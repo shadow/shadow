@@ -60,6 +60,32 @@ struct _Topology {
     MAGIC_DECLARE;
 };
 
+typedef enum _GraphAttribute GraphAttribute;
+enum _GraphAttribute {
+    GRAPH_ATTR_PREFERDIRECTPATHS=1,
+};
+
+typedef enum _VertexAttribute VertexAttribute;
+enum _VertexAttribute {
+    VERTEX_ATTR_ID=2,
+    VERTEX_ATTR_BANDWIDTHDOWN=3,
+    VERTEX_ATTR_BANDWIDTHUP=4,
+    VERTEX_ATTR_IP=5,
+    VERTEX_ATTR_CITYCODE=6,
+    VERTEX_ATTR_COUNTRYCODE=7,
+    VERTEX_ATTR_ASN=8,
+    VERTEX_ATTR_TYPE=9,
+    VERTEX_ATTR_PACKETLOSS=10,
+    VERTEX_ATTR_GEOCODE=11, // deprecated
+};
+
+typedef enum _EdgeAttribute EdgeAttribute;
+enum _EdgeAttribute {
+    EDGE_ATTR_LATENCY=12,
+    EDGE_ATTR_PACKETLOSS=13,
+    EDGE_ATTR_JITTER=14,
+};
+
 typedef struct _AttachHelper AttachHelper;
 struct _AttachHelper {
     GQueue* candidatesAll;
@@ -99,6 +125,214 @@ static void _topology_unlockGraph(Topology* top) {
 #define _topology_lockGraph(top)
 #define _topology_unlockGraph(top)
 #endif
+
+static const gchar* _topology_igraphAttributeTypeToString(igraph_attribute_type_t type) {
+    if(type == IGRAPH_ATTRIBUTE_DEFAULT) {
+        return "DEFAULT";
+    } else if(type == IGRAPH_ATTRIBUTE_BOOLEAN) {
+        return "BOOLEAN";
+    } else if(type == IGRAPH_ATTRIBUTE_NUMERIC) {
+        return "NUMERIC";
+    } else if(type == IGRAPH_ATTRIBUTE_STRING) {
+        return "STRING";
+    } else {
+        return "UNKOWN";
+    }
+}
+
+static const gchar* _topology_graphAttributeToString(GraphAttribute attr) {
+    if(attr == GRAPH_ATTR_PREFERDIRECTPATHS) {
+        return "preferdirectpaths";
+    } else {
+        return "unknown";
+    }
+}
+
+static gint _topology_graphAttributeLength(GraphAttribute attr) {
+    if(attr == GRAPH_ATTR_PREFERDIRECTPATHS) {
+        return 17;
+    } else {
+        return 7;
+    }
+}
+
+static gboolean _topology_isValidGraphAttributeKey(const gchar* attrName, GraphAttribute attr) {
+    gint r = g_ascii_strncasecmp(attrName, _topology_graphAttributeToString(attr), _topology_graphAttributeLength(attr));
+    return (r == 0) ? TRUE : FALSE;
+}
+
+static const gchar* _topology_vertexAttributeToString(VertexAttribute attr) {
+    if(attr == VERTEX_ATTR_ID) {
+        return "id";
+    } else if(attr == VERTEX_ATTR_BANDWIDTHDOWN) {
+        return "bandwidthdown";
+    } else if(attr == VERTEX_ATTR_BANDWIDTHUP) {
+        return "bandwidthup";
+    } else if(attr == VERTEX_ATTR_IP) {
+        return "ip";
+    } else if(attr == VERTEX_ATTR_CITYCODE) {
+        return "citycode";
+    } else if(attr == VERTEX_ATTR_COUNTRYCODE) {
+        return "countrycode";
+    } else if(attr == VERTEX_ATTR_ASN) {
+        return "asn";
+    } else if(attr == VERTEX_ATTR_TYPE) {
+        return "type";
+    } else if(attr == VERTEX_ATTR_PACKETLOSS) {
+        return "packetloss";
+    } else if(attr == VERTEX_ATTR_GEOCODE) {
+        return "geocode";
+    } else {
+        return "unknown";
+    }
+}
+
+static gint _topology_vertexAttributeLength(VertexAttribute attr) {
+    if(attr == VERTEX_ATTR_ID) {
+        return 2;
+    } else if(attr == VERTEX_ATTR_BANDWIDTHDOWN) {
+        return 13;
+    } else if(attr == VERTEX_ATTR_BANDWIDTHUP) {
+        return 11;
+    } else if(attr == VERTEX_ATTR_IP) {
+        return 2;
+    } else if(attr == VERTEX_ATTR_CITYCODE) {
+        return 8;
+    } else if(attr == VERTEX_ATTR_COUNTRYCODE) {
+        return 11;
+    } else if(attr == VERTEX_ATTR_ASN) {
+        return 3;
+    } else if(attr == VERTEX_ATTR_TYPE) {
+        return 4;
+    } else if(attr == VERTEX_ATTR_PACKETLOSS) {
+        return 10;
+    } else if(attr == VERTEX_ATTR_GEOCODE) {
+        return 7;
+    } else {
+        return 7;
+    }
+}
+
+static gboolean _topology_isValidVertexAttributeKey(const gchar* attrName, VertexAttribute attr) {
+    gint r = g_ascii_strncasecmp(attrName, _topology_vertexAttributeToString(attr), _topology_vertexAttributeLength(attr));
+    return (r == 0) ? TRUE : FALSE;
+}
+
+static const gchar* _topology_edgeAttributeToString(EdgeAttribute attr) {
+    if(attr == EDGE_ATTR_LATENCY) {
+        return "latency";
+    } else if(attr == EDGE_ATTR_PACKETLOSS) {
+        return "packetloss";
+    } else if(attr == EDGE_ATTR_JITTER) {
+        return "jitter";
+    } else {
+        return "unknown";
+    }
+}
+
+static gint _topology_edgeAttributeLength(EdgeAttribute attr) {
+    if(attr == EDGE_ATTR_LATENCY) {
+        return 7;
+    } else if(attr == EDGE_ATTR_PACKETLOSS) {
+        return 10;
+    } else if(attr == EDGE_ATTR_JITTER) {
+        return 6;
+    } else {
+        return 7;
+    }
+}
+
+static gboolean _topology_isValidEdgeAttributeKey(const gchar* attrName, EdgeAttribute attr) {
+    gint r = g_ascii_strncasecmp(attrName, _topology_edgeAttributeToString(attr), _topology_edgeAttributeLength(attr));
+    return (r == 0) ? TRUE : FALSE;
+}
+
+/* the graph lock should be held when calling this function, since it accesses igraph.
+ * if the value is found and not NULL, it's value is returned in valueOut.
+ * returns true if valueOut has been set, false otherwise */
+static gboolean _topology_findGraphAttributeString(Topology* top, GraphAttribute attr, const gchar** valueOut) {
+    MAGIC_ASSERT(top);
+
+    const gchar* name = _topology_graphAttributeToString(attr);
+
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_GRAPH, name)) {
+        const gchar* value = igraph_cattribute_GAS(&top->graph, name);
+        if(value != NULL && value[0] != '\0') {
+            if(valueOut != NULL) {
+                *valueOut = value;
+                return TRUE;
+            }
+        }
+    }
+
+    return FALSE;
+}
+
+/* the graph lock should be held when calling this function, since it accesses igraph.
+ * if the value is found and not NULL, it's value is returned in valueOut.
+ * returns true if valueOut has been set, false otherwise */
+static gboolean _topology_findVertexAttributeString(Topology* top, igraph_integer_t vertexIndex,
+        VertexAttribute attr, const gchar** valueOut) {
+    MAGIC_ASSERT(top);
+
+    const gchar* name = _topology_vertexAttributeToString(attr);
+
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, name)) {
+        const gchar* value = igraph_cattribute_VAS(&top->graph, name, vertexIndex);
+        if(value != NULL && value[0] != '\0') {
+            if(valueOut != NULL) {
+                *valueOut = value;
+                return TRUE;
+            }
+        }
+    }
+
+    return FALSE;
+}
+
+/* the graph lock should be held when calling this function, since it accesses igraph.
+ * if the value is found and not NULL, it's value is returned in valueOut.
+ * returns true if valueOut has been set, false otherwise */
+static gboolean _topology_findVertexAttributeDouble(Topology* top, igraph_integer_t vertexIndex,
+        VertexAttribute attr, gdouble* valueOut) {
+    MAGIC_ASSERT(top);
+
+    const gchar* name = _topology_vertexAttributeToString(attr);
+
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, name)) {
+        gdouble value = (gdouble) igraph_cattribute_VAN(&top->graph, name, vertexIndex);
+        if(isnan(value) == 0) {
+            if(valueOut != NULL) {
+                *valueOut = value;
+                return TRUE;
+            }
+        }
+    }
+
+    return FALSE;
+}
+
+/* the graph lock should be held when calling this function, since it accesses igraph.
+ * if the value is found and not NULL, it's value is returned in valueOut.
+ * returns true if valueOut has been set, false otherwise */
+static gboolean _topology_findEdgeAttributeDouble(Topology* top, igraph_integer_t edgeIndex,
+        EdgeAttribute attr, gdouble* valueOut) {
+    MAGIC_ASSERT(top);
+
+    const gchar* name = _topology_edgeAttributeToString(attr);
+
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, name)) {
+        gdouble value = (gdouble) igraph_cattribute_EAN(&top->graph, name, edgeIndex);
+        if(isnan(value) == 0) {
+            if(valueOut != NULL) {
+                *valueOut = value;
+                return TRUE;
+            }
+        }
+    }
+
+    return FALSE;
+}
 
 static gboolean _topology_loadGraph(Topology* top, const gchar* graphPath) {
     MAGIC_ASSERT(top);
@@ -149,11 +383,18 @@ static gint _topology_getEdgeHelper(Topology* top,
     }
 
     /* get edge properties from graph */
+    gdouble found;
     if(edgeLatencyOut) {
-        *edgeLatencyOut = EAN(&top->graph, "latency", edgeIndex);
+        gdouble edgeLatency;
+        found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
+        utility_assert(found);
+        *edgeLatencyOut = edgeLatency;
     }
     if(edgeReliabilityOut) {
-        *edgeReliabilityOut = 1.0f - EAN(&top->graph, "packetloss", edgeIndex);
+        gdouble edgePacketLoss;
+        found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_PACKETLOSS, &edgePacketLoss);
+        utility_assert(found);
+        *edgeReliabilityOut = 1.0f - edgePacketLoss;
     }
     if(edgeIndexOut) {
         *edgeIndexOut = edgeIndex;
@@ -270,27 +511,13 @@ done:
     return is_success;
 }
 
-static const gchar* _topology_attributeTypeToString(igraph_attribute_type_t type) {
-    if(type == IGRAPH_ATTRIBUTE_DEFAULT) {
-        return "DEFAULT";
-    } else if(type == IGRAPH_ATTRIBUTE_BOOLEAN) {
-        return "BOOLEAN";
-    } else if(type == IGRAPH_ATTRIBUTE_NUMERIC) {
-        return "NUMERIC";
-    } else if(type == IGRAPH_ATTRIBUTE_STRING) {
-        return "STRING";
-    } else {
-        return "UNKOWN";
-    }
-}
-
 static gboolean _topology_checkAttributeType(gchar* parsedName, igraph_attribute_type_t parsedType, igraph_attribute_type_t requiredType) {
     if(parsedType == requiredType) {
-        info("graph attribute '%s' with type '%s' is supported", parsedName, _topology_attributeTypeToString(parsedType));
+        info("graph attribute '%s' with type '%s' is supported", parsedName, _topology_igraphAttributeTypeToString(parsedType));
         return TRUE;
     } else {
         warning("graph attribute '%s' with type '%s' is supported, but we found unsupported type '%s'",
-                parsedName, _topology_attributeTypeToString(requiredType), _topology_attributeTypeToString(parsedType));
+                parsedName, _topology_igraphAttributeTypeToString(requiredType), _topology_igraphAttributeTypeToString(parsedType));
         return FALSE;
     }
 }
@@ -329,9 +556,9 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         igraph_strvector_get(&gnames, (glong) i, &name);
         type = (igraph_attribute_type_t)igraph_vector_e(&gtypes, (glong) i);
 
-        debug("found graph attribute '%s' with type '%s'", name, _topology_attributeTypeToString(type));
+        debug("found graph attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
 
-        if(g_ascii_strncasecmp(name, "preferdirectpaths", 17) == 0) {
+        if(_topology_isValidGraphAttributeKey(name, GRAPH_ATTR_PREFERDIRECTPATHS)) {
             /* we use a string because there is an error in igraph boolean attribute code. */
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else {
@@ -347,49 +574,58 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         igraph_strvector_get(&vnames, (glong) i, &name);
         type = igraph_vector_e(&vtypes, (glong) i);
 
-        debug("found vertex attribute '%s' with type '%s'", name, _topology_attributeTypeToString(type));
+        debug("found vertex attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
 
-        if(g_ascii_strncasecmp(name, "id", 2) == 0) {
+        if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_ID)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
-        } else if(g_ascii_strncasecmp(name, "ip", 2) == 0) {
+        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_IP)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
-        } else if(g_ascii_strncasecmp(name, "citycode", 8) == 0) {
+        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_CITYCODE)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
-        } else if(g_ascii_strncasecmp(name, "countrycode", 11) == 0) {
+        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_COUNTRYCODE)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
-        } else if(g_ascii_strncasecmp(name, "asn", 3) == 0) {
+        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_ASN)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
-        } else if(g_ascii_strncasecmp(name, "type", 4) == 0) {
+        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_TYPE)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
-        } else if(g_ascii_strncasecmp(name, "bandwidthdown", 13) == 0) {
+        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_BANDWIDTHDOWN)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
-        } else if(g_ascii_strncasecmp(name, "bandwidthup", 11) == 0) {
+        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_BANDWIDTHUP)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
-        } else if(g_ascii_strncasecmp(name, "packetloss", 10) == 0) {
+        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_PACKETLOSS)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
-        } else if(g_ascii_strncasecmp(name, "geocode", 7) == 0) {
+        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_GEOCODE)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
-            warning("vertex attribute '%s' has been renamed to 'countrycode' and is considered deprecated; "
-                    "please use 'countrycode' and/or 'citycode' instead", name);
+            warning("vertex attribute '%s' has been renamed to '%s' and is considered deprecated; "
+                    "please use '%s' and/or '%s' instead", name,
+                    _topology_vertexAttributeToString(VERTEX_ATTR_COUNTRYCODE),
+                    _topology_vertexAttributeToString(VERTEX_ATTR_COUNTRYCODE),
+                    _topology_vertexAttributeToString(VERTEX_ATTR_CITYCODE));
         } else {
             warning("vertex attribute '%s' is unsupported and will be ignored", name);
         }
     }
 
     /* make sure we have at least the required vertex attributes */
-    if(!igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "id")) {
-        warning("the vertex attribute 'id' of type '%s' is required but not provided",
-                _topology_attributeTypeToString(IGRAPH_ATTRIBUTE_STRING));
+    if(!igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX,
+            _topology_vertexAttributeToString(VERTEX_ATTR_ID))) {
+        warning("the vertex attribute '%s' of type '%s' is required but not provided",
+                _topology_vertexAttributeToString(VERTEX_ATTR_ID),
+                _topology_igraphAttributeTypeToString(IGRAPH_ATTRIBUTE_STRING));
         isSuccess = FALSE;
     }
-    if(!igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "bandwidthdown")) {
-        warning("the vertex attribute 'bandwidthdown' of type '%s' is required but not provided",
-                _topology_attributeTypeToString(IGRAPH_ATTRIBUTE_NUMERIC));
+    if(!igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX,
+            _topology_vertexAttributeToString(VERTEX_ATTR_BANDWIDTHDOWN))) {
+        warning("the vertex attribute '%s' of type '%s' is required but not provided",
+                _topology_vertexAttributeToString(VERTEX_ATTR_BANDWIDTHDOWN),
+                _topology_igraphAttributeTypeToString(IGRAPH_ATTRIBUTE_NUMERIC));
         isSuccess = FALSE;
     }
-    if(!igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "bandwidthup")) {
-        warning("the vertex attribute 'bandwidthup' of type '%s' is required but not provided",
-                _topology_attributeTypeToString(IGRAPH_ATTRIBUTE_NUMERIC));
+    if(!igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX,
+            _topology_vertexAttributeToString(VERTEX_ATTR_BANDWIDTHUP))) {
+        warning("the vertex attribute '%s' of type '%s' is required but not provided",
+                _topology_vertexAttributeToString(VERTEX_ATTR_BANDWIDTHUP),
+                _topology_igraphAttributeTypeToString(IGRAPH_ATTRIBUTE_NUMERIC));
         isSuccess = FALSE;
     }
 
@@ -399,13 +635,13 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         igraph_strvector_get(&enames, (glong) i, &name);
         type = igraph_vector_e(&etypes, (glong) i);
 
-        debug("found edge attribute '%s' with type '%s'", name, _topology_attributeTypeToString(type));
+        debug("found edge attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
 
-        if(g_ascii_strncasecmp(name, "latency", 7) == 0) {
+        if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_LATENCY)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
-        } else if(g_ascii_strncasecmp(name, "jitter", 6) == 0) {
+        } else if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_JITTER)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
-        } else if(g_ascii_strncasecmp(name, "packetloss", 10) == 0) {
+        } else if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_PACKETLOSS)) {
             isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else {
             warning("edge attribute '%s' is unsupported and will be ignored", name);
@@ -413,14 +649,18 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
     }
 
     /* make sure we have at least the required edge attributes */
-    if(!igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, "latency")) {
-        warning("the edge attribute 'latency' of type '%s' is required but not provided",
-                _topology_attributeTypeToString(IGRAPH_ATTRIBUTE_NUMERIC));
+    if(!igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE,
+            _topology_edgeAttributeToString(EDGE_ATTR_LATENCY))) {
+        warning("the edge attribute '%s' of type '%s' is required but not provided",
+                _topology_edgeAttributeToString(EDGE_ATTR_LATENCY),
+                _topology_igraphAttributeTypeToString(IGRAPH_ATTRIBUTE_NUMERIC));
         isSuccess = FALSE;
     }
-    if(!igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, "packetloss")) {
-        warning("the edge attribute 'packetloss' of type '%s' is required but not provided",
-                _topology_attributeTypeToString(IGRAPH_ATTRIBUTE_NUMERIC));
+    if(!igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE,
+            _topology_edgeAttributeToString(EDGE_ATTR_PACKETLOSS))) {
+        warning("the edge attribute '%s' of type '%s' is required but not provided",
+                _topology_edgeAttributeToString(EDGE_ATTR_PACKETLOSS),
+                _topology_igraphAttributeTypeToString(IGRAPH_ATTRIBUTE_NUMERIC));
         isSuccess = FALSE;
     }
 
@@ -486,12 +726,14 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
     /* if the value is not set in the graph, we default to always using shortest path */
     gboolean prefersDirectPaths = FALSE;
 
-    /* check if the graph sets a preference */
-    if (igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_GRAPH, "preferdirectpaths")) {
-        /* get the value of the graph attribute.
-         * we use a string because there is an error in igraph boolean attribute code. */
-        const gchar* value = igraph_cattribute_GAS(&top->graph, "preferdirectpaths");
+    /* check if the graph sets a preference for using direct paths.
+     * get the string value of the graph attribute, and check for true of false.
+     * we must use a string because there is a bug in igraph boolean attribute code:
+     * https://github.com/igraph/igraph/issues/1056 */
+    const gchar* value;
 
+    if (_topology_findGraphAttributeString(top, GRAPH_ATTR_PREFERDIRECTPATHS, &value)) {
+        /* extract the boolean value from the string */
         igraph_bool_t valueIsTrue = 0;
         if(g_ascii_strncasecmp(value, "true", 4) == 0 ||
                 g_ascii_strncasecmp(value, "yes", 3) == 0 ||
@@ -503,10 +745,12 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 
         /* check if it is true or not */
         if (valueIsTrue) {
-            info("Enabling preferdirectpaths");
+            info("If a direct path between any pair of nodes exists, Shadow will prefer it over shortest path.");
             prefersDirectPaths = TRUE;
         } else {
-            info("Not enabling preferdirectpaths (set to 'yes' or 'true' or '1' to enable)");
+            info("Shadow will always use shortest path between a pair of nodes, even if a direct path exists "
+                    "(to override, set '%s' to 'yes' or 'true' or '1' to enable)",
+                    _topology_graphAttributeToString(GRAPH_ATTR_PREFERDIRECTPATHS));
         }
     }
     top->prefersDirectPaths = prefersDirectPaths;
@@ -536,123 +780,135 @@ static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_int
     gchar* idStr = NULL;
 
     /* this attribute is required, so it is an error if it doesn't exist */
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "id")) {
-        const gchar* vidStr = VAS(&top->graph, "id", vertexIndex);
-        if(vidStr == NULL || vidStr[0] == '\0') {
-            warning("required attribute 'id' on vertex %li is NULL", (glong)vertexIndex);
+    const gchar* idKey = _topology_vertexAttributeToString(VERTEX_ATTR_ID);
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, idKey)) {
+        const gchar* vidStr;
+        if(_topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_ID, &vidStr)) {
+            g_string_append_printf(message, " %s='%s'", idKey, vidStr);
+            idStr = g_strdup(vidStr);
+        } else {
+            warning("required attribute '%s' on vertex %li is NULL", idKey, (glong)vertexIndex);
             isSuccess = FALSE;
             idStr = g_strdup("NULL");
-        } else {
-            g_string_append_printf(message, " id='%s'", vidStr);
-            idStr = g_strdup(vidStr);
         }
     } else {
-        warning("required attribute 'id' on vertex %li is missing", (glong)vertexIndex);
+        warning("required attribute '%s' on vertex %li is missing", idKey, (glong)vertexIndex);
         isSuccess = FALSE;
         idStr = g_strdup("MISSING");
     }
 
     /* this attribute is required, so it is an error if it doesn't exist */
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "bandwidthdown")) {
-        igraph_real_t val = VAN(&top->graph, "bandwidthdown", vertexIndex);
-        if(isnan((gdouble)val) != 0) {
-            warning("required attribute 'bandwidthdown' on vertex %li (id='%s') is NAN", (glong)vertexIndex, idStr);
-            isSuccess = FALSE;
-        } else if(val <= 0.0f) {
-            warning("optional attribute 'bandwidthdown' on vertex %li (id='%s') must be > 0", (glong)vertexIndex, idStr);
-            /* its an error if they gave a value that is incorrect */
-            isSuccess = FALSE;
+    const gchar* bandwidthdownKey = _topology_vertexAttributeToString(VERTEX_ATTR_BANDWIDTHDOWN);
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, bandwidthdownKey)) {
+        gdouble bandwidthdownValue;
+        if(_topology_findVertexAttributeDouble(top, vertexIndex, VERTEX_ATTR_BANDWIDTHDOWN, &bandwidthdownValue) &&
+                bandwidthdownValue > 0.0f) {
+            g_string_append_printf(message, " %s='%f'", bandwidthdownKey, bandwidthdownValue);
         } else {
-            g_string_append_printf(message, " bandwidthdown='%f'", val);
+            /* its an error if they gave a value that is incorrect */
+            warning("required attribute '%s' on vertex %li (%s='%s') is NAN or negative",
+                    bandwidthdownKey, (glong)vertexIndex, idKey, idStr);
+            isSuccess = FALSE;
         }
     } else {
-        warning("required attribute 'bandwidthdown' on vertex %li (id='%s') is missing", (glong)vertexIndex, idStr);
+        warning("required attribute '%s' on vertex %li (%s='%s') is missing",
+                bandwidthdownKey, (glong)vertexIndex, idKey, idStr);
         isSuccess = FALSE;
     }
 
     /* this attribute is required, so it is an error if it doesn't exist */
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "bandwidthup")) {
-        igraph_real_t val = VAN(&top->graph, "bandwidthup", vertexIndex);
-        if(isnan((gdouble)val) != 0) {
-            warning("required attribute 'bandwidthup' on vertex %li (id='%s') is NAN", (glong)vertexIndex, idStr);
-            isSuccess = FALSE;
-        } else if(val <= 0.0f) {
-            warning("optional attribute 'bandwidthup' on vertex %li (id='%s') must be > 0", (glong)vertexIndex, idStr);
-            /* its an error if they gave a value that is incorrect */
-            isSuccess = FALSE;
+    const gchar* bandwidthupKey = _topology_vertexAttributeToString(VERTEX_ATTR_BANDWIDTHUP);
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, bandwidthupKey)) {
+        gdouble bandwidthupValue;
+        if(_topology_findVertexAttributeDouble(top, vertexIndex, VERTEX_ATTR_BANDWIDTHUP, &bandwidthupValue) &&
+                bandwidthupValue > 0.0f) {
+            g_string_append_printf(message, " %s='%f'", bandwidthupKey, bandwidthupValue);
         } else {
-            g_string_append_printf(message, " bandwidthup='%f'", val);
+            /* its an error if they gave a value that is incorrect */
+            warning("required attribute '%s' on vertex %li (%s='%s') is NAN or negative",
+                    bandwidthupKey, (glong)vertexIndex, idKey, idStr);
+            isSuccess = FALSE;
         }
     } else {
-        warning("required attribute 'bandwidthup' on vertex %li (id='%s') is missing", (glong)vertexIndex, idStr);
+        warning("required attribute '%s' on vertex %li (%s='%s') is missing", bandwidthupKey, (glong)vertexIndex, idKey, idStr);
         isSuccess = FALSE;
     }
 
     /* this attribute is NOT required, so it is OK if it doesn't exist */
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "ip")) {
-        const gchar* val = VAS(&top->graph, "ip", vertexIndex);
-        if(val == NULL || val[0] == '\0') {
-            warning("optional attribute 'ip' on vertex %li (id='%s') is NULL, ignoring", (glong)vertexIndex, idStr);
+    const gchar* ipKey = _topology_vertexAttributeToString(VERTEX_ATTR_IP);
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, ipKey)) {
+        const gchar* ipVal;
+        if(_topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_IP, &ipVal)) {
+            g_string_append_printf(message, " %s='%s'", ipKey, ipVal);
         } else {
-            g_string_append_printf(message, " ip='%s'", val);
+            warning("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring",
+                    ipKey, (glong)vertexIndex, idKey, idStr);
         }
     }
 
     /* this attribute is NOT required, so it is OK if it doesn't exist */
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "citycode")) {
-        const gchar* val = VAS(&top->graph, "citycode", vertexIndex);
-        if(val == NULL || val[0] == '\0') {
-            warning("optional attribute 'citycode' on vertex %li (id='%s') is NULL, ignoring", (glong)vertexIndex, idStr);
+    const gchar* citycodeKey = _topology_vertexAttributeToString(VERTEX_ATTR_CITYCODE);
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, citycodeKey)) {
+        const gchar* citycodeVal;
+        if(_topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_CITYCODE, &citycodeVal)) {
+            g_string_append_printf(message, " %s='%s'", citycodeKey, citycodeVal);
         } else {
-            g_string_append_printf(message, " citycode='%s'", val);
+            warning("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring",
+                    citycodeKey, (glong)vertexIndex, idKey, idStr);
         }
     }
 
     /* this attribute is NOT required, so it is OK if it doesn't exist */
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "countrycode")) {
-        const gchar* val = VAS(&top->graph, "countrycode", vertexIndex);
-        if(val == NULL || val[0] == '\0') {
-            warning("optional attribute 'countrycode' on vertex %li (id='%s') is NULL, ignoring", (glong)vertexIndex, idStr);
+    const gchar* countrycodeKey = _topology_vertexAttributeToString(VERTEX_ATTR_COUNTRYCODE);
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, countrycodeKey)) {
+        const gchar* countrycodeVal;
+        if(_topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_COUNTRYCODE, &countrycodeVal)) {
+            g_string_append_printf(message, " %s='%s'", countrycodeKey, countrycodeVal);
         } else {
-            g_string_append_printf(message, " countrycode='%s'", val);
+            warning("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring",
+                    countrycodeKey, (glong)vertexIndex, idKey, idStr);
         }
     }
 
     /* this attribute is NOT required, so it is OK if it doesn't exist */
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "type")) {
-        const gchar* val = VAS(&top->graph, "type", vertexIndex);
-        if(val == NULL || val[0] == '\0') {
-            warning("optional attribute 'type' on vertex %li (id='%s') is NULL, ignoring", (glong)vertexIndex, idStr);
+    const gchar* typeKey = _topology_vertexAttributeToString(VERTEX_ATTR_TYPE);
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, typeKey)) {
+        const gchar* typeVal;
+        if(_topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_TYPE, &typeVal)) {
+            g_string_append_printf(message, " %s='%s'", typeKey, typeVal);
         } else {
-            g_string_append_printf(message, " type='%s'", val);
+            warning("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring",
+                    typeKey, (glong)vertexIndex, idKey, idStr);
         }
     }
 
     /* this attribute is NOT required, so it is OK if it doesn't exist */
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "asn")) {
-        igraph_real_t val = VAN(&top->graph, "asn", vertexIndex);
-        if(isnan((gdouble)val) != 0) {
-            warning("optional attribute 'asn' on vertex %li (id='%s') is NULL, ignoring", (glong)vertexIndex, idStr);
-        } else if(val <= 0.0f) {
-            warning("optional attribute 'asn' on vertex %li (id='%s') must be > 0", (glong)vertexIndex, idStr);
+    const gchar* asnKey = _topology_vertexAttributeToString(VERTEX_ATTR_ASN);
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, asnKey)) {
+        gdouble asnValue;
+        if(_topology_findVertexAttributeDouble(top, vertexIndex, VERTEX_ATTR_ASN, &asnValue) &&
+                asnValue > 0.0f) {
+            g_string_append_printf(message, " %s='%f'", asnKey, asnValue);
+        } else {
             /* its an error if they gave a value that is incorrect */
+            warning("optional attribute '%s' on vertex %li (%s='%s') is NAN or negative",
+                    asnKey, (glong)vertexIndex, idKey, idStr);
             isSuccess = FALSE;
-        } else {
-            g_string_append_printf(message, " asn='%s'", val);
         }
     }
 
     /* this attribute is NOT required, so it is OK if it doesn't exist */
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "packetloss")) {
-        igraph_real_t val = VAN(&top->graph, "packetloss", vertexIndex);
-        if(isnan((gdouble)val) != 0) {
-            warning("optional attribute 'packetloss' on vertex %li (id='%s') is NULL, ignoring", (glong)vertexIndex, idStr);
-        } else if(val < 0.0f || val > 1.0f) {
-            warning("optional attribute 'packetloss' on vertex %li (id='%s') must be >= 0.0 and <= 1.0", (glong)vertexIndex, idStr);
-            /* its an error if they gave a value that is incorrect */
-            isSuccess = FALSE;
+    const gchar* packetlossKey = _topology_vertexAttributeToString(VERTEX_ATTR_PACKETLOSS);
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, packetlossKey)) {
+        gdouble packetlossValue;
+        if(_topology_findVertexAttributeDouble(top, vertexIndex, VERTEX_ATTR_PACKETLOSS, &packetlossValue) &&
+                packetlossValue >= 0.0f && packetlossValue <= 1.0f) {
+            g_string_append_printf(message, " %s='%f'", packetlossKey, packetlossValue);
         } else {
-            g_string_append_printf(message, " packetloss='%f'", val);
+            /* its an error if they gave a value that is incorrect */
+            warning("optional attribute '%s' on vertex %li (%s='%s') is NAN or out of range [0.0,1.0]",
+                    packetlossKey, (glong)vertexIndex, idKey, idStr);
+            isSuccess = FALSE;
         }
     }
 
@@ -735,8 +991,14 @@ static gboolean _topology_checkGraphEdgesHelperHook(Topology* top, igraph_intege
         return FALSE;
     }
 
-    const gchar* fromIDStr = VAS(&top->graph, "id", fromVertexIndex);
-    const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
+    gboolean found;
+    const gchar* fromIDStr;
+    const gchar* toIDStr;
+
+    found = _topology_findVertexAttributeString(top, fromVertexIndex, VERTEX_ATTR_ID, &fromIDStr);
+    utility_assert(found);
+    found = _topology_findVertexAttributeString(top, toVertexIndex, VERTEX_ATTR_ID, &toIDStr);
+    utility_assert(found);
 
     gboolean isSuccess = TRUE;
 
@@ -744,53 +1006,56 @@ static gboolean _topology_checkGraphEdgesHelperHook(Topology* top, igraph_intege
     g_string_printf(message, "found edge %li", (glong)edgeIndex);
 
     /* this attribute is required, so it is an error if it doesn't exist */
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, "latency")) {
-        igraph_real_t val = EAN(&top->graph, "latency", edgeIndex);
-        if(isnan((gdouble)val) != 0) {
-            warning("required attribute 'latency' on edge %li (from '%s' to '%s') is NAN", (glong)edgeIndex, fromIDStr, toIDStr);
-            isSuccess = FALSE;
-        } else if(val <= 0.0f) {
-            warning("required attribute 'latency' on edge %li (from '%s' to '%s') must be > 0", (glong)edgeIndex, fromIDStr, toIDStr);
-            /* its an error if they gave a value that is incorrect */
-            isSuccess = FALSE;
+    const gchar* latencyKey = _topology_edgeAttributeToString(EDGE_ATTR_LATENCY);
+    gdouble latencyValue;
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, latencyKey) &&
+            _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_LATENCY, &latencyValue)) {
+        if(latencyValue > 0.0f) {
+            g_string_append_printf(message, " %s='%f'", latencyKey, latencyValue);
         } else {
-            g_string_append_printf(message, " latency='%f'", val);
+            /* its an error if they gave a value that is incorrect */
+            warning("required attribute '%s' on edge %li (from '%s' to '%s') is non-positive",
+                    latencyKey, (glong)edgeIndex, fromIDStr, toIDStr);
+            isSuccess = FALSE;
         }
     } else {
-        warning("required attribute 'latency' on edge %li (from '%s' to '%s') is missing", (glong)edgeIndex, fromIDStr, toIDStr);
+        warning("required attribute '%s' on edge %li (from '%s' to '%s') is missing or NAN",
+                latencyKey, (glong)edgeIndex, fromIDStr, toIDStr);
         isSuccess = FALSE;
     }
 
     /* this attribute is required, so it is an error if it doesn't exist */
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, "packetloss")) {
-        igraph_real_t val = EAN(&top->graph, "packetloss", edgeIndex);
-        if(isnan((gdouble)val) != 0) {
-            warning("required attribute 'packetloss' on edge %li (from '%s' to '%s') is NAN", (glong)edgeIndex, fromIDStr, toIDStr);
-            isSuccess = FALSE;
-        } else if(val < 0.0f || val > 1.0f) {
-            warning("required attribute 'packetloss' on edge %li (from '%s' to '%s') must be >= 0", (glong)edgeIndex, fromIDStr, toIDStr);
-            /* its an error if they gave a value that is incorrect */
-            isSuccess = FALSE;
+    const gchar* packetlossKey = _topology_edgeAttributeToString(EDGE_ATTR_PACKETLOSS);
+    gdouble packetlossValue;
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, packetlossKey) &&
+        _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_PACKETLOSS, &packetlossValue)) {
+
+        if(packetlossValue >= 0.0f && packetlossValue <= 1.0f) {
+            g_string_append_printf(message, " %s='%f'", packetlossKey, packetlossValue);
         } else {
-            g_string_append_printf(message, " packetloss='%f'", val);
+            /* its an error if they gave a value that is incorrect */
+            warning("required attribute '%s' on edge %li (from '%s' to '%s') is out of range [0.0,1.0]",
+                    packetlossKey, (glong)edgeIndex, fromIDStr, toIDStr);
+            isSuccess = FALSE;
         }
     } else {
-        warning("required attribute 'packetloss' on edge %li (from '%s' to '%s') is missing", (glong)edgeIndex, fromIDStr, toIDStr);
+        warning("required attribute '%s' on edge %li (from '%s' to '%s') is missing or NAN",
+                packetlossKey, (glong)edgeIndex, fromIDStr, toIDStr);
         isSuccess = FALSE;
     }
 
     /* this attribute is optional, so it is OK if it doesn't exist */
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, "jitter")) {
-        igraph_real_t val = EAN(&top->graph, "jitter", edgeIndex);
-        if(isnan((gdouble)val) != 0) {
-            warning("optional attribute 'jitter' on edge %li (from '%s' to '%s') is NAN, ignoring", (glong)edgeIndex, fromIDStr, toIDStr);
-            isSuccess = FALSE;
-        } else if(val < 0.0f) {
-            warning("optional attribute 'jitter' on edge %li (from '%s' to '%s') must be >= 0", (glong)edgeIndex, fromIDStr, toIDStr);
-            /* its an error if they gave a value that is incorrect */
-            isSuccess = FALSE;
+    const gchar* jitterKey = _topology_edgeAttributeToString(EDGE_ATTR_JITTER);
+    gdouble jitterValue;
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, jitterKey) &&
+            _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_JITTER, &jitterValue)) {
+        if(jitterValue >= 0.0f) {
+            g_string_append_printf(message, " %s='%f'", jitterKey, jitterValue);
         } else {
-            g_string_append_printf(message, " jitter='%f'", val);
+            /* its an error if they gave a value that is incorrect */
+            warning("optional attribute '%s' on edge %li (from '%s' to '%s') is negative",
+                    jitterKey, (glong)edgeIndex, fromIDStr, toIDStr);
+            isSuccess = FALSE;
         }
     }
 
@@ -911,7 +1176,8 @@ static gboolean _topology_extractEdgeWeights(Topology* top) {
     }
 
     /* use the 'latency' edge attribute as the edge weight */
-    result = EANV(&top->graph, "latency", top->edgeWeights);
+    const gchar* latencyKey = _topology_edgeAttributeToString(EDGE_ATTR_LATENCY);
+    result = EANV(&top->graph, latencyKey, top->edgeWeights);
     g_rw_lock_writer_unlock(&(top->edgeWeightsLock));
     _topology_unlockGraph(top);
     if(result != IGRAPH_SUCCESS) {
@@ -1056,17 +1322,26 @@ static gboolean _topology_computePathProperties(Topology* top, igraph_integer_t 
     _topology_lockGraph(top);
 
     /* get source properties */
-    totalReliability *= (1.0f - VAN(&top->graph, "packetloss", srcVertexIndex));
-    srcIDStr = VAS(&top->graph, "id", srcVertexIndex);
+    gdouble sourcePacketLoss;
+    if(_topology_findVertexAttributeDouble(top, srcVertexIndex, VERTEX_ATTR_PACKETLOSS, &sourcePacketLoss)) {
+        totalReliability *= (1.0f - sourcePacketLoss);
+    }
+
+    gboolean found = _topology_findVertexAttributeString(top, srcVertexIndex, VERTEX_ATTR_ID, &srcIDStr);
+    utility_assert(found);
     g_string_printf(pathStringBuffer, "%s", srcIDStr);
 
     /* get destination properties */
     targetVertexIndex = (igraph_integer_t) igraph_vector_tail(resultPathVertices);
-    dstIDStr = VAS(&top->graph, "id", targetVertexIndex);
+    found = _topology_findVertexAttributeString(top, targetVertexIndex, VERTEX_ATTR_ID, &dstIDStr);
+    utility_assert(found);
 
     /* only include dst loss if there is no path between src and dst vertices */
     if((srcVertexIndex != targetVertexIndex) || (srcVertexIndex == targetVertexIndex && nVertices > 2)) {
-        totalReliability *= (1.0f - VAN(&top->graph, "packetloss", targetVertexIndex));
+        gdouble destPacketLoss;
+        if(_topology_findVertexAttributeDouble(top, targetVertexIndex, VERTEX_ATTR_PACKETLOSS, &destPacketLoss)) {
+            totalReliability *= (1.0f - destPacketLoss);
+        }
     }
 
     /* the source is in the first position only if we have more than one vertex */
@@ -1085,7 +1360,10 @@ static gboolean _topology_computePathProperties(Topology* top, igraph_integer_t 
     for (gint i = startingPosition; i < nVertices; i++) {
         /* get the edge */
         toVertexIndex = igraph_vector_e(resultPathVertices, i);
-        const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
+
+        const gchar* toIDStr;
+        gboolean found = _topology_findVertexAttributeString(top, toVertexIndex, VERTEX_ATTR_ID, &toIDStr);
+        utility_assert(found);
 
         igraph_real_t edgeLatency = 0, edgeReliability = 0;
         igraph_integer_t edgeIndex = 0;
@@ -1133,9 +1411,14 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
     utility_assert(srcVertexIndex >= 0);
     utility_assert(dstVertexIndex >= 0);
 
+    gboolean found;
     _topology_lockGraph(top);
-    const gchar* srcIDStr = VAS(&top->graph, "id", srcVertexIndex);
-    const gchar* dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
+    const gchar* srcIDStr;
+    found = _topology_findVertexAttributeString(top, srcVertexIndex, VERTEX_ATTR_ID, &srcIDStr);
+    utility_assert(found);
+    const gchar* dstIDStr;
+    found = _topology_findVertexAttributeString(top, dstVertexIndex, VERTEX_ATTR_ID, &dstIDStr);
+    utility_assert(found);
     _topology_unlockGraph(top);
 
     info("requested path between source vertex %li (%s) and destination vertex %li (%s)",
@@ -1296,8 +1579,10 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
                     pathStringBuffer, &pathLatency, &pathReliability, &pathTargetIndex);
 
             if(isSuccess) {
+                const gchar* targetIDStr;
                 _topology_lockGraph(top);
-                const gchar* targetIDStr = VAS(&top->graph, "id", pathTargetIndex);
+                found = _topology_findVertexAttributeString(top, pathTargetIndex, VERTEX_ATTR_ID, &targetIDStr);
+                utility_assert(found);
                 _topology_unlockGraph(top);
 
                 GString* logMessage = g_string_new(NULL);
@@ -1365,8 +1650,10 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
                 pathLatency = 2*minPathLatency;
                 pathReliability = reliabilityOfMinLatencyPath*reliabilityOfMinLatencyPath;
 
+                const gchar* targetIDStr;
                 _topology_lockGraph(top);
-                const gchar* targetIDStr = VAS(&top->graph, "id", vertexIndexOfMinLatencyPath);
+                found = _topology_findVertexAttributeString(top, vertexIndexOfMinLatencyPath, VERTEX_ATTR_ID, &targetIDStr);
+                utility_assert(found);
                 _topology_unlockGraph(top);
 
                 g_string_printf(selfPathBuffer, "%s%s--[%f,%f]-->%s%s--[%f,%f]-->%s",
@@ -1414,14 +1701,26 @@ static gboolean _topology_lookupPath(Topology* top, igraph_integer_t srcVertexIn
 
     igraph_real_t totalLatency = 0.0, totalReliability = 1.0;
     igraph_real_t edgeLatency = 0.0, edgeReliability = 1.0;
+    gboolean found;
+    const gchar* srcIDStr;
+    const gchar* dstIDStr;
+
 
     _topology_lockGraph(top);
+    found = _topology_findVertexAttributeString(top, srcVertexIndex, VERTEX_ATTR_ID, &srcIDStr);
+    utility_assert(found);
+    found = _topology_findVertexAttributeString(top, dstVertexIndex, VERTEX_ATTR_ID, &dstIDStr);
+    utility_assert(found);
+    _topology_unlockGraph(top);
 
-    const gchar* srcIDStr = VAS(&top->graph, "id", srcVertexIndex);
-    const gchar* dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
-
-    totalReliability *= (1.0f - VAN(&top->graph, "packetloss", srcVertexIndex));
-    totalReliability *= (1.0f - VAN(&top->graph, "packetloss", dstVertexIndex));
+    gdouble sourcePacketLoss;
+    if(_topology_findVertexAttributeDouble(top, srcVertexIndex, VERTEX_ATTR_PACKETLOSS, &sourcePacketLoss)) {
+        totalReliability *= (1.0f - sourcePacketLoss);
+    }
+    gdouble destPacketLoss;
+    if(_topology_findVertexAttributeDouble(top, dstVertexIndex, VERTEX_ATTR_PACKETLOSS, &destPacketLoss)) {
+        totalReliability *= (1.0f - destPacketLoss);
+    }
 
     gint result = _topology_getEdgeHelper(top, srcVertexIndex, dstVertexIndex, NULL, &edgeLatency, &edgeReliability);
 
@@ -1469,9 +1768,15 @@ static void _topology_logAllCachedPathsHelper2(gpointer dstIndexKey, Path* path,
         igraph_integer_t srcVertexIndex = (igraph_integer_t)path_getSrcVertexIndex(path);
         igraph_integer_t dstVertexIndex = (igraph_integer_t)path_getDstVertexIndex(path);
 
+        gboolean found;
+        const gchar* srcIDStr;
+        const gchar* dstIDStr;
+
         _topology_lockGraph(top);
-        const gchar* srcIDStr = VAS(&top->graph, "id", srcVertexIndex);
-        const gchar* dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
+        found = _topology_findVertexAttributeString(top, srcVertexIndex, VERTEX_ATTR_ID, &srcIDStr);
+        utility_assert(found);
+        found = _topology_findVertexAttributeString(top, dstVertexIndex, VERTEX_ATTR_ID, &dstIDStr);
+        utility_assert(found);
         _topology_unlockGraph(top);
 
         /* log this at info level so we don't spam the message level logs */
@@ -1520,9 +1825,16 @@ static Path* _topology_getPathEntry(Topology* top, Address* srcAddress, Address*
         /* cache miss, lets find the path */
         gboolean success = FALSE;
 
+        gboolean found;
+        const gchar* srcIDStr;
+        const gchar* dstIDStr;
+
+
         _topology_lockGraph(top);
-        const gchar* srcIDStr = VAS(&top->graph, "id", srcVertexIndex);
-        const gchar* dstIDStr = VAS(&top->graph, "id", dstVertexIndex);
+        found = _topology_findVertexAttributeString(top, srcVertexIndex, VERTEX_ATTR_ID, &srcIDStr);
+        utility_assert(found);
+        found = _topology_findVertexAttributeString(top, dstVertexIndex, VERTEX_ATTR_ID, &dstIDStr);
+        utility_assert(found);
         _topology_unlockGraph(top);
 
         if(top->isComplete) {
@@ -1625,7 +1937,9 @@ static gboolean _topology_findAttachmentVertexHelperHook(Topology* top, igraph_i
     /* @warning: make sure we hold the graph lock when iterating with this helper
      * @todo: this could be made much more efficient */
 
-    const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
+    const gchar* idStr;
+    gboolean found = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_ID, &idStr);
+    utility_assert(found);
 
     /* first check the IP address */
     const gchar* ipStr = VAS(&top->graph, "ip", vertexIndex);
