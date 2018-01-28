@@ -171,7 +171,7 @@ static void _master_loadConfiguration(Master* master) {
     }
 }
 
-static void _master_loadTopology(Master* master) {
+static gboolean _master_loadTopology(Master* master) {
     MAGIC_ASSERT(master);
 
     ConfigurationTopologyElement* e = configuration_getTopologyElement(master->config);
@@ -201,22 +201,25 @@ static void _master_loadTopology(Master* master) {
         if(!g_file_set_contents(temporaryFilename, e->cdata.string->str,
                 (gssize)e->cdata.string->len, &error)) {
             error("unable to write cdata topology to '%s': %s", temporaryFilename, error->message);
-            return;
+            return FALSE;
         }
     }
 
     /* initialize global routing model */
     master->topology = topology_new(temporaryFilename);
     g_unlink(temporaryFilename);
-    g_free(temporaryFilename);
 
     if(!master->topology) {
-        error("error loading topology path '%s'", temporaryFilename);
-        return;
+        critical("fatal error loading topology at path '%s', check your syntax and try again", temporaryFilename);
+        g_free(temporaryFilename);
+        return FALSE;
     }
+
+    g_free(temporaryFilename);
 
     /* initialize global DNS addressing */
     master->dns = dns_new();
+    return TRUE;
 }
 
 static void _master_initializeTimeWindows(Master* master) {
@@ -375,7 +378,11 @@ gint master_run(Master* master) {
 
     /* start loading and initializing simulation data */
     _master_loadConfiguration(master);
-    _master_loadTopology(master);
+    gboolean isSuccess = _master_loadTopology(master);
+    if(!isSuccess) {
+        return 1;
+    }
+
     _master_initializeTimeWindows(master);
 
     /* the master will be responsible for distributing the actions to the slaves so that

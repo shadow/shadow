@@ -524,27 +524,144 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_integer_t vertexIndex, gpointer userData) {
     MAGIC_ASSERT(top);
 
-    /* get vertex attributes: S for string and N for numeric */
-    const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
-    const gchar* typeStr = VAS(&top->graph, "type", vertexIndex);
+    /* the required attributes were already verified when we check the graph
+     * properties. but that just means they are defined on the graph. the value
+     * may still be NULL of invalid on each vertex.
+     * in this func we get vertex attributes: S for string and N for numeric */
+    gboolean isSuccess = TRUE;
+    GString* message = g_string_new(NULL);
+    g_string_printf(message, "found vertex %li", (glong)vertexIndex);
 
-    if(g_strstr_len(idStr, (gssize)-1, "poi")) {
-        const gchar* ipStr = VAS(&top->graph, "ip", vertexIndex);
-        const gchar* geocodeStr = VAS(&top->graph, "geocode", vertexIndex);
-        igraph_real_t bwup = VAN(&top->graph, "bandwidthup", vertexIndex);
-        igraph_real_t bwdown = VAN(&top->graph, "bandwidthdown", vertexIndex);
-        igraph_real_t ploss = VAN(&top->graph, "packetloss", vertexIndex);
+    /* keep a copy of the id once we get it to make the following message more understandable */
+    gchar* idStr = NULL;
 
-        debug("found vertex %li (%s), type=%s ip=%s geocode=%s "
-                "bandwidthup=%f bandwidthdown=%f packetloss=%f",
-                (glong)vertexIndex, idStr, typeStr, ipStr, geocodeStr, bwup, bwdown, ploss);
+    /* this attribute is required, so it is an error if it doesn't exist */
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "id")) {
+        const gchar* vidStr = VAS(&top->graph, "id", vertexIndex);
+        if(vidStr == NULL || vidStr[0] == '\0') {
+            warning("required attribute 'id' on vertex %li is NULL", (glong)vertexIndex);
+            isSuccess = FALSE;
+            idStr = g_strdup("NULL");
+        } else {
+            g_string_append_printf(message, " id='%s'", vidStr);
+            idStr = g_strdup(vidStr);
+        }
     } else {
-        debug("found vertex %li (%s), type=%s",
-                (glong)vertexIndex, idStr, typeStr);
+        warning("required attribute 'id' on vertex %li is missing", (glong)vertexIndex);
+        isSuccess = FALSE;
+        idStr = g_strdup("MISSING");
     }
 
-    // XXX
-    return TRUE;
+    /* this attribute is required, so it is an error if it doesn't exist */
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "bandwidthdown")) {
+        igraph_real_t val = VAN(&top->graph, "bandwidthdown", vertexIndex);
+        if(isnan((gdouble)val) != 0) {
+            warning("required attribute 'bandwidthdown' on vertex %li (id='%s') is NAN", (glong)vertexIndex, idStr);
+            isSuccess = FALSE;
+        } else if(val <= 0.0f) {
+            warning("optional attribute 'bandwidthdown' on vertex %li (id='%s') must be > 0", (glong)vertexIndex, idStr);
+            /* its an error if they gave a value that is incorrect */
+            isSuccess = FALSE;
+        } else {
+            g_string_append_printf(message, " bandwidthdown='%f'", val);
+        }
+    } else {
+        warning("required attribute 'bandwidthdown' on vertex %li (id='%s') is missing", (glong)vertexIndex, idStr);
+        isSuccess = FALSE;
+    }
+
+    /* this attribute is required, so it is an error if it doesn't exist */
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "bandwidthup")) {
+        igraph_real_t val = VAN(&top->graph, "bandwidthup", vertexIndex);
+        if(isnan((gdouble)val) != 0) {
+            warning("required attribute 'bandwidthup' on vertex %li (id='%s') is NAN", (glong)vertexIndex, idStr);
+            isSuccess = FALSE;
+        } else if(val <= 0.0f) {
+            warning("optional attribute 'bandwidthup' on vertex %li (id='%s') must be > 0", (glong)vertexIndex, idStr);
+            /* its an error if they gave a value that is incorrect */
+            isSuccess = FALSE;
+        } else {
+            g_string_append_printf(message, " bandwidthup='%f'", val);
+        }
+    } else {
+        warning("required attribute 'bandwidthup' on vertex %li (id='%s') is missing", (glong)vertexIndex, idStr);
+        isSuccess = FALSE;
+    }
+
+    /* this attribute is NOT required, so it is OK if it doesn't exist */
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "ip")) {
+        const gchar* val = VAS(&top->graph, "ip", vertexIndex);
+        if(val == NULL || val[0] == '\0') {
+            warning("optional attribute 'ip' on vertex %li (id='%s') is NULL, ignoring", (glong)vertexIndex, idStr);
+        } else {
+            g_string_append_printf(message, " ip='%s'", val);
+        }
+    }
+
+    /* this attribute is NOT required, so it is OK if it doesn't exist */
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "citycode")) {
+        const gchar* val = VAS(&top->graph, "citycode", vertexIndex);
+        if(val == NULL || val[0] == '\0') {
+            warning("optional attribute 'citycode' on vertex %li (id='%s') is NULL, ignoring", (glong)vertexIndex, idStr);
+        } else {
+            g_string_append_printf(message, " citycode='%s'", val);
+        }
+    }
+
+    /* this attribute is NOT required, so it is OK if it doesn't exist */
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "countrycode")) {
+        const gchar* val = VAS(&top->graph, "countrycode", vertexIndex);
+        if(val == NULL || val[0] == '\0') {
+            warning("optional attribute 'countrycode' on vertex %li (id='%s') is NULL, ignoring", (glong)vertexIndex, idStr);
+        } else {
+            g_string_append_printf(message, " countrycode='%s'", val);
+        }
+    }
+
+    /* this attribute is NOT required, so it is OK if it doesn't exist */
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "type")) {
+        const gchar* val = VAS(&top->graph, "type", vertexIndex);
+        if(val == NULL || val[0] == '\0') {
+            warning("optional attribute 'type' on vertex %li (id='%s') is NULL, ignoring", (glong)vertexIndex, idStr);
+        } else {
+            g_string_append_printf(message, " type='%s'", val);
+        }
+    }
+
+    /* this attribute is NOT required, so it is OK if it doesn't exist */
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "asn")) {
+        igraph_real_t val = VAN(&top->graph, "asn", vertexIndex);
+        if(isnan((gdouble)val) != 0) {
+            warning("optional attribute 'asn' on vertex %li (id='%s') is NULL, ignoring", (glong)vertexIndex, idStr);
+        } else if(val <= 0.0f) {
+            warning("optional attribute 'asn' on vertex %li (id='%s') must be > 0", (glong)vertexIndex, idStr);
+            /* its an error if they gave a value that is incorrect */
+            isSuccess = FALSE;
+        } else {
+            g_string_append_printf(message, " asn='%s'", val);
+        }
+    }
+
+    /* this attribute is NOT required, so it is OK if it doesn't exist */
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, "packetloss")) {
+        igraph_real_t val = VAN(&top->graph, "packetloss", vertexIndex);
+        if(isnan((gdouble)val) != 0) {
+            warning("optional attribute 'packetloss' on vertex %li (id='%s') is NULL, ignoring", (glong)vertexIndex, idStr);
+        } else if(val < 0.0f || val > 1.0f) {
+            warning("optional attribute 'packetloss' on vertex %li (id='%s') must be >= 0.0 and <= 1.0", (glong)vertexIndex, idStr);
+            /* its an error if they gave a value that is incorrect */
+            isSuccess = FALSE;
+        } else {
+            g_string_append_printf(message, " packetloss='%f'", val);
+        }
+    }
+
+    debug("%s", message->str);
+
+    g_string_free(message, TRUE);
+    g_free(idStr);
+
+    return isSuccess;
 }
 
 static igraph_integer_t _topology_iterateAllVertices(Topology* top, VertexNotifyFunc hook, gpointer userData) {
@@ -621,24 +738,67 @@ static gboolean _topology_checkGraphEdgesHelperHook(Topology* top, igraph_intege
     const gchar* fromIDStr = VAS(&top->graph, "id", fromVertexIndex);
     const gchar* toIDStr = VAS(&top->graph, "id", toVertexIndex);
 
-    /* get edge attributes: S for string and N for numeric */
-    igraph_real_t latency = EAN(&top->graph, "latency", edgeIndex);
-    igraph_real_t jitter = EAN(&top->graph, "jitter", edgeIndex);
-    igraph_real_t ploss = EAN(&top->graph, "packetloss", edgeIndex);
+    gboolean isSuccess = TRUE;
 
-    if(latency <= 0) {
-        error("invalid latency %f on edge %li from vertex %li (%s) to vertex %li (%s)",
-            latency, (glong)edgeIndex, (glong)fromVertexIndex, fromIDStr, (glong)toVertexIndex, toIDStr);
+    GString* message = g_string_new(NULL);
+    g_string_printf(message, "found edge %li", (glong)edgeIndex);
+
+    /* this attribute is required, so it is an error if it doesn't exist */
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, "latency")) {
+        igraph_real_t val = EAN(&top->graph, "latency", edgeIndex);
+        if(isnan((gdouble)val) != 0) {
+            warning("required attribute 'latency' on edge %li (from '%s' to '%s') is NAN", (glong)edgeIndex, fromIDStr, toIDStr);
+            isSuccess = FALSE;
+        } else if(val <= 0.0f) {
+            warning("required attribute 'latency' on edge %li (from '%s' to '%s') must be > 0", (glong)edgeIndex, fromIDStr, toIDStr);
+            /* its an error if they gave a value that is incorrect */
+            isSuccess = FALSE;
+        } else {
+            g_string_append_printf(message, " latency='%f'", val);
+        }
+    } else {
+        warning("required attribute 'latency' on edge %li (from '%s' to '%s') is missing", (glong)edgeIndex, fromIDStr, toIDStr);
+        isSuccess = FALSE;
     }
 
-    utility_assert(latency > 0);
+    /* this attribute is required, so it is an error if it doesn't exist */
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, "packetloss")) {
+        igraph_real_t val = EAN(&top->graph, "packetloss", edgeIndex);
+        if(isnan((gdouble)val) != 0) {
+            warning("required attribute 'packetloss' on edge %li (from '%s' to '%s') is NAN", (glong)edgeIndex, fromIDStr, toIDStr);
+            isSuccess = FALSE;
+        } else if(val < 0.0f || val > 1.0f) {
+            warning("required attribute 'packetloss' on edge %li (from '%s' to '%s') must be >= 0", (glong)edgeIndex, fromIDStr, toIDStr);
+            /* its an error if they gave a value that is incorrect */
+            isSuccess = FALSE;
+        } else {
+            g_string_append_printf(message, " packetloss='%f'", val);
+        }
+    } else {
+        warning("required attribute 'packetloss' on edge %li (from '%s' to '%s') is missing", (glong)edgeIndex, fromIDStr, toIDStr);
+        isSuccess = FALSE;
+    }
 
-    debug("found edge %li from vertex %li (%s) to vertex %li (%s) latency=%f jitter=%f packetloss=%f",
-            (glong)edgeIndex, (glong)fromVertexIndex, fromIDStr, (glong)toVertexIndex, toIDStr,
-            latency, jitter, ploss);
+    /* this attribute is optional, so it is OK if it doesn't exist */
+    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, "jitter")) {
+        igraph_real_t val = EAN(&top->graph, "jitter", edgeIndex);
+        if(isnan((gdouble)val) != 0) {
+            warning("optional attribute 'jitter' on edge %li (from '%s' to '%s') is NAN, ignoring", (glong)edgeIndex, fromIDStr, toIDStr);
+            isSuccess = FALSE;
+        } else if(val < 0.0f) {
+            warning("optional attribute 'jitter' on edge %li (from '%s' to '%s') must be >= 0", (glong)edgeIndex, fromIDStr, toIDStr);
+            /* its an error if they gave a value that is incorrect */
+            isSuccess = FALSE;
+        } else {
+            g_string_append_printf(message, " jitter='%f'", val);
+        }
+    }
 
-    // XXX
-    return TRUE;
+    debug("%s", message->str);
+
+    g_string_free(message, TRUE);
+
+    return isSuccess;
 }
 
 static igraph_integer_t _topology_iterateAllEdges(Topology* top, EdgeNotifyFunc hook, gpointer userData) {
@@ -1467,67 +1627,65 @@ static gboolean _topology_findAttachmentVertexHelperHook(Topology* top, igraph_i
 
     const gchar* idStr = VAS(&top->graph, "id", vertexIndex);
 
-    if(g_strstr_len(idStr, (gssize)-1, "poi")) {
-        /* first check the IP address */
-        const gchar* ipStr = VAS(&top->graph, "ip", vertexIndex);
-        in_addr_t vertexIP = address_stringToIP(ipStr);
+    /* first check the IP address */
+    const gchar* ipStr = VAS(&top->graph, "ip", vertexIndex);
+    in_addr_t vertexIP = address_stringToIP(ipStr);
 
-        gboolean vertexHasUsableIP = FALSE;
-        if(vertexIP != INADDR_NONE && vertexIP != INADDR_ANY) {
-            vertexHasUsableIP = TRUE;
-        }
+    gboolean vertexHasUsableIP = FALSE;
+    if(vertexIP != INADDR_NONE && vertexIP != INADDR_ANY) {
+        vertexHasUsableIP = TRUE;
+    }
 
-        /* check for exact IP address match */
-        if(ah->ipHint && ah->requestedIP != INADDR_NONE && ah->requestedIP != INADDR_ANY) {
-            if(vertexIP == ah->requestedIP) {
-                if(!ah->foundExactIPMatch) {
-                    /* first time we found a match, clear all queues to make sure we only
-                     * select from the matching IP vertices */
-                    g_queue_clear(ah->candidatesAll);
-                    g_queue_clear(ah->candidatesType);
-                    g_queue_clear(ah->candidatesCode);
-                    g_queue_clear(ah->candidatesTypeCode);
-                }
-                ah->foundExactIPMatch = TRUE;
-                g_queue_push_tail(ah->candidatesAll, GINT_TO_POINTER(vertexIndex));
-                if(vertexHasUsableIP) {
-                    ah->numCandidatesAllIPs++;
-                }
+    /* check for exact IP address match */
+    if(ah->ipHint && ah->requestedIP != INADDR_NONE && ah->requestedIP != INADDR_ANY) {
+        if(vertexIP == ah->requestedIP) {
+            if(!ah->foundExactIPMatch) {
+                /* first time we found a match, clear all queues to make sure we only
+                 * select from the matching IP vertices */
+                g_queue_clear(ah->candidatesAll);
+                g_queue_clear(ah->candidatesType);
+                g_queue_clear(ah->candidatesCode);
+                g_queue_clear(ah->candidatesTypeCode);
+            }
+            ah->foundExactIPMatch = TRUE;
+            g_queue_push_tail(ah->candidatesAll, GINT_TO_POINTER(vertexIndex));
+            if(vertexHasUsableIP) {
+                ah->numCandidatesAllIPs++;
             }
         }
+    }
 
-        /* if it matches the requested IP exactly, we ignore other the filters */
-        if(ah->foundExactIPMatch) {
-            return TRUE;
-        }
+    /* if it matches the requested IP exactly, we ignore other the filters */
+    if(ah->foundExactIPMatch) {
+        return TRUE;
+    }
 
-        const gchar* typeStr = VAS(&top->graph, "type", vertexIndex);
-        const gchar* geocodeStr = VAS(&top->graph, "geocode", vertexIndex);
+    const gchar* typeStr = VAS(&top->graph, "type", vertexIndex);
+    const gchar* geocodeStr = VAS(&top->graph, "geocode", vertexIndex);
 
-        gboolean typeMatches = ah->typeHint && !g_ascii_strcasecmp(typeStr, ah->typeHint);
-        gboolean codeMatches = ah->geocodeHint && !g_ascii_strcasecmp(geocodeStr, ah->geocodeHint);
+    gboolean typeMatches = ah->typeHint && !g_ascii_strcasecmp(typeStr, ah->typeHint);
+    gboolean codeMatches = ah->geocodeHint && !g_ascii_strcasecmp(geocodeStr, ah->geocodeHint);
 
-        g_queue_push_tail(ah->candidatesAll, GINT_TO_POINTER(vertexIndex));
+    g_queue_push_tail(ah->candidatesAll, GINT_TO_POINTER(vertexIndex));
+    if(vertexHasUsableIP) {
+        ah->numCandidatesAllIPs++;
+    }
+    if(typeMatches && ah->candidatesType) {
+        g_queue_push_tail(ah->candidatesType, GINT_TO_POINTER(vertexIndex));
         if(vertexHasUsableIP) {
-            ah->numCandidatesAllIPs++;
+            ah->numCandidatesTypeIPs++;
         }
-        if(typeMatches && ah->candidatesType) {
-            g_queue_push_tail(ah->candidatesType, GINT_TO_POINTER(vertexIndex));
-            if(vertexHasUsableIP) {
-                ah->numCandidatesTypeIPs++;
-            }
+    }
+    if(codeMatches && ah->candidatesCode) {
+        g_queue_push_tail(ah->candidatesCode, GINT_TO_POINTER(vertexIndex));
+        if(vertexHasUsableIP) {
+            ah->numCandidatesCodeIPs++;
         }
-        if(codeMatches && ah->candidatesCode) {
-            g_queue_push_tail(ah->candidatesCode, GINT_TO_POINTER(vertexIndex));
-            if(vertexHasUsableIP) {
-                ah->numCandidatesCodeIPs++;
-            }
-        }
-        if(typeMatches && codeMatches && ah->candidatesTypeCode) {
-            g_queue_push_tail(ah->candidatesTypeCode, GINT_TO_POINTER(vertexIndex));
-            if(vertexHasUsableIP) {
-                ah->numCandidatesTypeCodeIPs++;
-            }
+    }
+    if(typeMatches && codeMatches && ah->candidatesTypeCode) {
+        g_queue_push_tail(ah->candidatesTypeCode, GINT_TO_POINTER(vertexIndex));
+        if(vertexHasUsableIP) {
+            ah->numCandidatesTypeCodeIPs++;
         }
     }
 
