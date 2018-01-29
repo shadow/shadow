@@ -91,18 +91,34 @@ enum _EdgeAttribute {
 
 typedef struct _AttachHelper AttachHelper;
 struct _AttachHelper {
-    GQueue* candidatesAll;
-    guint numCandidatesAllIPs;
+    /* these are ordered by preference, more specific is better */
+    GQueue* candidatesCityAndType;
+    GQueue* candidatesCity;
+    GQueue* candidatesCountryAndType;
+    GQueue* candidatesCountry;
+    GQueue* candidatesGeoAndType;
+    GQueue* candidatesGeo;
     GQueue* candidatesType;
-    guint numCandidatesTypeIPs;
-    GQueue* candidatesCode;
-    guint numCandidatesCodeIPs;
-    GQueue* candidatesTypeCode;
-    guint numCandidatesTypeCodeIPs;
-    gchar* typeHint;
-    gchar* geocodeHint;
+    GQueue* candidatesAll;
+
+    guint numIPsCityAndType;
+    guint numIPsCity;
+    guint numIPsCountryAndType;
+    guint numIPsCountry;
+    guint numIPsGeoAndType;
+    guint numIPsGeo;
+    guint numIPsType;
+    guint numIPsAll;
+
     gchar* ipHint;
+    gchar* citycodeHint;
+    gchar* countrycodeHint;
+    gchar* geocodeHint;
+    gchar* typeHint;
+
     in_addr_t requestedIP;
+    gboolean requestedIPIsUsable;
+
     gboolean foundExactIPMatch;
 };
 
@@ -2028,37 +2044,56 @@ static gboolean _topology_findAttachmentVertexHelperHook(Topology* top, igraph_i
      * @todo: this could be made much more efficient */
 
     const gchar* idStr;
-    gboolean found = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_ID, &idStr);
-    utility_assert(found);
+    gboolean idFound = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_ID, &idStr);
+    utility_assert(idFound);
 
-    /* first check the IP address */
-//    const gchar* ipStr = NULL;
-//    gboolean foundIP = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_IP, &ipStr);
-// TODO XXX
+    const gchar* ipStr = NULL;
+    const gchar* citycodeStr = NULL;
+    const gchar* countrycodeStr = NULL;
+    const gchar* geocodeStr = NULL;
+    const gchar* typeStr = NULL;
 
-    const gchar* ipStr = VAS(&top->graph, "ip", vertexIndex);
-    in_addr_t vertexIP = address_stringToIP(ipStr);
+    gboolean ipFound = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_IP, &ipStr);
+    gboolean citycodeFound = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_CITYCODE, &citycodeStr);
+    gboolean countrycodeFound = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_COUNTRYCODE, &countrycodeStr);
+    gboolean geocodeFound = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_GEOCODE, &geocodeStr);
+    gboolean typeFound = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_TYPE, &typeStr);
 
+    gboolean citycodeMatches = citycodeFound && ah->citycodeHint && !g_ascii_strcasecmp(citycodeStr, ah->citycodeHint);
+    gboolean countrycodeMatches = countrycodeFound && ah->countrycodeHint && !g_ascii_strcasecmp(countrycodeStr, ah->countrycodeHint);
+    gboolean geocodeMatches = geocodeFound && ah->geocodeHint && !g_ascii_strcasecmp(geocodeStr, ah->geocodeHint);
+    gboolean typeMatches = typeFound && ah->typeHint && !g_ascii_strcasecmp(typeStr, ah->typeHint);
+
+    /* get the ip address of the vertex if there is one */
     gboolean vertexHasUsableIP = FALSE;
-    if(vertexIP != INADDR_NONE && vertexIP != INADDR_ANY) {
-        vertexHasUsableIP = TRUE;
+    in_addr_t vertexIP = INADDR_NONE;
+    if(ipFound) {
+        in_addr_t ip = address_stringToIP(ipStr);
+        if(ip != INADDR_NONE && ip != INADDR_ANY && ip != INADDR_LOOPBACK) {
+            vertexHasUsableIP = TRUE;
+            vertexIP = ip;
+        }
     }
 
     /* check for exact IP address match */
-    if(ah->ipHint && ah->requestedIP != INADDR_NONE && ah->requestedIP != INADDR_ANY) {
+    if(ah->requestedIPIsUsable && vertexHasUsableIP) {
         if(vertexIP == ah->requestedIP) {
             if(!ah->foundExactIPMatch) {
                 /* first time we found a match, clear all queues to make sure we only
                  * select from the matching IP vertices */
+                g_queue_clear(ah->candidatesCityAndType);
+                g_queue_clear(ah->candidatesCity);
+                g_queue_clear(ah->candidatesCountryAndType);
+                g_queue_clear(ah->candidatesCountry);
+                g_queue_clear(ah->candidatesGeoAndType);
+                g_queue_clear(ah->candidatesGeo);
                 g_queue_clear(ah->candidatesAll);
                 g_queue_clear(ah->candidatesType);
-                g_queue_clear(ah->candidatesCode);
-                g_queue_clear(ah->candidatesTypeCode);
             }
             ah->foundExactIPMatch = TRUE;
             g_queue_push_tail(ah->candidatesAll, GINT_TO_POINTER(vertexIndex));
             if(vertexHasUsableIP) {
-                ah->numCandidatesAllIPs++;
+                ah->numIPsAll++;
             }
         }
     }
@@ -2068,32 +2103,58 @@ static gboolean _topology_findAttachmentVertexHelperHook(Topology* top, igraph_i
         return TRUE;
     }
 
-    const gchar* typeStr = VAS(&top->graph, "type", vertexIndex);
-    const gchar* geocodeStr = VAS(&top->graph, "geocode", vertexIndex);
-
-    gboolean typeMatches = ah->typeHint && !g_ascii_strcasecmp(typeStr, ah->typeHint);
-    gboolean codeMatches = ah->geocodeHint && !g_ascii_strcasecmp(geocodeStr, ah->geocodeHint);
-
     g_queue_push_tail(ah->candidatesAll, GINT_TO_POINTER(vertexIndex));
     if(vertexHasUsableIP) {
-        ah->numCandidatesAllIPs++;
+        ah->numIPsAll++;
     }
+
+    if(citycodeMatches && typeMatches && ah->candidatesCityAndType) {
+        g_queue_push_tail(ah->candidatesCityAndType, GINT_TO_POINTER(vertexIndex));
+        if(vertexHasUsableIP) {
+            ah->numIPsCityAndType++;
+        }
+    }
+
+    if(citycodeMatches && ah->candidatesCity) {
+        g_queue_push_tail(ah->candidatesCity, GINT_TO_POINTER(vertexIndex));
+        if(vertexHasUsableIP) {
+            ah->numIPsCity++;
+        }
+    }
+
+    if(countrycodeMatches && typeMatches && ah->candidatesCountryAndType) {
+        g_queue_push_tail(ah->candidatesCountryAndType, GINT_TO_POINTER(vertexIndex));
+        if(vertexHasUsableIP) {
+            ah->numIPsCountryAndType++;
+        }
+    }
+
+    if(countrycodeMatches && ah->candidatesCountry) {
+        g_queue_push_tail(ah->candidatesCountry, GINT_TO_POINTER(vertexIndex));
+        if(vertexHasUsableIP) {
+            ah->numIPsCountry++;
+        }
+    }
+
+    if(geocodeMatches && typeMatches && ah->candidatesGeoAndType) {
+        g_queue_push_tail(ah->candidatesGeoAndType, GINT_TO_POINTER(vertexIndex));
+        if(vertexHasUsableIP) {
+            ah->numIPsGeoAndType++;
+        }
+    }
+
+    if(geocodeMatches && ah->candidatesGeo) {
+        g_queue_push_tail(ah->candidatesGeo, GINT_TO_POINTER(vertexIndex));
+        if(vertexHasUsableIP) {
+            ah->numIPsGeo++;
+        }
+    }
+
+
     if(typeMatches && ah->candidatesType) {
         g_queue_push_tail(ah->candidatesType, GINT_TO_POINTER(vertexIndex));
         if(vertexHasUsableIP) {
-            ah->numCandidatesTypeIPs++;
-        }
-    }
-    if(codeMatches && ah->candidatesCode) {
-        g_queue_push_tail(ah->candidatesCode, GINT_TO_POINTER(vertexIndex));
-        if(vertexHasUsableIP) {
-            ah->numCandidatesCodeIPs++;
-        }
-    }
-    if(typeMatches && codeMatches && ah->candidatesTypeCode) {
-        g_queue_push_tail(ah->candidatesTypeCode, GINT_TO_POINTER(vertexIndex));
-        if(vertexHasUsableIP) {
-            ah->numCandidatesTypeCodeIPs++;
+            ah->numIPsType++;
         }
     }
 
@@ -2137,14 +2198,28 @@ static igraph_integer_t _topology_findAttachmentVertex(Topology* top, Random* ra
     igraph_integer_t* vertexIndexPtr = GINT_TO_POINTER(-1);
 
     AttachHelper* ah = g_new0(AttachHelper, 1);
-    ah->geocodeHint = geocodeHint;
     ah->ipHint = ipHint;
+    ah->citycodeHint = citycodeHint;
+    ah->countrycodeHint = countrycodeHint;
+    ah->geocodeHint = geocodeHint;
     ah->typeHint = typeHint;
-    ah->requestedIP = ipHint ? address_stringToIP(ipHint) : INADDR_NONE;
-    ah->candidatesAll = g_queue_new();
-    ah->candidatesCode = g_queue_new();
+
+    if(ipHint) {
+        in_addr_t ip = address_stringToIP(ipHint);
+        if(ip != INADDR_NONE && ip != INADDR_ANY && ip != INADDR_LOOPBACK) {
+            ah->requestedIPIsUsable = TRUE;
+            ah->requestedIP = ip;
+        }
+    }
+
+    ah->candidatesCityAndType = g_queue_new();
+    ah->candidatesCity = g_queue_new();
+    ah->candidatesCountryAndType = g_queue_new();
+    ah->candidatesCountry = g_queue_new();
+    ah->candidatesGeoAndType = g_queue_new();
+    ah->candidatesGeo = g_queue_new();
     ah->candidatesType = g_queue_new();
-    ah->candidatesTypeCode = g_queue_new();
+    ah->candidatesAll = g_queue_new();
 
     /* go through the vertices to see which ones match our hint filters */
     _topology_lockGraph(top);
@@ -2153,26 +2228,37 @@ static igraph_integer_t _topology_findAttachmentVertex(Topology* top, Random* ra
 
     /* the logic here is to try and find the most specific match following the hints.
      * we always use exact IP hint matches, and otherwise use it to select the best possible
-     * match from the final set of candidates. the type and geocode hints are used to filter
+     * match from the final set of candidates. the type and code hints are used to filter
      * all vertices down to a smaller set. if that smaller set is empty, then we fall back to the
-     * type-only filtered set. if the type-only set is empty, we fall back to the geocode-only
-     * filtered set. if that is empty, we stick with the complete vertex set.
+     * type-only filtered set and eventually the complete vertex set.
      */
     GQueue* candidates = NULL;
     gboolean useLongestPrefixMatching = FALSE;
 
-    if(g_queue_get_length(ah->candidatesTypeCode) > 0) {
-        candidates = ah->candidatesTypeCode;
-        useLongestPrefixMatching = (ipHint && ah->numCandidatesTypeCodeIPs > 0);
+    if(g_queue_get_length(ah->candidatesCityAndType) > 0) {
+        candidates = ah->candidatesCityAndType;
+        useLongestPrefixMatching = (ah->requestedIPIsUsable && ah->numIPsCityAndType > 0);
+    } else if(g_queue_get_length(ah->candidatesCity) > 0) {
+        candidates = ah->candidatesCity;
+        useLongestPrefixMatching = (ah->requestedIPIsUsable && ah->numIPsCity > 0);
+    } else if(g_queue_get_length(ah->candidatesCountryAndType) > 0) {
+        candidates = ah->candidatesCountryAndType;
+        useLongestPrefixMatching = (ah->requestedIPIsUsable && ah->numIPsCountryAndType > 0);
+    } else if(g_queue_get_length(ah->candidatesCountry) > 0) {
+        candidates = ah->candidatesCountry;
+        useLongestPrefixMatching = (ah->requestedIPIsUsable && ah->numIPsCountry > 0);
+    } else if(g_queue_get_length(ah->candidatesGeoAndType) > 0) {
+        candidates = ah->candidatesGeoAndType;
+        useLongestPrefixMatching = (ah->requestedIPIsUsable && ah->numIPsGeoAndType > 0);
+    } else if(g_queue_get_length(ah->candidatesGeo) > 0) {
+        candidates = ah->candidatesGeo;
+        useLongestPrefixMatching = (ah->requestedIPIsUsable && ah->numIPsGeo > 0);
     } else if(g_queue_get_length(ah->candidatesType) > 0) {
         candidates = ah->candidatesType;
-        useLongestPrefixMatching = (ipHint && ah->numCandidatesTypeIPs > 0);
-    } else if(g_queue_get_length(ah->candidatesCode) > 0) {
-        candidates = ah->candidatesCode;
-        useLongestPrefixMatching = (ipHint && ah->numCandidatesCodeIPs > 0);
+        useLongestPrefixMatching = (ah->requestedIPIsUsable && ah->numIPsType > 0);
     } else {
         candidates = ah->candidatesAll;
-        useLongestPrefixMatching = (ipHint && ah->numCandidatesAllIPs > 0);
+        useLongestPrefixMatching = (ipHint && ah->numIPsAll > 0);
     }
 
     guint numCandidates = g_queue_get_length(candidates);
@@ -2198,17 +2284,29 @@ static igraph_integer_t _topology_findAttachmentVertex(Topology* top, Random* ra
     utility_assert(vertexIndex > (igraph_integer_t) -1);
 
     /* clean up */
-    if(ah->candidatesAll) {
-        g_queue_free(ah->candidatesAll);
+    if(ah->candidatesCityAndType) {
+        g_queue_free(ah->candidatesCityAndType);
     }
-    if(ah->candidatesCode) {
-        g_queue_free(ah->candidatesCode);
+    if(ah->candidatesCity) {
+        g_queue_free(ah->candidatesCity);
+    }
+    if(ah->candidatesCountryAndType) {
+        g_queue_free(ah->candidatesCountryAndType);
+    }
+    if(ah->candidatesCountry) {
+        g_queue_free(ah->candidatesCountry);
+    }
+    if(ah->candidatesGeoAndType) {
+        g_queue_free(ah->candidatesGeoAndType);
+    }
+    if(ah->candidatesGeo) {
+        g_queue_free(ah->candidatesGeo);
     }
     if(ah->candidatesType) {
         g_queue_free(ah->candidatesType);
     }
-    if(ah->candidatesTypeCode) {
-        g_queue_free(ah->candidatesTypeCode);
+    if(ah->candidatesAll) {
+        g_queue_free(ah->candidatesAll);
     }
     g_free(ah);
 
@@ -2268,7 +2366,7 @@ void topology_attach(Topology* top, Address* address, Random* randomSourcePool,
 
     _topology_unlockGraph(top);
 
-    info("attached address '%s' to vertex %li ('%s') "
+    message("attached address '%s' to vertex %li ('%s') "
             "with attributes (ip=%s, citycode=%s, countrycode=%s, geocode=%s, type=%s) "
             "using hints (ip=%s, citycode=%s, countrycode=%s, geocode=%s, type=%s)",
             address_toHostIPString(address), (glong)vertexIndex, idStr,
