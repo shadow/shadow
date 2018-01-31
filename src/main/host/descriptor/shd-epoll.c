@@ -77,7 +77,6 @@ struct _Epoll {
     /* holds the wrappers for the descriptors we are watching for events */
     GHashTable* watching;
 
-    SimulationTime lastWaitTime;
     Process* ownerProcess;
     gint osEpollDescriptor;
 
@@ -468,8 +467,6 @@ gint epoll_controlOS(Epoll* epoll, gint operation, gint fileDescriptor,
 gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArrayLength, gint* nEvents) {
     MAGIC_ASSERT(epoll);
     utility_assert(nEvents);
-
-    epoll->lastWaitTime = worker_getCurrentTime();
 
     /* return the available events in the eventArray, making sure not to
      * overflow. the number of actual events is returned in nEvents. */

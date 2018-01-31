@@ -70,7 +70,12 @@ typedef guint64 EmulatedTime;
  * The number of nanoseconds from the epoch to January 1st, 2000 at 12:00am UTC.
  * This is used to emulate to applications that we are in a recent time.
  */
-#define EMULATED_TIME_OFFSET G_GUINT64_CONSTANT(946684800) * SIMTIME_ONE_SECOND
+#define EMULATED_TIME_OFFSET (G_GUINT64_CONSTANT(946684800) * SIMTIME_ONE_SECOND)
+
+/**
+ * Conversion from emulated time to simulated time.
+ */
+#define EMULATED_TIME_TO_SIMULATED_TIME(emtime) ((SimulationTime)(emtime-EMULATED_TIME_OFFSET))
 
 #ifdef DEBUG
 /**

@@ -115,6 +115,7 @@ gint timer_getTime(Timer* timer, struct itimerspec *curr_value) {
         return -1;
     }
 
+    /* returns relative time */
     _timer_getCurrentTime(timer, &(curr_value->it_value));
     _timer_getCurrentInterval(timer, &(curr_value->it_interval));
 
@@ -129,13 +130,23 @@ static void _timer_disarm(Timer* timer) {
     debug("timer fd %i disarmed", timer->super.handle);
 }
 
-static SimulationTime _timer_timespecToSimTime(const struct timespec* config) {
+static SimulationTime _timer_timespecToSimTime(const struct timespec* config, gboolean configTimeIsEmulatedTime) {
     utility_assert(config);
 
-    SimulationTime nsecs = config->tv_sec * SIMTIME_ONE_SECOND;
-    nsecs += (SimulationTime) config->tv_nsec;
+    SimulationTime simNanoSecs = 0;
 
-    return nsecs;
+    if(configTimeIsEmulatedTime) {
+        /* the time that was passed in represents an emulated time, so we need to adjust */
+        EmulatedTime emNanoSecs = (EmulatedTime)(config->tv_sec * SIMTIME_ONE_SECOND);
+        emNanoSecs += (EmulatedTime) config->tv_nsec;
+        simNanoSecs = EMULATED_TIME_TO_SIMULATED_TIME(emNanoSecs);
+    } else {
+        /* the config is a relative time, so we just use simtime directly */
+        simNanoSecs = (SimulationTime)(config->tv_sec * SIMTIME_ONE_SECOND);
+        simNanoSecs += (SimulationTime) config->tv_nsec;
+    }
+
+    return simNanoSecs;
 }
 
 static void _timer_setCurrentTime(Timer* timer, const struct timespec* config, gint flags) {
@@ -145,8 +156,10 @@ static void _timer_setCurrentTime(Timer* timer, const struct timespec* config, g
     SimulationTime now = worker_getCurrentTime();
 
     if(flags == TFD_TIMER_ABSTIME) {
-        /* config time specifies an absolute time. */
-        timer->nextExpireTime = _timer_timespecToSimTime(config);
+        /* config time specifies an absolute time.
+         * the plugin only knows about emulated time, so we need to convert it
+         * back to simulated time to make sure we expire at the right time. */
+        timer->nextExpireTime = _timer_timespecToSimTime(config, TRUE);
 
         /* the man page does not specify what happens if the time
          * they gave us is in the past. on linux, the result is an
@@ -156,7 +169,7 @@ static void _timer_setCurrentTime(Timer* timer, const struct timespec* config, g
         }
     } else {
         /* config time is relative to current time */
-        timer->nextExpireTime = now + _timer_timespecToSimTime(config);
+        timer->nextExpireTime = now + _timer_timespecToSimTime(config, FALSE);
     }
 }
 
@@ -164,7 +177,8 @@ static void _timer_setCurrentInterval(Timer* timer, const struct timespec* confi
     MAGIC_ASSERT(timer);
     utility_assert(config);
 
-    timer->expireInterval = _timer_timespecToSimTime(config);
+    /* config time for intervals is always just a raw number of seconds and nanos */
+    timer->expireInterval = _timer_timespecToSimTime(config, FALSE);
 }
 
 static void _timer_expire(Timer* timer, gpointer data);
@@ -283,6 +297,7 @@ gint timer_setTime(Timer* timer, gint flags,
 
     /* first get the old value if requested */
     if(old_value) {
+        /* old value is always relative, even if TFD_TIMER_ABSTIME is set */
         timer_getTime(timer, old_value);
     }
 

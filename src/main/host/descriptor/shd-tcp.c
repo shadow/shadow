@@ -1204,6 +1204,11 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 //  tcpinfo->tcpi_fackets;
 
     /* Times. */
+    /* TODO not sure if these are "how long ago the events happened" or an absolute time.
+     * They can't possibly be since the epoch, since there are only 32 bits and we are
+     * returning microseconds.
+     * FIXME If absolute time, these should be the emulated time, not the simulated time.
+     */
     tcpinfo->tcpi_last_data_sent = (u_int32_t)(tcp->info.lastDataSent/SIMTIME_ONE_MICROSECOND);
     tcpinfo->tcpi_last_ack_sent = (u_int32_t)(tcp->info.lastAckSent/SIMTIME_ONE_MICROSECOND);
     tcpinfo->tcpi_last_data_recv = (u_int32_t)(tcp->info.lastDataReceived/SIMTIME_ONE_MICROSECOND);
