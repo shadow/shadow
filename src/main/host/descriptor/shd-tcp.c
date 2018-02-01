@@ -434,6 +434,7 @@ static void _tcp_setBufferSizes(TCP* tcp) {
 
 // XXX declaration
 static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData);
+static void _tcp_clearRetransmit(TCP* tcp, guint sequence);
 
 static void _tcp_setState(TCP* tcp, enum TCPState state) {
     MAGIC_ASSERT(tcp);
@@ -471,6 +472,8 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
             break;
         }
         case TCPS_CLOSED: {
+            _tcp_clearRetransmit(tcp, (guint)-1);
+
             /* user can no longer use socket */
             descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
 
@@ -619,25 +622,34 @@ static gsize _tcp_getBufferSpaceIn(TCP* tcp) {
 static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
-    /* TCP wants to avoid congestion */
-    priorityqueue_push(tcp->throttledOutput, packet);
-    tcp->throttledOutputLength += packet_getPayloadLength(packet);
-    packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_THROTTLED);
+    if(!priorityqueue_find(tcp->throttledOutput, packet)) {
+        /* TCP wants to avoid congestion */
+        priorityqueue_push(tcp->throttledOutput, packet);
+        packet_ref(packet);
 
-    if(_tcp_getBufferSpaceOut(tcp) == 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+        /* the packet takes up more space */
+        tcp->throttledOutputLength += packet_getPayloadLength(packet);
+        if(_tcp_getBufferSpaceOut(tcp) == 0) {
+            descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+        }
+
+        packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_THROTTLED);
     }
 }
 
 static void _tcp_bufferPacketIn(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
-    /* TCP wants in-order data */
-    priorityqueue_push(tcp->unorderedInput, packet);
-    packet_ref(packet);
-    tcp->unorderedInputLength += packet_getPayloadLength(packet);
+    if(!priorityqueue_find(tcp->unorderedInput, packet)) {
+        /* TCP wants in-order data */
+        priorityqueue_push(tcp->unorderedInput, packet);
+        packet_ref(packet);
 
-    packet_addDeliveryStatus(packet, PDS_RCV_TCP_ENQUEUE_UNORDERED);
+        /* account for the packet length */
+        tcp->unorderedInputLength += packet_getPayloadLength(packet);
+
+        packet_addDeliveryStatus(packet, PDS_RCV_TCP_ENQUEUE_UNORDERED);
+    }
 }
 
 static void _tcp_updateReceiveWindow(TCP* tcp) {
@@ -718,16 +730,22 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
-    packet_ref(packet);
-
     PacketTCPHeader header;
     packet_getTCPHeader(packet, &header);
-    g_hash_table_insert(tcp->retransmit.queue, GINT_TO_POINTER(header.sequence), packet);
-    packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_RETRANSMIT);
+    gpointer key = GINT_TO_POINTER(header.sequence);
 
-    tcp->retransmit.queueLength += packet_getPayloadLength(packet);
-    if(_tcp_getBufferSpaceOut(tcp) == 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+    /* if it is already in the queue, it won't consume another packet reference */
+    if(g_hash_table_lookup(tcp->retransmit.queue, key) == NULL) {
+        /* its not in the queue yet */
+        g_hash_table_insert(tcp->retransmit.queue, key, packet);
+        packet_ref(packet);
+
+        packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_RETRANSMIT);
+
+        tcp->retransmit.queueLength += packet_getPayloadLength(packet);
+        if(_tcp_getBufferSpaceOut(tcp) == 0) {
+            descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+        }
     }
 }
 
@@ -866,8 +884,11 @@ static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
 
     debug("retransmitting packet %d", sequence);
 
-    /* remove from queue and update length and status */
+    /* remove from queue and update length and status.
+     * calling steal means that the packet ref count is not decremented */
     g_hash_table_steal(tcp->retransmit.queue, GINT_TO_POINTER(sequence));
+
+    /* update queue length and status */
     tcp->retransmit.queueLength -= packet_getPayloadLength(packet);
     packet_addDeliveryStatus(packet, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
 
@@ -875,12 +896,16 @@ static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
         descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
     }
 
-    /* reset retransmit timer and buffer packet out */
+    /* reset retransmit timer since we are resending it now */
     _tcp_setRetransmitTimer(tcp, worker_getCurrentTime());
-    packet_addDeliveryStatus(packet, PDS_SND_TCP_RETRANSMITTED);
-    _tcp_bufferPacketOut(tcp, packet);
 
+    /* queue it for sending */
+    _tcp_bufferPacketOut(tcp, packet);
+    packet_addDeliveryStatus(packet, PDS_SND_TCP_RETRANSMITTED);
     tcp->info.retransmitCount++;
+
+    /* free the ref that we stole */
+    packet_unref(packet);
 }
 
 
@@ -974,6 +999,7 @@ static void _tcp_flush(TCP* tcp) {
             gboolean fitInBuffer = socket_addToInputBuffer(&(tcp->super), packet);
 
             if(fitInBuffer) {
+                tcp->receive.lastSequence = header.sequence;
                 priorityqueue_pop(tcp->unorderedInput);
                 packet_unref(packet);
                 tcp->unorderedInputLength -= packet_getPayloadLength(packet);
@@ -1255,6 +1281,9 @@ gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t famil
     _tcp_bufferPacketOut(tcp, packet);
     _tcp_flush(tcp);
 
+    /* the output buffer holds the packet ref now */
+    packet_unref(packet);
+
     debug("%s <-> %s: user initiated connection", tcp->super.boundString, tcp->super.peerString);
     _tcp_setState(tcp, TCPS_SYNSENT);
 
@@ -1443,7 +1472,6 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
     TCPProcessFlags flags = TCP_PF_PROCESSED;
     SimulationTime now = worker_getCurrentTime();
 
-    guint32 prevSeq = tcp->receive.lastSequence;
     guint32 prevAck = tcp->receive.lastAcknowledgment;
     guint32 prevWin = tcp->receive.lastWindow;
 
@@ -1583,7 +1611,8 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
                 multiplexed->child = _tcpchild_new(multiplexed, tcp, header.sourceIP, header.sourcePort);
                 utility_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
-                descriptor_ref(multiplexed);
+
+                /* multiplexed TCP was initialized with a ref of 1, which the hash table consumes */
                 g_hash_table_replace(tcp->server->children, &(multiplexed->child->key), multiplexed);
 
                 multiplexed->receive.start = header.sequence;
@@ -1806,6 +1835,9 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         Packet* response = _tcp_createPacket(tcp, responseFlags, NULL, 0);
         _tcp_bufferPacketOut(tcp, response);
         _tcp_flush(tcp);
+
+        /* the output buffer holds the packet ref now */
+        packet_unref(response);
     }
 
     /* clear it so we dont send outdated timestamp echos */
@@ -1885,6 +1917,9 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
         /* buffer the outgoing packet in TCP */
         _tcp_bufferPacketOut(tcp, packet);
 
+        /* the output buffer holds the packet ref now */
+        packet_unref(packet);
+
         remaining -= copyLength;
         bytesCopied += copyLength;
     }
@@ -1907,6 +1942,9 @@ static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
     Packet* windowUpdate = _tcp_createPacket(tcp, PTCP_ACK, NULL, 0);
     _tcp_bufferPacketOut(tcp, windowUpdate);
     _tcp_flush(tcp);
+
+    /* the output buffer holds the packet ref now */
+    packet_unref(windowUpdate);
 
     tcp->receive.windowUpdatePending = FALSE;
     descriptor_unref(&tcp->super.super.super);
@@ -2104,6 +2142,8 @@ void tcp_close(TCP* tcp) {
             Packet* reset = _tcp_createPacket(tcp, PTCP_RST, NULL, 0);
             _tcp_bufferPacketOut(tcp, reset);
             _tcp_flush(tcp);
+            /* the output buffer holds the packet ref now */
+            packet_unref(reset);
             return;
         }
 
@@ -2121,6 +2161,9 @@ void tcp_close(TCP* tcp) {
     /* dont have to worry about space since this has no payload */
     _tcp_bufferPacketOut(tcp, packet);
     _tcp_flush(tcp);
+
+    /* the output buffer holds the packet ref now */
+    packet_unref(packet);
 
     /* the user closed the connection, so should never interact with the socket again */
     descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
