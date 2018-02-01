@@ -63,6 +63,7 @@ set(shadow_srcs
     core/support/shd-options.c
     core/support/shd-examples.c
     core/support/shd-configuration.c
+    core/support/shd-object-counter.c
     core/work/shd-event.c
     core/work/shd-message.c
     core/work/shd-task.c

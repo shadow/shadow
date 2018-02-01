@@ -67,6 +67,7 @@ typedef struct _Process Process;
 #include "core/logger/shd-logger.h"
 
 /* configuration, base runnables, and input parsing */
+#include "core/support/shd-object-counter.h"
 #include "core/support/shd-examples.h"
 #include "core/support/shd-options.h"
 #include "utility/shd-utility.h"

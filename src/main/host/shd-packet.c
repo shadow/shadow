@@ -68,6 +68,7 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength) {
 
     packet->orderedStatus = g_queue_new();
 
+    worker_countObject(OBJECT_TYPE_PACKET, COUNTER_TYPE_NEW);
     return packet;
 }
 
@@ -95,6 +96,8 @@ static void _packet_free(Packet* packet) {
 
     MAGIC_CLEAR(packet);
     g_free(packet);
+
+    worker_countObject(OBJECT_TYPE_PACKET, COUNTER_TYPE_FREE);
 }
 
 static void _packet_lock(Packet* packet) {

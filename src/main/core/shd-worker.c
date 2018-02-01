@@ -35,8 +35,12 @@ struct _Worker {
         Process* process;
     } active;
 
+    ObjectCounter* objectCounts;
+
     MAGIC_DECLARE;
 };
+
+ObjectCounter* globalObjectCounts = NULL;
 
 static Worker* _worker_new(Slave*, guint);
 static void _worker_free(Worker*);
@@ -69,6 +73,7 @@ static Worker* _worker_new(Slave* slave, guint threadID) {
     worker->clock.now = SIMTIME_INVALID;
     worker->clock.last = SIMTIME_INVALID;
     worker->clock.barrier = SIMTIME_INVALID;
+    worker->objectCounts = objectcounter_new();
 
     g_private_replace(&workerKey, worker);
 
@@ -77,6 +82,10 @@ static Worker* _worker_new(Slave* slave, guint threadID) {
 
 static void _worker_free(Worker* worker) {
     MAGIC_ASSERT(worker);
+
+    if(worker->objectCounts != NULL) {
+        objectcounter_free(worker->objectCounts);
+    }
 
     g_private_set(&workerKey, NULL);
 
@@ -147,12 +156,34 @@ gpointer worker_run(WorkerRunData* data) {
 
     scheduler_unref(worker->scheduler);
 
-    CountDownLatch* notifyDoneRunning = data->notifyDoneRunning;
-    _worker_free(worker);
-    g_free(data);
+    /* tell that we are done running */
+    if(data->notifyDoneRunning) {
+        countdownlatch_countDown(data->notifyDoneRunning);
+    }
 
-    if(notifyDoneRunning) {
-        countdownlatch_countDown(notifyDoneRunning);
+    /* wait for other cleanup to finish */
+    if(data->notifyReadyToJoin) {
+        countdownlatch_await(data->notifyReadyToJoin);
+    }
+
+    /* cleanup is all done */
+    message("thread-specific info after cleanup: %s", objectcounter_toString(worker->objectCounts));
+
+    /* synchronize thread join */
+    CountDownLatch* notifyJoined = data->notifyJoined;
+
+    /* this is a hack so that we don't free the worker before the scheduler is
+     * finished with object cleanup when running in global mode.
+     * normally, the if statement would not be necessary and we just free
+     * the worker in all cases. */
+    if(notifyJoined) {
+        _worker_free(worker);
+        g_free(data);
+    }
+
+    /* now the thread has ended */
+    if(notifyJoined) {
+        countdownlatch_countDown(notifyJoined);
     }
 
     /* calling pthread_exit(NULL) is equivalent to returning NULL for spawned threads
@@ -371,4 +402,28 @@ void worker_incrementPluginError() {
 const gchar* worker_getHostsRootPath() {
     Worker* worker = _worker_getPrivate();
     return slave_getHostsRootPath(worker->slave);
+}
+
+void worker_countObject(ObjectType otype, CounterType ctype) {
+    /* the issue is that the slave thread frees some objects that
+     * are created by the worker threads. but the slave thread does
+     * not have a worker object. this is only an issue when running
+     * with multiple workers. */
+    if(worker_isAlive()) {
+        Worker* worker = _worker_getPrivate();
+        objectcounter_increment(worker->objectCounts, otype, ctype);
+    } else {
+        /* this is a hack, but we don't want to miss free calls */
+        if(!globalObjectCounts) {
+            globalObjectCounts = objectcounter_new();
+            objectcounter_increment(globalObjectCounts, otype, ctype);
+        }
+    }
+}
+
+void worker_logAndFreeGlobalObjectCounts() {
+    if(globalObjectCounts != NULL) {
+        message("global state: %s", objectcounter_toString(globalObjectCounts));
+        objectcounter_free(globalObjectCounts);
+    }
 }

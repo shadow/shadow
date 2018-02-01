@@ -17,6 +17,8 @@ void descriptor_init(Descriptor* descriptor, DescriptorType type,
     descriptor->type = type;
     descriptor->readyListeners = NULL;
     descriptor->referenceCount = 1;
+
+    worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_NEW);
 }
 
 static void _descriptor_free(Descriptor* descriptor) {
@@ -30,6 +32,8 @@ static void _descriptor_free(Descriptor* descriptor) {
 
     MAGIC_CLEAR(descriptor);
     descriptor->funcTable->free(descriptor);
+
+    worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_FREE);
 }
 
 void descriptor_ref(gpointer data) {

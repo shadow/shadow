@@ -141,6 +141,8 @@ gint slave_free(Slave* slave) {
         scheduler_unref(slave->scheduler);
     }
 
+    worker_logAndFreeGlobalObjectCounts();
+
     g_hash_table_destroy(slave->programPaths);
 
     g_mutex_clear(&(slave->lock));
@@ -158,9 +160,6 @@ gint slave_free(Slave* slave) {
     if(slave->random) {
         random_free(slave->random);
     }
-
-    /* free main worker */
-//    worker_free(slave->mainWorker);
 
     MAGIC_CLEAR(slave);
     g_free(slave);

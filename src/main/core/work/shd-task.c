@@ -25,12 +25,15 @@ Task* task_new(TaskFunc execute, gpointer data, gpointer callbackArgument) {
     task->referenceCount = 1;
 
     MAGIC_INIT(task);
+
+    worker_countObject(OBJECT_TYPE_TASK, COUNTER_TYPE_NEW);
     return task;
 }
 
 static void _task_free(Task* task) {
     MAGIC_CLEAR(task);
     g_free(task);
+    worker_countObject(OBJECT_TYPE_TASK, COUNTER_TYPE_FREE);
 }
 
 void task_ref(Task* task) {

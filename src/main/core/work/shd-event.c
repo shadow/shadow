@@ -25,6 +25,7 @@ Event* event_new_(Task* task, SimulationTime time, gpointer host) {
     event->time = time;
     event->referenceCount = 1;
 
+    worker_countObject(OBJECT_TYPE_EVENT, COUNTER_TYPE_NEW);
     return event;
 }
 
@@ -32,6 +33,7 @@ static void _event_free(Event* event) {
     task_unref(event->task);
     MAGIC_CLEAR(event);
     g_free(event);
+    worker_countObject(OBJECT_TYPE_EVENT, COUNTER_TYPE_FREE);
 }
 
 void event_ref(Event* event) {

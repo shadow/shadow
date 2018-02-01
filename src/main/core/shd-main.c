@@ -708,12 +708,10 @@ static gint _main_helper(Options* options) {
     gint returnCode = 0;
     shadowMaster = master_new(options);
 
-    message("log message buffering is enabled for efficiency");
-    logger_setEnableBuffering(logger_getDefault(), TRUE);
-
     if(shadowMaster) {
         /* run the simulation */
         returnCode = master_run(shadowMaster);
+
         /* cleanup */
         master_free(shadowMaster);
         shadowMaster = NULL;

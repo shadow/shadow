@@ -2078,6 +2078,8 @@ void tcp_free(TCP* tcp) {
 
     MAGIC_CLEAR(tcp);
     g_free(tcp);
+
+    worker_countObject(OBJECT_TYPE_TCP, COUNTER_TYPE_FREE);
 }
 
 void tcp_close(TCP* tcp) {
@@ -2205,5 +2207,6 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
     /* initialize tcp retransmission timeout */
     _tcp_setRetransmitTimeout(tcp, CONFIG_TCP_RTO_INIT);
 
+    worker_countObject(OBJECT_TYPE_TCP, COUNTER_TYPE_NEW);
     return tcp;
 }

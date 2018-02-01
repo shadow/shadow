@@ -55,6 +55,8 @@ typedef struct _SchedulerThreadItem SchedulerThreadItem;
 struct _SchedulerThreadItem {
     pthread_t thread;
     CountDownLatch* notifyDoneRunning;
+    CountDownLatch* notifyReadyToJoin;
+    CountDownLatch* notifyJoined;
 };
 
 static void _scheduler_startHosts(Scheduler* scheduler) {
@@ -169,12 +171,16 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
 
         SchedulerThreadItem* item = g_new0(SchedulerThreadItem, 1);
         item->notifyDoneRunning = countdownlatch_new(1);
+        item->notifyReadyToJoin = countdownlatch_new(1);
+        item->notifyJoined = countdownlatch_new(1);
 
         WorkerRunData* runData = g_new0(WorkerRunData, 1);
         runData->userData = threadUserData;
         runData->scheduler = scheduler;
         runData->threadID = i;
         runData->notifyDoneRunning = item->notifyDoneRunning;
+        runData->notifyReadyToJoin = item->notifyReadyToJoin;
+        runData->notifyJoined = item->notifyJoined;
 
         gint returnVal = pthread_create(&(item->thread), NULL, (void*(*)(void*))worker_run, runData);
         if(returnVal != 0) {
@@ -198,6 +204,14 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
     return scheduler;
 }
 
+static void _scheduler_waitForThreadsToStopRunning(SchedulerThreadItem* item, Scheduler* scheduler) {
+    if(item && item->thread != pthread_self()) {
+        if(item->notifyDoneRunning) {
+            countdownlatch_await(item->notifyDoneRunning);
+        }
+    }
+}
+
 void scheduler_shutdown(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
 
@@ -213,52 +227,72 @@ void scheduler_shutdown(Scheduler* scheduler) {
 
     message("waiting for %u worker threads to finish", nWorkers);
 
-    /* wait for the threads to finish their cleanup */
-    while(!g_queue_is_empty(scheduler->threadItems)) {
-        SchedulerThreadItem* item = g_queue_pop_head(scheduler->threadItems);
+    /* threads need to finish and clean up some local state */
+    g_queue_foreach(scheduler->threadItems, (GFunc)_scheduler_waitForThreadsToStopRunning, scheduler);
+}
 
-        /* only join the spawned threads, not the main thread */
-        if(item->thread != pthread_self()) {
-            /* the join will consume the reference, so unref is not needed
-             * XXX: calling thread_join may cause deadlocks in the loader, so let's just wait
-             * for the thread to indicate that it finished everything instead. */
-            //pthread_join(item->thread);
-            if(item->notifyDoneRunning) {
-                countdownlatch_await(item->notifyDoneRunning);
-            }
-
-            GTimer* executeEventsBarrierWaitTime = g_hash_table_lookup(scheduler->threadToWaitTimerMap, GUINT_TO_POINTER(item->thread));
-            gdouble totalWaitTime = g_timer_elapsed(executeEventsBarrierWaitTime, NULL);
-            message("joined thread %p, total wait time for round execution barrier was %f seconds", item->thread, totalWaitTime);
+static void _scheduler_joinThreads(SchedulerThreadItem* item, Scheduler* scheduler) {
+    if(item && item->thread != pthread_self()) {
+        /* first tell the thread we are ready to join */
+        if(item->notifyReadyToJoin) {
+            countdownlatch_countDown(item->notifyReadyToJoin);
         }
+
+        /* the join will consume the reference, so unref is not needed
+         * XXX: calling thread_join may cause deadlocks in the loader, so let's just wait
+         * for the thread to indicate that it finished everything instead. */
+        //pthread_join(item->thread);
+
+        if(item->notifyJoined) {
+            countdownlatch_await(item->notifyJoined);
+        }
+
+        GTimer* executeEventsBarrierWaitTime = g_hash_table_lookup(scheduler->threadToWaitTimerMap, GUINT_TO_POINTER(item->thread));
+        gdouble totalWaitTime = g_timer_elapsed(executeEventsBarrierWaitTime, NULL);
+        message("joined thread %p, total wait time for round execution barrier was %f seconds", item->thread, totalWaitTime);
     }
 }
 
 static void _scheduler_free(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
 
+    /* finish cleanup of shadow objects */
+    scheduler->policy->free(scheduler->policy);
+    random_free(scheduler->random);
+
+    /* "join" the threads */
+    g_queue_foreach(scheduler->threadItems, (GFunc)_scheduler_joinThreads, scheduler);
+
+    /* dont need the timers anymore now that the threads are joined */
+    if(scheduler->threadToWaitTimerMap) {
+        g_hash_table_destroy(scheduler->threadToWaitTimerMap);
+    }
+
     guint nWorkers = g_queue_get_length(scheduler->threadItems);
 
     while(!g_queue_is_empty(scheduler->threadItems)) {
         SchedulerThreadItem* item = g_queue_pop_head(scheduler->threadItems);
-        countdownlatch_free(item->notifyDoneRunning);
-        g_free(item);
+        if(item) {
+            if(item->notifyDoneRunning) {
+                countdownlatch_await(item->notifyDoneRunning);
+            }
+            if(item->notifyReadyToJoin) {
+                countdownlatch_await(item->notifyReadyToJoin);
+            }
+            if(item->notifyJoined) {
+                countdownlatch_free(item->notifyJoined);
+            }
+            g_free(item);
+        }
     }
 
     g_queue_free(scheduler->threadItems);
-
-    scheduler->policy->free(scheduler->policy);
-    random_free(scheduler->random);
 
     countdownlatch_free(scheduler->executeEventsBarrier);
     countdownlatch_free(scheduler->collectInfoBarrier);
     countdownlatch_free(scheduler->prepareRoundBarrier);
     countdownlatch_free(scheduler->startBarrier);
     countdownlatch_free(scheduler->finishBarrier);
-
-    if(scheduler->threadToWaitTimerMap) {
-        g_hash_table_destroy(scheduler->threadToWaitTimerMap);
-    }
 
     g_mutex_clear(&(scheduler->globalLock));
 
