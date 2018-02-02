@@ -11,7 +11,7 @@
 
 typedef struct _Path Path;
 
-Path* path_new(gint64 srcVertexIndex, gint64 dstVertexIndex, gdouble latency, gdouble reliability);
+Path* path_new(gboolean isDirect, gint64 srcVertexIndex, gint64 dstVertexIndex, gdouble latency, gdouble reliability);
 void path_free(Path* path);
 
 gdouble path_getLatency(Path* path);

@@ -389,12 +389,19 @@ static gint _topology_getEdgeHelper(Topology* top,
         igraph_integer_t* edgeIndexOut, igraph_real_t* edgeLatencyOut, igraph_real_t* edgeReliabilityOut) {
     MAGIC_ASSERT(top);
 
-    igraph_integer_t edgeIndex = 0;
+    /* directedness of the graph edge should be ignored for undirected graphs */
+    igraph_bool_t directedness = (igraph_bool_t) (top->isDirected ? IGRAPH_DIRECTED : IGRAPH_UNDIRECTED);
+
+    /* if FALSE, igraph sets edgeIndex=-1 upon error instead of logging an error */
+    igraph_bool_t shouldReportError = (igraph_bool_t) FALSE;
+
+    /* set to -1 so that we are consistent in both versions of igraph_get_eid in case of error */
+    igraph_integer_t edgeIndex = -1;
 
 #ifndef IGRAPH_VERSION
-    gint result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE);
+    gint result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, directedness);
 #else
-    gint result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, (igraph_bool_t)TRUE, (igraph_bool_t)FALSE);
+    gint result = igraph_get_eid(&top->graph, &edgeIndex, fromVertexIndex, toVertexIndex, directedness, shouldReportError);
 #endif
 
     if(result != IGRAPH_SUCCESS) {
@@ -402,18 +409,17 @@ static gint _topology_getEdgeHelper(Topology* top,
     }
 
     /* get edge properties from graph */
-    gdouble found;
     if(edgeLatencyOut) {
         gdouble edgeLatency;
-        found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
+        gdouble found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
         utility_assert(found);
         *edgeLatencyOut = edgeLatency;
     }
     if(edgeReliabilityOut) {
         gdouble edgePacketLoss;
-        found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_PACKETLOSS, &edgePacketLoss);
+        gdouble found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_PACKETLOSS, &edgePacketLoss);
         utility_assert(found);
-        *edgeReliabilityOut = 1.0f - edgePacketLoss;
+        *edgeReliabilityOut = (1.0f - edgePacketLoss);
     }
     if(edgeIndexOut) {
         *edgeIndexOut = edgeIndex;
@@ -1224,7 +1230,7 @@ static gboolean _topology_extractEdgeWeights(Topology* top) {
 static gboolean _topology_verticesAreAdjacent(Topology* top, igraph_integer_t srcVertexIndex, igraph_integer_t dstVertexIndex) {
     MAGIC_ASSERT(top);
 
-    igraph_integer_t edge_id;
+    igraph_integer_t edge_id = -1;
     gint result;
 
     _topology_lockGraph(top);
@@ -1280,11 +1286,49 @@ static Path* _topology_getPathFromCache(Topology* top, igraph_integer_t srcVerte
     return path;
 }
 
-static void _topology_storePathInCache(Topology* top, igraph_integer_t srcVertexIndex,
-        igraph_integer_t dstVertexIndex, igraph_real_t totalLatency, igraph_real_t totalReliability) {
+static gboolean _topology_shouldStorePath(Topology* top, gboolean isDirectPath,
+        igraph_integer_t srcVertexIndex, igraph_integer_t dstVertexIndex) {
     MAGIC_ASSERT(top);
 
+    /* double check that we don't overwrite existing path entries */
+    Path* srcToDstCachedPath = _topology_getPathFromCache(top, srcVertexIndex, dstVertexIndex);
+    Path* dstToSrcCachedPath = _topology_getPathFromCache(top, dstVertexIndex, srcVertexIndex);
+
+    if(srcToDstCachedPath != NULL || dstToSrcCachedPath != NULL) {
+        /* we already have a cached path entry in one direction or the other */
+        return FALSE;
+    }
+
+    /* sanity check: complete graphs should only have direct paths and nothing else */
+    if(top->isComplete && !isDirectPath) {
+        return FALSE;
+    }
+
+    if(top->prefersDirectPaths && !isDirectPath) {
+        /* we only accept a non-direct path if a direct path does not exist in the graph */
+        gboolean verticesAreAdjacent = _topology_verticesAreAdjacent(top, srcVertexIndex, dstVertexIndex);
+        if(verticesAreAdjacent) {
+            /* the path we are trying to store is not a direct path, but the graph does have one */
+            return FALSE;
+        }
+    }
+
+    /* ok to store the path */
+    return TRUE;
+}
+
+static void _topology_storePathInCache(Topology* top, gboolean isDirectPath,
+        igraph_integer_t srcVertexIndex, igraph_integer_t dstVertexIndex,
+        igraph_real_t totalLatency, igraph_real_t totalReliability) {
+    MAGIC_ASSERT(top);
+
+    /* make sure we don't store a non-direct path if we want a direct one and it exists */
+    if(!_topology_shouldStorePath(top, isDirectPath, srcVertexIndex, dstVertexIndex)) {
+        return;
+    }
+
     gdouble latencyMS = (gdouble) totalLatency;
+    gdouble reliability = (gdouble) totalReliability;
     gboolean wasUpdated = FALSE;
 
     g_rw_lock_writer_lock(&(top->pathCacheLock));
@@ -1295,24 +1339,24 @@ static void _topology_storePathInCache(Topology* top, igraph_integer_t srcVertex
         top->pathCache = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)g_hash_table_destroy);
     }
 
-    GHashTable* sourceCache = g_hash_table_lookup(top->pathCache, GINT_TO_POINTER(srcVertexIndex));
-    if(!sourceCache) {
+    GHashTable* srcCache = g_hash_table_lookup(top->pathCache, GINT_TO_POINTER(srcVertexIndex));
+    if(!srcCache) {
         /* dont have a cache for this source yet, create one now */
-        sourceCache = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)path_free);
-        g_hash_table_replace(top->pathCache, GINT_TO_POINTER(srcVertexIndex), sourceCache);
+        srcCache = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)path_free);
+        g_hash_table_replace(top->pathCache, GINT_TO_POINTER(srcVertexIndex), srcCache);
     }
 
-    /* now cache this sources path to the destination, but don't overwrite the existing entry */
-    Path* cachedPath = g_hash_table_lookup(sourceCache, GINT_TO_POINTER(dstVertexIndex));
-    if(cachedPath == NULL) {
-        Path* path = path_new((gint64)srcVertexIndex, (gint64)dstVertexIndex, latencyMS, (gdouble) totalReliability);
-        g_hash_table_replace(sourceCache, GINT_TO_POINTER(dstVertexIndex), path);
+    /* create the path */
+    Path* path = path_new(isDirectPath, (gint64)srcVertexIndex, (gint64)dstVertexIndex, latencyMS, reliability);
 
-        /* track the minimum network latency in the entire graph */
-        if(top->minimumPathLatency == 0 || latencyMS < top->minimumPathLatency) {
-            top->minimumPathLatency = latencyMS;
-            wasUpdated = TRUE;
-        }
+    /* store it in the cache. don't bother storing the path for the reverse direction,
+     * because we can check both directions for this cached path later. */
+    g_hash_table_replace(srcCache, GINT_TO_POINTER(dstVertexIndex), path);
+
+    /* track the minimum network latency in the entire graph */
+    if(top->minimumPathLatency == 0 || latencyMS < top->minimumPathLatency) {
+        top->minimumPathLatency = latencyMS;
+        wasUpdated = TRUE;
     }
 
     g_rw_lock_writer_unlock(&(top->pathCacheLock));
@@ -1320,18 +1364,6 @@ static void _topology_storePathInCache(Topology* top, igraph_integer_t srcVertex
     /* make sure the worker knows the new min latency */
     if(wasUpdated) {
         worker_updateMinTimeJump(top->minimumPathLatency);
-    }
-}
-
-static void _topology_cacheShortestPathIfNeeded(Topology* top, igraph_integer_t srcVertexIndex,
-        igraph_integer_t dstVertexIndex, igraph_real_t totalLatency, igraph_real_t totalReliability) {
-    MAGIC_ASSERT(top);
-
-    gboolean verticesAreAdjacent = _topology_verticesAreAdjacent(top, srcVertexIndex, dstVertexIndex);
-    if(top->isComplete || (top->prefersDirectPaths && verticesAreAdjacent)) {
-        /* we use a direct path instead, not this calculated one */
-    } else {
-        _topology_storePathInCache(top, srcVertexIndex, dstVertexIndex, totalLatency, totalReliability);
     }
 }
 
@@ -1597,7 +1629,7 @@ static gboolean _topology_computeShortestPathToSelf(Topology* top, igraph_intege
             targetIDStr, top->isDirected ? "" : "<", minLatency, 1.0f-reliabilityOfMinLatencyEdge, idStr);
 
     /* cache the latency and reliability we just computed */
-    _topology_cacheShortestPathIfNeeded(top, vertexIndex, vertexIndex, latency, reliability);
+    _topology_storePathInCache(top, FALSE, vertexIndex, vertexIndex, latency, reliability);
 
     return TRUE;
 }
@@ -1802,7 +1834,7 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
                 }
 
                 /* cache the latency and reliability we just computed */
-                _topology_cacheShortestPathIfNeeded(top, srcVertexIndex, pathTargetIndex, pathLatency, pathReliability);
+                _topology_storePathInCache(top, FALSE, srcVertexIndex, pathTargetIndex, pathLatency, pathReliability);
             } else {
                 isAllSuccess = FALSE;
             }
@@ -1824,7 +1856,7 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
     return isAllSuccess;
 }
 
-static gboolean _topology_lookupPath(Topology* top, igraph_integer_t srcVertexIndex,
+static gboolean _topology_lookupDirectPath(Topology* top, igraph_integer_t srcVertexIndex,
         igraph_integer_t dstVertexIndex) {
     MAGIC_ASSERT(top);
 
@@ -1871,7 +1903,7 @@ static gboolean _topology_lookupPath(Topology* top, igraph_integer_t srcVertexIn
     totalReliability *= edgeReliability;
 
     /* cache the latency and reliability we just computed */
-    _topology_storePathInCache(top, srcVertexIndex, dstVertexIndex, totalLatency, totalReliability);
+    _topology_storePathInCache(top, TRUE, srcVertexIndex, dstVertexIndex, totalLatency, totalReliability);
 
     return TRUE;
 }
@@ -1966,7 +1998,7 @@ static Path* _topology_getPathEntry(Topology* top, Address* srcAddress, Address*
 
         if(top->isComplete || (top->prefersDirectPaths && verticesAreAdjacent)) {
             /* use the edge between src and dst as the path */
-            success = _topology_lookupPath(top, srcVertexIndex, dstVertexIndex);
+            success = _topology_lookupDirectPath(top, srcVertexIndex, dstVertexIndex);
 
             if(success) {
                 info("We found a direct path between node %s at %s (vertex %i) and "
@@ -1980,6 +2012,9 @@ static Path* _topology_getPathEntry(Topology* top, Address* srcAddress, Address*
 
         if(success) {
             path = _topology_getPathFromCache(top, srcVertexIndex, dstVertexIndex);
+            if(!path) {
+                path = _topology_getPathFromCache(top, dstVertexIndex, srcVertexIndex);
+            }
         }
 
         if(!path) {
