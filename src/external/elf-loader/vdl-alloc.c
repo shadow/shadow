@@ -17,31 +17,55 @@ void
 vdl_alloc_initialize (void)
 {
   alloc_initialize (&g_alloc);
+  g_vdl.allocators = vdl_list_new ();
+}
+
+void
+vdl_alloc_destroy_and_free (void *v_alloc)
+{
+  struct Alloc *alloc = v_alloc;
+  alloc_destroy (alloc);
+  vdl_alloc_free (alloc);
 }
 
 void
 vdl_alloc_destroy (void)
 {
+  vdl_list_iterate (g_vdl.allocators, vdl_alloc_destroy_and_free);
+  vdl_list_delete (g_vdl.allocators);
   alloc_destroy (&g_alloc);
+}
+
+void *
+vdl_alloc_global (size_t size)
+{
+  return alloc_malloc(&g_alloc, size);
+}
+
+void *
+vdl_alloc_allocator (void)
+{
+  // all allocators need to be allocated from the global allocator,
+  // so we can safely free them all at the end
+  struct Alloc *allocator = alloc_malloc(&g_alloc, sizeof(struct Alloc));
+  alloc_initialize (allocator);
+  vdl_list_global_push_back (g_vdl.allocators, allocator);
+  return allocator;
 }
 
 void *
 vdl_alloc_malloc (size_t size)
 {
   struct LocalTLS *local_tls = vdl_tls_get_local_tls ();
-  if (local_tls)
-    {
-      return alloc_malloc (local_tls->allocator, size);
-    }
-  return alloc_malloc (&g_alloc, size);
+  struct Alloc *allocator = local_tls ? local_tls->allocator : &g_alloc;
+  return alloc_malloc (allocator, size);
 }
 
 void
 vdl_alloc_free (void *buffer)
 {
-  if (buffer == 0)
+  if (buffer)
     {
-      return;
+      alloc_free (buffer);
     }
-  return alloc_free (buffer);
 }

@@ -1,8 +1,6 @@
 #include "vdl-list.h"
 #include "vdl-alloc.h"
 
-
-
 struct VdlList *
 vdl_list_new (void)
 {
@@ -269,6 +267,21 @@ vdl_list_push_back (struct VdlList *list, void *data)
 {
   write_lock (list->lock);
   vdl_list_insert_internal (list, (void **) &list->tail, data);
+  write_unlock (list->lock);
+}
+
+void
+vdl_list_global_push_back (struct VdlList *list, void *data)
+{
+  write_lock (list->lock);
+  struct VdlListItem *after = &list->tail;
+  struct VdlListItem *item = vdl_alloc_global (sizeof(struct VdlListItem));
+  item->data = data;
+  item->next = after;
+  item->prev = after->prev;
+  after->prev = item;
+  item->prev->next = item;
+  list->size++;
   write_unlock (list->lock);
 }
 

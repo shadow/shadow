@@ -325,8 +325,7 @@ vdl_tls_dtv_allocate (unsigned long tcb)
   if (!current_dtv)
     {
       local_tls = vdl_alloc_new (struct LocalTLS);
-      local_tls->allocator = vdl_alloc_new (struct Alloc);
-      alloc_initialize (local_tls->allocator);
+      local_tls->allocator = vdl_alloc_allocator ();
     }
   else
     {
