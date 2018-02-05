@@ -121,7 +121,7 @@ global_initialize (unsigned long interpreter_load_base)
   vdl->n_removed = 0;
   vdl->module_map = vdl_hashmap_new ();
   vdl->preloads = vdl_list_new ();
-  vdl->address_ranges = vdl_rbnew (map_address_compare, nodup, norel);
+  vdl->address_ranges = vdl_rbnew (map_address_compare, nodup, vdl_alloc_free);
   vdl->readonly_cache = vdl_hashmap_new ();
   vdl->ro_cache_futex = futex_new ();
   vdl->shm_path = make_shm_name ();

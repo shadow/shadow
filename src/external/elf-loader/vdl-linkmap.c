@@ -43,7 +43,7 @@ vdl_linkmap_append_range (struct VdlList *list, void **begin, void **end)
 }
 
 static void
-vdl_linkmap_remove (struct VdlFile *file)
+vdl_linkmap_remove_internal (struct VdlFile *file)
 {
   // first, remove them from the global link_map
   struct VdlFile *next = file->next;
@@ -77,13 +77,21 @@ vdl_linkmap_remove (struct VdlFile *file)
 }
 
 void
+vdl_linkmap_remove (struct VdlFile *file)
+{
+  write_lock (g_vdl.link_map_lock);
+  vdl_linkmap_remove_internal (file);
+  write_unlock (g_vdl.link_map_lock);
+}
+
+void
 vdl_linkmap_remove_range (struct VdlList *list, void **begin, void **end)
 {
   void **i;
   write_lock (g_vdl.link_map_lock);
   for (i = begin; i != end; i = vdl_list_next (list, i))
     {
-      vdl_linkmap_remove (*i);
+      vdl_linkmap_remove_internal (*i);
     }
   write_unlock (g_vdl.link_map_lock);
 }

@@ -47,6 +47,7 @@ vdl_sort_increasing_depth (struct VdlList *files)
           cur = vdl_list_next (input, cur);
         }
     }
+  vdl_list_delete (input);
   return output;
 }
 
