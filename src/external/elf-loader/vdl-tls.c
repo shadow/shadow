@@ -364,6 +364,7 @@ vdl_tls_dtv_allocate (unsigned long tcb)
           DTV_MIGRATE_SHADOW(new_dtv, current_dtv, module);
         }
       // clear the old dtv
+      DTV_FREE_SHADOW(current_dtv);
       vdl_alloc_free (&current_dtv[-2]);
     }
 }
@@ -416,7 +417,7 @@ vdl_tls_get_local_tls (void)
       dtv_t *dtv = get_current_dtv (tp);
       if (dtv)
         {
-          return (struct LocalTLS *) DTV_LOCAL_TLS(dtv);
+          return DTV_LOCAL_TLS(dtv);
         }
     }
   return 0;

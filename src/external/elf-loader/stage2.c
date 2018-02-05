@@ -132,6 +132,7 @@ ld_preload_lists (struct VdlList *preload_files, struct VdlList *preload_deps,
     }
 
   // save preload list for searching when in other contexts
+  vdl_list_delete(g_vdl.preloads);
   g_vdl.preloads = preload_files;
 error:
   vdl_utils_str_list_delete (preload_names);

@@ -116,6 +116,7 @@ vdl_hashmap_remove (struct VdlHashMap *map, uint32_t hash, void *data)
       if (data == item->data)
         {
           vdl_list_remove (items, item);
+          vdl_alloc_delete (item);
           map->load--;
           break;
         }

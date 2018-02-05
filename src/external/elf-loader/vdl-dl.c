@@ -460,11 +460,6 @@ vdl_dlclose (void *handle)
 
   vdl_tls_file_deinitialize (call_fini);
 
-  // update the linkmap before unmapping
-  vdl_linkmap_remove_range (call_fini,
-                            vdl_list_begin (call_fini),
-                            vdl_list_end (call_fini));
-
   // now, unmap
   vdl_unmap (call_fini, true);
 
