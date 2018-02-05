@@ -93,6 +93,11 @@ def main():
         action="store_true", dest="disable_tgen",
         default=False)
 
+    parser_build.add_argument('--loader-valgrind',
+        help="build in support for valgrind in elf-loader, instead of just Shadow",
+        action="store_true", dest="do_valgrind",
+        default=False)
+
     # configure test subcommand
     parser_test = subparsers_main.add_parser('test', help='run Shadow tests',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -145,6 +150,7 @@ def build(args):
     if args.do_profile: cmake_cmd += " -DSHADOW_PROFILE=ON"
     if args.export_libraries: cmake_cmd += " -DSHADOW_EXPORT=ON"
     if args.disable_tgen: cmake_cmd += " -DBUILD_TGEN=OFF"
+    if args.do_valgrind: cmake_cmd += " -DLOADER_VALGRIND=ON"
 
     # we will run from build directory
     calledDirectory = os.getcwd()

@@ -182,7 +182,8 @@ vdl_hashmap_delete (struct VdlHashMap *map)
   for (i = 0; i <= map->n_buckets; i++)
     {
       struct VdlList *bucket = map->buckets[i];
-      vdl_list_delete (bucket);
+      if(bucket)
+        vdl_list_delete (bucket);
     }
   vdl_alloc_free (map->buckets);
   rwlock_delete (map->lock);

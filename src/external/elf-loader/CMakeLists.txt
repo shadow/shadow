@@ -4,8 +4,14 @@ add_definitions(-DMALLOC_DEBUG_ENABLE)
 add_definitions(-D_GNU_SOURCE)
 add_definitions(-DLDSO_SONAME=\"ldso\")
 
+if(LOADER_VALGRIND STREQUAL ON)
+  add_definitions(-DHAVE_VALGRIND_H)
+  include_directories("/usr/include/")
+else()
+  add_cflags(-O3)
+endif()
+
 add_cflags(-g3)
-add_cflags(-O3)
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=56888
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
   add_cflags(-fno-tree-loop-distribute-patterns)
