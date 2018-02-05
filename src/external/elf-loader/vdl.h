@@ -97,6 +97,8 @@ struct Vdl
   struct Futex *ro_cache_futex;
   // the unique ephemeral path we use for our shared memory mappings
   char* shm_path;
+  // list of thread-local allocators for cleanup
+  struct VdlList *allocators;
 };
 
 extern struct Vdl g_vdl;

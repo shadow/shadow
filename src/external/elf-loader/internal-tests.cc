@@ -59,6 +59,10 @@ extern "C" void *vdl_alloc_malloc (size_t size)
 {
   return malloc (size);
 }
+extern "C" void *vdl_alloc_global(size_t size)
+{
+  return malloc (size);
+}
 extern "C" void vdl_alloc_free (void *buffer)
 {
   return free (buffer);

@@ -90,6 +90,9 @@ void vdl_list_iterate (struct VdlList *list,
 void *vdl_list_search_on (struct VdlList *list, void *aux,
                           void *(*iterator) (void *data, void *aux));
 
+// globally allocated list operations, for use by the allocator itself
+void vdl_list_global_push_back (struct VdlList *list, void *data);
+
 #ifdef __cplusplus
 }
 #endif
