@@ -158,7 +158,9 @@ file_deinitialize (struct VdlFile *file)
     {
       vdl_hashmap_remove (g_vdl.module_map, file->tls_index, file);
       g_vdl.tls_gen++;
-      g_vdl.tls_n_dtv--;
+      // because we're not reusing the tls index,
+      // we have to pretend it's still there for new allocations
+      //g_vdl.tls_n_dtv--;
     }
 }
 
@@ -476,7 +478,8 @@ void
 vdl_tls_tcb_deallocate (unsigned long tcb)
 {
   VDL_LOG_FUNCTION ("tcb=%lu", tcb);
-  unsigned long start = tcb - g_vdl.tls_static_total_size;
+  unsigned long tcb_offset = (g_vdl.tls_static_total_size + 0x0f) & ~0x0f;
+  unsigned long start = tcb - tcb_offset;
   vdl_alloc_free ((void *) start);
 }
 
@@ -532,7 +535,7 @@ vdl_tls_dtv_update_new (dtv_t *new_dtv, unsigned long dtv_size,
 {
   unsigned long module;
   shadowdtv_t *new_shadow_dtv = DTV_SHADOW_DTV(new_dtv);
-  for (module = dtv_size + 1; module <= new_dtv_size; module++)
+  for (module = dtv_size; module <= new_dtv_size; module++)
     {
       new_dtv[module].ptrs.value = 0;
       DTV_ABI_SET_TO_FREE(new_dtv, module);
