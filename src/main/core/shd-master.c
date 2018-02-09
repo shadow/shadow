@@ -245,7 +245,8 @@ static void _master_registerPluginCallback(ConfigurationPluginElement* pe, Maste
     utility_assert(pe);
     MAGIC_ASSERT(master);
     utility_assert(pe->id.isSet && pe->id.string);
-    slave_addNewProgram(master->slave, pe->id.string->str, pe->path.string->str);
+    slave_addNewProgram(master->slave, pe->id.string->str, pe->path.string->str,
+                        pe->startsymbol.isSet ? pe->startsymbol.string->str : NULL);
 }
 
 static void _master_registerPlugins(Master* master) {

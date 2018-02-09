@@ -38,6 +38,7 @@
 #define PLUGIN_PATH "libshadow-test-dynlink-plugin.so"
 
 #define PLUGIN_MAIN_SYMBOL "main"
+#define PLUGIN_MAIN_SYMBOL2 "main2"
 typedef int (*MainFunc)(int argc, char* argv[]);
 
 int global_num_dlmopens = 0;
@@ -113,10 +114,11 @@ int _test_linker_loader_single(int use_dlmopen) {
         /* clear dlerror */
         dlerror();
 
-        funcs[i] = dlsym(handles[i], PLUGIN_MAIN_SYMBOL);
+        char* startSymbol = (i % 2) ? PLUGIN_MAIN_SYMBOL : PLUGIN_MAIN_SYMBOL2;
+        funcs[i] = dlsym(handles[i], startSymbol);
         if(!funcs[i]) {
             fprintf(stdout, "dlsym() for symbol '%s' returned NULL, dlerror is '%s'\n",
-                    PLUGIN_MAIN_SYMBOL, dlerror());
+                    startSymbol, dlerror());
             return EXIT_FAILURE;
         }
     }

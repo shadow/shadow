@@ -39,6 +39,7 @@ struct _ConfigurationPluginElement {
     ConfigurationStringAttribute id;
     ConfigurationStringAttribute path;
     /* optional*/
+    ConfigurationStringAttribute startsymbol;
 };
 
 typedef struct _ConfigurationTopologyElement ConfigurationTopologyElement;

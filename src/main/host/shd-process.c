@@ -80,10 +80,11 @@
 #include "shadow.h"
 
 /**
- * We call this function to run the plugin executable. A symbol with this name
- * must exist or the dlsym lookup will fail.
+ * We call this function to run the plugin executable. This is the default
+ * symbol name when one isn't specified in the plugin configuration element.
+ * A start symbol must exist or the dlsym lookup will fail. 
  */
-#define PLUGIN_MAIN_SYMBOL "main"
+#define PLUGIN_DEFAULT_SYMBOL "main"
 
 /**
  * We call this function to get the location where we should set errno for this program.
@@ -157,6 +158,7 @@ struct _Process {
     struct {
         GString* name;
         GString* path;
+        GString* startSymbol;
         void* handle;
         GString* preloadName;
         GString* preloadPath;
@@ -281,6 +283,12 @@ static const gchar* _process_getPluginName(Process* proc) {
     MAGIC_ASSERT(proc);
     utility_assert(proc->plugin.name);
     return proc->plugin.name->str;
+}
+
+static const gchar* _process_getPluginStartSymbol(Process* proc) {
+    MAGIC_ASSERT(proc);
+    utility_assert(proc->plugin.startSymbol);
+    return proc->plugin.startSymbol->str;
 }
 
 static const gchar* _process_getName(Process* proc) {
@@ -473,15 +481,15 @@ static void _process_loadPlugin(Process* proc) {
     /* make sure it has the required init function */
     gpointer symbol = NULL;
 
-    symbol = dlsym(proc->plugin.handle, PLUGIN_MAIN_SYMBOL);
+    symbol = dlsym(proc->plugin.handle, _process_getPluginStartSymbol(proc));
     if(symbol) {
         proc->plugin.main = symbol;
-        message("found '%s' at %p", PLUGIN_MAIN_SYMBOL, symbol);
+        message("found '%s' at %p", _process_getPluginStartSymbol(proc), symbol);
     } else {
         const gchar* errorMessage = dlerror();
         critical("dlsym() failed: %s", errorMessage);
         error("unable to find the required function symbol '%s' in plug-in '%s'",
-                PLUGIN_MAIN_SYMBOL, proc->plugin.path->str);
+                _process_getPluginStartSymbol(proc), _process_getPluginPath(proc));
     }
 
     /* search for the location of errno and save it in the plugin state */
@@ -548,8 +556,8 @@ static void _process_loadPlugin(Process* proc) {
 
 Process* process_new(gpointer host, guint processID,
         SimulationTime startTime, SimulationTime stopTime, const gchar* pluginName,
-        const gchar* pluginPath, const gchar* preloadName, const gchar* preloadPath,
-        gchar* arguments) {
+        const gchar* pluginPath, const gchar* pluginSymbol, const gchar* preloadName, 
+        const gchar* preloadPath, gchar* arguments) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -564,6 +572,11 @@ Process* process_new(gpointer host, guint processID,
     utility_assert(pluginName);
     proc->plugin.name = g_string_new(pluginName);
     proc->plugin.path = g_string_new(pluginPath);
+    if(pluginSymbol == NULL) {
+        proc->plugin.startSymbol = g_string_new(PLUGIN_DEFAULT_SYMBOL);
+    } else {
+        proc->plugin.startSymbol = g_string_new(pluginSymbol);
+    }
     if(preloadName && preloadPath) {
         proc->plugin.preloadName = g_string_new(preloadName);
         proc->plugin.preloadPath = g_string_new(preloadPath);
@@ -630,6 +643,9 @@ static void _process_free(Process* proc) {
     }
     if(proc->plugin.name) {
         g_string_free(proc->plugin.name, TRUE);
+    }
+    if(proc->plugin.startSymbol) {
+        g_string_free(proc->plugin.startSymbol, TRUE);
     }
     if(proc->plugin.preloadPath) {
         g_string_free(proc->plugin.preloadPath, TRUE);

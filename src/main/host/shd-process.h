@@ -73,8 +73,8 @@ typedef off_t off64_t;
 
 Process* process_new(gpointer host, guint processID,
         SimulationTime startTime, SimulationTime stopTime, const gchar* pluginName,
-        const gchar* pluginPath, const gchar* preloadName, const gchar* preloadPath,
-        gchar* arguments);
+        const gchar* pluginPath, const gchar* pluginSymbol, const gchar* preloadName, 
+        const gchar* preloadPath, gchar* arguments);
 void process_ref(Process* proc);
 void process_unref(Process* proc);
 

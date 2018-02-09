@@ -10,6 +10,7 @@
 #define NUM_LOADS 500
 #define PLUGIN_PATH "libplugin.so"
 #define PLUGIN_SYM "main"
+#define PLUGIN_SYM2 "main2"
 
 // new info type we've added
 #define RTLD_DI_STATIC_TLS_SIZE 127
@@ -60,10 +61,11 @@ int run(void) {
         dlerror();
 
         /* lookup a function symbol in the plugin we just loaded */
-        void* func = dlsym(handles[i], PLUGIN_SYM);
+        char* startSymbol = (i % 2) ? PLUGIN_SYM : PLUGIN_SYM2;
+        void* func = dlsym(handles[i], startSymbol);
         if(!func) {
             fprintf(stdout, "dlsym() for symbol '%s' returned NULL, dlerror is '%s'\n",
-                    PLUGIN_SYM, dlerror());
+                    startSymbol, dlerror());
             return EXIT_FAILURE;
         }
     }
