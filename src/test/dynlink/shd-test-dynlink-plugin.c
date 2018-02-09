@@ -20,3 +20,7 @@ int plugin_value = 0;
 int main(int argc, char* argv[]) {
     return ++plugin_value + lib_increment();
 }
+
+int main2(int argc, char* argv[]) {
+    return ++plugin_value + lib_increment();
+}

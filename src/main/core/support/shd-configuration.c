@@ -139,6 +139,10 @@ static void _parser_freePluginElement(ConfigurationPluginElement* plugin) {
         utility_assert(plugin->id.string != NULL);
         g_string_free(plugin->id.string, TRUE);
     }
+    if(plugin->startsymbol.isSet) {
+        utility_assert(plugin->startsymbol.string != NULL);
+        g_string_free(plugin->startsymbol.string, TRUE);
+    }
 
     g_free(plugin);
 }
@@ -341,6 +345,9 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
             plugin->path.string = g_string_new(homePath);
             g_free(homePath);
             plugin->path.isSet = TRUE;
+        } else if (!plugin->startsymbol.isSet && !g_ascii_strcasecmp(name, "startsymbol")) {
+            plugin->startsymbol.string = g_string_new(value);
+            plugin->startsymbol.isSet = TRUE;
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
                             "unknown 'plugin' attribute '%s'", name);

@@ -27,6 +27,9 @@ struct _Slave {
     /* paths to programs (i.e. shadow plug-ins) that are run by virtual processes */
     GHashTable* programPaths;
 
+    /* start symbols for programs (i.e. shadow plug-ins) */
+    GHashTable* programStartSymbols;
+
     GMutex lock;
     GMutex pluginInitLock;
 
@@ -98,6 +101,9 @@ Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint
     /* we will store the plug-in programs that are loaded */
     slave->programPaths = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
+    /* we will store the plug-in program start symbols if specified in the config */
+    slave->programStartSymbols = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+
     /* the main scheduler may utilize multiple threads */
 
     guint nWorkers = options_getNWorkerThreads(options);
@@ -144,6 +150,7 @@ gint slave_free(Slave* slave) {
     worker_logAndFreeGlobalObjectCounts();
 
     g_hash_table_destroy(slave->programPaths);
+    g_hash_table_destroy(slave->programStartSymbols);
 
     g_mutex_clear(&(slave->lock));
     g_mutex_clear(&(slave->pluginInitLock));
@@ -196,7 +203,7 @@ gdouble slave_nextRandomDouble(Slave* slave) {
     return r;
 }
 
-void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path) {
+void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path, const gchar* startSymbol) {
     MAGIC_ASSERT(slave);
 
     /* store the path to the plugin with the given name, so that we can retrieve
@@ -206,6 +213,15 @@ void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path) {
               "this should have been caught by the configuration parser.");
     } else {
         g_hash_table_replace(slave->programPaths, g_strdup(name), g_strdup(path));
+    }
+
+    if(startSymbol == NULL) return;
+
+    /* store the start symbol for the plugin with the givenname. */
+    if(g_hash_table_lookup(slave->programStartSymbols, name) != NULL) {
+        error("attempting to register 2 start symbols for the same plugin.");
+    } else {
+        g_hash_table_replace(slave->programStartSymbols, g_strdup(name), g_strdup(startSymbol));
     }
 }
 
@@ -232,6 +248,10 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
         error("plugin path not found for name '%s'. this should be verified in the config parser", pluginName);
     }
 
+    /* look up pluginStartSymbol, it is OK for it to be NULL. A NULL start symbol
+     * forces the process to default to "main" */
+    gchar* pluginStartSymbol = g_hash_table_lookup(slave->programStartSymbols, pluginName);
+
     gchar* preloadPath = NULL;
     if(preloadName != NULL) {
         preloadPath = g_hash_table_lookup(slave->programPaths, preloadName);
@@ -242,7 +262,7 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
 
     Host* host = scheduler_getHost(slave->scheduler, hostID);
     host_continueExecutionTimer(host);
-    host_addApplication(host, startTime, stopTime, pluginName, pluginPath, preloadName, preloadPath, arguments);
+    host_addApplication(host, startTime, stopTime, pluginName, pluginPath, pluginStartSymbol, preloadName, preloadPath, arguments);
     host_stopExecutionTimer(host);
 }
 
