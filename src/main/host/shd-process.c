@@ -5117,6 +5117,33 @@ int process_emu_pthread_attr_destroy(Process* proc, pthread_attr_t *attr) {
     return ret;
 }
 
+int process_emu_pthread_getattr_np(Process* proc, pthread_t thread, pthread_attr_t *attr) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    int ret = 0;
+    if(prevCTX == PCTX_PLUGIN) {
+        pth_t pt = NULL;
+        memmove(&pt, &thread, sizeof(void*));
+        if(pt == NULL) {
+            ret = EINVAL;
+            _process_setErrno(proc, EINVAL);
+        } else {
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+            utility_assert(proc->tstate == pth_gctx_get());
+            pth_attr_t na = NULL;
+            if(!pth_getattr_np(pt, (pth_attr_t)attr)) {
+                ret = errno;
+            }
+            _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        }
+    } else {
+        warning("pthread_getattr_np() is handled by pth but not implemented by shadow");
+        _process_setErrno(proc, ENOSYS);
+        ret = ENOSYS;
+    }
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
 int process_emu_pthread_attr_setinheritsched(Process* proc, pthread_attr_t *attr, int inheritsched) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
