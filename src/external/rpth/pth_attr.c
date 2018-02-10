@@ -312,3 +312,17 @@ intern int pth_attr_ctrl(int cmd, pth_attr_t a, int op, va_list ap)
     return TRUE;
 }
 
+int pth_getattr_np(pth_t t, pth_attr_t a)
+{
+    if (t == NULL || a == NULL)
+        return pth_error(FALSE, EINVAL);
+    a->a_prio        = t->prio;
+    a->a_dispatches  = t->dispatches;
+    pth_util_cpystrn(a->a_name, t->name, PTH_TCB_NAMELEN);
+    a->a_joinable    = t->joinable;
+    a->a_cancelstate = t->cancelstate;
+    a->a_stacksize   = t->stacksize;
+    a->a_stackaddr   = t->stack;
+    return 0;
+}
+

@@ -176,6 +176,7 @@ PRELOADDEF(return, int, __cxa_atexit, (void (*a) (void *), void *b, void *c), a,
 /* pthread attributes */
 
 PRELOADDEF(return, int, pthread_attr_init, (pthread_attr_t *a), a);
+PRELOADDEF(return, int, pthread_getattr_np, (pthread_t a, pthread_attr_t *b), a, b);
 PRELOADDEF(return, int, pthread_attr_destroy, (pthread_attr_t *a), a);
 PRELOADDEF(return, int, pthread_attr_setinheritsched, (pthread_attr_t *a, int b), a, b);
 PRELOADDEF(return, int, pthread_attr_getinheritsched, (const pthread_attr_t *a, int *b), a, b);

@@ -439,6 +439,7 @@ extern int            pth_attr_init(pth_attr_t);
 extern int            pth_attr_set(pth_attr_t, int, ...);
 extern int            pth_attr_get(pth_attr_t, int, ...);
 extern int            pth_attr_destroy(pth_attr_t);
+extern int            pth_getattr_np(pth_t t, pth_attr_t a);
 
     /* thread functions */
 extern pth_t          pth_spawn(pth_attr_t, void *(*)(void *), void *);
