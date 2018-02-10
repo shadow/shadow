@@ -168,7 +168,7 @@ __attribute__ ((__regparm__ (1))) ___tls_get_addr (struct tls_index *ti)
 #endif
 
 EXPORT void internal_function
-_dl_get_tls_static_info (size_t * sizep, size_t * alignp)
+_dl_get_tls_static_info (size_t *sizep, size_t *alignp)
 {
   // This method is called from __pthread_initialize_minimal_internal (nptl/init.c)
   // It is called from the .init constructors in libpthread.so
@@ -240,6 +240,12 @@ _dl_make_stack_executable (__attribute__((unused)) void **stack_endp)
   return 0;
 }
 
+EXPORT struct VdlFile *internal_function
+_dl_find_dso_for_object (const ElfW(Addr) addr)
+{
+  return vdl_addr_to_file (addr);
+}
+
 void
 glibc_set_stack_end (void *addr)
 {
@@ -279,8 +285,8 @@ dlsym_hack (void *handle, const char *symbol)
 // Typically called by malloc to lookup ptmalloc_init.
 // In this case, symbolp is 0.
 int internal_function
-_dl_addr_hack (const void *address, Dl_info * info,
-               void **mapp, __attribute__((unused)) const ElfW (Sym) ** symbolp)
+_dl_addr_hack (const void *address, Dl_info *info,
+               void **mapp, __attribute__((unused)) const ElfW(Sym) **symbolp)
 {
   return vdl_dladdr1 (address, info, mapp, RTLD_DL_LINKMAP);
 }

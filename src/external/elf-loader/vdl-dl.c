@@ -64,11 +64,11 @@ set_error (const char *str, ...)
   error->error = error_string;
 }
 
-static struct VdlFile *
-addr_to_file (unsigned long caller)
+struct VdlFile *
+vdl_addr_to_file (unsigned long addr)
 {
   struct VdlFileAddress *ret, *address = vdl_alloc_new (struct VdlFileAddress);
-  address->key = caller;
+  address->key = addr;
   address->map = 0;
   ret = vdl_rbfind (g_vdl.address_ranges, address);
   vdl_alloc_delete (address);
@@ -111,11 +111,10 @@ search_file (void *handle)
   return (struct VdlFile *) ret;
 }
 
-static
-ElfW (Sym) *
+static ElfW(Sym) *
 update_match (unsigned long addr,
               struct VdlFile *file,
-              ElfW (Sym) * candidate, ElfW (Sym) * match)
+              ElfW(Sym) *candidate, ElfW(Sym) *match)
 {
   if (ELFW_ST_BIND (candidate->st_info) != STB_WEAK &&
       ELFW_ST_BIND (candidate->st_info) != STB_GLOBAL)
@@ -374,7 +373,7 @@ vdl_dlopen (const char *filename, int flags, unsigned long caller)
   VDL_LOG_FUNCTION ("filename=%s", filename);
   read_lock (g_vdl.global_lock);
   // unlike glibc, our dlopen opens files from the caller's namespace
-  struct VdlFile *caller_file = addr_to_file (caller);
+  struct VdlFile *caller_file = vdl_addr_to_file (caller);
   read_unlock (g_vdl.global_lock);
   struct VdlContext *context;
   if (caller_file)
@@ -385,7 +384,7 @@ vdl_dlopen (const char *filename, int flags, unsigned long caller)
     {
       context = g_vdl.main_context;
     }
-  
+
   void *handle = dlopen_with_context (context, filename, flags);
   return handle;
 }
@@ -488,11 +487,11 @@ vdl_dlerror (void)
 }
 
 int
-vdl_dladdr1 (const void *addr, Dl_info * info, void **extra_info, int flags)
+vdl_dladdr1 (const void *addr, Dl_info *info, void **extra_info, int flags)
 {
   VDL_LOG_FUNCTION ("", 0);
   read_lock (g_vdl.global_lock);
-  struct VdlFile *file = addr_to_file ((unsigned long) addr);
+  struct VdlFile *file = vdl_addr_to_file ((unsigned long) addr);
   if (file == 0)
     {
       set_error ("No object contains 0x%lx", addr);
@@ -523,10 +522,10 @@ vdl_dladdr1 (const void *addr, Dl_info * info, void **extra_info, int flags)
 
   // now, we try to find the closest symbol
   // For this, we simply iterate over the symbol table of the file.
-  ElfW (Sym) * match = 0;
+  ElfW(Sym) *match = 0;
   const char *dt_strtab = file->dt_strtab;
-  ElfW (Sym) * dt_symtab = file->dt_symtab;
-  ElfW (Word) * dt_hash = file->dt_hash;
+  ElfW(Sym) *dt_symtab = file->dt_symtab;
+  ElfW(Word) *dt_hash = file->dt_hash;
   uint32_t *dt_gnu_hash = file->dt_gnu_hash;
   if (dt_symtab != 0 && dt_strtab != 0)
     {
@@ -535,11 +534,11 @@ vdl_dladdr1 (const void *addr, Dl_info * info, void **extra_info, int flags)
           // this is a standard elf hash table
           // the number of symbol table entries is equal to the number of hash table
           // chain entries which is indicated by nchain
-          ElfW (Word) nchain = dt_hash[1];
-          ElfW (Word) i;
+          ElfW(Word) nchain = dt_hash[1];
+          ElfW(Word) i;
           for (i = 0; i < nchain; i++)
             {
-              ElfW (Sym) * cur = &dt_symtab[i];
+              ElfW(Sym) *cur = &dt_symtab[i];
               match = update_match ((unsigned long) addr, file, cur, match);
             }
         }
@@ -549,10 +548,10 @@ vdl_dladdr1 (const void *addr, Dl_info * info, void **extra_info, int flags)
           uint32_t nbuckets = dt_gnu_hash[0];
           uint32_t symndx = dt_gnu_hash[1];
           uint32_t maskwords = dt_gnu_hash[2];
-          ElfW (Addr) * bloom = (ElfW (Addr) *) (dt_gnu_hash + 4);
+          ElfW(Addr) *bloom = (ElfW(Addr) *) (dt_gnu_hash + 4);
           uint32_t *buckets =
             (uint32_t *) (((unsigned long) bloom) +
-                          maskwords * sizeof (ElfW (Addr)));
+                          maskwords * sizeof (ElfW(Addr)));
           uint32_t *chains = &buckets[nbuckets];
 
           // first, iterate over all buckets in the hash table
@@ -591,7 +590,7 @@ vdl_dladdr1 (const void *addr, Dl_info * info, void **extra_info, int flags)
     }
   if (flags == RTLD_DL_SYMENT)
     {
-      const ElfW (Sym) ** sym = (const ElfW (Sym) **) extra_info;
+      const ElfW(Sym) **sym = (const ElfW(Sym) **) extra_info;
       *sym = match;
     }
   read_unlock (g_vdl.global_lock);
@@ -602,7 +601,7 @@ error:
 }
 
 int
-vdl_dladdr (const void *addr, Dl_info * info)
+vdl_dladdr (const void *addr, Dl_info *info)
 {
   return vdl_dladdr1 (addr, info, 0, 0);
 }
@@ -622,7 +621,7 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
                     handle, symbol, (version == 0) ? "" : version, caller);
   read_lock (g_vdl.global_lock);
   struct VdlList *scope;
-  struct VdlFile *caller_file = addr_to_file (caller);
+  struct VdlFile *caller_file = vdl_addr_to_file (caller);
   struct VdlContext *context;
   if (caller_file == 0)
     {
@@ -687,14 +686,14 @@ error:
 }
 
 int
-vdl_dl_iterate_phdr (int (*callback) (struct dl_phdr_info * info,
+vdl_dl_iterate_phdr (int (*callback) (struct dl_phdr_info *info,
                                       size_t size, void *data),
                      void *data, unsigned long caller)
 {
   VDL_LOG_FUNCTION ("", 0);
   int ret = 0;
   read_lock (g_vdl.global_lock);
-  struct VdlFile *file = addr_to_file (caller);
+  struct VdlFile *file = vdl_addr_to_file (caller);
 
   // report all objects loaded within the context of the caller
   void **cur;
