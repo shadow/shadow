@@ -82,7 +82,7 @@
 /**
  * We call this function to run the plugin executable. This is the default
  * symbol name when one isn't specified in the plugin configuration element.
- * A start symbol must exist or the dlsym lookup will fail. 
+ * A start symbol must exist or the dlsym lookup will fail.
  */
 #define PLUGIN_DEFAULT_SYMBOL "main"
 
@@ -556,7 +556,7 @@ static void _process_loadPlugin(Process* proc) {
 
 Process* process_new(gpointer host, guint processID,
         SimulationTime startTime, SimulationTime stopTime, const gchar* pluginName,
-        const gchar* pluginPath, const gchar* pluginSymbol, const gchar* preloadName, 
+        const gchar* pluginPath, const gchar* pluginSymbol, const gchar* preloadName,
         const gchar* preloadPath, gchar* arguments) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
@@ -5139,14 +5139,14 @@ int process_emu_pthread_getattr_np(Process* proc, pthread_t thread, pthread_attr
     if(prevCTX == PCTX_PLUGIN) {
         pth_t pt = NULL;
         memmove(&pt, &thread, sizeof(void*));
-        if(pt == NULL) {
+        if(pt == NULL || attr == NULL) {
             ret = EINVAL;
             _process_setErrno(proc, EINVAL);
         } else {
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
             utility_assert(proc->tstate == pth_gctx_get());
             pth_attr_t na = NULL;
-            if(!pth_getattr_np(pt, (pth_attr_t)attr)) {
+            if(pth_getattr_np(pt, (pth_attr_t) attr)) {
                 ret = errno;
             }
             _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
@@ -7432,4 +7432,3 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
-
