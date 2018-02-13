@@ -73,7 +73,7 @@ typedef off_t off64_t;
 
 Process* process_new(gpointer host, guint processID,
         SimulationTime startTime, SimulationTime stopTime, const gchar* pluginName,
-        const gchar* pluginPath, const gchar* pluginSymbol, const gchar* preloadName, 
+        const gchar* pluginPath, const gchar* pluginSymbol, const gchar* preloadName,
         const gchar* preloadPath, gchar* arguments);
 void process_ref(Process* proc);
 void process_unref(Process* proc);
@@ -292,6 +292,7 @@ int process_emu_pthread_attr_setname_np(Process* proc, pthread_attr_t *attr, cha
 int process_emu_pthread_attr_getname_np(Process* proc, const pthread_attr_t *attr, char **name);
 int process_emu_pthread_attr_setprio_np(Process* proc, pthread_attr_t *attr, int prio);
 int process_emu_pthread_attr_getprio_np(Process* proc, const pthread_attr_t *attr, int *prio);
+int process_emu_pthread_getattr_np(Process* proc, pthread_t thread, pthread_attr_t *attr);
 
 /* pthread threads */
 
