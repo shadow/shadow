@@ -1257,7 +1257,6 @@ static void _tgentransfer_onWritable(TGenTransfer* transfer) {
         _tgentransfer_writeMModelPayload(transfer);
     }
 
-
     if((transfer->type == TGEN_TYPE_PUT
                 || transfer->type == TGEN_TYPE_GETPUT
                 || transfer->type == TGEN_TYPE_MMODEL)
@@ -1308,17 +1307,26 @@ static gchar* _tgentransfer_getBytesStatusReport(TGenTransfer* transfer) {
         gsize read, written;
         gsize to_read, to_write;
         gdouble read_progress, write_progress;
+
         read = transfer->bytes.payloadRead;
         written = transfer->bytes.payloadWrite;
-        if (transfer->type == TGEN_TYPE_GETPUT) {
+
+        if (transfer->type == TGEN_TYPE_GETPUT && transfer->getput != NULL) {
             to_read = transfer->getput->theirSize;
             to_write = transfer->getput->ourSize;
-        } else {
+        } else if (transfer->type == TGEN_TYPE_MMODEL && transfer->mmodel != NULL) {
             to_read = transfer->mmodel->expectedReceiveBytes;
             to_write = transfer->size;
+        } else {
+            /* TGEN_TYPE_NONE is a valid state, if the server exists but has
+             * yet to receive the command from the client. */
+            to_read = 0;
+            to_write = 0;
         }
-        read_progress = (gdouble)read / (gdouble)to_read * 100.0f;
-        write_progress = (gdouble)written / (gdouble)to_write * 100.0f;
+
+        read_progress = (to_read > 0) ? (gdouble)read / (gdouble)to_read * 100.0f : 0.0f;
+        write_progress = (to_write > 0) ? (gdouble)written / (gdouble)to_write * 100.0f : 0.0f;
+
         g_string_append_printf(buffer, "payload-bytes-read=%"G_GSIZE_FORMAT"/"
                 "%"G_GSIZE_FORMAT" (%.2f%%) payload-bytes-write=%"
                 G_GSIZE_FORMAT"/%"G_GSIZE_FORMAT" (%.2f%%)",
