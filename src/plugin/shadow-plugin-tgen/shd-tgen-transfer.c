@@ -1018,6 +1018,7 @@ _tgentransfer_mmodelOnTimerExpired(gpointer data1, gpointer data2)
 {
     TGenTransfer *transfer = (TGenTransfer *)data1;
     TGEN_ASSERT(transfer);
+    g_assert(transfer->type == TGEN_TYPE_MMODEL);
     transfer->mmodel->timerSet = FALSE;
     tgen_debug("MModel timer expired. Asking for write events again.");
     tgendriver_setEvents(transfer->data1, transfer->mmodel->descriptor,
@@ -1032,6 +1033,7 @@ static void
 _tgentransfer_mmodelStartPause(TGenTransfer *transfer, int32_t micros)
 {
     TGEN_ASSERT(transfer);
+    g_assert(transfer->type == TGEN_TYPE_MMODEL);
     g_assert(micros >= 0);
     if (!transfer->mmodel->timer) {
         tgentransfer_ref(transfer);
