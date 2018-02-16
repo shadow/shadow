@@ -509,24 +509,28 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
                 hasError = TRUE;
             }
 
-            if (transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_PUT) {
-                transfer->size = (gsize)g_ascii_strtoull(parts[4], NULL, 10);
-                if(transfer->size == 0) {
-                    tgen_critical("error parsing command size '%s'", parts[4]);
-                    hasError = TRUE;
+            if (!hasError && transfer->type != TGEN_TYPE_NONE) {
+                if (transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_PUT) {
+                    transfer->size = (gsize)g_ascii_strtoull(parts[4], NULL, 10);
+                    if(transfer->size == 0) {
+                        tgen_critical("error parsing command size '%s'", parts[4]);
+                        hasError = TRUE;
+                    }
+                } else if (transfer->type == TGEN_TYPE_GETPUT) {
+                    /* other side has sent OURSIZE,THEIRSIZE, but from their
+                     * perspective. So from our perspective, the first item is
+                     * THEIRSIZE and the second is OURSIZE */
+                    gchar **sizeParts = g_strsplit(parts[4], ",", 0);
+                    gsize ourSize, theirSize;
+                    theirSize = (gsize)g_ascii_strtoull(sizeParts[0], NULL, 10);
+                    ourSize = (gsize)g_ascii_strtoull(sizeParts[1], NULL, 10);
+                    g_strfreev(sizeParts);
+                    _tgentransfer_initGetputData(transfer, ourSize, theirSize);
+                } else if (transfer->type == TGEN_TYPE_MMODEL) {
+                    _tgentransfer_initMModelData(transfer, NULL, parts[4]);
+                } else {
+                    g_assert_not_reached();
                 }
-            } else if (transfer->type == TGEN_TYPE_GETPUT) {
-                /* other side has sent OURSIZE,THEIRSIZE, but from their
-                 * perspective. So from our perspective, the first item is
-                 * THEIRSIZE and the second is OURSIZE */
-                gchar **sizeParts = g_strsplit(parts[4], ",", 0);
-                gsize ourSize, theirSize;
-                theirSize = (gsize)g_ascii_strtoull(sizeParts[0], NULL, 10);
-                ourSize = (gsize)g_ascii_strtoull(sizeParts[1], NULL, 10);
-                g_strfreev(sizeParts);
-                _tgentransfer_initGetputData(transfer, ourSize, theirSize);
-            } else if (transfer->type == TGEN_TYPE_MMODEL) {
-                _tgentransfer_initMModelData(transfer, NULL, parts[4]);
             }
         }
 
