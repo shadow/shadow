@@ -309,11 +309,17 @@ static const gchar* _tgentransfer_toString(TGenTransfer* transfer) {
     if(!transfer->string) {
         GString* stringBuffer = g_string_new(NULL);
         GString *sizeStr = g_string_new(NULL);
-        if (transfer->type != TGEN_TYPE_GETPUT) {
-            g_string_printf(sizeStr, "%"G_GSIZE_FORMAT, transfer->size);
-        } else {
+        if (transfer->type == TGEN_TYPE_GETPUT && transfer->getput) {
             g_string_printf(sizeStr, "%"G_GSIZE_FORMAT"|%"G_GSIZE_FORMAT,
                     transfer->getput->ourSize, transfer->getput->theirSize);
+        } else if (transfer->type == TGEN_TYPE_MMODEL && transfer->mmodel) {
+            g_string_printf(sizeStr, "%"G_GSIZE_FORMAT"|%"G_GSIZE_FORMAT,
+                    transfer->size, transfer->mmodel->expectedReceiveBytes);
+        } else if (transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_PUT) {
+            g_string_printf(sizeStr, "%"G_GSIZE_FORMAT, transfer->size);
+        } else {
+            /* Most likely TGEN_TYPE_NONE, but a general good fail safe */
+            g_string_printf(sizeStr, "%"G_GSIZE_FORMAT, 0);
         }
         g_string_printf(stringBuffer, "%s,%"G_GSIZE_FORMAT",%s,%s,%s,%s,%"G_GSIZE_FORMAT",state=%s,error=%s",
                 transfer->id, transfer->count, transfer->hostname, _tgentransfer_typeToString(transfer),
