@@ -51,6 +51,8 @@ struct Vdl
   unsigned long interpreter_load_base;
   // end ABI-compatible fields
 
+  // we keep our internal link map here, then populate the ABI one when needed for gdb
+  struct VdlList *shadow_link_map;
   struct VdlFile *link_map_tail;
   struct RWLock *link_map_lock;
   // The list of directories to search for binaries in DT_NEEDED entries.

@@ -124,10 +124,7 @@ ld_preload_lists (struct VdlList *preload_files, struct VdlList *preload_deps,
       result.requested->count++;
       result.requested->is_interposer = 1;
       vdl_list_push_back (preload_files, result.requested);
-      vdl_list_insert_range (preload_deps, vdl_list_end (preload_deps),
-                             result.newly_mapped,
-                             vdl_list_begin (result.newly_mapped),
-                             vdl_list_end (result.newly_mapped));
+      vdl_list_append_list (preload_deps, result.newly_mapped);
       vdl_list_delete (result.newly_mapped);
     }
 
@@ -286,15 +283,10 @@ stage2_initialize (struct Stage2Input input)
   // then, the dependencies from the ld preload entries
   vdl_linkmap_append (main_file);
   vdl_linkmap_append (interp);
-  vdl_linkmap_append_range (ld_preload,
-                            vdl_list_begin (ld_preload),
-                            vdl_list_end (ld_preload));
-  vdl_linkmap_append_range (main_result.newly_mapped,
-                            vdl_list_begin (main_result.newly_mapped),
-                            vdl_list_end (main_result.newly_mapped));
-  vdl_linkmap_append_range (preload_deps,
-                            vdl_list_begin (preload_deps),
-                            vdl_list_end (preload_deps));
+  vdl_linkmap_append_list (ld_preload);
+  vdl_linkmap_append_list (main_result.newly_mapped);
+  vdl_linkmap_append_list (preload_deps);
+  vdl_linkmap_abi_update ();
   vdl_list_delete (main_result.newly_mapped);
   main_result.newly_mapped = 0;
 
@@ -305,20 +297,10 @@ stage2_initialize (struct Stage2Input input)
   // binaries).
   vdl_list_push_back (context->global_scope, main_file);
   // of course, the ld_preload binaries must be in there if needed.
-  vdl_list_insert_range (context->global_scope,
-                         vdl_list_end (context->global_scope),
-                         ld_preload,
-                         vdl_list_begin (ld_preload),
-                         vdl_list_end (ld_preload));
+  vdl_list_append_list (context->global_scope, ld_preload);
   struct VdlList *all_deps = vdl_sort_deps_breadth_first (main_file);
-  vdl_list_insert_range (context->global_scope,
-                         vdl_list_end (context->global_scope), all_deps,
-                         vdl_list_begin (all_deps), vdl_list_end (all_deps));
-  vdl_list_insert_range (context->global_scope,
-                         vdl_list_end (context->global_scope),
-                         preload_deps,
-                         vdl_list_begin (preload_deps),
-                         vdl_list_end (preload_deps));
+  vdl_list_append_list (context->global_scope, all_deps);
+  vdl_list_append_list (context->global_scope, preload_deps);
   vdl_list_delete (all_deps);
   vdl_list_unicize (context->global_scope);
 
