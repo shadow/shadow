@@ -97,17 +97,12 @@ search_context (struct VdlContext *context)
   return (struct VdlContext *) ret;
 }
 
-static struct VdlFile *
-search_file (void *handle)
+struct VdlFile *
+vdl_search_file (void *handle)
 {
   uint32_t hash = vdl_int_hash ((unsigned long) handle);
-  void *ret = vdl_hashmap_get (g_vdl.files, hash, handle, pointer_compare);
-  if (ret == 0)
-    {
-      set_error ("Can't find requested file 0x%x", handle);
-      return 0;
-    }
-  return (struct VdlFile *) ret;
+  struct VdlFile *ret = vdl_hashmap_get (g_vdl.files, hash, handle, pointer_compare);
+  return ret;
 }
 
 static ElfW(Sym) *
@@ -416,9 +411,10 @@ vdl_dlclose (void *handle)
   VDL_LOG_FUNCTION ("handle=0x%llx", handle);
   write_lock (g_vdl.global_lock);
 
-  struct VdlFile *file = search_file (handle);
+  struct VdlFile *file = vdl_search_file (handle);
   if (file == 0)
     {
+      set_error ("Can't find requested file 0x%x", handle);
       write_unlock (g_vdl.global_lock);
       return -1;
     }
@@ -648,9 +644,10 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
     }
   else
     {
-      struct VdlFile *file = search_file (handle);
+      struct VdlFile *file = vdl_search_file (handle);
       if (file == 0)
         {
+          set_error ("Can't find requested file 0x%x", handle);
           goto error;
         }
       context = file->context;
@@ -764,9 +761,10 @@ vdl_dlinfo (void *handle, int request, void *p)
     }
   else
     {
-      struct VdlFile *file = search_file (handle);
+      struct VdlFile *file = vdl_search_file (handle);
       if (file == 0)
         {
+          set_error ("Can't find requested file 0x%x", handle);
           goto error;
         }
       if (request == RTLD_DI_LMID)

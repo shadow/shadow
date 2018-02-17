@@ -1,6 +1,7 @@
 #include "vdl-linkmap.h"
 #include "vdl-list.h"
 #include "vdl.h"
+#include "vdl-dl.h"
 #include "vdl-file.h"
 #include "vdl-log.h"
 #include "vdl-hashmap.h"
@@ -144,14 +145,13 @@ vdl_linkmap_append_list (struct VdlList *list)
   vdl_list_delete (needed);
 }
 
-
 static void
 vdl_linkmap_shadow_print_iterator (void *data)
 {
   struct VdlFile *file = data;
   vdl_log_printf (VDL_LOG_PRINT,
-                  "load_base=0x%x , file=%s\n",
-                  file->load_base, file->filename);
+                  "handle=%p, load_base=0x%x, file=%s\n",
+                  file, file->load_base, file->filename);
 }
 
 // these are intended for debugging (e.g., you can call them from gdb)
@@ -175,4 +175,40 @@ vdl_linkmap_abi_print (void)
                       cur->load_base, cur->filename);
     }
   read_unlock (g_vdl.link_map_lock);
+}
+
+void
+vdl_linkmap_abi_from_addr (unsigned long addr)
+{
+  struct VdlFile *file = vdl_search_file ((void *)addr);
+  if (!file)
+    {
+      file = vdl_addr_to_file (addr);
+    }
+  if (!file)
+    {
+      vdl_log_printf (VDL_LOG_DBG,
+                      "could not find file for address 0x%x\n",
+                      addr);
+      return;
+    }
+  vdl_log_printf (VDL_LOG_DBG,
+                  "adding file %s with handle %p at location 0x%x to ABI linkmap\n",
+                  file->filename, file, file->load_base);
+  vdl_linkmap_abi_append (file);
+  gdb_notify ();
+}
+
+void
+vdl_linkmap_abi_from_addrs (int count, ...)
+{
+  va_list args;
+  va_start (args, count);
+  unsigned long addr;
+  for (int i = 0; i < count; i++)
+    {
+      addr = va_arg(args, unsigned long);
+      vdl_linkmap_abi_from_addr (addr);
+    }
+  va_end (args);
 }
