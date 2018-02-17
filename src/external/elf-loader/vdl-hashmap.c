@@ -10,17 +10,14 @@
 #define INITIAL_HASHMAP_SIZE 256
 
 static void
-vdl_hashmap_insert_internal (struct VdlHashMap *map, uint32_t hash, void *data)
+vdl_hashmap_insert_internal (struct VdlHashMap *map, struct VdlHashMapItem *item)
 {
-  struct VdlList *items = map->buckets[hash & (map->n_buckets - 1)];
+  struct VdlList *items = map->buckets[item->hash & (map->n_buckets - 1)];
   if (!items)
     {
       items = vdl_list_new ();
-      map->buckets[hash & (map->n_buckets - 1)] = items;
+      map->buckets[item->hash & (map->n_buckets - 1)] = items;
     }
-  struct VdlHashMapItem *item = vdl_alloc_new (struct VdlHashMapItem);
-  item->data = data;
-  item->hash = hash;
   vdl_list_push_back (items, item);
   map->load++;
 }
@@ -66,7 +63,7 @@ grow_hashmap (struct VdlHashMap *map)
            cur = vdl_list_next (bucket, cur))
         {
           struct VdlHashMapItem *item = (struct VdlHashMapItem *) (*cur);
-          vdl_hashmap_insert_internal (map, item->hash, item->data);
+          vdl_hashmap_insert_internal (map, item);
         }
       vdl_list_delete (bucket);
     }
@@ -106,20 +103,13 @@ vdl_hashmap_remove (struct VdlHashMap *map, uint32_t hash, void *data)
 {
   write_lock (map->lock);
   struct VdlList *items = map->buckets[hash & (map->n_buckets - 1)];
-  struct VdlHashMapItem *item;
-  void **cur;
-  for (cur = vdl_list_begin (items);
-       cur != vdl_list_end (items);
-       cur = vdl_list_next (items, cur))
+  void **found = vdl_list_find (items, data);
+  if(found != vdl_list_end(items))
     {
-      item = (struct VdlHashMapItem *) (*cur);
-      if (data == item->data)
-        {
-          vdl_list_remove (items, item);
-          vdl_alloc_delete (item);
-          map->load--;
-          break;
-        }
+      struct VdlHashMapItem *item = *found;
+      vdl_list_erase (items, found);
+      vdl_alloc_delete (item);
+      map->load--;
     }
   write_unlock (map->lock);
 }
