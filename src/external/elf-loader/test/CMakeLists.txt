@@ -214,6 +214,11 @@ add_executable(test28 test28.c)
 target_link_libraries(test28 vdl -lpthread -ldl)
 add_test(NAME elfloader-test28 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test28 ${CMAKE_CURRENT_SOURCE_DIR})
 
+add_executable(test29 test29.c)
+target_link_libraries(test29 vdl -lpthread -ldl)
+add_test(NAME elfloader-test29 COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/runtest.sh test29 ${CMAKE_CURRENT_SOURCE_DIR})
+set_property(TEST elfloader-test29 PROPERTY ENVIRONMENT LD_STATIC_TLS_EXTRA=1000000)
+
 add_test(NAME elfloader-registers COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/registers.sh)
 
 set_tests_properties(

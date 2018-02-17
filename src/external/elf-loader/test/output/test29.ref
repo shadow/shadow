@@ -1,0 +1,4 @@
+libtest29 constructor
+enter main
+leave main
+libtest29 destructor
