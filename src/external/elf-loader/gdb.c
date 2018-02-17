@@ -5,7 +5,7 @@
 #include <link.h>
 
 static
-ElfW (Dyn) *
+ElfW(Dyn) *
 file_get_dynamic (const struct VdlFile *file, long tag)
 {
   ElfW (Dyn) * cur = (ElfW (Dyn) *) file->dynamic;
@@ -43,7 +43,7 @@ gdb_initialize (struct VdlFile *file)
   // in the DT_DEBUG entry of the main executable dynamic section
   // because this is where gdb goes to look to find the pointer and
   // lookup an inferior's linkmap.
-  ElfW (Dyn) * dt_debug = file_get_dynamic (file, DT_DEBUG);
+  ElfW(Dyn) *dt_debug = file_get_dynamic (file, DT_DEBUG);
   unsigned long *p = (unsigned long *) &(dt_debug->d_un.d_ptr);
   *p = (unsigned long) &g_vdl;
 }
@@ -52,5 +52,8 @@ void
 gdb_notify (void)
 {
   g_vdl.state = VDL_CONSISTENT;
-  g_vdl.breakpoint ();
+  if (g_vdl.breakpoint)
+    {
+      g_vdl.breakpoint ();
+    }
 }

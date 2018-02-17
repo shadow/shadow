@@ -98,6 +98,7 @@ global_initialize (unsigned long interpreter_load_base)
 
   vdl->version = 1;
   vdl->link_map = 0;
+  vdl->shadow_link_map = vdl_list_new();
   vdl->link_map_lock = rwlock_new ();
   vdl->breakpoint = 0;
   vdl->state = VDL_CONSISTENT;
@@ -241,6 +242,7 @@ stage1_freeres (void)
   vdl_utils_str_list_delete (g_vdl.search_dirs);
   vdl_hashmap_delete (g_vdl.files);
   vdl_hashmap_delete (g_vdl.contexts);
+  vdl_list_delete (g_vdl.shadow_link_map);
   futex_delete (g_vdl.ro_cache_futex);
   rwlock_delete (g_vdl.global_lock);
   rwlock_delete (g_vdl.tls_lock);
@@ -280,7 +282,7 @@ stage1 (struct Stage1InputOutput *input_output)
   extern ElfW(Dyn) _DYNAMIC[] __attribute__ ((visibility ("hidden")));
   extern const ElfW(Addr) _GLOBAL_OFFSET_TABLE_[] __attribute__ ((visibility ("hidden")));
   ElfW(Addr) load_base = (ElfW(Addr)) &_DYNAMIC - (unsigned long)_GLOBAL_OFFSET_TABLE_[0];
-  
+
   relocate_dt_rel (load_base);
 
   // Now that access to global variables is possible, we initialize

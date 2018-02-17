@@ -523,3 +523,24 @@ vdl_list_search_on (struct VdlList *list, void *aux,
   read_unlock (list->lock);
   return NULL;
 }
+
+struct VdlList *vdl_list_get_all (struct VdlList *list,
+                                  int (*iterator) (void *data))
+{
+  struct VdlList *ret = vdl_list_new ();
+  int is;
+  struct VdlListItem *i;
+  read_lock (list->lock);
+  for (i = list->head.next;
+       i != &list->tail;
+       i = i->next)
+    {
+      is = (*iterator) (i->data);
+      if (is)
+        {
+          vdl_list_insert_internal (ret, (void **) &ret->tail, i->data);
+        }
+    }
+  read_unlock (list->lock);
+  return ret;
+}

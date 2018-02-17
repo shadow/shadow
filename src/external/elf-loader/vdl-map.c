@@ -380,6 +380,7 @@ file_new (unsigned long load_base, unsigned long dynamic, struct VdlList *maps,
   file->reloced = 0;
   file->patched = 0;
   file->in_linkmap = 0;
+  file->in_shadow_linkmap = 0;
   file->is_executable = 0;
   file->is_interposer = 0;
   // no need to initialize gc_color because it is always

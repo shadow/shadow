@@ -3,7 +3,6 @@
 #include "vdl-utils.h"
 #include "vdl-list.h"
 #include "vdl-hashmap.h"
-#include "gdb.h"
 #include "glibc.h"
 #include "vdl-dl.h"
 #include "vdl-gc.h"
@@ -328,10 +327,7 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
 
   // now that this object and its dependencies are ready,
   // we can add them to the (truly) global lists
-  vdl_linkmap_append_range (map.newly_mapped,
-                            vdl_list_begin (map.newly_mapped),
-                            vdl_list_end (map.newly_mapped));
-  gdb_notify ();
+  vdl_linkmap_append_list (map.newly_mapped);
 
   if (flags & RTLD_PRELOAD)
     {
@@ -360,7 +356,6 @@ error:
     vdl_list_delete (gc.unload);
     vdl_list_delete (gc.not_unload);
 
-    gdb_notify ();
     write_unlock (context->lock);
     read_unlock (g_vdl.global_lock);
   }
@@ -465,8 +460,6 @@ vdl_dlclose (void *handle)
   vdl_list_delete (call_fini);
   vdl_list_delete (gc.unload);
   vdl_list_delete (gc.not_unload);
-
-  gdb_notify ();
 
   write_unlock (g_vdl.global_lock);
   return 0;
@@ -853,9 +846,7 @@ vdl_dl_lmid_delete (Lmid_t lmid)
   vdl_tls_file_deinitialize (context->loaded);
 
   // update the linkmap before unmapping
-  vdl_linkmap_remove_range (context->loaded,
-                            vdl_list_begin (context->loaded),
-                            vdl_list_end (context->loaded));
+  vdl_linkmap_remove_list (context->loaded);
   // need to make a copy because the context might disappear from
   // under our feet while we unmap if we unmap its remaining files.
   struct VdlList *copy = vdl_list_copy (context->loaded);
@@ -866,7 +857,6 @@ vdl_dl_lmid_delete (Lmid_t lmid)
   // to be unmapped by vdl_unmap will trigger the deletion of
   // the associated context.
 
-  gdb_notify ();
 out:
   write_unlock (g_vdl.global_lock);
 }
