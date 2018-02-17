@@ -24,6 +24,7 @@ void *vdl_dlvsym_with_flags (void *handle, const char *symbol,
 int vdl_dlinfo (void *handle, int request, void *p);
 void *vdl_dlmopen (Lmid_t lmid, const char *filename, int flag);
 struct VdlFile *vdl_addr_to_file (unsigned long addr);
+struct VdlFile *vdl_search_file (void *handle);
 // create a new linkmap
 Lmid_t vdl_dl_lmid_new (int argc, char **argv, char **envp);
 void vdl_dl_lmid_delete (Lmid_t lmid);
