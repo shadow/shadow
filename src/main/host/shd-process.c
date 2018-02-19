@@ -7432,3 +7432,16 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
+
+#define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
+    returntype process_emu_##functionname(Process* proc, ...) { \
+        ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW); \
+        warning(#functionname " is not supported by pth or by shadow"); \
+        _process_setErrno(proc, ENOSYS); \
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX); \
+        return returnval; \
+    }
+
+#include "shd-process-undefined.h"
+
+#undef PROCESS_EMU_UNSUPPORTED

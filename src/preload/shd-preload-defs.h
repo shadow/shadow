@@ -133,6 +133,7 @@ PRELOADDEF(return, int, clock_gettime, (clockid_t a, struct timespec *b), a, b);
 PRELOADDEF(return, int, gettimeofday, (struct timeval* a, struct timezone* b), a, b);
 PRELOADDEF(return, struct tm *, localtime, (const time_t *a), a);
 PRELOADDEF(return, struct tm *, localtime_r, (const time_t *a, struct tm *b), a, b);
+PRELOADDEF(return, int, pthread_getcpuclockid, (pthread_t a, clockid_t *b), a, b);
 
 /* name/address family */
 
@@ -198,6 +199,12 @@ PRELOADDEF(return, int, pthread_attr_setname_np, (pthread_attr_t *a, char *b), a
 PRELOADDEF(return, int, pthread_attr_getname_np, (const pthread_attr_t *a, char **b), a, b);
 PRELOADDEF(return, int, pthread_attr_setprio_np, (pthread_attr_t *a, int b), a, b);
 PRELOADDEF(return, int, pthread_attr_getprio_np, (const pthread_attr_t *a, int *b), a, b);
+PRELOADDEF(return, int, pthread_attr_getstack, (const pthread_attr_t *a, void **b, size_t *c), a, b, c);
+PRELOADDEF(return, int, pthread_attr_setstack, (pthread_attr_t *a, void *b, size_t c), a, b, c);
+PRELOADDEF(return, int, pthread_attr_setaffinity_np, (pthread_attr_t *a, size_t b, const cpu_set_t *c), a, b, c);
+PRELOADDEF(return, int, pthread_attr_getaffinity_np, (const pthread_attr_t *a, size_t b, cpu_set_t *c), a, b, c);
+PRELOADDEF(return, int, pthread_getattr_default_np, (pthread_attr_t *a), a);
+PRELOADDEF(return, int, pthread_setattr_default_np, (const pthread_attr_t *a), a);
 
 /* pthread threads */
 
@@ -213,6 +220,12 @@ PRELOADDEF(return, int, pthread_once, (pthread_once_t *a, void (*b)(void)), a, b
 PRELOADDEF(return, int, pthread_sigmask, (int a, const sigset_t *b, sigset_t *c), a, b, c);
 PRELOADDEF(return, int, pthread_kill, (pthread_t a, int b), a, b);
 PRELOADDEF(return, int, pthread_abort, (pthread_t a), a);
+PRELOADDEF(return, int, pthread_tryjoin_np, (pthread_t a, void **b), a, b);
+PRELOADDEF(return, int, pthread_timedjoin_np, (pthread_t a, void **b, const struct timespec *c), a, b, c);
+PRELOADDEF(return, int, pthread_getname_np, (pthread_t a, char *b, size_t c), a, b, c);
+PRELOADDEF(return, int, pthread_setname_np, (pthread_t a, const char *b), a, b);
+PRELOADDEF(return, int, pthread_setaffinity_np, (pthread_t a, size_t b, const cpu_set_t *c), a, b, c);
+PRELOADDEF(return, int, pthread_getaffinity_np, (pthread_t a, size_t b, cpu_set_t *c), a, b, c);
 
 /* concurrency */
 
@@ -237,11 +250,20 @@ PRELOADDEF(return, int, pthread_setcanceltype, (int a, int *b), a, b);
 
 PRELOADDEF(return, int, pthread_setschedparam, (pthread_t a, int b, const struct sched_param *c), a, b, c);
 PRELOADDEF(return, int, pthread_getschedparam, (pthread_t a, int *b, struct sched_param *c), a, b, c);
+PRELOADDEF(return, int, pthread_setschedprio, (pthread_t a, int b), a, b);
 
 /* pthread cleanup */
+/* the commented out PRELOADDEFs here are macros, so cannot be interposed */
 
 //PRELOADDEF(      , void, pthread_cleanup_push, (void (*a)(void *), void *b), a, b);
+PRELOADDEF(      , void, __pthread_register_cancel, (__pthread_unwind_buf_t *a), a);
 //PRELOADDEF(      , void, pthread_cleanup_pop, (int a), a, b);
+PRELOADDEF(      , void, __pthread_unregister_cancel, (__pthread_unwind_buf_t *a), a);
+//PRELOADDEF(      , void, pthread_cleanup_push_defer_np, (void (*a)(void *), void *b), a, b);
+PRELOADDEF(      , void, __pthread_register_cancel_defer, (__pthread_unwind_buf_t *a), a);
+//PRELOADDEF(      , void, pthread_cleanup_pop_restore_np, (int a), a, b);
+PRELOADDEF(      , void, __pthread_unregister_cancel_restore, (__pthread_unwind_buf_t *a), a);
+PRELOADDEF(      , void, __pthread_unwind_next, (__pthread_unwind_buf_t *a), a);
 
 /* forking */
 
@@ -259,6 +281,10 @@ PRELOADDEF(return, int, pthread_mutexattr_setpshared, (pthread_mutexattr_t *a, i
 PRELOADDEF(return, int, pthread_mutexattr_getpshared, (const pthread_mutexattr_t *a, int *b), a, b);
 PRELOADDEF(return, int, pthread_mutexattr_settype, (pthread_mutexattr_t *a, int b), a, b);
 PRELOADDEF(return, int, pthread_mutexattr_gettype, (const pthread_mutexattr_t *a, int *b), a, b);
+PRELOADDEF(return, int, pthread_mutexattr_getrobust, (const pthread_mutexattr_t *a, int *b), a, b);
+PRELOADDEF(return, int, pthread_mutexattr_getrobust_np, (const pthread_mutexattr_t *a, int *b), a, b);
+PRELOADDEF(return, int, pthread_mutexattr_setrobust, (pthread_mutexattr_t *a, int b), a, b);
+PRELOADDEF(return, int, pthread_mutexattr_setrobust_np, (pthread_mutexattr_t *a, int b), a, b);
 
 /* pthread mutex */
 
@@ -269,15 +295,20 @@ PRELOADDEF(return, int, pthread_mutex_getprioceiling, (const pthread_mutex_t *a,
 PRELOADDEF(return, int, pthread_mutex_lock, (pthread_mutex_t *a), a);
 PRELOADDEF(return, int, pthread_mutex_trylock, (pthread_mutex_t *a), a);
 PRELOADDEF(return, int, pthread_mutex_unlock, (pthread_mutex_t *a), a);
+PRELOADDEF(return, int, pthread_mutex_timedlock, (pthread_mutex_t *a, const struct timespec *b), a, b);
+PRELOADDEF(return, int, pthread_mutex_consistent, (pthread_mutex_t *a), a);
+PRELOADDEF(return, int, pthread_mutex_consistent_np, (pthread_mutex_t *a), a);
 
-/* pthread lock attributes */
+/* pthread read-write lock attributes */
 
 PRELOADDEF(return, int, pthread_rwlockattr_init, (pthread_rwlockattr_t *a), a);
 PRELOADDEF(return, int, pthread_rwlockattr_destroy, (pthread_rwlockattr_t *a), a);
 PRELOADDEF(return, int, pthread_rwlockattr_setpshared, (pthread_rwlockattr_t *a, int b), a, b);
 PRELOADDEF(return, int, pthread_rwlockattr_getpshared, (const pthread_rwlockattr_t *a, int *b), a, b);
+PRELOADDEF(return, int, pthread_rwlockattr_getkind_np, (const pthread_rwlockattr_t *a, int *b), a, b);
+PRELOADDEF(return, int, pthread_rwlockattr_setkind_np, (pthread_rwlockattr_t *a, int b), a, b);
 
-/* pthread locks */
+/* pthread read-write locks */
 
 PRELOADDEF(return, int, pthread_rwlock_init, (pthread_rwlock_t *a, const pthread_rwlockattr_t *b), a, b);
 PRELOADDEF(return, int, pthread_rwlock_destroy, (pthread_rwlock_t *a), a);
@@ -286,6 +317,29 @@ PRELOADDEF(return, int, pthread_rwlock_tryrdlock, (pthread_rwlock_t *a), a);
 PRELOADDEF(return, int, pthread_rwlock_wrlock, (pthread_rwlock_t *a), a);
 PRELOADDEF(return, int, pthread_rwlock_trywrlock, (pthread_rwlock_t *a), a);
 PRELOADDEF(return, int, pthread_rwlock_unlock, (pthread_rwlock_t *a), a);
+PRELOADDEF(return, int, pthread_rwlock_timedrdlock, (pthread_rwlock_t *a, const struct timespec *b), a, b);
+PRELOADDEF(return, int, pthread_rwlock_timedwrlock, (pthread_rwlock_t *a, const struct timespec *b), a, b);
+
+/* pthread spinlocks */
+
+PRELOADDEF(return, int, pthread_spin_init, (pthread_spinlock_t *a, int b), a, b);
+PRELOADDEF(return, int, pthread_spin_destroy, (pthread_spinlock_t *a), a);
+PRELOADDEF(return, int, pthread_spin_lock, (pthread_spinlock_t *a), a);
+PRELOADDEF(return, int, pthread_spin_trylock, (pthread_spinlock_t *a), a);
+PRELOADDEF(return, int, pthread_spin_unlock, (pthread_spinlock_t *a), a);
+
+/* pthread barrier attributes */
+
+PRELOADDEF(return, int, pthread_barrierattr_init, (pthread_barrierattr_t *a), a);
+PRELOADDEF(return, int, pthread_barrierattr_destroy, (pthread_barrierattr_t *a), a);
+PRELOADDEF(return, int, pthread_barrierattr_getpshared, (const pthread_barrierattr_t *a, int *b), a, b);
+PRELOADDEF(return, int, pthread_barrierattr_setpshared, (pthread_barrierattr_t *a, int b), a, b);
+
+/* pthread barriers */
+
+PRELOADDEF(return, int, pthread_barrier_init, (pthread_barrier_t *a, const pthread_barrierattr_t *b, unsigned int c), a, b, c);
+PRELOADDEF(return, int, pthread_barrier_destroy, (pthread_barrier_t *a), a);
+PRELOADDEF(return, int, pthread_barrier_wait, (pthread_barrier_t *a), a);
 
 /* pthread condition attributes */
 

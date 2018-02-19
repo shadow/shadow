@@ -414,4 +414,11 @@ int process_emu_pselect(Process* proc, int nfds, fd_set *readfds, fd_set *writef
 int process_emu_poll(Process* proc, struct pollfd *pfd, nfds_t nfd, int timeout);
 int process_emu_ppoll(Process* proc, struct pollfd *fds, nfds_t nfds, const struct timespec *timeout_ts, const sigset_t *sigmask);
 
+#define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
+  returntype process_emu_##functionname(Process* proc, ...);
+
+#include "shd-process-undefined.h"
+
+#undef PROCESS_EMU_UNSUPPORTED
+
 #endif /* SHD_PROCESS_H_ */
