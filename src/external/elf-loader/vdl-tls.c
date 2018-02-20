@@ -680,10 +680,10 @@ struct SwapArgs
   dtv_t *dtv2;
 };
 
-void *
-vdl_tls_swap_file (void *data, void *aux)
+static void *
+vdl_tls_swap_file (void **data, void *aux)
 {
-  struct VdlFile *file = data;
+  struct VdlFile *file = *data;
   struct SwapArgs *args = aux;
 
   if (!file->has_tls)

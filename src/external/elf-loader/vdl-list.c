@@ -504,7 +504,7 @@ vdl_list_iterate (struct VdlList *list, void (*iterator) (void *data))
 */
 void *
 vdl_list_search_on (struct VdlList *list, void *aux,
-                    void *(*iterator) (void *data, void *aux))
+                    void *(*iterator) (void **data, void *aux))
 {
   read_lock (list->lock);
   void *ret;
@@ -513,7 +513,7 @@ vdl_list_search_on (struct VdlList *list, void *aux,
        i != &list->tail;
        i = i->next)
     {
-      ret = (*iterator) (i->data, aux);
+      ret = (*iterator) ((void **)i, aux);
       if (ret)
         {
           read_unlock (list->lock);
