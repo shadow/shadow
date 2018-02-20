@@ -435,9 +435,10 @@ struct VdlLookupArgs
 
 /* designed to be the iterator on the list of files in the scope
  */
-static void *vdl_lookup_in_file (void *data, void *aux)
+static void *
+vdl_lookup_in_file (void **data, void *aux)
 {
-  struct VdlFile *item = data;
+  struct VdlFile *item = *data;
   struct VdlLookupArgs *args = aux;
   if (args->flags & VDL_LOOKUP_NO_EXEC && item->is_executable)
     {

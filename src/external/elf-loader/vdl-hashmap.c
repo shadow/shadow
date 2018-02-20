@@ -98,13 +98,24 @@ vdl_hashmap_get (struct VdlHashMap *map, uint32_t hash, void *key,
   return 0;
 }
 
+static void *
+vdl_hashmap_search_iter (void **data, void *aux)
+{
+  struct VdlHashMapItem *item = *data;
+  if (item->data == aux)
+    {
+      return data;
+    }
+  return NULL;
+}
+
 void
 vdl_hashmap_remove (struct VdlHashMap *map, uint32_t hash, void *data)
 {
   write_lock (map->lock);
   struct VdlList *items = map->buckets[hash & (map->n_buckets - 1)];
-  void **found = vdl_list_find (items, data);
-  if(found != vdl_list_end(items))
+  void **found = vdl_list_search_on (items, data, vdl_hashmap_search_iter);
+  if (found)
     {
       struct VdlHashMapItem *item = *found;
       vdl_list_erase (items, found);
