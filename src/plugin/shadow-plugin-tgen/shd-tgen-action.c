@@ -215,22 +215,15 @@ static GError* _tgenaction_handleBytes(const gchar* attributeName,
                         G_MARKUP_ERROR_INVALID_CONTENT,
                         "invalid byte conversion, factor %Lf computed from base %i and exponent %i",
                         factor, base, exponent);
-		}
+                }
             }
         }
-
-	if (!error) {
+        if (!error) {
             tgen_debug("parsed %lu bytes from string %s", bytes, byteStr);
-
-            if (bytes > 0) {
-                if (bytesOut) {
-                    *bytesOut = bytes;
-                }
-            } else {
-                error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
-                    "we parsed a bytes value of 0, but it must be a positive value");
+            if (bytesOut) {
+                *bytesOut = bytes;
             }
-	}
+        }
     }
 
     g_strfreev(tokens);
