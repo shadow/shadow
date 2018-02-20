@@ -10,7 +10,7 @@
 /* store a global pointer to the log func, so we can log in any
  * of our tgen modules without a pointer to the tgen struct */
 TGenLogFunc tgenLogFunc = NULL;
-GLogLevelFlags tgenLogFilterLevel = G_LOG_LEVEL_DEBUG;
+GLogLevelFlags tgenLogFilterLevel = G_LOG_LEVEL_MESSAGE;
 
 static const gchar* _tgenmain_logLevelToString(GLogLevelFlags logLevel) {
     switch (logLevel) {
@@ -71,7 +71,7 @@ static void _tgenmain_cleanup(gint status, gpointer arg) {
 
 static gint _tgenmain_run(gint argc, gchar *argv[]) {
     tgenLogFunc = _tgenmain_log;
-    tgenLogFilterLevel = G_LOG_LEVEL_DEBUG;
+    tgenLogFilterLevel = G_LOG_LEVEL_MESSAGE;
 
     /* get our hostname for logging */
     gchar hostname[128];
