@@ -8,6 +8,20 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
+typedef struct {
+
+  /* the program name. */
+  gchar* name;
+
+  /* the path to the executable */
+  gchar* path;
+
+  /* the start symbol for the program */
+  gchar* startSymbol;
+  
+  MAGIC_DECLARE;
+} _ProgramMeta;
+
 struct _Slave {
     Master* master;
 
@@ -24,11 +38,8 @@ struct _Slave {
     /* the parallel event/host/thread scheduler */
     Scheduler* scheduler;
 
-    /* paths to programs (i.e. shadow plug-ins) that are run by virtual processes */
-    GHashTable* programPaths;
-
-    /* start symbols for programs (i.e. shadow plug-ins) */
-    GHashTable* programStartSymbols;
+    /* the meta data for each program */
+    GHashTable* programMeta;
 
     GMutex lock;
     GMutex pluginInitLock;
@@ -82,6 +93,44 @@ static SchedulerPolicyType _slave_getEventSchedulerPolicy(Slave* slave) {
     }
 }
 
+_ProgramMeta* _program_meta_new(const gchar* name, const gchar* path, const gchar* startSymbol) {
+    if((name == NULL) || (path == NULL)) {
+        error("attempting to register a program with a null name and/or path");
+    }
+
+    _ProgramMeta* meta = g_new0(_ProgramMeta, 1);
+    MAGIC_INIT(meta);
+
+    meta->name = g_strdup(name);
+    meta->path = g_strdup(path);
+
+    if(startSymbol != NULL) {
+        meta->startSymbol = g_strdup(startSymbol);
+    }
+
+    return meta;
+}
+
+void _program_meta_free(gpointer data) {
+    _ProgramMeta* meta = (_ProgramMeta*)data;
+    MAGIC_ASSERT(meta);
+
+    if(meta->name) {
+        g_free(meta->name);
+    }
+
+    if(meta->path) {
+        g_free(meta->path);
+    }
+
+    if(meta->startSymbol) {
+        g_free(meta->startSymbol);
+    }
+
+    MAGIC_CLEAR(meta);
+    g_free(meta);
+}
+
 Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint randomSeed) {
     Slave* slave = g_new0(Slave, 1);
     MAGIC_INIT(slave);
@@ -98,11 +147,8 @@ Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint
         info("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
     }
 
-    /* we will store the plug-in programs that are loaded */
-    slave->programPaths = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-
-    /* we will store the plug-in program start symbols if specified in the config */
-    slave->programStartSymbols = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+    /* we will store the plug-in program meta data */
+    slave->programMeta = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, _program_meta_free);
 
     /* the main scheduler may utilize multiple threads */
 
@@ -149,8 +195,7 @@ gint slave_free(Slave* slave) {
 
     worker_logAndFreeGlobalObjectCounts();
 
-    g_hash_table_destroy(slave->programPaths);
-    g_hash_table_destroy(slave->programStartSymbols);
+    g_hash_table_destroy(slave->programMeta);
 
     g_mutex_clear(&(slave->lock));
     g_mutex_clear(&(slave->pluginInitLock));
@@ -206,22 +251,15 @@ gdouble slave_nextRandomDouble(Slave* slave) {
 void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path, const gchar* startSymbol) {
     MAGIC_ASSERT(slave);
 
-    /* store the path to the plugin with the given name, so that we can retrieve
-     * the path later when hosts' processes want to load it */
-    if(g_hash_table_lookup(slave->programPaths, name) != NULL) {
-        error("attempting to register 2 plugins with the same path."
+    /* store the path to the plugin and maybe the start symbol with the given
+     * name so that we can retrieve the path later when hosts' processes want
+     * to load it */
+    if(g_hash_table_lookup(slave->programMeta, name) != NULL) {
+        error("attempting to regiser 2 plugins with the same path."
               "this should have been caught by the configuration parser.");
     } else {
-        g_hash_table_replace(slave->programPaths, g_strdup(name), g_strdup(path));
-    }
-
-    if(startSymbol == NULL) return;
-
-    /* store the start symbol for the plugin with the givenname. */
-    if(g_hash_table_lookup(slave->programStartSymbols, name) != NULL) {
-        error("attempting to register 2 start symbols for the same plugin.");
-    } else {
-        g_hash_table_replace(slave->programStartSymbols, g_strdup(name), g_strdup(startSymbol));
+        _ProgramMeta* meta = _program_meta_new(name, path, startSymbol);
+        g_hash_table_replace(slave->programMeta, g_strdup(name), meta);
     }
 }
 
@@ -243,26 +281,25 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
     /* quarks are unique per process, so do the conversion here */
     GQuark hostID = g_quark_from_string(hostName);
 
-    gchar* pluginPath = g_hash_table_lookup(slave->programPaths, pluginName);
-    if(pluginPath == NULL) {
-        error("plugin path not found for name '%s'. this should be verified in the config parser", pluginName);
+    _ProgramMeta* meta = g_hash_table_lookup(slave->programMeta, pluginName);
+    if(meta == NULL) {
+        error("plugin not found for name '%s'. this should be verified in the "
+              "config parser.", pluginName);
     }
 
-    /* look up pluginStartSymbol, it is OK for it to be NULL. A NULL start symbol
-     * forces the process to default to "main" */
-    gchar* pluginStartSymbol = g_hash_table_lookup(slave->programStartSymbols, pluginName);
-
-    gchar* preloadPath = NULL;
+    _ProgramMeta* preload = NULL;
     if(preloadName != NULL) {
-        preloadPath = g_hash_table_lookup(slave->programPaths, preloadName);
-        if(preloadPath == NULL) {
-            error("preload path not found for name '%s'. this should be verified in the config parser", preloadName);
+        preload = g_hash_table_lookup(slave->programMeta, preloadName);
+        if(preload == NULL) {
+            error("preload plugin not found for name '%s'. this should be verified in the config parser", preloadName);
         }
     }
 
     Host* host = scheduler_getHost(slave->scheduler, hostID);
     host_continueExecutionTimer(host);
-    host_addApplication(host, startTime, stopTime, pluginName, pluginPath, pluginStartSymbol, preloadName, preloadPath, arguments);
+    host_addApplication(host, startTime, stopTime, pluginName, meta->path, 
+                        meta->startSymbol, preloadName, 
+                        preload ? preload->path : NULL, arguments);
     host_stopExecutionTimer(host);
 }
 
