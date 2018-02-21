@@ -205,7 +205,8 @@ vdl_linkmap_abi_from_addrs (int count, ...)
   va_list args;
   va_start (args, count);
   unsigned long addr;
-  for (int i = 0; i < count; i++)
+  int i;
+  for (i = 0; i < count; i++)
     {
       addr = va_arg(args, unsigned long);
       vdl_linkmap_abi_from_addr (addr);

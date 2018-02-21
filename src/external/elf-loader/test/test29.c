@@ -13,7 +13,8 @@ int main (__attribute__((unused)) int argc,
   printf ("enter main\n");
   void *handles[DLMOPEN_COUNT];
   dlerror();
-  for (int i = 0; i < DLMOPEN_COUNT; i++)
+  int i;
+  for (i = 0; i < DLMOPEN_COUNT; i++)
     {
       handles[i] = dlmopen(LM_ID_NEWLM, "./libr.so", RTLD_LAZY);
       if (!handles[i])
@@ -44,7 +45,7 @@ int main (__attribute__((unused)) int argc,
         }
       fn2 (b+1);
     }
-  for (int i = 0; i < DLMOPEN_COUNT; i++)
+  for (i = 0; i < DLMOPEN_COUNT; i++)
     {
       if(dlclose (handles[i]))
         {
