@@ -181,6 +181,9 @@ def search_debug_file():
                     # debian 9
                     find_build_id('/lib/x86_64-linux-gnu/ld-2.24.so'),
                     find_build_id('/lib/i386-linux-gnu/ld-2.24.so'),
+                    # debian 10 (testing)
+                    find_build_id('/lib/x86_64-linux-gnu/ld-2.26.so'),
+                    find_build_id('/lib/i386-linux-gnu/ld-2.26.so'),
                     # solus - link points to latest version of ld
                     find_build_id('/usr/lib/ld-linux-x86-64.so.2'),
                     ]
