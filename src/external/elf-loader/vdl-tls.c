@@ -535,7 +535,7 @@ vdl_tls_dtv_update_new (dtv_t *new_dtv, unsigned long dtv_size,
 {
   unsigned long module;
   shadowdtv_t *new_shadow_dtv = DTV_SHADOW_DTV(new_dtv);
-  for (module = dtv_size; module <= new_dtv_size; module++)
+  for (module = dtv_size+1; module <= new_dtv_size; module++)
     {
       new_dtv[module].ptrs.value = 0;
       DTV_ABI_SET_TO_FREE(new_dtv, module);
