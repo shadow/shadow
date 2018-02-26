@@ -1,47 +1,21 @@
 ### Debugging Shadow using GDB
 
-When debugging, it will be helpful to use the Shadow option `--cpu-threshold=-1`. It disable the automatic virtual CPU delay measurement feature. This feature may introduce non-deterministic behaviors, even when running the exact same experiment twice, by the re-ordering of events that occurs due to how the kernel schedules the physical CPU of the experiment machine. Disabling the feature with the above option will ensure a deterministic experiment, making debugging easier.
+When debugging, it will be helpful to use the Shadow option `--cpu-threshold=-1`. It disables the automatic virtual CPU delay measurement feature. This feature may introduce non-deterministic behaviors, even when running the exact same experiment twice, by the re-ordering of events that occurs due to how the kernel schedules the physical CPU of the experiment machine. Disabling the feature with the above option will ensure a deterministic experiment, making debugging easier.
 
 Build Shadow with debugging symbols by using the `-g` flag. See the help menu with `python setup.py build --help`.
 
-The easiest way to debug is to run shadow with the `-g` flag, which will pause shadow after startup and print the `PID`. You can then simply attach gdb to shadow in a new terminal and continue the experiment:
+These days, shadow can typically be run directly from gdb:
+```
+gdb shadow
+> run shadow.config.xml
+```
+
+An alternative is to run shadow with the `-g` flag, which will pause shadow after startup and print the `PID`. You can then simply attach gdb to shadow in a new terminal and continue the experiment:
 ```
 shadow -g shadow.config.xml
 # new terminal
 gdb --pid=PID
 > continue
-```
-
-To do run shadow in gdb manually instead of attaching after initial execution, you will need to set `LD_PRELOAD` inside of gdb. Its value should contain a colon separated list of every 'preload' library (generally installed to `~/.shadow/lib`):
-```
-cd shadow/resource/examples
-gdb shadow
-> set environment LD_PRELOAD=/home/rob/.shadow/lib/libshadow-interpose.so
-> set args shadow.config.xml
-> run
-```
-
-If this doesn't work and you just see "exited with code 1", instead set
-`LD_PRELOAD` in gdb as follows:
-```
-> set exec-wrapper env LD_PRELOAD=/home/rob/.shadow/lib/libshadow-interpose.so
-```
-
-The following example shows how to manually run a `shadow-plugin-tor` experiment in gdb instead of attaching to the shadow process:
-
-```
-cd shadow-plugin-tor/resource/minimal
-gdb shadow
-> set env EVENT_NOSELECT=1
-> set env EVENT_NOPOLL=1
-> set env EVENT_NOKQUEUE=1
-> set env EVENT_NODEVPOLL=1
-> set env EVENT_NOEVPORT=1
-> set env EVENT_NOWIN32=1
-> set env OPENSSL_ia32cap=~0x200000200000000
-> set env LD_PRELOAD=/home/rob/.shadow/lib/libshadow-interpose.so:/home/rob/.shadow/lib/libshadow-preload-tor.so
-> set args shadow.config.xml
-> run
 ```
 
 ### Tracing Shadow using Valgrind
