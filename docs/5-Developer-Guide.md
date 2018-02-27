@@ -18,6 +18,41 @@ gdb --pid=PID
 > continue
 ```
 
+#### Debugging plugins with gdb
+
+If debugging plugins in shadow instead of shadow itself, some extra commands are helpful. Because of performance problems in gdb, shadow (via elf-loader) prevents debug symbols for plugins from loading by default. To load all debug symbols in gdb, stop the experiment after the relevant plugins have been loaded, then run:
+```
+> p vdl_linkmap_abi_update()
+```
+However, unless the experiment is very small, this will take too long to feasibly run. Instead, individual plugins can have their debug symbols loaded by calling:
+```
+> p vdl_linkmapabi_from_addr(addr)
+```
+where `addr` is an address in a loaded elf file, e.g. from a backtrace.
+This process can be automated in gdb by copying and pasting the commands below into gdb before running/continuing:
+```
+py
+def bt_load():
+  frame=gdb.newest_frame()
+  frameaddrs=""
+  count=0
+  while(frame):
+    frameaddrs += ", " + (str(frame.pc()))
+    count += 1
+    frame=frame.older()
+  command = "p vdl_linkmap_abi_from_addrs(" + str(count) + frameaddrs + ")"
+  gdb.execute(command)
+end
+catch signal SIGILL SIGFPE SIGSEGV SIGSYS
+commands
+set scheduler-locking on
+py bt_load()
+end
+```
+where the above catches any of `SIGILL SIGFPE SIGSEGV SIGSYS` (illegal instructions, arithmetic errors, segfaults, and improper syscalls) and loads the debug symbols from every file in the backtrace. You can also load the debug symbols from the current backtrace yourself by running `py bt_load()` if you define it as above.
+
+Some other functions elf-loader provides that could potentially be useful are `vdl_linkmap_shadow_print()`, which prints all shared object files in all namespaces available for loading the debug symbols of, and `vdl_linkmap_abi_print()`, which prints all the shared ojbect files in all namespaces that should already have their debug symbols loaded by gdb.
+
 ### Tracing Shadow using Valgrind
 
 If you want to be able to run Shadow through valgrind and the application you 
