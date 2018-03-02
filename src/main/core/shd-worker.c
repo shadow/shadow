@@ -210,7 +210,6 @@ static void _worker_runDeliverPacketTask(Packet* packet, gpointer userData) {
     NetworkInterface* interface = host_lookupInterface(_worker_getPrivate()->active.host, ip);
     utility_assert(interface != NULL);
     networkinterface_packetArrived(interface, packet);
-    packet_unref(packet);
 }
 
 void worker_sendPacket(Packet* packet) {
@@ -256,8 +255,9 @@ void worker_sendPacket(Packet* packet) {
         Host* dstHost = scheduler_getHost(worker->scheduler, dstID);
         utility_assert(dstHost);
 
-        Task* packetTask = task_new((TaskFunc)_worker_runDeliverPacketTask, packet, NULL);
         packet_ref(packet);
+        Task* packetTask = task_new((TaskCallbackFunc)_worker_runDeliverPacketTask,
+                packet, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
         Event* packetEvent = event_new_(packetTask, deliverTime, dstHost);
         task_unref(packetTask);
 

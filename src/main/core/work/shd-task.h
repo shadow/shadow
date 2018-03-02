@@ -6,11 +6,14 @@
 #ifndef SHD_TASK_H_
 #define SHD_TASK_H_
 
-typedef void (*TaskFunc)(gpointer data, gpointer callbackArgument);
+typedef void (*TaskCallbackFunc)(gpointer callbackObject, gpointer callbackArgument);
+typedef void (*TaskObjectFreeFunc)(gpointer data);
+typedef void (*TaskArgumentFreeFunc)(gpointer data);
 
 typedef struct _Task Task;
 
-Task* task_new(TaskFunc callback, gpointer data, gpointer callbackArgument);
+Task* task_new(TaskCallbackFunc callback, gpointer callbackObject, gpointer callbackArgument,
+        TaskObjectFreeFunc objectFree, TaskArgumentFreeFunc argumentFree);
 void task_ref(Task* task);
 void task_unref(Task* task);
 void task_execute(Task* task);

@@ -15,7 +15,7 @@ void descriptor_init(Descriptor* descriptor, DescriptorType type,
     descriptor->funcTable = funcTable;
     descriptor->handle = handle;
     descriptor->type = type;
-    descriptor->readyListeners = NULL;
+    descriptor->epollListeners = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
     descriptor->referenceCount = 1;
 
     worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_NEW);
@@ -25,9 +25,8 @@ static void _descriptor_free(Descriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
-
-    if(descriptor->readyListeners) {
-        g_slist_free(descriptor->readyListeners);
+    if(descriptor->epollListeners) {
+        g_hash_table_destroy(descriptor->epollListeners);
     }
 
     MAGIC_CLEAR(descriptor);
@@ -79,9 +78,10 @@ gint* descriptor_getHandleReference(Descriptor* descriptor) {
     return &(descriptor->handle);
 }
 
-static void _descriptor_notifyListener(gpointer data, gpointer user_data) {
-    Task* listener = data;
-    task_execute(listener);
+static void _descriptor_notifyEpollListener(gpointer key, gpointer value, gpointer user_data) {
+    Descriptor* descriptor = user_data;
+    Epoll* epoll = value;
+    epoll_descriptorStatusChanged(epoll, descriptor);
 }
 
 void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gboolean doSetBits){
@@ -124,8 +124,8 @@ void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gb
         }
     }
 
-    /* tell our listeners their was some activity on this descriptor */
-    g_slist_foreach(descriptor->readyListeners, _descriptor_notifyListener, NULL);
+    /* tell our epoll listeners their was some activity on this descriptor */
+    g_hash_table_foreach(descriptor->epollListeners, _descriptor_notifyEpollListener, descriptor);
 }
 
 DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
@@ -146,14 +146,17 @@ DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
     return status;
 }
 
-void descriptor_addStatusListener(Descriptor* descriptor, Task* listener) {
+void descriptor_addEpollListener(Descriptor* descriptor, Descriptor* epoll) {
     MAGIC_ASSERT(descriptor);
-    descriptor->readyListeners = g_slist_prepend(descriptor->readyListeners, listener);
+    /* we are string the epoll instance, so increase the ref */
+    descriptor_ref(epoll);
+    g_hash_table_insert(descriptor->epollListeners, &epoll->handle, epoll);
 }
 
-void descriptor_removeStatusListener(Descriptor* descriptor, Task* listener) {
+void descriptor_removeEpollListener(Descriptor* descriptor, Descriptor* epoll) {
     MAGIC_ASSERT(descriptor);
-    descriptor->readyListeners = g_slist_remove(descriptor->readyListeners, listener);
+    /* this will automatically call descriptor_unref on the epoll instance */
+    g_hash_table_remove(descriptor->epollListeners, &epoll->handle);
 }
 
 gint descriptor_getFlags(Descriptor* descriptor) {

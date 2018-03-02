@@ -505,8 +505,9 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
         case TCPS_LASTACK:
         case TCPS_TIMEWAIT: {
             /* schedule a close timer self-event to finish out the closing process */
-            Task* closeTask = task_new((TaskFunc)_tcp_runCloseTimerExpiredTask, tcp, NULL);
-            descriptor_ref(&tcp->super.super.super);
+            descriptor_ref(tcp);
+            Task* closeTask = task_new((TaskCallbackFunc)_tcp_runCloseTimerExpiredTask,
+                    tcp, NULL, descriptor_unref, NULL);
             worker_scheduleTask(closeTask, CONFIG_TCPCLOSETIMER_DELAY);
             task_unref(closeTask);
             break;
@@ -519,8 +520,6 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
 static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData) {
     MAGIC_ASSERT(tcp);
     _tcp_setState(tcp, TCPS_CLOSED);
-    /* unref because the task is complete and will no longer hold a pointer to the tcp */
-    descriptor_unref(&tcp->super.super.super);
 }
 
 static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
@@ -784,8 +783,9 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, SimulationTime now, Simulatio
     gboolean success = priorityqueue_push(tcp->retransmit.scheduledTimerExpirations, expireTimePtr);
 
     if(success) {
-        Task* retexpTask = task_new((TaskFunc)_tcp_runRetransmitTimerExpiredTask, tcp, NULL);
-        descriptor_ref(&tcp->super.super.super);
+        descriptor_ref(tcp);
+        Task* retexpTask = task_new((TaskCallbackFunc)_tcp_runRetransmitTimerExpiredTask,
+                tcp, NULL, descriptor_unref, NULL);
         worker_scheduleTask(retexpTask, delay);
         task_unref(retexpTask);
 
@@ -1125,9 +1125,6 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
 
     _tcp_retransmitPacket(tcp, sequence);
     _tcp_flush(tcp);
-
-    /* unref because the task is complete and will no longer hold a pointer to the tcp */
-    descriptor_unref(&tcp->super.super.super);
 }
 
 gboolean tcp_isFamilySupported(TCP* tcp, sa_family_t family) {
@@ -1612,7 +1609,9 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 multiplexed->child = _tcpchild_new(multiplexed, tcp, header.sourceIP, header.sourcePort);
                 utility_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
 
-                /* multiplexed TCP was initialized with a ref of 1, which the hash table consumes */
+                /* multiplexed TCP was initialized with a ref of 1, which the host table consumes.
+                 * so we need another ref for the children table */
+                descriptor_ref(multiplexed);
                 g_hash_table_replace(tcp->server->children, &(multiplexed->child->key), multiplexed);
 
                 multiplexed->receive.start = header.sequence;
@@ -1947,7 +1946,6 @@ static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
     packet_unref(windowUpdate);
 
     tcp->receive.windowUpdatePending = FALSE;
-    descriptor_unref(&tcp->super.super.super);
 }
 
 gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
@@ -2072,9 +2070,10 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
         /* our receive window just opened, make sure the sender knows it can
          * send more. otherwise we get into a deadlock situation!
          * make sure we don't send multiple events when read is called many times per instant */
-        descriptor_ref(&tcp->super.super.super);
+        descriptor_ref(tcp);
 
-        Task* updateWindowTask = task_new((TaskFunc)_tcp_sendWindowUpdate, tcp, NULL);
+        Task* updateWindowTask = task_new((TaskCallbackFunc)_tcp_sendWindowUpdate,
+                tcp, NULL, descriptor_unref, NULL);
         worker_scheduleTask(updateWindowTask, 1);
         task_unref(updateWindowTask);
 

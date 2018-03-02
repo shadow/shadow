@@ -278,7 +278,8 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
         /* we are 'receiving' the packets */
         interface->flags |= NIF_RECEIVING;
         /* call back when the packets are 'received' */
-        Task* receivedTask = task_new((TaskFunc)_networkinterface_runReceievedTask, interface, NULL);
+        Task* receivedTask = task_new((TaskCallbackFunc)_networkinterface_runReceievedTask,
+                interface, NULL, NULL, NULL);
         worker_scheduleTask(receivedTask, receiveTime);
         task_unref(receivedTask);
     }
@@ -413,8 +414,9 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
         /* now actually send the packet somewhere */
         if(address_toNetworkIP(interface->address) == packet_getDestinationIP(packet)) {
             /* packet will arrive on our own interface */
-            Task* packetTask = task_new((TaskFunc)networkinterface_packetArrived, interface, packet);
             packet_ref(packet);
+            Task* packetTask = task_new((TaskCallbackFunc)networkinterface_packetArrived,
+                    interface, packet, NULL, (TaskArgumentFreeFunc)packet_unref);
             worker_scheduleTask(packetTask, 1);
             task_unref(packetTask);
         } else {
@@ -444,7 +446,8 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
         /* we are 'sending' the packets */
         interface->flags |= NIF_SENDING;
         /* call back when the packets are 'sent' */
-        Task* sentTask = task_new((TaskFunc)_networkinterface_runSentTask, interface, NULL);
+        Task* sentTask = task_new((TaskCallbackFunc)_networkinterface_runSentTask,
+                interface, NULL, NULL, NULL);
         worker_scheduleTask(sentTask, sendTime);
         task_unref(sentTask);
     }

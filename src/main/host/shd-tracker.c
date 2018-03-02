@@ -586,7 +586,8 @@ void tracker_heartbeat(Tracker* tracker, gpointer userData) {
 
     /* schedule the next heartbeat */
     tracker->lastHeartbeat = worker_getCurrentTime();
-    Task* heartbeatTask = task_new((TaskFunc)tracker_heartbeat, tracker, NULL);
+    Task* heartbeatTask = task_new((TaskCallbackFunc)tracker_heartbeat,
+            tracker, NULL, NULL, NULL);
     worker_scheduleTask(heartbeatTask, tracker->interval);
     task_unref(heartbeatTask);
 }

@@ -1312,12 +1312,10 @@ static void _process_stop(Process* proc) {
 
 static void _process_runStartTask(Process* proc, gpointer nothing) {
     _process_start(proc);
-    process_unref(proc);
 }
 
 static void _process_runStopTask(Process* proc, gpointer nothing) {
     _process_stop(proc);
-    process_unref(proc);
 }
 
 void process_schedule(Process* proc, gpointer nothing) {
@@ -1327,17 +1325,19 @@ void process_schedule(Process* proc, gpointer nothing) {
 
     if(proc->stopTime == 0 || proc->startTime < proc->stopTime) {
         SimulationTime startDelay = proc->startTime <= now ? 1 : proc->startTime - now;
-        Task* startProcessTask = task_new((TaskFunc)_process_runStartTask, proc, NULL);
-        worker_scheduleTask(startProcessTask, startDelay);
         process_ref(proc);
+        Task* startProcessTask = task_new((TaskCallbackFunc)_process_runStartTask,
+                proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
+        worker_scheduleTask(startProcessTask, startDelay);
         task_unref(startProcessTask);
     }
 
     if(proc->stopTime > 0 && proc->stopTime > proc->startTime) {
         SimulationTime stopDelay = proc->stopTime <= now ? 1 : proc->stopTime - now;
-        Task* stopProcessTask = task_new((TaskFunc)_process_runStopTask, proc, NULL);
-        worker_scheduleTask(stopProcessTask, stopDelay);
         process_ref(proc);
+        Task* stopProcessTask = task_new((TaskCallbackFunc)_process_runStopTask,
+                proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
+        worker_scheduleTask(stopProcessTask, stopDelay);
         task_unref(stopProcessTask);
     }
 }

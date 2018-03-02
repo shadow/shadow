@@ -44,8 +44,6 @@ typedef struct _EpollWatch EpollWatch;
 struct _EpollWatch {
     /* the shadow descriptor we are watching for events */
     Descriptor* descriptor;
-    /* the listener that will notify us when the descriptor status changes */
-    Task* listener;
     /* holds the actual event info */
     struct epoll_event event;
     /* current status of the underlying shadow descriptor */
@@ -102,10 +100,6 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct 
 static void _epollwatch_free(EpollWatch* watch) {
     MAGIC_ASSERT(watch);
 
-    if(watch->listener) {
-        descriptor_removeStatusListener(watch->descriptor, watch->listener);
-        task_unref(watch->listener);
-    }
     descriptor_unref(watch->descriptor);
 
     MAGIC_CLEAR(watch);
@@ -128,6 +122,16 @@ static void _epollwatch_unref(EpollWatch* watch) {
 /* should only be called from descriptor dereferencing the functionTable */
 static void _epoll_free(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
+
+    /* make sure none of our watch descriptors notify us anymore */
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, epoll->watching);
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        EpollWatch* watch = value;
+        MAGIC_ASSERT(watch);
+        descriptor_removeEpollListener(watch->descriptor, (Descriptor*)epoll);
+    }
 
     /* this unrefs all of the remaining watches */
     g_hash_table_destroy(epoll->watching);
@@ -347,7 +351,8 @@ static void _epoll_check(Epoll* epoll) {
         /* schedule a notification event for our node, if wanted and one isnt already scheduled */
         if(!(epoll->flags & EF_SCHEDULED) && process_wantsNotify(epoll->ownerProcess, epoll->super.handle)) {
             /* pass NULL instead of epoll to avoid use-after-free bugs */
-            Task* notifyTask = task_new((TaskFunc)_epoll_runNotifyTask, NULL, GINT_TO_POINTER(epoll->super.handle));
+            Task* notifyTask = task_new((TaskCallbackFunc)_epoll_runNotifyTask,
+                    NULL, GINT_TO_POINTER(epoll->super.handle), NULL, NULL);
             worker_scheduleTask(notifyTask, 1);
             task_unref(notifyTask);
 
@@ -390,12 +395,10 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, struct 
             /* start watching for status changes */
             watch = _epollwatch_new(epoll, descriptor, event);
             watch->flags |= EWF_WATCHING;
-            g_hash_table_replace(epoll->watching, descriptor_getHandleReference(descriptor), watch);
+            g_hash_table_replace(epoll->watching, descriptor_getHandleReference(watch->descriptor), watch);
 
-            /* its added, so we need to listen
-             * XXX do we need to ref epoll here? */
-            watch->listener = task_new((TaskFunc)epoll_descriptorStatusChanged, epoll, descriptor);
-            descriptor_addStatusListener(watch->descriptor, watch->listener);
+            /* its added, so we need to listen for changes */
+            descriptor_addEpollListener(watch->descriptor, (Descriptor*)epoll);
 
             /* initiate a callback if the new watched descriptor is ready */
             _epoll_check(epoll);
@@ -434,12 +437,10 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, struct 
             watch->flags &= ~EWF_WATCHING;
 
             /* its deleted, so stop listening for updates */
-            descriptor_removeStatusListener(watch->descriptor, watch->listener);
-            task_unref(watch->listener);
-            watch->listener = NULL;
+            descriptor_removeEpollListener(watch->descriptor, (Descriptor*)epoll);
 
             /* unref gets called on the watch when it is removed from this table */
-            g_hash_table_remove(epoll->watching, descriptor_getHandleReference(descriptor));
+            g_hash_table_remove(epoll->watching, descriptor_getHandleReference(watch->descriptor));
 
             break;
         }

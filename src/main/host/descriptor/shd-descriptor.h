@@ -49,7 +49,7 @@ struct _Descriptor {
     gint handle;
     DescriptorType type;
     DescriptorStatus status;
-    GSList* readyListeners;
+    GHashTable* epollListeners;
     gint referenceCount;
     gint flags;
     MAGIC_DECLARE;
@@ -68,8 +68,8 @@ gint* descriptor_getHandleReference(Descriptor* descriptor);
 void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gboolean doSetBits);
 DescriptorStatus descriptor_getStatus(Descriptor* descriptor);
 
-void descriptor_addStatusListener(Descriptor* descriptor, Task* listener);
-void descriptor_removeStatusListener(Descriptor* descriptor, Task* listener);
+void descriptor_addEpollListener(Descriptor* descriptor, Descriptor* epoll);
+void descriptor_removeEpollListener(Descriptor* descriptor, Descriptor* epoll);
 
 gint descriptor_getFlags(Descriptor* descriptor);
 void descriptor_setFlags(Descriptor* descriptor, gint flags);

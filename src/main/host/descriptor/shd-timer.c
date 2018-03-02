@@ -188,10 +188,11 @@ static void _timer_scheduleNewExpireEvent(Timer* timer) {
 
     /* callback to our own node */
     gpointer next = GUINT_TO_POINTER(timer->nextExpireID);
-    Task* task = task_new((TaskFunc)_timer_expire, timer, next);
 
     /* ref the timer storage in the callback event */
-    descriptor_ref(&timer->super);
+    descriptor_ref(timer);
+    Task* task = task_new((TaskCallbackFunc)_timer_expire,
+            timer, next, descriptor_unref, NULL);
 
     SimulationTime delay = timer->nextExpireTime - worker_getCurrentTime();
 
@@ -245,9 +246,6 @@ static void _timer_expire(Timer* timer, gpointer data) {
             _timer_scheduleNewExpireEvent(timer);
         }
     }
-
-    /* unref the timer storage in the original task callback event */
-    descriptor_unref(&timer->super);
 }
 
 static void _timer_arm(Timer* timer, const struct itimerspec *config, gint flags) {

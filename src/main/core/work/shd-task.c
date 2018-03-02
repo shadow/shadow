@@ -6,22 +6,27 @@
 #include "shadow.h"
 
 struct _Task {
-    TaskFunc execute;
-    gpointer data;
+    TaskCallbackFunc execute;
+    gpointer callbackObject;
     gpointer callbackArgument;
+    TaskObjectFreeFunc objectFree;
+    TaskArgumentFreeFunc argumentFree;
     gint referenceCount;
     MAGIC_DECLARE;
 };
 
 
-Task* task_new(TaskFunc execute, gpointer data, gpointer callbackArgument) {
-    utility_assert(execute != NULL);
+Task* task_new(TaskCallbackFunc callback, gpointer callbackObject, gpointer callbackArgument,
+        TaskObjectFreeFunc objectFree, TaskArgumentFreeFunc argumentFree) {
+    utility_assert(callback != NULL);
 
     Task* task = g_new0(Task, 1);
 
-    task->execute = execute;
-    task->data = data;
+    task->execute = callback;
+    task->callbackObject = callbackObject;
     task->callbackArgument = callbackArgument;
+    task->objectFree = objectFree;
+    task->argumentFree = argumentFree;
     task->referenceCount = 1;
 
     MAGIC_INIT(task);
@@ -31,6 +36,12 @@ Task* task_new(TaskFunc execute, gpointer data, gpointer callbackArgument) {
 }
 
 static void _task_free(Task* task) {
+    if(task->objectFree && task->callbackObject) {
+        task->objectFree(task->callbackObject);
+    }
+    if(task->argumentFree && task->callbackArgument) {
+        task->argumentFree(task->callbackArgument);
+    }
     MAGIC_CLEAR(task);
     g_free(task);
     worker_countObject(OBJECT_TYPE_TASK, COUNTER_TYPE_FREE);
@@ -51,5 +62,5 @@ void task_unref(Task* task) {
 
 void task_execute(Task* task) {
     MAGIC_ASSERT(task);
-    task->execute(task->data, task->callbackArgument);
+    task->execute(task->callbackObject, task->callbackArgument);
 }

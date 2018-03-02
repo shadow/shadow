@@ -487,9 +487,11 @@ static void _host_returnPreviousDescriptorHandle(Host* host, gint handle) {
 
 void host_returnHandleHack(gint handle) {
     /* TODO replace this with something more graceful? */
-    Host* host = worker_getActiveHost();
-    if(host) {
-        _host_returnPreviousDescriptorHandle(host, handle);
+    if(worker_isAlive()) {
+        Host* host = worker_getActiveHost();
+        if(host) {
+            _host_returnPreviousDescriptorHandle(host, handle);
+        }
     }
 }
 
