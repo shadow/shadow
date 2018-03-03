@@ -80,6 +80,8 @@ void process_unref(Process* proc);
 
 void process_schedule(Process* proc, gpointer nothing);
 void process_continue(Process* proc);
+void process_stop(Process* proc);
+
 struct ProcessMigrateArgs {
     pthread_t* t1;
     pthread_t* t2;

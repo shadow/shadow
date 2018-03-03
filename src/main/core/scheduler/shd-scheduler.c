@@ -320,13 +320,13 @@ void scheduler_unref(Scheduler* scheduler) {
     }
 }
 
-void scheduler_push(Scheduler* scheduler, Event* event, GQuark senderHostID, GQuark receiverHostID) {
+gboolean scheduler_push(Scheduler* scheduler, Event* event, GQuark senderHostID, GQuark receiverHostID) {
     MAGIC_ASSERT(scheduler);
 
     SimulationTime eventTime = event_getTime(event);
-    if(eventTime > scheduler->endTime) {
+    if(eventTime >= scheduler->endTime) {
         event_unref(event);
-        return;
+        return FALSE;
     }
 
     /* parties involved. sender may be NULL, receiver may not!
@@ -338,6 +338,8 @@ void scheduler_push(Scheduler* scheduler, Event* event, GQuark senderHostID, GQu
 
     /* push to a queue based on the policy */
     scheduler->policy->push(scheduler->policy, event, sender, receiver, scheduler->currentRound.endTime);
+
+    return TRUE;
 }
 
 Event* scheduler_pop(Scheduler* scheduler) {

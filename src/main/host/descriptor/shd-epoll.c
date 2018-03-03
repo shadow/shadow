@@ -81,6 +81,9 @@ struct _Epoll {
     MAGIC_DECLARE;
 };
 
+/* forward declaration */
+static void _epoll_tryNotify(Epoll* epoll, gpointer userData);
+
 static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct epoll_event* event) {
     EpollWatch* watch = g_new0(EpollWatch, 1);
     MAGIC_INIT(watch);
@@ -123,16 +126,6 @@ static void _epollwatch_unref(EpollWatch* watch) {
 static void _epoll_free(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
 
-    /* make sure none of our watch descriptors notify us anymore */
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, epoll->watching);
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
-        EpollWatch* watch = value;
-        MAGIC_ASSERT(watch);
-        descriptor_removeEpollListener(watch->descriptor, (Descriptor*)epoll);
-    }
-
     /* this unrefs all of the remaining watches */
     g_hash_table_destroy(epoll->watching);
 
@@ -147,7 +140,31 @@ static void _epoll_free(Epoll* epoll) {
     worker_countObject(OBJECT_TYPE_EPOLL, COUNTER_TYPE_FREE);
 }
 
+void epoll_clearWatchListeners(Epoll* epoll) {
+    MAGIC_ASSERT(epoll);
+
+    /* make sure none of our watch descriptors notify us anymore */
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, epoll->watching);
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        EpollWatch* watch = value;
+        MAGIC_ASSERT(watch);
+        descriptor_removeEpollListener(watch->descriptor, (Descriptor*)epoll);
+    }
+}
+
 static void _epoll_close(Epoll* epoll) {
+    MAGIC_ASSERT(epoll);
+
+    epoll_clearWatchListeners(epoll);
+
+    /* tell the host to stop tracking us, and unref the descriptor.
+     * this should trigger _epoll_free in most cases. */
+    host_closeDescriptor(worker_getActiveHost(), epoll->super.handle);
+}
+
+static void _epoll_tryToClose(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
 
     /* mark the descriptor as closed */
@@ -156,12 +173,12 @@ static void _epoll_close(Epoll* epoll) {
     /* only close it if there is no pending epoll notify event */
     gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
     if(!isScheduled) {
-        host_closeDescriptor(worker_getActiveHost(), epoll->super.handle);
+        _epoll_close(epoll);
     }
 }
 
 DescriptorFunctionTable epollFunctions = {
-    (DescriptorFunc) _epoll_close,
+    (DescriptorFunc) _epoll_tryToClose,
     (DescriptorFunc) _epoll_free,
     MAGIC_VALUE
 };
@@ -306,17 +323,6 @@ static gboolean _epoll_isReadyOS(Epoll* epoll) {
     return isReady;
 }
 
-static void _epoll_runNotifyTask(gpointer nothing, gpointer userData) {
-    nothing = NULL;
-    /* do a clean lookup in case the epoll closed between the point where it
-     * was scheduled and now */
-    gint handle = GPOINTER_TO_INT(userData);
-    Epoll* activeEpoll = (Epoll*) host_lookupDescriptor(worker_getActiveHost(), handle);
-    if(activeEpoll) {
-        epoll_tryNotify(activeEpoll);
-    }
-}
-
 static void _epoll_check(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
 
@@ -354,13 +360,14 @@ static void _epoll_check(Epoll* epoll) {
 
         /* schedule a notification event for our node, if wanted and one isnt already scheduled */
         if(!(epoll->flags & EF_SCHEDULED) && process_wantsNotify(epoll->ownerProcess, epoll->super.handle)) {
-            /* pass NULL instead of epoll to avoid use-after-free bugs */
-            Task* notifyTask = task_new((TaskCallbackFunc)_epoll_runNotifyTask,
-                    NULL, GINT_TO_POINTER(epoll->super.handle), NULL, NULL);
-            worker_scheduleTask(notifyTask, 1);
-            task_unref(notifyTask);
+            descriptor_ref(epoll);
+            Task* notifyTask = task_new((TaskCallbackFunc)_epoll_tryNotify,
+                    epoll, NULL, descriptor_unref, NULL);
 
-            epoll->flags |= EF_SCHEDULED;
+            if(worker_scheduleTask(notifyTask, 1)) {
+                epoll->flags |= EF_SCHEDULED;
+            }
+            task_unref(notifyTask);
         }
     } else {
         descriptor_adjustStatus(&(epoll->super), DS_READABLE, FALSE);
@@ -587,7 +594,7 @@ static gchar* _epoll_getChildrenStatus(Epoll* epoll, GString* message) {
 }
 #endif
 
-void epoll_tryNotify(Epoll* epoll) {
+static void _epoll_tryNotify(Epoll* epoll, gpointer userData) {
     MAGIC_ASSERT(epoll);
 
     /* event is being executed from the scheduler, so its no longer scheduled */
@@ -596,12 +603,9 @@ void epoll_tryNotify(Epoll* epoll) {
     /* if it was closed in the meantime, do the actual close now */
     gboolean isClosed = (epoll->flags & EF_CLOSED) ? TRUE : FALSE;
     if(isClosed || !process_isRunning(epoll->ownerProcess)) {
-        host_closeDescriptor(worker_getActiveHost(), epoll->super.handle);
+        _epoll_close(epoll);
         return;
     }
-
-    /* make sure this doesn't get destroyed if closed while notifying */
-    descriptor_ref(&epoll->super);
 
     /* we should notify the plugin only if we still have some events to report */
     gboolean isReady = FALSE;
@@ -652,7 +656,4 @@ void epoll_tryNotify(Epoll* epoll) {
         /* set up another shadow callback event if needed */
         _epoll_check(epoll);
     }
-
-    /* now we can safely unref. those that are no longer tracked will be freed. */
-    descriptor_unref(&epoll->super);
 }

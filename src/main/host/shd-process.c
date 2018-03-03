@@ -249,9 +249,6 @@ struct _Process {
     MAGIC_DECLARE;
 };
 
-/* forward declaration */
-static void _process_stop(Process* proc);
-
 static ProcessContext _process_changeContext(Process* proc, ProcessContext from, ProcessContext to) {
     ProcessContext prevContext = PCTX_NONE;
     if(from == PCTX_SHADOW) {
@@ -616,7 +613,7 @@ static void _process_free(Process* proc) {
 
     /* stop and free plugin memory if we are still running */
     if(process_isRunning(proc)) {
-        _process_stop(proc);
+        process_stop(proc);
     }
 
     if(proc->arguments) {
@@ -1064,7 +1061,7 @@ static void _process_start(Process* proc) {
     utility_assert(proc->programAuxiliaryThreads == NULL);
     proc->programAuxiliaryThreads = g_queue_new();
 
-    /* ref for the spawn below */
+    /* ref for the main func (spawn) below */
     process_ref(proc);
 
     /* now we will execute in the pth/plugin context, so we need to load the state */
@@ -1274,7 +1271,7 @@ gboolean process_wantsNotify(Process* proc, gint epollfd) {
     }
 }
 
-static void _process_stop(Process* proc) {
+void process_stop(Process* proc) {
     MAGIC_ASSERT(proc);
 
     /* we only have state if we are running */
@@ -1319,7 +1316,7 @@ static void _process_runStartTask(Process* proc, gpointer nothing) {
 }
 
 static void _process_runStopTask(Process* proc, gpointer nothing) {
-    _process_stop(proc);
+    process_stop(proc);
 }
 
 void process_schedule(Process* proc, gpointer nothing) {
@@ -5871,6 +5868,7 @@ int process_emu_pthread_join(Process* proc, pthread_t thread, void **value_ptr) 
                 if (!pth_join(pt, value_ptr)) {
                     ret = errno;
                 } else {
+                    g_queue_remove(proc->programAuxiliaryThreads, pt);
                     if (value_ptr != NULL && *value_ptr == PTH_CANCELED) {
                         *value_ptr = PTHREAD_CANCELED;
                     }
@@ -5988,6 +5986,7 @@ int process_emu_pthread_abort(Process* proc, pthread_t thread) {
             if (!pth_abort(pt)) {
                 ret = errno;
             } else {
+                g_queue_remove(proc->programAuxiliaryThreads, pt);
                 ret = 0;
             }
 

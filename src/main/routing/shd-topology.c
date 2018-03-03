@@ -129,14 +129,16 @@ static gboolean _topology_loadGraph(Topology* top, const gchar* graphPath) {
 static gboolean _topology_isComplete(Topology* top, gboolean *result) {
     MAGIC_ASSERT(top);
     g_assert(result);
+
     igraph_t *graph = &top->graph;
     igraph_vs_t vs;
     igraph_vit_t vit;
-    int ret;
+    int ret = 0;
     igraph_integer_t vcount = igraph_vcount(graph);
     igraph_bool_t is_directed = igraph_is_directed(&top->graph);
     gboolean is_success = FALSE;
     gboolean is_complete = FALSE;
+
     /*
      * Determines if a graph is complete by:
      * - knowning how many vertexes there are
@@ -154,42 +156,52 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
         is_success = FALSE;
         goto done;
     }
+
     ret = igraph_vit_create(graph, vs, &vit);
     if (ret != IGRAPH_SUCCESS) {
         critical("igraph_vit_create returned non-success code %i", ret);
         is_success = FALSE;
         goto done;
     }
+
     while (!IGRAPH_VIT_END(vit)) {
+        igraph_integer_t vertexID = 0;
+        vertexID = IGRAPH_VIT_GET(vit);
+
         igraph_vector_t iedges;
         igraph_vector_init(&iedges, 0);
-        ret = igraph_incident(graph, &iedges, IGRAPH_VIT_GET(vit), IGRAPH_OUT);
+
+        ret = igraph_incident(graph, &iedges, vertexID, IGRAPH_OUT);
         if (ret != IGRAPH_SUCCESS) {
             critical("error computing igraph_incident\n");
             is_success = FALSE;
             igraph_vector_destroy(&iedges);
             goto done;
         }
+
         igraph_integer_t ecount = igraph_vector_size(&iedges);
+
         /* If the graph is undirected and there is a self-loop edge (an edge
          * that begins and ends at the same vertex) on this vertex, then igraph
          * will have double counted it and we need to correct that. */
         if (!is_directed) {
-            igraph_integer_t edge_id;
-            igraph_get_eid(&top->graph, &edge_id, IGRAPH_VIT_GET(vit), IGRAPH_VIT_GET(vit), TRUE, FALSE);
+            igraph_integer_t edge_id = 0;
+            igraph_get_eid(&top->graph, &edge_id, vertexID, vertexID, TRUE, FALSE);
+
             /* If the edge does not exist, then -1 will be stored in edge_id.
              * If it is found, then it will be >= 0 */
             if (edge_id >= 0) {
                 debug("Subtracting one from vert id=%li's edge count because "
                         "this is an undirected graph and this vertex's "
-                        "self-looping edge has been counted twice", IGRAPH_VIT_GET(vit));
+                        "self-looping edge has been counted twice", (long int)vertexID);
                 ecount -= 1;
             }
         }
+
         if (ecount < vcount) {
             info("Vert id=%li has %li incident edges to %li total verts "
                 "and thus this isn't a complete graph",
-                IGRAPH_VIT_GET(vit), (long int)ecount, (long int)vcount);
+                (long int)vertexID, (long int)ecount, (long int)vcount);
             is_success = TRUE;
             is_complete = FALSE;
             igraph_vector_destroy(&iedges);
@@ -197,15 +209,19 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
         } else {
             debug("Vert id=%li has %li incident edges to %li total verts "
                 "and thus doesn't determine whether this graph is incomplete. "
-                "Must keep searching.", IGRAPH_VIT_GET(vit),
+                "Must keep searching.", (long int)vertexID,
                 (long int)ecount, (long int)vcount);
         }
+
         igraph_vector_destroy(&iedges);
+
         IGRAPH_VIT_NEXT(vit);
     }
+
     info("Determined this graph is complete.");
     is_complete = TRUE;
     is_success = TRUE;
+
 done:
     igraph_vs_destroy(&vs);
     igraph_vit_destroy(&vit);

@@ -24,7 +24,7 @@ void scheduler_continueNextRound(Scheduler*, SimulationTime, SimulationTime);
 SimulationTime scheduler_awaitNextRound(Scheduler*);
 void scheduler_finish(Scheduler*);
 
-void scheduler_push(Scheduler*, Event*, GQuark, GQuark);
+gboolean scheduler_push(Scheduler*, Event*, GQuark, GQuark);
 Event* scheduler_pop(Scheduler*);
 
 void scheduler_addHost(Scheduler*, Host*);

@@ -189,7 +189,7 @@ gpointer worker_run(WorkerRunData* data) {
     return NULL;
 }
 
-void worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
+gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
     utility_assert(task);
 
     Worker* worker = _worker_getPrivate();
@@ -197,9 +197,12 @@ void worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
     if(slave_schedulerIsRunning(worker->slave)) {
         utility_assert(worker->clock.now != SIMTIME_INVALID);
         utility_assert(worker->active.host != NULL);
+
         Event* event = event_new_(task, worker->clock.now + nanoDelay, worker->active.host);
         GQuark hostID = host_getID(worker->active.host);
-        scheduler_push(worker->scheduler, event, hostID, hostID);
+        return scheduler_push(worker->scheduler, event, hostID, hostID);
+    } else {
+        return FALSE;
     }
 }
 

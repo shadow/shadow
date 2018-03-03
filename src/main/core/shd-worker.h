@@ -25,7 +25,7 @@ DNS* worker_getDNS();
 Topology* worker_getTopology();
 Options* worker_getOptions();
 gpointer worker_run(WorkerRunData*);
-void worker_scheduleTask(Task* task, SimulationTime nanoDelay);
+gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay);
 void worker_sendPacket(Packet* packet);
 gboolean worker_isAlive();
 

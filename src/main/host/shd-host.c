@@ -324,9 +324,23 @@ void host_freeAllApplications(Host* host) {
     MAGIC_ASSERT(host);
     debug("start freeing applications for host '%s'", host->params.hostname);
     while(!g_queue_is_empty(host->processes)) {
-        process_unref(g_queue_pop_head(host->processes));
+        Process* proc = g_queue_pop_head(host->processes);
+        process_stop(proc);
+        process_unref(proc);
     }
     debug("done freeing application for host '%s'", host->params.hostname);
+
+    debug("start clearing epoll descriptors for host '%s'", host->params.hostname);
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, host->descriptors);
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        Descriptor* descriptor = value;
+        if(descriptor->type == DT_EPOLL) {
+            epoll_clearWatchListeners((Epoll*) descriptor);
+        }
+    }
+    debug("done clearing epoll descriptors for host '%s'", host->params.hostname);
 }
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
@@ -458,8 +472,7 @@ static void _host_unmonitorDescriptor(Host* host, gint handle) {
 
     Descriptor* descriptor = host_lookupDescriptor(host, handle);
     if(descriptor) {
-        if(descriptor->type == DT_TCPSOCKET || descriptor->type == DT_UDPSOCKET)
-        {
+        if(descriptor->type == DT_TCPSOCKET || descriptor->type == DT_UDPSOCKET) {
             Socket* socket = (Socket*) descriptor;
             _host_disassociateInterface(host, socket);
         }
