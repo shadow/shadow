@@ -79,7 +79,25 @@ less analysis.txt
 
 ##### Profiling with `perf`
 
-TODO.
+Either run perf when starting Shadow:
+
+```bash
+perf record shadow shadow.config.xml > shadow.log
+```
+
+Or, connect to a running Shadow process:
+
+```bash
+perf record -p <PID>
+```
+
+Either of the above two options will write a `perf.data` file when you press control-c, or Shadow ends. You can then analyze the report:
+
+```bash
+perf report
+```
+
+Perf is extremely powerful with many options. See `man perf` or [the perf wiki](https://perf.wiki.kernel.org/index.php/Tutorial) for more info.
 
 ### Tagging Shadow releases
 
