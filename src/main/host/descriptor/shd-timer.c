@@ -40,6 +40,7 @@ static void _timer_free(Timer* timer) {
     MAGIC_ASSERT(timer);
     MAGIC_CLEAR(timer);
     g_free(timer);
+    worker_countObject(OBJECT_TYPE_TIMER, COUNTER_TYPE_FREE);
 }
 
 static DescriptorFunctionTable _timerFunctions = {
@@ -69,6 +70,8 @@ Timer* timer_new(gint handle, gint clockid, gint flags) {
 
     descriptor_init(&(timer->super), DT_TIMER, &_timerFunctions, handle);
     descriptor_adjustStatus(&(timer->super), DS_ACTIVE, TRUE);
+
+    worker_countObject(OBJECT_TYPE_TIMER, COUNTER_TYPE_NEW);
 
     return timer;
 }

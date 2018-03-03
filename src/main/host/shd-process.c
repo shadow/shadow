@@ -596,6 +596,8 @@ Process* process_new(gpointer host, guint processID,
     proc->referenceCount = 1;
     proc->activeContext = PCTX_SHADOW;
 
+    worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_NEW);
+
     return proc;
 }
 
@@ -662,6 +664,8 @@ static void _process_free(Process* proc) {
     if(proc->host) {
         host_unref(proc->host);
     }
+
+    worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_FREE);
 
     MAGIC_CLEAR(proc);
     g_free(proc);

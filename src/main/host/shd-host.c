@@ -107,6 +107,8 @@ Host* host_new(HostParameters* params) {
     /* we go back to the slave setup process here, so stop counting this host execution */
     g_timer_stop(host->executionTimer);
 
+    worker_countObject(OBJECT_TYPE_HOST, COUNTER_TYPE_NEW);
+
     return host;
 }
 
@@ -114,6 +116,8 @@ static void _host_free(Host* host) {
     MAGIC_ASSERT(host);
     MAGIC_CLEAR(host);
     g_free(host);
+
+    worker_countObject(OBJECT_TYPE_HOST, COUNTER_TYPE_FREE);
 }
 
 /* this is needed outside of the free function, because there are parts of the shutdown

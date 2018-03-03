@@ -35,6 +35,9 @@ struct _Slave {
     Random* random;
     gint rawFrequencyKHz;
 
+    /* global object counters, we collect counts from workers at end of sim */
+    ObjectCounter* objectCounts;
+
     /* the parallel event/host/thread scheduler */
     Scheduler* scheduler;
 
@@ -58,6 +61,8 @@ struct _Slave {
 
     MAGIC_DECLARE;
 };
+
+static Slave* globalSlave = NULL;
 
 static void _slave_lock(Slave* slave) {
     MAGIC_ASSERT(slave);
@@ -132,8 +137,13 @@ void _program_meta_free(gpointer data) {
 }
 
 Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint randomSeed) {
+    if(globalSlave != NULL) {
+        return NULL;
+    }
+
     Slave* slave = g_new0(Slave, 1);
     MAGIC_INIT(slave);
+    globalSlave = slave;
 
     g_mutex_init(&(slave->lock));
     g_mutex_init(&(slave->pluginInitLock));
@@ -141,6 +151,7 @@ Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint
     slave->master = master;
     slave->options = options;
     slave->random = random_new(randomSeed);
+    slave->objectCounts = objectcounter_new();
 
     slave->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if(slave->rawFrequencyKHz == 0) {
@@ -193,7 +204,11 @@ gint slave_free(Slave* slave) {
         scheduler_unref(slave->scheduler);
     }
 
-    worker_logAndFreeGlobalObjectCounts();
+    if(slave->objectCounts != NULL) {
+        message("%s", objectcounter_valuesToString(slave->objectCounts));
+        message("%s", objectcounter_diffsToString(slave->objectCounts));
+        objectcounter_free(slave->objectCounts);
+    }
 
     g_hash_table_destroy(slave->programMeta);
 
@@ -215,6 +230,7 @@ gint slave_free(Slave* slave) {
 
     MAGIC_CLEAR(slave);
     g_free(slave);
+    globalSlave = NULL;
 
     return returnCode;
 }
@@ -440,4 +456,24 @@ void slave_incrementPluginError(Slave* slave) {
 const gchar* slave_getHostsRootPath(Slave* slave) {
     MAGIC_ASSERT(slave);
     return slave->hostsPath;
+}
+
+void slave_storeCounts(Slave* slave, ObjectCounter* objectCounter) {
+    MAGIC_ASSERT(slave);
+    _slave_lock(slave);
+    if(slave->objectCounts) {
+        objectcounter_incrementAll(globalSlave->objectCounts, objectCounter);
+    }
+    _slave_unlock(slave);
+}
+
+void slave_countObject(ObjectType otype, CounterType ctype) {
+    if(globalSlave) {
+        MAGIC_ASSERT(globalSlave);
+        _slave_lock(globalSlave);
+        if(globalSlave->objectCounts) {
+            objectcounter_incrementOne(globalSlave->objectCounts, otype, ctype);
+        }
+        _slave_unlock(globalSlave);
+    }
 }

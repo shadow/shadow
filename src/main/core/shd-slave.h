@@ -53,4 +53,7 @@ void slave_addNewVirtualHost(Slave* slave, HostParameters* params);
 void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName, gchar* preloadName,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
 
+void slave_storeCounts(Slave* slave, ObjectCounter* objectCounter);
+void slave_countObject(ObjectType otype, CounterType ctype);
+
 #endif /* SHD_SLAVE_H_ */

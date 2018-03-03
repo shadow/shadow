@@ -30,7 +30,6 @@ void worker_sendPacket(Packet* packet);
 gboolean worker_isAlive();
 
 void worker_countObject(ObjectType otype, CounterType ctype);
-void worker_logAndFreeGlobalObjectCounts();
 
 SimulationTime worker_getCurrentTime();
 EmulatedTime worker_getEmulatedTime();

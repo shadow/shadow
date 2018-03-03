@@ -143,6 +143,8 @@ static void _epoll_free(Epoll* epoll) {
 
     MAGIC_CLEAR(epoll);
     g_free(epoll);
+
+    worker_countObject(OBJECT_TYPE_EPOLL, COUNTER_TYPE_FREE);
 }
 
 static void _epoll_close(Epoll* epoll) {
@@ -189,6 +191,8 @@ Epoll* epoll_new(gint handle) {
 
     /* the epoll descriptor itself is always able to be epolled */
     descriptor_adjustStatus(&(epoll->super), DS_ACTIVE, TRUE);
+
+    worker_countObject(OBJECT_TYPE_EPOLL, COUNTER_TYPE_NEW);
 
     return epoll;
 }

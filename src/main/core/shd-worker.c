@@ -40,8 +40,6 @@ struct _Worker {
     MAGIC_DECLARE;
 };
 
-ObjectCounter* globalObjectCounts = NULL;
-
 static Worker* _worker_new(Slave*, guint);
 static void _worker_free(Worker*);
 
@@ -166,8 +164,8 @@ gpointer worker_run(WorkerRunData* data) {
         countdownlatch_await(data->notifyReadyToJoin);
     }
 
-    /* cleanup is all done */
-    message("thread-specific info after cleanup: %s", objectcounter_toString(worker->objectCounts));
+    /* cleanup is all done, send object counts to slave */
+    slave_storeCounts(worker->slave, worker->objectCounts);
 
     /* synchronize thread join */
     CountDownLatch* notifyJoined = data->notifyJoined;
@@ -411,19 +409,9 @@ void worker_countObject(ObjectType otype, CounterType ctype) {
      * with multiple workers. */
     if(worker_isAlive()) {
         Worker* worker = _worker_getPrivate();
-        objectcounter_increment(worker->objectCounts, otype, ctype);
+        objectcounter_incrementOne(worker->objectCounts, otype, ctype);
     } else {
-        /* this is a hack, but we don't want to miss free calls */
-        if(!globalObjectCounts) {
-            globalObjectCounts = objectcounter_new();
-            objectcounter_increment(globalObjectCounts, otype, ctype);
-        }
-    }
-}
-
-void worker_logAndFreeGlobalObjectCounts() {
-    if(globalObjectCounts != NULL) {
-        message("global state: %s", objectcounter_toString(globalObjectCounts));
-        objectcounter_free(globalObjectCounts);
+        /* has a global lock, so don't do it unless there is no worker object */
+        slave_countObject(otype, ctype);
     }
 }
