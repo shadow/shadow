@@ -136,9 +136,9 @@ intern pth_t pth_tcb_alloc(unsigned int stacksize, void *stackaddr)
 
 #ifdef PTH_VALGRIND
 #ifdef PTH_DEBUG
-        t->valgrind_id = VALGRIND_STACK_REGISTER(t->stack, &t->stack[stacksize]);
-        pth_debug4("pth_tcb_alloc: allocated new stack at [0x%p-0x%p] with valgrind id %i",
-                t->stack, &t->stack[stacksize], t->valgrind_id);
+        t->valgrind_id = VALGRIND_STACK_REGISTER(t->stack, &t->stack[t->stacksize]);
+        pth_debug5("pth_tcb_alloc: allocated new stack of size %u at [0x%p-0x%p] with valgrind id %i",
+            t->stacksize, t->stack, &t->stack[t->stacksize], t->valgrind_id);
 #endif
 #endif
 
@@ -158,10 +158,16 @@ intern pth_t pth_tcb_alloc(unsigned int stacksize, void *stackaddr)
 /* free a thread control block */
 intern void pth_tcb_free(pth_t t)
 {
-    if (t == NULL)
+    if (t == NULL || t->stackguard == NULL)
         return;
     if (t->stack != NULL && !t->stackloan) {
         if(t->stacksize > 0) {
+#ifdef PTH_VALGRIND
+#ifdef PTH_DEBUG
+            pth_debug5("pth_tcb_free: freeing stack of size %u at [0x%p-0x%p] with valgrind id %i",
+              t->stacksize, t->stack, &t->stack[t->stacksize], t->valgrind_id);
+#endif
+#endif
             memset(t->stack, 0, (size_t)t->stacksize);
         }
         free(t->stack);
