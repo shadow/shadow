@@ -927,6 +927,9 @@ static void _process_executeCleanup(Process* proc) {
     /* the main thread is done and will be joined by pth */
     proc->programMainThread = NULL;
 
+    /* unref for the main func */
+    process_unref(proc);
+
     /* unref for the cleanup func */
     int count = proc->referenceCount;
     process_unref(proc);
@@ -1007,9 +1010,6 @@ static void* _process_executeMain(Process* proc) {
     _process_handleTimerResult(proc, elapsed);
 
     _process_logReturnCode(proc, proc->returnCode);
-
-    /* unref for the main func */
-    process_unref(proc);
 
     /* when we return, pth will call the exit functions queued for the main thread */
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
