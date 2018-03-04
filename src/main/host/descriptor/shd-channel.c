@@ -44,6 +44,8 @@ static void channel_free(Channel* channel) {
 
     MAGIC_CLEAR(channel);
     g_free(channel);
+
+    worker_countObject(OBJECT_TYPE_CHANNEL, COUNTER_TYPE_FREE);
 }
 
 static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize nBytes) {
@@ -144,18 +146,24 @@ Channel* channel_new(gint handle, ChannelType type) {
         descriptor_adjustStatus((Descriptor*)channel, DS_WRITABLE, TRUE);
     }
 
+    worker_countObject(OBJECT_TYPE_CHANNEL, COUNTER_TYPE_NEW);
+
     return channel;
 }
 
 void channel_setLinkedChannel(Channel* channel, Channel* linkedChannel) {
     MAGIC_ASSERT(channel);
-    MAGIC_ASSERT(linkedChannel);
 
     if(channel->linkedChannel) {
         descriptor_unref(&channel->linkedChannel->super.super);
+        channel->linkedChannel = NULL;
     }
-    channel->linkedChannel = linkedChannel;
-    descriptor_ref(&linkedChannel->super.super);
+
+    if(linkedChannel) {
+      MAGIC_ASSERT(linkedChannel);
+      channel->linkedChannel = linkedChannel;
+      descriptor_ref(&linkedChannel->super.super);
+    }
 }
 
 Channel* channel_getLinkedChannel(Channel* channel) {

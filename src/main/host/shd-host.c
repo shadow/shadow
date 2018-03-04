@@ -142,15 +142,18 @@ void host_shutdown(Host* host) {
     }
 
     if(host->descriptors) {
-        /* tcp servers and their children holds refs to each other. make sure they
-         * all get freed by removing the refs in one direction */
         GHashTableIter iter;
         gpointer key, value;
         g_hash_table_iter_init(&iter, host->descriptors);
         while(g_hash_table_iter_next(&iter, &key, &value)) {
             Descriptor* desc = value;
             if(desc && desc->type == DT_TCPSOCKET) {
+              /* tcp servers and their children holds refs to each other. make
+               * sure they all get freed by removing the refs in one direction */
                 tcp_clearAllChildrenIfServer((TCP*)desc);
+            } else if(desc && (desc->type == DT_SOCKETPAIR || desc->type == DT_PIPE)) {
+              /* we need to correctly update the linked channel refs */
+              channel_setLinkedChannel((Channel*)desc, NULL);
             }
         }
 

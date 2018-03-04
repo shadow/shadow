@@ -20,6 +20,7 @@ struct _ObjectCounter {
         ObjectCounts host;
         ObjectCounts process;
         ObjectCounts descriptor;
+        ObjectCounts channel;
         ObjectCounts tcp;
         ObjectCounts udp;
         ObjectCounts epoll;
@@ -112,6 +113,11 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
 
+        case OBJECT_TYPE_CHANNEL: {
+            _objectcount_incrementOne(&(counter->counters.channel), ctype);
+            break;
+        }
+
         case OBJECT_TYPE_TCP: {
             _objectcount_incrementOne(&(counter->counters.tcp), ctype);
             break;
@@ -148,6 +154,7 @@ void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment
     _objectcount_incrementAll(&(counter->counters.host), &(increment->counters.host));
     _objectcount_incrementAll(&(counter->counters.process), &(increment->counters.process));
     _objectcount_incrementAll(&(counter->counters.descriptor), &(increment->counters.descriptor));
+    _objectcount_incrementAll(&(counter->counters.channel), &(increment->counters.channel));
     _objectcount_incrementAll(&(counter->counters.tcp), &(increment->counters.tcp));
     _objectcount_incrementAll(&(counter->counters.udp), &(increment->counters.udp));
     _objectcount_incrementAll(&(counter->counters.epoll), &(increment->counters.epoll));
@@ -168,6 +175,7 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
             "host_new=%"G_GUINT64_FORMAT" host_free=%"G_GUINT64_FORMAT" "
             "process_new=%"G_GUINT64_FORMAT" process_free=%"G_GUINT64_FORMAT" "
             "descriptor_new=%"G_GUINT64_FORMAT" descriptor_free=%"G_GUINT64_FORMAT" "
+            "channel_new=%"G_GUINT64_FORMAT" channel_free=%"G_GUINT64_FORMAT" "
             "tcp_new=%"G_GUINT64_FORMAT" tcp_free=%"G_GUINT64_FORMAT" "
             "udp_new=%"G_GUINT64_FORMAT" udp_free=%"G_GUINT64_FORMAT" "
             "epoll_new=%"G_GUINT64_FORMAT" epoll_free=%"G_GUINT64_FORMAT" "
@@ -178,6 +186,7 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
             counter->counters.host.new, counter->counters.host.free,
             counter->counters.process.new, counter->counters.process.free,
             counter->counters.descriptor.new, counter->counters.descriptor.free,
+            counter->counters.channel.new, counter->counters.channel.free,
             counter->counters.tcp.new, counter->counters.tcp.free,
             counter->counters.udp.new, counter->counters.udp.free,
             counter->counters.epoll.new, counter->counters.epoll.free,
@@ -200,6 +209,7 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
             "host=%"G_GUINT64_FORMAT" "
             "process=%"G_GUINT64_FORMAT" "
             "descriptor=%"G_GUINT64_FORMAT" "
+            "channel=%"G_GUINT64_FORMAT" "
             "tcp=%"G_GUINT64_FORMAT" "
             "udp=%"G_GUINT64_FORMAT" "
             "epoll=%"G_GUINT64_FORMAT" "
@@ -210,6 +220,7 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
             counter->counters.host.new - counter->counters.host.free,
             counter->counters.process.new - counter->counters.process.free,
             counter->counters.descriptor.new - counter->counters.descriptor.free,
+            counter->counters.channel.new - counter->counters.channel.free,
             counter->counters.tcp.new - counter->counters.tcp.free,
             counter->counters.udp.new - counter->counters.udp.free,
             counter->counters.epoll.new - counter->counters.epoll.free,
