@@ -5,24 +5,6 @@ import re
 import getopt
 import os
 
-
-def find_build_id(path):
-    if os.path.exists(path):
-        file = os.popen('readelf -n {}'.format(path), 'r')
-        lines = file.readlines()
-        regex = re.compile(r'^    Build ID: (\w+)$')
-
-        for line in lines:
-            result = regex.search(line)
-
-            if not result:
-                continue
-
-            h = result.group(1)
-            return "/usr/lib/debug/.build-id/{}/{}.debug".format(h[0:2], h[2:])
-
-    return None
-
 class Data:
     def __init__(self, data):
         self.data = data
@@ -145,55 +127,65 @@ class DebugData:
 class CouldNotFindFile:
     pass
 
+
+def find_build_id(path):
+    if not os.path.exists(path):
+        return None
+    file = os.popen('readelf -n {}'.format(path), 'r')
+    lines = file.readlines()
+    regex = re.compile(r'^    Build ID: (\w+)$')
+    for line in lines:
+        result = regex.search(line)
+        if result:
+            h = result.group(1)
+            return "/usr/lib/debug/.build-id/{}/{}.debug".format(h[0:2], h[2:])
+    return None
+
+def check_file_regex(directory, file_regex):
+    if not os.path.exists(directory):
+        return None
+    lines = os.listdir(directory)
+    regex = re.compile(file_regex)
+    for line in lines:
+        result = regex.search(line)
+        if result:
+            return directory + result.group()
+    return None
+
 def search_debug_file():
-    files_to_try = ['/usr/lib64/debug/lib64/ld-2.11.2.so.debug',
-                    '/usr/lib/debug/lib64/ld-linux-x86-64.so.2.debug',
-                    '/usr/lib/debug/ld-linux-x86-64.so.2',
-                    '/usr/lib/debug/lib/ld-linux.so.2.debug',
-                    '/usr/lib/debug/ld-linux.so.2',
-                    # ubuntu 1104/1110
-                    '/usr/lib/debug/lib/i386-linux-gnu/ld-2.13.so',
-                    '/usr/lib/debug/lib/x86_64-linux-gnu/ld-2.13.so',
-                    # for ubuntu 0910. braindead
-                    '/usr/lib/debug/lib/ld-2.10.1.so',
-                    # for ubuntu 1004.
-                    '/usr/lib/debug/lib/ld-2.11.1.so',
-                    # for ubuntu 1010.
-                    '/usr/lib/debug/lib/ld-2.12.1.so',
-                    # ubuntu 1204
-                    '/usr/lib/debug/lib/x86_64-linux-gnu/ld-2.15.so',
-                    '/usr/lib/debug/lib/i386-linux-gnu/ld-2.15.so',
-                    # ubuntu 1304
-                    '/usr/lib/debug/lib/x86_64-linux-gnu/ld-2.17.so',
-                    '/usr/lib/debug/lib/i386-linux-gnu/ld-2.17.so',
-                    # ubuntu 1404
-                    '/usr/lib/debug/lib/x86_64-linux-gnu/ld-2.19.so',
-                    '/usr/lib/debug/lib/i386-linux-gnu/ld-2.19.so',
-                    # ubuntu 1604
-                    '/usr/lib/debug/lib/x86_64-linux-gnu/ld-2.23.so',
-                    '/usr/lib/debug/lib/i386-linux-gnu/ld-2.23.so',
-                    # ubuntu 1610
-                    '/usr/lib/debug/lib/x86_64-linux-gnu/ld-2.24.so',
-                    '/usr/lib/debug/lib/i386-linux-gnu/ld-2.24.so',
-                    # ubuntu 1710
-                    '/usr/lib/debug/lib/x86_64-linux-gnu/ld-2.26.so',
-                    '/usr/lib/debug/lib/i386-linux-gnu/ld-2.26.so',
-                    # debian 9
-                    find_build_id('/lib/x86_64-linux-gnu/ld-2.24.so'),
-                    find_build_id('/lib/i386-linux-gnu/ld-2.24.so'),
-                    # debian 10 (testing)
-                    find_build_id('/lib/x86_64-linux-gnu/ld-2.26.so'),
-                    find_build_id('/lib/i386-linux-gnu/ld-2.26.so'),
-                    # solus - link points to latest version of ld
-                    find_build_id('/usr/lib/ld-linux-x86-64.so.2'),
-                    ]
-    for file in files_to_try:
+    debug_files = [ ('/usr/lib64/debug/lib64/', r'ld-[0-9.]+\.so.debug'),
+                    ('/usr/lib/debug/lib64/', r'ld-linux-x86-64\.so\.2\.debug'),
+                    ('/usr/lib/debug/', r'ld-linux-x86-64\.so\.2'),
+                    ('/usr/lib/debug/lib/', r'ld-linux\.so\.2\.debug'),
+                    ('/usr/lib/debug/', r'ld-linux\.so\.2'),
+                    # ubuntu 09.10-10.10
+                    ('/usr/lib/debug/lib/', r'ld-[0-9.]+\.so'),
+                    # ubuntu 11.04/11.10
+                    ('/usr/lib/debug/lib/i386-linux-gnu/', r'ld-[0-9.]+\.so'),
+                    ('/usr/lib/debug/lib/x86_64-linux-gnu/', r'ld-[0-9.]+\.so'),
+                    # ubuntu >12.04
+                    ('/usr/lib/debug/lib/x86_64-linux-gnu/', r'ld-[0-9.]+\.so'),
+                    ('/usr/lib/debug/lib/i386-linux-gnu/', r'ld-[0-9.]+\.so'),
+                  ]
+    build_ids = [ # debian
+                  ('/lib/x86_64-linux-gnu/', r'ld-[0-9.]+\.so'),
+                  ('/lib/i386-linux-gnu/', r'ld-[0-9.]+\.so'),
+                  # solus
+                  ('/usr/lib/', r'ld-linux-x86-64\.so\.2'),
+                ]
+    for file_tuple in debug_files:
+        file = check_file_regex(file_tuple[0], file_tuple[1])
         if not file:
             continue
-
         if os.path.isfile (file):
             return file
-
+    for file_tuple in build_ids:
+        library = check_file_regex(file_tuple[0], file_tuple[1])
+        file = find_build_id(library)
+        if not file:
+            continue
+        if os.path.isfile (file):
+            return file
     raise CouldNotFindFile ()
 
 def list_lib_path():
