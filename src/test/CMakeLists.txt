@@ -30,3 +30,21 @@ add_subdirectory(sleep)
 add_subdirectory(sockbuf)
 add_subdirectory(tcp)
 add_subdirectory(timerfd)
+
+## FIXME - the LastTest.log.tmp file does not contain all output when we do
+## the grep above, so we get an inconsistent number of results in the output.
+## For now, we just check the first 20 results so that some checking is in place.
+add_test(
+	NAME shadow-leakcheck-grep
+	COMMAND /usr/bin/bash ${CMAKE_SOURCE_DIR}/src/test/leakcheck.sh
+	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(shadow-leakcheck-grep PROPERTIES DEPENDS "determinism1-shadow;determinism2-shadow;dynlink-shadow;preload-shadow-dl-run;preload-shadow-dl-env;bind-shadow;cpp-shadow;determinism-shadow-compare;epoll-shadow;epoll-writeable-shadow;epoll-shadow;file-shadow;phold-shadow;phold-threaded-shadow;pthreads-shadow;random-shadow;signal-shadow;sleep-shadow;sockbuf-shadow;tcp-blocking-loopback-shadow;tcp-blocking-lossless-shadow;tcp-blocking-lossy-shadow;tcp-nonblocking-poll-lossy-shadow;tcp-nonblocking-poll-lossless-shadow;tcp-nonblocking-poll-loopback-shadow;tcp-nonblocking-epoll-lossless-shadow;tcp-nonblocking-epoll-loopback-shadow;tcp-nonblocking-epoll-lossy-shadow;tcp-nonblocking-epoll-lossy-shadow;tcp-nonblocking-select-lossless-shadow;tcp-nonblocking-select-lossy-shadow;tcp-nonblocking-select-loopback-shadow;timerfd-shadow;tcp-iov-shadow")
+
+add_test(
+    NAME shadow-leakcheck-compare
+    COMMAND ${CMAKE_COMMAND} -E compare_files 
+		${CMAKE_CURRENT_BINARY_DIR}/leakcheck.log
+		${CMAKE_SOURCE_DIR}/src/test/leakcheck.log
+)
+set_tests_properties(shadow-leakcheck-compare PROPERTIES DEPENDS "shadow-leakcheck-grep")
