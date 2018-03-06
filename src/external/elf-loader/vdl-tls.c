@@ -215,8 +215,7 @@ vdl_tls_tcb_allocate (void)
 void
 vdl_tls_tcb_initialize (unsigned long tcb, unsigned long sysinfo)
 {
-  vdl_memcpy ((void *) (tcb + CONFIG_TCB_SYSINFO_OFFSET), &sysinfo,
-              sizeof (sysinfo));
+  *(unsigned long *)(tcb + CONFIG_TCB_SYSINFO_OFFSET) = sysinfo;
 }
 
 // The dtv_t structure needs to be compatible with the one used by the
@@ -302,15 +301,13 @@ typedef union shadowdtv
 static inline dtv_t *
 get_current_dtv (unsigned long tp)
 {
-  dtv_t *dtv;
-  vdl_memcpy (&dtv, (void *) (tp + CONFIG_TCB_DTV_OFFSET), sizeof (dtv));
-  return dtv;
+  return *(dtv_t **) (tp + CONFIG_TCB_DTV_OFFSET);
 }
 
 static inline void
 set_current_dtv (unsigned long tp, dtv_t *dtv)
 {
-  vdl_memcpy ((void *) (tp + CONFIG_TCB_DTV_OFFSET), &dtv, sizeof (dtv));
+  *(dtv_t **) (tp + CONFIG_TCB_DTV_OFFSET) = dtv;
 }
 
 void
