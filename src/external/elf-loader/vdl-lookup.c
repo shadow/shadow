@@ -464,7 +464,7 @@ vdl_lookup_in_file (void **data, void *aux)
           if (item != args->file && args->file != 0)
             {
               // The symbol has been resolved in another binary. Make note of this.
-              vdl_list_push_front (args->file->gc_symbols_resolved_in, item);
+              vdl_list_sorted_insert (args->file->gc_symbols_resolved_in, item);
             }
           struct VdlLookupResult *result = vdl_alloc_new (struct VdlLookupResult);
           result->file = item;
@@ -510,7 +510,7 @@ vdl_lookup_in_file (void **data, void *aux)
   if (final_item != args->file && args->file != 0)
     {
       // The symbol has been resolved in another binary. Make note of this.
-      vdl_list_push_front (args->file->gc_symbols_resolved_in, final_item);
+      vdl_list_sorted_insert (args->file->gc_symbols_resolved_in, final_item);
     }
   struct VdlLookupResult *result = vdl_alloc_new (struct VdlLookupResult);
   result->file = final_item;
