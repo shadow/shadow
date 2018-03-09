@@ -68,6 +68,7 @@ void vdl_list_sort (struct VdlList *list,
                     // true if a < b, false otherwise
                     bool (*is_strictly_lower) (void *a, void *b, void *context),
                     void *context);
+void vdl_list_sorted_insert (struct VdlList *list, void *value);
 void vdl_list_unique (struct VdlList *list);
 
 // Contrary to the std::list::unique method, this function

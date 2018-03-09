@@ -445,6 +445,22 @@ vdl_list_sort (struct VdlList *list,
 }
 
 void
+vdl_list_sorted_insert (struct VdlList *list, void *value)
+{
+  write_lock (list->lock);
+  struct VdlListItem *i = list->head.next;
+  while (value < i->data && i != &list->tail)
+    {
+      i = i->next;
+    }
+  if (value != i->data)
+    {
+      vdl_list_insert_internal (list, i, value);
+    }
+  write_unlock (list->lock);
+}
+
+void
 vdl_list_unique (struct VdlList *list)
 {
   write_lock (list->lock);
