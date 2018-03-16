@@ -147,6 +147,8 @@ vdl_hashmap_insert (struct VdlHashMap *map, uint32_t hash, void *data)
       read_unlock (map->lock);
       struct VdlList *new_items = vdl_list_new ();
       write_lock (map->lock);
+      index = hash & (map->n_buckets - 1);
+      items = map->buckets[index];
       if (!items)
         {
           items = new_items;
