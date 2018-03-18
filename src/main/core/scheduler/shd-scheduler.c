@@ -135,7 +135,7 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
             break;
         }
         case SP_PARALLEL_HOST_STEAL: {
-            scheduler->policy = schedulerpolicyhostsingle_new();
+            scheduler->policy = schedulerpolicyhoststeal_new();
             break;
         }
         case SP_PARALLEL_THREAD_SINGLE: {

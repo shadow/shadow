@@ -49,6 +49,7 @@ struct _SchedulerPolicy {
 
 SchedulerPolicy* schedulerpolicyglobalsingle_new();
 SchedulerPolicy* schedulerpolicyhostsingle_new();
+SchedulerPolicy* schedulerpolicyhoststeal_new();
 SchedulerPolicy* schedulerpolicythreadsingle_new();
 SchedulerPolicy* schedulerpolicythreadperthread_new();
 SchedulerPolicy* schedulerpolicythreadperhost_new();
