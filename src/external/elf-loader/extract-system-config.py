@@ -181,6 +181,8 @@ def search_debug_file():
             return file
     for file_tuple in build_ids:
         library = check_file_regex(file_tuple[0], file_tuple[1])
+        if not library:
+            continue
         file = find_build_id(library)
         if not file:
             continue
