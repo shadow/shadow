@@ -1371,7 +1371,7 @@ void process_migrate(Process* proc, gpointer threads) {
     struct ProcessMigrateArgs* ts = threads;
     if (!proc->lmid) {
         /* plugin hasn't been loaded into a namespace yet; nothing to do */
-        warning("can't migrate process before namespace is loaded");
+        info("can't migrate process before namespace is loaded");
         return;
     }
     if (!ts || !ts->t1 || !ts->t2) {
