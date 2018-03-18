@@ -128,10 +128,10 @@ initialize_static_tls (struct VdlList *list)
   return static_tls;
 }
 
+// assumes caller has lock
 bool
 vdl_tls_file_initialize (struct VdlList *files)
 {
-  write_lock (g_vdl.tls_lock);
   file_list_initialize (files);
   struct static_tls static_tls = initialize_static_tls (files);
   if (static_tls.size < g_vdl.tls_static_total_size)
@@ -141,7 +141,6 @@ vdl_tls_file_initialize (struct VdlList *files)
       write_unlock (g_vdl.tls_lock);
       return true;
     }
-  write_unlock (g_vdl.tls_lock);
   return false;
 }
 
@@ -370,6 +369,7 @@ void
 vdl_tls_dtv_initialize (unsigned long tcb)
 {
   VDL_LOG_FUNCTION ("tcb=%lu", tcb);
+  read_lock (g_vdl.tls_lock);
   dtv_t *dtv = get_current_dtv (tcb);
   shadowdtv_t *shadow_dtv = DTV_SHADOW_DTV(dtv);
   // allocate a dtv for the set of tls blocks needed now
@@ -403,6 +403,7 @@ vdl_tls_dtv_initialize (unsigned long tcb)
     }
   // initialize its generation counter
   DTV_ABI_GEN(dtv) = g_vdl.tls_gen;
+  read_unlock (g_vdl.tls_lock);
 }
 
 inline struct LocalTLS *

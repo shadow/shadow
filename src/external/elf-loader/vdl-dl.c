@@ -226,6 +226,9 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
       goto error;
     }
 
+  // we have to track the tls lock here, because we can't update any threads
+  // until the symbols are resolved (tls templates are symbols)
+  write_lock (g_vdl.tls_lock);
   bool ok = vdl_tls_file_initialize (map.newly_mapped);
 
   if (!ok)
@@ -235,6 +238,7 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
       // how to handle them because that would require
       // adding space to the already-allocated static tls
       // which, by definition, can't be deallocated.
+      write_unlock (g_vdl.tls_lock);
       set_error
         ("Attempting to dlopen a file with a static tls block which is bigger than the space available");
       goto error;
@@ -298,18 +302,10 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
     }
   vdl_list_delete (scope);
 
-
   vdl_reloc (map.newly_mapped, g_vdl.bind_now || flags & RTLD_NOW);
+  write_unlock (g_vdl.tls_lock);
 
-  // now, we want to update the dtv of _this_ thread.
-  // i.e., we can't touch the dtv of the other threads
-  // because of locking issues so, if the code we loaded
-  // uses the tls direct model to access the static block
-  // and if any of the other threads try to call in this code
-  // and if it tries to access the static tls block directly,
-  // BOOOOM. nasty. anyway, we protect the caller if it tries to
-  // access these tls static blocks by updating the dtv forcibly here
-  // this indirectly initializes the content of the tls static area.
+  // now safe to update tls
   vdl_tls_dtv_update ();
 
   glibc_patch (map.newly_mapped);
@@ -933,16 +929,16 @@ int
 vdl_dl_lmid_swap_tls (Lmid_t lmid, pthread_t *t1, pthread_t *t2)
 {
   VDL_LOG_FUNCTION ("", 0);
-  read_lock (g_vdl.global_lock);
+  write_lock (g_vdl.global_lock);
   struct VdlContext *context = (struct VdlContext *) lmid;
   if (search_context (context) == 0)
     {
       goto error;
     }
   vdl_tls_swap_context (context, (unsigned long) *t1, (unsigned long) *t2);
-  read_unlock (g_vdl.global_lock);
+  write_unlock (g_vdl.global_lock);
   return 0;
 error:
-  read_unlock (g_vdl.global_lock);
+  write_unlock (g_vdl.global_lock);
   return -1;
 }
