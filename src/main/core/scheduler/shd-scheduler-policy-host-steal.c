@@ -323,12 +323,18 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
     HostStealThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(pthread_self()));
     g_rw_lock_reader_unlock(&data->lock);
 
+    /* if there is no tdata, that means this thread didn't get any hosts assigned to it */
+    if(!tdata) {
+        /* this thread will remain idle */
+        return NULL;
+    }
+
     /* we only need to lock this thread's lock, since it's our own queue */
     g_timer_continue(tdata->popIdleTime);
     g_mutex_lock(&(tdata->lock));
     g_timer_stop(tdata->popIdleTime);
 
-    if(tdata != NULL && barrier > tdata->currentBarrier) {
+    if(barrier > tdata->currentBarrier) {
         tdata->currentBarrier = barrier;
 
         /* make sure all of the hosts that were processed last time get processed in the next round */
