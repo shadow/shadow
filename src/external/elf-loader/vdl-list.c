@@ -455,7 +455,7 @@ vdl_list_sorted_insert (struct VdlList *list, void *value)
     }
   if (value != i->data)
     {
-      vdl_list_insert_internal (list, i, value);
+      vdl_list_insert_internal (list, (void**) i, value);
     }
   write_unlock (list->lock);
 }
