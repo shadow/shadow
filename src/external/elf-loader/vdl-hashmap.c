@@ -142,7 +142,10 @@ vdl_hashmap_insert (struct VdlHashMap *map, uint32_t hash, void *data)
     }
   uint32_t index = hash & (map->n_buckets - 1);
   struct VdlList *items = map->buckets[index];
-  if (!items)
+  // This loop won't break until a valid list in the right bucket is obtained.
+  // Remember that every time we grab any lock, we have to recompute the
+  // index/items, since the map may have grown.
+  while (!items)
     {
       read_unlock (map->lock);
       struct VdlList *new_items = vdl_list_new ();
@@ -151,16 +154,18 @@ vdl_hashmap_insert (struct VdlHashMap *map, uint32_t hash, void *data)
       items = map->buckets[index];
       if (!items)
         {
-          items = new_items;
-          map->buckets[index] = items;
+          map->buckets[index] = new_items;
           write_unlock (map->lock);
         }
       else
         {
+          // someone beat us
           write_unlock (map->lock);
           vdl_list_delete (new_items);
         }
       read_lock (map->lock);
+      index = hash & (map->n_buckets - 1);
+      items = map->buckets[index];
     }
   vdl_list_push_back (items, item);
   read_unlock (map->lock);
