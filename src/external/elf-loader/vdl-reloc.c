@@ -83,7 +83,7 @@ do_process_reloc (struct VdlFile *file,
     }
   ElfW (Sym) * sym = &dt_symtab[reloc_sym];
 
-  VDL_LOG_FUNCTION ("file=%s, type=%s, addr=0x%lx, addend=0x%lx, sym=%s",
+  VDL_LOG_FUNCTION ("file=%s, type=%s, addr=%p, addend=0x%lx, sym=%s",
                     file->filename, machine_reloc_type_to_str (reloc_type),
                     reloc_addr, reloc_addend,
                     reloc_sym == 0 ? "0" : dt_strtab + sym->st_name);
