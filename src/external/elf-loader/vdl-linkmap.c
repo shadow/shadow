@@ -188,8 +188,8 @@ vdl_linkmap_abi_from_addr (unsigned long addr)
   if (!file)
     {
       vdl_log_printf (VDL_LOG_DBG,
-                      "could not find file for address 0x%x\n",
-                      addr);
+                      "could not find file for address %p\n",
+                      (void *) addr);
       return;
     }
   vdl_log_printf (VDL_LOG_DBG,

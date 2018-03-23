@@ -378,8 +378,8 @@ vdl_dlopen (const char *filename, int flags, unsigned long caller)
 void *
 vdl_dlsym (void *handle, const char *symbol, unsigned long caller)
 {
-  VDL_LOG_FUNCTION ("handle=0x%llx, symbol=%s, caller=0x%llx", handle, symbol,
-                    caller);
+  VDL_LOG_FUNCTION ("handle=%p, symbol=%s, caller=%p", handle, symbol,
+                    (void *) caller);
   return vdl_dlvsym (handle, symbol, 0, caller);
 }
 
@@ -404,13 +404,13 @@ remove_from_scopes (struct VdlList *files, struct VdlFile *file)
 int
 vdl_dlclose (void *handle)
 {
-  VDL_LOG_FUNCTION ("handle=0x%llx", handle);
+  VDL_LOG_FUNCTION ("handle=%p", handle);
   write_lock (g_vdl.global_lock);
 
   struct VdlFile *file = vdl_search_file (handle);
   if (file == 0)
     {
-      set_error ("Can't find requested file 0x%x", handle);
+      set_error ("Can't find requested file %p", handle);
       write_unlock (g_vdl.global_lock);
       return -1;
     }
@@ -479,7 +479,7 @@ vdl_dladdr1 (const void *addr, Dl_info *info, void **extra_info, int flags)
   struct VdlFile *file = vdl_addr_to_file ((unsigned long) addr);
   if (file == 0)
     {
-      set_error ("No object contains 0x%lx", addr);
+      set_error ("No object contains %p", addr);
       goto error;
     }
   if (info == 0)
@@ -602,8 +602,9 @@ void *
 vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
                        unsigned long flags, unsigned long caller)
 {
-  VDL_LOG_FUNCTION ("handle=0x%llx, symbol=%s, version=%s, caller=0x%llx",
-                    handle, symbol, (version == 0) ? "" : version, caller);
+  VDL_LOG_FUNCTION ("handle=%p, symbol=%s, version=%s, caller=%p",
+                    handle, symbol, (version == 0) ? "" : version,
+                    (void *) caller);
   read_lock (g_vdl.global_lock);
   struct VdlList *scope;
   struct VdlFile *caller_file = vdl_addr_to_file (caller);
@@ -643,7 +644,7 @@ vdl_dlvsym_with_flags (void *handle, const char *symbol, const char *version,
       struct VdlFile *file = vdl_search_file (handle);
       if (file == 0)
         {
-          set_error ("Can't find requested file 0x%x", handle);
+          set_error ("Can't find requested file %p", handle);
           goto error;
         }
       context = file->context;
@@ -760,7 +761,7 @@ vdl_dlinfo (void *handle, int request, void *p)
       struct VdlFile *file = vdl_search_file (handle);
       if (file == 0)
         {
-          set_error ("Can't find requested file 0x%x", handle);
+          set_error ("Can't find requested file %p", handle);
           goto error;
         }
       if (request == RTLD_DI_LMID)
