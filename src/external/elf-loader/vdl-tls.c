@@ -138,7 +138,6 @@ vdl_tls_file_initialize (struct VdlList *files)
     {
       g_vdl.tls_static_current_size = static_tls.size;
       g_vdl.tls_static_align = static_tls.align;
-      write_unlock (g_vdl.tls_lock);
       return true;
     }
   return false;
