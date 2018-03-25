@@ -3,8 +3,10 @@
 #include "system.h"
 #include "vdl-utils.h"
 #include "vdl-list.h"
+#include "futex.h"
 
-uint32_t g_logging = 0;
+uint32_t g_logging;
+static struct Futex *g_logging_futex;
 
 static void
 avprintf_callback (char c, __attribute__((unused)) void *context)
@@ -18,7 +20,7 @@ avprintf_callback (char c, __attribute__((unused)) void *context)
 void
 vdl_log_set (const char *debug_str)
 {
-  VDL_LOG_FUNCTION ("debug=%s", debug_str);
+  g_logging_futex = futex_new ();
   g_logging = VDL_LOG_AST | VDL_LOG_PRINT | VDL_LOG_ERR;
   if (debug_str == 0)
     {
@@ -66,19 +68,19 @@ vdl_log_set (const char *debug_str)
         }
     }
   g_logging |= logging;
+  VDL_LOG_FUNCTION ("debug=%s", debug_str);
   vdl_utils_str_list_delete (list);
 }
 
 
 
 void
-vdl_log_printf (enum VdlLog log, const char *str, ...)
+vdl_log_printf_func (const char *str, ...)
 {
   va_list list;
   va_start (list, str);
-  if (g_logging & log)
-    {
-      avprintf_cb (avprintf_callback, 0, str, list);
-    }
+  futex_lock (g_logging_futex);
+  avprintf_cb (avprintf_callback, 0, str, list);
+  futex_unlock (g_logging_futex);
   va_end (list);
 }

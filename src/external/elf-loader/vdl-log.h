@@ -4,6 +4,8 @@
 // for system_exit in VDL_LOG_ASSERT
 #include "system.h"
 
+extern uint32_t g_logging;
+
 enum VdlLog {
   VDL_LOG_FUNC     = (1<<0),
   VDL_LOG_DBG      = (1<<1),
@@ -15,7 +17,12 @@ enum VdlLog {
   VDL_LOG_PRINT    = (1<<7)
 };
 
-void vdl_log_printf (enum VdlLog log, const char *str, ...);
+void vdl_log_printf_func (const char *str, ...);
+
+#define vdl_log_printf(log, str, ...)           \
+  if (__builtin_expect(g_logging & log, 0))     \
+    vdl_log_printf_func(str, ##__VA_ARGS__)
+
 #ifdef DEBUG
 #define VDL_LOG_FUNCTION(str,...)                                       \
   vdl_log_printf (VDL_LOG_FUNC, "%s:%d, %s (" str ")\n",                \
@@ -44,7 +51,7 @@ void vdl_log_printf (enum VdlLog log, const char *str, ...);
   if (!(predicate))                                                     \
     {                                                                   \
       vdl_log_printf (VDL_LOG_AST, "%s:%d, %s, " str "\n",              \
-                      __FILE__, __LINE__, __FUNCTION__, ## __VA_ARGS__); \
+                      __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
       {                                                                 \
         char *p = 0;                                                    \
         *p = 0;                                                         \
