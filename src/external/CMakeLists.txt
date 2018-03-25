@@ -6,9 +6,7 @@ INCLUDE(ExternalProject)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(RPTH_DEBUG_SWITCH "--enable-debug=yes")
-    set(RPTH_OPT_SWITCH "--enable-optimize=no")
 else()
-    set(RPTH_DEBUG_SWITCH "--enable-debug=no")
     set(RPTH_OPT_SWITCH "--enable-optimize=yes")
 endif()
 
