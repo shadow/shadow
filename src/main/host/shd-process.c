@@ -301,7 +301,7 @@ static void _process_updateErrnoLocation(Process* proc) {
     gpointer symbol = dlsym(proc->plugin.handle, PLUGIN_ERRNOLOC_SYMBOL);
     if(symbol) {
         proc->plugin.errnoGetLocation = symbol;
-        message("found '%s' at %p", PLUGIN_ERRNOLOC_SYMBOL, symbol);
+        info("found '%s' at %p", PLUGIN_ERRNOLOC_SYMBOL, symbol);
 
         /* now that we just did the lookup, the errno location is no longer stale */
         proc->plugin.errnoGetLocationIsStale = FALSE;
