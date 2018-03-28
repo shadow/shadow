@@ -51,7 +51,11 @@ end
 ```
 where the above catches any of `SIGILL SIGFPE SIGSEGV SIGSYS` (illegal instructions, arithmetic errors, segfaults, and improper syscalls) and loads the debug symbols from every file in the backtrace. You can also load the debug symbols from the current backtrace yourself by running `py bt_load()` if you define it as above.
 
-Some other functions elf-loader provides that could potentially be useful are `vdl_linkmap_shadow_print()`, which prints all shared object files in all namespaces available for loading the debug symbols of, and `vdl_linkmap_abi_print()`, which prints all the shared ojbect files in all namespaces that should already have their debug symbols loaded by gdb.
+Some other functions elf-loader provides that could potentially be useful are:  
+  * `vdl_linkmap_shadow_print()`  
+     prints all shared object files in all namespaces for which we can load debug symbols, and
+  * `vdl_linkmap_abi_print()`  
+     prints all shared ojbect files in all namespaces that should already have their debug symbols loaded by gdb.
 
 ### Tracing Shadow using Valgrind
 
