@@ -28,10 +28,13 @@
   </graph>
 </graphml>
 ]]></topology>
-  <kill time="2"/>
+  <kill time="3"/>
   <plugin id="testphold" path="shadow-plugin-test-phold"/>
-  <node id="testnode" quantity="10">
-    <application plugin="testphold" starttime="1" arguments="basename=testnode quantity=10 msgload=100"/>
+  <node id="generator">
+    <application plugin="testphold" starttime="1" arguments="mode=generator basename=peer quantity=10 location=0.5 scale=0.5"/>
+  </node>
+  <node id="peer" quantity="10">
+    <application plugin="testphold" starttime="1" arguments="mode=peer basename=peer load=10"/>
   </node>
 </shadow>
 

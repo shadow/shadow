@@ -5,7 +5,7 @@ include_directories(${GLIB_INCLUDES})
 add_shadow_exe(shadow-plugin-test-phold shd-test-phold.c)
 
 ## if the test needs any libraries, link them here
-target_link_libraries(shadow-plugin-test-phold ${RT_LIBRARIES} ${GLIB_LIBRARIES})
+target_link_libraries(shadow-plugin-test-phold ${M_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 
 ## register the tests
 ## dont run with debug logging because it causes the test case to take too long
