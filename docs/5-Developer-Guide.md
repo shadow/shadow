@@ -20,12 +20,14 @@ gdb --pid=PID
 
 #### Debugging plugins with gdb
 
-If debugging plugins in shadow instead of shadow itself, some extra commands are helpful. Because of performance problems in gdb, shadow (via elf-loader) prevents debug symbols for plugins from loading by default. To load all debug symbols in gdb, stop the experiment after the relevant plugins have been loaded, then run:
+If debugging plugins in shadow instead of shadow itself, some extra commands are helpful. Because of performance problems in gdb, shadow (via elf-loader) prevents debug symbols for plugins from loading by default. (Note: The following commands include `set scheduler-locking on` to prevent gdb from running other threads while executing the requested command. This should not be done until needed and should be turned back off if you wish to run Shadow again or from the current state.) To load all debug symbols in gdb, stop the experiment after the relevant plugins have been loaded, then run:
 ```
+> set scheduler-locking on
 > p vdl_linkmap_abi_update()
 ```
 However, unless the experiment is very small, this will take too long to feasibly run. Instead, individual plugins can have their debug symbols loaded by calling:
 ```
+> set scheduler-locking on
 > p vdl_linkmapabi_from_addr(addr)
 ```
 where `addr` is an address in a loaded elf file, e.g. from a backtrace.
