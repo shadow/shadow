@@ -169,7 +169,7 @@ static gchar* _phold_chooseNode(PHold* phold) {
         cumulative += normWeight;
         if(cumulative >= r) {
             GString* chosenNodeBuffer = g_string_new(NULL);
-            g_string_append_printf(chosenNodeBuffer, "%s%"G_GUINT64_FORMAT, phold->basename->str, i+1);
+            g_string_append_printf(chosenNodeBuffer, "%s%"G_GUINT64_FORMAT, phold->basename->str, (guint64)(i+1));
             return g_string_free(chosenNodeBuffer, FALSE);
         }
     }
@@ -477,7 +477,7 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
 
         return TRUE;
     } else {
-        phold_error("invalid argv string for node %s: %s", &myname[0], argv);
+        phold_error("invalid argv string for node %s", &myname[0]);
         phold_info("USAGE: %s", usage);
 
         return FALSE;
