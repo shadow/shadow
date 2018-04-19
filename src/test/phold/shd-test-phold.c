@@ -35,28 +35,19 @@
 
 typedef struct _PHold PHold;
 struct _PHold {
-    GString* mode;
     GString* basename;
-    /* mode is generator */
-    struct {
-        int active;
-        guint64 quantity;
-        double location;
-        double scale;
-    } generator;
-    /* mode is peer */
-    struct {
-        int active;
-        guint64 load;
-        GString* commandBuffer;
-        double* weights;
-        int num_weights;
-    } peer;
+    guint64 quantity;
+    guint64 load;
+    GString* weightsfilepath;
+
+    double* weights;
+    double totalWeight;
+    guint64 num_weights;
 
     GString* hostname;
     gint listend;
     gint epolld_in;
-    guint64 nmsgs;
+    guint64 num_msgs_sent;
     guint magic;
 };
 
@@ -168,13 +159,14 @@ static in_addr_t _phold_lookupIP(PHold* phold, const gchar* hostname) {
 
 static gchar* _phold_chooseNode(PHold* phold) {
     PHOLD_ASSERT(phold);
-    g_assert(phold->peer.weights);
+    g_assert(phold->weights);
 
     double r = _phold_get_uniform_double();
 
     double cumulative = 0.0;
-    for(int i = 0; i < phold->peer.num_weights; i++) {
-        cumulative += phold->peer.weights[i];
+    for(int i = 0; i < phold->num_weights; i++) {
+        double normWeight = phold->weights[i] / phold->totalWeight;
+        cumulative += normWeight;
         if(cumulative >= r) {
             GString* chosenNodeBuffer = g_string_new(NULL);
             g_string_append_printf(chosenNodeBuffer, "%s%"G_GUINT64_FORMAT, phold->basename->str, i+1);
@@ -204,7 +196,7 @@ static int _phold_sendToNode(PHold* phold, char* nodeName, in_port_t port, void*
         /* send the message to the node */
         ssize_t b = sendto(socketd, msg, msg_len, 0, (struct sockaddr*) (&node), len);
         if(b > 0) {
-            phold->nmsgs++;
+            phold->num_msgs_sent++;
             phold_info("host '%s' sent %i byte%s to host '%s'",
                             phold->hostname->str, (gint)b, b == 1 ? "" : "s", nodeName);
             result = TRUE;
@@ -240,40 +232,10 @@ static void _phold_sendNewMessage(PHold* phold) {
 }
 
 static void _phold_bootstrapMessages(PHold* phold) {
-    phold_info("sending %lu message to bootstrap", (long unsigned int)phold->peer.load);
-    for(guint64 i = 0; i < phold->peer.load; i++) {
+    phold_info("sending %"G_GUINT64_FORMAT" messages to bootstrap", phold->load);
+    for(guint64 i = 0; i < phold->load; i++) {
         _phold_sendNewMessage(phold);
     }
-}
-
-static void _phold_processCommand(PHold* phold) {
-    g_assert(phold->peer.commandBuffer->str[phold->peer.commandBuffer->len-1] == ';');
-    phold->peer.commandBuffer->str[phold->peer.commandBuffer->len-1] = 0x0;
-
-    phold_info("processing command of len %d, command='%s'",
-            phold->peer.commandBuffer->len, phold->peer.commandBuffer->str);
-
-    gchar* command = phold->peer.commandBuffer->str;
-    gchar** weights = g_strsplit(command, (const gchar*) ",", -1);
-
-    phold->peer.num_weights = 0;
-    for(int i = 0; weights[i] != NULL; i++) {
-        phold->peer.num_weights++;
-    }
-
-    phold_info("found %d weights in command", phold->peer.num_weights);
-
-    phold->peer.weights = g_new0(double, phold->peer.num_weights);
-
-    for(int i = 0; i < phold->peer.num_weights; i++) {
-        phold->peer.weights[i] = g_ascii_strtod(weights[i], NULL);
-        phold_info("found weight=%f", phold->peer.weights[i]);
-    }
-
-    g_strfreev(weights);
-
-    g_string_free(phold->peer.commandBuffer, TRUE);
-    phold->peer.commandBuffer = NULL;
 }
 
 static void _phold_startListening(PHold* phold) {
@@ -330,30 +292,18 @@ static void _phold_activate(PHold* phold) {
             }
             buffer[nBytes] = 0x0;
 
-            if(phold->peer.commandBuffer) {
-                g_string_append_printf(phold->peer.commandBuffer, "%s", buffer);
-
-                phold_info("contents of command buffer: '%s'", phold->peer.commandBuffer->str);
-
-                if(g_str_has_suffix(phold->peer.commandBuffer->str, ";")) {
-                    _phold_processCommand(phold);
-                    sleep(1);
-                    _phold_bootstrapMessages(phold);
-                }
-            } else {
-                for(int i = 0; i < nBytes; i++) {
-                    _phold_sendNewMessage(phold);
-                }
+            for(int i = 0; i < nBytes; i++) {
+                _phold_sendNewMessage(phold);
             }
         }
     }
 }
 
-static int _phold_runPeer(PHold* phold) {
-    g_assert(phold->peer.active);
+static int _phold_run(PHold* phold) {
+    PHOLD_ASSERT(phold);
 
-    phold->peer.commandBuffer = g_string_new("");
     _phold_startListening(phold);
+    _phold_bootstrapMessages(phold);
 
     /* now we need to watch all of the descriptors in our main loop
      * so we know when we can wait on any of them without blocking. */
@@ -415,91 +365,47 @@ static int _phold_runPeer(PHold* phold) {
     return EXIT_SUCCESS;
 }
 
-static GString* _phold_generateWeights(PHold* phold) {
+static int _phold_parseWeightsFile(PHold* phold) {
     PHOLD_ASSERT(phold);
-    g_assert(phold->generator.active);
 
-    phold_info("generating weights for %d peers", phold->generator.quantity);
-
-    double totalWeight = 0.0;
-    double minWeight = INFINITY;
-
-    double weights[phold->generator.quantity];
-    memset(weights, 0, sizeof(double)*phold->generator.quantity);
-
-    for(int i = 0; i < phold->generator.quantity; i++) {
-        weights[i] = _phold_generate_normal(phold->generator.location, phold->generator.scale);
-        totalWeight += weights[i];
-        minWeight = MIN(minWeight, weights[i]);
+    if(phold->weights) {
+        free(phold->weights);
+        phold->weights = NULL;
     }
 
-    /* adjust any negative values */
-    if(minWeight < 0) {
-        double increment = -minWeight;
-        for(int i = 0; i < phold->generator.quantity; i++) {
-            weights[i] += increment;
-            totalWeight += increment;
-        }
+    gchar* contents = NULL;
+    gboolean success = g_file_get_contents(phold->weightsfilepath->str, &contents, NULL, NULL);
+    if(!success) {
+        phold_warning("Problem reading weights file at path %s. Check your file.",
+                phold->weightsfilepath->str);
+        return FALSE;
     }
 
-    /* normalize */
-    for(int i = 0; i < phold->generator.quantity; i++) {
-        weights[i] /= totalWeight;
+    gchar** lines = g_strsplit(contents, (const gchar*) "\n", -1);
+
+    phold->num_weights = 0;
+    for(int i = 0; lines[i] != NULL; i++) {
+        phold->num_weights++;
     }
 
-    /* generate message string */
-    GString* weightsBuffer = g_string_new(NULL);
-    for(int i = 0; i < phold->generator.quantity; i++) {
-        g_string_append_printf(weightsBuffer, "%f%s",
-                weights[i], (i == phold->generator.quantity-1) ? ";" : ",");
+    phold_info("found %"G_GUINT64_FORMAT" weights in command", phold->num_weights);
+
+    phold->weights = g_new0(double, phold->num_weights);
+
+    for(int i = 0; i < phold->num_weights; i++) {
+        phold->weights[i] = g_ascii_strtod(lines[i], NULL);
+        phold_debug("found weight=%f", phold->weights[i]);
+        phold->totalWeight += phold->weights[i];
     }
 
-    phold_info("finished generating weights; minWeight=%f totalWeight=%f",
-            minWeight, totalWeight);
-
-    return weightsBuffer;
-}
-
-static void _phold_broadcast(PHold* phold, GString* messageBuffer) {
-    PHOLD_ASSERT(phold);
-    g_assert(phold->generator.active);
-
-    in_port_t port = (in_port_t)htons(PHOLD_LISTEN_PORT);
-
-    for(int i = 0; i < phold->generator.quantity; i++) {
-        GString* nameBuffer = g_string_new(NULL);
-        g_string_append_printf(nameBuffer, "%s%d",
-                phold->basename->str, i+1);
-
-        int was_success = _phold_sendToNode(phold, nameBuffer->str, port,
-                messageBuffer->str, messageBuffer->len);
-
-        if(was_success) {
-            phold_info("successfully sent broadcast message to peer %s", nameBuffer->str);
-        } else {
-            phold_info("failed to send broadcast message to peer %s", nameBuffer->str);
-        }
-
-        g_string_free(nameBuffer, TRUE);
+    if(lines) {
+        g_strfreev(lines);
     }
-}
-
-static int _phold_runGenerator(PHold* phold) {
-    g_assert(phold->generator.active);
-
-    GString* weightsBuffer = _phold_generateWeights(phold);
-    if(weightsBuffer) {
-        phold_info("sending broadcase message '%s' to all peers", weightsBuffer->str);
-        _phold_broadcast(phold, weightsBuffer);
-        phold_info("finished broadcasting weights to peers");
-
-        g_string_free(weightsBuffer, TRUE);
-
-        phold_info("generator done running");
-        return EXIT_SUCCESS;
-    } else {
-        return EXIT_FAILURE;
+    if(contents) {
+        g_free(contents);
     }
+
+    return TRUE;
 }
 
 static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
@@ -507,145 +413,81 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
 
     /* basename: name of the test nodes in shadow, without the integer suffix
      * quantity: number of test nodes running in the experiment with the same basename as this one
-     * msgload: number of messages to generate, each to a random node */
-    const gchar* usage = "mode=generator basename=STR quantity=INT location=FLOAT scale=FLOAT | mode=peer basename=STR load=INT";
+     * load: number of messages to generate when the simulation starts
+     * weightsfile: path to a file containing $quantity weights according to which messages will be sent to peers */
+    const gchar* usage = "basename=STR quantity=INT load=INT weights=PATH";
 
-    /*
-     * generator mode:
-     *
-     * this mode generates the workload distribution for each node in the experiment
-     * according to a normal distribution and sends the config to all of the nodes
-     * in the simulation.
-     *
-     * required args:
-     *   mode=generate basename=STR quantity=INT location=FLOAT scale=FLOAT
-     *
-     * peer mode:
-     *
-     * this mode runs the nodes that actually send messages to each other according
-     * to the weights for each node that are generated by the generator.
-     *
-     * required args:
-     *   mode=peer basename=STR load=INT
-     */
-#define ARGC_GENERATOR 6
-#define ARGC_PEER 4
+    gchar myname[128];
+    g_assert(gethostname(&myname[0], 128) == 0);
 
-    if(argc <= ARGC_GENERATOR && argv != NULL) {
-        for(gint i = 1; i < ARGC_GENERATOR; i++) {
+    int num_params_found = 0;
+#define ARGC_PEER 5
+
+    if(argc == ARGC_PEER && argv != NULL) {
+        /* argv[0] is the program name */
+        for(gint i = 1; i < ARGC_PEER; i++) {
             gchar* token = argv[i];
             gchar** config = g_strsplit(token, (const gchar*) "=", 2);
 
-            if(!g_ascii_strcasecmp(config[0], "mode")) {
-                phold->mode = g_string_new(config[1]);
-                i = 6;
+            if(!g_ascii_strcasecmp(config[0], "basename")) {
+                phold->basename = g_string_new(config[1]);
+                num_params_found++;
+            } else if(!g_ascii_strcasecmp(config[0], "quantity")) {
+                phold->quantity = g_ascii_strtoull(config[1], NULL, 10);
+                num_params_found++;
+            } else if(!g_ascii_strcasecmp(config[0], "load")) {
+                phold->load = g_ascii_strtoull(config[1], NULL, 10);
+                num_params_found++;
+            } else if(!g_ascii_strcasecmp(config[0], "weightsfilepath")) {
+                phold->weightsfilepath = g_string_new(config[1]);
+                num_params_found++;
+            } else {
+                phold_warning("skipping unknown config option %s=%s", config[0], config[1]);
             }
 
             g_strfreev(config);
         }
     }
 
-    if(phold->mode == NULL) {
-        phold_warning("Unable to find 'mode' option");
-        return FALSE;
+    int parse_file_success = 0;
+    if(phold->weightsfilepath && phold->weightsfilepath->str) {
+        parse_file_success = _phold_parseWeightsFile(phold);
+        if(parse_file_success) {
+            phold_info("We found %"G_GUINT64_FORMAT" weights and we have %"G_GUINT64_FORMAT" nodes",
+                    phold->num_weights, phold->quantity);
+            if(phold->num_weights > phold->quantity) {
+                phold_warning("Too many weights in the weights file!");
+                parse_file_success = FALSE;
+            } else if(phold->num_weights < phold->quantity) {
+                phold_warning("Not enough weights in the weights file!");
+                parse_file_success = FALSE;
+            }
+        }
     }
 
-    gchar myname[128];
-    g_assert(gethostname(&myname[0], 128) == 0);
+    if(phold->basename != NULL && phold->weightsfilepath != NULL &&
+            parse_file_success && phold->weights &&
+            num_params_found == ARGC_PEER-1) {
+        phold->hostname = g_string_new(&myname[0]);
 
-    if(!g_ascii_strcasecmp(phold->mode->str, "generator")) {
-        int found_location = 0;
-        int found_scale = 0;
+        phold_info("successfully parsed options for %s: "
+                "basename=%s load=%"G_GUINT64_FORMAT" quantity=%"G_GUINT64_FORMAT" weightsfilepath=%s",
+                &myname[0],
+                phold->basename->str, phold->load, phold->quantity, phold->weightsfilepath->str);
 
-        if(argc <= ARGC_GENERATOR && argv != NULL) {
-            for(gint i = 1; i < ARGC_GENERATOR; i++) {
-                gchar* token = argv[i];
-                gchar** config = g_strsplit(token, (const gchar*) "=", 2);
-
-                if(!g_ascii_strcasecmp(config[0], "mode")) {
-                    /* valid option, but we don't need it */
-                } else if(!g_ascii_strcasecmp(config[0], "basename")) {
-                    phold->basename = g_string_new(config[1]);
-                } else if(!g_ascii_strcasecmp(config[0], "quantity")) {
-                    phold->generator.quantity = g_ascii_strtoull(config[1], NULL, 10);
-                } else if(!g_ascii_strcasecmp(config[0], "location")) {
-                    phold->generator.location = g_ascii_strtod(config[1], NULL);
-                    found_location = 1;
-                } else if(!g_ascii_strcasecmp(config[0], "scale")) {
-                    phold->generator.scale = g_ascii_strtod(config[1], NULL);
-                    found_scale = 1;
-                } else {
-                    phold_warning("skipping unknown config option %s=%s", config[0], config[1]);
-                }
-
-                g_strfreev(config);
-            }
-        }
-
-        if(phold->basename != NULL && phold->generator.quantity > 0
-                && found_location && found_scale) {
-            phold->hostname = g_string_new(&myname[0]);
-            phold->generator.active = 1;
-
-            phold_info("successfully parsed options for %s: mode=%s "
-                    "basename=%s quantity=%"G_GUINT64_FORMAT" location=%f scale=%f",
-                    &myname[0], phold->mode->str,
-                    phold->basename->str, phold->generator.quantity,
-                    phold->generator.location, phold->generator.scale);
-
-            return TRUE;
-        } else {
-            phold_error("invalid argv string for node %s: %s", &myname[0], argv);
-            phold_info("USAGE: %s", usage);
-
-            return FALSE;
-        }
+        return TRUE;
     } else {
-        int found_load = 0;
+        phold_error("invalid argv string for node %s: %s", &myname[0], argv);
+        phold_info("USAGE: %s", usage);
 
-        if(argc <= ARGC_PEER && argv != NULL) {
-            for(gint i = 1; i < ARGC_PEER; i++) {
-                gchar* token = argv[i];
-                gchar** config = g_strsplit(token, (const gchar*) "=", 2);
-
-                if(!g_ascii_strcasecmp(config[0], "mode")) {
-                    /* valid option, but we don't need it */
-                } else if(!g_ascii_strcasecmp(config[0], "basename")) {
-                    phold->basename = g_string_new(config[1]);
-                } else if(!g_ascii_strcasecmp(config[0], "load")) {
-                    phold->peer.load = g_ascii_strtoull(config[1], NULL, 10);
-                    found_load = 1;
-                } else {
-                    phold_warning("skipping unknown config option %s=%s", config[0], config[1]);
-                }
-
-                g_strfreev(config);
-            }
-        }
-
-        if(phold->basename != NULL && found_load) {
-            phold->hostname = g_string_new(&myname[0]);
-            phold->peer.active = 1;
-
-            phold_info("successfully parsed options for %s: mode=%s "
-                    "basename=%s load=%"G_GUINT64_FORMAT,
-                    &myname[0], phold->mode->str,
-                    phold->basename->str, phold->peer.load);
-
-            return TRUE;
-        } else {
-            phold_error("invalid argv string for node %s: %s", &myname[0], argv);
-            phold_info("USAGE: %s", usage);
-
-            return FALSE;
-        }
+        return FALSE;
     }
 }
 
 static void _phold_free(PHold* phold) {
     PHOLD_ASSERT(phold);
 
-    phold_info("%s sent %"G_GUINT64_FORMAT" messages", phold->hostname->str, phold->nmsgs);
+    phold_info("%s sent %"G_GUINT64_FORMAT" messages", phold->hostname->str, phold->num_msgs_sent);
 
     if(phold->listend > 0) {
         close(phold->listend);
@@ -660,11 +502,11 @@ static void _phold_free(PHold* phold) {
     if(phold->basename) {
         g_string_free(phold->basename, TRUE);
     }
-    if(phold->peer.commandBuffer) {
-        g_string_free(phold->peer.commandBuffer, TRUE);
+    if(phold->weightsfilepath) {
+        g_string_free(phold->weightsfilepath, TRUE);
     }
-    if(phold->peer.weights) {
-        g_free(phold->peer.weights);
+    if(phold->weights) {
+        g_free(phold->weights);
     }
 
     phold->magic = 0;
@@ -703,10 +545,8 @@ int main(int argc, char *argv[]) {
     }
 
     int result = 0;
-    if(phold->generator.active) {
-        result = _phold_runGenerator(phold);
-    } else if(phold->peer.active) {
-        result = _phold_runPeer(phold);
+    if(phold) {
+        result = _phold_run(phold);
     } else {
         phold_error("neither generator or peer are active");
         result = EXIT_FAILURE;

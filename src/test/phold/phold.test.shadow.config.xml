@@ -30,11 +30,8 @@
 ]]></topology>
   <kill time="3"/>
   <plugin id="testphold" path="shadow-plugin-test-phold"/>
-  <node id="generator">
-    <application plugin="testphold" starttime="1" arguments="mode=generator basename=peer quantity=10 location=0.5 scale=0.5"/>
-  </node>
   <node id="peer" quantity="10">
-    <application plugin="testphold" starttime="1" arguments="mode=peer basename=peer load=10"/>
+    <application plugin="testphold" starttime="1" arguments="basename=peer quantity=10 load=25 weightsfilepath=weights.txt"/>
   </node>
 </shadow>
 
