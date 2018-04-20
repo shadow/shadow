@@ -197,7 +197,7 @@ static int _phold_sendToNode(PHold* phold, char* nodeName, in_port_t port, void*
         ssize_t b = sendto(socketd, msg, msg_len, 0, (struct sockaddr*) (&node), len);
         if(b > 0) {
             phold->num_msgs_sent++;
-            phold_info("host '%s' sent %i byte%s to host '%s'",
+            phold_debug("host '%s' sent %i byte%s to host '%s'",
                             phold->hostname->str, (gint)b, b == 1 ? "" : "s", nodeName);
             result = TRUE;
         } else if(b < 0) {
