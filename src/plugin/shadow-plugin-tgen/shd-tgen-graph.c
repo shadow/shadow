@@ -24,7 +24,8 @@ typedef enum {
     TGEN_EA_WEIGHT = 1 << 14,
     TGEN_VA_OURSIZE = 1 << 15,
     TGEN_VA_THEIRSIZE = 1 << 16,
-    TGEN_VA_MMODEL = 1 << 17,
+    TGEN_VA_LOCALSCHED = 1 << 17,
+    TGEN_VA_REMOTESCHED = 1 << 18,
 } AttributeFlags;
 
 struct _TGenGraph {
@@ -246,15 +247,12 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
             VAS(g->graph, "socksproxy", vertexIndex) : NULL;
     const gchar* loglevelStr = (g->knownAttributes&TGEN_VA_LOGLEVEL) ?
                 VAS(g->graph, "loglevel", vertexIndex) : NULL;
-    const gchar *mmodelStr = (g->knownAttributes&TGEN_VA_MMODEL) ?
-                VAS(g->graph, "mmodel", vertexIndex) : NULL;
 
     tgen_debug("validating action '%s' at vertex %li, time=%s timeout=%s "
             "stallout=%s heartbeat=%s loglevel=%s serverport=%s socksproxy=%s "
-            "peers=%s mmodel=%s",
+            "peers=%s",
             idStr, (glong)vertexIndex, timeStr, timeoutStr, stalloutStr,
-            heartbeatStr, loglevelStr, serverPortStr, socksProxyStr, peersStr,
-            mmodelStr);
+            heartbeatStr, loglevelStr, serverPortStr, socksProxyStr, peersStr);
 
     if(g->hasStartAction) {
         return g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
@@ -269,7 +267,7 @@ static GError* _tgengraph_parseStartVertex(TGenGraph* g, const gchar* idStr,
     GError* error = NULL;
     TGenAction* a = tgenaction_newStartAction(timeStr, timeoutStr, stalloutStr,
             heartbeatStr, loglevelStr, serverPortStr, peersStr, socksProxyStr,
-            mmodelStr, &error);
+            &error);
 
     if(a) {
         _tgengraph_storeAction(g, a, vertexIndex);
@@ -354,19 +352,21 @@ static GError* _tgengraph_parseTransferVertex(TGenGraph* g, const gchar* idStr,
             VAS(g->graph, "timeout", vertexIndex) : NULL;
     const gchar* stalloutStr = (g->knownAttributes&TGEN_VA_STALLOUT) ?
             VAS(g->graph, "stallout", vertexIndex) : NULL;
-    const gchar *mmodelStr = (g->knownAttributes&TGEN_VA_MMODEL) ?
-            VAS(g->graph, "mmodel", vertexIndex) : NULL;
+    const gchar* localSchedStr = (g->knownAttributes&TGEN_VA_LOCALSCHED) ?
+            VAS(g->graph, "localschedule", vertexIndex) : NULL;
+    const gchar* remoteSchedStr = (g->knownAttributes&TGEN_VA_REMOTESCHED) ?
+            VAS(g->graph, "remoteschedule", vertexIndex) : NULL;
 
     tgen_debug("found vertex %li (%s), type=%s protocol=%s size=%s oursize=%s "
-            "theirsize=%s peers=%s timeout=%s stallout=%s mmodel=%s",
+            "theirsize=%s peers=%s timeout=%s stallout=%s localschedule=%s remoteschedule=%s",
             (glong)vertexIndex, idStr, typeStr, protocolStr, sizeStr,
             ourSizeStr, theirSizeStr, peersStr, timeoutStr, stalloutStr,
-            mmodelStr);
+            localSchedStr, remoteSchedStr);
 
     GError* error = NULL;
     TGenAction* a = tgenaction_newTransferAction(typeStr, protocolStr, sizeStr,
             ourSizeStr, theirSizeStr, peersStr, timeoutStr, stalloutStr,
-            mmodelStr, &error);
+            localSchedStr, remoteSchedStr, &error);
 
     if(a) {
         _tgengraph_storeAction(g, a, vertexIndex);
@@ -483,8 +483,10 @@ static AttributeFlags _tgengraph_vertexAttributeToFlag(const gchar* stringAttrib
             return TGEN_VA_HEARTBEAT;
         } else if(!g_ascii_strcasecmp(stringAttribute, "loglevel")) {
             return TGEN_VA_LOGLEVEL;
-        } else if (!g_ascii_strcasecmp(stringAttribute, "mmodel")) {
-            return TGEN_VA_MMODEL;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "localschedule")) {
+            return TGEN_VA_LOCALSCHED;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "remoteschedule")) {
+            return TGEN_VA_REMOTESCHED;
         }
     }
     return TGEN_A_NONE;

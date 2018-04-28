@@ -18,7 +18,6 @@ typedef struct _TGenActionStartData {
     guint16 serverport;
     TGenPeer* socksproxy;
     TGenPool* peers;
-    TGenMModel *mmodel;
 } TGenActionStartData;
 
 typedef struct _TGenActionEndData {
@@ -44,7 +43,8 @@ typedef struct _TGenActionTransferData {
     guint64 stalloutNanos;
     gboolean stalloutIsSet;
     TGenPool* peers;
-    TGenMModel *mmodel;
+    gchar* localSchedule;
+    gchar* remoteSchedule;
 } TGenActionTransferData;
 
 struct _TGenAction {
@@ -427,6 +427,14 @@ static void _tgenaction_free(TGenAction* action) {
         if(data->peers) {
             tgenpool_unref(data->peers);
         }
+        if(data->localSchedule) {
+            g_free(data->localSchedule);
+            data->localSchedule = NULL;
+        }
+        if(data->remoteSchedule) {
+            g_free(data->remoteSchedule);
+            data->remoteSchedule = NULL;
+        }
     }
 
     if(action->data) {
@@ -452,8 +460,7 @@ void tgenaction_unref(TGenAction* action) {
 TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeoutStr,
         const gchar* stalloutStr, const gchar* heartbeatStr,
         const gchar* loglevelStr, const gchar* serverPortStr,
-        const gchar* peersStr, const gchar* socksProxyStr,
-        const gchar *mmodelStr, GError** error) {
+        const gchar* peersStr, const gchar* socksProxyStr, GError** error) {
     g_assert(error);
 
     /* a serverport is required */
@@ -527,16 +534,6 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
         }
     }
 
-    TGenMModel *mmodel = NULL;
-    if (mmodelStr && g_ascii_strncasecmp(mmodelStr, "\0", (gsize)1)) {
-        mmodel = tgenmmodel_new(mmodelStr);
-        if (!mmodel) {
-            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
-                    "unable to load MModel");
-            return NULL;
-        }
-    }
-
     /* if we get here, we have what we need and validated it */
     TGenAction* action = g_new0(TGenAction, 1);
     action->magic = TGEN_MAGIC;
@@ -555,7 +552,6 @@ TGenAction* tgenaction_newStartAction(const gchar* timeStr, const gchar* timeout
     data->serverport = htons((guint16)longport);
     data->peers = peerPool;
     data->socksproxy = socksproxy;
-    data->mmodel = mmodel;
 
     action->data = data;
 
@@ -637,7 +633,8 @@ TGenAction* tgenaction_newPauseAction(const gchar* timeStr, glong totalIncoming,
 TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* protocolStr,
         const gchar* sizeStr, const gchar *ourSizeStr, const gchar *theirSizeStr,
         const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr,
-        const gchar *mmodelStr, GError** error) {
+        const gchar* localscheduleStr, const gchar* remotescheduleStr,
+        GError** error) {
     g_assert(error);
 
     /* type is required */
@@ -652,8 +649,8 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
         type = TGEN_TYPE_PUT;
     } else if (!g_ascii_strcasecmp(typeStr, "getput")) {
         type = TGEN_TYPE_GETPUT;
-    } else if (!g_ascii_strcasecmp(typeStr, "mmodel")) {
-        type = TGEN_TYPE_MMODEL;
+    } else if (!g_ascii_strcasecmp(typeStr, "schedule")) {
+        type = TGEN_TYPE_SCHEDULE;
     } else {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
                 "transfer action has unknown value '%s' for 'type' attribute",
@@ -759,13 +756,19 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
         stalloutIsSet = TRUE;
     }
 
-    /* mmodel is optional */
-    TGenMModel *mmodel = NULL;
-    if (mmodelStr && g_ascii_strncasecmp(mmodelStr, "\0", (gsize)1)) {
-        mmodel = tgenmmodel_new(mmodelStr);
-        if (!mmodel) {
-            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
-                    "unable to load MModel");
+    /* schedules are required for sched type */
+    if(type == TGEN_TYPE_SCHEDULE) {
+        gboolean localSchedIsValid = localscheduleStr && g_ascii_strncasecmp(localscheduleStr, "\0", (gsize)1);
+        gboolean remoteSchedIsValid = remotescheduleStr && g_ascii_strncasecmp(remotescheduleStr, "\0", (gsize)1);
+
+        if(!localSchedIsValid) {
+            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                    "transfer action missing required attribute 'localschedule'");
+            return NULL;
+        }
+        if(!remoteSchedIsValid) {
+            *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                    "transfer action missing required attribute 'remoteschedule'");
             return NULL;
         }
     }
@@ -787,7 +790,12 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     data->timeoutIsSet = timeoutIsSet;
     data->stalloutNanos = stalloutNanos;
     data->stalloutIsSet = stalloutIsSet;
-    data->mmodel = mmodel;
+    if(type == TGEN_TYPE_SCHEDULE && localscheduleStr) {
+        data->localSchedule = g_strdup(localscheduleStr);
+    }
+    if(type == TGEN_TYPE_SCHEDULE && remotescheduleStr) {
+        data->remoteSchedule = g_strdup(remotescheduleStr);
+    }
 
     action->data = data;
 
@@ -842,13 +850,6 @@ guint64 tgenaction_getDefaultStalloutMillis(TGenAction* action) {
     return (guint64)(((TGenActionStartData*)action->data)->stalloutNanos / 1000000);
 }
 
-TGenMModel *
-tgenaction_getDefaultMModel(TGenAction *action) {
-    TGEN_ASSERT(action);
-    g_assert(action->data && action->type == TGEN_ACTION_START);
-    return ((TGenActionStartData *)action->data)->mmodel;
-}
-
 guint64 tgenaction_getHeartbeatPeriodMillis(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_START);
@@ -864,44 +865,44 @@ GLogLevelFlags tgenaction_getLogLevel(TGenAction* action) {
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
         TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64 *ourSizeOut,
         guint64 *theirSizeOut, guint64* timeoutOut, guint64* stalloutOut,
-        TGenMModel **mmodelOut) {
+        gchar** localSchedule, gchar** remoteSchedule) {
     TGEN_ASSERT(action);
     g_assert(action->data && action->type == TGEN_ACTION_TRANSFER);
 
+    TGenActionTransferData* data = (TGenActionTransferData*)action->data;
+
     if(typeOut) {
-        *typeOut = ((TGenActionTransferData*)action->data)->type;
+        *typeOut = data->type;
     }
     if(protocolOut) {
-        *protocolOut = ((TGenActionTransferData*)action->data)->protocol;
+        *protocolOut = data->protocol;
     }
     if(sizeOut) {
-        *sizeOut = ((TGenActionTransferData*)action->data)->size;
+        *sizeOut = data->size;
     }
     if (ourSizeOut) {
-        *ourSizeOut = ((TGenActionTransferData*)action->data)->ourSize;
+        *ourSizeOut = data->ourSize;
     }
     if (theirSizeOut) {
-        *theirSizeOut = ((TGenActionTransferData*)action->data)->theirSize;
+        *theirSizeOut = data->theirSize;
     }
     if(timeoutOut) {
-        TGenActionTransferData* data = (TGenActionTransferData*)action->data;
         if(data->timeoutIsSet) {
             /* nanoseconds to milliseconds */
             *timeoutOut = (guint64)(data->timeoutNanos / 1000000);
         }
     }
     if(stalloutOut) {
-        TGenActionTransferData* data = (TGenActionTransferData*)action->data;
         if(data->stalloutIsSet) {
             /* nanoseconds to milliseconds */
             *stalloutOut = (guint64)(data->stalloutNanos / 1000000);
         }
     }
-    if (mmodelOut) {
-        TGenActionTransferData *data = (TGenActionTransferData *)action->data;
-        if (data->mmodel) {
-            *mmodelOut = data->mmodel;
-        }
+    if(localSchedule) {
+        *localSchedule = data->localSchedule;
+    }
+    if(remoteSchedule) {
+        *remoteSchedule = data->remoteSchedule;
     }
 }
 

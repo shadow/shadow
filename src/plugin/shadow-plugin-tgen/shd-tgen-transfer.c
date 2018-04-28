@@ -36,13 +36,15 @@ typedef struct _TGenTransferGetputData {
     gboolean receivedTheirChecksum;
 } TGenTransferGetputData;
 
-typedef struct _TGenTransferMModelData {
-    TGenMModel *mmodel;
+typedef struct _TGenTransferScheduleData {
     TGenTimer *timer;
     GChecksum *ourPayloadChecksum;
     GChecksum *theirPayloadChecksum;
     GArray *sched;
     gint schedIdx;
+    gsize scheduleSize;
+    gchar* theirSchedule;
+    gsize theirScheduleSize;
     gint descriptor;
     gsize expectedReceiveBytes;
     gboolean timerSet;
@@ -51,7 +53,7 @@ typedef struct _TGenTransferMModelData {
     gboolean doneWritingPayload;
     gboolean sentOurChecksum;
     gboolean receivedTheirChecksum;
-} TGenTransferMModelData;
+} TGenTransferScheduleData;
 
 struct _TGenTransfer {
     /* transfer progress and context information */
@@ -96,7 +98,7 @@ struct _TGenTransfer {
     } bytes;
 
     TGenTransferGetputData *getput;
-    TGenTransferMModelData *mmodel;
+    TGenTransferScheduleData *schedule;
 
     /* track timings for time reporting, using g_get_monotonic_time in usec granularity */
     struct {
@@ -135,60 +137,74 @@ static void _tgentransfer_initGetputData(TGenTransfer *transfer,
     transfer->getput->theirSize = theirSize;
 }
 
-static void
-_tgentransfer_setMModelSchedFromString(TGenTransfer *transfer, gchar *str)
+static GArray* _tgentransfer_getScheduleFromString(const gchar *str, gsize* totalSizeBytes)
 {
-    TGEN_ASSERT(transfer);
-    g_assert(!transfer->mmodel->sched);
     g_assert(str);
-    transfer->mmodel->sched = g_array_new(TRUE, FALSE, 4);
-    transfer->mmodel->schedIdx = 0;
+    GArray* sched = g_array_new(TRUE, FALSE, 4);
+    if(totalSizeBytes) {
+        *totalSizeBytes = 0;
+    }
+
     gchar **delays = g_strsplit(str, ",", 0);
-    int i = 0;
-    gboolean first_item = TRUE;
-    gchar *delay = delays[i];
-    while (delay) {
+    for(gint i = 0; delays[i] != NULL; i++) {
         /* Make sure this string is of positive length, but stop at a max
          * length of 10 chars so we don't read garbage. 10 chars isn't really
          * important, but if it somehow became important, it allows for 1000
          * seconds of delay expressed in microseconds */
-        if (strnlen(delay, 10) < 1) {
-            delay = delays[++i];
+        if (strnlen(delays[i], 10) < 1) {
             continue;
         }
-        /* The first item is the number of bytes we should expect the other
-         * side to send us */
-        if (first_item) {
-            first_item = FALSE;
-            transfer->mmodel->expectedReceiveBytes =
-                    g_ascii_strtoll(delay, NULL, 10);
-        /* The remaining items are delays */
+
+        /* delays are time in micros between packets */
+        gint64 value = g_ascii_strtoll(delays[i], NULL, 10);
+        int32_t delay = 0;
+        if(value > INT32_MAX) {
+            delay = INT32_MAX;
+        } else if (value < INT32_MIN) {
+            delay = INT32_MIN;
         } else {
-            int32_t v = g_ascii_strtoll(delay, NULL, 10);
-            g_array_append_val(transfer->mmodel->sched, v);
-            transfer->size += TGEN_MMODEL_PACKET_DATA_SIZE;
+            delay = (int32_t) value;
         }
-        delay = delays[++i];
+        g_array_append_val(sched, delay);
+        if(totalSizeBytes) {
+            *totalSizeBytes = *totalSizeBytes + TGEN_MMODEL_PACKET_DATA_SIZE;
+        }
     }
-    g_strfreev(delays);
+    if(delays) {
+        g_strfreev(delays);
+    }
+
+    return sched;
 }
 
-static void _tgentransfer_initMModelData(TGenTransfer *transfer,
-        TGenMModel *mmodel, gchar *str)
+static void _tgentransfer_initSchedData(TGenTransfer *transfer,
+        const gchar* localSchedule, const gchar* remoteSchedule)
 {
     TGEN_ASSERT(transfer);
-    g_assert(!transfer->mmodel); // Yes, assert that it is NULL
-    transfer->mmodel = g_new0(TGenTransferMModelData, 1);
-    transfer->mmodel->ourPayloadChecksum = g_checksum_new(G_CHECKSUM_MD5);
-    transfer->mmodel->theirPayloadChecksum = g_checksum_new(G_CHECKSUM_MD5);
-    if (mmodel) {
-        transfer->mmodel->mmodel = mmodel;
-        tgenmmodel_ref(mmodel);
-    } else {
-        transfer->mmodel->mmodel = NULL;
+    g_assert(!transfer->schedule); // Yes, assert that it is NULL
+
+    transfer->schedule = g_new0(TGenTransferScheduleData, 1);
+    transfer->schedule->ourPayloadChecksum = g_checksum_new(G_CHECKSUM_MD5);
+    transfer->schedule->theirPayloadChecksum = g_checksum_new(G_CHECKSUM_MD5);
+
+    if (localSchedule) {
+        /* keep the schedule size so that we can tell the other size how
+         * much they can expect to receive from us. We need this so they
+         * know when to stop waiting for more data. */
+        transfer->schedule->sched = _tgentransfer_getScheduleFromString(localSchedule,
+                &(transfer->schedule->scheduleSize));
+        transfer->size = transfer->schedule->scheduleSize;
     }
-    if (str) {
-        _tgentransfer_setMModelSchedFromString(transfer, str);
+    if(remoteSchedule) {
+        transfer->schedule->theirSchedule = g_strdup(remoteSchedule);
+        /* we need to know how much they will send us so we know when to
+         * stop waiting for more data. but we don't need the actual schedule,
+         * so just keep the size. */
+        GArray* temp = _tgentransfer_getScheduleFromString(transfer->schedule->theirSchedule,
+                &(transfer->schedule->theirScheduleSize));
+        g_array_unref(temp);
+
+        transfer->schedule->expectedReceiveBytes = transfer->schedule->theirScheduleSize;
     }
 }
 
@@ -206,25 +222,25 @@ static void _tgentransfer_freeGetputData(TGenTransfer *transfer) {
     g_free(transfer->getput);
 }
 
-static void _tgentransfer_freeMModelData(TGenTransfer *transfer) {
+static void _tgentransfer_freeSchedData(TGenTransfer *transfer) {
     TGEN_ASSERT(transfer);
-    if (!transfer->mmodel) {
+    if (!transfer->schedule) {
         return;
     }
-    if (transfer->mmodel->ourPayloadChecksum) {
-        g_checksum_free(transfer->mmodel->ourPayloadChecksum);
+    if (transfer->schedule->ourPayloadChecksum) {
+        g_checksum_free(transfer->schedule->ourPayloadChecksum);
     }
-    if (transfer->mmodel->theirPayloadChecksum) {
-        g_checksum_free(transfer->mmodel->theirPayloadChecksum);
+    if (transfer->schedule->theirPayloadChecksum) {
+        g_checksum_free(transfer->schedule->theirPayloadChecksum);
     }
-    if (transfer->mmodel->sched) {
-        g_array_unref(transfer->mmodel->sched);
+    if (transfer->schedule->sched) {
+        g_array_unref(transfer->schedule->sched);
     }
-    if (transfer->mmodel->timer) {
-        tgentimer_unref(transfer->mmodel->timer);
+    if (transfer->schedule->timer) {
+        tgentimer_unref(transfer->schedule->timer);
     }
-    if (transfer->mmodel->mmodel) {
-        tgenmmodel_unref(transfer->mmodel->mmodel);
+    if (transfer->schedule->theirSchedule) {
+        g_free(transfer->schedule->theirSchedule);
     }
 }
 
@@ -239,8 +255,8 @@ static const gchar* _tgentransfer_typeToString(TGenTransfer* transfer) {
         case TGEN_TYPE_GETPUT: {
             return "GETPUT";
         }
-        case TGEN_TYPE_MMODEL: {
-            return "MMODEL";
+        case TGEN_TYPE_SCHEDULE: {
+            return "SCHEDULE";
         }
         case TGEN_TYPE_NONE:
         default: {
@@ -312,9 +328,9 @@ static const gchar* _tgentransfer_toString(TGenTransfer* transfer) {
         if (transfer->type == TGEN_TYPE_GETPUT && transfer->getput) {
             g_string_printf(sizeStr, "%"G_GSIZE_FORMAT"|%"G_GSIZE_FORMAT,
                     transfer->getput->ourSize, transfer->getput->theirSize);
-        } else if (transfer->type == TGEN_TYPE_MMODEL && transfer->mmodel) {
+        } else if (transfer->type == TGEN_TYPE_SCHEDULE && transfer->schedule) {
             g_string_printf(sizeStr, "%"G_GSIZE_FORMAT"|%"G_GSIZE_FORMAT,
-                    transfer->size, transfer->mmodel->expectedReceiveBytes);
+                    transfer->size, transfer->schedule->expectedReceiveBytes);
         } else if (transfer->type == TGEN_TYPE_GET || transfer->type == TGEN_TYPE_PUT) {
             g_string_printf(sizeStr, "%"G_GSIZE_FORMAT, transfer->size);
         } else {
@@ -502,8 +518,8 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
             } else if(!g_ascii_strncasecmp(parts[3], "PUT", 3)) {
                 /* they want to PUT, so we will GET from them */
                 transfer->type = TGEN_TYPE_GET;
-            } else if (!g_ascii_strncasecmp(parts[3], "MMODEL", 6)) {
-                transfer->type = TGEN_TYPE_MMODEL;
+            } else if (!g_ascii_strncasecmp(parts[3], "SCHEDULE", 6)) {
+                transfer->type = TGEN_TYPE_SCHEDULE;
             } else {
                 tgen_critical("error parsing command type '%s'", parts[3]);
                 hasError = TRUE;
@@ -526,8 +542,22 @@ static void _tgentransfer_readCommand(TGenTransfer* transfer) {
                     ourSize = (gsize)g_ascii_strtoull(sizeParts[1], NULL, 10);
                     g_strfreev(sizeParts);
                     _tgentransfer_initGetputData(transfer, ourSize, theirSize);
-                } else if (transfer->type == TGEN_TYPE_MMODEL) {
-                    _tgentransfer_initMModelData(transfer, NULL, parts[4]);
+                } else if (transfer->type == TGEN_TYPE_SCHEDULE) {
+                    /* they send the amount they are sending us, and the delay
+                     * schedule we should use between packets. */
+                    gchar **schedParts = g_strsplit(parts[4], "|", 2);
+
+                    /* store the size we will receive from them */
+                    gsize theirSize = (gsize)g_ascii_strtoull(schedParts[0], NULL, 10);
+
+                    /* the schedule we got is our local schedule, we don't care
+                     * about the other end's schedule. */
+                    _tgentransfer_initSchedData(transfer, schedParts[1], NULL);
+
+                    /* now that the schedule is initialized, we can store the size */
+                    transfer->schedule->expectedReceiveBytes = theirSize;
+
+                    g_strfreev(schedParts);
                 } else {
                     g_assert_not_reached();
                 }
@@ -608,7 +638,7 @@ static void _tgentransfer_readResponse(TGenTransfer* transfer) {
                 transfer->events |= TGEN_EVENT_WRITE;
             } else if (transfer->state == TGEN_TYPE_GETPUT) {
                 transfer->events |= TGEN_EVENT_WRITE;
-            } else if (transfer->state == TGEN_TYPE_MMODEL) {
+            } else if (transfer->state == TGEN_TYPE_SCHEDULE) {
                 transfer->events |= TGEN_EVENT_WRITE|TGEN_EVENT_READ;
             }
         }
@@ -621,7 +651,7 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
     g_assert(transfer->type == TGEN_TYPE_GET
             || transfer->type == TGEN_TYPE_GETPUT
-            || transfer->type == TGEN_TYPE_MMODEL);
+            || transfer->type == TGEN_TYPE_SCHEDULE);
 
     guchar buffer[65536];
 
@@ -632,8 +662,8 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
             length = MIN(65536, (transfer->size - transfer->bytes.payloadRead));
         } else if (transfer->type == TGEN_TYPE_GETPUT && transfer->getput) {
             length = MIN(65536, (transfer->getput->theirSize - transfer->bytes.payloadRead));
-        } else if (transfer->type == TGEN_TYPE_MMODEL && transfer->mmodel) {
-            length = MIN(65536, (transfer->mmodel->expectedReceiveBytes - transfer->bytes.payloadRead));
+        } else if (transfer->type == TGEN_TYPE_SCHEDULE && transfer->schedule) {
+            length = MIN(65536, (transfer->schedule->expectedReceiveBytes - transfer->bytes.payloadRead));
         } else {
             g_assert_not_reached();
         }
@@ -664,8 +694,8 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
                     g_checksum_update(transfer->payloadChecksum, buffer, bytes);
                 } else if (transfer->type == TGEN_TYPE_GETPUT) {
                     g_checksum_update(transfer->getput->theirPayloadChecksum, buffer, bytes);
-                } else if (transfer->type == TGEN_TYPE_MMODEL) {
-                    g_checksum_update(transfer->mmodel->theirPayloadChecksum, buffer, bytes);
+                } else if (transfer->type == TGEN_TYPE_SCHEDULE) {
+                    g_checksum_update(transfer->schedule->theirPayloadChecksum, buffer, bytes);
                 } else {
                     g_assert_not_reached();
                 }
@@ -683,9 +713,9 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
                     transfer->time.lastPayloadByte = g_get_monotonic_time();
                     transfer->events |= TGEN_EVENT_WRITE;
                 }
-            } else if (transfer->type == TGEN_TYPE_MMODEL) {
-                transfer->mmodel->doneReadingPayload = TRUE;
-                if (transfer->mmodel->doneWritingPayload) {
+            } else if (transfer->type == TGEN_TYPE_SCHEDULE) {
+                transfer->schedule->doneReadingPayload = TRUE;
+                if (transfer->schedule->doneWritingPayload) {
                     _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
                     transfer->time.lastPayloadByte = g_get_monotonic_time();
                     transfer->events |= TGEN_EVENT_WRITE;
@@ -702,7 +732,7 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
     g_assert(transfer->type == TGEN_TYPE_GET
             || transfer->type == TGEN_TYPE_GETPUT
-            || transfer->type == TGEN_TYPE_MMODEL);
+            || transfer->type == TGEN_TYPE_SCHEDULE);
 
     if(_tgentransfer_getLine(transfer)) {
         if (transfer->type == TGEN_TYPE_GET) {
@@ -715,9 +745,9 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
                 transfer->time.checksum = g_get_monotonic_time();
             }
-        } else if (transfer->type == TGEN_TYPE_MMODEL && transfer->mmodel) {
-            transfer->mmodel->receivedTheirChecksum = TRUE;
-            if (transfer->mmodel->sentOurChecksum) {
+        } else if (transfer->type == TGEN_TYPE_SCHEDULE && transfer->schedule) {
+            transfer->schedule->receivedTheirChecksum = TRUE;
+            if (transfer->schedule->sentOurChecksum) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
                 transfer->time.checksum = g_get_monotonic_time();
             }
@@ -733,8 +763,8 @@ static void _tgentransfer_readChecksum(TGenTransfer* transfer) {
             computedSum = g_strdup(g_checksum_get_string(transfer->payloadChecksum));
         } else if (transfer->type == TGEN_TYPE_GETPUT) {
             computedSum = g_strdup(g_checksum_get_string(transfer->getput->theirPayloadChecksum));
-        } else if (transfer->type == TGEN_TYPE_MMODEL) {
-            computedSum = g_strdup(g_checksum_get_string(transfer->mmodel->theirPayloadChecksum));
+        } else if (transfer->type == TGEN_TYPE_SCHEDULE) {
+            computedSum = g_strdup(g_checksum_get_string(transfer->schedule->theirPayloadChecksum));
         } else {
             g_assert_not_reached();
         }
@@ -783,18 +813,18 @@ _tgentransfer_getputWantsReadEvents(TGenTransfer *transfer) {
 }
 
 static gboolean
-_tgentransfer_mmodelWantsReadEvents(TGenTransfer *transfer) {
+_tgentransfer_schedWantsReadEvents(TGenTransfer *transfer) {
     TGEN_ASSERT(transfer);
 
-    if (transfer->type != TGEN_TYPE_MMODEL) {
+    if (transfer->type != TGEN_TYPE_SCHEDULE) {
         return FALSE;
     } else if (transfer->readBuffer) {
         return TRUE;
     } else if (transfer->state == TGEN_XFER_RESPONSE) {
         return TRUE;
-    } else if (!transfer->mmodel->doneReadingPayload && transfer->state == TGEN_XFER_PAYLOAD) {
+    } else if (!transfer->schedule->doneReadingPayload && transfer->state == TGEN_XFER_PAYLOAD) {
         return TRUE;
-    } else if (!transfer->mmodel->receivedTheirChecksum && transfer->state == TGEN_XFER_CHECKSUM) {
+    } else if (!transfer->schedule->receivedTheirChecksum && transfer->state == TGEN_XFER_CHECKSUM) {
         return TRUE;
     } else {
         return FALSE;
@@ -819,14 +849,14 @@ static void _tgentransfer_onReadable(TGenTransfer* transfer) {
     /* check if we are responsible for reading payload bytes */
     if((transfer->type == TGEN_TYPE_GET
                 || transfer->type == TGEN_TYPE_GETPUT
-                || transfer->type == TGEN_TYPE_MMODEL)
+                || transfer->type == TGEN_TYPE_SCHEDULE)
             && transfer->state == TGEN_XFER_PAYLOAD) {
         _tgentransfer_readPayload(transfer);
     }
 
     if((transfer->type == TGEN_TYPE_GET
                 || transfer->type == TGEN_TYPE_GETPUT
-                || transfer->type == TGEN_TYPE_MMODEL)
+                || transfer->type == TGEN_TYPE_SCHEDULE)
             && transfer->state == TGEN_XFER_CHECKSUM) {
         _tgentransfer_readChecksum(transfer);
     }
@@ -834,7 +864,7 @@ static void _tgentransfer_onReadable(TGenTransfer* transfer) {
     if(transfer->readBuffer ||
             (transfer->type == TGEN_TYPE_GET && transfer->state != TGEN_XFER_SUCCESS) ||
             (_tgentransfer_getputWantsReadEvents(transfer)) ||
-            (_tgentransfer_mmodelWantsReadEvents(transfer))) {
+            (_tgentransfer_schedWantsReadEvents(transfer))) {
         /* we have more to read */
         transfer->events |= TGEN_EVENT_READ;
     } else {
@@ -914,17 +944,14 @@ static void _tgentransfer_writeCommand(TGenTransfer* transfer) {
             g_string_append_printf(transfer->writeBuffer,
                 "%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT,
                 transfer->getput->ourSize, transfer->getput->theirSize);
-        } else if (transfer->type == TGEN_TYPE_MMODEL && transfer->mmodel) {
-            GString *us = g_string_new(NULL);
-            GString *them = g_string_new(NULL);
-            if (!tgenmmodel_generatePath(transfer->mmodel->mmodel, us, them)) {
-                tgen_critical("Unable to generate path and store it in strings");
-                g_assert(NULL);
-            }
-            _tgentransfer_setMModelSchedFromString(transfer, us->str);
-            g_string_append_printf(transfer->writeBuffer, "%s", them->str);
-            g_string_free(us, TRUE);
-            g_string_free(them, TRUE);
+        } else if (transfer->type == TGEN_TYPE_SCHEDULE && transfer->schedule) {
+            /* send the other side's schedule over in the command */
+            g_string_append_printf(transfer->writeBuffer, "%"G_GSIZE_FORMAT"|%s",
+                    transfer->schedule->scheduleSize, transfer->schedule->theirSchedule);
+
+            /* we don't need their schedule string anymore */
+            g_free(transfer->schedule->theirSchedule);
+            transfer->schedule->theirSchedule = NULL;
         } else {
             g_assert_not_reached();
         }
@@ -1024,15 +1051,15 @@ static void _tgentransfer_writePayload(TGenTransfer* transfer) {
 }
 
 static gboolean
-_tgentransfer_mmodelOnTimerExpired(gpointer data1, gpointer data2)
+_tgentransfer_schedOnTimerExpired(gpointer data1, gpointer data2)
 {
     TGenTransfer *transfer = (TGenTransfer *)data1;
     TGEN_ASSERT(transfer);
-    g_assert(transfer->type == TGEN_TYPE_MMODEL);
-    g_assert(transfer->mmodel);
-    transfer->mmodel->timerSet = FALSE;
-    tgen_debug("MModel timer expired. Asking for write events again.");
-    tgendriver_setEvents(transfer->data1, transfer->mmodel->descriptor,
+    g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
+    g_assert(transfer->schedule);
+    transfer->schedule->timerSet = FALSE;
+    tgen_debug("Sched timer expired. Asking for write events again.");
+    tgendriver_setEvents(transfer->data1, transfer->schedule->descriptor,
             TGEN_EVENT_WRITE);
     /* Meaning YES cancel future callbacks of this function from
      * tgentimer_onEvent. The timer is already not persistent, so this is just
@@ -1041,37 +1068,37 @@ _tgentransfer_mmodelOnTimerExpired(gpointer data1, gpointer data2)
 }
 
 static void
-_tgentransfer_mmodelStartPause(TGenTransfer *transfer, int32_t micros)
+_tgentransfer_schedStartPause(TGenTransfer *transfer, int32_t micros)
 {
     TGEN_ASSERT(transfer);
-    g_assert(transfer->type == TGEN_TYPE_MMODEL);
-    g_assert(transfer->mmodel);
+    g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
+    g_assert(transfer->schedule);
     g_assert(micros >= 0);
-    if (!transfer->mmodel->timer) {
+    if (!transfer->schedule->timer) {
         tgentransfer_ref(transfer);
         /* The initial timeout isn't important since we will set it later in
          * the function body */
-        transfer->mmodel->timer = tgentimer_new(5000, FALSE,
-                _tgentransfer_mmodelOnTimerExpired,
+        transfer->schedule->timer = tgentimer_new(5000, FALSE,
+                _tgentransfer_schedOnTimerExpired,
                 transfer, NULL, (GDestroyNotify)tgentransfer_unref, NULL);
     }
-    g_assert(transfer->mmodel->timer);
-    tgen_debug("Setting a MModel timer for %dus", micros);
-    tgentimer_settime_micros(transfer->mmodel->timer, micros);
-    tgendriver_registerTransferPause(transfer->data1, transfer->mmodel->timer);
-    transfer->mmodel->timerSet = TRUE;
-    transfer->mmodel->goneToSleepOnce = TRUE;
+    g_assert(transfer->schedule->timer);
+    tgen_debug("Setting a Sched timer for %dus", micros);
+    tgentimer_settime_micros(transfer->schedule->timer, micros);
+    tgendriver_registerTransferPause(transfer->data1, transfer->schedule->timer);
+    transfer->schedule->timerSet = TRUE;
+    transfer->schedule->goneToSleepOnce = TRUE;
 }
 
 static gboolean
-_tgentransfer_mmodelSchedAdvance(TGenTransfer *transfer)
+_tgentransfer_schedAdvanceSchedule(TGenTransfer *transfer)
 {
     TGEN_ASSERT(transfer);
-    g_assert(transfer->type == TGEN_TYPE_MMODEL);
-    g_assert(transfer->mmodel);
+    g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
+    g_assert(transfer->schedule);
     tgen_debug("Advancing one from idx=%d (len=%d)",
-            transfer->mmodel->schedIdx, transfer->mmodel->sched->len);
-    if (++transfer->mmodel->schedIdx >= transfer->mmodel->sched->len) {
+            transfer->schedule->schedIdx, transfer->schedule->sched->len);
+    if (++transfer->schedule->schedIdx >= transfer->schedule->sched->len) {
         return FALSE;
     }
     return TRUE;
@@ -1079,10 +1106,10 @@ _tgentransfer_mmodelSchedAdvance(TGenTransfer *transfer)
 }
 
 static void
-_tgentransfer_mmodelTryFlushWriteBuffer(TGenTransfer *transfer)
+_tgentransfer_schedTryFlushWriteBuffer(TGenTransfer *transfer)
 {
     TGEN_ASSERT(transfer);
-    g_assert(transfer->type == TGEN_TYPE_MMODEL);
+    g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
     g_assert(transfer->writeBuffer);
     gboolean firstByte = transfer->bytes.payloadWrite == 0 ? TRUE : FALSE;
     transfer->bytes.payloadWrite += _tgentransfer_flushOut(transfer);
@@ -1092,10 +1119,10 @@ _tgentransfer_mmodelTryFlushWriteBuffer(TGenTransfer *transfer)
 }
 
 static void
-_tgentransfer_mmodelWriteToBuffer(TGenTransfer *transfer)
+_tgentransfer_schedWriteToBuffer(TGenTransfer *transfer)
 {
     TGEN_ASSERT(transfer);
-    g_assert(transfer->type == TGEN_TYPE_MMODEL);
+    g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
     g_assert(!transfer->writeBuffer);
     GString *more_data;
     int32_t delay, cum_delay = 0;
@@ -1105,55 +1132,56 @@ _tgentransfer_mmodelWriteToBuffer(TGenTransfer *transfer)
     more_data = _tgentransfer_getRandomString(TGEN_MMODEL_PACKET_DATA_SIZE);
     g_string_append(transfer->writeBuffer, more_data->str);
     g_string_free(more_data, TRUE);
-    while (_tgentransfer_mmodelSchedAdvance(transfer)) {
-        delay = g_array_index(transfer->mmodel->sched, int32_t,
-                transfer->mmodel->schedIdx);
+    while (_tgentransfer_schedAdvanceSchedule(transfer)) {
+        /* delay is in microseconds */
+        delay = g_array_index(transfer->schedule->sched, int32_t,
+                transfer->schedule->schedIdx);
         cum_delay += delay;
         if (cum_delay <= TGEN_MMODEL_MICROS_AT_ONCE) {
             more_data = _tgentransfer_getRandomString(TGEN_MMODEL_PACKET_DATA_SIZE);
             g_string_append(transfer->writeBuffer, more_data->str);
             g_string_free(more_data, TRUE);
         } else {
-            _tgentransfer_mmodelStartPause(transfer, cum_delay);
+            _tgentransfer_schedStartPause(transfer, cum_delay);
             break;
         }
     }
-    g_checksum_update(transfer->mmodel->ourPayloadChecksum,
+    g_checksum_update(transfer->schedule->ourPayloadChecksum,
             (guchar*)transfer->writeBuffer->str,
             (gssize)transfer->writeBuffer->len);
 }
 
 static void
-_tgentransfer_writeMModelPayload(TGenTransfer *transfer)
+_tgentransfer_writeSchedPayload(TGenTransfer *transfer)
 {
     TGEN_ASSERT(transfer);
-    g_assert(transfer->type == TGEN_TYPE_MMODEL);
+    g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
     if (transfer->writeBuffer) {
         tgen_debug("There's an existing writeBuffer, so going to try to write "
                 "it out first");
-        _tgentransfer_mmodelTryFlushWriteBuffer(transfer);
+        _tgentransfer_schedTryFlushWriteBuffer(transfer);
     }
 
     if (!transfer->writeBuffer) {
-        if (!transfer->mmodel->timerSet) {
-            if (transfer->mmodel->schedIdx < transfer->mmodel->sched->len) {
-                if (transfer->mmodel->schedIdx == 0) {
-                    int32_t delay = g_array_index(transfer->mmodel->sched,
-                            int32_t, transfer->mmodel->schedIdx);
-                    if (delay > 0 && !transfer->mmodel->goneToSleepOnce) {
+        if (!transfer->schedule->timerSet) {
+            if (transfer->schedule->schedIdx < transfer->schedule->sched->len) {
+                if (transfer->schedule->schedIdx == 0) {
+                    int32_t delay = g_array_index(transfer->schedule->sched,
+                            int32_t, transfer->schedule->schedIdx);
+                    if (delay > 0 && !transfer->schedule->goneToSleepOnce) {
                         tgen_debug("This is the first item but it calls to "
                                 "sleep first. So we are not going to write "
                                 "this time.");
-                        _tgentransfer_mmodelStartPause(transfer, delay);
+                        _tgentransfer_schedStartPause(transfer, delay);
                     }
                 }
                 /* Make sure timer still isn't set since it might have been set
                  * if this was the first schedIdx and we needed to sleep */
-                if (!transfer->mmodel->timerSet) {
+                if (!transfer->schedule->timerSet) {
                     tgen_debug("Empty write buffer, no timer set, and not at "
                             "the end of the schedule. Writing more data.");
-                    _tgentransfer_mmodelWriteToBuffer(transfer);
-                    _tgentransfer_mmodelTryFlushWriteBuffer(transfer);
+                    _tgentransfer_schedWriteToBuffer(transfer);
+                    _tgentransfer_schedTryFlushWriteBuffer(transfer);
                 }
             }
         } else {
@@ -1165,17 +1193,17 @@ _tgentransfer_writeMModelPayload(TGenTransfer *transfer)
                 "write more");
     }
 
-    if (transfer->mmodel->schedIdx >= transfer->mmodel->sched->len &&
+    if (transfer->schedule->schedIdx >= transfer->schedule->sched->len &&
             !transfer->writeBuffer) {
-        tgen_debug("We're done writing for the MModel!");
-        transfer->mmodel->doneWritingPayload = TRUE;
-        if (transfer->mmodel->doneReadingPayload) {
+        tgen_debug("We're done writing for the Schedule!");
+        transfer->schedule->doneWritingPayload = TRUE;
+        if (transfer->schedule->doneReadingPayload) {
             transfer->time.lastPayloadByte = g_get_monotonic_time();
             _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
             transfer->events |= TGEN_EVENT_READ|TGEN_EVENT_WRITE;
         }
-        if (transfer->mmodel->timer) {
-            tgentimer_settime_micros(transfer->mmodel->timer, 0);
+        if (transfer->schedule->timer) {
+            tgentimer_settime_micros(transfer->schedule->timer, 0);
         }
     }
 }
@@ -1184,7 +1212,7 @@ static void _tgentransfer_writeChecksum(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
     g_assert(transfer->type == TGEN_TYPE_GETPUT
             || transfer->type == TGEN_TYPE_PUT
-            || transfer->type == TGEN_TYPE_MMODEL);
+            || transfer->type == TGEN_TYPE_SCHEDULE);
 
     /* buffer the checksum if we have not done that yet */
     if(!transfer->writeBuffer) {
@@ -1195,9 +1223,9 @@ static void _tgentransfer_writeChecksum(TGenTransfer* transfer) {
         } else if (transfer->type == TGEN_TYPE_GETPUT && transfer->getput) {
             g_string_printf(transfer->writeBuffer, "MD5 %s\n",
                     g_checksum_get_string(transfer->getput->ourPayloadChecksum));
-        } else if (transfer->type == TGEN_TYPE_MMODEL && transfer->mmodel) {
+        } else if (transfer->type == TGEN_TYPE_SCHEDULE && transfer->schedule) {
             g_string_printf(transfer->writeBuffer, "MD5 %s\n",
-                    g_checksum_get_string(transfer->mmodel->ourPayloadChecksum));
+                    g_checksum_get_string(transfer->schedule->ourPayloadChecksum));
         } else {
             g_assert_not_reached();
         }
@@ -1216,9 +1244,9 @@ static void _tgentransfer_writeChecksum(TGenTransfer* transfer) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
                 transfer->time.checksum = g_get_monotonic_time();
             }
-        } else if (transfer->type == TGEN_TYPE_MMODEL) {
-            transfer->mmodel->sentOurChecksum = TRUE;
-            if (transfer->mmodel->receivedTheirChecksum) {
+        } else if (transfer->type == TGEN_TYPE_SCHEDULE) {
+            transfer->schedule->sentOurChecksum = TRUE;
+            if (transfer->schedule->receivedTheirChecksum) {
                 _tgentransfer_changeState(transfer, TGEN_XFER_SUCCESS);
                 transfer->time.checksum = g_get_monotonic_time();
             }
@@ -1248,20 +1276,20 @@ _tgentransfer_getputWantsWriteEvents(TGenTransfer *transfer) {
 }
 
 static gboolean
-_tgentransfer_mmodelWantsWriteEvents(TGenTransfer *transfer) {
+_tgentransfer_schedWantsWriteEvents(TGenTransfer *transfer) {
     TGEN_ASSERT(transfer);
 
-    if (transfer->type != TGEN_TYPE_MMODEL) {
+    if (transfer->type != TGEN_TYPE_SCHEDULE) {
         return FALSE;
     } else if (transfer->writeBuffer) {
         return TRUE;
     } else if (transfer->state == TGEN_XFER_COMMAND) {
         return TRUE;
-    } else if (!transfer->mmodel->doneWritingPayload
+    } else if (!transfer->schedule->doneWritingPayload
             && transfer->state == TGEN_XFER_PAYLOAD
-            && !transfer->mmodel->timerSet) {
+            && !transfer->schedule->timerSet) {
         return TRUE;
-    } else if (!transfer->mmodel->sentOurChecksum && transfer->state == TGEN_XFER_CHECKSUM) {
+    } else if (!transfer->schedule->sentOurChecksum && transfer->state == TGEN_XFER_CHECKSUM) {
         return TRUE;
     } else {
         return FALSE;
@@ -1287,14 +1315,14 @@ static void _tgentransfer_onWritable(TGenTransfer* transfer) {
     if((transfer->type == TGEN_TYPE_PUT || transfer->type == TGEN_TYPE_GETPUT)
             && transfer->state == TGEN_XFER_PAYLOAD) {
         _tgentransfer_writePayload(transfer);
-    } else if (transfer->type == TGEN_TYPE_MMODEL
+    } else if (transfer->type == TGEN_TYPE_SCHEDULE
             && transfer->state == TGEN_XFER_PAYLOAD) {
-        _tgentransfer_writeMModelPayload(transfer);
+        _tgentransfer_writeSchedPayload(transfer);
     }
 
     if((transfer->type == TGEN_TYPE_PUT
                 || transfer->type == TGEN_TYPE_GETPUT
-                || transfer->type == TGEN_TYPE_MMODEL)
+                || transfer->type == TGEN_TYPE_SCHEDULE)
             && transfer->state == TGEN_XFER_CHECKSUM) {
         _tgentransfer_writeChecksum(transfer);
     }
@@ -1302,7 +1330,7 @@ static void _tgentransfer_onWritable(TGenTransfer* transfer) {
     if(transfer->writeBuffer ||
             (transfer->type == TGEN_TYPE_PUT && transfer->state == TGEN_XFER_PAYLOAD) ||
             (_tgentransfer_getputWantsWriteEvents(transfer)) ||
-            (_tgentransfer_mmodelWantsWriteEvents(transfer))) {
+            (_tgentransfer_schedWantsWriteEvents(transfer))) {
         /* we have more to write */
         transfer->events |= TGEN_EVENT_WRITE;
     } else {
@@ -1349,8 +1377,8 @@ static gchar* _tgentransfer_getBytesStatusReport(TGenTransfer* transfer) {
         if (transfer->type == TGEN_TYPE_GETPUT && transfer->getput != NULL) {
             to_read = transfer->getput->theirSize;
             to_write = transfer->getput->ourSize;
-        } else if (transfer->type == TGEN_TYPE_MMODEL && transfer->mmodel != NULL) {
-            to_read = transfer->mmodel->expectedReceiveBytes;
+        } else if (transfer->type == TGEN_TYPE_SCHEDULE && transfer->schedule != NULL) {
+            to_read = transfer->schedule->expectedReceiveBytes;
             to_write = transfer->size;
         } else {
             /* TGEN_TYPE_NONE is a valid state, if the server exists but has
@@ -1498,9 +1526,9 @@ static TGenEvent _tgentransfer_runTransferEventLoop(TGenTransfer* transfer, TGen
 TGenEvent tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, TGenEvent events) {
     TGEN_ASSERT(transfer);
 
-    if (transfer->type == TGEN_TYPE_MMODEL && transfer->mmodel
-            && !transfer->mmodel->descriptor) {
-        transfer->mmodel->descriptor = descriptor;
+    if (transfer->type == TGEN_TYPE_SCHEDULE && transfer->schedule
+            && !transfer->schedule->descriptor) {
+        transfer->schedule->descriptor = descriptor;
     }
 
     TGenEvent retEvents = TGEN_EVENT_NONE;
@@ -1569,7 +1597,7 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
 
 TGenTransfer* tgentransfer_new(const gchar* idStr, gsize count, TGenTransferType type,
         gsize size, gsize ourSize, gsize theirSize,
-        guint64 timeout, guint64 stallout, TGenMModel *mmodel,
+        guint64 timeout, guint64 stallout, const gchar* localSchedule, const gchar* remoteSchedule,
         TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
         gpointer data1, gpointer data2, GDestroyNotify destructData1, GDestroyNotify destructData2) {
     TGenTransfer* transfer = g_new0(TGenTransfer, 1);
@@ -1605,8 +1633,8 @@ TGenTransfer* tgentransfer_new(const gchar* idStr, gsize count, TGenTransferType
 
     if (type == TGEN_TYPE_GETPUT) {
         _tgentransfer_initGetputData(transfer, ourSize, theirSize);
-    } else if (type == TGEN_TYPE_MMODEL) {
-        _tgentransfer_initMModelData(transfer, mmodel, NULL);
+    } else if (type == TGEN_TYPE_SCHEDULE) {
+        _tgentransfer_initSchedData(transfer, localSchedule, remoteSchedule);
     }
 
     transfer->payloadChecksum = g_checksum_new(G_CHECKSUM_MD5);
@@ -1652,8 +1680,8 @@ static void _tgentransfer_free(TGenTransfer* transfer) {
         _tgentransfer_freeGetputData(transfer);
     }
 
-    if (transfer->mmodel) {
-        _tgentransfer_freeMModelData(transfer);
+    if (transfer->schedule) {
+        _tgentransfer_freeSchedData(transfer);
     }
 
     if(transfer->destructData1 && transfer->data1) {

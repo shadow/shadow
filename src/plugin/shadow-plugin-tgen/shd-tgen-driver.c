@@ -156,7 +156,7 @@ static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, gint64 start
     /* a new transfer will be coming in on this transport */
     gsize count = ++(driver->globalTransferCounter);
     TGenTransfer* transfer = tgentransfer_new(NULL, count, TGEN_TYPE_NONE, 0, 0, 0,
-            defaultTimeout, defaultStallout, NULL, transport,
+            defaultTimeout, defaultStallout, NULL, NULL, transport,
             (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, NULL,
             (GDestroyNotify)tgendriver_unref, NULL);
 
@@ -212,7 +212,6 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     /* default timeout after which we give up on transfer */
     guint64 timeout = tgenaction_getDefaultTimeoutMillis(driver->startAction);
     guint64 stallout = tgenaction_getDefaultStalloutMillis(driver->startAction);
-    TGenMModel *mmodel = tgenaction_getDefaultMModel(driver->startAction);
 
     /* ref++ the driver for the transport notify func */
     tgendriver_ref(driver);
@@ -221,9 +220,11 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     guint64 ourSize = 0;
     guint64 theirSize = 0;
     TGenTransferType type = 0;
+    gchar* localSchedule = NULL;
+    gchar* remoteSchedule = NULL;
     /* this will only update timeout if there was a non-default timeout set for this transfer */
     tgenaction_getTransferParameters(action, &type, NULL, &size, &ourSize,
-            &theirSize, &timeout, &stallout, &mmodel);
+            &theirSize, &timeout, &stallout, &localSchedule, &remoteSchedule);
 
     /* the unique id of this vertex in the graph */
     const gchar* idStr = tgengraph_getActionIDStr(driver->actionGraph, action);
@@ -232,8 +233,8 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     /* a new transfer will be coming in on this transport. the transfer
      * takes control of the transport pointer reference. */
     TGenTransfer* transfer = tgentransfer_new(idStr, count, type, (gsize)size,
-            (gsize)ourSize, (gsize)theirSize, timeout, stallout, mmodel,
-            transport,
+            (gsize)ourSize, (gsize)theirSize, timeout, stallout,
+            localSchedule, remoteSchedule, transport,
             (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, action,
             (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgenaction_unref);
 
