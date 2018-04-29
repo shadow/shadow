@@ -93,7 +93,7 @@ TGenEvent tgentimer_onEvent(TGenTimer* timer, gint descriptor, TGenEvent events)
     }
 }
 
-TGenTimer* tgentimer_new(guint64 milliseconds, gboolean isPersistent,
+TGenTimer* tgentimer_new(guint64 microseconds, gboolean isPersistent,
         TGenTimer_notifyExpiredFunc notify, gpointer data1, gpointer data2,
         GDestroyNotify destructData1, GDestroyNotify destructData2) {
     /* if they dont want to be notified of timer expirations, there is no point */
@@ -112,8 +112,8 @@ TGenTimer* tgentimer_new(guint64 milliseconds, gboolean isPersistent,
     /* create the timer info */
     struct itimerspec arm;
 
-    guint64 seconds = milliseconds / 1000;
-    guint64 nanoseconds = (milliseconds % 1000) * 1000000;
+    guint64 seconds = microseconds / 1000000;
+    guint64 nanoseconds = (microseconds % 1000000) * 1000;
 
     /* a timer with 0 delay will cause timerfd to disarm, so we use a 1 nano
      * delay instead, in order to execute the event as close to now as possible */

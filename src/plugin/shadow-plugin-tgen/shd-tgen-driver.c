@@ -45,8 +45,10 @@ struct _TGenDriver {
 };
 
 /* forward declaration */
+static gboolean _tgendriver_onStartClientTimerExpired(TGenDriver* driver, gpointer nullData);
+static gboolean _tgendriver_onPauseTimerExpired(TGenDriver* driver, TGenAction* action);
+static gboolean _tgendriver_onGeneratorTimerExpired(TGenDriver* driver, TGenGenerator* generator);
 static void _tgendriver_continueNextActions(TGenDriver* driver, TGenAction* action);
-static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action);
 
 static gint64 _tgendriver_getCurrentTimeMillis() {
     return g_get_monotonic_time()/1000;
@@ -67,6 +69,18 @@ static void _tgendriver_onTransferComplete(TGenDriver* driver, TGenAction* actio
     /* this only happens for transfers that our side initiated.
      * continue traversing the graph as instructed */
     if(action) {
+        _tgendriver_continueNextActions(driver, action);
+    }
+}
+
+static void _tgendriver_onGeneratorTransferComplete(TGenDriver* driver, TGenGenerator* generator, gboolean wasSuccess) {
+    TGEN_ASSERT(driver);
+
+    _tgendriver_onTransferComplete(driver, NULL, wasSuccess);
+    tgengenerator_onTransferCompleted(generator);
+
+    if(tgengenerator_isDoneGenerating(generator) && !tgengenerator_hasOutstandingTransfers(generator)) {
+        TGenAction* action = tgengenerator_getGenerateAction(generator);
         _tgendriver_continueNextActions(driver, action);
     }
 }
@@ -101,29 +115,6 @@ static gboolean _tgendriver_onHeartbeat(TGenDriver* driver, gpointer nullData) {
      * we are still running and the heartbeat timer still owns a driver ref.
      * do not cancel the timer */
     return FALSE;
-}
-
-static gboolean _tgendriver_onStartClientTimerExpired(TGenDriver* driver, gpointer nullData) {
-    TGEN_ASSERT(driver);
-
-    driver->startTimeMicros = g_get_monotonic_time();
-
-    tgen_message("starting client using action graph '%s'",
-            tgengraph_getGraphPath(driver->actionGraph));
-    _tgendriver_continueNextActions(driver, driver->startAction);
-
-    return TRUE;
-}
-
-static gboolean _tgendriver_onPauseTimerExpired(TGenDriver* driver, TGenAction* action) {
-    TGEN_ASSERT(driver);
-
-    tgen_info("pause timer expired");
-
-    /* continue next actions if possible */
-    _tgendriver_continueNextActions(driver, action);
-    /* timer was a one time event, so it can be canceled */
-    return TRUE;
 }
 
 static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, gint64 started, gint64 created, TGenPeer* peer) {
@@ -181,10 +172,11 @@ static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, gint64 start
     tgentransport_unref(transport);
 }
 
-static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action) {
+/* this should only be called with action of type start, generate, or transfer */
+static TGenPeer* _tgendriver_getRandomPeer(TGenDriver* driver, TGenAction* action) {
     TGEN_ASSERT(driver);
 
-    /* the peer list of the transfer takes priority over the general start peer list
+    /* the peer list of the action takes priority over the general start peer list
      * we must have a list of peers to transfer to one of them */
     TGenPool* peers = tgenaction_getPeers(action);
     if (!peers) {
@@ -197,59 +189,66 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
                 "either the start action, or in *every* transfer action");
     }
 
-    TGenPeer* peer = tgenpool_getRandom(peers);
-    TGenPeer* proxy = tgenaction_getSocksProxy(driver->startAction);
+    return tgenpool_getRandom(peers);
+}
 
+static gboolean _tgendriver_createNewActiveTransfer(TGenDriver* driver,
+        TGenTransferType type, TGenPeer* peer,
+        guint64 size, guint64 ourSize, guint64 theirSize,
+        guint64 timeout, guint64 stallout,
+        gchar* localSchedule, gchar* remoteSchedule,
+        const gchar* actionIDStr,
+        TGenTransfer_notifyCompleteFunc onComplete,
+        gpointer callbackArg1, gpointer callbackArg2,
+        GDestroyNotify arg1Destroy, GDestroyNotify arg2Destroy) {
+    TGEN_ASSERT(driver);
+
+    TGenPeer* proxy = tgenaction_getSocksProxy(driver->startAction);
+    if(timeout == 0) {
+        timeout = tgenaction_getDefaultTimeoutMillis(driver->startAction);
+    }
+    if(stallout == 0) {
+        stallout = tgenaction_getDefaultStalloutMillis(driver->startAction);
+    }
+
+    /* create the transport connection over which we can start a transfer */
     TGenTransport* transport = tgentransport_newActive(proxy, peer,
             (TGenTransport_notifyBytesFunc) _tgendriver_onBytesTransferred, driver,
             (GDestroyNotify)tgendriver_unref);
 
-    if(!transport) {
-        tgen_warning("failed to initialize transport for transfer action, skipping");
-        _tgendriver_continueNextActions(driver, action);
-        return;
+    if(transport) {
+        /* ref++ the driver because the transport object is holding a ref to it
+         * as a generic callback parameter for the notify function callback */
+        tgendriver_ref(driver);
+    } else {
+        tgen_warning("failed to initialize transport for active transfer");
+        return FALSE;
     }
 
-    /* default timeout after which we give up on transfer */
-    guint64 timeout = tgenaction_getDefaultTimeoutMillis(driver->startAction);
-    guint64 stallout = tgenaction_getDefaultStalloutMillis(driver->startAction);
-
-    /* ref++ the driver for the transport notify func */
-    tgendriver_ref(driver);
-
-    guint64 size = 0;
-    guint64 ourSize = 0;
-    guint64 theirSize = 0;
-    TGenTransferType type = 0;
-    gchar* localSchedule = NULL;
-    gchar* remoteSchedule = NULL;
-    /* this will only update timeout if there was a non-default timeout set for this transfer */
-    tgenaction_getTransferParameters(action, &type, NULL, &size, &ourSize,
-            &theirSize, &timeout, &stallout, &localSchedule, &remoteSchedule);
-
-    /* the unique id of this vertex in the graph */
-    const gchar* idStr = tgengraph_getActionIDStr(driver->actionGraph, action);
+    /* get transfer counter id */
     gsize count = ++(driver->globalTransferCounter);
 
     /* a new transfer will be coming in on this transport. the transfer
      * takes control of the transport pointer reference. */
-    TGenTransfer* transfer = tgentransfer_new(idStr, count, type, (gsize)size,
+    TGenTransfer* transfer = tgentransfer_new(actionIDStr, count, type, (gsize)size,
             (gsize)ourSize, (gsize)theirSize, timeout, stallout,
             localSchedule, remoteSchedule, transport,
-            (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, action,
-            (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgenaction_unref);
+            onComplete, callbackArg1, callbackArg2, arg1Destroy, arg2Destroy);
 
     if(!transfer) {
+        /* the transport was created, but we failed to create the transfer.
+         * so we should clean up the transport since we no longer need it */
         tgentransport_unref(transport);
-        tgendriver_unref(driver);
-        tgen_warning("failed to initialize transfer for transfer action, skipping");
-        _tgendriver_continueNextActions(driver, action);
-        return;
-    }
 
-    /* ref++ the driver and action for the transfer notify func */
-    tgendriver_ref(driver);
-    tgenaction_ref(action);
+        /* XXX Rob:
+         * I think the transport unref will call the driver unref function that
+         * we passed as the destroy function, so I'm not sure why or if we need to
+         * do it again here. Leaving it here for now. */
+        tgendriver_unref(driver);
+
+        tgen_warning("failed to initialize active transfer");
+        return FALSE;
+    }
 
     /* now let the IO handler manage the transfer. our transfer pointer reference
      * will be held by the IO object */
@@ -258,34 +257,167 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
             (TGenIO_notifyCheckTimeoutFunc) tgentransfer_onCheckTimeout,
             transfer, (GDestroyNotify)tgentransfer_unref);
 
-    /* release our transport pointer reference, the transfer should hold one */
+    /* release our local transport pointer ref (from when we initialized the new transport)
+     * because the transfer now owns it and holds the ref */
     tgentransport_unref(transport);
+
+    return TRUE;
+}
+
+static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action) {
+    TGEN_ASSERT(driver);
+
+    TGenPeer* peer = _tgendriver_getRandomPeer(driver, action);
+    TGenTransferType type = 0;
+
+    guint64 size = 0;
+    guint64 ourSize = 0;
+    guint64 theirSize = 0;
+
+    guint64 timeout = 0;
+    guint64 stallout = 0;
+
+    gchar* localSchedule = NULL;
+    gchar* remoteSchedule = NULL;
+
+    /* if timeout is 0, we fall back to the start action timeout in the
+     * _tgendriver_createNewActiveTransfer function */
+    tgenaction_getTransferParameters(action, &type, NULL, &size, &ourSize,
+            &theirSize, &timeout, &stallout, &localSchedule, &remoteSchedule);
+
+    const gchar* actionIDStr = tgengraph_getActionIDStr(driver->actionGraph, action);
+
+    gboolean isSuccess = _tgendriver_createNewActiveTransfer(driver, type, peer,
+            size, ourSize, theirSize, timeout, stallout, localSchedule, remoteSchedule,
+            actionIDStr,
+            (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete,
+            driver, action,
+            (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgenaction_unref);
+
+    if(isSuccess) {
+        /* ref++ the driver and action because the transfer object is holding refs
+         * as generic callback parameters for the notify function callback.
+         * these will get unref'd when the transfer finishes. */
+        tgendriver_ref(driver);
+        tgenaction_ref(action);
+    } else {
+       tgen_warning("skipping failed transfer action and continuing to the next action");
+       _tgendriver_continueNextActions(driver, action);
+    }
+}
+
+static gboolean _tgendriver_setGeneratorDelayTimer(TGenDriver* driver, TGenGenerator* generator,
+        guint64 delayTimeUSec) {
+    TGEN_ASSERT(driver);
+
+    /* create a timer to handle so we can delay before starting the next transfer */
+    TGenTimer* generatorTimer = tgentimer_new(delayTimeUSec, FALSE,
+            (TGenTimer_notifyExpiredFunc)_tgendriver_onGeneratorTimerExpired, driver, generator,
+            (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgengenerator_unref);
+
+    if(!generatorTimer) {
+        tgen_warning("failed to initialize timer for generate action");
+        return FALSE;
+    }
+
+    tgen_info("set generator delay timer for %"G_GUINT64_FORMAT" milliseconds", delayTimeUSec);
+
+    /* ref++ the driver and generator for the refs held in the timer */
+    tgendriver_ref(driver);
+    tgengenerator_ref(generator);
+
+    /* let the IO module handle timer reads, transfer the timer pointer reference */
+    tgenio_register(driver->io, tgentimer_getDescriptor(generatorTimer),
+            (TGenIO_notifyEventFunc)tgentimer_onEvent, NULL, generatorTimer,
+            (GDestroyNotify)tgentimer_unref);
+
+    return TRUE;
+}
+
+static void _tgendriver_generateNextTransfer(TGenDriver* driver, TGenGenerator* generator) {
+    TGEN_ASSERT(driver);
+
+    TGenAction* action = tgengenerator_getGenerateAction(generator);
+
+    /* if these strings are non-null following this call, we own and must free them */
+    gchar* localSchedule = NULL;
+    gchar* remoteSchedule = NULL;
+    guint64 delayTimeUSec = 0;
+    gboolean shouldCreateStream = tgengenerator_nextStream(generator,
+            &localSchedule, &remoteSchedule, &delayTimeUSec);
+
+    if(!shouldCreateStream) {
+       /* the generator reached the end of the streams for this flow,
+        * so the action is now complete. */
+        tgen_info("Generator finished generating streams, generate action complete");
+        if(tgengenerator_isDoneGenerating(generator) && !tgengenerator_hasOutstandingTransfers(generator)) {
+            _tgendriver_continueNextActions(driver, action);
+        }
+        tgengenerator_unref(generator);
+        return;
+    }
+
+    /* we need to create a new transfer according to the schedules from the generator */
+
+    TGenPeer* peer = _tgendriver_getRandomPeer(driver, action);
+    const gchar* actionIDStr = tgengraph_getActionIDStr(driver->actionGraph, action);
+
+    /* Create the schedule type transfer. The sizes will be computed from the
+     * schedules, and timeout and stallout will be taken from the default start vertex.
+     * We pass a NULL action, because we don't want to continue in the action graph
+     * when this transfer completes (we continue when the generator is done). */
+    gboolean isSuccess = _tgendriver_createNewActiveTransfer(driver, TGEN_TYPE_SCHEDULE, peer,
+            0, 0, 0, 0, 0, localSchedule, remoteSchedule, actionIDStr,
+            (TGenTransfer_notifyCompleteFunc)_tgendriver_onGeneratorTransferComplete,
+            driver, generator,
+            (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgengenerator_unref);
+
+    if(isSuccess) {
+        /* ref++ the driver and generator because the transfer object is holding refs
+         * as generic callback parameters for the notify function callback.
+         * these will get unref'd when the transfer finishes. */
+        tgendriver_ref(driver);
+        tgengenerator_ref(generator);
+        tgengenerator_onTransferCreated(generator);
+    } else {
+       tgen_warning("we failed to create a transfer in generate action, "
+               "delaying %"G_GUINT64_FORMAT" microseconds before the next try",
+               delayTimeUSec);
+    }
+
+    isSuccess = _tgendriver_setGeneratorDelayTimer(driver, generator, delayTimeUSec);
+
+    if(!isSuccess) {
+        tgen_warning("Failed to set generator delay timer for %"G_GUINT64_FORMAT" "
+                "microseconds. Stopping generator now and skipping to next action.",
+                delayTimeUSec);
+        if(tgengenerator_isDoneGenerating(generator) && !tgengenerator_hasOutstandingTransfers(generator)) {
+            _tgendriver_continueNextActions(driver, action);
+        }
+        tgengenerator_unref(generator);
+    }
+
+    tgen_info("successfully generated new transfer to peer %s", tgenpeer_toString(peer));
+
+    if(localSchedule) {
+        g_free(localSchedule);
+    }
+    if(remoteSchedule) {
+        g_free(remoteSchedule);
+    }
 }
 
 static void _tgendriver_initiateGenerator(TGenDriver* driver, TGenAction* action) {
     TGEN_ASSERT(driver);
 
-    // XXX only try once for now, remove before final
-    driver->clientHasEnded = TRUE;
-
-    TGenPool* peers = tgenaction_getPeers(action);
-    if (!peers) {
-        peers = tgenaction_getPeers(driver->startAction);
-    }
-
-    if(!peers) {
-        /* FIXME we should handle this more gracefully than error */
-        tgen_error("missing peers for generator action; note that peers must be specified in "
-                "either the start action, or in *every* generate action");
-    }
-
     TGenPeer* proxy = tgenaction_getSocksProxy(driver->startAction);
 
+    /* these strings are owned by the action and we should not free them */
     gchar* streamModelPath = NULL;
     gchar* packetModelPath = NULL;
     tgenaction_getGeneratorModelPaths(action, &streamModelPath, &packetModelPath);
 
-    TGenGenerator* generator = tgengenerator_new(streamModelPath, packetModelPath, peers);
+    TGenGenerator* generator = tgengenerator_new(streamModelPath, packetModelPath, action);
 
     if(!generator) {
         tgen_warning("failed to initialize generator action, skipping");
@@ -293,18 +425,11 @@ static void _tgendriver_initiateGenerator(TGenDriver* driver, TGenAction* action
         return;
     }
 
-    gboolean isDone = tgengenerator_nextStream(generator);
-
-    if(isDone) {
-        tgengenerator_unref(generator);
-    } else {
-        /* TODO create the transport and the transfer of type schedule for this stream */
-    }
+    /* start generating transfers! */
+    _tgendriver_generateNextTransfer(driver, generator);
 }
 
-void
-tgendriver_registerTransferPause(TGenDriver *driver, TGenTimer *timer)
-{
+void tgendriver_registerTransferPause(TGenDriver *driver, TGenTimer *timer) {
     TGEN_ASSERT(driver);
     tgentimer_ref(timer);
     tgenio_register(driver->io, tgentimer_getDescriptor(timer),
@@ -316,9 +441,10 @@ static gboolean _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action
     TGEN_ASSERT(driver);
 
     guint64 millisecondsPause = tgenaction_getPauseTimeMillis(action);
+    guint64 microsecondsPause = millisecondsPause * 1000;
 
     /* create a timer to handle the pause action */
-    TGenTimer* pauseTimer = tgentimer_new(millisecondsPause, FALSE,
+    TGenTimer* pauseTimer = tgentimer_new(microsecondsPause, FALSE,
             (TGenTimer_notifyExpiredFunc)_tgendriver_onPauseTimerExpired, driver, action,
             (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgenaction_unref);
 
@@ -536,11 +662,15 @@ static gboolean _tgendriver_startServerHelper(TGenDriver* driver) {
     }
 }
 
-static gboolean _tgendriver_setStartClientTimerHelper(TGenDriver* driver, guint64 timerTime) {
+static gboolean _tgendriver_setStartClientTimerHelper(TGenDriver* driver) {
     TGEN_ASSERT(driver);
 
+    /* this is a delay in milliseconds from now to start the client */
+    guint64 delayMillis = tgenaction_getStartTimeMillis(driver->startAction);
+    guint64 pauseTimeMicros = delayMillis * 1000;
+
     /* client will start in the future */
-    TGenTimer* startTimer = tgentimer_new(timerTime, FALSE,
+    TGenTimer* startTimer = tgentimer_new(pauseTimeMicros, FALSE,
             (TGenTimer_notifyExpiredFunc)_tgendriver_onStartClientTimerExpired, driver, NULL,
             (GDestroyNotify)tgendriver_unref, NULL);
 
@@ -567,9 +697,10 @@ static gboolean _tgendriver_setHeartbeatTimerHelper(TGenDriver* driver) {
     if(heartbeatPeriod == 0) {
         heartbeatPeriod = 1000;
     }
+    guint64 microsecondsPause = heartbeatPeriod * 1000;
 
     /* start the heartbeat as a persistent timer event */
-    TGenTimer* heartbeatTimer = tgentimer_new(heartbeatPeriod, TRUE,
+    TGenTimer* heartbeatTimer = tgentimer_new(microsecondsPause, TRUE,
             (TGenTimer_notifyExpiredFunc)_tgendriver_onHeartbeat, driver, NULL,
             (GDestroyNotify)tgendriver_unref, NULL);
 
@@ -615,12 +746,9 @@ TGenDriver* tgendriver_new(TGenGraph* graph) {
 
     /* only run the client if we have (non-start) actions we need to process */
     if(tgengraph_hasEdges(driver->actionGraph)) {
-        /* the client-side transfers start as specified in the action.
-         * this is a delay in milliseconds from now to start the client */
-        guint64 delayMillis = tgenaction_getStartTimeMillis(driver->startAction);
-
-        /* start our client after a timeout */
-        if(!_tgendriver_setStartClientTimerHelper(driver, delayMillis)) {
+        /* the client-side transfers start as specified in the graph.
+         * start our client after a timeout */
+        if(!_tgendriver_setStartClientTimerHelper(driver)) {
             tgendriver_unref(driver);
             return NULL;
         }
@@ -646,3 +774,38 @@ tgendriver_setEvents(TGenDriver *driver, gint descriptor, TGenEvent events)
     TGEN_ASSERT(driver);
     tgenio_setEvents(driver->io, descriptor, events);
 }
+
+static gboolean _tgendriver_onStartClientTimerExpired(TGenDriver* driver, gpointer nullData) {
+    TGEN_ASSERT(driver);
+
+    driver->startTimeMicros = g_get_monotonic_time();
+
+    tgen_message("starting client using action graph '%s'",
+            tgengraph_getGraphPath(driver->actionGraph));
+    _tgendriver_continueNextActions(driver, driver->startAction);
+
+    /* timer was a one time event, so it can be canceled and freed */
+    return TRUE;
+}
+
+static gboolean _tgendriver_onPauseTimerExpired(TGenDriver* driver, TGenAction* action) {
+    TGEN_ASSERT(driver);
+
+    tgen_info("pause timer expired");
+
+    /* continue next actions if possible */
+    _tgendriver_continueNextActions(driver, action);
+    /* timer was a one time event, so it can be canceled and freed */
+    return TRUE;
+}
+
+static gboolean _tgendriver_onGeneratorTimerExpired(TGenDriver* driver, TGenGenerator* generator) {
+    TGEN_ASSERT(driver);
+
+    tgen_info("generator timer expired");
+    _tgendriver_generateNextTransfer(driver, generator);
+
+    /* timer was a one time event, so it can be canceled and freed */
+    return TRUE;
+}
+

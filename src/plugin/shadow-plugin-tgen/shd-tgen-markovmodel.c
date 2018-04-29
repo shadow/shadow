@@ -668,7 +668,7 @@ TGenMarkovModel* tgenmarkovmodel_new(const gchar* modelPath) {
         return NULL;
     }
 
-    tgen_info("Successfully validated markov model graph at"
+    tgen_info("Successfully validated markov model graph at "
             "path '%s', found start vertex at index %i", modelPath, (int)mmodel->startVertexID);
 
     return mmodel;

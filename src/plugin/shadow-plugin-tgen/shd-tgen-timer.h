@@ -11,7 +11,7 @@ typedef struct _TGenTimer TGenTimer;
 /* return TRUE to cancel the timer, FALSE to continue the timer as originally configured */
 typedef gboolean (*TGenTimer_notifyExpiredFunc)(gpointer data1, gpointer data2);
 
-TGenTimer* tgentimer_new(guint64 milliseconds, gboolean isPersistent,
+TGenTimer* tgentimer_new(guint64 microseconds, gboolean isPersistent,
         TGenTimer_notifyExpiredFunc notify, gpointer data1, gpointer data2,
         GDestroyNotify destructData1, GDestroyNotify destructData2);
 void tgentimer_ref(TGenTimer* timer);

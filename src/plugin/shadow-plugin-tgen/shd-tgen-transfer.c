@@ -1074,17 +1074,22 @@ _tgentransfer_schedStartPause(TGenTransfer *transfer, int32_t micros)
     g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
     g_assert(transfer->schedule);
     g_assert(micros >= 0);
+
+    guint64 microsecondsPause = (guint64)micros;
+
     if (!transfer->schedule->timer) {
+        tgen_debug("Creating new Sched timer for %"G_GUINT64_FORMAT" microseconds", microsecondsPause);
         tgentransfer_ref(transfer);
-        /* The initial timeout isn't important since we will set it later in
-         * the function body */
-        transfer->schedule->timer = tgentimer_new(5000, FALSE,
+        transfer->schedule->timer = tgentimer_new(microsecondsPause, FALSE,
                 _tgentransfer_schedOnTimerExpired,
                 transfer, NULL, (GDestroyNotify)tgentransfer_unref, NULL);
+    } else {
+        tgen_debug("Arming existing Sched timer for %"G_GUINT64_FORMAT" microseconds", microsecondsPause);
+        tgentimer_settime_micros(transfer->schedule->timer, microsecondsPause);
     }
+
     g_assert(transfer->schedule->timer);
-    tgen_debug("Setting a Sched timer for %dus", micros);
-    tgentimer_settime_micros(transfer->schedule->timer, micros);
+
     tgendriver_registerTransferPause(transfer->data1, transfer->schedule->timer);
     transfer->schedule->timerSet = TRUE;
     transfer->schedule->goneToSleepOnce = TRUE;
