@@ -192,6 +192,7 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
     }
 
     if(!peers) {
+        /* FIXME we should handle this more gracefully than error */
         tgen_error("missing peers for transfer action; note that peers must be specified in "
                 "either the start action, or in *every* transfer action");
     }
@@ -259,6 +260,46 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
 
     /* release our transport pointer reference, the transfer should hold one */
     tgentransport_unref(transport);
+}
+
+static void _tgendriver_initiateGenerator(TGenDriver* driver, TGenAction* action) {
+    TGEN_ASSERT(driver);
+
+    // XXX only try once for now, remove before final
+    driver->clientHasEnded = TRUE;
+
+    TGenPool* peers = tgenaction_getPeers(action);
+    if (!peers) {
+        peers = tgenaction_getPeers(driver->startAction);
+    }
+
+    if(!peers) {
+        /* FIXME we should handle this more gracefully than error */
+        tgen_error("missing peers for generator action; note that peers must be specified in "
+                "either the start action, or in *every* generate action");
+    }
+
+    TGenPeer* proxy = tgenaction_getSocksProxy(driver->startAction);
+
+    gchar* streamModelPath = NULL;
+    gchar* packetModelPath = NULL;
+    tgenaction_getGeneratorModelPaths(action, &streamModelPath, &packetModelPath);
+
+    TGenGenerator* generator = tgengenerator_new(streamModelPath, packetModelPath, peers);
+
+    if(!generator) {
+        tgen_warning("failed to initialize generator action, skipping");
+        _tgendriver_continueNextActions(driver, action);
+        return;
+    }
+
+    gboolean isDone = tgengenerator_nextStream(generator);
+
+    if(isDone) {
+        tgengenerator_unref(generator);
+    } else {
+        /* TODO create the transport and the transfer of type schedule for this stream */
+    }
 }
 
 void
@@ -360,6 +401,10 @@ static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action) {
         }
         case TGEN_ACTION_TRANSFER: {
             _tgendriver_initiateTransfer(driver, action);
+            break;
+        }
+        case TGEN_ACTION_GENERATE: {
+            _tgendriver_initiateGenerator(driver, action);
             break;
         }
         case TGEN_ACTION_END: {

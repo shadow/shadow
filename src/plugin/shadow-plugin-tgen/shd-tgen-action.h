@@ -12,6 +12,7 @@ typedef enum _TGenActionType {
     TGEN_ACTION_END,
     TGEN_ACTION_PAUSE,
     TGEN_ACTION_TRANSFER,
+    TGEN_ACTION_GENERATE,
 } TGenActionType;
 
 typedef struct _TGenAction TGenAction;
@@ -27,6 +28,8 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
         const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr,
         const gchar* localscheduleStr, const gchar* remotescheduleStr,
         GError** error);
+TGenAction* tgenaction_newGenerateAction(const gchar* streamModelPath, const gchar* packetModelPath,
+        const gchar* peersStr, GError** error);
 
 void tgenaction_ref(TGenAction* action);
 void tgenaction_unref(TGenAction* action);
@@ -46,6 +49,10 @@ void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* type
         TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64 *ourSizeOut,
         guint64 *theirSizeOut, guint64* timeoutOut, guint64* stalloutOut,
         gchar** localSchedule, gchar** remoteSchedule);
+
+void tgenaction_getGeneratorModelPaths(TGenAction* action,
+        gchar** streamModelPathStr, gchar** packetModelPathStr);
+
 TGenPool* tgenaction_getPeers(TGenAction* action);
 
 guint64 tgenaction_getEndTimeMillis(TGenAction* action);

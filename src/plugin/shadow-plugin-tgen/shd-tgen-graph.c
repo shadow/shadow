@@ -26,6 +26,8 @@ typedef enum {
     TGEN_VA_THEIRSIZE = 1 << 16,
     TGEN_VA_LOCALSCHED = 1 << 17,
     TGEN_VA_REMOTESCHED = 1 << 18,
+    TGEN_VA_STREAMMODELPATH = 1 << 19,
+    TGEN_VA_PACKETMODELPATH = 1 << 20,
 } AttributeFlags;
 
 struct _TGenGraph {
@@ -378,6 +380,30 @@ static GError* _tgengraph_parseTransferVertex(TGenGraph* g, const gchar* idStr,
     return error;
 }
 
+static GError* _tgengraph_parseGenerateVertex(TGenGraph* g, const gchar* idStr,
+        igraph_integer_t vertexIndex) {
+    TGEN_ASSERT(g);
+
+    const gchar* streamModelPath = (g->knownAttributes&TGEN_VA_STREAMMODELPATH) ?
+            VAS(g->graph, "streammodelpath", vertexIndex) : NULL;
+    const gchar* packetModelPath = (g->knownAttributes&TGEN_VA_PACKETMODELPATH) ?
+            VAS(g->graph, "packetmodelpath", vertexIndex) : NULL;
+    const gchar* peersStr = (g->knownAttributes&TGEN_VA_PEERS) ?
+            VAS(g->graph, "peers", vertexIndex) : NULL;
+
+    tgen_debug("found vertex %li (%s), streammodelpath=%s packetmodelpath=%s peers=%s",
+            (glong)vertexIndex, streamModelPath, packetModelPath, peersStr);
+
+    GError* error = NULL;
+
+    TGenAction* a = tgenaction_newGenerateAction(streamModelPath, packetModelPath, peersStr, &error);
+    if(a) {
+        _tgengraph_storeAction(g, a, vertexIndex);
+    }
+
+    return error;
+}
+
 static GError* _tgengraph_parseGraphVertices(TGenGraph* g) {
     TGEN_ASSERT(g);
 
@@ -417,6 +443,8 @@ static GError* _tgengraph_parseGraphVertices(TGenGraph* g) {
             error = _tgengraph_parsePauseVertex(g, idStr, vertexIndex);
         } else if(g_strstr_len(idStr, (gssize)-1, "transfer")) {
             error = _tgengraph_parseTransferVertex(g, idStr, vertexIndex);
+        } else if(g_strstr_len(idStr, (gssize)-1, "generate")) {
+            error = _tgengraph_parseGenerateVertex(g, idStr, vertexIndex);
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
                     "found vertex %li (%s) with an unknown action id '%s'",
@@ -487,6 +515,10 @@ static AttributeFlags _tgengraph_vertexAttributeToFlag(const gchar* stringAttrib
             return TGEN_VA_LOCALSCHED;
         } else if(!g_ascii_strcasecmp(stringAttribute, "remoteschedule")) {
             return TGEN_VA_REMOTESCHED;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "streammodelpath")) {
+            return TGEN_VA_STREAMMODELPATH;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "packetmodelpath")) {
+            return TGEN_VA_PACKETMODELPATH;
         }
     }
     return TGEN_A_NONE;

@@ -5,10 +5,11 @@ cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
 set(tgen_sources
     shd-tgen-action.c
     shd-tgen-driver.c
+    shd-tgen-generator.c
     shd-tgen-graph.c
     shd-tgen-io.c
     shd-tgen-main.c
-    shd-tgen-mmodel.c
+    shd-tgen-markovmodel.c
     shd-tgen-peer.c
     shd-tgen-pool.c
     shd-tgen-server.c

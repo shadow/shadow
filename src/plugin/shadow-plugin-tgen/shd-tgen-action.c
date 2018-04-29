@@ -47,6 +47,13 @@ typedef struct _TGenActionTransferData {
     gchar* remoteSchedule;
 } TGenActionTransferData;
 
+typedef struct _TGenActionGenerateData {
+    TGenTransferType type;
+    gchar* streamModelPath;
+    gchar* packetModelPath;
+    TGenPool* peers;
+} TGenActionGenerateData;
+
 struct _TGenAction {
     TGenActionType type;
     gpointer key;
@@ -435,6 +442,16 @@ static void _tgenaction_free(TGenAction* action) {
             g_free(data->remoteSchedule);
             data->remoteSchedule = NULL;
         }
+    } else if(action->type == TGEN_ACTION_GENERATE) {
+        TGenActionGenerateData* data = (TGenActionGenerateData*) action->data;
+        if(data->streamModelPath) {
+            g_free(data->streamModelPath);
+            data->streamModelPath = NULL;
+        }
+        if(data->packetModelPath) {
+            g_free(data->packetModelPath);
+            data->packetModelPath = NULL;
+        }
     }
 
     if(action->data) {
@@ -803,6 +820,63 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
 
 }
 
+TGenAction* tgenaction_newGenerateAction(const gchar* streamModelPath, const gchar* packetModelPath,
+        const gchar* peersStr, GError** error) {
+    g_assert(error);
+
+    gboolean streamPathIsValid = streamModelPath && g_ascii_strncasecmp(streamModelPath, "\0", (gsize)1);
+    if(!streamPathIsValid) {
+        *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                "generate action missing required attribute 'streammodelpath'");
+        return NULL;
+    }
+
+    if(!g_file_test(streamModelPath, G_FILE_TEST_EXISTS|G_FILE_TEST_IS_REGULAR)) {
+        *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                "generate action found invalid path for 'streammodelpath': %s", streamModelPath);
+        return NULL;
+    }
+
+    gboolean packetPathIsValid = packetModelPath && g_ascii_strncasecmp(packetModelPath, "\0", (gsize)1);
+    if(!packetPathIsValid) {
+        *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                "generate action missing required attribute 'packetmodelpath'");
+        return NULL;
+    }
+
+    if(!g_file_test(packetModelPath, G_FILE_TEST_EXISTS|G_FILE_TEST_IS_REGULAR)) {
+        *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
+                "generate action found invalid path for 'packetmodelpath': %s", packetModelPath);
+        return NULL;
+    }
+
+    /* peers are optional */
+    TGenPool* peerPool = NULL;
+    if (peersStr && g_ascii_strncasecmp(peersStr, "\0", (gsize) 1)) {
+        peerPool = tgenpool_new((GDestroyNotify)tgenpeer_unref);
+        *error = _tgenaction_handlePeers("peers", peersStr, peerPool);
+        if (*error) {
+            tgenpool_unref(peerPool);
+            return NULL;
+        }
+    }
+
+    TGenAction* action = g_new0(TGenAction, 1);
+    action->magic = TGEN_MAGIC;
+    action->refcount = 1;
+
+    action->type = TGEN_ACTION_GENERATE;
+
+    TGenActionGenerateData* data = g_new0(TGenActionGenerateData, 1);
+    data->streamModelPath = g_strdup(streamModelPath);
+    data->packetModelPath = g_strdup(packetModelPath);
+    data->peers = peerPool;
+
+    action->data = data;
+
+    return action;
+}
+
 void tgenaction_setKey(TGenAction* action, gpointer key) {
     TGEN_ASSERT(action);
     action->key = key;
@@ -906,12 +980,29 @@ void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* type
     }
 }
 
+void tgenaction_getGeneratorModelPaths(TGenAction* action,
+        gchar** streamModelPathStr, gchar** packetModelPathStr) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_GENERATE);
+
+    TGenActionGenerateData* data = (TGenActionGenerateData*)action->data;
+
+    if(streamModelPathStr) {
+        *streamModelPathStr = data->streamModelPath;
+    }
+    if(packetModelPathStr) {
+        *packetModelPathStr = data->packetModelPath;
+    }
+}
+
 TGenPool* tgenaction_getPeers(TGenAction* action) {
     TGEN_ASSERT(action);
     g_assert(action->data);
 
     if(action->type == TGEN_ACTION_TRANSFER) {
         return ((TGenActionTransferData*)action->data)->peers;
+    } else if(action->type == TGEN_ACTION_GENERATE) {
+        return ((TGenActionGenerateData*)action->data)->peers;
     } else if(action->type == TGEN_ACTION_START) {
         return ((TGenActionStartData*)action->data)->peers;
     } else {
