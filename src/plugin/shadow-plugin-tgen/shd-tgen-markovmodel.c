@@ -2,6 +2,7 @@
  * See LICENSE for licensing information
  */
 
+#include <math.h>
 #include <igraph.h>
 
 #include "shd-tgen.h"
@@ -45,8 +46,10 @@ enum _VertexID {
 struct _TGenMarkovModel {
     gint refcount;
 
-    igraph_t *graph;
-    igraph_integer_t startVertexID;
+    igraph_t* graph;
+    igraph_integer_t startVertexIndex;
+    igraph_integer_t currentStateVertexIndex;
+    gboolean foundEndState;
 
     guint magic;
 };
@@ -648,7 +651,7 @@ TGenMarkovModel* tgenmarkovmodel_new(const gchar* modelPath) {
 
     tgen_info("Starting graph validation on markov model at path '%s'", modelPath);
 
-    gboolean verticesPassed = _tgenmarkovmodel_validateVertices(mmodel, &(mmodel->startVertexID));
+    gboolean verticesPassed = _tgenmarkovmodel_validateVertices(mmodel, &(mmodel->startVertexIndex));
     if(verticesPassed) {
         tgen_info("Markov model at path '%s' passed vertex validation", modelPath);
     } else {
@@ -668,8 +671,306 @@ TGenMarkovModel* tgenmarkovmodel_new(const gchar* modelPath) {
         return NULL;
     }
 
+    mmodel->currentStateVertexIndex = mmodel->startVertexIndex;
+
     tgen_info("Successfully validated markov model graph at "
-            "path '%s', found start vertex at index %i", modelPath, (int)mmodel->startVertexID);
+            "path '%s', found start vertex at index %i", modelPath, (int)mmodel->startVertexIndex);
 
     return mmodel;
+}
+
+static gboolean _tgenmarkovmodel_chooseEdge(TGenMarkovModel* mmodel, EdgeType type,
+        igraph_integer_t fromVertexIndex,
+        igraph_integer_t* edgeIndexOut, igraph_integer_t* toVertexIndexOut) {
+    TGEN_ASSERT(mmodel);
+
+    int result = 0;
+    gboolean isSuccess = FALSE;
+
+    /* first we 'select' the incident edges, that is, those to which vertexIndex is connected */
+    igraph_es_t edgeSelector;
+    result = igraph_es_incident(&edgeSelector, fromVertexIndex, IGRAPH_OUT);
+
+    if(result != IGRAPH_SUCCESS) {
+        tgen_warning("igraph_es_incident return non-success code %i", result);
+        return FALSE;
+    }
+
+    /* now we set up an iterator on these edges */
+    igraph_eit_t edgeIterator;
+    result = igraph_eit_create(mmodel->graph, edgeSelector, &edgeIterator);
+
+    if(result != IGRAPH_SUCCESS) {
+        tgen_warning("igraph_eit_create return non-success code %i", result);
+        igraph_es_destroy(&edgeSelector);
+        return FALSE;
+    }
+
+    /* iterate over the edges to get the total weight, filtering by edge type */
+    gdouble totalWeight = 0;
+    guint numEdgesTotal = 0;
+    guint numEdgesType = 0;
+
+    /* iterate */
+    while (!IGRAPH_EIT_END(edgeIterator)) {
+        igraph_integer_t edgeIndex = IGRAPH_EIT_GET(edgeIterator);
+        numEdgesTotal++;
+
+        const gchar* typeStr;
+        isSuccess = _tgenmarkovmodel_findEdgeAttributeString(mmodel, edgeIndex, EDGE_ATTR_TYPE, &typeStr);
+        g_assert(isSuccess);
+
+        if(_tgenmarkovmodel_edgeTypeIsEqual(typeStr, type)) {
+            numEdgesType++;
+
+            gdouble weightValue = 0;
+            isSuccess = _tgenmarkovmodel_findEdgeAttributeDouble(mmodel, edgeIndex, EDGE_ATTR_WEIGHT, &weightValue);
+            g_assert(isSuccess);
+
+            totalWeight += weightValue;
+        }
+
+        IGRAPH_EIT_NEXT(edgeIterator);
+    }
+
+    tgen_debug("We found a total weight of %f from %u of %u edges that matched type '%s'",
+            totalWeight, numEdgesType, numEdgesTotal, _tgenmarkovmodel_edgeTypeToString(type));
+
+    /* select a random weight value */
+    gdouble randomValue = g_random_double_range((gdouble)0.0, totalWeight);
+
+    tgen_debug("Using random value %f from total weight %f", randomValue, totalWeight);
+
+    /* now iterate again to actually select one of the edges */
+    igraph_integer_t chosenEdgeIndex = 0;
+    gdouble cumulativeWeight = 0;
+    gboolean foundEdge = FALSE;
+
+    /* reset the iterator and iterate again */
+    IGRAPH_EIT_RESET(edgeIterator);
+    while (!IGRAPH_EIT_END(edgeIterator)) {
+        igraph_integer_t edgeIndex = IGRAPH_EIT_GET(edgeIterator);
+
+        const gchar* typeStr;
+        isSuccess = _tgenmarkovmodel_findEdgeAttributeString(mmodel, edgeIndex, EDGE_ATTR_TYPE, &typeStr);
+        g_assert(isSuccess);
+
+        if(_tgenmarkovmodel_edgeTypeIsEqual(typeStr, type)) {
+            gdouble weightValue = 0;
+            isSuccess = _tgenmarkovmodel_findEdgeAttributeDouble(mmodel, edgeIndex, EDGE_ATTR_WEIGHT, &weightValue);
+            g_assert(isSuccess);
+
+            cumulativeWeight += weightValue;
+
+            if(cumulativeWeight >= randomValue) {
+                foundEdge = TRUE;
+                chosenEdgeIndex = edgeIndex;
+                break;
+            }
+        }
+
+        IGRAPH_EIT_NEXT(edgeIterator);
+    }
+
+    /* clean up */
+    igraph_es_destroy(&edgeSelector);
+    igraph_eit_destroy(&edgeIterator);
+
+    if(!foundEdge) {
+        tgen_warning("Unable to choose random outgoing edge from vertex %i, "
+                "%u of %u edges matched edge type '%s'. "
+                "Total weight was %f, cumulative weight was %f, and randomValue was %f.",
+                (int)fromVertexIndex, numEdgesType, numEdgesTotal,
+                _tgenmarkovmodel_edgeTypeToString(type),
+                totalWeight, cumulativeWeight, randomValue);
+        return FALSE;
+    }
+
+    if(edgeIndexOut) {
+        *edgeIndexOut = chosenEdgeIndex;
+    }
+
+    if(toVertexIndexOut) {
+        /* get the other vertex that we chose */
+         igraph_integer_t from, to;
+         result = igraph_edge(mmodel->graph, chosenEdgeIndex, &from, &to);
+
+         if(result != IGRAPH_SUCCESS) {
+             tgen_warning("igraph_edge return non-success code %i", result);
+             return FALSE;
+         }
+
+         *toVertexIndexOut = to;
+    }
+
+    return TRUE;
+}
+
+static gboolean _tgenmarkovmodel_chooseTransition(TGenMarkovModel* mmodel,
+        igraph_integer_t fromVertexIndex,
+        igraph_integer_t* transitionEdgeIndex, igraph_integer_t* transitionStateVertexIndex) {
+    TGEN_ASSERT(mmodel);
+    return _tgenmarkovmodel_chooseEdge(mmodel, EDGE_TYPE_TRANSITION, fromVertexIndex,
+            transitionEdgeIndex, transitionStateVertexIndex);
+}
+
+static gboolean _tgenmarkovmodel_chooseEmission(TGenMarkovModel* mmodel,
+        igraph_integer_t fromVertexIndex,
+        igraph_integer_t* emissionEdgeIndex, igraph_integer_t* emissionObservationVertexIndex) {
+    TGEN_ASSERT(mmodel);
+    return _tgenmarkovmodel_chooseEdge(mmodel, EDGE_TYPE_EMISSION, fromVertexIndex,
+            emissionEdgeIndex, emissionObservationVertexIndex);
+}
+
+static gdouble _tgenmarkovmodel_generateLogNormalValue(gdouble mu, gdouble sigma) {
+    /* first get a normal value from mu and sigma, using the Box-Muller method */
+    gdouble u = g_random_double_range((gdouble)0.0001, (gdouble)0.9999);
+    gdouble v = g_random_double_range((gdouble)0.0001, (gdouble)0.9999);
+
+    /* this gives us 2 normally-distributed values */
+    gdouble two = (gdouble)2;
+    gdouble x = sqrt(-two * log(u)) * cos(two * M_PI * v);
+    //double y = sqrt(-two * log(u)) * sin(two * M_PI * v);
+
+    /* location is mu, scale is sigma */
+    return exp(mu + (sigma * x));
+}
+
+static gdouble _tgenmarkovmodel_generateExponentialValue(gdouble lambda) {
+    /* inverse transform sampling */
+    gdouble clampedUniform = g_random_double_range((gdouble)0.0001, (gdouble)0.9999);
+    return -log(clampedUniform)/lambda;
+}
+
+static guint64 _tgenmarkovmodel_generateDelay(TGenMarkovModel* mmodel,
+        igraph_integer_t edgeIndex) {
+    TGEN_ASSERT(mmodel);
+
+    /* we already validated the attributes, so assert that they exist here */
+    gboolean isSuccess = FALSE;
+
+    const gchar* typeStr;
+    isSuccess = _tgenmarkovmodel_findEdgeAttributeString(mmodel, edgeIndex, EDGE_ATTR_TYPE, &typeStr);
+    g_assert(isSuccess);
+    g_assert(_tgenmarkovmodel_edgeTypeIsEqual(typeStr, EDGE_TYPE_EMISSION));
+
+    gdouble muValue = 0;
+    isSuccess = _tgenmarkovmodel_findEdgeAttributeDouble(mmodel, edgeIndex, EDGE_ATTR_LOGNORMMU, &muValue);
+    g_assert(isSuccess);
+
+    gdouble sigmaValue = 0;
+    isSuccess = _tgenmarkovmodel_findEdgeAttributeDouble(mmodel, edgeIndex, EDGE_ATTR_LOGNORMSIGMA, &sigmaValue);
+    g_assert(isSuccess);
+
+    gdouble generatedValue = 0;
+    if(sigmaValue > 0 || muValue > 0) {
+        generatedValue = _tgenmarkovmodel_generateLogNormalValue(muValue, sigmaValue);
+    } else {
+        gdouble lambdaValue = 0;
+        isSuccess = _tgenmarkovmodel_findEdgeAttributeDouble(mmodel, edgeIndex, EDGE_ATTR_EXPLAMBDA, &lambdaValue);
+        g_assert(isSuccess);
+
+        generatedValue = _tgenmarkovmodel_generateExponentialValue(lambdaValue);
+    }
+
+    if(generatedValue > UINT64_MAX) {
+        return (guint64)UINT64_MAX;
+    } else {
+        return (guint64)generatedValue;
+    }
+}
+
+static Observation _tgenmarkovmodel_vertexToObservation(TGenMarkovModel* mmodel,
+        igraph_integer_t vertexIndex) {
+    TGEN_ASSERT(mmodel);
+
+    /* we already validated the attributes, so assert that they exist here */
+    gboolean isSuccess = FALSE;
+
+    const gchar* typeStr;
+    isSuccess = _tgenmarkovmodel_findVertexAttributeString(mmodel, vertexIndex, VERTEX_ATTR_TYPE, &typeStr);
+    g_assert(isSuccess);
+    g_assert(_tgenmarkovmodel_vertexTypeIsEqual(typeStr, VERTEX_TYPE_OBSERVATION));
+
+    const gchar* vidStr;
+    isSuccess = _tgenmarkovmodel_findVertexAttributeString(mmodel, vertexIndex, VERTEX_ATTR_ID, &vidStr);
+    g_assert(isSuccess);
+
+    if(_tgenmarkovmodel_vertexIDIsEqual(vidStr, VERTEX_ID_PACKET_TO_ORIGIN)) {
+        return OBSERVATION_PACKET_TO_ORIGIN;
+    } else if(_tgenmarkovmodel_vertexIDIsEqual(vidStr, VERTEX_ID_PACKET_TO_SERVER)) {
+        return OBSERVATION_PACKET_TO_SERVER;
+    } else if(_tgenmarkovmodel_vertexIDIsEqual(vidStr, VERTEX_ID_STREAM)) {
+        return OBSERVATION_STREAM;
+    } else {
+        return OBSERVATION_END;
+    }
+}
+
+Observation tgenmarkovmodel_getNextObservation(TGenMarkovModel* mmodel, guint64* delay) {
+    TGEN_ASSERT(mmodel);
+
+    if(mmodel->foundEndState) {
+        return OBSERVATION_END;
+    }
+
+    tgen_debug("About to choose transition from vertex %li", (glong)mmodel->currentStateVertexIndex);
+
+    /* first choose the next state through a transition edge */
+    igraph_integer_t nextStateVertexIndex = 0;
+    gboolean isSuccess = _tgenmarkovmodel_chooseTransition(mmodel,
+            mmodel->currentStateVertexIndex, NULL, &nextStateVertexIndex);
+
+    if(!isSuccess) {
+        const gchar* fromIDStr;
+        _tgenmarkovmodel_findVertexAttributeString(mmodel,
+                mmodel->currentStateVertexIndex, VERTEX_ATTR_ID, &fromIDStr);
+
+        tgen_warning("Failed to choose a transition edge from state %li (%s)",
+                (glong)mmodel->currentStateVertexIndex, fromIDStr);
+        tgen_warning("Prematurely returning end observation");
+
+        return OBSERVATION_END;
+    }
+
+    tgen_debug("Found transition to vertex %li", (glong)nextStateVertexIndex);
+
+    /* update our current state */
+    mmodel->currentStateVertexIndex = nextStateVertexIndex;
+
+    tgen_debug("About to choose emission from vertex %li", (glong)mmodel->currentStateVertexIndex);
+
+    /* now choose an observation through an emission edge */
+    igraph_integer_t emissionEdgeIndex = 0;
+    igraph_integer_t emissionObservationVertexIndex = 0;
+    isSuccess = _tgenmarkovmodel_chooseEmission(mmodel, mmodel->currentStateVertexIndex,
+            &emissionEdgeIndex, &emissionObservationVertexIndex);
+
+    if(!isSuccess) {
+        const gchar* fromIDStr;
+        _tgenmarkovmodel_findVertexAttributeString(mmodel,
+                mmodel->currentStateVertexIndex, VERTEX_ATTR_ID, &fromIDStr);
+
+        tgen_warning("Failed to choose an emission edge from state %li (%s)",
+                (glong)mmodel->currentStateVertexIndex, fromIDStr);
+        tgen_warning("Prematurely returning end observation");
+
+        return OBSERVATION_END;
+    }
+
+    tgen_debug("Found emission on edge %li and observation on vertex %li",
+            (glong)emissionEdgeIndex, (glong)emissionObservationVertexIndex);
+
+    if(delay) {
+        *delay = _tgenmarkovmodel_generateDelay(mmodel, emissionEdgeIndex);
+    }
+
+    return _tgenmarkovmodel_vertexToObservation(mmodel, emissionObservationVertexIndex);
+}
+
+void tgenmarkovmodel_reset(TGenMarkovModel* mmodel) {
+    TGEN_ASSERT(mmodel);
+
+    mmodel->foundEndState = FALSE;
+    mmodel->currentStateVertexIndex = mmodel->startVertexIndex;
 }

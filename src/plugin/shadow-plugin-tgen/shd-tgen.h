@@ -32,7 +32,11 @@ extern TGenLogFunc tgenLogFunc;
 #define tgen_warning(...)   if(tgenLogFunc){tgenLogFunc(G_LOG_LEVEL_WARNING, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__);}
 #define tgen_message(...)   if(tgenLogFunc){tgenLogFunc(G_LOG_LEVEL_MESSAGE, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__);}
 #define tgen_info(...)      if(tgenLogFunc){tgenLogFunc(G_LOG_LEVEL_INFO, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__);}
+#ifdef DEBUG
 #define tgen_debug(...)     if(tgenLogFunc){tgenLogFunc(G_LOG_LEVEL_DEBUG, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__);}
+#else
+#define tgen_debug(...)
+#endif
 
 #include "shd-tgen-io.h"
 #include "shd-tgen-timer.h"

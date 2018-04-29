@@ -93,6 +93,84 @@ gboolean tgengenerator_hasOutstandingTransfers(TGenGenerator* gen) {
     return (gen->numTransfersCreated >= gen->numTransfersCompleted) ? TRUE : FALSE;
 }
 
+static void _tgengenerator_generatePacketSchedules(TGenGenerator* gen,
+        GString* serverBuffer, GString* originBuffer) {
+    TGEN_ASSERT(gen);
+    g_assert(serverBuffer);
+    g_assert(originBuffer);
+
+    gint32 nextServerPacketDelay = 0;
+    gint32 nextOriginpacketDelay = 0;
+
+    guint numServerPackets = 0;
+    guint numOriginPackets = 0;
+
+    /* make sure the packet model is ready to generate more */
+    tgenmarkovmodel_reset(gen->packetModel);
+
+    while(TRUE) {
+        tgen_debug("Generating next packet observation");
+        guint64 packetDelay = 0;
+        Observation obs = tgenmarkovmodel_getNextObservation(gen->packetModel, &packetDelay);
+
+        /* keep track of cumulative delay for each packet. we need this because
+         * we are actually computing independent delays for the server and the origin.
+         * we take care not to overflow the int32 type. */
+        if(packetDelay > INT32_MAX) {
+            nextOriginpacketDelay = INT32_MAX;
+            nextServerPacketDelay = INT32_MAX;
+        } else {
+            if(((guint64)nextOriginpacketDelay)+packetDelay > INT32_MAX) {
+                nextOriginpacketDelay = INT32_MAX;
+            } else {
+                nextOriginpacketDelay += (gint32)packetDelay;
+            }
+
+            if(((guint64)nextServerPacketDelay)+packetDelay > INT32_MAX) {
+                nextServerPacketDelay = INT32_MAX;
+            } else {
+                nextServerPacketDelay += (gint32)packetDelay;
+            }
+        }
+
+        /* now build the schedule */
+        if(obs == OBSERVATION_PACKET_TO_ORIGIN) {
+            tgen_debug("Found packet to origin observation with packet delay %"G_GUINT64_FORMAT, packetDelay);
+
+            /* packet to origin means the server sent it.
+             * so add a packet to the server schedule. */
+            g_string_append_printf(serverBuffer, "%s%"G_GINT32_FORMAT,
+                    serverBuffer->len > 0 ? "," : "", nextServerPacketDelay);
+
+            nextServerPacketDelay = 0;
+            numServerPackets++;
+            gen->numPacketsGenerated++;
+        } else if(obs == OBSERVATION_PACKET_TO_SERVER) {
+            tgen_debug("Found packet to server observation with packet delay %"G_GUINT64_FORMAT, packetDelay);
+
+            /* packet to server means the origin sent it.
+             * so add a packet to the origin schedule. */
+            g_string_append_printf(originBuffer, "%s%"G_GINT32_FORMAT,
+                    originBuffer->len > 0 ? "," : "", nextOriginpacketDelay);
+
+            nextOriginpacketDelay = 0;
+            numOriginPackets++;
+            gen->numPacketsGenerated++;
+        } else {
+            /* we observed an end state, so the packet stream is done. */
+            tgen_debug("Found packet end observation");
+            break;
+        }
+    }
+
+    tgen_info("Generated origin packet schedule of size %"G_GSIZE_FORMAT" "
+            "with %u packets (%u bytes) "
+            "and server packet schedule of size %"G_GSIZE_FORMAT" "
+            "with %u packets (%u bytes)",
+            originBuffer->len, numOriginPackets, numOriginPackets*TGEN_MMODEL_PACKET_DATA_SIZE,
+            serverBuffer->len, numServerPackets, numServerPackets*TGEN_MMODEL_PACKET_DATA_SIZE);
+}
+
 /**
  * Compute the packet schedules for the next stream using the configured
  * markov models, and the pause time that we should wait after this stream
@@ -107,32 +185,52 @@ gboolean tgengenerator_hasOutstandingTransfers(TGenGenerator* gen) {
  * returns FALSE if we have reached the end of the stream flow for this
  *         iteration of the model. The generator can be unref'd and free'd.
  */
-gboolean tgengenerator_nextStream(TGenGenerator* gen,
+gboolean tgengenerator_generateStream(TGenGenerator* gen,
         gchar** localSchedule, gchar** remoteSchedule, guint64* pauseTimeUSec) {
     TGEN_ASSERT(gen);
 
-    /* TODO this is a short term hard code for testing other code first */
-
-    if(gen->numStreamsGenerated >= 50) {
-        gen->reachedEndState = TRUE;
+    if(gen->reachedEndState) {
         return FALSE;
     }
 
-    if(localSchedule) {
-        *localSchedule = g_strdup("1000000,1000000");
+    tgen_debug("Generating next stream observation");
+    guint64 streamDelay = 0;
+    Observation obs = tgenmarkovmodel_getNextObservation(gen->streamModel, &streamDelay);
+
+    if(obs == OBSERVATION_STREAM) {
+        tgen_debug("Found stream observation with stream delay %"G_GUINT64_FORMAT, streamDelay);
+
+        /* we should create a new stream now, and then wait streamDelay before
+         * creating the next one. We need packet schedules for the stream.
+         * start the buffers with 100k to avoid too many reallocs. */
+        GString* serverBuffer = g_string_sized_new(100000);
+        GString* originBuffer = g_string_sized_new(100000);
+        _tgengenerator_generatePacketSchedules(gen, serverBuffer, originBuffer);
+
+        if(localSchedule) {
+            *localSchedule = g_string_free(originBuffer, FALSE);
+        } else {
+            g_string_free(originBuffer, TRUE);
+        }
+
+        if(remoteSchedule) {
+            *remoteSchedule = g_string_free(serverBuffer, FALSE);
+        } else {
+            g_string_free(serverBuffer, TRUE);
+        }
+
+        if(pauseTimeUSec) {
+            *pauseTimeUSec = streamDelay;
+        }
+
+        gen->numStreamsGenerated++;
+        return TRUE;
+    } else {
+        tgen_debug("Found stream end observation");
+
+        /* we got to the end, we should not create a transfer */
+        gen->reachedEndState = TRUE;
+        return FALSE;
     }
-
-    if(remoteSchedule) {
-        *remoteSchedule = g_strdup("1000000,1000000,1000000,1000000,1000000,1000000,1000000,1000000,1000000,1000000");
-    }
-
-    if(pauseTimeUSec) {
-        *pauseTimeUSec = 1000000;
-    }
-
-    gen->numStreamsGenerated++;
-    gen->numPacketsGenerated += 12;
-
-    return TRUE;
 }
 

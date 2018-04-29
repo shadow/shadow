@@ -343,7 +343,7 @@ static void _tgendriver_generateNextTransfer(TGenDriver* driver, TGenGenerator* 
     gchar* localSchedule = NULL;
     gchar* remoteSchedule = NULL;
     guint64 delayTimeUSec = 0;
-    gboolean shouldCreateStream = tgengenerator_nextStream(generator,
+    gboolean shouldCreateStream = tgengenerator_generateStream(generator,
             &localSchedule, &remoteSchedule, &delayTimeUSec);
 
     if(!shouldCreateStream) {

@@ -12,7 +12,7 @@ TGenGenerator* tgengenerator_new(const gchar* streamModelPath, const gchar* pack
 void tgengenerator_ref(TGenGenerator* gen);
 void tgengenerator_unref(TGenGenerator* gen);
 
-gboolean tgengenerator_nextStream(TGenGenerator* gen,
+gboolean tgengenerator_generateStream(TGenGenerator* gen,
         gchar** localSchedule, gchar** remoteSchedule, guint64* pauseTimeUSec);
 
 TGenAction* tgengenerator_getGenerateAction(TGenGenerator* gen);

@@ -11,11 +11,21 @@
  * at the same time for efficiency reasons */
 #define TGEN_MMODEL_MICROS_AT_ONCE 100
 
+typedef enum _Observation Observation;
+enum _Observation {
+    OBSERVATION_PACKET_TO_SERVER,
+    OBSERVATION_PACKET_TO_ORIGIN,
+    OBSERVATION_STREAM,
+    OBSERVATION_END,
+};
+
 typedef struct _TGenMarkovModel TGenMarkovModel;
 
 TGenMarkovModel* tgenmarkovmodel_new(const gchar* modelPath);
 void tgenmarkovmodel_ref(TGenMarkovModel* mmodel);
 void tgenmarkovmodel_unref(TGenMarkovModel* mmodel);
 
+Observation tgenmarkovmodel_getNextObservation(TGenMarkovModel* mmodel, guint64* delay);
+void tgenmarkovmodel_reset(TGenMarkovModel* mmodel);
 
 #endif /* SRC_PLUGIN_SHADOW_PLUGIN_TGEN_SHD_TGEN_MARKOVMODEL_H_ */
