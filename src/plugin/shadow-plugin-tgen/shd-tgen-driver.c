@@ -368,6 +368,8 @@ static void _tgendriver_generateNextTransfer(TGenDriver* driver, TGenGenerator* 
         if(tgengenerator_isDoneGenerating(generator) && numOutstanding <= 0) {
             tgen_info("Generate action complete, continue to next action");
             _tgendriver_continueNextActions(driver, action);
+        } else {
+            tgen_info("Generate action will be complete once all outstanding transfers finish");
         }
 
         tgengenerator_unref(generator);

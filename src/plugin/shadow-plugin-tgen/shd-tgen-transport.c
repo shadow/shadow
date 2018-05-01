@@ -9,6 +9,7 @@
 typedef enum {
     TGEN_XPORT_CONNECT,
     TGEN_XPORT_PROXY_INIT, TGEN_XPORT_PROXY_CHOICE,
+    TGEN_XPORT_PROXY_AUTHREQUEST, TGEN_XPORT_PROXY_AUTHRESPONSE,
     TGEN_XPORT_PROXY_REQUEST, TGEN_XPORT_PROXY_RESPONSEA,
     TGEN_XPORT_PROXY_RESPONSEB, TGEN_XPORT_PROXY_RESPONSEC,
     TGEN_XPORT_PROXY_RESPONSED, TGEN_XPORT_PROXY_RESPONSEE,
@@ -17,6 +18,7 @@ typedef enum {
 
 typedef enum {
     TGEN_XPORT_ERR_NONE, TGEN_XPORT_ERR_PROXY_CHOICE,
+    TGEN_XPORT_ERR_PROXY_AUTH,
     TGEN_XPORT_ERR_PROXY_RECONN, TGEN_XPORT_ERR_PROXY_ADDR,
     TGEN_XPORT_ERR_PROXY_VERSION, TGEN_XPORT_ERR_PROXY_STATUS,
     TGEN_XPORT_ERR_WRITE, TGEN_XPORT_ERR_READ, TGEN_XPORT_ERR_MISC
@@ -96,6 +98,12 @@ static const gchar* _tgentransport_stateToString(TGenTransportState state) {
         case TGEN_XPORT_PROXY_REQUEST: {
             return "REQUEST";
         }
+        case TGEN_XPORT_PROXY_AUTHREQUEST: {
+            return "AUTHREQUEST";
+        }
+        case TGEN_XPORT_PROXY_AUTHRESPONSE: {
+            return "AUTHRESPONSE";
+        }
         case TGEN_XPORT_PROXY_RESPONSEA: {
             return "RESPONSEA";
         }
@@ -128,6 +136,9 @@ static const gchar* _tgentransport_errorToString(TGenTransportError error) {
         }
         case TGEN_XPORT_ERR_PROXY_CHOICE: {
             return "CHOICE";
+        }
+        case TGEN_XPORT_ERR_PROXY_AUTH: {
+            return "AUTH";
         }
         case TGEN_XPORT_ERR_PROXY_RECONN: {
             return "RECONN";
@@ -453,12 +464,16 @@ static TGenEvent _tgentransport_sendSocksInit(TGenTransport* transport) {
     1 socks init client --> server
     \x05 (version 5)
     \x01 (1 supported auth method)
-    \x00 (method is "no auth")
+    \x?? method is \x00 "no auth" or \x02 user/pass if configured
     */
 
     if(!transport->socksBuffer) {
         /* use g_string_new_len to make sure the NULL gets written */
-        transport->socksBuffer = g_string_new_len("\x05\x01\x00", 3);
+        if(transport->username || transport->password) {
+            transport->socksBuffer = g_string_new_len("\x05\x01\x02", 3);
+        } else {
+            transport->socksBuffer = g_string_new_len("\x05\x01\x00", 3);
+        }
         g_assert(transport->socksBuffer->len == 3);
     }
 
@@ -535,21 +550,166 @@ static TGenEvent _tgentransport_receiveSocksChoice(TGenTransport* transport) {
         /* we read it all, we can move on */
         transport->time.proxyChoice = g_get_monotonic_time();
 
-        gboolean supported = (transport->socksBuffer->str[0] == 0x05 && transport->socksBuffer->str[1] == 0x00) ? TRUE : FALSE;
+        gboolean versionSupported = (transport->socksBuffer->str[0] == 0x05) ? TRUE : FALSE;
+        gboolean authSupported = FALSE;
+        if(transport->username || transport->password) {
+            authSupported = (transport->socksBuffer->str[1] == 0x02) ? TRUE : FALSE;
+            if(authSupported) {
+                tgen_debug("Proxy supports username/password authenticated");
+            }
+        } else {
+            authSupported = (transport->socksBuffer->str[1] == 0x00) ? TRUE : FALSE;
+            if(authSupported) {
+                tgen_debug("Proxy supports no authenticated");
+            }
+        }
 
         g_string_free(transport->socksBuffer, TRUE);
         transport->socksBuffer = NULL;
 
-        if(supported) {
+        if(versionSupported && authSupported) {
             tgen_debug("socks choice supported by proxy %s", tgenpeer_toString(transport->proxy));
 
-            _tgentransport_changeState(transport, TGEN_XPORT_PROXY_REQUEST);
+            if(transport->username || transport->password) {
+                /* try to authenticate */
+                _tgentransport_changeState(transport, TGEN_XPORT_PROXY_AUTHREQUEST);
+            } else {
+                /* go straight to request */
+                _tgentransport_changeState(transport, TGEN_XPORT_PROXY_REQUEST);
+            }
+
             return TGEN_EVENT_WRITE;
         } else {
-            tgen_debug("socks choice unsupported by proxy %s", tgenpeer_toString(transport->proxy));
+            tgen_info("socks choice unsupported by proxy %s", tgenpeer_toString(transport->proxy));
 
             _tgentransport_changeState(transport, TGEN_XPORT_ERROR);
             _tgentransport_changeError(transport, TGEN_XPORT_ERR_PROXY_CHOICE);
+            return TGEN_EVENT_NONE;
+        }
+    }
+}
+
+static guint8 _tgentransport_getTruncatedStrLen(gchar* str) {
+    guint8 guint8max = -1;
+    glong len = g_utf8_strlen(str, -1);
+
+    if(len > guint8max) {
+        tgen_warning("truncated string '%s' in proxy handshake from %li to %u bytes",
+                str, len, (guint)guint8max);
+        return guint8max;
+    } else {
+        return (guint8)len;
+    }
+}
+
+static TGenEvent _tgentransport_sendSocksAuth(TGenTransport* transport) {
+    TGEN_ASSERT(transport);
+
+    /*
+    2.5a socks auth request client --> server
+    \x01 (user/pass auth version)
+    uint8 username length (1 byte)
+    (username) (1-255 bytes)
+    uint8 password length (1 byte)
+    (password) (1-255 bytes)
+    */
+
+    if(!transport->socksBuffer) {
+        guint8 userlen = transport->username ? _tgentransport_getTruncatedStrLen(transport->username) : 1;
+        gchar* user = transport->username ? transport->username : "\x00";
+        guint8 passlen = transport->password ? _tgentransport_getTruncatedStrLen(transport->password) : 1;
+        gchar* pass = transport->password ? transport->password : "\x00";
+
+        gchar buffer[255+255+3];
+        memset(buffer, 0, 255+255+3);
+
+        g_memmove(&buffer[0], "\x01", 1);
+        g_memmove(&buffer[1], &userlen, 1);
+        g_memmove(&buffer[2], user, userlen);
+        g_memmove(&buffer[2+userlen], &passlen, 1);
+        g_memmove(&buffer[3+userlen], pass, passlen);
+
+        /* use g_string_new_len to make sure the NULL gets written */
+        transport->socksBuffer = g_string_new_len(&buffer[0], (gssize)3+userlen+passlen);
+        g_assert(transport->socksBuffer->len == (gssize)3+userlen+passlen);
+    }
+
+    gssize bytesSent = tgentransport_write(transport, transport->socksBuffer->str, transport->socksBuffer->len);
+
+    if(bytesSent <= 0 || bytesSent > transport->socksBuffer->len) {
+        /* there was an error of some kind */
+        tgen_debug("there was an error when trying to send socks auth request");
+        g_string_free(transport->socksBuffer, TRUE);
+        transport->socksBuffer = NULL;
+        return TGEN_EVENT_NONE;
+    } else {
+        /* we sent some bytes */
+        transport->socksBuffer = g_string_erase(transport->socksBuffer, 0, bytesSent);
+
+        /* after writing, we may not have written it all and may have some remaining */
+        if(transport->socksBuffer->len > 0) {
+            /* we still have more to send later */
+            tgen_debug("sent partial socks authentication request to proxy %s",
+                    tgenpeer_toString(transport->proxy));
+            return TGEN_EVENT_WRITE;
+        } else {
+            /* we wrote it all, we can move on */
+            tgen_debug("sent socks authentication request to proxy %s",
+                    tgenpeer_toString(transport->proxy));
+
+            g_string_free(transport->socksBuffer, TRUE);
+            transport->socksBuffer = NULL;
+
+            /* the next step is to read the auth response from the server */
+            _tgentransport_changeState(transport, TGEN_XPORT_PROXY_AUTHRESPONSE);
+            return TGEN_EVENT_READ;
+        }
+    }
+}
+
+static TGenEvent _tgentransport_receiveSocksAuth(TGenTransport* transport) {
+    TGEN_ASSERT(transport);
+
+    /*
+    2.5b socks auth response client <-- server
+    \x01 (user/pass auth version)
+    \x00 (1 byte status, 00 for success otherwise fail)
+    */
+
+    _tgentransport_socksReceiveHelper(transport, 2);
+
+    if(!transport->socksBuffer) {
+        /* there was an error of some kind */
+        return TGEN_EVENT_NONE;
+    } else if(transport->socksBuffer->len < 2) {
+        /* we did not get all of the data yet */
+        tgen_debug("received partial socks auth response from proxy %s", tgenpeer_toString(transport->proxy));
+        return TGEN_EVENT_READ;
+    } else {
+        /* we read it all, we can move on */
+        gboolean versionMatch = (transport->socksBuffer->str[0] == 0x01) ? TRUE : FALSE;
+        gboolean authSuccess = (transport->socksBuffer->str[1] == 0x00) ? TRUE : FALSE;
+
+        g_string_free(transport->socksBuffer, TRUE);
+        transport->socksBuffer = NULL;
+
+        if(authSuccess) {
+            tgen_info("socks server %s authentication succeeded with username='%s' and password='%s'",
+                    tgenpeer_toString(transport->proxy),
+                    transport->username ? transport->username : "",
+                    transport->password ? transport->password : "");
+
+            /* now we can move on to the request */
+            _tgentransport_changeState(transport, TGEN_XPORT_PROXY_REQUEST);
+            return TGEN_EVENT_WRITE;
+        } else {
+            tgen_warning("socks server %s authentication failed with username='%s' and password='%s'",
+                    tgenpeer_toString(transport->proxy),
+                    transport->username ? transport->username : "",
+                    transport->password ? transport->password : "");
+
+            _tgentransport_changeState(transport, TGEN_XPORT_ERROR);
+            _tgentransport_changeError(transport, TGEN_XPORT_ERR_PROXY_AUTH);
             return TGEN_EVENT_NONE;
         }
     }
@@ -886,6 +1046,22 @@ TGenEvent tgentransport_onEvent(TGenTransport* transport, TGenEvent events) {
             return TGEN_EVENT_READ;
         } else {
             return _tgentransport_receiveSocksChoice(transport);
+        }
+    }
+
+    case TGEN_XPORT_PROXY_AUTHREQUEST: {
+        if(!(events & TGEN_EVENT_WRITE)) {
+            return TGEN_EVENT_WRITE;
+        } else {
+            return _tgentransport_sendSocksAuth(transport);
+        }
+    }
+
+    case TGEN_XPORT_PROXY_AUTHRESPONSE: {
+        if(!(events & TGEN_EVENT_READ)) {
+            return TGEN_EVENT_READ;
+        } else {
+            return _tgentransport_receiveSocksAuth(transport);
         }
     }
 
