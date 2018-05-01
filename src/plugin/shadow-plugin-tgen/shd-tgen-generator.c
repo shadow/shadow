@@ -88,9 +88,19 @@ gboolean tgengenerator_isDoneGenerating(TGenGenerator* gen) {
     return gen->reachedEndState;
 }
 
-gboolean tgengenerator_hasOutstandingTransfers(TGenGenerator* gen) {
+guint tgengenerator_getNumOutstandingTransfers(TGenGenerator* gen) {
     TGEN_ASSERT(gen);
-    return (gen->numTransfersCreated >= gen->numTransfersCompleted) ? TRUE : FALSE;
+    return (gen->numTransfersCreated - gen->numTransfersCompleted);
+}
+
+guint tgengenerator_getNumStreamsGenerated(TGenGenerator* gen) {
+    TGEN_ASSERT(gen);
+    return gen->numStreamsGenerated;
+}
+
+guint tgengenerator_getNumPacketsGenerated(TGenGenerator* gen) {
+    TGEN_ASSERT(gen);
+    return gen->numPacketsGenerated;
 }
 
 static void _tgengenerator_generatePacketSchedules(TGenGenerator* gen,

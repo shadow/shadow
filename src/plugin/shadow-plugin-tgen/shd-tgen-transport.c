@@ -38,6 +38,8 @@ struct _TGenTransport {
     TGenPeer* local;
     /* non-null if we need to connect through a proxy */
     TGenPeer* proxy;
+    gchar* username;
+    gchar* password;
     /* the remote side of the transport */
     TGenPeer* remote;
 
@@ -201,7 +203,7 @@ static void _tgentransport_changeError(TGenTransport* transport, TGenTransportEr
 }
 
 static TGenTransport* _tgentransport_newHelper(gint socketD, gint64 startedTime, gint64 createdTime,
-        TGenPeer* proxy, TGenPeer* peer,
+        TGenPeer* proxy, gchar* username, gchar* password, TGenPeer* peer,
         TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData) {
     TGenTransport* transport = g_new0(TGenTransport, 1);
     transport->magic = TGEN_MAGIC;
@@ -217,6 +219,20 @@ static TGenTransport* _tgentransport_newHelper(gint socketD, gint64 startedTime,
     if(proxy) {
         transport->proxy = proxy;
         tgenpeer_ref(proxy);
+
+        tgen_info("Initiated transport to socks proxy at %s", tgenpeer_toString(transport->proxy));
+
+        if(username) {
+            transport->username = g_strdup(username);
+        }
+        if(password) {
+            transport->password = g_strdup(password);
+        }
+
+        if(username != NULL || password != NULL) {
+            tgen_info("Configured to use proxy authentication with username='%s' and password='%s'",
+                    username ? username : "", password ? password : "");
+        }
     }
 
     struct sockaddr_in addrBuf;
@@ -241,7 +257,7 @@ static TGenTransport* _tgentransport_newHelper(gint socketD, gint64 startedTime,
     return transport;
 }
 
-TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
+TGenTransport* tgentransport_newActive(TGenPeer* proxy, gchar* username, gchar* password, TGenPeer* peer,
         TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData) {
     gint64 started = g_get_monotonic_time();
 
@@ -279,12 +295,12 @@ TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
         return NULL;
     }
 
-    return _tgentransport_newHelper(socketD, started, created, proxy, peer, notify, data, destructData);
+    return _tgentransport_newHelper(socketD, started, created, proxy, username, password, peer, notify, data, destructData);
 }
 
 TGenTransport* tgentransport_newPassive(gint socketD, gint64 started, gint64 created, TGenPeer* peer,
         TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData) {
-    return _tgentransport_newHelper(socketD, started, created, NULL, peer, notify, data, destructData);
+    return _tgentransport_newHelper(socketD, started, created, NULL, NULL, NULL, peer, notify, data, destructData);
 }
 
 static void _tgentransport_free(TGenTransport* transport) {
@@ -316,6 +332,14 @@ static void _tgentransport_free(TGenTransport* transport) {
 
     if(transport->destructData && transport->data) {
         transport->destructData(transport->data);
+    }
+
+    if(transport->username) {
+        g_free(transport->username);
+    }
+
+    if(transport->password) {
+        g_free(transport->password);
     }
 
     transport->magic = 0;

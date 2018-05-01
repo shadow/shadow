@@ -19,6 +19,9 @@ TGenAction* tgengenerator_getGenerateAction(TGenGenerator* gen);
 void tgengenerator_onTransferCreated(TGenGenerator* gen);
 void tgengenerator_onTransferCompleted(TGenGenerator* gen);
 gboolean tgengenerator_isDoneGenerating(TGenGenerator* gen);
-gboolean tgengenerator_hasOutstandingTransfers(TGenGenerator* gen);
+
+guint tgengenerator_getNumOutstandingTransfers(TGenGenerator* gen);
+guint tgengenerator_getNumStreamsGenerated(TGenGenerator* gen);
+guint tgengenerator_getNumPacketsGenerated(TGenGenerator* gen);
 
 #endif /* SRC_PLUGIN_SHADOW_PLUGIN_TGEN_SHD_TGEN_GENERATOR_H_ */

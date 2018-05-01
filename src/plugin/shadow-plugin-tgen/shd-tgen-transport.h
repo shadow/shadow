@@ -16,7 +16,7 @@ typedef struct _TGenTransport TGenTransport;
 
 typedef void (*TGenTransport_notifyBytesFunc)(gpointer data, gsize bytesRead, gsize bytesWritten);
 
-TGenTransport* tgentransport_newActive(TGenPeer* proxy, TGenPeer* peer,
+TGenTransport* tgentransport_newActive(TGenPeer* proxy, gchar* username, gchar* password, TGenPeer* peer,
         TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData);
 TGenTransport* tgentransport_newPassive(gint socketD, gint64 started, gint64 created, TGenPeer* peer,
         TGenTransport_notifyBytesFunc notify, gpointer data, GDestroyNotify destructData);

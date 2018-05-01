@@ -28,6 +28,8 @@ typedef enum {
     TGEN_VA_REMOTESCHED = 1 << 18,
     TGEN_VA_STREAMMODELPATH = 1 << 19,
     TGEN_VA_PACKETMODELPATH = 1 << 20,
+    TGEN_VA_SOCKSUSERNAME = 1 << 21,
+    TGEN_VA_SOCKSPASSWORD = 1 << 22,
 } AttributeFlags;
 
 struct _TGenGraph {
@@ -390,13 +392,20 @@ static GError* _tgengraph_parseGenerateVertex(TGenGraph* g, const gchar* idStr,
             VAS(g->graph, "packetmodelpath", vertexIndex) : NULL;
     const gchar* peersStr = (g->knownAttributes&TGEN_VA_PEERS) ?
             VAS(g->graph, "peers", vertexIndex) : NULL;
+    const gchar* socksUsernameStr = (g->knownAttributes&TGEN_VA_SOCKSUSERNAME) ?
+            VAS(g->graph, "socksusername", vertexIndex) : NULL;
+    const gchar* socksPasswordStr = (g->knownAttributes&TGEN_VA_SOCKSPASSWORD) ?
+            VAS(g->graph, "sockspassword", vertexIndex) : NULL;
 
-    tgen_debug("found vertex %li (%s), streammodelpath=%s packetmodelpath=%s peers=%s",
-            (glong)vertexIndex, streamModelPath, packetModelPath, peersStr);
+    tgen_debug("found vertex %li (%s), streammodelpath=%s packetmodelpath=%s peers=%s "
+            "socksusername=%s sockspassword=%s",
+            (glong)vertexIndex, idStr, streamModelPath, packetModelPath, peersStr,
+            socksUsernameStr, socksPasswordStr);
 
     GError* error = NULL;
 
-    TGenAction* a = tgenaction_newGenerateAction(streamModelPath, packetModelPath, peersStr, &error);
+    TGenAction* a = tgenaction_newGenerateAction(streamModelPath, packetModelPath, peersStr,
+            socksUsernameStr, socksPasswordStr, &error);
     if(a) {
         _tgengraph_storeAction(g, a, vertexIndex);
     }
@@ -519,6 +528,10 @@ static AttributeFlags _tgengraph_vertexAttributeToFlag(const gchar* stringAttrib
             return TGEN_VA_STREAMMODELPATH;
         } else if(!g_ascii_strcasecmp(stringAttribute, "packetmodelpath")) {
             return TGEN_VA_PACKETMODELPATH;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "socksusername")) {
+            return TGEN_VA_SOCKSUSERNAME;
+        } else if(!g_ascii_strcasecmp(stringAttribute, "sockspassword")) {
+            return TGEN_VA_SOCKSPASSWORD;
         }
     }
     return TGEN_A_NONE;

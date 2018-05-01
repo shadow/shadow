@@ -51,6 +51,8 @@ typedef struct _TGenActionGenerateData {
     TGenTransferType type;
     gchar* streamModelPath;
     gchar* packetModelPath;
+    gchar* socksUsernameStr;
+    gchar* socksPasswordStr;
     TGenPool* peers;
 } TGenActionGenerateData;
 
@@ -820,8 +822,9 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
 
 }
 
-TGenAction* tgenaction_newGenerateAction(const gchar* streamModelPath, const gchar* packetModelPath,
-        const gchar* peersStr, GError** error) {
+TGenAction* tgenaction_newGenerateAction(const gchar* streamModelPath,
+        const gchar* packetModelPath, const gchar* peersStr,
+        const gchar* socksUsernameStr, const gchar* socksPasswordStr, GError** error) {
     g_assert(error);
 
     gboolean streamPathIsValid = streamModelPath && g_ascii_strncasecmp(streamModelPath, "\0", (gsize)1);
@@ -870,6 +873,8 @@ TGenAction* tgenaction_newGenerateAction(const gchar* streamModelPath, const gch
     TGenActionGenerateData* data = g_new0(TGenActionGenerateData, 1);
     data->streamModelPath = g_strdup(streamModelPath);
     data->packetModelPath = g_strdup(packetModelPath);
+    data->socksUsernameStr = socksUsernameStr ? g_strdup(socksUsernameStr) : NULL;
+    data->socksPasswordStr = socksPasswordStr ? g_strdup(socksPasswordStr) : NULL;
     data->peers = peerPool;
 
     action->data = data;
@@ -992,6 +997,21 @@ void tgenaction_getGeneratorModelPaths(TGenAction* action,
     }
     if(packetModelPathStr) {
         *packetModelPathStr = data->packetModelPath;
+    }
+}
+
+void tgenaction_getGeneratorSocksParams(TGenAction* action,
+        gchar** socksUsernameStr, gchar** socksPasswordStr) {
+    TGEN_ASSERT(action);
+    g_assert(action->data && action->type == TGEN_ACTION_GENERATE);
+
+    TGenActionGenerateData* data = (TGenActionGenerateData*)action->data;
+
+    if(socksUsernameStr) {
+        *socksUsernameStr = data->socksUsernameStr;
+    }
+    if(socksPasswordStr) {
+        *socksPasswordStr = data->socksPasswordStr;
     }
 }
 

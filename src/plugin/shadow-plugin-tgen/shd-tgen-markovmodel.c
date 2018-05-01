@@ -706,6 +706,14 @@ static gboolean _tgenmarkovmodel_chooseEdge(TGenMarkovModel* mmodel, EdgeType ty
         return FALSE;
     }
 
+    /* TODO
+     * Ideally, we should do this initial iteration over the edges to compute the total
+     * weight once at the graph load time. If we want to support graphs with weights
+     * that don't add to one, we can normalize the weights ourselves at load time and
+     * update the edge weight values. That way, in this function we only have to get
+     * the random value and iterate one to find the appropriate choice.
+     */
+
     /* iterate over the edges to get the total weight, filtering by edge type */
     gdouble totalWeight = 0;
     guint numEdgesTotal = 0;

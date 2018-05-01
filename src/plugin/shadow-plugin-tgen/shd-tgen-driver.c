@@ -79,7 +79,9 @@ static void _tgendriver_onGeneratorTransferComplete(TGenDriver* driver, TGenGene
     _tgendriver_onTransferComplete(driver, NULL, wasSuccess);
     tgengenerator_onTransferCompleted(generator);
 
-    if(tgengenerator_isDoneGenerating(generator) && !tgengenerator_hasOutstandingTransfers(generator)) {
+    if(tgengenerator_isDoneGenerating(generator) &&
+            tgengenerator_getNumOutstandingTransfers(generator) <= 0) {
+        tgen_info("Generate action complete, continue to next action");
         TGenAction* action = tgengenerator_getGenerateAction(generator);
         _tgendriver_continueNextActions(driver, action);
     }
@@ -197,6 +199,7 @@ static gboolean _tgendriver_createNewActiveTransfer(TGenDriver* driver,
         guint64 size, guint64 ourSize, guint64 theirSize,
         guint64 timeout, guint64 stallout,
         gchar* localSchedule, gchar* remoteSchedule,
+        gchar* socksUsername, gchar* socksPassword,
         const gchar* actionIDStr,
         TGenTransfer_notifyCompleteFunc onComplete,
         gpointer callbackArg1, gpointer callbackArg2,
@@ -212,7 +215,7 @@ static gboolean _tgendriver_createNewActiveTransfer(TGenDriver* driver,
     }
 
     /* create the transport connection over which we can start a transfer */
-    TGenTransport* transport = tgentransport_newActive(proxy, peer,
+    TGenTransport* transport = tgentransport_newActive(proxy, socksUsername, socksPassword, peer,
             (TGenTransport_notifyBytesFunc) _tgendriver_onBytesTransferred, driver,
             (GDestroyNotify)tgendriver_unref);
 
@@ -287,8 +290,14 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
 
     const gchar* actionIDStr = tgengraph_getActionIDStr(driver->actionGraph, action);
 
+    /* socks username and password are NULL for now, until we allow them to be
+     * added to transfer actions. */
+    gchar* socksUsername = NULL;
+    gchar* socksPassword = NULL;
+
     gboolean isSuccess = _tgendriver_createNewActiveTransfer(driver, type, peer,
-            size, ourSize, theirSize, timeout, stallout, localSchedule, remoteSchedule,
+            size, ourSize, theirSize, timeout, stallout,
+            localSchedule, remoteSchedule, socksUsername, socksPassword,
             actionIDStr,
             (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete,
             driver, action,
@@ -349,10 +358,18 @@ static void _tgendriver_generateNextTransfer(TGenDriver* driver, TGenGenerator* 
     if(!shouldCreateStream) {
        /* the generator reached the end of the streams for this flow,
         * so the action is now complete. */
-        tgen_info("Generator finished generating streams, generate action complete");
-        if(tgengenerator_isDoneGenerating(generator) && !tgengenerator_hasOutstandingTransfers(generator)) {
+        tgen_message("Generator reached end after generating %u streams and %u packets",
+                tgengenerator_getNumStreamsGenerated(generator),
+                tgengenerator_getNumPacketsGenerated(generator));
+
+        guint numOutstanding = tgengenerator_getNumOutstandingTransfers(generator);
+        tgen_info("Generator has %u outstanding transfers", numOutstanding);
+
+        if(tgengenerator_isDoneGenerating(generator) && numOutstanding <= 0) {
+            tgen_info("Generate action complete, continue to next action");
             _tgendriver_continueNextActions(driver, action);
         }
+
         tgengenerator_unref(generator);
         return;
     }
@@ -362,12 +379,20 @@ static void _tgendriver_generateNextTransfer(TGenDriver* driver, TGenGenerator* 
     TGenPeer* peer = _tgendriver_getRandomPeer(driver, action);
     const gchar* actionIDStr = tgengraph_getActionIDStr(driver->actionGraph, action);
 
+    /* get socks user and password, these will remain null if not provided by user */
+    gchar* socksUsername = NULL;
+    gchar* socksPassword = NULL;
+    tgenaction_getGeneratorSocksParams(action, &socksUsername, &socksPassword);
+
     /* Create the schedule type transfer. The sizes will be computed from the
      * schedules, and timeout and stallout will be taken from the default start vertex.
      * We pass a NULL action, because we don't want to continue in the action graph
      * when this transfer completes (we continue when the generator is done). */
     gboolean isSuccess = _tgendriver_createNewActiveTransfer(driver, TGEN_TYPE_SCHEDULE, peer,
-            0, 0, 0, 0, 0, localSchedule, remoteSchedule, actionIDStr,
+            0, 0, 0, 0, 0,
+            localSchedule, remoteSchedule,
+            socksUsername, socksPassword,
+            actionIDStr,
             (TGenTransfer_notifyCompleteFunc)_tgendriver_onGeneratorTransferComplete,
             driver, generator,
             (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgengenerator_unref);
@@ -391,7 +416,9 @@ static void _tgendriver_generateNextTransfer(TGenDriver* driver, TGenGenerator* 
         tgen_warning("Failed to set generator delay timer for %"G_GUINT64_FORMAT" "
                 "microseconds. Stopping generator now and skipping to next action.",
                 delayTimeUSec);
-        if(tgengenerator_isDoneGenerating(generator) && !tgengenerator_hasOutstandingTransfers(generator)) {
+        if(tgengenerator_isDoneGenerating(generator) &&
+                tgengenerator_getNumOutstandingTransfers(generator) <= 0) {
+            tgen_info("Generate action complete, continue to next action");
             _tgendriver_continueNextActions(driver, action);
         }
         tgengenerator_unref(generator);

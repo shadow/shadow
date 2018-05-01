@@ -28,8 +28,9 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
         const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr,
         const gchar* localscheduleStr, const gchar* remotescheduleStr,
         GError** error);
-TGenAction* tgenaction_newGenerateAction(const gchar* streamModelPath, const gchar* packetModelPath,
-        const gchar* peersStr, GError** error);
+TGenAction* tgenaction_newGenerateAction(const gchar* streamModelPath,
+        const gchar* packetModelPath, const gchar* peersStr,
+        const gchar* socksUsernameStr, const gchar* socksPasswordStr, GError** error);
 
 void tgenaction_ref(TGenAction* action);
 void tgenaction_unref(TGenAction* action);
@@ -45,6 +46,7 @@ guint64 tgenaction_getDefaultTimeoutMillis(TGenAction* action);
 guint64 tgenaction_getDefaultStalloutMillis(TGenAction* action);
 guint64 tgenaction_getHeartbeatPeriodMillis(TGenAction* action);
 GLogLevelFlags tgenaction_getLogLevel(TGenAction* action);
+
 void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* typeOut,
         TGenTransportProtocol* protocolOut, guint64* sizeOut, guint64 *ourSizeOut,
         guint64 *theirSizeOut, guint64* timeoutOut, guint64* stalloutOut,
@@ -52,6 +54,8 @@ void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* type
 
 void tgenaction_getGeneratorModelPaths(TGenAction* action,
         gchar** streamModelPathStr, gchar** packetModelPathStr);
+void tgenaction_getGeneratorSocksParams(TGenAction* action,
+        gchar** socksUsernameStr, gchar** socksPasswordStr);
 
 TGenPool* tgenaction_getPeers(TGenAction* action);
 
