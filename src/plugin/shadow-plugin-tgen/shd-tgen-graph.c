@@ -382,7 +382,7 @@ static GError* _tgengraph_parseTransferVertex(TGenGraph* g, const gchar* idStr,
     return error;
 }
 
-static GError* _tgengraph_parseGenerateVertex(TGenGraph* g, const gchar* idStr,
+static GError* _tgengraph_parseModelVertex(TGenGraph* g, const gchar* idStr,
         igraph_integer_t vertexIndex) {
     TGEN_ASSERT(g);
 
@@ -404,7 +404,7 @@ static GError* _tgengraph_parseGenerateVertex(TGenGraph* g, const gchar* idStr,
 
     GError* error = NULL;
 
-    TGenAction* a = tgenaction_newGenerateAction(streamModelPath, packetModelPath, peersStr,
+    TGenAction* a = tgenaction_newModelAction(streamModelPath, packetModelPath, peersStr,
             socksUsernameStr, socksPasswordStr, &error);
     if(a) {
         _tgengraph_storeAction(g, a, vertexIndex);
@@ -452,8 +452,8 @@ static GError* _tgengraph_parseGraphVertices(TGenGraph* g) {
             error = _tgengraph_parsePauseVertex(g, idStr, vertexIndex);
         } else if(g_strstr_len(idStr, (gssize)-1, "transfer")) {
             error = _tgengraph_parseTransferVertex(g, idStr, vertexIndex);
-        } else if(g_strstr_len(idStr, (gssize)-1, "generate")) {
-            error = _tgengraph_parseGenerateVertex(g, idStr, vertexIndex);
+        } else if(g_strstr_len(idStr, (gssize)-1, "model")) {
+            error = _tgengraph_parseModelVertex(g, idStr, vertexIndex);
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
                     "found vertex %li (%s) with an unknown action id '%s'",

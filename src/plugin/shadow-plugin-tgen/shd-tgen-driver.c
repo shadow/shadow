@@ -81,8 +81,8 @@ static void _tgendriver_onGeneratorTransferComplete(TGenDriver* driver, TGenGene
 
     if(tgengenerator_isDoneGenerating(generator) &&
             tgengenerator_getNumOutstandingTransfers(generator) <= 0) {
-        tgen_info("Generate action complete, continue to next action");
-        TGenAction* action = tgengenerator_getGenerateAction(generator);
+        tgen_info("Model action complete, continue to next action");
+        TGenAction* action = tgengenerator_getModelAction(generator);
         _tgendriver_continueNextActions(driver, action);
     }
 }
@@ -174,7 +174,7 @@ static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, gint64 start
     tgentransport_unref(transport);
 }
 
-/* this should only be called with action of type start, generate, or transfer */
+/* this should only be called with action of type start, model, or transfer */
 static TGenPeer* _tgendriver_getRandomPeer(TGenDriver* driver, TGenAction* action) {
     TGEN_ASSERT(driver);
 
@@ -325,7 +325,7 @@ static gboolean _tgendriver_setGeneratorDelayTimer(TGenDriver* driver, TGenGener
             (GDestroyNotify)tgendriver_unref, (GDestroyNotify)tgengenerator_unref);
 
     if(!generatorTimer) {
-        tgen_warning("failed to initialize timer for generate action");
+        tgen_warning("failed to initialize timer for model action");
         return FALSE;
     }
 
@@ -346,7 +346,7 @@ static gboolean _tgendriver_setGeneratorDelayTimer(TGenDriver* driver, TGenGener
 static void _tgendriver_generateNextTransfer(TGenDriver* driver, TGenGenerator* generator) {
     TGEN_ASSERT(driver);
 
-    TGenAction* action = tgengenerator_getGenerateAction(generator);
+    TGenAction* action = tgengenerator_getModelAction(generator);
 
     /* if these strings are non-null following this call, we own and must free them */
     gchar* localSchedule = NULL;
@@ -366,10 +366,10 @@ static void _tgendriver_generateNextTransfer(TGenDriver* driver, TGenGenerator* 
         tgen_info("Generator has %u outstanding transfers", numOutstanding);
 
         if(tgengenerator_isDoneGenerating(generator) && numOutstanding <= 0) {
-            tgen_info("Generate action complete, continue to next action");
+            tgen_info("Model action complete, continue to next action");
             _tgendriver_continueNextActions(driver, action);
         } else {
-            tgen_info("Generate action will be complete once all outstanding transfers finish");
+            tgen_info("Model action will be complete once all outstanding transfers finish");
         }
 
         tgengenerator_unref(generator);
@@ -384,7 +384,7 @@ static void _tgendriver_generateNextTransfer(TGenDriver* driver, TGenGenerator* 
     /* get socks user and password, these will remain null if not provided by user */
     gchar* socksUsername = NULL;
     gchar* socksPassword = NULL;
-    tgenaction_getGeneratorSocksParams(action, &socksUsername, &socksPassword);
+    tgenaction_getSocksParams(action, &socksUsername, &socksPassword);
 
     /* Create the schedule type transfer. The sizes will be computed from the
      * schedules, and timeout and stallout will be taken from the default start vertex.
@@ -407,7 +407,7 @@ static void _tgendriver_generateNextTransfer(TGenDriver* driver, TGenGenerator* 
         tgengenerator_ref(generator);
         tgengenerator_onTransferCreated(generator);
     } else {
-       tgen_warning("we failed to create a transfer in generate action, "
+       tgen_warning("we failed to create a transfer in model action, "
                "delaying %"G_GUINT64_FORMAT" microseconds before the next try",
                delayTimeUSec);
     }
@@ -420,7 +420,7 @@ static void _tgendriver_generateNextTransfer(TGenDriver* driver, TGenGenerator* 
                 delayTimeUSec);
         if(tgengenerator_isDoneGenerating(generator) &&
                 tgengenerator_getNumOutstandingTransfers(generator) <= 0) {
-            tgen_info("Generate action complete, continue to next action");
+            tgen_info("Model action complete, continue to next action");
             _tgendriver_continueNextActions(driver, action);
         }
         tgengenerator_unref(generator);
@@ -444,12 +444,12 @@ static void _tgendriver_initiateGenerator(TGenDriver* driver, TGenAction* action
     /* these strings are owned by the action and we should not free them */
     gchar* streamModelPath = NULL;
     gchar* packetModelPath = NULL;
-    tgenaction_getGeneratorModelPaths(action, &streamModelPath, &packetModelPath);
+    tgenaction_getModelPaths(action, &streamModelPath, &packetModelPath);
 
     TGenGenerator* generator = tgengenerator_new(streamModelPath, packetModelPath, action);
 
     if(!generator) {
-        tgen_warning("failed to initialize generator action, skipping");
+        tgen_warning("failed to initialize generator for model action, skipping");
         _tgendriver_continueNextActions(driver, action);
         return;
     }
@@ -558,7 +558,7 @@ static void _tgendriver_processAction(TGenDriver* driver, TGenAction* action) {
             _tgendriver_initiateTransfer(driver, action);
             break;
         }
-        case TGEN_ACTION_GENERATE: {
+        case TGEN_ACTION_MODEL: {
             _tgendriver_initiateGenerator(driver, action);
             break;
         }

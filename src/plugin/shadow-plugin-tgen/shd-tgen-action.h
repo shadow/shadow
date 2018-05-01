@@ -12,7 +12,7 @@ typedef enum _TGenActionType {
     TGEN_ACTION_END,
     TGEN_ACTION_PAUSE,
     TGEN_ACTION_TRANSFER,
-    TGEN_ACTION_GENERATE,
+    TGEN_ACTION_MODEL,
 } TGenActionType;
 
 typedef struct _TGenAction TGenAction;
@@ -28,7 +28,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
         const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr,
         const gchar* localscheduleStr, const gchar* remotescheduleStr,
         GError** error);
-TGenAction* tgenaction_newGenerateAction(const gchar* streamModelPath,
+TGenAction* tgenaction_newModelAction(const gchar* streamModelPath,
         const gchar* packetModelPath, const gchar* peersStr,
         const gchar* socksUsernameStr, const gchar* socksPasswordStr, GError** error);
 
@@ -52,9 +52,9 @@ void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* type
         guint64 *theirSizeOut, guint64* timeoutOut, guint64* stalloutOut,
         gchar** localSchedule, gchar** remoteSchedule);
 
-void tgenaction_getGeneratorModelPaths(TGenAction* action,
+void tgenaction_getModelPaths(TGenAction* action,
         gchar** streamModelPathStr, gchar** packetModelPathStr);
-void tgenaction_getGeneratorSocksParams(TGenAction* action,
+void tgenaction_getSocksParams(TGenAction* action,
         gchar** socksUsernameStr, gchar** socksPasswordStr);
 
 TGenPool* tgenaction_getPeers(TGenAction* action);

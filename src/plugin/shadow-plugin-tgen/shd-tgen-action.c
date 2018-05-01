@@ -47,14 +47,14 @@ typedef struct _TGenActionTransferData {
     gchar* remoteSchedule;
 } TGenActionTransferData;
 
-typedef struct _TGenActionGenerateData {
+typedef struct _TGenActionModelData {
     TGenTransferType type;
     gchar* streamModelPath;
     gchar* packetModelPath;
     gchar* socksUsernameStr;
     gchar* socksPasswordStr;
     TGenPool* peers;
-} TGenActionGenerateData;
+} TGenActionModelData;
 
 struct _TGenAction {
     TGenActionType type;
@@ -444,8 +444,8 @@ static void _tgenaction_free(TGenAction* action) {
             g_free(data->remoteSchedule);
             data->remoteSchedule = NULL;
         }
-    } else if(action->type == TGEN_ACTION_GENERATE) {
-        TGenActionGenerateData* data = (TGenActionGenerateData*) action->data;
+    } else if(action->type == TGEN_ACTION_MODEL) {
+        TGenActionModelData* data = (TGenActionModelData*) action->data;
         if(data->streamModelPath) {
             g_free(data->streamModelPath);
             data->streamModelPath = NULL;
@@ -822,7 +822,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
 
 }
 
-TGenAction* tgenaction_newGenerateAction(const gchar* streamModelPath,
+TGenAction* tgenaction_newModelAction(const gchar* streamModelPath,
         const gchar* packetModelPath, const gchar* peersStr,
         const gchar* socksUsernameStr, const gchar* socksPasswordStr, GError** error) {
     g_assert(error);
@@ -830,26 +830,26 @@ TGenAction* tgenaction_newGenerateAction(const gchar* streamModelPath,
     gboolean streamPathIsValid = streamModelPath && g_ascii_strncasecmp(streamModelPath, "\0", (gsize)1);
     if(!streamPathIsValid) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-                "generate action missing required attribute 'streammodelpath'");
+                "model action missing required attribute 'streammodelpath'");
         return NULL;
     }
 
     if(!g_file_test(streamModelPath, G_FILE_TEST_EXISTS|G_FILE_TEST_IS_REGULAR)) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
-                "generate action found invalid path for 'streammodelpath': %s", streamModelPath);
+                "model action found invalid path for 'streammodelpath': %s", streamModelPath);
         return NULL;
     }
 
     gboolean packetPathIsValid = packetModelPath && g_ascii_strncasecmp(packetModelPath, "\0", (gsize)1);
     if(!packetPathIsValid) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-                "generate action missing required attribute 'packetmodelpath'");
+                "model action missing required attribute 'packetmodelpath'");
         return NULL;
     }
 
     if(!g_file_test(packetModelPath, G_FILE_TEST_EXISTS|G_FILE_TEST_IS_REGULAR)) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
-                "generate action found invalid path for 'packetmodelpath': %s", packetModelPath);
+                "model action found invalid path for 'packetmodelpath': %s", packetModelPath);
         return NULL;
     }
 
@@ -868,9 +868,9 @@ TGenAction* tgenaction_newGenerateAction(const gchar* streamModelPath,
     action->magic = TGEN_MAGIC;
     action->refcount = 1;
 
-    action->type = TGEN_ACTION_GENERATE;
+    action->type = TGEN_ACTION_MODEL;
 
-    TGenActionGenerateData* data = g_new0(TGenActionGenerateData, 1);
+    TGenActionModelData* data = g_new0(TGenActionModelData, 1);
     data->streamModelPath = g_strdup(streamModelPath);
     data->packetModelPath = g_strdup(packetModelPath);
     data->socksUsernameStr = socksUsernameStr ? g_strdup(socksUsernameStr) : NULL;
@@ -985,12 +985,12 @@ void tgenaction_getTransferParameters(TGenAction* action, TGenTransferType* type
     }
 }
 
-void tgenaction_getGeneratorModelPaths(TGenAction* action,
+void tgenaction_getModelPaths(TGenAction* action,
         gchar** streamModelPathStr, gchar** packetModelPathStr) {
     TGEN_ASSERT(action);
-    g_assert(action->data && action->type == TGEN_ACTION_GENERATE);
+    g_assert(action->data && action->type == TGEN_ACTION_MODEL);
 
-    TGenActionGenerateData* data = (TGenActionGenerateData*)action->data;
+    TGenActionModelData* data = (TGenActionModelData*)action->data;
 
     if(streamModelPathStr) {
         *streamModelPathStr = data->streamModelPath;
@@ -1000,12 +1000,12 @@ void tgenaction_getGeneratorModelPaths(TGenAction* action,
     }
 }
 
-void tgenaction_getGeneratorSocksParams(TGenAction* action,
+void tgenaction_getSocksParams(TGenAction* action,
         gchar** socksUsernameStr, gchar** socksPasswordStr) {
     TGEN_ASSERT(action);
-    g_assert(action->data && action->type == TGEN_ACTION_GENERATE);
+    g_assert(action->data && action->type == TGEN_ACTION_MODEL);
 
-    TGenActionGenerateData* data = (TGenActionGenerateData*)action->data;
+    TGenActionModelData* data = (TGenActionModelData*)action->data;
 
     if(socksUsernameStr) {
         *socksUsernameStr = data->socksUsernameStr;
@@ -1021,8 +1021,8 @@ TGenPool* tgenaction_getPeers(TGenAction* action) {
 
     if(action->type == TGEN_ACTION_TRANSFER) {
         return ((TGenActionTransferData*)action->data)->peers;
-    } else if(action->type == TGEN_ACTION_GENERATE) {
-        return ((TGenActionGenerateData*)action->data)->peers;
+    } else if(action->type == TGEN_ACTION_MODEL) {
+        return ((TGenActionModelData*)action->data)->peers;
     } else if(action->type == TGEN_ACTION_START) {
         return ((TGenActionStartData*)action->data)->peers;
     } else {

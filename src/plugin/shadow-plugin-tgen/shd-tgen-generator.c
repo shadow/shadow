@@ -9,7 +9,7 @@ struct _TGenGenerator {
 
     TGenMarkovModel* streamModel;
     TGenMarkovModel* packetModel;
-    TGenAction* generateAction;
+    TGenAction* modelAction;
 
     guint numStreamsGenerated;
     guint numPacketsGenerated;
@@ -42,7 +42,7 @@ void tgengenerator_unref(TGenGenerator* gen) {
 }
 
 TGenGenerator* tgengenerator_new(const gchar* streamModelPath, const gchar* packetModelPath,
-        TGenAction* generateAction) {
+        TGenAction* modelAction) {
     TGenMarkovModel* streamModel = tgenmarkovmodel_new(streamModelPath);
     if(!streamModel) {
         tgen_warning("failed to parse stream markov model");
@@ -61,16 +61,16 @@ TGenGenerator* tgengenerator_new(const gchar* streamModelPath, const gchar* pack
 
     gen->streamModel = streamModel;
     gen->packetModel = packetModel;
-    gen->generateAction = generateAction;
+    gen->modelAction = modelAction;
 
     gen->refcount = 1;
 
     return gen;
 }
 
-TGenAction* tgengenerator_getGenerateAction(TGenGenerator* gen) {
+TGenAction* tgengenerator_getModelAction(TGenGenerator* gen) {
     TGEN_ASSERT(gen);
-    return gen->generateAction;
+    return gen->modelAction;
 }
 
 void tgengenerator_onTransferCreated(TGenGenerator* gen) {
