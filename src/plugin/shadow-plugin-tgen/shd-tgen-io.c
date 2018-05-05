@@ -242,6 +242,27 @@ void tgenio_checkTimeouts(TGenIO* io) {
 void
 tgenio_setEvents(TGenIO *io, gint descriptor, TGenEvent events)
 {
+    /* FIXME
+     * RGJ: there is an error here due to the new SCHED transfer code.
+     * If a SCHED wants to delay sending, then it uses this function to
+     * disable events and then it pauses for a while. In the meantime,
+     * the transfer might close because of a timeout or stallout, and
+     * that event will destroy the descriptor and deregister it from
+     * the children table. Then the SCHED pause timer expires and this
+     * function is called with a descriptor that is no longer valid, or
+     * worse, with a descriptor that has been re-assigned to a completely
+     * different socket.
+     *
+     * For now I'm going to add the children table check, but this needs
+     * to be redesigned to avoid this problem in the first place.
+     * (We probably need to ref and store the transport object in the
+     * pause event, and then when it expires, we can check a flag somewhere
+     * to see if it is in an error state and only continue if it's not.)
+     */
+    if(g_hash_table_lookup(io->children, GINT_TO_POINTER(descriptor)) == NULL) {
+        return;
+    }
+
     struct epoll_event ee;
     memset(&ee, 0, sizeof(struct epoll_event));
     if (events & TGEN_EVENT_READ) {

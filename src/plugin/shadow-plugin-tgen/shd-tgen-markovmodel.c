@@ -715,7 +715,7 @@ static gboolean _tgenmarkovmodel_chooseEdge(TGenMarkovModel* mmodel, EdgeType ty
      */
 
     /* iterate over the edges to get the total weight, filtering by edge type */
-    gdouble totalWeight = 0;
+    gdouble totalWeight = 0.0;
     guint numEdgesTotal = 0;
     guint numEdgesType = 0;
 

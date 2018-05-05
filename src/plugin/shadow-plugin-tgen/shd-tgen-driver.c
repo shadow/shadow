@@ -329,7 +329,7 @@ static gboolean _tgendriver_setGeneratorDelayTimer(TGenDriver* driver, TGenGener
         return FALSE;
     }
 
-    tgen_info("set generator delay timer for %"G_GUINT64_FORMAT" milliseconds", delayTimeUSec);
+    tgen_info("set generator delay timer for %"G_GUINT64_FORMAT" microseconds", delayTimeUSec);
 
     /* ref++ the driver and generator for the refs held in the timer */
     tgendriver_ref(driver);
@@ -358,7 +358,7 @@ static void _tgendriver_generateNextTransfer(TGenDriver* driver, TGenGenerator* 
     if(!shouldCreateStream) {
        /* the generator reached the end of the streams for this flow,
         * so the action is now complete. */
-        tgen_message("Generator reached end after generating %u streams and %u packets",
+        tgen_info("Generator reached end state after generating %u streams and %u packets",
                 tgengenerator_getNumStreamsGenerated(generator),
                 tgengenerator_getNumPacketsGenerated(generator));
 
