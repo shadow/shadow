@@ -4,7 +4,7 @@
 project(Shadow)
 set(SHADOW_VERSION_MAJOR 1)
 set(SHADOW_VERSION_MINOR 12)
-set(SHADOW_VERSION_BUILD 0)
+set(SHADOW_VERSION_BUILD 1)
 
 message(STATUS "System name: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "System version: ${CMAKE_SYSTEM_VERSION}")
