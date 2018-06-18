@@ -414,11 +414,13 @@ static gboolean _tgentransfer_getLine(TGenTransfer* transfer) {
 static void _tgentransfer_authenticate(TGenTransfer* transfer) {
     TGEN_ASSERT(transfer);
 
-    while(TRUE) {
-        gchar c;
-        gssize bytes = tgentransport_read(transfer->transport, &c, 1);
+    gchar authbuf[24];
+    gsize amt = 21 - transfer->authIndex;
+    gssize bytes = tgentransport_read(transfer->transport, &(authbuf[0]), amt);
 
-        if(bytes == 1) {
+    if(bytes > 0) {
+        for (gsize loc = 0; loc < bytes; loc++) {
+            gchar c = authbuf[loc];
             transfer->bytes.totalRead += 1;
 
             if(transfer->authIndex == 20) {
@@ -441,24 +443,21 @@ static void _tgentransfer_authenticate(TGenTransfer* transfer) {
                 transfer->authSuccess = FALSE;
                 break;
             }
-        } else if(bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            /* we ran out of bytes for now, but expect more to come */
-            transfer->authComplete = FALSE;
-            transfer->authSuccess = FALSE;
-            break;
-        } else if(bytes == 0) {
-            /* socket closed */
-            tgen_info("transfer authentication error: socket closed before authentication completed");
-            transfer->authComplete = TRUE;
-            transfer->authSuccess = FALSE;
-            break;
-        } else {
-            /* some type of socket error while reading */
-            tgen_info("transfer authentication error: socket read error before authentication completed");
-            transfer->authComplete = TRUE;
-            transfer->authSuccess = FALSE;
-            break;
         }
+    } else if(bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        /* we ran out of bytes for now, but expect more to come */
+        transfer->authComplete = FALSE;
+        transfer->authSuccess = FALSE;
+    } else if(bytes == 0) {
+        /* socket closed */
+        tgen_info("transfer authentication error: socket closed before authentication completed");
+        transfer->authComplete = TRUE;
+        transfer->authSuccess = FALSE;
+    } else {
+        /* some type of socket error while reading */
+        tgen_info("transfer authentication error: socket read error before authentication completed");
+        transfer->authComplete = TRUE;
+        transfer->authSuccess = FALSE;
     }
 
     if(transfer->authComplete && !transfer->authSuccess) {
