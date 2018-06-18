@@ -20,5 +20,6 @@ void tgentimer_unref(TGenTimer* timer);
 TGenEvent tgentimer_onEvent(TGenTimer* timer, gint descriptor, TGenEvent events);
 gint tgentimer_getDescriptor(TGenTimer* timer);
 void tgentimer_settime_micros(TGenTimer *timer, guint64 micros);
+void tgentimer_cancel(TGenTimer *timer);
 
 #endif /* SHD_TGEN_TIMER_H_ */

@@ -318,6 +318,7 @@ static void _tgentransport_free(TGenTransport* transport) {
     TGEN_ASSERT(transport);
 
     if(transport->socketD > 0) {
+        tgen_info("closing transport socket for fd %i", transport->socketD);
         close(transport->socketD);
     }
 

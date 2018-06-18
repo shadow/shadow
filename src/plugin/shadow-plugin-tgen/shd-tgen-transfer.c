@@ -45,7 +45,6 @@ typedef struct _TGenTransferScheduleData {
     gsize scheduleSize;
     gchar* theirSchedule;
     gsize theirScheduleSize;
-    gint descriptor;
     gsize expectedReceiveBytes;
     gboolean timerSet;
     gboolean goneToSleepOnce;
@@ -97,6 +96,7 @@ struct _TGenTransfer {
         gsize totalWrite;
     } bytes;
 
+    TGenIO* io;
     TGenTransferGetputData *getput;
     TGenTransferScheduleData *schedule;
 
@@ -1051,24 +1051,103 @@ static void _tgentransfer_writePayload(TGenTransfer* transfer) {
 }
 
 static gboolean
-_tgentransfer_schedOnTimerExpired(gpointer data1, gpointer data2)
+_tgentransfer_getputWantsWriteEvents(TGenTransfer *transfer) {
+    TGEN_ASSERT(transfer);
+
+    if (transfer->type != TGEN_TYPE_GETPUT) {
+        return FALSE;
+    } else if (transfer->writeBuffer) {
+        return TRUE;
+    } else if (transfer->state == TGEN_XFER_COMMAND) {
+        return TRUE;
+    } else if (!transfer->getput->doneWritingPayload && transfer->state == TGEN_XFER_PAYLOAD) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+static gboolean
+_tgentransfer_schedWantsWriteEvents(TGenTransfer *transfer) {
+    TGEN_ASSERT(transfer);
+
+    if (transfer->type != TGEN_TYPE_SCHEDULE) {
+        return FALSE;
+    } else if (transfer->writeBuffer) {
+        return TRUE;
+    } else if (transfer->state == TGEN_XFER_COMMAND) {
+        return TRUE;
+    } else if (!transfer->schedule->doneWritingPayload
+            && transfer->state == TGEN_XFER_PAYLOAD
+            && !transfer->schedule->timerSet) {
+        return TRUE;
+    } else if (!transfer->schedule->sentOurChecksum && transfer->state == TGEN_XFER_CHECKSUM) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+static gboolean _tgentransfer_schedOnTimerExpired(gpointer data1, gpointer data2)
 {
     TGenTransfer *transfer = (TGenTransfer *)data1;
     TGEN_ASSERT(transfer);
+
     g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
     g_assert(transfer->schedule);
+
     transfer->schedule->timerSet = FALSE;
+
     tgen_debug("Sched timer expired. Asking for write events again.");
-    tgendriver_setEvents(transfer->data1, transfer->schedule->descriptor,
-            TGEN_EVENT_WRITE);
-    /* Meaning YES cancel future callbacks of this function from
-     * tgentimer_onEvent. The timer is already not persistent, so this is just
-     * extra. */
+
+    if(!(transfer->events & TGEN_EVENT_DONE) && transfer->transport) {
+        TGenEvent schedEvents = 0;
+        if(_tgentransfer_schedWantsWriteEvents(transfer)) {
+            schedEvents |= TGEN_EVENT_WRITE;
+        }
+        if(_tgentransfer_schedWantsReadEvents(transfer)) {
+            schedEvents |= TGEN_EVENT_READ;
+        }
+        if(schedEvents > 0) {
+            tgenio_setEvents(transfer->io, tgentransport_getDescriptor(transfer->transport), schedEvents);
+        }
+    }
+
+    /* Return TRUE to cancel future callbacks of this function from tgentimer_onEvent.
+     * The timer is already not persistent, and returning TRUE makes this explicit.
+     * Once we return TRUE, the timer is disarmed and de-registered from the io
+     * module so we won't pay attention to any future timer events.
+     * Let's also clean up the transfer reference so we create a new timer if needed. */
+    tgentimer_unref(transfer->schedule->timer);
+    transfer->schedule->timer = NULL;
     return TRUE;
 }
 
-static void
-_tgentransfer_schedStartPause(TGenTransfer *transfer, int32_t micros)
+static void _tgentransfer_schedTimerCancel(TGenTransfer *transfer) {
+    TGEN_ASSERT(transfer);
+    if(!transfer->schedule || !transfer->schedule->timer) {
+        return;
+    }
+
+    /* first tell the io module to stop paying attention to the timer. after this call
+     * if the timer fires (becomes readable) we won't notice. this will call the
+     * tgentimer_unref destructor that we passed in tgenio_register.*/
+    tgenio_deregister(transfer->io, tgentimer_getDescriptor(transfer->schedule->timer));
+
+    /* then tell the timer that we don't want it to fire anymore */
+    tgentimer_cancel(transfer->schedule->timer);
+    transfer->schedule->timerSet = FALSE;
+
+    /* now free the timer. this should be done here because we want the timer to
+     * call the tgentransfer_unref function to make sure that the transfer object
+     * is freed correctly. */
+    tgentimer_unref(transfer->schedule->timer);
+
+    /* now clear the timer to make sure we don't use it again */
+    transfer->schedule->timer = NULL;
+}
+
+static void _tgentransfer_schedStartPause(TGenTransfer *transfer, int32_t micros)
 {
     TGEN_ASSERT(transfer);
     g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
@@ -1079,18 +1158,31 @@ _tgentransfer_schedStartPause(TGenTransfer *transfer, int32_t micros)
 
     if (!transfer->schedule->timer) {
         tgen_debug("Creating new Sched timer for %"G_GUINT64_FORMAT" microseconds", microsecondsPause);
+
+        /* the scheduler timer holds a pointer to the transfer object */
         tgentransfer_ref(transfer);
+        /* the timer starts with one ref */
         transfer->schedule->timer = tgentimer_new(microsecondsPause, FALSE,
                 _tgentransfer_schedOnTimerExpired,
                 transfer, NULL, (GDestroyNotify)tgentransfer_unref, NULL);
+
+        /* Tell the io module to watch the timer so we know when it expires.
+         * The io module holds a second reference to the timer.
+         * The order here is that the io module will watch the timer and then call
+         * tgentimer_onEvent when the timer expires, then the timer will call
+         * _tgentransfer_schedOnTimerExpired and adjust the timer as appropriate. */
+        tgentimer_ref(transfer->schedule->timer);
+        /* the ref above will be unreffed when the timer is deregistered. */
+        tgenio_register(transfer->io,
+                tgentimer_getDescriptor(transfer->schedule->timer),
+                (TGenIO_notifyEventFunc)tgentimer_onEvent, NULL,
+                transfer->schedule->timer, (GDestroyNotify)tgentimer_unref);
     } else {
         tgen_debug("Arming existing Sched timer for %"G_GUINT64_FORMAT" microseconds", microsecondsPause);
         tgentimer_settime_micros(transfer->schedule->timer, microsecondsPause);
     }
 
     g_assert(transfer->schedule->timer);
-
-    tgendriver_registerTransferPause(transfer->data1, transfer->schedule->timer);
     transfer->schedule->timerSet = TRUE;
     transfer->schedule->goneToSleepOnce = TRUE;
 }
@@ -1129,6 +1221,7 @@ _tgentransfer_schedWriteToBuffer(TGenTransfer *transfer)
     TGEN_ASSERT(transfer);
     g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
     g_assert(!transfer->writeBuffer);
+
     GString *more_data;
     int32_t delay, cum_delay = 0;
     gsize flushed;
@@ -1137,6 +1230,7 @@ _tgentransfer_schedWriteToBuffer(TGenTransfer *transfer)
     more_data = _tgentransfer_getRandomString(TGEN_MMODEL_PACKET_DATA_SIZE);
     g_string_append(transfer->writeBuffer, more_data->str);
     g_string_free(more_data, TRUE);
+
     while (_tgentransfer_schedAdvanceSchedule(transfer)) {
         /* delay is in microseconds */
         delay = g_array_index(transfer->schedule->sched, int32_t,
@@ -1151,6 +1245,7 @@ _tgentransfer_schedWriteToBuffer(TGenTransfer *transfer)
             break;
         }
     }
+
     g_checksum_update(transfer->schedule->ourPayloadChecksum,
             (guchar*)transfer->writeBuffer->str,
             (gssize)transfer->writeBuffer->len);
@@ -1202,13 +1297,17 @@ _tgentransfer_writeSchedPayload(TGenTransfer *transfer)
             !transfer->writeBuffer) {
         tgen_debug("We're done writing for the Schedule!");
         transfer->schedule->doneWritingPayload = TRUE;
+
+        /* since we are done writing, cancel and deregister any outstanding timer. */
+        if (transfer->schedule->timer) {
+            _tgentransfer_schedTimerCancel(transfer);
+        }
+
+        /* now move forward if we are also done reading */
         if (transfer->schedule->doneReadingPayload) {
             transfer->time.lastPayloadByte = g_get_monotonic_time();
             _tgentransfer_changeState(transfer, TGEN_XFER_CHECKSUM);
             transfer->events |= TGEN_EVENT_READ|TGEN_EVENT_WRITE;
-        }
-        if (transfer->schedule->timer) {
-            tgentimer_settime_micros(transfer->schedule->timer, 0);
         }
     }
 }
@@ -1260,44 +1359,6 @@ static void _tgentransfer_writeChecksum(TGenTransfer* transfer) {
         }
     } else {
         /* unable to send entire checksum, wait for next chance to write */
-    }
-}
-
-static gboolean
-_tgentransfer_getputWantsWriteEvents(TGenTransfer *transfer) {
-    TGEN_ASSERT(transfer);
-
-    if (transfer->type != TGEN_TYPE_GETPUT) {
-        return FALSE;
-    } else if (transfer->writeBuffer) {
-        return TRUE;
-    } else if (transfer->state == TGEN_XFER_COMMAND) {
-        return TRUE;
-    } else if (!transfer->getput->doneWritingPayload && transfer->state == TGEN_XFER_PAYLOAD) {
-        return TRUE;
-    } else {
-        return FALSE;
-    }
-}
-
-static gboolean
-_tgentransfer_schedWantsWriteEvents(TGenTransfer *transfer) {
-    TGEN_ASSERT(transfer);
-
-    if (transfer->type != TGEN_TYPE_SCHEDULE) {
-        return FALSE;
-    } else if (transfer->writeBuffer) {
-        return TRUE;
-    } else if (transfer->state == TGEN_XFER_COMMAND) {
-        return TRUE;
-    } else if (!transfer->schedule->doneWritingPayload
-            && transfer->state == TGEN_XFER_PAYLOAD
-            && !transfer->schedule->timerSet) {
-        return TRUE;
-    } else if (!transfer->schedule->sentOurChecksum && transfer->state == TGEN_XFER_CHECKSUM) {
-        return TRUE;
-    } else {
-        return FALSE;
     }
 }
 
@@ -1531,11 +1592,6 @@ static TGenEvent _tgentransfer_runTransferEventLoop(TGenTransfer* transfer, TGen
 TGenEvent tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, TGenEvent events) {
     TGEN_ASSERT(transfer);
 
-    if (transfer->type == TGEN_TYPE_SCHEDULE && transfer->schedule
-            && !transfer->schedule->descriptor) {
-        transfer->schedule->descriptor = descriptor;
-    }
-
     TGenEvent retEvents = TGEN_EVENT_NONE;
 
     if(transfer->transport && tgentransport_wantsEvents(transfer->transport)) {
@@ -1550,6 +1606,11 @@ TGenEvent tgentransfer_onEvent(TGenTransfer* transfer, gint descriptor, TGenEven
         /* send back that we are done */
         transfer->events |= TGEN_EVENT_DONE;
         retEvents |= TGEN_EVENT_DONE;
+
+        /* cancel the in-progress schedule timer if we have one */
+        if (transfer->schedule && transfer->schedule->timer) {
+            _tgentransfer_schedTimerCancel(transfer);
+        }
 
         if(transfer->notify) {
             /* execute the callback to notify that we are complete */
@@ -1585,6 +1646,11 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
 
         _tgentransfer_log(transfer, FALSE);
 
+        /* cancel the in-progress schedule timer if we have one */
+        if (transfer->schedule && transfer->schedule->timer) {
+            _tgentransfer_schedTimerCancel(transfer);
+        }
+
         /* we have to call notify so the next transfer can start */
         if(transfer->notify) {
             /* execute the callback to notify that we failed with a timeout error */
@@ -1603,7 +1669,7 @@ gboolean tgentransfer_onCheckTimeout(TGenTransfer* transfer, gint descriptor) {
 TGenTransfer* tgentransfer_new(const gchar* idStr, gsize count, TGenTransferType type,
         gsize size, gsize ourSize, gsize theirSize,
         guint64 timeout, guint64 stallout, const gchar* localSchedule, const gchar* remoteSchedule,
-        TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
+        TGenIO* io, TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
         gpointer data1, gpointer data2, GDestroyNotify destructData1, GDestroyNotify destructData2) {
     TGenTransfer* transfer = g_new0(TGenTransfer, 1);
     transfer->magic = TGEN_MAGIC;
@@ -1614,6 +1680,11 @@ TGenTransfer* tgentransfer_new(const gchar* idStr, gsize count, TGenTransferType
     transfer->data2 = data2;
     transfer->destructData1 = destructData1;
     transfer->destructData2 = destructData2;
+
+    if(io) {
+        tgenio_ref(io);
+        transfer->io = io;
+    }
 
     transfer->time.start = g_get_monotonic_time();
 
@@ -1699,6 +1770,10 @@ static void _tgentransfer_free(TGenTransfer* transfer) {
 
     if(transfer->transport) {
         tgentransport_unref(transfer->transport);
+    }
+
+    if(transfer->io) {
+        tgenio_unref(transfer->io);
     }
 
     transfer->magic = 0;

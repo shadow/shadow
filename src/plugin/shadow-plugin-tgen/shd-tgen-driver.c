@@ -149,7 +149,7 @@ static void _tgendriver_onNewPeer(TGenDriver* driver, gint socketD, gint64 start
     /* a new transfer will be coming in on this transport */
     gsize count = ++(driver->globalTransferCounter);
     TGenTransfer* transfer = tgentransfer_new(NULL, count, TGEN_TYPE_NONE, 0, 0, 0,
-            defaultTimeout, defaultStallout, NULL, NULL, transport,
+            defaultTimeout, defaultStallout, NULL, NULL, driver->io, transport,
             (TGenTransfer_notifyCompleteFunc)_tgendriver_onTransferComplete, driver, NULL,
             (GDestroyNotify)tgendriver_unref, NULL);
 
@@ -235,7 +235,7 @@ static gboolean _tgendriver_createNewActiveTransfer(TGenDriver* driver,
      * takes control of the transport pointer reference. */
     TGenTransfer* transfer = tgentransfer_new(actionIDStr, count, type, (gsize)size,
             (gsize)ourSize, (gsize)theirSize, timeout, stallout,
-            localSchedule, remoteSchedule, transport,
+            localSchedule, remoteSchedule, driver->io, transport,
             onComplete, callbackArg1, callbackArg2, arg1Destroy, arg2Destroy);
 
     if(!transfer) {
@@ -456,14 +456,6 @@ static void _tgendriver_initiateGenerator(TGenDriver* driver, TGenAction* action
 
     /* start generating transfers! */
     _tgendriver_generateNextTransfer(driver, generator);
-}
-
-void tgendriver_registerTransferPause(TGenDriver *driver, TGenTimer *timer) {
-    TGEN_ASSERT(driver);
-    tgentimer_ref(timer);
-    tgenio_register(driver->io, tgentimer_getDescriptor(timer),
-            (TGenIO_notifyEventFunc)tgentimer_onEvent, NULL, timer,
-            (GDestroyNotify)tgentimer_unref);
 }
 
 static gboolean _tgendriver_initiatePause(TGenDriver* driver, TGenAction* action) {
@@ -794,14 +786,6 @@ gint tgendriver_getEpollDescriptor(TGenDriver* driver) {
 gboolean tgendriver_hasEnded(TGenDriver* driver) {
     TGEN_ASSERT(driver);
     return driver->clientHasEnded;
-}
-
-/** Forward a request for the given events to the tgenio epoll instance */
-void
-tgendriver_setEvents(TGenDriver *driver, gint descriptor, TGenEvent events)
-{
-    TGEN_ASSERT(driver);
-    tgenio_setEvents(driver->io, descriptor, events);
 }
 
 static gboolean _tgendriver_onStartClientTimerExpired(TGenDriver* driver, gpointer nullData) {

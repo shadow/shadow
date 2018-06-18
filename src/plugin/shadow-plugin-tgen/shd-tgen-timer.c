@@ -37,6 +37,14 @@ static void _tgentimer_disarm(TGenTimer* timer) {
     }
 }
 
+/* disarms the timer so that its notification function is not called.
+ * note that the data passed on tgentimer_new is *not* freed by this
+ * function (use tgentimer_unref to free any data). */
+void tgentimer_cancel(TGenTimer *timer) {
+    TGEN_ASSERT(timer);
+    _tgentimer_disarm(timer);
+}
+
 /** Sets the timer to go off in the given number of microseconds. If the timer
  * is persistent, then configure it to continue going off at the new interval.
  */

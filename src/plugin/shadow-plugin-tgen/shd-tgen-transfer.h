@@ -16,7 +16,7 @@ typedef void (*TGenTransfer_notifyCompleteFunc)(gpointer data1, gpointer data2, 
 TGenTransfer* tgentransfer_new(const gchar* idStr, gsize count, TGenTransferType type,
         gsize size, gsize ourSize, gsize theirSize, guint64 timeout, guint64 stallout,
         const gchar* localSchedule, const gchar* remoteSchedule,
-        TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
+        TGenIO* io, TGenTransport* transport, TGenTransfer_notifyCompleteFunc notify,
         gpointer data1, gpointer data2, GDestroyNotify destructData1, GDestroyNotify destructData2);
 void tgentransfer_ref(TGenTransfer* transfer);
 void tgentransfer_unref(TGenTransfer* transfer);

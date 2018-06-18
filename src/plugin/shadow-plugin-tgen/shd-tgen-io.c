@@ -86,7 +86,7 @@ void tgenio_unref(TGenIO* io) {
     }
 }
 
-static void _tgenio_deregister(TGenIO* io, gint descriptor) {
+void tgenio_deregister(TGenIO* io, gint descriptor) {
     TGEN_ASSERT(io);
 
     gint result = epoll_ctl(io->epollD, EPOLL_CTL_DEL, descriptor, NULL);
@@ -103,7 +103,7 @@ gboolean tgenio_register(TGenIO* io, gint descriptor, TGenIO_notifyEventFunc not
     TGEN_ASSERT(io);
 
     if(g_hash_table_lookup(io->children, GINT_TO_POINTER(descriptor))) {
-        _tgenio_deregister(io, descriptor);
+        tgenio_deregister(io, descriptor);
         tgen_warning("removed existing entry at descriptor %i to make room for a new one", descriptor);
     }
 
@@ -150,7 +150,7 @@ static void _tgenio_helper(TGenIO* io, TGenIOChild* child, gboolean in, gboolean
 
     /* now check if we should update our epoll events */
     if(outEvents & TGEN_EVENT_DONE) {
-        _tgenio_deregister(io, child->descriptor);
+        tgenio_deregister(io, child->descriptor);
     } else if(inEvents != outEvents) {
         guint32 newEvents = 0;
         if(outEvents & TGEN_EVENT_READ) {
@@ -204,7 +204,7 @@ gint tgenio_loopOnce(TGenIO* io, gint maxEvents) {
         } else {
             /* we don't currently have a child for the event descriptor, stop paying attention to it */
             tgen_warning("can't find child for descriptor %i, canceling event now", eventDescriptor);
-            _tgenio_deregister(io, eventDescriptor);
+            tgenio_deregister(io, eventDescriptor);
         }
     }
 
@@ -226,7 +226,7 @@ void tgenio_checkTimeouts(TGenIO* io) {
             /* this calls tgentransfer_onCheckTimeout to check and handle if a timeout is present */
             gboolean hasTimeout = child->checkTimeout(child->data, child->descriptor);
             if(hasTimeout) {
-                _tgenio_deregister(io, child->descriptor);
+                tgenio_deregister(io, child->descriptor);
             }
         }
         item = g_list_next(item);
@@ -260,6 +260,7 @@ tgenio_setEvents(TGenIO *io, gint descriptor, TGenEvent events)
      * to see if it is in an error state and only continue if it's not.)
      */
     if(g_hash_table_lookup(io->children, GINT_TO_POINTER(descriptor)) == NULL) {
+        tgen_warning("transport descriptor %i cannot be found", descriptor);
         return;
     }
 
