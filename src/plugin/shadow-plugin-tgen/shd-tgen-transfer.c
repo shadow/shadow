@@ -335,7 +335,7 @@ static const gchar* _tgentransfer_toString(TGenTransfer* transfer) {
             g_string_printf(sizeStr, "%"G_GSIZE_FORMAT, transfer->size);
         } else {
             /* Most likely TGEN_TYPE_NONE, but a general good fail safe */
-            g_string_printf(sizeStr, "%"G_GSIZE_FORMAT, 0);
+            g_string_printf(sizeStr, "0");
         }
         g_string_printf(stringBuffer, "%s,%"G_GSIZE_FORMAT",%s,%s,%s,%s,%"G_GSIZE_FORMAT",state=%s,error=%s",
                 transfer->id, transfer->count, transfer->hostname, _tgentransfer_typeToString(transfer),
