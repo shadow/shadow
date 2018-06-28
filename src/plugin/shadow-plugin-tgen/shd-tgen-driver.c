@@ -290,10 +290,10 @@ static void _tgendriver_initiateTransfer(TGenDriver* driver, TGenAction* action)
 
     const gchar* actionIDStr = tgengraph_getActionIDStr(driver->actionGraph, action);
 
-    /* socks username and password are NULL for now, until we allow them to be
-     * added to transfer actions. */
+    /* socks username and password are populated if given in the transfer action. */
     gchar* socksUsername = NULL;
     gchar* socksPassword = NULL;
+    tgenaction_getSocksParams(action, &socksUsername, &socksPassword);
 
     gboolean isSuccess = _tgendriver_createNewActiveTransfer(driver, type, peer,
             size, ourSize, theirSize, timeout, stallout,

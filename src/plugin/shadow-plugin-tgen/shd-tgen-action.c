@@ -45,6 +45,8 @@ typedef struct _TGenActionTransferData {
     TGenPool* peers;
     gchar* localSchedule;
     gchar* remoteSchedule;
+    gchar* socksUsernameStr;
+    gchar* socksPasswordStr;
 } TGenActionTransferData;
 
 typedef struct _TGenActionModelData {
@@ -653,6 +655,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
         const gchar* sizeStr, const gchar *ourSizeStr, const gchar *theirSizeStr,
         const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr,
         const gchar* localscheduleStr, const gchar* remotescheduleStr,
+        const gchar* socksUsernameStr, const gchar* socksPasswordStr,
         GError** error) {
     g_assert(error);
 
@@ -815,6 +818,8 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
     if(type == TGEN_TYPE_SCHEDULE && remotescheduleStr) {
         data->remoteSchedule = g_strdup(remotescheduleStr);
     }
+    data->socksUsernameStr = socksUsernameStr ? g_strdup(socksUsernameStr) : NULL;
+    data->socksPasswordStr = socksPasswordStr ? g_strdup(socksPasswordStr) : NULL;
 
     action->data = data;
 
@@ -1003,15 +1008,27 @@ void tgenaction_getModelPaths(TGenAction* action,
 void tgenaction_getSocksParams(TGenAction* action,
         gchar** socksUsernameStr, gchar** socksPasswordStr) {
     TGEN_ASSERT(action);
-    g_assert(action->data && action->type == TGEN_ACTION_MODEL);
+    g_assert(action->data);
+    g_assert(action->type == TGEN_ACTION_MODEL || action->type == TGEN_ACTION_TRANSFER);
 
-    TGenActionModelData* data = (TGenActionModelData*)action->data;
+    gchar* userStr = NULL;
+    gchar* passStr = NULL;
+
+    if(action->type == TGEN_ACTION_TRANSFER) {
+      TGenActionTransferData* data = (TGenActionTransferData*)action->data;
+      userStr = data->socksUsernameStr;
+      passStr = data->socksPasswordStr;
+    } else if(action->type == TGEN_ACTION_MODEL) {
+      TGenActionModelData* data = (TGenActionModelData*)action->data;
+      userStr = data->socksUsernameStr;
+      passStr = data->socksPasswordStr;
+    }
 
     if(socksUsernameStr) {
-        *socksUsernameStr = data->socksUsernameStr;
+        *socksUsernameStr = userStr;
     }
     if(socksPasswordStr) {
-        *socksPasswordStr = data->socksPasswordStr;
+        *socksPasswordStr = passStr;
     }
 }
 

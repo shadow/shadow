@@ -360,17 +360,22 @@ static GError* _tgengraph_parseTransferVertex(TGenGraph* g, const gchar* idStr,
             VAS(g->graph, "localschedule", vertexIndex) : NULL;
     const gchar* remoteSchedStr = (g->knownAttributes&TGEN_VA_REMOTESCHED) ?
             VAS(g->graph, "remoteschedule", vertexIndex) : NULL;
+    const gchar* socksUsernameStr = (g->knownAttributes&TGEN_VA_SOCKSUSERNAME) ?
+            VAS(g->graph, "socksusername", vertexIndex) : NULL;
+    const gchar* socksPasswordStr = (g->knownAttributes&TGEN_VA_SOCKSPASSWORD) ?
+            VAS(g->graph, "sockspassword", vertexIndex) : NULL;
 
     tgen_debug("found vertex %li (%s), type=%s protocol=%s size=%s oursize=%s "
-            "theirsize=%s peers=%s timeout=%s stallout=%s localschedule=%s remoteschedule=%s",
+            "theirsize=%s peers=%s timeout=%s stallout=%s localschedule=%s remoteschedule=%s "
+            "socksusername=%s sockspassword=%s",
             (glong)vertexIndex, idStr, typeStr, protocolStr, sizeStr,
             ourSizeStr, theirSizeStr, peersStr, timeoutStr, stalloutStr,
-            localSchedStr, remoteSchedStr);
+            localSchedStr, remoteSchedStr, socksUsernameStr, socksPasswordStr);
 
     GError* error = NULL;
     TGenAction* a = tgenaction_newTransferAction(typeStr, protocolStr, sizeStr,
             ourSizeStr, theirSizeStr, peersStr, timeoutStr, stalloutStr,
-            localSchedStr, remoteSchedStr, &error);
+            localSchedStr, remoteSchedStr, socksUsernameStr, socksPasswordStr, &error);
 
     if(a) {
         _tgengraph_storeAction(g, a, vertexIndex);

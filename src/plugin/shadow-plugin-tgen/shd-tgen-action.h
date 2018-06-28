@@ -27,6 +27,7 @@ TGenAction* tgenaction_newTransferAction(const gchar* typeStr, const gchar* prot
         const gchar* sizeStr, const gchar *ourSizeStr, const gchar *theirSizeStr,
         const gchar* peersStr, const gchar* timeoutStr, const gchar* stalloutStr,
         const gchar* localscheduleStr, const gchar* remotescheduleStr,
+        const gchar* socksUsernameStr, const gchar* socksPasswordStr,
         GError** error);
 TGenAction* tgenaction_newModelAction(const gchar* streamModelPath,
         const gchar* packetModelPath, const gchar* peersStr,
