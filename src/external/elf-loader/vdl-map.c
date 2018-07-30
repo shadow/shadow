@@ -1145,6 +1145,8 @@ vdl_map_from_filename (struct VdlContext *context, const char *filename)
     {
       result.error_string = single.error_string;
       vdl_list_delete (empty);
+      vdl_list_delete (result.newly_mapped);
+      result.newly_mapped = 0;
       return result;
     }
   if (single.newly_mapped)

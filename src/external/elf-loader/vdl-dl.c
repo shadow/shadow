@@ -335,21 +335,22 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
   return map.requested;
 
 error:
-  {
-    // we don't need to call_fini here because we have not yet
-    // called call_init.
-    struct VdlGcResult gc = vdl_gc_run ();
+  if (map.newly_mapped != 0)
+    {
+      // we don't need to call_fini here because we have not yet
+      // called call_init.
+      vdl_list_delete (map.newly_mapped);
+      struct VdlGcResult gc = vdl_gc_run ();
 
-    vdl_tls_file_deinitialize (gc.unload);
+      vdl_tls_file_deinitialize (gc.unload);
 
-    vdl_unmap (gc.unload, true);
+      vdl_unmap (gc.unload, true);
 
-    vdl_list_delete (gc.unload);
-    vdl_list_delete (gc.not_unload);
-
-    write_unlock (context->lock);
-    read_unlock (g_vdl.global_lock);
-  }
+      vdl_list_delete (gc.unload);
+      vdl_list_delete (gc.not_unload);
+    }
+  write_unlock (context->lock);
+  read_unlock (g_vdl.global_lock);
   return 0;
 }
 
