@@ -24,6 +24,15 @@ struct mux_try {
     int numnolocked;
 };
 
+static pthread_key_t key;
+static pthread_once_t init_done = PTHREAD_ONCE_INIT;
+pthread_mutex_t env_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static void
+thread_init(void) {
+    pthread_key_create(&key, free);
+}
+
 static void* _test_thread_returnOne() {
     int* retval = (int*)malloc(sizeof(int));
     *retval = 1;
@@ -274,6 +283,30 @@ fail2:
 fail1:
     return value_to_return;
 }
+
+static int _test_thread_once(pthread_t* threads) {
+    int value_to_return = -1;
+    char *envbuf;
+
+    int ret = pthread_once(&init_done, thread_init);
+    if (ret != 0) {
+        return -1;
+    }
+    pthread_mutex_lock(&env_mutex);
+    envbuf = (char *)pthread_getspecific(key);
+    if (envbuf == NULL) {
+        envbuf = malloc(100);
+        if (envbuf == NULL) {
+            pthread_mutex_unlock(&env_mutex);
+            return -1;
+        }
+        pthread_setspecific(key, envbuf);
+    }
+    
+    pthread_mutex_unlock(&env_mutex);
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     fprintf(stdout, "########## pthreads test starting ##########\n");
 
@@ -292,6 +325,11 @@ int main(int argc, char* argv[]) {
 
     if(_test_mutex_trylock(threads) < 0) {
         fprintf(stdout, "########## _test_mutex_trylock(threads) failed\n");
+        return -1;
+    }
+
+    if(_test_thread_once(threads) < 0) {
+        fprintf(stdout, "########## _test_thread_once(threads) failed\n");
         return -1;
     }
 
