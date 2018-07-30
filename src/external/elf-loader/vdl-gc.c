@@ -101,8 +101,9 @@ vdl_gc_white_list_new (struct VdlList *list)
 struct VdlGcResult
 vdl_gc_run (void)
 {
-  struct VdlList *global = vdl_linkmap_copy ();
   struct VdlList *unload = vdl_list_new ();
+  futex_lock (g_vdl.gc_futex);
+  struct VdlList *global = vdl_linkmap_copy ();
   struct VdlList *white = vdl_gc_white_list_new (global);
   while (!vdl_list_empty (white))
     {
@@ -123,6 +124,7 @@ vdl_gc_run (void)
       vdl_list_delete (white);
       white = vdl_gc_white_list_new (global);
     }
+  futex_unlock (g_vdl.gc_futex);
   vdl_list_delete (white);
   // copy global files left into not_unload list
   struct VdlGcResult result;

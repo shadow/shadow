@@ -126,6 +126,7 @@ global_initialize (unsigned long interpreter_load_base)
   vdl->readonly_cache = vdl_hashmap_new ();
   vdl->ro_cache_futex = futex_new ();
   vdl->shm_path = make_shm_name ();
+  vdl->gc_futex = futex_new ();
 }
 
 // relocate entries in DT_REL
