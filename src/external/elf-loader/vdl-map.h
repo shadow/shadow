@@ -12,7 +12,8 @@ struct VdlMapResult
   // should be non-null if success, null otherwise.
   struct VdlFile *requested;
   // the list of files which were brought into memory
-  // by this map request. allocated by callee. caller must free.
+  // by this map request. allocated by callee. caller must free,
+  // unless null, which indicates nothing was mapped
   struct VdlList *newly_mapped;
   // if the mapping fails, a human-readable string
   // which indicates what went wrong.
