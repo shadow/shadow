@@ -101,6 +101,8 @@ struct Vdl
   char* shm_path;
   // list of thread-local allocators for cleanup
   struct VdlList *allocators;
+  // the garbage collector spans multiple contexts, so needs a global futex
+  struct Futex *gc_futex;
 };
 
 extern struct Vdl g_vdl;
