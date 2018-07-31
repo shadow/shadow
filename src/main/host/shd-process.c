@@ -1308,7 +1308,7 @@ void process_stop(Process* proc) {
     worker_setActiveProcess(NULL);
 
     /* free our copy of plug-in resources, and other application state */
-    _process_unloadPlugin(proc);
+    //_process_unloadPlugin(proc); XXX TODO this should be done once elf-loader supports unloading libs
 }
 
 static void _process_runStartTask(Process* proc, gpointer nothing) {
