@@ -971,6 +971,9 @@ Observation tgenmarkovmodel_getNextObservation(TGenMarkovModel* mmodel, guint64*
 
     if(delay) {
         *delay = _tgenmarkovmodel_generateDelay(mmodel, emissionEdgeIndex);
+        if(*delay > 60000000){
+            *delay = 60000000;
+        }
     }
 
     return _tgenmarkovmodel_vertexToObservation(mmodel, emissionObservationVertexIndex);
