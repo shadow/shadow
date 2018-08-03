@@ -882,10 +882,13 @@ static void _tgentransfer_onReadable(TGenTransfer* transfer) {
 }
 
 static GString* _tgentransfer_getRandomString(gsize size) {
+    /* call rand() once to limit overhead */
+    gint r = rand() % 26;
+    gchar c = (gchar)('a' + r);
+    /* fill the buffer. this was more efficient than malloc/memset and then g_string_new  */
     GString* buffer = g_string_new_len(NULL, (gssize)size);
     for(gint i = 0; i < size; i++) {
-        gint n = rand() % 26;
-        g_string_append_c(buffer, (gchar)('a' + n));
+        g_string_append_c(buffer, c);
     }
     return buffer;
 }
