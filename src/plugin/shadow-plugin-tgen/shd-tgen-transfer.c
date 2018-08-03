@@ -46,8 +46,8 @@ typedef struct _TGenTransferScheduleData {
     gchar* theirSchedule;
     gsize theirScheduleSize;
     gsize expectedReceiveBytes;
+    int32_t nextDelay;
     gboolean timerSet;
-    gboolean goneToSleepOnce;
     gboolean doneReadingPayload;
     gboolean doneWritingPayload;
     gboolean sentOurChecksum;
@@ -1149,7 +1149,7 @@ static void _tgentransfer_schedTimerCancel(TGenTransfer *transfer) {
     transfer->schedule->timer = NULL;
 }
 
-static void _tgentransfer_schedStartPause(TGenTransfer *transfer, int32_t micros)
+static void _tgentransfer_schedPause(TGenTransfer *transfer, int32_t micros)
 {
     TGEN_ASSERT(transfer);
     g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
@@ -1186,7 +1186,6 @@ static void _tgentransfer_schedStartPause(TGenTransfer *transfer, int32_t micros
 
     g_assert(transfer->schedule->timer);
     transfer->schedule->timerSet = TRUE;
-    transfer->schedule->goneToSleepOnce = TRUE;
 }
 
 static gboolean
@@ -1217,86 +1216,78 @@ _tgentransfer_schedTryFlushWriteBuffer(TGenTransfer *transfer)
     }
 }
 
-static void
-_tgentransfer_schedWriteToBuffer(TGenTransfer *transfer)
-{
+static void _tgentransfer_schedWriteToBuffer(TGenTransfer *transfer) {
     TGEN_ASSERT(transfer);
     g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
     g_assert(!transfer->writeBuffer);
 
-    GString *more_data;
-    int32_t delay, cum_delay = 0;
-    gsize flushed;
+    /* First compute how many packets we send now (i.e., how much data we write).
+     * We send multiple packets that would be sent within a threshold at the same 
+     * time for performance reasons. */
+    gsize amountToWrite = 0;
+    int32_t cumulativeDelay = 0;
 
-    transfer->writeBuffer = g_string_new(NULL);
-    more_data = _tgentransfer_getRandomString(TGEN_MMODEL_PACKET_DATA_SIZE);
-    g_string_append(transfer->writeBuffer, more_data->str);
-    g_string_free(more_data, TRUE);
+    while(cumulativeDelay <= TGEN_MMODEL_MICROS_AT_ONCE) {
+        amountToWrite += (gsize)TGEN_MMODEL_PACKET_DATA_SIZE;
 
-    while (_tgentransfer_schedAdvanceSchedule(transfer)) {
         /* delay is in microseconds */
-        delay = g_array_index(transfer->schedule->sched, int32_t,
+        int32_t delay = g_array_index(transfer->schedule->sched, int32_t,
                 transfer->schedule->schedIdx);
-        cum_delay += delay;
-        if (cum_delay <= TGEN_MMODEL_MICROS_AT_ONCE) {
-            more_data = _tgentransfer_getRandomString(TGEN_MMODEL_PACKET_DATA_SIZE);
-            g_string_append(transfer->writeBuffer, more_data->str);
-            g_string_free(more_data, TRUE);
-        } else {
-            _tgentransfer_schedStartPause(transfer, cum_delay);
+        cumulativeDelay += delay;
+
+        gboolean needMore = _tgentransfer_schedAdvanceSchedule(transfer);
+        if(!needMore) {
             break;
         }
     }
+
+    transfer->schedule->nextDelay = cumulativeDelay;
+
+    /* Now get enough bytes to fill the number of packets we need. */
+    transfer->writeBuffer = _tgentransfer_getRandomString(amountToWrite);
 
     g_checksum_update(transfer->schedule->ourPayloadChecksum,
             (guchar*)transfer->writeBuffer->str,
             (gssize)transfer->writeBuffer->len);
 }
 
-static void
-_tgentransfer_writeSchedPayload(TGenTransfer *transfer)
+static void _tgentransfer_writeSchedPayload(TGenTransfer* transfer)
 {
     TGEN_ASSERT(transfer);
     g_assert(transfer->type == TGEN_TYPE_SCHEDULE);
+
+do_write_more:
+
     if (transfer->writeBuffer) {
-        tgen_debug("There's an existing writeBuffer, so going to try to write "
-                "it out first");
+        tgen_debug("There's an existing write buffer, so let's write it");
         _tgentransfer_schedTryFlushWriteBuffer(transfer);
-    }
 
-    if (!transfer->writeBuffer) {
-        if (!transfer->schedule->timerSet) {
-            if (transfer->schedule->schedIdx < transfer->schedule->sched->len) {
-                if (transfer->schedule->schedIdx == 0) {
-                    int32_t delay = g_array_index(transfer->schedule->sched,
-                            int32_t, transfer->schedule->schedIdx);
-                    if (delay > 0 && !transfer->schedule->goneToSleepOnce) {
-                        tgen_debug("This is the first item but it calls to "
-                                "sleep first. So we are not going to write "
-                                "this time.");
-                        _tgentransfer_schedStartPause(transfer, delay);
-                    }
-                }
-                /* Make sure timer still isn't set since it might have been set
-                 * if this was the first schedIdx and we needed to sleep */
-                if (!transfer->schedule->timerSet) {
-                    tgen_debug("Empty write buffer, no timer set, and not at "
-                            "the end of the schedule. Writing more data.");
-                    _tgentransfer_schedWriteToBuffer(transfer);
-                    _tgentransfer_schedTryFlushWriteBuffer(transfer);
-                }
-            }
+        /* if there still is a write buffer, we still need to write more */
+        if(transfer->writeBuffer) {
+            return;
         } else {
-            tgen_debug("Empty write buffer, but timer is set. Trusting that "
-                    "when it expires we'll get the writable event again.");
+            /* we finished writing previous data, now we pause, but only if
+             * we haven't finished the schedule. */
+            if((transfer->schedule->schedIdx < transfer->schedule->sched->len) &&
+                transfer->schedule->nextDelay > 0) {
+                /* we still need to send more packets after a delay */
+                _tgentransfer_schedPause(transfer, transfer->schedule->nextDelay);
+                /* now that we paused, reset the delay for the next round */
+                transfer->schedule->nextDelay = 0;
+                return;
+            }
         }
-    } else {
-        tgen_debug("There's a write buffer already so we aren't going to "
-                "write more");
     }
 
-    if (transfer->schedule->schedIdx >= transfer->schedule->sched->len &&
-            !transfer->writeBuffer) {
+    g_assert(!transfer->writeBuffer);
+    g_assert(!transfer->schedule->timerSet);
+
+    if (transfer->schedule->schedIdx < transfer->schedule->sched->len) {
+        tgen_debug("Empty write buffer, no timer set, and not at "
+                   "the end of the schedule. Writing more data.");
+        _tgentransfer_schedWriteToBuffer(transfer);
+        goto do_write_more;
+    } else {
         tgen_debug("We're done writing for the Schedule!");
         transfer->schedule->doneWritingPayload = TRUE;
 
