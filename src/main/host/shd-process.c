@@ -4319,6 +4319,14 @@ int process_emu_fflush(Process* proc, FILE *stream) {
         _process_setErrno(proc, errno);
     }
 
+    /* flush program output */
+    if(proc->stdoutFile) {
+        fflush(proc->stdoutFile);
+    }
+    if(proc->stderrFile) {
+        fflush(proc->stderrFile);
+    }
+
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
