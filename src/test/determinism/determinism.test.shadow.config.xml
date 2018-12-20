@@ -20,7 +20,7 @@
 ]]></topology>
   <kill time="5"/>
   <plugin id="testdeterminism" path="shadow-plugin-test-determinism"/>
-  <node id="testnode" quantity="1">
+  <node id="testnode" quantity="50">
     <application plugin="testdeterminism" starttime="1" arguments=""/>
   </node>
 </shadow>
