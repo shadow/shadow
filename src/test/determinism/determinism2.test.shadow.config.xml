@@ -19,9 +19,8 @@
 </graphml>
 ]]></topology>
   <kill time="3"/>
-  <plugin id="testphold" path="shadow-plugin-test-phold"/>
+  <plugin id="testphold" path="../phold/shadow-plugin-test-phold"/>
   <node id="peer" quantity="10">
-    <application plugin="testphold" starttime="1" arguments="loglevel=info basename=peer quantity=10 load=25 weightsfilepath=weights.txt"/>
+    <application plugin="testphold" starttime="1" arguments="loglevel=debug basename=peer quantity=10 load=5 weightsfilepath=weights.txt"/>
   </node>
 </shadow>
-
