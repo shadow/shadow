@@ -11,6 +11,9 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <errno.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
 static int test_randomOpenRead(const char *filename) {
     unsigned char buf[1];
@@ -81,6 +84,12 @@ static int _test_open() {
     return EXIT_SUCCESS;
 }
 
+static int _test_getPID() {
+    pid_t myPID = getpid();
+    fprintf(stdout, "my process ID is %i\n", (int) myPID);
+    return EXIT_SUCCESS;
+}
+
 int main(int argc, char* argv[]) {
     fprintf(stdout, "########## determinism test starting ##########\n");
 
@@ -97,6 +106,13 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
     fprintf(stdout, "_test_fopen() passed\n");
+
+    fprintf(stdout, "starting _test_getPID()\n");
+    if (_test_getPID() < 0) {
+        fprintf(stdout, "########## _test_getPID() failed\n");
+        return EXIT_FAILURE;
+    }
+    fprintf(stdout, "_test_getPID() passed\n");
 
     fprintf(stdout, "########## determinism test passed! ##########\n");
     return EXIT_SUCCESS;
