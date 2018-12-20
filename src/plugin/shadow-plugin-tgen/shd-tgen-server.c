@@ -36,6 +36,9 @@ static gint _tgenserver_acceptPeer(TGenServer* server) {
             /* someone is connecting to us, its ok to perform network lookups */
             tgenpeer_performLookups(peer);
 
+            tgen_debug("Server listen socket %i accepted new peer %s on socket %i",
+                    server->socketD, tgenpeer_toString(peer), peerSocketD)
+
             server->notify(server->data, peerSocketD, started, created, peer);
             tgenpeer_unref(peer);
         }
@@ -67,7 +70,7 @@ TGenEvent tgenserver_onEvent(TGenServer* server, gint descriptor, TGenEvent even
         }
     }
 
-    tgen_debug("accepted %i peer connection(s) until blocked", acceptedCount);
+    tgen_debug("accepted %i peer connection(s), and now the listen port is blocked", acceptedCount);
 
     /* we will only ever accept and never write */
     return TGEN_EVENT_READ;

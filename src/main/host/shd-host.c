@@ -368,7 +368,7 @@ gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
     const Host* nb = b;
     MAGIC_ASSERT(na);
     MAGIC_ASSERT(nb);
-    return na->params.id > nb->params.id ? +1 : na->params.id == nb->params.id ? 0 : -1;
+    return na->params.id > nb->params.id ? +1 : na->params.id < nb->params.id ? -1 : 0;
 }
 
 gboolean host_isEqual(Host* a, Host* b) {

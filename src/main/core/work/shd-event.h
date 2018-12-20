@@ -8,10 +8,12 @@
 
 #include "shadow.h"
 
-/* A basic event connected to a local virtual host. */
+/* An event for a local virtual host, i.e.,
+ * a host running on the same slave machine as the event initiator.
+ * (These are packets sent between hosts on the same machine.) */
 typedef struct _Event Event;
 
-Event* event_new_(Task* task, SimulationTime time, gpointer host);
+Event* event_new_(Task* task, SimulationTime time, gpointer srcHost, gpointer dstHost);
 void event_ref(Event* event);
 void event_unref(Event* event);
 

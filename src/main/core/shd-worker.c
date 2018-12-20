@@ -198,9 +198,10 @@ gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
         utility_assert(worker->clock.now != SIMTIME_INVALID);
         utility_assert(worker->active.host != NULL);
 
-        Event* event = event_new_(task, worker->clock.now + nanoDelay, worker->active.host);
-        GQuark hostID = host_getID(worker->active.host);
-        return scheduler_push(worker->scheduler, event, hostID, hostID);
+        Host* srcHost = worker->active.host;
+        Host* dstHost = srcHost;
+        Event* event = event_new_(task, worker->clock.now + nanoDelay, srcHost, dstHost);
+        return scheduler_push(worker->scheduler, event, srcHost, dstHost);
     } else {
         return FALSE;
     }
@@ -253,7 +254,6 @@ void worker_sendPacket(Packet* packet) {
          * this is the only place where tasks are sent between separate hosts */
 
         Host* srcHost = worker->active.host;
-        GQuark srcID = srcHost == NULL ? 0 : host_getID(srcHost);
         GQuark dstID = (GQuark)address_getID(dstAddress);
         Host* dstHost = scheduler_getHost(worker->scheduler, dstID);
         utility_assert(dstHost);
@@ -261,10 +261,10 @@ void worker_sendPacket(Packet* packet) {
         packet_ref(packet);
         Task* packetTask = task_new((TaskCallbackFunc)_worker_runDeliverPacketTask,
                 packet, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
-        Event* packetEvent = event_new_(packetTask, deliverTime, dstHost);
+        Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
         task_unref(packetTask);
 
-        scheduler_push(worker->scheduler, packetEvent, srcID, dstID);
+        scheduler_push(worker->scheduler, packetEvent, srcHost, dstHost);
 
         packet_addDeliveryStatus(packet, PDS_INET_SENT);
     } else {

@@ -320,7 +320,7 @@ void scheduler_unref(Scheduler* scheduler) {
     }
 }
 
-gboolean scheduler_push(Scheduler* scheduler, Event* event, GQuark senderHostID, GQuark receiverHostID) {
+gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* receiver) {
     MAGIC_ASSERT(scheduler);
 
     SimulationTime eventTime = event_getTime(event);
@@ -331,8 +331,6 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, GQuark senderHostID,
 
     /* parties involved. sender may be NULL, receiver may not!
      * we MAY NOT OWN the receiver, so do not write to it! */
-    Host* sender = scheduler_getHost(scheduler, senderHostID);
-    Host* receiver = scheduler_getHost(scheduler, receiverHostID);
     utility_assert(receiver);
     utility_assert(receiver == event_getHost(event));
 
