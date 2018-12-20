@@ -91,6 +91,7 @@ typedef struct _Process Process;
 #include "routing/shd-address.h"
 #include "routing/shd-dns.h"
 #include "routing/shd-path.h"
+#include "routing/shd-topology.h"
 
 #include "host/descriptor/shd-epoll.h"
 #include "host/descriptor/shd-timer.h"
@@ -109,7 +110,6 @@ typedef struct _Process Process;
 #include "host/shd-tracker.h"
 #include "host/shd-host.h"
 
-#include "routing/shd-topology.h"
 
 #include "core/scheduler/shd-scheduler-policy.h"
 #include "core/scheduler/shd-scheduler.h"

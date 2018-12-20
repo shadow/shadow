@@ -53,9 +53,11 @@ void host_continueExecutionTimer(Host* host);
 void host_stopExecutionTimer(Host* host);
 gdouble host_getElapsedExecutionTime(Host* host);
 
+void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, const gchar* hostRootPath);
 void host_boot(Host* host);
 void host_shutdown(Host* host);
 
+guint host_getNewProcessID(Host* host);
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
         const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
         const gchar* preloadName, const gchar* preloadPath, gchar* arguments);

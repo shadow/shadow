@@ -61,6 +61,7 @@ struct _Host {
     MAGIC_DECLARE;
 };
 
+/* this function is called by slave before the workers exist */
 Host* host_new(HostParameters* params) {
     utility_assert(params);
 
@@ -112,6 +113,61 @@ Host* host_new(HostParameters* params) {
     worker_countObject(OBJECT_TYPE_HOST, COUNTER_TYPE_NEW);
 
     return host;
+}
+
+/* this function is called by slave before the workers exist */
+void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, const gchar* hostRootPath) {
+    MAGIC_ASSERT(host);
+
+    /* get unique virtual address identifiers for each network interface */
+    Address* loopbackAddress = dns_register(dns, host->params.id, host->params.hostname, "127.0.0.1");
+    Address* ethernetAddress = dns_register(dns, host->params.id, host->params.hostname, host->params.ipHint);
+    host->defaultAddress = ethernetAddress;
+    address_ref(host->defaultAddress);
+
+    if(!host->dataDirPath) {
+        host->dataDirPath = g_build_filename(hostRootPath, host->params.hostname, NULL);
+        g_mkdir_with_parents(host->dataDirPath, 0775);
+    }
+
+    host->random = random_new(host->params.nodeSeed);
+    host->cpu = cpu_new(host->params.cpuFrequency, (guint64)rawCPUFreq, host->params.cpuThreshold, host->params.cpuPrecision);
+
+    /* connect to topology and get the default bandwidth */
+    guint64 bwDownKiBps = 0, bwUpKiBps = 0;
+    topology_attach(topology, ethernetAddress, host->random,
+            host->params.ipHint, host->params.citycodeHint, host->params.countrycodeHint, host->params.geocodeHint,
+            host->params.typeHint, &bwDownKiBps, &bwUpKiBps);
+
+    /* prefer assigned bandwidth if available */
+    if(host->params.requestedBWDownKiBps) {
+        bwDownKiBps = host->params.requestedBWDownKiBps;
+    }
+    if(host->params.requestedBWUpKiBps) {
+        bwUpKiBps = host->params.requestedBWUpKiBps;
+    }
+
+    /* virtual addresses and interfaces for managing network I/O */
+    NetworkInterface* loopback = networkinterface_new(loopbackAddress, G_MAXUINT32, G_MAXUINT32,
+            host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
+    NetworkInterface* ethernet = networkinterface_new(ethernetAddress, bwDownKiBps, bwUpKiBps,
+            host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
+
+    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(ethernetAddress)), ethernet);
+    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
+
+    address_unref(loopbackAddress);
+    address_unref(ethernetAddress);
+
+    message("Setup host id '%u' name '%s' with seed %u, ip %s, "
+                "%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, "
+                "%"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
+                "%"G_GUINT64_FORMAT" cpuFrequency, %"G_GUINT64_FORMAT" cpuThreshold, "
+                "%"G_GUINT64_FORMAT" cpuPrecision",
+                (guint)host->params.id, host->params.hostname, host->params.nodeSeed,
+                address_toHostIPString(host->defaultAddress),
+                bwUpKiBps, bwDownKiBps, host->params.sendBufSize, host->params.recvBufSize,
+                host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
 }
 
 static void _host_free(Host* host) {
@@ -259,71 +315,27 @@ GQuark host_getID(Host* host) {
     return host->params.id;
 }
 
+/* this function is called by worker after the workers exist */
 void host_boot(Host* host) {
     MAGIC_ASSERT(host);
-
-    /* get unique virtual address identifiers for each network interface */
-    Address* loopbackAddress = dns_register(worker_getDNS(), host->params.id, host->params.hostname, "127.0.0.1");
-    Address* ethernetAddress = dns_register(worker_getDNS(), host->params.id, host->params.hostname, host->params.ipHint);
-    host->defaultAddress = ethernetAddress;
-    address_ref(host->defaultAddress);
-
-    if(!host->dataDirPath) {
-        host->dataDirPath = g_build_filename(worker_getHostsRootPath(), host->params.hostname, NULL);
-        g_mkdir_with_parents(host->dataDirPath, 0775);
-    }
-
-    host->random = random_new(host->params.nodeSeed);
-    host->cpu = cpu_new(host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
-
-    /* connect to topology and get the default bandwidth */
-    guint64 bwDownKiBps = 0, bwUpKiBps = 0;
-    topology_attach(worker_getTopology(), ethernetAddress, host->random,
-            host->params.ipHint, host->params.citycodeHint, host->params.countrycodeHint, host->params.geocodeHint,
-            host->params.typeHint, &bwDownKiBps, &bwUpKiBps);
-
-    /* prefer assigned bandwidth if available */
-    if(host->params.requestedBWDownKiBps) {
-        bwDownKiBps = host->params.requestedBWDownKiBps;
-    }
-    if(host->params.requestedBWUpKiBps) {
-        bwUpKiBps = host->params.requestedBWUpKiBps;
-    }
-
-    /* virtual addresses and interfaces for managing network I/O */
-    NetworkInterface* loopback = networkinterface_new(loopbackAddress, G_MAXUINT32, G_MAXUINT32,
-            host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
-    NetworkInterface* ethernet = networkinterface_new(ethernetAddress, bwDownKiBps, bwUpKiBps,
-            host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
-
-    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(ethernetAddress)), ethernet);
-    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
-
-    address_unref(loopbackAddress);
-    address_unref(ethernetAddress);
 
     /* must be done after the default IP exists so tracker_heartbeat works */
     host->tracker = tracker_new(host->params.heartbeatInterval, host->params.heartbeatLogLevel, host->params.heartbeatLogInfo);
 
     /* scheduling the starting and stopping of our virtual processes */
     g_queue_foreach(host->processes, (GFunc)process_schedule, NULL);
+}
 
-    message("Booted host id '%u' name '%s' with seed %u, ip %s, "
-                "%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, "
-                "%"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
-                "%"G_GUINT64_FORMAT" cpuFrequency, %"G_GUINT64_FORMAT" cpuThreshold, "
-                "%"G_GUINT64_FORMAT" cpuPrecision",
-                (guint)host->params.id, host->params.hostname, host->params.nodeSeed,
-                address_toHostIPString(host->defaultAddress),
-                bwUpKiBps, bwDownKiBps, host->params.sendBufSize, host->params.recvBufSize,
-                host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
+guint host_getNewProcessID(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->processIDCounter++;
 }
 
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
         const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
         const gchar* preloadName, const gchar* preloadPath, gchar* arguments) {
     MAGIC_ASSERT(host);
-    guint processID = host->processIDCounter++;
+    guint processID = host_getNewProcessID(host);
     Process* proc = process_new(host, processID, startTime, stopTime, pluginName, pluginPath, pluginSymbol, preloadName, preloadPath, arguments);
     g_queue_push_tail(host->processes, proc);
 }

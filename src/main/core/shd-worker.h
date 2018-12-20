@@ -34,7 +34,6 @@ void worker_countObject(ObjectType otype, CounterType ctype);
 SimulationTime worker_getCurrentTime();
 EmulatedTime worker_getEmulatedTime();
 
-guint worker_getRawCPUFrequency();
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID);
@@ -53,7 +52,6 @@ void worker_setActiveProcess(Process* proc);
 
 void worker_incrementPluginError();
 
-const gchar* worker_getHostsRootPath();
 Address* worker_resolveIPToAddress(in_addr_t ip);
 Address* worker_resolveNameToAddress(const gchar* name);
 

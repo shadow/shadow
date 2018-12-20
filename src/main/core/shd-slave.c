@@ -33,7 +33,7 @@ struct _Slave {
 
     /* slave random source, init from master random, used to init host randoms */
     Random* random;
-    gint rawFrequencyKHz;
+    guint rawFrequencyKHz;
 
     /* global object counters, we collect counts from workers at end of sim */
     ObjectCounter* objectCounts;
@@ -287,6 +287,8 @@ void slave_addNewVirtualHost(Slave* slave, HostParameters* params) {
     params->nodeSeed = slave_nextRandomUInt(slave);
 
     Host* host = host_new(params);
+    host_setup(host, slave_getDNS(slave), slave_getTopology(slave),
+            slave_getRawCPUFrequency(slave), slave_getHostsRootPath(slave));
     scheduler_addHost(slave->scheduler, host);
 }
 

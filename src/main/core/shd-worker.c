@@ -358,11 +358,6 @@ EmulatedTime worker_getEmulatedTime() {
     return (EmulatedTime)(worker_getCurrentTime() + EMULATED_TIME_OFFSET);
 }
 
-guint worker_getRawCPUFrequency() {
-    Worker* worker = _worker_getPrivate();
-    return slave_getRawCPUFrequency(worker->slave);
-}
-
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip) {
     Worker* worker = _worker_getPrivate();
     return slave_getNodeBandwidthUp(worker->slave, nodeID, ip);
@@ -400,11 +395,6 @@ gboolean worker_isFiltered(LogLevel level) {
 void worker_incrementPluginError() {
     Worker* worker = _worker_getPrivate();
     slave_incrementPluginError(worker->slave);
-}
-
-const gchar* worker_getHostsRootPath() {
-    Worker* worker = _worker_getPrivate();
-    return slave_getHostsRootPath(worker->slave);
 }
 
 void worker_countObject(ObjectType otype, CounterType ctype) {
