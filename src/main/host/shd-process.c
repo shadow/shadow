@@ -4749,6 +4749,38 @@ int process_emu___cxa_atexit(Process* proc, void (*func) (void *), void * arg, v
     return success == TRUE ? 0 : -1;
 }
 
+pid_t process_emu_getpid(Process* proc) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    pid_t pid;
+
+    if(prevCTX == PCTX_PLUGIN) {
+        /* FIXME this should return a unique pid for each thread */
+        pid = (pid_t)proc->processID;
+    } else {
+        pid = getpid();
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return pid;
+}
+
+pid_t process_emu_getppid(Process* proc) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    pid_t pid;
+
+    if(prevCTX == PCTX_PLUGIN) {
+        /* FIXME this should return the main process id for threads, and some parent for thread 0 */
+        pid = (pid_t)proc->processID;
+    } else {
+        pid = getppid();
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return pid;
+}
+
 /* syscall */
 
 int process_emu_syscall(Process* proc, int number, va_list ap) {

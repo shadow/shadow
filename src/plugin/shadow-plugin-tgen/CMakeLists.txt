@@ -32,6 +32,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC -std=gnu11 -fno-inline -fno-strict-ali
 message(STATUS "CMAKE_C_FLAGS = ${CMAKE_C_FLAGS}")
 
 add_definitions(-D_GNU_SOURCE)
+add_compile_options(-O2 -ggdb -fno-omit-frame-pointer)
 
 ## the main tgen dynamic executable, can run inside or outside of shadow
 ## this only works because none of tgen's internal symbols need to be interposed!

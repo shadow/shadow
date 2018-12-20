@@ -266,6 +266,11 @@ int process_emu_on_exit(Process* proc, void (*function)(int , void *), void *arg
 int process_emu_atexit(Process* proc, void (*func)(void));
 int process_emu___cxa_atexit(Process* proc, void (*func) (void *), void * arg, void * dso_handle);
 
+/* pid */
+
+pid_t process_emu_getpid(Process* proc);
+pid_t process_emu_getppid(Process* proc);
+
 /* syscall */
 
 int process_emu_syscall(Process* proc, int number, va_list ap);

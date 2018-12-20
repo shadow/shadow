@@ -164,6 +164,11 @@ PRELOADDEF(return, int, random_r, (struct random_data *a, int32_t *b), a, b);
 PRELOADDEF(      , void, srandom, (unsigned int a), a);
 PRELOADDEF(return, int, srandom_r, (unsigned int a, struct random_data *b), a, b);
 
+/* pid */
+
+PRELOADDEF(      , pid_t, getpid, (void));
+PRELOADDEF(      , pid_t, getppid, (void));
+
 /* signals */
 
 PRELOADDEF(return, int, sigaction, (int a, const struct sigaction* b, struct sigaction* c), a, b, c);
