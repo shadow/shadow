@@ -1,7 +1,10 @@
 ## TEST 1 (Basic tests)
 
+find_package(Threads REQUIRED)
+
 ## build the test as a dynamic executable that plugs into shadow
 add_shadow_exe(shadow-plugin-test-determinism shd-test-determinism.c)
+target_link_libraries(shadow-plugin-test-determinism ${CMAKE_THREAD_LIBS_INIT})
 
 ## We need to run twice to make sure the 'random' output is the same both times
 add_test(NAME determinism1a-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -w 2 -s 1 -d determinism1a.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/determinism1.test.shadow.config.xml)

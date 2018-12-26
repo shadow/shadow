@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <pthread.h>
 
 static int test_randomOpenRead(const char *filename) {
     unsigned char buf[1];
@@ -84,9 +85,58 @@ static int _test_open() {
     return EXIT_SUCCESS;
 }
 
+typedef struct _ThreadPIDs ThreadPIDs;
+struct _ThreadPIDs {
+    int pid;
+    int ppid;
+};
+
+static void* _test_runThread(void* arg) {
+    ThreadPIDs* tids = (ThreadPIDs*)arg;
+    tids->pid = (int)getpid();
+    tids->ppid = (int)getppid();
+    return NULL;
+}
+
 static int _test_getPID() {
-    pid_t myPID = getpid();
-    fprintf(stdout, "my process ID is %i\n", (int) myPID);
+#define NUMTHREADS 2
+    pthread_t threads[NUMTHREADS];
+    ThreadPIDs tids[NUMTHREADS];
+
+    memset(&threads[0], 0, NUMTHREADS*sizeof(pthread_t));
+    memset(&tids[0], 0, NUMTHREADS*sizeof(ThreadPIDs));
+
+    for(int i = 0; i < NUMTHREADS; i++) {
+        int retval = pthread_create(&threads[i], NULL, _test_runThread, (void*)&tids[i]);
+        if(retval < 0) {
+            fprintf(stdout, "error %i in pthread_create: %s\n",
+                    errno, gai_strerror(errno));
+            return EXIT_FAILURE;
+        }
+
+        fprintf(stdout, "created thread %i\n", i);
+    }
+
+    for(int i = 0; i < NUMTHREADS; i++) {
+        int retval = pthread_join(threads[i], NULL);
+        if(retval < 0) {
+            fprintf(stdout, "error %i in pthread_join: %s\n",
+                    errno, gai_strerror(errno));
+            return EXIT_FAILURE;
+        }
+
+        fprintf(stdout, "joined thread %i\n", i);
+    }
+
+    ThreadPIDs myPIDs;
+    myPIDs.pid = (int)getpid();
+    myPIDs.ppid = (int)getppid();
+
+    fprintf(stdout, "PIDS: Main: pid=%i, ppid=%i Thread1: pid=%i, ppid=%i "
+            "Thread2: pid=%i, ppid=%i\n",
+            myPIDs.pid, myPIDs.ppid, tids[0].pid, tids[0].ppid,
+            tids[1].pid, tids[1].ppid);
+
     return EXIT_SUCCESS;
 }
 

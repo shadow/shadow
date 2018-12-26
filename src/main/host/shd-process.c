@@ -4755,7 +4755,7 @@ pid_t process_emu_getpid(Process* proc) {
     pid_t pid;
 
     if(prevCTX == PCTX_PLUGIN) {
-        /* FIXME this should return a unique pid for each thread */
+        /* POSIX specifies that all threads return the process id */
         pid = (pid_t)proc->processID;
     } else {
         pid = getpid();
@@ -4771,9 +4771,10 @@ pid_t process_emu_getppid(Process* proc) {
     pid_t pid;
 
     if(prevCTX == PCTX_PLUGIN) {
-        /* FIXME this should return the main process id for threads, and some parent for thread 0 */
-        pid = (pid_t)proc->processID;
+        /* we list a constant as the parent process */
+        pid = 1;
     } else {
+        /* if shadow is calling this, get shadow's real ppid */
         pid = getppid();
     }
 
