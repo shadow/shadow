@@ -107,6 +107,40 @@ Perf is extremely powerful with many options. See `man perf` or [the perf wiki](
 
 Note that any time an example uses the `-g` option in `perf record`, you should use `--call-graph dwarf` instead. (The `-g` option defaults to stack frames for traces, which elf-loader and certain optimizations can break. If you see absurdly tall or small call graphs, this is probably what happened.)
 
+### Testing for Deterministic Behavior
+
+If you run Shadow twice with the same seed (the `-s` or `--seed` command line options), then it _should_ produce deterministic results (it's a bug if it doesn't).
+
+A good way to check this is to compare the log output of an application that was run in Shadow. For example, after running two TGen experiments where the results are in the `shadow.data.1` and `shadow.data.2` directories, you could do something like the following:
+
+```bash
+found_difference=0
+
+for SUFFIX in \
+    hosts/fileserver/stdout-fileserver.tgen.1000.log \
+    hosts/client/stdout-client.tgen.1000.log
+do
+    ## ignore memory addresses in log file with `sed 's/0x[0-9a-f]*/HEX/g' FILENAME`
+    sed -i 's/0x[0-9a-f]*/HEX/g' shadow.data.1/${SUFFIX}
+    sed -i 's/0x[0-9a-f]*/HEX/g' shadow.data.2/${SUFFIX}
+
+    diff --brief shadow.data.1/${SUFFIX} shadow.data.2/${SUFFIX}
+    exit_code=$?
+
+    if (($exit_code != 0)); then
+      found_difference=1
+    fi
+done
+
+if (($found_difference == 1)); then
+  echo -e "\033[0;31mDetected difference in output (Shadow may be non-deterministic).\033[0m"
+else
+  echo -e "\033[0;32mDid not detect difference in Shadow output (Shadow may be deterministic).\033[0m"
+fi
+```
+
+If you find non-deterministic behavior, please consider helping to diagnose the problem by opening a [new issue](https://github.com/shadow/shadow/issues/new).
+
 ### Tagging Shadow releases
 
 The following commands can be used to tag a new version of Shadow, after which an
