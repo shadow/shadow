@@ -111,9 +111,11 @@ Note that any time an example uses the `-g` option in `perf record`, you should 
 
 If you run Shadow twice with the same seed (the `-s` or `--seed` command line options), then it _should_ produce deterministic results (it's a bug if it doesn't).
 
-A good way to check this is to compare the log output of an application that was run in Shadow. For example, after running two TGen experiments where the results are in the `shadow.data.1` and `shadow.data.2` directories, you could do something like the following:
+A good way to check this is to compare the log output of an application that was run in Shadow. For example, after running two TGen experiments where the results are in the `shadow.data.1` and `shadow.data.2` directories, you could run something like the following bash script:
 
 ```bash
+#!/bin/bash
+
 found_difference=0
 
 for SUFFIX in \
@@ -139,7 +141,7 @@ else
 fi
 ```
 
-If you find non-deterministic behavior, please consider helping to diagnose the problem by opening a [new issue](https://github.com/shadow/shadow/issues/new).
+If you find non-deterministic behavior in your Shadow experiment, please consider helping to diagnose the problem by opening a [new issue](https://github.com/shadow/shadow/issues/new).
 
 ### Tagging Shadow releases
 
