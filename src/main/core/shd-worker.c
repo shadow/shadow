@@ -17,10 +17,6 @@ struct _Worker {
     /* pointer to the per-slave parallel scheduler object that feeds events to all workers */
     Scheduler* scheduler;
 
-    /* the random source used for all hosts run by this worker
-     * the source is seeded by the master random source. */
-    Random* random;
-
     /* timing information tracked by this worker */
     struct {
         SimulationTime now;

@@ -136,6 +136,14 @@ void _program_meta_free(gpointer data) {
     g_free(meta);
 }
 
+static guint _slave_nextRandomUInt(Slave* slave) {
+    MAGIC_ASSERT(slave);
+    _slave_lock(slave);
+    guint r = random_nextUInt(slave->random);
+    _slave_unlock(slave);
+    return r;
+}
+
 Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint randomSeed) {
     if(globalSlave != NULL) {
         return NULL;
@@ -165,7 +173,7 @@ Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint
 
     guint nWorkers = options_getNWorkerThreads(options);
     SchedulerPolicyType policy = _slave_getEventSchedulerPolicy(slave);
-    guint schedulerSeed = slave_nextRandomUInt(slave);
+    guint schedulerSeed = _slave_nextRandomUInt(slave);
     slave->scheduler = scheduler_new(policy, nWorkers, slave, schedulerSeed, endTime);
 
     slave->cwdPath = g_get_current_dir();
@@ -248,22 +256,6 @@ guint slave_getRawCPUFrequency(Slave* slave) {
     return freq;
 }
 
-guint slave_nextRandomUInt(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    _slave_lock(slave);
-    guint r = random_nextUInt(slave->random);
-    _slave_unlock(slave);
-    return r;
-}
-
-gdouble slave_nextRandomDouble(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    _slave_lock(slave);
-    gdouble r = random_nextDouble(slave->random);
-    _slave_unlock(slave);
-    return r;
-}
-
 void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path, const gchar* startSymbol) {
     MAGIC_ASSERT(slave);
 
@@ -284,7 +276,7 @@ void slave_addNewVirtualHost(Slave* slave, HostParameters* params) {
 
     /* quarks are unique per slave process, so do the conversion here */
     params->id = g_quark_from_string(params->hostname);
-    params->nodeSeed = slave_nextRandomUInt(slave);
+    params->nodeSeed = _slave_nextRandomUInt(slave);
 
     Host* host = host_new(params);
     host_setup(host, slave_getDNS(slave), slave_getTopology(slave),

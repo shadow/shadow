@@ -30,8 +30,6 @@ gint slave_free(Slave* slave);
 
 gboolean slave_isForced(Slave* slave);
 guint slave_getRawCPUFrequency(Slave* slave);
-guint slave_nextRandomUInt(Slave* slave);
-gdouble slave_nextRandomDouble(Slave* slave);
 DNS* slave_getDNS(Slave* slave);
 Topology* slave_getTopology(Slave* slave);
 guint32 slave_getNodeBandwidthUp(Slave* slave, GQuark nodeID, in_addr_t ip);
