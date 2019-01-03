@@ -23,6 +23,5 @@ gint event_compare(const Event* a, const Event* b, gpointer userData);
 gpointer event_getHost(Event* event);
 SimulationTime event_getTime(Event* event);
 void event_setTime(Event* event, SimulationTime time);
-void event_setSequence(Event* event, guint64 sequence);
 
 #endif /* SHD_EVENT_H_ */

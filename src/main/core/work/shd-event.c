@@ -10,7 +10,7 @@ struct _Event {
     Host* dstHost;
     Task* task;
     SimulationTime time;
-    guint64 sequence;
+    guint64 srcHostEventID;
     gint referenceCount;
     MAGIC_DECLARE;
 };
@@ -25,6 +25,7 @@ Event* event_new_(Task* task, SimulationTime time, gpointer srcHost, gpointer ds
     event->task = task;
     task_ref(event->task);
     event->time = time;
+    event->srcHostEventID = host_getNewEventID(srcHost);
     event->referenceCount = 1;
 
     worker_countObject(OBJECT_TYPE_EVENT, COUNTER_TYPE_NEW);
@@ -96,11 +97,6 @@ void event_setTime(Event* event, SimulationTime time) {
     event->time = time;
 }
 
-void event_setSequence(Event* event, guint64 sequence) {
-    MAGIC_ASSERT(event);
-    event->sequence = sequence;
-}
-
 gint event_compare(const Event* a, const Event* b, gpointer userData) {
     MAGIC_ASSERT(a);
     MAGIC_ASSERT(b);
@@ -130,11 +126,15 @@ gint event_compare(const Event* a, const Event* b, gpointer userData) {
             } else if (cmpresult < 0) {
                 return -1;
             } else {
-                if (a->sequence > b->sequence) {
+                /* src and dst host are the same. the event should be sorted in
+                 * the order that the events were created on the host. */
+                if (a->srcHostEventID > b->srcHostEventID) {
                     return 1;
-                } else if (a->sequence < b->sequence) {
+                } else if (a->srcHostEventID < b->srcHostEventID) {
                     return -1;
                 } else {
+                    /* if the eventIDs are the same, then the two pointers
+                     * really are pointing to the same event. */
                     return 0;
                 }
             }

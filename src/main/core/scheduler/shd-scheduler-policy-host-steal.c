@@ -9,7 +9,6 @@ typedef struct _HostStealQueueData HostStealQueueData;
 struct _HostStealQueueData {
     GMutex lock;
     PriorityQueue* pq;
-    SimulationTime pushSequenceCounter;
     SimulationTime lastEventTime;
     gsize nPushed;
     gsize nPopped;
@@ -252,7 +251,6 @@ static void _schedulerpolicyhoststeal_push(SchedulerPolicy* policy, Event* event
     }
 
     /* 'deliver' the event to the destination queue */
-    event_setSequence(event, ++(qdata->pushSequenceCounter));
     priorityqueue_push(qdata->pq, event);
     qdata->nPushed++;
 

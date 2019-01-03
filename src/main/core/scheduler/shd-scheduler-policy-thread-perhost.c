@@ -8,7 +8,6 @@
 typedef struct _ThreadPerHostQueueData ThreadPerHostQueueData;
 struct _ThreadPerHostQueueData {
     PriorityQueue* pq;
-    SimulationTime pushSequenceCounter;
     SimulationTime lastEventTime;
     gsize nPushed;
     gsize nPopped;
@@ -121,7 +120,6 @@ static void _schedulerpolicythreadperhost_push(SchedulerPolicy* policy, Event* e
 
     pthread_t self = pthread_self();
     if(pthread_equal(dstThread, self)) {
-        event_setSequence(event, ++(tdata->qdata->pushSequenceCounter));
         priorityqueue_push(tdata->qdata->pq, event);
         tdata->qdata->nPushed++;
     } else {
@@ -190,7 +188,6 @@ static SimulationTime _schedulerpolicythreadperhost_getNextTime(SchedulerPolicy*
 
             while(!priorityqueue_isEmpty(futureEvents)) {
                 Event* event = priorityqueue_pop(futureEvents);
-                event_setSequence(event, ++(tdata->qdata->pushSequenceCounter));
                 priorityqueue_push(tdata->qdata->pq, event);
                 tdata->qdata->nPushed++;
             }

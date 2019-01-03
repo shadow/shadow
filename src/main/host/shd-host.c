@@ -27,8 +27,9 @@ struct _Host {
     GQueue* availableDescriptors;
     gint descriptorHandleCounter;
 
-    /* virtual process id counter */
+    /* virtual process and event id counter */
     guint processIDCounter;
+    guint64 eventIDCounter;
 
     /* all file, socket, and epoll descriptors we know about and track */
     GHashTable* descriptors;
@@ -329,6 +330,11 @@ void host_boot(Host* host) {
 guint host_getNewProcessID(Host* host) {
     MAGIC_ASSERT(host);
     return host->processIDCounter++;
+}
+
+guint64 host_getNewEventID(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->eventIDCounter++;
 }
 
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,

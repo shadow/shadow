@@ -10,7 +10,6 @@ struct _ThreadSingleThreadData {
     GQueue* assignedHosts2;
     GMutex lock;
     PriorityQueue* pq;
-    SimulationTime pushSequenceCounter;
     SimulationTime lastEventTime;
     gsize nPushed;
     gsize nPopped;
@@ -93,7 +92,6 @@ static void _schedulerpolicythreadsingle_push(SchedulerPolicy* policy, Event* ev
 
     /* 'deliver' the event there */
     g_mutex_lock(&(tdata->lock));
-    event_setSequence(event, ++(tdata->pushSequenceCounter));
     priorityqueue_push(tdata->pq, event);
     tdata->nPushed++;
     g_mutex_unlock(&(tdata->lock));
