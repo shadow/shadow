@@ -132,8 +132,8 @@ def do_reduce(data, m, result, with_packet_data):
                 if l not in data['nodes'][n]['recv']: data['nodes'][n]['recv'][l] = {}
                 if l not in data['nodes'][n]['send']: data['nodes'][n]['send'][l] = {}
                 for s in d['nodes'][n]['recv'][l]:
-                    if s not in data['nodes'][n]['recv']: data['nodes'][n]['recv'][l][s] = 0
-                    if s not in data['nodes'][n]['send']: data['nodes'][n]['send'][l][s] = 0
+                    if s not in data['nodes'][n]['recv'][l]: data['nodes'][n]['recv'][l][s] = 0
+                    if s not in data['nodes'][n]['send'][l]: data['nodes'][n]['send'][l][s] = 0
                     data['nodes'][n]['recv'][l][s] += d['nodes'][n]['recv'][l][s]
                     data['nodes'][n]['send'][l][s] += d['nodes'][n]['send'][l][s]
     return data, m
