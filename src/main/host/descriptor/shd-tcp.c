@@ -713,7 +713,8 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
     guint sequence = payloadLength > 0 || isFinNotAck ? tcp->send.next : 0;
 
     /* create the TCP packet. the ack, window, and timestamps will be set in _tcp_flush */
-    Packet* packet = packet_new(payload, payloadLength);
+    Host* host = worker_getActiveHost();
+    Packet* packet = packet_new(payload, payloadLength, (guint)host_getID(host), host_getNewPacketID(host));
     packet_setDropNotificationDelay(packet, (tcp->congestion->rttSmoothed * 2) * SIMTIME_ONE_MILLISECOND);
     packet_setTCP(packet, flags, sourceIP, sourcePort, destinationIP, destinationPort, sequence);
     packet_addDeliveryStatus(packet, PDS_SND_CREATED);

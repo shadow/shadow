@@ -49,7 +49,7 @@ struct _PacketTCPHeader {
     SimulationTime timestampEcho;
 };
 
-Packet* packet_new(gconstpointer payload, gsize payloadLength);
+Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, guint64 packetID);
 
 void packet_ref(Packet* packet);
 void packet_unref(Packet* packet);
@@ -86,5 +86,6 @@ PacketDeliveryStatusFlags packet_getDeliveryStatus(Packet* packet);
 void packet_setDropNotificationDelay(Packet* packet, SimulationTime delay);
 SimulationTime packet_getDropNotificationDelay(Packet* packet);
 
+gchar* packet_toString(Packet* packet);
 
 #endif /* SHD_PACKET_H_ */

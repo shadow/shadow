@@ -59,6 +59,7 @@ void host_shutdown(Host* host);
 
 guint host_getNewProcessID(Host* host);
 guint64 host_getNewEventID(Host* host);
+guint64 host_getNewPacketID(Host* host);
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
         const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
         const gchar* preloadName, const gchar* preloadPath, gchar* arguments);

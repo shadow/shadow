@@ -93,7 +93,8 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
         utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
 
         /* create the UDP packet */
-        Packet* packet = packet_new(buffer + offset, copyLength);
+        Host* host = worker_getActiveHost();
+        Packet* packet = packet_new(buffer + offset, copyLength, (guint)host_getID(host), host_getNewPacketID(host));
         packet_setUDP(packet, PUDP_NONE, sourceIP, sourcePort, destinationIP, destinationPort);
         packet_addDeliveryStatus(packet, PDS_SND_CREATED);
 

@@ -30,6 +30,7 @@ struct _Host {
     /* virtual process and event id counter */
     guint processIDCounter;
     guint64 eventIDCounter;
+    guint64 packetIDCounter;
 
     /* all file, socket, and epoll descriptors we know about and track */
     GHashTable* descriptors;
@@ -335,6 +336,11 @@ guint host_getNewProcessID(Host* host) {
 guint64 host_getNewEventID(Host* host) {
     MAGIC_ASSERT(host);
     return host->eventIDCounter++;
+}
+
+guint64 host_getNewPacketID(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->packetIDCounter++;
 }
 
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,

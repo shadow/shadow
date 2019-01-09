@@ -29,6 +29,11 @@ struct _Packet {
     GMutex lock;
     guint referenceCount;
 
+    /* id of the host that created the packet */
+    guint hostID;
+    /* id of the packet created on the host given by hostID */
+    guint64 packetID;
+
     enum ProtocolType protocol;
     gpointer header;
     gpointer payload;
@@ -49,9 +54,12 @@ struct _Packet {
     MAGIC_DECLARE;
 };
 
-Packet* packet_new(gconstpointer payload, gsize payloadLength) {
+Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, guint64 packetID) {
     Packet* packet = g_new0(Packet, 1);
     MAGIC_INIT(packet);
+
+    packet->hostID = hostID;
+    packet->packetID = packetID;
 
     g_mutex_init(&(packet->lock));
     packet->referenceCount = 1;
@@ -514,6 +522,9 @@ static gchar* _packet_getString(Packet* packet) {
 
     //_packet_lock(packet);
 
+    g_string_append_printf(packetString, "packetID=%u:%"G_GUINT64_FORMAT" ",
+            packet->hostID, packet->packetID);
+
     switch (packet->protocol) {
         case PLOCAL: {
             PacketLocalHeader* header = packet->header;
@@ -641,6 +652,13 @@ void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) 
     if(!skipDebug) {
         message("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
     }
+}
+
+gchar* packet_toString(Packet* packet){
+    _packet_lock(packet);
+    gchar* packetStr = _packet_getString(packet);
+    _packet_unlock(packet);
+    return packetStr;
 }
 
 PacketDeliveryStatusFlags packet_getDeliveryStatus(Packet* packet) {
