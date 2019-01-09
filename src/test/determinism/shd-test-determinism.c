@@ -15,6 +15,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <pthread.h>
+#include <syscall.h>
 
 static int test_randomOpenRead(const char *filename) {
     unsigned char buf[1];
@@ -89,12 +90,14 @@ typedef struct _ThreadPIDs ThreadPIDs;
 struct _ThreadPIDs {
     int pid;
     int ppid;
+    int tid;
 };
 
 static void* _test_runThread(void* arg) {
     ThreadPIDs* tids = (ThreadPIDs*)arg;
     tids->pid = (int)getpid();
     tids->ppid = (int)getppid();
+    tids->tid = (int)syscall(SYS_gettid);
     return NULL;
 }
 
@@ -131,11 +134,14 @@ static int _test_getPID() {
     ThreadPIDs myPIDs;
     myPIDs.pid = (int)getpid();
     myPIDs.ppid = (int)getppid();
+    myPIDs.tid = (int)syscall(SYS_gettid);
 
-    fprintf(stdout, "PIDS: Main: pid=%i, ppid=%i Thread1: pid=%i, ppid=%i "
-            "Thread2: pid=%i, ppid=%i\n",
-            myPIDs.pid, myPIDs.ppid, tids[0].pid, tids[0].ppid,
-            tids[1].pid, tids[1].ppid);
+    fprintf(stdout, "PIDS: Main: pid=%i, ppid=%i, tid=%i "
+            "Thread1: pid=%i, ppid=%i, tid=%i "
+            "Thread2: pid=%i, ppid=%i, tid=%i\n",
+            myPIDs.pid, myPIDs.ppid, myPIDs.tid,
+            tids[0].pid, tids[0].ppid, tids[0].tid,
+            tids[1].pid, tids[1].ppid, tids[1].tid);
 
     return EXIT_SUCCESS;
 }

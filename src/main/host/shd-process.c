@@ -204,9 +204,7 @@ struct _Process {
     /* the shadow thread spawns a child to run the program main function */
     pth_t programMainThread;
     /* any other threads created by the program are auxiliary threads */
-    GQueue* programAuxiliaryThreads;
-    /* keep track of number of aux threads, for naming */
-    guint programAuxiliaryThreadCounter;
+    GHashTable* programAuxThreads;
 
     /*
      * Distinguishes which context we are in. Whenever the flow of execution
@@ -593,6 +591,8 @@ Process* process_new(gpointer host, guint processID,
     proc->referenceCount = 1;
     proc->activeContext = PCTX_SHADOW;
 
+    proc->programAuxThreads = g_hash_table_new(g_direct_hash, g_direct_equal);
+
     worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_NEW);
 
     return proc;
@@ -862,23 +862,24 @@ static void _process_executeCleanup(Process* proc) {
     utility_assert(process_isRunning(proc));
     utility_assert(worker_getActiveProcess() == proc);
 
-    gint numThreads = proc->programAuxiliaryThreads ? g_queue_get_length(proc->programAuxiliaryThreads) : 0;
-    gint numExitFuncs = proc->atExitFunctions ? g_queue_get_length(proc->atExitFunctions) : 0;
+    guint numThreads = g_hash_table_size(proc->programAuxThreads);
+    guint numExitFuncs = proc->atExitFunctions ? g_queue_get_length(proc->atExitFunctions) : 0;
     message("cleaning up process '%s': aborting %u auxiliary threads and calling %u atexit functions",
             _process_getName(proc), numThreads, numExitFuncs);
 
     /* closing the main thread causes all other threads to get terminated */
-    if(proc->programAuxiliaryThreads != NULL) {
-        while(g_queue_get_length(proc->programAuxiliaryThreads) > 0) {
-            pth_t auxThread = g_queue_pop_head(proc->programAuxiliaryThreads);
-            if(auxThread) {
-                _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
-                gint success = pth_abort(auxThread);
-                _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-            }
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, proc->programAuxThreads);
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        pth_t auxThread = key;
+        if(auxThread) {
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+            gint success = pth_abort(auxThread);
+            _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         }
-        g_queue_free(proc->programAuxiliaryThreads);
     }
+    g_hash_table_remove_all(proc->programAuxThreads);
 
     /* calling the process atexit funcs. these shouldnt use any thread data that got deleted above */
     while(proc->atExitFunctions && g_queue_get_length(proc->atExitFunctions) > 0) {
@@ -1058,8 +1059,7 @@ static void _process_start(Process* proc) {
     GString* programMainThreadNameBuf = g_string_new(NULL);
     g_string_printf(programMainThreadNameBuf, "%s.main", _process_getName(proc));
 
-    utility_assert(proc->programAuxiliaryThreads == NULL);
-    proc->programAuxiliaryThreads = g_queue_new();
+    utility_assert(g_hash_table_size(proc->programAuxThreads) == 0);
 
     /* ref for the main func (spawn) below */
     process_ref(proc);
@@ -4772,7 +4772,7 @@ pid_t process_emu_getppid(Process* proc) {
 
     if(prevCTX == PCTX_PLUGIN) {
         /* we list a constant as the parent process */
-        pid = 1;
+        pid = 0;
     } else {
         /* if shadow is calling this, get shadow's real ppid */
         pid = getppid();
@@ -4831,6 +4831,25 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
 
 			break;
 		}
+#endif
+
+#if defined SYS_gettid
+        /* thread ids need to be unique for every thread, and unique from the pid */
+        case SYS_gettid: {
+            pth_t thread = pth_self();
+            if (thread == proc->shadowThread) {
+                ret = (int) getpid();
+            } else if (thread == proc->programMainThread) {
+                ret = (int) proc->processID;
+            } else {
+                gpointer val = g_hash_table_lookup(proc->programAuxThreads, thread);
+                utility_assert(val);
+                guint tid = GPOINTER_TO_UINT(val);
+                ret = (int)tid;
+            }
+
+            break;
+        }
 #endif
 
 		/* TODO the following are functions that shadow normally intercepts, and we should handle them */
@@ -5741,6 +5760,10 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
             data->run = start_routine;
             data->arg = arg;
 
+            _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+            guint threadID = host_getNewProcessID(proc->host);
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+
             if (attr != NULL) {
                 pth_attr_t customAttr = NULL;
                 memmove(&customAttr, attr, sizeof(void*));
@@ -5749,8 +5772,8 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
                 /* default for new auxiliary threads */
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
                 GString* programAuxThreadNameBuf = g_string_new(NULL);
-                g_string_printf(programAuxThreadNameBuf, "%s.%s.%u.aux%i", host_getName(proc->host),
-                        _process_getPluginName(proc), proc->processID, proc->programAuxiliaryThreadCounter++);
+                g_string_printf(programAuxThreadNameBuf, "%s.%s.%u.aux%u", host_getName(proc->host),
+                        _process_getPluginName(proc), proc->processID, threadID);
                 _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
                 pth_attr_t defaultAttr = pth_attr_new();
@@ -5776,7 +5799,7 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
             } else {
                 memmove(thread, &auxThread, sizeof(void*));
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-                g_queue_push_head(proc->programAuxiliaryThreads, auxThread);
+                g_hash_table_insert(proc->programAuxThreads, auxThread, GUINT_TO_POINTER(threadID));
                 ret = 0;
             }
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
@@ -5901,7 +5924,7 @@ int process_emu_pthread_join(Process* proc, pthread_t thread, void **value_ptr) 
                 if (!pth_join(pt, value_ptr)) {
                     ret = errno;
                 } else {
-                    g_queue_remove(proc->programAuxiliaryThreads, pt);
+                    g_hash_table_remove(proc->programAuxThreads, pt);
                     if (value_ptr != NULL && *value_ptr == PTH_CANCELED) {
                         *value_ptr = PTHREAD_CANCELED;
                     }
@@ -6019,7 +6042,7 @@ int process_emu_pthread_abort(Process* proc, pthread_t thread) {
             if (!pth_abort(pt)) {
                 ret = errno;
             } else {
-                g_queue_remove(proc->programAuxiliaryThreads, pt);
+                g_hash_table_remove(proc->programAuxThreads, pt);
                 ret = 0;
             }
 
