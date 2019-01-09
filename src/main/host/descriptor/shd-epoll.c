@@ -346,6 +346,8 @@ static void _epoll_check(Epoll* epoll) {
 
         if(_epollwatch_isReady(watch)) {
             isReady = TRUE;
+            /* at least one child is ready, stop looping */
+            break;
         }
     }
 
