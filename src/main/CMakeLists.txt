@@ -89,9 +89,10 @@ set(shadow_srcs
     host/shd-cpu.c
     host/shd-host.c
     host/shd-network-interface.c
-    host/shd-packet.c
     host/shd-tracker.c
 
+    routing/shd-payload.c
+    routing/shd-packet.c
     routing/shd-address.c
     routing/shd-dns.c
     routing/shd-path.c

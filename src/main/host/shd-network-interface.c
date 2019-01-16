@@ -194,23 +194,22 @@ static void _networkinterface_capturePacket(NetworkInterface* interface, Packet*
         packet_copyPayload(packet, 0, pcapPacket->payload, pcapPacket->payloadLength);
     }
 
-    PacketTCPHeader tcpHeader;
-    packet_getTCPHeader(packet, &tcpHeader);
+    PacketTCPHeader* tcpHeader = packet_getTCPHeader(packet);
 
-    pcapPacket->srcIP = tcpHeader.sourceIP;
-    pcapPacket->dstIP = tcpHeader.destinationIP;
-    pcapPacket->srcPort = tcpHeader.sourcePort;
-    pcapPacket->dstPort = tcpHeader.destinationPort;
+    pcapPacket->srcIP = tcpHeader->sourceIP;
+    pcapPacket->dstIP = tcpHeader->destinationIP;
+    pcapPacket->srcPort = tcpHeader->sourcePort;
+    pcapPacket->dstPort = tcpHeader->destinationPort;
 
-    if(tcpHeader.flags & PTCP_RST) pcapPacket->rstFlag = TRUE;
-    if(tcpHeader.flags & PTCP_SYN) pcapPacket->synFlag = TRUE;
-    if(tcpHeader.flags & PTCP_ACK) pcapPacket->ackFlag = TRUE;
-    if(tcpHeader.flags & PTCP_FIN) pcapPacket->finFlag = TRUE;
+    if(tcpHeader->flags & PTCP_RST) pcapPacket->rstFlag = TRUE;
+    if(tcpHeader->flags & PTCP_SYN) pcapPacket->synFlag = TRUE;
+    if(tcpHeader->flags & PTCP_ACK) pcapPacket->ackFlag = TRUE;
+    if(tcpHeader->flags & PTCP_FIN) pcapPacket->finFlag = TRUE;
 
-    pcapPacket->seq = (guint32)tcpHeader.sequence;
-    pcapPacket->win = (guint32)tcpHeader.window;
-    if(tcpHeader.flags & PTCP_ACK) {
-        pcapPacket->ack = (guint32)htonl(tcpHeader.acknowledgment);
+    pcapPacket->seq = (guint32)tcpHeader->sequence;
+    pcapPacket->win = (guint32)tcpHeader->window;
+    if(tcpHeader->flags & PTCP_ACK) {
+        pcapPacket->ack = (guint32)htonl(tcpHeader->acknowledgment);
     }
 
     pcapwriter_writePacket(interface->pcap, pcapPacket);

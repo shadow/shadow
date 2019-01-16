@@ -258,7 +258,7 @@ void worker_sendPacket(Packet* packet) {
 
         /* the packetCopy starts with 1 ref, which will be held by the packet task
          * and unreffed after the task is finished executing. */
-        Packet* packetCopy = packet_deepCopy(packet);
+        Packet* packetCopy = packet_copy(packet);
 
         Task* packetTask = task_new((TaskCallbackFunc)_worker_runDeliverPacketTask,
                 packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);

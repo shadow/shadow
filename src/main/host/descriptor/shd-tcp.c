@@ -729,9 +729,8 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
-    PacketTCPHeader header;
-    packet_getTCPHeader(packet, &header);
-    gpointer key = GINT_TO_POINTER(header.sequence);
+    PacketTCPHeader* header = packet_getTCPHeader(packet);
+    gpointer key = GINT_TO_POINTER(header->sequence);
 
     /* if it is already in the queue, it won't consume another packet reference */
     if(g_hash_table_lookup(tcp->retransmit.queue, key) == NULL) {
@@ -937,12 +936,11 @@ static void _tcp_flush(TCP* tcp) {
         }
 
         guint length = packet_getPayloadLength(packet);
-        PacketTCPHeader header;
-        packet_getTCPHeader(packet, &header);
+        PacketTCPHeader* header = packet_getTCPHeader(packet);
 
         if(length > 0) {
             /* we cant send it if our window is too small */
-            gboolean fitsInWindow = (header.sequence < (guint)(tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
+            gboolean fitsInWindow = (header->sequence < (guint)(tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
 
             /* we cant send it if we dont have enough space */
             gboolean fitsInBuffer = (length <= socket_getOutputBufferSpace(&(tcp->super))) ? TRUE : FALSE;
@@ -960,7 +958,7 @@ static void _tcp_flush(TCP* tcp) {
         priorityqueue_pop(tcp->throttledOutput);
         tcp->throttledOutputLength -= length;
 
-        if(header.sequence > 0 || (header.flags & PTCP_SYN)) {
+        if(header->sequence > 0 || (header->flags & PTCP_SYN)) {
             /* store in retransmission buffer */
             _tcp_addRetransmit(tcp, packet);
 
@@ -981,7 +979,7 @@ static void _tcp_flush(TCP* tcp) {
          /* socket will queue it ASAP */
         gboolean success = socket_addToOutputBuffer(&(tcp->super), packet);
         tcp->send.packetsSent++;
-        tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header.sequence);
+        tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header->sequence);
 
         /* we already checked for space, so this should always succeed */
         utility_assert(success);
@@ -991,15 +989,14 @@ static void _tcp_flush(TCP* tcp) {
     while(!priorityqueue_isEmpty(tcp->unorderedInput)) {
         Packet* packet = priorityqueue_peek(tcp->unorderedInput);
 
-        PacketTCPHeader header;
-        packet_getTCPHeader(packet, &header);
+        PacketTCPHeader* header = packet_getTCPHeader(packet);
 
-        if(header.sequence == tcp->receive.next) {
+        if(header->sequence == tcp->receive.next) {
             /* move from the unordered buffer to user input buffer */
             gboolean fitInBuffer = socket_addToInputBuffer(&(tcp->super), packet);
 
             if(fitInBuffer) {
-                tcp->receive.lastSequence = header.sequence;
+                tcp->receive.lastSequence = header->sequence;
                 priorityqueue_pop(tcp->unorderedInput);
                 packet_unref(packet);
                 tcp->unorderedInputLength -= packet_getPayloadLength(packet);
@@ -1553,18 +1550,17 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
     /* fetch the TCP info from the packet */
-    PacketTCPHeader header;
-    packet_getTCPHeader(packet, &header);
     guint packetLength = packet_getPayloadLength(packet);
 
     /* if we run a server, the packet could be for an existing child */
-    tcp = _tcp_getSourceTCP(tcp, header.sourceIP, header.sourcePort);
+    tcp = _tcp_getSourceTCP(tcp, packet_getSourceIP(packet), packet_getSourcePort(packet));
 
     /* now we have the true TCP for the packet */
     MAGIC_ASSERT(tcp);
+    PacketTCPHeader* header = packet_getTCPHeader(packet);
 
     /* if packet is reset, don't process */
-    if(header.flags & PTCP_RST) {
+    if(header->flags & PTCP_RST) {
         /* @todo: not sure if this is handled correctly */
         debug("received RESET packet");
 
@@ -1585,9 +1581,9 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
      * interfaces and otherwise cant decide which to send on.
      */
     if(tcp->server) {
-        tcp->server->lastPeerIP = header.sourceIP;
-        tcp->server->lastPeerPort = header.sourcePort;
-        tcp->server->lastIP = header.destinationIP;
+        tcp->server->lastPeerIP = header->sourceIP;
+        tcp->server->lastPeerPort = header->sourcePort;
+        tcp->server->lastIP = header->destinationIP;
     }
 
     /* go through the state machine, tracking processing and response */
@@ -1597,7 +1593,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     switch(tcp->state) {
         case TCPS_LISTEN: {
             /* receive SYN, send SYNACK, move to SYNRECEIVED */
-            if(header.flags & PTCP_SYN) {
+            if(header->flags & PTCP_SYN) {
                 MAGIC_ASSERT(tcp->server);
                 flags |= TCP_PF_PROCESSED;
 
@@ -1606,7 +1602,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 gint multiplexedHandle = host_createDescriptor(node, DT_TCPSOCKET);
                 TCP* multiplexed = (TCP*) host_lookupDescriptor(node, multiplexedHandle);
 
-                multiplexed->child = _tcpchild_new(multiplexed, tcp, header.sourceIP, header.sourcePort);
+                multiplexed->child = _tcpchild_new(multiplexed, tcp, header->sourceIP, header->sourcePort);
                 utility_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
 
                 /* multiplexed TCP was initialized with a ref of 1, which the host table consumes.
@@ -1614,7 +1610,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 descriptor_ref(multiplexed);
                 g_hash_table_replace(tcp->server->children, &(multiplexed->child->key), multiplexed);
 
-                multiplexed->receive.start = header.sequence;
+                multiplexed->receive.start = header->sequence;
                 multiplexed->receive.next = multiplexed->receive.start + 1;
 
                 debug("%s <-> %s: server multiplexed child socket %s <-> %s",
@@ -1632,9 +1628,9 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
         case TCPS_SYNSENT: {
             /* receive SYNACK, send ACK, move to ESTABLISHED */
-            if((header.flags & PTCP_SYN) && (header.flags & PTCP_ACK)) {
+            if((header->flags & PTCP_SYN) && (header->flags & PTCP_ACK)) {
                 flags |= TCP_PF_PROCESSED;
-                tcp->receive.start = header.sequence;
+                tcp->receive.start = header->sequence;
                 tcp->receive.next = tcp->receive.start + 1;
 
                 responseFlags |= PTCP_ACK;
@@ -1644,9 +1640,9 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 _tcp_clearRetransmit(tcp, 1);
             }
             /* receive SYN, send ACK, move to SYNRECEIVED (simultaneous open) */
-            else if(header.flags & PTCP_SYN) {
+            else if(header->flags & PTCP_SYN) {
                 flags |= TCP_PF_PROCESSED;
-                tcp->receive.start = header.sequence;
+                tcp->receive.start = header->sequence;
                 tcp->receive.next = tcp->receive.start + 1;
 
                 responseFlags |= PTCP_ACK;
@@ -1658,7 +1654,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
         case TCPS_SYNRECEIVED: {
             /* receive ACK, move to ESTABLISHED */
-            if(header.flags & PTCP_ACK) {
+            if(header->flags & PTCP_ACK) {
                 flags |= TCP_PF_PROCESSED;
                 _tcp_setState(tcp, TCPS_ESTABLISHED);
 
@@ -1678,7 +1674,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
         case TCPS_ESTABLISHED: {
             /* receive FIN, send FINACK, move to CLOSEWAIT */
-            if(header.flags & PTCP_FIN) {
+            if(header->flags & PTCP_FIN) {
                 flags |= TCP_PF_PROCESSED;
 
                 /* other side of connections closed */
@@ -1687,47 +1683,47 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 _tcp_setState(tcp, TCPS_CLOSEWAIT);
 
                 /* remote will send us no more user data after this sequence */
-                tcp->receive.end = header.sequence;
+                tcp->receive.end = header->sequence;
             }
             break;
         }
 
         case TCPS_FINWAIT1: {
             /* receive FINACK, move to FINWAIT2 */
-            if((header.flags & PTCP_FIN) && (header.flags & PTCP_ACK)) {
+            if((header->flags & PTCP_FIN) && (header->flags & PTCP_ACK)) {
                 flags |= TCP_PF_PROCESSED;
                 _tcp_setState(tcp, TCPS_FINWAIT2);
             }
             /* receive FIN, send FINACK, move to CLOSING (simultaneous close) */
-            else if(header.flags & PTCP_FIN) {
+            else if(header->flags & PTCP_FIN) {
                 flags |= TCP_PF_PROCESSED;
                 responseFlags |= (PTCP_FIN|PTCP_ACK);
                 tcp->flags |= TCPF_REMOTE_CLOSED;
                 _tcp_setState(tcp, TCPS_CLOSING);
 
                 /* it will send no more user data after this sequence */
-                tcp->receive.end = header.sequence;
+                tcp->receive.end = header->sequence;
             }
             break;
         }
 
         case TCPS_FINWAIT2: {
             /* receive FIN, send FINACK, move to TIMEWAIT */
-            if(header.flags & PTCP_FIN) {
+            if(header->flags & PTCP_FIN) {
                 flags |= TCP_PF_PROCESSED;
                 responseFlags |= (PTCP_FIN|PTCP_ACK);
                 tcp->flags |= TCPF_REMOTE_CLOSED;
                 _tcp_setState(tcp, TCPS_TIMEWAIT);
 
                 /* it will send no more user data after this sequence */
-                tcp->receive.end = header.sequence;
+                tcp->receive.end = header->sequence;
             }
             break;
         }
 
         case TCPS_CLOSING: {
             /* receive FINACK, move to TIMEWAIT */
-            if((header.flags & PTCP_FIN) && (header.flags & PTCP_ACK)) {
+            if((header->flags & PTCP_FIN) && (header->flags & PTCP_ACK)) {
                 flags |= TCP_PF_PROCESSED;
                 _tcp_setState(tcp, TCPS_TIMEWAIT);
             }
@@ -1744,7 +1740,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
         case TCPS_LASTACK: {
             /* receive FINACK, move to CLOSED */
-            if((header.flags & PTCP_FIN) && (header.flags & PTCP_ACK)) {
+            if((header->flags & PTCP_FIN) && (header->flags & PTCP_ACK)) {
                 flags |= TCP_PF_PROCESSED;
                 _tcp_setState(tcp, TCPS_CLOSED);
                 /* we closed, cant use tcp anymore */
@@ -1773,11 +1769,11 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     gint nPacketsAcked = 0;
 
     if(packetLength > 0) {
-        flags |= _tcp_dataProcessing(tcp, packet, &header);
+        flags |= _tcp_dataProcessing(tcp, packet, header);
     }
 
-    if(header.flags & PTCP_ACK) {
-        flags |= _tcp_ackProcessing(tcp, packet, &header, &nPacketsAcked);
+    if(header->flags & PTCP_ACK) {
+        flags |= _tcp_ackProcessing(tcp, packet, header, &nPacketsAcked);
     }
 
     /* if it is a spurious packet, drop it */
@@ -1795,9 +1791,9 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     }
 
     /* update the last time stamp value (RFC 1323) */
-    tcp->receive.lastTimestamp = header.timestampValue;
-    if(header.timestampEcho && tcp->retransmit.backoffCount == 0) {
-        _tcp_updateRTTEstimate(tcp, header.timestampEcho);
+    tcp->receive.lastTimestamp = header->timestampValue;
+    if(header->timestampEcho && tcp->retransmit.backoffCount == 0) {
+        _tcp_updateRTTEstimate(tcp, header->timestampEcho);
     }
 
     /* see tcp_ack_is_dubious() in net/ipv4/tcp_input.c */
@@ -1822,7 +1818,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     /* send ack if they need updates but we didn't send any yet (selective acks) */
     if((tcp->receive.next > tcp->send.lastAcknowledgment) ||
         (tcp->receive.window != tcp->send.lastWindow) ||
-        (tcp->congestion->fastRetransmit && header.sequence > (guint)tcp->receive.next))
+        (tcp->congestion->fastRetransmit && header->sequence > (guint)tcp->receive.next))
     {
         responseFlags |= PTCP_ACK;
     }
@@ -1846,20 +1842,19 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 void tcp_dropPacket(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
-    /* fetch the TCP info from the packet */
-    PacketTCPHeader header;
-    packet_getTCPHeader(packet, &header);
-
     /* if we run a server, the packet could be for an existing child */
-    tcp = _tcp_getSourceTCP(tcp, header.destinationIP, header.destinationPort);
+    tcp = _tcp_getSourceTCP(tcp, packet_getDestinationIP(packet), packet_getDestinationPort(packet));
 
     /* now we have the true TCP for the packet */
     MAGIC_ASSERT(tcp);
 
-    debug("dropped packet %d", header.sequence);
+    /* fetch the TCP info from the packet */
+    PacketTCPHeader* header = packet_getTCPHeader(packet);
+
+    debug("dropped packet %d", header->sequence);
 
     //scoreboard_markLoss(tcp->retransmit.scoreboard, header.sequence, tcp->send.highestSequence);
-    scoreboard_packetDropped(tcp->retransmit.scoreboard, header.sequence);
+    scoreboard_packetDropped(tcp->retransmit.scoreboard, header->sequence);
     //_tcp_retransmitPacket(tcp, header.sequence);
     
     _tcp_flush(tcp);

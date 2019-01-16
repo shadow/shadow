@@ -77,7 +77,8 @@ typedef struct _Process Process;
 #include "host/shd-protocol.h"
 #include "host/descriptor/shd-descriptor.h"
 #include "core/support/shd-configuration.h"
-#include "host/shd-packet.h"
+#include "routing/shd-payload.h"
+#include "routing/shd-packet.h"
 #include "host/shd-cpu.h"
 #include "utility/shd-pcap-writer.h"
 

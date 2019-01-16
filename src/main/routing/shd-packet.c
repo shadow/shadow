@@ -25,8 +25,8 @@ struct _PacketUDPHeader {
     in_port_t destinationPort;
 };
 
+/* packets are guaranteed not to be shared across hosts */
 struct _Packet {
-    GMutex lock;
     guint referenceCount;
 
     /* id of the host that created the packet */
@@ -36,8 +36,7 @@ struct _Packet {
 
     enum ProtocolType protocol;
     gpointer header;
-    gpointer payload;
-    guint payloadLength;
+    Payload* payload;
 
     /* tracks application priority so we flush packets from the interface to
      * the wire in the order intended by the application. this is used in
@@ -52,31 +51,18 @@ struct _Packet {
     MAGIC_DECLARE;
 };
 
-static void _packet_lock(Packet* packet) {
-    MAGIC_ASSERT(packet);
-    g_mutex_lock(&(packet->lock));
-}
-
-static void _packet_unlock(Packet* packet) {
-    MAGIC_ASSERT(packet);
-    g_mutex_unlock(&(packet->lock));
-}
-
 Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, guint64 packetID) {
     Packet* packet = g_new0(Packet, 1);
     MAGIC_INIT(packet);
 
+    packet->referenceCount = 1;
+
     packet->hostID = hostID;
     packet->packetID = packetID;
 
-    g_mutex_init(&(packet->lock));
-    packet->referenceCount = 1;
-
     if(payload != NULL && payloadLength > 0) {
-        packet->payload = g_malloc0(payloadLength);
-        memmove(packet->payload, payload, (size_t)payloadLength);
-        packet->payloadLength = payloadLength;
-        utility_assert(packet->payload);
+        /* the payload starts with 1 ref, which we hold */
+        packet->payload = payload_new(payload, payloadLength);
 
         /* application data needs a priority ordering for FIFO onto the wire */
         packet->priority = host_getNextPacketPriority(worker_getActiveHost());
@@ -88,19 +74,25 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, gui
     return packet;
 }
 
-static Packet* _packet_getShallowCopyLocked(Packet* packet) {
+/* copy everything except the payload.
+ * the payload will point to the same payload as the original packet.
+ * the payload is protected so it is safe to send the copied packet to a different host. */
+Packet* packet_copy(Packet* packet) {
+    MAGIC_ASSERT(packet);
+
     Packet* copy = g_new0(Packet, 1);
     MAGIC_INIT(copy);
 
-    g_mutex_init(&(copy->lock));
     copy->referenceCount = 1;
 
     copy->hostID = packet->hostID;
     copy->packetID = packet->packetID;
 
-    copy->payload = packet->payload;
-    copy->payloadLength = packet->payloadLength;
-    copy->priority = packet->priority;
+    if(packet->payload) {
+        copy->payload = packet->payload;
+        payload_ref(packet->payload);
+        copy->priority = packet->priority;
+    }
 
     copy->allStatus = packet->allStatus;
 
@@ -148,41 +140,8 @@ static Packet* _packet_getShallowCopyLocked(Packet* packet) {
     return copy;
 }
 
-/* copy everything except the payload.
- * the payload will point to the same payload as the original packet. */
-Packet* packet_shallowCopy(Packet* packet) {
-    MAGIC_ASSERT(packet);
-    _packet_lock(packet);
-
-    Packet* copy = _packet_getShallowCopyLocked(packet);
-
-    _packet_unlock(packet);
-    return copy;
-}
-
-/* copy everything including the payload */
-Packet* packet_deepCopy(Packet* packet) {
-    MAGIC_ASSERT(packet);
-    _packet_lock(packet);
-
-    Packet* copy = _packet_getShallowCopyLocked(packet);
-
-    /* now also copy the payload if one exists in the original packet */
-    if(packet->payload != NULL && packet->payloadLength > 0) {
-        copy->payload = g_memdup(packet->payload, packet->payloadLength);
-        copy->payloadLength = packet->payloadLength;
-        copy->priority = packet->priority;
-        utility_assert(copy->payload);
-    }
-
-    _packet_unlock(packet);
-    return copy;
-}
-
 static void _packet_free(Packet* packet) {
     MAGIC_ASSERT(packet);
-
-    g_mutex_clear(&(packet->lock));
 
     if(packet->protocol == PTCP) {
         PacketTCPHeader* header = (PacketTCPHeader*)packet->header;
@@ -195,7 +154,7 @@ static void _packet_free(Packet* packet) {
         g_free(packet->header);
     }
     if(packet->payload) {
-        g_free(packet->payload);
+        payload_unref(packet->payload);
     }
     if(packet->orderedStatus) {
         g_queue_free(packet->orderedStatus);
@@ -208,45 +167,38 @@ static void _packet_free(Packet* packet) {
 }
 
 void packet_ref(Packet* packet) {
-    _packet_lock(packet);
+    MAGIC_ASSERT(packet);
     (packet->referenceCount)++;
-    _packet_unlock(packet);
 }
 
 void packet_unref(Packet* packet) {
-    _packet_lock(packet);
-
+    MAGIC_ASSERT(packet);
     (packet->referenceCount)--;
     if(packet->referenceCount == 0) {
-        _packet_unlock(packet);
         packet_addDeliveryStatus(packet, PDS_DESTROYED);
         _packet_free(packet);
-    } else {
-        _packet_unlock(packet);
     }
 }
 
 gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data) {
+    MAGIC_ASSERT(packet1 && packet2);
+
     /* packet1 for one worker might be packet2 for another, dont lock both
      * at once or a deadlock will occur */
     guint sequence1 = 0, sequence2 = 0;
 
-    _packet_lock(packet1);
     utility_assert(packet1->protocol == PTCP);
     sequence1 = ((PacketTCPHeader*)(packet1->header))->sequence;
-    _packet_unlock(packet1);
 
-    _packet_lock(packet2);
     utility_assert(packet2->protocol == PTCP);
     sequence2 = ((PacketTCPHeader*)(packet2->header))->sequence;
-    _packet_unlock(packet2);
 
     return sequence1 < sequence2 ? -1 : sequence1 > sequence2 ? 1 : 0;
 }
 
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
         gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port) {
-    _packet_lock(packet);
+    MAGIC_ASSERT(packet);
     utility_assert(!(packet->header) && packet->protocol == PNONE);
     utility_assert(port > 0);
 
@@ -259,13 +211,12 @@ void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
 
     packet->header = header;
     packet->protocol = PLOCAL;
-    _packet_unlock(packet);
 }
 
 void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
         in_addr_t sourceIP, in_port_t sourcePort,
         in_addr_t destinationIP, in_port_t destinationPort) {
-    _packet_lock(packet);
+    MAGIC_ASSERT(packet);
     utility_assert(!(packet->header) && packet->protocol == PNONE);
     utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
 
@@ -279,13 +230,12 @@ void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
 
     packet->header = header;
     packet->protocol = PUDP;
-    _packet_unlock(packet);
 }
 
 void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
         in_addr_t sourceIP, in_port_t sourcePort,
         in_addr_t destinationIP, in_port_t destinationPort, guint sequence) {
-    _packet_lock(packet);
+    MAGIC_ASSERT(packet);
     utility_assert(!(packet->header) && packet->protocol == PNONE);
     utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
 
@@ -300,12 +250,11 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 
     packet->header = header;
     packet->protocol = PTCP;
-    _packet_unlock(packet);
 }
 
 void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
         guint window, SimulationTime timestampValue, SimulationTime timestampEcho) {
-    _packet_lock(packet);
+    MAGIC_ASSERT(packet);
     utility_assert(packet->header && (packet->protocol == PTCP));
 
     PacketTCPHeader* header = (PacketTCPHeader*) packet->header;
@@ -326,31 +275,31 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACK
     header->window = window;
     header->timestampValue = timestampValue;
     header->timestampEcho = timestampEcho;
-
-    _packet_unlock(packet);
 }
 
 guint packet_getPayloadLength(Packet* packet) {
-    /* not locked, read only */
-    return packet->payloadLength;
+    MAGIC_ASSERT(packet);
+    if(packet->payload) {
+        return (guint)payload_getLength(packet->payload);
+    } else {
+        return 0;
+    }
 }
 
 gdouble packet_getPriority(Packet* packet) {
-    /* not locked, read only */
+    MAGIC_ASSERT(packet);
     return packet->priority;
 }
 
 guint packet_getHeaderSize(Packet* packet) {
-    _packet_lock(packet);
+    MAGIC_ASSERT(packet);
     guint size = packet->protocol == PUDP ? CONFIG_HEADER_SIZE_UDPIPETH :
             packet->protocol == PTCP ? CONFIG_HEADER_SIZE_TCPIPETH : 0;
-    _packet_unlock(packet);
     return size;
 }
 
 in_addr_t packet_getDestinationIP(Packet* packet) {
-    _packet_lock(packet);
-
+    MAGIC_ASSERT(packet);
     in_addr_t ip = 0;
 
     switch (packet->protocol) {
@@ -377,12 +326,44 @@ in_addr_t packet_getDestinationIP(Packet* packet) {
         }
     }
 
-    _packet_unlock(packet);
     return ip;
 }
 
+in_port_t packet_getDestinationPort(Packet* packet) {
+    MAGIC_ASSERT(packet);
+
+    in_port_t port = 0;
+
+    switch (packet->protocol) {
+        case PLOCAL: {
+            PacketLocalHeader* header = packet->header;
+            port = header->port;
+            break;
+        }
+
+        case PUDP: {
+            PacketUDPHeader* header = packet->header;
+            port = header->destinationPort;
+            break;
+        }
+
+        case PTCP: {
+            PacketTCPHeader* header = packet->header;
+            port = header->destinationPort;
+            break;
+        }
+
+        default: {
+            error("unrecognized protocol");
+            break;
+        }
+    }
+
+    return port;
+}
+
 in_addr_t packet_getSourceIP(Packet* packet) {
-    _packet_lock(packet);
+    MAGIC_ASSERT(packet);
 
     in_addr_t ip = 0;
 
@@ -410,12 +391,11 @@ in_addr_t packet_getSourceIP(Packet* packet) {
         }
     }
 
-    _packet_unlock(packet);
     return ip;
 }
 
 in_port_t packet_getSourcePort(Packet* packet) {
-    _packet_lock(packet);
+    MAGIC_ASSERT(packet);
 
     in_port_t port = 0;
 
@@ -444,28 +424,21 @@ in_port_t packet_getSourcePort(Packet* packet) {
         }
     }
 
-    _packet_unlock(packet);
     return port;
 }
 
 guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, gsize bufferLength) {
-    _packet_lock(packet);
+    MAGIC_ASSERT(packet);
 
-    utility_assert(payloadOffset <= packet->payloadLength);
-
-    guint targetLength = packet->payloadLength - ((guint)payloadOffset);
-    guint copyLength = MIN(targetLength, bufferLength);
-
-    if(copyLength > 0) {
-        g_memmove(buffer, packet->payload + payloadOffset, copyLength);
+    if(packet->payload) {
+        return (guint) payload_getData(packet->payload, payloadOffset, buffer, bufferLength);
+    } else {
+        return 0;
     }
-
-    _packet_unlock(packet);
-    return copyLength;
 }
 
 gint packet_getDestinationAssociationKey(Packet* packet) {
-    _packet_lock(packet);
+    MAGIC_ASSERT(packet);
 
     in_port_t port = 0;
     switch (packet->protocol) {
@@ -495,12 +468,11 @@ gint packet_getDestinationAssociationKey(Packet* packet) {
 
     gint key = PROTOCOL_DEMUX_KEY(packet->protocol, port);
 
-    _packet_unlock(packet);
     return key;
 }
 
 gint packet_getSourceAssociationKey(Packet* packet) {
-    _packet_lock(packet);
+    MAGIC_ASSERT(packet);
 
     in_port_t port = 0;
     switch (packet->protocol) {
@@ -530,12 +502,11 @@ gint packet_getSourceAssociationKey(Packet* packet) {
 
     gint key = PROTOCOL_DEMUX_KEY(packet->protocol, port);
 
-    _packet_unlock(packet);
     return key;
 }
 
 GList* packet_copyTCPSelectiveACKs(Packet* packet) {
-    _packet_lock(packet);
+    MAGIC_ASSERT(packet);
     utility_assert(packet->protocol == PTCP);
 
     PacketTCPHeader* packetHeader = (PacketTCPHeader*)packet->header;
@@ -547,38 +518,13 @@ GList* packet_copyTCPSelectiveACKs(Packet* packet) {
         selectiveACKsCopy = g_list_copy(packetHeader->selectiveACKs);
     }
 
-    _packet_unlock(packet);
-
     return selectiveACKsCopy;
 }
 
-void packet_getTCPHeader(Packet* packet, PacketTCPHeader* header) {
-    if(!header) {
-        return;
-    }
-
-    _packet_lock(packet);
-
+PacketTCPHeader* packet_getTCPHeader(Packet* packet) {
+    MAGIC_ASSERT(packet);
     utility_assert(packet->protocol == PTCP);
-
-    PacketTCPHeader* packetHeader = (PacketTCPHeader*)packet->header;
-
-    /* copy all local non-malloc'd header state */
-    header->flags = packetHeader->flags;
-    header->sourceIP = packetHeader->sourceIP;
-    header->sourcePort = packetHeader->sourcePort;
-    header->destinationIP = packetHeader->destinationIP;
-    header->destinationPort = packetHeader->destinationPort;
-    header->sequence = packetHeader->sequence;
-    header->acknowledgment = packetHeader->acknowledgment;
-    header->window = packetHeader->window;
-    header->timestampValue = packetHeader->timestampValue;
-    header->timestampEcho = packetHeader->timestampEcho;
-
-    /* don't copy the selective acks list here; use packet_copyTCPSelectiveACKs for that */
-    header->selectiveACKs = NULL;
-
-    _packet_unlock(packet);
+    return (PacketTCPHeader*)packet->header;
 }
 
 static const gchar* _packet_deliveryStatusToAscii(PacketDeliveryStatusFlags status) {
@@ -606,20 +552,21 @@ static const gchar* _packet_deliveryStatusToAscii(PacketDeliveryStatusFlags stat
     }
 }
 
-static gchar* _packet_getString(Packet* packet) {
+gchar* packet_toString(Packet* packet) {
+    MAGIC_ASSERT(packet);
     GString* packetString = g_string_new("");
-
-    //_packet_lock(packet);
 
     g_string_append_printf(packetString, "packetID=%u:%"G_GUINT64_FORMAT" ",
             packet->hostID, packet->packetID);
+
+    guint payloadLength = (packet->payload) ? (guint)payload_getLength(packet->payload) : 0;
 
     switch (packet->protocol) {
         case PLOCAL: {
             PacketLocalHeader* header = packet->header;
             g_string_append_printf(packetString, "%i -> %i bytes=%u",
                     header->sourceDescriptorHandle, header->destinationDescriptorHandle,
-                    packet->payloadLength);
+                    payloadLength);
             break;
         }
 
@@ -632,7 +579,7 @@ static gchar* _packet_getString(Packet* packet) {
                     sourceIPString, ntohs(header->sourcePort));
             g_string_append_printf(packetString, "%s:%u bytes=%u",
                     destinationIPString, ntohs( header->destinationPort),
-                    packet->payloadLength);
+                    payloadLength);
 
             g_free(sourceIPString);
             g_free(destinationIPString);
@@ -675,7 +622,7 @@ static gchar* _packet_getString(Packet* packet) {
                 g_string_append_printf(packetString, "NA");
             }
 
-            g_string_append_printf(packetString, " window=%u bytes=%u", header->window, packet->payloadLength);
+            g_string_append_printf(packetString, " window=%u bytes=%u", header->window, payloadLength);
 
             if(!(header->flags & PTCP_NONE)) {
                 g_string_append_printf(packetString, " header=");
@@ -724,39 +671,24 @@ static gchar* _packet_getString(Packet* packet) {
         g_queue_push_tail(packet->orderedStatus, statusPtr);
     }
 
-    //_packet_unlock(packet);
     return g_string_free(packetString, FALSE);
 }
 
 void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) {
-    gboolean skipDebug = worker_isFiltered(LOGLEVEL_DEBUG);
-    gchar* packetStr = NULL;
+    MAGIC_ASSERT(packet);
 
-    _packet_lock(packet);
     packet->allStatus |= status;
 
+    gboolean skipDebug = worker_isFiltered(LOGLEVEL_DEBUG);
     if(!skipDebug) {
         g_queue_push_tail(packet->orderedStatus, GUINT_TO_POINTER(status));
-        packetStr = _packet_getString(packet);
-    }
-
-    _packet_unlock(packet);
-
-    if(!skipDebug) {
+        gchar* packetStr = packet_toString(packet);
         message("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
+        g_free(packetStr);
     }
-}
-
-gchar* packet_toString(Packet* packet){
-    _packet_lock(packet);
-    gchar* packetStr = _packet_getString(packet);
-    _packet_unlock(packet);
-    return packetStr;
 }
 
 PacketDeliveryStatusFlags packet_getDeliveryStatus(Packet* packet) {
-    _packet_lock(packet);
-    PacketDeliveryStatusFlags flags = packet->allStatus;
-    _packet_unlock(packet);
-    return flags;
+    MAGIC_ASSERT(packet);
+    return packet->allStatus;
 }

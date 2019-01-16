@@ -50,8 +50,7 @@ struct _PacketTCPHeader {
 };
 
 Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, guint64 packetID);
-Packet* packet_shallowCopy(Packet* packet);
-Packet* packet_deepCopy(Packet* packet);
+Packet* packet_copy(Packet* packet);
 
 void packet_ref(Packet* packet);
 void packet_unref(Packet* packet);
@@ -71,12 +70,15 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACK
 guint packet_getPayloadLength(Packet* packet);
 gdouble packet_getPriority(Packet* packet);
 guint packet_getHeaderSize(Packet* packet);
+
 in_addr_t packet_getDestinationIP(Packet* packet);
+in_port_t packet_getDestinationPort(Packet* packet);
 in_addr_t packet_getSourceIP(Packet* packet);
 in_port_t packet_getSourcePort(Packet* packet);
+
 guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, gsize bufferLength);
 GList* packet_copyTCPSelectiveACKs(Packet* packet);
-void packet_getTCPHeader(Packet* packet, PacketTCPHeader* header);
+PacketTCPHeader* packet_getTCPHeader(Packet* packet);
 gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data);
 
 gint packet_getDestinationAssociationKey(Packet* packet);
