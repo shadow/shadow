@@ -288,11 +288,13 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet) {
     MAGIC_ASSERT(interface);
 
-    /* a packet arrived. lets try to receive or buffer it */
-    guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+    /* a packet arrived. lets try to receive or buffer it.
+     * we don't drop control-only packets, so don't include header size in length */
+    guint length = packet_getPayloadLength(packet);// + packet_getHeaderSize(packet);
     gssize space = interface->inBufferSize - interface->inBufferLength;
     utility_assert(space >= 0);
 
+    /* we don't drop control packets */
     if(length <= space) {
         /* we have space to buffer it */
         packet_ref(packet);

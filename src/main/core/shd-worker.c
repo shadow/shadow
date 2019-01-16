@@ -254,15 +254,18 @@ void worker_sendPacket(Packet* packet) {
         Host* dstHost = scheduler_getHost(worker->scheduler, dstID);
         utility_assert(dstHost);
 
-        packet_ref(packet);
+        packet_addDeliveryStatus(packet, PDS_INET_SENT);
+
+        /* the packetCopy starts with 1 ref, which will be held by the packet task
+         * and unreffed after the task is finished executing. */
+        Packet* packetCopy = packet_deepCopy(packet);
+
         Task* packetTask = task_new((TaskCallbackFunc)_worker_runDeliverPacketTask,
-                packet, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
+                packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
         Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
         task_unref(packetTask);
 
         scheduler_push(worker->scheduler, packetEvent, srcHost, dstHost);
-
-        packet_addDeliveryStatus(packet, PDS_INET_SENT);
     } else {
         packet_addDeliveryStatus(packet, PDS_INET_DROPPED);
     }

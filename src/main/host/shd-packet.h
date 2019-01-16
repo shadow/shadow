@@ -50,6 +50,8 @@ struct _PacketTCPHeader {
 };
 
 Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, guint64 packetID);
+Packet* packet_shallowCopy(Packet* packet);
+Packet* packet_deepCopy(Packet* packet);
 
 void packet_ref(Packet* packet);
 void packet_unref(Packet* packet);
@@ -82,9 +84,6 @@ gint packet_getSourceAssociationKey(Packet* packet);
 
 void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status);
 PacketDeliveryStatusFlags packet_getDeliveryStatus(Packet* packet);
-
-void packet_setDropNotificationDelay(Packet* packet, SimulationTime delay);
-SimulationTime packet_getDropNotificationDelay(Packet* packet);
 
 gchar* packet_toString(Packet* packet);
 

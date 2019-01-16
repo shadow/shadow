@@ -49,10 +49,18 @@ struct _Packet {
     PacketDeliveryStatusFlags allStatus;
     GQueue* orderedStatus;
 
-    SimulationTime dropNotificationDelay;
-
     MAGIC_DECLARE;
 };
+
+static void _packet_lock(Packet* packet) {
+    MAGIC_ASSERT(packet);
+    g_mutex_lock(&(packet->lock));
+}
+
+static void _packet_unlock(Packet* packet) {
+    MAGIC_ASSERT(packet);
+    g_mutex_unlock(&(packet->lock));
+}
 
 Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, guint64 packetID) {
     Packet* packet = g_new0(Packet, 1);
@@ -66,7 +74,7 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, gui
 
     if(payload != NULL && payloadLength > 0) {
         packet->payload = g_malloc0(payloadLength);
-        g_memmove(packet->payload, payload, payloadLength);
+        memmove(packet->payload, payload, (size_t)payloadLength);
         packet->payloadLength = payloadLength;
         utility_assert(packet->payload);
 
@@ -78,6 +86,97 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, gui
 
     worker_countObject(OBJECT_TYPE_PACKET, COUNTER_TYPE_NEW);
     return packet;
+}
+
+static Packet* _packet_getShallowCopyLocked(Packet* packet) {
+    Packet* copy = g_new0(Packet, 1);
+    MAGIC_INIT(copy);
+
+    g_mutex_init(&(copy->lock));
+    copy->referenceCount = 1;
+
+    copy->hostID = packet->hostID;
+    copy->packetID = packet->packetID;
+
+    copy->payload = packet->payload;
+    copy->payloadLength = packet->payloadLength;
+    copy->priority = packet->priority;
+
+    copy->allStatus = packet->allStatus;
+
+    if(packet->orderedStatus) {
+        /* this is ok because we store ints in the pointers, not objects */
+        copy->orderedStatus = g_queue_copy(packet->orderedStatus);
+    }
+
+    copy->protocol = packet->protocol;
+    if(packet->header) {
+        switch (packet->protocol) {
+            case PLOCAL: {
+                copy->header = g_memdup(packet->header, sizeof(PacketLocalHeader));
+                break;
+            }
+
+            case PUDP: {
+                copy->header = g_memdup(packet->header, sizeof(PacketUDPHeader));
+                break;
+            }
+
+            case PTCP: {
+                copy->header = g_memdup(packet->header, sizeof(PacketTCPHeader));
+
+                PacketTCPHeader* packetHeader = (PacketTCPHeader*)packet->header;
+                PacketTCPHeader* copyHeader = (PacketTCPHeader*)copy->header;
+
+                copyHeader->selectiveACKs = NULL;
+
+                if(packetHeader->selectiveACKs) {
+                    /* g_list_copy is shallow, but we store integers in the data pointers, so its OK here */
+                    copyHeader->selectiveACKs = g_list_copy(packetHeader->selectiveACKs);
+                }
+                break;
+            }
+
+            default: {
+                error("unrecognized protocol");
+                break;
+            }
+        }
+    }
+
+    worker_countObject(OBJECT_TYPE_PACKET, COUNTER_TYPE_NEW);
+    return copy;
+}
+
+/* copy everything except the payload.
+ * the payload will point to the same payload as the original packet. */
+Packet* packet_shallowCopy(Packet* packet) {
+    MAGIC_ASSERT(packet);
+    _packet_lock(packet);
+
+    Packet* copy = _packet_getShallowCopyLocked(packet);
+
+    _packet_unlock(packet);
+    return copy;
+}
+
+/* copy everything including the payload */
+Packet* packet_deepCopy(Packet* packet) {
+    MAGIC_ASSERT(packet);
+    _packet_lock(packet);
+
+    Packet* copy = _packet_getShallowCopyLocked(packet);
+
+    /* now also copy the payload if one exists in the original packet */
+    if(packet->payload != NULL && packet->payloadLength > 0) {
+        copy->payload = g_memdup(packet->payload, packet->payloadLength);
+        copy->payloadLength = packet->payloadLength;
+        copy->priority = packet->priority;
+        utility_assert(copy->payload);
+    }
+
+    _packet_unlock(packet);
+    return copy;
 }
 
 static void _packet_free(Packet* packet) {
@@ -106,16 +205,6 @@ static void _packet_free(Packet* packet) {
     g_free(packet);
 
     worker_countObject(OBJECT_TYPE_PACKET, COUNTER_TYPE_FREE);
-}
-
-static void _packet_lock(Packet* packet) {
-    MAGIC_ASSERT(packet);
-    g_mutex_lock(&(packet->lock));
-}
-
-static void _packet_unlock(Packet* packet) {
-    MAGIC_ASSERT(packet);
-    g_mutex_unlock(&(packet->lock));
 }
 
 void packet_ref(Packet* packet) {
@@ -670,18 +759,4 @@ PacketDeliveryStatusFlags packet_getDeliveryStatus(Packet* packet) {
     PacketDeliveryStatusFlags flags = packet->allStatus;
     _packet_unlock(packet);
     return flags;
-}
-
-void packet_setDropNotificationDelay(Packet* packet, SimulationTime delay) {
-    MAGIC_ASSERT(packet);
-    _packet_lock(packet);
-    packet->dropNotificationDelay = delay;
-    _packet_unlock(packet);
-}
-SimulationTime packet_getDropNotificationDelay(Packet* packet) {
-    MAGIC_ASSERT(packet);
-    _packet_lock(packet);
-    SimulationTime delay = packet->dropNotificationDelay;
-    _packet_unlock(packet);
-    return delay;
 }
