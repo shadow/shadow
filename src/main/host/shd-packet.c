@@ -604,6 +604,9 @@ static gchar* _packet_getString(Packet* packet) {
                 }
             }
 
+            g_string_append_printf(packetString, " tsval=%"G_GUINT64_FORMAT" tsechoreply=%"G_GUINT64_FORMAT,
+                    header->timestampValue, header->timestampEcho);
+
             g_free(sourceIPString);
             g_free(destinationIPString);
             break;
@@ -615,9 +618,10 @@ static gchar* _packet_getString(Packet* packet) {
         }
     }
     
-    g_string_append_printf(packetString, " status=");
-
     guint statusLength = g_queue_get_length(packet->orderedStatus);
+    if(statusLength > 0) {
+        g_string_append_printf(packetString, " status=");
+    }
     for(int i = 0; i < statusLength; i++) {
         gpointer statusPtr = g_queue_pop_head(packet->orderedStatus);
         PacketDeliveryStatusFlags status = (PacketDeliveryStatusFlags) GPOINTER_TO_UINT(statusPtr);
