@@ -282,6 +282,24 @@ TGenTransport* tgentransport_newActive(TGenPeer* proxy, gchar* username, gchar* 
         return NULL;
     }
 
+    char* tgenip = getenv("TGENIP");
+    /* bind()'ing here is only neccessary if we specify our IP */
+    if (tgenip != NULL) {
+        struct sockaddr_in localaddr;
+        memset(&localaddr, 0, sizeof(localaddr));
+        localaddr.sin_family = AF_INET;
+        localaddr.sin_addr.s_addr = inet_addr(tgenip);
+        localaddr.sin_port = 0;
+        gint result = bind(socketD, (struct sockaddr *) &localaddr, sizeof(localaddr));
+
+        if (result < 0) {
+            tgen_critical("bind(): socket %i returned %i error %i: %s",
+                    socketD, result, errno, g_strerror(errno));
+            close(socketD);
+            return NULL;
+        }
+    }
+
     /* connect to another host */
     struct sockaddr_in master;
     memset(&master, 0, sizeof(master));
