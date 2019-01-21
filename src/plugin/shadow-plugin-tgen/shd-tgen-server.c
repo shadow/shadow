@@ -108,7 +108,12 @@ TGenServer* tgenserver_new(in_port_t serverPort, TGenServer_notifyNewPeerFunc no
     struct sockaddr_in listener;
     memset(&listener, 0, sizeof(struct sockaddr_in));
     listener.sin_family = AF_INET;
-    listener.sin_addr.s_addr = htonl(INADDR_ANY);
+    char* tgenip = getenv("TGENIP");
+    if (tgenip != NULL) {
+        listener.sin_addr.s_addr = inet_addr(tgenip);
+    } else {
+        listener.sin_addr.s_addr = htonl(INADDR_ANY);
+    }
     listener.sin_port = serverPort;
 
     /* bind the socket to the server port */
