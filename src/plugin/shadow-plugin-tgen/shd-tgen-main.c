@@ -4,6 +4,7 @@
 
 #include <glib.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "shd-tgen.h"
 
@@ -104,6 +105,13 @@ static gint _tgenmain_run(gint argc, gchar *argv[]) {
         tgen_warning("USAGE: %s path/to/tgen.xml", argv[0]);
         tgen_critical("cannot continue: incorrect argument list format")
         return -1;
+    }
+
+    /* make sure broken pipes (if a tgen peer closes) doesn't crash our process */
+    if(signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        tgen_warning("Unable to set SIG_IGN for signal SIGPIPE");
+    } else {
+        tgen_message("Set SIG_IGN for signal SIGPIPE");
     }
 
     /* parse the config file */
