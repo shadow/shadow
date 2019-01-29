@@ -128,7 +128,7 @@ Options* options_new(gint argc, gchar* argv[]) {
       { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(options->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
       { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(options->initialSocketReceiveBufferSize), sockrecv->str, "N" },
       { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(options->initialSocketSendBufferSize), socksend->str, "N" },
-      { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(options->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['cubic']", "TCPCC" },
+      { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(options->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['reno']", "TCPCC" },
       { "tcp-ssthresh", 0, 0, G_OPTION_ARG_INT, &(options->tcpSlowStartThreshold), "Set TCP ssthresh value instead of discovering it via packet loss or hystart [0]", "N" },
       { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(options->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
       { NULL },
@@ -202,7 +202,7 @@ Options* options_new(gint argc, gchar* argv[]) {
         options->autotuneSocketSendBuffer = TRUE;
     }
     if(options->tcpCongestionControl == NULL) {
-        options->tcpCongestionControl = g_strdup("cubic");
+        options->tcpCongestionControl = g_strdup("reno");
     }
     if(options->dataDirPath == NULL) {
         options->dataDirPath = g_strdup("shadow.data");
