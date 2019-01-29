@@ -10,6 +10,13 @@
 #define DEFAULT_XFER_TIMEOUT_USEC 60000000
 #define DEFAULT_XFER_STALLOUT_USEC 15000000
 
+/* default lengths for buffers used during i/o.
+ * the read buffer is temporary and stack-allocated.
+ * the write buffer is persistent and heap-allocated, and thus
+ * it will consume more memory so we keep it relatively smaller. */
+#define DEFAULT_XFER_READ_BUFLEN 65536
+#define DEFAULT_XFER_WRITE_BUFLEN 32768
+
 /* an auth password so we know both sides understand tgen */
 #define TGEN_AUTH_PW "T8nNx9L95LATtckJkR5n"
 
@@ -652,17 +659,17 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
             || transfer->type == TGEN_TYPE_GETPUT
             || transfer->type == TGEN_TYPE_SCHEDULE);
 
-    guchar buffer[65536];
+    guchar buffer[DEFAULT_XFER_READ_BUFLEN];
 
-    /* keep reading until blocked */
-    while(TRUE) {
+    /* we only run through the read loop once in order to give other sockets a chance for i/o */
+    if(TRUE) {
         gsize length;
         if (transfer->type == TGEN_TYPE_GET) {
-            length = MIN(65536, (transfer->size - transfer->bytes.payloadRead));
+            length = MIN(DEFAULT_XFER_READ_BUFLEN, (transfer->size - transfer->bytes.payloadRead));
         } else if (transfer->type == TGEN_TYPE_GETPUT && transfer->getput) {
-            length = MIN(65536, (transfer->getput->theirSize - transfer->bytes.payloadRead));
+            length = MIN(DEFAULT_XFER_READ_BUFLEN, (transfer->getput->theirSize - transfer->bytes.payloadRead));
         } else if (transfer->type == TGEN_TYPE_SCHEDULE && transfer->schedule) {
-            length = MIN(65536, (transfer->schedule->expectedReceiveBytes - transfer->bytes.payloadRead));
+            length = MIN(DEFAULT_XFER_READ_BUFLEN, (transfer->schedule->expectedReceiveBytes - transfer->bytes.payloadRead));
         } else {
             g_assert_not_reached();
         }
@@ -698,7 +705,6 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
                 } else {
                     g_assert_not_reached();
                 }
-                continue;
             }
         } else {
             if (transfer->type == TGEN_TYPE_GET) {
@@ -723,7 +729,6 @@ static void _tgentransfer_readPayload(TGenTransfer* transfer) {
                 g_assert_not_reached();
             }
         }
-        break;
     }
 }
 
@@ -1003,13 +1008,13 @@ static void _tgentransfer_writePayload(TGenTransfer* transfer) {
     /* try to flush any leftover bytes */
     transfer->bytes.payloadWrite += _tgentransfer_flushOut(transfer);
 
-    /* keep writing until blocked */
-    while(!transfer->writeBuffer) {
+    /* we only run through the write loop once in order to give other sockets a chance for i/o */
+    if (!transfer->writeBuffer) {
         gsize length;
         if (transfer->type == TGEN_TYPE_PUT) {
-            length = MIN(16384, (transfer->size - transfer->bytes.payloadWrite));
+            length = MIN(DEFAULT_XFER_WRITE_BUFLEN, (transfer->size - transfer->bytes.payloadWrite));
         } else {
-            length = MIN(16384, (transfer->getput->ourSize - transfer->bytes.payloadWrite));
+            length = MIN(DEFAULT_XFER_WRITE_BUFLEN, (transfer->getput->ourSize - transfer->bytes.payloadWrite));
         }
 
         if(length > 0) {
@@ -1047,7 +1052,6 @@ static void _tgentransfer_writePayload(TGenTransfer* transfer) {
             } else {
                 g_assert_not_reached();
             }
-            break;
         }
     }
 }
