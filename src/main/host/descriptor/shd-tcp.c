@@ -1959,7 +1959,6 @@ void tcp_dropPacket(TCP* tcp, Packet* packet) {
     /* now we have the true TCP for the packet */
     MAGIC_ASSERT(tcp);
 
-    debug("dropped packet %d", header->sequence);
     _tcp_flush(tcp);
 }
 
