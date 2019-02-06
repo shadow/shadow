@@ -733,12 +733,6 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
         return FALSE;
     }
 
-    /* it must be connected */
-    if(!top->isConnected || top->clusterCount > 1) {
-        critical("topology must be but is not strongly connected");
-        return FALSE;
-    }
-
     top->isDirected = igraph_is_directed(&top->graph);
 
     gboolean is_complete;
@@ -786,6 +780,15 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
             top->isConnected ? "strongly connected" : "disconnected",
             (guint)top->clusterCount, top->clusterCount == 1 ? "cluster" : "clusters",
             top->prefersDirectPaths ? "" : " not");
+
+    /* it must be connected so everyone can route to everyone else */
+    if(!top->isConnected || top->clusterCount > 1) {
+        critical("topology must be strongly connected with a single cluster; "
+                "it is %sconnected with %i cluster%s",
+                top->isConnected ? "" : "dis",
+                (gint)top->clusterCount, top->clusterCount == 1 ? "" : "s");
+        return FALSE;
+    }
 
     return TRUE;
 }
