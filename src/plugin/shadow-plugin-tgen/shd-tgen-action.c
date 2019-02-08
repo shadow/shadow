@@ -85,7 +85,7 @@ static GError* _tgenaction_handlePeer(const gchar* attributeName,
 
     /* dont add my own address to the server pool */
     char myname[128];
-    if (!gethostname(&myname[0], 128)
+    if (!tgenconfig_gethostname(&myname[0], 128)
             && !g_ascii_strcasecmp(myname, tokens[0])) {
         tgen_info("refusing to place my address in server pool for attribute '%s'", attributeName);
         return NULL;

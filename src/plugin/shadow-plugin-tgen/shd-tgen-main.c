@@ -77,7 +77,7 @@ static gint _tgenmain_run(gint argc, gchar *argv[]) {
     /* get our hostname for logging */
     gchar hostname[128];
     memset(hostname, 0, 128);
-    gethostname(hostname, 128);
+    tgenconfig_gethostname(hostname, 128);
 
     /* default to message level log until we read config */
     tgen_message("Initializing traffic generator on host %s process id %i", hostname, (gint)getpid());

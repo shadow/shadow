@@ -50,5 +50,6 @@ extern TGenLogFunc tgenLogFunc;
 #include "shd-tgen-generator.h"
 #include "shd-tgen-graph.h"
 #include "shd-tgen-driver.h"
+#include "shd-tgen-config.h"
 
 #endif /* SHD_TGEN_H_ */
