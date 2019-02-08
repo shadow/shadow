@@ -282,7 +282,7 @@ TGenTransport* tgentransport_newActive(TGenPeer* proxy, gchar* username, gchar* 
         return NULL;
     }
 
-    char* tgenip = getenv("TGENIP");
+    gchar* tgenip = tgenconfig_getIP();
     /* bind()'ing here is only neccessary if we specify our IP */
     if (tgenip != NULL) {
         struct sockaddr_in localaddr;

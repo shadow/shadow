@@ -1695,7 +1695,7 @@ TGenTransfer* tgentransfer_new(const gchar* idStr, gsize count, TGenTransferType
 
     gchar nameBuffer[256];
     memset(nameBuffer, 0, 256);
-    transfer->hostname = (0 == gethostname(nameBuffer, 255)) ? g_strdup(nameBuffer) : NULL;
+    transfer->hostname = (0 == tgenconfig_gethostname(nameBuffer, 255)) ? g_strdup(nameBuffer) : NULL;
 
     if(type != TGEN_TYPE_NONE) {
         transfer->isCommander = TRUE;

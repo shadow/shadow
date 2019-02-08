@@ -638,7 +638,7 @@ void tgendriver_unref(TGenDriver* driver) {
 //static gchar* _tgendriver_makeTempFile() {
 //    gchar nameBuffer[256];
 //    memset(nameBuffer, 0, 256);
-//    gethostname(nameBuffer, 255);
+//    tgenconfig_gethostname(nameBuffer, 255);
 //
 //    GString* templateBuffer = g_string_new("XXXXXX-shadow-tgen-");
 //    g_string_append_printf(templateBuffer, "%s.xml", nameBuffer);
