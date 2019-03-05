@@ -133,6 +133,9 @@ def build(args):
     builddir=getfullpath(BUILD_PREFIX)
     installdir=getfullpath(args.prefix)
 
+    # workaround for elf-loader extract-system-config.py
+    os.putenv("LANGUAGE", "C")
+
     # clear cmake cache
     if args.do_force_rebuild and os.path.exists(builddir): shutil.rmtree(builddir)
 
