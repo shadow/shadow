@@ -48,3 +48,6 @@ PRELOADDEF(return, int, syscall, (int a, ...), a);
 /* these cause undocumented errors */
 //INTERPOSE_NORET(void pthread_cleanup_push(void (*a)(void *), void *b), pthread_cleanup_push, a, b);
 //INTERPOSE_NORET(void pthread_cleanup_pop(int a), pthread_cleanup_pop, a, b);
+
+PRELOADDEF(return, int, puts_temp, (const char *a), a);
+PRELOADDEF(return, int, shadow_pipe2, (int a[2], int b), a, b);
