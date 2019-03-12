@@ -319,6 +319,15 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
     host_stopExecutionTimer(host);
 }
 
+void slave_addCommandToHostQueue(Slave* slave, gchar* hostName, gchar* id, SimulationTime startTime, gchar* arguments) {
+    MAGIC_ASSERT(slave);
+    /* quarks are unique per process, so do the conversion here */
+    GQuark hostID = g_quark_from_string(hostName);
+
+    Host* host = scheduler_getHost(slave->scheduler, hostID);
+    host_addCommand(host, id, startTime, arguments);
+}
+
 DNS* slave_getDNS(Slave* slave) {
     MAGIC_ASSERT(slave);
     return master_getDNS(slave->master);

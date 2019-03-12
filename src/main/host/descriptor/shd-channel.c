@@ -170,3 +170,8 @@ Channel* channel_getLinkedChannel(Channel* channel) {
     MAGIC_ASSERT(channel);
     return channel->linkedChannel;
 }
+
+gssize channel_sendShadowChannel(Channel* channel, gconstpointer buffer, gsize nBytes) {
+    MAGIC_ASSERT(channel);    
+    return channel_sendUserData(channel, buffer, nBytes, 0, 0);
+}

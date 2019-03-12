@@ -166,6 +166,21 @@ static void _parser_freeProcessElement(ConfigurationProcessElement* process) {
     g_free(process);
 }
 
+static void _parser_freeCommandElement(ConfigurationCommandElement* command) {
+    utility_assert(command != NULL);
+
+    if(command->id.isSet) {
+        utility_assert(command->id.string != NULL);
+        g_string_free(command->id.string, TRUE);
+    }
+    if(command->arguments.isSet) {
+        utility_assert(command->arguments.string != NULL);
+        g_string_free(command->arguments.string, TRUE);
+    }
+
+    g_free(command);
+}
+
 static void _parser_freeHostElement(ConfigurationHostElement* host) {
     utility_assert(host != NULL);
 
@@ -207,6 +222,9 @@ static void _parser_freeHostElement(ConfigurationHostElement* host) {
     }
     if(host->processes) {
         g_queue_free_full(host->processes, (GDestroyNotify)_parser_freeProcessElement);
+    }
+    if(host->commands) {
+        g_queue_free_full(host->commands, (GDestroyNotify)_parser_freeCommandElement);
     }
 
     g_free(host);
@@ -387,6 +405,7 @@ static GError* _parser_handlePluginAttributes(Parser* parser, const gchar** attr
 static GError* _parser_handleHostAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
     ConfigurationHostElement* host = g_new0(ConfigurationHostElement, 1);
     host->processes = g_queue_new();
+    host->commands = g_queue_new();
     GError* error = NULL;
 
     const gchar **nameCursor = attributeNames;
@@ -604,6 +623,58 @@ static GError* _parser_handleProcessAttributes(Parser* parser, const gchar** att
     return error;
 }
 
+static GError* _parser_handleCommandAttributes(Parser* parser, const gchar** attributeNames, const gchar** attributeValues) {
+    ConfigurationCommandElement* command = g_new0(ConfigurationCommandElement, 1);
+    GError* error = NULL;
+
+    const gchar **nameCursor = attributeNames;
+    const gchar **valueCursor = attributeValues;
+
+    /* check the attributes */
+    while (!error && *nameCursor) {
+        const gchar* name = *nameCursor;
+        const gchar* value = *valueCursor;
+
+        debug("found attribute '%s=%s'", name, value);
+
+        if (!command->id.isSet && !g_ascii_strcasecmp(name, "id")) {
+            command->id.string = g_string_new(value);
+            command->id.isSet = TRUE;
+        } else if (!command->starttime.isSet && !g_ascii_strcasecmp(name, "starttime")) {
+            command->starttime.integer = g_ascii_strtoull(value, NULL, 10);
+            command->starttime.isSet = TRUE;
+        } else if (!command->arguments.isSet && !g_ascii_strcasecmp(name, "arguments")) {
+            command->arguments.string = g_string_new(value);
+            command->arguments.isSet = TRUE;
+        } else {
+            error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+                            "unknown 'command' attribute '%s'", name);
+        }
+
+        nameCursor++;
+        valueCursor++;
+    }
+
+    /* validate the values */
+    if(!error && (!command->id.isSet || !command->starttime.isSet || !command->arguments.isSet)) {
+        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                "element 'command' requires attributes 'id' 'arguments' 'starttime'");
+    }
+
+    if(error) {
+        /* clean up */
+        _parser_freeCommandElement(command);
+    } else {
+        /* no error, process configs get added to the most recent host */
+        ConfigurationHostElement* host = g_queue_peek_tail(parser->hosts);
+        utility_assert(host != NULL);
+
+        g_queue_push_tail(host->commands, command);
+    }
+
+    return error;
+}
+
 static void _parser_handleHostChildStartElement(GMarkupParseContext* context,
         const gchar* elementName, const gchar** attributeNames,
         const gchar** attributeValues, gpointer userData, GError** error) {
@@ -616,6 +687,8 @@ static void _parser_handleHostChildStartElement(GMarkupParseContext* context,
     /* check for cluster child-level elements */
     if (!g_ascii_strcasecmp(elementName, "process") || !g_ascii_strcasecmp(elementName, "application")) {
         *error = _parser_handleProcessAttributes(parser, attributeNames, attributeValues);
+    } else if (!g_ascii_strcasecmp(elementName, "command")) {
+        *error = _parser_handleCommandAttributes(parser, attributeNames, attributeValues);
     } else {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
                 "unknown 'host' child starting element '%s'", elementName);
@@ -631,7 +704,7 @@ static void _parser_handleHostChildEndElement(GMarkupParseContext* context,
     debug("found 'host' child ending element '%s'", elementName);
 
     /* check for cluster child-level elements */
-    if (!(!g_ascii_strcasecmp(elementName, "process")) && !(!g_ascii_strcasecmp(elementName, "application"))) {
+    if (!(!g_ascii_strcasecmp(elementName, "process")) && !(!g_ascii_strcasecmp(elementName, "application")) && !(!g_ascii_strcasecmp(elementName, "command"))) {
         *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
                 "unknown 'host' child ending element '%s'", elementName);
     }

@@ -152,6 +152,7 @@ int process_emu_close(Process* proc, int fd);
 int process_emu_fcntl(Process* proc, int fd, int cmd, void* argp);
 int process_emu_ioctl(Process* proc, int fd, unsigned long int request, void* argp);
 int process_emu_pipe2(Process* proc, int pipefds[2], int flags);
+int process_emu_shadow_pipe2(Process* proc, int pipefds[2], int flags);
 int process_emu_pipe(Process* proc, int pipefds[2]);
 int process_emu_getifaddrs(Process* proc, struct ifaddrs **ifap);
 void process_emu_freeifaddrs(Process* proc, struct ifaddrs *ifa);

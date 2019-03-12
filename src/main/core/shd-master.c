@@ -274,6 +274,30 @@ static void _master_registerProcessCallback(ConfigurationProcessElement* pe, Pro
                         pe->arguments.string->str);
 }
 
+static void _master_registerCommandCallback(ConfigurationCommandElement* ce, ProcessCallbackArgs* args) {
+    /* Allocate task for command */
+    /* slave_addNewVirtualProcess(args->master->slave, args->hostParams->hostname, pe->plugin.string->str, */
+    /*                     pe->preload.isSet ? pe->preload.string->str : NULL, */
+    /*                     SIMTIME_ONE_SECOND * pe->starttime.integer, */
+    /*                     pe->stoptime.isSet ? SIMTIME_ONE_SECOND * pe->stoptime.integer : 0, */
+    /*                     pe->arguments.string->str); */
+
+    /* SimulationTime now = worker_getCurrentTime(); */
+    /* command_new( */
+    /* SimulationTime starttime = SIMTIME_ONE_SECOND * pe->starttime.integer; */
+    /* SimulationTime startDelay = starttime <= now ? 1 : starttime - now; */
+    /* Task* commandTask = task_new((TaskCallbackFunc)_master_runCommandTask,  */
+    MAGIC_ASSERT(args->master);
+    
+    message("command id=%s", ce->id.string->str);
+    message("command starttime=%d", ce->starttime.integer);
+    message("command args=%s", ce->arguments.string->str);
+    
+    message("successfully parsed Shadow XML!");
+
+    slave_addCommandToHostQueue(args->master->slave, args->hostParams->hostname, ce->id.string->str, SIMTIME_ONE_SECOND * ce->starttime.integer, ce->arguments.string->str);
+}
+
 static void _master_registerHostCallback(ConfigurationHostElement* he, Master* master) {
     MAGIC_ASSERT(master);
     utility_assert(he);
@@ -355,6 +379,9 @@ static void _master_registerHostCallback(ConfigurationHostElement* he, Master* m
 
         /* now handle each virtual process the host will run */
         g_queue_foreach(he->processes, (GFunc)_master_registerProcessCallback, &processArgs);
+
+        /* register commands */
+        g_queue_foreach(he->commands, (GFunc)_master_registerCommandCallback, &processArgs);
 
         /* cleanup for next pass through the loop */
         g_string_free(hostnameBuffer, TRUE);

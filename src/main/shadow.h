@@ -74,6 +74,7 @@ typedef struct _Process Process;
 #include "core/work/shd-task.h"
 #include "core/work/shd-event.h"
 #include "core/work/shd-message.h"
+#include "core/work/shd-command.h"
 #include "host/shd-protocol.h"
 #include "host/descriptor/shd-descriptor.h"
 #include "core/support/shd-configuration.h"

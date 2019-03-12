@@ -450,7 +450,7 @@ int puts_temp(const char *str) {
 int shadow_pipe2(int fds[2], int flag) {
     Process* proc = NULL;
     if((proc = _doEmulate()) != NULL) {
-        return process_emu_pipe2(proc, fds, flag);
+        return process_emu_shadow_pipe2(proc, fds, flag);
     } else {
         ENSURE(pipe2);
         return director.next.pipe2(fds, flag);

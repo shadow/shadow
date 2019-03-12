@@ -2996,6 +2996,57 @@ int process_emu_pipe2(Process* proc, int pipefds[2], int flags) {
     return 0;
 }
 
+int process_emu_shadow_pipe2(Process* proc, int pipefds[2], int flags) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    gint result = 0;
+
+    /* check inputs for what we support */
+    if(flags & O_DIRECT) {
+        warning("we don't support pipes in 'O_DIRECT' mode, ignoring");
+    }
+
+    gint handle = host_createDescriptor(proc->host, DT_PIPE);
+    pipefds[0] = handle; /* reader */
+    Descriptor* desc = host_lookupDescriptor(proc->host, handle);
+
+    if(desc) {
+        gint options = descriptor_getFlags(desc);
+        if(flags & O_NONBLOCK) {
+            options |= O_NONBLOCK;
+        }
+        if(flags & O_CLOEXEC) {
+            options |= O_CLOEXEC;
+        }
+        descriptor_setFlags(desc, options);
+    }
+
+    Descriptor* linkedDesc = (Descriptor*)channel_getLinkedChannel((Channel*)desc);
+    utility_assert(linkedDesc);
+    gint linkedHandle = *descriptor_getHandleReference(linkedDesc);
+    pipefds[1] = linkedHandle; /* writer */
+    host_registerShadowChannel(proc->host, linkedHandle);
+
+    if(linkedDesc) {
+        gint options = descriptor_getFlags(linkedDesc);
+        if(flags & O_NONBLOCK) {
+            options |= O_NONBLOCK;
+        }
+        if(flags & O_CLOEXEC) {
+            options |= O_CLOEXEC;
+        }
+        descriptor_setFlags(linkedDesc, options);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+
+    if(result != 0) {
+        _process_setErrno(proc, result);
+        return -1;
+    }
+
+    return 0;
+}
+
 int process_emu_pipe(Process* proc, int pipefds[2]) {
     return process_emu_pipe2(proc, pipefds, O_NONBLOCK);
 }

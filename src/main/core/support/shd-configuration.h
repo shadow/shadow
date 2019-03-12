@@ -60,12 +60,24 @@ struct _ConfigurationProcessElement {
     ConfigurationStringAttribute preload;
 };
 
+typedef struct _ConfigurationCommandElement ConfigurationCommandElement;
+struct _ConfigurationCommandElement {
+    /* required */
+    ConfigurationStringAttribute id;
+    ConfigurationIntegerAttribute starttime;
+    ConfigurationStringAttribute arguments;
+    /* optional*/
+    /* ConfigurationIntegerAttribute stoptime; */
+    /* ConfigurationStringAttribute preload; */
+};
+
 typedef struct _ConfigurationHostElement ConfigurationHostElement;
 struct _ConfigurationHostElement {
     /* required */
     ConfigurationStringAttribute id;
     GQueue* processes;
     /* optional*/
+    GQueue* commands;
     ConfigurationStringAttribute ipHint;
     ConfigurationStringAttribute geocodeHint;
     ConfigurationStringAttribute typeHint;

@@ -20,4 +20,6 @@ Channel* channel_new(gint handle, ChannelType type);
 void channel_setLinkedChannel(Channel* channel, Channel* linkedChannel);
 Channel* channel_getLinkedChannel(Channel* channel);
 
+gssize channel_sendShadowChannel(Channel* channel, gconstpointer buffer, gsize nBytes);
+
 #endif /* SHD_CHANNEL_H_ */

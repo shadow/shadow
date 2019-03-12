@@ -57,6 +57,7 @@ void host_shutdown(Host* host);
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
         const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
         const gchar* preloadName, const gchar* preloadPath, gchar* arguments);
+void host_addCommand(Host* host, gchar* id, SimulationTime startTime, gchar* arguments);
 void host_freeAllApplications(Host* host);
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);
@@ -77,6 +78,11 @@ void host_closeDescriptor(Host* host, gint handle);
 gint host_closeUser(Host* host, gint handle);
 Descriptor* host_lookupDescriptor(Host* host, gint handle);
 NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle);
+/* Channel* host_lookupShadowChannel(Host* host); */
+void host_registerShadowChannel(Host* host, gint handle);
+gint host_getShadowChannel(Host* host);
+gboolean host_isSetShadowChannel(Host* host);
+Channel* host_lookupShadowChannel(Host* host);
 
 void host_returnHandleHack(gint handle);
 gboolean host_isShadowDescriptor(Host* host, gint handle);

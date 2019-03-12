@@ -19,6 +19,9 @@ struct _Host {
 
     /* the virtual processes this host is running */
     GQueue* processes;
+    
+    /* command queue */
+    GQueue* commands;
 
     /* a statistics tracker for in/out bytes, CPU, memory, etc. */
     Tracker* tracker;
@@ -32,6 +35,10 @@ struct _Host {
 
     /* all file, socket, and epoll descriptors we know about and track */
     GHashTable* descriptors;
+
+    /* descriptorHandle for shadow-plugin channel */
+    gint shadowChannel;
+    gboolean shadowChannelSet;
 
     /* map from the descriptor handle we returned to the plug-in, and
      * descriptor handle that the OS gave us for files, etc.
@@ -98,6 +105,7 @@ Host* host_new(HostParameters* params) {
 
     /* applications this node will run */
     host->processes = g_queue_new();
+    host->commands = g_queue_new();
 
     message("Created host id '%u' name '%s'", (guint)host->params.id, g_quark_to_string(host->params.id));
 
@@ -130,6 +138,9 @@ void host_shutdown(Host* host) {
 
     if(host->processes) {
         g_queue_free(host->processes);
+    }
+    if(host->commands) {
+        g_queue_free(host->commands);
     }
 
     if(host->defaultAddress) {
@@ -255,6 +266,25 @@ GQuark host_getID(Host* host) {
     return host->params.id;
 }
 
+static void host_schedule_commands(Host* host) {
+    MAGIC_ASSERT(host);
+    while(host->commands && !g_queue_is_empty(host->commands)) {
+        Command* command = g_queue_pop_head(host->commands);
+
+        SimulationTime now = worker_getCurrentTime();
+        SimulationTime startTime = command_getStartTime(command);
+        SimulationTime startDelay = startTime <= now ? 1 : startTime - now;
+    
+        command_ref(command);
+        Task* commandTask = task_new((TaskCallbackFunc)command_run,
+                                     command, NULL, (TaskObjectFreeFunc)command_unref, NULL);
+        worker_scheduleTask(commandTask, startDelay);
+        task_unref(commandTask);
+        command_unref(command);
+    }
+    /* g_queue_free(host->commands); */
+}
+
 void host_boot(Host* host) {
     MAGIC_ASSERT(host);
 
@@ -303,6 +333,9 @@ void host_boot(Host* host) {
     /* scheduling the starting and stopping of our virtual processes */
     g_queue_foreach(host->processes, (GFunc)process_schedule, NULL);
 
+    /* scheduling the command */
+    host_schedule_commands(host);
+
     message("Booted host id '%u' name '%s' with seed %u, ip %s, "
                 "%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, "
                 "%"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
@@ -321,6 +354,12 @@ void host_addApplication(Host* host, SimulationTime startTime, SimulationTime st
     guint processID = host->processIDCounter++;
     Process* proc = process_new(host, processID, startTime, stopTime, pluginName, pluginPath, pluginSymbol, preloadName, preloadPath, arguments);
     g_queue_push_tail(host->processes, proc);
+}
+
+void host_addCommand(Host* host, gchar* id, SimulationTime startTime, gchar* arguments) {
+    MAGIC_ASSERT(host);    
+    Command* command = command_new(host, id, startTime, arguments);
+    g_queue_push_tail(host->commands, command);
 }
 
 void host_freeAllApplications(Host* host) {
@@ -671,6 +710,23 @@ void host_closeDescriptor(Host* host, gint handle) {
     MAGIC_ASSERT(host);
     _host_unmonitorDescriptor(host, handle);
 }
+
+void host_registerShadowChannel(Host* host, gint handle) {
+    MAGIC_ASSERT(host);
+    host->shadowChannel = handle;
+    host->shadowChannelSet = TRUE;
+}
+
+gboolean host_isSetShadowChannel(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->shadowChannelSet;
+}
+
+gint host_getShadowChannel(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->shadowChannel;
+}
+
 
 gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
         gint fileDescriptor, struct epoll_event* event) {

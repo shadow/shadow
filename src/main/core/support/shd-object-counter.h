@@ -20,6 +20,7 @@ enum _ObjectType {
     OBJECT_TYPE_UDP,
     OBJECT_TYPE_EPOLL,
     OBJECT_TYPE_TIMER,
+    OBJECT_TYPE_COMMAND,
 };
 
 typedef enum _CounterType CounterType;
