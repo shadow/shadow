@@ -75,10 +75,10 @@ void command_unref(Command* command) {
 
 void command_run(Command* command, gpointer userData) {
     message("command executed!");
-    message("currentTime=%d", worker_getCurrentTime());
+    message("currentTime=%llu", worker_getCurrentTime());
     if (command->id) 
         message("command id=%s", command->id->str);
-    message("command startTime=%d", command->startTime);
+    message("command startTime=%llu", command->startTime);
     if (command->arguments)
         message("command arg=%s", command->arguments->str);
 
@@ -93,6 +93,9 @@ void command_run(Command* command, gpointer userData) {
         if (command->arguments)
             g_string_append_printf(shadow_cmd, "%s", command->arguments->str);
         
+        message("cmd:(%s)", shadow_cmd->str);
+        message("cmdlen:(%d)", strlen(shadow_cmd->str));
+
         int cmd_length = strlen(shadow_cmd->str);
         g_string_prepend_len(shadow_cmd, (char*)&cmd_length, sizeof(int));
 
@@ -101,7 +104,6 @@ void command_run(Command* command, gpointer userData) {
         /*     sprintf(shadow_cmd, "%s:%s", command->id->str, command->arguments->str); */
         /* else  */
         /*     sprintf(shadow_cmd, "%s:too long args", command->id->str);             */
-        message("(%s)(%d)", shadow_cmd->str, strlen(shadow_cmd->str));
         
         gint result = host_sendUserData(command->host, handle, shadow_cmd->str, sizeof(int)+cmd_length, 0, 0, &bytes);
         if (result != 0) {

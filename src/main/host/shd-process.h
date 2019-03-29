@@ -161,6 +161,9 @@ int process_emu_timerfd_create(Process* proc, int clockid, int flags);
 int process_emu_timerfd_settime(Process* proc, int fd, int flags, const struct itimerspec *new_value, struct itimerspec *old_value);
 int process_emu_timerfd_gettime(Process* proc, int fd, struct itimerspec *curr_value);
 
+/* plugin event log */
+int process_emu_shadow_push_eventlog(Process* proc, const char *s);
+
 /* file specific */
 
 int process_emu_fileno(Process* proc, FILE *stream);

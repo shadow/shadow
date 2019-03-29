@@ -456,3 +456,13 @@ int shadow_pipe2(int fds[2], int flag) {
         return director.next.pipe2(fds, flag);
     }
 }
+
+int shadow_push_eventlog(const char *str) {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_shadow_push_eventlog(proc, str);
+    } else {
+        ENSURE(puts);
+        return director.next.puts(str);
+    }
+}
