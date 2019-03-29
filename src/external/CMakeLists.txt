@@ -21,7 +21,7 @@ EXTERNALPROJECT_ADD(
     PREFIX rpth
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/rpth
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/rpth
-    CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/rpth/configure ${RPTH_VERB_SWITCH} --prefix=${CMAKE_BINARY_DIR} --with-tags= --disable-shared --disable-tests ${RPTH_DEBUG_SWITCH} ${RPTH_OPT_SWITCH}
+    CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/rpth/configure ${RPTH_VERB_SWITCH} --prefix=${PROJECT_BINARY_DIR} --with-tags= --disable-shared --disable-tests ${RPTH_DEBUG_SWITCH} ${RPTH_OPT_SWITCH}
 #    CFLAGS=-Qunused-arguments
     BUILD_COMMAND make
     BUILD_IN_SOURCE 0

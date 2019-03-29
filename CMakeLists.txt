@@ -19,6 +19,11 @@ if((NOT UNIX) OR (NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux")))
 endif((NOT UNIX) OR (NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux")))
 
 ## ensure out-of-source build
+message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
+message(STATUS "CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
+message(STATUS "PROJECT_SOURCE_DIR: ${PROJECT_SOURCE_DIR}")
+message(STATUS "PROJECT_BINARY_DIR: ${PROJECT_BINARY_DIR}")
+
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
     message(FATAL_ERROR "Shadow requires an out-of-source build. Please create a separate build directory and run 'cmake path/to/shadow [options]' there.")
 endif(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
@@ -28,7 +33,7 @@ foreach(include ${CMAKE_EXTRA_INCLUDES})
     include_directories(${include})
     set(CMAKE_MODULE_PATH "${include}" ${CMAKE_MODULE_PATH})
 endforeach(include)
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
+set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
 
 message(STATUS "CMAKE_MODULE_PATH = ${CMAKE_MODULE_PATH}")
 
@@ -55,7 +60,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 ## construct info/version strings
 set(SHADOW_INFO_STRING_CONF "For more information, visit https://shadow.github.io or https://github.com/shadow")
 set(SHADOW_VERSION_STRING_CONF "Shadow")
-if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
+if(EXISTS ${PROJECT_SOURCE_DIR}/.git)
     ## current git commit version and hash
     EXECUTE_PROCESS(COMMAND "git" "describe" "--long" "--dirty" OUTPUT_VARIABLE DESCRIBE)
     if(DESCRIBE)
@@ -135,9 +140,9 @@ if(POLICY  CMP0026)
 endif()
 
 ## recurse our project tree
-add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)
-add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
-add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
+add_subdirectory(${PROJECT_SOURCE_DIR}/resource/)
+add_subdirectory(${PROJECT_SOURCE_DIR}/src/)
+add_subdirectory(${PROJECT_SOURCE_DIR}/cpack/)
 
 if(SHADOW_TEST STREQUAL ON)
     ## http://www.cmake.org/Wiki/CMake_Testing_With_CTest
@@ -147,7 +152,7 @@ if(SHADOW_TEST STREQUAL ON)
 endif(SHADOW_TEST STREQUAL ON)
 
 ## install our 'exported' libs so they can be imported by others
-file(GLOB CMAKE_CUSTOM_MODULES "${CMAKE_SOURCE_DIR}/cmake/*cmake")
+file(GLOB CMAKE_CUSTOM_MODULES "${PROJECT_SOURCE_DIR}/cmake/*cmake")
 install(FILES ${CMAKE_CUSTOM_MODULES} DESTINATION share/cmake/Modules/)
 if(SHADOW_EXPORT STREQUAL ON)
     install(EXPORT shadow-externals DESTINATION share/)
