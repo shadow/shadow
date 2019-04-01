@@ -105,6 +105,9 @@ def search_debug_file():
                     # ubuntu >12.04
                     ('/usr/lib/debug/lib/x86_64-linux-gnu/', r'ld-[0-9.]+\.so'),
                     ('/usr/lib/debug/lib/i386-linux-gnu/', r'ld-[0-9.]+\.so'),
+                    # arch / manjaro
+                    ('/usr/lib/debug/usr/lib32/', r'ld-[0-9.]+\.so\.debug'),
+                    ('/usr/lib/debug/usr/lib/', r'ld-[0-9.]+\.so\.debug'),
                   ]
     build_ids = [ # debian
                   ('/lib/x86_64-linux-gnu/', r'ld-[0-9.]+\.so'),
