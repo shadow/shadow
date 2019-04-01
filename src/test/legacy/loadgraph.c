@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <errno.h>
 #include <igraph.h>
 
 int main(int argc, char* argv[]) {
@@ -23,9 +24,20 @@ int main(int argc, char* argv[]) {
     return -2;
   }
 
+  int r = fseek(graphFile, 0, SEEK_END);
+  if(r < 0) {
+      printf("error in fseek %i: %s", errno, strerror(errno));
+      return -5;
+  }
+
+  long int fileSize = ftell(graphFile);
+  rewind(graphFile);
+
+  printf("graph file size is %li bytes\n", fileSize);
+
   igraph_t graph;
   time_t start = time(NULL);
-  int r = igraph_read_graph_graphml(&graph, graphFile, 0);
+  r = igraph_read_graph_graphml(&graph, graphFile, 0);
   time_t end = time(NULL);
   fclose(graphFile);
 
