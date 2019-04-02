@@ -2598,10 +2598,44 @@ int process_emu_accept4(Process* proc, int fd, struct sockaddr* addr, socklen_t*
 
 int process_emu_shutdown(Process* proc, int fd, int how) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("shutdown not implemented");
-    _process_setErrno(proc, ENOSYS);
+
+    if(how != SHUT_RD && how != SHUT_WR && how != SHUT_RDWR) {
+        _process_setErrno(proc, EINVAL);
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+        return -1;
+    }
+
+    /* check if this is a socket */
+    gint ret = 0;
+
+    if(!host_isShadowDescriptor(proc->host, fd)){
+        /* it's not a shadow descriptor, check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd >= 0) {
+            /* probably not a socket, but let the OS set the error */
+            ret = shutdown(osfd, how);
+            if(ret < 0) {
+                _process_setErrno(proc, errno);
+            }
+        } else {
+            _process_setErrno(proc, EBADF);
+            ret = -1;
+        }
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+        return ret;
+    }
+
+    /* it is a shadow descriptor */
+    ret = host_shutdownSocket(proc->host, fd, how);
+
+    if(ret != 0) {
+        _process_setErrno(proc, ret);
+        ret = -1;
+    }
+
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+
+    return ret;
 }
 
 ssize_t process_emu_read(Process* proc, int fd, void *buff, size_t numbytes) {

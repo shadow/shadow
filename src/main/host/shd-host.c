@@ -1508,6 +1508,8 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
         *bytesCopied = (gsize)n;
     } else if(n == -2) {
         return ENOTCONN;
+    } else if(n == -3) {
+        return EPIPE;
     } else if(n < 0) {
         return EWOULDBLOCK;
     }
@@ -1582,6 +1584,33 @@ gint host_closeUser(Host* host, gint handle) {
     descriptor_close(descriptor);
 
     return 0;
+}
+
+gint host_shutdownSocket(Host* host, gint handle, gint how) {
+    MAGIC_ASSERT(host);
+
+    Descriptor* descriptor = host_lookupDescriptor(host, handle);
+    if(descriptor == NULL) {
+        warning("descriptor handle '%i' not found", handle);
+        return EBADF;
+    }
+
+    DescriptorStatus status = descriptor_getStatus(descriptor);
+    if(status & DS_CLOSED) {
+        warning("descriptor handle '%i' not a valid open descriptor", handle);
+        return EBADF;
+    }
+
+    DescriptorType type = descriptor_getType(descriptor);
+    if(type == DT_TCPSOCKET) {
+        return tcp_shutdown((TCP*)descriptor, how);
+    } else if(type == DT_UDPSOCKET) {
+        return ENOTCONN;
+    } else if(type == DT_PIPE || type == DT_EPOLL || type == DT_TIMER) {
+        return ENOTSOCK;
+    } else {
+        return 0;
+    }
 }
 
 Tracker* host_getTracker(Host* host) {

@@ -81,6 +81,7 @@ gboolean host_autotuneSendBuffer(Host* host);
 gint host_createDescriptor(Host* host, DescriptorType type);
 void host_closeDescriptor(Host* host, gint handle);
 gint host_closeUser(Host* host, gint handle);
+gint host_shutdownSocket(Host* host, gint handle, gint how);
 Descriptor* host_lookupDescriptor(Host* host, gint handle);
 NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle);
 

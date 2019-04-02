@@ -40,4 +40,6 @@ gboolean tcp_isFamilySupported(TCP* tcp, sa_family_t family);
 gboolean tcp_isValidListener(TCP* tcp);
 gboolean tcp_isListeningAllowed(TCP* tcp);
 
+gint tcp_shutdown(TCP* tcp, gint how);
+
 #endif /* SHD_TCP_H_ */

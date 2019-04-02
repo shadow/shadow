@@ -34,12 +34,14 @@ static const gchar* tcp_stateToAscii(enum TCPState state) {
 
 enum TCPFlags {
     TCPF_NONE = 0,
-    TCPF_LOCAL_CLOSED = 1 << 0,
-    TCPF_REMOTE_CLOSED = 1 << 1,
-    TCPF_EOF_SIGNALED = 1 << 2,
-    TCPF_RESET_SIGNALED = 1 << 3,
-    TCPF_WAS_ESTABLISHED = 1 << 4,
-    TCPF_CONNECT_SIGNALED = 1 << 5,
+    TCPF_LOCAL_CLOSED_RD = 1 << 0,
+    TCPF_LOCAL_CLOSED_WR = 1 << 1,
+    TCPF_REMOTE_CLOSED = 1 << 2,
+    TCPF_EOF_RD_SIGNALED = 1 << 3,
+    TCPF_EOF_WR_SIGNALED = 1 << 4,
+    TCPF_RESET_SIGNALED = 1 << 5,
+    TCPF_WAS_ESTABLISHED = 1 << 6,
+    TCPF_CONNECT_SIGNALED = 1 << 7,
 };
 
 enum TCPError {
@@ -1109,12 +1111,15 @@ static void _tcp_flush(TCP* tcp) {
     tracker_updateSocketOutputBuffer(tracker, descriptor->handle, outSize - _tcp_getBufferSpaceOut(tcp), outSize);
 
     /* check if user needs an EOF signal */
-    gboolean wantsEOF = ((tcp->flags & TCPF_LOCAL_CLOSED) || (tcp->flags & TCPF_REMOTE_CLOSED)) ? TRUE : FALSE;
-    if(wantsEOF) {
-        /* if anyone closed, can't send anymore */
+    if((tcp->flags & TCPF_LOCAL_CLOSED_WR) || (tcp->error & TCPE_CONNECTION_RESET)) {
+        /* if we closed or conn reset, can't send anymore */
         tcp->error |= TCPE_SEND_EOF;
+    }
 
-        if((tcp->receive.next >= tcp->receive.end) && !(tcp->flags & TCPF_EOF_SIGNALED)) {
+    /* we said no more reads, or they said no more writes, or reset */
+    if((tcp->flags & TCPF_LOCAL_CLOSED_RD) || (tcp->flags & TCPF_REMOTE_CLOSED) ||
+            (tcp->error & TCPE_CONNECTION_RESET)) {
+        if((tcp->receive.next >= tcp->receive.end) && !(tcp->flags & TCPF_EOF_RD_SIGNALED)) {
             /* user needs to read a 0 so it knows we closed */
             tcp->error |= TCPE_RECEIVE_EOF;
             descriptor_adjustStatus((Descriptor*)tcp, DS_READABLE, TRUE);
@@ -1253,7 +1258,7 @@ gint tcp_getConnectError(TCP* tcp) {
         }
     } else if(tcp->state == TCPS_SYNSENT || tcp->state == TCPS_SYNRECEIVED) {
         return EALREADY;
-    } else if(tcp->flags & TCPF_EOF_SIGNALED) {
+    } else if((tcp->flags & TCPF_EOF_RD_SIGNALED) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
         /* we already signaled close, now its an error */
         return ENOTCONN;
     } else if(tcp->state != TCPS_CLOSED) {
@@ -1767,7 +1772,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
             if(header->flags & PTCP_FIN) {
                 flags |= TCP_PF_PROCESSED;
 
-                /* other side of connections closed */
+                /* other side of connection closed */
                 tcp->flags |= TCPF_REMOTE_CLOSED;
                 responseFlags |= (PTCP_FIN|PTCP_ACK);
                 _tcp_setState(tcp, TCPS_CLOSEWAIT);
@@ -1858,7 +1863,8 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
     gint nPacketsAcked = 0;
 
-    if(packetLength > 0) {
+    /* if TCPE_RECEIVE_EOF, we are not supposed to receive any more */
+    if(packetLength > 0 && !(tcp->error & TCPE_RECEIVE_EOF)) {
         flags |= _tcp_dataProcessing(tcp, packet, header);
     }
 
@@ -1931,7 +1937,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     if (stale_packet) { responseFlags |= PTCP_ACK; }
 
     /* send control packet if we have one */
-    if(responseFlags != PTCP_NONE) {
+    if(responseFlags != PTCP_NONE && !(tcp->error & TCPE_RECEIVE_EOF)) {
         _rswlog(tcp, "Sending control packet on %d\n",
                 header->sequence);
 
@@ -1962,15 +1968,17 @@ void tcp_dropPacket(TCP* tcp, Packet* packet) {
     _tcp_flush(tcp);
 }
 
-static void _tcp_endOfFileSignalled(TCP* tcp) {
+static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
     MAGIC_ASSERT(tcp);
 
     debug("%s <-> %s: signaling close to user, socket no longer usable", tcp->super.boundString, tcp->super.peerString);
-    tcp->flags |= TCPF_EOF_SIGNALED;
+    tcp->flags |= flags;
 
-    /* user can no longer access socket */
-    descriptor_adjustStatus(&(tcp->super.super.super), DS_CLOSED, TRUE);
-    descriptor_adjustStatus(&(tcp->super.super.super), DS_ACTIVE, FALSE);
+    if((tcp->flags & TCPF_EOF_RD_SIGNALED) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
+        /* user can no longer access socket */
+        descriptor_adjustStatus(&(tcp->super.super.super), DS_CLOSED, TRUE);
+        descriptor_adjustStatus(&(tcp->super.super.super), DS_ACTIVE, FALSE);
+    }
 }
 
 gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
@@ -1979,13 +1987,13 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
     /* return 0 to signal close, if necessary */
     if(tcp->error & TCPE_SEND_EOF)
     {
-        if(tcp->flags & TCPF_EOF_SIGNALED) {
+        if(tcp->flags & TCPF_EOF_WR_SIGNALED) {
             /* we already signaled close, now its an error */
             return -2;
         } else {
             /* we have not signaled close, do that now */
-            _tcp_endOfFileSignalled(tcp);
-            return 0;
+            _tcp_endOfFileSignalled(tcp, TCPF_EOF_WR_SIGNALED);
+            return -3;
         }
     }
 
@@ -2136,12 +2144,12 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
                 descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
             } else {
                 /* OK, no more data and nothing just received. */
-                if(tcp->flags & TCPF_EOF_SIGNALED) {
+                if(tcp->flags & TCPF_EOF_RD_SIGNALED) {
                     /* we already signaled close, now its an error */
                     return -2;
                 } else {
                     /* we have not signaled close, do that now and close out the socket */
-                    _tcp_endOfFileSignalled(tcp);
+                    _tcp_endOfFileSignalled(tcp, TCPF_EOF_RD_SIGNALED);
                     return 0;
                 }
             }
@@ -2221,7 +2229,10 @@ void tcp_close(TCP* tcp) {
     MAGIC_ASSERT(tcp);
 
     debug("%s <-> %s:  user closed connection", tcp->super.boundString, tcp->super.peerString);
-    tcp->flags |= TCPF_LOCAL_CLOSED;
+    tcp->flags |= TCPF_LOCAL_CLOSED_WR;
+    tcp->flags |= TCPF_LOCAL_CLOSED_RD;
+
+    Packet* packet = NULL;
 
     switch (tcp->state) {
         case TCPS_ESTABLISHED: {
@@ -2236,12 +2247,8 @@ void tcp_close(TCP* tcp) {
 
         case TCPS_SYNRECEIVED:
         case TCPS_SYNSENT: {
-            Packet* reset = _tcp_createPacket(tcp, PTCP_RST, NULL, 0);
-            _tcp_bufferPacketOut(tcp, reset);
-            _tcp_flush(tcp);
-            /* the output buffer holds the packet ref now */
-            packet_unref(reset);
-            return;
+            packet = _tcp_createPacket(tcp, PTCP_RST, NULL, 0);
+            break;
         }
 
         default: {
@@ -2252,8 +2259,11 @@ void tcp_close(TCP* tcp) {
         }
     }
 
-    /* send a FIN */
-    Packet* packet = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
+    /* send a RST to abandon the connection.
+     * WARN sending a RST here breaks several test cases, so I'm sticking with FIN. */
+    if(!packet) {
+        packet = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
+    }
 
     /* dont have to worry about space since this has no payload */
     _tcp_bufferPacketOut(tcp, packet);
@@ -2264,6 +2274,48 @@ void tcp_close(TCP* tcp) {
 
     /* the user closed the connection, so should never interact with the socket again */
     descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
+}
+
+gint tcp_shutdown(TCP* tcp, gint how) {
+    MAGIC_ASSERT(tcp);
+
+    if(tcp->state == TCPS_SYNSENT || tcp->state == TCPS_SYNRECEIVED ||
+            tcp->state == TCPS_LISTEN || tcp->state == TCPS_CLOSED) {
+        return ENOTCONN;
+    }
+
+    if(how == SHUT_RD || how == SHUT_RDWR) {
+        /* can't receive any more */
+        tcp->flags |= TCPF_LOCAL_CLOSED_RD;
+        tcp->error |= TCPE_RECEIVE_EOF;
+    }
+
+    if((how == SHUT_WR || how == SHUT_RDWR) && !(tcp->flags & TCPF_LOCAL_CLOSED_WR)) {
+        /* can't send any more */
+        tcp->flags |= TCPF_LOCAL_CLOSED_WR;
+        tcp->error |= TCPE_SEND_EOF;
+
+        gboolean sendFin = FALSE;
+        if(tcp->state == TCPS_ESTABLISHED || tcp->state == TCPS_SYNRECEIVED) {
+            _tcp_setState(tcp, TCPS_FINWAIT1);
+            sendFin = TRUE;
+        } else if(tcp->state == TCPS_CLOSEWAIT) {
+            _tcp_setState(tcp, TCPS_LASTACK);
+            sendFin = TRUE;
+        }
+
+        if(sendFin) {
+            /* send a fin */
+            Packet* fin = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
+            _tcp_bufferPacketOut(tcp, fin);
+            _tcp_flush(tcp);
+
+            /* the output buffer holds the packet ref now */
+            packet_unref(fin);
+        }
+    }
+
+    return 0;
 }
 
 /* we implement the socket interface, this describes our function suite */
