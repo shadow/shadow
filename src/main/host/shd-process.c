@@ -3488,6 +3488,18 @@ FILE *process_emu_fopen64(Process* proc, const char *path, const char *mode) {
     return process_emu_fopen(proc, path, mode);
 }
 
+FILE *process_emu_fmemopen(Process* proc, void* buf, size_t size, const char *mode) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    FILE* osfile = fmemopen(buf, size, mode);
+    if(osfile == NULL) {
+        _process_setErrno(proc, errno);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return osfile;
+}
+
 FILE *process_emu_fdopen(Process* proc, int fd, const char *mode) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
@@ -3612,16 +3624,60 @@ int process_emu_fclose(Process* proc, FILE *fp) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
     gint osfd = fileno(fp);
-    if(osfd == -1) {
-        _process_setErrno(proc, errno);
-    }
-    gint shadowHandle = host_getShadowHandle(proc->host, osfd);
+    gint shadowHandle = osfd >= 0 ? host_getShadowHandle(proc->host, osfd) : -1;
 
     gint ret = fclose(fp);
-    if(osfd == EOF) {
+    if(ret == EOF) {
         _process_setErrno(proc, errno);
     }
-    host_destroyShadowHandle(proc->host, shadowHandle);
+
+    if(shadowHandle >= 0) {
+        host_destroyShadowHandle(proc->host, shadowHandle);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+int process_emu_fseek(Process* proc, FILE *stream, long offset, int whence) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    int ret = fseek(stream, offset, whence);
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+long process_emu_ftell(Process* proc, FILE *stream) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    long ret = ftell(stream);
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+void process_emu_rewind(Process* proc, FILE *stream) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    rewind(stream);
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+}
+
+int process_emu_fgetpos(Process* proc, FILE *stream, fpos_t *pos) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    int ret = fgetpos(stream, pos);
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+int process_emu_fsetpos(Process* proc, FILE *stream, const fpos_t *pos) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    int ret = fsetpos(stream, pos);
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4203,21 +4259,51 @@ size_t process_emu_fread(Process* proc, void *ptr, size_t size, size_t nmemb, FI
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     size_t ret;
 
+    /* get the fd the operating system uses to refer to this FILE stream */
     int osfd = fileno(stream);
-    if(prevCTX == PCTX_PLUGIN && (osfd == STDOUT_FILENO || osfd == STDERR_FILENO)) {
-        ret = fread(ptr, size, nmemb, _process_getIOFile(proc, osfd));
-    } else {
-        gint shadowHandle = host_getShadowHandle(proc->host, osfd);
-        if(shadowHandle > 0) {
-            /* this is either an internal shadow read or a random file read, let read handle it */
-            ret = process_emu_read(proc, shadowHandle, ptr, size*nmemb);
-            if(ret > 0) {
-                ret = ret / size;
-                g_assert(ret <= nmemb);
-            }
+
+    if(prevCTX == PCTX_PLUGIN) {
+        /* if the plugin is trying to read from an std stream, redirect to our process log file */
+        if(osfd == STDOUT_FILENO || osfd == STDERR_FILENO) {
+            FILE* stdioFile = _process_getIOFile(proc, osfd);
+            ret = fread(ptr, size, nmemb, stdioFile);
+            fflush(stdioFile);
         } else {
-            ret = fread(ptr, size, nmemb, stream);
+            /* If shadow has an FD, then it knows about the FILE - it created the FILE
+             * stream to service another syscall, but then it mapped a "virtual" shadowFD to
+             * return to the plugin so the plugin would use shadowFD for future operations. */
+            gint shadowFD = host_getShadowHandle(proc->host, osfd);
+            if(shadowFD >= 0) {
+                /* ok so shadow knows about the file. if this is a true shadow-backed
+                 * descriptor like a socket, then we should never have associated
+                 * a FILE stream with it. */
+                if(host_isShadowDescriptor(proc->host, shadowFD)) {
+                    error("A file stream with an os fd %i was associated with a "
+                            "shadow descriptor with a shadow fd %i", osfd, shadowFD);
+                }
+
+                /* if this is a random file, then we can return bytes here */
+                if(host_isRandomHandle(proc->host, shadowFD)) {
+                    gsize numBytes = size * nmemb;
+                    Random* random = host_getRandom(proc->host);
+                    random_nextNBytes(random, (guchar*)ptr, numBytes);
+                    ret = nmemb;
+                } else {
+                    /* shadow knows about the file, but it is an os-backed file and
+                     * osfd is the actual thing we should read from */
+                    ret = fread(ptr, size, nmemb, stream);
+                }
+            } else {
+                /* This is a file that shadow does not know about, and never mapped it to
+                 * a virtual shadow fd for the process. This is valid in case of fmemopen,
+                 * which returns an osfd of -1 since there is no file backing it. */
+                info("fread() was called on file stream with fd %i, and shadow never mapped it", osfd);
+                ret = fread(ptr, size, nmemb, stream);
+            }
         }
+    } else {
+        /* fread is being called from pth or shadow */
+        ret = fread(ptr, size, nmemb, stream);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);

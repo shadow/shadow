@@ -163,16 +163,25 @@ int process_emu_timerfd_gettime(Process* proc, int fd, struct itimerspec *curr_v
 /* file specific */
 
 int process_emu_fileno(Process* proc, FILE *stream);
+
 int process_emu_open(Process* proc, const char *pathname, int flags, mode_t mode);
 int process_emu_open64(Process* proc, const char *pathname, int flags, mode_t mode);
 int process_emu_creat(Process* proc, const char *pathname, mode_t mode);
 FILE *process_emu_fopen(Process* proc, const char *path, const char *mode);
 FILE *process_emu_fopen64(Process* proc, const char *path, const char *mode);
+FILE *process_emu_fmemopen(Process* proc, void* buf, size_t size, const char *mode);
 FILE *process_emu_fdopen(Process* proc, int fd, const char *mode);
 int process_emu_dup(Process* proc, int oldfd);
 int process_emu_dup2(Process* proc, int oldfd, int newfd);
 int process_emu_dup3(Process* proc, int oldfd, int newfd, int flags);
-int process_emu_fclose(Process* proc, FILE *fp);;
+
+int process_emu_fclose(Process* proc, FILE *fp);
+
+int process_emu_fseek(Process* proc, FILE *stream, long offset, int whence);
+long process_emu_ftell(Process* proc, FILE *stream);
+void process_emu_rewind(Process* proc, FILE *stream);
+int process_emu_fgetpos(Process* proc, FILE *stream, fpos_t *pos);
+int process_emu_fsetpos(Process* proc, FILE *stream, const fpos_t *pos);
 int process_emu___fxstat (Process* proc, int ver, int fd, struct stat *buf);
 int process_emu___fxstat64 (Process* proc, int ver, int fd, struct stat64 *buf);
 int process_emu_fstatfs (Process* proc, int fd, struct statfs *buf);

@@ -80,6 +80,7 @@ PRELOADDEF(return, int, timerfd_gettime, (int a, struct itimerspec *b), a, b);
 
 PRELOADDEF(return, int, fileno, (FILE *a), a);
 PRELOADDEF(return, int, creat, (const char *a, mode_t b), a, b);
+PRELOADDEF(return, FILE *, fmemopen, (void *a, size_t b, const char *c), a, b, c);
 PRELOADDEF(return, FILE *, fopen, (const char *a, const char *b), a, b);
 PRELOADDEF(return, FILE *, fopen64, (const char *a, const char *b), a, b);
 PRELOADDEF(return, FILE *, fdopen, (int a, const char *b), a, b);
@@ -87,6 +88,13 @@ PRELOADDEF(return, int, dup, (int a), a);
 PRELOADDEF(return, int, dup2, (int a, int b), a, b);
 PRELOADDEF(return, int, dup3, (int a, int b, int c), a, b, c);
 PRELOADDEF(return, int, fclose, (FILE *a), a);
+
+PRELOADDEF(return, int, fseek, (FILE *a, long b, int c), a, b, c);
+PRELOADDEF(return, long, ftell, (FILE *a), a);
+PRELOADDEF(      , void, rewind, (FILE *a), a);
+PRELOADDEF(return, int, fgetpos, (FILE *a, fpos_t *b), a, b);
+PRELOADDEF(return, int, fsetpos, (FILE *a, const fpos_t *b), a, b);
+
 /* fstat redirects to this */
 PRELOADDEF(return, int, __fxstat, (int a, int b, struct stat *c), a, b, c);
 /* fstat64 redirects to this */
