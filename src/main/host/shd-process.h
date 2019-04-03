@@ -66,6 +66,7 @@ typedef off_t off64_t;
 #include <sys/vfs.h>
 #include <linux/sockios.h>
 #include <features.h>
+#include <wchar.h>
 
 #include <pthread.h>
 
@@ -170,6 +171,8 @@ int process_emu_creat(Process* proc, const char *pathname, mode_t mode);
 FILE *process_emu_fopen(Process* proc, const char *path, const char *mode);
 FILE *process_emu_fopen64(Process* proc, const char *path, const char *mode);
 FILE *process_emu_fmemopen(Process* proc, void* buf, size_t size, const char *mode);
+FILE *process_emu_open_memstream(Process* proc, char **ptr, size_t *sizeloc);
+FILE *process_emu_open_wmemstream(Process* proc, wchar_t **ptr, size_t *sizeloc);
 FILE *process_emu_fdopen(Process* proc, int fd, const char *mode);
 int process_emu_dup(Process* proc, int oldfd);
 int process_emu_dup2(Process* proc, int oldfd, int newfd);

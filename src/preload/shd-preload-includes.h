@@ -39,6 +39,7 @@
 #include <sys/uio.h>
 #include <linux/sockios.h>
 #include <features.h>
+#include <wchar.h>
 
 #include <malloc.h>
 #include <pthread.h>

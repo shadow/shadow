@@ -81,6 +81,8 @@ PRELOADDEF(return, int, timerfd_gettime, (int a, struct itimerspec *b), a, b);
 PRELOADDEF(return, int, fileno, (FILE *a), a);
 PRELOADDEF(return, int, creat, (const char *a, mode_t b), a, b);
 PRELOADDEF(return, FILE *, fmemopen, (void *a, size_t b, const char *c), a, b, c);
+PRELOADDEF(return, FILE *, open_memstream, (char** a, size_t* b), a, b);
+PRELOADDEF(return, FILE *, open_wmemstream, (wchar_t** a, size_t* b), a, b);
 PRELOADDEF(return, FILE *, fopen, (const char *a, const char *b), a, b);
 PRELOADDEF(return, FILE *, fopen64, (const char *a, const char *b), a, b);
 PRELOADDEF(return, FILE *, fdopen, (int a, const char *b), a, b);

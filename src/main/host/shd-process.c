@@ -49,6 +49,7 @@
 #include <sys/syscall.h>
 #include <linux/sockios.h>
 #include <features.h>
+#include <wchar.h>
 
 #include <pthread.h>
 #include <rpth.h>
@@ -3492,6 +3493,30 @@ FILE *process_emu_fmemopen(Process* proc, void* buf, size_t size, const char *mo
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
     FILE* osfile = fmemopen(buf, size, mode);
+    if(osfile == NULL) {
+        _process_setErrno(proc, errno);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return osfile;
+}
+
+FILE *process_emu_open_memstream(Process* proc, char **ptr, size_t *sizeloc) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    FILE* osfile = open_memstream(ptr, sizeloc);
+    if(osfile == NULL) {
+        _process_setErrno(proc, errno);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return osfile;
+}
+
+FILE *process_emu_open_wmemstream(Process* proc, wchar_t **ptr, size_t *sizeloc) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    FILE* osfile = open_wmemstream(ptr, sizeloc);
     if(osfile == NULL) {
         _process_setErrno(proc, errno);
     }
