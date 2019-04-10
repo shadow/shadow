@@ -313,6 +313,76 @@ fail:
     return EXIT_FAILURE;
 }
 
+static int _test_write_blocked_shutdown() {
+    /* if you write a bunch to a socket and then shutdown **after the other end already shutdown**,
+     * the fin should not be sent until after the buffer is cleared. */
+
+    printf("########## running _test_write_blocked_shutdown\n");
+
+    int sd = 0, cd = 0, sd_child = 0;
+
+    int result = common_get_connected_tcp_sockets((in_port_t)htons(30950), &sd, &sd_child, &cd);
+    if(result != EXIT_SUCCESS) {
+        printf("Unable to get connected tcp sockets\n");
+        goto fail;
+    }
+
+    result = shutdown(sd_child, SHUT_WR);
+    printf("shutdown(SHUT_WR) on server child returned %i\n", result);
+
+    char buf[60000];
+    memset(buf, 0, 60000);
+
+    ssize_t bytes = send(cd, buf, 60000, 0);
+
+    result = shutdown(cd, SHUT_WR);
+    printf("shutdown(SHUT_WR) on client returned %i\n", result);
+
+    if(result != 0) {
+        printf("Unable to shutdown socket\n");
+        goto fail;
+    }
+
+    /* wait for the data to get to the receiver */
+    usleep(10000); // 10 millis
+
+    size_t totalBytes = 0;
+    while(1) {
+        bytes = recv(sd_child, buf, 4096, 0);
+
+        if(bytes > 0) {
+            totalBytes += (size_t)bytes;
+            printf("recv() got %li more bytes, total is %li\n", (long int)bytes, (long int) totalBytes);
+        } else if(bytes == -1 && errno == EWOULDBLOCK) {
+            printf("recv() would block, pausing for 1 millisecond\n");
+            usleep(1000); // 1 milli
+        } else if(bytes == 0) {
+            printf("recv() returned EOF\n");
+            break;
+        } else {
+            printf("recv() returned error %i: %s\n", errno, strerror(errno));
+            break;
+        }
+    }
+
+    printf("recv() %li total bytes after SHUT_WR\n", (long int)totalBytes);
+
+    if(totalBytes != 60000) {
+        printf("after shutdown(SHUT_WR) peer should be able to read the 60000 bytes we sent\n");
+        goto fail;
+    }
+
+    close(cd);
+    close(sd_child);
+    close(sd);
+    return EXIT_SUCCESS;
+fail:
+    close(cd);
+    close(sd_child);
+    close(sd);
+    return EXIT_FAILURE;
+}
+
 static int _test_udp_shutdown() {
     printf("########## running _test_udp_shutdown\n");
 
@@ -361,6 +431,10 @@ int run() {
     }
 
     if(_test_write_after_shutdown() == EXIT_FAILURE) {
+        return EXIT_FAILURE;
+    }
+
+    if(_test_write_blocked_shutdown() == EXIT_FAILURE) {
         return EXIT_FAILURE;
     }
 

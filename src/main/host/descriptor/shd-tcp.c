@@ -42,6 +42,7 @@ enum TCPFlags {
     TCPF_RESET_SIGNALED = 1 << 5,
     TCPF_WAS_ESTABLISHED = 1 << 6,
     TCPF_CONNECT_SIGNALED = 1 << 7,
+    TCPF_SHOULD_SEND_WR_FIN = 1 << 8,
 };
 
 enum TCPError {
@@ -965,6 +966,30 @@ static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
     packet_unref(packet);
 }
 
+static void _tcp_flush(TCP* tcp);
+
+static void _tcp_sendShutdownFin(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+
+    gboolean sendFin = FALSE;
+    if(tcp->state == TCPS_ESTABLISHED || tcp->state == TCPS_SYNRECEIVED) {
+        _tcp_setState(tcp, TCPS_FINWAIT1);
+        sendFin = TRUE;
+    } else if(tcp->state == TCPS_CLOSEWAIT) {
+        _tcp_setState(tcp, TCPS_LASTACK);
+        sendFin = TRUE;
+    }
+
+    if(sendFin) {
+        /* send a fin */
+        Packet* fin = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
+        _tcp_bufferPacketOut(tcp, fin);
+        _tcp_flush(tcp);
+
+        /* the output buffer holds the packet ref now */
+        packet_unref(fin);
+    }
+}
 
 static void _tcp_flush(TCP* tcp) {
     MAGIC_ASSERT(tcp);
@@ -1110,6 +1135,12 @@ static void _tcp_flush(TCP* tcp) {
     tracker_updateSocketInputBuffer(tracker, descriptor->handle, inSize - _tcp_getBufferSpaceIn(tcp), inSize);
     tracker_updateSocketOutputBuffer(tracker, descriptor->handle, outSize - _tcp_getBufferSpaceOut(tcp), outSize);
 
+    /* should we send a fin after clearing the output buffer */
+    if((tcp->flags & TCPF_SHOULD_SEND_WR_FIN) && tcp_getOutputBufferLength(tcp) == 0) {
+        _tcp_sendShutdownFin(tcp);
+        tcp->flags &= ~TCPF_SHOULD_SEND_WR_FIN;
+    }
+
     /* check if user needs an EOF signal */
     if((tcp->flags & TCPF_LOCAL_CLOSED_WR) || (tcp->error & TCPE_CONNECTION_RESET)) {
         /* if we closed or conn reset, can't send anymore */
@@ -1126,10 +1157,14 @@ static void _tcp_flush(TCP* tcp) {
         }
     }
 
-    if(_tcp_getBufferSpaceOut(tcp) > 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
-    } else {
+    if((tcp->error & TCPE_CONNECTION_RESET) && (tcp->flags & TCPF_RESET_SIGNALED)) {
         descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+    } else if((tcp->error & TCPE_SEND_EOF) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
+        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+    } else if(_tcp_getBufferSpaceOut(tcp) <= 0) {
+        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+    } else {
+        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
     }
 }
 
@@ -2295,23 +2330,10 @@ gint tcp_shutdown(TCP* tcp, gint how) {
         tcp->flags |= TCPF_LOCAL_CLOSED_WR;
         tcp->error |= TCPE_SEND_EOF;
 
-        gboolean sendFin = FALSE;
-        if(tcp->state == TCPS_ESTABLISHED || tcp->state == TCPS_SYNRECEIVED) {
-            _tcp_setState(tcp, TCPS_FINWAIT1);
-            sendFin = TRUE;
-        } else if(tcp->state == TCPS_CLOSEWAIT) {
-            _tcp_setState(tcp, TCPS_LASTACK);
-            sendFin = TRUE;
-        }
-
-        if(sendFin) {
-            /* send a fin */
-            Packet* fin = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
-            _tcp_bufferPacketOut(tcp, fin);
-            _tcp_flush(tcp);
-
-            /* the output buffer holds the packet ref now */
-            packet_unref(fin);
+        if(tcp_getOutputBufferLength(tcp) == 0) {
+            _tcp_sendShutdownFin(tcp);
+        } else {
+            tcp->flags |= TCPF_SHOULD_SEND_WR_FIN;
         }
     }
 
