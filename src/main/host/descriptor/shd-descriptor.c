@@ -142,6 +142,9 @@ DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
     if(descriptor->status & DS_WRITABLE) {
         status |= DS_WRITABLE;
     }
+    if(descriptor->status & DS_CLOSED) {
+        status |= DS_CLOSED;
+    }
 
     return status;
 }

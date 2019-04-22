@@ -735,12 +735,7 @@ gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
     /* EBADF  fd is not a valid shadow file descriptor. */
     descriptor = host_lookupDescriptor(host, fileDescriptor);
     if(descriptor == NULL) {
-        return EBADF;
-    }
-
-    status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", fileDescriptor);
+        warning("descriptor handle '%i' not a valid shadow descriptor", fileDescriptor);
         return EBADF;
     }
 
