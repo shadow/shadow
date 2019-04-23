@@ -466,3 +466,13 @@ int shadow_push_eventlog(const char *str) {
         return director.next.puts(str);
     }
 }
+
+int shadow_usleep(unsigned int usec) {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_usleep(proc, usec);
+    } else {
+        ENSURE(puts);
+        return director.next.usleep(usec);
+    }
+}
