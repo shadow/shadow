@@ -3418,7 +3418,8 @@ int process_emu_shadow_push_eventlog(Process* proc, const char *s) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
 
-    message("shadow_push_eventlog:%llu,%s", worker_getCurrentTime(), s);
+    const gchar* hostname = host_getName(proc->host);
+    message("shadow_push_eventlog:%s,%llu,%s", hostname, worker_getCurrentTime(), s);
 
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
