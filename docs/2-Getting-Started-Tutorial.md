@@ -16,10 +16,18 @@ shadow --help
 
 Generic applications may be run in Shadow. The most important required features of the application code to enable this are:
 
- + polls I/O events using one of the `epoll`, `poll`, or `select` interfaces (see, e.g., `$ man epoll`)
- + doesn't fork/exec process (can run in single process mode)
+ + doesn't fork/exec processes
+ + blocking calls (e.g. `sleep()`) are supported, but if nonblocking is used then it should poll I/O events using one of the `epoll`, `poll`, or `select` interfaces (see, e.g., `$ man epoll`)
 
-Included with Shadow is a traffic generator plug-in that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format. With this powerful plug-in, different behavior models can be implemented by simply writing a python script to generate new graphml files rather than modifying simulator code or writing new plug-ins. More information about [customizing tgen behaviors](3.3-TGen-Config) is also on the wiki.
+#### Traffic generation
+
+We also maintain a [traffic generator plug-in called TGen](https://github.com/shadow/tgen) that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format. With this powerful plug-in, different behavior models can be implemented by simply writing a python script to generate new graphml files rather than modifying simulator code or writing new plug-ins.
+
+Make sure you have TGen installed as described on [the Shadow setup page](https://github.com/shadow/shadow/wiki/1.1-Shadow#tgen-setup) as we will use it for this tutorial.
+
+See the [TGen documentation](https://github.com/shadow/tgen/tree/master/doc) for more information about customizing TGen behaviors.
+
+#### Other plugins
 
 Existing plug-ins for Shadow also include [shadow-plugin-tor](https://github.com/shadow/shadow-plugin-tor) for running Tor anonymity networks and [shadow-plugin-bitcoin](https://github.com/shadow/shadow-plugin-bitcoin) for running Bitcoin cryptocurrency networks. Other useful plug-ins exist in the [shadow-plugin-extras repository](https://github.com/shadow/shadow-plugin-extras), including an HTML-supported web browser and server combo.
 
@@ -136,9 +144,6 @@ cd ../..
 # parse the shadow output file
 python src/tools/parse-shadow.py --help
 python src/tools/parse-shadow.py --prefix results resource/examples/shadow.log
-# parse tgen output files from all hosts
-python src/tools/parse-tgen.py --help
-python src/tools/parse-tgen.py --prefix results resource/examples/shadow.data/hosts/
 # plot the results!
 python src/tools/plot-shadow.py --help
 python src/tools/plot-shadow.py --data results "example-plots"
@@ -171,6 +176,8 @@ The `parse-*.py` scripts generate `stats.*.json.xz` files. The (heavily trimmed)
 
 The `plot-*.py` scripts generate graphs. Open the PDF file that was created to see the graphed results.
 
+You can also parse and plot the TGen output using the `tgentools` program from the TGen repo. [This page describes how to get started](https://github.com/shadow/tgen/blob/master/doc/Tools-Setup.md).
+
 ## Example experiment
 
 Consider a set of experiments where we would like to analyze the effect of changing the size of our nodes' initial TCP window. We run the following 2 experiments:
@@ -188,9 +195,7 @@ To parse these log files, we use the following scripts:
 
 ```bash
 python ../../src/tools/parse-shadow.py --prefix=window1.results window1.log
-python ../../src/tools/parse-tgen.py --prefix=window1.results window1.data/hosts
 python ../../src/tools/parse-shadow.py --prefix=window1000.results window1000.log
-python ../../src/tools/parse-tgen.py --prefix=window1000.results window1000.data/hosts
 ```
 
 Each of the directories `window1.results/` and `window1000.results/` now contain data statistics files extracted from the log files. We can now combine and visualize these results with the `plot-shadow.py` script:
