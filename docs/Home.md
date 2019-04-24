@@ -1,6 +1,6 @@
 ## Welcome to the Shadow Wiki! 
 
-This wiki contains important information about installing and using the Shadow discrete event network simulator. Please [let us know](https://github.com/shadow/shadow/issues/new/choose) if you notice something out of date, or fix it yourself if you can.
+This wiki contains important information about installing and using the Shadow discrete event network simulator. Please [open an issue](https://github.com/shadow/shadow/issues/new/choose) if you notice something out of date, or fix it yourself if you can.
 
 ## Contents:
 
