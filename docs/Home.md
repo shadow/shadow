@@ -11,7 +11,7 @@ This wiki contains important information about installing and using the Shadow d
 [[4 Notes and FAQs]]  
 [[5 Developer Guide]]  
 
-## Plug-in Wikis:
+## Plug-in Info:
 
 TGen: https://github.com/shadow/tgen  
 Tor: https://github.com/shadow/shadow-plugin-tor/wiki  
