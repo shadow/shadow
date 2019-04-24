@@ -13,5 +13,6 @@ This wiki contains important information about installing and using the Shadow d
 
 ## Plug-in Wikis:
 
+TGen: https://github.com/shadow/tgen  
 Tor: https://github.com/shadow/shadow-plugin-tor/wiki  
 Bitcoin: https://github.com/shadow/shadow-plugin-bitcoin/wiki  
