@@ -2217,8 +2217,8 @@ static igraph_integer_t* _topology_getLongestPrefixMatch(Topology* top, GQueue* 
         _topology_unlockGraph(top);
         in_addr_t vertexIP = address_stringToIP(ipStr);
 
-        in_addr_t match = (vertexIP & ip);
-        if(match > bestMatch) {
+        in_addr_t match = ~(vertexIP ^ ip);
+        if(match > bestMatch || bestMatch == 0) {
             bestMatch = match;
             bestIP = vertexIP;
             bestVertexIndexPtr = vertexIndexPtr;
