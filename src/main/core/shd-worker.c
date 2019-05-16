@@ -31,6 +31,8 @@ struct _Worker {
         Process* process;
     } active;
 
+    SimulationTime bootstrapEndTime;
+
     ObjectCounter* objectCounts;
 
     MAGIC_DECLARE;
@@ -68,6 +70,8 @@ static Worker* _worker_new(Slave* slave, guint threadID) {
     worker->clock.last = SIMTIME_INVALID;
     worker->clock.barrier = SIMTIME_INVALID;
     worker->objectCounts = objectcounter_new();
+
+    worker->bootstrapEndTime = slave_getBootstrapEndTime(worker->slave);
 
     g_private_replace(&workerKey, worker);
 
@@ -231,6 +235,8 @@ void worker_sendPacket(Packet* packet) {
         return;
     }
 
+    gboolean bootstrapping = worker_isBootstrapActive();
+
     /* check if network reliability forces us to 'drop' the packet */
     gdouble reliability = topology_getReliability(worker_getTopology(), srcAddress, dstAddress);
     Random* random = host_getRandom(worker_getActiveHost());
@@ -238,7 +244,7 @@ void worker_sendPacket(Packet* packet) {
 
     /* don't drop control packets with length 0, otherwise congestion
      * control has problems responding to packet loss */
-    if(chance <= reliability || packet_getPayloadLength(packet) == 0) {
+    if(bootstrapping || chance <= reliability || packet_getPayloadLength(packet) == 0) {
         /* the sender's packet will make it through, find latency */
         gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);
         SimulationTime delay = (SimulationTime) ceil(latency * SIMTIME_ONE_MILLISECOND);
@@ -407,5 +413,15 @@ void worker_countObject(ObjectType otype, CounterType ctype) {
     } else {
         /* has a global lock, so don't do it unless there is no worker object */
         slave_countObject(otype, ctype);
+    }
+}
+
+gboolean worker_isBootstrapActive() {
+    Worker* worker = _worker_getPrivate();
+
+    if(worker->clock.now < worker->bootstrapEndTime) {
+        return TRUE;
+    } else {
+        return FALSE;
     }
 }

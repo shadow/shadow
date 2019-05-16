@@ -674,6 +674,9 @@ static GError* _parser_handleShadowAttributes(Parser* parser, const gchar** attr
         } else if(!shadow->stoptime.isSet && !g_ascii_strcasecmp(name, "stoptime")) {
             shadow->stoptime.integer = g_ascii_strtoull(value, NULL, 10);
             shadow->stoptime.isSet = TRUE;
+        } else if(!shadow->bootstrapEndTime.isSet && !g_ascii_strcasecmp(name, "bootstraptime")) {
+            shadow->bootstrapEndTime.integer = g_ascii_strtoull(value, NULL, 10);
+            shadow->bootstrapEndTime.isSet = TRUE;
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
                     "unknown 'shadow' attribute '%s'", name);

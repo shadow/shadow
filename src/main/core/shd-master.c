@@ -48,6 +48,9 @@ struct _Master {
     /* the simulator should attempt to end immediately after this time */
     SimulationTime endTime;
 
+    /* if we run in unlimited bandwidth mode, this is when we go back to bw enforcement */
+    SimulationTime bootstrapEndTime;
+
     Slave* slave;
 
     MAGIC_DECLARE;
@@ -242,6 +245,15 @@ static void _master_initializeTimeWindows(Master* master) {
         master->executeWindowStart = 0;
         master->executeWindowEnd = G_MAXUINT64;
     }
+
+    /* check if we run in unlimited bandwidth mode */
+    ConfigurationShadowElement* shadowElm = configuration_getShadowElement(master->config);
+
+    if(shadowElm && shadowElm->bootstrapEndTime.isSet) {
+        master->bootstrapEndTime = (SimulationTime) (SIMTIME_ONE_SECOND * shadowElm->bootstrapEndTime.integer);
+    } else {
+        master->bootstrapEndTime = (SimulationTime) 0;
+    }
 }
 
 static void _master_registerPluginCallback(ConfigurationPluginElement* pe, Master* master) {
@@ -391,7 +403,7 @@ gint master_run(Master* master) {
      * they all have a consistent view of the simulation, topology, etc.
      * For now we only have one slave so send it everything. */
     guint slaveSeed = random_nextUInt(master->random);
-    master->slave = slave_new(master, master->options, master->endTime, slaveSeed);
+    master->slave = slave_new(master, master->options, master->endTime, master->bootstrapEndTime, slaveSeed);
 
     message("registering plugins and hosts");
 

@@ -34,8 +34,10 @@ void worker_countObject(ObjectType otype, CounterType ctype);
 SimulationTime worker_getCurrentTime();
 EmulatedTime worker_getEmulatedTime();
 
+gboolean worker_isBootstrapActive();
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
+
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID);
 gint worker_getThreadID();
 void worker_updateMinTimeJump(gdouble minPathLatency);

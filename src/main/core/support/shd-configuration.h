@@ -93,6 +93,7 @@ struct _ConfigurationShadowElement {
     /* optional*/
     ConfigurationStringAttribute preloadPath;
     ConfigurationStringAttribute environment;
+    ConfigurationIntegerAttribute bootstrapEndTime;
 };
 
 Configuration* configuration_new(Options* options, const GString* file);

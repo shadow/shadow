@@ -30,6 +30,7 @@ struct _Slave {
 
     /* simulation cli options */
     Options* options;
+    SimulationTime bootstrapEndTime;
 
     /* slave random source, init from master random, used to init host randoms */
     Random* random;
@@ -144,7 +145,7 @@ static guint _slave_nextRandomUInt(Slave* slave) {
     return r;
 }
 
-Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint randomSeed) {
+Slave* slave_new(Master* master, Options* options, SimulationTime endTime, SimulationTime unlimBWEndTime, guint randomSeed) {
     if(globalSlave != NULL) {
         return NULL;
     }
@@ -160,6 +161,7 @@ Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint
     slave->options = options;
     slave->random = random_new(randomSeed);
     slave->objectCounts = objectcounter_new();
+    slave->bootstrapEndTime = unlimBWEndTime;
 
     slave->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if(slave->rawFrequencyKHz == 0) {
@@ -444,7 +446,9 @@ void slave_run(Slave* slave) {
 
 void slave_incrementPluginError(Slave* slave) {
     MAGIC_ASSERT(slave);
+    _slave_lock(slave);
     slave->numPluginErrors++;
+    _slave_unlock(slave);
 }
 
 const gchar* slave_getHostsRootPath(Slave* slave) {
@@ -470,4 +474,9 @@ void slave_countObject(ObjectType otype, CounterType ctype) {
         }
         _slave_unlock(globalSlave);
     }
+}
+
+SimulationTime slave_getBootstrapEndTime(Slave* slave) {
+    MAGIC_ASSERT(slave);
+    return slave->bootstrapEndTime;
 }

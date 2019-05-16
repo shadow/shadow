@@ -229,6 +229,8 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
     /* the next packets need to be received and processed */
     SimulationTime batchTime = options_getInterfaceBatchTime(worker_getOptions());
 
+    gboolean bootstrapping = worker_isBootstrapActive();
+
     /* receive packets in batches */
     while(!g_queue_is_empty(interface->inBuffer) &&
             interface->receiveNanosecondsConsumed <= batchTime) {
@@ -244,7 +246,9 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
         interface->inBufferLength -= length;
 
         /* calculate how long it took to 'receive' this packet */
-        interface->receiveNanosecondsConsumed += (length * interface->timePerByteDown);
+        if(!bootstrapping) {
+            interface->receiveNanosecondsConsumed += (length * interface->timePerByteDown);
+        }
 
         /* hand it off to the correct socket layer */
         gint key = packet_getDestinationAssociationKey(packet);
@@ -389,6 +393,8 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
      * we need to spend time sending it before sending the next. */
     SimulationTime batchTime = options_getInterfaceBatchTime(worker_getOptions());
 
+    gboolean bootstrapping = worker_isBootstrapActive();
+
     /* loop until we find a socket that has something to send */
     while(interface->sendNanosecondsConsumed <= batchTime) {
         gint socketHandle = -1;
@@ -426,8 +432,10 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
         }
 
         /* successfully sent, calculate how long it took to 'send' this packet */
-        guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
-        interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
+        if(!bootstrapping) {
+            guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+            interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
+        }
 
         tracker_addOutputBytes(host_getTracker(worker_getActiveHost()), packet, socketHandle);
         if(interface->pcap) {
