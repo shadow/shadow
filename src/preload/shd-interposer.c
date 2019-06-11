@@ -476,3 +476,8 @@ int shadow_usleep(unsigned int usec) {
         return director.next.usleep(usec);
     }
 }
+
+int shadow_clock_gettime(clockid_t clk_id, struct timespec *tp) {
+    ENSURE(clock_gettime);
+    return director.next.clock_gettime(clk_id, tp);
+}
