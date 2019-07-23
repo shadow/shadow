@@ -244,6 +244,10 @@ void worker_sendPacket(Packet* packet) {
     if(chance <= reliability || packet_getPayloadLength(packet) == 0) {
         /* the sender's packet will make it through, find latency */
         gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);
+
+        /* gdouble deviationfactor = 1.025 - (random_nextDouble(random) * 0.05); // 0.975~1.025 *\/ */
+        /* latency *= deviationfactor; */
+        /* latency = MAX(latency, 0.001); */
         SimulationTime delay = (SimulationTime) ceil(latency * SIMTIME_ONE_MILLISECOND);
         SimulationTime deliverTime = worker->clock.now + delay;
 
