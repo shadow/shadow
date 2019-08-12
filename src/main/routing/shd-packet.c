@@ -34,7 +34,7 @@ struct _Packet {
     /* id of the packet created on the host given by hostID */
     guint64 packetID;
 
-    enum ProtocolType protocol;
+    ProtocolType protocol;
     gpointer header;
     Payload* payload;
 
@@ -50,6 +50,15 @@ struct _Packet {
 
     MAGIC_DECLARE;
 };
+
+const gchar* protocol_toString(ProtocolType type) {
+    switch (type) {
+        case PLOCAL: return "LOCAL";
+        case PUDP: return "UDP";
+        case PTCP: return "TCP";
+        default: return "UNKNOWN";
+    }
+}
 
 Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, guint64 packetID) {
     Packet* packet = g_new0(Packet, 1);
@@ -431,6 +440,11 @@ in_port_t packet_getSourcePort(Packet* packet) {
     return port;
 }
 
+ProtocolType packet_getProtocol(Packet* packet) {
+    MAGIC_ASSERT(packet);
+    return packet->protocol;
+}
+
 guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, gsize bufferLength) {
     MAGIC_ASSERT(packet);
 
@@ -439,74 +453,6 @@ guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, g
     } else {
         return 0;
     }
-}
-
-gint packet_getDestinationAssociationKey(Packet* packet) {
-    MAGIC_ASSERT(packet);
-
-    in_port_t port = 0;
-    switch (packet->protocol) {
-        case PLOCAL: {
-            PacketLocalHeader* header = packet->header;
-            port = header->port;
-            break;
-        }
-
-        case PUDP: {
-            PacketUDPHeader* header = packet->header;
-            port = header->destinationPort;
-            break;
-        }
-
-        case PTCP: {
-            PacketTCPHeader* header = packet->header;
-            port = header->destinationPort;
-            break;
-        }
-
-        default: {
-            error("unrecognized protocol");
-            break;
-        }
-    }
-
-    gint key = PROTOCOL_DEMUX_KEY(packet->protocol, port);
-
-    return key;
-}
-
-gint packet_getSourceAssociationKey(Packet* packet) {
-    MAGIC_ASSERT(packet);
-
-    in_port_t port = 0;
-    switch (packet->protocol) {
-        case PLOCAL: {
-            PacketLocalHeader* header = packet->header;
-            port = header->port;
-            break;
-        }
-
-        case PUDP: {
-            PacketUDPHeader* header = packet->header;
-            port = header->sourcePort;
-            break;
-        }
-
-        case PTCP: {
-            PacketTCPHeader* header = packet->header;
-            port = header->sourcePort;
-            break;
-        }
-
-        default: {
-            error("unrecognized protocol");
-            break;
-        }
-    }
-
-    gint key = PROTOCOL_DEMUX_KEY(packet->protocol, port);
-
-    return key;
 }
 
 GList* packet_copyTCPSelectiveACKs(Packet* packet) {

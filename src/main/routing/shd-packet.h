@@ -49,6 +49,8 @@ struct _PacketTCPHeader {
     SimulationTime timestampEcho;
 };
 
+const gchar* protocol_toString(ProtocolType type);
+
 Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, guint64 packetID);
 Packet* packet_copy(Packet* packet);
 
@@ -77,14 +79,12 @@ in_addr_t packet_getDestinationIP(Packet* packet);
 in_port_t packet_getDestinationPort(Packet* packet);
 in_addr_t packet_getSourceIP(Packet* packet);
 in_port_t packet_getSourcePort(Packet* packet);
+ProtocolType packet_getProtocol(Packet* packet);
 
 guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, gsize bufferLength);
 GList* packet_copyTCPSelectiveACKs(Packet* packet);
 PacketTCPHeader* packet_getTCPHeader(Packet* packet);
 gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data);
-
-gint packet_getDestinationAssociationKey(Packet* packet);
-gint packet_getSourceAssociationKey(Packet* packet);
 
 void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status);
 PacketDeliveryStatusFlags packet_getDeliveryStatus(Packet* packet);

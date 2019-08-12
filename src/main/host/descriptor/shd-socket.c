@@ -91,7 +91,7 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType typ
     tracker_addSocket(tracker, descriptor->handle, socket->protocol, socket->inputBufferSize, socket->outputBufferSize);
 }
 
-enum ProtocolType socket_getProtocol(Socket* socket) {
+ProtocolType socket_getProtocol(Socket* socket) {
     MAGIC_ASSERT(socket);
     return socket->protocol;
 }
@@ -196,7 +196,7 @@ gboolean socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
     return TRUE;
 }
 
-void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port, gboolean isInternal) {
+void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port) {
     MAGIC_ASSERT(socket);
 
     socket->boundAddress = ip;
@@ -213,16 +213,6 @@ void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port, gboolean
     g_string_append_printf(stringBuffer, ":%u (descriptor %i)", ntohs(port), socket->super.super.handle);
     socket->boundString = g_string_free(stringBuffer, FALSE);
 
-    /* children of server sockets must not have the same key as the parent
-     * otherwise when the child is closed, the parent's interface association
-     * will be removed. in fact, they dont need a key because their parent
-     * will handle incoming packets and will hand them off as necessary */
-    if(isInternal) {
-        socket->associationKey = 0;
-    } else {
-        socket->associationKey = PROTOCOL_DEMUX_KEY(socket->protocol, port);
-    }
-
     /* the socket is now bound */
     socket->flags |= SF_BOUND;
 }
@@ -230,12 +220,6 @@ void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port, gboolean
 gboolean socket_isBound(Socket* socket) {
     MAGIC_ASSERT(socket);
     return (socket->flags & SF_BOUND) ? TRUE : FALSE;
-}
-
-gint socket_getAssociationKey(Socket* socket) {
-    MAGIC_ASSERT(socket);
-    utility_assert((socket->flags & SF_BOUND));
-    return socket->associationKey;
 }
 
 gsize socket_getInputBufferSpace(Socket* socket) {

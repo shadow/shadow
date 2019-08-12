@@ -71,7 +71,7 @@ struct _Tracker {
 typedef struct _SocketStats SocketStats;
 struct _SocketStats {
     gint handle;
-    enum ProtocolType type;
+    ProtocolType type;
 
     in_addr_t peerIP;
     in_port_t peerPort;
@@ -90,7 +90,7 @@ struct _SocketStats {
     MAGIC_DECLARE;
 };
 
-static SocketStats* _socketstats_new(gint handle, enum ProtocolType type,
+static SocketStats* _socketstats_new(gint handle, ProtocolType type,
         gsize inputBufferSize, gsize outputBufferSize) {
     SocketStats* ss = g_new0(SocketStats, 1);
 
@@ -291,7 +291,7 @@ void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location) {
     }
 }
 
-void tracker_addSocket(Tracker* tracker, gint handle, enum ProtocolType type, gsize inputBufferSize, gsize outputBufferSize) {
+void tracker_addSocket(Tracker* tracker, gint handle, ProtocolType type, gsize inputBufferSize, gsize outputBufferSize) {
     MAGIC_ASSERT(tracker);
 
     if(tracker->loginfo & LOG_INFO_FLAGS_SOCKET) {

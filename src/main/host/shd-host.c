@@ -439,11 +439,12 @@ NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle) {
 }
 
 static void _host_associateInterface(Host* host, Socket* socket,
-        in_addr_t bindAddress, in_port_t bindPort) {
+        in_addr_t bindAddress, in_port_t bindPort, in_addr_t peerAddress, in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
     /* connect up socket layer */
-    socket_setSocketName(socket, bindAddress, bindPort, FALSE);
+    socket_setPeerName(socket, peerAddress, peerPort);
+    socket_setSocketName(socket, bindAddress, bindPort);
 
     /* now associate the interfaces corresponding to bindAddress with socket */
     if(bindAddress == htonl(INADDR_ANY)) {
@@ -957,12 +958,10 @@ static gboolean _host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
     return FALSE;
 }
 
-static gboolean _host_isInterfaceAvailable(Host* host, in_addr_t interfaceIP,
-        DescriptorType type, in_port_t port) {
+static gboolean _host_isInterfaceAvailable(Host* host, ProtocolType type,
+        in_addr_t interfaceIP, in_port_t port, in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
-    enum ProtocolType protocol = type == DT_TCPSOCKET ? PTCP : type == DT_UDPSOCKET ? PUDP : PLOCAL;
-    gint associationKey = PROTOCOL_DEMUX_KEY(protocol, port);
     gboolean isAvailable = FALSE;
 
     if(interfaceIP == htonl(INADDR_ANY)) {
@@ -973,7 +972,7 @@ static gboolean _host_isInterfaceAvailable(Host* host, in_addr_t interfaceIP,
 
         while(g_hash_table_iter_next(&iter, &key, &value)) {
             NetworkInterface* interface = value;
-            isAvailable = !networkinterface_isAssociated(interface, associationKey);
+            isAvailable = !networkinterface_isAssociated(interface, type, port, peerIP, peerPort);
 
             /* as soon as one is taken, break out to return FALSE */
             if(!isAvailable) {
@@ -982,7 +981,7 @@ static gboolean _host_isInterfaceAvailable(Host* host, in_addr_t interfaceIP,
         }
     } else {
         NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
-        isAvailable = !networkinterface_isAssociated(interface, associationKey);
+        isAvailable = !networkinterface_isAssociated(interface, type, port, peerIP, peerPort);
     }
 
     return isAvailable;
@@ -995,81 +994,46 @@ static in_port_t _host_getRandomPort(Host* host) {
     return htons(randomHostPort);
 }
 
-static in_port_t _host_getRandomFreePort(Host* host, in_addr_t interfaceIP, DescriptorType type) {
+static in_port_t _host_getRandomFreePort(Host* host, ProtocolType type,
+        in_addr_t interfaceIP, in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
     /* we need a random port that is free everywhere we need it to be.
      * we have two modes here: first we just try grabbing a random port until we
-     * get a free one. if we cannot find one in an expected number of loops
-     * (based on how many we think are free), then we do an inefficient linear
-     * search that is guaranteed to succeed/fail as a fallback. */
-
-    /* lets see if we have enough free ports to just choose randomly */
-    guint maxNumBound = 0;
-
-    if(interfaceIP == htonl(INADDR_ANY)) {
-        /* need to make sure the port is free on all interfaces */
-        GHashTableIter iter;
-        gpointer key, value;
-        g_hash_table_iter_init(&iter, host->interfaces);
-
-        while(g_hash_table_iter_next(&iter, &key, &value)) {
-            NetworkInterface* interface = value;
-            if(interface) {
-                guint numBoundSockets = networkinterface_getAssociationCount(interface);
-                maxNumBound = MAX(numBoundSockets, maxNumBound);
-            }
-        }
-    } else {
-        /* just check the one at the given IP */
-        NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
-        if(interface) {
-            guint numBoundSockets = networkinterface_getAssociationCount(interface);
-            maxNumBound = MAX(numBoundSockets, maxNumBound);
-        }
-    }
-
-    guint numAllocatablePorts = (guint)(UINT16_MAX - MIN_RANDOM_PORT);
-    guint numFreePorts = 0;
-    if(maxNumBound < numAllocatablePorts) {
-        numFreePorts = numAllocatablePorts - maxNumBound;
-    }
+     * get a free one. if we cannot find one fast enough, then as a fallback we
+     * do an inefficient linear search that is guaranteed to succeed or fail. */
 
     /* we will try to get a port */
     in_port_t randomNetworkPort = 0;
 
-    /* if more than 1/10 of allocatable ports are free, choose randomly but only
-     * until we try to many times */
-    guint threshold = (guint)(numAllocatablePorts / 100);
-    if(numFreePorts >= threshold) {
-        guint numTries = 0;
-        while(numTries < numFreePorts) {
-            in_port_t randomPort = _host_getRandomPort(host);
+    /* if choosing randomly doesn't succeed within 10 tries, then we have already
+     * allocated a lot of ports (>90% on average). then we fall back to linear search. */
+    for(guint i = 0; i < 10; i++) {
+        in_port_t randomPort = _host_getRandomPort(host);
 
-            /* this will check all interfaces in the case of INADDR_ANY */
-            if(_host_isInterfaceAvailable(host, interfaceIP, type, randomPort)) {
-                randomNetworkPort = randomPort;
-                break;
-            }
-
-            numTries++;
+        /* this will check all interfaces in the case of INADDR_ANY */
+        if(_host_isInterfaceAvailable(host, type, interfaceIP, randomPort, peerIP, peerPort)) {
+            return randomPort;
         }
     }
 
     /* now if we tried too many times and still don't have a port, fall back
-     * to a linear search to make sure we get a free port if we have one */
-    if(!randomNetworkPort) {
-        for(in_port_t i = MIN_RANDOM_PORT; i < UINT16_MAX; i++) {
-            /* this will check all interfaces in the case of INADDR_ANY */
-            if(_host_isInterfaceAvailable(host, interfaceIP, type, i)) {
-                randomNetworkPort = i;
-                break;
-            }
+     * to a linear search to make sure we get a free port if we have one.
+     * but start from a random port instead of the min. */
+    in_port_t start = _host_getRandomPort(host);
+    in_port_t next = (start == UINT16_MAX) ? MIN_RANDOM_PORT : start + 1;
+    while(next != start) {
+        /* this will check all interfaces in the case of INADDR_ANY */
+        if(_host_isInterfaceAvailable(host, type, interfaceIP, next, peerIP, peerPort)) {
+            return next;
         }
+        next = (next == UINT16_MAX) ? MIN_RANDOM_PORT : next + 1;
     }
 
-    /* this will return 0 if we can't find a free port */
-    return randomNetworkPort;
+    gchar* peerIPStr = address_ipToNewString(peerIP);
+    warning("unable to find free ephemeral port for %s peer %s:%"G_GUINT16_FORMAT,
+            protocol_toString(type), peerIPStr, (guint16) ntohs((uint16_t) peerPort));
+    return 0;
 }
 
 gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* address) {
@@ -1104,8 +1068,8 @@ gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* addres
         return EBADF;
     }
 
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
+    DescriptorType dtype = descriptor_getType(descriptor);
+    if(dtype != DT_TCPSOCKET && dtype != DT_UDPSOCKET) {
         warning("wrong type for descriptor handle '%i'", handle);
         return ENOTSOCK;
     }
@@ -1123,22 +1087,24 @@ gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* addres
         return EINVAL;
     }
 
+    ProtocolType ptype = socket_getProtocol(socket);
+
     /* make sure we have a proper port */
     if(bindPort == 0) {
         /* we know it will be available */
-        bindPort = _host_getRandomFreePort(host, bindAddress, type);
+        bindPort = _host_getRandomFreePort(host, ptype, bindAddress, 0, 0);
         if(!bindPort) {
             return EADDRNOTAVAIL;
         }
     } else {
         /* make sure their port is available at that address for this protocol. */
-        if(!_host_isInterfaceAvailable(host, bindAddress, type, bindPort)) {
+        if(!_host_isInterfaceAvailable(host, ptype, bindAddress, bindPort, 0, 0)) {
             return EADDRINUSE;
         }
     }
 
     /* bind port and set associations */
-    _host_associateInterface(host, socket, bindAddress, bindPort);
+    _host_associateInterface(host, socket, bindAddress, bindPort, 0, 0);
 
     if (address->sa_family == AF_UNIX) {
         struct sockaddr_un* saddr = (struct sockaddr_un*) address;
@@ -1207,8 +1173,8 @@ gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address)
         return EBADF;
     }
 
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
+    DescriptorType dtype = descriptor_getType(descriptor);
+    if(dtype != DT_TCPSOCKET && dtype != DT_UDPSOCKET) {
         warning("wrong type for descriptor handle '%i'", handle);
         return ENOTSOCK;
     }
@@ -1229,13 +1195,15 @@ gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address)
          * use default interface unless the remote peer is on loopback */
         in_addr_t defaultIP = address_toNetworkIP(host->defaultAddress);
 
-        in_addr_t bindAddress = loIP == peerIP ? loIP : defaultIP;
-        in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
+        ProtocolType ptype = socket_getProtocol(socket);
+
+        in_addr_t bindAddr = loIP == peerIP ? loIP : defaultIP;
+        in_port_t bindPort = _host_getRandomFreePort(host, ptype, bindAddr, peerIP, peerPort);
         if(!bindPort) {
             return EADDRNOTAVAIL;
         }
 
-        _host_associateInterface(host, socket, bindAddress, bindPort);
+        _host_associateInterface(host, socket, bindAddr, bindPort, peerIP, peerPort);
     }
 
     return socket_connectToPeer(socket, peerIP, peerPort, family);
@@ -1256,8 +1224,8 @@ gint host_listenForPeer(Host* host, gint handle, gint backlog) {
         return EBADF;
     }
 
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type != DT_TCPSOCKET) {
+    DescriptorType dtype = descriptor_getType(descriptor);
+    if(dtype != DT_TCPSOCKET) {
         warning("wrong type for descriptor handle '%i'", handle);
         return EOPNOTSUPP;
     }
@@ -1280,13 +1248,14 @@ gint host_listenForPeer(Host* host, gint handle, gint backlog) {
     /* if we get here, we are allowed to listen and are not already listening, start listening now */
     if(!socket_isBound(socket)) {
         /* implicit bind */
+        ProtocolType ptype = socket_getProtocol(socket);
         in_addr_t bindAddress = htonl(INADDR_ANY);
-        in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
+        in_port_t bindPort = _host_getRandomFreePort(host, ptype, bindAddress, 0, 0);
         if(!bindPort) {
             return EADDRNOTAVAIL;
         }
 
-        _host_associateInterface(host, socket, bindAddress, bindPort);
+        _host_associateInterface(host, socket, bindAddress, bindPort, 0, 0);
     }
 
     tcp_enterServerMode(tcp, backlog);
@@ -1439,8 +1408,8 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
         return EBADF;
     }
 
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_PIPE) {
+    DescriptorType dtype = descriptor_getType(descriptor);
+    if(dtype != DT_TCPSOCKET && dtype != DT_UDPSOCKET && dtype != DT_PIPE) {
         return EBADF;
     }
 
@@ -1459,7 +1428,7 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
         return EAGAIN;
     }
 
-    if(type == DT_UDPSOCKET) {
+    if(dtype == DT_UDPSOCKET) {
         /* make sure that we have somewhere to send it */
         Socket* socket = (Socket*)transport;
         if(ip == 0 || port == 0) {
@@ -1472,19 +1441,20 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
 
         /* if this socket is not bound, do an implicit bind to a random port */
         if(!socket_isBound(socket)) {
+            ProtocolType ptype = socket_getProtocol(socket);
             in_addr_t bindAddress = ip == htonl(INADDR_LOOPBACK) ? htonl(INADDR_LOOPBACK) :
                     address_toNetworkIP(host->defaultAddress);
-            in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
+            in_port_t bindPort = _host_getRandomFreePort(host, ptype, bindAddress, 0, 0);
             if(!bindPort) {
                 return EADDRNOTAVAIL;
             }
 
             /* bind port and set associations */
-            _host_associateInterface(host, socket, bindAddress, bindPort);
+            _host_associateInterface(host, socket, bindAddress, bindPort, 0, 0);
         }
     }
 
-    if(type == DT_TCPSOCKET) {
+    if(dtype == DT_TCPSOCKET) {
         gint error = tcp_getConnectError((TCP*) transport);
         if(error != EISCONN) {
             if(error == EALREADY) {

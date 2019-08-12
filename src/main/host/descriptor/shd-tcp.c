@@ -247,7 +247,10 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
     in_addr_t parentAddress;
     in_port_t parentPort;
     socket_getSocketName(&(parent->super), &parentAddress, &parentPort);
-    socket_setSocketName(&(tcp->super), parentAddress, parentPort, TRUE);
+    socket_setSocketName(&(tcp->super), parentAddress, parentPort);
+
+    /* we have the same name and peer as the parent, but we do not associate
+     * on the interface. the parent will receive packets and multiplex to us. */
 
     return child;
 }
@@ -1389,9 +1392,6 @@ gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t famil
     }
 
     /* no error, so we need to do the connect */
-
-    /* create the connection state */
-    socket_setPeerName(&(tcp->super), ip, port);
 
     /* send 1st part of 3-way handshake, state->syn_sent */
     Packet* packet = _tcp_createPacket(tcp, PTCP_SYN, NULL, 0);
