@@ -24,11 +24,13 @@ If debugging plugins in shadow instead of shadow itself, some extra commands are
 ```
 > set scheduler-locking on
 > p vdl_linkmap_abi_update()
+> set scheduler-locking off
 ```
 However, unless the experiment is very small, this will take too long to feasibly run. Instead, individual plugins can have their debug symbols loaded by calling:
 ```
 > set scheduler-locking on
 > p vdl_linkmap_abi_from_addr(addr)
+> set scheduler-locking off
 ```
 where `addr` is an address in a loaded elf file, e.g. from a backtrace.
 This process can be automated in gdb by copying and pasting the commands below into gdb before running/continuing:
