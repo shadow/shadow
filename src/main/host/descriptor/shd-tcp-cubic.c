@@ -7,7 +7,6 @@
 #include "shadow.h"
 
 #define BETA_SCALE 1024
-#define HZ 1024
 #define BICTCP_HZ 10
 
 struct _Cubic {
@@ -124,7 +123,7 @@ static void _cubic_update(Cubic* cubic) {
 
     cubic->ackCount += 1;
 
-    if(now - cubic->lastTime <= HZ / 32) {
+    if(now - cubic->lastTime <= NET_TCP_HZ / 32) {
         return;
     }
 
