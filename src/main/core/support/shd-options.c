@@ -71,7 +71,7 @@ Options* options_new(gint argc, gchar* argv[]) {
     /* set defaults */
     options->initialTCPWindow = 10;
     options->interfaceBufferSize = 1024000;
-    options->interfaceBatchTime = 10;
+    options->interfaceBatchTime = 5000;
     options->randomSeed = 1;
     options->cpuThreshold = -1;
     options->cpuPrecision = 200;
@@ -123,7 +123,7 @@ Options* options_new(gint argc, gchar* argv[]) {
     {
       { "cpu-precision", 0, 0, G_OPTION_ARG_INT, &(options->cpuPrecision), "round measured CPU delays to the nearest TIME, in microseconds (negative value to disable fuzzy CPU delays) [200]", "TIME" },
       { "cpu-threshold", 0, 0, G_OPTION_ARG_INT, &(options->cpuThreshold), "TIME delay threshold after which the CPU becomes blocked, in microseconds (negative value to disable CPU delays) (experimental!) [-1]", "TIME" },
-      { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(options->interfaceBatchTime), "Batch TIME for network interface sends and receives, in milliseconds [10]", "TIME" },
+      { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(options->interfaceBatchTime), "Batch TIME for network interface sends and receives, in microseconds [5000]", "TIME" },
       { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(options->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
       { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(options->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
       { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(options->initialSocketReceiveBufferSize), sockrecv->str, "N" },
@@ -182,7 +182,7 @@ Options* options_new(gint argc, gchar* argv[]) {
     if(options->interfaceBufferSize < CONFIG_MTU) {
         options->interfaceBufferSize = CONFIG_MTU;
     }
-    options->interfaceBatchTime *= SIMTIME_ONE_MILLISECOND;
+    options->interfaceBatchTime *= SIMTIME_ONE_MICROSECOND;
     if(options->interfaceBatchTime == 0) {
         /* we require at least 1 nanosecond b/c of time granularity */
         options->interfaceBatchTime = 1;
