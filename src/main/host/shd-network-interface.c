@@ -399,6 +399,14 @@ void networkinterface_received(NetworkInterface* interface) {
     _networkinterface_scheduleNextReceive(interface);
 }
 
+static void _networkinterface_updatePacketHeader(Descriptor* descriptor, Packet* packet) {
+    DescriptorType type = descriptor_getType(descriptor);
+    if(type == DT_TCPSOCKET) {
+        TCP* tcp = (TCP*)descriptor;
+        tcp_networkInterfaceIsAboutToSendPacket(tcp, packet);
+    }
+}
+
 /* round robin queuing discipline ($ man tc)*/
 static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, gint* socketHandle) {
     Packet* packet = NULL;
@@ -408,6 +416,10 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, g
         Socket* socket = g_queue_pop_head(interface->rrQueue);
         packet = socket_pullOutPacket(socket);
         *socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
+
+        if(socket && packet) {
+            _networkinterface_updatePacketHeader((Descriptor*)socket, packet);
+        }
 
         if(socket_peekNextPacket(socket)) {
             /* socket has more packets, and is still reffed from before */
@@ -432,6 +444,10 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
         Socket* socket = priorityqueue_pop(interface->fifoQueue);
         packet = socket_pullOutPacket(socket);
         *socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
+
+        if(socket && packet) {
+            _networkinterface_updatePacketHeader((Descriptor*)socket, packet);
+        }
 
         if(socket_peekNextPacket(socket)) {
             /* socket has more packets, and is still reffed from before */

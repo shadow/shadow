@@ -556,6 +556,40 @@ static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData) {
     _tcp_setState(tcp, TCPS_CLOSED);
 }
 
+static gsize _tcp_computeRTTMEM(TCP* tcp, gboolean isRMEM) {
+    Host* host = worker_getActiveHost();
+    Address* address = host_getDefaultAddress(host);
+    in_addr_t ip = (in_addr_t)address_toNetworkIP(address);
+
+    NetworkInterface* interface = host_lookupInterface(host, ip);
+    g_assert(interface);
+
+    gsize bw_KiBps = 0;
+    if(isRMEM) {
+        bw_KiBps = (gsize)networkinterface_getSpeedDownKiBps(interface);
+    } else {
+        bw_KiBps = (gsize)networkinterface_getSpeedUpKiBps(interface);
+    }
+
+    gsize bw_Bps = bw_KiBps * 1024;
+    gdouble rttSeconds = ((gdouble)tcp->congestion->rttSmoothed) / ((gdouble)1000);
+
+    gsize mem = (gsize)(bw_Bps * rttSeconds);
+    return mem;
+}
+
+static gsize _tcp_computeMaxRMEM(TCP* tcp) {
+    gsize mem = _tcp_computeRTTMEM(tcp, TRUE);
+    mem = MAX(mem, CONFIG_TCP_RMEM_MAX);
+    return mem;
+}
+
+static gsize _tcp_computeMaxWMEM(TCP* tcp) {
+    gsize mem = _tcp_computeRTTMEM(tcp, FALSE);
+    mem = MAX(mem, CONFIG_TCP_WMEM_MAX);
+    return mem;
+}
+
 static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
     MAGIC_ASSERT(tcp);
 
@@ -567,7 +601,7 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
     if(space > currentSize) {
         tcp->autotune.space = space;
 
-        gsize newSize = (gsize) MIN(space, (gsize)CONFIG_TCP_RMEM_MAX);
+        gsize newSize = (gsize) MIN(space, _tcp_computeMaxRMEM(tcp));
         if(newSize > currentSize) {
             socket_setInputBufferSize(&tcp->super, newSize);
             debug("[autotune] input buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
@@ -603,7 +637,8 @@ static void _tcp_autotuneSendBuffer(TCP* tcp) {
 
     gsize sndmem = 2404;
     gsize demanded = (gsize)tcp->congestion->window;
-    gsize newSize = (gsize) MIN((gsize)(sndmem * 2 * demanded), (gsize)CONFIG_TCP_WMEM_MAX);
+
+    gsize newSize = (gsize) MIN((gsize)(sndmem * 2 * demanded), _tcp_computeMaxWMEM(tcp));
 
     gsize currentSize = socket_getOutputBufferSize(&tcp->super);
     if(newSize > currentSize) {
@@ -994,6 +1029,31 @@ static void _tcp_sendShutdownFin(TCP* tcp) {
     }
 }
 
+void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Packet* packet) {
+    MAGIC_ASSERT(tcp);
+
+    SimulationTime now = worker_getCurrentTime();
+
+    /* update TCP header to our current advertised window and acknowledgment and timestamps */
+    packet_updateTCP(packet, tcp->receive.next, tcp->send.selectiveACKs, tcp->receive.window, now, tcp->receive.lastTimestamp);
+
+    /* keep track of the last things we sent them */
+    tcp->send.lastAcknowledgment = tcp->receive.next;
+    tcp->send.lastWindow = tcp->receive.window;
+    tcp->info.lastAckSent = now;
+
+    PacketTCPHeader* header = packet_getTCPHeader(packet);
+    if(header->sequence > 0 || (header->flags & PTCP_SYN)) {
+        /* store in retransmission buffer */
+        _tcp_addRetransmit(tcp, packet);
+
+        /* start retransmit timer if its not running (rfc 6298, section 5.1) */
+        if(!tcp->retransmit.desiredTimerExpiration) {
+            _tcp_setRetransmitTimer(tcp, now);
+        }
+    }
+}
+
 static void _tcp_flush(TCP* tcp) {
     MAGIC_ASSERT(tcp);
 
@@ -1069,27 +1129,9 @@ static void _tcp_flush(TCP* tcp) {
         priorityqueue_pop(tcp->throttledOutput);
         tcp->throttledOutputLength -= length;
 
-        if(header->sequence > 0 || (header->flags & PTCP_SYN)) {
-            /* store in retransmission buffer */
-            _tcp_addRetransmit(tcp, packet);
+        /* packet will get stored in retrans queue in tcp_networkInterfaceIsAboutToSendPacket */
 
-            /* start retransmit timer if its not running (rfc 6298, section 5.1) */
-            if(!tcp->retransmit.desiredTimerExpiration) {
-                _tcp_setRetransmitTimer(tcp, now);
-            }
-        }
-
-
-        /* update TCP header to our current advertised window and acknowledgment */
-        packet_updateTCP(packet, tcp->receive.next, tcp->send.selectiveACKs, tcp->receive.window, now, tcp->receive.lastTimestamp);
-
-        /* keep track of the last things we sent them */
-        tcp->send.lastAcknowledgment = tcp->receive.next;
-        tcp->send.lastWindow = tcp->receive.window;
-        // fprintf(stderr, "SND/RCV Sending %s %s %d @ %f\n", tcp->super.boundString, tcp->super.peerString, header.sequence, dtime);
-        tcp->info.lastAckSent = now;
-
-         /* socket will queue it ASAP */
+        /* socket will queue it ASAP */
         gboolean success = socket_addToOutputBuffer(&(tcp->super), packet);
         tcp->send.packetsSent++;
         tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header->sequence);
@@ -1922,7 +1964,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     }
 
 
-    if (header->flags & PTCP_ACK && header->sourceIP == tcp->super.peerIP
+    if ((header->flags & PTCP_ACK) && header->sourceIP == tcp->super.peerIP
         && packetLength == 0)
     {
        flags |= retransmit_tally_update(tcp->retransmit.tally,

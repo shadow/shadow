@@ -42,4 +42,6 @@ gboolean tcp_isListeningAllowed(TCP* tcp);
 
 gint tcp_shutdown(TCP* tcp, gint how);
 
+void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Packet* packet);
+
 #endif /* SHD_TCP_H_ */
