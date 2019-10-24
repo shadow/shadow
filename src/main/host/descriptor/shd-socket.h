@@ -59,6 +59,7 @@ struct _Socket {
 
     /* buffering packets ready to send */
     GQueue* outputBuffer;
+    GQueue* outputControlBuffer;
     gsize outputBufferSize;
     gsize outputBufferSizePending;
     gsize outputBufferLength;
