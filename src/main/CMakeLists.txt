@@ -78,6 +78,8 @@ set(shadow_srcs
     host/descriptor/shd-epoll.c
     host/descriptor/shd-socket.c
     host/descriptor/shd-tcp.c
+    host/descriptor/shd-tcp-cong.c
+    host/descriptor/shd-tcp-cong-reno.c
     host/descriptor/shd-tcp-aimd.c
     host/descriptor/shd-tcp-congestion.c
     host/descriptor/shd-tcp-cubic.c

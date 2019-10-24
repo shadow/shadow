@@ -6,13 +6,17 @@
  */
 
 #include "shadow.h"
-#include "shd-tcp-retransmit-tally.h"
+
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "shd-tcp-cong.h"
+#include "shd-tcp-cong-reno.h"
+#include "shd-tcp-retransmit-tally.h"
 
 enum TCPState {
     TCPS_CLOSED, TCPS_LISTEN,
@@ -172,6 +176,8 @@ struct _TCP {
         gsize space;
     } autotune;
 
+    TCPCong cong;
+
     /* congestion object for implementing different types of congestion control (aimd, reno, cubic) */
     TCPCongestion* congestion;
 
@@ -291,6 +297,10 @@ static void _tcpserver_free(TCPServer* server) {
 
     MAGIC_CLEAR(server);
     g_free(server);
+}
+
+struct TCPCong_ *tcp_get_cong(TCP *tcp) {
+    return &tcp->cong;
 }
 
 void tcp_clearAllChildrenIfServer(TCP* tcp) {
@@ -1666,6 +1676,8 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
 
         _rswlog(tcp, "The ReTX is now %zu\n", tcp->retransmit.queueLength);
 
+        // RSW -- fire acked packet event here
+
         /* update their advertisements */
         tcp->receive.lastAcknowledgment = (guint32) header->acknowledgment;
 
@@ -2477,6 +2489,7 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 
         case TCP_CC_RENO:
             tcp->congestion = (TCPCongestion*)reno_new(initial_window, tcpSSThresh);
+            tcp_cong_reno_init(&tcp->cong);
             break;
 
         case TCP_CC_CUBIC:

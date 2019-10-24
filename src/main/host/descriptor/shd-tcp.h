@@ -11,6 +11,7 @@
 #define TCP_MIN_CWND 10
 
 typedef struct _TCP TCP;
+struct TCPCong_;
 
 typedef enum TCPProcessFlags TCPProcessFlags;
 enum TCPProcessFlags {
@@ -27,6 +28,8 @@ gint tcp_getConnectError(TCP* tcp);
 void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo);
 void tcp_enterServerMode(TCP* tcp, gint backlog);
 gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* acceptedHandle);
+
+struct TCPCong_ *tcp_get_cong(TCP *tcp);
 
 void tcp_clearAllChildrenIfServer(TCP* tcp);
 
