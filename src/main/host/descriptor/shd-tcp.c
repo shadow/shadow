@@ -580,13 +580,13 @@ static gsize _tcp_computeRTTMEM(TCP* tcp, gboolean isRMEM) {
 
 static gsize _tcp_computeMaxRMEM(TCP* tcp) {
     gsize mem = _tcp_computeRTTMEM(tcp, TRUE);
-    mem = MAX(mem, CONFIG_TCP_RMEM_MAX);
+    mem = CLAMP(mem, CONFIG_TCP_RMEM_MAX, CONFIG_TCP_RMEM_MAX*10);
     return mem;
 }
 
 static gsize _tcp_computeMaxWMEM(TCP* tcp) {
     gsize mem = _tcp_computeRTTMEM(tcp, FALSE);
-    mem = MAX(mem, CONFIG_TCP_WMEM_MAX);
+    mem = CLAMP(mem, CONFIG_TCP_WMEM_MAX, CONFIG_TCP_WMEM_MAX*10);
     return mem;
 }
 
