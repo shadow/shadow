@@ -137,6 +137,10 @@ struct _TCP {
         guint32 highestSequence;
         /* total number of packets sent */
         guint32 packetsSent;
+        /* total number of quick acknowledgments sent */
+        guint32 numQuickACKsSent;
+        gboolean delayedACKIsScheduled;
+        guint32 delayedACKCounter;
         /* list of selective ACKs, packets received after a missing packet */
         GList* selectiveACKs;
     } send;
@@ -1043,6 +1047,12 @@ void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Packet* packet) {
     tcp->info.lastAckSent = now;
 
     PacketTCPHeader* header = packet_getTCPHeader(packet);
+
+    if(header->flags & PTCP_ACK) {
+        /* we are sending an ACK already, so we may not need any delayed ACK */
+        tcp->send.delayedACKCounter = 0;
+    }
+
     if(header->sequence > 0 || (header->flags & PTCP_SYN)) {
         /* store in retransmission buffer */
         _tcp_addRetransmit(tcp, packet);
@@ -1715,6 +1725,32 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
             outSize, outLength, inSize, inLength, tcp->info.retransmitCount, ploss);
 }
 
+static void _tcp_sendControlPacket(TCP* tcp, enum ProtocolTCPFlags flags) {
+    MAGIC_ASSERT(tcp);
+
+    /* create the ack packet, without any payload data */
+    Packet* control = _tcp_createPacket(tcp, flags, NULL, 0);
+
+    /* make sure it gets sent before whatever else is in the queue */
+    packet_setPriority(control, 0.0);
+
+    /* push it in the buffer and to the socket */
+    _tcp_bufferPacketOut(tcp, control);
+    _tcp_flush(tcp);
+
+    /* the output buffer holds the packet ref now */
+    packet_unref(control);
+}
+
+static void _tcp_sendACKTaskCallback(TCP* tcp, gpointer userData) {
+    MAGIC_ASSERT(tcp);
+    tcp->send.delayedACKIsScheduled = FALSE;
+    if(tcp->send.delayedACKCounter > 0) {
+        _tcp_sendControlPacket(tcp, PTCP_ACK);
+        tcp->send.delayedACKCounter = 0;
+    }
+}
+
 /* return TRUE if the packet should be retransmitted */
 void tcp_processPacket(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
@@ -1963,7 +1999,6 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
        retransmit_tally_mark_sacked(tcp->retransmit.tally, selectiveACKs);
     }
 
-
     if ((header->flags & PTCP_ACK) && header->sourceIP == tcp->super.peerIP
         && packetLength == 0)
     {
@@ -2020,13 +2055,37 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
         debug("%s <-> %s: sending response control packet",
                 tcp->super.boundString, tcp->super.peerString);
-        Packet* response = _tcp_createPacket(tcp, responseFlags, NULL, 0);
-        packet_setPriority(response, 0.0);
-        _tcp_bufferPacketOut(tcp, response);
-        _tcp_flush(tcp);
 
-        /* the output buffer holds the packet ref now */
-        packet_unref(response);
+        if(responseFlags == PTCP_ACK) {
+            if(tcp->send.delayedACKIsScheduled == FALSE) {
+                /* we need to send an ACK, lets schedule a task so we don't send an ACK
+                 * for all packets that are received during this same simtime receiving round. */
+                Task* sendACKTask = task_new((TaskCallbackFunc)_tcp_sendACKTaskCallback,
+                                tcp, NULL, descriptor_unref, NULL);
+                /* taks holds a ref to tcp */
+                descriptor_ref(tcp);
+
+                /* figure out what we should use as delay */
+                SimulationTime delay = 0;
+                /* "quick acknowledgments" happen at the beginning of a connection */
+                if(tcp->send.numQuickACKsSent < ((guint32)(tcp->receive.window / 2))) {
+                    /* we want the other side to get the ACKs ASAP so we don't throttle its sending rate */
+                    delay = SIMTIME_ONE_NANOSECOND;
+                    tcp->send.numQuickACKsSent++;
+                } else {
+                    delay = 5*SIMTIME_ONE_MILLISECOND;
+                }
+
+                worker_scheduleTask(sendACKTask, delay);
+                task_unref(sendACKTask);
+
+                tcp->send.delayedACKIsScheduled = TRUE;
+            }
+            tcp->send.delayedACKCounter++;
+        } else {
+            /* just send the response now */
+            _tcp_sendControlPacket(tcp, responseFlags);
+        }
     }
 
     /* clear it so we dont send outdated timestamp echos */
