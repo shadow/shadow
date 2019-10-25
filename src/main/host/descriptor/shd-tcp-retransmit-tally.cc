@@ -45,6 +45,16 @@ static bool range_adj(const SeqRange &lhs, const SeqRange &rhs) {
    return (lhs.second == rhs.first || rhs.second == lhs.first);
 }
 
+static bool ranges_contains(const Ranges &ranges, SeqNum value) {
+  for (const auto &range : ranges) {
+    if (range_contains(range, value)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 static std::pair<Ranges::iterator, Ranges::iterator>
 ranges_mergable(Ranges &ranges, const SeqRange &value) {
    assert(still_sorted_(ranges));
@@ -198,7 +208,8 @@ enum TCPProcessFlags_ retransmit_tally_update(void *p, uint32_t last_ack, bool *
       rt->tidy_ranges(&rt->retransmitted_);
    }
 
-   if (rt->num_dupl_ack_ >= RetransmitTally::kDuplAckLostThresh) {
+   if (rt->num_dupl_ack_ >= RetransmitTally::kDuplAckLostThresh
+       && !ranges_contains(rt->retransmitted_, rt->last_ack_)) {
       // std::cerr << "3 dupl acks!" << std::endl;
       // std::cerr << last_ack << std::endl;
       ranges_insert(&rt->marked_lost_, {rt->last_ack_, rt->last_ack_ + 1});

@@ -28,8 +28,8 @@ static inline const struct TCPCongHooks_ *cong_avoid_hooks_();
 
 /* HELPERS *******************************************************/
 
-static inline void ssthresh_halve(CAReno *reno) {
-    reno->ssthresh = (reno->ssthresh / 2) + 1;
+static inline void ssthresh_halve(TCP *tcp, CAReno *reno) {
+    reno->ssthresh = (tcp_cong(tcp)->cwnd / 2) + 1;
 }
 
 /*
@@ -49,7 +49,7 @@ static void ca_reno_slow_start_duplicate_ack_ev_(TCP *tcp) {
 
     if (reno->duplicate_ack_n == 3) { // transition to fast recovery
 
-        ssthresh_halve(reno);
+        ssthresh_halve(tcp, reno);
         tcp_cong(tcp)->cwnd = reno->ssthresh + 3;
 
         reno->state_hooks = fast_recovery_hooks_();
@@ -114,15 +114,15 @@ static void ca_reno_cong_avoid_new_ack_ev_(TCP *tcp, guint32 n) {
 /*******************************************************************/
 
 static void ca_reno_init_(TCP *tcp, CAReno *reno) {
-    tcp_cong(tcp)->cwnd = 1;
-    reno->ssthresh = UINT_MAX;
+    tcp_cong(tcp)->cwnd = 10;
+    reno->ssthresh = INT32_MAX;
     reno->cong_avoid_nacked = 0;
     reno->duplicate_ack_n = 0;
     reno->state_hooks = slow_start_hooks_();
 }
 
 static void tcp_cong_reno_delete_(TCP *tcp) {
-    free(tcp_cong(tcp));
+    free(tcp_cong(tcp)->ca);
 }
 
 static void tcp_cong_reno_duplicate_ack_ev_(TCP *tcp) {
@@ -146,8 +146,8 @@ static void tcp_cong_reno_timeout_ev_(TCP *tcp) {
     CAReno *reno = tcp_cong(tcp)->ca;
 
     reno->duplicate_ack_n = 0;
-    ssthresh_halve(reno);
-    tcp_cong(tcp)->cwnd = 1;
+    ssthresh_halve(tcp, reno);
+    tcp_cong(tcp)->cwnd = 10;
 
     // transition to slow start
     reno->state_hooks = slow_start_hooks_();

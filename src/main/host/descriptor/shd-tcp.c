@@ -91,6 +91,8 @@ struct _TCPServer {
     MAGIC_DECLARE;
 };
 
+static void _tcp_logCongestionInfo(TCP* tcp);
+
 struct _TCP {
     Socket super;
 
@@ -1269,6 +1271,8 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
     _tcp_setRetransmitTimer(tcp, now);
 
     tcp->cong.hooks->tcp_cong_timeout_ev(tcp);
+    info("[CONG] timeout");
+    _tcp_logCongestionInfo(tcp);
 
     retransmit_tally_clear_retransmitted(tcp->retransmit.tally);
 
@@ -1635,14 +1639,19 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         flags |= TCP_PF_RWND_UPDATED;
     }
 
-    bool is_dup = false;
+    // TODO: This logic needs work.
+    if (packet_getPayloadLength(packet) == 0 || (isValidAck &&
+        (header->acknowledgment - (guint)tcp->send.unacked) > 0)) {
+        bool is_dup = false;
+        flags |= retransmit_tally_update(tcp->retransmit.tally,
+                                        (guint32)header->acknowledgment,
+                                        &is_dup);
 
-   flags |= retransmit_tally_update(tcp->retransmit.tally,
-                                    tcp->receive.lastAcknowledgment,
-                                    &is_dup);
-
-    if (is_dup) {
-      tcp->cong.hooks->tcp_cong_duplicate_ack_ev(tcp);
+        if (is_dup) {
+          info("[CONG] duplicate ack");
+          _tcp_logCongestionInfo(tcp);
+          // tcp->cong.hooks->tcp_cong_duplicate_ack_ev(tcp);
+        }
     }
 
     *nPacketsAcked = 0;
@@ -1707,7 +1716,7 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
     gsize inLength = socket_getInputBufferLength(&tcp->super);
     double ploss = (double) (tcp->info.retransmitCount / tcp->send.packetsSent);
 
-    debug("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
+    info("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
             "sndbufsize=%"G_GSIZE_FORMAT" sndbuflen=%"G_GSIZE_FORMAT" rcvbufsize=%"G_GSIZE_FORMAT" rcbuflen=%"G_GSIZE_FORMAT" "
             "retrans=%"G_GSIZE_FORMAT" ploss=%f",
             tcp->cong.cwnd, tcp->cong.hooks->tcp_cong_ssthresh(tcp), tcp->timing.rttSmoothed,
