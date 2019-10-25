@@ -176,10 +176,13 @@ struct _TCP {
         gsize space;
     } autotune;
 
+    /* congestion object for implementing different types of congestion control (aimd, reno, cubic) */
     TCPCong cong;
 
-    /* congestion object for implementing different types of congestion control (aimd, reno, cubic) */
-    TCPCongestion* congestion;
+    struct {
+      gint rttSmoothed;
+      gint rttVariance;
+    } timing;
 
     /* TODO: these should probably be stamped when the network interface sends
      * instead of when the tcp layer sends down to the socket layer */
@@ -226,14 +229,6 @@ static void _rswlog(const TCP *tcp, const char *format, ...) {
     vfprintf(stderr, format, args);
     va_end(args);
 #endif // RSWLOG
-}
-
-// rwails
-// BEGIN: new CONG functions
-static uint32_t _tcp_inFlight(const TCP *tcp) {
-    // return tcp->send.next - tcp->receive.lastAcknowledgment;
-    return tcp->congestion->window;
-    // return tcp->send.window;
 }
 
 static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_t peerPort) {
@@ -301,13 +296,6 @@ static void _tcpserver_free(TCPServer* server) {
 
 struct TCPCong_ *tcp_cong(TCP *tcp) {
     return &tcp->cong;
-}
-
-guint32 tcp_sendWindow(const TCP *tcp) {
-  return tcp->send.window;
-}
-void tcp_setSendWindow(TCP *tcp, guint32 value) {
-  tcp->send.window = value;
 }
 
 void tcp_clearAllChildrenIfServer(TCP* tcp) {
@@ -593,7 +581,7 @@ static gsize _tcp_computeRTTMEM(TCP* tcp, gboolean isRMEM) {
     }
 
     gsize bw_Bps = bw_KiBps * 1024;
-    gdouble rttSeconds = ((gdouble)tcp->congestion->rttSmoothed) / ((gdouble)1000);
+    gdouble rttSeconds = ((gdouble)tcp->timing.rttSmoothed) / ((gdouble)1000);
 
     gsize mem = (gsize)(bw_Bps * rttSeconds);
     return mem;
@@ -633,8 +621,8 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
     SimulationTime now = worker_getCurrentTime();
     if(tcp->autotune.lastAdjustment == 0) {
         tcp->autotune.lastAdjustment = now;
-    } else if(tcp->congestion->rttSmoothed > 0) {
-        SimulationTime threshold = ((SimulationTime)tcp->congestion->rttSmoothed) * ((SimulationTime)SIMTIME_ONE_MILLISECOND);
+    } else if(tcp->timing.rttSmoothed > 0) {
+        SimulationTime threshold = ((SimulationTime)tcp->timing.rttSmoothed) * ((SimulationTime)SIMTIME_ONE_MILLISECOND);
         if((now - tcp->autotune.lastAdjustment) > threshold) {
             tcp->autotune.lastAdjustment = now;
             tcp->autotune.bytesCopied = 0;
@@ -657,7 +645,7 @@ static void _tcp_autotuneSendBuffer(TCP* tcp) {
      * or sample from a distribution. */
 
     gsize sndmem = 2404;
-    gsize demanded = (gsize)tcp->congestion->window;
+    gsize demanded = (gsize)tcp->cong.cwnd;
 
     gsize newSize = (gsize) MIN((gsize)(sndmem * 2 * demanded), _tcp_computeMaxWMEM(tcp));
 
@@ -767,7 +755,7 @@ static void _tcp_updateSendWindow(TCP* tcp) {
     MAGIC_ASSERT(tcp);
 
     /* send window is minimum of congestion window and the last advertised window */
-    tcp->send.window = (guint32)MIN(tcp->congestion->window, (gint)tcp->receive.lastWindow);
+    tcp->send.window = (guint32)MIN(tcp->cong.cwnd, (gint)tcp->receive.lastWindow);
 }
 
 static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpointer payload, gsize payloadLength) {
@@ -964,25 +952,25 @@ static void _tcp_updateRTTEstimate(TCP* tcp, SimulationTime timestamp) {
     }
 
     /* RFC 6298 (http://tools.ietf.org/html/rfc6298) */
-    if(!tcp->congestion->rttSmoothed) {
+    if(!tcp->timing.rttSmoothed) {
         /* first RTT measurement */
-        tcp->congestion->rttSmoothed = rtt;
-        tcp->congestion->rttVariance = rtt / 2;
+        tcp->timing.rttSmoothed = rtt;
+        tcp->timing.rttVariance = rtt / 2;
     } else {
         /* RTTVAR = (1 - beta) * RTTVAR + beta * |SRTT - R|   (beta = 1/4) */
-        tcp->congestion->rttVariance = (3 * tcp->congestion->rttVariance / 4) +
-                (ABS(tcp->congestion->rttSmoothed - rtt) / 4);
+        tcp->timing.rttVariance = (3 * tcp->timing.rttVariance / 4) +
+                (ABS(tcp->timing.rttSmoothed - rtt) / 4);
         /* SRTT = (1 - alpha) * SRTT + alpha * R   (alpha = 1/8) */
-        tcp->congestion->rttSmoothed = (7 * tcp->congestion->rttSmoothed / 8) + (rtt / 8);
+        tcp->timing.rttSmoothed = (7 * tcp->timing.rttSmoothed / 8) + (rtt / 8);
     }
 
     /* RTO = SRTT + 4 * RTTVAR  (min=1s, max=60s) */
-    gint newRTO = tcp->congestion->rttSmoothed + (4 * tcp->congestion->rttVariance);
+    gint newRTO = tcp->timing.rttSmoothed + (4 * tcp->timing.rttVariance);
     // fprintf(stderr, "newRTO - %d\n", newRTO);
     _tcp_setRetransmitTimeout(tcp, newRTO);
 
-    debug("srtt=%d rttvar=%d rto=%d", tcp->congestion->rttSmoothed,
-            tcp->congestion->rttVariance, tcp->retransmit.timeout);
+    debug("srtt=%d rttvar=%d rto=%d", tcp->timing.rttSmoothed,
+            tcp->timing.rttVariance, tcp->retransmit.timeout);
 }
 
 static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
@@ -1280,35 +1268,7 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
     _tcp_setRetransmitTimeout(tcp, tcp->retransmit.timeout * 2);
     _tcp_setRetransmitTimer(tcp, now);
 
-#if 0
-    fprintf(stderr, "CW %s %s timer exp\n", tcp->super.boundString,
-            tcp->super.peerString);
-#endif // 0
-
-    debug("[CONG-LOSS] cwnd=%d ssthresh=%d rtt=%d sndbufsize=%d sndbuflen=%d rcvbufsize=%d rcbuflen=%d retrans=%d ploss=%f",
-            tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed, 
-            tcp->super.outputBufferLength, tcp->super.outputBufferSize, tcp->super.inputBufferLength, tcp->super.inputBufferSize, 
-            tcp->info.retransmitCount, (float)tcp->info.retransmitCount / tcp->send.packetsSent);
-
-
-    // if (!_tcp_inEvent(now, tcp->pipeDrainEventEnd)) {
-    tcp->congestion->state = TCP_CCS_SLOWSTART;
-    tcp->congestion->threshold = MAX(_tcp_inFlight(tcp) / 2, TCP_MIN_CWND);
-    tcp->congestion->window = TCP_MIN_CWND;
-
-#if 0
-    fprintf(stderr, "CW %s %s Pipe draining%\n",
-            tcp->super.boundString,
-            tcp->super.peerString);
-#endif // 0
-
-    // fprintf(stderr, "DB - Next seq %d\n", sequence, tcp->send.highestSequence);
-
-#if 0
-    for (unsigned sitr = sequence; sitr < tcp->send.highestSequence; ++sitr) {
-       _tcp_retransmitPacket(tcp, sitr);
-    }
-#endif // 0
+    tcp->cong.hooks->tcp_cong_timeout_ev(tcp);
 
     retransmit_tally_clear_retransmitted(tcp->retransmit.tally);
 
@@ -1434,10 +1394,10 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
     /* Metrics. */
     tcpinfo->tcpi_pmtu = (u_int32_t)(CONFIG_MTU);
 //  tcpinfo->tcpi_rcv_ssthresh;
-    tcpinfo->tcpi_rtt = (u_int32_t)tcp->congestion->rttSmoothed;
-    tcpinfo->tcpi_rttvar = (u_int32_t)tcp->congestion->rttVariance;
-    tcpinfo->tcpi_snd_ssthresh = (u_int32_t)tcp->congestion->threshold;
-    tcpinfo->tcpi_snd_cwnd = (u_int32_t)tcp->congestion->window;
+    tcpinfo->tcpi_rtt = (u_int32_t)tcp->timing.rttSmoothed;
+    tcpinfo->tcpi_rttvar = (u_int32_t)tcp->timing.rttVariance;
+    tcpinfo->tcpi_snd_ssthresh = (u_int32_t)tcp->cong.hooks->tcp_cong_ssthresh(tcp);
+    tcpinfo->tcpi_snd_cwnd = (u_int32_t)tcp->cong.cwnd;
     tcpinfo->tcpi_advmss = (u_int32_t)(CONFIG_MTU - CONFIG_HEADER_SIZE_TCPIPETH);
 //  tcpinfo->tcpi_reordering;
 
@@ -1675,6 +1635,16 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         flags |= TCP_PF_RWND_UPDATED;
     }
 
+    bool is_dup = false;
+
+   flags |= retransmit_tally_update(tcp->retransmit.tally,
+                                    tcp->receive.lastAcknowledgment,
+                                    &is_dup);
+
+    if (is_dup) {
+      tcp->cong.hooks->tcp_cong_duplicate_ack_ev(tcp);
+    }
+
     *nPacketsAcked = 0;
     if(isValidAck) {
         /* the packets just acked are 'released' from retransmit queue */
@@ -1682,8 +1652,6 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
                                   header->acknowledgment);
 
         _rswlog(tcp, "The ReTX is now %zu\n", tcp->retransmit.queueLength);
-
-        // RSW -- fire acked packet event here
 
         /* update their advertisements */
         tcp->receive.lastAcknowledgment = (guint32) header->acknowledgment;
@@ -1695,6 +1663,8 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         if(*nPacketsAcked > 0) {
             flags |= TCP_PF_DATA_ACKED;
 
+            tcp->cong.hooks->tcp_cong_new_ack_ev(tcp, *nPacketsAcked);
+
             /* increase send buffer size with autotuning */
             if(tcp->autotune.isEnabled && !tcp->autotune.userDisabledSend &&
                     host_autotuneSendBuffer(worker_getActiveHost())) {
@@ -1704,8 +1674,8 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
 
         /* if we had congestion, reset our state (rfc 6298, section 5) */
         if(tcp->retransmit.backoffCount > 2) {
-            tcp->congestion->rttSmoothed = 0;
-            tcp->congestion->rttVariance = 0;
+            tcp->timing.rttSmoothed = 0;
+            tcp->timing.rttVariance = 0;
             _tcp_setRetransmitTimeout(tcp, CONFIG_TCP_RTO_INIT);
         }
         tcp->retransmit.backoffCount = 0;
@@ -1740,7 +1710,7 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
     debug("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
             "sndbufsize=%"G_GSIZE_FORMAT" sndbuflen=%"G_GSIZE_FORMAT" rcvbufsize=%"G_GSIZE_FORMAT" rcbuflen=%"G_GSIZE_FORMAT" "
             "retrans=%"G_GSIZE_FORMAT" ploss=%f",
-            tcp->congestion->window, tcp->congestion->threshold, tcp->congestion->rttSmoothed,
+            tcp->cong.cwnd, tcp->cong.hooks->tcp_cong_ssthresh(tcp), tcp->timing.rttSmoothed,
             outSize, outLength, inSize, inLength, tcp->info.retransmitCount, ploss);
 }
 
@@ -2018,13 +1988,6 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
        retransmit_tally_mark_sacked(tcp->retransmit.tally, selectiveACKs);
     }
 
-    if ((header->flags & PTCP_ACK) && header->sourceIP == tcp->super.peerIP
-        && packetLength == 0)
-    {
-       flags |= retransmit_tally_update(tcp->retransmit.tally,
-                                        tcp->receive.lastAcknowledgment);
-    }
-
     if(selectiveACKs) {
         g_list_free(selectiveACKs);
     }
@@ -2042,15 +2005,9 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     gboolean mayRaiseWindow = (tcp->receive.state != TCPRS_RECOVERY);
 
     if(isAckDubious) {
-        if((flags & TCP_PF_DATA_ACKED) && mayRaiseWindow) {
-            tcpCongestion_avoidance(tcp->congestion, (gint)tcp->send.next, nPacketsAcked, (gint)tcp->send.unacked);
-            _tcp_logCongestionInfo(tcp);
-        }
-
-    } else if(flags & TCP_PF_DATA_ACKED) {
-        tcpCongestion_avoidance(tcp->congestion, (gint)tcp->send.next, nPacketsAcked, (gint)tcp->send.unacked);
-        _tcp_logCongestionInfo(tcp);
+      // TODO (rwails): Any special handling for dubious acks?
     }
+
 
     /* now flush as many packets as we can to socket */
     _tcp_flush(tcp);
@@ -2058,7 +2015,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     /* send ack if they need updates but we didn't send any yet (selective acks) */
     if((tcp->receive.next > tcp->send.lastAcknowledgment) ||
         (tcp->receive.window != tcp->send.lastWindow) ||
-        (tcp->congestion->fastRetransmit && header->sequence > (guint)tcp->receive.next))
+        (tcp->cong.hooks->tcp_cong_fast_recovery(tcp) && header->sequence > (guint)tcp->receive.next))
     {
         responseFlags |= PTCP_ACK;
     }
@@ -2369,8 +2326,7 @@ void tcp_free(TCP* tcp) {
         _tcpserver_free(tcp->server);
     }
 
-    tcpCongestion_free(tcp->congestion);
-
+    tcp->cong.hooks->tcp_cong_delete(tcp);
     retransmit_tally_destroy(tcp->retransmit.tally);
 
     MAGIC_CLEAR(tcp);
@@ -2484,32 +2440,17 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
     gint tcpSSThresh = options_getTCPSlowStartThreshold(options);
 
     TCPCongestionType congestionType = tcpCongestion_getType(tcpCC);
-    if(congestionType == TCP_CC_UNKNOWN) {
-        warning("unable to find congestion control algorithm '%s', defaulting to CUBIC", tcpCC);
-        congestionType = TCP_CC_CUBIC;
-    }
 
     switch(congestionType) {
-        case TCP_CC_AIMD:
-            tcp->congestion = (TCPCongestion*)aimd_new(initial_window, tcpSSThresh);
-            break;
-
+        default:
+            warning("CC %s not implemented, falling back to reno", tcpCC);
         case TCP_CC_RENO:
-            tcp->congestion = (TCPCongestion*)reno_new(initial_window, tcpSSThresh);
             tcp_cong_reno_init(tcp);
             break;
-
-        case TCP_CC_CUBIC:
-            tcp->congestion = (TCPCongestion*)cubic_new(initial_window, tcpSSThresh);
-            break;
-
         case TCP_CC_UNKNOWN:
-        default:
             error("Failed to initialize TCP congestion control for %s", tcpCC);
             break;
     }
-
-    tcp->congestion->window = TCP_MIN_CWND;
 
     tcp->send.window = initial_window;
     tcp->send.lastWindow = initial_window;
@@ -2547,4 +2488,12 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 
     worker_countObject(OBJECT_TYPE_TCP, COUNTER_TYPE_NEW);
     return tcp;
+}
+
+TCPCongestionType tcpCongestion_getType(const gchar* type) {
+    if(!g_ascii_strcasecmp(type, "reno")) {
+        return TCP_CC_RENO;
+    }
+
+    return TCP_CC_UNKNOWN;
 }

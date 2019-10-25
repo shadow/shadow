@@ -80,10 +80,6 @@ set(shadow_srcs
     host/descriptor/shd-tcp.c
     host/descriptor/shd-tcp-cong.c
     host/descriptor/shd-tcp-cong-reno.c
-    host/descriptor/shd-tcp-aimd.c
-    host/descriptor/shd-tcp-congestion.c
-    host/descriptor/shd-tcp-cubic.c
-    host/descriptor/shd-tcp-reno.c
     host/descriptor/shd-timer.c
     host/descriptor/shd-transport.c
     host/descriptor/shd-udp.c

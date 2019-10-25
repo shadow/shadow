@@ -23,6 +23,11 @@ enum TCPProcessFlags {
     TCP_PF_RWND_UPDATED = 1 << 4,
 };
 
+typedef enum _TCPCongestionType TCPCongestionType;
+enum _TCPCongestionType {
+    TCP_CC_UNKNOWN, TCP_CC_AIMD, TCP_CC_RENO, TCP_CC_CUBIC,
+};
+
 TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize);
 gint tcp_getConnectError(TCP* tcp);
 void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo);
@@ -30,8 +35,6 @@ void tcp_enterServerMode(TCP* tcp, gint backlog);
 gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* acceptedHandle);
 
 struct TCPCong_ *tcp_cong(TCP *tcp);
-guint32 tcp_sendWindow(const TCP *tcp);
-void tcp_setSendWindow(TCP *tcp, guint32 value);
 
 void tcp_clearAllChildrenIfServer(TCP* tcp);
 
@@ -48,5 +51,7 @@ gboolean tcp_isListeningAllowed(TCP* tcp);
 gint tcp_shutdown(TCP* tcp, gint how);
 
 void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Packet* packet);
+
+TCPCongestionType tcpCongestion_getType(const gchar* type);
 
 #endif /* SHD_TCP_H_ */
