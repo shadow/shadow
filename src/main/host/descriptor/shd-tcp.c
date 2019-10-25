@@ -299,8 +299,15 @@ static void _tcpserver_free(TCPServer* server) {
     g_free(server);
 }
 
-struct TCPCong_ *tcp_get_cong(TCP *tcp) {
+struct TCPCong_ *tcp_cong(TCP *tcp) {
     return &tcp->cong;
+}
+
+guint32 tcp_sendWindow(const TCP *tcp) {
+  return tcp->send.window;
+}
+void tcp_setSendWindow(TCP *tcp, guint32 value) {
+  tcp->send.window = value;
 }
 
 void tcp_clearAllChildrenIfServer(TCP* tcp) {
@@ -2489,7 +2496,7 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
 
         case TCP_CC_RENO:
             tcp->congestion = (TCPCongestion*)reno_new(initial_window, tcpSSThresh);
-            tcp_cong_reno_init(&tcp->cong);
+            tcp_cong_reno_init(tcp);
             break;
 
         case TCP_CC_CUBIC:

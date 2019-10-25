@@ -29,7 +29,9 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo);
 void tcp_enterServerMode(TCP* tcp, gint backlog);
 gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* acceptedHandle);
 
-struct TCPCong_ *tcp_get_cong(TCP *tcp);
+struct TCPCong_ *tcp_cong(TCP *tcp);
+guint32 tcp_sendWindow(const TCP *tcp);
+void tcp_setSendWindow(TCP *tcp, guint32 value);
 
 void tcp_clearAllChildrenIfServer(TCP* tcp);
 

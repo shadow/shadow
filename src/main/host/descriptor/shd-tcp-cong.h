@@ -11,6 +11,7 @@ typedef guint (*TCPCongSSThresh)(TCP *tcp);
 
 typedef struct TCPCongHooks_ {
     TCPCongDuplicateAckEv tcp_cong_duplicate_ack_ev;
+    TCPCongTimeoutEv tcp_cong_timeout_ev;
     TCPCongSSThresh tcp_cong_ssthresh;
 } TCPCongHooks;
 
