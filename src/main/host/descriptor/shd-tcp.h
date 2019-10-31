@@ -13,14 +13,18 @@
 typedef struct _TCP TCP;
 struct TCPCong_;
 
+/* these were redefined in shd-tcp-retransmit-tally.h
+ * if they change here, they must also change there!! (-RSW)
+ */
 typedef enum TCPProcessFlags TCPProcessFlags;
 enum TCPProcessFlags {
     TCP_PF_NONE = 0,
     TCP_PF_PROCESSED = 1 << 0,
-    TCP_PF_DATA_ACKED = 1 << 1,
-    TCP_PF_DATA_SACKED = 1 << 2,
-    TCP_PF_DATA_LOST = 1 << 3,
-    TCP_PF_RWND_UPDATED = 1 << 4,
+    TCP_PF_DATA_RECEIVED = 1 << 1,
+    TCP_PF_DATA_ACKED = 1 << 2,
+    TCP_PF_DATA_SACKED = 1 << 3,
+    TCP_PF_DATA_LOST = 1 << 4,
+    TCP_PF_RWND_UPDATED = 1 << 5,
 };
 
 typedef enum _TCPCongestionType TCPCongestionType;

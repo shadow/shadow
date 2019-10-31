@@ -5,7 +5,6 @@
 #include <gmodule.h>
 #include <iostream>
 #include <string>
-
 #include <random>
 
 static bool still_sorted_(const Ranges &r) {
@@ -190,17 +189,17 @@ size_t retransmit_tally_size_bytes() {
    return sizeof(RetransmitTally);
 }
 
-enum TCPProcessFlags_ retransmit_tally_update(void *p, uint32_t last_ack, bool *is_dup)
+enum TCPProcessFlags_ retransmit_tally_update(void *p, uint32_t last_ack, bool is_possible_dup, bool *is_dup)
 {
    auto rt = cast_and_assert(p);
 
    int ret = TCP_PF_NONE_;
    *is_dup = false;
 
-   if (last_ack == rt->last_ack_) {
+   if (is_possible_dup && last_ack == rt->last_ack_) {
       ++rt->num_dupl_ack_;
       *is_dup = true;
-   } else {
+   } else if (last_ack > rt->last_ack_) { // new ack branch
       rt->last_ack_ = last_ack;
       rt->num_dupl_ack_ = 0;
       rt->tidy_ranges(&rt->marked_lost_);

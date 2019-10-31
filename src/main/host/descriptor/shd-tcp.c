@@ -233,6 +233,8 @@ static void _rswlog(const TCP *tcp, const char *format, ...) {
 #endif // RSWLOG
 }
 
+static void _tcp_flush(TCP* tcp);
+
 static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(tcp);
     MAGIC_ASSERT(parent);
@@ -806,6 +808,23 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
     return packet;
 }
 
+static void _tcp_sendControlPacket(TCP* tcp, enum ProtocolTCPFlags flags) {
+    MAGIC_ASSERT(tcp);
+
+    /* create the ack packet, without any payload data */
+    Packet* control = _tcp_createPacket(tcp, flags, NULL, 0);
+
+    /* make sure it gets sent before whatever else is in the queue */
+    packet_setPriority(control, 0.0);
+
+    /* push it in the buffer and to the socket */
+    _tcp_bufferPacketOut(tcp, control);
+    _tcp_flush(tcp);
+
+    /* the output buffer holds the packet ref now */
+    packet_unref(control);
+}
+
 static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
@@ -1014,8 +1033,6 @@ static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
     /* free the ref that we stole */
     packet_unref(packet);
 }
-
-static void _tcp_flush(TCP* tcp);
 
 static void _tcp_sendShutdownFin(TCP* tcp) {
     MAGIC_ASSERT(tcp);
@@ -1271,7 +1288,7 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
     _tcp_setRetransmitTimer(tcp, now);
 
     tcp->cong.hooks->tcp_cong_timeout_ev(tcp);
-    info("[CONG] timeout");
+    debug("[CONG] congestion timeout");
     _tcp_logCongestionInfo(tcp);
 
     retransmit_tally_clear_retransmitted(tcp->retransmit.tally);
@@ -1427,14 +1444,7 @@ gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t famil
     /* no error, so we need to do the connect */
 
     /* send 1st part of 3-way handshake, state->syn_sent */
-    Packet* packet = _tcp_createPacket(tcp, PTCP_SYN, NULL, 0);
-
-    /* dont have to worry about space since this has no payload */
-    _tcp_bufferPacketOut(tcp, packet);
-    _tcp_flush(tcp);
-
-    /* the output buffer holds the packet ref now */
-    packet_unref(packet);
+    _tcp_sendControlPacket(tcp, PTCP_SYN);
 
     debug("%s <-> %s: user initiated connection", tcp->super.boundString, tcp->super.peerString);
     _tcp_setState(tcp, TCPS_SYNSENT);
@@ -1609,6 +1619,7 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
             /* make sure its in order */
             _tcp_bufferPacketIn(tcp, packet);
             tcp->info.lastDataReceived = now;
+            flags |= TCP_PF_DATA_RECEIVED;
         } else {
             debug("no space for packet even though its in our window");
             packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
@@ -1618,7 +1629,7 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
     return flags;
 }
 
-TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *header, gint* nPacketsAcked) {
+TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *header) {
     MAGIC_ASSERT(tcp);
 
     TCPProcessFlags flags = TCP_PF_PROCESSED;
@@ -1639,22 +1650,24 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         flags |= TCP_PF_RWND_UPDATED;
     }
 
-    // TODO: This logic needs work.
-    if (packet_getPayloadLength(packet) == 0 || (isValidAck &&
-        (header->acknowledgment - (guint)tcp->send.unacked) > 0)) {
-        bool is_dup = false;
-        flags |= retransmit_tally_update(tcp->retransmit.tally,
-                                        (guint32)header->acknowledgment,
-                                        &is_dup);
+    /* if its an ACK with no payload and the window did not change, then
+     * its possible that this is a duplicate to indicate a loss event. */
+    bool is_possible_dup = ((packet_getPayloadLength(packet) == 0) &&
+            (header->window == (guint)prevWin));
+    bool is_dup = false;
 
-        if (is_dup) {
-          info("[CONG] duplicate ack");
-          _tcp_logCongestionInfo(tcp);
-          // tcp->cong.hooks->tcp_cong_duplicate_ack_ev(tcp);
-        }
+    flags |= retransmit_tally_update(tcp->retransmit.tally,
+                                    (guint32)header->acknowledgment,
+                                    is_possible_dup,
+                                    &is_dup);
+
+    if (is_dup) {
+      debug("[CONG-AVOID] duplicate ack");
+      _tcp_logCongestionInfo(tcp);
+      tcp->cong.hooks->tcp_cong_duplicate_ack_ev(tcp);
     }
 
-    *nPacketsAcked = 0;
+    gint nPacketsAcked = 0;
     if(isValidAck) {
         /* the packets just acked are 'released' from retransmit queue */
         _tcp_clearRetransmitRange(tcp, tcp->receive.lastAcknowledgment,
@@ -1666,13 +1679,13 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         tcp->receive.lastAcknowledgment = (guint32) header->acknowledgment;
 
         /* some data we sent got acknowledged */
-        *nPacketsAcked = header->acknowledgment - (guint)tcp->send.unacked;
+        nPacketsAcked = header->acknowledgment - (guint)tcp->send.unacked;
         tcp->send.unacked = (guint32)header->acknowledgment;
 
-        if(*nPacketsAcked > 0) {
+        if(nPacketsAcked > 0) {
             flags |= TCP_PF_DATA_ACKED;
 
-            tcp->cong.hooks->tcp_cong_new_ack_ev(tcp, *nPacketsAcked);
+            tcp->cong.hooks->tcp_cong_new_ack_ev(tcp, nPacketsAcked);
 
             /* increase send buffer size with autotuning */
             if(tcp->autotune.isEnabled && !tcp->autotune.userDisabledSend &&
@@ -1699,7 +1712,7 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
     if(tcp->retransmit.queueLength == 0) {
         /* all outstanding data has been acked */
         _tcp_stopRetransmitTimer(tcp);
-    } else if(*nPacketsAcked > 0) {
+    } else if(nPacketsAcked > 0) {
         /* new data has been acked */
         _tcp_setRetransmitTimer(tcp, now);
     }
@@ -1721,23 +1734,6 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
             "retrans=%"G_GSIZE_FORMAT" ploss=%f",
             tcp->cong.cwnd, tcp->cong.hooks->tcp_cong_ssthresh(tcp), tcp->timing.rttSmoothed,
             outSize, outLength, inSize, inLength, tcp->info.retransmitCount, ploss);
-}
-
-static void _tcp_sendControlPacket(TCP* tcp, enum ProtocolTCPFlags flags) {
-    MAGIC_ASSERT(tcp);
-
-    /* create the ack packet, without any payload data */
-    Packet* control = _tcp_createPacket(tcp, flags, NULL, 0);
-
-    /* make sure it gets sent before whatever else is in the queue */
-    packet_setPriority(control, 0.0);
-
-    /* push it in the buffer and to the socket */
-    _tcp_bufferPacketOut(tcp, control);
-    _tcp_flush(tcp);
-
-    /* the output buffer holds the packet ref now */
-    packet_unref(control);
 }
 
 static void _tcp_sendACKTaskCallback(TCP* tcp, gpointer userData) {
@@ -1972,15 +1968,13 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         return;
     }
 
-    gint nPacketsAcked = 0;
-
     /* if TCPE_RECEIVE_EOF, we are not supposed to receive any more */
     if(packetLength > 0 && !(tcp->error & TCPE_RECEIVE_EOF)) {
         flags |= _tcp_dataProcessing(tcp, packet, header);
     }
 
     if(header->flags & PTCP_ACK) {
-        flags |= _tcp_ackProcessing(tcp, packet, header, &nPacketsAcked);
+        flags |= _tcp_ackProcessing(tcp, packet, header);
     }
 
     /* if it is a spurious packet, drop it */
@@ -2017,21 +2011,20 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
       // TODO (rwails): Any special handling for dubious acks?
     }
 
+    gboolean outOfOrderData = FALSE;
 
-    /* now flush as many packets as we can to socket */
-    _tcp_flush(tcp);
-
-    /* send ack if they need updates but we didn't send any yet (selective acks) */
-    if((tcp->receive.next > tcp->send.lastAcknowledgment) ||
-        (tcp->receive.window != tcp->send.lastWindow) ||
-        (tcp->cong.hooks->tcp_cong_fast_recovery(tcp) && header->sequence > (guint)tcp->receive.next))
-    {
+    /* during fast recovery, out of order data results in a duplicate ack.
+     * this ack needs to get sent now. */
+    if (tcp->cong.hooks->tcp_cong_fast_recovery(tcp) &&
+            header->sequence > (guint)tcp->receive.next) {
+        responseFlags |= PTCP_ACK;
+        outOfOrderData = TRUE;
+    }
+    /* otherwise if they sent us new data, we need to ack that we received it.
+     * this ack can be delayed. */
+    else if(flags & TCP_PF_DATA_RECEIVED) {
         responseFlags |= PTCP_ACK;
     }
-
-    bool stale_packet = (packetLength > 0
-                         && header->sequence < tcp->receive.next);
-    if (stale_packet) { responseFlags |= PTCP_ACK; }
 
     /* send control packet if we have one */
     if(responseFlags != PTCP_NONE && !(tcp->error & TCPE_RECEIVE_EOF)) {
@@ -2041,7 +2034,10 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         debug("%s <-> %s: sending response control packet",
                 tcp->super.boundString, tcp->super.peerString);
 
-        if(responseFlags == PTCP_ACK) {
+        if(outOfOrderData || responseFlags != PTCP_ACK) {
+            /* just send the response now */
+            _tcp_sendControlPacket(tcp, responseFlags);
+        } else {
             if(tcp->send.delayedACKIsScheduled == FALSE) {
                 /* we need to send an ACK, lets schedule a task so we don't send an ACK
                  * for all packets that are received during this same simtime receiving round. */
@@ -2053,12 +2049,12 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 /* figure out what we should use as delay */
                 SimulationTime delay = 0;
                 /* "quick acknowledgments" happen at the beginning of a connection */
-                if(tcp->send.numQuickACKsSent < ((guint32)(tcp->receive.window / 2))) {
-                    /* we want the other side to get the ACKs ASAP so we don't throttle its sending rate */
-                    delay = SIMTIME_ONE_NANOSECOND;
+                if(tcp->send.numQuickACKsSent < 1000) {
+                    /* we want the other side to get the ACKs sooner so we don't throttle its sending rate */
+                    delay = CONFIG_TCP_DELACK_MIN*SIMTIME_ONE_MILLISECOND;
                     tcp->send.numQuickACKsSent++;
                 } else {
-                    delay = 5*SIMTIME_ONE_MILLISECOND;
+                    delay = CONFIG_TCP_DELACK_MAX*SIMTIME_ONE_MILLISECOND;
                 }
 
                 worker_scheduleTask(sendACKTask, delay);
@@ -2067,11 +2063,11 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 tcp->send.delayedACKIsScheduled = TRUE;
             }
             tcp->send.delayedACKCounter++;
-        } else {
-            /* just send the response now */
-            _tcp_sendControlPacket(tcp, responseFlags);
         }
     }
+
+    /* now flush as many packets as we can to socket */
+    _tcp_flush(tcp);
 
     /* clear it so we dont send outdated timestamp echos */
     tcp->receive.lastTimestamp = 0;
@@ -2163,12 +2159,7 @@ static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
             tcp->super.boundString, tcp->super.peerString, tcp->receive.window);
 
     // XXX we may be in trouble if this packet gets dropped
-    Packet* windowUpdate = _tcp_createPacket(tcp, PTCP_ACK, NULL, 0);
-    _tcp_bufferPacketOut(tcp, windowUpdate);
-    _tcp_flush(tcp);
-
-    /* the output buffer holds the packet ref now */
-    packet_unref(windowUpdate);
+    _tcp_sendControlPacket(tcp, PTCP_ACK);
 
     tcp->receive.windowUpdatePending = FALSE;
 }
