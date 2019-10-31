@@ -27,6 +27,7 @@ enum ProtocolTCPFlags {
     PTCP_ACK =  1 << 3,
     PTCP_SACK = 1 << 4,
     PTCP_FIN =  1 << 5,
+    PTCP_DUPACK =  1 << 6,
 };
 
 #endif /* SHD_PROTOCOL_H_ */

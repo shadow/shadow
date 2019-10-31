@@ -1288,7 +1288,7 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
     _tcp_setRetransmitTimer(tcp, now);
 
     tcp->cong.hooks->tcp_cong_timeout_ev(tcp);
-    debug("[CONG] congestion timeout");
+    debug("[CONG] a congestion timeout has occurred on %s", tcp->super.boundString);
     _tcp_logCongestionInfo(tcp);
 
     retransmit_tally_clear_retransmitted(tcp->retransmit.tally);
@@ -1650,16 +1650,12 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         flags |= TCP_PF_RWND_UPDATED;
     }
 
-    /* if its an ACK with no payload and the window did not change, then
-     * its possible that this is a duplicate to indicate a loss event. */
-    bool is_possible_dup = ((packet_getPayloadLength(packet) == 0) &&
-            (header->window == (guint)prevWin));
-    bool is_dup = false;
+    /* duplicate acks indicate out of order data on the other end of connection. */
+    bool is_dup = (header->flags & PTCP_DUPACK);
 
     flags |= retransmit_tally_update(tcp->retransmit.tally,
                                     (guint32)header->acknowledgment,
-                                    is_possible_dup,
-                                    &is_dup);
+                                    is_dup);
 
     if (is_dup) {
       debug("[CONG-AVOID] duplicate ack");
@@ -2011,14 +2007,11 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
       // TODO (rwails): Any special handling for dubious acks?
     }
 
-    gboolean outOfOrderData = FALSE;
-
     /* during fast recovery, out of order data results in a duplicate ack.
      * this ack needs to get sent now. */
-    if (tcp->cong.hooks->tcp_cong_fast_recovery(tcp) &&
-            header->sequence > (guint)tcp->receive.next) {
-        responseFlags |= PTCP_ACK;
-        outOfOrderData = TRUE;
+    if (header->sequence > (guint)tcp->receive.next &&
+            (header->sequence < (guint)(tcp->receive.next + tcp->receive.window))) {
+        responseFlags |= (PTCP_ACK|PTCP_DUPACK);
     }
     /* otherwise if they sent us new data, we need to ack that we received it.
      * this ack can be delayed. */
@@ -2034,7 +2027,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         debug("%s <-> %s: sending response control packet",
                 tcp->super.boundString, tcp->super.peerString);
 
-        if(outOfOrderData || responseFlags != PTCP_ACK) {
+        if(responseFlags != PTCP_ACK) { // includes DUPACKs
             /* just send the response now */
             _tcp_sendControlPacket(tcp, responseFlags);
         } else {
@@ -2051,10 +2044,10 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 /* "quick acknowledgments" happen at the beginning of a connection */
                 if(tcp->send.numQuickACKsSent < 1000) {
                     /* we want the other side to get the ACKs sooner so we don't throttle its sending rate */
-                    delay = CONFIG_TCP_DELACK_MIN*SIMTIME_ONE_MILLISECOND;
+                    delay = 1*SIMTIME_ONE_MILLISECOND;
                     tcp->send.numQuickACKsSent++;
                 } else {
-                    delay = CONFIG_TCP_DELACK_MAX*SIMTIME_ONE_MILLISECOND;
+                    delay = 5*SIMTIME_ONE_MILLISECOND;
                 }
 
                 worker_scheduleTask(sendACKTask, delay);
