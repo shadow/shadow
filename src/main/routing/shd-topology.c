@@ -1946,7 +1946,9 @@ static void _topology_logAllCachedPathsHelper1(gpointer srcIndexKey, GHashTable*
 
 static void _topology_logAllCachedPaths(Topology* top) {
     MAGIC_ASSERT(top);
-    g_hash_table_foreach(top->pathCache, (GHFunc)_topology_logAllCachedPathsHelper1, top);
+    if(top->pathCache) {
+        g_hash_table_foreach(top->pathCache, (GHFunc)_topology_logAllCachedPathsHelper1, top);
+    }
 }
 
 static Path* _topology_getPathEntry(Topology* top, Address* srcAddress, Address* dstAddress) {
