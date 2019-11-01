@@ -252,9 +252,9 @@ static void _networkinterface_capturePacket(NetworkInterface* interface, Packet*
     if(tcpHeader->flags & PTCP_FIN) pcapPacket->finFlag = TRUE;
 
     pcapPacket->seq = (guint32)tcpHeader->sequence;
-    pcapPacket->win = (guint32)tcpHeader->window;
+    pcapPacket->win = (guint16)tcpHeader->window;
     if(tcpHeader->flags & PTCP_ACK) {
-        pcapPacket->ack = (guint32)htonl(tcpHeader->acknowledgment);
+        pcapPacket->ack = (guint32)tcpHeader->acknowledgment;
     }
 
     pcapwriter_writePacket(interface->pcap, pcapPacket);

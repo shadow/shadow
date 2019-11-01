@@ -38,7 +38,7 @@ struct _PCapPacket {
     gboolean finFlag;
     guint32 seq;
     guint32 ack;
-    guint32 win;
+    guint16 win;
     guint headerSize;
     guint payloadLength;
     gpointer payload;
