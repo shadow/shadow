@@ -98,7 +98,7 @@ void pcapwriter_writePacket(PCapWriter* pcap, PCapPacket* packet) {
     /* write the TCP header */
     guint16 sourcePort = packet->srcPort;
     guint16 destinationPort = packet->dstPort;
-    guint32 sequence = packet->seq;
+    guint32 sequence = htonl(packet->seq);
     guint32 acknowledgement = 0;
     if(packet->ackFlag) {
         acknowledgement = htonl(packet->ack);
@@ -109,7 +109,7 @@ void pcapwriter_writePacket(PCapWriter* pcap, PCapPacket* packet) {
     if(packet->synFlag) tcpFlags |= 0x02;
     if(packet->ackFlag) tcpFlags |= 0x10;
     if(packet->finFlag) tcpFlags |= 0x01;
-    guint16 window = (guint16)packet->win;
+    guint16 window = htons(packet->win);
     guint16 tcpChecksum = 0x0000;
     guint8 options[14] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
