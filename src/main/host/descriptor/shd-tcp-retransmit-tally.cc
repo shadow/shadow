@@ -294,6 +294,7 @@ RetransmitTally &RetransmitTally::operator=(RetransmitTally &&rhs) {
    sacked_ = std::move(rhs.sacked_);
    retransmitted_ = std::move(rhs.retransmitted_);
    lost_ = std::move(rhs.lost_);
+   return *this;
 }
 
 void RetransmitTally::compute_lost() {
