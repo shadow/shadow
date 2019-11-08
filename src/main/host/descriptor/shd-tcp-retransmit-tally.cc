@@ -22,13 +22,13 @@ static bool still_sorted_(const Ranges &r) {
 }
 
 static RetransmitTally *cast_and_assert(void *p) {
-   auto *rt = reinterpret_cast<RetransmitTally *>(p);
+   auto *rt = static_cast<RetransmitTally *>(p);
    assert(rt->magic_num_ == RetransmitTally::kMagicNum);
    return rt;
 }
 
 static const RetransmitTally *cast_and_assert(const void *p) {
-   auto *rt = reinterpret_cast<const RetransmitTally *>(p);
+   auto *rt = static_cast<const RetransmitTally *>(p);
    assert(rt->magic_num_ == RetransmitTally::kMagicNum);
    return rt;
 }
@@ -167,14 +167,13 @@ static Ranges ranges_subtract(const Ranges &lhs, const Ranges &rhs) {
 
 extern "C" {
 
-void retransmit_tally_init(void *p) {
-   std::fill_n(reinterpret_cast<std::uint8_t *>(p), sizeof(RetransmitTally), 0);
-   auto *rt = reinterpret_cast<RetransmitTally *>(p);
-   *rt = RetransmitTally{};
+void retransmit_tally_init(void **p) {
+   *p = new RetransmitTally{};
 }
 
 void retransmit_tally_destroy(void *p) {
-   auto *rt [[ gnu::unused ]] = cast_and_assert(p);
+   auto *rt = cast_and_assert(p);
+   delete rt;
 }
 
 size_t retransmit_tally_size_bytes() {
