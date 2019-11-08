@@ -2252,7 +2252,6 @@ void tcp_free(TCP* tcp) {
     tcpCongestion_free(tcp->congestion);
 
     retransmit_tally_destroy(tcp->retransmit.tally);
-    free(tcp->retransmit.tally);
 
     MAGIC_CLEAR(tcp);
     g_free(tcp);
@@ -2417,9 +2416,7 @@ TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
     tcp->retransmit.queue =
             g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)packet_unref);
 
-    tcp->retransmit.tally = malloc(retransmit_tally_size_bytes());
-    assert(tcp->retransmit.tally != NULL);
-    retransmit_tally_init(tcp->retransmit.tally);
+    retransmit_tally_init(&tcp->retransmit.tally);
 
     tcp->retransmit.scheduledTimerExpirations =
             priorityqueue_new((GCompareDataFunc)utility_simulationTimeCompare, NULL, g_free);

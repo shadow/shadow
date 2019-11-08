@@ -27,7 +27,7 @@ enum TCPProcessFlags_ {
 extern "C" {
 #endif // __cplusplus
 
-void retransmit_tally_init(void *p);
+void retransmit_tally_init(void **p);
 void retransmit_tally_destroy(void *p);
 
 size_t retransmit_tally_size_bytes();
