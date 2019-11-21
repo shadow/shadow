@@ -54,3 +54,8 @@ PRELOADDEF(return, int, shadow_pipe2, (int a[2], int b), a, b);
 PRELOADDEF(return, int, shadow_push_eventlog, (const char *a), a);
 PRELOADDEF(return, int, shadow_usleep, (unsigned int a), a);
 PRELOADDEF(return, int, shadow_clock_gettime, (clockid_t a, struct timespec *b), a, b);
+
+// BLEEP OBJECT SHARE
+PRELOADDEF(return, void, shadow_global_gmutex_lock, (int lock_no), lock_no);
+PRELOADDEF(return, void, shadow_global_gmutex_unlock, (int lock_no), lock_no);
+PRELOADDEF(return, void*, shadow_lock_try_set_global_entry, (void* ptr, size_t sz), ptr, sz);

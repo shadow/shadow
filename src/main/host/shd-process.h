@@ -420,6 +420,11 @@ int process_emu_pselect(Process* proc, int nfds, fd_set *readfds, fd_set *writef
 int process_emu_poll(Process* proc, struct pollfd *pfd, nfds_t nfd, int timeout);
 int process_emu_ppoll(Process* proc, struct pollfd *fds, nfds_t nfds, const struct timespec *timeout_ts, const sigset_t *sigmask);
 
+// BLEEP OBJECT SHARE
+void process_emu_shadow_global_gmutex_lock(Process* proc, int lock_no);
+void process_emu_shadow_global_gmutex_unlock(Process* proc, int lock_no);
+void* process_emu_shadow_lock_try_set_global_entry(Process* proc, void* ptr, size_t sz);
+
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
   returntype process_emu_##functionname(Process* proc, ...);
 

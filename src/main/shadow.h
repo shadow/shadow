@@ -109,6 +109,8 @@ typedef struct _Process Process;
 #include "host/shd-network-interface.h"
 #include "host/shd-tracker.h"
 #include "host/shd-host.h"
+// BLEEP OBJECT SHARE
+#include "host/shd-bleep-object.h"
 
 #include "routing/shd-topology.h"
 

@@ -7507,6 +7507,26 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
+// BLEEP OBJECT SHARE
+void process_emu_shadow_global_gmutex_lock(Process* proc, int lock_no) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    shadow_global_gmutex_lock(lock_no);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return;
+}
+void process_emu_shadow_global_gmutex_unlock(Process* proc, int lock_no) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    shadow_global_gmutex_unlock(lock_no);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return;
+}
+void* process_emu_shadow_lock_try_set_global_entry(Process* proc, void* ptr, size_t sz) {
+    void* ret;
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    ret = shadow_lock_try_set_global_entry(ptr, sz);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
 
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
     returntype process_emu_##functionname(Process* proc, ...) { \

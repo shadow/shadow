@@ -423,6 +423,9 @@ gint master_run(Master* master) {
     message("log message buffering is enabled for efficiency");
     logger_setEnableBuffering(logger_getDefault(), TRUE);
 
+    // BLEEP OBJECT SHARE
+    init_global_locks();
+
     /* start running each slave */
     slave_run(master->slave);
 
