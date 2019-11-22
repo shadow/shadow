@@ -549,13 +549,23 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
             }
             break;
         }
-        case TCPS_LASTACK:
+        case TCPS_LASTACK: {
+            /* now as soon as I receive an acknowledgement of my FIN, I close */
+            break;
+        }
         case TCPS_TIMEWAIT: {
             /* schedule a close timer self-event to finish out the closing process */
             descriptor_ref(tcp);
             Task* closeTask = task_new((TaskCallbackFunc)_tcp_runCloseTimerExpiredTask,
                     tcp, NULL, descriptor_unref, NULL);
-            worker_scheduleTask(closeTask, CONFIG_TCPCLOSETIMER_DELAY);
+            SimulationTime delay = CONFIG_TCPCLOSETIMER_DELAY;
+
+            /* if a child of a server initiated the close, close more quickly */
+            if(tcp->child && tcp->child->parent) {
+                delay = SIMTIME_ONE_SECOND;
+            }
+
+            worker_scheduleTask(closeTask, delay);
             task_unref(closeTask);
             break;
         }
@@ -2335,48 +2345,57 @@ void tcp_close(TCP* tcp) {
     tcp->flags |= TCPF_LOCAL_CLOSED_WR;
     tcp->flags |= TCPF_LOCAL_CLOSED_RD;
 
+    /* the user closed the connection, so should never interact with the socket again */
+    descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
+
+    /* do we have to send a packet? */
     Packet* packet = NULL;
 
     switch (tcp->state) {
+        case TCPS_LISTEN:
+        case TCPS_SYNSENT: {
+            _tcp_setState(tcp, TCPS_CLOSED);
+            return;
+        }
+
+        case TCPS_SYNRECEIVED:
         case TCPS_ESTABLISHED: {
+            packet = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
             _tcp_setState(tcp, TCPS_FINWAIT1);
             break;
         }
 
         case TCPS_CLOSEWAIT: {
+            packet = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
             _tcp_setState(tcp, TCPS_LASTACK);
             break;
         }
 
-        case TCPS_SYNRECEIVED:
-        case TCPS_SYNSENT: {
-            packet = _tcp_createPacket(tcp, PTCP_RST, NULL, 0);
-            break;
+        case TCPS_FINWAIT1:
+        case TCPS_FINWAIT2:
+        case TCPS_CLOSING:
+        case TCPS_TIMEWAIT:
+        case TCPS_LASTACK: {
+            /* close was already called, do nothing */
+            return;
         }
 
         default: {
-            /* dont send a FIN
-             * but make sure we set state to closed so we unbind the socket */
+            /* if we didnt start connection yet, we still want to make sure
+             * we set the state to closed so we unbind the socket */
             _tcp_setState(tcp, TCPS_CLOSED);
             return;
         }
     }
 
-    /* send a RST to abandon the connection.
-     * WARN sending a RST here breaks several test cases, so I'm sticking with FIN. */
-    if(!packet) {
-        packet = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
+    if(packet) {
+        /* dont have to worry about space since this has no payload */
+        _tcp_bufferPacketOut(tcp, packet);
+        _tcp_flush(tcp);
+
+        /* the output buffer holds the packet ref now */
+        packet_unref(packet);
     }
-
-    /* dont have to worry about space since this has no payload */
-    _tcp_bufferPacketOut(tcp, packet);
-    _tcp_flush(tcp);
-
-    /* the output buffer holds the packet ref now */
-    packet_unref(packet);
-
-    /* the user closed the connection, so should never interact with the socket again */
-    descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
 }
 
 gint tcp_shutdown(TCP* tcp, gint how) {
