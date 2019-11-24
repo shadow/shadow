@@ -59,3 +59,4 @@ PRELOADDEF(return, int, shadow_clock_gettime, (clockid_t a, struct timespec *b),
 PRELOADDEF(return, void, shadow_global_gmutex_lock, (int lock_no), lock_no);
 PRELOADDEF(return, void, shadow_global_gmutex_unlock, (int lock_no), lock_no);
 PRELOADDEF(return, void*, shadow_lock_try_set_global_entry, (void* ptr, size_t sz), ptr, sz);
+PRELOADDEF(return, int, shadow_assign_virtual_id, (void));

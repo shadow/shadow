@@ -424,6 +424,7 @@ int process_emu_ppoll(Process* proc, struct pollfd *fds, nfds_t nfds, const stru
 void process_emu_shadow_global_gmutex_lock(Process* proc, int lock_no);
 void process_emu_shadow_global_gmutex_unlock(Process* proc, int lock_no);
 void* process_emu_shadow_lock_try_set_global_entry(Process* proc, void* ptr, size_t sz);
+int process_emu_shadow_assign_virtual_id(Process* proc);
 
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
   returntype process_emu_##functionname(Process* proc, ...);

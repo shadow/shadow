@@ -510,3 +510,12 @@ void* shadow_lock_try_set_global_entry(void* ptr, size_t sz) {
         return director.next.shadow_lock_try_set_global_entry(ptr, sz);
     }
 }
+int shadow_assign_virtual_id() {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_shadow_assign_virtual_id(proc);
+    } else {
+        ENSURE(shadow_assign_virtual_id);
+        return director.next.shadow_assign_virtual_id();
+    }
+}
