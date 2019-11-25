@@ -92,6 +92,7 @@ set(shadow_srcs
     host/shd-network-interface.c
     host/shd-packet.c
     host/shd-tracker.c
+    host/shd-bleep-object.c
 
     routing/shd-address.c
     routing/shd-dns.c
