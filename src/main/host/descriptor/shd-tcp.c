@@ -2029,8 +2029,10 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         responseFlags |= PTCP_ACK;
     }
 
-    /* send control packet if we have one */
-    if(responseFlags != PTCP_NONE && !(tcp->error & TCPE_RECEIVE_EOF)) {
+    /* send control packet if we have one. we always need to send any packet with a FIN set
+     * to ensure the connection close sequence completes on both sides. */
+    if(responseFlags != PTCP_NONE &&
+            (!(tcp->error & TCPE_RECEIVE_EOF) || (responseFlags & PTCP_FIN))) {
         _rswlog(tcp, "Sending control packet on %d\n",
                 header->sequence);
 
@@ -2348,9 +2350,6 @@ void tcp_close(TCP* tcp) {
     /* the user closed the connection, so should never interact with the socket again */
     descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
 
-    /* do we have to send a packet? */
-    Packet* packet = NULL;
-
     switch (tcp->state) {
         case TCPS_LISTEN:
         case TCPS_SYNSENT: {
@@ -2359,15 +2358,14 @@ void tcp_close(TCP* tcp) {
         }
 
         case TCPS_SYNRECEIVED:
-        case TCPS_ESTABLISHED: {
-            packet = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
-            _tcp_setState(tcp, TCPS_FINWAIT1);
-            break;
-        }
-
+        case TCPS_ESTABLISHED:
         case TCPS_CLOSEWAIT: {
-            packet = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
-            _tcp_setState(tcp, TCPS_LASTACK);
+            if(tcp_getOutputBufferLength(tcp) == 0) {
+                _tcp_sendShutdownFin(tcp);
+            } else {
+                /* we still have data. send that first, and then finish with fin */
+                tcp->flags |= TCPF_SHOULD_SEND_WR_FIN;
+            }
             break;
         }
 
@@ -2386,15 +2384,6 @@ void tcp_close(TCP* tcp) {
             _tcp_setState(tcp, TCPS_CLOSED);
             return;
         }
-    }
-
-    if(packet) {
-        /* dont have to worry about space since this has no payload */
-        _tcp_bufferPacketOut(tcp, packet);
-        _tcp_flush(tcp);
-
-        /* the output buffer holds the packet ref now */
-        packet_unref(packet);
     }
 }
 
