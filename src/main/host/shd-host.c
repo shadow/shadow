@@ -989,7 +989,14 @@ static gboolean _host_isInterfaceAvailable(Host* host, ProtocolType type,
 
 static in_port_t _host_getRandomPort(Host* host) {
     gdouble randomFraction = random_nextDouble(host->random);
-    in_port_t randomHostPort = (in_port_t) (randomFraction * (UINT16_MAX - MIN_RANDOM_PORT)) + MIN_RANDOM_PORT;
+    gdouble numPotentialPorts = (gdouble)(UINT16_MAX - MIN_RANDOM_PORT);
+
+    gdouble randomPick = round(randomFraction * numPotentialPorts);
+    in_port_t randomHostPort = (in_port_t) randomPick;
+
+    /* make sure we don't assign any low privileged ports */
+    randomHostPort += (in_port_t)MIN_RANDOM_PORT;
+
     utility_assert(randomHostPort >= MIN_RANDOM_PORT);
     return htons(randomHostPort);
 }
@@ -1002,9 +1009,6 @@ static in_port_t _host_getRandomFreePort(Host* host, ProtocolType type,
      * we have two modes here: first we just try grabbing a random port until we
      * get a free one. if we cannot find one fast enough, then as a fallback we
      * do an inefficient linear search that is guaranteed to succeed or fail. */
-
-    /* we will try to get a port */
-    in_port_t randomNetworkPort = 0;
 
     /* if choosing randomly doesn't succeed within 10 tries, then we have already
      * allocated a lot of ports (>90% on average). then we fall back to linear search. */
