@@ -171,6 +171,7 @@ struct _TCP {
     /* tcp autotuning for the send and recv buffers */
     struct {
         gboolean isEnabled;
+        gboolean didInitializeBufferSizes;
         gboolean userDisabledSend;
         gboolean userDisabledReceive;
         gsize bytesCopied;
@@ -382,7 +383,41 @@ static guint _tcp_calculateRTT(TCP* tcp) {
     return rtt;
 }
 
-static void _tcp_setBufferSizes(TCP* tcp) {
+static gsize _tcp_computeRTTMEM(TCP* tcp, gboolean isRMEM) {
+    Host* host = worker_getActiveHost();
+    Address* address = host_getDefaultAddress(host);
+    in_addr_t ip = (in_addr_t)address_toNetworkIP(address);
+
+    NetworkInterface* interface = host_lookupInterface(host, ip);
+    g_assert(interface);
+
+    gsize bw_KiBps = 0;
+    if(isRMEM) {
+        bw_KiBps = (gsize)networkinterface_getSpeedDownKiBps(interface);
+    } else {
+        bw_KiBps = (gsize)networkinterface_getSpeedUpKiBps(interface);
+    }
+
+    gsize bw_Bps = bw_KiBps * 1024;
+    gdouble rttSeconds = ((gdouble)tcp->timing.rttSmoothed) / ((gdouble)1000);
+
+    gsize mem = (gsize)(bw_Bps * rttSeconds);
+    return mem;
+}
+
+static gsize _tcp_computeMaxRMEM(TCP* tcp) {
+    gsize mem = _tcp_computeRTTMEM(tcp, TRUE);
+    mem = CLAMP(mem, CONFIG_TCP_RMEM_MAX, CONFIG_TCP_RMEM_MAX*10);
+    return mem;
+}
+
+static gsize _tcp_computeMaxWMEM(TCP* tcp) {
+    gsize mem = _tcp_computeRTTMEM(tcp, FALSE);
+    mem = CLAMP(mem, CONFIG_TCP_WMEM_MAX, CONFIG_TCP_WMEM_MAX*10);
+    return mem;
+}
+
+static void _tcp_tuneInitialBufferSizes(TCP* tcp) {
     MAGIC_ASSERT(tcp);
 
     if(!CONFIG_TCPAUTOTUNE) {
@@ -395,6 +430,7 @@ static void _tcp_setBufferSizes(TCP* tcp) {
      * is meant to tune it to an optimal rate. here, we approximate that
      * by getting the true latencies instead of detecting them.
      */
+    tcp->autotune.didInitializeBufferSizes = TRUE;
 
     in_addr_t sourceIP = tcp_getIP(tcp);
     in_addr_t destinationIP = tcp_getPeerIP(tcp);
@@ -412,12 +448,18 @@ static void _tcp_setBufferSizes(TCP* tcp) {
         /* 16 MiB as max */
         gsize inSize = socket_getInputBufferSize(&(tcp->super));
         gsize outSize = socket_getOutputBufferSize(&(tcp->super));
-        utility_assert(16777216 > inSize);
-        utility_assert(16777216 > outSize);
-        socket_setInputBufferSize(&(tcp->super), (gsize) 16777216);
-        socket_setOutputBufferSize(&(tcp->super), (gsize) 16777216);
-        tcp->info.rtt = G_MAXUINT32;
-        debug("set loopback buffer sizes to 16777216");
+
+        /* localhost always gets adjusted unless user explicitly set a set */
+        if(!tcp->autotune.userDisabledReceive) {
+            socket_setInputBufferSize(&(tcp->super), (gsize) CONFIG_TCP_RMEM_MAX);
+            debug("set loopback receive buffer size to %"G_GSIZE_FORMAT, (gsize)CONFIG_TCP_RMEM_MAX);
+        }
+        if(!tcp->autotune.userDisabledSend) {
+            socket_setOutputBufferSize(&(tcp->super), (gsize) CONFIG_TCP_WMEM_MAX);
+            debug("set loopback send buffer size to %"G_GSIZE_FORMAT, (gsize)CONFIG_TCP_WMEM_MAX);
+        }
+
+        tcp->info.rtt = G_MAXUINT32; // not sure why this is here
         return;
     }
 
@@ -451,12 +493,8 @@ static void _tcp_setBufferSizes(TCP* tcp) {
     guint64 receivebuf_size = (guint64) ((rtt_milliseconds * receive_bottleneck_bw * 1024.0f * 1.25f) / 1000.0f);
 
     /* keep minimum buffer size bounds */
-    if(sendbuf_size < CONFIG_SEND_BUFFER_MIN_SIZE) {
-        sendbuf_size = CONFIG_SEND_BUFFER_MIN_SIZE;
-    }
-    if(receivebuf_size < CONFIG_RECV_BUFFER_MIN_SIZE) {
-        receivebuf_size = CONFIG_RECV_BUFFER_MIN_SIZE;
-    }
+    sendbuf_size = CLAMP(sendbuf_size, CONFIG_SEND_BUFFER_MIN_SIZE, CONFIG_TCP_WMEM_MAX);
+    receivebuf_size = CLAMP(receivebuf_size, CONFIG_RECV_BUFFER_MIN_SIZE, CONFIG_TCP_RMEM_MAX);
 
     /* make sure the user hasnt already written to the buffer, because if we
      * shrink it, our buffer math would overflow the size variable
@@ -477,140 +515,6 @@ static void _tcp_setBufferSizes(TCP* tcp) {
 
     info("set network buffer sizes: send %"G_GSIZE_FORMAT" receive %"G_GSIZE_FORMAT,
             socket_getOutputBufferSize(&(tcp->super)), socket_getInputBufferSize(&(tcp->super)));
-}
-
-// XXX declaration
-static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData);
-static void _tcp_clearRetransmit(TCP* tcp, guint sequence);
-
-static void _tcp_setState(TCP* tcp, enum TCPState state) {
-    MAGIC_ASSERT(tcp);
-
-    tcp->stateLast = tcp->state;
-    tcp->state = state;
-
-    debug("%s <-> %s: moved from TCP state '%s' to '%s'", tcp->super.boundString, tcp->super.peerString,
-            tcp_stateToAscii(tcp->stateLast), tcp_stateToAscii(tcp->state));
-
-    /* some state transitions require us to update the descriptor status */
-    switch (state) {
-        case TCPS_LISTEN: {
-            descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, TRUE);
-            break;
-        }
-        case TCPS_SYNSENT: {
-            break;
-        }
-        case TCPS_SYNRECEIVED: {
-            break;
-        }
-        case TCPS_ESTABLISHED: {
-            tcp->flags |= TCPF_WAS_ESTABLISHED;
-            if(tcp->state != tcp->stateLast && !tcp->autotune.isEnabled) {
-                _tcp_setBufferSizes(tcp);
-            }
-            descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE|DS_WRITABLE, TRUE);
-            break;
-        }
-        case TCPS_CLOSING: {
-            break;
-        }
-        case TCPS_CLOSEWAIT: {
-            break;
-        }
-        case TCPS_CLOSED: {
-            _tcp_clearRetransmit(tcp, (guint)-1);
-
-            /* user can no longer use socket */
-            descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
-
-            /*
-             * servers have to wait for all children to close.
-             * children need to notify their parents when closing.
-             */
-            if(!tcp->server || g_hash_table_size(tcp->server->children) <= 0) {
-                if(tcp->child && tcp->child->parent) {
-                    TCP* parent = tcp->child->parent;
-                    utility_assert(parent->server);
-
-                    /* tell my server to stop accepting packets for me
-                     * this will destroy the child and NULL out tcp->child */
-                    g_hash_table_remove(parent->server->children, &(tcp->child->key));
-
-                    /* if i was the server's last child and its waiting to close, close it */
-                    if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
-                        /* this will unbind from the network interface and free socket */
-                        host_closeDescriptor(worker_getActiveHost(), parent->super.super.super.handle);
-                    }
-                }
-
-                /* this will unbind from the network interface and free socket */
-                host_closeDescriptor(worker_getActiveHost(), tcp->super.super.super.handle);
-            }
-            break;
-        }
-        case TCPS_LASTACK: {
-            /* now as soon as I receive an acknowledgement of my FIN, I close */
-            break;
-        }
-        case TCPS_TIMEWAIT: {
-            /* schedule a close timer self-event to finish out the closing process */
-            descriptor_ref(tcp);
-            Task* closeTask = task_new((TaskCallbackFunc)_tcp_runCloseTimerExpiredTask,
-                    tcp, NULL, descriptor_unref, NULL);
-            SimulationTime delay = CONFIG_TCPCLOSETIMER_DELAY;
-
-            /* if a child of a server initiated the close, close more quickly */
-            if(tcp->child && tcp->child->parent) {
-                delay = SIMTIME_ONE_SECOND;
-            }
-
-            worker_scheduleTask(closeTask, delay);
-            task_unref(closeTask);
-            break;
-        }
-        default:
-            break;
-    }
-}
-
-static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData) {
-    MAGIC_ASSERT(tcp);
-    _tcp_setState(tcp, TCPS_CLOSED);
-}
-
-static gsize _tcp_computeRTTMEM(TCP* tcp, gboolean isRMEM) {
-    Host* host = worker_getActiveHost();
-    Address* address = host_getDefaultAddress(host);
-    in_addr_t ip = (in_addr_t)address_toNetworkIP(address);
-
-    NetworkInterface* interface = host_lookupInterface(host, ip);
-    g_assert(interface);
-
-    gsize bw_KiBps = 0;
-    if(isRMEM) {
-        bw_KiBps = (gsize)networkinterface_getSpeedDownKiBps(interface);
-    } else {
-        bw_KiBps = (gsize)networkinterface_getSpeedUpKiBps(interface);
-    }
-
-    gsize bw_Bps = bw_KiBps * 1024;
-    gdouble rttSeconds = ((gdouble)tcp->timing.rttSmoothed) / ((gdouble)1000);
-
-    gsize mem = (gsize)(bw_Bps * rttSeconds);
-    return mem;
-}
-
-static gsize _tcp_computeMaxRMEM(TCP* tcp) {
-    gsize mem = _tcp_computeRTTMEM(tcp, TRUE);
-    mem = CLAMP(mem, CONFIG_TCP_RMEM_MAX, CONFIG_TCP_RMEM_MAX*10);
-    return mem;
-}
-
-static gsize _tcp_computeMaxWMEM(TCP* tcp) {
-    gsize mem = _tcp_computeRTTMEM(tcp, FALSE);
-    mem = CLAMP(mem, CONFIG_TCP_WMEM_MAX, CONFIG_TCP_WMEM_MAX*10);
-    return mem;
 }
 
 static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
@@ -679,6 +583,103 @@ void tcp_disableSendBufferAutotuning(TCP* tcp) {
 void tcp_disableReceiveBufferAutotuning(TCP* tcp) {
     MAGIC_ASSERT(tcp);
     tcp->autotune.userDisabledReceive = TRUE;
+}
+
+// XXX declaration
+static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData);
+static void _tcp_clearRetransmit(TCP* tcp, guint sequence);
+
+static void _tcp_setState(TCP* tcp, enum TCPState state) {
+    MAGIC_ASSERT(tcp);
+
+    tcp->stateLast = tcp->state;
+    tcp->state = state;
+
+    debug("%s <-> %s: moved from TCP state '%s' to '%s'", tcp->super.boundString, tcp->super.peerString,
+            tcp_stateToAscii(tcp->stateLast), tcp_stateToAscii(tcp->state));
+
+    /* some state transitions require us to update the descriptor status */
+    switch (state) {
+        case TCPS_LISTEN: {
+            descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, TRUE);
+            break;
+        }
+        case TCPS_SYNSENT: {
+            break;
+        }
+        case TCPS_SYNRECEIVED: {
+            break;
+        }
+        case TCPS_ESTABLISHED: {
+            tcp->flags |= TCPF_WAS_ESTABLISHED;
+            descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE|DS_WRITABLE, TRUE);
+            break;
+        }
+        case TCPS_CLOSING: {
+            break;
+        }
+        case TCPS_CLOSEWAIT: {
+            break;
+        }
+        case TCPS_CLOSED: {
+            _tcp_clearRetransmit(tcp, (guint)-1);
+
+            /* user can no longer use socket */
+            descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
+
+            /*
+             * servers have to wait for all children to close.
+             * children need to notify their parents when closing.
+             */
+            if(!tcp->server || g_hash_table_size(tcp->server->children) <= 0) {
+                if(tcp->child && tcp->child->parent) {
+                    TCP* parent = tcp->child->parent;
+                    utility_assert(parent->server);
+
+                    /* tell my server to stop accepting packets for me
+                     * this will destroy the child and NULL out tcp->child */
+                    g_hash_table_remove(parent->server->children, &(tcp->child->key));
+
+                    /* if i was the server's last child and its waiting to close, close it */
+                    if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
+                        /* this will unbind from the network interface and free socket */
+                        host_closeDescriptor(worker_getActiveHost(), parent->super.super.super.handle);
+                    }
+                }
+
+                /* this will unbind from the network interface and free socket */
+                host_closeDescriptor(worker_getActiveHost(), tcp->super.super.super.handle);
+            }
+            break;
+        }
+        case TCPS_LASTACK: {
+            /* now as soon as I receive an acknowledgement of my FIN, I close */
+            break;
+        }
+        case TCPS_TIMEWAIT: {
+            /* schedule a close timer self-event to finish out the closing process */
+            descriptor_ref(tcp);
+            Task* closeTask = task_new((TaskCallbackFunc)_tcp_runCloseTimerExpiredTask,
+                    tcp, NULL, descriptor_unref, NULL);
+            SimulationTime delay = CONFIG_TCPCLOSETIMER_DELAY;
+
+            /* if a child of a server initiated the close, close more quickly */
+            if(tcp->child && tcp->child->parent) {
+                delay = SIMTIME_ONE_SECOND;
+            }
+
+            worker_scheduleTask(closeTask, delay);
+            task_unref(closeTask);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData) {
+    MAGIC_ASSERT(tcp);
+    _tcp_setState(tcp, TCPS_CLOSED);
 }
 
 /* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
@@ -987,6 +988,10 @@ static void _tcp_updateRTTEstimate(TCP* tcp, SimulationTime timestamp) {
         /* first RTT measurement */
         tcp->timing.rttSmoothed = rtt;
         tcp->timing.rttVariance = rtt / 2;
+
+        if(tcp->autotune.isEnabled && !tcp->autotune.didInitializeBufferSizes) {
+            _tcp_tuneInitialBufferSizes(tcp);
+        }
     } else {
         /* RTTVAR = (1 - beta) * RTTVAR + beta * |SRTT - R|   (beta = 1/4) */
         tcp->timing.rttVariance = (3 * tcp->timing.rttVariance / 4) +
