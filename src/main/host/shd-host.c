@@ -324,6 +324,16 @@ void host_boot(Host* host) {
     /* must be done after the default IP exists so tracker_heartbeat works */
     host->tracker = tracker_new(host->params.heartbeatInterval, host->params.heartbeatLogLevel, host->params.heartbeatLogInfo);
 
+    /* start refilling the token buckets for all interfaces */
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, host->interfaces);
+
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        NetworkInterface* interface = value;
+        networkinterface_startRefillingTokenBuckets(interface);
+    }
+
     /* scheduling the starting and stopping of our virtual processes */
     g_queue_foreach(host->processes, (GFunc)process_schedule, NULL);
 }

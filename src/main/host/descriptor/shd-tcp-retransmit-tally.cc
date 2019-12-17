@@ -189,7 +189,7 @@ size_t retransmit_tally_size_bytes() {
    return sizeof(RetransmitTally);
 }
 
-enum TCPProcessFlags_ retransmit_tally_update(void *p, uint32_t last_ack, bool is_dup)
+enum TCPProcessFlags_ retransmit_tally_update(void *p, uint32_t last_ack, uint32_t max_ack, bool is_dup)
 {
    auto rt = cast_and_assert(p);
 
@@ -209,7 +209,8 @@ enum TCPProcessFlags_ retransmit_tally_update(void *p, uint32_t last_ack, bool i
        && !ranges_contains(rt->retransmitted_, rt->last_ack_)) {
       // std::cerr << "3 dupl acks!" << std::endl;
       // std::cerr << last_ack << std::endl;
-      ranges_insert(&rt->marked_lost_, {rt->last_ack_, rt->last_ack_ + 1});
+      uint32_t right_edge_exclusive = MAX(max_ack, rt->last_ack_ + 1);
+      ranges_insert(&rt->marked_lost_, {rt->last_ack_, right_edge_exclusive});
       rt->compute_lost();
       if (rt->lost_.size() > 0) { ret |= TCP_PF_DATA_LOST_; }
    }

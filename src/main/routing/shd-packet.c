@@ -489,7 +489,6 @@ static const gchar* _packet_deliveryStatusToAscii(PacketDeliveryStatusFlags stat
         case PDS_SND_INTERFACE_SENT: return "SND_INTERFACE_SENT";
         case PDS_INET_SENT: return "INET_SENT";
         case PDS_INET_DROPPED: return "INET_DROPPED";
-        case PDS_RCV_INTERFACE_BUFFERED: return "RCV_INTERFACE_BUFFERED";
         case PDS_RCV_INTERFACE_RECEIVED: return "RCV_INTERFACE_RECEIVED";
         case PDS_RCV_INTERFACE_DROPPED: return "RCV_INTERFACE_DROPPED";
         case PDS_RCV_SOCKET_PROCESSED: return "RCV_SOCKET_PROCESSED";
@@ -587,6 +586,9 @@ gchar* packet_toString(Packet* packet) {
                 }
                 if(header->flags & PTCP_ACK) {
                     g_string_append_printf(packetString, "ACK");
+                }
+                if(header->flags & PTCP_DUPACK) {
+                    g_string_append_printf(packetString, "DUPACK");
                 }
             }
 
