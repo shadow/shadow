@@ -699,7 +699,7 @@ gsize tcp_getInputBufferLength(TCP* tcp) {
 static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
     MAGIC_ASSERT(tcp);
     /* account for throttled and retransmission buffer */
-    gssize s = (gssize)(socket_getOutputBufferSpace(&(tcp->super)) - tcp->throttledOutputLength - tcp->retransmit.queueLength);
+    gssize s = (gssize)(socket_getOutputBufferSpace(&(tcp->super)) - tcp_getOutputBufferLength(tcp));
     gsize space = (gsize) MAX(0, s);
     return space;
 }
@@ -1303,7 +1303,7 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
     _tcp_setRetransmitTimer(tcp, now);
 
     tcp->cong.hooks->tcp_cong_timeout_ev(tcp);
-    debug("[CONG] a congestion timeout has occurred on %s", tcp->super.boundString);
+    info("[CONG] a congestion timeout has occurred on %s", tcp->super.boundString);
     _tcp_logCongestionInfo(tcp);
 
     retransmit_tally_clear_retransmitted(tcp->retransmit.tally);
@@ -1670,10 +1670,10 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
 
     flags |= retransmit_tally_update(tcp->retransmit.tally,
                                     (guint32)header->acknowledgment,
-                                    is_dup);
+                                    tcp->send.next, is_dup);
 
     if (is_dup) {
-      debug("[CONG-AVOID] duplicate ack");
+      info("[CONG-AVOID] duplicate ack");
       _tcp_logCongestionInfo(tcp);
       tcp->cong.hooks->tcp_cong_duplicate_ack_ev(tcp);
     }
@@ -1696,6 +1696,7 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         if(nPacketsAcked > 0) {
             flags |= TCP_PF_DATA_ACKED;
 
+            info("[CONG] %i packets were acked", nPacketsAcked);
             tcp->cong.hooks->tcp_cong_new_ack_ev(tcp, nPacketsAcked);
 
             /* increase send buffer size with autotuning */
@@ -1742,9 +1743,10 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
 
     info("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
             "sndbufsize=%"G_GSIZE_FORMAT" sndbuflen=%"G_GSIZE_FORMAT" rcvbufsize=%"G_GSIZE_FORMAT" rcbuflen=%"G_GSIZE_FORMAT" "
-            "retrans=%"G_GSIZE_FORMAT" ploss=%f",
+            "retrans=%"G_GSIZE_FORMAT" ploss=%f fd=%i",
             tcp->cong.cwnd, tcp->cong.hooks->tcp_cong_ssthresh(tcp), tcp->timing.rttSmoothed,
-            outSize, outLength, inSize, inLength, tcp->info.retransmitCount, ploss);
+            outSize, outLength, inSize, inLength, tcp->info.retransmitCount, ploss,
+            tcp->super.super.super.handle);
 }
 
 static void _tcp_sendACKTaskCallback(TCP* tcp, gpointer userData) {
@@ -1769,8 +1771,6 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     /* now we have the true TCP for the packet */
     MAGIC_ASSERT(tcp);
     PacketTCPHeader* header = packet_getTCPHeader(packet);
-
-    _rswlog(tcp, "processPacket called on %d\n", header->sequence);
 
     /* if packet is reset, don't process */
     if(header->flags & PTCP_RST) {
