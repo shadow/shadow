@@ -147,9 +147,9 @@ endif(SHADOW_EXPORT STREQUAL ON)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_BINARY_DIR}/src/shd-config.h)
 install(FILES ${CMAKE_BINARY_DIR}/src/shd-config.h DESTINATION include/)
 
-if(POLICY  CMP0026)
-    cmake_policy(SET  CMP0026  OLD)
-endif()
+#if(POLICY  CMP0026)
+#    cmake_policy(SET  CMP0026  OLD)
+#endif()
 
 if(SHADOW_TEST STREQUAL ON)
     ## http://www.cmake.org/Wiki/CMake_Testing_With_CTest

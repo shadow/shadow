@@ -4,12 +4,6 @@
 
 include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
 
-## make sure rpth.h is in the link path
-link_directories(${CMAKE_BINARY_DIR}/src/external/rpth/.libs)
-
-## make sure vdl.h is in the link path
-link_directories(${CMAKE_BINARY_DIR}/src/external/elf-loader)
-
 ## compile defs and flags
 #add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOURCE
 ## set the igraph version guesses
@@ -66,6 +60,8 @@ set(shadow_srcs
     host/descriptor/udp.c
     host/process.c
     host/cpu.c
+    host/shd-syscall-handler.c
+    host/shd-thread-controller.c
     host/host.c
     host/network_interface.c
     host/tracker.c
@@ -101,17 +97,16 @@ install(TARGETS shadow-remora DESTINATION lib)
 
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
-add_dependencies(shadow elf-loader rpth)
-## 'shadow-interpose-helper' and 'vdl' are cmake targets, the rest are external libs for which '-l' is needed
-target_link_libraries(shadow shadow-interpose-helper vdl -lrpth
+add_dependencies(shadow shadow-remora)
+target_link_libraries(shadow
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
    ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} shadow-remora logger)
 install(TARGETS shadow DESTINATION bin)
 
 
-## shadow needs to find libshadow-interpose and custom libs after install
+## shadow needs to find libs after install
 set_target_properties(shadow PROPERTIES
     INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib
     INSTALL_RPATH_USE_LINK_PATH TRUE
-    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib,-dynamic-linker=${CMAKE_INSTALL_PREFIX}/lib/ldso -z lazy"
+    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib"
 )

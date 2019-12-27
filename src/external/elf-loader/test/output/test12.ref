@@ -1,6 +1,0 @@
-libtest12 constructor
-dlopen failed
-dlopen failed: Unable to load "./libl.so": Could not find ./libl.so
-error cleared
-main error: "Unable to load "./libj.so": Could not find libl.so"
-libtest12 destructor

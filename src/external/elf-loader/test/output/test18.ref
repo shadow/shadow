@@ -1,7 +1,0 @@
-libtest18 constructor
-loaded libp.so twice
-got lmid1
-got lmid2
-yes, contexts are different !
-both libraries have separate symbols and global variables
-libtest18 destructor

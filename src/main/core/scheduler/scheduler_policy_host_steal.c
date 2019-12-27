@@ -190,7 +190,7 @@ static void _schedulerpolicyhoststeal_migrateHost(SchedulerPolicy* policy, Host*
          */
         utility_assert(tdata->runningHost != tdataNew->runningHost);
         /* migrate the TLS of all objects associated with this host */
-        host_migrate(host, &oldThread, &newThread);
+//        host_migrate(host, &oldThread, &newThread);
     }
     _schedulerpolicyhoststeal_addHost(policy, host, newThread);
 }

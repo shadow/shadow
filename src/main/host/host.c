@@ -63,6 +63,9 @@ struct _Host {
     /* the virtual processes this host is running */
     GQueue* processes;
 
+    /* a handler for system calls made by plugins */
+    SystemCallHandler* sys;
+
     /* a statistics tracker for in/out bytes, CPU, memory, etc. */
     Tracker* tracker;
 
@@ -164,6 +167,9 @@ Host* host_new(HostParameters* params) {
 void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, const gchar* hostRootPath) {
     MAGIC_ASSERT(host);
 
+    /* the virtual process system call handler */
+    host->sys = syscallhandler_new(host);
+
     /* get unique virtual address identifiers for each network interface */
     Address* loopbackAddress = dns_register(dns, host->params.id, host->params.hostname, "127.0.0.1");
     Address* ethernetAddress = dns_register(dns, host->params.id, host->params.hostname, host->params.ipHint);
@@ -239,6 +245,11 @@ void host_shutdown(Host* host) {
 
     if(host->processes) {
         g_queue_free(host->processes);
+    }
+
+    if(host->sys) {
+        syscallhandler_unref(host->sys);
+        host->sys = NULL;
     }
 
     if(host->defaultAddress) {
@@ -411,7 +422,8 @@ void host_addApplication(Host* host, SimulationTime startTime, SimulationTime st
         const gchar* preloadName, const gchar* preloadPath, gchar* arguments) {
     MAGIC_ASSERT(host);
     guint processID = host_getNewProcessID(host);
-    Process* proc = process_new(host, processID, startTime, stopTime, pluginName, pluginPath, pluginSymbol, preloadName, preloadPath, arguments);
+    Process* proc = process_new(host->sys, processID, startTime, stopTime, host_getName(host),
+            pluginName, pluginPath, pluginSymbol, preloadName, preloadPath, arguments);
     g_queue_push_tail(host->processes, proc);
 }
 
@@ -1670,15 +1682,4 @@ gdouble host_getNextPacketPriority(Host* host) {
 const gchar* host_getDataPath(Host* host) {
     MAGIC_ASSERT(host);
     return host->dataDirPath;
-}
-
-void host_migrate(Host* host, pthread_t *from, pthread_t *to) {
-    MAGIC_ASSERT(host);
-    if(*from == *to) {
-        return;
-    }
-    struct ProcessMigrateArgs ts;
-    ts.t1 = from;
-    ts.t2 = to;
-    g_queue_foreach(host->processes, (GFunc)process_migrate, &ts);
 }

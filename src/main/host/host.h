@@ -133,6 +133,4 @@ LogLevel host_getLogLevel(Host* host);
 
 const gchar* host_getDataPath(Host* host);
 
-void host_migrate(Host* host, pthread_t* from, pthread_t* to);
-
 #endif /* SHD_HOST_H_ */

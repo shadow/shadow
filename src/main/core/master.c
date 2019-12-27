@@ -158,7 +158,7 @@ void master_updateMinTimeJump(Master* master, gdouble minPathLatency) {
     }
 }
 
-static void _master_loadConfiguration(Master* master) {
+static gboolean _master_loadConfiguration(Master* master) {
     MAGIC_ASSERT(master);
 
     /* parse built-in examples, or input files */
@@ -181,8 +181,10 @@ static void _master_loadConfiguration(Master* master) {
     /* if there was an error parsing, bounce out */
     if(master->config) {
         message("successfully parsed Shadow XML input!");
+        return TRUE;
     } else {
         error("error parsing Shadow XML input!");
+        return FALSE;
     }
 }
 
@@ -403,8 +405,12 @@ gint master_run(Master* master) {
     message("loading and initializing simulation data");
 
     /* start loading and initializing simulation data */
-    _master_loadConfiguration(master);
-    gboolean isSuccess = _master_loadTopology(master);
+    gboolean isSuccess = _master_loadConfiguration(master);
+    if(!isSuccess) {
+        return 1;
+    }
+
+    isSuccess = _master_loadTopology(master);
     if(!isSuccess) {
         return 1;
     }
