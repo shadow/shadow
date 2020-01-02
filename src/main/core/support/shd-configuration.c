@@ -50,6 +50,32 @@ static GString* _parser_findPathToFile(const gchar* relativeFilePathSuffix, cons
 
         g_free(pluginsPathStr);
     }
+    message("hello?");
+    if (!foundPath && relativeFilePathSuffix) {
+        const gchar *libPath = g_getenv("LD_LIBRARY_PATH");
+        gchar **libPathList = g_strsplit(libPath, ":", 0);
+
+        int i = 0;
+        while(*(libPathList+i)) {
+            const gchar* path = *(libPathList+i);
+            if (defaultShadowPath == NULL) {
+                gchar* currentPathStr = g_build_path("/", path, relativeFilePathSuffix, NULL);
+                if(g_file_test(currentPathStr, G_FILE_TEST_EXISTS) && g_file_test(currentPathStr, G_FILE_TEST_IS_REGULAR)) {
+                    foundPath = g_string_new(currentPathStr);
+                }
+                g_free(currentPathStr);
+            } else {
+                gchar *currentPathStr = g_build_path("/", path, defaultShadowPath, relativeFilePathSuffix, NULL);
+                if (g_file_test(currentPathStr, G_FILE_TEST_EXISTS) &&
+                    g_file_test(currentPathStr, G_FILE_TEST_IS_REGULAR)) {
+                    foundPath = g_string_new(currentPathStr);
+                }
+                g_free(currentPathStr);
+            }
+            i++;
+        }
+        g_strfreev(libPathList);
+    }
 
     return foundPath;
 }
