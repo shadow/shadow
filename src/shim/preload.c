@@ -23,11 +23,13 @@ int nanosleep(const struct timespec *req, struct timespec *rem) {
     int event_fd = shim_thisThreadEventFD();
 
     ShimEvent shim_event;
+    shim_event.event_id = SHD_SHIM_EVENT_NANO_SLEEP;
     shim_event.event_data.data_nano_sleep.ts = *req;
-
     shimevent_sendEvent(event_fd, &shim_event);
 
+    memset(&shim_event, 0, sizeof(ShimEvent));
     shimevent_recvEvent(event_fd, &shim_event);
+    assert(shim_event.event_id == SHD_SHIM_EVENT_NANO_SLEEP);
 
     int rc = (shim_event.event_data.data_nano_sleep.ts.tv_sec == 0 &&
               shim_event.event_data.data_nano_sleep.ts.tv_nsec == 0) ? 0 : -1;
