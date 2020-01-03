@@ -22,6 +22,9 @@ add_subdirectory(support)
 ## build the core simulator
 add_subdirectory(main)
 
+## build the shim
+add_subdirectory(shim)
+
 if(SHADOW_TEST STREQUAL ON)
     add_subdirectory(test)
 endif(SHADOW_TEST STREQUAL ON)
