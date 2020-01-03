@@ -61,7 +61,7 @@ set(shadow_srcs
     host/process.c
     host/cpu.c
     host/shd-syscall-handler.c
-    host/shd-thread-controller.c
+    host/shd-thread.c
     host/host.c
     host/network_interface.c
     host/tracker.c

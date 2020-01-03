@@ -1,14 +1,14 @@
 /*
- * shd-thread-controller.c
+ * shd-thread.c
  *
  *  Created on: Dec 13, 2019
  *      Author: rjansen
  */
-#include "main/host/shd-thread-controller.h"
+#include "main/host/shd-thread.h"
 
 #include "main/host/shd-syscall-handler.h"
 
-struct _ThreadControlBlock {
+struct _Thread {
     // needs to store comm channel state, etc.
 
     SystemCallHandler* sys;
@@ -19,68 +19,68 @@ struct _ThreadControlBlock {
     MAGIC_DECLARE;
 };
 
-ThreadControlBlock* threadcontroller_new(SystemCallHandler* sys) {
-    ThreadControlBlock* tcb = g_new0(ThreadControlBlock, 1);
-    MAGIC_INIT(tcb);
+Thread* thread_new(SystemCallHandler* sys) {
+    Thread* thread = g_new0(Thread, 1);
+    MAGIC_INIT(thread);
 
-    tcb->sys = sys;
+    thread->sys = sys;
     syscallhandler_ref(sys);
 
-    tcb->referenceCount = 1;
+    thread->referenceCount = 1;
 
-    // tcb has access to a global, thread safe shared memory manager
+    // thread has access to a global, thread safe shared memory manager
 
     // this function is called when the process is created at the beginning
     // of the sim. but the process may not launch/start until later. any
     // resources for launch/start should be allocated in the respective funcs.
 
-    return tcb;
+    return thread;
 }
 
-static void _threadcontroller_free(ThreadControlBlock* tcb) {
-    MAGIC_ASSERT(tcb);
+static void _thread_free(Thread* thread) {
+    MAGIC_ASSERT(thread);
 
-    if(tcb->sys) {
-        syscallhandler_unref(tcb->sys);
+    if(thread->sys) {
+        syscallhandler_unref(thread->sys);
     }
 
-    MAGIC_CLEAR(tcb);
-    g_free(tcb);
+    MAGIC_CLEAR(thread);
+    g_free(thread);
 }
 
-void threadcontroller_ref(ThreadControlBlock* tcb) {
-    MAGIC_ASSERT(tcb);
-    (tcb->referenceCount)++;
+void thread_ref(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    (thread->referenceCount)++;
 }
 
-void threadcontroller_unref(ThreadControlBlock* tcb) {
-    MAGIC_ASSERT(tcb);
-    (tcb->referenceCount)--;
-    utility_assert(tcb->referenceCount >= 0);
-    if(tcb->referenceCount == 0) {
-        _threadcontroller_free(tcb);
+void thread_unref(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    (thread->referenceCount)--;
+    utility_assert(thread->referenceCount >= 0);
+    if(thread->referenceCount == 0) {
+        _thread_free(thread);
     }
 }
 
-static void _threadcontroller_launch(ThreadControlBlock* tcb) {
-    MAGIC_ASSERT(tcb);
-    tcb->isAlive = 1;
+static void _thread_launch(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    thread->isAlive = 1;
     // launch the plugin process, set up the comm channel, get the
     // process to the point where it blocks before calling main()
 }
 
-void threadcontroller_start(ThreadControlBlock* tcb, int argc, char** argv) {
-    MAGIC_ASSERT(tcb);
+void thread_start(Thread* thread, int argc, char** argv) {
+    MAGIC_ASSERT(thread);
 
-    _threadcontroller_launch(tcb);
+    _thread_launch(thread);
 
     // call main()
     // the plugin will run until it makes a blocking call
     // return
 }
 
-void threadcontroller_continue(ThreadControlBlock* tcb) {
-    MAGIC_ASSERT(tcb);
+void thread_continue(Thread* thread) {
+    MAGIC_ASSERT(thread);
 
     // TODO somehow we need to figure out which thread_key we are running
     int threadKey = 0;
@@ -102,7 +102,7 @@ void threadcontroller_continue(ThreadControlBlock* tcb) {
                 unsigned int sec = 1;
 
                 // handle call
-                unsigned int result = syscallhandler_sleep(tcb->sys, threadKey, sec);
+                unsigned int result = syscallhandler_sleep(thread->sys, threadKey, sec);
 
                 // if return variable indicates that the call is blocked
                 // we need to block the plugin, i.e. mark thread_key as blocked
@@ -114,14 +114,14 @@ void threadcontroller_continue(ThreadControlBlock* tcb) {
 
             case 2: {
                 unsigned int usec = 1;
-                int result = syscallhandler_usleep(tcb->sys, threadKey, usec);
+                int result = syscallhandler_usleep(thread->sys, threadKey, usec);
                 break;
             }
 
             case 3: {
                 struct timespec req;
                 struct timespec rem;
-                int result = syscallhandler_nanosleep(tcb->sys, threadKey, &req, &rem);
+                int result = syscallhandler_nanosleep(thread->sys, threadKey, &req, &rem);
                 break;
             }
 
@@ -136,24 +136,24 @@ void threadcontroller_continue(ThreadControlBlock* tcb) {
     }
 }
 
-int threadcontroller_stop(ThreadControlBlock* tcb) {
-    MAGIC_ASSERT(tcb);
+int thread_stop(Thread* thread) {
+    MAGIC_ASSERT(thread);
 
     // if the proc has already stopped, just return the returncode
 
     // terminate the process (send a signal that will cause it to
     // call proper destructors, etc)
 
-    tcb->isAlive = 0;
+    thread->isAlive = 0;
 
     // return the return code of the process
     return 0;
 }
 
-gboolean threadcontroller_isAlive(ThreadControlBlock* tcb) {
-    MAGIC_ASSERT(tcb);
+gboolean thread_isAlive(Thread* thread) {
+    MAGIC_ASSERT(thread);
     // TODO
     // return TRUE if at least one thread is still running
     // return false if the process died or completed
-    return tcb->isAlive;
+    return thread->isAlive;
 }

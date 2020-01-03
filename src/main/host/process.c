@@ -43,7 +43,7 @@
 #include "main/host/cpu.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/shd-thread-controller.h"
+#include "main/host/shd-thread.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
@@ -94,7 +94,7 @@ struct _Process {
     gboolean didLogReturnCode;
 
     /* manages interactions with the forked process and its threads */
-    ThreadControlBlock* tcb;
+    Thread* tcb;
 
     gint referenceCount;
     MAGIC_DECLARE;
@@ -141,16 +141,16 @@ static void _process_check(Process* proc) {
         return;
     }
 
-    if(threadcontroller_isAlive(proc->tcb)) {
+    if(thread_isAlive(proc->tcb)) {
         info("process '%s' is running, but threads are blocked waiting for events", _process_getName(proc));
     } else {
         /* collect return code */
-        int returnCode = threadcontroller_stop(proc->tcb);
+        int returnCode = thread_stop(proc->tcb);
 
         message("process '%s' has completed or is otherwise no longer running", _process_getName(proc));
         _process_logReturnCode(proc, returnCode);
 
-        threadcontroller_unref(proc->tcb);
+        thread_unref(proc->tcb);
         proc->tcb = NULL;
 
         message("total runtime for process '%s' was %f seconds", _process_getName(proc), proc->totalRunTime);
@@ -166,7 +166,7 @@ static void _process_start(Process* proc) {
     }
 
     utility_assert(proc->tcb == NULL);
-    proc->tcb = threadcontroller_new(proc->sys);
+    proc->tcb = thread_new(proc->sys);
 
     message("starting process '%s'", _process_getName(proc));
 
@@ -178,7 +178,7 @@ static void _process_start(Process* proc) {
 
     proc->plugin.isExecuting = TRUE;
     /* exec the process and call main to start it */
-    threadcontroller_start(proc->tcb, proc->argc, proc->argv);
+    thread_start(proc->tcb, proc->argc, proc->argv);
     proc->plugin.isExecuting = FALSE;
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -207,7 +207,7 @@ void process_continue(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 
     proc->plugin.isExecuting = TRUE;
-    threadcontroller_continue(proc->tcb);
+    thread_continue(proc->tcb);
     proc->plugin.isExecuting = FALSE;
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -236,7 +236,7 @@ void process_stop(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 
     proc->plugin.isExecuting = TRUE;
-    threadcontroller_stop(proc->tcb);
+    thread_stop(proc->tcb);
     proc->plugin.isExecuting = FALSE;
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -283,7 +283,7 @@ void process_schedule(Process* proc, gpointer nothing) {
 
 gboolean process_isRunning(Process* proc) {
     MAGIC_ASSERT(proc);
-    return (proc->tcb != NULL && threadcontroller_isAlive(proc->tcb)) ? TRUE : FALSE;
+    return (proc->tcb != NULL && thread_isAlive(proc->tcb)) ? TRUE : FALSE;
 }
 
 gboolean process_wantsNotify(Process* proc, gint epollfd) {
@@ -388,10 +388,10 @@ static void _process_free(Process* proc) {
 
     /* stop and free plugin memory if we are still running */
     if(proc->tcb) {
-        if(threadcontroller_isAlive(proc->tcb)) {
-            threadcontroller_stop(proc->tcb);
+        if(thread_isAlive(proc->tcb)) {
+            thread_stop(proc->tcb);
         }
-        threadcontroller_unref(proc->tcb);
+        thread_unref(proc->tcb);
         proc->tcb = NULL;
     }
 
