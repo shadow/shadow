@@ -16,11 +16,13 @@ set(SHIM_LIB shadow-shim)
 
 add_library(${SHIM_LIB} SHARED ${SHIM_FILES})
 
+target_compile_options(${SHIM_LIB} PRIVATE -pthread)
+
 set_target_properties(${SHIM_LIB} PROPERTIES 
     INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib
     INSTALL_RPATH_USE_LINK_PATH TRUE 
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib"
 )
 
-#target_link_libraries(${SHIM_LIB})
+target_link_libraries(${SHIM_LIB} -pthread)
 install(TARGETS ${SHIM_LIB} DESTINATION lib)
