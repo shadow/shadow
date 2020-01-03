@@ -324,8 +324,8 @@ static gchar** _process_getArgv(Process* proc, gchar* arguments) {
     return argv;
 }
 
-static gchar** _process_getEnvv(Process* process, gchar* environment) {
-    MAGIC_ASSERT(process);
+static gchar** _process_getEnvv(Process* proc, gchar* environment) {
+    MAGIC_ASSERT(proc);
 
     /* start with an empty environment */
     gchar** envv = g_environ_setenv(NULL, "SHADOW_SPAWNED", "TRUE", TRUE);
