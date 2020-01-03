@@ -7,24 +7,31 @@
 #include "main/host/shd-thread.h"
 
 #include "main/host/shd-syscall-handler.h"
+#include "support/logger/logger.h"
 
 struct _Thread {
     // needs to store comm channel state, etc.
 
-    SystemCallHandler* sys;
+    SysCallHandler* sys;
 
-    int isAlive;
+    gint threadID;
+    gint isAlive;
+
+    /* holds the event id for the most recent call from the plugin/shim */
+    gint currentEventID;
 
     gint referenceCount;
     MAGIC_DECLARE;
 };
 
-Thread* thread_new(SystemCallHandler* sys) {
+Thread* thread_new(gint threadID, SysCallHandler* sys) {
     Thread* thread = g_new0(Thread, 1);
     MAGIC_INIT(thread);
 
     thread->sys = sys;
     syscallhandler_ref(sys);
+
+    thread->threadID = threadID;
 
     thread->referenceCount = 1;
 
@@ -62,81 +69,126 @@ void thread_unref(Thread* thread) {
     }
 }
 
-static void _thread_launch(Thread* thread) {
+void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     MAGIC_ASSERT(thread);
+
+    /* set the env for the child */
+    gchar** myenvv = g_strdupv(envv);
+
+    /* append to the env */
+    // TODO fix this to use the correct key/value strings
+    myenvv = g_environ_setenv(myenvv, "FTM_EVENT_FD", "0", TRUE);
+
+    // TODO set up the comm channel stuff here
+
+    /* make the fork() / exec() calls */
+    // TODO need to fork first, and do any other setup first
+    //gint returnValue = execvpe(argv[0], argv, myenvv);
+
+    /* cleanup the dupd env*/
+    if(myenvv) {
+        g_strfreev(myenvv);
+    }
+
+    // TODO get to the point where the plugin blocks before calling main()
+    thread->currentEventID = 1; // designate a main() call
+
+    /* thread is now active */
     thread->isAlive = 1;
-    // launch the plugin process, set up the comm channel, get the
-    // process to the point where it blocks before calling main()
+
+    /* this will cause us to call main() */
+    thread_resume(thread);
 }
 
-void thread_start(Thread* thread, int argc, char** argv) {
+gint _thread_waitForNextEvent(Thread* thread) {
     MAGIC_ASSERT(thread);
 
-    _thread_launch(thread);
+    // TODO wait on the channel for the next event from the shim
 
-    // call main()
-    // the plugin will run until it makes a blocking call
-    // return
+    // return the event code
+    return 2;
 }
 
-void thread_continue(Thread* thread) {
+void thread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
 
-    // TODO somehow we need to figure out which thread_key we are running
-    int threadKey = 0;
+    utility_assert(thread->currentEventID != 0);
 
-    // "main" loop
+    gboolean needToBlock = FALSE;
+
     while(TRUE) {
-        // unblock one of the threads in the plugin (ie a channel)
-        // when we get here, we should know which thread_key should be unblocked
-        // because the syscallhandler will track it when blocking
 
-        // wait for event in channel
-        int event = 0;
-
-        // handle event
-        switch(event) {
+        switch(thread->currentEventID) {
             case 1: {
-                // deserialize event params from channel
-                // some params might be in shared memory
-                unsigned int sec = 1;
+                // send the message to the shim to call main(),
+                // the plugin will run until it makes a blocking call
 
-                // handle call
-                unsigned int result = syscallhandler_sleep(thread->sys, threadKey, sec);
-
-                // if return variable indicates that the call is blocked
-                // we need to block the plugin, i.e. mark thread_key as blocked
-                // and then move to the next thread
-                // TODO how to mark threadKey as blocked?
+                /* event has completed */
+                needToBlock = FALSE;
 
                 break;
             }
 
             case 2: {
-                unsigned int usec = 1;
-                int result = syscallhandler_usleep(thread->sys, threadKey, usec);
+                // deserialize event params from channel
+                // some params might be in shared memory
+                unsigned int sec = 1;
+
+                // handle call
+                unsigned int result = syscallhandler_sleep(thread->sys, thread, &needToBlock, sec);
+
+                if(!needToBlock) {
+                    // TODO send message containing result to shim
+                }
+
                 break;
             }
 
             case 3: {
+                unsigned int usec = 1;
+
+                int result = syscallhandler_usleep(thread->sys, thread, &needToBlock, usec);
+
+                if(!needToBlock) {
+                    // TODO send message containing result to shim
+                }
+
+                break;
+            }
+
+            case 4: {
                 struct timespec req;
                 struct timespec rem;
-                int result = syscallhandler_nanosleep(thread->sys, threadKey, &req, &rem);
+
+                int result = syscallhandler_nanosleep(thread->sys, thread, &needToBlock, &req, &rem);
+
+                if(!needToBlock) {
+                    // TODO send message containing result to shim
+                }
+
                 break;
             }
 
             default: {
+                error("unknown event type");
                 break;
             }
         }
 
-
-        // if threadKey is now blocked, return
+        // TODO remove this once we have functional events
         return;
+
+        if(needToBlock) {
+            /* thread is blocked on simulation progress */
+            return;
+        } else {
+            /* previous event was handled, wait for next one */
+            thread->currentEventID = _thread_waitForNextEvent(thread);
+        }
     }
 }
 
-int thread_stop(Thread* thread) {
+int thread_terminate(Thread* thread) {
     MAGIC_ASSERT(thread);
 
     // if the proc has already stopped, just return the returncode

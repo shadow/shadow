@@ -58,7 +58,7 @@
 
 struct _Process {
     /* the handler of system calls made by the process */
-    SystemCallHandler* sys;
+    SysCallHandler* sys;
 
     /* unique id of the program that this process should run */
     guint processID;
@@ -70,7 +70,8 @@ struct _Process {
         GString* exeName;
         GString* exePath;
 
-        /* the name and path to a library that we will LD_PRELOAD before exec */
+        /* the name and path to any plugin-specific preload library that we should
+         * LD_PRELOAD before exec */
         GString* preloadName;
         GString* preloadPath;
 
@@ -87,14 +88,20 @@ struct _Process {
     /* process boot and shutdown variables */
     SimulationTime startTime;
     SimulationTime stopTime;
-    GString* arguments;
+
+    /* vector of argument strings passed to exec */
     gchar** argv;
-    gint argc;
+    /* vector on environment variables passed to exec */
+    gchar** envv;
+
     gint returnCode;
     gboolean didLogReturnCode;
 
-    /* manages interactions with the forked process and its threads */
-    Thread* tcb;
+    /* the main execution unit for the plugin */
+    Thread* mainThread;
+    gint threadIDCounter;
+
+    // TODO add spawned threads
 
     gint referenceCount;
     MAGIC_DECLARE;
@@ -137,21 +144,21 @@ static void _process_logReturnCode(Process* proc, gint code) {
 static void _process_check(Process* proc) {
     MAGIC_ASSERT(proc);
 
-    if(!proc->tcb) {
+    if(!proc->mainThread) {
         return;
     }
 
-    if(thread_isAlive(proc->tcb)) {
+    if(thread_isAlive(proc->mainThread)) {
         info("process '%s' is running, but threads are blocked waiting for events", _process_getName(proc));
     } else {
         /* collect return code */
-        int returnCode = thread_stop(proc->tcb);
+        int returnCode = thread_terminate(proc->mainThread);
 
         message("process '%s' has completed or is otherwise no longer running", _process_getName(proc));
         _process_logReturnCode(proc, returnCode);
 
-        thread_unref(proc->tcb);
-        proc->tcb = NULL;
+        thread_unref(proc->mainThread);
+        proc->mainThread = NULL;
 
         message("total runtime for process '%s' was %f seconds", _process_getName(proc), proc->totalRunTime);
     }
@@ -165,8 +172,8 @@ static void _process_start(Process* proc) {
         return;
     }
 
-    utility_assert(proc->tcb == NULL);
-    proc->tcb = thread_new(proc->sys);
+    utility_assert(proc->mainThread == NULL);
+    proc->mainThread = thread_new(proc->threadIDCounter++, proc->sys);
 
     message("starting process '%s'", _process_getName(proc));
 
@@ -178,9 +185,7 @@ static void _process_start(Process* proc) {
 
     proc->plugin.isExecuting = TRUE;
     /* exec the process and call main to start it */
-    thread_start(proc->tcb, proc->argc, proc->argv);
-    proc->plugin.isExecuting = FALSE;
-
+    thread_run(proc->mainThread, proc->argv, proc->envv);
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
 
@@ -207,7 +212,7 @@ void process_continue(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 
     proc->plugin.isExecuting = TRUE;
-    thread_continue(proc->tcb);
+    thread_resume(proc->mainThread);
     proc->plugin.isExecuting = FALSE;
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -236,7 +241,7 @@ void process_stop(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 
     proc->plugin.isExecuting = TRUE;
-    thread_stop(proc->tcb);
+    thread_terminate(proc->mainThread);
     proc->plugin.isExecuting = FALSE;
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -283,7 +288,7 @@ void process_schedule(Process* proc, gpointer nothing) {
 
 gboolean process_isRunning(Process* proc) {
     MAGIC_ASSERT(proc);
-    return (proc->tcb != NULL && thread_isAlive(proc->tcb)) ? TRUE : FALSE;
+    return (proc->mainThread != NULL && thread_isAlive(proc->mainThread)) ? TRUE : FALSE;
 }
 
 gboolean process_wantsNotify(Process* proc, gint epollfd) {
@@ -299,62 +304,64 @@ gboolean process_wantsNotify(Process* proc, gint epollfd) {
 //    }
 }
 
-static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
-    gchar* threadBuffer;
+static gchar** _process_getArgv(Process* proc, gchar* arguments) {
+    MAGIC_ASSERT(proc);
 
-    GQueue *arguments = g_queue_new();
+    /* we need at least the executable path in order to run the plugin */
+    GString* command = g_string_new(proc->plugin.exePath->str);
 
-    /* first argument is the name of the program */
-    const gchar* pluginName = proc->plugin.exeName ? proc->plugin.exeName->str : "NULL";
-    g_queue_push_tail(arguments, g_strdup(pluginName));
-
-    /* parse the full argument string into separate strings */
-    if(proc->arguments && proc->arguments->len > 0 && g_ascii_strncasecmp(proc->arguments->str, "\0", (gsize) 1) != 0) {
-        gchar* argumentString = g_strdup(proc->arguments->str);
-        gchar* token = strtok_r(argumentString, " ", &threadBuffer);
-        while(token != NULL) {
-            gchar* argument = g_strdup((const gchar*) token);
-            g_queue_push_tail(arguments, argument);
-            token = strtok_r(NULL, " ", &threadBuffer);
-        }
-        g_free(argumentString);
+    /* if the user specified additional arguments, append those */
+    if(arguments && (g_ascii_strncasecmp(arguments, "\0", (gsize) 1) != 0)) {
+        g_string_append_printf(command, " %s", arguments);
     }
 
-    /* setup for creating new plug-in, i.e. format into argc and argv */
-    gint argc = g_queue_get_length(arguments);
-    /* a pointer to an array that holds pointers */
-    gchar** argv = g_new0(gchar*, argc);
+    /* now split the command string to an argv */
+    gchar** argv = g_strsplit(command->str, " ", 0);
 
-    for(gint i = 0; i < argc; i++) {
-        argv[i] = g_queue_pop_head(arguments);
-    }
+    /* we don't need the command string anymore */
+    g_string_free(command, TRUE);
 
-    /* cleanup */
-    g_queue_free(arguments);
-
-    /* transfer to the caller - they must free argv and each element of it */
-    *argvOut = argv;
-    return argc;
+    return argv;
 }
 
-Process* process_new(SystemCallHandler* sys, guint processID,
+static gchar** _process_getEnvv(Process* process, gchar* environment) {
+    MAGIC_ASSERT(process);
+
+    /* start with an empty environment */
+    gchar** envv = g_environ_setenv(NULL, "SHADOW_SPAWNED", "TRUE", TRUE);
+
+    /* set up the LD_PRELOAD environment */
+    // TODO no hard code!
+    envv = g_environ_setenv(envv, "LD_PRELOAD", "/home/user/.shadow/lib/ftm-shim.so", TRUE);
+
+    // TODO add in user-specified env vals
+
+    return envv;
+}
+
+void process_setSysCallHandler(Process* proc, SysCallHandler* sys) {
+    MAGIC_ASSERT(proc);
+    utility_assert(sys);
+    proc->sys = sys;
+    syscallhandler_ref(proc->sys);
+}
+
+Process* process_new(guint processID,
         SimulationTime startTime, SimulationTime stopTime, const gchar* hostName,
         const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
         const gchar* preloadName, const gchar* preloadPath, gchar* arguments) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
-    utility_assert(sys);
-    proc->sys = sys;
-    syscallhandler_ref(proc->sys);
-
     proc->processID = processID;
 
+    /* plugin name and path are required so we know what to execute */
     utility_assert(pluginName);
-    proc->plugin.exeName = g_string_new(pluginName);
     utility_assert(pluginPath);
+    proc->plugin.exeName = g_string_new(pluginName);
     proc->plugin.exePath = g_string_new(pluginPath);
 
+    /* a user-specified preload library (in addition to shadow's) is optional */
     if(preloadName && preloadPath) {
         proc->plugin.preloadName = g_string_new(preloadName);
         proc->plugin.preloadPath = g_string_new(preloadPath);
@@ -366,16 +373,16 @@ Process* process_new(SystemCallHandler* sys, guint processID,
             proc->plugin.exeName ? proc->plugin.exeName->str : "NULL",
             proc->processID);
 
+    proc->cpuDelayTimer = g_timer_new();
+
     proc->startTime = startTime;
     proc->stopTime = stopTime;
 
-    if(arguments && (g_ascii_strncasecmp(arguments, "\0", (gsize) 1) != 0)) {
-        proc->arguments = g_string_new(arguments);
-    }
+    /* get args and env */
+    proc->argv = _process_getArgv(proc, arguments);
+    gchar* environment = NULL; // TODO allow user to specify env
+    proc->envv = _process_getEnvv(proc, environment);
 
-    proc->argc = _process_getArguments(proc, &proc->argv);
-
-    proc->cpuDelayTimer = g_timer_new();
     proc->referenceCount = 1;
 
     worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_NEW);
@@ -387,16 +394,12 @@ static void _process_free(Process* proc) {
     MAGIC_ASSERT(proc);
 
     /* stop and free plugin memory if we are still running */
-    if(proc->tcb) {
-        if(thread_isAlive(proc->tcb)) {
-            thread_stop(proc->tcb);
+    if(proc->mainThread) {
+        if(thread_isAlive(proc->mainThread)) {
+            thread_terminate(proc->mainThread);
         }
-        thread_unref(proc->tcb);
-        proc->tcb = NULL;
-    }
-
-    if(proc->arguments) {
-        g_string_free(proc->arguments, TRUE);
+        thread_unref(proc->mainThread);
+        proc->mainThread = NULL;
     }
 
     if(proc->plugin.exePath) {
@@ -416,12 +419,10 @@ static void _process_free(Process* proc) {
     }
 
     if(proc->argv) {
-        /* free the arguments */
-        for(gint i = 0; i < proc->argc; i++) {
-            g_free(proc->argv[i]);
-        }
-        g_free(proc->argv);
-        proc->argv = NULL;
+        g_strfreev(proc->argv);
+    }
+    if(proc->envv) {
+        g_strfreev(proc->envv);
     }
 
     g_timer_destroy(proc->cpuDelayTimer);

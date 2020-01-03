@@ -37,12 +37,14 @@
 #include "main/core/support/definitions.h"
 #include "main/host/shd-syscall-handler.h"
 
-Process* process_new(SystemCallHandler* sys, guint processID,
+Process* process_new(guint processID,
         SimulationTime startTime, SimulationTime stopTime, const gchar* hostName,
         const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
         const gchar* preloadName, const gchar* preloadPath, gchar* arguments);
 void process_ref(Process* proc);
 void process_unref(Process* proc);
+
+void process_setSysCallHandler(Process* proc, SysCallHandler* sys);
 
 void process_schedule(Process* proc, gpointer nothing);
 void process_continue(Process* proc);

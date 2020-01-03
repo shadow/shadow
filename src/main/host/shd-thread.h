@@ -12,13 +12,15 @@
 
 typedef struct _Thread Thread;
 
-Thread* thread_new();
+#include "main/host/shd-syscall-handler.h"
+
+Thread* thread_new(gint threadID, SysCallHandler* sys);
 void thread_ref(Thread* thread);
 void thread_unref(Thread* thread);
 
-void thread_start(Thread* thread, int argc, char** argv);
-void thread_continue(Thread* thread);
-int thread_stop(Thread* thread);
+void thread_run(Thread* thread, gchar** argv, gchar** envv);
+void thread_resume(Thread* thread);
+int thread_terminate(Thread* thread);
 
 gboolean thread_isAlive(Thread* thread);
 
