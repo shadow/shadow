@@ -28,5 +28,7 @@ int syscallhandler_usleep(SysCallHandler* sys, Thread* thread, gboolean* block,
         unsigned int usec);
 int syscallhandler_nanosleep(SysCallHandler* sys, Thread* thread, gboolean* block,
         const struct timespec *req, struct timespec *rem);
+time_t syscallhandler_time(SysCallHandler* sys, Thread* thread, gboolean* block,
+        time_t* tloc);
 
 #endif /* SRC_MAIN_HOST_SHD_SYSCALL_HANDLER_H_ */

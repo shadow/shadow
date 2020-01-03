@@ -77,3 +77,9 @@ int syscallhandler_nanosleep(SysCallHandler* sys, Thread* thread, gboolean* bloc
     // TODO implement
     return 0;
 }
+
+time_t syscallhandler_time(SysCallHandler* sys, Thread* thread, gboolean* block,
+        time_t* tloc) {
+    // TODO implement
+    return 0;
+}
