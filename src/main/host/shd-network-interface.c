@@ -17,6 +17,11 @@ struct _NetworkInterfaceTokenBucket {
 };
 
 struct _NetworkInterface {
+    /* The upstream ISP router connected to this interface. */
+    Router* router;
+
+    /* The queuing discipline used by this interface to schedule the
+     * sending of packets from sockets. */
     QDiscMode qdisc;
 
     /* The address associated with this interface */
@@ -57,7 +62,7 @@ static inline SimulationTime _networkinterface_getRefillIntervalSend() {
 }
 
 static inline SimulationTime _networkinterface_getRefillIntervalReceive() {
-    return (SimulationTime) SIMTIME_ONE_MILLISECOND*300;
+    return (SimulationTime) SIMTIME_ONE_MILLISECOND*10;
 }
 
 static inline guint64 _networkinterface_getCapacityFactorSend() {
@@ -67,7 +72,7 @@ static inline guint64 _networkinterface_getCapacityFactorSend() {
 
 static inline guint64 _networkinterface_getCapacityFactorReceive() {
     /* the capacity is this much times the refill rate */
-    return (guint64) 1;
+    return (guint64) 10;
 }
 
 static void _networkinterface_refillTokenBucket(NetworkInterfaceTokenBucket* bucket) {
@@ -142,68 +147,6 @@ static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
             "every %"G_GUINT64_FORMAT" nanoseconds",
             address_toString(interface->address), interface->receiveBucket.bytesRefill,
             _networkinterface_getRefillIntervalReceive());
-}
-
-NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, guint64 bwUpKiBps,
-        gboolean logPcap, gchar* pcapDir, QDiscMode qdisc, guint64 interfaceReceiveLength) {
-    NetworkInterface* interface = g_new0(NetworkInterface, 1);
-    MAGIC_INIT(interface);
-
-    interface->address = address;
-    address_ref(interface->address);
-
-    /* incoming packets get passed along to sockets */
-    interface->boundSockets = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, descriptor_unref);
-
-    /* sockets tell us when they want to start sending */
-    interface->rrQueue = g_queue_new();
-    interface->fifoQueue = priorityqueue_new((GCompareDataFunc)_networkinterface_compareSocket, NULL, descriptor_unref);
-
-    /* parse queuing discipline */
-    interface->qdisc = (qdisc == QDISC_MODE_NONE) ? QDISC_MODE_FIFO : qdisc;
-
-    if(logPcap) {
-        GString* filename = g_string_new(NULL);
-        g_string_printf(filename, "%s-%s",
-                address_toHostName(interface->address),
-                address_toHostIPString(interface->address));
-        interface->pcap = pcapwriter_new(pcapDir, filename->str);
-        g_string_free(filename, TRUE);
-    }
-
-    /* set size and refill rates for token buckets */
-    _networkinterface_setupTokenBuckets(interface, bwDownKiBps, bwUpKiBps);
-
-    info("bringing up network interface '%s' at '%s', %"G_GUINT64_FORMAT" KiB/s up and %"G_GUINT64_FORMAT" KiB/s down using queuing discipline %s",
-            address_toHostName(interface->address), address_toHostIPString(interface->address), bwUpKiBps, bwDownKiBps,
-            interface->qdisc == QDISC_MODE_RR ? "rr" : "fifo");
-
-    return interface;
-}
-
-void networkinterface_free(NetworkInterface* interface) {
-    MAGIC_ASSERT(interface);
-
-    /* unref all sockets wanting to send */
-    while(interface->rrQueue && !g_queue_is_empty(interface->rrQueue)) {
-        Socket* socket = g_queue_pop_head(interface->rrQueue);
-        descriptor_unref(socket);
-    }
-    g_queue_free(interface->rrQueue);
-
-    priorityqueue_free(interface->fifoQueue);
-
-    g_hash_table_destroy(interface->boundSockets);
-
-    dns_deregister(worker_getDNS(), interface->address);
-    address_unref(interface->address);
-
-    if(interface->pcap) {
-        pcapwriter_free(interface->pcap);
-    }
-
-    MAGIC_CLEAR(interface);
-    g_free(interface);
 }
 
 Address* networkinterface_getAddress(NetworkInterface* interface) {
@@ -397,7 +340,7 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
     }
 }
 
-void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet) {
+static void _networkinterface_packetArrived(NetworkInterface* interface, Packet* packet) {
     MAGIC_ASSERT(interface);
 
     gboolean bootstrapping = worker_isBootstrapActive();
@@ -418,6 +361,12 @@ void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet)
         /* buffers are full, drop packet */
         packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_DROPPED);
     }
+}
+
+static void _networkinterface_packetArrivedAtUpstreamRouter(NetworkInterface* interface) {
+    MAGIC_ASSERT(interface);
+    Packet* packet = router_receive(interface->router);
+    _networkinterface_packetArrived(interface, packet);
 }
 
 static void _networkinterface_updatePacketHeader(Descriptor* descriptor, Packet* packet) {
@@ -512,15 +461,16 @@ static void _networkinterface_sendPackets(NetworkInterface* interface) {
 
         /* now actually send the packet somewhere */
         if(address_toNetworkIP(interface->address) == packet_getDestinationIP(packet)) {
-            /* packet will arrive on our own interface */
+            /* packet will arrive on our own interface, so it doesn't need to
+             * go through the upstream router. */
             packet_ref(packet);
-            Task* packetTask = task_new((TaskCallbackFunc)networkinterface_packetArrived,
+            Task* packetTask = task_new((TaskCallbackFunc)_networkinterface_packetArrived,
                     interface, packet, NULL, (TaskArgumentFreeFunc)packet_unref);
             worker_scheduleTask(packetTask, 1);
             task_unref(packetTask);
         } else {
-            /* let the worker send to remote with appropriate delays */
-            worker_sendPacket(packet);
+            /* let the upstream router send to remote with appropriate delays */
+            router_send(interface->router, packet);
         }
 
         /* successfully sent, calculate how long it took to 'send' this packet */
@@ -568,3 +518,77 @@ void networkinterface_wantsSend(NetworkInterface* interface, Socket* socket) {
     /* send packets if we can */
     _networkinterface_sendPackets(interface);
 }
+
+Router* networkinterface_getRouter(NetworkInterface* interface) {
+    MAGIC_ASSERT(interface);
+    return interface->router;
+}
+
+NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, guint64 bwUpKiBps,
+        gboolean logPcap, gchar* pcapDir, QDiscMode qdisc, guint64 interfaceReceiveLength) {
+    NetworkInterface* interface = g_new0(NetworkInterface, 1);
+    MAGIC_INIT(interface);
+
+    interface->address = address;
+    address_ref(interface->address);
+
+    /* incoming packets get passed along to sockets */
+    interface->boundSockets = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, descriptor_unref);
+
+    /* sockets tell us when they want to start sending */
+    interface->rrQueue = g_queue_new();
+    interface->fifoQueue = priorityqueue_new((GCompareDataFunc)_networkinterface_compareSocket, NULL, descriptor_unref);
+
+    /* parse queuing discipline */
+    interface->qdisc = (qdisc == QDISC_MODE_NONE) ? QDISC_MODE_FIFO : qdisc;
+
+    interface->router = router_new((PacketQueuedCallback)_networkinterface_packetArrivedAtUpstreamRouter, interface);
+
+    if(logPcap) {
+        GString* filename = g_string_new(NULL);
+        g_string_printf(filename, "%s-%s",
+                address_toHostName(interface->address),
+                address_toHostIPString(interface->address));
+        interface->pcap = pcapwriter_new(pcapDir, filename->str);
+        g_string_free(filename, TRUE);
+    }
+
+    /* set size and refill rates for token buckets */
+    _networkinterface_setupTokenBuckets(interface, bwDownKiBps, bwUpKiBps);
+
+    info("bringing up network interface '%s' at '%s', %"G_GUINT64_FORMAT" KiB/s up and %"G_GUINT64_FORMAT" KiB/s down using queuing discipline %s",
+            address_toHostName(interface->address), address_toHostIPString(interface->address), bwUpKiBps, bwDownKiBps,
+            interface->qdisc == QDISC_MODE_RR ? "rr" : "fifo");
+
+    return interface;
+}
+
+void networkinterface_free(NetworkInterface* interface) {
+    MAGIC_ASSERT(interface);
+
+    /* unref all sockets wanting to send */
+    while(interface->rrQueue && !g_queue_is_empty(interface->rrQueue)) {
+        Socket* socket = g_queue_pop_head(interface->rrQueue);
+        descriptor_unref(socket);
+    }
+    g_queue_free(interface->rrQueue);
+
+    priorityqueue_free(interface->fifoQueue);
+
+    g_hash_table_destroy(interface->boundSockets);
+
+    if(interface->router) {
+        router_unref(interface->router);
+    }
+
+    dns_deregister(worker_getDNS(), interface->address);
+    address_unref(interface->address);
+
+    if(interface->pcap) {
+        pcapwriter_free(interface->pcap);
+    }
+
+    MAGIC_CLEAR(interface);
+    g_free(interface);
+}
+

@@ -448,6 +448,13 @@ NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle) {
     return g_hash_table_lookup(host->interfaces, GUINT_TO_POINTER(handle));
 }
 
+Router* host_getUpstreamRouter(Host* host, in_addr_t handle) {
+    MAGIC_ASSERT(host);
+    NetworkInterface* interface = g_hash_table_lookup(host->interfaces, GUINT_TO_POINTER(handle));
+    utility_assert(interface != NULL);
+    return networkinterface_getRouter(interface);
+}
+
 static void _host_associateInterface(Host* host, Socket* socket,
         in_addr_t bindAddress, in_port_t bindPort, in_addr_t peerAddress, in_port_t peerPort) {
     MAGIC_ASSERT(host);

@@ -209,9 +209,10 @@ enum TCPProcessFlags_ retransmit_tally_update(void *p, uint32_t last_ack, uint32
        && !ranges_contains(rt->retransmitted_, rt->last_ack_)) {
       // std::cerr << "3 dupl acks!" << std::endl;
       // std::cerr << last_ack << std::endl;
-      uint32_t right_edge_exclusive = MAX(max_ack, rt->last_ack_ + 1);
+      //uint32_t right_edge_exclusive = MAX(max_ack, rt->last_ack_ + 1);
+      uint32_t right_edge_exclusive = rt->last_ack_ + 1;
       ranges_insert(&rt->marked_lost_, {rt->last_ack_, right_edge_exclusive});
-      rt->compute_lost();
+      rt->compute_lost(); // sacked packets are removed from lost list here
       if (rt->lost_.size() > 0) { ret |= TCP_PF_DATA_LOST_; }
    }
 

@@ -209,9 +209,9 @@ gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
 
 static void _worker_runDeliverPacketTask(Packet* packet, gpointer userData) {
     in_addr_t ip = packet_getDestinationIP(packet);
-    NetworkInterface* interface = host_lookupInterface(_worker_getPrivate()->active.host, ip);
-    utility_assert(interface != NULL);
-    networkinterface_packetArrived(interface, packet);
+    Router* router = host_getUpstreamRouter(_worker_getPrivate()->active.host, ip);
+    utility_assert(router != NULL);
+    router_arrived(router, packet);
 }
 
 void worker_sendPacket(Packet* packet) {
