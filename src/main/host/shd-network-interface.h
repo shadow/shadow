@@ -24,10 +24,11 @@ gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType
 void networkinterface_associate(NetworkInterface* interface, Socket* transport);
 void networkinterface_disassociate(NetworkInterface* interface, Socket* transport);
 
-void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet);
 void networkinterface_wantsSend(NetworkInterface* interface, Socket* transport);
 void networkinterface_sent(NetworkInterface* interface);
 
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface);
+
+Router* networkinterface_getRouter(NetworkInterface* interface);
 
 #endif /* SHD_NETWORK_INTERFACE_H_ */
