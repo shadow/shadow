@@ -7,9 +7,9 @@
 #ifndef SHD_NETWORK_INTERFACE_H_
 #define SHD_NETWORK_INTERFACE_H_
 
-#include "shadow.h"
-
 typedef struct _NetworkInterface NetworkInterface;
+
+#include "shadow.h"
 
 NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, guint64 bwUpKiBps,
         gboolean logPcap, gchar* pcapDir, QDiscMode qdisc, guint64 interfaceReceiveLength);
@@ -30,5 +30,6 @@ void networkinterface_sent(NetworkInterface* interface);
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface);
 
 Router* networkinterface_getRouter(NetworkInterface* interface);
+void networkinterface_triggerReceiveLoop(NetworkInterface* interface);
 
 #endif /* SHD_NETWORK_INTERFACE_H_ */

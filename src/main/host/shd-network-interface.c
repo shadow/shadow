@@ -62,7 +62,7 @@ static inline SimulationTime _networkinterface_getRefillIntervalSend() {
 }
 
 static inline SimulationTime _networkinterface_getRefillIntervalReceive() {
-    return (SimulationTime) SIMTIME_ONE_MILLISECOND*10;
+    return (SimulationTime) SIMTIME_ONE_MILLISECOND*1;
 }
 
 static inline guint64 _networkinterface_getCapacityFactorSend() {
@@ -72,7 +72,7 @@ static inline guint64 _networkinterface_getCapacityFactorSend() {
 
 static inline guint64 _networkinterface_getCapacityFactorReceive() {
     /* the capacity is this much times the refill rate */
-    return (guint64) 10;
+    return (guint64) 1;
 }
 
 static void _networkinterface_refillTokenBucket(NetworkInterfaceTokenBucket* bucket) {
@@ -109,6 +109,9 @@ static void _networkinterface_refillTokenBucketReceive(NetworkInterface* interfa
             interface, NULL, NULL, NULL);
     worker_scheduleTask(refillTask, _networkinterface_getRefillIntervalReceive());
     task_unref(refillTask);
+
+    /* check if our new tokens allow us to receive more packets */
+    networkinterface_triggerReceiveLoop(interface);
 }
 
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface) {
@@ -133,11 +136,14 @@ static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
     interface->receiveBucket.bytesRefill = bytesPerIntervalReceive;
     interface->sendBucket.bytesRefill = bytesPerIntervalSend;
 
+    /* the CONFIG_MTU parts make sure we don't lose any partial bytes we had left
+     * from last round when we do the refill. */
+
     guint64 sendFactor = _networkinterface_getCapacityFactorSend();
-    interface->sendBucket.bytesCapacity = interface->sendBucket.bytesRefill * sendFactor;
+    interface->sendBucket.bytesCapacity = (interface->sendBucket.bytesRefill * sendFactor) + CONFIG_MTU;
 
     guint64 receiveFactor = _networkinterface_getCapacityFactorReceive();
-    interface->receiveBucket.bytesCapacity = interface->receiveBucket.bytesRefill * receiveFactor;
+    interface->receiveBucket.bytesCapacity = (interface->receiveBucket.bytesRefill * receiveFactor) + CONFIG_MTU;
 
     info("interface %s token buckets can send %"G_GUINT64_FORMAT" bytes "
             "every %"G_GUINT64_FORMAT" nanoseconds",
@@ -340,33 +346,42 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
     }
 }
 
-static void _networkinterface_packetArrived(NetworkInterface* interface, Packet* packet) {
+void networkinterface_triggerReceiveLoop(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
 
+    /* get the bootstrapping mode for later */
     gboolean bootstrapping = worker_isBootstrapActive();
 
-    /* a packet had arrived, can we receive it? */
-    guint64 length = (guint64)(packet_getPayloadLength(packet) + packet_getHeaderSize(packet));
+    /* see if a packet is available */
+    Packet* packet = router_peek(interface->router);
 
-    /* we receive it if it fits in the token bucket */
-    if(bootstrapping || length <= interface->receiveBucket.bytesRemaining) {
-        _networkinterface_receivePacket(interface, packet);
+    while(packet != NULL) {
+        guint64 length = (guint64)(packet_getPayloadLength(packet) + packet_getHeaderSize(packet));
 
-        /* update bandwidth accounting when not in infinite bandwidth mode */
-        if(!bootstrapping) {
-            g_assert(length <= interface->receiveBucket.bytesRemaining);
-            interface->receiveBucket.bytesRemaining -= length;
+        if(bootstrapping || length <= interface->receiveBucket.bytesRemaining) {
+            /* we are now the owner of the packet reference from the router */
+            packet = router_dequeue(interface->router);
+            utility_assert(packet);
+
+            _networkinterface_receivePacket(interface, packet);
+
+            /* release reference from router */
+            packet_unref(packet);
+
+            /* update bandwidth accounting when not in infinite bandwidth mode */
+            if(!bootstrapping) {
+                g_assert(length <= interface->receiveBucket.bytesRemaining);
+                interface->receiveBucket.bytesRemaining -= length;
+            }
+
+            /* check if the router has another */
+            packet = router_peek(interface->router);
+        } else {
+            /* can't receive it so don't dequeue it */
+            packet = NULL;
+            break;
         }
-    } else {
-        /* buffers are full, drop packet */
-        packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_DROPPED);
     }
-}
-
-static void _networkinterface_packetArrivedAtUpstreamRouter(NetworkInterface* interface) {
-    MAGIC_ASSERT(interface);
-    Packet* packet = router_receive(interface->router);
-    _networkinterface_packetArrived(interface, packet);
 }
 
 static void _networkinterface_updatePacketHeader(Descriptor* descriptor, Packet* packet) {
@@ -462,15 +477,15 @@ static void _networkinterface_sendPackets(NetworkInterface* interface) {
         /* now actually send the packet somewhere */
         if(address_toNetworkIP(interface->address) == packet_getDestinationIP(packet)) {
             /* packet will arrive on our own interface, so it doesn't need to
-             * go through the upstream router. */
+             * go through the upstream router and does not consume bandwidth. */
             packet_ref(packet);
-            Task* packetTask = task_new((TaskCallbackFunc)_networkinterface_packetArrived,
+            Task* packetTask = task_new((TaskCallbackFunc)_networkinterface_receivePacket,
                     interface, packet, NULL, (TaskArgumentFreeFunc)packet_unref);
             worker_scheduleTask(packetTask, 1);
             task_unref(packetTask);
         } else {
             /* let the upstream router send to remote with appropriate delays */
-            router_send(interface->router, packet);
+            router_forward(interface->router, packet);
         }
 
         /* successfully sent, calculate how long it took to 'send' this packet */
@@ -542,7 +557,8 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
     /* parse queuing discipline */
     interface->qdisc = (qdisc == QDISC_MODE_NONE) ? QDISC_MODE_FIFO : qdisc;
 
-    interface->router = router_new((PacketQueuedCallback)_networkinterface_packetArrivedAtUpstreamRouter, interface);
+    /* the upstream router that will queue packets until we can receive them */
+    interface->router = router_new(QUEUE_MANAGER_STATIC, interface);
 
     if(logPcap) {
         GString* filename = g_string_new(NULL);
