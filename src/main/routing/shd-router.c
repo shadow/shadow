@@ -2,14 +2,8 @@
  * shd-router.c
  *
  * This component models the upstream (ISP) router from a host's external facing
- * network interface. The router uses an active queue management (AQM) algorithm
- * to smooth out packet bursts from fast networks onto slow networks. Currently,
- * the only supported AQM algorithm is CoDel.
- *
- * More info:
- *   - https://en.wikipedia.org/wiki/CoDel
- *   - http://man7.org/linux/man-pages/man8/tc-codel.8.html
- *   - https://queue.acm.org/detail.cfm?id=2209336
+ * network interface. The router uses a queue management algorithm to smooth out
+ * packet bursts from fast networks onto slow networks.
  *
  *  Created on: Jan 7, 2020
  *      Author: rjansen
@@ -17,55 +11,56 @@
 
 #include "shadow.h"
 
-/* hard limit of queue size, in number of packets */
-#define CODEL_PARAM_LIMIT 1000
-/* target minimum standing queue delay time, in milliseconds */
-#define CODEL_PARAM_TARGET 5
-/* delay is computed over the most recent interval time, in milliseconds */
-#define CODEL_PARAM_INTERVAL 100
-
-typedef enum _RouterMode RouterMode;
-enum _RouterMode {
-    ROUTER_MODE_STORE, ROUTER_MODE_DROP,
-};
-
-typedef struct _RouterEntry RouterEntry;
-struct _RouterEntry {
-    Packet* packet;
-    SimulationTime storedTS;
-};
 
 struct _Router {
-    RouterMode currentMode;
+    /* the algorithm we use to manage the router queue */
+    QueueManagerMode queueMode;
+    const QueueManagerHooks* queueHooks;
+    void* queueManager;
 
-    PacketQueuedCallback callbackFunc;
-    void* callbackArg;
-
-    Packet* currentPacket;
+    /* the interface that we deliver packets to */
+    NetworkInterface* interface;
 
     gint referenceCount;
     MAGIC_DECLARE;
 };
 
-Router* router_new(PacketQueuedCallback callbackFunc, void* callbackArg) {
+Router* router_new(QueueManagerMode queueMode, void* interface) {
+    utility_assert(interface);
+
     Router* router = g_new0(Router, 1);
     MAGIC_INIT(router);
 
-    router->currentMode = ROUTER_MODE_STORE;
-
-    /* WARNING careful, we are not ref counting the callbackArg here!
-     * Currently, the arg is the network interface and this is OK, but it may not be
-     * OK in the general case!  */
-    router->callbackFunc = callbackFunc;
-    router->callbackArg = callbackArg;
+    router->queueMode = queueMode;
+    router->interface = interface;
 
     router->referenceCount = 1;
+
+    if(router->queueMode == QUEUE_MANAGER_SINGLE) {
+        router->queueHooks = routerqueuesingle_getHooks();
+    } else if(router->queueMode == QUEUE_MANAGER_STATIC) {
+        router->queueHooks = routerqueuestatic_getHooks();
+    } else if(router->queueMode == QUEUE_MANAGER_CODEL) {
+        router->queueHooks = routerqueuecodel_getHooks();
+    } else {
+        error("Queue manager mode %i is undefined", (int)queueMode);
+    }
+
+    utility_assert(router->queueHooks->new);
+    utility_assert(router->queueHooks->free);
+    utility_assert(router->queueHooks->enqueue);
+    utility_assert(router->queueHooks->dequeue);
+    utility_assert(router->queueHooks->peek);
+
+    router->queueManager = router->queueHooks->new();
 
     return router;
 }
 
 static void _router_free(Router* router) {
     MAGIC_ASSERT(router);
+
+    router->queueHooks->free(router->queueManager);
 
     MAGIC_CLEAR(router);
     g_free(router);
@@ -85,7 +80,7 @@ void router_unref(Router* router) {
     }
 }
 
-void router_send(Router* router, Packet* packet) {
+void router_forward(Router* router, Packet* packet) {
     MAGIC_ASSERT(router);
     /* just immediately forward the sending task to the worker, who will compute the
      * path and the appropriate delays to the destination. The packet will arrive
@@ -93,22 +88,38 @@ void router_send(Router* router, Packet* packet) {
     worker_sendPacket(packet);
 }
 
-Packet* router_receive(Router* router) {
-    MAGIC_ASSERT(router);
-    Packet* packet = router->currentPacket;
-    router->currentPacket = NULL;
-    return packet;    
-}
-
-void router_arrived(Router* router, Packet* packet) {
+void router_enqueue(Router* router, Packet* packet) {
     MAGIC_ASSERT(router);
     utility_assert(packet);
-    utility_assert(!router->currentPacket);
 
-    router->currentPacket = packet;
+    Packet* bufferedPacket = router->queueHooks->peek(router->queueManager);
 
-    if(router->callbackFunc) {
-        router->callbackFunc(router->callbackArg);
+    gboolean wasQueued = router->queueHooks->enqueue(router->queueManager, packet);
+
+    if(wasQueued) {
+        packet_addDeliveryStatus(packet, PDS_ROUTER_ENQUEUED);
+    } else {
+        packet_addDeliveryStatus(packet, PDS_ROUTER_DROPPED);
+    }
+
+    /* notify the netiface that we have a new packet so it can dequeue it. */
+    if(!bufferedPacket && wasQueued) {
+        networkinterface_triggerReceiveLoop(router->interface);
     }
 }
 
+Packet* router_peek(Router* router) {
+    MAGIC_ASSERT(router);
+    return router->queueHooks->peek(router->queueManager);
+}
+
+Packet* router_dequeue(Router* router) {
+    MAGIC_ASSERT(router);
+
+    Packet* packet = router->queueHooks->dequeue(router->queueManager);
+    if(packet) {
+        packet_addDeliveryStatus(packet, PDS_ROUTER_DEQUEUED);
+    }
+
+    return packet;
+}

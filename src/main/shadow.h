@@ -90,6 +90,9 @@ typedef struct _Process Process;
 #include "utility/shd-random.h"
 
 #include "routing/shd-address.h"
+#include "routing/shd-router-queue-single.h"
+#include "routing/shd-router-queue-static.h"
+#include "routing/shd-router-queue-codel.h"
 #include "routing/shd-router.h"
 #include "routing/shd-dns.h"
 #include "routing/shd-path.h"

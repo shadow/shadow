@@ -211,7 +211,7 @@ static void _worker_runDeliverPacketTask(Packet* packet, gpointer userData) {
     in_addr_t ip = packet_getDestinationIP(packet);
     Router* router = host_getUpstreamRouter(_worker_getPrivate()->active.host, ip);
     utility_assert(router != NULL);
-    router_arrived(router, packet);
+    router_enqueue(router, packet);
 }
 
 void worker_sendPacket(Packet* packet) {

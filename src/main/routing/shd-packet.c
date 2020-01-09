@@ -489,6 +489,9 @@ static const gchar* _packet_deliveryStatusToAscii(PacketDeliveryStatusFlags stat
         case PDS_SND_INTERFACE_SENT: return "SND_INTERFACE_SENT";
         case PDS_INET_SENT: return "INET_SENT";
         case PDS_INET_DROPPED: return "INET_DROPPED";
+        case PDS_ROUTER_ENQUEUED: return "ROUTER_ENQUEUED";
+        case PDS_ROUTER_DEQUEUED: return "ROUTER_DEQUEUED";
+        case PDS_ROUTER_DROPPED: return "ROUTER_DROPPED";
         case PDS_RCV_INTERFACE_RECEIVED: return "RCV_INTERFACE_RECEIVED";
         case PDS_RCV_INTERFACE_DROPPED: return "RCV_INTERFACE_DROPPED";
         case PDS_RCV_SOCKET_PROCESSED: return "RCV_SOCKET_PROCESSED";

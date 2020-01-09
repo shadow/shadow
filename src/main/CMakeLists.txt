@@ -92,6 +92,9 @@ set(shadow_srcs
     routing/shd-payload.c
     routing/shd-packet.c
     routing/shd-address.c
+    routing/shd-router-queue-single.c
+    routing/shd-router-queue-static.c
+    routing/shd-router-queue-codel.c
     routing/shd-router.c
     routing/shd-dns.c
     routing/shd-path.c

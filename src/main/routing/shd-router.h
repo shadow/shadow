@@ -8,18 +8,44 @@
 #ifndef SRC_MAIN_ROUTING_SHD_ROUTER_H_
 #define SRC_MAIN_ROUTING_SHD_ROUTER_H_
 
-typedef void (*PacketQueuedCallback)(void* callbackArg);
-
 typedef struct _Router Router;
+typedef enum _QueueManagerMode QueueManagerMode;
+typedef struct _QueueManagerHooks QueueManagerHooks;
 
 #include "shadow.h"
 
-Router* router_new(PacketQueuedCallback callbackFunc, void* callbackArg);
+enum _QueueManagerMode {
+    QUEUE_MANAGER_SINGLE, // buffers only a single packet
+    QUEUE_MANAGER_STATIC, // a FIFO queue with a static size
+    QUEUE_MANAGER_CODEL, // implements the CoDel AQM
+};
+
+typedef void* (*QueueManagerNew)();
+typedef void (*QueueManagerFree)(void* queueManager);
+typedef gboolean (*QueueManagerEnqueue)(void* queueManager, Packet* packet);
+typedef Packet* (*QueueManagerDequeue)(void* queueManager);
+typedef Packet* (*QueueManagerPeek)(void* queueManager);
+
+struct _QueueManagerHooks {
+    QueueManagerNew new;
+    QueueManagerFree free;
+    QueueManagerEnqueue enqueue;
+    QueueManagerDequeue dequeue;
+    QueueManagerPeek peek;
+};
+
+Router* router_new(QueueManagerMode queueMode, void* interface);
 void router_ref(Router* router);
 void router_unref(Router* router);
 
-void router_send(Router* router, Packet* packet);
-void router_arrived(Router* router, Packet* packet);
-Packet* router_receive(Router* router);
+/* forward an outgoing packet to the destination's upstream router */
+void router_forward(Router* router, Packet* packet);
+
+/* enqueue a downstream packet, i.e., buffer it until the host can receive it */
+void router_enqueue(Router* router, Packet* packet);
+/* get the next downstream packet without dequeuing it */
+Packet* router_peek(Router* router);
+/* dequeue a downstream packet, i.e., receive it from the network */
+Packet* router_dequeue(Router* router);
 
 #endif /* SRC_MAIN_ROUTING_SHD_ROUTER_H_ */
