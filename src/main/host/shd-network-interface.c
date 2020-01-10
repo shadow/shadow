@@ -375,40 +375,33 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
     }
 }
 
-void networkinterface_triggerReceiveLoop(NetworkInterface* interface) {
+void networkinterface_receivePackets(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
 
-    /* get the bootstrapping mode for later */
+    /* get the bootstrapping mode */
     gboolean bootstrapping = worker_isBootstrapActive();
 
-    /* see if a packet is available */
-    Packet* packet = router_peek(interface->router);
+    while(bootstrapping || interface->receiveBucket.bytesRemaining >= CONFIG_MTU) {
+        /* we are now the owner of the packet reference from the router */
+        Packet* packet = router_dequeue(interface->router);
+        if(!packet) {
+            break;
+        }
 
-    while(packet != NULL) {
         guint64 length = (guint64)(packet_getPayloadLength(packet) + packet_getHeaderSize(packet));
 
-        if(bootstrapping || length <= interface->receiveBucket.bytesRemaining) {
-            /* we are now the owner of the packet reference from the router */
-            packet = router_dequeue(interface->router);
-            utility_assert(packet);
+        _networkinterface_receivePacket(interface, packet);
 
-            _networkinterface_receivePacket(interface, packet);
+        /* release reference from router */
+        packet_unref(packet);
 
-            /* release reference from router */
-            packet_unref(packet);
-
-            /* update bandwidth accounting when not in infinite bandwidth mode */
-            if(!bootstrapping) {
-                g_assert(length <= interface->receiveBucket.bytesRemaining);
+        /* update bandwidth accounting when not in infinite bandwidth mode */
+        if(!bootstrapping) {
+            if(length > interface->receiveBucket.bytesRemaining) {
+                interface->receiveBucket.bytesRemaining = 0;
+            } else {
                 interface->receiveBucket.bytesRemaining -= length;
             }
-
-            /* check if the router has another */
-            packet = router_peek(interface->router);
-        } else {
-            /* can't receive it so don't dequeue it */
-            packet = NULL;
-            break;
         }
     }
 }
