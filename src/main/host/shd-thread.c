@@ -114,7 +114,7 @@ void thread_resume(Thread* thread) {
 
     utility_assert(thread->currentEventID != 0);
 
-    gboolean needToBlock = FALSE;
+    SysCallReturn result;
 
     while(TRUE) {
 
@@ -124,7 +124,7 @@ void thread_resume(Thread* thread) {
                 // the plugin will run until it makes a blocking call
 
                 /* event has completed */
-                needToBlock = FALSE;
+                result.block = FALSE;
 
                 break;
             }
@@ -135,9 +135,9 @@ void thread_resume(Thread* thread) {
                 unsigned int sec = 1;
 
                 // handle call
-                unsigned int result = syscallhandler_sleep(thread->sys, thread, &needToBlock, sec);
+                result = syscallhandler_sleep(thread->sys, thread, sec);
 
-                if(!needToBlock) {
+                if(!result.block) {
                     // TODO send message containing result to shim
                 }
 
@@ -147,9 +147,9 @@ void thread_resume(Thread* thread) {
             case 3: {
                 unsigned int usec = 1;
 
-                int result = syscallhandler_usleep(thread->sys, thread, &needToBlock, usec);
+                result = syscallhandler_usleep(thread->sys, thread, usec);
 
-                if(!needToBlock) {
+                if(!result.block) {
                     // TODO send message containing result to shim
                 }
 
@@ -160,9 +160,9 @@ void thread_resume(Thread* thread) {
                 struct timespec req;
                 struct timespec rem;
 
-                int result = syscallhandler_nanosleep(thread->sys, thread, &needToBlock, &req, &rem);
+                result = syscallhandler_nanosleep(thread->sys, thread, &req, &rem);
 
-                if(!needToBlock) {
+                if(!result.block) {
                     // TODO send message containing result to shim
                 }
 
@@ -178,7 +178,7 @@ void thread_resume(Thread* thread) {
         // TODO remove this once we have functional events
         return;
 
-        if(needToBlock) {
+        if(result.block) {
             /* thread is blocked on simulation progress */
             return;
         } else {
