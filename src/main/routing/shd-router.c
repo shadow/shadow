@@ -54,6 +54,7 @@ Router* router_new(QueueManagerMode queueMode, void* interface) {
 
     router->queueManager = router->queueHooks->new();
 
+    worker_countObject(OBJECT_TYPE_ROUTER, COUNTER_TYPE_NEW);
     return router;
 }
 
@@ -64,6 +65,7 @@ static void _router_free(Router* router) {
 
     MAGIC_CLEAR(router);
     g_free(router);
+    worker_countObject(OBJECT_TYPE_ROUTER, COUNTER_TYPE_FREE);
 }
 
 void router_ref(Router* router) {

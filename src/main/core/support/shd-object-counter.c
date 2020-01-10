@@ -18,7 +18,9 @@ struct _ObjectCounter {
         ObjectCounts event;
         ObjectCounts packet;
         ObjectCounts payload;
+        ObjectCounts router;
         ObjectCounts host;
+        ObjectCounts netiface;
         ObjectCounts process;
         ObjectCounts descriptor;
         ObjectCounts channel;
@@ -104,8 +106,18 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
 
+        case OBJECT_TYPE_ROUTER: {
+            _objectcount_incrementOne(&(counter->counters.router), ctype);
+            break;
+        }
+
         case OBJECT_TYPE_HOST: {
             _objectcount_incrementOne(&(counter->counters.host), ctype);
+            break;
+        }
+
+        case OBJECT_TYPE_NETIFACE: {
+            _objectcount_incrementOne(&(counter->counters.netiface), ctype);
             break;
         }
 
@@ -158,7 +170,9 @@ void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment
     _objectcount_incrementAll(&(counter->counters.event), &(increment->counters.event));
     _objectcount_incrementAll(&(counter->counters.packet), &(increment->counters.packet));
     _objectcount_incrementAll(&(counter->counters.payload), &(increment->counters.payload));
+    _objectcount_incrementAll(&(counter->counters.router), &(increment->counters.router));
     _objectcount_incrementAll(&(counter->counters.host), &(increment->counters.host));
+    _objectcount_incrementAll(&(counter->counters.netiface), &(increment->counters.netiface));
     _objectcount_incrementAll(&(counter->counters.process), &(increment->counters.process));
     _objectcount_incrementAll(&(counter->counters.descriptor), &(increment->counters.descriptor));
     _objectcount_incrementAll(&(counter->counters.channel), &(increment->counters.channel));
@@ -180,7 +194,9 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
             "event_new=%"G_GUINT64_FORMAT" event_free=%"G_GUINT64_FORMAT" "
             "packet_new=%"G_GUINT64_FORMAT" packet_free=%"G_GUINT64_FORMAT" "
             "payload_new=%"G_GUINT64_FORMAT" payload_free=%"G_GUINT64_FORMAT" "
+            "router_new=%"G_GUINT64_FORMAT" router_free=%"G_GUINT64_FORMAT" "
             "host_new=%"G_GUINT64_FORMAT" host_free=%"G_GUINT64_FORMAT" "
+            "netiface_new=%"G_GUINT64_FORMAT" netiface_free=%"G_GUINT64_FORMAT" "
             "process_new=%"G_GUINT64_FORMAT" process_free=%"G_GUINT64_FORMAT" "
             "descriptor_new=%"G_GUINT64_FORMAT" descriptor_free=%"G_GUINT64_FORMAT" "
             "channel_new=%"G_GUINT64_FORMAT" channel_free=%"G_GUINT64_FORMAT" "
@@ -192,7 +208,9 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
             counter->counters.event.new, counter->counters.event.free,
             counter->counters.packet.new, counter->counters.packet.free,
             counter->counters.payload.new, counter->counters.payload.free,
+            counter->counters.router.new, counter->counters.router.free,
             counter->counters.host.new, counter->counters.host.free,
+            counter->counters.netiface.new, counter->counters.netiface.free,
             counter->counters.process.new, counter->counters.process.free,
             counter->counters.descriptor.new, counter->counters.descriptor.free,
             counter->counters.channel.new, counter->counters.channel.free,
@@ -216,7 +234,9 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
             "event=%"G_GUINT64_FORMAT" "
             "packet=%"G_GUINT64_FORMAT" "
             "payload=%"G_GUINT64_FORMAT" "
+            "router=%"G_GUINT64_FORMAT" "
             "host=%"G_GUINT64_FORMAT" "
+            "netiface=%"G_GUINT64_FORMAT" "
             "process=%"G_GUINT64_FORMAT" "
             "descriptor=%"G_GUINT64_FORMAT" "
             "channel=%"G_GUINT64_FORMAT" "
@@ -228,7 +248,9 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
             counter->counters.event.new - counter->counters.event.free,
             counter->counters.packet.new - counter->counters.packet.free,
             counter->counters.payload.new - counter->counters.payload.free,
+            counter->counters.router.new - counter->counters.router.free,
             counter->counters.host.new - counter->counters.host.free,
+            counter->counters.netiface.new - counter->counters.netiface.free,
             counter->counters.process.new - counter->counters.process.free,
             counter->counters.descriptor.new - counter->counters.descriptor.free,
             counter->counters.channel.new - counter->counters.channel.free,

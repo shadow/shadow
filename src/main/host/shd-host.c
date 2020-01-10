@@ -13,6 +13,9 @@ struct _Host {
 
     HostParameters params;
 
+    /* The router upstream from the host, from which we receive packets. */
+    Router* router;
+
     GHashTable* interfaces;
     Address* defaultAddress;
     CPU* cpu;
@@ -158,6 +161,12 @@ void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, cons
     g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(ethernetAddress)), ethernet);
     g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 
+    /* the upstream router that will queue packets until we can receive them.
+     * this only applies the the ethernet interface, the loopback interface
+     * does not receive packets from a router. */
+    host->router = router_new(QUEUE_MANAGER_CODEL, ethernet);
+    networkinterface_setRouter(ethernet, host->router);
+
     address_unref(loopbackAddress);
     address_unref(ethernetAddress);
 
@@ -199,6 +208,10 @@ void host_shutdown(Host* host) {
 
     if(host->interfaces) {
         g_hash_table_destroy(host->interfaces);
+    }
+
+    if(host->router) {
+        router_unref(host->router);
     }
 
     if(host->descriptors) {
