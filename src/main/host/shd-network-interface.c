@@ -82,6 +82,33 @@ static void _networkinterface_refillTokenBucket(NetworkInterfaceTokenBucket* buc
     }
 }
 
+static inline void _networkinterface_scheduleRefillTask(NetworkInterface* interface,
+        TaskCallbackFunc func, SimulationTime delay) {
+    Task* refillTask = task_new(func, interface, NULL, NULL, NULL);
+    worker_scheduleTask(refillTask, delay);
+    task_unref(refillTask);
+}
+
+static void _networkinterface_refillTokenBucketsBoth(NetworkInterface* interface, gpointer userData) {
+    MAGIC_ASSERT(interface);
+
+    /* add more bytes to the token buckets */
+    _networkinterface_refillTokenBucket(&interface->receiveBucket);
+    _networkinterface_refillTokenBucket(&interface->sendBucket);
+
+    /* call back when we need the next refill */
+    utility_assert(_networkinterface_getRefillIntervalSend() ==
+            _networkinterface_getRefillIntervalReceive());
+
+    _networkinterface_scheduleRefillTask(interface,
+            (TaskCallbackFunc) _networkinterface_refillTokenBucketsBoth,
+            _networkinterface_getRefillIntervalReceive());
+
+    /* the refill may have caused us to be able to receive and send again */
+    networkinterface_receivePackets(interface);
+    _networkinterface_sendPackets(interface);
+}
+
 static void _networkinterface_refillTokenBucketSend(NetworkInterface* interface, gpointer userData) {
     MAGIC_ASSERT(interface);
 
@@ -89,10 +116,9 @@ static void _networkinterface_refillTokenBucketSend(NetworkInterface* interface,
     _networkinterface_refillTokenBucket(&interface->sendBucket);
 
     /* call back when we need the next refill */
-    Task* refillTask = task_new((TaskCallbackFunc)_networkinterface_refillTokenBucketSend,
-            interface, NULL, NULL, NULL);
-    worker_scheduleTask(refillTask, _networkinterface_getRefillIntervalSend());
-    task_unref(refillTask);
+    _networkinterface_scheduleRefillTask(interface,
+            (TaskCallbackFunc) _networkinterface_refillTokenBucketSend,
+            _networkinterface_getRefillIntervalSend());
 
     /* the refill may have caused us to be able to send again */
     _networkinterface_sendPackets(interface);
@@ -105,19 +131,22 @@ static void _networkinterface_refillTokenBucketReceive(NetworkInterface* interfa
     _networkinterface_refillTokenBucket(&interface->receiveBucket);
 
     /* call back when we need the next refill */
-    Task* refillTask = task_new((TaskCallbackFunc)_networkinterface_refillTokenBucketReceive,
-            interface, NULL, NULL, NULL);
-    worker_scheduleTask(refillTask, _networkinterface_getRefillIntervalReceive());
-    task_unref(refillTask);
+    _networkinterface_scheduleRefillTask(interface,
+            (TaskCallbackFunc) _networkinterface_refillTokenBucketReceive,
+            _networkinterface_getRefillIntervalReceive());
 
-    /* check if our new tokens allow us to receive more packets */
-    networkinterface_triggerReceiveLoop(interface);
+    /* the refill may have caused us to be able to receive again */
+    networkinterface_receivePackets(interface);
 }
 
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
-    _networkinterface_refillTokenBucketReceive(interface, NULL);
-    _networkinterface_refillTokenBucketSend(interface, NULL);
+    if(_networkinterface_getRefillIntervalSend() == _networkinterface_getRefillIntervalReceive()) {
+        _networkinterface_refillTokenBucketsBoth(interface, NULL);
+    } else {
+        _networkinterface_refillTokenBucketReceive(interface, NULL);
+        _networkinterface_refillTokenBucketSend(interface, NULL);
+    }
 }
 
 static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
