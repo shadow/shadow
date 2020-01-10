@@ -17,7 +17,8 @@ struct _NetworkInterfaceTokenBucket {
 };
 
 struct _NetworkInterface {
-    /* The upstream ISP router connected to this interface. */
+    /* The upstream ISP router connected to this interface.
+     * May be NULL for loopback interfaces. */
     Router* router;
 
     /* The queuing discipline used by this interface to schedule the
@@ -105,7 +106,9 @@ static void _networkinterface_refillTokenBucketsBoth(NetworkInterface* interface
             _networkinterface_getRefillIntervalReceive());
 
     /* the refill may have caused us to be able to receive and send again */
-    networkinterface_receivePackets(interface);
+    if(interface->router) {
+        networkinterface_receivePackets(interface);
+    }
     _networkinterface_sendPackets(interface);
 }
 
@@ -136,7 +139,9 @@ static void _networkinterface_refillTokenBucketReceive(NetworkInterface* interfa
             _networkinterface_getRefillIntervalReceive());
 
     /* the refill may have caused us to be able to receive again */
-    networkinterface_receivePackets(interface);
+    if(interface->router) {
+        networkinterface_receivePackets(interface);
+    }
 }
 
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface) {
@@ -378,6 +383,11 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
 void networkinterface_receivePackets(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
 
+    /* we can only receive packets from the upstream router if we actually have one */
+    if(!interface->router) {
+        return;
+    }
+
     /* get the bootstrapping mode */
     gboolean bootstrapping = worker_isBootstrapActive();
 
@@ -506,7 +516,9 @@ static void _networkinterface_sendPackets(NetworkInterface* interface) {
             worker_scheduleTask(packetTask, 1);
             task_unref(packetTask);
         } else {
-            /* let the upstream router send to remote with appropriate delays */
+            /* let the upstream router send to remote with appropriate delays.
+             * if we get here we are not loopback and should have been assigned a router. */
+            utility_assert(interface->router);
             router_forward(interface->router, packet);
         }
 
@@ -556,6 +568,17 @@ void networkinterface_wantsSend(NetworkInterface* interface, Socket* socket) {
     _networkinterface_sendPackets(interface);
 }
 
+void networkinterface_setRouter(NetworkInterface* interface, Router* router) {
+    MAGIC_ASSERT(interface);
+    if(interface->router) {
+        router_unref(interface->router);
+    }
+    interface->router = router;
+    if(interface->router) {
+        router_ref(interface->router);
+    }
+}
+
 Router* networkinterface_getRouter(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
     return interface->router;
@@ -579,9 +602,6 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
     /* parse queuing discipline */
     interface->qdisc = (qdisc == QDISC_MODE_NONE) ? QDISC_MODE_FIFO : qdisc;
 
-    /* the upstream router that will queue packets until we can receive them */
-    interface->router = router_new(QUEUE_MANAGER_CODEL, interface);
-
     if(logPcap) {
         GString* filename = g_string_new(NULL);
         g_string_printf(filename, "%s-%s",
@@ -598,6 +618,7 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
             address_toHostName(interface->address), address_toHostIPString(interface->address), bwUpKiBps, bwDownKiBps,
             interface->qdisc == QDISC_MODE_RR ? "rr" : "fifo");
 
+    worker_countObject(OBJECT_TYPE_NETIFACE, COUNTER_TYPE_NEW);
     return interface;
 }
 
@@ -628,5 +649,7 @@ void networkinterface_free(NetworkInterface* interface) {
 
     MAGIC_CLEAR(interface);
     g_free(interface);
+
+    worker_countObject(OBJECT_TYPE_NETIFACE, COUNTER_TYPE_FREE);
 }
 

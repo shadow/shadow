@@ -29,7 +29,9 @@ void networkinterface_sent(NetworkInterface* interface);
 
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface);
 
+void networkinterface_setRouter(NetworkInterface* interface, Router* router);
 Router* networkinterface_getRouter(NetworkInterface* interface);
+
 void networkinterface_receivePackets(NetworkInterface* interface);
 
 #endif /* SHD_NETWORK_INTERFACE_H_ */
