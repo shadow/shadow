@@ -580,7 +580,7 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
     interface->qdisc = (qdisc == QDISC_MODE_NONE) ? QDISC_MODE_FIFO : qdisc;
 
     /* the upstream router that will queue packets until we can receive them */
-    interface->router = router_new(QUEUE_MANAGER_STATIC, interface);
+    interface->router = router_new(QUEUE_MANAGER_CODEL, interface);
 
     if(logPcap) {
         GString* filename = g_string_new(NULL);
