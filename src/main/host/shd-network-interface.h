@@ -30,6 +30,6 @@ void networkinterface_sent(NetworkInterface* interface);
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface);
 
 Router* networkinterface_getRouter(NetworkInterface* interface);
-void networkinterface_triggerReceiveLoop(NetworkInterface* interface);
+void networkinterface_receivePackets(NetworkInterface* interface);
 
 #endif /* SHD_NETWORK_INTERFACE_H_ */

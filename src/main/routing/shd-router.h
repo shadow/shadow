@@ -43,8 +43,6 @@ void router_forward(Router* router, Packet* packet);
 
 /* enqueue a downstream packet, i.e., buffer it until the host can receive it */
 void router_enqueue(Router* router, Packet* packet);
-/* get the next downstream packet without dequeuing it */
-Packet* router_peek(Router* router);
 /* dequeue a downstream packet, i.e., receive it from the network */
 Packet* router_dequeue(Router* router);
 

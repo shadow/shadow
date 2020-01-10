@@ -104,13 +104,8 @@ void router_enqueue(Router* router, Packet* packet) {
 
     /* notify the netiface that we have a new packet so it can dequeue it. */
     if(!bufferedPacket && wasQueued) {
-        networkinterface_triggerReceiveLoop(router->interface);
+        networkinterface_receivePackets(router->interface);
     }
-}
-
-Packet* router_peek(Router* router) {
-    MAGIC_ASSERT(router);
-    return router->queueHooks->peek(router->queueManager);
 }
 
 Packet* router_dequeue(Router* router) {
