@@ -3,8 +3,9 @@
 #include <stdint.h>
 #include <time.h>
 
-#define SHD_SHIM_EVENT_START 0
-#define SHD_SHIM_EVENT_NANO_SLEEP 1
+#define SHD_SHIM_EVENT_NULL 0
+#define SHD_SHIM_EVENT_START 1
+#define SHD_SHIM_EVENT_NANO_SLEEP 2
 
 typedef uint32_t ShimEventID;
 

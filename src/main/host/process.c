@@ -332,7 +332,7 @@ static gchar** _process_getEnvv(Process* proc, gchar* environment) {
 
     /* set up the LD_PRELOAD environment */
     // TODO no hard code!
-    envv = g_environ_setenv(envv, "LD_PRELOAD", "/home/user/.shadow/lib/ftm-shim.so", TRUE);
+    envv = g_environ_setenv(envv, "LD_PRELOAD", "/home/rwails/.shadow/lib/libshadow-shim.so", TRUE);
 
     // TODO add in user-specified env vals
 

@@ -25,6 +25,8 @@ int nanosleep(const struct timespec *req, struct timespec *rem) {
     ShimEvent shim_event;
     shim_event.event_id = SHD_SHIM_EVENT_NANO_SLEEP;
     shim_event.event_data.data_nano_sleep.ts = *req;
+
+    SHD_SHIM_LOG("sending event on %d\n", event_fd);
     shimevent_sendEvent(event_fd, &shim_event);
 
     memset(&shim_event, 0, sizeof(ShimEvent));

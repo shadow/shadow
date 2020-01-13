@@ -1,12 +1,18 @@
 #ifndef SHD_SHIM_SHIM_H_
 #define SHD_SHIM_SHIM_H_
 #include <stddef.h>
+#include <stdio.h>
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
+FILE *shim_logFD();
 int shim_thisThreadEventFD();
+
+#define SHD_SHIM_LOG(...) \
+    fprintf(shim_logFD(), "[shd-shim]\t"); \
+    fprintf(shim_logFD(), __VA_ARGS__)
 
 static inline void shim_determinedSend(int sock_fd, const void *ptr,
                                        size_t nbytes) {

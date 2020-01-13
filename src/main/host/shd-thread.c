@@ -6,19 +6,30 @@
  */
 #include "main/host/shd-thread.h"
 
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include "shim/shim_event.h"
 #include "main/host/shd-syscall-handler.h"
 #include "support/logger/logger.h"
+
 
 struct _Thread {
     // needs to store comm channel state, etc.
 
     SysCallHandler* sys;
 
+    pid_t childPID;
+    int eventFD;
+
     gint threadID;
     gint isAlive;
 
     /* holds the event id for the most recent call from the plugin/shim */
-    gint currentEventID;
+    ShimEvent currentEvent;
 
     gint referenceCount;
     MAGIC_DECLARE;
@@ -55,6 +66,54 @@ static void _thread_free(Thread* thread) {
     g_free(thread);
 }
 
+static void _thread_create_ipc_sockets(Thread *thread, int *child_fd) {
+    utility_assert(thread != NULL && child_fd != NULL);
+
+    int socks[2] = {0, 0};
+
+    int rc = socketpair(AF_UNIX, SOCK_DGRAM, 0, socks);
+
+    if (rc == 0) {
+        thread->eventFD = socks[0];
+        *child_fd = socks[1];
+
+        // set the parent fd to close on exec
+        fcntl(thread->eventFD, F_SETFD, FD_CLOEXEC);
+    } else {
+        error("socketpair() call failed");
+        thread->eventFD = *child_fd = -1;
+    }
+
+}
+
+static int _thread_fork_exec(Thread *thread,
+                             const char *file,
+                             char *const argv[],
+                             char *const envp[])
+{
+    int rc = 0;
+    pid_t pid = fork();
+
+    switch (pid) {
+        case -1:
+            error("fork failed");
+            return -1;
+            break;
+        case 0: // child
+            execvpe(file, argv, envp);
+            if (rc == -1) {
+                error("execvpe() call failed");
+                return -1;
+            }
+            while (1) {} // here for compiler optimization
+            break;
+        default: // parent
+            info("started process %s with PID %d", file, pid);
+            thread->childPID = pid;
+            break;
+    }
+}
+
 void thread_ref(Thread* thread) {
     MAGIC_ASSERT(thread);
     (thread->referenceCount)++;
@@ -75,15 +134,20 @@ void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     /* set the env for the child */
     gchar** myenvv = g_strdupv(envv);
 
+    int child_fd = 0;
+    _thread_create_ipc_sockets(thread, &child_fd);
+    utility_assert(thread->eventFD != -1 && child_fd != -1);
+
+    char buf[64];
+    snprintf(buf, 64, "%d", child_fd);
+
     /* append to the env */
-    // TODO fix this to use the correct key/value strings
-    myenvv = g_environ_setenv(myenvv, "FTM_EVENT_FD", "0", TRUE);
+    myenvv = g_environ_setenv(myenvv, "_SHD_IPC_SOCKET", buf, TRUE);
 
-    // TODO set up the comm channel stuff here
+    _thread_fork_exec(thread, argv[0], argv, myenvv);
 
-    /* make the fork() / exec() calls */
-    // TODO need to fork first, and do any other setup first
-    //gint returnValue = execvpe(argv[0], argv, myenvv);
+    // close the child sock, it is no longer needed
+    close(child_fd);
 
     /* cleanup the dupd env*/
     if(myenvv) {
@@ -91,7 +155,7 @@ void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     }
 
     // TODO get to the point where the plugin blocks before calling main()
-    thread->currentEventID = 1; // designate a main() call
+    thread->currentEvent.event_id = SHD_SHIM_EVENT_START;
 
     /* thread is now active */
     thread->isAlive = 1;
@@ -100,28 +164,28 @@ void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     thread_resume(thread);
 }
 
-gint _thread_waitForNextEvent(Thread* thread) {
+static inline void _thread_waitForNextEvent(Thread* thread) {
     MAGIC_ASSERT(thread);
-
-    // TODO wait on the channel for the next event from the shim
-
-    // return the event code
-    return 2;
+    utility_assert(thread->eventFD > 0);
+    shimevent_recvEvent(thread->eventFD, &thread->currentEvent);
+    debug("received shim_event %d", thread->currentEvent.event_id);
 }
 
 void thread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
 
-    utility_assert(thread->currentEventID != 0);
+    utility_assert(thread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
 
     SysCallReturn result;
 
     while(TRUE) {
 
-        switch(thread->currentEventID) {
-            case 1: {
+        switch(thread->currentEvent.event_id) {
+            case SHD_SHIM_EVENT_START: {
                 // send the message to the shim to call main(),
                 // the plugin will run until it makes a blocking call
+                debug("sending start event code to %d on %d", thread->childPID, thread->eventFD);
+                shimevent_sendEvent(thread->eventFD, &thread->currentEvent);
 
                 /* event has completed */
                 result.block = FALSE;
@@ -129,35 +193,10 @@ void thread_resume(Thread* thread) {
                 break;
             }
 
-            case 2: {
-                // deserialize event params from channel
-                // some params might be in shared memory
-                unsigned int sec = 1;
+            case SHD_SHIM_EVENT_NANO_SLEEP: {
+                struct timespec req =
+                    thread->currentEvent.event_data.data_nano_sleep.ts;
 
-                // handle call
-                result = syscallhandler_sleep(thread->sys, thread, sec);
-
-                if(!result.block) {
-                    // TODO send message containing result to shim
-                }
-
-                break;
-            }
-
-            case 3: {
-                unsigned int usec = 1;
-
-                result = syscallhandler_usleep(thread->sys, thread, usec);
-
-                if(!result.block) {
-                    // TODO send message containing result to shim
-                }
-
-                break;
-            }
-
-            case 4: {
-                struct timespec req;
                 struct timespec rem;
 
                 result = syscallhandler_nanosleep(thread->sys, thread, &req, &rem);
@@ -175,31 +214,53 @@ void thread_resume(Thread* thread) {
             }
         }
 
-        // TODO remove this once we have functional events
-        return;
-
         if(result.block) {
             /* thread is blocked on simulation progress */
             return;
         } else {
             /* previous event was handled, wait for next one */
-            thread->currentEventID = _thread_waitForNextEvent(thread);
+            _thread_waitForNextEvent(thread);
         }
     }
 }
 
 int thread_terminate(Thread* thread) {
+    // TODO [rwails]: come back and make this logic more solid
+
     MAGIC_ASSERT(thread);
 
-    // if the proc has already stopped, just return the returncode
+    int status = 0, child_rc = 0;
 
-    // terminate the process (send a signal that will cause it to
-    // call proper destructors, etc)
+    if (thread->isAlive) {
 
-    thread->isAlive = 0;
+        utility_assert(thread->childPID > 0);
+
+        pid_t rc = waitpid(thread->childPID, &status, WNOHANG);
+        utility_assert(rc != -1);
+
+        if (rc == 0) { // child is running, request a stop
+            debug("sending SIGTERM to %d", thread->childPID);
+            kill(thread->childPID, SIGTERM);
+            rc = waitpid(thread->childPID, &status, 0);
+            utility_assert(rc != -1 && rc > 0);
+        }
+
+        if (WIFEXITED(status)) {
+            child_rc = WEXITSTATUS(status);
+            debug("child %d exited with status %d", thread->childPID, child_rc);
+        } else if (WIFSIGNALED(status)) {
+            int signum = WTERMSIG(status);
+            debug("child %d terminated by signal %d", thread->childPID, signum);
+            child_rc = -1;
+        } else {
+            debug("child %d quit unexpectedly", thread->childPID);
+        }
+
+        thread->isAlive = 0;
+    }
 
     // return the return code of the process
-    return 0;
+    return child_rc;
 }
 
 gboolean thread_isAlive(Thread* thread) {

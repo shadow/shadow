@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -29,7 +30,7 @@ static int _shim_tidFDTreeCompare(const void *lhs, const void *rhs) {
 static void _shim_tidFDTreeAdd(TIDFDPair *tid_fd) {
     pthread_mutex_lock(&tid_fd_tree_mtx);
 
-    tsearch(tid_fd, tid_fd_tree, _shim_tidFDTreeCompare);
+    tsearch(tid_fd, &tid_fd_tree, _shim_tidFDTreeCompare);
 
     pthread_mutex_unlock(&tid_fd_tree_mtx);
 }
@@ -37,14 +38,14 @@ static void _shim_tidFDTreeAdd(TIDFDPair *tid_fd) {
 static TIDFDPair _shim_tidFDTreeGet(pthread_t tid) {
     pthread_mutex_lock(&tid_fd_tree_mtx);
 
-    TIDFDPair tid_fd, needle, *p = NULL;
+    TIDFDPair tid_fd, needle, **p = NULL;
     memset(&tid_fd, 0, sizeof(TIDFDPair));
     memset(&needle, 0, sizeof(TIDFDPair));
 
     needle.tid = tid;
-    p = tfind(&needle, tid_fd_tree, _shim_tidFDTreeCompare);
+    p = tfind(&needle, &tid_fd_tree, _shim_tidFDTreeCompare);
     if (p != NULL) {
-        tid_fd = *p;
+        tid_fd = *(*p);
     }
 
     pthread_mutex_unlock(&tid_fd_tree_mtx);
@@ -52,10 +53,11 @@ static TIDFDPair _shim_tidFDTreeGet(pthread_t tid) {
     return tid_fd;
 }
 
-__attribute__((constructor)) static void _shim_load() {
-    const char *ftm_event_sock_fd = getenv("_SHD_IPC_SOCKET");
-    assert(ftm_event_sock_fd);
-    int event_sock_fd = atoi(ftm_event_sock_fd);
+__attribute__((constructor))
+static void _shim_load() {
+    const char *shd_event_sock_fd = getenv("_SHD_IPC_SOCKET");
+    assert(shd_event_sock_fd);
+    int event_sock_fd = atoi(shd_event_sock_fd);
 
     pthread_mutex_init(&tid_fd_tree_mtx, NULL);
 
@@ -65,10 +67,16 @@ __attribute__((constructor)) static void _shim_load() {
     tid_fd->tid = pthread_self();
     tid_fd->fd = event_sock_fd;
 
+    _shim_tidFDTreeAdd(tid_fd);
+
+    SHD_SHIM_LOG("waiting for event on %d\n", event_sock_fd);
     _shim_wait_start(event_sock_fd);
+
+    SHD_SHIM_LOG("starting main\n");
 }
 
-__attribute__((destructor)) static void _shim_unload() {
+__attribute__((destructor))
+static void _shim_unload() {
     pthread_mutex_destroy(&tid_fd_tree_mtx);
 
     if (tid_fd_tree != NULL) {
@@ -81,6 +89,10 @@ static void _shim_wait_start(int event_fd) {
 
     shimevent_recvEvent(event_fd, &event);
     assert(event.event_id == SHD_SHIM_EVENT_START);
+}
+
+FILE *shim_logFD() {
+    return stderr;
 }
 
 int shim_thisThreadEventFD() {
