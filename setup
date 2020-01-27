@@ -219,6 +219,8 @@ def test(args):
     if retcode != 0:
         logging.warning("Failed to pass all test cases!")
 
+    return retcode
+
 def run_tests(testdir, args):
     if not os.path.exists(testdir+'/CTestTestfile.cmake'):
         logging.error("please run './setup build --test' before testing!")

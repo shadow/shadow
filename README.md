@@ -1,5 +1,7 @@
 # The Shadow Simulator
 
+![](https://github.com/shadow/shadow/workflows/Tests/badge.svg)
+
 Shadow is a unique discrete-event network simulator that runs real 
 applications like Tor and Bitcoin, and distributed systems of thousands of
 nodes on a single machine. Shadow combines the accuracy of emulation with the 
