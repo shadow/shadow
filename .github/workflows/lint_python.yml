@@ -1,5 +1,16 @@
-name: lint_python
-on: [push, pull_request]
+# Syntax reference:
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
+
+name: PythonLint
+on:
+  push:
+    paths:
+      - 'setup'
+      - '**.py'
+  pull_request:
+    paths:
+      - 'setup'
+      - '**.py'
 jobs:
   lint_python:
     runs-on: ubuntu-latest
