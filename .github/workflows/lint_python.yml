@@ -3,6 +3,9 @@ on: [push, pull_request]
 jobs:
   lint_python:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [2.7]  # 3.8]
     steps:
       - uses: actions/checkout@master
       - uses: actions/setup-python@master
