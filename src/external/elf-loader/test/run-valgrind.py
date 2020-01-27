@@ -7,7 +7,7 @@ try:
     version = subprocess.Popen (['valgrind', '--version'],
                                 stdout = subprocess.PIPE,
                                 stderr = subprocess.PIPE)
-except e:
+except Exception:
     sys.exit(1)
 
 ver_re = re.compile('([0-9]+)\.([0-9]+)\.([0-9]+)')
