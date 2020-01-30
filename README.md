@@ -13,8 +13,8 @@ $ ./setup build --clean --debug
 $ ./setup install
 ```
 
-Setup and Usage Instructions:
-  + https://github.com/shadow/shadow/wiki
+Detailed Documentation
+  + [docs/README.md](docs/README.md)
 
 Questions and Bug Reports:
   + https://github.com/shadow/shadow/issues
