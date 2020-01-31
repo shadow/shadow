@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 
-int common_setup_tcp_sockets(int* server_listener_fd_out, int* client_fd_out, in_port_t server_listener_port) {
+int common_setup_tcp_sockets(int* server_listener_fd_out, int* client_fd_out, in_port_t* server_listener_port_out) {
     /* set up server */
     int sd = socket(AF_INET, SOCK_STREAM, 0);
     printf("socket() returned %i\n", sd);
@@ -22,7 +22,7 @@ int common_setup_tcp_sockets(int* server_listener_fd_out, int* client_fd_out, in
     memset(&saddr, 0, sizeof(struct sockaddr_in));
     saddr.sin_family = AF_INET;
     saddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    saddr.sin_port = server_listener_port;
+    saddr.sin_port = 0;
 
     int result = bind(sd, (struct sockaddr *) &saddr, sizeof(struct sockaddr_in));
     printf("bind() returned %i\n", result);
@@ -30,6 +30,14 @@ int common_setup_tcp_sockets(int* server_listener_fd_out, int* client_fd_out, in
         printf("bind() error was: %s\n", strerror(errno));
         return EXIT_FAILURE;
     }
+
+    socklen_t saddr_sz = sizeof(struct sockaddr_in);
+    result = getsockname(sd, (struct sockaddr *) &saddr, &saddr_sz);
+    if (result < 0) {
+        printf("getsockname() error was: %s\n", strerror(errno));
+        return EXIT_FAILURE;
+    }
+    *server_listener_port_out = saddr.sin_port;
 
     result = listen(sd, 100);
     printf("listen() returned %i\n", result);
@@ -89,14 +97,15 @@ int common_connect_tcp_sockets(int server_listener_fd, int client_fd, int* serve
     return EXIT_SUCCESS;
 }
 
-int common_get_connected_tcp_sockets(in_port_t server_listener_port, int* server_listener_fd_out, int* server_fd_out, int* client_fd_out) {
+int common_get_connected_tcp_sockets(int* server_listener_fd_out, int* server_fd_out, int* client_fd_out) {
     int listener, server, client;
+    in_port_t port = 0;
 
-    if(common_setup_tcp_sockets(&listener, &client, server_listener_port) != EXIT_SUCCESS) {
+    if(common_setup_tcp_sockets(&listener, &client, &port) != EXIT_SUCCESS) {
         return EXIT_FAILURE;
     }
 
-    if(common_connect_tcp_sockets(listener, client, &server, server_listener_port) != EXIT_SUCCESS) {
+    if(common_connect_tcp_sockets(listener, client, &server, port) != EXIT_SUCCESS) {
         return EXIT_FAILURE;
     }
 
