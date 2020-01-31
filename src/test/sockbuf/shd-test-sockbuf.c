@@ -145,11 +145,12 @@ static int log_sizes(int fd, int get_len, char* str) {
     return 0;
 }
 
-int test_set_size_connect_helper(int call_connect, in_port_t server_port) {
+int test_set_size_connect_helper(int call_connect) {
     int sd = 0, cd = 0, sd_child = 0;
+    in_port_t server_port = 0;
     int result = 0;
 
-    if(common_setup_tcp_sockets(&sd, &cd, server_port) < 0) {
+    if(common_setup_tcp_sockets(&sd, &cd, &server_port) < 0) {
         goto fail;
     }
 
@@ -227,11 +228,12 @@ int do_send_receive_loop(int sd_child, int cd, int num_loops) {
     return 0;
 }
 
-int test_autotune_helper(int use_autotune, in_port_t server_port){
+int test_autotune_helper(int use_autotune) {
     int sd = 0, cd = 0, sd_child = 0;
+    in_port_t server_port = 0;
     int result = 0;
 
-    if(common_setup_tcp_sockets(&sd, &cd, server_port) < 0) {
+    if(common_setup_tcp_sockets(&sd, &cd, &server_port) < 0) {
         goto fail;
     }
 
@@ -333,22 +335,22 @@ fail:
 
 int test_set_size_before_connect(){
     printf("########## running test_set_size_before_connect\n");
-    return test_set_size_connect_helper(0, (in_port_t)htons(30001));
+    return test_set_size_connect_helper(0);
 }
 
 int test_set_size_after_connect(){
     printf("########## running test_set_size_after_connect\n");
-    return test_set_size_connect_helper(1, (in_port_t)htons(30002));
+    return test_set_size_connect_helper(1);
 }
 
 int test_set_size_to_disable_autotune() {
     printf("########## running test_set_size_to_disable_autotune\n");
-    return test_autotune_helper(0, (in_port_t)htons(30003));
+    return test_autotune_helper(0);
 }
 
 int test_autotune_increases_size() {
     printf("########## running test_autotune_increases_size\n");
-    return test_autotune_helper(1, (in_port_t)htons(30004));
+    return test_autotune_helper(1);
 }
 
 int run() {

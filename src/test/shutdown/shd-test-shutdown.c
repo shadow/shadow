@@ -13,11 +13,12 @@
 
 #include <../shd-test-common.h>
 
-static int _test_shutdown_tcp(int call_connect, in_port_t server_port, int shut_client, int how) {
+static int _test_shutdown_tcp(int call_connect, int shut_client, int how) {
     int sd = 0, cd = 0, sd_child = 0;
+    in_port_t server_port = 0;
     int retval = EXIT_FAILURE;
 
-    if(common_setup_tcp_sockets(&sd, &cd, server_port) < 0) {
+    if(common_setup_tcp_sockets(&sd, &cd, &server_port) < 0) {
         goto fail;
     }
 
@@ -50,22 +51,21 @@ fail:
 static int _test_tcp_shutdown_before_connect(){
     printf("########## running _test_tcp_shutdown_before_connect\n");
 
-    int portctr = 30550;
     int result = 0;
 
-    result = _test_shutdown_tcp(0, (in_port_t)htons(portctr++), 1, SHUT_RDWR);
+    result = _test_shutdown_tcp(0, 1, SHUT_RDWR);
     if(result != ENOTCONN) {
         printf("Expecting shutdown(SHUT_RDWR) on unconnected socket to return ENOTCONN instead of %i\n", result);
         return EXIT_FAILURE;
     }
 
-    result = _test_shutdown_tcp(0, (in_port_t)htons(portctr++), 1, SHUT_RD);
+    result = _test_shutdown_tcp(0, 1, SHUT_RD);
     if(result != ENOTCONN) {
         printf("Expecting shutdown(SHUT_RD) on unconnected socket to return ENOTCONN instead of %i\n", result);
         return EXIT_FAILURE;
     }
 
-    result = _test_shutdown_tcp(0, (in_port_t)htons(portctr++), 1, SHUT_WR);
+    result = _test_shutdown_tcp(0, 1, SHUT_WR);
     if(result != ENOTCONN) {
         printf("Expecting shutdown(SHUT_WR) on unconnected socket to return ENOTCONN instead of %i\n", result);
         return EXIT_FAILURE;
@@ -77,46 +77,45 @@ static int _test_tcp_shutdown_before_connect(){
 static int _test_tcp_shutdown_after_connect(){
     printf("########## running _test_tcp_shutdown_after_connect\n");
 
-    int portctr = 30650;
     int result = 0;
 
-    result = _test_shutdown_tcp(1, (in_port_t)htons(portctr++), 1, SHUT_RDWR);
+    result = _test_shutdown_tcp(1, 1, SHUT_RDWR);
     if(result != 0) {
         printf("Expecting shutdown(SHUT_RDWR) on client socket to return 0 instead of %i\n", result);
         return EXIT_FAILURE;
     }
 
-    result = _test_shutdown_tcp(1, (in_port_t)htons(portctr++), 1, SHUT_RD);
+    result = _test_shutdown_tcp(1, 1, SHUT_RD);
     if(result != 0) {
         printf("Expecting shutdown(SHUT_RD) on client socket to return 0 instead of %i\n", result);
         return EXIT_FAILURE;
     }
 
-    result = _test_shutdown_tcp(1, (in_port_t)htons(portctr++), 1, SHUT_WR);
+    result = _test_shutdown_tcp(1, 1, SHUT_WR);
     if(result != 0) {
         printf("Expecting shutdown(SHUT_WR) on client socket to return 0 instead of %i\n", result);
         return EXIT_FAILURE;
     }
 
-    result = _test_shutdown_tcp(1, (in_port_t)htons(portctr++), 0, SHUT_RDWR);
+    result = _test_shutdown_tcp(1, 0, SHUT_RDWR);
     if(result != 0) {
         printf("Expecting shutdown(SHUT_RDWR) on server socket to return 0 instead of %i\n", result);
         return EXIT_FAILURE;
     }
 
-    result = _test_shutdown_tcp(1, (in_port_t)htons(portctr++), 0, SHUT_RD);
+    result = _test_shutdown_tcp(1, 0, SHUT_RD);
     if(result != 0) {
         printf("Expecting shutdown(SHUT_RD) on server socket to return 0 instead of %i\n", result);
         return EXIT_FAILURE;
     }
 
-    result = _test_shutdown_tcp(1, (in_port_t)htons(portctr++), 0, SHUT_WR);
+    result = _test_shutdown_tcp(1, 0, SHUT_WR);
     if(result != 0) {
         printf("Expecting shutdown(SHUT_WR) on server socket to return 0 instead of %i\n", result);
         return EXIT_FAILURE;
     }
 
-    result = _test_shutdown_tcp(1, (in_port_t)htons(portctr++), 1, 666);
+    result = _test_shutdown_tcp(1, 1, 666);
     if(result != -1 && errno != EINVAL) {
         printf("Expecting shutdown(SHUT_WR) on server socket to return -1(EINVAL) instead of %i\n", result);
         return EXIT_FAILURE;
@@ -135,7 +134,7 @@ static int _test_read_after_shutdown() {
 
     int sd = 0, cd = 0, sd_child = 0;
 
-    int result = common_get_connected_tcp_sockets((in_port_t)htons(30750), &sd, &sd_child, &cd);
+    int result = common_get_connected_tcp_sockets(&sd, &sd_child, &cd);
     if(result != EXIT_SUCCESS) {
         printf("Unable to get connected tcp sockets\n");
         goto fail;
@@ -233,7 +232,7 @@ static int _test_write_after_shutdown() {
 
     int sd = 0, cd = 0, sd_child = 0;
 
-    int result = common_get_connected_tcp_sockets((in_port_t)htons(30850), &sd, &sd_child, &cd);
+    int result = common_get_connected_tcp_sockets(&sd, &sd_child, &cd);
     if(result != EXIT_SUCCESS) {
         printf("Unable to get connected tcp sockets\n");
         goto fail;
@@ -321,7 +320,7 @@ static int _test_write_blocked_shutdown() {
 
     int sd = 0, cd = 0, sd_child = 0;
 
-    int result = common_get_connected_tcp_sockets((in_port_t)htons(30950), &sd, &sd_child, &cd);
+    int result = common_get_connected_tcp_sockets(&sd, &sd_child, &cd);
     if(result != EXIT_SUCCESS) {
         printf("Unable to get connected tcp sockets\n");
         goto fail;
