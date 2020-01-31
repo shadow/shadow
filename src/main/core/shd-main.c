@@ -97,7 +97,7 @@ static gulong _main_computeLoadSize(Lmid_t lmid, const gchar* pluginPath, const 
     dlerror();
 
     /* get the initial TLS size used */
-    result = dlinfo(NULL, RTLD_DI_STATIC_TLS_SIZE, &tlsSizeStart);
+    result = dlinfo(RTLD_DI_STATIC_TLS_SIZE_DOESNT_REQUIRE_HANDLE, RTLD_DI_STATIC_TLS_SIZE, &tlsSizeStart);
 
     if (result != 0) {
         warning("error in dlinfo() while computing TLS start size, dlerror is '%s'", dlerror());
@@ -129,7 +129,7 @@ static gulong _main_computeLoadSize(Lmid_t lmid, const gchar* pluginPath, const 
         }
     }
 
-    result = dlinfo(NULL, RTLD_DI_STATIC_TLS_SIZE, &tlsSizeEnd);
+    result = dlinfo(RTLD_DI_STATIC_TLS_SIZE_DOESNT_REQUIRE_HANDLE, RTLD_DI_STATIC_TLS_SIZE, &tlsSizeEnd);
 
     if (result != 0) {
         warning("error in dlinfo() while computing TLS end size, dlerror is '%s'", dlerror());

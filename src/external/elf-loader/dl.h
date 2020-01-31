@@ -16,3 +16,6 @@ int dl_lmid_swap_tls (Lmid_t lmid, pthread_t *t1, pthread_t *t2);
 // dlinfo() flag. Populates info field with the size of the currently used
 // static TLS.
 #define RTLD_DI_STATIC_TLS_SIZE 127
+// Pass as first argument when using RTLD_DI_STATIC_TLS_SIZE, to avoid
+// a NULL argument warning.
+#define RTLD_DI_STATIC_TLS_SIZE_DOESNT_REQUIRE_HANDLE ((void*)0x1)
