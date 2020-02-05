@@ -43,6 +43,7 @@
 #include <sys/syscall.h>
 #include <linux/sockios.h>
 #include <features.h>
+#include <stdnoreturn.h>
 
 #include <malloc.h>
 #include <pthread.h>
@@ -67,6 +68,19 @@
     if(!director.next.func) { \
         SETSYM_OR_FAIL(director.next.func, #func); \
     } \
+}
+
+// We use this to convince the compiler that functions declared noreturn really
+// don't return... also to fail in some well defined way instead of getting
+// undefined behavior if we're wrong.
+noreturn static void ensure_noreturn() {
+    void (*real_abort)(void);
+    SETSYM_OR_FAIL(real_abort, "abort");
+    real_abort();
+    // Because this function is declared noreturn, returning would result in
+    // undefined behavior.
+    // Recurse until stack overflow instead.
+    ensure_noreturn();
 }
 
 typedef struct {
@@ -414,6 +428,7 @@ void exit(int a) {
         ENSURE(exit);
         director.next.exit(a);
     }
+    ensure_noreturn();
 }
 
 void pthread_exit(void* a) {
@@ -424,6 +439,13 @@ void pthread_exit(void* a) {
         ENSURE(pthread_exit);
         director.next.pthread_exit(a);
     }
+    ensure_noreturn();
+}
+
+void __pthread_unwind_next(__pthread_unwind_buf_t* buf) {
+    // This function should never actually be called, since the overridden
+    // pthread_exit will stop executing the thread first.
+    ensure_noreturn();
 }
 
 void abort(void) {
@@ -434,4 +456,5 @@ void abort(void) {
         ENSURE(abort);
         director.next.abort();
     }
+    ensure_noreturn();
 }
