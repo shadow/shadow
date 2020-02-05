@@ -176,8 +176,8 @@ PRELOADDEF(return, int, srandom_r, (unsigned int a, struct random_data *b), a, b
 
 /* pid */
 
-PRELOADDEF(      , pid_t, getpid, (void));
-PRELOADDEF(      , pid_t, getppid, (void));
+PRELOADDEF(return, pid_t, getpid, (void));
+PRELOADDEF(return, pid_t, getppid, (void));
 
 /* signals */
 
