@@ -74,9 +74,8 @@
 // don't return... also to fail in some well defined way instead of getting
 // undefined behavior if we're wrong.
 noreturn static void ensure_noreturn() {
-    void (*real_abort)(void);
-    SETSYM_OR_FAIL(real_abort, "abort");
-    real_abort();
+    ENSURE(abort);
+    director.next.abort();
     // Because this function is declared noreturn, returning would result in
     // undefined behavior.
     // Recurse until stack overflow instead.
