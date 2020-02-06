@@ -70,18 +70,6 @@
     } \
 }
 
-// We use this to convince the compiler that functions declared noreturn really
-// don't return... also to fail in some well defined way instead of getting
-// undefined behavior if we're wrong.
-noreturn static void ensure_noreturn() {
-    ENSURE(abort);
-    director.next.abort();
-    // Because this function is declared noreturn, returning would result in
-    // undefined behavior.
-    // Recurse until stack overflow instead.
-    ensure_noreturn();
-}
-
 typedef struct {
     struct {
         char buf[102400];
@@ -108,6 +96,18 @@ static __thread unsigned long disableCount = 0;
 /* we must use the & operator to get the current thread's version */
 void interposer_enable() {__sync_fetch_and_sub(&disableCount, 1);}
 void interposer_disable() {__sync_fetch_and_add(&disableCount, 1);}
+
+// We use this to convince the compiler that functions declared noreturn really
+// don't return... also to fail in some well defined way instead of getting
+// undefined behavior if we're wrong.
+noreturn static void ensure_noreturn() {
+    ENSURE(abort);
+    director.next.abort();
+    // Because this function is declared noreturn, returning would result in
+    // undefined behavior.
+    // Recurse until stack overflow instead.
+    ensure_noreturn();
+}
 
 static void* dummy_malloc(size_t size) {
     if (director.dummy.pos + size >= sizeof(director.dummy.buf)) {
@@ -442,8 +442,19 @@ void pthread_exit(void* a) {
 }
 
 void __pthread_unwind_next(__pthread_unwind_buf_t* buf) {
-    // This function should never actually be called, since the overridden
-    // pthread_exit will stop executing the thread first.
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+	// __pthread_unwind_next shouldn't have been called from emulated code.
+	// It's normally only called via other pthread internals, which we
+	// should've intercepted at a higher level. Ideally if this somehow
+	// happens we'd just kill the thread, but calling pthread_exit would
+	// likely result in recursion.  Take down the whole emulated process
+	// instead.
+        abort();
+    } else {
+        ENSURE(__pthread_unwind_next);
+        director.next.__pthread_unwind_next(buf);
+    }
     ensure_noreturn();
 }
 
