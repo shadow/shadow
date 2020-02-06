@@ -75,6 +75,9 @@ else()
     set(CMAKE_LINK_FLAGS "${CMAKE_LINK_FLAGS} -m32")
 endif()
 
+# https://github.com/shadow/shadow/issues/715
+set_source_files_properties(glibc.c PROPERTIES COMPILE_FLAGS -Wno-unneeded-internal-declaration)
+
 set(ldso_srcs
     alloc.c
     avprintf-cb.c
