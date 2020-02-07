@@ -278,7 +278,6 @@ PRELOADDEF(      , void, __pthread_unregister_cancel, (__pthread_unwind_buf_t *a
 PRELOADDEF(      , void, __pthread_register_cancel_defer, (__pthread_unwind_buf_t *a), a);
 //PRELOADDEF(      , void, pthread_cleanup_pop_restore_np, (int a), a, b);
 PRELOADDEF(      , void, __pthread_unregister_cancel_restore, (__pthread_unwind_buf_t *a), a);
-PRELOADDEF(      , void, __pthread_unwind_next, (__pthread_unwind_buf_t *a), a);
 
 /* forking */
 
