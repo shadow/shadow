@@ -32,6 +32,7 @@ PRELOADDEF(return, int, openat, (int a, const char* b, int c, mode_t d), a, b, c
 //typedef void (*pthread_exit_func)(void *);
 //typedef void (*exit_func)(int status);
 PRELOADDEF(      , void, pthread_exit, (void* a), a);
+PRELOADDEF(      , void, __pthread_unwind_next, (__pthread_unwind_buf_t *a), a);
 PRELOADDEF(      , void, exit, (int a), a);
 PRELOADDEF(      , void, abort, (void));
 
