@@ -1,6 +1,4 @@
-add_cflags("-Wl,--warn-unresolved-symbols -L. -Wl,--no-as-needed")
-
-SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS)
+SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "-Wl,--warn-unresolved-symbols -L. -Wl,--no-as-needed")
 
 if(NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64" )
     add_cflags(-m32)
