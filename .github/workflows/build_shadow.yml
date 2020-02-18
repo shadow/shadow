@@ -16,15 +16,18 @@ on:
 jobs:
   testing:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cc: ['gcc', 'clang']
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
       - name: Install dependencies
-        run: sudo apt install -y gcc g++ cmake make xz-utils python libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg python-pyelftools
+        run: sudo apt install -y ${{ matrix.cc }} g++ cmake make xz-utils python libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg python-pyelftools
 
       - name: Build
-        run: python setup build --clean --test
+        run: CC=${{ matrix.cc }} python setup build --clean --test
 
       - name: Install
         run: python setup install
