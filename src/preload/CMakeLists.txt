@@ -15,6 +15,9 @@ include_directories(${CMAKE_SOURCE_DIR}/src/main)
 add_library(shadow-interpose SHARED shd-interposer.c shd-preload-functions.c)
 add_library(shadow-interpose-helper SHARED shd-interposer-helper.c)
 
+# https://github.com/shadow/shadow/issues/717
+set_source_files_properties(shd-interposer.c PROPERTIES COMPILE_FLAGS -Wno-static-in-inline)
+
 set_target_properties(shadow-interpose PROPERTIES 
     INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib
     INSTALL_RPATH_USE_LINK_PATH TRUE 
