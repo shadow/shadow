@@ -1,4 +1,4 @@
-add_cflags("-Wl,--warn-unresolved-symbols -L. -Wl,--no-as-needed")
+add_ldflags("-Wl,--warn-unresolved-symbols -L. -Wl,--no-as-needed")
 
 SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS)
 
