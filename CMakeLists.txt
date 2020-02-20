@@ -84,6 +84,7 @@ option(SHADOW_DEBUG "turn on debugging for verbose program output (default: OFF)
 option(SHADOW_PROFILE "build with profile settings (default: OFF)" OFF)
 option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_EXPORT "export service libraries and headers (default: OFF)" OFF)
+option(SHADOW_WERROR "turn compiler warnings into errors. (default: OFF)" OFF)
 
 ## display selected user options
 MESSAGE(STATUS)
@@ -112,6 +113,10 @@ else(SHADOW_DEBUG STREQUAL ON)
     add_definitions(-DNDEBUG)
     add_compile_options(-O3)
 endif(SHADOW_DEBUG STREQUAL ON)
+if(SHADOW_WERROR STREQUAL ON)
+    add_compile_options(-Werror)
+endif(SHADOW_WERROR STREQUAL ON)
+
 
 if($ENV{VERBOSE})
     add_definitions(-DVERBOSE)
