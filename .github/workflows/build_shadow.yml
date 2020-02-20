@@ -27,7 +27,7 @@ jobs:
         run: sudo apt install -y ${{ matrix.cc }} g++ cmake make xz-utils python libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg python-pyelftools
 
       - name: Build
-        run: CC=${{ matrix.cc }} python setup build --clean --test
+        run: CC=${{ matrix.cc }} python setup build --clean --test --werror
 
       - name: Install
         run: python setup install
