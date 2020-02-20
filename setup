@@ -98,6 +98,11 @@ def main():
         action="store_true", dest="do_valgrind",
         default=False)
 
+    parser_build.add_argument('--werror',
+        help="turn compiler warnings into errors",
+        action="store_true", dest="do_werror",
+        default=False)
+
     # configure test subcommand
     parser_test = subparsers_main.add_parser('test', help='run Shadow tests',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -154,6 +159,7 @@ def build(args):
     if args.export_libraries: cmake_cmd += " -DSHADOW_EXPORT=ON"
     if args.disable_tgen: cmake_cmd += " -DBUILD_TGEN=OFF"
     if args.do_valgrind: cmake_cmd += " -DLOADER_VALGRIND=ON"
+    if args.do_werror: cmake_cmd += " -DSHADOW_WERROR=ON"
 
     # we will run from build directory
     calledDirectory = os.getcwd()
