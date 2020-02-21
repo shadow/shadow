@@ -7,6 +7,9 @@
 #define SHD_SHIM_EVENT_START 1
 #define SHD_SHIM_EVENT_NANO_SLEEP 2
 
+// TODO (rwails) hack, change me
+#define SHD_SHIM_EVENT_NANO_SLEEP_COMPLETE 3
+
 typedef uint32_t ShimEventID;
 
 typedef struct _ShimEventDataNanoSleep {
@@ -18,6 +21,7 @@ typedef struct _ShimEvent {
 
     union _EventData {
         ShimEventDataNanoSleep data_nano_sleep;
+        int rv; // TODO (rwails) hack, remove me
     } event_data;
 
 } ShimEvent;

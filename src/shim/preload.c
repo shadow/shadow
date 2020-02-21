@@ -30,7 +30,9 @@ int nanosleep(const struct timespec *req, struct timespec *rem) {
     shimevent_sendEvent(event_fd, &shim_event);
 
     memset(&shim_event, 0, sizeof(ShimEvent));
+    SHD_SHIM_LOG("waiting for event on %d\n", event_fd);
     shimevent_recvEvent(event_fd, &shim_event);
+    SHD_SHIM_LOG("got response on %d\n", event_fd);
     assert(shim_event.event_id == SHD_SHIM_EVENT_NANO_SLEEP);
 
     int rc = (shim_event.event_data.data_nano_sleep.ts.tv_sec == 0 &&

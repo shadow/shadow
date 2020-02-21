@@ -203,7 +203,25 @@ void thread_resume(Thread* thread) {
 
                 if(!result.block) {
                     // TODO send message containing result to shim
+                } else {
+                    // TODO (rwails): stub, change me
+                    ShimEvent next_ev;
+                    next_ev.event_id = SHD_SHIM_EVENT_NANO_SLEEP_COMPLETE;
+                    next_ev.event_data.rv = result.retval._int;
+
+                    thread->currentEvent = next_ev;
                 }
+
+                break;
+            }
+
+            case SHD_SHIM_EVENT_NANO_SLEEP_COMPLETE: {
+
+                ShimEvent response;
+                response.event_id = SHD_SHIM_EVENT_NANO_SLEEP;
+                response.event_data.data_nano_sleep.ts.tv_sec = 0;
+                response.event_data.data_nano_sleep.ts.tv_nsec = 0;
+                shimevent_sendEvent(thread->eventFD, &response);
 
                 break;
             }
