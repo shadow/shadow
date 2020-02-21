@@ -110,7 +110,7 @@ static int _thread_fork_exec(Thread *thread,
         default: // parent
             info("started process %s with PID %d", file, pid);
             thread->childPID = pid;
-            break;
+            return pid;
     }
 }
 

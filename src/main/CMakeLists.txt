@@ -92,8 +92,7 @@ set(REMORA_SRC
    host/descriptor/tcp_retransmit_tally.cc
 )
 
-add_library(shadow-remora SHARED ${REMORA_SRC})
-install(TARGETS shadow-remora DESTINATION lib)
+add_library(shadow-remora STATIC ${REMORA_SRC})
 
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})

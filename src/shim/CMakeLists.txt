@@ -21,7 +21,7 @@ set(SHIM_LIB shadow-shim)
 set(HELPER_LIB shadow-shim-helper)
 
 add_library(${SHIM_LIB} SHARED ${SHIM_FILES})
-add_library(${HELPER_LIB} SHARED ${HELPER_FILES})
+add_library(${HELPER_LIB} STATIC ${HELPER_FILES})
 
 target_compile_options(${SHIM_LIB} PRIVATE -pthread)
 
@@ -31,6 +31,6 @@ set_target_properties(${SHIM_LIB} PROPERTIES
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib"
 )
 
-install(TARGETS ${SHIM_LIB} ${HELPER_LIB} DESTINATION lib)
+install(TARGETS ${SHIM_LIB} DESTINATION lib)
 
 target_link_libraries(${SHIM_LIB} ${HELPER_LIB} -pthread)
