@@ -25,13 +25,14 @@ struct _Thread {
     pid_t childPID;
     int eventFD;
 
-    gint threadID;
-    gint isAlive;
+    int threadID;
+    int isRunning;
+    int returnCode;
 
     /* holds the event id for the most recent call from the plugin/shim */
     ShimEvent currentEvent;
 
-    gint referenceCount;
+    int referenceCount;
     MAGIC_DECLARE;
 };
 
@@ -158,7 +159,7 @@ void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     thread->currentEvent.event_id = SHD_SHIM_EVENT_START;
 
     /* thread is now active */
-    thread->isAlive = 1;
+    thread->isRunning = 1;
 
     /* this will cause us to call main() */
     thread_resume(thread);
@@ -191,6 +192,13 @@ void thread_resume(Thread* thread) {
                 result.block = FALSE;
 
                 break;
+            }
+
+            case SHD_SHIM_EVENT_STOP: {
+                // the plugin stopped running, clear it and collect the return code
+                thread_terminate(thread);
+                // it will not be sending us any more events
+                return;
             }
 
             case SHD_SHIM_EVENT_NANO_SLEEP: {
@@ -242,14 +250,14 @@ void thread_resume(Thread* thread) {
     }
 }
 
-int thread_terminate(Thread* thread) {
+void thread_terminate(Thread* thread) {
     // TODO [rwails]: come back and make this logic more solid
 
     MAGIC_ASSERT(thread);
 
-    int status = 0, child_rc = 0;
+    int status = 0;
 
-    if (thread->isAlive) {
+    if (thread->isRunning) {
 
         utility_assert(thread->childPID > 0);
 
@@ -264,27 +272,30 @@ int thread_terminate(Thread* thread) {
         }
 
         if (WIFEXITED(status)) {
-            child_rc = WEXITSTATUS(status);
-            debug("child %d exited with status %d", thread->childPID, child_rc);
+            thread->returnCode = WEXITSTATUS(status);
+            debug("child %d exited with status %d", thread->childPID, thread->returnCode);
         } else if (WIFSIGNALED(status)) {
             int signum = WTERMSIG(status);
             debug("child %d terminated by signal %d", thread->childPID, signum);
-            child_rc = -1;
+            thread->returnCode = -1;
         } else {
             debug("child %d quit unexpectedly", thread->childPID);
+            thread->returnCode = -1;
         }
 
-        thread->isAlive = 0;
+        thread->isRunning = 0;
     }
-
-    // return the return code of the process
-    return child_rc;
 }
 
-gboolean thread_isAlive(Thread* thread) {
+int thread_getReturnCode(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    return thread->returnCode;
+}
+
+gboolean thread_isRunning(Thread* thread) {
     MAGIC_ASSERT(thread);
     // TODO
     // return TRUE if at least one thread is still running
     // return false if the process died or completed
-    return thread->isAlive;
+    return thread->isRunning;
 }

@@ -148,11 +148,11 @@ static void _process_check(Process* proc) {
         return;
     }
 
-    if(thread_isAlive(proc->mainThread)) {
+    if(thread_isRunning(proc->mainThread)) {
         info("process '%s' is running, but threads are blocked waiting for events", _process_getName(proc));
     } else {
         /* collect return code */
-        int returnCode = thread_terminate(proc->mainThread);
+        int returnCode = thread_getReturnCode(proc->mainThread);
 
         message("process '%s' has completed or is otherwise no longer running", _process_getName(proc));
         _process_logReturnCode(proc, returnCode);
@@ -288,7 +288,7 @@ void process_schedule(Process* proc, gpointer nothing) {
 
 gboolean process_isRunning(Process* proc) {
     MAGIC_ASSERT(proc);
-    return (proc->mainThread != NULL && thread_isAlive(proc->mainThread)) ? TRUE : FALSE;
+    return (proc->mainThread != NULL && thread_isRunning(proc->mainThread)) ? TRUE : FALSE;
 }
 
 gboolean process_wantsNotify(Process* proc, gint epollfd) {
@@ -332,7 +332,7 @@ static gchar** _process_getEnvv(Process* proc, gchar* environment) {
 
     /* set up the LD_PRELOAD environment */
     // TODO no hard code!
-    envv = g_environ_setenv(envv, "LD_PRELOAD", "/home/rwails/.shadow/lib/libshadow-shim.so", TRUE);
+    envv = g_environ_setenv(envv, "LD_PRELOAD", "/home/rjansen/.shadow/lib/libshadow-shim.so", TRUE);
 
     // TODO add in user-specified env vals
 
@@ -395,7 +395,7 @@ static void _process_free(Process* proc) {
 
     /* stop and free plugin memory if we are still running */
     if(proc->mainThread) {
-        if(thread_isAlive(proc->mainThread)) {
+        if(thread_isRunning(proc->mainThread)) {
             thread_terminate(proc->mainThread);
         }
         thread_unref(proc->mainThread);

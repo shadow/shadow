@@ -20,8 +20,9 @@ void thread_unref(Thread* thread);
 
 void thread_run(Thread* thread, gchar** argv, gchar** envv);
 void thread_resume(Thread* thread);
-int thread_terminate(Thread* thread);
+void thread_terminate(Thread* thread);
+int thread_getReturnCode(Thread* thread);
 
-gboolean thread_isAlive(Thread* thread);
+gboolean thread_isRunning(Thread* thread);
 
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */

@@ -77,6 +77,13 @@ static void _shim_load() {
 
 __attribute__((destructor))
 static void _shim_unload() {
+    int event_fd = shim_thisThreadEventFD();
+
+    ShimEvent shim_event;
+    shim_event.event_id = SHD_SHIM_EVENT_STOP;
+    SHD_SHIM_LOG("sending stop event on %d\n", event_fd);
+    shimevent_sendEvent(event_fd, &shim_event);
+
     pthread_mutex_destroy(&tid_fd_tree_mtx);
 
     if (tid_fd_tree != NULL) {

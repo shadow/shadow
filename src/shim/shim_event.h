@@ -5,10 +5,11 @@
 
 #define SHD_SHIM_EVENT_NULL 0
 #define SHD_SHIM_EVENT_START 1
-#define SHD_SHIM_EVENT_NANO_SLEEP 2
+#define SHD_SHIM_EVENT_STOP 2
+#define SHD_SHIM_EVENT_NANO_SLEEP 3
 
 // TODO (rwails) hack, change me
-#define SHD_SHIM_EVENT_NANO_SLEEP_COMPLETE 3
+#define SHD_SHIM_EVENT_NANO_SLEEP_COMPLETE 4
 
 typedef uint32_t ShimEventID;
 
