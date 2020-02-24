@@ -34,3 +34,45 @@ jobs:
 
       - name: Test
         run: python setup test
+
+  shadow-plugin-tor-ci:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # TODO: add clang. Currently builds but has unsuccessful xfers in simulation.
+        cc: ['gcc']
+
+    env:
+      CC: ${{ matrix.cc }}
+
+    steps:
+      - name: Checkout shadow
+        uses: actions/checkout@v2
+        with:
+          path: shadow
+
+      - name: Checkout tgen 
+        uses: actions/checkout@v2
+        with:
+          repository: shadow/tgen
+          ref: v0.0.1
+          path: tgen
+
+      - name: Checkout shadow-plugin-tor
+        uses: actions/checkout@v2
+        with:
+          repository: shadow/shadow-plugin-tor
+          # First commit with the CI shell script.
+          ref: 7af2926439b7b181144c6b2e10be6ecbf977965f
+          path: shadow-plugin-tor
+
+      - name: CI script
+        run: shadow-plugin-tor/tools/continuous_integration_test.sh
+
+      - name: Upload simulation logs
+        uses: actions/upload-artifact@v1
+        if: failure()
+        with:
+          name: simulation-output
+          path: simulation
+
