@@ -88,6 +88,8 @@ GString* utility_getFileContents(const gchar* fileName);
 gchar* utility_getNewTemporaryFilename(const gchar* templateStr);
 gboolean utility_copyFile(const gchar* fromPath, const gchar* toPath);
 
+gchar* utility_strvToNewStr(gchar** strv);
+
 void utility_handleError(const gchar* file, gint line, const gchar* funtcion, const gchar* message);
 
 #endif /* SHD_UTILITY_H_ */

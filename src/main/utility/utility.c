@@ -333,3 +333,20 @@ gboolean utility_copyFile(const gchar* fromPath, const gchar* toPath) {
     g_free(contents);
     return TRUE;
 }
+
+gchar* utility_strvToNewStr(gchar** strv) {
+    GString* strBuffer = g_string_new(NULL);
+
+    if(strv) {
+        for(gint i = 0; strv[i] != NULL; i++) {
+            if(strv[i+1] == NULL) {
+                g_string_append_printf(strBuffer, "%s", strv[i]);
+            } else {
+                g_string_append_printf(strBuffer, "%s ", strv[i]);
+            }
+        }
+    }
+
+    return g_string_free(strBuffer, FALSE);
+}
+

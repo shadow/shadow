@@ -79,7 +79,7 @@ guint64 host_getNewEventID(Host* host);
 guint64 host_getNewPacketID(Host* host);
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
         const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
-        const gchar* preloadName, const gchar* preloadPath, gchar* arguments);
+        gchar** envv, gchar** argv);
 void host_freeAllApplications(Host* host);
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);

@@ -170,20 +170,32 @@ static gboolean _master_loadConfiguration(Master* master) {
     } else {
         /* parse Shadow XML config file */
         const GString* fileName = options_getInputXMLFilename(master->options);
+        if(!fileName) {
+            critical("unable to obtain the name for the configuration file");
+            return FALSE;
+        }
+
         file = utility_getFileContents(fileName->str);
+        if(!file) {
+            critical("unable to read configuration file contents");
+            return FALSE;
+        }
     }
 
     if(file) {
         master->config = configuration_new(master->options, file);
         g_string_free(file, TRUE);
+        file = NULL;
     }
 
     /* if there was an error parsing, bounce out */
     if(master->config) {
         message("successfully parsed Shadow XML input!");
+        message("shadow configuration file loaded, parsed, and passed validation");
         return TRUE;
     } else {
-        error("error parsing Shadow XML input!");
+        critical("error parsing Shadow XML input!");
+        critical("there was a problem parsing the Shadow config file, and we can't run without it");
         return FALSE;
     }
 }
@@ -417,11 +429,16 @@ gint master_run(Master* master) {
 
     _master_initializeTimeWindows(master);
 
+    ConfigurationShadowElement* element = configuration_getShadowElement(master->config);
+    g_assert(element && element->preloadPath.isSet);
+
     /* the master will be responsible for distributing the actions to the slaves so that
      * they all have a consistent view of the simulation, topology, etc.
      * For now we only have one slave so send it everything. */
     guint slaveSeed = random_nextUInt(master->random);
-    master->slave = slave_new(master, master->options, master->endTime, master->bootstrapEndTime, slaveSeed);
+    master->slave = slave_new(master, master->options, master->endTime, master->bootstrapEndTime,
+            slaveSeed, element->preloadPath.string->str,
+            element->environment.isSet ? element->environment.string->str : NULL);
 
     message("registering plugins and hosts");
 

@@ -70,11 +70,6 @@ struct _Process {
         GString* exeName;
         GString* exePath;
 
-        /* the name and path to any plugin-specific preload library that we should
-         * LD_PRELOAD before exec */
-        GString* preloadName;
-        GString* preloadPath;
-
         /* TRUE from when we've called into plug-in code until the call completes.
          * Note that the plug-in may get back into shadow code during execution, by
          * calling a function that we intercept. */
@@ -91,7 +86,7 @@ struct _Process {
 
     /* vector of argument strings passed to exec */
     gchar** argv;
-    /* vector on environment variables passed to exec */
+    /* vector of environment variables passed to exec */
     gchar** envv;
 
     gint returnCode;
@@ -304,41 +299,6 @@ gboolean process_wantsNotify(Process* proc, gint epollfd) {
 //    }
 }
 
-static gchar** _process_getArgv(Process* proc, gchar* arguments) {
-    MAGIC_ASSERT(proc);
-
-    /* we need at least the executable path in order to run the plugin */
-    GString* command = g_string_new(proc->plugin.exePath->str);
-
-    /* if the user specified additional arguments, append those */
-    if(arguments && (g_ascii_strncasecmp(arguments, "\0", (gsize) 1) != 0)) {
-        g_string_append_printf(command, " %s", arguments);
-    }
-
-    /* now split the command string to an argv */
-    gchar** argv = g_strsplit(command->str, " ", 0);
-
-    /* we don't need the command string anymore */
-    g_string_free(command, TRUE);
-
-    return argv;
-}
-
-static gchar** _process_getEnvv(Process* proc, gchar* environment) {
-    MAGIC_ASSERT(proc);
-
-    /* start with an empty environment */
-    gchar** envv = g_environ_setenv(NULL, "SHADOW_SPAWNED", "TRUE", TRUE);
-
-    /* set up the LD_PRELOAD environment */
-    // TODO no hard code!
-    envv = g_environ_setenv(envv, "LD_PRELOAD", "/home/rjansen/.shadow/lib/libshadow-shim.so", TRUE);
-
-    // TODO add in user-specified env vals
-
-    return envv;
-}
-
 void process_setSysCallHandler(Process* proc, SysCallHandler* sys) {
     MAGIC_ASSERT(proc);
     utility_assert(sys);
@@ -349,7 +309,7 @@ void process_setSysCallHandler(Process* proc, SysCallHandler* sys) {
 Process* process_new(guint processID,
         SimulationTime startTime, SimulationTime stopTime, const gchar* hostName,
         const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
-        const gchar* preloadName, const gchar* preloadPath, gchar* arguments) {
+        gchar** envv, gchar** argv) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -360,12 +320,6 @@ Process* process_new(guint processID,
     utility_assert(pluginPath);
     proc->plugin.exeName = g_string_new(pluginName);
     proc->plugin.exePath = g_string_new(pluginPath);
-
-    /* a user-specified preload library (in addition to shadow's) is optional */
-    if(preloadName && preloadPath) {
-        proc->plugin.preloadName = g_string_new(preloadName);
-        proc->plugin.preloadPath = g_string_new(preloadPath);
-    }
 
     proc->processName = g_string_new(NULL);
     g_string_printf(proc->processName, "%s.%s.%u",
@@ -378,10 +332,9 @@ Process* process_new(guint processID,
     proc->startTime = startTime;
     proc->stopTime = stopTime;
 
-    /* get args and env */
-    proc->argv = _process_getArgv(proc, arguments);
-    gchar* environment = NULL; // TODO allow user to specify env
-    proc->envv = _process_getEnvv(proc, environment);
+    /* save args and env */
+    proc->argv = argv;
+    proc->envv = envv;
 
     proc->referenceCount = 1;
 
@@ -407,12 +360,6 @@ static void _process_free(Process* proc) {
     }
     if(proc->plugin.exeName) {
         g_string_free(proc->plugin.exeName, TRUE);
-    }
-    if(proc->plugin.preloadPath) {
-        g_string_free(proc->plugin.preloadPath, TRUE);
-    }
-    if(proc->plugin.preloadName) {
-        g_string_free(proc->plugin.preloadName, TRUE);
     }
     if(proc->processName) {
         g_string_free(proc->processName, TRUE);

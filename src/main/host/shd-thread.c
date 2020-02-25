@@ -145,6 +145,12 @@ void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     /* append to the env */
     myenvv = g_environ_setenv(myenvv, "_SHD_IPC_SOCKET", buf, TRUE);
 
+    gchar* envStr = utility_strvToNewStr(myenvv);
+    gchar* argStr = utility_strvToNewStr(argv);
+    message("forking new thread with environment '%s' and arguments '%s'", envStr, argStr);
+    g_free(envStr);
+    g_free(argStr);
+
     _thread_fork_exec(thread, argv[0], argv, myenvv);
 
     // close the child sock, it is no longer needed

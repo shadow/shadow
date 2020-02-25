@@ -82,6 +82,9 @@ struct _Slave {
     gchar* dataPath;
     gchar* hostsPath;
 
+    gchar* preloadShimPath;
+    gchar* environment;
+
     MAGIC_DECLARE;
 };
 
@@ -167,7 +170,8 @@ static guint _slave_nextRandomUInt(Slave* slave) {
     return r;
 }
 
-Slave* slave_new(Master* master, Options* options, SimulationTime endTime, SimulationTime unlimBWEndTime, guint randomSeed) {
+Slave* slave_new(Master* master, Options* options, SimulationTime endTime, SimulationTime unlimBWEndTime,
+        guint randomSeed, const gchar* preloadShimPath, const gchar* environment) {
     if(globalSlave != NULL) {
         return NULL;
     }
@@ -184,6 +188,8 @@ Slave* slave_new(Master* master, Options* options, SimulationTime endTime, Simul
     slave->random = random_new(randomSeed);
     slave->objectCounts = objectcounter_new();
     slave->bootstrapEndTime = unlimBWEndTime;
+    slave->preloadShimPath = g_strdup(preloadShimPath);
+    slave->environment = g_strdup(environment);
 
     slave->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if(slave->rawFrequencyKHz == 0) {
@@ -259,6 +265,12 @@ gint slave_free(Slave* slave) {
     if(slave->random) {
         random_free(slave->random);
     }
+    if(slave->preloadShimPath) {
+        g_free(slave->preloadShimPath);
+    }
+    if(slave->environment) {
+        g_free(slave->environment);
+    }
 
     MAGIC_CLEAR(slave);
     g_free(slave);
@@ -308,6 +320,90 @@ void slave_addNewVirtualHost(Slave* slave, HostParameters* params) {
     scheduler_addHost(slave->scheduler, host);
 }
 
+
+static gchar** _slave_generateEnvv(Slave* slave, const gchar* preloadShimPath, const gchar* environment, const gchar* pluginPreloadPath) {
+    MAGIC_ASSERT(slave);
+
+    /* start with an empty environment */
+    gchar** envv = g_environ_setenv(NULL, "SHADOW_SPAWNED", "TRUE", TRUE);
+
+    /* insert also the plugin preload entry if one exists.
+     * precendence here is:
+     *   - preload attribute in the process element
+     *   - preload attribute in the shadow element
+     *   - preload values from LD_PRELOAD entries in the environment attribute of the shadow element*/
+    GString* ldPreloadVal = g_string_new(NULL);
+    if(pluginPreloadPath) {
+        g_string_printf(ldPreloadVal, "%s:%s", pluginPreloadPath, preloadShimPath);
+    } else {
+        g_string_printf(ldPreloadVal, "%s", preloadShimPath);
+    }
+
+    /* now we also have to scan the other env variables that were given in the shadow conf file */
+
+    if(environment) {
+        /* entries are split by ';' */
+        gchar** envTokens = g_strsplit(environment, ";", 0);
+
+        for(gint i = 0; envTokens[i] != NULL; i++) {
+            /* each env entry is key=value, get 2 tokens max */
+            gchar** items = g_strsplit(envTokens[i], "=", 2);
+
+            gchar* key = items[0];
+            gchar* value = items[1];
+
+            if(key != NULL && value != NULL) {
+                /* check if the key is LD_PRELOAD */
+                if(!g_ascii_strncasecmp(key, "LD_PRELOAD", 10)) {
+                    /* append all LD_PRELOAD entries */
+                    gchar** preloadTokens = g_strsplit(value, ":", 0);
+
+                    for(gint j = 0; preloadTokens[j] != NULL; j++) {
+                        g_string_append_printf(ldPreloadVal, ":%s", preloadTokens[j]);
+                    }
+
+                    g_strfreev(preloadTokens);
+                } else {
+                    /* set the key=value pair, but don't overwrite any existing settings */
+                    envv = g_environ_setenv(envv, key, value, 0);
+                }
+            }
+
+            g_strfreev(items);
+        }
+
+        g_strfreev(envTokens);
+    }
+
+    /* now we can set the LD_PRELOAD environment */
+    envv = g_environ_setenv(envv, "LD_PRELOAD", ldPreloadVal->str, TRUE);
+
+    /* cleanup */
+    g_string_free(ldPreloadVal, TRUE);
+
+    return envv;
+}
+
+static gchar** _slave_getArgv(Slave* slave, gchar* exepath, gchar* arguments) {
+    MAGIC_ASSERT(slave);
+
+    /* we need at least the executable path in order to run the plugin */
+    GString* command = g_string_new(exepath);
+
+    /* if the user specified additional arguments, append those */
+    if(arguments && (g_ascii_strncasecmp(arguments, "\0", (gsize) 1) != 0)) {
+        g_string_append_printf(command, " %s", arguments);
+    }
+
+    /* now split the command string to an argv */
+    gchar** argv = g_strsplit(command->str, " ", 0);
+
+    /* we don't need the command string anymore */
+    g_string_free(command, TRUE);
+
+    return argv;
+}
+
 void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName, gchar* preloadName,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
     MAGIC_ASSERT(slave);
@@ -315,8 +411,8 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
     /* quarks are unique per process, so do the conversion here */
     GQuark hostID = g_quark_from_string(hostName);
 
-    _ProgramMeta* meta = g_hash_table_lookup(slave->programMeta, pluginName);
-    if(meta == NULL) {
+    _ProgramMeta* plugin = g_hash_table_lookup(slave->programMeta, pluginName);
+    if(plugin == NULL) {
         error("plugin not found for name '%s'. this should be verified in the "
               "config parser.", pluginName);
     }
@@ -329,11 +425,14 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
         }
     }
 
+    /* ownership is passed to the host/process below, so we don't free these */
+    gchar** envv = _slave_generateEnvv(slave, slave->preloadShimPath, slave->environment, preload ? preload->path : NULL);
+    gchar** argv = _slave_getArgv(slave, plugin->path, arguments);
+
     Host* host = scheduler_getHost(slave->scheduler, hostID);
     host_continueExecutionTimer(host);
-    host_addApplication(host, startTime, stopTime, pluginName, meta->path, 
-                        meta->startSymbol, preloadName, 
-                        preload ? preload->path : NULL, arguments);
+    host_addApplication(host, startTime, stopTime,
+            plugin->name, plugin->path, plugin->startSymbol, envv, argv);
     host_stopExecutionTimer(host);
 }
 

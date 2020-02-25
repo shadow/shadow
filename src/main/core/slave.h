@@ -36,7 +36,8 @@
 typedef struct _Slave Slave;
 
 
-Slave* slave_new(Master* master, Options* options, SimulationTime endTime, SimulationTime bootstrapEndTime, guint randomSeed);
+Slave* slave_new(Master* master, Options* options, SimulationTime endTime, SimulationTime bootstrapEndTime,
+        guint randomSeed, const gchar* preloadShimPath, const gchar* environment);
 gint slave_free(Slave* slave);
 
 gboolean slave_isForced(Slave* slave);

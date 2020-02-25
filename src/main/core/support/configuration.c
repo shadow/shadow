@@ -6,11 +6,15 @@
 
 #include "main/core/support/configuration.h"
 
+#include <elf.h>
+#include <link.h>
 #include <stddef.h>
 
 #include "main/core/support/definitions.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
+
+#define PRELOAD_SHIM_LIB_STR "libshadow-shim.so"
 
 /* an internal module to help parse the XML file */
 typedef struct _Parser Parser;
@@ -32,6 +36,67 @@ struct _Parser {
     GQueue* hosts; // holds items of type ConfigurationHostElement
     MAGIC_DECLARE;
 };
+
+static gchar* _parser_getRPath() {
+    const ElfW(Dyn) *dyn = _DYNAMIC;
+    const ElfW(Dyn) *rpath = NULL;
+    const gchar *strtab = NULL;
+    for (; dyn->d_tag != DT_NULL; ++dyn) {
+        if (dyn->d_tag == DT_RPATH || dyn->d_tag == DT_RUNPATH) {
+            rpath = dyn;
+        } else if (dyn->d_tag == DT_STRTAB) {
+            strtab = (const gchar *) dyn->d_un.d_val;
+        }
+    }
+    GString* rpathStrBuf = g_string_new(NULL );
+    if (strtab != NULL && rpath != NULL ) {
+        g_string_printf(rpathStrBuf, "%s", strtab + rpath->d_un.d_val);
+    }
+    return g_string_free(rpathStrBuf, FALSE);
+}
+
+static gboolean _parser_isValidPathToPreloadLib(const gchar* path) {
+    if(path) {
+        gboolean isAbsolute = g_path_is_absolute(path);
+        gboolean exists = g_file_test(path, G_FILE_TEST_IS_REGULAR|G_FILE_TEST_EXISTS);
+        gboolean isShadowPreload = g_str_has_suffix(path, PRELOAD_SHIM_LIB_STR);
+
+        if(isAbsolute && exists && isShadowPreload) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
+static gchar* _parser_scanRPathForPreloadShim(){
+    gchar* preloadArgValue = NULL;
+
+    gchar* rpathStr = _parser_getRPath();
+    if(rpathStr != NULL) {
+        gchar** tokens = g_strsplit(rpathStr, ":", 0);
+
+        for(gint i = 0; tokens[i] != NULL; i++) {
+            GString* candidateBuffer = g_string_new(NULL);
+
+            /* rpath specifies directories, so look inside */
+            g_string_printf(candidateBuffer, "%s/%s", tokens[i], PRELOAD_SHIM_LIB_STR);
+            gchar* candidate = g_string_free(candidateBuffer, FALSE);
+
+            if(_parser_isValidPathToPreloadLib(candidate)) {
+                preloadArgValue = candidate;
+                break;
+            } else {
+                g_free(candidate);
+            }
+        }
+
+        g_strfreev(tokens);
+    }
+    g_free(rpathStr);
+
+    return preloadArgValue;
+}
 
 static GString* _parser_findPathToFile(const gchar* relativeFilePathSuffix, const gchar* defaultShadowPath) {
     GString* foundPath = NULL;
@@ -693,10 +758,24 @@ static GError* _parser_handleShadowAttributes(Parser* parser, const gchar** attr
     }
 
     /* validate the values */
-//    if(!error && !shadow->preload.isSet) {
-//        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
-//                "element 'shadow' requires attributes 'preload'");
-//    }
+    if(!error && !shadow->preloadPath.isSet) {
+        warning("'shadow' element is missing 'preload' attribute; falling back to rpath scan for "PRELOAD_SHIM_LIB_STR);
+        gchar* preloadPath = _parser_scanRPathForPreloadShim();
+
+        if(preloadPath) {
+            message("found "PRELOAD_SHIM_LIB_STR" at %s", preloadPath);
+            shadow->preloadPath.string = g_string_new(preloadPath);
+            shadow->preloadPath.isSet = TRUE;
+            g_free(preloadPath);
+        } else {
+            critical("could not find "PRELOAD_SHIM_LIB_STR" in rpath");
+        }
+    }
+
+    if(!error && !shadow->preloadPath.isSet) {
+        error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+                "element 'shadow' requires attributes 'preload'");
+    }
 
     if(!error && shadow->preloadPath.isSet) {
         error = _parser_checkPath(&(shadow->preloadPath));
