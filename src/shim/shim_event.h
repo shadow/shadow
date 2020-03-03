@@ -3,26 +3,36 @@
 #include <stdint.h>
 #include <time.h>
 
-#define SHD_SHIM_EVENT_NULL 0
-#define SHD_SHIM_EVENT_START 1
-#define SHD_SHIM_EVENT_STOP 2
-#define SHD_SHIM_EVENT_NANO_SLEEP 3
+#include "../main/host/shd-syscall-types.h"
 
-// TODO (rwails) hack, change me
-#define SHD_SHIM_EVENT_NANO_SLEEP_COMPLETE 4
-
-typedef uint32_t ShimEventID;
-
-typedef struct _ShimEventDataNanoSleep {
-    struct timespec ts;
-} ShimEventDataNanoSleep;
+typedef enum {
+    SHD_SHIM_EVENT_NULL = 0,
+    SHD_SHIM_EVENT_START = 1,
+    SHD_SHIM_EVENT_STOP = 2,
+    SHD_SHIM_EVENT_NANO_SLEEP = 3,
+    // TODO (rwails) hack, change me
+    SHD_SHIM_EVENT_NANO_SLEEP_COMPLETE = 4,
+    SHD_SHIM_EVENT_SYSCALL = 5,
+    SHD_SHIM_EVENT_SYSCALL_COMPLETE = 6
+} ShimEventID;
 
 typedef struct _ShimEvent {
     ShimEventID event_id;
 
-    union _EventData {
-        ShimEventDataNanoSleep data_nano_sleep;
+    union {
+        struct {
+            struct timespec ts;
+        } data_nano_sleep;
         int rv; // TODO (rwails) hack, remove me
+        struct {
+            // We wrap this in the surrounding struct in case there's anything
+            // else we end up needing in the message besides the literal struct
+            // we're going to pass to the syscall handler.
+            SysCallArgs syscall_args;
+        } syscall;
+        struct {
+            SysCallReg retval;
+        } syscall_complete;
     } event_data;
 
 } ShimEvent;

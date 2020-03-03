@@ -13,6 +13,7 @@
 typedef struct _Thread Thread;
 
 #include "main/host/shd-syscall-handler.h"
+#include "main/host/shd-syscall-types.h"
 
 Thread* thread_new(gint threadID, SysCallHandler* sys);
 void thread_ref(Thread* thread);
@@ -21,6 +22,7 @@ void thread_unref(Thread* thread);
 void thread_run(Thread* thread, gchar** argv, gchar** envv);
 void thread_resume(Thread* thread);
 void thread_terminate(Thread* thread);
+void thread_setSysCallResult(Thread* thread, SysCallReg retval);
 int thread_getReturnCode(Thread* thread);
 
 gboolean thread_isRunning(Thread* thread);

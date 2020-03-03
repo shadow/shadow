@@ -13,48 +13,16 @@
 
 typedef struct _SysCallHandler SysCallHandler;
 
-typedef struct _SysCallReturn SysCallReturn;
-struct _SysCallReturn {
-    gboolean block;
-    int errnum;
-    union {
-        int _int;
-        uint _uint;
-        long _long;
-        time_t _time_t;
-        size_t _size_t;
-        ssize_t _ssize_t;
-        void* _void_p;
-
-    } retval;
-};
-
-#include "main/host/shd-thread.h"
-#include "main/host/process.h"
 #include "main/host/host.h"
+#include "main/host/process.h"
+#include "main/host/shd-thread.h"
+#include "main/host/shd-syscall-types.h"
 
 SysCallHandler* syscallhandler_new(Host* host, Process* process);
 void syscallhandler_ref(SysCallHandler* sys);
 void syscallhandler_unref(SysCallHandler* sys);
 
-///////////////////////////////////////////////////////////
-// System Calls
-///////////////////////////////////////////////////////////
-
-SysCallReturn syscallhandler_sleep(SysCallHandler* sys, Thread* thread,
-        unsigned int sec);
-SysCallReturn syscallhandler_usleep(SysCallHandler* sys, Thread* thread,
-        unsigned int usec);
-SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys, Thread* thread,
-        const struct timespec *req, struct timespec *rem);
-
-SysCallReturn syscallhandler_time(SysCallHandler* sys, Thread* thread,
-        time_t* tloc);
-SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys, Thread* thread,
-        clockid_t clk_id, struct timespec *tp);
-SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys, Thread* thread,
-        clockid_t clk_id, struct timespec *res);
-SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, Thread* thread,
-        struct timeval *tv, struct timezone *tz);
+SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys, Thread* thread,
+                                          const SysCallArgs* args);
 
 #endif /* SRC_MAIN_HOST_SHD_SYSCALL_HANDLER_H_ */

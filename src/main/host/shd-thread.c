@@ -115,6 +115,23 @@ static int _thread_fork_exec(Thread *thread,
     }
 }
 
+// status should have been set by caller using waitpid.
+static void _thread_cleanup(Thread* thread, int status) {
+    if (WIFEXITED(status)) {
+        thread->returnCode = WEXITSTATUS(status);
+        debug("child %d exited with status %d", thread->childPID, thread->returnCode);
+    } else if (WIFSIGNALED(status)) {
+        int signum = WTERMSIG(status);
+        debug("child %d terminated by signal %d", thread->childPID, signum);
+        thread->returnCode = -1;
+    } else {
+        debug("child %d quit unexpectedly", thread->childPID);
+        thread->returnCode = -1;
+    }
+
+    thread->isRunning = 0;
+}
+
 void thread_ref(Thread* thread) {
     MAGIC_ASSERT(thread);
     (thread->referenceCount)++;
@@ -183,70 +200,53 @@ void thread_resume(Thread* thread) {
 
     utility_assert(thread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
 
-    SysCallReturn result;
+    bool blocked = false;
 
-    while(TRUE) {
-
-        switch(thread->currentEvent.event_id) {
+    while (!blocked) {
+        switch (thread->currentEvent.event_id) {
             case SHD_SHIM_EVENT_START: {
                 // send the message to the shim to call main(),
                 // the plugin will run until it makes a blocking call
-                debug("sending start event code to %d on %d", thread->childPID, thread->eventFD);
+                debug("sending start event code to %d on %d", thread->childPID,
+                      thread->eventFD);
                 shimevent_sendEvent(thread->eventFD, &thread->currentEvent);
-
-                /* event has completed */
-                result.block = FALSE;
-
                 break;
             }
-
             case SHD_SHIM_EVENT_STOP: {
-                // the plugin stopped running, clear it and collect the return code
-                thread_terminate(thread);
+                // the plugin stopped running, clear it and collect the return
+                // code
+                int status;
+                pid_t rc = waitpid(thread->childPID, &status, 0);
+                utility_assert(rc == thread->childPID);
+                _thread_cleanup(thread, status);
                 // it will not be sending us any more events
                 return;
             }
-
-            case SHD_SHIM_EVENT_NANO_SLEEP: {
-                struct timespec req =
-                    thread->currentEvent.event_data.data_nano_sleep.ts;
-
-                struct timespec rem;
-
-                result = syscallhandler_nanosleep(thread->sys, thread, &req, &rem);
-
-                if(!result.block) {
-                    // TODO send message containing result to shim
+            case SHD_SHIM_EVENT_SYSCALL: {
+                SysCallReturn result = syscallhandler_make_syscall(
+                    thread->sys, thread,
+                    &thread->currentEvent.event_data.syscall.syscall_args);
+                if (result.have_retval) {
+                    ShimEvent shim_result = {
+                        .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                        .event_data.syscall_complete.retval = result.retval};
+                    shimevent_sendEvent(thread->eventFD, &shim_result);
                 } else {
-                    // TODO (rwails): stub, change me
-                    ShimEvent next_ev;
-                    next_ev.event_id = SHD_SHIM_EVENT_NANO_SLEEP_COMPLETE;
-                    next_ev.event_data.rv = result.retval._int;
-
-                    thread->currentEvent = next_ev;
+                    blocked = true;
                 }
-
                 break;
             }
-
-            case SHD_SHIM_EVENT_NANO_SLEEP_COMPLETE: {
-
-                ShimEvent response;
-                response.event_id = SHD_SHIM_EVENT_NANO_SLEEP;
-                response.event_data.data_nano_sleep.ts.tv_sec = 0;
-                response.event_data.data_nano_sleep.ts.tv_nsec = 0;
-                shimevent_sendEvent(thread->eventFD, &response);
-
+            case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
+                shimevent_sendEvent(thread->eventFD, &thread->currentEvent);
                 break;
             }
-
             default: {
                 error("unknown event type");
                 break;
             }
         }
 
-        if(result.block) {
+        if (blocked) {
             /* thread is blocked on simulation progress */
             return;
         } else {
@@ -256,41 +256,34 @@ void thread_resume(Thread* thread) {
     }
 }
 
+void thread_setSysCallResult(Thread* thread, SysCallReg retval) {
+    thread->currentEvent =
+        (ShimEvent){.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                    .event_data.syscall_complete.retval = retval};
+}
+
 void thread_terminate(Thread* thread) {
     // TODO [rwails]: come back and make this logic more solid
 
     MAGIC_ASSERT(thread);
+    if (!thread->isRunning) {
+        return;
+    }
 
     int status = 0;
 
-    if (thread->isRunning) {
+    utility_assert(thread->childPID > 0);
 
-        utility_assert(thread->childPID > 0);
+    pid_t rc = waitpid(thread->childPID, &status, WNOHANG);
+    utility_assert(rc != -1);
 
-        pid_t rc = waitpid(thread->childPID, &status, WNOHANG);
-        utility_assert(rc != -1);
-
-        if (rc == 0) { // child is running, request a stop
-            debug("sending SIGTERM to %d", thread->childPID);
-            kill(thread->childPID, SIGTERM);
-            rc = waitpid(thread->childPID, &status, 0);
-            utility_assert(rc != -1 && rc > 0);
-        }
-
-        if (WIFEXITED(status)) {
-            thread->returnCode = WEXITSTATUS(status);
-            debug("child %d exited with status %d", thread->childPID, thread->returnCode);
-        } else if (WIFSIGNALED(status)) {
-            int signum = WTERMSIG(status);
-            debug("child %d terminated by signal %d", thread->childPID, signum);
-            thread->returnCode = -1;
-        } else {
-            debug("child %d quit unexpectedly", thread->childPID);
-            thread->returnCode = -1;
-        }
-
-        thread->isRunning = 0;
+    if (rc == 0) { // child is running, request a stop
+        debug("sending SIGTERM to %d", thread->childPID);
+        kill(thread->childPID, SIGTERM);
+        rc = waitpid(thread->childPID, &status, 0);
+        utility_assert(rc != -1 && rc > 0);
     }
+    _thread_cleanup(thread, status);
 }
 
 int thread_getReturnCode(Thread* thread) {

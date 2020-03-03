@@ -6,12 +6,17 @@
  */
 #include "main/host/shd-syscall-handler.h"
 
+#include <errno.h>
 #include <glib.h>
-#include <time.h>
+#include <sys/syscall.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "main/core/worker.h"
+#include "main/host/shd-syscall-types.h"
+#include "support/logger/logger.h"
 
 struct _SysCallHandler {
     Host* host;
@@ -70,6 +75,12 @@ static EmulatedTime _syscallhandler_getEmulatedTime() {
 
 static void _syscallhandler_unblock(SysCallHandler* sys, Thread* thread) {
     MAGIC_ASSERT(sys);
+    // TODO: Need to check that we're still in the same syscall from which
+    // this was scheduled. For other syscalls will also need a way of
+    // wiring through other return values, and probably for arranging
+    // for syscall-specific cleanup (e.g. on a select timeout).
+    thread_setSysCallResult(thread, (SysCallReg){.as_i64 = 0});
+
     process_continue(sys->process);
 }
 
@@ -98,69 +109,31 @@ static void _syscallhandler_block(SysCallHandler* sys, Thread* thread, Simulatio
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_sleep(SysCallHandler* sys, Thread* thread,
-        unsigned int sec) {
-    struct timespec request;
-    request.tv_sec = (time_t)sec;
-    request.tv_nsec = 0;
-    struct timespec remain;
-    remain.tv_sec = 0;
-    remain.tv_nsec = 0;
-
-    SysCallReturn ret = syscallhandler_nanosleep(sys, thread, &request, &remain);
-
-    /* the nanosleep call will have set block if needed */
-    if(ret.block) {
-        /* we need to block so the return value is irrelevant */
-        return (SysCallReturn){.block = TRUE, .errnum = 0, .retval._uint = 0};
-    }
-
-    if(ret.retval._int < 0) {
-        return (SysCallReturn){.block = FALSE, .errnum = 0, .retval._uint = (uint)remain.tv_sec};
-    } else {
-        return (SysCallReturn){.block = FALSE, .errnum = 0, .retval._uint = 0};
-    }
-}
-
-SysCallReturn syscallhandler_usleep(SysCallHandler* sys, Thread* thread,
-        unsigned int usec) {
-    struct timespec request;
-    request.tv_sec = (time_t)(usec / 1000000);
-    request.tv_nsec = (long)((usec % 1000000) * 1000);
-
-    SysCallReturn ret = syscallhandler_nanosleep(sys, thread, &request, NULL);
-
-    /* the nanosleep call will have set block if needed */
-    if(ret.block) {
-        /* we need to block so the return value is irrelevant */
-        return (SysCallReturn){.block = TRUE, .errnum = 0, .retval._int = 0};
-    }
-
-    if(ret.retval._int < 0) {
-        return (SysCallReturn){.block = FALSE, .errnum = ret.errnum, .retval._int = -1};
-    } else {
-        return (SysCallReturn){.block = FALSE, .errnum = 0, .retval._int = 0};
-    }
-}
-
 SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys, Thread* thread,
-        const struct timespec *req, struct timespec *rem) {
+                                       const struct timespec* req,
+                                       struct timespec* rem) {
     utility_assert(req);
 
-    if(req->tv_nsec > 0 || req->tv_sec > 0) {
-        /* how much simtime do we wait */
-        SimulationTime sleepDelay = ((SimulationTime)req->tv_nsec) +
-                ((SimulationTime)req->tv_sec * SIMTIME_ONE_SECOND);
-
-        /* set up a block task in the host */
-        // TODO I think this should go in process.c with the rest of the thread scheduling code
-        _syscallhandler_block(sys, thread, sleepDelay);
-
-        /* tell the thread we blocked it */
-        return (SysCallReturn){.block = TRUE, .errnum = 0, .retval._int = 0};
-    } else {
-        return (SysCallReturn){.block = FALSE, .errnum = 0, .retval._int = 0};
+    if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
+        return (SysCallReturn){.have_retval = true, .retval.as_i64 = -EINVAL};
     }
+
+    if (req->tv_sec == 0 && req->tv_nsec == 0) {
+        return (SysCallReturn){.have_retval = true, .retval.as_i64 = 0};
+    }
+
+    /* how much simtime do we wait */
+    SimulationTime sleepDelay =
+        ((SimulationTime)req->tv_nsec) +
+        ((SimulationTime)req->tv_sec * SIMTIME_ONE_SECOND);
+
+    /* set up a block task in the host */
+    // TODO I think this should go in process.c with the rest of the thread
+    // scheduling code
+    _syscallhandler_block(sys, thread, sleepDelay);
+
+    /* tell the thread we blocked it */
+    return (SysCallReturn){.have_retval = false};
 }
 
 SysCallReturn syscallhandler_time(SysCallHandler* sys, Thread* thread,
@@ -172,7 +145,7 @@ SysCallReturn syscallhandler_time(SysCallHandler* sys, Thread* thread,
         *tloc = secs;
     }
 
-    return (SysCallReturn){.block = FALSE, .errnum = 0, .retval._time_t = secs};
+    return (SysCallReturn){.have_retval = true, .retval.as_i64 = secs};
 }
 
 SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys, Thread* thread,
@@ -183,7 +156,7 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys, Thread* thread,
     tp->tv_sec = now / SIMTIME_ONE_SECOND;
     tp->tv_nsec = now % SIMTIME_ONE_SECOND;
 
-    return (SysCallReturn){.block = FALSE, .errnum = 0, .retval._int = 0};
+    return (SysCallReturn){.have_retval = true, .retval.as_i64 = 0};
 }
 
 SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys, Thread* thread,
@@ -194,7 +167,7 @@ SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys, Thread* thread,
     res->tv_sec = 0;
     res->tv_nsec = 1;
 
-    return (SysCallReturn){.block = FALSE, .errnum = 0, .retval._int = 0};
+    return (SysCallReturn){.have_retval = true, .retval.as_i64 = 0};
 }
 
 SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, Thread* thread,
@@ -211,5 +184,34 @@ SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, Thread* thread,
     tv->tv_sec = (time_t)sec;
     tv->tv_usec = (suseconds_t)usec;
 
-    return (SysCallReturn){.block = FALSE, .errnum = 0, .retval._int = 0};
+    return (SysCallReturn){.have_retval = true, .retval.as_i64 = 0};
+}
+
+SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys, Thread* thread,
+                                          const SysCallArgs* args) {
+    switch (args->number) {
+        case SYS_nanosleep: {
+            // FIXME: arg[0] and arg[1] should be pointers to shared memory.
+            // TODO(ryanwails): Add shared memory mechanism,and an API for
+            // mapping shim-side pointers to shadow-side pointers.
+            const struct timespec req_timespec = {
+                .tv_sec = args->args[0].as_i64,
+                .tv_nsec = args->args[1].as_i64};
+            return syscallhandler_nanosleep(sys, thread, &req_timespec, NULL);
+        }
+        case SYS_clock_gettime: {
+            // FIXME: args[1] should be a pointer to the timespec.
+            // For now we insted write the result as i64 nanos in the returned register.
+            struct timespec res_timespec;
+            SysCallReturn rv = syscallhandler_clock_gettime(
+                sys, thread, args->args[0].as_i64, &res_timespec);
+            return (SysCallReturn) {
+                .have_retval = true,
+                .retval.as_i64 =
+                    res_timespec.tv_sec * 1000000000LL + res_timespec.tv_nsec
+            };
+        }
+    }
+    error("unknown syscall number");
+    abort();
 }

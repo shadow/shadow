@@ -1,62 +1,125 @@
 #include <assert.h>
 #include <errno.h>
+#include <stdarg.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/syscall.h>
 #include <time.h>
-
 #include <unistd.h>
 
 #include "shim.h"
 #include "shim_event.h"
 
-int nanosleep(const struct timespec *req, struct timespec *rem) {
-
-    if (req == NULL) {
-        errno = EFAULT;
+static long shadow_retval_to_errno(long retval) {
+    if (retval >= 0) {
+        return retval;
+    } else {
+        errno = -retval;
         return -1;
     }
-
-    if (req->tv_sec < 0 || req->tv_nsec < 0 || req->tv_nsec > 999999999) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    int event_fd = shim_thisThreadEventFD();
-
-    ShimEvent shim_event;
-    shim_event.event_id = SHD_SHIM_EVENT_NANO_SLEEP;
-    shim_event.event_data.data_nano_sleep.ts = *req;
-
-    SHD_SHIM_LOG("sending event on %d\n", event_fd);
-    shimevent_sendEvent(event_fd, &shim_event);
-
-    memset(&shim_event, 0, sizeof(ShimEvent));
-    SHD_SHIM_LOG("waiting for event on %d\n", event_fd);
-    shimevent_recvEvent(event_fd, &shim_event);
-    SHD_SHIM_LOG("got response on %d\n", event_fd);
-    assert(shim_event.event_id == SHD_SHIM_EVENT_NANO_SLEEP);
-
-    int rc = (shim_event.event_data.data_nano_sleep.ts.tv_sec == 0 &&
-              shim_event.event_data.data_nano_sleep.ts.tv_nsec == 0) ? 0 : -1;
-
-    if (rc == -1) {
-        errno = EINTR;
-    }
-
-    if (rem != NULL) {
-        *rem = shim_event.event_data.data_nano_sleep.ts;
-    }
-
-    return rc;
 }
 
-unsigned int sleep(unsigned int seconds) {
+static SysCallReg shadow_syscall(const ShimEvent* ev) {
+    const int fd = shim_thisThreadEventFD();
+    SHD_SHIM_LOG("sending event on %d\n", fd);
+    shimevent_sendEvent(fd, ev);
 
+    SHD_SHIM_LOG("waiting for event on %d\n", fd);
+    ShimEvent res;
+    shimevent_recvEvent(fd, &res);
+    SHD_SHIM_LOG("got response on %d\n", fd);
+    assert(res.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
+
+    return res.event_data.syscall_complete.retval;
+}
+
+static long shadow_syscall_nanosleep(va_list args) {
+    const struct timespec* req = va_arg(args, SysCallReg).as_ptr;
+    struct timespec* res = va_arg(args, SysCallReg).as_ptr;
+
+    // FIXME: the real ABI uses pointers to timespecs.
+    // Switch to that when we have shared memory implemented.
+    // In particular we don't write remaining time to `rem` yet.
+    ShimEvent event = {
+        .event_id = SHD_SHIM_EVENT_SYSCALL,
+        .event_data.syscall.syscall_args =
+            (SysCallArgs){.number = SYS_nanosleep,
+                          .args = {req->tv_sec, req->tv_nsec}}
+    };
+    return shadow_retval_to_errno(shadow_syscall(&event).as_i64);
+}
+
+static long shadow_syscall_clock_gettime(va_list args) {
+    clockid_t clk_id = va_arg(args, SysCallReg).as_i64;
+    struct timespec* res = va_arg(args, SysCallReg).as_ptr;
+
+    ShimEvent event = {
+        .event_id = SHD_SHIM_EVENT_SYSCALL,
+        .event_data.syscall.syscall_args =
+            (SysCallArgs){.number = SYS_clock_gettime,
+                          .args = {clk_id, {.as_ptr=res}}}
+    };
+    int64_t rv = shadow_syscall(&event).as_i64;
+
+    // FIXME: the real ABI uses pointers to timespecs.
+    // Switch to that when we have shared memory implemented.
+    // In the meantime, shadow passes the result as literal nanos.
+    const int64_t nano = 1000000000LL;
+    res->tv_sec = rv / nano; 
+    res->tv_nsec = rv % nano;
+    return 0;
+}
+
+// man 2 syscall
+long syscall(long n, ...) {
+    va_list args;
+    va_start(args, n);
+    long rv = -1;
+    switch (n) {
+        case SYS_nanosleep:
+            rv = shadow_syscall_nanosleep(args);
+            break;
+        case SYS_clock_gettime:
+            rv = shadow_syscall_clock_gettime(args);
+            break;
+        default:
+            SHD_SHIM_LOG("unhandled syscall %ld\n", n);
+    }
+    va_end(args);
+    return rv;
+}
+
+// man 2 nanosleep
+int nanosleep(const struct timespec* req, struct timespec* rem) {
+    return syscall(SYS_nanosleep, (SysCallReg){.as_cptr = req},
+                   (SysCallReg){.as_ptr = rem});
+}
+
+// man 3 usleep
+int usleep(useconds_t usec) {
     struct timespec req, rem;
-    memset(&req, 0, sizeof(struct timespec));
+    req.tv_sec = usec / 1000000;
+    const long remaining_usec = usec - req.tv_sec * 1000000;
+    req.tv_nsec = remaining_usec * 1000;
 
-    req.tv_sec = seconds;
+    return nanosleep(&req, &rem);
+}
 
-    nanosleep(&req, &rem);
+// man 3 sleep
+unsigned int sleep(unsigned int seconds) {
+    struct timespec req = {.tv_sec = seconds};
+    struct timespec rem = { 0 };
+
+    if (nanosleep(&req, &rem) == 0) {
+        return 0;
+    }
 
     return rem.tv_sec;
 }
+
+// man 2 
+int clock_gettime(clockid_t clk_id, struct timespec *tp) {
+    return syscall(SYS_clock_gettime, (SysCallReg){.as_i64 = clk_id},
+                   (SysCallReg){.as_ptr = tp});
+}
+
