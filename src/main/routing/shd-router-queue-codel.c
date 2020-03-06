@@ -21,16 +21,22 @@
 
 #include "shadow.h"
 
-/* hard limit of queue size, in number of packets */
-//#define CODEL_PARAM_LIMIT 1000
-#define CODEL_PARAM_LIMIT G_MAXUINT
+/* hard limit of queue size, in number of packets. this is recommended to be
+ * 1000 in normal routers, but in Shadow we don't enforce a practical limit.
+ * this corresponds to the "LIMIT" parameter in the RFC. */
+#define CODEL_PARAM_QUEUE_SIZE_LIMIT G_MAXUINT
 
-/* target minimum standing queue delay time (5 milliseconds) */
-//#define CODEL_PARAM_TARGET (5*SIMTIME_ONE_MILLISECOND)
-#define CODEL_PARAM_TARGET (10*SIMTIME_ONE_MILLISECOND)
+/* target minimum standing queue delay time. this is recommended to be
+ * set to 5 milliseconds, but in Shadow we increase it to 10 milliseconds.
+ * this corresponds to the "TARGET" parameter in the RFC.
+ * note that the raw value is in SimTime, i.e., number of nanoseconds. */
+#define CODEL_PARAM_TARGET_DELAY_SIMTIME (10*SIMTIME_ONE_MILLISECOND)
 
-/* delay is computed over the most recent interval time (100 milliseconds) */
-#define CODEL_PARAM_INTERVAL (100*SIMTIME_ONE_MILLISECOND)
+/* delay is computed over the most recent interval time. we follow the
+ * recommended setting of 100 milliseconds. this corresponds to the
+ * "INTERVAL" parameter in the RFC. note that the raw value is in SimTime,
+ * i.e., number of nanoseconds.*/
+#define CODEL_PARAM_INTERVAL_SIMTIME (100*SIMTIME_ONE_MILLISECOND)
 
 typedef enum _CoDelMode CoDelMode;
 enum _CoDelMode {
@@ -99,7 +105,7 @@ static gboolean _routerqueuecodel_enqueue(QueueManagerCoDel* queueManager, Packe
     utility_assert(queueManager);
     utility_assert(packet);
 
-    if(g_queue_get_length(queueManager->entries) < CODEL_PARAM_LIMIT) {
+    if(g_queue_get_length(queueManager->entries) < CODEL_PARAM_QUEUE_SIZE_LIMIT) {
         /* we will store the packet */
         packet_ref(packet);
 
@@ -115,7 +121,7 @@ static gboolean _routerqueuecodel_enqueue(QueueManagerCoDel* queueManager, Packe
     } else {
         /* we already have reached our hard packet limit, so we drop it */
         // TODO not sure if we need to change to drop mode or count this as a dropped packet
-        // XXX Until CODEL_PARAM_LIMIT becomes less than infinity, it does not matter
+        // XXX Until CODEL_PARAM_QUEUE_SIZE_LIMIT becomes less than infinity, it does not matter
         return FALSE;
     }
 }
@@ -157,7 +163,7 @@ static Packet* _routerqueuecodel_dequeueHelper(QueueManagerCoDel* queueManager,
     utility_assert(now >= ts);
     SimulationTime sojournTime = now - ts;
 
-    if(sojournTime < CODEL_PARAM_TARGET || queueManager->totalSize < CONFIG_MTU) {
+    if(sojournTime < CODEL_PARAM_TARGET_DELAY_SIMTIME || queueManager->totalSize < CONFIG_MTU) {
         /* We are in a good state, i.e., below the target delay. We reset the interval
          * expiration, so that we wait for at least interval if the delay exceeds the
          * target again. */
@@ -167,7 +173,7 @@ static Packet* _routerqueuecodel_dequeueHelper(QueueManagerCoDel* queueManager,
         if(queueManager->intervalExpireTS == 0) {
             /* We were in a good state and just entered a bad state. If we stay in the
              * bad state for a full interval, we enter drop mode. */
-            queueManager->intervalExpireTS = now + CODEL_PARAM_INTERVAL;
+            queueManager->intervalExpireTS = now + CODEL_PARAM_INTERVAL_SIMTIME;
         } else {
             /* We were already in a bad state and stayed in it. If we have been in it
              * for a full interval worth of time, then we drop this packet. */
@@ -181,7 +187,7 @@ static Packet* _routerqueuecodel_dequeueHelper(QueueManagerCoDel* queueManager,
 }
 
 static SimulationTime _routerqueuecodel_controlLaw(guint count, SimulationTime ts) {
-    SimulationTime newTS = ts + CODEL_PARAM_INTERVAL;
+    SimulationTime newTS = ts + CODEL_PARAM_INTERVAL_SIMTIME;
 
     double result = ((double)newTS) / sqrt((double)count);
     double rounded = round(result);
@@ -238,7 +244,7 @@ static Packet* _routerqueuecodel_dequeue(QueueManagerCoDel* queueManager) {
         guint delta = queueManager->dropCount - queueManager->dropCountLast;
         queueManager->dropCount = 1;
 
-        gboolean droppingRecently = (now < queueManager->nextDropTS + (16*CODEL_PARAM_INTERVAL)) ? TRUE : FALSE;
+        gboolean droppingRecently = (now < queueManager->nextDropTS + (16*CODEL_PARAM_INTERVAL_SIMTIME)) ? TRUE : FALSE;
 
         if(droppingRecently && delta > 1) {
             queueManager->dropCount = delta;

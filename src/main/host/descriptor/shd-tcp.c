@@ -496,12 +496,6 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp) {
     sendbuf_size = CLAMP(sendbuf_size, CONFIG_SEND_BUFFER_MIN_SIZE, CONFIG_TCP_WMEM_MAX);
     receivebuf_size = CLAMP(receivebuf_size, CONFIG_RECV_BUFFER_MIN_SIZE, CONFIG_TCP_RMEM_MAX);
 
-    /* make sure the user hasnt already written to the buffer, because if we
-     * shrink it, our buffer math would overflow the size variable
-     */
-//    utility_assert(socket_getInputBufferLength(&(tcp->super)) == 0);
-//    utility_assert(socket_getOutputBufferLength(&(tcp->super)) == 0);
-
     /* check to see if the node should set buffer sizes via autotuning, or
      * they were specified by configuration or parameters in XML */
     Host* node = worker_getActiveHost();

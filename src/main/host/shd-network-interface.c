@@ -105,7 +105,9 @@ static void _networkinterface_refillTokenBucketsBoth(NetworkInterface* interface
             (TaskCallbackFunc) _networkinterface_refillTokenBucketsBoth,
             _networkinterface_getRefillIntervalReceive());
 
-    /* the refill may have caused us to be able to receive and send again */
+    /* the refill may have caused us to be able to receive and send again.
+     * we only receive packets from an upstream router if we have one (i.e.,
+     * if this is not a loopback interface). */
     if(interface->router) {
         networkinterface_receivePackets(interface);
     }
@@ -138,7 +140,9 @@ static void _networkinterface_refillTokenBucketReceive(NetworkInterface* interfa
             (TaskCallbackFunc) _networkinterface_refillTokenBucketReceive,
             _networkinterface_getRefillIntervalReceive());
 
-    /* the refill may have caused us to be able to receive again */
+    /* the refill may have caused us to be able to receive again.
+     * we only receive packets from an upstream router if we have one (i.e.,
+     * if this is not a loopback interface). */
     if(interface->router) {
         networkinterface_receivePackets(interface);
     }
@@ -383,7 +387,9 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
 void networkinterface_receivePackets(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
 
-    /* we can only receive packets from the upstream router if we actually have one */
+    /* we can only receive packets from the upstream router if we actually have one.
+     * sending on loopback means we don't have a router, sending to a remote host
+     * means we do have a router. */
     if(!interface->router) {
         return;
     }

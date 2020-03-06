@@ -7,9 +7,9 @@
 #ifndef SHD_NETWORK_INTERFACE_H_
 #define SHD_NETWORK_INTERFACE_H_
 
-typedef struct _NetworkInterface NetworkInterface;
-
 #include "shadow.h"
+
+typedef struct _NetworkInterface NetworkInterface;
 
 NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, guint64 bwUpKiBps,
         gboolean logPcap, gchar* pcapDir, QDiscMode qdisc, guint64 interfaceReceiveLength);
