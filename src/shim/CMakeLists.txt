@@ -8,6 +8,8 @@
 ## we redirect them to our internal shadow versions, or to libc.
 # include_directories(${CMAKE_SOURCE_DIR}/src/main)
 
+add_cflags(-fPIC)
+
 set(SHIM_FILES
   preload.c
   shim.c
