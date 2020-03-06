@@ -33,7 +33,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
-
 #include "main/core/support/definitions.h"
 #include "main/host/shd-syscall-handler.h"
 
