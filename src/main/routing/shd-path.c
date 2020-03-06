@@ -7,17 +7,28 @@
 #include "shadow.h"
 
 struct _Path {
+    gboolean isDirect;
+    gint64 srcVertexIndex;
+    gint64 dstVertexIndex;
     gdouble latency;
-    gdouble reliablity;
+    gdouble reliability;
+    guint64 packetCount;
     MAGIC_DECLARE;
 };
 
-Path* path_new(gdouble latency, gdouble reliablity) {
+Path* path_new(gboolean isDirect, gint64 srcVertexIndex, gint64 dstVertexIndex, gdouble latency, gdouble reliability) {
     Path* path = g_new0(Path, 1);
     MAGIC_INIT(path);
 
+    /* a path representing a single edge in the graph.
+     *   SrcVertex--Edge--DstVertex: isDirect should be TRUE
+     *   SrcVertex--Edge--Vertex--Edge--DstVertex: isDirect should be FALSE
+     */
+    path->isDirect = isDirect;
+    path->srcVertexIndex = srcVertexIndex;
+    path->dstVertexIndex = dstVertexIndex;
     path->latency = latency;
-    path->reliablity = reliablity;
+    path->reliability = reliability;
 
     return path;
 }
@@ -36,5 +47,35 @@ gdouble path_getLatency(Path* path) {
 
 gdouble path_getReliability(Path* path) {
     MAGIC_ASSERT(path);
-    return path->reliablity;
+    return path->reliability;
+}
+
+void path_incrementPacketCount(Path* path) {
+    MAGIC_ASSERT(path);
+    path->packetCount++;
+}
+
+gchar* path_toString(Path* path) {
+    MAGIC_ASSERT(path);
+
+    GString* pathStringBuffer = g_string_new(NULL);
+
+    g_string_printf(pathStringBuffer,
+            "SourceIndex=%"G_GINT64_FORMAT" DestinationIndex=%"G_GINT64_FORMAT" "
+            "Latency=%f Reliability=%f PacketCount=%"G_GUINT64_FORMAT" isDirect=%s",
+            path->srcVertexIndex, path->dstVertexIndex,
+            path->latency, path->reliability, path->packetCount,
+            path->isDirect ? "True" : "False");
+
+    return g_string_free(pathStringBuffer, FALSE);
+}
+
+gint64 path_getSrcVertexIndex(Path* path) {
+    MAGIC_ASSERT(path);
+    return path->srcVertexIndex;
+}
+
+gint64 path_getDstVertexIndex(Path* path) {
+    MAGIC_ASSERT(path);
+    return path->dstVertexIndex;
 }

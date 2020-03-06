@@ -10,6 +10,9 @@ typedef void (*TaskCallbackFunc)(gpointer callbackObject, gpointer callbackArgum
 typedef void (*TaskObjectFreeFunc)(gpointer data);
 typedef void (*TaskArgumentFreeFunc)(gpointer data);
 
+/* An event for the currently active host, i.e.,
+ * the same host as the event initiator and running on the same slave machine.
+ * (These are non-packet events for localhost.) */
 typedef struct _Task Task;
 
 Task* task_new(TaskCallbackFunc callback, gpointer callbackObject, gpointer callbackArgument,

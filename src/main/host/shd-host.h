@@ -19,6 +19,8 @@ struct _HostParameters {
     guint nodeSeed;
     gchar* hostname;
     gchar* ipHint;
+    gchar* citycodeHint;
+    gchar* countrycodeHint;
     gchar* geocodeHint;
     gchar* typeHint;
     guint64 requestedBWDownKiBps;
@@ -51,9 +53,13 @@ void host_continueExecutionTimer(Host* host);
 void host_stopExecutionTimer(Host* host);
 gdouble host_getElapsedExecutionTime(Host* host);
 
+void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, const gchar* hostRootPath);
 void host_boot(Host* host);
 void host_shutdown(Host* host);
 
+guint host_getNewProcessID(Host* host);
+guint64 host_getNewEventID(Host* host);
+guint64 host_getNewPacketID(Host* host);
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
         const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
         const gchar* preloadName, const gchar* preloadPath, gchar* arguments);
@@ -76,6 +82,7 @@ gboolean host_autotuneSendBuffer(Host* host);
 gint host_createDescriptor(Host* host, DescriptorType type);
 void host_closeDescriptor(Host* host, gint handle);
 gint host_closeUser(Host* host, gint handle);
+gint host_shutdownSocket(Host* host, gint handle, gint how);
 Descriptor* host_lookupDescriptor(Host* host, gint handle);
 NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle);
 /* Channel* host_lookupShadowChannel(Host* host); */

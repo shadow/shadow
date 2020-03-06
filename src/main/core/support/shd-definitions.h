@@ -158,10 +158,19 @@ typedef guint64 EmulatedTime;
 /**
  * Default initial retransmission timeout and ranges,
  * TCP_TIMEOUT_INIT=1000ms, TCP_RTO_MIN=200ms and TCP_RTO_MAX=120000ms from net/tcp.h
+ *
+ * HZ is about 1 second, i.e., about 1000 milliseconds
  */
-#define CONFIG_TCP_RTO_INIT 1000
-#define CONFIG_TCP_RTO_MIN 200
-#define CONFIG_TCP_RTO_MAX 1200000
+#define NET_TCP_HZ 1000
+#define CONFIG_TCP_RTO_INIT NET_TCP_HZ
+#define CONFIG_TCP_RTO_MIN NET_TCP_HZ/5
+#define CONFIG_TCP_RTO_MAX NET_TCP_HZ*120
+
+/**
+ * Default delay ack times, from net/tcp.h
+ */
+#define CONFIG_TCP_DELACK_MIN NET_TCP_HZ/25
+#define CONFIG_TCP_DELACK_MAX NET_TCP_HZ/5
 
 /**
  * Minimum size of the send buffer per socket when TCP-autotuning is used.

@@ -19,10 +19,10 @@ Address* networkinterface_getAddress(NetworkInterface* interface);
 guint32 networkinterface_getSpeedUpKiBps(NetworkInterface* interface);
 guint32 networkinterface_getSpeedDownKiBps(NetworkInterface* interface);
 
-gboolean networkinterface_isAssociated(NetworkInterface* interface, gint key);
+gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
+        in_port_t port, in_addr_t peerAddr, in_port_t peerPort);
 void networkinterface_associate(NetworkInterface* interface, Socket* transport);
 void networkinterface_disassociate(NetworkInterface* interface, Socket* transport);
-guint networkinterface_getAssociationCount(NetworkInterface* interface);
 
 void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet);
 void networkinterface_received(NetworkInterface* interface);

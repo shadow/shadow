@@ -39,7 +39,7 @@ struct _Socket {
     SocketFunctionTable* vtable;
 
     enum SocketFlags flags;
-    enum ProtocolType protocol;
+    ProtocolType protocol;
 
     in_addr_t peerIP;
     in_addr_t peerPort;
@@ -51,8 +51,6 @@ struct _Socket {
 
     gchar* unixPath;
 
-    gint associationKey;
-
     /* buffering packets readable by user */
     GQueue* inputBuffer;
     gsize inputBufferSize;
@@ -61,6 +59,7 @@ struct _Socket {
 
     /* buffering packets ready to send */
     GQueue* outputBuffer;
+    GQueue* outputControlBuffer;
     gsize outputBufferSize;
     gsize outputBufferSizePending;
     gsize outputBufferLength;
@@ -91,13 +90,12 @@ gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet);
 Packet* socket_removeFromOutputBuffer(Socket* socket);
 
 gboolean socket_isBound(Socket* socket);
-gint socket_getAssociationKey(Socket* socket);
 gboolean socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port);
 void socket_setPeerName(Socket* socket, in_addr_t ip, in_port_t port);
 gboolean socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port);
-void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port, gboolean isInternal);
+void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port);
 
-enum ProtocolType socket_getProtocol(Socket* socket);
+ProtocolType socket_getProtocol(Socket* socket);
 
 gboolean socket_isFamilySupported(Socket* socket, sa_family_t family);
 gint socket_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port, sa_family_t family);

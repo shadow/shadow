@@ -131,11 +131,12 @@ intern void pth_mutex_releaseall(pth_t thread)
     if (thread == NULL)
         return;
     /* iterate over all mutexes of thread */
+    unsigned int num_elms = pth_ring_elements(&(thread->mutexring));
     rn = rnf = pth_ring_first(&(thread->mutexring));
     while (rn != NULL) {
         pth_mutex_release((pth_mutex_t *)rn);
         rn = pth_ring_next(&(thread->mutexring), rn);
-        if (rn == rnf)
+        if (rn == rnf || --num_elms <= 0)
             break;
     }
     return;

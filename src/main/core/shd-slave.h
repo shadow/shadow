@@ -25,19 +25,18 @@
 typedef struct _Slave Slave;
 
 
-Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint randomSeed);
+Slave* slave_new(Master* master, Options* options, SimulationTime endTime, SimulationTime bootstrapEndTime, guint randomSeed);
 gint slave_free(Slave* slave);
 
 gboolean slave_isForced(Slave* slave);
 guint slave_getRawCPUFrequency(Slave* slave);
-guint slave_nextRandomUInt(Slave* slave);
-gdouble slave_nextRandomDouble(Slave* slave);
 DNS* slave_getDNS(Slave* slave);
 Topology* slave_getTopology(Slave* slave);
 guint32 slave_getNodeBandwidthUp(Slave* slave, GQuark nodeID, in_addr_t ip);
 guint32 slave_getNodeBandwidthDown(Slave* slave, GQuark nodeID, in_addr_t ip);
 gdouble slave_getLatency(Slave* slave, GQuark sourceNodeID, GQuark destinationNodeID);
 Options* slave_getOptions(Slave* slave);
+SimulationTime slave_getBootstrapEndTime(Slave* slave);
 
 void slave_incrementPluginError(Slave* slave);
 const gchar* slave_getHostsRootPath(Slave* slave);

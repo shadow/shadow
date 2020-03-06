@@ -30,10 +30,11 @@ struct _Slave {
 
     /* simulation cli options */
     Options* options;
+    SimulationTime bootstrapEndTime;
 
     /* slave random source, init from master random, used to init host randoms */
     Random* random;
-    gint rawFrequencyKHz;
+    guint rawFrequencyKHz;
 
     /* global object counters, we collect counts from workers at end of sim */
     ObjectCounter* objectCounts;
@@ -136,7 +137,15 @@ void _program_meta_free(gpointer data) {
     g_free(meta);
 }
 
-Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint randomSeed) {
+static guint _slave_nextRandomUInt(Slave* slave) {
+    MAGIC_ASSERT(slave);
+    _slave_lock(slave);
+    guint r = random_nextUInt(slave->random);
+    _slave_unlock(slave);
+    return r;
+}
+
+Slave* slave_new(Master* master, Options* options, SimulationTime endTime, SimulationTime unlimBWEndTime, guint randomSeed) {
     if(globalSlave != NULL) {
         return NULL;
     }
@@ -152,6 +161,7 @@ Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint
     slave->options = options;
     slave->random = random_new(randomSeed);
     slave->objectCounts = objectcounter_new();
+    slave->bootstrapEndTime = unlimBWEndTime;
 
     slave->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if(slave->rawFrequencyKHz == 0) {
@@ -165,7 +175,7 @@ Slave* slave_new(Master* master, Options* options, SimulationTime endTime, guint
 
     guint nWorkers = options_getNWorkerThreads(options);
     SchedulerPolicyType policy = _slave_getEventSchedulerPolicy(slave);
-    guint schedulerSeed = slave_nextRandomUInt(slave);
+    guint schedulerSeed = _slave_nextRandomUInt(slave);
     slave->scheduler = scheduler_new(policy, nWorkers, slave, schedulerSeed, endTime);
 
     slave->cwdPath = g_get_current_dir();
@@ -248,22 +258,6 @@ guint slave_getRawCPUFrequency(Slave* slave) {
     return freq;
 }
 
-guint slave_nextRandomUInt(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    _slave_lock(slave);
-    guint r = random_nextUInt(slave->random);
-    _slave_unlock(slave);
-    return r;
-}
-
-gdouble slave_nextRandomDouble(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    _slave_lock(slave);
-    gdouble r = random_nextDouble(slave->random);
-    _slave_unlock(slave);
-    return r;
-}
-
 void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path, const gchar* startSymbol) {
     MAGIC_ASSERT(slave);
 
@@ -284,9 +278,11 @@ void slave_addNewVirtualHost(Slave* slave, HostParameters* params) {
 
     /* quarks are unique per slave process, so do the conversion here */
     params->id = g_quark_from_string(params->hostname);
-    params->nodeSeed = slave_nextRandomUInt(slave);
+    params->nodeSeed = _slave_nextRandomUInt(slave);
 
     Host* host = host_new(params);
+    host_setup(host, slave_getDNS(slave), slave_getTopology(slave),
+            slave_getRawCPUFrequency(slave), slave_getHostsRootPath(slave));
     scheduler_addHost(slave->scheduler, host);
 }
 
@@ -459,7 +455,9 @@ void slave_run(Slave* slave) {
 
 void slave_incrementPluginError(Slave* slave) {
     MAGIC_ASSERT(slave);
+    _slave_lock(slave);
     slave->numPluginErrors++;
+    _slave_unlock(slave);
 }
 
 const gchar* slave_getHostsRootPath(Slave* slave) {
@@ -485,4 +483,9 @@ void slave_countObject(ObjectType otype, CounterType ctype) {
         }
         _slave_unlock(globalSlave);
     }
+}
+
+SimulationTime slave_getBootstrapEndTime(Slave* slave) {
+    MAGIC_ASSERT(slave);
+    return slave->bootstrapEndTime;
 }

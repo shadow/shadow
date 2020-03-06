@@ -113,7 +113,7 @@ static double _phold_generate_normal_deviate() {
     // Box-Muller method
     double u = _phold_get_uniform_double();
     double v = _phold_get_uniform_double();
-    double x = sqrt(-2 * log(u)) * cos(2 * M_PI * v);
+    double x = sqrt(-2 * log(u)) * cos(2 * G_PI * v);
     //double y = sqrt(-2 * log(u)) * sin(2 * M_PI * v);
     return x;
 }
@@ -245,6 +245,8 @@ static void _phold_startListening(PHold* phold) {
     phold->listend = socket(AF_INET, (SOCK_DGRAM | SOCK_NONBLOCK), 0);
     g_assert(phold->listend != -1);
 
+    phold_info("opened listener at socket %i", phold->listend);
+
     /* setup the socket address info, client has outgoing connection to server */
     struct sockaddr_in bindAddr;
     memset(&bindAddr, 0, sizeof(bindAddr));
@@ -260,6 +262,8 @@ static void _phold_startListening(PHold* phold) {
     phold->epolld_in = epoll_create(1);
     g_assert(phold->epolld_in != -1);
 
+    phold_info("opened epoll %i for socket %i", phold->epolld_in, phold->listend);
+
     /* setup the events we will watch for */
     struct epoll_event ev;
     ev.events = EPOLLIN;
@@ -270,27 +274,38 @@ static void _phold_startListening(PHold* phold) {
     g_assert(result != -1);
 }
 
-static void _phold_activate(PHold* phold) {
+static void _phold_wait_and_process_events(PHold* phold) {
     PHOLD_ASSERT(phold);
 
     /* storage for collecting events from our epoll descriptor */
     struct epoll_event epevs[10];
     memset(epevs, 0, 10*sizeof(struct epoll_event));
 
-    /* collect and process all events that are ready */
-    gint nfds = epoll_wait(phold->epolld_in, epevs, 10, 0);
+    /* collect and process all events that are ready.
+     * this is a blocking call, it will block until we have packets coming in on listend */
+    gint nfds = epoll_wait(phold->epolld_in, epevs, 10, -1);
     for (gint i = 0; i < nfds; i++) {
-        gboolean in = (epevs[i].events & EPOLLIN) ? TRUE : FALSE;
-        gboolean out = (epevs[i].events & EPOLLOUT) ? TRUE : FALSE;
-
         gchar buffer[102400];
         memset(buffer, 0, 102400);
         while(TRUE) {
-            gssize nBytes = read(phold->listend, &buffer[0], 102400);
+            struct sockaddr_in addrbuf;
+            memset(&addrbuf, 0, sizeof(struct sockaddr_in));
+            socklen_t addrlen = sizeof(struct sockaddr_in);
+
+            gssize nBytes = recvfrom(phold->listend, &buffer[0], 102400, 0,
+                    (struct sockaddr*)(&addrbuf), &addrlen);
+
             if(nBytes <= 0) {
                 break;
             }
             buffer[nBytes] = 0x0;
+
+            in_addr_t ip = addrbuf.sin_addr.s_addr;
+            char netbuf[INET_ADDRSTRLEN+1];
+            memset(netbuf, 0, INET_ADDRSTRLEN+1);
+            const char* netresult = inet_ntop(AF_INET, &ip, netbuf, INET_ADDRSTRLEN);
+
+            phold_debug("got new message of %lu bytes from peer at %s", (unsigned int) nBytes, netbuf);
 
             for(int i = 0; i < nBytes; i++) {
                 _phold_sendNewMessage(phold);
@@ -305,27 +320,6 @@ static int _phold_run(PHold* phold) {
     _phold_startListening(phold);
     _phold_bootstrapMessages(phold);
 
-    /* now we need to watch all of the descriptors in our main loop
-     * so we know when we can wait on any of them without blocking. */
-    int mainepolld = epoll_create(1);
-    if (mainepolld == -1) {
-        phold_error("Error in main epoll_create");
-        close(mainepolld);
-        return EXIT_FAILURE;
-    }
-
-    /* the one main epoll descriptor that watches all of the sockets,
-     * so we now register that descriptor so we can watch for its events */
-    struct epoll_event mainevent;
-    mainevent.events = EPOLLIN | EPOLLOUT;
-    mainevent.data.fd = phold->epolld_in;
-    if (!mainevent.data.fd) {
-        phold_error("Error retrieving epoll descriptor");
-        close(mainepolld);
-        return EXIT_FAILURE;
-    }
-    epoll_ctl(mainepolld, EPOLL_CTL_ADD, mainevent.data.fd, &mainevent);
-
     /* main loop - wait for events from the descriptors */
     struct epoll_event events[100];
     int nReadyFDs;
@@ -333,34 +327,10 @@ static int _phold_run(PHold* phold) {
 
     while (1) {
         /* wait for some events */
-        phold_debug("waiting for events");
-        nReadyFDs = epoll_wait(mainepolld, events, 100, -1);
-        if (nReadyFDs == -1) {
-            phold_error("Error in client epoll_wait");
-            return -1;
-        }
-
-        /* activate if something is ready */
-        phold_debug("processing event");
-        if (nReadyFDs > 0) {
-            _phold_activate(phold);
-        }
-
-        /* should we ever break? */
+        _phold_wait_and_process_events(phold);
     }
 
     phold_info("finished main loop, cleaning up");
-
-    /* de-register the test epoll descriptor */
-    mainevent.data.fd = phold->epolld_in;
-    if (mainevent.data.fd) {
-        epoll_ctl(mainepolld, EPOLL_CTL_DEL, mainevent.data.fd, &mainevent);
-    }
-
-    /* cleanup and close */
-    close(mainepolld);
-
-    phold_info("peer done running");
 
     return EXIT_SUCCESS;
 }
@@ -411,17 +381,18 @@ static int _phold_parseWeightsFile(PHold* phold) {
 static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
     PHOLD_ASSERT(phold);
 
-    /* basename: name of the test nodes in shadow, without the integer suffix
+    /* loglevel: one of 'debug' or 'info'
+     * basename: name of the test nodes in shadow, without the integer suffix
      * quantity: number of test nodes running in the experiment with the same basename as this one
      * load: number of messages to generate when the simulation starts
      * weightsfile: path to a file containing $quantity weights according to which messages will be sent to peers */
-    const gchar* usage = "basename=STR quantity=INT load=INT weights=PATH";
+    const gchar* usage = "loglevel=STR basename=STR quantity=INT load=INT weights=PATH";
 
     gchar myname[128];
     g_assert(gethostname(&myname[0], 128) == 0);
 
     int num_params_found = 0;
-#define ARGC_PEER 5
+#define ARGC_PEER 6
 
     if(argc == ARGC_PEER && argv != NULL) {
         /* argv[0] is the program name */
@@ -429,7 +400,14 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
             gchar* token = argv[i];
             gchar** config = g_strsplit(token, (const gchar*) "=", 2);
 
-            if(!g_ascii_strcasecmp(config[0], "basename")) {
+            if(!g_ascii_strcasecmp(config[0], "loglevel")) {
+                if(!g_ascii_strcasecmp(config[1], "debug")) {
+                    pholdLogFilterLevel = G_LOG_LEVEL_DEBUG;
+                } else {
+                    pholdLogFilterLevel = G_LOG_LEVEL_INFO;
+                }
+                num_params_found++;
+            } else if(!g_ascii_strcasecmp(config[0], "basename")) {
                 phold->basename = g_string_new(config[1]);
                 num_params_found++;
             } else if(!g_ascii_strcasecmp(config[0], "quantity")) {

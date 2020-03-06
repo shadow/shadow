@@ -48,6 +48,9 @@ struct _Master {
     /* the simulator should attempt to end immediately after this time */
     SimulationTime endTime;
 
+    /* if we run in unlimited bandwidth mode, this is when we go back to bw enforcement */
+    SimulationTime bootstrapEndTime;
+
     Slave* slave;
 
     MAGIC_DECLARE;
@@ -171,7 +174,7 @@ static void _master_loadConfiguration(Master* master) {
     }
 }
 
-static void _master_loadTopology(Master* master) {
+static gboolean _master_loadTopology(Master* master) {
     MAGIC_ASSERT(master);
 
     ConfigurationTopologyElement* e = configuration_getTopologyElement(master->config);
@@ -201,22 +204,25 @@ static void _master_loadTopology(Master* master) {
         if(!g_file_set_contents(temporaryFilename, e->cdata.string->str,
                 (gssize)e->cdata.string->len, &error)) {
             error("unable to write cdata topology to '%s': %s", temporaryFilename, error->message);
-            return;
+            return FALSE;
         }
     }
 
     /* initialize global routing model */
     master->topology = topology_new(temporaryFilename);
     g_unlink(temporaryFilename);
-    g_free(temporaryFilename);
 
     if(!master->topology) {
-        error("error loading topology path '%s'", temporaryFilename);
-        return;
+        critical("fatal error loading topology at path '%s', check your syntax and try again", temporaryFilename);
+        g_free(temporaryFilename);
+        return FALSE;
     }
+
+    g_free(temporaryFilename);
 
     /* initialize global DNS addressing */
     master->dns = dns_new();
+    return TRUE;
 }
 
 static void _master_initializeTimeWindows(Master* master) {
@@ -238,6 +244,15 @@ static void _master_initializeTimeWindows(Master* master) {
         /* single threaded, we are the only worker */
         master->executeWindowStart = 0;
         master->executeWindowEnd = G_MAXUINT64;
+    }
+
+    /* check if we run in unlimited bandwidth mode */
+    ConfigurationShadowElement* shadowElm = configuration_getShadowElement(master->config);
+
+    if(shadowElm && shadowElm->bootstrapEndTime.isSet) {
+        master->bootstrapEndTime = (SimulationTime) (SIMTIME_ONE_SECOND * shadowElm->bootstrapEndTime.integer);
+    } else {
+        master->bootstrapEndTime = (SimulationTime) 0;
     }
 }
 
@@ -366,6 +381,8 @@ static void _master_registerHostCallback(ConfigurationHostElement* he, Master* m
 
         /* requested attributes from shadow config */
         params->ipHint = he->ipHint.isSet ? he->ipHint.string->str : NULL;
+        params->countrycodeHint = he->countrycodeHint.isSet ? he->countrycodeHint.string->str : NULL;
+        params->citycodeHint = he->citycodeHint.isSet ? he->citycodeHint.string->str : NULL;
         params->geocodeHint = he->geocodeHint.isSet ? he->geocodeHint.string->str : NULL;
         params->typeHint = he->typeHint.isSet ? he->typeHint.string->str : NULL;
         params->requestedBWDownKiBps = he->bandwidthdown.isSet ? he->bandwidthdown.integer : 0;
@@ -402,14 +419,18 @@ gint master_run(Master* master) {
 
     /* start loading and initializing simulation data */
     _master_loadConfiguration(master);
-    _master_loadTopology(master);
+    gboolean isSuccess = _master_loadTopology(master);
+    if(!isSuccess) {
+        return 1;
+    }
+
     _master_initializeTimeWindows(master);
 
     /* the master will be responsible for distributing the actions to the slaves so that
      * they all have a consistent view of the simulation, topology, etc.
      * For now we only have one slave so send it everything. */
     guint slaveSeed = random_nextUInt(master->random);
-    master->slave = slave_new(master, master->options, master->endTime, slaveSeed);
+    master->slave = slave_new(master, master->options, master->endTime, master->bootstrapEndTime, slaveSeed);
 
     message("registering plugins and hosts");
 
@@ -420,8 +441,11 @@ gint master_run(Master* master) {
 
     message("running simulation");
 
-    message("log message buffering is enabled for efficiency");
-    logger_setEnableBuffering(logger_getDefault(), TRUE);
+    /* dont buffer log messages in debug mode */
+    if(options_getLogLevel(master->options) != LOGLEVEL_DEBUG) {
+        message("log message buffering is enabled for efficiency");
+        logger_setEnableBuffering(logger_getDefault(), TRUE);
+    }
 
     // BLEEP OBJECT SHARE
     init_global_locks();
@@ -430,8 +454,12 @@ gint master_run(Master* master) {
     /* start running each slave */
     slave_run(master->slave);
 
-    message("log message buffering is disabled during cleanup");
-    logger_setEnableBuffering(logger_getDefault(), FALSE);
+    /* only need to disable buffering if it was enabled, otherwise
+     * don't log the message as it may confuse the user. */
+    if(options_getLogLevel(master->options) != LOGLEVEL_DEBUG) {
+        message("log message buffering is disabled during cleanup");
+        logger_setEnableBuffering(logger_getDefault(), FALSE);
+    }
 
     message("simulation finished, cleaning up now");
 

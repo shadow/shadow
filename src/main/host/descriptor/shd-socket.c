@@ -32,6 +32,11 @@ void socket_free(gpointer data) {
     }
     g_queue_free(socket->outputBuffer);
 
+    while(g_queue_get_length(socket->outputControlBuffer) > 0) {
+        packet_unref(g_queue_pop_head(socket->outputControlBuffer));
+    }
+    g_queue_free(socket->outputControlBuffer);
+
     MAGIC_CLEAR(socket);
     socket->vtable->free((Descriptor*)socket);
 }
@@ -84,6 +89,7 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType typ
     socket->inputBuffer = g_queue_new();
     socket->inputBufferSize = receiveBufferSize;
     socket->outputBuffer = g_queue_new();
+    socket->outputControlBuffer = g_queue_new();
     socket->outputBufferSize = sendBufferSize;
 
     Tracker* tracker = host_getTracker(worker_getActiveHost());
@@ -91,7 +97,7 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType typ
     tracker_addSocket(tracker, descriptor->handle, socket->protocol, socket->inputBufferSize, socket->outputBufferSize);
 }
 
-enum ProtocolType socket_getProtocol(Socket* socket) {
+ProtocolType socket_getProtocol(Socket* socket) {
     MAGIC_ASSERT(socket);
     return socket->protocol;
 }
@@ -136,7 +142,11 @@ Packet* socket_pullOutPacket(Socket* socket) {
 
 Packet* socket_peekNextPacket(const Socket* socket) {
     MAGIC_ASSERT(socket);
-    return g_queue_peek_head(socket->outputBuffer);
+    if(!g_queue_is_empty(socket->outputControlBuffer)) {
+        return g_queue_peek_head(socket->outputControlBuffer);
+    } else {
+        return g_queue_peek_head(socket->outputBuffer);
+    }
 }
 
 gboolean socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port) {
@@ -196,7 +206,7 @@ gboolean socket_getSocketName(Socket* socket, in_addr_t* ip, in_port_t* port) {
     return TRUE;
 }
 
-void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port, gboolean isInternal) {
+void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port) {
     MAGIC_ASSERT(socket);
 
     socket->boundAddress = ip;
@@ -213,16 +223,6 @@ void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port, gboolean
     g_string_append_printf(stringBuffer, ":%u (descriptor %i)", ntohs(port), socket->super.super.handle);
     socket->boundString = g_string_free(stringBuffer, FALSE);
 
-    /* children of server sockets must not have the same key as the parent
-     * otherwise when the child is closed, the parent's interface association
-     * will be removed. in fact, they dont need a key because their parent
-     * will handle incoming packets and will hand them off as necessary */
-    if(isInternal) {
-        socket->associationKey = 0;
-    } else {
-        socket->associationKey = PROTOCOL_DEMUX_KEY(socket->protocol, port);
-    }
-
     /* the socket is now bound */
     socket->flags |= SF_BOUND;
 }
@@ -230,12 +230,6 @@ void socket_setSocketName(Socket* socket, in_addr_t ip, in_port_t port, gboolean
 gboolean socket_isBound(Socket* socket) {
     MAGIC_ASSERT(socket);
     return (socket->flags & SF_BOUND) ? TRUE : FALSE;
-}
-
-gint socket_getAssociationKey(Socket* socket) {
-    MAGIC_ASSERT(socket);
-    utility_assert((socket->flags & SF_BOUND));
-    return socket->associationKey;
 }
 
 gsize socket_getInputBufferSpace(Socket* socket) {
@@ -384,7 +378,13 @@ gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
     }
 
     /* add to our queue */
-    g_queue_push_tail(socket->outputBuffer, packet);
+    if(packet_getPriority(packet) == 0.0f) {
+        /* control packets get sent first */
+        g_queue_push_tail(socket->outputControlBuffer, packet);
+    } else {
+        g_queue_push_tail(socket->outputBuffer, packet);
+    }
+
     socket->outputBufferLength += length;
     packet_addDeliveryStatus(packet, PDS_SND_SOCKET_BUFFERED);
 
@@ -410,7 +410,9 @@ Packet* socket_removeFromOutputBuffer(Socket* socket) {
     MAGIC_ASSERT(socket);
 
     /* see if we have any packets */
-    Packet* packet = g_queue_pop_head(socket->outputBuffer);
+    Packet* packet = !g_queue_is_empty(socket->outputControlBuffer) ?
+            g_queue_pop_head(socket->outputControlBuffer) : g_queue_pop_head(socket->outputBuffer);
+
     if(packet) {
         /* just removed a packet */
         guint length = packet_getPayloadLength(packet);

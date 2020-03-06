@@ -1,5 +1,8 @@
 #!/usr/bin/python
 
+# make sure print works in python2.7 (this statement must be at beginning of file)
+from __future__ import print_function
+
 import matplotlib; matplotlib.use('Agg') # for systems without X11
 from matplotlib.backends.backend_pdf import PdfPages
 import sys, os, argparse, subprocess, json, pylab, numpy
@@ -188,7 +191,7 @@ def main():
             plot_tor(tordata, page, capacities=capacities, direction="bytes_written")
     except:
         page.close()
-        print >>sys.stderr, "!! there was an error while plotting, but some graphs may still be readable"
+        print("!! there was an error while plotting, but some graphs may still be readable", file=sys.stderr)
         raise
     page.close()
 
@@ -1104,7 +1107,7 @@ def get_data(experiments, lineformats, skiptime, rskiptime, hostpatternshadow, h
         data = json.load(xzcatp.stdout)
         data = prune_data(data, skiptime, rskiptime, hostpatternshadow)
 
-        nextcycle = lfcycle.next()
+        nextcycle = next(lfcycle)
         if 'nodes' in data and len(data['nodes']) > 0:
             shdata.append((data['nodes'], label, nextcycle))
         if 'ticks' in data and len(data['ticks']) > 0:
@@ -1118,7 +1121,7 @@ def get_data(experiments, lineformats, skiptime, rskiptime, hostpatternshadow, h
         data = json.load(xzcatp.stdout)
         data = prune_data(data, skiptime, rskiptime, hostpatterntgen)
         if 'nodes' in data and len(data['nodes']) > 0:
-            ftdata.append((data['nodes'], label, lfcycle.next()))
+            ftdata.append((data['nodes'], label, next(lfcycle)))
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
@@ -1128,7 +1131,7 @@ def get_data(experiments, lineformats, skiptime, rskiptime, hostpatternshadow, h
         data = json.load(xzcatp.stdout)
         data = prune_data(data, skiptime, rskiptime, hostpatterntgen)
         if 'nodes' in data and len(data['nodes']) > 0:
-            tgendata.append((data['nodes'], label, lfcycle.next()))
+            tgendata.append((data['nodes'], label, next(lfcycle)))
 
     lfcycle = cycle(lflist)
     for (path, label) in experiments:
@@ -1137,7 +1140,7 @@ def get_data(experiments, lineformats, skiptime, rskiptime, hostpatternshadow, h
         xzcatp = subprocess.Popen(["xzcat", log], stdout=subprocess.PIPE)
         data = json.load(xzcatp.stdout)
         data = prune_data(data, skiptime, rskiptime, hostpatterntor)
-        if len(data['nodes']) > 0: tordata.append((data['nodes'], label, lfcycle.next()))
+        if len(data['nodes']) > 0: tordata.append((data['nodes'], label, next(lfcycle)))
 
     return tickdata, shdata, ftdata, tgendata, tordata
 
@@ -1224,7 +1227,7 @@ def getcdf(data, shownpercentile=0.99, maxpoints=100000.0):
     frac = cf(data)
     k = len(data)/maxpoints
     x, y, lasty = [], [], 0.0
-    for i in xrange(int(round(len(data)*shownpercentile))):
+    for i in range(int(round(len(data)*shownpercentile))):
         if i % k > 1.0: continue
         assert not numpy.isnan(data[i])
         x.append(data[i])

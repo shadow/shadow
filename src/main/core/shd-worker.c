@@ -17,10 +17,6 @@ struct _Worker {
     /* pointer to the per-slave parallel scheduler object that feeds events to all workers */
     Scheduler* scheduler;
 
-    /* the random source used for all hosts run by this worker
-     * the source is seeded by the master random source. */
-    Random* random;
-
     /* timing information tracked by this worker */
     struct {
         SimulationTime now;
@@ -34,6 +30,8 @@ struct _Worker {
         Host* host;
         Process* process;
     } active;
+
+    SimulationTime bootstrapEndTime;
 
     ObjectCounter* objectCounts;
 
@@ -72,6 +70,8 @@ static Worker* _worker_new(Slave* slave, guint threadID) {
     worker->clock.last = SIMTIME_INVALID;
     worker->clock.barrier = SIMTIME_INVALID;
     worker->objectCounts = objectcounter_new();
+
+    worker->bootstrapEndTime = slave_getBootstrapEndTime(worker->slave);
 
     g_private_replace(&workerKey, worker);
 
@@ -198,9 +198,10 @@ gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
         utility_assert(worker->clock.now != SIMTIME_INVALID);
         utility_assert(worker->active.host != NULL);
 
-        Event* event = event_new_(task, worker->clock.now + nanoDelay, worker->active.host);
-        GQuark hostID = host_getID(worker->active.host);
-        return scheduler_push(worker->scheduler, event, hostID, hostID);
+        Host* srcHost = worker->active.host;
+        Host* dstHost = srcHost;
+        Event* event = event_new_(task, worker->clock.now + nanoDelay, srcHost, dstHost);
+        return scheduler_push(worker->scheduler, event, srcHost, dstHost);
     } else {
         return FALSE;
     }
@@ -234,6 +235,8 @@ void worker_sendPacket(Packet* packet) {
         return;
     }
 
+    gboolean bootstrapping = worker_isBootstrapActive();
+
     /* check if network reliability forces us to 'drop' the packet */
     gdouble reliability = topology_getReliability(worker_getTopology(), srcAddress, dstAddress);
     Random* random = host_getRandom(worker_getActiveHost());
@@ -241,7 +244,7 @@ void worker_sendPacket(Packet* packet) {
 
     /* don't drop control packets with length 0, otherwise congestion
      * control has problems responding to packet loss */
-    if(chance <= reliability || packet_getPayloadLength(packet) == 0) {
+    if(bootstrapping || chance <= reliability || packet_getPayloadLength(packet) == 0) {
         /* the sender's packet will make it through, find latency */
         gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);
 
@@ -251,24 +254,28 @@ void worker_sendPacket(Packet* packet) {
         SimulationTime delay = (SimulationTime) ceil(latency * SIMTIME_ONE_MILLISECOND);
         SimulationTime deliverTime = worker->clock.now + delay;
 
+        topology_incrementPathPacketCounter(worker_getTopology(), srcAddress, dstAddress);
+
         /* TODO this should change for sending to remote slave (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
 
         Host* srcHost = worker->active.host;
-        GQuark srcID = srcHost == NULL ? 0 : host_getID(srcHost);
         GQuark dstID = (GQuark)address_getID(dstAddress);
         Host* dstHost = scheduler_getHost(worker->scheduler, dstID);
         utility_assert(dstHost);
 
-        packet_ref(packet);
+        packet_addDeliveryStatus(packet, PDS_INET_SENT);
+
+        /* the packetCopy starts with 1 ref, which will be held by the packet task
+         * and unreffed after the task is finished executing. */
+        Packet* packetCopy = packet_copy(packet);
+
         Task* packetTask = task_new((TaskCallbackFunc)_worker_runDeliverPacketTask,
-                packet, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
-        Event* packetEvent = event_new_(packetTask, deliverTime, dstHost);
+                packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
+        Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
         task_unref(packetTask);
 
-        scheduler_push(worker->scheduler, packetEvent, srcID, dstID);
-
-        packet_addDeliveryStatus(packet, PDS_INET_SENT);
+        scheduler_push(worker->scheduler, packetEvent, srcHost, dstHost);
     } else {
         packet_addDeliveryStatus(packet, PDS_INET_DROPPED);
     }
@@ -360,11 +367,6 @@ EmulatedTime worker_getEmulatedTime() {
     return (EmulatedTime)(worker_getCurrentTime() + EMULATED_TIME_OFFSET);
 }
 
-guint worker_getRawCPUFrequency() {
-    Worker* worker = _worker_getPrivate();
-    return slave_getRawCPUFrequency(worker->slave);
-}
-
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip) {
     Worker* worker = _worker_getPrivate();
     return slave_getNodeBandwidthUp(worker->slave, nodeID, ip);
@@ -404,11 +406,6 @@ void worker_incrementPluginError() {
     slave_incrementPluginError(worker->slave);
 }
 
-const gchar* worker_getHostsRootPath() {
-    Worker* worker = _worker_getPrivate();
-    return slave_getHostsRootPath(worker->slave);
-}
-
 void worker_countObject(ObjectType otype, CounterType ctype) {
     /* the issue is that the slave thread frees some objects that
      * are created by the worker threads. but the slave thread does
@@ -420,5 +417,15 @@ void worker_countObject(ObjectType otype, CounterType ctype) {
     } else {
         /* has a global lock, so don't do it unless there is no worker object */
         slave_countObject(otype, ctype);
+    }
+}
+
+gboolean worker_isBootstrapActive() {
+    Worker* worker = _worker_getPrivate();
+
+    if(worker->clock.now < worker->bootstrapEndTime) {
+        return TRUE;
+    } else {
+        return FALSE;
     }
 }

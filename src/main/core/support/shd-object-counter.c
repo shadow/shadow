@@ -17,6 +17,7 @@ struct _ObjectCounter {
         ObjectCounts task;
         ObjectCounts event;
         ObjectCounts packet;
+        ObjectCounts payload;
         ObjectCounts host;
         ObjectCounts process;
         ObjectCounts descriptor;
@@ -98,6 +99,11 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
 
+        case OBJECT_TYPE_PAYLOAD: {
+            _objectcount_incrementOne(&(counter->counters.payload), ctype);
+            break;
+        }
+
         case OBJECT_TYPE_HOST: {
             _objectcount_incrementOne(&(counter->counters.host), ctype);
             break;
@@ -151,6 +157,7 @@ void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment
     _objectcount_incrementAll(&(counter->counters.task), &(increment->counters.task));
     _objectcount_incrementAll(&(counter->counters.event), &(increment->counters.event));
     _objectcount_incrementAll(&(counter->counters.packet), &(increment->counters.packet));
+    _objectcount_incrementAll(&(counter->counters.payload), &(increment->counters.payload));
     _objectcount_incrementAll(&(counter->counters.host), &(increment->counters.host));
     _objectcount_incrementAll(&(counter->counters.process), &(increment->counters.process));
     _objectcount_incrementAll(&(counter->counters.descriptor), &(increment->counters.descriptor));
@@ -172,6 +179,7 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
             "task_new=%"G_GUINT64_FORMAT" task_free=%"G_GUINT64_FORMAT" "
             "event_new=%"G_GUINT64_FORMAT" event_free=%"G_GUINT64_FORMAT" "
             "packet_new=%"G_GUINT64_FORMAT" packet_free=%"G_GUINT64_FORMAT" "
+            "payload_new=%"G_GUINT64_FORMAT" payload_free=%"G_GUINT64_FORMAT" "
             "host_new=%"G_GUINT64_FORMAT" host_free=%"G_GUINT64_FORMAT" "
             "process_new=%"G_GUINT64_FORMAT" process_free=%"G_GUINT64_FORMAT" "
             "descriptor_new=%"G_GUINT64_FORMAT" descriptor_free=%"G_GUINT64_FORMAT" "
@@ -183,6 +191,7 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
             counter->counters.task.new, counter->counters.task.free,
             counter->counters.event.new, counter->counters.event.free,
             counter->counters.packet.new, counter->counters.packet.free,
+            counter->counters.payload.new, counter->counters.payload.free,
             counter->counters.host.new, counter->counters.host.free,
             counter->counters.process.new, counter->counters.process.free,
             counter->counters.descriptor.new, counter->counters.descriptor.free,
@@ -206,6 +215,7 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
             "task=%"G_GUINT64_FORMAT" "
             "event=%"G_GUINT64_FORMAT" "
             "packet=%"G_GUINT64_FORMAT" "
+            "payload=%"G_GUINT64_FORMAT" "
             "host=%"G_GUINT64_FORMAT" "
             "process=%"G_GUINT64_FORMAT" "
             "descriptor=%"G_GUINT64_FORMAT" "
@@ -217,6 +227,7 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
             counter->counters.task.new - counter->counters.task.free,
             counter->counters.event.new - counter->counters.event.free,
             counter->counters.packet.new - counter->counters.packet.free,
+            counter->counters.payload.new - counter->counters.payload.free,
             counter->counters.host.new - counter->counters.host.free,
             counter->counters.process.new - counter->counters.process.free,
             counter->counters.descriptor.new - counter->counters.descriptor.free,

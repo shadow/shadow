@@ -6,23 +6,26 @@
 #include "shadow.h"
 
 struct _Event {
-    Host* host;
+    Host* srcHost;
+    Host* dstHost;
     Task* task;
     SimulationTime time;
-    guint64 sequence;
+    guint64 srcHostEventID;
     gint referenceCount;
     MAGIC_DECLARE;
 };
 
-Event* event_new_(Task* task, SimulationTime time, gpointer host) {
+Event* event_new_(Task* task, SimulationTime time, gpointer srcHost, gpointer dstHost) {
     utility_assert(task != NULL);
     Event* event = g_new0(Event, 1);
     MAGIC_INIT(event);
 
-    event->host = (Host*)host;
+    event->srcHost = (Host*)srcHost;
+    event->dstHost = (Host*)dstHost;
     event->task = task;
     task_ref(event->task);
     event->time = time;
+    event->srcHostEventID = host_getNewEventID(srcHost);
     event->referenceCount = 1;
 
     worker_countObject(OBJECT_TYPE_EVENT, COUNTER_TYPE_NEW);
@@ -52,11 +55,11 @@ void event_unref(Event* event) {
 void event_execute(Event* event) {
     MAGIC_ASSERT(event);
 
-    host_lock(event->host);
-    worker_setActiveHost(event->host);
+    host_lock(event->dstHost);
+    worker_setActiveHost(event->dstHost);
 
     /* check if we are allowed to execute or have to wait for cpu delays */
-    CPU* cpu = host_getCPU(event->host);
+    CPU* cpu = host_getCPU(event->dstHost);
     cpu_updateTime(cpu, event->time);
 
     if(cpu_isBlocked(cpu)) {
@@ -64,19 +67,19 @@ void event_execute(Event* event) {
         debug("event blocked on CPU, rescheduled for %"G_GUINT64_FORMAT" nanoseconds from now", cpuDelay);
 
         /* track the event delay time */
-        tracker_addVirtualProcessingDelay(host_getTracker(event->host), cpuDelay);
+        tracker_addVirtualProcessingDelay(host_getTracker(event->dstHost), cpuDelay);
 
         /* this event is delayed due to cpu, so reschedule it to ourselves */
         worker_scheduleTask(event->task, cpuDelay);
     } else {
         /* cpu is not blocked, its ok to execute the event */
-        host_continueExecutionTimer(event->host);
+        host_continueExecutionTimer(event->dstHost);
         task_execute(event->task);
-        host_stopExecutionTimer(event->host);
+        host_stopExecutionTimer(event->dstHost);
     }
 
     worker_setActiveHost(NULL);
-    host_unlock(event->host);
+    host_unlock(event->dstHost);
 }
 
 SimulationTime event_getTime(Event* event) {
@@ -86,7 +89,7 @@ SimulationTime event_getTime(Event* event) {
 
 gpointer event_getHost(Event* event) {
     MAGIC_ASSERT(event);
-    return event->host;
+    return event->dstHost;
 }
 
 void event_setTime(Event* event, SimulationTime time) {
@@ -94,15 +97,47 @@ void event_setTime(Event* event, SimulationTime time) {
     event->time = time;
 }
 
-void event_setSequence(Event* event, guint64 sequence) {
-    MAGIC_ASSERT(event);
-    event->sequence = sequence;
-}
-
 gint event_compare(const Event* a, const Event* b, gpointer userData) {
     MAGIC_ASSERT(a);
     MAGIC_ASSERT(b);
-    /* events already scheduled get priority over new events */
-    return (a->time > b->time) ? +1 : (a->time < b->time) ? -1 :
-            (a->sequence > b->sequence) ? +1 : (a->sequence < b->sequence) ? -1 : 0;
+
+    /* Shadow events should be scheduled in a way that preserves deterministic behavior.
+     * The priority order is:
+     *  - time (the sim time that the event will occur)
+     *  - dst host id (where the packet is going to)
+     *  - src host id (where the packet came from)
+     *  - sequence in which the event was pushed (in case src hosts and dst hosts both match)
+     *  (Host ids are guaranteed to be unique across hosts.)
+     */
+    if (a->time > b->time) {
+        return 1;
+    } else if (a->time < b->time) {
+        return -1;
+    } else {
+        gint cmpresult = host_compare(a->dstHost, b->dstHost, NULL);
+        if (cmpresult > 0) {
+            return 1;
+        } else if (cmpresult < 0) {
+            return -1;
+        } else {
+            cmpresult = host_compare(a->srcHost, b->srcHost, NULL);
+            if (cmpresult > 0) {
+                return 1;
+            } else if (cmpresult < 0) {
+                return -1;
+            } else {
+                /* src and dst host are the same. the event should be sorted in
+                 * the order that the events were created on the host. */
+                if (a->srcHostEventID > b->srcHostEventID) {
+                    return 1;
+                } else if (a->srcHostEventID < b->srcHostEventID) {
+                    return -1;
+                } else {
+                    /* if the eventIDs are the same, then the two pointers
+                     * really are pointing to the same event. */
+                    return 0;
+                }
+            }
+        }
+    }
 }

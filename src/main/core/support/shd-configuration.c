@@ -218,6 +218,14 @@ static void _parser_freeHostElement(ConfigurationHostElement* host) {
         utility_assert(host->ipHint.string != NULL);
         g_string_free(host->ipHint.string, TRUE);
     }
+    if(host->citycodeHint.isSet) {
+        utility_assert(host->citycodeHint.string != NULL);
+        g_string_free(host->citycodeHint.string, TRUE);
+    }
+    if(host->countrycodeHint.isSet) {
+        utility_assert(host->countrycodeHint.string != NULL);
+        g_string_free(host->countrycodeHint.string, TRUE);
+    }
     if(host->geocodeHint.isSet) {
         utility_assert(host->geocodeHint.string != NULL);
         g_string_free(host->geocodeHint.string, TRUE);
@@ -450,6 +458,12 @@ static GError* _parser_handleHostAttributes(Parser* parser, const gchar** attrib
         } else if (!host->ipHint.isSet && !g_ascii_strcasecmp(name, "iphint")) {
             host->ipHint.string = g_string_new(value);
             host->ipHint.isSet = TRUE;
+        } else if (!host->citycodeHint.isSet && !g_ascii_strcasecmp(name, "citycodehint")) {
+            host->citycodeHint.string = g_string_new(value);
+            host->citycodeHint.isSet = TRUE;
+        } else if (!host->countrycodeHint.isSet && !g_ascii_strcasecmp(name, "countrycodehint")) {
+            host->countrycodeHint.string = g_string_new(value);
+            host->countrycodeHint.isSet = TRUE;
         } else if (!host->geocodeHint.isSet && !g_ascii_strcasecmp(name, "geocodehint")) {
             host->geocodeHint.string = g_string_new(value);
             host->geocodeHint.isSet = TRUE;
@@ -759,6 +773,9 @@ static GError* _parser_handleShadowAttributes(Parser* parser, const gchar** attr
         } else if(!shadow->stoptime.isSet && !g_ascii_strcasecmp(name, "stoptime")) {
             shadow->stoptime.integer = g_ascii_strtoull(value, NULL, 10);
             shadow->stoptime.isSet = TRUE;
+        } else if(!shadow->bootstrapEndTime.isSet && !g_ascii_strcasecmp(name, "bootstraptime")) {
+            shadow->bootstrapEndTime.integer = g_ascii_strtoull(value, NULL, 10);
+            shadow->bootstrapEndTime.isSet = TRUE;
         } else {
             error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
                     "unknown 'shadow' attribute '%s'", name);

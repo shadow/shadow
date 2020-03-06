@@ -4,142 +4,81 @@ import sys
 import re
 import getopt
 import os
-
-class Data:
-    def __init__(self, data):
-        self.data = data
-
-class DebugData:
-    class Item:
-        def __init__(self):
-            self.type = ''
-            self.ref = 0
-            self.level = 0
-            self.attributes = {}
-    def __init__(self, debug_filename):
-        file = os.popen ('readelf -wi ' + debug_filename, 'r')
-        self.__lines = file.readlines ()
-        self.__current = 0
-        self.__re1 = re.compile ('<([^>]+)><([^>]+)>:[^A]*Abbrev Number:.*\d+.*\((\w+)\)')
-        self.__re2 = re.compile ('<[^>]+>[^D]*(DW_AT_\w+)([^:]*:)+ <?0?x?([^ \t><\)]+)[ >\t\)]*$')
-        return
-    def rewind (self):
-        self.__current = 0
-        return
-    def read_line (self):
-        if self.__current == len (self.__lines):
-            return ''
-        line = self.__lines[self.__current]
-        self.__current = self.__current + 1
-        return line
-    def write_back_line (self):
-        self.__current = self.__current - 1
-        return
-    def write_back_one (self, item):
-        self.__current = self.__current - 1 - len (item.attributes.keys ())
-        return
-    def read_one (self):
-        item = DebugData.Item ()
-        while 1:
-            line = self.read_line ()
-            if line == '':
-                if item.type == '':
-                    return None
-                else:
-                    return item
-            result = self.__re1.search (line)
-            if result is None:
-                continue
-            item.level = result.group (1)
-            item.ref = result.group (2)
-            item.type = result.group (3)
-            while 1:
-                line = self.read_line ()
-                result = self.__re1.search (line)
-                if result is not None:
-                    self.write_back_line ()
-                    return item
-                result = self.__re2.search (line)
-                if result is None:
-                    self.write_back_line ()
-                    return item
-                item.attributes[result.group (1)] = result.group (3)
-        return item
-    def find_struct (self, struct_type_name):
-        return self.find_by_name ('DW_TAG_structure_type', struct_type_name)
-    def find_by_name (self, type, name):
-        item = self.read_one ()
-        while item is not None:
-            if item.type.strip() == type and \
-                    item.attributes.has_key ('DW_AT_name') and \
-                    item.attributes['DW_AT_name'].strip() == name:
-                return item
-            item = self.read_one ()
-        return item
-    def find_by_ref (self, ref):
-        item = self.read_one ()
-        while item is not None:
-            if item.ref == ref:
-                return item
-            item = self.read_one ()
-        return item
-    def find_member (self, member_name, parent):
-        sub_item = self.read_one ()
-        while sub_item is not None:
-            if sub_item.level == parent.level:
-                self.write_back_one (sub_item)
-                return None
-            if sub_item.type.strip() == 'DW_TAG_member' and \
-                    sub_item.attributes.has_key ('DW_AT_name') and \
-                    sub_item.attributes['DW_AT_name'].strip() == member_name:
-                return Data (sub_item.attributes['DW_AT_data_member_location'].strip())
-            sub_item = self.read_one ()
-        return None
-    # public methods below
-    def get_struct_member_offset (self, struct_type_name, member_name):
-        self.rewind ()
-        item = self.find_struct (struct_type_name)
-        if item is None:
-            return None
-        return self.find_member (member_name, item)
-    def get_struct_size (self, struct_type_name):
-        self.rewind ()
-        item = self.find_struct (struct_type_name)
-        if item is None:
-            return None
-        if not item.attributes.has_key ('DW_AT_byte_size'):
-            return None
-        return Data (item.attributes['DW_AT_byte_size'].strip())
-    def get_typedef_member_offset (self, typename, member):
-        self.rewind ()
-        item = self.find_by_name ('DW_TAG_typedef', typename)
-        if item is None:
-            return None
-        if not item.attributes.has_key ('DW_AT_type'):
-            return None
-        ref = item.attributes['DW_AT_type'].strip()
-        self.rewind ()
-        item = self.find_by_ref (ref)
-        if item is None:
-            return None
-        return self.find_member (member, item)
+import codecs
+from elftools.elf.elffile import ELFFile
 
 class CouldNotFindFile:
     pass
 
+class DebugData:
+    def __init__(self, debug_filename):
+        with open(debug_filename, 'rb') as f:
+            elffile = ELFFile(f)
+            assert elffile.has_dwarf_info(), debug_filename + ' has no DWARF info'
+            self.dwarfinfo = elffile.get_dwarf_info()
+            return
+    def get_struct_size(self, struct_die, required=True):
+        if struct_die is not None:
+            return struct_die.attributes['DW_AT_byte_size'].value
+        assert not required
+        return None
+    def get_member_offset (self, die, member_name, required=True):
+        member = self._find_member_in_struct(die, member_name.encode('UTF-8'))
+        if member is not None and 'DW_AT_data_member_location' in member.attributes:
+            return member.attributes['DW_AT_data_member_location'].value
+        assert not required
+        return None
+    def get_struct_die(self, struct_name):
+        return self._get_X('DW_TAG_structure_type', struct_name)
+    def get_type_die(self, type_name):
+        typedef = self._get_X('DW_TAG_typedef', type_name)
+        ref = typedef.attributes['DW_AT_type'].value
+        for CU in self.dwarfinfo.iter_CUs():
+            for die in CU.iter_DIEs():
+                if die.offset == ref:
+                    return die
+        return None
+    def _find_in_DIE(self, die, tag_name, struct_name):
+        if die.tag == tag_name and \
+           'DW_AT_name' in die.attributes and \
+           die.attributes['DW_AT_name'].value == struct_name:
+            return die
+        if die.has_children:
+            for child in die.iter_children():
+                result = self._find_in_DIE(child, tag_name, struct_name)
+                if result is not None:
+                    return result
+        return None
+    def _get_X(self, tag_name, item_name):
+        for CU in self.dwarfinfo.iter_CUs():
+            for die in CU.iter_DIEs():
+                item = self._find_in_DIE(die, tag_name, item_name.encode('UTF-8'))
+                if item is not None:
+                    return item
+        return None
+    def _find_member_in_struct(self, struct, member_name):
+        for die in struct.iter_children():
+            if die.tag == 'DW_TAG_member' and \
+               'DW_AT_name' in die.attributes and \
+               die.attributes['DW_AT_name'].value == member_name:
+                return die
+        return None
 
 def find_build_id(path):
     if not os.path.exists(path):
         return None
-    file = os.popen('readelf -n {}'.format(path), 'r')
-    lines = file.readlines()
-    regex = re.compile(r'^    Build ID: (\w+)$')
-    for line in lines:
-        result = regex.search(line)
-        if result:
-            h = result.group(1)
-            return "/usr/lib/debug/.build-id/{}/{}.debug".format(h[0:2], h[2:])
-    return None
+    with open(path, 'rb') as f:
+        elffile = ELFFile(f)
+        section = elffile.get_section_by_name('.note.gnu.build-id')
+        build_id = ''
+        try:
+            note = next(section.iter_notes())
+            build_id = note['n_desc']
+        except AttributeError:
+            # older versions of pyelftools don't support notes,
+            # so parse the section data directly
+            build_id = codecs.getencoder('hex')(section.data()[-20:])[0].decode('UTF-8')
+        return "/usr/lib/debug/.build-id/{}/{}.debug".format(build_id[0:2], build_id[2:])
 
 def check_file_regex(directory, file_regex):
     if not os.path.exists(directory):
@@ -166,6 +105,9 @@ def search_debug_file():
                     # ubuntu >12.04
                     ('/usr/lib/debug/lib/x86_64-linux-gnu/', r'ld-[0-9.]+\.so'),
                     ('/usr/lib/debug/lib/i386-linux-gnu/', r'ld-[0-9.]+\.so'),
+                    # arch / manjaro
+                    ('/usr/lib/debug/usr/lib32/', r'ld-[0-9.]+\.so\.debug'),
+                    ('/usr/lib/debug/usr/lib/', r'ld-[0-9.]+\.so\.debug'),
                   ]
     build_ids = [ # debian
                   ('/lib/x86_64-linux-gnu/', r'ld-[0-9.]+\.so'),
@@ -175,20 +117,16 @@ def search_debug_file():
                 ]
     for file_tuple in debug_files:
         file = check_file_regex(file_tuple[0], file_tuple[1])
-        if not file:
-            continue
-        if os.path.isfile (file):
+        if file and os.path.isfile(file):
             return file
     for file_tuple in build_ids:
         library = check_file_regex(file_tuple[0], file_tuple[1])
         if not library:
             continue
         file = find_build_id(library)
-        if not file:
-            continue
-        if os.path.isfile (file):
+        if file and os.path.isfile(file):
             return file
-    raise CouldNotFindFile ()
+    raise CouldNotFindFile()
 
 def list_lib_path():
     paths = []
@@ -197,16 +135,25 @@ def list_lib_path():
         return ''
     for filename in os.listdir("/etc/ld.so.conf.d/"):
         try:
-            for line in open ("/etc/ld.so.conf.d/" + filename, 'r'):
-                if re_lib.search (line) is not None:
+            for line in open("/etc/ld.so.conf.d/" + filename, 'r'):
+                if re_lib.search(line) is not None:
                     continue
-                paths.append(line.rstrip ())
+                paths.append(line.rstrip())
         except:
             continue
     return ':'.join(paths)
 
+def define(outfile, name, value):
+    if value is not None:
+        outfile.write('#define {} {}\n'.format(name, value))
+
 def usage():
-    print ''
+    print('''Usage: ./extract-system-config.py [OPTIONS]
+Options:
+\t-h, --help\tdisplay this help text
+\t-c, --config=[FILE]\twrite output to file (default: stdout)
+\t-d, --debug=[FILE]\tread debug symbols from file (default: search common locations)
+\t-b, --builddir=[DIR]\tbuild directory for inclusion in library path''')
 
 def main(argv):
     config_filename = ''
@@ -230,69 +177,29 @@ def main(argv):
             build_dir = arg
 
     if config_filename != '':
-        config = open (config_filename, 'w')
+        config = open(config_filename, 'w')
     else:
         config = sys.stdout
     if debug_filename == '':
-        debug_filename = search_debug_file ()
-    debug = DebugData (debug_filename)
-    data = debug.get_struct_size ('rtld_global')
-    if data is None:
-        sys.exit (1)
-    config.write ('#define CONFIG_RTLD_GLOBAL_SIZE ' + str(data.data) + '\n')
-
-    data = debug.get_struct_size ('rtld_global_ro')
-    if data is None:
-        sys.exit (1)
-    config.write ('#define CONFIG_RTLD_GLOBAL_RO_SIZE ' + str(data.data) + '\n')
-
-    data = debug.get_struct_member_offset ('rtld_global_ro', '_dl_pagesize')
-    if data is None:
-        sys.exit (1)
-    config.write ('#define CONFIG_RTLD_DL_PAGESIZE_OFFSET ' + str(data.data) + '\n')
-
-    data = debug.get_struct_member_offset ('rtld_global_ro', '_dl_clktck')
-    if data is None:
-        sys.exit (1)
-    config.write ('#define CONFIG_RTLD_DL_CLKTCK_OFFSET ' + str(data.data) + '\n')
-
-    data = debug.get_struct_member_offset ('rtld_global', '_dl_error_catch_tsd')
+        debug_filename = search_debug_file()
+    find_build_id(debug_filename)
+    debug = DebugData(debug_filename)
+    rtld_global_die = debug.get_struct_die('rtld_global')
+    rtld_global_ro_die = debug.get_struct_die('rtld_global_ro')
+    tcb_die = debug.get_type_die('tcbhead_t')
+    define(config, 'CONFIG_RTLD_GLOBAL_SIZE', debug.get_struct_size(rtld_global_die))
     # field was removed in glibc 2.25
-    if data is not None:
-        config.write ('#define CONFIG_DL_ERROR_CATCH_TSD_OFFSET ' + str(data.data) + '\n')
-
-    data = debug.get_struct_size ('pthread')
-    if data is None:
-        sys.exit (1)
-    config.write ('#define CONFIG_TCB_SIZE ' + str(data.data) + '\n')
-
-    data = debug.get_typedef_member_offset ('tcbhead_t', 'tcb')
-    if data is None:
-        sys.exit (1)
-    offset = str(data.data) if len(str(data.data)) > 0 else '0'
-    config.write ('#define CONFIG_TCB_TCB_OFFSET ' + offset + '\n')
-
-    data = debug.get_typedef_member_offset ('tcbhead_t', 'dtv')
-    if data is None:
-        sys.exit (1)
-    config.write ('#define CONFIG_TCB_DTV_OFFSET ' + str(data.data) + '\n')
-
-    data = debug.get_typedef_member_offset ('tcbhead_t', 'self')
-    if data is None:
-        sys.exit (1)
-    config.write ('#define CONFIG_TCB_SELF_OFFSET ' + str(data.data) + '\n')
-
-    data = debug.get_typedef_member_offset ('tcbhead_t', 'sysinfo')
-    if data is None:
-        sys.exit (1)
-    config.write ('#define CONFIG_TCB_SYSINFO_OFFSET ' + str(data.data) + '\n')
-
-    data = debug.get_typedef_member_offset ('tcbhead_t', 'stack_guard')
-    if data is None:
-        sys.exit (1)
-    config.write ('#define CONFIG_TCB_STACK_GUARD ' + str(data.data) + '\n')
-
-    config.write ('#define CONFIG_SYSTEM_LDSO_LIBRARY_PATH \"' + list_lib_path () + ':' + build_dir + '\"\n')
+    define(config, 'CONFIG_DL_ERROR_CATCH_TSD_OFFSET', debug.get_member_offset (rtld_global_die, '_dl_error_catch_tsd', False))
+    define(config, 'CONFIG_RTLD_GLOBAL_RO_SIZE', debug.get_struct_size(rtld_global_ro_die))
+    define(config, 'CONFIG_RTLD_DL_PAGESIZE_OFFSET', debug.get_member_offset(rtld_global_ro_die, '_dl_pagesize'))
+    define(config, 'CONFIG_RTLD_DL_CLKTCK_OFFSET', debug.get_member_offset(rtld_global_ro_die, '_dl_clktck'))
+    define(config, 'CONFIG_TCB_SIZE', debug.get_struct_size(debug.get_struct_die('pthread')))
+    define(config, 'CONFIG_TCB_TCB_OFFSET', debug.get_member_offset(tcb_die, 'tcb'))
+    define(config, 'CONFIG_TCB_DTV_OFFSET', debug.get_member_offset(tcb_die, 'dtv'))
+    define(config, 'CONFIG_TCB_SELF_OFFSET',debug.get_member_offset(tcb_die, 'self'))
+    define(config, 'CONFIG_TCB_SYSINFO_OFFSET', debug.get_member_offset(tcb_die, 'sysinfo'))
+    define(config, 'CONFIG_TCB_STACK_GUARD', debug.get_member_offset(tcb_die, 'stack_guard'))
+    define(config, 'CONFIG_SYSTEM_LDSO_LIBRARY_PATH', '"' + list_lib_path() + ':' + build_dir + '\"')
 
 if __name__ == "__main__":
     main(sys.argv[1:])

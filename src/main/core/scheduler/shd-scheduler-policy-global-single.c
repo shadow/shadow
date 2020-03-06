@@ -8,7 +8,6 @@
 typedef struct _GlobalSinglePolicyData GlobalSinglePolicyData;
 struct _GlobalSinglePolicyData {
     PriorityQueue* pq;
-    SimulationTime pushSequenceCounter;
     SimulationTime lastEventTime;
     gsize nPushed;
     gsize nPopped;
@@ -32,8 +31,6 @@ static GQueue* _schedulerpolicyglobalsingle_getHosts(SchedulerPolicy* policy) {
 static void _schedulerpolicyglobalsingle_push(SchedulerPolicy* policy, Event* event, Host* srcHost, Host* dstHost, SimulationTime barrier) {
     MAGIC_ASSERT(policy);
     GlobalSinglePolicyData* data = policy->data;
-
-    event_setSequence(event, ++(data->pushSequenceCounter));
     priorityqueue_push(data->pq, event);
 }
 

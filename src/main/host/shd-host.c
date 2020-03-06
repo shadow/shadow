@@ -30,8 +30,10 @@ struct _Host {
     GQueue* availableDescriptors;
     gint descriptorHandleCounter;
 
-    /* virtual process id counter */
+    /* virtual process and event id counter */
     guint processIDCounter;
+    guint64 eventIDCounter;
+    guint64 packetIDCounter;
 
     /* all file, socket, and epoll descriptors we know about and track */
     GHashTable* descriptors;
@@ -68,6 +70,7 @@ struct _Host {
     MAGIC_DECLARE;
 };
 
+/* this function is called by slave before the workers exist */
 Host* host_new(HostParameters* params) {
     utility_assert(params);
 
@@ -84,6 +87,8 @@ Host* host_new(HostParameters* params) {
     /* now dup the strings so we own them */
     if(params->hostname) host->params.hostname = g_strdup(params->hostname);
     if(params->ipHint) host->params.ipHint = g_strdup(params->ipHint);
+    if(params->citycodeHint) host->params.citycodeHint = g_strdup(params->citycodeHint);
+    if(params->countrycodeHint) host->params.countrycodeHint = g_strdup(params->countrycodeHint);
     if(params->geocodeHint) host->params.geocodeHint = g_strdup(params->geocodeHint);
     if(params->typeHint) host->params.typeHint = g_strdup(params->typeHint);
     if(params->pcapDir) host->params.pcapDir = g_strdup(params->pcapDir);
@@ -118,6 +123,61 @@ Host* host_new(HostParameters* params) {
     worker_countObject(OBJECT_TYPE_HOST, COUNTER_TYPE_NEW);
 
     return host;
+}
+
+/* this function is called by slave before the workers exist */
+void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, const gchar* hostRootPath) {
+    MAGIC_ASSERT(host);
+
+    /* get unique virtual address identifiers for each network interface */
+    Address* loopbackAddress = dns_register(dns, host->params.id, host->params.hostname, "127.0.0.1");
+    Address* ethernetAddress = dns_register(dns, host->params.id, host->params.hostname, host->params.ipHint);
+    host->defaultAddress = ethernetAddress;
+    address_ref(host->defaultAddress);
+
+    if(!host->dataDirPath) {
+        host->dataDirPath = g_build_filename(hostRootPath, host->params.hostname, NULL);
+        g_mkdir_with_parents(host->dataDirPath, 0775);
+    }
+
+    host->random = random_new(host->params.nodeSeed);
+    host->cpu = cpu_new(host->params.cpuFrequency, (guint64)rawCPUFreq, host->params.cpuThreshold, host->params.cpuPrecision);
+
+    /* connect to topology and get the default bandwidth */
+    guint64 bwDownKiBps = 0, bwUpKiBps = 0;
+    topology_attach(topology, ethernetAddress, host->random,
+            host->params.ipHint, host->params.citycodeHint, host->params.countrycodeHint, host->params.geocodeHint,
+            host->params.typeHint, &bwDownKiBps, &bwUpKiBps);
+
+    /* prefer assigned bandwidth if available */
+    if(host->params.requestedBWDownKiBps) {
+        bwDownKiBps = host->params.requestedBWDownKiBps;
+    }
+    if(host->params.requestedBWUpKiBps) {
+        bwUpKiBps = host->params.requestedBWUpKiBps;
+    }
+
+    /* virtual addresses and interfaces for managing network I/O */
+    NetworkInterface* loopback = networkinterface_new(loopbackAddress, G_MAXUINT32, G_MAXUINT32,
+            host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
+    NetworkInterface* ethernet = networkinterface_new(ethernetAddress, bwDownKiBps, bwUpKiBps,
+            host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
+
+    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(ethernetAddress)), ethernet);
+    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
+
+    address_unref(loopbackAddress);
+    address_unref(ethernetAddress);
+
+    message("Setup host id '%u' name '%s' with seed %u, ip %s, "
+                "%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, "
+                "%"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
+                "%"G_GUINT64_FORMAT" cpuFrequency, %"G_GUINT64_FORMAT" cpuThreshold, "
+                "%"G_GUINT64_FORMAT" cpuPrecision",
+                (guint)host->params.id, host->params.hostname, host->params.nodeSeed,
+                address_toHostIPString(host->defaultAddress),
+                bwUpKiBps, bwDownKiBps, host->params.sendBufSize, host->params.recvBufSize,
+                host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
 }
 
 static void _host_free(Host* host) {
@@ -199,6 +259,8 @@ void host_shutdown(Host* host) {
     }
 
     if(host->params.ipHint) g_free(host->params.ipHint);
+    if(host->params.citycodeHint) g_free(host->params.citycodeHint);
+    if(host->params.countrycodeHint) g_free(host->params.countrycodeHint);
     if(host->params.geocodeHint) g_free(host->params.geocodeHint);
     if(host->params.typeHint) g_free(host->params.typeHint);
     if(host->params.pcapDir) g_free(host->params.pcapDir);
@@ -285,47 +347,9 @@ static void host_schedule_commands(Host* host) {
     /* g_queue_free(host->commands); */
 }
 
+/* this function is called by worker after the workers exist */
 void host_boot(Host* host) {
     MAGIC_ASSERT(host);
-
-    /* get unique virtual address identifiers for each network interface */
-    Address* loopbackAddress = dns_register(worker_getDNS(), host->params.id, host->params.hostname, "127.0.0.1");
-    Address* ethernetAddress = dns_register(worker_getDNS(), host->params.id, host->params.hostname, host->params.ipHint);
-    host->defaultAddress = ethernetAddress;
-    address_ref(host->defaultAddress);
-
-    if(!host->dataDirPath) {
-        host->dataDirPath = g_build_filename(worker_getHostsRootPath(), host->params.hostname, NULL);
-        g_mkdir_with_parents(host->dataDirPath, 0775);
-    }
-
-    host->random = random_new(host->params.nodeSeed);
-    host->cpu = cpu_new(host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
-
-    /* connect to topology and get the default bandwidth */
-    guint64 bwDownKiBps = 0, bwUpKiBps = 0;
-    topology_attach(worker_getTopology(), ethernetAddress, host->random,
-            host->params.ipHint, host->params.geocodeHint, host->params.typeHint, &bwDownKiBps, &bwUpKiBps);
-
-    /* prefer assigned bandwidth if available */
-    if(host->params.requestedBWDownKiBps) {
-        bwDownKiBps = host->params.requestedBWDownKiBps;
-    }
-    if(host->params.requestedBWUpKiBps) {
-        bwUpKiBps = host->params.requestedBWUpKiBps;
-    }
-
-    /* virtual addresses and interfaces for managing network I/O */
-    NetworkInterface* loopback = networkinterface_new(loopbackAddress, G_MAXUINT32, G_MAXUINT32,
-            host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
-    NetworkInterface* ethernet = networkinterface_new(ethernetAddress, bwDownKiBps, bwUpKiBps,
-            host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
-
-    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(ethernetAddress)), ethernet);
-    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
-
-    address_unref(loopbackAddress);
-    address_unref(ethernetAddress);
 
     /* must be done after the default IP exists so tracker_heartbeat works */
     host->tracker = tracker_new(host->params.heartbeatInterval, host->params.heartbeatLogLevel, host->params.heartbeatLogInfo);
@@ -336,7 +360,7 @@ void host_boot(Host* host) {
     /* scheduling the command */
     host_schedule_commands(host);
 
-    message("Booted host id '%u' name '%s' with seed %u, ip %s, "
+    /*message("Booted host id '%u' name '%s' with seed %u, ip %s, "
                 "%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, "
                 "%"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
                 "%"G_GUINT64_FORMAT" cpuFrequency, %"G_GUINT64_FORMAT" cpuThreshold, "
@@ -345,13 +369,29 @@ void host_boot(Host* host) {
                 address_toHostIPString(host->defaultAddress),
                 bwUpKiBps, bwDownKiBps, host->params.sendBufSize, host->params.recvBufSize,
                 host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
+		*/
+}
+
+guint host_getNewProcessID(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->processIDCounter++;
+}
+
+guint64 host_getNewEventID(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->eventIDCounter++;
+}
+
+guint64 host_getNewPacketID(Host* host) {
+    MAGIC_ASSERT(host);
+    return host->packetIDCounter++;
 }
 
 void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
         const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
         const gchar* preloadName, const gchar* preloadPath, gchar* arguments) {
     MAGIC_ASSERT(host);
-    guint processID = host->processIDCounter++;
+    guint processID = host_getNewProcessID(host);
     Process* proc = process_new(host, processID, startTime, stopTime, pluginName, pluginPath, pluginSymbol, preloadName, preloadPath, arguments);
     g_queue_push_tail(host->processes, proc);
 }
@@ -390,7 +430,7 @@ gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
     const Host* nb = b;
     MAGIC_ASSERT(na);
     MAGIC_ASSERT(nb);
-    return na->params.id > nb->params.id ? +1 : na->params.id == nb->params.id ? 0 : -1;
+    return na->params.id > nb->params.id ? +1 : na->params.id < nb->params.id ? -1 : 0;
 }
 
 gboolean host_isEqual(Host* a, Host* b) {
@@ -449,11 +489,12 @@ NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle) {
 }
 
 static void _host_associateInterface(Host* host, Socket* socket,
-        in_addr_t bindAddress, in_port_t bindPort) {
+        in_addr_t bindAddress, in_port_t bindPort, in_addr_t peerAddress, in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
     /* connect up socket layer */
-    socket_setSocketName(socket, bindAddress, bindPort, FALSE);
+    socket_setPeerName(socket, peerAddress, peerPort);
+    socket_setSocketName(socket, bindAddress, bindPort);
 
     /* now associate the interfaces corresponding to bindAddress with socket */
     if(bindAddress == htonl(INADDR_ANY)) {
@@ -762,12 +803,7 @@ gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
     /* EBADF  fd is not a valid shadow file descriptor. */
     descriptor = host_lookupDescriptor(host, fileDescriptor);
     if(descriptor == NULL) {
-        return EBADF;
-    }
-
-    status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", fileDescriptor);
+        warning("descriptor handle '%i' not a valid shadow descriptor", fileDescriptor);
         return EBADF;
     }
 
@@ -989,12 +1025,10 @@ static gboolean _host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
     return FALSE;
 }
 
-static gboolean _host_isInterfaceAvailable(Host* host, in_addr_t interfaceIP,
-        DescriptorType type, in_port_t port) {
+static gboolean _host_isInterfaceAvailable(Host* host, ProtocolType type,
+        in_addr_t interfaceIP, in_port_t port, in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
-    enum ProtocolType protocol = type == DT_TCPSOCKET ? PTCP : type == DT_UDPSOCKET ? PUDP : PLOCAL;
-    gint associationKey = PROTOCOL_DEMUX_KEY(protocol, port);
     gboolean isAvailable = FALSE;
 
     if(interfaceIP == htonl(INADDR_ANY)) {
@@ -1005,7 +1039,7 @@ static gboolean _host_isInterfaceAvailable(Host* host, in_addr_t interfaceIP,
 
         while(g_hash_table_iter_next(&iter, &key, &value)) {
             NetworkInterface* interface = value;
-            isAvailable = !networkinterface_isAssociated(interface, associationKey);
+            isAvailable = !networkinterface_isAssociated(interface, type, port, peerIP, peerPort);
 
             /* as soon as one is taken, break out to return FALSE */
             if(!isAvailable) {
@@ -1014,7 +1048,7 @@ static gboolean _host_isInterfaceAvailable(Host* host, in_addr_t interfaceIP,
         }
     } else {
         NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
-        isAvailable = !networkinterface_isAssociated(interface, associationKey);
+        isAvailable = !networkinterface_isAssociated(interface, type, port, peerIP, peerPort);
     }
 
     return isAvailable;
@@ -1027,81 +1061,46 @@ static in_port_t _host_getRandomPort(Host* host) {
     return htons(randomHostPort);
 }
 
-static in_port_t _host_getRandomFreePort(Host* host, in_addr_t interfaceIP, DescriptorType type) {
+static in_port_t _host_getRandomFreePort(Host* host, ProtocolType type,
+        in_addr_t interfaceIP, in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
     /* we need a random port that is free everywhere we need it to be.
      * we have two modes here: first we just try grabbing a random port until we
-     * get a free one. if we cannot find one in an expected number of loops
-     * (based on how many we think are free), then we do an inefficient linear
-     * search that is guaranteed to succeed/fail as a fallback. */
-
-    /* lets see if we have enough free ports to just choose randomly */
-    guint maxNumBound = 0;
-
-    if(interfaceIP == htonl(INADDR_ANY)) {
-        /* need to make sure the port is free on all interfaces */
-        GHashTableIter iter;
-        gpointer key, value;
-        g_hash_table_iter_init(&iter, host->interfaces);
-
-        while(g_hash_table_iter_next(&iter, &key, &value)) {
-            NetworkInterface* interface = value;
-            if(interface) {
-                guint numBoundSockets = networkinterface_getAssociationCount(interface);
-                maxNumBound = MAX(numBoundSockets, maxNumBound);
-            }
-        }
-    } else {
-        /* just check the one at the given IP */
-        NetworkInterface* interface = host_lookupInterface(host, interfaceIP);
-        if(interface) {
-            guint numBoundSockets = networkinterface_getAssociationCount(interface);
-            maxNumBound = MAX(numBoundSockets, maxNumBound);
-        }
-    }
-
-    guint numAllocatablePorts = (guint)(UINT16_MAX - MIN_RANDOM_PORT);
-    guint numFreePorts = 0;
-    if(maxNumBound < numAllocatablePorts) {
-        numFreePorts = numAllocatablePorts - maxNumBound;
-    }
+     * get a free one. if we cannot find one fast enough, then as a fallback we
+     * do an inefficient linear search that is guaranteed to succeed or fail. */
 
     /* we will try to get a port */
     in_port_t randomNetworkPort = 0;
 
-    /* if more than 1/10 of allocatable ports are free, choose randomly but only
-     * until we try to many times */
-    guint threshold = (guint)(numAllocatablePorts / 100);
-    if(numFreePorts >= threshold) {
-        guint numTries = 0;
-        while(numTries < numFreePorts) {
-            in_port_t randomPort = _host_getRandomPort(host);
+    /* if choosing randomly doesn't succeed within 10 tries, then we have already
+     * allocated a lot of ports (>90% on average). then we fall back to linear search. */
+    for(guint i = 0; i < 10; i++) {
+        in_port_t randomPort = _host_getRandomPort(host);
 
-            /* this will check all interfaces in the case of INADDR_ANY */
-            if(_host_isInterfaceAvailable(host, interfaceIP, type, randomPort)) {
-                randomNetworkPort = randomPort;
-                break;
-            }
-
-            numTries++;
+        /* this will check all interfaces in the case of INADDR_ANY */
+        if(_host_isInterfaceAvailable(host, type, interfaceIP, randomPort, peerIP, peerPort)) {
+            return randomPort;
         }
     }
 
     /* now if we tried too many times and still don't have a port, fall back
-     * to a linear search to make sure we get a free port if we have one */
-    if(!randomNetworkPort) {
-        for(in_port_t i = MIN_RANDOM_PORT; i < UINT16_MAX; i++) {
-            /* this will check all interfaces in the case of INADDR_ANY */
-            if(_host_isInterfaceAvailable(host, interfaceIP, type, i)) {
-                randomNetworkPort = i;
-                break;
-            }
+     * to a linear search to make sure we get a free port if we have one.
+     * but start from a random port instead of the min. */
+    in_port_t start = _host_getRandomPort(host);
+    in_port_t next = (start == UINT16_MAX) ? MIN_RANDOM_PORT : start + 1;
+    while(next != start) {
+        /* this will check all interfaces in the case of INADDR_ANY */
+        if(_host_isInterfaceAvailable(host, type, interfaceIP, next, peerIP, peerPort)) {
+            return next;
         }
+        next = (next == UINT16_MAX) ? MIN_RANDOM_PORT : next + 1;
     }
 
-    /* this will return 0 if we can't find a free port */
-    return randomNetworkPort;
+    gchar* peerIPStr = address_ipToNewString(peerIP);
+    warning("unable to find free ephemeral port for %s peer %s:%"G_GUINT16_FORMAT,
+            protocol_toString(type), peerIPStr, (guint16) ntohs((uint16_t) peerPort));
+    return 0;
 }
 
 gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* address) {
@@ -1136,8 +1135,8 @@ gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* addres
         return EBADF;
     }
 
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
+    DescriptorType dtype = descriptor_getType(descriptor);
+    if(dtype != DT_TCPSOCKET && dtype != DT_UDPSOCKET) {
         warning("wrong type for descriptor handle '%i'", handle);
         return ENOTSOCK;
     }
@@ -1155,22 +1154,24 @@ gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* addres
         return EINVAL;
     }
 
+    ProtocolType ptype = socket_getProtocol(socket);
+
     /* make sure we have a proper port */
     if(bindPort == 0) {
         /* we know it will be available */
-        bindPort = _host_getRandomFreePort(host, bindAddress, type);
+        bindPort = _host_getRandomFreePort(host, ptype, bindAddress, 0, 0);
         if(!bindPort) {
             return EADDRNOTAVAIL;
         }
     } else {
         /* make sure their port is available at that address for this protocol. */
-        if(!_host_isInterfaceAvailable(host, bindAddress, type, bindPort)) {
+        if(!_host_isInterfaceAvailable(host, ptype, bindAddress, bindPort, 0, 0)) {
             return EADDRINUSE;
         }
     }
 
     /* bind port and set associations */
-    _host_associateInterface(host, socket, bindAddress, bindPort);
+    _host_associateInterface(host, socket, bindAddress, bindPort, 0, 0);
 
     if (address->sa_family == AF_UNIX) {
         struct sockaddr_un* saddr = (struct sockaddr_un*) address;
@@ -1239,8 +1240,8 @@ gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address)
         return EBADF;
     }
 
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
+    DescriptorType dtype = descriptor_getType(descriptor);
+    if(dtype != DT_TCPSOCKET && dtype != DT_UDPSOCKET) {
         warning("wrong type for descriptor handle '%i'", handle);
         return ENOTSOCK;
     }
@@ -1261,13 +1262,15 @@ gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address)
          * use default interface unless the remote peer is on loopback */
         in_addr_t defaultIP = address_toNetworkIP(host->defaultAddress);
 
-        in_addr_t bindAddress = loIP == peerIP ? loIP : defaultIP;
-        in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
+        ProtocolType ptype = socket_getProtocol(socket);
+
+        in_addr_t bindAddr = loIP == peerIP ? loIP : defaultIP;
+        in_port_t bindPort = _host_getRandomFreePort(host, ptype, bindAddr, peerIP, peerPort);
         if(!bindPort) {
             return EADDRNOTAVAIL;
         }
 
-        _host_associateInterface(host, socket, bindAddress, bindPort);
+        _host_associateInterface(host, socket, bindAddr, bindPort, peerIP, peerPort);
     }
 
     return socket_connectToPeer(socket, peerIP, peerPort, family);
@@ -1288,8 +1291,8 @@ gint host_listenForPeer(Host* host, gint handle, gint backlog) {
         return EBADF;
     }
 
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type != DT_TCPSOCKET) {
+    DescriptorType dtype = descriptor_getType(descriptor);
+    if(dtype != DT_TCPSOCKET) {
         warning("wrong type for descriptor handle '%i'", handle);
         return EOPNOTSUPP;
     }
@@ -1312,13 +1315,14 @@ gint host_listenForPeer(Host* host, gint handle, gint backlog) {
     /* if we get here, we are allowed to listen and are not already listening, start listening now */
     if(!socket_isBound(socket)) {
         /* implicit bind */
+        ProtocolType ptype = socket_getProtocol(socket);
         in_addr_t bindAddress = htonl(INADDR_ANY);
-        in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
+        in_port_t bindPort = _host_getRandomFreePort(host, ptype, bindAddress, 0, 0);
         if(!bindPort) {
             return EADDRNOTAVAIL;
         }
 
-        _host_associateInterface(host, socket, bindAddress, bindPort);
+        _host_associateInterface(host, socket, bindAddress, bindPort, 0, 0);
     }
 
     tcp_enterServerMode(tcp, backlog);
@@ -1471,8 +1475,8 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
         return EBADF;
     }
 
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_PIPE) {
+    DescriptorType dtype = descriptor_getType(descriptor);
+    if(dtype != DT_TCPSOCKET && dtype != DT_UDPSOCKET && dtype != DT_PIPE) {
         return EBADF;
     }
 
@@ -1491,7 +1495,7 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
         return EAGAIN;
     }
 
-    if(type == DT_UDPSOCKET) {
+    if(dtype == DT_UDPSOCKET) {
         /* make sure that we have somewhere to send it */
         Socket* socket = (Socket*)transport;
         if(ip == 0 || port == 0) {
@@ -1504,19 +1508,20 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
 
         /* if this socket is not bound, do an implicit bind to a random port */
         if(!socket_isBound(socket)) {
+            ProtocolType ptype = socket_getProtocol(socket);
             in_addr_t bindAddress = ip == htonl(INADDR_LOOPBACK) ? htonl(INADDR_LOOPBACK) :
                     address_toNetworkIP(host->defaultAddress);
-            in_port_t bindPort = _host_getRandomFreePort(host, bindAddress, type);
+            in_port_t bindPort = _host_getRandomFreePort(host, ptype, bindAddress, 0, 0);
             if(!bindPort) {
                 return EADDRNOTAVAIL;
             }
 
             /* bind port and set associations */
-            _host_associateInterface(host, socket, bindAddress, bindPort);
+            _host_associateInterface(host, socket, bindAddress, bindPort, 0, 0);
         }
     }
 
-    if(type == DT_TCPSOCKET) {
+    if(dtype == DT_TCPSOCKET) {
         gint error = tcp_getConnectError((TCP*) transport);
         if(error != EISCONN) {
             if(error == EALREADY) {
@@ -1535,6 +1540,8 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
         *bytesCopied = (gsize)n;
     } else if(n == -2) {
         return ENOTCONN;
+    } else if(n == -3) {
+        return EPIPE;
     } else if(n < 0) {
         return EWOULDBLOCK;
     }
@@ -1609,6 +1616,33 @@ gint host_closeUser(Host* host, gint handle) {
     descriptor_close(descriptor);
 
     return 0;
+}
+
+gint host_shutdownSocket(Host* host, gint handle, gint how) {
+    MAGIC_ASSERT(host);
+
+    Descriptor* descriptor = host_lookupDescriptor(host, handle);
+    if(descriptor == NULL) {
+        warning("descriptor handle '%i' not found", handle);
+        return EBADF;
+    }
+
+    DescriptorStatus status = descriptor_getStatus(descriptor);
+    if(status & DS_CLOSED) {
+        warning("descriptor handle '%i' not a valid open descriptor", handle);
+        return EBADF;
+    }
+
+    DescriptorType type = descriptor_getType(descriptor);
+    if(type == DT_TCPSOCKET) {
+        return tcp_shutdown((TCP*)descriptor, how);
+    } else if(type == DT_UDPSOCKET) {
+        return ENOTCONN;
+    } else if(type == DT_PIPE || type == DT_EPOLL || type == DT_TIMER) {
+        return ENOTSOCK;
+    } else {
+        return 0;
+    }
 }
 
 Tracker* host_getTracker(Host* host) {

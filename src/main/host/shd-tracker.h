@@ -18,7 +18,7 @@ void tracker_addInputBytes(Tracker* tracker, Packet* packet, gint handle);
 void tracker_addOutputBytes(Tracker* tracker, Packet* packet, gint handle);
 void tracker_addAllocatedBytes(Tracker* tracker, gpointer location, gsize allocatedBytes);
 void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location);
-void tracker_addSocket(Tracker* tracker, gint handle, enum ProtocolType type, gsize inputBufferSize, gsize outputBufferSize);
+void tracker_addSocket(Tracker* tracker, gint handle, ProtocolType type, gsize inputBufferSize, gsize outputBufferSize);
 void tracker_updateSocketPeer(Tracker* tracker, gint handle, in_addr_t peerIP, in_port_t peerPort);
 void tracker_updateSocketInputBuffer(Tracker* tracker, gint handle, gsize inputBufferLength, gsize inputBufferSize);
 void tracker_updateSocketOutputBuffer(Tracker* tracker, gint handle, gsize outputBufferLength, gsize outputBufferSize);

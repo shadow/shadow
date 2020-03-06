@@ -71,7 +71,7 @@ Options* options_new(gint argc, gchar* argv[]) {
     /* set defaults */
     options->initialTCPWindow = 10;
     options->interfaceBufferSize = 1024000;
-    options->interfaceBatchTime = 10;
+    options->interfaceBatchTime = 5000;
     options->randomSeed = 1;
     options->cpuThreshold = -1;
     options->cpuPrecision = 200;
@@ -123,12 +123,12 @@ Options* options_new(gint argc, gchar* argv[]) {
     {
       { "cpu-precision", 0, 0, G_OPTION_ARG_INT, &(options->cpuPrecision), "round measured CPU delays to the nearest TIME, in microseconds (negative value to disable fuzzy CPU delays) [200]", "TIME" },
       { "cpu-threshold", 0, 0, G_OPTION_ARG_INT, &(options->cpuThreshold), "TIME delay threshold after which the CPU becomes blocked, in microseconds (negative value to disable CPU delays) (experimental!) [-1]", "TIME" },
-      { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(options->interfaceBatchTime), "Batch TIME for network interface sends and receives, in milliseconds [10]", "TIME" },
+      { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(options->interfaceBatchTime), "Batch TIME for network interface sends and receives, in microseconds [5000]", "TIME" },
       { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(options->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
       { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(options->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
       { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(options->initialSocketReceiveBufferSize), sockrecv->str, "N" },
       { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(options->initialSocketSendBufferSize), socksend->str, "N" },
-      { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(options->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['cubic']", "TCPCC" },
+      { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(options->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['reno']", "TCPCC" },
       { "tcp-ssthresh", 0, 0, G_OPTION_ARG_INT, &(options->tcpSlowStartThreshold), "Set TCP ssthresh value instead of discovering it via packet loss or hystart [0]", "N" },
       { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(options->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
       { NULL },
@@ -182,7 +182,7 @@ Options* options_new(gint argc, gchar* argv[]) {
     if(options->interfaceBufferSize < CONFIG_MTU) {
         options->interfaceBufferSize = CONFIG_MTU;
     }
-    options->interfaceBatchTime *= SIMTIME_ONE_MILLISECOND;
+    options->interfaceBatchTime *= SIMTIME_ONE_MICROSECOND;
     if(options->interfaceBatchTime == 0) {
         /* we require at least 1 nanosecond b/c of time granularity */
         options->interfaceBatchTime = 1;
@@ -202,7 +202,7 @@ Options* options_new(gint argc, gchar* argv[]) {
         options->autotuneSocketSendBuffer = TRUE;
     }
     if(options->tcpCongestionControl == NULL) {
-        options->tcpCongestionControl = g_strdup("cubic");
+        options->tcpCongestionControl = g_strdup("reno");
     }
     if(options->dataDirPath == NULL) {
         options->dataDirPath = g_strdup("shadow.data");
@@ -435,3 +435,4 @@ const gchar* options_getDataTemplatePath(Options* options) {
     MAGIC_ASSERT(options);
     return options->dataTemplatePath;
 }
+

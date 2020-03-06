@@ -9,7 +9,7 @@
 
 typedef struct _CPU CPU;
 
-CPU* cpu_new(guint64 frequencyKHz, guint64 threshold, guint64 precision);
+CPU* cpu_new(guint64 frequencyKHz, guint64 rawFrequencyKHz, guint64 threshold, guint64 precision);
 void cpu_free(CPU* cpu);
 
 gboolean cpu_isBlocked(CPU* cpu);

@@ -80,6 +80,9 @@ PRELOADDEF(return, int, timerfd_gettime, (int a, struct itimerspec *b), a, b);
 
 PRELOADDEF(return, int, fileno, (FILE *a), a);
 PRELOADDEF(return, int, creat, (const char *a, mode_t b), a, b);
+PRELOADDEF(return, FILE *, fmemopen, (void *a, size_t b, const char *c), a, b, c);
+PRELOADDEF(return, FILE *, open_memstream, (char** a, size_t* b), a, b);
+PRELOADDEF(return, FILE *, open_wmemstream, (wchar_t** a, size_t* b), a, b);
 PRELOADDEF(return, FILE *, fopen, (const char *a, const char *b), a, b);
 PRELOADDEF(return, FILE *, fopen64, (const char *a, const char *b), a, b);
 PRELOADDEF(return, FILE *, fdopen, (int a, const char *b), a, b);
@@ -87,6 +90,13 @@ PRELOADDEF(return, int, dup, (int a), a);
 PRELOADDEF(return, int, dup2, (int a, int b), a, b);
 PRELOADDEF(return, int, dup3, (int a, int b, int c), a, b, c);
 PRELOADDEF(return, int, fclose, (FILE *a), a);
+
+PRELOADDEF(return, int, fseek, (FILE *a, long b, int c), a, b, c);
+PRELOADDEF(return, long, ftell, (FILE *a), a);
+PRELOADDEF(      , void, rewind, (FILE *a), a);
+PRELOADDEF(return, int, fgetpos, (FILE *a, fpos_t *b), a, b);
+PRELOADDEF(return, int, fsetpos, (FILE *a, const fpos_t *b), a, b);
+
 /* fstat redirects to this */
 PRELOADDEF(return, int, __fxstat, (int a, int b, struct stat *c), a, b, c);
 /* fstat64 redirects to this */
@@ -163,6 +173,11 @@ PRELOADDEF(return, long int, random, ());
 PRELOADDEF(return, int, random_r, (struct random_data *a, int32_t *b), a, b);
 PRELOADDEF(      , void, srandom, (unsigned int a), a);
 PRELOADDEF(return, int, srandom_r, (unsigned int a, struct random_data *b), a, b);
+
+/* pid */
+
+PRELOADDEF(      , pid_t, getpid, (void));
+PRELOADDEF(      , pid_t, getppid, (void));
 
 /* signals */
 
@@ -358,3 +373,4 @@ PRELOADDEF(return, int, pthread_cond_broadcast, (pthread_cond_t *a), a);
 PRELOADDEF(return, int, pthread_cond_signal, (pthread_cond_t *a), a);
 PRELOADDEF(return, int, pthread_cond_wait, (pthread_cond_t *a, pthread_mutex_t *b), a, b);
 PRELOADDEF(return, int, pthread_cond_timedwait, (pthread_cond_t *a, pthread_mutex_t *b, const struct timespec *c), a, b, c);
+

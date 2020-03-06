@@ -74,7 +74,7 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
     interface->inBufferSize = interfaceReceiveLength;
 
     /* incoming packets get passed along to sockets */
-    interface->boundSockets = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, descriptor_unref);
+    interface->boundSockets = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, descriptor_unref);
 
     /* sockets tell us when they want to start sending */
     interface->rrQueue = g_queue_new();
@@ -146,41 +146,86 @@ guint32 networkinterface_getSpeedDownKiBps(NetworkInterface* interface) {
     return interface->bwDownKiBps;
 }
 
-gboolean networkinterface_isAssociated(NetworkInterface* interface, gint key) {
+static gchar* _networkinterface_getAssociationKey(NetworkInterface* interface,
+        ProtocolType type, in_port_t port, in_addr_t peerAddr, in_port_t peerPort) {
     MAGIC_ASSERT(interface);
 
-    if(g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key))) {
-        return TRUE;
-    } else {
-        return FALSE;
-    }
+    GString* strBuffer = g_string_new(NULL);
+    g_string_printf(strBuffer,
+            "%s|%"G_GUINT32_FORMAT":%"G_GUINT16_FORMAT"|%"G_GUINT32_FORMAT":%"G_GUINT16_FORMAT,
+            protocol_toString(type),
+            (guint)address_toNetworkIP(interface->address),
+            port, peerAddr, peerPort);
+
+    return g_string_free(strBuffer, FALSE);
 }
 
-guint networkinterface_getAssociationCount(NetworkInterface* interface) {
+static gchar* _networkinterface_socketToAssociationKey(NetworkInterface* interface, Socket* socket) {
     MAGIC_ASSERT(interface);
-    return g_hash_table_size(interface->boundSockets);
+
+    ProtocolType type = socket_getProtocol(socket);
+
+    in_addr_t peerIP = 0;
+    in_port_t peerPort = 0;
+    socket_getPeerName(socket, &peerIP, &peerPort);
+
+    in_addr_t boundIP = 0;
+    in_port_t boundPort = 0;
+    socket_getSocketName(socket, &boundIP, &boundPort);
+
+    gchar* key = _networkinterface_getAssociationKey(interface, type, boundPort, peerIP, peerPort);
+    return key;
+}
+
+gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
+        in_port_t port, in_addr_t peerAddr, in_port_t peerPort) {
+    MAGIC_ASSERT(interface);
+
+    gboolean isFound = FALSE;
+
+    /* we need to check the general key too (ie the ones listening sockets use) */
+    gchar* general = _networkinterface_getAssociationKey(interface, type, port, 0, 0);
+    if(g_hash_table_lookup(interface->boundSockets, general)) {
+        isFound = TRUE;
+    }
+    g_free(general);
+
+    if(!isFound) {
+        gchar* specific = _networkinterface_getAssociationKey(interface, type, port, peerAddr, peerPort);
+        if(g_hash_table_lookup(interface->boundSockets, specific)) {
+            isFound = TRUE;
+        }
+        g_free(specific);
+    }
+
+    return isFound;
 }
 
 void networkinterface_associate(NetworkInterface* interface, Socket* socket) {
     MAGIC_ASSERT(interface);
 
-    gint key = socket_getAssociationKey(socket);
+    gchar* key = _networkinterface_socketToAssociationKey(interface, socket);
 
     /* make sure there is no collision */
-    utility_assert(!networkinterface_isAssociated(interface, key));
+    utility_assert(!g_hash_table_contains(interface->boundSockets, key));
 
-    /* insert to our storage */
-    g_hash_table_replace(interface->boundSockets, GINT_TO_POINTER(key), socket);
+    /* insert to our storage, key is now owned by table */
+    g_hash_table_replace(interface->boundSockets, key, socket);
     descriptor_ref(socket);
+
+    debug("associated socket key %s", key);
 }
 
 void networkinterface_disassociate(NetworkInterface* interface, Socket* socket) {
     MAGIC_ASSERT(interface);
 
-    gint key = socket_getAssociationKey(socket);
+    gchar* key = _networkinterface_socketToAssociationKey(interface, socket);
 
     /* we will no longer receive packets for this port, this unrefs descriptor */
-    g_hash_table_remove(interface->boundSockets, GINT_TO_POINTER(key));
+    g_hash_table_remove(interface->boundSockets, key);
+
+    debug("disassociated socket key %s", key);
+    g_free(key);
 }
 
 static void _networkinterface_capturePacket(NetworkInterface* interface, Packet* packet) {
@@ -194,23 +239,22 @@ static void _networkinterface_capturePacket(NetworkInterface* interface, Packet*
         packet_copyPayload(packet, 0, pcapPacket->payload, pcapPacket->payloadLength);
     }
 
-    PacketTCPHeader tcpHeader;
-    packet_getTCPHeader(packet, &tcpHeader);
+    PacketTCPHeader* tcpHeader = packet_getTCPHeader(packet);
 
-    pcapPacket->srcIP = tcpHeader.sourceIP;
-    pcapPacket->dstIP = tcpHeader.destinationIP;
-    pcapPacket->srcPort = tcpHeader.sourcePort;
-    pcapPacket->dstPort = tcpHeader.destinationPort;
+    pcapPacket->srcIP = tcpHeader->sourceIP;
+    pcapPacket->dstIP = tcpHeader->destinationIP;
+    pcapPacket->srcPort = tcpHeader->sourcePort;
+    pcapPacket->dstPort = tcpHeader->destinationPort;
 
-    if(tcpHeader.flags & PTCP_RST) pcapPacket->rstFlag = TRUE;
-    if(tcpHeader.flags & PTCP_SYN) pcapPacket->synFlag = TRUE;
-    if(tcpHeader.flags & PTCP_ACK) pcapPacket->ackFlag = TRUE;
-    if(tcpHeader.flags & PTCP_FIN) pcapPacket->finFlag = TRUE;
+    if(tcpHeader->flags & PTCP_RST) pcapPacket->rstFlag = TRUE;
+    if(tcpHeader->flags & PTCP_SYN) pcapPacket->synFlag = TRUE;
+    if(tcpHeader->flags & PTCP_ACK) pcapPacket->ackFlag = TRUE;
+    if(tcpHeader->flags & PTCP_FIN) pcapPacket->finFlag = TRUE;
 
-    pcapPacket->seq = (guint32)tcpHeader.sequence;
-    pcapPacket->win = (guint32)tcpHeader.window;
-    if(tcpHeader.flags & PTCP_ACK) {
-        pcapPacket->ack = (guint32)htonl(tcpHeader.acknowledgment);
+    pcapPacket->seq = (guint32)tcpHeader->sequence;
+    pcapPacket->win = (guint16)tcpHeader->window;
+    if(tcpHeader->flags & PTCP_ACK) {
+        pcapPacket->ack = (guint32)tcpHeader->acknowledgment;
     }
 
     pcapwriter_writePacket(interface->pcap, pcapPacket);
@@ -230,6 +274,8 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
     /* the next packets need to be received and processed */
     SimulationTime batchTime = options_getInterfaceBatchTime(worker_getOptions());
 
+    gboolean bootstrapping = worker_isBootstrapActive();
+
     /* receive packets in batches */
     while(!g_queue_is_empty(interface->inBuffer) &&
             interface->receiveNanosecondsConsumed <= batchTime) {
@@ -245,11 +291,30 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
         interface->inBufferLength -= length;
 
         /* calculate how long it took to 'receive' this packet */
-        interface->receiveNanosecondsConsumed += (length * interface->timePerByteDown);
+        if(!bootstrapping) {
+            interface->receiveNanosecondsConsumed += (length * interface->timePerByteDown);
+        }
 
         /* hand it off to the correct socket layer */
-        gint key = packet_getDestinationAssociationKey(packet);
-        Socket* socket = g_hash_table_lookup(interface->boundSockets, GINT_TO_POINTER(key));
+        ProtocolType ptype = packet_getProtocol(packet);
+        in_port_t bindPort = packet_getDestinationPort(packet);
+
+        /* the first check is for servers who don't associate with specific destinations */
+        gchar* key = _networkinterface_getAssociationKey(interface, ptype, bindPort, 0, 0);
+        debug("looking for socket associated with general key %s", key);
+        Socket* socket = g_hash_table_lookup(interface->boundSockets, key);
+        g_free(key);
+
+        if(!socket) {
+            /* now check the destination-specific key */
+            in_addr_t peerIP = packet_getSourceIP(packet);
+            in_port_t peerPort = packet_getSourcePort(packet);
+
+            key = _networkinterface_getAssociationKey(interface, ptype, bindPort, peerIP, peerPort);
+            debug("looking for socket associated with specific key %s", key);
+            socket = g_hash_table_lookup(interface->boundSockets, key);
+            g_free(key);
+        }
 
         /* if the socket closed, just drop the packet */
         gint socketHandle = -1;
@@ -288,11 +353,13 @@ static void _networkinterface_scheduleNextReceive(NetworkInterface* interface) {
 void networkinterface_packetArrived(NetworkInterface* interface, Packet* packet) {
     MAGIC_ASSERT(interface);
 
-    /* a packet arrived. lets try to receive or buffer it */
-    guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+    /* a packet arrived. lets try to receive or buffer it.
+     * we don't drop control-only packets, so don't include header size in length */
+    guint length = packet_getPayloadLength(packet);// + packet_getHeaderSize(packet);
     gssize space = interface->inBufferSize - interface->inBufferLength;
     utility_assert(space >= 0);
 
+    /* we don't drop control packets */
     if(length <= space) {
         /* we have space to buffer it */
         packet_ref(packet);
@@ -332,6 +399,14 @@ void networkinterface_received(NetworkInterface* interface) {
     _networkinterface_scheduleNextReceive(interface);
 }
 
+static void _networkinterface_updatePacketHeader(Descriptor* descriptor, Packet* packet) {
+    DescriptorType type = descriptor_getType(descriptor);
+    if(type == DT_TCPSOCKET) {
+        TCP* tcp = (TCP*)descriptor;
+        tcp_networkInterfaceIsAboutToSendPacket(tcp, packet);
+    }
+}
+
 /* round robin queuing discipline ($ man tc)*/
 static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, gint* socketHandle) {
     Packet* packet = NULL;
@@ -341,6 +416,10 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, g
         Socket* socket = g_queue_pop_head(interface->rrQueue);
         packet = socket_pullOutPacket(socket);
         *socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
+
+        if(socket && packet) {
+            _networkinterface_updatePacketHeader((Descriptor*)socket, packet);
+        }
 
         if(socket_peekNextPacket(socket)) {
             /* socket has more packets, and is still reffed from before */
@@ -366,6 +445,10 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
         packet = socket_pullOutPacket(socket);
         *socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
 
+        if(socket && packet) {
+            _networkinterface_updatePacketHeader((Descriptor*)socket, packet);
+        }
+
         if(socket_peekNextPacket(socket)) {
             /* socket has more packets, and is still reffed from before */
             priorityqueue_push(interface->fifoQueue, socket);
@@ -387,6 +470,8 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
     /* the next packet needs to be sent according to bandwidth limitations.
      * we need to spend time sending it before sending the next. */
     SimulationTime batchTime = options_getInterfaceBatchTime(worker_getOptions());
+
+    gboolean bootstrapping = worker_isBootstrapActive();
 
     /* loop until we find a socket that has something to send */
     while(interface->sendNanosecondsConsumed <= batchTime) {
@@ -425,8 +510,10 @@ static void _networkinterface_scheduleNextSend(NetworkInterface* interface) {
         }
 
         /* successfully sent, calculate how long it took to 'send' this packet */
-        guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
-        interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
+        if(!bootstrapping) {
+            guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
+            interface->sendNanosecondsConsumed += (length * interface->timePerByteUp);
+        }
 
         tracker_addOutputBytes(host_getTracker(worker_getActiveHost()), packet, socketHandle);
         if(interface->pcap) {

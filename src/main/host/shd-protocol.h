@@ -7,7 +7,8 @@
 #ifndef SHD_PROTOCOL_H_
 #define SHD_PROTOCOL_H_
 
-enum ProtocolType {
+typedef enum _ProtocolType ProtocolType;
+enum _ProtocolType {
     PNONE, PLOCAL, PTCP, PUDP
 };
 
@@ -26,13 +27,7 @@ enum ProtocolTCPFlags {
     PTCP_ACK =  1 << 3,
     PTCP_SACK = 1 << 4,
     PTCP_FIN =  1 << 5,
+    PTCP_DUPACK =  1 << 6,
 };
-
-/**
- * Use protocol type and 16 bit port to create a unique gint that can be used
- * as a key into a hashtable. The protocol type occupies the upper 16 bits, and
- * the port occupies the lower 16 bits.
- */
-#define PROTOCOL_DEMUX_KEY(protocolType, port) ((gint)((protocolType << 16) + port))
 
 #endif /* SHD_PROTOCOL_H_ */

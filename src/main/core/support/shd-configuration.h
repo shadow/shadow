@@ -79,6 +79,8 @@ struct _ConfigurationHostElement {
     /* optional*/
     GQueue* commands;
     ConfigurationStringAttribute ipHint;
+    ConfigurationStringAttribute citycodeHint;
+    ConfigurationStringAttribute countrycodeHint;
     ConfigurationStringAttribute geocodeHint;
     ConfigurationStringAttribute typeHint;
     ConfigurationIntegerAttribute quantity;
@@ -103,6 +105,7 @@ struct _ConfigurationShadowElement {
     /* optional*/
     ConfigurationStringAttribute preloadPath;
     ConfigurationStringAttribute environment;
+    ConfigurationIntegerAttribute bootstrapEndTime;
 };
 
 Configuration* configuration_new(Options* options, const GString* file);

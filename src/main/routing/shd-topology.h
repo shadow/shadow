@@ -15,10 +15,13 @@ Topology* topology_new(const gchar* graphPath);
 void topology_free(Topology* top);
 
 void topology_attach(Topology* top, Address* address, Random* randomSourcePool,
-        gchar* ipHint, gchar* geocodeHint, gchar* typeHint, guint64* bwDownOut, guint64* bwUpOut);
+        gchar* ipHint, gchar* citycodeHint, gchar* countrycodeHint, gchar* geocodeHint, gchar* typeHint,
+        guint64* bwDownOut, guint64* bwUpOut);
 void topology_detach(Topology* top, Address* address);
+
 gboolean topology_isRoutable(Topology* top, Address* srcAddress, Address* dstAddress);
 gdouble topology_getLatency(Topology* top, Address* srcAddress, Address* dstAddress);
 gdouble topology_getReliability(Topology* top, Address* srcAddress, Address* dstAddress);
+void topology_incrementPathPacketCounter(Topology* top, Address* srcAddress, Address* dstAddress);
 
 #endif /* SHD_TOPOLOGY_H_ */

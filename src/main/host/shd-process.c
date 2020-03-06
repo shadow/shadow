@@ -49,6 +49,7 @@
 #include <sys/syscall.h>
 #include <linux/sockios.h>
 #include <features.h>
+#include <wchar.h>
 
 #include <pthread.h>
 #include <rpth.h>
@@ -204,9 +205,7 @@ struct _Process {
     /* the shadow thread spawns a child to run the program main function */
     pth_t programMainThread;
     /* any other threads created by the program are auxiliary threads */
-    GQueue* programAuxiliaryThreads;
-    /* keep track of number of aux threads, for naming */
-    guint programAuxiliaryThreadCounter;
+    GHashTable* programAuxThreads;
 
     /*
      * Distinguishes which context we are in. Whenever the flow of execution
@@ -593,6 +592,8 @@ Process* process_new(gpointer host, guint processID,
     proc->referenceCount = 1;
     proc->activeContext = PCTX_SHADOW;
 
+    proc->programAuxThreads = g_hash_table_new(g_direct_hash, g_direct_equal);
+
     worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_NEW);
 
     return proc;
@@ -862,23 +863,24 @@ static void _process_executeCleanup(Process* proc) {
     utility_assert(process_isRunning(proc));
     utility_assert(worker_getActiveProcess() == proc);
 
-    gint numThreads = proc->programAuxiliaryThreads ? g_queue_get_length(proc->programAuxiliaryThreads) : 0;
-    gint numExitFuncs = proc->atExitFunctions ? g_queue_get_length(proc->atExitFunctions) : 0;
+    guint numThreads = g_hash_table_size(proc->programAuxThreads);
+    guint numExitFuncs = proc->atExitFunctions ? g_queue_get_length(proc->atExitFunctions) : 0;
     message("cleaning up process '%s': aborting %u auxiliary threads and calling %u atexit functions",
             _process_getName(proc), numThreads, numExitFuncs);
 
     /* closing the main thread causes all other threads to get terminated */
-    if(proc->programAuxiliaryThreads != NULL) {
-        while(g_queue_get_length(proc->programAuxiliaryThreads) > 0) {
-            pth_t auxThread = g_queue_pop_head(proc->programAuxiliaryThreads);
-            if(auxThread) {
-                _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
-                gint success = pth_abort(auxThread);
-                _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-            }
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, proc->programAuxThreads);
+    while(g_hash_table_iter_next(&iter, &key, &value)) {
+        pth_t auxThread = key;
+        if(auxThread) {
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+            gint success = pth_abort(auxThread);
+            _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         }
-        g_queue_free(proc->programAuxiliaryThreads);
     }
+    g_hash_table_remove_all(proc->programAuxThreads);
 
     /* calling the process atexit funcs. these shouldnt use any thread data that got deleted above */
     while(proc->atExitFunctions && g_queue_get_length(proc->atExitFunctions) > 0) {
@@ -1058,8 +1060,7 @@ static void _process_start(Process* proc) {
     GString* programMainThreadNameBuf = g_string_new(NULL);
     g_string_printf(programMainThreadNameBuf, "%s.main", _process_getName(proc));
 
-    utility_assert(proc->programAuxiliaryThreads == NULL);
-    proc->programAuxiliaryThreads = g_queue_new();
+    utility_assert(g_hash_table_size(proc->programAuxThreads) == 0);
 
     /* ref for the main func (spawn) below */
     process_ref(proc);
@@ -1308,7 +1309,7 @@ void process_stop(Process* proc) {
     worker_setActiveProcess(NULL);
 
     /* free our copy of plug-in resources, and other application state */
-    _process_unloadPlugin(proc);
+    //_process_unloadPlugin(proc); XXX TODO this should be done once elf-loader supports unloading libs
 }
 
 static void _process_runStartTask(Process* proc, gpointer nothing) {
@@ -2598,10 +2599,44 @@ int process_emu_accept4(Process* proc, int fd, struct sockaddr* addr, socklen_t*
 
 int process_emu_shutdown(Process* proc, int fd, int how) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    warning("shutdown not implemented");
-    _process_setErrno(proc, ENOSYS);
+
+    if(how != SHUT_RD && how != SHUT_WR && how != SHUT_RDWR) {
+        _process_setErrno(proc, EINVAL);
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+        return -1;
+    }
+
+    /* check if this is a socket */
+    gint ret = 0;
+
+    if(!host_isShadowDescriptor(proc->host, fd)){
+        /* it's not a shadow descriptor, check if we have a mapped os fd */
+        gint osfd = host_getOSHandle(proc->host, fd);
+        if(osfd >= 0) {
+            /* probably not a socket, but let the OS set the error */
+            ret = shutdown(osfd, how);
+            if(ret < 0) {
+                _process_setErrno(proc, errno);
+            }
+        } else {
+            _process_setErrno(proc, EBADF);
+            ret = -1;
+        }
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+        return ret;
+    }
+
+    /* it is a shadow descriptor */
+    ret = host_shutdownSocket(proc->host, fd, how);
+
+    if(ret != 0) {
+        _process_setErrno(proc, ret);
+        ret = -1;
+    }
+
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return -1;
+
+    return ret;
 }
 
 ssize_t process_emu_read(Process* proc, int fd, void *buff, size_t numbytes) {
@@ -3518,6 +3553,42 @@ FILE *process_emu_fopen64(Process* proc, const char *path, const char *mode) {
     return process_emu_fopen(proc, path, mode);
 }
 
+FILE *process_emu_fmemopen(Process* proc, void* buf, size_t size, const char *mode) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    FILE* osfile = fmemopen(buf, size, mode);
+    if(osfile == NULL) {
+        _process_setErrno(proc, errno);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return osfile;
+}
+
+FILE *process_emu_open_memstream(Process* proc, char **ptr, size_t *sizeloc) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    FILE* osfile = open_memstream(ptr, sizeloc);
+    if(osfile == NULL) {
+        _process_setErrno(proc, errno);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return osfile;
+}
+
+FILE *process_emu_open_wmemstream(Process* proc, wchar_t **ptr, size_t *sizeloc) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    FILE* osfile = open_wmemstream(ptr, sizeloc);
+    if(osfile == NULL) {
+        _process_setErrno(proc, errno);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return osfile;
+}
+
 FILE *process_emu_fdopen(Process* proc, int fd, const char *mode) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
@@ -3642,16 +3713,60 @@ int process_emu_fclose(Process* proc, FILE *fp) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
     gint osfd = fileno(fp);
-    if(osfd == -1) {
-        _process_setErrno(proc, errno);
-    }
-    gint shadowHandle = host_getShadowHandle(proc->host, osfd);
+    gint shadowHandle = osfd >= 0 ? host_getShadowHandle(proc->host, osfd) : -1;
 
     gint ret = fclose(fp);
-    if(osfd == EOF) {
+    if(ret == EOF) {
         _process_setErrno(proc, errno);
     }
-    host_destroyShadowHandle(proc->host, shadowHandle);
+
+    if(shadowHandle >= 0) {
+        host_destroyShadowHandle(proc->host, shadowHandle);
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+int process_emu_fseek(Process* proc, FILE *stream, long offset, int whence) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    int ret = fseek(stream, offset, whence);
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+long process_emu_ftell(Process* proc, FILE *stream) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    long ret = ftell(stream);
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+void process_emu_rewind(Process* proc, FILE *stream) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    rewind(stream);
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+}
+
+int process_emu_fgetpos(Process* proc, FILE *stream, fpos_t *pos) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    int ret = fgetpos(stream, pos);
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
+
+int process_emu_fsetpos(Process* proc, FILE *stream, const fpos_t *pos) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    int ret = fsetpos(stream, pos);
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
@@ -4233,21 +4348,51 @@ size_t process_emu_fread(Process* proc, void *ptr, size_t size, size_t nmemb, FI
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     size_t ret;
 
+    /* get the fd the operating system uses to refer to this FILE stream */
     int osfd = fileno(stream);
-    if(prevCTX == PCTX_PLUGIN && (osfd == STDOUT_FILENO || osfd == STDERR_FILENO)) {
-        ret = fread(ptr, size, nmemb, _process_getIOFile(proc, osfd));
-    } else {
-        gint shadowHandle = host_getShadowHandle(proc->host, osfd);
-        if(shadowHandle > 0) {
-            /* this is either an internal shadow read or a random file read, let read handle it */
-            ret = process_emu_read(proc, shadowHandle, ptr, size*nmemb);
-            if(ret > 0) {
-                ret = ret / size;
-                g_assert(ret <= nmemb);
-            }
+
+    if(prevCTX == PCTX_PLUGIN) {
+        /* if the plugin is trying to read from an std stream, redirect to our process log file */
+        if(osfd == STDOUT_FILENO || osfd == STDERR_FILENO) {
+            FILE* stdioFile = _process_getIOFile(proc, osfd);
+            ret = fread(ptr, size, nmemb, stdioFile);
+            fflush(stdioFile);
         } else {
-            ret = fread(ptr, size, nmemb, stream);
+            /* If shadow has an FD, then it knows about the FILE - it created the FILE
+             * stream to service another syscall, but then it mapped a "virtual" shadowFD to
+             * return to the plugin so the plugin would use shadowFD for future operations. */
+            gint shadowFD = host_getShadowHandle(proc->host, osfd);
+            if(shadowFD >= 0) {
+                /* ok so shadow knows about the file. if this is a true shadow-backed
+                 * descriptor like a socket, then we should never have associated
+                 * a FILE stream with it. */
+                if(host_isShadowDescriptor(proc->host, shadowFD)) {
+                    error("A file stream with an os fd %i was associated with a "
+                            "shadow descriptor with a shadow fd %i", osfd, shadowFD);
+                }
+
+                /* if this is a random file, then we can return bytes here */
+                if(host_isRandomHandle(proc->host, shadowFD)) {
+                    gsize numBytes = size * nmemb;
+                    Random* random = host_getRandom(proc->host);
+                    random_nextNBytes(random, (guchar*)ptr, numBytes);
+                    ret = nmemb;
+                } else {
+                    /* shadow knows about the file, but it is an os-backed file and
+                     * osfd is the actual thing we should read from */
+                    ret = fread(ptr, size, nmemb, stream);
+                }
+            } else {
+                /* This is a file that shadow does not know about, and never mapped it to
+                 * a virtual shadow fd for the process. This is valid in case of fmemopen,
+                 * which returns an osfd of -1 since there is no file backing it. */
+                info("fread() was called on file stream with fd %i, and shadow never mapped it", osfd);
+                ret = fread(ptr, size, nmemb, stream);
+            }
         }
+    } else {
+        /* fread is being called from pth or shadow */
+        ret = fread(ptr, size, nmemb, stream);
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -4821,6 +4966,39 @@ int process_emu___cxa_atexit(Process* proc, void (*func) (void *), void * arg, v
     return success == TRUE ? 0 : -1;
 }
 
+pid_t process_emu_getpid(Process* proc) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    pid_t pid;
+
+    if(prevCTX == PCTX_PLUGIN) {
+        /* POSIX specifies that all threads return the process id */
+        pid = (pid_t)proc->processID;
+    } else {
+        pid = getpid();
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return pid;
+}
+
+pid_t process_emu_getppid(Process* proc) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    pid_t pid;
+
+    if(prevCTX == PCTX_PLUGIN) {
+        /* we list a constant as the parent process */
+        pid = 0;
+    } else {
+        /* if shadow is calling this, get shadow's real ppid */
+        pid = getppid();
+    }
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return pid;
+}
+
 /* syscall */
 
 int process_emu_syscall(Process* proc, int number, va_list ap) {
@@ -4870,6 +5048,25 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
 
 			break;
 		}
+#endif
+
+#if defined SYS_gettid
+        /* thread ids need to be unique for every thread, and unique from the pid */
+        case SYS_gettid: {
+            pth_t thread = pth_self();
+            if (thread == proc->shadowThread) {
+                ret = (int) getpid();
+            } else if (thread == proc->programMainThread) {
+                ret = (int) proc->processID;
+            } else {
+                gpointer val = g_hash_table_lookup(proc->programAuxThreads, thread);
+                utility_assert(val);
+                guint tid = GPOINTER_TO_UINT(val);
+                ret = (int)tid;
+            }
+
+            break;
+        }
 #endif
 
 		/* TODO the following are functions that shadow normally intercepts, and we should handle them */
@@ -5780,6 +5977,10 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
             data->run = start_routine;
             data->arg = arg;
 
+            _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+            guint threadID = host_getNewProcessID(proc->host);
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+
             if (attr != NULL) {
                 pth_attr_t customAttr = NULL;
                 memmove(&customAttr, attr, sizeof(void*));
@@ -5788,8 +5989,8 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
                 /* default for new auxiliary threads */
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
                 GString* programAuxThreadNameBuf = g_string_new(NULL);
-                g_string_printf(programAuxThreadNameBuf, "%s.%s.%u.aux%i", host_getName(proc->host),
-                        _process_getPluginName(proc), proc->processID, proc->programAuxiliaryThreadCounter++);
+                g_string_printf(programAuxThreadNameBuf, "%s.%s.%u.aux%u", host_getName(proc->host),
+                        _process_getPluginName(proc), proc->processID, threadID);
                 _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
                 pth_attr_t defaultAttr = pth_attr_new();
@@ -5815,7 +6016,7 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
             } else {
                 memmove(thread, &auxThread, sizeof(void*));
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-                g_queue_push_head(proc->programAuxiliaryThreads, auxThread);
+                g_hash_table_insert(proc->programAuxThreads, auxThread, GUINT_TO_POINTER(threadID));
                 ret = 0;
             }
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
@@ -5940,7 +6141,7 @@ int process_emu_pthread_join(Process* proc, pthread_t thread, void **value_ptr) 
                 if (!pth_join(pt, value_ptr)) {
                     ret = errno;
                 } else {
-                    g_queue_remove(proc->programAuxiliaryThreads, pt);
+                    g_hash_table_remove(proc->programAuxThreads, pt);
                     if (value_ptr != NULL && *value_ptr == PTH_CANCELED) {
                         *value_ptr = PTHREAD_CANCELED;
                     }
@@ -6058,7 +6259,7 @@ int process_emu_pthread_abort(Process* proc, pthread_t thread) {
             if (!pth_abort(pt)) {
                 ret = errno;
             } else {
-                g_queue_remove(proc->programAuxiliaryThreads, pt);
+                g_hash_table_remove(proc->programAuxThreads, pt);
                 ret = 0;
             }
 
@@ -7553,3 +7754,4 @@ int process_emu_shadow_assign_virtual_id(Process* proc) {
 #include "shd-process-undefined.h"
 
 #undef PROCESS_EMU_UNSUPPORTED
+
