@@ -225,12 +225,8 @@ def build(args):
 def test(args):
     builddir=getfullpath(BUILD_PREFIX)
 
-    # run elf-loader tests
-    retcode = run_tests(builddir+'/src/external/elf-loader', args)
-
-    if retcode == 0:
-        # run the shadow tests
-        retcode = run_tests(builddir, args)
+    # run the shadow tests
+    retcode = run_tests(builddir, args)
 
     if retcode != 0:
         logging.warning("Failed to pass all test cases!")
