@@ -55,10 +55,8 @@
     funcptr = dlsym(RTLD_NEXT, funcstr);\
     char* errorMessage = dlerror(); \
     if(errorMessage != NULL) { \
-        fprintf(stderr, "dlsym(%s): dlerror(): %s\n", funcstr, errorMessage); \
         exit(EXIT_FAILURE); \
     } else if(funcptr == NULL) { \
-        fprintf(stderr, "dlsym(%s): returned NULL pointer\n", funcstr); \
         exit(EXIT_FAILURE); \
     } \
 }
