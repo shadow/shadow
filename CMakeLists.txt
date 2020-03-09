@@ -2,7 +2,7 @@
 
 ## set build parameters
 project(Shadow)
-set(SHADOW_VERSION_FULL 1.13.2)
+set(SHADOW_VERSION_FULL 1.14.0)
 
 message(STATUS "System name: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "System version: ${CMAKE_SYSTEM_VERSION}")
