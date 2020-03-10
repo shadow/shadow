@@ -101,12 +101,20 @@ add_executable(tsc_test host/tsc_test.c)
 target_link_libraries(tsc_test ${GLIB_LIBRARIES} shadow-tsc)
 add_test(NAME tsc_test COMMAND tsc_test)
 
+set(SHD_SHMEM_SRC
+    shmem/shd-buddy.c
+    shmem/shd-shmem-file.c
+    shmem/shd-shmem-util.c)
+
+add_library(shd-shmem STATIC ${SHD_SHMEM_SRC})
+
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
 add_dependencies(shadow shadow-remora)
 target_link_libraries(shadow
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
-   ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} logger shadow-remora shadow-tsc)
+   ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES}
+   logger shadow-remora shd-shmem shadow-tsc)
 install(TARGETS shadow DESTINATION bin)
 
 ## shadow needs to find libs after install
