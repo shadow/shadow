@@ -150,12 +150,10 @@ static int buddy_test() {
     buddy_poolInit(pool, pool_nbytes);
     buddy_metaInit(meta, pool, pool_nbytes);
 
-    buddy_alloc(2, meta, pool, pool_nbytes);
-    buddy_alloc(16, meta, pool, pool_nbytes);
-    buddy_alloc(17, meta, pool, pool_nbytes);
     buddy_alloc(32, meta, pool, pool_nbytes);
-
-    printf("%p\n", pool);
+    buddy_alloc(16, meta, pool, pool_nbytes);
+    buddy_alloc(16, meta, pool, pool_nbytes);
+    buddy_alloc(16, meta, pool, pool_nbytes);
 
     free(pool);
     free(meta);

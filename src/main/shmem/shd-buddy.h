@@ -76,6 +76,30 @@ static inline void buddycontrolblock_setPrv(BuddyControlBlock* bcb,
     bcb->_prv |= value;
 }
 
+static inline BuddyControlBlock*
+buddycontrolblock_nxtBlock(const BuddyControlBlock* bcb) {
+    assert(bcb != NULL);
+    uint32_t nxt = buddycontrolblock_nxt(bcb);
+    if (nxt == 0) {
+        return NULL;
+    } else {
+        uint8_t* p = (uint8_t*)bcb;
+        return (BuddyControlBlock*)(p + nxt);
+    }
+}
+
+static inline BuddyControlBlock*
+buddycontrolblock_prvBlock(const BuddyControlBlock* bcb) {
+    assert(bcb != NULL);
+    uint32_t prv = buddycontrolblock_prv(bcb);
+    if (prv == 0) {
+        return NULL;
+    } else {
+        uint8_t* p = (uint8_t*)bcb;
+        return (BuddyControlBlock*)(p - prv);
+    }
+}
+
 uint32_t buddy_goodPoolSizeNBytes(uint32_t requested_nbytes);
 
 size_t buddy_metaSizeNBytes(uint32_t pool_nbytes);
