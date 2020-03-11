@@ -63,6 +63,7 @@ set(shadow_srcs
     host/shd-syscall-handler.c
     host/shd-thread.c
     host/host.c
+    host/shd-thread-shim.c
     host/network_interface.c
     host/tracker.c
 

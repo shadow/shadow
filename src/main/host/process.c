@@ -56,6 +56,8 @@
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
+#include "main/host/shd-thread-shim.h"
+
 struct _Process {
     /* the handler of system calls made by the process */
     SysCallHandler* sys;
@@ -168,7 +170,7 @@ static void _process_start(Process* proc) {
     }
 
     utility_assert(proc->mainThread == NULL);
-    proc->mainThread = thread_new(proc->threadIDCounter++, proc->sys);
+    proc->mainThread = threadshim_new(proc->threadIDCounter++, proc->sys);
 
     message("starting process '%s'", _process_getName(proc));
 

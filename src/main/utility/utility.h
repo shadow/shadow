@@ -51,7 +51,7 @@ do { \
 /**
  * Initialize a value declared with MAGIC_DECLARE to MAGIC_VALUE
  */
-#define MAGIC_INIT(object) object->magic = MAGIC_VALUE
+#define MAGIC_INIT(object) (object)->magic = MAGIC_VALUE
 
 /**
  * Assert that a struct declared with MAGIC_DECLARE and initialized with
