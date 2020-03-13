@@ -20,6 +20,9 @@ jobs:
       matrix:
         cc: ['gcc', 'clang']
     steps:
+      - name: Update packages
+        run: sudo apt-get update
+
       - name: Checkout
         uses: actions/checkout@v2
 
@@ -46,6 +49,9 @@ jobs:
       CC: ${{ matrix.cc }}
 
     steps:
+      - name: Update packages
+        run: sudo apt-get update
+
       - name: Checkout shadow
         uses: actions/checkout@v2
         with:
