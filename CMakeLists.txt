@@ -76,14 +76,18 @@ set(SHADOW_INFO_STRING_CONF "For more information, visit https://shadow.github.i
 set(SHADOW_VERSION_STRING_CONF "Shadow")
 if(EXISTS ${PROJECT_SOURCE_DIR}/.git)
     ## current git commit version and hash
-    EXECUTE_PROCESS(COMMAND "git" "describe" "--long" "--dirty" OUTPUT_VARIABLE DESCRIBE)
+    EXECUTE_PROCESS(COMMAND "git" "describe" "--long" "--dirty"
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        OUTPUT_VARIABLE DESCRIBE)
     if(DESCRIBE)
         string(REGEX REPLACE "\n" "" DESCRIBE ${DESCRIBE})
         set(SHADOW_VERSION_STRING_CONF "${SHADOW_VERSION_STRING_CONF} ${DESCRIBE}")
     endif(DESCRIBE)
     
     ## current git commit short date
-    EXECUTE_PROCESS(COMMAND "git" "log" "--pretty=format:%ad" "--date=short" "-n"  "1" OUTPUT_VARIABLE SHORTDATE)
+    EXECUTE_PROCESS(COMMAND "git" "log" "--pretty=format:%ad" "--date=short" "-n"  "1"
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        OUTPUT_VARIABLE SHORTDATE)
     if(SHORTDATE)
         set(SHADOW_VERSION_STRING_CONF "${SHADOW_VERSION_STRING_CONF} ${SHORTDATE}")
     endif(SHORTDATE)
