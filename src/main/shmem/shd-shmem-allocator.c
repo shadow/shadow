@@ -57,9 +57,8 @@ static ShMemFileNode* _shmemfilenode_findName(ShMemFileNode* file_nodes,
         } while (node != file_nodes);
     }
 
-    if (!found) {
-        return NULL;
-    }
+    assert(!found);
+    return NULL;
 }
 
 typedef struct _ShMemPoolNode {
@@ -109,7 +108,7 @@ ShMemAllocator* shmemallocator_create() {
     return allocator;
 }
 
-void* shmemallocator_destroy(ShMemAllocator* allocator) {
+void shmemallocator_destroy(ShMemAllocator* allocator) {
     if (allocator != NULL) {
 
         ShMemPoolNode* node = allocator->little_alloc_nodes;
@@ -196,7 +195,7 @@ static ShMemBlock _shmemallocator_littleAlloc(ShMemAllocator* allocator,
 
         allocator->little_alloc_nodes = (ShMemPoolNode*)new_head;
 
-        _shmemallocator_littleAlloc(allocator, nbytes);
+        return _shmemallocator_littleAlloc(allocator, nbytes);
     } else {
         blk.p = p;
         blk.nbytes = nbytes;

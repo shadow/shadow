@@ -20,7 +20,7 @@ typedef struct _ShMemBlockSerialized {
 } ShMemBlockSerialized;
 
 ShMemAllocator* shmemallocator_create();
-void* shmemallocator_destroy(ShMemAllocator* allocator);
+void shmemallocator_destroy(ShMemAllocator* allocator);
 
 ShMemBlock shmemallocator_alloc(ShMemAllocator* allocator, size_t nbytes);
 void shmemallocator_free(ShMemAllocator* allocator, ShMemBlock* blk);
