@@ -30,10 +30,10 @@ uint32_t shmem_util_uintLog2(uint32_t v) {
     uint32_t r;              // r will be lg(v)
     register uint32_t t, tt; // temporaries
 
-    if (tt = v >> 16) {
-        r = (t = tt >> 8) ? 24 + _log_table_256[t] : 16 + _log_table_256[tt];
+    if ((tt = v >> 16)) {
+        r = ((t = tt >> 8)) ? 24 + _log_table_256[t] : 16 + _log_table_256[tt];
     } else {
-        r = (t = v >> 8) ? 8 + _log_table_256[t] : _log_table_256[v];
+        r = ((t = v >> 8)) ? 8 + _log_table_256[t] : _log_table_256[v];
     }
 
     return r;
