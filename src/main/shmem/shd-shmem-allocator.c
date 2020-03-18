@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <stdio.h>
+
 #include "shd-buddy.h"
 #include "shd-shmem-file.h"
 
@@ -30,12 +32,16 @@ static ShMemFileNode* _shmemfilenode_findPtr(ShMemFileNode* file_nodes,
 
         if (p >= (uint8_t*)node->shmf.p &&
             p < ((uint8_t*)node->shmf.p + node->shmf.nbytes)) {
+
+            printf("FOUND %s\n", node->shmf.name);
+
             return node;
         }
 
         node = node->nxt;
     }
 
+    printf("FOUND null\n");
     return NULL;
 }
 
@@ -46,21 +52,14 @@ static ShMemFileNode* _shmemfilenode_findName(ShMemFileNode* file_nodes,
     bool found = false;
 
     if (node != NULL) {
-        while (!found && node->nxt != file_nodes) {
-            found = strcmp(node->shmf.name, name);
+        do {
+            found = (strcmp(node->shmf.name, name) == 0);
+            if (found) { return node; }
             node = node->nxt;
-        }
+        } while (node != file_nodes);
     }
 
-    if (node && strcmp(node->shmf.name, name) == 0) {
-        return node;
-    }
-
-    if (!found) {
-        return NULL;
-    } else {
-        return node;
-    }
+    if (!found) { return NULL; }
 }
 
 typedef struct _ShMemPoolNode {
@@ -289,10 +288,16 @@ ShMemBlock shmemallocator_blockDeserialize(ShMemAllocator* allocator,
 
     ShMemFileNode* node = NULL;
     // scan thru both
+    printf("looking %s\n", serial->name);
     node = _shmemfilenode_findName(allocator->big_alloc_nodes, serial->name);
+
+    printf("deserial found node %p %s\n", node, node ? node->shmf.name : 0);
+
     if (node == NULL) {
         node = _shmemfilenode_findName(
             (ShMemFileNode*)allocator->little_alloc_nodes, serial->name);
+
+        printf("deserial found node %p %s\n", node, node ? node->shmf.name : 0);
     }
 
     if (node != NULL) {
@@ -339,10 +344,12 @@ ShMemBlock shmemserializer_blockDeserialize(ShMemSerializer* serializer,
 
         ShMemFile shmf;
         int rc = shmemfile_map(serial->name, serial->nbytes, &shmf);
-        if (rc != 0) { return ret; }
+        if (rc != 0) {
+            return ret;
+        }
 
         // we are missing that node, so let's map it in.
-        ShMemFileNode *new_node = calloc(1, sizeof(ShMemFileNode));
+        ShMemFileNode* new_node = calloc(1, sizeof(ShMemFileNode));
         new_node->shmf = shmf;
 
         if (serializer->nodes == NULL) {
@@ -350,10 +357,12 @@ ShMemBlock shmemserializer_blockDeserialize(ShMemSerializer* serializer,
             new_node->nxt = new_node;
             serializer->nodes = new_node;
         } else { // put it at the end
-            serializer->nodes->prv->nxt = new_node;
-            new_node->prv = serializer->nodes->prv;
-            new_node->nxt = serializer->nodes;
-            serializer->nodes->nxt->prv = new_node;
+
+            ShMemFileNode* old_head = serializer->nodes;
+            old_head->prv->nxt = new_node;
+            new_node->prv = old_head->prv;
+            new_node->nxt = old_head;
+            old_head->prv = new_node;
         }
 
         node = new_node;
@@ -361,4 +370,23 @@ ShMemBlock shmemserializer_blockDeserialize(ShMemSerializer* serializer,
 
     ret.p = node->shmf.p + serial->offset;
     ret.nbytes = serial->nbytes;
+    return ret;
+}
+
+ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer,
+                                                    ShMemBlock* blk)
+{
+    ShMemBlockSerialized ret;
+    memset(&ret, 0, sizeof(ShMemBlock));
+
+    ShMemFileNode* node = NULL;
+    node = _shmemfilenode_findPtr(serializer->nodes, blk->p);
+
+    assert(node != NULL);
+
+    ret.nbytes = node->shmf.nbytes;
+    ret.offset = (uint8_t*)blk->p - (uint8_t*)node->shmf.p;
+    strncpy(ret.name, node->shmf.name, SHD_SHMEM_FILE_NAME_NBYTES);
+    return ret;
+
 }

@@ -278,15 +278,18 @@ static int shmemallocator_test() {
     ShMemBlock blk5 = shmemallocator_alloc(allocator, 2040);
     shmemallocator_free(allocator, &blk4);
     ShMemBlock blk6 = shmemallocator_alloc(allocator, 8192);
-    // ShMemBlock blk7 = shmemallocator_alloc(allocator, 8);
 
-    blk6.p = (uint8_t*)blk6.p + 8;
+    memcpy(blk6.p, "hello", 6);
+    printf("1) %p %s\n", blk6.p, blk6.p);
 
     ShMemBlockSerialized serial5 = shmemallocator_blockSerialize(allocator, &blk5);
     ShMemBlockSerialized serial6 = shmemallocator_blockSerialize(allocator, &blk6);
 
-    ShMemBlock d1 = shmemallocator_blockDeserialize(allocator, &serial5);
+    printf("%s %zu %zu\n", serial6.name, serial6.nbytes, serial6.offset);
+
+    // ShMemBlock d1 = shmemallocator_blockDeserialize(allocator, &serial5);
     ShMemBlock d2 = shmemallocator_blockDeserialize(allocator, &serial6);
+    printf("2) %p %s\n", d2.p, d2.p);
 
     ShMemSerializer *serializer = shmemserializer_create();
 
@@ -295,7 +298,9 @@ static int shmemallocator_test() {
     ShMemBlock d5 = shmemserializer_blockDeserialize(serializer, &serial5);
     ShMemBlock d6 = shmemserializer_blockDeserialize(serializer, &serial6);
 
-    shmemallocator_free(allocator, &blk6);
+    printf("%p %s\n", d6.p, d6.p);
+
+    // shmemallocator_free(allocator, &blk6);
 
     shmemallocator_destroy(allocator);
     shmemserializer_destroy(serializer);
