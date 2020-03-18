@@ -137,11 +137,23 @@ static int buddycontrolblock_testGoodSizes() {
     return rc;
 }
 
-static int buddy_test() {
+static int buddy_test(size_t pool_nbytes) {
 
     int rc = 0;
 
-    size_t pool_nbytes = 128;
+    static const size_t nallocs = 1000;
+
+    struct Alloc {
+        size_t nbytes;
+        void *bud;
+        void *mal;
+    };
+
+    struct Alloc allocs[nallocs];
+
+    unsigned max_alloc = shmem_util_uintLog2(pool_nbytes);
+    size_t n = (max_alloc - SHD_BUDDY_PART_MIN_ORDER + 1);
+
     size_t meta_nbytes = buddy_metaSizeNBytes(pool_nbytes);
 
     void *pool = calloc(1, pool_nbytes);
@@ -150,10 +162,37 @@ static int buddy_test() {
     buddy_poolInit(pool, pool_nbytes);
     buddy_metaInit(meta, pool, pool_nbytes);
 
-    buddy_alloc(32, meta, pool, pool_nbytes);
-    buddy_alloc(16, meta, pool, pool_nbytes);
-    buddy_alloc(16, meta, pool, pool_nbytes);
-    buddy_alloc(16, meta, pool, pool_nbytes);
+    for (size_t idx = 0; idx < nallocs; ++idx) {
+        unsigned alloc_order = SHD_BUDDY_PART_MIN_ORDER + (rand() % n);
+        size_t alloc_nbytes = shmem_util_uintPow2k(alloc_order) - 8;
+
+        void *p = buddy_alloc(alloc_nbytes, meta, pool, pool_nbytes);
+
+        if (p != NULL) {
+            void *q = malloc(alloc_nbytes);
+            assert(q != NULL);
+            *(uint32_t*)p = rand();
+            *(uint32_t*)q = *(uint32_t*)p;
+
+            struct Alloc a = {.nbytes = alloc_nbytes, .bud = p, .mal = q};
+            allocs[idx] = a;
+        } else {
+            struct Alloc a = {.nbytes = 0, .bud = NULL, .mal = NULL};
+            allocs[idx] = a;
+        }
+    }
+
+    for (size_t idx = 0; idx < nallocs; ++idx) {
+        if (allocs[idx].bud != NULL) {
+
+            uint32_t *p = (uint32_t *)allocs[idx].bud;
+            uint32_t *q = (uint32_t *)allocs[idx].mal;
+            EXPECT_TRUE(*p == *q);
+
+            buddy_free(allocs[idx].bud, meta, pool, pool_nbytes);
+            free(allocs[idx].mal);
+        }
+    }
 
     free(pool);
     free(meta);
@@ -221,7 +260,8 @@ int main(int argc, char** argv) {
     rc |= buddycontrolblock_testTagAndPrv();
     rc |= buddycontrolblock_testGoodSizes();
 
-    rc |= buddy_test();
+    rc |= buddy_test(4096);
+    rc |= buddy_test(SHD_BUDDY_POOL_MAX_NBYTES);
 
     /* shmemfile */
     rc |= shmemfile_testGoodAlloc(100);

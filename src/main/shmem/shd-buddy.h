@@ -88,6 +88,22 @@ buddycontrolblock_nxtBlock(const BuddyControlBlock* bcb) {
     }
 }
 
+static inline void
+buddycontrolblock_setNxtBlock(BuddyControlBlock* bcb,
+                              const BuddyControlBlock *nxt) {
+    assert(bcb != NULL);
+
+    unsigned offset = 0;
+
+    if (nxt != NULL) {
+        uint8_t *p = (uint8_t *)bcb, *q = (uint8_t *)nxt;
+        assert(p <= q);
+        offset = (q - p);
+    }
+
+    buddycontrolblock_setNxt(bcb, offset);
+}
+
 static inline BuddyControlBlock*
 buddycontrolblock_prvBlock(const BuddyControlBlock* bcb) {
     assert(bcb != NULL);
@@ -100,6 +116,22 @@ buddycontrolblock_prvBlock(const BuddyControlBlock* bcb) {
     }
 }
 
+static inline void
+buddycontrolblock_setPrvBlock(BuddyControlBlock* bcb,
+                              const BuddyControlBlock *prv) {
+    assert(bcb != NULL);
+
+    unsigned offset = 0;
+
+    if (prv != NULL) {
+        uint8_t *p = (uint8_t *)bcb, *q = (uint8_t *)prv;
+        assert(q <= p);
+        offset = (p - q);
+    }
+
+    buddycontrolblock_setPrv(bcb, offset);
+}
+
 uint32_t buddy_goodPoolSizeNBytes(uint32_t requested_nbytes);
 
 size_t buddy_metaSizeNBytes(uint32_t pool_nbytes);
@@ -109,5 +141,7 @@ void buddy_metaInit(void* meta, const void* pool, uint32_t pool_nbytes);
 
 void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool,
                   uint32_t pool_nbytes);
+
+void buddy_free(void* p, void* meta, void* pool, size_t pool_nbytes);
 
 #endif // SHD_BUDDY_H_
