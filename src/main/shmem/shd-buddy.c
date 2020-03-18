@@ -8,8 +8,8 @@ static BuddyControlBlock*
 _buddycontrolblock_computeBuddy(BuddyControlBlock* bcb, unsigned order,
                                 const void* pool) {
 
-    const uint8_t *bcb_p = (const uint8_t*)bcb;
-    const uint8_t *pool_p = (const uint8_t*)pool;
+    const uint8_t* bcb_p = (const uint8_t*)bcb;
+    const uint8_t* pool_p = (const uint8_t*)pool;
 
     size_t nbytes = bcb_p - pool_p;
 
@@ -203,7 +203,9 @@ static void _print(void* pool, size_t pool_nbytes, void* meta) {
 void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool,
                   uint32_t pool_nbytes) {
 
-    if (requested_nbytes == 0) { return NULL; }
+    if (requested_nbytes == 0) {
+        return NULL;
+    }
 
     BuddyControlBlock** bcbs = meta;
     size_t nbcbs = buddy_metaNumLists(pool_nbytes);
@@ -266,7 +268,8 @@ void buddy_free(void* p, void* meta, void* pool, size_t pool_nbytes) {
     unsigned bcb_order = buddycontrolblock_order(bcb);
     unsigned max_order = buddy_poolMaxOrder(pool_nbytes);
 
-    BuddyControlBlock* buddy = _buddycontrolblock_computeBuddy(bcb, bcb_order, pool);
+    BuddyControlBlock* buddy =
+        _buddycontrolblock_computeBuddy(bcb, bcb_order, pool);
     size_t idx = 0;
 
     while (bcb_order < max_order &&

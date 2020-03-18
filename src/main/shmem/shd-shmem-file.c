@@ -16,7 +16,7 @@
 
 #include "shd-shmem-util.h"
 
-static void _shmemfile_getName(size_t nbytes, char *str) {
+static void _shmemfile_getName(size_t nbytes, char* str) {
     assert(str != NULL && nbytes >= 3);
 
     struct timespec ts;
@@ -35,7 +35,7 @@ static size_t _shmemfile_systemPageNBytes() {
     return (size_t)sysconf(_SC_PAGESIZE);
 }
 
-int shmemfile_alloc(size_t nbytes, ShMemFile *shmf) {
+int shmemfile_alloc(size_t nbytes, ShMemFile* shmf) {
     if (nbytes == 0 || nbytes % _shmemfile_systemPageNBytes() != 0) {
         SHD_SHMEM_LOG_ERROR(
             "ShMemFile size must be a positive multiple of %zu but requested "
@@ -61,7 +61,7 @@ int shmemfile_alloc(size_t nbytes, ShMemFile *shmf) {
     if (fd >= 0) {
         int rc = ftruncate(fd, nbytes);
         if (rc == 0) {
-            void *p = mmap(NULL, nbytes, PROT_READ | PROT_WRITE | PROT_EXEC,
+            void* p = mmap(NULL, nbytes, PROT_READ | PROT_WRITE | PROT_EXEC,
                            MAP_SHARED, fd, 0);
 
             if (p != MAP_FAILED) {
@@ -72,7 +72,7 @@ int shmemfile_alloc(size_t nbytes, ShMemFile *shmf) {
                 bad = true;
             }
 
-        } else {  // failed truncate
+        } else { // failed truncate
             SHD_SHMEM_LOG_ERROR("error on truncate: %s", strerror(errno));
             bad = true;
         }
@@ -91,7 +91,58 @@ int shmemfile_alloc(size_t nbytes, ShMemFile *shmf) {
     return -1 * (bad);
 }
 
-int shmemfile_free(ShMemFile *shmf) {
+// rwails: cleanup redundant logic
+int shmemfile_map(const char* name, size_t nbytes, ShMemFile* shmf) {
+    if (nbytes == 0 || nbytes % _shmemfile_systemPageNBytes() != 0) {
+        SHD_SHMEM_LOG_ERROR(
+            "ShMemFile size must be a positive multiple of %zu but requested "
+            "size was %zu",
+            _shmemfile_systemPageNBytes(), nbytes);
+
+        return -1;
+    }
+
+    if (shmf == NULL) {
+        SHD_SHMEM_LOG_ERROR("shmf must not be null");
+        return -1;
+    }
+
+    int rc = 0;
+    memset(shmf, 0, sizeof(ShMemFile));
+    strncpy(shmf->name, name, SHD_SHMEM_FILE_NAME_NBYTES);
+
+    bool bad = false;
+
+    int fd = shm_open(shmf->name, O_RDWR, S_IRWXU | S_IRWXG);
+
+    if (fd >= 0) {
+
+        void* p = mmap(NULL, nbytes, PROT_READ | PROT_WRITE | PROT_EXEC,
+                       MAP_SHARED, fd, 0);
+
+        if (p != MAP_FAILED) {
+            shmf->p = p;
+            shmf->nbytes = nbytes;
+        } else {
+            SHD_SHMEM_LOG_ERROR("error on mmap: %s", strerror(errno));
+            bad = true;
+        }
+
+        close(fd);
+
+        if (bad) {
+            rc = shm_unlink(shmf->name);
+            assert(rc == 0);
+        }
+    } else {
+        bad = true;
+        SHD_SHMEM_LOG_ERROR("error on shm_open: %s", strerror(errno));
+    }
+
+    return -1 * (bad);
+}
+
+int shmemfile_free(ShMemFile* shmf) {
     int rc = munmap(shmf->p, shmf->nbytes);
     if (rc != 0) {
         SHD_SHMEM_LOG_ERROR("error on munmap: %s", strerror(errno));

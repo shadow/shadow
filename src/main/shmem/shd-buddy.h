@@ -15,6 +15,10 @@
 
 #define SHD_BUDDY_PART_MIN_NBYTES 16 // 8 for control block, 8 for data
 #define SHD_BUDDY_PART_MIN_ORDER 4
+#define SHD_BUDDY_PART_MAX_ORDER 27
+
+#define SHD_BUDDY_META_MAX_NBYTES                                              \
+    (sizeof(void*) * (SHD_BUDDY_PART_MAX_ORDER - SHD_BUDDY_PART_MIN_ORDER + 1))
 
 typedef struct _BuddyControlBlock {
     uint32_t _nxt;
@@ -88,15 +92,14 @@ buddycontrolblock_nxtBlock(const BuddyControlBlock* bcb) {
     }
 }
 
-static inline void
-buddycontrolblock_setNxtBlock(BuddyControlBlock* bcb,
-                              const BuddyControlBlock *nxt) {
+static inline void buddycontrolblock_setNxtBlock(BuddyControlBlock* bcb,
+                                                 const BuddyControlBlock* nxt) {
     assert(bcb != NULL);
 
     unsigned offset = 0;
 
     if (nxt != NULL) {
-        uint8_t *p = (uint8_t *)bcb, *q = (uint8_t *)nxt;
+        uint8_t *p = (uint8_t*)bcb, *q = (uint8_t*)nxt;
         assert(p <= q);
         offset = (q - p);
     }
@@ -116,15 +119,14 @@ buddycontrolblock_prvBlock(const BuddyControlBlock* bcb) {
     }
 }
 
-static inline void
-buddycontrolblock_setPrvBlock(BuddyControlBlock* bcb,
-                              const BuddyControlBlock *prv) {
+static inline void buddycontrolblock_setPrvBlock(BuddyControlBlock* bcb,
+                                                 const BuddyControlBlock* prv) {
     assert(bcb != NULL);
 
     unsigned offset = 0;
 
     if (prv != NULL) {
-        uint8_t *p = (uint8_t *)bcb, *q = (uint8_t *)prv;
+        uint8_t *p = (uint8_t*)bcb, *q = (uint8_t*)prv;
         assert(q <= p);
         offset = (p - q);
     }

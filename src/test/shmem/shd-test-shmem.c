@@ -1,4 +1,5 @@
 #include "shd-buddy.h"
+#include "shd-shmem-allocator.h"
 #include "shd-shmem-file.h"
 #include "shd-shmem-util.h"
 
@@ -250,9 +251,68 @@ static int util_testPow2k() {
     return rc;
 }
 
+static int shmemallocator_test() {
+    int rc = 0;
+
+    ShMemAllocator *allocator = shmemallocator_create();
+
+    ShMemBlock blk1 = shmemallocator_alloc(allocator, 134217728 - 100);
+
+    shmemallocator_free(allocator, &blk1);
+
+    blk1 = shmemallocator_alloc(allocator, 134217728 - 100);
+    ShMemBlock blk2 = shmemallocator_alloc(allocator, 134217728 + 1);
+
+    shmemallocator_free(allocator, &blk1);
+    shmemallocator_free(allocator, &blk2);
+
+    blk1 = shmemallocator_alloc(allocator, 134217728 - 100);
+    blk2 = shmemallocator_alloc(allocator, 134217728 + 1);
+
+    shmemallocator_free(allocator, &blk1);
+    shmemallocator_free(allocator, &blk2);
+
+    ShMemBlock blk3 = shmemallocator_alloc(allocator, 2040);
+    ShMemBlock blk4 = shmemallocator_alloc(allocator, 2040);
+    shmemallocator_free(allocator, &blk3);
+    ShMemBlock blk5 = shmemallocator_alloc(allocator, 2040);
+    shmemallocator_free(allocator, &blk4);
+    ShMemBlock blk6 = shmemallocator_alloc(allocator, 8192);
+    // ShMemBlock blk7 = shmemallocator_alloc(allocator, 8);
+
+    blk6.p = (uint8_t*)blk6.p + 8;
+
+    ShMemBlockSerialized serial5 = shmemallocator_blockSerialize(allocator, &blk5);
+    ShMemBlockSerialized serial6 = shmemallocator_blockSerialize(allocator, &blk6);
+
+    ShMemBlock d1 = shmemallocator_blockDeserialize(allocator, &serial5);
+    ShMemBlock d2 = shmemallocator_blockDeserialize(allocator, &serial6);
+
+    ShMemSerializer *serializer = shmemserializer_create();
+
+    ShMemBlock d3 = shmemserializer_blockDeserialize(serializer, &serial5);
+    ShMemBlock d4 = shmemserializer_blockDeserialize(serializer, &serial6);
+    ShMemBlock d5 = shmemserializer_blockDeserialize(serializer, &serial5);
+    ShMemBlock d6 = shmemserializer_blockDeserialize(serializer, &serial6);
+
+    shmemallocator_free(allocator, &blk6);
+
+    shmemallocator_destroy(allocator);
+    shmemserializer_destroy(serializer);
+
+    if (rc) {
+        fprintf(stderr, "failed shmemallocator_test\n");
+    }
+
+    return rc;
+}
+
 int main(int argc, char** argv) {
 
     int rc = 0;
+
+    rc |= shmemallocator_test();
+    return rc;
 
     /* buddy */
     rc |= buddycontrolblock_testOrder();
@@ -261,7 +321,10 @@ int main(int argc, char** argv) {
     rc |= buddycontrolblock_testGoodSizes();
 
     rc |= buddy_test(4096);
-    rc |= buddy_test(SHD_BUDDY_POOL_MAX_NBYTES);
+
+    for (size_t idx = 0; idx < 100; ++idx) {
+        rc |= buddy_test(SHD_BUDDY_POOL_MAX_NBYTES);
+    }
 
     /* shmemfile */
     rc |= shmemfile_testGoodAlloc(100);

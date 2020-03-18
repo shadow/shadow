@@ -103,6 +103,7 @@ add_test(NAME tsc_test COMMAND tsc_test)
 
 set(SHD_SHMEM_SRC
     shmem/shd-buddy.c
+    shmem/shd-shmem-allocator.c
     shmem/shd-shmem-file.c
     shmem/shd-shmem-util.c)
 
