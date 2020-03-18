@@ -146,8 +146,8 @@ static int buddy_test(size_t pool_nbytes) {
 
     struct Alloc {
         size_t nbytes;
-        void *bud;
-        void *mal;
+        void* bud;
+        void* mal;
     };
 
     struct Alloc allocs[nallocs];
@@ -157,8 +157,8 @@ static int buddy_test(size_t pool_nbytes) {
 
     size_t meta_nbytes = buddy_metaSizeNBytes(pool_nbytes);
 
-    void *pool = calloc(1, pool_nbytes);
-    void *meta = calloc(1, meta_nbytes);
+    void* pool = calloc(1, pool_nbytes);
+    void* meta = calloc(1, meta_nbytes);
 
     buddy_poolInit(pool, pool_nbytes);
     buddy_metaInit(meta, pool, pool_nbytes);
@@ -167,10 +167,10 @@ static int buddy_test(size_t pool_nbytes) {
         unsigned alloc_order = SHD_BUDDY_PART_MIN_ORDER + (rand() % n);
         size_t alloc_nbytes = shmem_util_uintPow2k(alloc_order) - 8;
 
-        void *p = buddy_alloc(alloc_nbytes, meta, pool, pool_nbytes);
+        void* p = buddy_alloc(alloc_nbytes, meta, pool, pool_nbytes);
 
         if (p != NULL) {
-            void *q = malloc(alloc_nbytes);
+            void* q = malloc(alloc_nbytes);
             assert(q != NULL);
             *(uint32_t*)p = rand();
             *(uint32_t*)q = *(uint32_t*)p;
@@ -186,8 +186,8 @@ static int buddy_test(size_t pool_nbytes) {
     for (size_t idx = 0; idx < nallocs; ++idx) {
         if (allocs[idx].bud != NULL) {
 
-            uint32_t *p = (uint32_t *)allocs[idx].bud;
-            uint32_t *q = (uint32_t *)allocs[idx].mal;
+            uint32_t* p = (uint32_t*)allocs[idx].bud;
+            uint32_t* q = (uint32_t*)allocs[idx].mal;
             EXPECT_TRUE(*p == *q);
 
             buddy_free(allocs[idx].bud, meta, pool, pool_nbytes);
@@ -254,10 +254,9 @@ static int util_testPow2k() {
 static int shmemallocator_test() {
     int rc = 0;
 
-    ShMemAllocator *allocator = shmemallocator_create();
+    ShMemAllocator* allocator = shmemallocator_create();
 
     ShMemBlock blk1 = shmemallocator_alloc(allocator, 134217728 - 100);
-
     shmemallocator_free(allocator, &blk1);
 
     blk1 = shmemallocator_alloc(allocator, 134217728 - 100);
@@ -279,28 +278,52 @@ static int shmemallocator_test() {
     shmemallocator_free(allocator, &blk4);
     ShMemBlock blk6 = shmemallocator_alloc(allocator, 8192);
 
-    memcpy(blk6.p, "hello", 6);
-    printf("1) %p %s\n", blk6.p, blk6.p);
+    memcpy(blk5.p, "hello", 6);
+    memcpy(blk6.p, "world", 6);
 
-    ShMemBlockSerialized serial5 = shmemallocator_blockSerialize(allocator, &blk5);
-    ShMemBlockSerialized serial6 = shmemallocator_blockSerialize(allocator, &blk6);
+    ShMemBlockSerialized serial5 =
+        shmemallocator_blockSerialize(allocator, &blk5);
+    ShMemBlockSerialized serial6 =
+        shmemallocator_blockSerialize(allocator, &blk6);
 
-    printf("%s %zu %zu\n", serial6.name, serial6.nbytes, serial6.offset);
+    // See the if allocator can deserialize:
+    ShMemBlock allocator_deserial5 =
+        shmemallocator_blockDeserialize(allocator, &serial5);
+    ShMemBlock allocator_deserial6 =
+        shmemallocator_blockDeserialize(allocator, &serial6);
 
-    // ShMemBlock d1 = shmemallocator_blockDeserialize(allocator, &serial5);
-    ShMemBlock d2 = shmemallocator_blockDeserialize(allocator, &serial6);
-    printf("2) %p %s\n", d2.p, d2.p);
+    EXPECT_TRUE(strcmp(blk5.p, allocator_deserial5.p) == 0);
+    EXPECT_TRUE(strcmp(blk6.p, allocator_deserial6.p) == 0);
 
-    ShMemSerializer *serializer = shmemserializer_create();
+    ShMemSerializer* serializer = shmemserializer_create();
 
-    ShMemBlock d3 = shmemserializer_blockDeserialize(serializer, &serial5);
-    ShMemBlock d4 = shmemserializer_blockDeserialize(serializer, &serial6);
-    ShMemBlock d5 = shmemserializer_blockDeserialize(serializer, &serial5);
-    ShMemBlock d6 = shmemserializer_blockDeserialize(serializer, &serial6);
+    ShMemBlock serializer_deserial5 =
+        shmemserializer_blockDeserialize(serializer, &serial5);
 
-    printf("%p %s\n", d6.p, d6.p);
+    ShMemBlock serializer_deserial6 =
+        shmemserializer_blockDeserialize(serializer, &serial6);
 
-    // shmemallocator_free(allocator, &blk6);
+    EXPECT_TRUE(strcmp(blk5.p, serializer_deserial5.p) == 0);
+    EXPECT_TRUE(strcmp(blk6.p, serializer_deserial6.p) == 0);
+
+    // Ensure that the serializer can reserialize back to the allocator if
+    // necessary.
+
+    ShMemBlockSerialized serializer_serial5 =
+        shmemserializer_blockSerialize(serializer, &serializer_deserial5);
+    ShMemBlockSerialized serializer_serial6 =
+        shmemserializer_blockSerialize(serializer, &serializer_deserial6);
+
+    ShMemBlock allocator_deserial5_2 =
+        shmemallocator_blockDeserialize(allocator, &serializer_serial5);
+    ShMemBlock allocator_deserial6_2 =
+        shmemallocator_blockDeserialize(allocator, &serializer_serial6);
+
+    EXPECT_TRUE(strcmp(blk5.p, allocator_deserial5_2.p) == 0);
+    EXPECT_TRUE(strcmp(blk6.p, allocator_deserial6_2.p) == 0);
+
+    shmemallocator_free(allocator, &blk5);
+    shmemallocator_free(allocator, &blk6);
 
     shmemallocator_destroy(allocator);
     shmemserializer_destroy(serializer);
@@ -315,9 +338,6 @@ static int shmemallocator_test() {
 int main(int argc, char** argv) {
 
     int rc = 0;
-
-    rc |= shmemallocator_test();
-    return rc;
 
     /* buddy */
     rc |= buddycontrolblock_testOrder();
@@ -341,5 +361,7 @@ int main(int argc, char** argv) {
     rc |= util_testLog2();
     rc |= util_testPow2k();
 
+    /* shmemallocator */
+    rc |= shmemallocator_test();
     return rc;
 }

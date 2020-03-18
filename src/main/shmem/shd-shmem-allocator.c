@@ -10,8 +10,7 @@
 #include "shd-buddy.h"
 #include "shd-shmem-file.h"
 
-// #define SHD_SHMEM_ALLOCATOR_POOL_NBYTES SHD_BUDDY_POOL_MAX_NBYTES
-#define SHD_SHMEM_ALLOCATOR_POOL_NBYTES 4096
+#define SHD_SHMEM_ALLOCATOR_POOL_NBYTES SHD_BUDDY_POOL_MAX_NBYTES
 
 // When to change allocation strategies
 #define SHD_SHMEM_ALLOCATOR_CUTOVER_NBYTES                                     \
@@ -33,15 +32,12 @@ static ShMemFileNode* _shmemfilenode_findPtr(ShMemFileNode* file_nodes,
         if (p >= (uint8_t*)node->shmf.p &&
             p < ((uint8_t*)node->shmf.p + node->shmf.nbytes)) {
 
-            printf("FOUND %s\n", node->shmf.name);
-
             return node;
         }
 
         node = node->nxt;
     }
 
-    printf("FOUND null\n");
     return NULL;
 }
 
@@ -54,12 +50,16 @@ static ShMemFileNode* _shmemfilenode_findName(ShMemFileNode* file_nodes,
     if (node != NULL) {
         do {
             found = (strcmp(node->shmf.name, name) == 0);
-            if (found) { return node; }
+            if (found) {
+                return node;
+            }
             node = node->nxt;
         } while (node != file_nodes);
     }
 
-    if (!found) { return NULL; }
+    if (!found) {
+        return NULL;
+    }
 }
 
 typedef struct _ShMemPoolNode {
@@ -288,16 +288,11 @@ ShMemBlock shmemallocator_blockDeserialize(ShMemAllocator* allocator,
 
     ShMemFileNode* node = NULL;
     // scan thru both
-    printf("looking %s\n", serial->name);
     node = _shmemfilenode_findName(allocator->big_alloc_nodes, serial->name);
-
-    printf("deserial found node %p %s\n", node, node ? node->shmf.name : 0);
 
     if (node == NULL) {
         node = _shmemfilenode_findName(
             (ShMemFileNode*)allocator->little_alloc_nodes, serial->name);
-
-        printf("deserial found node %p %s\n", node, node ? node->shmf.name : 0);
     }
 
     if (node != NULL) {
@@ -340,8 +335,6 @@ ShMemBlock shmemserializer_blockDeserialize(ShMemSerializer* serializer,
 
     if (node == NULL) {
 
-        printf("mapping a new block\n");
-
         ShMemFile shmf;
         int rc = shmemfile_map(serial->name, serial->nbytes, &shmf);
         if (rc != 0) {
@@ -374,8 +367,7 @@ ShMemBlock shmemserializer_blockDeserialize(ShMemSerializer* serializer,
 }
 
 ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer,
-                                                    ShMemBlock* blk)
-{
+                                                    ShMemBlock* blk) {
     ShMemBlockSerialized ret;
     memset(&ret, 0, sizeof(ShMemBlock));
 
@@ -388,5 +380,4 @@ ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer,
     ret.offset = (uint8_t*)blk->p - (uint8_t*)node->shmf.p;
     strncpy(ret.name, node->shmf.name, SHD_SHMEM_FILE_NAME_NBYTES);
     return ret;
-
 }
