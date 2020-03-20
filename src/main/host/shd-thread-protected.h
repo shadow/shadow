@@ -19,6 +19,10 @@ struct _Thread {
     int (*getReturnCode)(Thread* thread);
     gboolean (*isRunning)(Thread* thread);
     void (*free)(Thread* thread);
+    void (*memcpyToShadow)(Thread* thread, void* shadow_dst,
+                           PluginPtr plugin_src, size_t n);
+    void (*memcpyToPlugin)(Thread* thread, PluginPtr plugin_dst,
+                           void* shadow_src, size_t n);
 
     // For safe down-casting. Set and checked by child class.
     int type_id;

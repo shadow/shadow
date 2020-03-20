@@ -406,13 +406,16 @@ guint64 host_getNewPacketID(Host* host) {
     return host->packetIDCounter++;
 }
 
-void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
-        const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
-        gchar** envv, gchar** argv) {
+void host_addApplication(Host* host, SimulationTime startTime,
+                         SimulationTime stopTime, InterposeMethod interposeMethod,
+                         const gchar* pluginName, const gchar* pluginPath,
+                         const gchar* pluginSymbol, gchar** envv,
+                         gchar** argv) {
     MAGIC_ASSERT(host);
     guint processID = host_getNewProcessID(host);
-    Process* proc = process_new(processID, startTime, stopTime, host_getName(host),
-            pluginName, pluginPath, pluginSymbol, envv, argv);
+    Process* proc = process_new(processID, startTime, stopTime, interposeMethod,
+                                host_getName(host), pluginName, pluginPath,
+                                pluginSymbol, envv, argv);
     SysCallHandler* sch = syscallhandler_new(host, proc);
     process_setSysCallHandler(proc, sch);
     g_queue_push_tail(host->processes, proc);

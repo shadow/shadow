@@ -1,5 +1,6 @@
 #ifndef SHD_SHIM_SHIM_H_
 #define SHD_SHIM_SHIM_H_
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -51,5 +52,10 @@ static inline uint32_t shim_recvUint32_t(int sock_fd) {
     shim_determinedRecv(sock_fd, &value, sizeof(uint32_t));
     return ntohl(value);
 }
+
+// FIXME: Ideally we split or make 2 version of the shim and load the
+// appropriate version based on whether we're using the shim-pipe.  In the
+// meantime we rely on run-time checks.
+bool shim_usingInterposePreload();
 
 #endif // SHD_SHIM_SHIM_H_

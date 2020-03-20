@@ -320,24 +320,30 @@ void slave_addNewVirtualHost(Slave* slave, HostParameters* params) {
     scheduler_addHost(slave->scheduler, host);
 }
 
-
-static gchar** _slave_generateEnvv(Slave* slave, const gchar* preloadShimPath, const gchar* environment, const gchar* pluginPreloadPath) {
+static gchar** _slave_generateEnvv(Slave* slave, InterposeMethod interposeMethod,
+                                   const gchar* preloadShimPath,
+                                   const gchar* environment,
+                                   const gchar* pluginPreloadPath) {
     MAGIC_ASSERT(slave);
 
     /* start with an empty environment */
     gchar** envv = g_environ_setenv(NULL, "SHADOW_SPAWNED", "TRUE", TRUE);
+    if (interposeMethod == INTERPOSE_PRELOAD) {
+        envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD", 0);
+    }
 
     /* insert also the plugin preload entry if one exists.
      * precendence here is:
      *   - preload attribute in the process element
      *   - preload attribute in the shadow element
      *   - preload values from LD_PRELOAD entries in the environment attribute of the shadow element*/
-    GString* ldPreloadVal = g_string_new(NULL);
+    GPtrArray* ldPreloadArray = g_ptr_array_new();
     if(pluginPreloadPath) {
-        g_string_printf(ldPreloadVal, "%s:%s", pluginPreloadPath, preloadShimPath);
-    } else {
-        g_string_printf(ldPreloadVal, "%s", preloadShimPath);
+        info("adding preload path %s", pluginPreloadPath);
+        g_ptr_array_add(ldPreloadArray, g_strdup(pluginPreloadPath));
     }
+    info("adding shim path %s", preloadShimPath ? preloadShimPath : "null");
+    g_ptr_array_add(ldPreloadArray, g_strdup(preloadShimPath));
 
     /* now we also have to scan the other env variables that were given in the shadow conf file */
 
@@ -356,13 +362,8 @@ static gchar** _slave_generateEnvv(Slave* slave, const gchar* preloadShimPath, c
                 /* check if the key is LD_PRELOAD */
                 if(!g_ascii_strncasecmp(key, "LD_PRELOAD", 10)) {
                     /* append all LD_PRELOAD entries */
-                    gchar** preloadTokens = g_strsplit(value, ":", 0);
-
-                    for(gint j = 0; preloadTokens[j] != NULL; j++) {
-                        g_string_append_printf(ldPreloadVal, ":%s", preloadTokens[j]);
-                    }
-
-                    g_strfreev(preloadTokens);
+                    info("adding key path %s", value);
+                    g_ptr_array_add(ldPreloadArray, g_strdup(value));
                 } else {
                     /* set the key=value pair, but don't overwrite any existing settings */
                     envv = g_environ_setenv(envv, key, value, 0);
@@ -375,11 +376,17 @@ static gchar** _slave_generateEnvv(Slave* slave, const gchar* preloadShimPath, c
         g_strfreev(envTokens);
     }
 
+    // Must be NULL terminated for g_strjoinv
+    g_ptr_array_add(ldPreloadArray, NULL);
+
+    gchar* ldPreloadVal = g_strjoinv(":", (gchar**)ldPreloadArray->pdata);
+    g_ptr_array_unref(ldPreloadArray);
+
     /* now we can set the LD_PRELOAD environment */
-    envv = g_environ_setenv(envv, "LD_PRELOAD", ldPreloadVal->str, TRUE);
+    envv = g_environ_setenv(envv, "LD_PRELOAD", ldPreloadVal, TRUE);
 
     /* cleanup */
-    g_string_free(ldPreloadVal, TRUE);
+    g_free(ldPreloadVal);
 
     return envv;
 }
@@ -417,6 +424,8 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
               "config parser.", pluginName);
     }
 
+    InterposeMethod interposeMethod = options_getInterposeMethod(slave->options);
+
     _ProgramMeta* preload = NULL;
     if(preloadName != NULL) {
         preload = g_hash_table_lookup(slave->programMeta, preloadName);
@@ -426,13 +435,17 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
     }
 
     /* ownership is passed to the host/process below, so we don't free these */
-    gchar** envv = _slave_generateEnvv(slave, slave->preloadShimPath, slave->environment, preload ? preload->path : NULL);
+    gchar** envv = _slave_generateEnvv(slave,
+                                       interposeMethod,
+                                       slave->preloadShimPath,
+                                       slave->environment,
+                                       preload ? preload->path : NULL);
     gchar** argv = _slave_getArgv(slave, plugin->path, arguments);
 
     Host* host = scheduler_getHost(slave->scheduler, hostID);
     host_continueExecutionTimer(host);
-    host_addApplication(host, startTime, stopTime,
-            plugin->name, plugin->path, plugin->startSymbol, envv, argv);
+    host_addApplication(host, startTime, stopTime, interposeMethod, plugin->name,
+                        plugin->path, plugin->startSymbol, envv, argv);
     host_stopExecutionTimer(host);
 }
 

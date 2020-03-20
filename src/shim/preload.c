@@ -1,4 +1,7 @@
+#define _GNU_SOURCE 1
+
 #include <assert.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -34,8 +37,8 @@ static SysCallReg shadow_syscall(const ShimEvent* ev) {
 }
 
 static long shadow_syscall_nanosleep(va_list args) {
-    const struct timespec* req = va_arg(args, SysCallReg).as_ptr;
-    struct timespec* res = va_arg(args, SysCallReg).as_ptr;
+    const struct timespec* req = va_arg(args, const struct timespec*);
+    struct timespec* res = va_arg(args, struct timespec*);
 
     // FIXME: the real ABI uses pointers to timespecs.
     // Switch to that when we have shared memory implemented.
@@ -50,15 +53,13 @@ static long shadow_syscall_nanosleep(va_list args) {
 }
 
 static long shadow_syscall_clock_gettime(va_list args) {
-    clockid_t clk_id = va_arg(args, SysCallReg).as_i64;
-    struct timespec* res = va_arg(args, SysCallReg).as_ptr;
+    clockid_t clk_id = va_arg(args, clockid_t);
+    struct timespec* res = va_arg(args, struct timespec*);
 
-    ShimEvent event = {
-        .event_id = SHD_SHIM_EVENT_SYSCALL,
-        .event_data.syscall.syscall_args =
-            (SysCallArgs){.number = SYS_clock_gettime,
-                          .args = {clk_id, {.as_ptr=res}}}
-    };
+    ShimEvent event = {.event_id = SHD_SHIM_EVENT_SYSCALL,
+                       .event_data.syscall.syscall_args = (SysCallArgs){
+                           .number = SYS_clock_gettime,
+                           .args = {clk_id, {.as_u64 = (uint64_t)res}}}};
     int64_t rv = shadow_syscall(&event).as_i64;
 
     // FIXME: the real ABI uses pointers to timespecs.
@@ -70,10 +71,30 @@ static long shadow_syscall_clock_gettime(va_list args) {
     return 0;
 }
 
+// Handle to the real syscall function, initialized once at load-time for
+// thread-safety.
+static const long (*_real_syscall)(long n, ...);
+__attribute__((constructor)) static void _init_real_syscall() {
+    _real_syscall = dlsym(RTLD_NEXT, "syscall");
+    assert(_real_syscall != NULL);
+}
+
+static long _vreal_syscall(long n, va_list args) {
+    long arg1 = va_arg(args, long);
+    long arg2 = va_arg(args, long);
+    long arg3 = va_arg(args, long);
+    long arg4 = va_arg(args, long);
+    long arg5 = va_arg(args, long);
+    return _real_syscall(n, arg1, arg2, arg3, arg4, arg5);
+}
+
 // man 2 syscall
 long syscall(long n, ...) {
     va_list args;
     va_start(args, n);
+    if (!shim_usingInterposePreload()) {
+        return _vreal_syscall(n, args);
+    }
     long rv = -1;
     switch (n) {
         case SYS_nanosleep:
@@ -91,8 +112,7 @@ long syscall(long n, ...) {
 
 // man 2 nanosleep
 int nanosleep(const struct timespec* req, struct timespec* rem) {
-    return syscall(SYS_nanosleep, (SysCallReg){.as_cptr = req},
-                   (SysCallReg){.as_ptr = rem});
+    return syscall(SYS_nanosleep, req, rem);
 }
 
 // man 3 usleep
@@ -119,7 +139,6 @@ unsigned int sleep(unsigned int seconds) {
 
 // man 2 
 int clock_gettime(clockid_t clk_id, struct timespec *tp) {
-    return syscall(SYS_clock_gettime, (SysCallReg){.as_i64 = clk_id},
-                   (SysCallReg){.as_ptr = tp});
+    return syscall(SYS_clock_gettime, clk_id, tp);
 }
 

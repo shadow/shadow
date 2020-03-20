@@ -36,10 +36,11 @@
 #include "main/core/support/definitions.h"
 #include "main/host/shd-syscall-handler.h"
 
-Process* process_new(guint processID,
-        SimulationTime startTime, SimulationTime stopTime, const gchar* hostName,
-        const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
-        gchar** envv, gchar** argv);
+Process* process_new(guint processID, SimulationTime startTime,
+                     SimulationTime stopTime, InterposeMethod interposeMethod,
+                     const gchar* hostName, const gchar* pluginName,
+                     const gchar* pluginPath, const gchar* pluginSymbol,
+                     gchar** envv, gchar** argv);
 void process_ref(Process* proc);
 void process_unref(Process* proc);
 
@@ -51,5 +52,9 @@ void process_stop(Process* proc);
 
 gboolean process_wantsNotify(Process* proc, gint epollfd);
 gboolean process_isRunning(Process* proc);
+
+// FIXME: This shouldn't be public. Exposing for temporary hack in
+// syscallhandler.
+InterposeMethod process_getInterposeMethod(Process* proc);
 
 #endif /* SHD_PROCESS_H_ */

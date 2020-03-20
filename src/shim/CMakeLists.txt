@@ -35,4 +35,4 @@ set_target_properties(${SHIM_LIB} PROPERTIES
 
 install(TARGETS ${SHIM_LIB} DESTINATION lib)
 
-target_link_libraries(${SHIM_LIB} ${HELPER_LIB} -pthread)
+target_link_libraries(${SHIM_LIB} ${HELPER_LIB} -pthread -ldl)

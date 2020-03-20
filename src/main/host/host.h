@@ -77,9 +77,10 @@ void host_shutdown(Host* host);
 guint host_getNewProcessID(Host* host);
 guint64 host_getNewEventID(Host* host);
 guint64 host_getNewPacketID(Host* host);
-void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
-        const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
-        gchar** envv, gchar** argv);
+void host_addApplication(Host* host, SimulationTime startTime,
+                         SimulationTime stopTime, InterposeMethod interposeMethod,
+                         const gchar* pluginName, const gchar* pluginPath,
+                         const gchar* pluginSymbol, gchar** envv, gchar** argv);
 void host_freeAllApplications(Host* host);
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);

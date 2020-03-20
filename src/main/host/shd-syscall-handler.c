@@ -110,22 +110,32 @@ static void _syscallhandler_block(SysCallHandler* sys, Thread* thread, Simulatio
 ///////////////////////////////////////////////////////////
 
 SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys, Thread* thread,
-                                       const struct timespec* req,
-                                       struct timespec* rem) {
-    utility_assert(req);
-
-    if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
-        return (SysCallReturn){.have_retval = true, .retval.as_i64 = -EINVAL};
+                                       const SysCallArgs* args) {
+    struct timespec req;
+    if (process_getInterposeMethod(sys->process) == INTERPOSE_PRELOAD) {
+        // FIXME: shim path FIXME: arg[0] and arg[1] should be pointers to
+        // shared memory.  TODO(ryanwails): Add shared memory mechanism,and an
+        // API for mapping shim-side pointers to shadow-side pointers.
+        req = (struct timespec){.tv_sec = args->args[0].as_i64,
+                                .tv_nsec = args->args[1].as_i64};
+    } else {
+        thread_memcpyToShadow(thread, &req, args->args[0].as_ptr, sizeof(req));
     }
 
-    if (req->tv_sec == 0 && req->tv_nsec == 0) {
-        return (SysCallReturn){.have_retval = true, .retval.as_i64 = 0};
+    if (!(req.tv_nsec >= 0 && req.tv_nsec <= 999999999)) {
+        return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
+                               .retval.as_i64 = -EINVAL};
+    }
+
+    if (req.tv_sec == 0 && req.tv_nsec == 0) {
+        return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
+                               .retval.as_i64 = 0};
     }
 
     /* how much simtime do we wait */
     SimulationTime sleepDelay =
-        ((SimulationTime)req->tv_nsec) +
-        ((SimulationTime)req->tv_sec * SIMTIME_ONE_SECOND);
+        ((SimulationTime)req.tv_nsec) +
+        ((SimulationTime)req.tv_sec * SIMTIME_ONE_SECOND);
 
     /* set up a block task in the host */
     // TODO I think this should go in process.c with the rest of the thread
@@ -133,30 +143,35 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys, Thread* thread,
     _syscallhandler_block(sys, thread, sleepDelay);
 
     /* tell the thread we blocked it */
-    return (SysCallReturn){.have_retval = false};
-}
-
-SysCallReturn syscallhandler_time(SysCallHandler* sys, Thread* thread,
-        time_t* tloc) {
-    EmulatedTime now = _syscallhandler_getEmulatedTime();
-
-    time_t secs = (time_t) (now / SIMTIME_ONE_SECOND);
-    if(tloc != NULL){
-        *tloc = secs;
-    }
-
-    return (SysCallReturn){.have_retval = true, .retval.as_i64 = secs};
+    return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
 }
 
 SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys, Thread* thread,
-        clockid_t clk_id, struct timespec *tp) {
-    utility_assert(tp);
+                                           const SysCallArgs* args) {
+    clockid_t clk_id = args->args[0].as_u64;
+    struct timespec res_timespec = {};
+    debug("syscallhandler_clock_gettime with %d %p", clk_id,
+          args->args[1].as_ptr);
 
     EmulatedTime now = _syscallhandler_getEmulatedTime();
-    tp->tv_sec = now / SIMTIME_ONE_SECOND;
-    tp->tv_nsec = now % SIMTIME_ONE_SECOND;
+    res_timespec.tv_sec = now / SIMTIME_ONE_SECOND;
+    res_timespec.tv_nsec = now % SIMTIME_ONE_SECOND;
 
-    return (SysCallReturn){.have_retval = true, .retval.as_i64 = 0};
+    if (process_getInterposeMethod(sys->process) == INTERPOSE_PRELOAD) {
+        // FIXME: shim path
+        // FIXME: args[1] should be a pointer to the timespec.
+        // For now we instead write the result as i64 nanos in the
+        // returned register.
+        return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
+                               .retval.as_i64 =
+                                   res_timespec.tv_sec * 1000000000LL +
+                                   res_timespec.tv_nsec};
+    } else {
+        thread_memcpyToPlugin(thread, args->args[1].as_ptr, &res_timespec,
+                              sizeof(res_timespec));
+        return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
+                               .retval.as_i64 = 0};
+    }
 }
 
 SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys, Thread* thread,
@@ -167,7 +182,7 @@ SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys, Thread* thread,
     res->tv_sec = 0;
     res->tv_nsec = 1;
 
-    return (SysCallReturn){.have_retval = true, .retval.as_i64 = 0};
+    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
 }
 
 SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, Thread* thread,
@@ -184,34 +199,46 @@ SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, Thread* thread,
     tv->tv_sec = (time_t)sec;
     tv->tv_usec = (suseconds_t)usec;
 
-    return (SysCallReturn){.have_retval = true, .retval.as_i64 = 0};
+    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
 }
 
+#define HANDLE(s)                                                              \
+    case SYS_##s:                                                              \
+        debug("handled syscall %d " #s, args->number);                         \
+        return syscallhandler_##s(sys, thread, args)
+#define NATIVE(s)                                                              \
+    case SYS_##s:                                                              \
+        debug("native syscall %d " #s, args->number);                          \
+        return (SysCallReturn){.state = SYSCALL_RETURN_NATIVE};
 SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys, Thread* thread,
                                           const SysCallArgs* args) {
     switch (args->number) {
-        case SYS_nanosleep: {
-            // FIXME: arg[0] and arg[1] should be pointers to shared memory.
-            // TODO(ryanwails): Add shared memory mechanism,and an API for
-            // mapping shim-side pointers to shadow-side pointers.
-            const struct timespec req_timespec = {
-                .tv_sec = args->args[0].as_i64,
-                .tv_nsec = args->args[1].as_i64};
-            return syscallhandler_nanosleep(sys, thread, &req_timespec, NULL);
-        }
-        case SYS_clock_gettime: {
-            // FIXME: args[1] should be a pointer to the timespec.
-            // For now we insted write the result as i64 nanos in the returned register.
-            struct timespec res_timespec;
-            SysCallReturn rv = syscallhandler_clock_gettime(
-                sys, thread, args->args[0].as_i64, &res_timespec);
-            return (SysCallReturn) {
-                .have_retval = true,
-                .retval.as_i64 =
-                    res_timespec.tv_sec * 1000000000LL + res_timespec.tv_nsec
-            };
-        }
+        HANDLE(clock_gettime);
+        HANDLE(nanosleep);
+
+        NATIVE(access);
+        NATIVE(arch_prctl);
+        NATIVE(brk);
+        NATIVE(close);
+        NATIVE(execve);
+        NATIVE(fstat);
+        NATIVE(mmap);
+        NATIVE(mprotect);
+        NATIVE(munmap);
+        NATIVE(openat);
+        NATIVE(prlimit64);
+        NATIVE(read);
+        NATIVE(rt_sigaction);
+        NATIVE(rt_sigprocmask);
+        NATIVE(set_robust_list);
+        NATIVE(set_tid_address);
+        NATIVE(stat);
+        NATIVE(write);
+
+        default:
+            info("unhandled syscall %d", args->number);
+            return (SysCallReturn){.state = SYSCALL_RETURN_NATIVE};
     }
-    error("unknown syscall number");
-    abort();
 }
+#undef NATIVE
+#undef HANDLE

@@ -24,6 +24,10 @@ void thread_resume(Thread* thread);
 void thread_terminate(Thread* thread);
 void thread_setSysCallResult(Thread* thread, SysCallReg retval);
 int thread_getReturnCode(Thread* thread);
+void thread_memcpyToShadow(Thread* thread, void* shadow_dst,
+                           PluginPtr plugin_src, size_t n);
+void thread_memcpyToPlugin(Thread* thread, PluginPtr plugin_dst,
+                           void* shadow_src, size_t n);
 
 gboolean thread_isRunning(Thread* thread);
 

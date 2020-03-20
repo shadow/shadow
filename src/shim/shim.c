@@ -53,8 +53,15 @@ static TIDFDPair _shim_tidFDTreeGet(pthread_t tid) {
     return tid_fd;
 }
 
+static bool _using_interpose_preload;
+
 __attribute__((constructor))
 static void _shim_load() {
+    const char* interpose_method = getenv("SHADOW_INTERPOSE_METHOD");
+    _using_interpose_preload =
+        interpose_method != NULL && !strcmp(interpose_method, "PRELOAD");
+    if (!_using_interpose_preload)
+        return;
     const char *shd_event_sock_fd = getenv("_SHD_IPC_SOCKET");
     assert(shd_event_sock_fd);
     int event_sock_fd = atoi(shd_event_sock_fd);
@@ -77,6 +84,8 @@ static void _shim_load() {
 
 __attribute__((destructor))
 static void _shim_unload() {
+    if (!shim_usingInterposePreload())
+        return;
     int event_fd = shim_thisThreadEventFD();
 
     ShimEvent shim_event;
@@ -97,6 +106,8 @@ static void _shim_wait_start(int event_fd) {
     shimevent_recvEvent(event_fd, &event);
     assert(event.event_id == SHD_SHIM_EVENT_START);
 }
+
+bool shim_usingInterposePreload() { return _using_interpose_preload; }
 
 FILE *shim_logFD() {
     return stderr;

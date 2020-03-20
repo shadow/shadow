@@ -109,7 +109,8 @@ static int _threadshim_fork_exec(ThreadShim* thread, const char* file,
 static void _threadshim_cleanup(ThreadShim* thread, int status) {
     if (WIFEXITED(status)) {
         thread->returnCode = WEXITSTATUS(status);
-        debug("child %d exited with status %d", thread->childPID, thread->returnCode);
+        debug("child %d exited with status %d", thread->childPID,
+              thread->returnCode);
     } else if (WIFSIGNALED(status)) {
         int signum = WTERMSIG(status);
         debug("child %d terminated by signal %d", thread->childPID, signum);
@@ -203,12 +204,16 @@ void threadshim_resume(Thread* base) {
                 SysCallReturn result = syscallhandler_make_syscall(
                     thread->sys, _threadShimToThread(thread),
                     &thread->currentEvent.event_data.syscall.syscall_args);
-                if (result.have_retval) {
+                if (result.state == SYSCALL_RETURN_DONE) {
                     ShimEvent shim_result = {
                         .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
                         .event_data.syscall_complete.retval = result.retval};
                     shimevent_sendEvent(thread->eventFD, &shim_result);
                 } else {
+                    // FIXME: SYSCALL_RETURN_NATIVE unhandled, and we might want
+                    // it e.g. for a read that turns out to be to a file rather
+                    // than a socket.
+                    utility_assert(result.state == SYSCALL_RETURN_BLOCKED);
                     blocked = true;
                 }
                 break;

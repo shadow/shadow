@@ -33,6 +33,16 @@ enum _QDiscMode {
     QDISC_MODE_NONE=0, QDISC_MODE_FIFO=1, QDISC_MODE_RR=2,
 };
 
+typedef enum _InterposeMethod {
+    INTERPOSE_NONE,
+    // Use LD_PRELOAD to load a library that implements the libC interface to
+    // route syscalls to Shadow. Uses ThreadShim.
+    INTERPOSE_PRELOAD,
+    // Use ptrace to trace child processes, and use ptrace to interpose system
+    // calls.  Uses ThreadPtrace.
+    INTERPOSE_PTRACE,
+} InterposeMethod;
+
 /**
  * Create a new #Configuration and parse the command line arguments given in
  * argv. Errors encountered during parsing are printed to stderr.
@@ -90,6 +100,7 @@ SimulationTime options_getHeartbeatInterval(Options* options);
 QDiscMode options_getQueuingDiscipline(Options* options);
 
 gchar* options_getEventSchedulerPolicy(Options* options);
+InterposeMethod options_getInterposeMethod(Options* options);
 
 guint options_getNWorkerThreads(Options* options);
 

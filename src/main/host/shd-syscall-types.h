@@ -4,12 +4,17 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// We use this to get some type safety for pointers in the plugin's address
+// space. In particular we want to avoid dereferencing them directly.
+typedef struct {
+    uint64_t val;
+} PluginPtr;
+
 // A register used for input/output in a syscall.
 typedef union _SysCallReg {
     int64_t as_i64;
     uint64_t as_u64;
-    void* as_ptr;
-    const void* as_cptr;
+    PluginPtr as_ptr;
 } SysCallReg;
 
 typedef struct _SysCallArgs {
@@ -20,10 +25,18 @@ typedef struct _SysCallArgs {
     SysCallReg args[5];
 } SysCallArgs;
 
+typedef enum {
+    // Done executing the syscall; ready to let the plugin thread resume.
+    SYSCALL_RETURN_DONE,
+    // We don't have the result yet.
+    SYSCALL_RETURN_BLOCKED,
+    // Direct plugin to make the syscall natively.
+    SYSCALL_RETURN_NATIVE
+} SysCallReturnState;
+
 typedef struct _SysCallReturn {
-    bool have_retval;
-    // Only valid if have_retval is true.
-    // Otherwise, syscall hasn't completed yet and should block.
+    SysCallReturnState state;
+    // Only valid for state SYSCALL_RETURN_DONE.
     SysCallReg retval;
 } SysCallReturn;
 

@@ -56,6 +56,7 @@
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
+#include "main/host/shd-thread-ptrace.h"
 #include "main/host/shd-thread-shim.h"
 
 struct _Process {
@@ -65,6 +66,9 @@ struct _Process {
     /* unique id of the program that this process should run */
     guint processID;
     GString* processName;
+
+    /* Which InterposeMethod to use for this process's threads */
+    InterposeMethod interposeMethod;
 
     /* the shadow plugin executable */
     struct {
@@ -170,7 +174,13 @@ static void _process_start(Process* proc) {
     }
 
     utility_assert(proc->mainThread == NULL);
-    proc->mainThread = threadshim_new(proc->threadIDCounter++, proc->sys);
+    if (proc->interposeMethod == INTERPOSE_PTRACE) {
+        proc->mainThread = threadptrace_new(proc->threadIDCounter++, proc->sys);
+    } else if (proc->interposeMethod == INTERPOSE_PRELOAD) {
+        proc->mainThread = threadshim_new(proc->threadIDCounter++, proc->sys);
+    } else {
+        error("Bad interposeMethod %d", proc->interposeMethod);
+    }
 
     message("starting process '%s'", _process_getName(proc));
 
@@ -192,6 +202,8 @@ static void _process_start(Process* proc) {
 
     _process_check(proc);
 }
+
+InterposeMethod process_getInterposeMethod(Process* proc) { return proc->interposeMethod; }
 
 void process_continue(Process* proc) {
     MAGIC_ASSERT(proc);
@@ -308,10 +320,11 @@ void process_setSysCallHandler(Process* proc, SysCallHandler* sys) {
     syscallhandler_ref(proc->sys);
 }
 
-Process* process_new(guint processID,
-        SimulationTime startTime, SimulationTime stopTime, const gchar* hostName,
-        const gchar* pluginName, const gchar* pluginPath, const gchar* pluginSymbol,
-        gchar** envv, gchar** argv) {
+Process* process_new(guint processID, SimulationTime startTime,
+                     SimulationTime stopTime, InterposeMethod interposeMethod,
+                     const gchar* hostName, const gchar* pluginName,
+                     const gchar* pluginPath, const gchar* pluginSymbol,
+                     gchar** envv, gchar** argv) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -333,6 +346,8 @@ Process* process_new(guint processID,
 
     proc->startTime = startTime;
     proc->stopTime = stopTime;
+
+    proc->interposeMethod = interposeMethod;
 
     /* save args and env */
     proc->argv = argv;
