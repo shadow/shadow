@@ -284,6 +284,45 @@ gboolean threadshim_isRunning(Thread* base) {
     return thread->isRunning;
 }
 
+void* threadshim_clonePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
+    ThreadShim* thread = _threadToThreadShim(base);
+
+    utility_assert(false);
+    return NULL;
+    // FIXME(rwails)
+    // * Allocate space in shared memory
+    // * Send memcpy command via pipe
+    // * Return the pointer to shared memory
+}
+
+void threadshim_releaseClonedPtr(Thread* base, void* p) {
+    ThreadShim* thread = _threadToThreadShim(base);
+
+    utility_assert(false);
+    // FIXME(rwails)
+    // * Release the pointer
+}
+
+void threadshim_memcpyToShadow(Thread* base, void* shadow_dst,
+                                 PluginPtr plugin_src, size_t n) {
+    ThreadShim* thread = _threadToThreadShim(base);
+
+    void *cloned = threadshim_clonePluginPtr(base, plugin_src, n);
+    memcpy(shadow_dst, cloned, n);
+    threadshim_releaseClonedPtr(base, clone);
+}
+
+void threadshim_memcpyToPlugin(Thread* base, PluginPtr plugin_dst,
+                                 void* shadow_src, size_t n) {
+    ThreadShim* thread = _threadToThreadShim(base);
+    utility_assert(false);
+    // FIXME(rwails)
+    // * Allocate space in shared memory
+    // * memcpy `shadow_src` into that region
+    // * Send memcpy command via pipe
+    // * Free the shared memory
+}
+
 Thread* threadshim_new(gint threadID, SysCallHandler* sys) {
     ThreadShim* thread = g_new0(ThreadShim, 1);
 
@@ -299,6 +338,10 @@ Thread* threadshim_new(gint threadID, SysCallHandler* sys) {
                             .getReturnCode = threadshim_getReturnCode,
                             .isRunning = threadshim_isRunning,
                             .free = threadshim_free,
+                            .memcpyToShadow = threadshim_memcpyToShadow,
+                            .memcpyToPlugin = threadshim_memcpyToPlugin,
+                            .clonePluginPtr = threadshim_clonePluginPtr,
+                            .releaseClonedPtr = threadshim_releaseClonedPtr,
 
                             .type_id = THREADSHIM_TYPE_ID,
                             .referenceCount = 1};

@@ -88,5 +88,5 @@ void* thread_clonePluginPtr(Thread* thread, PluginPtr plugin_src, size_t n) {
 void thread_releaseClonedPtr(Thread* thread, void* p) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->releaseClonedPtr);
-    return thread->releaseClonedPtr(thread, p);
+    thread->releaseClonedPtr(thread, p);
 }
