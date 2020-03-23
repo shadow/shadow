@@ -37,6 +37,8 @@ typedef struct _ThreadPtrace {
     Tsc tsc;
 
     FILE* childMemFile;
+    bool childMemFileIsDirty;
+
     pid_t childPID;
 
     int threadID;
@@ -327,6 +329,14 @@ void threadptrace_resume(Thread* base) {
                 break;
                 // no default
         }
+        // Flush writes if needed
+        if (thread->childMemFileIsDirty) {
+            if (fflush(thread->childMemFile) != 0) {
+                error("fflush");
+            }
+            thread->childMemFileIsDirty = false;
+        }
+
         // Allow child to start executing.
         if (ptrace(PTRACE_SYSCALL, thread->childPID, 0,
                    thread->signalToDeliver) < 0) {
@@ -432,11 +442,7 @@ void threadptrace_memcpyToPlugin(Thread* base, PluginPtr plugin_dst,
     if (count != n) {
         error("fread");
     }
-    // Consider removing? Or putting in a separate Thread API to minimize
-    // syncs if there are multiple writes?
-    if (fflush(thread->childMemFile) != 0) {
-        error("fflush");
-    }
+    thread->childMemFileIsDirty = true;
     return;
 }
 
