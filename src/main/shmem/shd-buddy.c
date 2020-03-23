@@ -6,7 +6,7 @@
 
 static BuddyControlBlock*
 _buddycontrolblock_computeBuddy(BuddyControlBlock* bcb, unsigned order,
-                                const void* pool) {
+                                void* pool) {
 
     const uint8_t* bcb_p = (const uint8_t*)bcb;
     const uint8_t* pool_p = (const uint8_t*)pool;

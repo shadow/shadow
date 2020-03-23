@@ -21,10 +21,10 @@ typedef struct _ShMemFileNode {
     ShMemFile shmf;
 } ShMemFileNode;
 
-static ShMemFileNode* _shmemfilenode_findPtr(ShMemFileNode* file_nodes,
-                                             uint8_t* p) {
+static const ShMemFileNode*
+_shmemfilenode_findPtr(const ShMemFileNode* file_nodes, uint8_t* p) {
 
-    ShMemFileNode* node = file_nodes;
+    const ShMemFileNode* node = file_nodes;
 
     // TODO (rwails) fix the possible infinite loop on bad input
     while (true) {
@@ -41,10 +41,10 @@ static ShMemFileNode* _shmemfilenode_findPtr(ShMemFileNode* file_nodes,
     return NULL;
 }
 
-static ShMemFileNode* _shmemfilenode_findName(ShMemFileNode* file_nodes,
-                                              const char* name) {
+static const ShMemFileNode*
+_shmemfilenode_findName(const ShMemFileNode* file_nodes, const char* name) {
 
-    ShMemFileNode* node = file_nodes;
+    const ShMemFileNode* node = file_nodes;
     bool found = false;
 
     if (node != NULL) {
@@ -214,12 +214,14 @@ ShMemBlock shmemallocator_alloc(ShMemAllocator* allocator, size_t nbytes) {
     ShMemBlock blk;
     memset(&blk, 0, sizeof(ShMemBlock));
 
-    if (nbytes == 0) { return blk; }
+    if (nbytes == 0) {
+        return blk;
+    }
 
     pthread_mutex_lock(&allocator->mtx);
 
     if (nbytes > SHD_SHMEM_ALLOCATOR_CUTOVER_NBYTES) {
-        blk =  _shmemallocator_bigAlloc(allocator, nbytes);
+        blk = _shmemallocator_bigAlloc(allocator, nbytes);
     } else {
         blk = _shmemallocator_littleAlloc(allocator, nbytes);
     }
@@ -280,12 +282,13 @@ void shmemallocator_free(ShMemAllocator* allocator, ShMemBlock* blk) {
     pthread_mutex_unlock(&allocator->mtx);
 }
 
-ShMemBlockSerialized shmemallocator_blockSerialize(ShMemAllocator* allocator,
-                                                   ShMemBlock* blk) {
+ShMemBlockSerialized
+shmemallocator_blockSerialize(const ShMemAllocator* allocator,
+                              ShMemBlock* blk) {
     ShMemBlockSerialized ret;
-    ShMemFileNode* node = NULL;
+    const ShMemFileNode* node = NULL;
 
-    pthread_mutex_lock(&allocator->mtx);
+    pthread_mutex_lock(&((ShMemAllocator*)allocator)->mtx);
 
     if (blk->nbytes > SHD_SHMEM_ALLOCATOR_CUTOVER_NBYTES) {
         node = _shmemfilenode_findPtr(allocator->big_alloc_nodes, blk->p);
@@ -299,17 +302,17 @@ ShMemBlockSerialized shmemallocator_blockSerialize(ShMemAllocator* allocator,
     ret.offset = (uint8_t*)blk->p - (uint8_t*)node->shmf.p;
     strncpy(ret.name, node->shmf.name, SHD_SHMEM_FILE_NAME_NBYTES);
 
-    pthread_mutex_unlock(&allocator->mtx);
+    pthread_mutex_unlock(&((ShMemAllocator*)allocator)->mtx);
     return ret;
 }
 
-ShMemBlock shmemallocator_blockDeserialize(ShMemAllocator* allocator,
+ShMemBlock shmemallocator_blockDeserialize(const ShMemAllocator* allocator,
                                            ShMemBlockSerialized* serial) {
     ShMemBlock ret;
     memset(&ret, 0, sizeof(ShMemBlock));
 
-    ShMemFileNode* node = NULL;
-    pthread_mutex_lock(&allocator->mtx);
+    const ShMemFileNode* node = NULL;
+    pthread_mutex_lock(&((ShMemAllocator*)allocator)->mtx);
 
     // scan thru both
     node = _shmemfilenode_findName(allocator->big_alloc_nodes, serial->name);
@@ -324,12 +327,12 @@ ShMemBlock shmemallocator_blockDeserialize(ShMemAllocator* allocator,
         ret.nbytes = serial->nbytes;
     }
 
-    pthread_mutex_unlock(&allocator->mtx);
+    pthread_mutex_unlock(&((ShMemAllocator*)allocator)->mtx);
     return ret;
 }
 
 ShMemSerializer* shmemserializer_create() {
-    ShMemSerializer *serializer = calloc(1, sizeof(ShMemSerializer));
+    ShMemSerializer* serializer = calloc(1, sizeof(ShMemSerializer));
     pthread_mutex_init(&serializer->mtx, NULL);
     return serializer;
 }
@@ -358,7 +361,7 @@ ShMemBlock shmemserializer_blockDeserialize(ShMemSerializer* serializer,
     ShMemBlock ret;
     memset(&ret, 0, sizeof(ShMemBlock));
 
-    ShMemFileNode* node = NULL;
+    const ShMemFileNode* node = NULL;
 
     pthread_mutex_lock(&serializer->mtx);
 
@@ -400,14 +403,15 @@ ShMemBlock shmemserializer_blockDeserialize(ShMemSerializer* serializer,
     return ret;
 }
 
-ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer,
-                                                    ShMemBlock* blk) {
+ShMemBlockSerialized
+shmemserializer_blockSerialize(const ShMemSerializer* serializer,
+                               ShMemBlock* blk) {
     ShMemBlockSerialized ret;
     memset(&ret, 0, sizeof(ShMemBlock));
 
-    ShMemFileNode* node = NULL;
+    const ShMemFileNode* node = NULL;
 
-    pthread_mutex_lock(&serializer->mtx);
+    pthread_mutex_lock(&((ShMemSerializer *)serializer)->mtx);
     node = _shmemfilenode_findPtr(serializer->nodes, blk->p);
 
     assert(node != NULL);
@@ -416,6 +420,6 @@ ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer,
     ret.offset = (uint8_t*)blk->p - (uint8_t*)node->shmf.p;
     strncpy(ret.name, node->shmf.name, SHD_SHMEM_FILE_NAME_NBYTES);
 
-    pthread_mutex_unlock(&serializer->mtx);
+    pthread_mutex_unlock(&((ShMemSerializer *)serializer)->mtx);
     return ret;
 }

@@ -25,17 +25,18 @@ void shmemallocator_destroy(ShMemAllocator* allocator);
 ShMemBlock shmemallocator_alloc(ShMemAllocator* allocator, size_t nbytes);
 void shmemallocator_free(ShMemAllocator* allocator, ShMemBlock* blk);
 
-ShMemBlockSerialized shmemallocator_blockSerialize(ShMemAllocator* allocator,
-                                                   ShMemBlock* blk);
+ShMemBlockSerialized
+shmemallocator_blockSerialize(const ShMemAllocator* allocator, ShMemBlock* blk);
 
-ShMemBlock shmemallocator_blockDeserialize(ShMemAllocator* allocator,
+ShMemBlock shmemallocator_blockDeserialize(const ShMemAllocator* allocator,
                                            ShMemBlockSerialized* serial);
 
 ShMemSerializer* shmemserializer_create();
 void shmemserializer_destroy(ShMemSerializer* serializer);
 
-ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer,
-                                                    ShMemBlock* blk);
+ShMemBlockSerialized
+shmemserializer_blockSerialize(const ShMemSerializer* serializer,
+                               ShMemBlock* blk);
 
 ShMemBlock shmemserializer_blockDeserialize(ShMemSerializer* serializer,
                                             ShMemBlockSerialized* serial);
