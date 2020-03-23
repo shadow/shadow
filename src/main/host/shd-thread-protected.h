@@ -23,6 +23,8 @@ struct _Thread {
                            PluginPtr plugin_src, size_t n);
     void (*memcpyToPlugin)(Thread* thread, PluginPtr plugin_dst,
                            void* shadow_src, size_t n);
+    void* (*clonePluginPtr)(Thread* base, PluginPtr plugin_src, size_t n);
+    void (*releaseClonedPtr)(Thread* base, void* p);
 
     // For safe down-casting. Set and checked by child class.
     int type_id;

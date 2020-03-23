@@ -78,3 +78,15 @@ void thread_memcpyToPlugin(Thread* thread, PluginPtr plugin_dst,
     utility_assert(thread->memcpyToPlugin);
     thread->memcpyToPlugin(thread, plugin_dst, shadow_src, n);
 }
+
+void* thread_clonePluginPtr(Thread* thread, PluginPtr plugin_src, size_t n) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->clonePluginPtr);
+    return thread->clonePluginPtr(thread, plugin_src, n);
+}
+
+void thread_releaseClonedPtr(Thread* thread, void* p) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->releaseClonedPtr);
+    return thread->releaseClonedPtr(thread, p);
+}
