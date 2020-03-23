@@ -447,15 +447,14 @@ void threadptrace_memcpyToPlugin(Thread* base, PluginPtr plugin_dst,
     return;
 }
 
-void* threadptrace_clonePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
+void* threadptrace_clonePluginPtr(Thread* base, PluginPtr plugin_src,
+                                  size_t n) {
     void* rv = g_new(void, n);
     threadptrace_memcpyToShadow(base, rv, plugin_src, n);
     return rv;
 }
 
-void threadptrace_releaseClonedPtr(Thread* base, void* p) {
-    g_free(p);
-}
+void threadptrace_releaseClonedPtr(Thread* base, void* p) { g_free(p); }
 
 Thread* threadptrace_new(gint threadID, SysCallHandler* sys) {
     ThreadPtrace* thread = g_new(ThreadPtrace, 1);

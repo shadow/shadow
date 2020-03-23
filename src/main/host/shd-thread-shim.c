@@ -304,16 +304,16 @@ void threadshim_releaseClonedPtr(Thread* base, void* p) {
 }
 
 void threadshim_memcpyToShadow(Thread* base, void* shadow_dst,
-                                 PluginPtr plugin_src, size_t n) {
+                               PluginPtr plugin_src, size_t n) {
     ThreadShim* thread = _threadToThreadShim(base);
 
-    void *cloned = threadshim_clonePluginPtr(base, plugin_src, n);
+    void* cloned = threadshim_clonePluginPtr(base, plugin_src, n);
     memcpy(shadow_dst, cloned, n);
     threadshim_releaseClonedPtr(base, clone);
 }
 
 void threadshim_memcpyToPlugin(Thread* base, PluginPtr plugin_dst,
-                                 void* shadow_src, size_t n) {
+                               void* shadow_src, size_t n) {
     ThreadShim* thread = _threadToThreadShim(base);
     utility_assert(false);
     // FIXME(rwails)
