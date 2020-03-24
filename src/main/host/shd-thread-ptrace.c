@@ -76,28 +76,28 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
 
     switch (pid) {
         case -1: {
-            error("fork failed");
+            error("fork: %s", g_strerror(errno));
             return -1;
         }
         case 0: {
             // child
             // Disable RDTSC
             if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
-                error("prctl: %s", strerror(errno));
+                error("prctl: %s", g_strerror(errno));
                 return -1;
             }
             // Allow parent to trace.
             if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
-                error("ptrace: %s", strerror(errno));
+                error("ptrace: %s", g_strerror(errno));
                 return -1;
             }
             // Wait for parent to attach.
             if (raise(SIGSTOP) < 0) {
-                error("raise: %s", strerror(errno));
+                error("raise: %s", g_strerror(errno));
                 return -1;
             }
             if (execvpe(file, argv, envp) < 0) {
-                error("execvpe: %s", strerror(errno));
+                error("execvpe: %s", g_strerror(errno));
                 return -1;
             }
             while (1) {
@@ -126,7 +126,7 @@ static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
     snprintf(path, 64, "/proc/%d/mem", thread->childPID);
     thread->childMemFile = fopen(path, "r+");
     if (thread->childMemFile == NULL) {
-        error("fopen %s: %s", path, strerror(errno));
+        error("fopen %s: %s", path, g_strerror(errno));
         return;
     }
 }
@@ -134,7 +134,7 @@ static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
 static void _threadptrace_enterStateSyscallPre(ThreadPtrace* thread) {
     struct user_regs_struct* const regs = &thread->syscall.regs;
     if (ptrace(PTRACE_GETREGS, thread->childPID, 0, regs) < 0) {
-        error("ptrace");
+        error("ptrace: %s", g_strerror(errno));
         return;
     }
     SysCallArgs args = {
@@ -151,7 +151,7 @@ static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
     snprintf(path, 64, "/proc/%d/mem", thread->childPID);
     thread->childMemFile = freopen(path, "r+", thread->childMemFile);
     if (thread->childMemFile == NULL) {
-        error("fopen %s: %s", path, strerror(errno));
+        error("fopen %s: %s", path, g_strerror(errno));
         return;
     }
 }
@@ -165,7 +165,7 @@ static void _threadptrace_enterStateSyscallPost(ThreadPtrace* thread) {
                 thread->syscall.sysCallReturn.retval.as_u64;
             if (ptrace(PTRACE_SETREGS, thread->childPID, 0,
                        &thread->syscall.regs) < 0) {
-                error("ptrace");
+                error("ptrace: %s", g_strerror(errno));
                 return;
             }
             break;
@@ -181,7 +181,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
     if (signal == SIGSEGV) {
         struct user_regs_struct regs;
         if (ptrace(PTRACE_GETREGS, thread->childPID, 0, &regs) < 0) {
-            error("ptrace");
+            error("ptrace: %s", g_strerror(errno));
             return;
         }
         uint8_t buf[16];
@@ -193,7 +193,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
                              &regs,
                              worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
             if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &regs) < 0) {
-                error("ptrace");
+                error("ptrace", g_strerror(errno));
                 return;
             }
             return;
@@ -203,7 +203,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
                               &regs,
                               worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
             if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &regs) < 0) {
-                error("ptrace");
+                error("ptrace", g_strerror(errno));
                 return;
             }
             return;
@@ -222,7 +222,7 @@ static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     // Wait for child to stop.
     int wstatus;
     if (waitpid(thread->childPID, &wstatus, 0) < 0) {
-        error("waitpid: %s", strerror(errno));
+        error("waitpid: %s", g_strerror(errno));
         return;
     }
 
@@ -241,7 +241,7 @@ static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     }
     if (!WIFSTOPPED(wstatus)) {
         // NOT stopped by a ptrace event.
-        error("Unknown waitpid reason");
+        error("Unknown waitpid reason. wstatus: %x", wstatus);
         return;
     }
     const int signal = WSTOPSIG(wstatus);
@@ -306,7 +306,7 @@ void threadptrace_resume(Thread* base) {
                         thread->syscall.regs.orig_rax = -1;
                         if (ptrace(PTRACE_SETREGS, thread->childPID, 0,
                                    &thread->syscall.regs) != 0) {
-                            error("ptrace");
+                            error("ptrace: %s", g_strerror(errno));
                             return;
                         }
                         break;
@@ -333,7 +333,7 @@ void threadptrace_resume(Thread* base) {
         // Flush writes if needed
         if (thread->childMemFileIsDirty) {
             if (fflush(thread->childMemFile) != 0) {
-                error("fflush");
+                error("fflush: %s", g_strerror(errno));
             }
             thread->childMemFileIsDirty = false;
         }
@@ -341,7 +341,7 @@ void threadptrace_resume(Thread* base) {
         // Allow child to start executing.
         if (ptrace(PTRACE_SYSCALL, thread->childPID, 0,
                    thread->signalToDeliver) < 0) {
-            error("ptrace %d: %s", thread->childPID, strerror(errno));
+            error("ptrace %d: %s", thread->childPID, g_strerror(errno));
             return;
         }
         thread->signalToDeliver = 0;
@@ -416,7 +416,7 @@ void threadptrace_memcpyToShadow(Thread* base, void* shadow_dst,
 
     clearerr(thread->childMemFile);
     if (fseek(thread->childMemFile, plugin_src.val, SEEK_SET) < 0) {
-        error("fseek");
+        error("fseek %p: %s", (void*)plugin_src.val, g_strerror(errno));
         return;
     }
     size_t count = fread(shadow_dst, 1, n, thread->childMemFile);
@@ -425,8 +425,7 @@ void threadptrace_memcpyToShadow(Thread* base, void* shadow_dst,
             error("EOF");
             return;
         }
-        error("fread returned %d instead of %d: %s", count, n,
-              ferror(thread->childMemFile));
+        error("fread %u -> %u: %s", n, count, g_strerror(errno));
     }
     return;
 }
@@ -436,12 +435,12 @@ void threadptrace_memcpyToPlugin(Thread* base, PluginPtr plugin_dst,
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     if (fseek(thread->childMemFile, plugin_dst.val, SEEK_SET) < 0) {
-        error("fseek");
+        error("fseek %p: %s", (void*)plugin_dst.val, g_strerror(errno));
         return;
     }
     size_t count = fwrite(shadow_src, 1, n, thread->childMemFile);
     if (count != n) {
-        error("fread");
+        error("fwrite %u -> %u: %s", n, count, g_strerror(errno));
     }
     thread->childMemFileIsDirty = true;
     return;
