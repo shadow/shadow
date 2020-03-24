@@ -90,3 +90,15 @@ void thread_releaseClonedPtr(Thread* thread, void* p) {
     utility_assert(thread->releaseClonedPtr);
     thread->releaseClonedPtr(thread, p);
 }
+
+const void* thread_readPluginPtr(Thread* thread, PluginPtr plugin_src, size_t n) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->readPluginPtr);
+    return thread->readPluginPtr(thread, plugin_src, n);
+}
+
+void* thread_writePluginPtr(Thread* thread, PluginPtr plugin_src, size_t n){
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->readPluginPtr);
+    return thread->writePluginPtr(thread, plugin_src, n);
+}

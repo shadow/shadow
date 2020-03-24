@@ -25,6 +25,9 @@ struct _Thread {
                            void* shadow_src, size_t n);
     void* (*clonePluginPtr)(Thread* base, PluginPtr plugin_src, size_t n);
     void (*releaseClonedPtr)(Thread* base, void* p);
+    const void* (*readPluginPtr)(Thread* thread, PluginPtr plugin_src,
+                                 size_t n);
+    void* (*writePluginPtr)(Thread* thread, PluginPtr plugin_src, size_t n);
 
     // For safe down-casting. Set and checked by child class.
     int type_id;

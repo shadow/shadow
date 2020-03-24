@@ -323,6 +323,37 @@ void threadshim_memcpyToPlugin(Thread* base, PluginPtr plugin_dst,
     // * Free the shared memory
 }
 
+const void* threadshim_readPluginPtr(Thread* base, PluginPtr plugin_src,
+                                     size_t n) {
+    utility_assert(false);
+    return NULL;
+    // FIXME(rwails)
+    // Initial implementation can:
+    // * Allocate space in shared memory
+    // * Send memcpy command via pipe
+    // * Add the pointer to a list to be freed before returning control to the
+    // plugin.
+    //
+    // As an optimization, we could later allow the plugin to request shared
+    // regions that *it* owns.  This function could recognize if plugin_src
+    // already belongs to such a region, and if so just return the pointer.
+}
+
+void* threadshim_writePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
+    utility_assert(false);
+    return NULL;
+    // FIXME(rwails)
+    // Initial implementation can:
+    // * Allocate space in shared memory
+    // * Save metadata about this region, s.t. before returning control to the
+    // plugin, we tell it to memcpy from the shared region to the original
+    // pointer location in its address space.
+    //
+    // As an optimization, we could later allow the plugin to request shared
+    // regions that *it* owns. This function could recognize if plugin_src
+    // already belongs to such a region, and if so just return the pointer.
+}
+
 Thread* threadshim_new(gint threadID, SysCallHandler* sys) {
     ThreadShim* thread = g_new0(ThreadShim, 1);
 

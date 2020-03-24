@@ -30,10 +30,25 @@ typedef enum {
     THREAD_PTRACE_CHILD_STATE_EXITED,
 } ThreadPtraceChildState;
 
+typedef struct _PendingWrite {
+    PluginPtr pluginPtr;
+    void *ptr;
+    size_t n;
+} PendingWrite;
+
 typedef struct _ThreadPtrace {
     Thread base;
 
     SysCallHandler* sys;
+
+    // GArray of PendingWrite, to be flushed before returning control to the
+    // plugin.
+    GArray* pendingWrites;
+
+    // GArray of void*s that were previously returned by
+    // threadptrace_readPluginPtr. These should be freed before returning
+    // control to the plugin.
+    GArray* readPointers;
 
     Tsc tsc;
 
@@ -60,6 +75,10 @@ typedef struct _ThreadPtrace {
     // be delivered.
     intptr_t signalToDeliver;
 } ThreadPtrace;
+
+// Forward declaration.
+void threadptrace_memcpyToPlugin(Thread* base, PluginPtr plugin_dst,
+                                 void* shadow_src, size_t n);
 
 static ThreadPtrace* _threadToThreadPtrace(Thread* thread) {
     utility_assert(thread->type_id == THREADPTRACE_TYPE_ID);
@@ -330,6 +349,28 @@ void threadptrace_resume(Thread* base) {
                 break;
                 // no default
         }
+        // Free any read pointers
+        if (thread->readPointers->len > 0) {
+            for (int i = 0; i < thread->pendingWrites->len; ++i) {
+                void* p = g_array_index(thread->pendingWrites, void*, i);
+                g_free(p);
+            }
+            thread->readPointers = g_array_set_size(thread->readPointers, 0);
+        }
+        // Perform writes if needed
+        if (thread->pendingWrites->len > 0) {
+            for (int i = 0; i < thread->pendingWrites->len; ++i) {
+                PendingWrite* write =
+                    &g_array_index(thread->pendingWrites, PendingWrite, i);
+                threadptrace_memcpyToPlugin(_threadPtraceToThread(thread),
+                                            write->pluginPtr,
+                                            write->ptr,
+                                            write->n);
+                g_free(write->ptr);
+            }
+            thread->pendingWrites = g_array_set_size(thread->pendingWrites, 0);
+            thread->childMemFileIsDirty = true;
+        }
         // Flush writes if needed
         if (thread->childMemFileIsDirty) {
             if (fflush(thread->childMemFile) != 0) {
@@ -337,7 +378,6 @@ void threadptrace_resume(Thread* base) {
             }
             thread->childMemFileIsDirty = false;
         }
-
         // Allow child to start executing.
         if (ptrace(PTRACE_SYSCALL, thread->childPID, 0,
                    thread->signalToDeliver) < 0) {
@@ -455,6 +495,28 @@ void* threadptrace_clonePluginPtr(Thread* base, PluginPtr plugin_src,
 
 void threadptrace_releaseClonedPtr(Thread* base, void* p) { g_free(p); }
 
+const void* threadptrace_readPluginPtr(Thread* base, PluginPtr plugin_src,
+                                       size_t n) {
+    // TODO: Use mmap instead.
+
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+    void* rv = g_new(void, n);
+    g_array_append_val(thread->readPointers, rv);
+    threadptrace_memcpyToShadow(base, rv, plugin_src, n);
+    return rv;
+}
+
+void* threadptrace_writePluginPtr(Thread* base, PluginPtr plugin_src,
+                                  size_t n) {
+    // TODO: Use mmap instead.
+
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+    void* rv = g_new(void, n);
+    PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
+    g_array_append_val(thread->pendingWrites, pendingWrite);
+    return rv;
+}
+
 Thread* threadptrace_new(gint threadID, SysCallHandler* sys) {
     ThreadPtrace* thread = g_new(ThreadPtrace, 1);
     *thread = (ThreadPtrace){
@@ -469,6 +531,8 @@ Thread* threadptrace_new(gint threadID, SysCallHandler* sys) {
                          .memcpyToShadow = threadptrace_memcpyToShadow,
                          .clonePluginPtr = threadptrace_clonePluginPtr,
                          .releaseClonedPtr = threadptrace_releaseClonedPtr,
+                         .readPluginPtr = threadptrace_readPluginPtr,
+                         .writePluginPtr = threadptrace_writePluginPtr,
 
                          .type_id = THREADPTRACE_TYPE_ID,
                          .referenceCount = 1},
@@ -477,6 +541,9 @@ Thread* threadptrace_new(gint threadID, SysCallHandler* sys) {
         .tsc = {.cyclesPerSecond = 2000000000UL},
         .threadID = threadID,
         .childState = THREAD_PTRACE_CHILD_STATE_NONE};
+
+    thread->pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite));
+    thread->readPointers = g_array_new(FALSE, FALSE, sizeof(void*));
 
     syscallhandler_ref(sys);
     MAGIC_INIT(&thread->base);
