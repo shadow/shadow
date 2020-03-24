@@ -30,12 +30,12 @@ void Tsc_emulateRdtscp(const Tsc* tsc, struct user_regs_struct* regs,
                        uint64_t nanos);
 
 // Whether `buf` begins with an rdtsc instruction.
-static inline bool isRdtsc(uint8_t* buf) {
+static inline bool isRdtsc(const uint8_t* buf) {
     return buf[0] == 0x0f && buf[1] == 0x31;
 }
 
 // Whether `buf` begins with an rdtscp instruction.
-static inline bool isRdtscp(uint8_t* buf) {
+static inline bool isRdtscp(const uint8_t* buf) {
     return buf[0] == 0x0f && buf[1] == 0x01 && buf[2] == 0xf9;
 }
 

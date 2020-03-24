@@ -303,26 +303,6 @@ void threadshim_releaseClonedPtr(Thread* base, void* p) {
     // * Release the pointer
 }
 
-void threadshim_memcpyToShadow(Thread* base, void* shadow_dst,
-                               PluginPtr plugin_src, size_t n) {
-    ThreadShim* thread = _threadToThreadShim(base);
-
-    void* cloned = threadshim_clonePluginPtr(base, plugin_src, n);
-    memcpy(shadow_dst, cloned, n);
-    threadshim_releaseClonedPtr(base, clone);
-}
-
-void threadshim_memcpyToPlugin(Thread* base, PluginPtr plugin_dst,
-                               void* shadow_src, size_t n) {
-    ThreadShim* thread = _threadToThreadShim(base);
-    utility_assert(false);
-    // FIXME(rwails)
-    // * Allocate space in shared memory
-    // * memcpy `shadow_src` into that region
-    // * Send memcpy command via pipe
-    // * Free the shared memory
-}
-
 const void* threadshim_readPluginPtr(Thread* base, PluginPtr plugin_src,
                                      size_t n) {
     utility_assert(false);
@@ -369,8 +349,6 @@ Thread* threadshim_new(gint threadID, SysCallHandler* sys) {
                             .getReturnCode = threadshim_getReturnCode,
                             .isRunning = threadshim_isRunning,
                             .free = threadshim_free,
-                            .memcpyToShadow = threadshim_memcpyToShadow,
-                            .memcpyToPlugin = threadshim_memcpyToPlugin,
                             .clonePluginPtr = threadshim_clonePluginPtr,
                             .releaseClonedPtr = threadshim_releaseClonedPtr,
 

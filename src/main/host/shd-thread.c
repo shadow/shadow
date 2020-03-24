@@ -65,20 +65,6 @@ gboolean thread_isRunning(Thread* thread) {
     return thread->isRunning(thread);
 }
 
-void thread_memcpyToShadow(Thread* thread, void* shadow_dst,
-                           PluginPtr plugin_src, size_t n) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->memcpyToShadow);
-    thread->memcpyToShadow(thread, shadow_dst, plugin_src, n);
-}
-
-void thread_memcpyToPlugin(Thread* thread, PluginPtr plugin_dst,
-                           void* shadow_src, size_t n) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->memcpyToPlugin);
-    thread->memcpyToPlugin(thread, plugin_dst, shadow_src, n);
-}
-
 void* thread_clonePluginPtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->clonePluginPtr);

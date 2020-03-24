@@ -77,8 +77,11 @@ typedef struct _ThreadPtrace {
 } ThreadPtrace;
 
 // Forward declaration.
-void threadptrace_memcpyToPlugin(Thread* base, PluginPtr plugin_dst,
-                                 void* shadow_src, size_t n);
+static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
+                                         PluginPtr plugin_dst, void* shadow_src,
+                                         size_t n);
+const void* threadptrace_readPluginPtr(Thread* base, PluginPtr plugin_src,
+                                       size_t n);
 
 static ThreadPtrace* _threadToThreadPtrace(Thread* thread) {
     utility_assert(thread->type_id == THREADPTRACE_TYPE_ID);
@@ -203,10 +206,9 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
             error("ptrace: %s", g_strerror(errno));
             return;
         }
-        uint8_t buf[16];
         uint64_t eip = regs.rip;
-        thread_memcpyToShadow(_threadPtraceToThread(thread), buf,
-                              (PluginPtr){eip}, 16);
+        const uint8_t* buf = thread_readPluginPtr(
+            _threadPtraceToThread(thread), (PluginPtr){eip}, 16);
         if (isRdtsc(buf)) {
             Tsc_emulateRdtsc(&thread->tsc,
                              &regs,
@@ -362,10 +364,8 @@ void threadptrace_resume(Thread* base) {
             for (int i = 0; i < thread->pendingWrites->len; ++i) {
                 PendingWrite* write =
                     &g_array_index(thread->pendingWrites, PendingWrite, i);
-                threadptrace_memcpyToPlugin(_threadPtraceToThread(thread),
-                                            write->pluginPtr,
-                                            write->ptr,
-                                            write->n);
+                _threadptrace_memcpyToPlugin(
+                    thread, write->pluginPtr, write->ptr, write->n);
                 g_free(write->ptr);
             }
             thread->pendingWrites = g_array_set_size(thread->pendingWrites, 0);
@@ -450,10 +450,8 @@ void threadptrace_free(Thread* base) {
     g_free(thread);
 }
 
-void threadptrace_memcpyToShadow(Thread* base, void* shadow_dst,
-                                 PluginPtr plugin_src, size_t n) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-
+static void _threadptrace_memcpyToShadow(ThreadPtrace* thread, void* shadow_dst,
+                                         PluginPtr plugin_src, size_t n) {
     clearerr(thread->childMemFile);
     if (fseek(thread->childMemFile, plugin_src.val, SEEK_SET) < 0) {
         error("fseek %p: %s", (void*)plugin_src.val, g_strerror(errno));
@@ -470,10 +468,9 @@ void threadptrace_memcpyToShadow(Thread* base, void* shadow_dst,
     return;
 }
 
-void threadptrace_memcpyToPlugin(Thread* base, PluginPtr plugin_dst,
-                                 void* shadow_src, size_t n) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-
+static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
+                                         PluginPtr plugin_dst, void* shadow_src,
+                                         size_t n) {
     if (fseek(thread->childMemFile, plugin_dst.val, SEEK_SET) < 0) {
         error("fseek %p: %s", (void*)plugin_dst.val, g_strerror(errno));
         return;
@@ -488,8 +485,9 @@ void threadptrace_memcpyToPlugin(Thread* base, PluginPtr plugin_dst,
 
 void* threadptrace_clonePluginPtr(Thread* base, PluginPtr plugin_src,
                                   size_t n) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
     void* rv = g_new(void, n);
-    threadptrace_memcpyToShadow(base, rv, plugin_src, n);
+    _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
     return rv;
 }
 
@@ -502,7 +500,7 @@ const void* threadptrace_readPluginPtr(Thread* base, PluginPtr plugin_src,
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     void* rv = g_new(void, n);
     g_array_append_val(thread->readPointers, rv);
-    threadptrace_memcpyToShadow(base, rv, plugin_src, n);
+    _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
     return rv;
 }
 
@@ -527,8 +525,6 @@ Thread* threadptrace_new(gint threadID, SysCallHandler* sys) {
                          .getReturnCode = threadptrace_getReturnCode,
                          .isRunning = threadptrace_isRunning,
                          .free = threadptrace_free,
-                         .memcpyToPlugin = threadptrace_memcpyToPlugin,
-                         .memcpyToShadow = threadptrace_memcpyToShadow,
                          .clonePluginPtr = threadptrace_clonePluginPtr,
                          .releaseClonedPtr = threadptrace_releaseClonedPtr,
                          .readPluginPtr = threadptrace_readPluginPtr,
