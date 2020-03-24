@@ -12,6 +12,7 @@
 
 #include "main/core/worker.h"
 #include "main/host/shd-thread-protected.h"
+#include "main/host/tsc.h"
 #include "support/logger/logger.h"
 
 #define THREADPTRACE_TYPE_ID 3024
@@ -32,6 +33,8 @@ typedef struct _ThreadPtrace {
     Thread base;
 
     SysCallHandler* sys;
+
+    Tsc tsc;
 
     FILE* childMemFile;
     pid_t childPID;
@@ -76,12 +79,10 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
         case 0: {
             // child
             // Disable RDTSC
-            // FIXME: We eventually want to do this, but the emulation isn't
-            // working reliably yet.
-            //            if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
-            //                error("prctl: %s", strerror(errno));
-            //                return -1;
-            //            }
+            if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
+                error("prctl: %s", strerror(errno));
+                return -1;
+            }
             // Allow parent to trace.
             if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
                 error("ptrace: %s", strerror(errno));
@@ -171,66 +172,6 @@ static void _threadptrace_enterStateSyscallPost(ThreadPtrace* thread) {
     }
 }
 
-static uint64_t _get_cycles_per_ms() {
-    // FIXME: use cpuid to get the canonical answer.
-    uint64_t min_cycles = UINT64_MAX;
-    for (int i = 0; i < 10; ++i) {
-        struct timespec ts_start;
-        clock_gettime(CLOCK_MONOTONIC, &ts_start);
-        uint64_t rdtsc_start = __rdtsc();
-
-        usleep(10000);
-
-        struct timespec ts_end;
-        clock_gettime(CLOCK_MONOTONIC, &ts_end);
-        uint64_t rdtsc_end = __rdtsc();
-        uint64_t cycles = rdtsc_end - rdtsc_start;
-        uint64_t ns = (uint64_t)ts_end.tv_sec * 1000000000UL + ts_end.tv_nsec -
-                      (uint64_t)ts_start.tv_sec * 1000000000UL -
-                      ts_start.tv_nsec;
-        min_cycles = MIN(min_cycles, cycles * 1000000 / ns);
-    }
-    info("Calculated %" PRIu64 " cycles_per_ms", min_cycles);
-    return min_cycles;
-}
-
-static void _set_rdtsc_cycles(struct user_regs_struct* regs) {
-    // FIXME this needs a mutex to handle multiple worker threads
-    static uint64_t cycles_per_ms = 0;
-    if (cycles_per_ms == 0) {
-        cycles_per_ms = _get_cycles_per_ms();
-    }
-
-    // RDTSC instruction, which we disabled after fork. emulate it.
-    EmulatedTime t = worker_getEmulatedTime();
-
-    uint64_t cycles = t / SIMTIME_ONE_MILLISECOND * cycles_per_ms;
-    regs->rdx = (cycles >> 32) & 0xffffffff;
-    regs->rax = cycles & 0xffffffff;
-}
-
-static void _emulate_rdtsc(struct user_regs_struct* regs) {
-    _set_rdtsc_cycles(regs);
-    regs->rip += 2;
-}
-
-static void _emulate_rdtscp(struct user_regs_struct* regs) {
-    _set_rdtsc_cycles(regs);
-    // FIXME: using the real instruction to put plausible data int rcx, but we
-    // probably want an emulated value. It's some metadata about the processor,
-    // including the processor ID.
-    unsigned int a;
-    __rdtscp(&a);
-    regs->rcx = a;
-    regs->rip += 3;
-}
-
-static bool _is_rdtsc(uint8_t* buf) { return buf[0] == 0x0f && buf[1] == 0x31; }
-
-static bool _is_rdtscp(uint8_t* buf) {
-    return buf[0] == 0x0f && buf[1] == 0x01 && buf[2] == 0xf9;
-}
-
 static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
                                               int signal) {
     thread->childState = THREAD_PTRACE_CHILD_STATE_SIGNALLED;
@@ -244,16 +185,20 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
         uint64_t eip = regs.rip;
         thread_memcpyToShadow(_threadPtraceToThread(thread), buf,
                               (PluginPtr){eip}, 16);
-        if (_is_rdtsc(buf)) {
-            _emulate_rdtsc(&regs);
+        if (isRdtsc(buf)) {
+            Tsc_emulateRdtsc(&thread->tsc,
+                             &regs,
+                             worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
             if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &regs) < 0) {
                 error("ptrace");
                 return;
             }
             return;
         }
-        if (_is_rdtscp(buf)) {
-            _emulate_rdtscp(&regs);
+        if (isRdtscp(buf)) {
+            Tsc_emulateRdtscp(&thread->tsc,
+                              &regs,
+                              worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
             if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &regs) < 0) {
                 error("ptrace");
                 return;
@@ -266,6 +211,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
         // fall through
     }
     // Deliver the signal.
+    warning("Delivering signal %d", signal);
     thread->signalToDeliver = signal;
 }
 
@@ -323,7 +269,6 @@ static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     }
     _threadptrace_enterStateSignalled(thread, signal);
 
-    error("Unhandled stop signal: %d", signal);
     return;
 }
 
@@ -379,7 +324,7 @@ void threadptrace_resume(Thread* base) {
                 return;
             case THREAD_PTRACE_CHILD_STATE_SIGNALLED:
                 debug("THREAD_PTRACE_CHILD_STATE_SIGNALLED");
-                return;
+                break;
                 // no default
         }
         // Allow child to start executing.
@@ -511,6 +456,8 @@ Thread* threadptrace_new(gint threadID, SysCallHandler* sys) {
                          .type_id = THREADPTRACE_TYPE_ID,
                          .referenceCount = 1},
         .sys = sys,
+        // FIXME: This should the emulated CPU's frequency
+        .tsc = {.cyclesPerSecond = 2000000000UL},
         .threadID = threadID,
         .childState = THREAD_PTRACE_CHILD_STATE_NONE};
 

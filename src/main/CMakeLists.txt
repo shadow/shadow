@@ -96,12 +96,17 @@ set(REMORA_SRC
 
 add_library(shadow-remora STATIC ${REMORA_SRC})
 
+add_library(shadow-tsc STATIC host/tsc.c)
+add_executable(tsc_test host/tsc_test.c)
+target_link_libraries(tsc_test ${GLIB_LIBRARIES} shadow-tsc)
+add_test(NAME tsc_test COMMAND tsc_test)
+
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
 add_dependencies(shadow shadow-remora)
 target_link_libraries(shadow
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
-   ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} shadow-remora logger shadow-shim-helper)
+   ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} shadow-remora logger shadow-shim-helper shadow-tsc)
 install(TARGETS shadow DESTINATION bin)
 
 
