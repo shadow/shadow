@@ -111,31 +111,33 @@ static void _syscallhandler_block(SysCallHandler* sys, Thread* thread, Simulatio
 
 SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys, Thread* thread,
                                        const SysCallArgs* args) {
-    struct timespec req;
+    const struct timespec *req;
+
+    struct timespec req_for_preload_hack;
     if (process_getInterposeMethod(sys->process) == INTERPOSE_PRELOAD) {
-        // FIXME: shim path FIXME: arg[0] and arg[1] should be pointers to
-        // shared memory.  TODO(ryanwails): Add shared memory mechanism,and an
-        // API for mapping shim-side pointers to shadow-side pointers.
-        req = (struct timespec){.tv_sec = args->args[0].as_i64,
-                                .tv_nsec = args->args[1].as_i64};
+        // FIXME: This is a workaround until ThreadPreload implements
+        // thread_readPluginPtr.
+        req_for_preload_hack = (struct timespec){
+            .tv_sec = args->args[0].as_i64, .tv_nsec = args->args[1].as_i64};
+        req = &req_for_preload_hack;
     } else {
-        thread_memcpyToShadow(thread, &req, args->args[0].as_ptr, sizeof(req));
+        req = thread_readPluginPtr(thread, args->args[0].as_ptr, sizeof(*req));
     }
 
-    if (!(req.tv_nsec >= 0 && req.tv_nsec <= 999999999)) {
+    if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
         return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
                                .retval.as_i64 = -EINVAL};
     }
 
-    if (req.tv_sec == 0 && req.tv_nsec == 0) {
+    if (req->tv_sec == 0 && req->tv_nsec == 0) {
         return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
                                .retval.as_i64 = 0};
     }
 
     /* how much simtime do we wait */
     SimulationTime sleepDelay =
-        ((SimulationTime)req.tv_nsec) +
-        ((SimulationTime)req.tv_sec * SIMTIME_ONE_SECOND);
+        ((SimulationTime)req->tv_nsec) +
+        ((SimulationTime)req->tv_sec * SIMTIME_ONE_SECOND);
 
     /* set up a block task in the host */
     // TODO I think this should go in process.c with the rest of the thread
@@ -149,29 +151,34 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys, Thread* thread,
 SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys, Thread* thread,
                                            const SysCallArgs* args) {
     clockid_t clk_id = args->args[0].as_u64;
-    struct timespec res_timespec = {};
     debug("syscallhandler_clock_gettime with %d %p", clk_id,
           args->args[1].as_ptr);
 
+    struct timespec* res_timespec;
+    struct timespec res_timespec_for_preload_hack;
+    if (process_getInterposeMethod(sys->process) == INTERPOSE_PRELOAD) {
+        // FIXME: remove when ThreadShim implements thread_writePluginPtr
+        res_timespec = &res_timespec_for_preload_hack;
+    } else {
+        res_timespec = thread_writePluginPtr(
+            thread, args->args[1].as_ptr, sizeof(*res_timespec));
+    }
+
     EmulatedTime now = _syscallhandler_getEmulatedTime();
-    res_timespec.tv_sec = now / SIMTIME_ONE_SECOND;
-    res_timespec.tv_nsec = now % SIMTIME_ONE_SECOND;
+    res_timespec->tv_sec = now / SIMTIME_ONE_SECOND;
+    res_timespec->tv_nsec = now % SIMTIME_ONE_SECOND;
 
     if (process_getInterposeMethod(sys->process) == INTERPOSE_PRELOAD) {
-        // FIXME: shim path
-        // FIXME: args[1] should be a pointer to the timespec.
-        // For now we instead write the result as i64 nanos in the
-        // returned register.
+        // FIXME: remote when ThreadShim implements thread_writePluginPtr
+ 
+        // Since we don't have a way to write memory yet, we instead write the
+        // result as i64 nanos in the returned register.
         return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
                                .retval.as_i64 =
-                                   res_timespec.tv_sec * 1000000000LL +
-                                   res_timespec.tv_nsec};
-    } else {
-        thread_memcpyToPlugin(thread, args->args[1].as_ptr, &res_timespec,
-                              sizeof(res_timespec));
-        return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
-                               .retval.as_i64 = 0};
+                                   res_timespec->tv_sec * 1000000000LL +
+                                   res_timespec->tv_nsec};
     }
+    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
 }
 
 SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys, Thread* thread,
