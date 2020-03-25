@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "shim.h"
 #include "shim_event.h"
 
@@ -55,8 +54,8 @@ static TIDFDPair _shim_tidFDTreeGet(pthread_t tid) {
 
 static bool _using_interpose_preload;
 
-__attribute__((constructor))
-static void _shim_load() {
+// Priority must be higher than those in system-libc.c.
+__attribute__((constructor(201))) static void _shim_load() {
     const char* interpose_method = getenv("SHADOW_INTERPOSE_METHOD");
     _using_interpose_preload =
         interpose_method != NULL && !strcmp(interpose_method, "PRELOAD");

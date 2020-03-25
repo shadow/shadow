@@ -9,32 +9,23 @@
 
 #ifdef SHADOW_SHIM
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-#include <dlfcn.h>
+// Forward declare global function pointers system_libc_X, which will point to
+// the respective functions X.
+#define SYSTEM_LIBC_FN(name, return_type, args)                       \
+    extern return_type(*system_libc_##name) args;
+#include "system-libc-fns.inc.h"
+#undef SYSTEM_LIBC_FN
 
-#include "shim.h"
-
-
-#define SHADOW_SYSTEM_LIBC_INIT(return_type, name, args)                       \
-    static return_type(*system_libc_##name) args;                              \
-    __attribute__((constructor)) static void _system_libc_init_##name() {      \
-        system_libc_##name = dlsym(RTLD_NEXT, #name);                          \
-        if (system_libc_##name == NULL) {                                      \
-            SHD_SHIM_LOG("dlsym(%s): dlerror(): %s\n", #name, dlerror());      \
-        }                                                                      \
-    }
-
-SHADOW_SYSTEM_LIBC_INIT(long, syscall, (long n, ...))
-SHADOW_SYSTEM_LIBC_INIT(ssize_t, recv, (int a, void *b, size_t c, int flags));
-SHADOW_SYSTEM_LIBC_INIT(ssize_t, send, (int a, const void *b, size_t c, int flags));
 
 #else // SHADOW_SHIM
 
-#define system_libc_syscall syscall
+// When adding a function here, add it also to system-libc-fns.inc.h
+// (Unfortunately the xmacro trick used above doesn't work here, so we have to
+// repeat ourselves.)
+#define system_libc_abort abort 
 #define system_libc_recv recv 
 #define system_libc_send send 
+#define system_libc_syscall syscall
 
 #endif // SHADOW_SHIM
 

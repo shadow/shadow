@@ -15,6 +15,7 @@ set(SHIM_FILES
   preload.c
   shim.c
   socket.c
+  system-libc.c
 )
 add_library(${SHIM_LIB} SHARED ${SHIM_FILES})
 set_target_properties(${SHIM_LIB} PROPERTIES 
@@ -22,7 +23,12 @@ set_target_properties(${SHIM_LIB} PROPERTIES
     INSTALL_RPATH_USE_LINK_PATH TRUE 
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib"
 )
-target_compile_options(${SHIM_LIB} PRIVATE -pthread -DSHADOW_SHIM)
+# -DSHADOW_SHIM indicates that this code will run in the shim. This is used
+# e.g. to select the appropriate mechanism for calling libc functions that
+# would otherwise be overriden from in the shim.
+#
+# -D_GNU_SOURCE enables some additional features in libc, such at RTLD_NEXT.
+target_compile_options(${SHIM_LIB} PRIVATE -pthread -DSHADOW_SHIM -D_GNU_SOURCE)
 target_link_libraries(${SHIM_LIB} -pthread -ldl)
 install(TARGETS ${SHIM_LIB} DESTINATION lib)
 
