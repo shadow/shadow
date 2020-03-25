@@ -15,6 +15,7 @@ typedef struct _ShMemFile {
 int shmemfile_alloc(size_t nbytes, ShMemFile *shmf);
 
 int shmemfile_map(const char *name, size_t nbytes, ShMemFile *shmf);
+int shmemfile_unmap(ShMemFile *shmf);
 
 int shmemfile_free(ShMemFile *shmf);
 

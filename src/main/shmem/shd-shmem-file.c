@@ -142,11 +142,17 @@ int shmemfile_map(const char* name, size_t nbytes, ShMemFile* shmf) {
     return -1 * (bad);
 }
 
-int shmemfile_free(ShMemFile* shmf) {
+int shmemfile_unmap(ShMemFile *shmf) {
     int rc = munmap(shmf->p, shmf->nbytes);
-    if (rc != 0) {
+    if (rc) {
         SHD_SHMEM_LOG_ERROR("error on munmap: %s", strerror(errno));
-    } else {
+    }
+    return rc;
+}
+
+int shmemfile_free(ShMemFile* shmf) {
+    int rc = shmemfile_unmap(shmf);
+    if (rc == 0) {
         rc = shm_unlink(shmf->name);
         if (rc) {
             SHD_SHMEM_LOG_ERROR("error on shm_unlink: %s", strerror(errno));
