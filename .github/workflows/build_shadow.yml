@@ -9,9 +9,6 @@ on:
       - '**.md'
       - 'LICENSE'
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
 
 jobs:
   testing:
