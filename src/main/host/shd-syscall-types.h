@@ -22,7 +22,7 @@ typedef struct _SysCallArgs {
     // (mostly included from
     // /usr/include/x86_64-linux-gnu/bits/syscall.h)
     long number;
-    SysCallReg args[5];
+    SysCallReg args[6];
 } SysCallArgs;
 
 typedef enum {

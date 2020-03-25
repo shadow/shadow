@@ -78,7 +78,8 @@ static long _vreal_syscall(long n, va_list args) {
     long arg3 = va_arg(args, long);
     long arg4 = va_arg(args, long);
     long arg5 = va_arg(args, long);
-    return system_libc_syscall(n, arg1, arg2, arg3, arg4, arg5);
+    long arg6 = va_arg(args, long);
+    return system_libc_syscall(n, arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 // man 2 syscall
