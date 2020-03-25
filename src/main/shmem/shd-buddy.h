@@ -1,6 +1,8 @@
 #ifndef SHD_BUDDY_H_
 #define SHD_BUDDY_H_
 
+/* Intended to be private to shd-shmem-allocator. */
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>

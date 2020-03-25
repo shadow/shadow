@@ -108,10 +108,10 @@ set(SHD_SHMEM_SRC
     shmem/shd-shmem-util.c)
 
 add_library(shd-shmem STATIC ${SHD_SHMEM_SRC})
-add_executable(shd-test-shmem shmem/shd-test-shmem.c)
-target_link_libraries(shd-test-shmem shd-shmem ${GLIB_LIBRARIES} ${RT_LIBRARIES} ${M_LIBRARIES})
+add_executable(shd-shmem-test shmem/shd-shmem-test.c)
+target_link_libraries(shd-shmem-test shd-shmem ${GLIB_LIBRARIES} ${RT_LIBRARIES} ${M_LIBRARIES})
 include_directories(${CMAKE_SOURCE_DIR}/src/main/shmem)
-add_test(NAME shmem COMMAND shd-test-shmem)
+add_test(NAME shmem COMMAND shd-shmem-test)
 
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})

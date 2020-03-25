@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+/* Intended to be private to shd-shmem-allocator. */
+
 /* rwails:
  *
  * Compile-time log selection enables the shmem modules to be built with no
