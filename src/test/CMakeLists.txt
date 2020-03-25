@@ -28,7 +28,6 @@ add_executable(shadow-test-launcher-fail test_launcher_fail.c test_launcher_comm
 # FIXME add_subdirectory(random)
 # FIXME add_subdirectory(shutdown)
 # FIXME add_subdirectory(signal)
-add_subdirectory(shmem)
 add_subdirectory(sleep)
 # FIXME add_subdirectory(sockbuf)
 # FIXME add_subdirectory(tcp)

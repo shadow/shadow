@@ -19,7 +19,20 @@ typedef struct _ShMemBlockSerialized {
     char name[SHD_SHMEM_FILE_NAME_NBYTES];
 } ShMemBlockSerialized;
 
+/*
+ * Heap-allocates and initializes a shared-memory allocator.
+ *
+ * RETURN VALUE: a pointer to a valid allocator, or NULL if out-of-memory
+ * failure occurs.
+ */
 ShMemAllocator* shmemallocator_create();
+
+/*
+ * 
+ *
+ * PRE: 
+ * POST:
+ */
 void shmemallocator_destroy(ShMemAllocator* allocator);
 
 ShMemBlock shmemallocator_alloc(ShMemAllocator* allocator, size_t nbytes);

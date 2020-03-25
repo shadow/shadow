@@ -107,7 +107,11 @@ struct _ShMemSerializer {
 
 ShMemAllocator* shmemallocator_create() {
     ShMemAllocator* allocator = calloc(1, sizeof(ShMemAllocator));
-    pthread_mutex_init(&allocator->mtx, NULL);
+
+    if (allocator != NULL) {
+        pthread_mutex_init(&allocator->mtx, NULL);
+    }
+
     return allocator;
 }
 
