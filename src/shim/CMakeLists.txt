@@ -10,29 +10,19 @@
 
 add_cflags(-fPIC)
 
+set(SHIM_LIB shadow-shim)
 set(SHIM_FILES
   preload.c
   shim.c
+  socket.c
 )
-
-set(HELPER_FILES
-  shim_event.c
-)
-
-set(SHIM_LIB shadow-shim)
-set(HELPER_LIB shadow-shim-helper)
-
 add_library(${SHIM_LIB} SHARED ${SHIM_FILES})
-add_library(${HELPER_LIB} STATIC ${HELPER_FILES})
-
-target_compile_options(${SHIM_LIB} PRIVATE -pthread)
-
 set_target_properties(${SHIM_LIB} PROPERTIES 
     INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib
     INSTALL_RPATH_USE_LINK_PATH TRUE 
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib"
 )
-
+target_compile_options(${SHIM_LIB} PRIVATE -pthread -DSHADOW_SHIM)
+target_link_libraries(${SHIM_LIB} -pthread -ldl)
 install(TARGETS ${SHIM_LIB} DESTINATION lib)
 
-target_link_libraries(${SHIM_LIB} ${HELPER_LIB} -pthread -ldl)

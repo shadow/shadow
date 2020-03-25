@@ -12,6 +12,7 @@
 
 #include "shim.h"
 #include "shim_event.h"
+#include "system-libc.h"
 
 static long shadow_retval_to_errno(long retval) {
     if (retval >= 0) {
@@ -71,21 +72,13 @@ static long shadow_syscall_clock_gettime(va_list args) {
     return 0;
 }
 
-// Handle to the real syscall function, initialized once at load-time for
-// thread-safety.
-static const long (*_real_syscall)(long n, ...);
-__attribute__((constructor)) static void _init_real_syscall() {
-    _real_syscall = dlsym(RTLD_NEXT, "syscall");
-    assert(_real_syscall != NULL);
-}
-
 static long _vreal_syscall(long n, va_list args) {
     long arg1 = va_arg(args, long);
     long arg2 = va_arg(args, long);
     long arg3 = va_arg(args, long);
     long arg4 = va_arg(args, long);
     long arg5 = va_arg(args, long);
-    return _real_syscall(n, arg1, arg2, arg3, arg4, arg5);
+    return system_libc_syscall(n, arg1, arg2, arg3, arg4, arg5);
 }
 
 // man 2 syscall
