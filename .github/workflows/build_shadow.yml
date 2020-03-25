@@ -9,6 +9,7 @@ on:
       - '**.md'
       - 'LICENSE'
   pull_request:
+    types: [opened, synchronize]
 
 jobs:
   testing:
