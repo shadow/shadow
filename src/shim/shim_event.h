@@ -40,9 +40,9 @@ typedef struct _ShimEvent {
 
 } ShimEvent;
 
-static inline void shim_determinedSend(int sock_fd, const void *ptr,
+static inline void shim_determinedSend(int sock_fd, const void* ptr,
                                        size_t nbytes) {
-    const char *buf = (const char *)(ptr);
+    const char* buf = (const char*)(ptr);
     size_t nbytes_sent = 0;
     ssize_t rc = 0;
 
@@ -50,13 +50,13 @@ static inline void shim_determinedSend(int sock_fd, const void *ptr,
         rc = system_libc_send(
             sock_fd, buf + nbytes_sent, (nbytes - nbytes_sent), 0);
         if (rc > -1) {
-          nbytes_sent += rc;
+            nbytes_sent += rc;
         }
     }
 }
 
-static inline void shim_determinedRecv(int sock_fd, void *ptr, size_t nbytes) {
-    char *buf = (char *)(ptr);
+static inline void shim_determinedRecv(int sock_fd, void* ptr, size_t nbytes) {
+    char* buf = (char*)(ptr);
     size_t nbytes_recv = 0;
     ssize_t rc = 0;
 
@@ -80,11 +80,11 @@ static inline uint32_t shim_recvUint32_t(int sock_fd) {
     return ntohl(value);
 }
 
-static inline void shimevent_recvEvent(int event_fd, ShimEvent *e) {
+static inline void shimevent_recvEvent(int event_fd, ShimEvent* e) {
     shim_determinedRecv(event_fd, e, sizeof(ShimEvent));
 }
 
-static inline void shimevent_sendEvent(int event_fd, const ShimEvent *e) {
+static inline void shimevent_sendEvent(int event_fd, const ShimEvent* e) {
     shim_determinedSend(event_fd, e, sizeof(ShimEvent));
 }
 
