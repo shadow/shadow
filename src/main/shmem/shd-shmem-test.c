@@ -21,7 +21,8 @@ static void buddycontrolblock_testOrder() {
 
     g_assert_cmpint(buddycontrolblock_order(&bcb), ==, 0);
 
-    for (unsigned idx = 0; idx < 32; ++idx) {
+    for (unsigned idx = 0; idx < shmem_util_uintPow2k(SHD_BUDDY_ORDER_BITS);
+         ++idx) {
         buddycontrolblock_setOrder(&bcb, idx);
         g_assert_cmpint(buddycontrolblock_order(&bcb), ==, idx);
     }
@@ -33,7 +34,7 @@ static void buddycontrolblock_testOrderAndNxt() {
     BuddyControlBlock bcb;
     memset(&bcb, 0, sizeof(BuddyControlBlock));
 
-    uint32_t* nxt_values = calloc(kNTests, 4);
+    uint32_t* nxt_values = calloc(kNTests, sizeof(uint32_t));
 
     for (size_t idx = 0; idx < kNTests; ++idx) {
         nxt_values[idx] = rand() % (SHD_BUDDY_ORDER_MASK + 1);
@@ -74,7 +75,7 @@ static void buddycontrolblock_testTagAndPrv() {
     BuddyControlBlock bcb;
     memset(&bcb, 0, sizeof(BuddyControlBlock));
 
-    uint32_t* prv_values = calloc(kNTests, 4);
+    uint32_t* prv_values = calloc(kNTests, sizeof(uint32_t));
 
     for (size_t idx = 0; idx < kNTests; ++idx) {
         prv_values[idx] = rand() % ((uint32_t)SHD_BUDDY_TAG_MASK + 1);
@@ -144,7 +145,8 @@ static void buddy_implTestVsMalloc(size_t pool_nbytes) {
 
     for (size_t idx = 0; idx < kNAllocs; ++idx) {
         unsigned alloc_order = SHD_BUDDY_PART_MIN_ORDER + (rand() % n);
-        size_t alloc_nbytes = shmem_util_uintPow2k(alloc_order) - 8;
+        size_t alloc_nbytes =
+            shmem_util_uintPow2k(alloc_order) - sizeof(BuddyControlBlock);
 
         void* p = buddy_alloc(alloc_nbytes, meta, pool, pool_nbytes);
 
@@ -409,17 +411,20 @@ static void shmemserializer_testSerialize() {
     shmemallocator_destroy(allocator);
 }
 
-static void shmemallocator_testFork() {
+static const char *test_fork_key = "TEST_FORK";
+static const char* test_fork_val1 = "hello";
+static const char* test_fork_val2 = "goodbye";
 
-    const char* test_str = "hello world";
-    const char* test_str2 = "goodbye";
+static void shmemallocator_testForkExec(void *_, const void *user_data) {
+
+    const char *path = user_data;
 
     ShMemAllocator* allocator = shmemallocator_create();
     g_assert_nonnull(allocator);
 
     ShMemBlock blk = shmemallocator_alloc(allocator, 32);
 
-    strcpy(blk.p, test_str);
+    strcpy(blk.p, test_fork_val1);
 
     ShMemBlockSerialized serial =
         shmemallocator_blockSerialize(allocator, &blk);
@@ -430,22 +435,26 @@ static void shmemallocator_testFork() {
 
         shmemallocator_destroyNoShmDelete(allocator);
 
-        int rc = 0;
+        const size_t buf_nbytes = 256;
+        char offset_buf[buf_nbytes],
+              nbytes_buf[buf_nbytes],
+              block_nbytes_buf[buf_nbytes];
 
-        ShMemSerializer* serializer = shmemserializer_create();
-        ShMemBlock blk_2 =
-            shmemserializer_blockDeserialize(serializer, &serial);
+        snprintf(offset_buf, buf_nbytes, "%zu", serial.offset);
+        snprintf(nbytes_buf, buf_nbytes, "%zu", serial.nbytes);
+        snprintf(block_nbytes_buf, buf_nbytes, "%zu", serial.block_nbytes);
 
-        if (strcmp(test_str, blk_2.p) == 0) {
-            strcpy(blk_2.p, test_str2);
-            rc = 0;
-        } else {
-            rc = 1;
+        int rc = execl(path, path, test_fork_key,
+                       offset_buf,
+                       nbytes_buf,
+                       block_nbytes_buf,
+                       serial.name,
+                       (char *) NULL);
+
+        if (rc != 0) {
+            exit(rc);
         }
 
-        shmemserializer_destroy(serializer);
-
-        exit(rc);
 
     } else { // parent process
 
@@ -454,15 +463,49 @@ static void shmemallocator_testFork() {
         g_assert_cmpint(WIFEXITED(status), !=, 0);
         g_assert_cmpint(WEXITSTATUS(status), ==, 0);
 
-        g_assert_cmpmem(test_str2, strlen(test_str2),
-                        blk.p, strlen(blk.p));
+        g_assert_cmpmem(test_fork_val2, strlen(test_fork_val2), blk.p, strlen(blk.p));
 
         shmemallocator_free(allocator, &blk);
         shmemallocator_destroy(allocator);
     }
 }
 
+// after fork + exec, the exec'd process executes this
+static void shmemallocator_auxTestForkExec(int argc, char **argv) {
+    if (argc != 6) {
+        exit(-1);
+    }
+
+    ShMemBlockSerialized serial;
+    sscanf(argv[2], "%zu", &serial.offset);
+    sscanf(argv[3], "%zu", &serial.nbytes);
+    sscanf(argv[4], "%zu", &serial.block_nbytes);
+    strcpy(serial.name, argv[5]);
+
+    ShMemSerializer* serializer = shmemserializer_create();
+    ShMemBlock blk =
+        shmemserializer_blockDeserialize(serializer, &serial);
+
+    int rc = 0;
+
+    if (strcmp(test_fork_val1, blk.p) == 0) {
+        strcpy(blk.p, test_fork_val2);
+    } else {
+        rc = 1;
+    }
+
+    shmemserializer_destroy(serializer);
+
+    exit(rc);
+}
+
 int main(int argc, char** argv) {
+
+    if (argc > 2) {
+        if (strcmp(argv[1], test_fork_key) == 0) {
+            shmemallocator_auxTestForkExec(argc, argv);
+        }
+    }
 
     g_test_init(&argc, &argv, NULL);
     g_test_set_nonfatal_assertions();
@@ -558,11 +601,11 @@ int main(int argc, char** argv) {
                shmemserializer_testSerialize,
                NULL);
 
-    g_test_add("/shmem/shmemallocator_testFork",
+    g_test_add("/shmem/shmemallocator_testForkExec",
                void,
+               argv[0],
                NULL,
-               NULL,
-               shmemallocator_testFork,
+               shmemallocator_testForkExec,
                NULL);
 
     return g_test_run();
