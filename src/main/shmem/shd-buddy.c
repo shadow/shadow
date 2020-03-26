@@ -165,7 +165,7 @@ static void _print(void* pool, size_t pool_nbytes, void* meta) {
     for (size_t idx = 0; idx + SHD_BUDDY_PART_MIN_ORDER < max_order + 1;
          ++idx) {
 
-        printf("[%u] ", idx + SHD_BUDDY_PART_MIN_ORDER);
+        printf("[%zu] ", idx + SHD_BUDDY_PART_MIN_ORDER);
 
         BuddyControlBlock* p = bcbs[idx];
 
