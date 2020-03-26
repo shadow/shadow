@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 #include "shim.h"
-#include "shim_event.h"
+#include "shim-event.h"
 #include "system-libc.h"
 
 static long shadow_retval_to_errno(long retval) {

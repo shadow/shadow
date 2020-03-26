@@ -14,7 +14,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "shim/shim_event.h"
+#include "shim/shim-event.h"
 #include "main/host/shd-thread-protected.h"
 #include "main/host/shd-thread-shim.h"
 #include "support/logger/logger.h"

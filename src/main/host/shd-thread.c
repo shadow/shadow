@@ -12,7 +12,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "shim/shim_event.h"
+#include "shim/shim-event.h"
 #include "main/host/shd-syscall-handler.h"
 #include "main/host/shd-thread-protected.h"
 #include "support/logger/logger.h"

@@ -1,5 +1,5 @@
 #include "shim.h"
-#include "shim_event.h"
+#include "shim-event.h"
 
 #include <assert.h>
 #include <stddef.h>

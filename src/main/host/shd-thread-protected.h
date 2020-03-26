@@ -8,7 +8,7 @@
  * interface.
  */
 
-#include "shim/shim_event.h"
+#include "shim/shim-event.h"
 #include "main/host/shd-thread.h"
 
 struct _Thread {
