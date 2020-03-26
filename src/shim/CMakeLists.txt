@@ -22,7 +22,7 @@ set(SHIM_LIB shadow-shim)
 set(SHIM_FILES
   preload.c
   shim.c
-  socket.c
+  syscalls.c
 )
 add_library(${SHIM_LIB} SHARED ${SHIM_FILES})
 set_target_properties(${SHIM_LIB} PROPERTIES 

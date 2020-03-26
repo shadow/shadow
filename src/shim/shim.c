@@ -71,15 +71,15 @@ static TIDFDPair _shim_tidFDTreeGet(pthread_t tid) {
     return tid_fd;
 }
 
-
-__attribute__((constructor)) static void _shim_load() {
+__attribute__((constructor(SHIM_CONSTRUCTOR_PRIORITY))) static void
+_shim_load() {
+    shim_disableInterposition();
     const char* interpose_method = getenv("SHADOW_INTERPOSE_METHOD");
     _using_interpose_preload =
         interpose_method != NULL && !strcmp(interpose_method, "PRELOAD");
     if (!_using_interpose_preload) {
         return;
     }
-    shim_disableInterposition();
     const char *shd_event_sock_fd = getenv("_SHD_IPC_SOCKET");
     assert(shd_event_sock_fd);
     int event_sock_fd = atoi(shd_event_sock_fd);

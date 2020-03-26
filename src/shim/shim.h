@@ -30,4 +30,7 @@ void shim_enableInterposition();
 // Whether syscall interposition is currently enabled.
 bool shim_interpositionEnabled();
 
+// Used in the constructor attribute to initialize the shim.
+#define SHIM_CONSTRUCTOR_PRIORITY 200
+
 #endif // SHD_SHIM_SHIM_H_
