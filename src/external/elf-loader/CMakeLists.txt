@@ -78,6 +78,10 @@ endif()
 # https://github.com/shadow/shadow/issues/715
 set_source_files_properties(glibc.c PROPERTIES COMPILE_FLAGS -Wno-unneeded-internal-declaration)
 
+# There are some internal debugging functions that currently have no callers,
+# but are probably better to keep around.
+set_source_files_properties(stage2.c PROPERTIES COMPILE_FLAGS -Wno-unused-function)
+
 set(ldso_srcs
     alloc.c
     avprintf-cb.c
