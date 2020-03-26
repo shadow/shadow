@@ -18,6 +18,7 @@ jobs:
     strategy:
       matrix:
         cc: ['gcc', 'clang']
+        buildtype: ['debug', 'release']
     steps:
       - name: Update packages
         run: sudo apt-get update
@@ -28,7 +29,12 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get install -y ${{ matrix.cc }} g++ cmake make xz-utils python libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg python-pyelftools
 
-      - name: Build
+      - name: Build Debug
+        if: ${{ matrix.buildtype == 'debug' }}
+        run: CC=${{ matrix.cc }} python setup build --clean --test --werror --debug
+
+      - name: Build Release
+        if: ${{ matrix.buildtype == 'release' }}
         run: CC=${{ matrix.cc }} python setup build --clean --test --werror
 
       - name: Install
