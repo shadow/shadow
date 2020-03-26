@@ -11,6 +11,9 @@
 #include <string.h>
 
 #include <glib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 static void buddycontrolblock_testOrder() {
     BuddyControlBlock bcb;
@@ -406,6 +409,59 @@ static void shmemserializer_testSerialize() {
     shmemallocator_destroy(allocator);
 }
 
+static void shmemallocator_testFork() {
+
+    const char* test_str = "hello world";
+    const char* test_str2 = "goodbye";
+
+    ShMemAllocator* allocator = shmemallocator_create();
+    g_assert_nonnull(allocator);
+
+    ShMemBlock blk = shmemallocator_alloc(allocator, 32);
+
+    strcpy(blk.p, test_str);
+
+    ShMemBlockSerialized serial =
+        shmemallocator_blockSerialize(allocator, &blk);
+
+    pid_t pid = fork();
+
+    if (pid == 0) { // child process
+
+        shmemallocator_destroyNoShmDelete(allocator);
+
+        int rc = 0;
+
+        ShMemSerializer* serializer = shmemserializer_create();
+        ShMemBlock blk_2 =
+            shmemserializer_blockDeserialize(serializer, &serial);
+
+        if (strcmp(test_str, blk_2.p) == 0) {
+            strcpy(blk_2.p, test_str2);
+            rc = 0;
+        } else {
+            rc = 1;
+        }
+
+        shmemserializer_destroy(serializer);
+
+        exit(rc);
+
+    } else { // parent process
+
+        int status = 0;
+        waitpid(pid, &status, 0);
+        g_assert_cmpint(WIFEXITED(status), !=, 0);
+        g_assert_cmpint(WEXITSTATUS(status), ==, 0);
+
+        g_assert_cmpmem(test_str2, strlen(test_str2),
+                        blk.p, strlen(blk.p));
+
+        shmemallocator_free(allocator, &blk);
+        shmemallocator_destroy(allocator);
+    }
+}
+
 int main(int argc, char** argv) {
 
     g_test_init(&argc, &argv, NULL);
@@ -440,14 +496,12 @@ int main(int argc, char** argv) {
                buddycontrolblock_testGoodSizes,
                NULL);
 
-#if 0
     g_test_add("/shmem/buddy_testVsMalloc",
                void,
                NULL,
                NULL,
                buddy_testVsMalloc,
                NULL);
-#endif // 0
 
     /* shmemfile tests */
 
@@ -502,6 +556,13 @@ int main(int argc, char** argv) {
                NULL,
                NULL,
                shmemserializer_testSerialize,
+               NULL);
+
+    g_test_add("/shmem/shmemallocator_testFork",
+               void,
+               NULL,
+               NULL,
+               shmemallocator_testFork,
                NULL);
 
     return g_test_run();

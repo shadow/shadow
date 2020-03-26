@@ -55,6 +55,21 @@ ShMemAllocator* shmemallocator_create();
 void shmemallocator_destroy(ShMemAllocator* allocator);
 
 /*
+ * Reclaim resources associated w/ and deallocate a shared-memory allocator.
+ * Does not delete any shared memory pages that were automatically acquired by
+ * this shared memory allocator.
+ *
+ * THREAD SAFETY: not thread-safe; should only be called once per allocator
+ * object.  OK to call in parallel on separate allocator objects.
+ *
+ * PRE: allocator is non-null and points to an valid allocator created by
+ * shmemallocator_create().
+ *
+ * POST: the allocator will be destroyed and invalidated.
+ */
+void shmemallocator_destroyNoShmDelete(ShMemAllocator* allocator);
+
+/*
  * Semantically similar to malloc(nbytes), except the memory allocated will
  * live in shared memory.  The allocator will try to fit the request into
  * shared-memory pages that are already mapped into this process's address

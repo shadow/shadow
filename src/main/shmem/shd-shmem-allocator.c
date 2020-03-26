@@ -122,10 +122,28 @@ void shmemallocator_destroy(ShMemAllocator* allocator) {
 
     ShMemPoolNode* node = allocator->little_alloc_nodes;
 
-    if (node != NULL) {
+    if (node) {
         do {
             ShMemPoolNode* next_node = (ShMemPoolNode*)node->file_node.nxt;
             _shmempoolnode_destroy(node);
+            node = next_node;
+        } while (node != allocator->little_alloc_nodes);
+    }
+
+    pthread_mutex_destroy(&allocator->mtx);
+
+    free(allocator);
+}
+
+void shmemallocator_destroyNoShmDelete(ShMemAllocator* allocator) {
+    assert(allocator);
+
+    ShMemPoolNode* node = allocator->little_alloc_nodes;
+
+    if (node != NULL) {
+        do {
+            ShMemPoolNode* next_node = (ShMemPoolNode*)node->file_node.nxt;
+            free(next_node);
             node = next_node;
         } while (node != allocator->little_alloc_nodes);
     }
