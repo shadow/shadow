@@ -19,7 +19,26 @@ typedef struct _TIDFDPair {
 static pthread_mutex_t tid_fd_tree_mtx = PTHREAD_MUTEX_INITIALIZER;
 static void *tid_fd_tree = NULL;
 
+// Whether Shadow is using INTERPOSE_PRELOAD
+static bool _using_interpose_preload;
+
+// We disable syscall interposition when this is > 0.
+static __thread int _shim_disable_interposition = 0;
+
 static void _shim_wait_start(int event_fd);
+
+void shim_disableInterposition() {
+    ++_shim_disable_interposition;
+}
+
+void shim_enableInterposition() {
+    assert(_shim_disable_interposition > 0);
+    --_shim_disable_interposition;
+}
+
+bool shim_interpositionEnabled() {
+    return _using_interpose_preload && !_shim_disable_interposition;
+}
 
 static int _shim_tidFDTreeCompare(const void *lhs, const void *rhs) {
     const TIDFDPair *lhs_tidfd = lhs, *rhs_tidfd = rhs;
@@ -52,15 +71,15 @@ static TIDFDPair _shim_tidFDTreeGet(pthread_t tid) {
     return tid_fd;
 }
 
-static bool _using_interpose_preload;
 
-// Priority must be higher than those in system-libc.c.
-__attribute__((constructor(201))) static void _shim_load() {
+__attribute__((constructor)) static void _shim_load() {
     const char* interpose_method = getenv("SHADOW_INTERPOSE_METHOD");
     _using_interpose_preload =
         interpose_method != NULL && !strcmp(interpose_method, "PRELOAD");
-    if (!_using_interpose_preload)
+    if (!_using_interpose_preload) {
         return;
+    }
+    shim_disableInterposition();
     const char *shd_event_sock_fd = getenv("_SHD_IPC_SOCKET");
     assert(shd_event_sock_fd);
     int event_sock_fd = atoi(shd_event_sock_fd);
@@ -79,12 +98,14 @@ __attribute__((constructor(201))) static void _shim_load() {
     _shim_wait_start(event_sock_fd);
 
     SHD_SHIM_LOG("starting main\n");
+    shim_enableInterposition();
 }
 
 __attribute__((destructor))
 static void _shim_unload() {
-    if (!shim_usingInterposePreload())
+    if (!_using_interpose_preload)
         return;
+    shim_disableInterposition();
     int event_fd = shim_thisThreadEventFD();
 
     ShimEvent shim_event;
@@ -97,6 +118,7 @@ static void _shim_unload() {
     if (tid_fd_tree != NULL) {
         tdestroy(tid_fd_tree, free);
     }
+    shim_enableInterposition();
 }
 
 static void _shim_wait_start(int event_fd) {
@@ -106,8 +128,6 @@ static void _shim_wait_start(int event_fd) {
     assert(event.event_id == SHD_SHIM_EVENT_START);
 }
 
-bool shim_usingInterposePreload() { return _using_interpose_preload; }
-
 FILE *shim_logFD() {
     return stderr;
 }
@@ -115,3 +135,4 @@ FILE *shim_logFD() {
 int shim_thisThreadEventFD() {
     return _shim_tidFDTreeGet(pthread_self()).fd;
 }
+

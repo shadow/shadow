@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -9,7 +10,6 @@
 
 #include "shim-event.h"
 #include "shim.h"
-#include "system-libc.h"
 
 static long shadow_retval_to_errno(long retval) {
     if (retval >= 0) {
@@ -69,6 +69,14 @@ static long shadow_syscall_clock_gettime(va_list args) {
     return 0;
 }
 
+// Handle to the real syscall function, initialized once at load-time for
+// thread-safety.
+static const long (*_real_syscall)(long n, ...);
+__attribute__((constructor)) static void _init_real_syscall() {
+    _real_syscall = dlsym(RTLD_NEXT, "syscall");
+    assert(_real_syscall != NULL);
+}
+
 static long _vreal_syscall(long n, va_list args) {
     long arg1 = va_arg(args, long);
     long arg2 = va_arg(args, long);
@@ -76,16 +84,17 @@ static long _vreal_syscall(long n, va_list args) {
     long arg4 = va_arg(args, long);
     long arg5 = va_arg(args, long);
     long arg6 = va_arg(args, long);
-    return system_libc_syscall(n, arg1, arg2, arg3, arg4, arg5, arg6);
+    return _real_syscall(n, arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 // man 2 syscall
 long syscall(long n, ...) {
     va_list args;
     va_start(args, n);
-    if (!shim_usingInterposePreload()) {
+    if (!shim_interpositionEnabled()) {
         return _vreal_syscall(n, args);
     }
+    shim_disableInterposition();
     long rv = -1;
     switch (n) {
         case SYS_nanosleep:
@@ -98,6 +107,7 @@ long syscall(long n, ...) {
             SHD_SHIM_LOG("unhandled syscall %ld\n", n);
     }
     va_end(args);
+    shim_enableInterposition();
     return rv;
 }
 

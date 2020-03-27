@@ -16,9 +16,18 @@ int shim_thisThreadEventFD();
     fprintf(shim_logFD(), "[shd-shim]\t"); \
     fprintf(shim_logFD(), __VA_ARGS__)
 
-// FIXME: Ideally we split or make 2 version of the shim and load the
-// appropriate version based on whether we're using the shim-pipe.  In the
-// meantime we rely on run-time checks.
-bool shim_usingInterposePreload();
+// Disables syscall interposition for the current thread if it's enabled. (And
+// if not, increments a counter). Should be matched with a call to
+// _shim_enable_interposition.
+//
+// Every call to this function should have corresponding call(s) to
+// _shim_return.
+void shim_disableInterposition();
+
+// Re-enables syscall interposition for the current thread.
+void shim_enableInterposition();
+
+// Whether syscall interposition is currently enabled.
+bool shim_interpositionEnabled();
 
 #endif // SHD_SHIM_SHIM_H_
