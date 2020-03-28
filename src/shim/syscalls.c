@@ -1,16 +1,15 @@
 // Defines functions for libc functions that are trivial wrappers around a
 // system call.
 
-// We avoid including headers that define the functions we're wrapping, as that
-// simplifies things a bit, especially for functions that would otherwise use
-// varargs to implement optional arguments.
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <poll.h>
 #include <stdint.h>
+#include <sys/select.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <unistd.h>
-#include <sys/select.h>
 #include <stdarg.h>
 
 #include "shim.h"
@@ -119,17 +118,57 @@ long syscall(long n, ...) {
 
 // Sorted by function name (e.g. using `sort -t',' -k2`).
 // clang-format off
-
 NOREMAP(int, bind, (int a, const struct sockaddr* b, socklen_t c), a,b,c);
 NOREMAP(int, clock_gettime, (clockid_t a, struct timespec* b), a,b);
+NOREMAP(int, close, (int a), a);
 NOREMAP(int, connect, (int a, const struct sockaddr* b, socklen_t c), a,b,c);
+NOREMAP(int, creat, (const char *a, mode_t b), a,b);
+NOREMAP(int, fstat, (int a, struct stat* b), a,b);
+static REMAP(int, ioctl_explicit, ioctl, (int a, unsigned long b, char* c), a,b,c);
+NOREMAP(int, lstat, (const char* a, struct stat* b), a,b);
 NOREMAP(int, nanosleep, (const struct timespec* a, struct timespec* b), a,b);
+static REMAP(int, openat_explicit, openat, (int a, const char* b, int c, mode_t d), a,b,c,d);
+static REMAP(int, open_explicit, open, (const char *a, int b, mode_t c), a,b,c);
+NOREMAP(int, poll, (struct pollfd* a, nfds_t b, int c), a,b,c);
+NOREMAP(int, ppoll, (struct pollfd* a, nfds_t b, const struct timespec* c, const sigset_t* d), a,b,c,d);
+NOREMAP(ssize_t, read, (int a, void *b, size_t c), a,b,c);
 NOREMAP(ssize_t, recvfrom, (int a, void* b, size_t c, int d, struct sockaddr* e, socklen_t* f), a,b,c,d,e,f);
-REMAP(ssize_t, recv, recvfrom, (int a, void* b, size_t c, int d), a,b,c,d,NULL,NULL);
 NOREMAP(ssize_t, recvmsg, (int a, struct msghdr* b, int c), a,b,c);
+REMAP(ssize_t, recv, recvfrom, (int a, void* b, size_t c, int d), a,b,c,d,NULL,NULL);
 NOREMAP(ssize_t, sendmsg, (int a, const struct msghdr* b, int c), a,b,c);
 REMAP(ssize_t, send, sendto, (int a, const void* b, size_t c, int d), a,b,c,d,NULL,0);
 NOREMAP(ssize_t, sendto, (int a, const void* b, size_t c, int d, const struct sockaddr* e, socklen_t f), a,b,c,d,e,f);
 NOREMAP(int, socket, (int a, int b, int c), a,b,c);
-
+NOREMAP(int, stat, (const char* a, struct stat* b), a,b);
+NOREMAP(ssize_t, write, (int a, const void *b, size_t c), a,b,c);
 // clang-format on
+
+/*
+ * libc uses variadic functions to implement optional parameters. For those cases,
+ * internal versions were created above that take all the parameters explicitly.
+ * Next are the variadic wrappers.
+ */
+
+int open(const char *pathname, int flags, ...) {
+    va_list args;
+    va_start(args, flags);
+    mode_t mode = va_arg(args, mode_t);
+    va_end(args);
+    return open_explicit(pathname, flags, mode);
+}
+
+int openat(int dirfd, const char* pathname, int flags, ...) {
+    va_list args;
+    va_start(args, flags);
+    mode_t mode = va_arg(args, mode_t);
+    va_end(args);
+    return openat_explicit(dirfd, pathname, flags, mode);
+}
+
+int ioctl(int fd, unsigned long request, ...) {
+    va_list args;
+    va_start(args, request);
+    char* argp = va_arg(args, char*);
+    va_end(args);
+    return ioctl_explicit(fd, request, argp);
+}
