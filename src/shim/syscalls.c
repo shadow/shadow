@@ -5,15 +5,15 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <poll.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <unistd.h>
-#include <stdarg.h>
 
-#include "shim.h"
 #include "shim-event.h"
+#include "shim.h"
 
 // Handle to the real syscall function, initialized once at load-time for
 // thread-safety.
@@ -114,7 +114,8 @@ long syscall(long n, ...) {
 
 // Specialization of REMAP for defining a function `fnname` that invokes a
 // syscall of the same name.
-#define NOREMAP(type, fnname, params, ...) REMAP(type, fnname, fnname, params,  __VA_ARGS__)
+#define NOREMAP(type, fnname, params, ...)                                     \
+    REMAP(type, fnname, fnname, params, __VA_ARGS__)
 
 // Sorted by function name (e.g. using `sort -t',' -k2`).
 // clang-format off
@@ -144,12 +145,12 @@ NOREMAP(ssize_t, write, (int a, const void *b, size_t c), a,b,c);
 // clang-format on
 
 /*
- * libc uses variadic functions to implement optional parameters. For those cases,
- * internal versions were created above that take all the parameters explicitly.
- * Next are the variadic wrappers.
+ * libc uses variadic functions to implement optional parameters. For those
+ * cases, internal versions were created above that take all the parameters
+ * explicitly. Next are the variadic wrappers.
  */
 
-int open(const char *pathname, int flags, ...) {
+int open(const char* pathname, int flags, ...) {
     va_list args;
     va_start(args, flags);
     mode_t mode = va_arg(args, mode_t);
