@@ -1,11 +1,13 @@
 #!/usr/bin/python
 
+from __future__ import print_function
 import os,sys
 from lxml import etree
 
+
 def main():
     if len(sys.argv) < 3:
-        print 'Usage: {0} <old hosts filename> <new hosts filename>'.format(sys.argv[0])
+        print('Usage: {0} <old hosts filename> <new hosts filename>'.format(sys.argv[0]))
         sys.exit(0)
 
     # mappings from scallion types to plugins
