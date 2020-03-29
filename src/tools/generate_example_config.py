@@ -2,7 +2,11 @@
 
 import sys, networkx as nx
 from lxml import etree
-from cStringIO import StringIO
+try:
+    from cStringIO import StringIO
+except ImportError:
+    from io import BytesIO as StringIO
+
 
 def main():
     generate_shadow()
@@ -35,7 +39,8 @@ def generate_shadow():
     a.set("starttime", "2")
     a.set("arguments", "tgen.client.graphml.xml")
 
-    with open("shadow.config.xml", 'wb') as f: print >>f, etree.tostring(root, pretty_print=True, xml_declaration=False)
+    with open("shadow.config.xml", 'wb') as f:
+        f.write(etree.tostring(root, pretty_print=True, xml_declaration=False))
 
 def generate_tgen_server():
     G = nx.DiGraph()
