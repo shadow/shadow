@@ -352,7 +352,8 @@ Thread* threadshim_new(Host* host, Process* process, gint threadID) {
     MAGIC_INIT(&thread->base);
 
     thread->threadID = threadID;
-    thread->sys = syscallhandler_new(host, process, _threadShimToThread(thread));
+    thread->sys =
+        syscallhandler_new(host, process, _threadShimToThread(thread));
 
     // thread has access to a global, thread safe shared memory manager
 

@@ -163,8 +163,8 @@ static void _threadptrace_enterStateSyscallPre(ThreadPtrace* thread) {
         .number = regs->orig_rax,
         .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8},
     };
-    thread->syscall.sysCallReturn = syscallhandler_make_syscall(
-        thread->sys, &args);
+    thread->syscall.sysCallReturn =
+        syscallhandler_make_syscall(thread->sys, &args);
 }
 
 static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {

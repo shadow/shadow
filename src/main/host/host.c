@@ -413,9 +413,17 @@ void host_addApplication(Host* host, SimulationTime startTime,
                          gchar** argv) {
     MAGIC_ASSERT(host);
     guint processID = host_getNewProcessID(host);
-    Process* proc = process_new(host, processID, startTime, stopTime, interposeMethod,
-                                host_getName(host), pluginName, pluginPath,
-                                pluginSymbol, envv, argv);
+    Process* proc = process_new(host,
+                                processID,
+                                startTime,
+                                stopTime,
+                                interposeMethod,
+                                host_getName(host),
+                                pluginName,
+                                pluginPath,
+                                pluginSymbol,
+                                envv,
+                                argv);
     g_queue_push_tail(host->processes, proc);
 }
 

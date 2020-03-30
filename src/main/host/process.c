@@ -175,9 +175,11 @@ static void _process_start(Process* proc) {
 
     utility_assert(proc->mainThread == NULL);
     if (proc->interposeMethod == INTERPOSE_PTRACE) {
-        proc->mainThread = threadptrace_new(proc->host, proc, proc->threadIDCounter++);
+        proc->mainThread =
+            threadptrace_new(proc->host, proc, proc->threadIDCounter++);
     } else if (proc->interposeMethod == INTERPOSE_PRELOAD) {
-        proc->mainThread = threadshim_new(proc->host, proc, proc->threadIDCounter++);
+        proc->mainThread =
+            threadshim_new(proc->host, proc, proc->threadIDCounter++);
     } else {
         error("Bad interposeMethod %d", proc->interposeMethod);
     }
@@ -387,7 +389,7 @@ static void _process_free(Process* proc) {
 
     g_timer_destroy(proc->cpuDelayTimer);
 
-    if(proc->host) {
+    if (proc->host) {
         host_unref(proc->host);
     }
 

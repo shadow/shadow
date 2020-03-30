@@ -27,7 +27,8 @@ struct _SysCallHandler {
     MAGIC_DECLARE;
 };
 
-SysCallHandler* syscallhandler_new(Host* host, Process* process, Thread* thread) {
+SysCallHandler* syscallhandler_new(Host* host, Process* process,
+                                   Thread* thread) {
     SysCallHandler* sys = g_new0(SysCallHandler, 1);
     MAGIC_INIT(sys);
 
@@ -52,7 +53,7 @@ static void _syscallhandler_free(SysCallHandler* sys) {
     if(sys->process) {
         process_unref(sys->process);
     }
-    if(sys->thread) {
+    if (sys->thread) {
         thread_unref(sys->thread);
     }
 
@@ -90,7 +91,8 @@ static void _syscallhandler_unblock(SysCallHandler* sys) {
     process_continue(sys->process);
 }
 
-static void _syscallhandler_block(SysCallHandler* sys, SimulationTime blockTime) {
+static void _syscallhandler_block(SysCallHandler* sys,
+                                  SimulationTime blockTime) {
     MAGIC_ASSERT(sys);
     utility_assert(blockTime > 0);
 
@@ -98,8 +100,11 @@ static void _syscallhandler_block(SysCallHandler* sys, SimulationTime blockTime)
     syscallhandler_ref(sys);
 
     /* call back after the given time passes */
-    Task* blockTask = task_new((TaskCallbackFunc)_syscallhandler_unblock, sys, NULL,
-            (TaskObjectFreeFunc)syscallhandler_unref, NULL);
+    Task* blockTask = task_new((TaskCallbackFunc)_syscallhandler_unblock,
+                               sys,
+                               NULL,
+                               (TaskObjectFreeFunc)syscallhandler_unref,
+                               NULL);
 
     /* schedule into our host event queue */
     worker_scheduleTask(blockTask, blockTime);
@@ -124,7 +129,8 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
             .tv_sec = args->args[0].as_i64, .tv_nsec = args->args[1].as_i64};
         req = &req_for_preload_hack;
     } else {
-        req = thread_readPluginPtr(sys->thread, args->args[0].as_ptr, sizeof(*req));
+        req = thread_readPluginPtr(
+            sys->thread, args->args[0].as_ptr, sizeof(*req));
     }
 
     if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
@@ -184,8 +190,8 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
     return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
 }
 
-SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys,
-        clockid_t clk_id, struct timespec *res) {
+SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys, clockid_t clk_id,
+                                          struct timespec* res) {
     utility_assert(res);
 
     /* our clock has nanosecond precision */
@@ -196,7 +202,8 @@ SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys,
 }
 
 SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys,
-        struct timeval *tv, struct timezone *tz) {
+                                          struct timeval* tv,
+                                          struct timezone* tz) {
     utility_assert(tv);
 
     EmulatedTime now = _syscallhandler_getEmulatedTime();
