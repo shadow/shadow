@@ -117,7 +117,7 @@ static void _syscallhandler_block(SysCallHandler* sys,
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
+static SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
                                        const SysCallArgs* args) {
     const struct timespec *req;
 
@@ -157,7 +157,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
 }
 
-SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
+static SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
                                            const SysCallArgs* args) {
     clockid_t clk_id = args->args[0].as_u64;
     debug("syscallhandler_clock_gettime with %d %p", clk_id,
@@ -190,34 +190,9 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
     return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
 }
 
-SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys, clockid_t clk_id,
-                                          struct timespec* res) {
-    utility_assert(res);
-
-    /* our clock has nanosecond precision */
-    res->tv_sec = 0;
-    res->tv_nsec = 1;
-
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
-}
-
-SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys,
-                                          struct timeval* tv,
-                                          struct timezone* tz) {
-    utility_assert(tv);
-
-    EmulatedTime now = _syscallhandler_getEmulatedTime();
-
-    EmulatedTime sec = now / (EmulatedTime)SIMTIME_ONE_SECOND;
-    EmulatedTime usec = (now - (sec*(EmulatedTime)SIMTIME_ONE_SECOND)) / (EmulatedTime)SIMTIME_ONE_MICROSECOND;
-
-    utility_assert(usec < (EmulatedTime)1000000);
-
-    tv->tv_sec = (time_t)sec;
-    tv->tv_usec = (suseconds_t)usec;
-
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
-}
+///////////////////////////////////////////////////////////
+// Single public API function for calling Shadow syscalls
+///////////////////////////////////////////////////////////
 
 #define HANDLE(s)                                                              \
     case SYS_##s:                                                              \
