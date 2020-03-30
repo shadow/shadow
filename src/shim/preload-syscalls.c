@@ -1,5 +1,5 @@
-// Defines functions for libc functions that are trivial wrappers around a
-// system call.
+// Defines system call wrappers: functions that are
+// documented in man section 2. (See `man man`).
 
 #include <assert.h>
 #include <dlfcn.h>

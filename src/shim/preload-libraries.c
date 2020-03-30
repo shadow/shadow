@@ -1,3 +1,6 @@
+// Defines higher-level functions C library functions: those that are
+// documented in man section 3. (See `man man`).
+
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
