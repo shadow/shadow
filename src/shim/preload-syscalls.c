@@ -25,12 +25,13 @@ _init_real_syscall() {
 }
 
 static long shadow_retval_to_errno(long retval) {
-    if (retval >= 0) {
-        return retval;
-    } else {
+    // Linux reserves -1 through -4095 for errors. See
+    // https://sourceware.org/git/?p=glibc.git;a=blob;f=sysdeps/unix/sysv/linux/x86_64/sysdep.h;h=24d8b8ec20a55824a4806f8821ecba2622d0fe8e;hb=HEAD#l41
+    if (retval <= -1 && retval >= -4095) {
         errno = -retval;
         return -1;
     }
+    return retval;
 }
 
 static SysCallReg _shadow_syscall_event(const ShimEvent* ev) {
