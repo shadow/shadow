@@ -7,6 +7,6 @@
 
 typedef struct _ThreadShim ThreadShim;
 
-Thread* threadshim_new(gint threadID, SysCallHandler* sys);
+Thread* threadshim_new(Host* host, Process* process, gint threadID);
 
 #endif

@@ -202,7 +202,7 @@ void threadshim_resume(Thread* base) {
             }
             case SHD_SHIM_EVENT_SYSCALL: {
                 SysCallReturn result = syscallhandler_make_syscall(
-                    thread->sys, _threadShimToThread(thread),
+                    thread->sys,
                     &thread->currentEvent.event_data.syscall.syscall_args);
                 if (result.state == SYSCALL_RETURN_DONE) {
                     ShimEvent shim_result = {
@@ -334,13 +334,8 @@ void* threadshim_writePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
     // already belongs to such a region, and if so just return the pointer.
 }
 
-Thread* threadshim_new(gint threadID, SysCallHandler* sys) {
+Thread* threadshim_new(Host* host, Process* process, gint threadID) {
     ThreadShim* thread = g_new0(ThreadShim, 1);
-
-    thread->sys = sys;
-    syscallhandler_ref(sys);
-
-    thread->threadID = threadID;
 
     thread->base = (Thread){.run = threadshim_run,
                             .resume = threadshim_resume,
@@ -355,6 +350,9 @@ Thread* threadshim_new(gint threadID, SysCallHandler* sys) {
                             .type_id = THREADSHIM_TYPE_ID,
                             .referenceCount = 1};
     MAGIC_INIT(&thread->base);
+
+    thread->threadID = threadID;
+    thread->sys = syscallhandler_new(host, process, _threadShimToThread(thread));
 
     // thread has access to a global, thread safe shared memory manager
 

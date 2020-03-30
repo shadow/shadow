@@ -164,7 +164,7 @@ static void _threadptrace_enterStateSyscallPre(ThreadPtrace* thread) {
         .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8},
     };
     thread->syscall.sysCallReturn = syscallhandler_make_syscall(
-        thread->sys, _threadPtraceToThread(thread), &args);
+        thread->sys, &args);
 }
 
 static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
@@ -515,8 +515,10 @@ void* threadptrace_writePluginPtr(Thread* base, PluginPtr plugin_src,
     return rv;
 }
 
-Thread* threadptrace_new(gint threadID, SysCallHandler* sys) {
+Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
     ThreadPtrace* thread = g_new(ThreadPtrace, 1);
+    MAGIC_INIT(&thread->base);
+
     *thread = (ThreadPtrace){
         .base = (Thread){.run = threadptrace_run,
                          .resume = threadptrace_resume,
@@ -532,7 +534,7 @@ Thread* threadptrace_new(gint threadID, SysCallHandler* sys) {
 
                          .type_id = THREADPTRACE_TYPE_ID,
                          .referenceCount = 1},
-        .sys = sys,
+        .sys = syscallhandler_new(host, process, _threadPtraceToThread(thread)),
         // FIXME: This should the emulated CPU's frequency
         .tsc = {.cyclesPerSecond = 2000000000UL},
         .threadID = threadID,
@@ -540,9 +542,6 @@ Thread* threadptrace_new(gint threadID, SysCallHandler* sys) {
 
     thread->pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite));
     thread->readPointers = g_array_new(FALSE, FALSE, sizeof(void*));
-
-    syscallhandler_ref(sys);
-    MAGIC_INIT(&thread->base);
 
     return _threadPtraceToThread(thread);
 }

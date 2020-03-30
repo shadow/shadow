@@ -60,8 +60,8 @@
 #include "main/host/shd-thread-shim.h"
 
 struct _Process {
-    /* the handler of system calls made by the process */
-    SysCallHandler* sys;
+    /* Host owning this process */
+    Host* host;
 
     /* unique id of the program that this process should run */
     guint processID;
@@ -175,9 +175,9 @@ static void _process_start(Process* proc) {
 
     utility_assert(proc->mainThread == NULL);
     if (proc->interposeMethod == INTERPOSE_PTRACE) {
-        proc->mainThread = threadptrace_new(proc->threadIDCounter++, proc->sys);
+        proc->mainThread = threadptrace_new(proc->host, proc, proc->threadIDCounter++);
     } else if (proc->interposeMethod == INTERPOSE_PRELOAD) {
-        proc->mainThread = threadshim_new(proc->threadIDCounter++, proc->sys);
+        proc->mainThread = threadshim_new(proc->host, proc, proc->threadIDCounter++);
     } else {
         error("Bad interposeMethod %d", proc->interposeMethod);
     }
@@ -313,20 +313,16 @@ gboolean process_wantsNotify(Process* proc, gint epollfd) {
 //    }
 }
 
-void process_setSysCallHandler(Process* proc, SysCallHandler* sys) {
-    MAGIC_ASSERT(proc);
-    utility_assert(sys);
-    proc->sys = sys;
-    syscallhandler_ref(proc->sys);
-}
-
-Process* process_new(guint processID, SimulationTime startTime,
+Process* process_new(Host* host, guint processID, SimulationTime startTime,
                      SimulationTime stopTime, InterposeMethod interposeMethod,
                      const gchar* hostName, const gchar* pluginName,
                      const gchar* pluginPath, const gchar* pluginSymbol,
                      gchar** envv, gchar** argv) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
+
+    proc->host = host;
+    host_ref(proc->host);
 
     proc->processID = processID;
 
@@ -391,8 +387,8 @@ static void _process_free(Process* proc) {
 
     g_timer_destroy(proc->cpuDelayTimer);
 
-    if(proc->sys) {
-        syscallhandler_unref(proc->sys);
+    if(proc->host) {
+        host_unref(proc->host);
     }
 
     worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_FREE);

@@ -21,12 +21,13 @@
 struct _SysCallHandler {
     Host* host;
     Process* process;
+    Thread* thread;
     int referenceCount;
 
     MAGIC_DECLARE;
 };
 
-SysCallHandler* syscallhandler_new(Host* host, Process* process) {
+SysCallHandler* syscallhandler_new(Host* host, Process* process, Thread* thread) {
     SysCallHandler* sys = g_new0(SysCallHandler, 1);
     MAGIC_INIT(sys);
 
@@ -34,6 +35,8 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process) {
     host_ref(host);
     sys->process = process;
     process_ref(process);
+    sys->thread = thread;
+    thread_ref(thread);
 
     sys->referenceCount = 1;
 
@@ -48,6 +51,9 @@ static void _syscallhandler_free(SysCallHandler* sys) {
     }
     if(sys->process) {
         process_unref(sys->process);
+    }
+    if(sys->thread) {
+        thread_unref(sys->thread);
     }
 
     MAGIC_CLEAR(sys);
@@ -73,30 +79,27 @@ static EmulatedTime _syscallhandler_getEmulatedTime() {
     return worker_getEmulatedTime();
 }
 
-static void _syscallhandler_unblock(SysCallHandler* sys, Thread* thread) {
+static void _syscallhandler_unblock(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
     // TODO: Need to check that we're still in the same syscall from which
     // this was scheduled. For other syscalls will also need a way of
     // wiring through other return values, and probably for arranging
     // for syscall-specific cleanup (e.g. on a select timeout).
-    thread_setSysCallResult(thread, (SysCallReg){.as_i64 = 0});
+    thread_setSysCallResult(sys->thread, (SysCallReg){.as_i64 = 0});
 
     process_continue(sys->process);
 }
 
-static void _syscallhandler_block(SysCallHandler* sys, Thread* thread, SimulationTime blockTime) {
+static void _syscallhandler_block(SysCallHandler* sys, SimulationTime blockTime) {
     MAGIC_ASSERT(sys);
     utility_assert(blockTime > 0);
 
     /* ref count the objects correctly */
     syscallhandler_ref(sys);
-    if(thread) {
-        thread_ref(thread);
-    }
 
     /* call back after the given time passes */
-    Task* blockTask = task_new((TaskCallbackFunc)_syscallhandler_unblock, sys, thread,
-            (TaskObjectFreeFunc)syscallhandler_unref, (TaskArgumentFreeFunc)thread_unref);
+    Task* blockTask = task_new((TaskCallbackFunc)_syscallhandler_unblock, sys, NULL,
+            (TaskObjectFreeFunc)syscallhandler_unref, NULL);
 
     /* schedule into our host event queue */
     worker_scheduleTask(blockTask, blockTime);
@@ -109,7 +112,7 @@ static void _syscallhandler_block(SysCallHandler* sys, Thread* thread, Simulatio
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys, Thread* thread,
+SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
                                        const SysCallArgs* args) {
     const struct timespec *req;
 
@@ -121,7 +124,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys, Thread* thread,
             .tv_sec = args->args[0].as_i64, .tv_nsec = args->args[1].as_i64};
         req = &req_for_preload_hack;
     } else {
-        req = thread_readPluginPtr(thread, args->args[0].as_ptr, sizeof(*req));
+        req = thread_readPluginPtr(sys->thread, args->args[0].as_ptr, sizeof(*req));
     }
 
     if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
@@ -142,13 +145,13 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys, Thread* thread,
     /* set up a block task in the host */
     // TODO I think this should go in process.c with the rest of the thread
     // scheduling code
-    _syscallhandler_block(sys, thread, sleepDelay);
+    _syscallhandler_block(sys, sleepDelay);
 
     /* tell the thread we blocked it */
     return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
 }
 
-SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys, Thread* thread,
+SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
                                            const SysCallArgs* args) {
     clockid_t clk_id = args->args[0].as_u64;
     debug("syscallhandler_clock_gettime with %d %p", clk_id,
@@ -161,7 +164,7 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys, Thread* thread,
         res_timespec = &res_timespec_for_preload_hack;
     } else {
         res_timespec = thread_writePluginPtr(
-            thread, args->args[1].as_ptr, sizeof(*res_timespec));
+            sys->thread, args->args[1].as_ptr, sizeof(*res_timespec));
     }
 
     EmulatedTime now = _syscallhandler_getEmulatedTime();
@@ -181,7 +184,7 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys, Thread* thread,
     return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
 }
 
-SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys, Thread* thread,
+SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys,
         clockid_t clk_id, struct timespec *res) {
     utility_assert(res);
 
@@ -192,7 +195,7 @@ SysCallReturn syscallhandler_clock_getres(SysCallHandler* sys, Thread* thread,
     return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
 }
 
-SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, Thread* thread,
+SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys,
         struct timeval *tv, struct timezone *tz) {
     utility_assert(tv);
 
@@ -212,12 +215,12 @@ SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, Thread* thread,
 #define HANDLE(s)                                                              \
     case SYS_##s:                                                              \
         debug("handled syscall %d " #s, args->number);                         \
-        return syscallhandler_##s(sys, thread, args)
+        return syscallhandler_##s(sys, args)
 #define NATIVE(s)                                                              \
     case SYS_##s:                                                              \
         debug("native syscall %d " #s, args->number);                          \
         return (SysCallReturn){.state = SYSCALL_RETURN_NATIVE};
-SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys, Thread* thread,
+SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args) {
     switch (args->number) {
         HANDLE(clock_gettime);

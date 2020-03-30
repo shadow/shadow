@@ -5,6 +5,6 @@
 #include "main/host/shd-syscall-types.h"
 #include "main/host/shd-thread.h"
 
-Thread* threadptrace_new(gint threadID, SysCallHandler* sys);
+Thread* threadptrace_new(Host* host, Process* process, gint threadID);
 
 #endif
