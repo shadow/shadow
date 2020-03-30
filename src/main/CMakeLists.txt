@@ -107,9 +107,9 @@ set(SHD_SHMEM_SRC
     shmem/shd-shmem-file.c
     shmem/shd-shmem-util.c)
 
-add_library(shd-shmem STATIC ${SHD_SHMEM_SRC})
+add_library(shadow-shmem STATIC ${SHD_SHMEM_SRC})
 add_executable(shd-shmem-test shmem/shd-shmem-test.c)
-target_link_libraries(shd-shmem-test shd-shmem ${GLIB_LIBRARIES} ${RT_LIBRARIES} ${M_LIBRARIES})
+target_link_libraries(shd-shmem-test shadow-shmem ${GLIB_LIBRARIES} ${RT_LIBRARIES} ${M_LIBRARIES})
 include_directories(${CMAKE_SOURCE_DIR}/src/main/shmem)
 add_test(NAME shmem COMMAND shd-shmem-test)
 
@@ -119,7 +119,7 @@ add_dependencies(shadow shadow-remora)
 target_link_libraries(shadow
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
    ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES}
-   logger shadow-remora shadow-shim-helper shd-shmem shadow-tsc)
+   logger shadow-remora shadow-shim-helper shadow-shmem shadow-tsc)
 install(TARGETS shadow DESTINATION bin)
 
 ## shadow needs to find libs after install
