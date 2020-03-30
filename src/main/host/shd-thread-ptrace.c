@@ -516,8 +516,7 @@ void* threadptrace_writePluginPtr(Thread* base, PluginPtr plugin_src,
 }
 
 Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
-    ThreadPtrace* thread = g_new(ThreadPtrace, 1);
-    MAGIC_INIT(&thread->base);
+    ThreadPtrace* thread = g_new0(ThreadPtrace, 1);
 
     *thread = (ThreadPtrace){
         .base = (Thread){.run = threadptrace_run,
@@ -534,12 +533,15 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
 
                          .type_id = THREADPTRACE_TYPE_ID,
                          .referenceCount = 1},
-        .sys = syscallhandler_new(host, process, _threadPtraceToThread(thread)),
         // FIXME: This should the emulated CPU's frequency
         .tsc = {.cyclesPerSecond = 2000000000UL},
         .threadID = threadID,
         .childState = THREAD_PTRACE_CHILD_STATE_NONE};
 
+    MAGIC_INIT(&thread->base);
+
+    thread->sys =
+        syscallhandler_new(host, process, _threadPtraceToThread(thread));
     thread->pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite));
     thread->readPointers = g_array_new(FALSE, FALSE, sizeof(void*));
 
