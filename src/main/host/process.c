@@ -158,6 +158,7 @@ static void _process_check(Process* proc) {
         message("process '%s' has completed or is otherwise no longer running", _process_getName(proc));
         _process_logReturnCode(proc, returnCode);
 
+        thread_terminate(proc->mainThread);
         thread_unref(proc->mainThread);
         proc->mainThread = NULL;
 
@@ -239,11 +240,6 @@ void process_continue(Process* proc) {
 void process_stop(Process* proc) {
     MAGIC_ASSERT(proc);
 
-    /* we only have state if we are running */
-    if(!process_isRunning(proc)) {
-        return;
-    }
-
     message("terminating process '%s'", _process_getName(proc));
 
     worker_setActiveProcess(proc);
@@ -252,7 +248,11 @@ void process_stop(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 
     proc->plugin.isExecuting = TRUE;
-    thread_terminate(proc->mainThread);
+    if(proc->mainThread) {
+        thread_terminate(proc->mainThread);
+        thread_unref(proc->mainThread);
+        proc->mainThread = NULL;
+    }
     proc->plugin.isExecuting = FALSE;
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);

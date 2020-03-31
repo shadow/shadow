@@ -246,10 +246,16 @@ void threadshim_setSysCallResult(Thread* base, SysCallReg retval) {
 }
 
 void threadshim_terminate(Thread* base) {
+    MAGIC_ASSERT(base);
     ThreadShim* thread = _threadToThreadShim(base);
     // TODO [rwails]: come back and make this logic more solid
 
-    MAGIC_ASSERT(base);
+    /* make sure we cleanup circular refs */
+    if(thread->sys) {
+        syscallhandler_unref(thread->sys);
+        thread->sys = NULL;
+    }
+
     if (!thread->isRunning) {
         return;
     }

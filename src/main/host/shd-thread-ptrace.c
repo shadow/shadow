@@ -407,6 +407,12 @@ gboolean threadptrace_isRunning(Thread* base) {
 void threadptrace_terminate(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
+    /* make sure we cleanup circular refs */
+    if(thread->sys) {
+        syscallhandler_unref(thread->sys);
+        thread->sys = NULL;
+    }
+
     if (!threadptrace_isRunning(base)) {
         return;
     }
