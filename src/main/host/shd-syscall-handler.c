@@ -118,7 +118,7 @@ static void _syscallhandler_block(SysCallHandler* sys,
 ///////////////////////////////////////////////////////////
 
 static SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
-                                       const SysCallArgs* args) {
+                                              const SysCallArgs* args) {
     const struct timespec *req;
 
     struct timespec req_for_preload_hack;
@@ -158,7 +158,7 @@ static SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
 }
 
 static SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
-                                           const SysCallArgs* args) {
+                                                  const SysCallArgs* args) {
     clockid_t clk_id = args->args[0].as_u64;
     debug("syscallhandler_clock_gettime with %d %p", clk_id,
           args->args[1].as_ptr);

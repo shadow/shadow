@@ -408,7 +408,7 @@ void threadptrace_terminate(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     /* make sure we cleanup circular refs */
-    if(thread->sys) {
+    if (thread->sys) {
         syscallhandler_unref(thread->sys);
         thread->sys = NULL;
     }

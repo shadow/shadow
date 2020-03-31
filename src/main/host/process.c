@@ -248,7 +248,7 @@ void process_stop(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 
     proc->plugin.isExecuting = TRUE;
-    if(proc->mainThread) {
+    if (proc->mainThread) {
         thread_terminate(proc->mainThread);
         thread_unref(proc->mainThread);
         proc->mainThread = NULL;

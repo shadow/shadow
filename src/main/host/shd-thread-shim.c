@@ -251,7 +251,7 @@ void threadshim_terminate(Thread* base) {
     // TODO [rwails]: come back and make this logic more solid
 
     /* make sure we cleanup circular refs */
-    if(thread->sys) {
+    if (thread->sys) {
         syscallhandler_unref(thread->sys);
         thread->sys = NULL;
     }
