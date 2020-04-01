@@ -522,7 +522,7 @@ void* threadptrace_writePluginPtr(Thread* base, PluginPtr plugin_src,
 }
 
 Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
-    ThreadPtrace* thread = g_new0(ThreadPtrace, 1);
+    ThreadPtrace* thread = g_new(ThreadPtrace, 1);
 
     *thread = (ThreadPtrace){
         .base = (Thread){.run = threadptrace_run,
