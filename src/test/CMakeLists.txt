@@ -34,9 +34,8 @@ add_subdirectory(sleep)
 # FIXME add_subdirectory(timerfd)
 # FIXME add_subdirectory(udp)
 
-## the LastTest.log.tmp file does not contain all output when we do
-## the grep above, so we get an inconsistent number of results in the output.
-## For now, we just check the first 20 results so that some checking is in place.
+## grep the LastTest.log.tmp file for the counter diff lines, and make sure
+## that each such line matches the line in src/test/leakcheck.log
 add_test(
 	NAME shadow-leakcheck-grep
 	COMMAND /usr/bin/env bash ${CMAKE_SOURCE_DIR}/src/test/leakcheck-grep.sh
