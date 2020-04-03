@@ -46,7 +46,7 @@ static void* _test_thread_muxlock(void* data) {
         *(ms->sum) = 2;
     }
     else {
-        *(ms->sum) = current*current;
+        *(ms->sum) = current+2;
     }
 
     /* unlock the mutex, let the next guy come through */
@@ -202,7 +202,7 @@ static int _test_mutex_lock(pthread_t* threads) {
 
     int expected = 2;
     for(t=0; t<NUM_THREADS-1; t++){
-        expected = expected*expected;
+        expected = expected+2;
     }
 
     if(sum != expected) {
