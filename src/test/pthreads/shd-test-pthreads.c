@@ -71,7 +71,7 @@ static void* _test_thread_muxtrylock(void* mx) {
 
         muxes->numlocked++;
 
-        if(muxes->numnolocked == 0) {
+        if(muxes->numnolocked == 0 && NUM_THREADS != 1) {
             if(pthread_cond_wait(&(muxes->cond), &(muxes->mux2)) < 0) {
                 fprintf(stdout, "error: pthread_cond_wait failed\n");
             }
@@ -255,8 +255,11 @@ static int _test_mutex_trylock(pthread_t* threads) {
         }
     }
 
-    /* check that trylock worked by checking that some threads skipped */
-    if (muxes.numnolocked <= 0 || muxes.numlocked <= 0) {
+    /*
+     * check that trylock worked by checking that some threads skipped
+     * if there is only one thread, one trylock is executed and should be successful
+     */
+    if ((NUM_THREADS != 1 && muxes.numnolocked <= 0) || muxes.numlocked <= 0) {
         fprintf(stdout, "error: %i threads locked (expected at least 1), "
                 "%i threads skipped (expected at least 1)\n",
                 muxes.numlocked, muxes.numnolocked);
