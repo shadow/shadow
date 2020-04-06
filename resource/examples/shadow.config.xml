@@ -17,7 +17,7 @@
     </node>
     <edge source="isp" target="isp">
       <data key="d5">50.0</data>
-      <data key="d6">0.05</data>
+      <data key="d6">0.01</data>
     </edge>
   </graph>
 </graphml>
