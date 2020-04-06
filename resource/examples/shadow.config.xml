@@ -8,14 +8,14 @@
   <key attr.name="bandwidthup" attr.type="int" for="node" id="d1" />
   <key attr.name="ip" attr.type="string" for="node" id="d0" />
   <graph edgedefault="undirected">
-    <node id="poi-1">
+    <node id="isp">
       <data key="d0">0.0.0.0</data>
       <data key="d1">2251</data>
       <data key="d2">17038</data>
       <data key="d3">US</data>
       <data key="d4">0.0</data>
     </node>
-    <edge source="poi-1" target="poi-1">
+    <edge source="isp" target="isp">
       <data key="d5">50.0</data>
       <data key="d6">0.05</data>
     </edge>
