@@ -52,35 +52,6 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* ev) {
 }
 
 static long _shadow_syscall(ShimEvent* event) {
-    SysCallArgs* args = &event->event_data.syscall.syscall_args;
-
-    // Some temporary special cases.
-    switch (args->number) {
-        case SYS_nanosleep: {
-            // FIXME: temporarily using registers until memory APIs are in
-            // place.
-            const struct timespec* req = (void*)args->args[0].as_u64;
-            struct timespec* res = (void*)args->args[1].as_u64;
-            args->args[0].as_i64 = req->tv_sec;
-            args->args[1].as_i64 = req->tv_nsec;
-            SysCallReg rv = _shadow_syscall_event(event);
-            return shadow_retval_to_errno(rv.as_i64);
-        }
-        case SYS_clock_gettime: {
-            // FIXME: temporarily using registers until memory APIs are in
-            // place.
-            clockid_t clk_id = args->args[0].as_u64;
-            struct timespec* res = (void*)args->args[1].as_u64;
-            SysCallReg rv = _shadow_syscall_event(event);
-
-            // In the meantime, shadow passes the result as literal nanos.
-            const int64_t nano = 1000000000LL;
-            res->tv_sec = rv.as_i64 / nano;
-            res->tv_nsec = rv.as_i64 % nano;
-            return 0;
-        }
-    }
-    // Common path
     return shadow_retval_to_errno(_shadow_syscall_event(event).as_i64);
 }
 

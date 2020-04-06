@@ -119,19 +119,8 @@ static void _syscallhandler_block(SysCallHandler* sys,
 
 static SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
                                               const SysCallArgs* args) {
-    const struct timespec *req;
-
-    struct timespec req_for_preload_hack;
-    if (process_getInterposeMethod(sys->process) == INTERPOSE_PRELOAD) {
-        // FIXME: This is a workaround until ThreadPreload implements
-        // thread_readPluginPtr.
-        req_for_preload_hack = (struct timespec){
-            .tv_sec = args->args[0].as_i64, .tv_nsec = args->args[1].as_i64};
-        req = &req_for_preload_hack;
-    } else {
-        req = thread_readPluginPtr(
-            sys->thread, args->args[0].as_ptr, sizeof(*req));
-    }
+    const struct timespec* req =
+        thread_readPluginPtr(sys->thread, args->args[0].as_ptr, sizeof(*req));
 
     if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
         return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
@@ -163,30 +152,13 @@ static SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
     debug("syscallhandler_clock_gettime with %d %p", clk_id,
           args->args[1].as_ptr);
 
-    struct timespec* res_timespec;
-    struct timespec res_timespec_for_preload_hack;
-    if (process_getInterposeMethod(sys->process) == INTERPOSE_PRELOAD) {
-        // FIXME: remove when ThreadShim implements thread_writePluginPtr
-        res_timespec = &res_timespec_for_preload_hack;
-    } else {
-        res_timespec = thread_writePluginPtr(
-            sys->thread, args->args[1].as_ptr, sizeof(*res_timespec));
-    }
+    struct timespec* res_timespec = thread_writePluginPtr(
+        sys->thread, args->args[1].as_ptr, sizeof(*res_timespec));
 
     EmulatedTime now = _syscallhandler_getEmulatedTime();
     res_timespec->tv_sec = now / SIMTIME_ONE_SECOND;
     res_timespec->tv_nsec = now % SIMTIME_ONE_SECOND;
 
-    if (process_getInterposeMethod(sys->process) == INTERPOSE_PRELOAD) {
-        // FIXME: remote when ThreadShim implements thread_writePluginPtr
- 
-        // Since we don't have a way to write memory yet, we instead write the
-        // result as i64 nanos in the returned register.
-        return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
-                               .retval.as_i64 =
-                                   res_timespec->tv_sec * 1000000000LL +
-                                   res_timespec->tv_nsec};
-    }
     return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
 }
 
