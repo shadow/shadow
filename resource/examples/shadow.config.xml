@@ -23,11 +23,11 @@
 </graphml>
 ]]></topology>
   <plugin id="tgen" path="~/.shadow/bin/tgen"/>
-  <node id="server" quantity="2">
-    <application plugin="tgen" starttime="1" arguments="tgen.server.graphml.xml"/>
-  </node>
-  <node id="client">
-    <application plugin="tgen" starttime="2" arguments="tgen.client.graphml.xml"/>
-  </node>
+  <host id="server" quantity="2">
+    <process plugin="tgen" starttime="1" arguments="tgen.server.graphml.xml"/>
+  </host>
+  <host id="client">
+    <process plugin="tgen" starttime="2" arguments="tgen.client.graphml.xml"/>
+  </host>
 </shadow>
 
