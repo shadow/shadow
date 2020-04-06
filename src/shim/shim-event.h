@@ -9,13 +9,17 @@
 #include <time.h>
 
 #include "../main/host/shd-syscall-types.h"
+#include "../main/shmem/shd-shmem-allocator.h"
 
 typedef enum {
     SHD_SHIM_EVENT_NULL = 0,
     SHD_SHIM_EVENT_START = 1,
     SHD_SHIM_EVENT_STOP = 2,
     SHD_SHIM_EVENT_SYSCALL = 3,
-    SHD_SHIM_EVENT_SYSCALL_COMPLETE = 4
+    SHD_SHIM_EVENT_SYSCALL_COMPLETE = 4,
+    SHD_SHIM_EVENT_CLONE_REQ = 5,
+    SHD_SHIM_EVENT_SHMEM_COMPLETE = 6,
+    SHD_SHIM_EVENT_WRITE_REQ = 7
 } ShimEventID;
 
 typedef struct _ShimEvent {
@@ -25,16 +29,24 @@ typedef struct _ShimEvent {
         struct {
             struct timespec ts;
         } data_nano_sleep;
+
         int rv; // TODO (rwails) hack, remove me
+
         struct {
             // We wrap this in the surrounding struct in case there's anything
             // else we end up needing in the message besides the literal struct
             // we're going to pass to the syscall handler.
             SysCallArgs syscall_args;
         } syscall;
+
         struct {
             SysCallReg retval;
         } syscall_complete;
+
+        struct {
+            ShMemBlockSerialized serial;
+        } shmem_blk;
+
     } event_data;
 
 } ShimEvent;

@@ -136,6 +136,13 @@ static inline void buddycontrolblock_setPrvBlock(BuddyControlBlock* bcb,
     buddycontrolblock_setPrv(bcb, offset);
 }
 
+static inline BuddyControlBlock* buddy_retreiveBCB(void* p) {
+    uint8_t* cp = p;
+    BuddyControlBlock* bcb =
+        (BuddyControlBlock*)(cp - sizeof(BuddyControlBlock));
+    return bcb;
+}
+
 uint32_t buddy_goodPoolSizeNBytes(uint32_t requested_nbytes);
 
 size_t buddy_metaSizeNBytes(uint32_t pool_nbytes);

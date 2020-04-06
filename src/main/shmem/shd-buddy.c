@@ -261,9 +261,7 @@ void buddy_free(void* p, void* meta, void* pool, size_t pool_nbytes) {
         return;
     }
 
-    uint8_t* cp = p;
-    BuddyControlBlock* bcb =
-        (BuddyControlBlock*)(cp - sizeof(BuddyControlBlock));
+    BuddyControlBlock* bcb = buddy_retreiveBCB(p);
 
     unsigned bcb_order = buddycontrolblock_order(bcb);
     unsigned max_order = buddy_poolMaxOrder(pool_nbytes);

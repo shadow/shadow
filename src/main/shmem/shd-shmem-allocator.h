@@ -29,6 +29,30 @@ typedef struct _ShMemBlockSerialized {
 } ShMemBlockSerialized;
 
 /*
+ * Returns a pointer to a pre-initialized, process-global shared-memory
+ * allocator.  This object is owned by the process: the caller should not call
+ * free or destroy.
+ *
+ * THREAD SAFETY: thread-safe; can be called by two threads in parallel.
+ *
+ * POST: returns a pointer to the initialized global allocator or aborts if the
+ * global serializer could not be created.
+ */
+ShMemAllocator* shmemallocator_getGlobal();
+
+/*
+ * Returns a pointer to a pre-initialized, process-global shared-memory
+ * serializer.  This object is owned by the process: the caller should not call
+ * free or destroy.
+ *
+ * THREAD SAFETY: thread-safe; can be called by two threads in parallel.
+ *
+ * POST: returns a pointer to the initialized global serializer or aborts if the
+ * global serializer could not be created.
+ */
+ShMemSerializer* shmemserializer_getGlobal();
+
+/*
  * Heap-allocate and initialize a shared-memory allocator.
  *
  * THREAD SAFETY: thread-safe; can be called by two threads in parallel.
@@ -89,6 +113,10 @@ void shmemallocator_destroyNoShmDelete(ShMemAllocator* allocator);
  */
 ShMemBlock shmemallocator_alloc(ShMemAllocator* allocator, size_t nbytes);
 
+static inline ShMemBlock shmemallocator_globalAlloc(size_t nbytes) {
+    return shmemallocator_alloc(shmemallocator_getGlobal(), nbytes);
+}
+
 /*
  * Semantically similar to free(blk->p).  Returns the shared-memory to the
  * allocator and invalidates the block.
@@ -103,6 +131,10 @@ ShMemBlock shmemallocator_alloc(ShMemAllocator* allocator, size_t nbytes);
  * POST: the block is destroyed and invalidated.
  */
 void shmemallocator_free(ShMemAllocator* allocator, ShMemBlock* blk);
+
+static inline void shmemallocator_globalFree(ShMemBlock* blk) {
+    return shmemallocator_free(shmemallocator_getGlobal(), blk);
+}
 
 /*
  * Converts a ShMemBlock created by an allocator into a format that is
@@ -122,6 +154,11 @@ void shmemallocator_free(ShMemAllocator* allocator, ShMemBlock* blk);
 ShMemBlockSerialized shmemallocator_blockSerialize(ShMemAllocator* allocator,
                                                    ShMemBlock* blk);
 
+static inline ShMemBlockSerialized
+shmemallocator_globalBlockSerialize(ShMemBlock* blk) {
+    return shmemallocator_blockSerialize(shmemallocator_getGlobal(), blk);
+}
+
 /*
  * Converts a valid ShMemBlockSerialized to a valid ShMemBlock.
  *
@@ -140,6 +177,11 @@ ShMemBlockSerialized shmemallocator_blockSerialize(ShMemAllocator* allocator,
  */
 ShMemBlock shmemallocator_blockDeserialize(ShMemAllocator* allocator,
                                            ShMemBlockSerialized* serial);
+
+static inline ShMemBlock
+shmemallocator_globalBlockDeserialize(ShMemBlockSerialized* serial) {
+    return shmemallocator_blockDeserialize(shmemallocator_getGlobal(), serial);
+}
 
 /*
  * Heap-allocate and initialize a shared-memory serializer.
@@ -180,9 +222,13 @@ void shmemserializer_destroy(ShMemSerializer* serializer);
  * POST: returns a valid ShMemBlockSerialized that is identical to the
  * serialized block that was used to generate the input ShMemBlock.
  */
-ShMemBlockSerialized
-shmemserializer_blockSerialize(const ShMemSerializer* serializer,
-                               ShMemBlock* blk);
+ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer,
+                                                    ShMemBlock* blk);
+
+static inline ShMemBlockSerialized
+shmemserializer_globalBlockSerialize(ShMemBlock* blk) {
+    return shmemserializer_blockSerialize(shmemserializer_getGlobal(), blk);
+}
 
 /*
  * Converts a valid ShMemBlockSerialized to a valid ShMemBlock.  This operation
@@ -197,5 +243,11 @@ shmemserializer_blockSerialize(const ShMemSerializer* serializer,
  */
 ShMemBlock shmemserializer_blockDeserialize(ShMemSerializer* serializer,
                                             ShMemBlockSerialized* serial);
+
+static inline ShMemBlock
+shmemserializer_globalBlockDeserialize(ShMemBlockSerialized* serial) {
+    return shmemserializer_blockDeserialize(
+        shmemserializer_getGlobal(), serial);
+}
 
 #endif // SHD_SHMEM_ALLOCATOR_H_

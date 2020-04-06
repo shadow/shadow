@@ -9,6 +9,7 @@
 
 #include "shd-buddy.h"
 #include "shd-shmem-file.h"
+#include "shd-shmem-util.h"
 
 #define SHD_SHMEM_ALLOCATOR_POOL_NBYTES SHD_BUDDY_POOL_MAX_NBYTES
 
@@ -106,6 +107,65 @@ struct _ShMemSerializer {
     ShMemFileNode* nodes;
     pthread_mutex_t mtx;
 };
+
+static ShMemAllocator* _global_allocator = NULL;
+static ShMemSerializer* _global_serializer = NULL;
+
+/*
+ * hook used to cleanup at exit.
+ */
+static void _shmemallocator_destroyGlobal() {
+    assert(_global_allocator);
+    shmemallocator_destroy(_global_allocator);
+}
+
+/*
+ * hook used to cleanup at exit.
+ */
+static void _shmemserializer_destroyGlobal() {
+    assert(_global_serializer);
+    shmemserializer_destroy(_global_serializer);
+}
+
+ShMemAllocator* shmemallocator_getGlobal() {
+    static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&mtx);
+
+    if (!_global_allocator) { // need to initialize
+        _global_allocator = shmemallocator_create();
+
+        if (_global_allocator) { // set up hooks for free on exit
+            atexit(_shmemallocator_destroyGlobal);
+        } else { // something bad happened, and we definitely can't continue
+            SHD_SHMEM_LOG_ERROR(
+                "error allocating global shared memory allocator");
+            abort();
+        }
+    }
+
+    pthread_mutex_unlock(&mtx);
+    return _global_allocator;
+}
+
+ShMemSerializer* shmemserializer_getGlobal() {
+    static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&mtx);
+
+    if (!_global_serializer) { // need to initialize
+        _global_serializer = shmemserializer_create();
+
+        if (_global_serializer) { // set up hooks for free on exit
+            atexit(_shmemserializer_destroyGlobal);
+        } else { // something bad happened, and we definitely can't continue
+            SHD_SHMEM_LOG_ERROR(
+                "error allocating global shared memory serializer");
+            abort();
+        }
+    }
+
+    pthread_mutex_unlock(&mtx);
+    return _global_serializer;
+}
 
 ShMemAllocator* shmemallocator_create() {
     ShMemAllocator* allocator = calloc(1, sizeof(ShMemAllocator));
@@ -412,9 +472,8 @@ void shmemserializer_destroy(ShMemSerializer* serializer) {
     free(serializer);
 }
 
-ShMemBlockSerialized
-shmemserializer_blockSerialize(const ShMemSerializer* serializer,
-                               ShMemBlock* blk) {
+ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer,
+                                                    ShMemBlock* blk) {
     assert(serializer && blk);
 
     ShMemBlockSerialized ret;
@@ -422,14 +481,14 @@ shmemserializer_blockSerialize(const ShMemSerializer* serializer,
 
     const ShMemFileNode* node = NULL;
 
-    pthread_mutex_lock(&((ShMemSerializer*)serializer)->mtx);
+    pthread_mutex_lock(&serializer->mtx);
     node = _shmemfilenode_findPtr(serializer->nodes, blk->p);
 
     assert(node);
 
     _shmemblockserialized_populate(blk, &node->shmf, &ret);
 
-    pthread_mutex_unlock(&((ShMemSerializer*)serializer)->mtx);
+    pthread_mutex_unlock(&serializer->mtx);
     return ret;
 }
 

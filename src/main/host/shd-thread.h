@@ -47,7 +47,6 @@ void* thread_clonePluginPtr(Thread* thread, PluginPtr plugin_src, size_t n);
 // Release a pointer returned by thread_clonePluginPtr.
 void thread_releaseClonedPtr(Thread* thread, void* p);
 
-
 gboolean thread_isRunning(Thread* thread);
 
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */

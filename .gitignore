@@ -6,3 +6,4 @@
 .pydevproject
 .settings
 *.swp
+cscope.*

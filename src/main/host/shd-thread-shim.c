@@ -1,3 +1,5 @@
+#include "main/host/shd-thread-shim.h"
+
 /*
  * shd-thread.c
  *
@@ -5,11 +7,12 @@
  *      Author: rjansen
  */
 
-#include "shadow.h"
-
 #include <signal.h>
+#include <string.h>
 
 #include <fcntl.h>
+#include <glib.h>
+#include <search.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -17,6 +20,7 @@
 #include "shim/shim-event.h"
 #include "main/host/shd-thread-protected.h"
 #include "main/host/shd-thread-shim.h"
+#include "main/shmem/shd-shmem-allocator.h"
 #include "support/logger/logger.h"
 
 #define THREADSHIM_TYPE_ID 13357
@@ -37,7 +41,15 @@ struct _ThreadShim {
 
     /* holds the event id for the most recent call from the plugin/shim */
     ShimEvent currentEvent;
+
+    GHashTable* ptr_to_block;
+    GList *read_list, *write_list;
 };
+
+typedef struct _ShMemWriteBlock {
+    ShMemBlock blk;
+    PluginPtr plugin_tr;
+} ShMemWriteBlock;
 
 static ThreadShim* _threadToThreadShim(Thread* thread) {
     utility_assert(thread->type_id == THREADSHIM_TYPE_ID);
@@ -48,11 +60,55 @@ static Thread* _threadShimToThread(ThreadShim* thread) {
     return (Thread*)thread;
 }
 
+static void _threadshim_auxFree(void* p, void* _) {
+    ShMemBlock* blk = (ShMemBlock*)p;
+    shmemallocator_globalFree(blk);
+    free(blk);
+}
+
+static void _threadshim_flushReads(ThreadShim* thread) {
+    if (thread->read_list) {
+        g_list_foreach(thread->read_list, _threadshim_auxFree, NULL);
+        g_list_free(thread->read_list);
+        thread->read_list = NULL;
+    }
+}
+
+static void _threadshim_auxWrite(void* p, void* t) {
+    ShMemWriteBlock* write_blk = (ShMemWriteBlock*)p;
+    ThreadShim* thread = (ThreadShim*)t;
+
+    ShimEvent req, resp;
+    memset(&req, 0, sizeof(ShimEvent));
+    memset(&resp, 0, sizeof(ShimEvent));
+    req.event_id = SHD_SHIM_EVENT_WRITE_REQ;
+
+    req.event_data.shmem_blk.serial =
+        shmemallocator_globalBlockSerialize(&write_blk->blk);
+
+    shimevent_sendEvent(thread->eventFD, &req);
+    shimevent_recvEvent(thread->eventFD, &resp);
+
+    utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
+}
+
+static void _threadshim_flushWrites(ThreadShim* thread) {
+    if (thread->write_list) {
+        g_list_foreach(thread->write_list, _threadshim_auxWrite, thread);
+        g_list_free(thread->write_list);
+        thread->write_list = NULL;
+    }
+}
+
 void threadshim_free(Thread* base) {
     ThreadShim* thread = _threadToThreadShim(base);
 
     if (thread->sys) {
         syscallhandler_unref(thread->sys);
+    }
+
+    if (thread->ptr_to_block) {
+        g_hash_table_destroy(thread->ptr_to_block);
     }
 
     MAGIC_CLEAR(base);
@@ -293,51 +349,85 @@ gboolean threadshim_isRunning(Thread* base) {
 void* threadshim_clonePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
     ThreadShim* thread = _threadToThreadShim(base);
 
-    utility_assert(false);
-    return NULL;
-    // FIXME(rwails)
-    // * Allocate space in shared memory
-    // * Send memcpy command via pipe
-    // * Return the pointer to shared memory
+    // Allocate a block for the clone
+    ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
+    *blk = shmemallocator_globalAlloc(n);
+
+    utility_assert(blk->p && blk->nbytes == n);
+
+    ShimEvent req, resp;
+    memset(&req, 0, sizeof(ShimEvent));
+    memset(&resp, 0, sizeof(ShimEvent));
+    req.event_id = SHD_SHIM_EVENT_CLONE_REQ;
+    req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(blk);
+
+    shimevent_sendEvent(thread->eventFD, &req);
+    shimevent_recvEvent(thread->eventFD, &resp);
+
+    utility_assert(resp.event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE);
+
+    g_hash_table_insert(thread->ptr_to_block, &blk->p, blk);
+
+    return blk->p;
 }
 
 void threadshim_releaseClonedPtr(Thread* base, void* p) {
     ThreadShim* thread = _threadToThreadShim(base);
 
-    utility_assert(false);
-    // FIXME(rwails)
-    // * Release the pointer
+    ShMemBlock* blk = g_hash_table_lookup(thread->ptr_to_block, &p);
+    utility_assert(blk != NULL);
+    g_hash_table_remove(thread->ptr_to_block, &p);
+    shmemallocator_globalFree(blk);
+    free(blk);
 }
 
 const void* threadshim_readPluginPtr(Thread* base, PluginPtr plugin_src,
                                      size_t n) {
-    utility_assert(false);
-    return NULL;
-    // FIXME(rwails)
-    // Initial implementation can:
-    // * Allocate space in shared memory
-    // * Send memcpy command via pipe
-    // * Add the pointer to a list to be freed before returning control to the
-    // plugin.
-    //
-    // As an optimization, we could later allow the plugin to request shared
-    // regions that *it* owns.  This function could recognize if plugin_src
-    // already belongs to such a region, and if so just return the pointer.
+    ThreadShim* thread = _threadToThreadShim(base);
+
+    // Allocate a block for the clone
+    ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
+    *blk = shmemallocator_globalAlloc(n);
+
+    utility_assert(blk->p && blk->nbytes == n);
+
+    ShimEvent req, resp;
+    memset(&req, 0, sizeof(ShimEvent));
+    memset(&resp, 0, sizeof(ShimEvent));
+    req.event_id = SHD_SHIM_EVENT_CLONE_REQ;
+    req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(blk);
+
+    shimevent_sendEvent(thread->eventFD, &req);
+    shimevent_recvEvent(thread->eventFD, &resp);
+
+    utility_assert(resp.event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE);
+
+    GList* new_head = g_list_append(thread->read_list, blk);
+    utility_assert(new_head);
+    if (!thread->read_list) {
+        thread->read_list = new_head;
+    }
+
+    return blk->p;
 }
 
 void* threadshim_writePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
-    utility_assert(false);
-    return NULL;
-    // FIXME(rwails)
-    // Initial implementation can:
-    // * Allocate space in shared memory
-    // * Save metadata about this region, s.t. before returning control to the
-    // plugin, we tell it to memcpy from the shared region to the original
-    // pointer location in its address space.
-    //
-    // As an optimization, we could later allow the plugin to request shared
-    // regions that *it* owns. This function could recognize if plugin_src
-    // already belongs to such a region, and if so just return the pointer.
+    ThreadShim* thread = _threadToThreadShim(base);
+
+    // Allocate a block for the clone
+    ShMemWriteBlock* write_blk = calloc(1, sizeof(ShMemWriteBlock));
+    utility_assert(write_blk);
+    write_blk->blk = shmemallocator_globalAlloc(n);
+
+    utility_assert(write_blk->blk.p && write_blk->blk.nbytes == n);
+
+    GList* new_head = g_list_append(thread->write_list, write_blk);
+    utility_assert(new_head);
+    if (!thread->write_list) {
+        thread->write_list = new_head;
+    }
+
+    return write_blk->blk.p;
 }
 
 Thread* threadshim_new(Host* host, Process* process, gint threadID) {
@@ -360,6 +450,12 @@ Thread* threadshim_new(Host* host, Process* process, gint threadID) {
     thread->threadID = threadID;
     thread->sys =
         syscallhandler_new(host, process, _threadShimToThread(thread));
+
+    _Static_assert(
+        sizeof(void*) == 8, "thread-shim impl assumes 8 byte pointers");
+    thread->ptr_to_block = g_hash_table_new(g_int64_hash, g_int64_equal);
+    thread->read_list = NULL;
+    thread->write_list = NULL;
 
     // thread has access to a global, thread safe shared memory manager
 
