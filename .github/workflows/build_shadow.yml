@@ -73,8 +73,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: shadow/shadow-plugin-tor
-          # First commit with the CI shell script.
-          ref: 7af2926439b7b181144c6b2e10be6ecbf977965f
+          ref: 391f85f26bcaf09dd6b9f06f7331b6b73b47db17
           path: shadow-plugin-tor
 
       - name: CI script
