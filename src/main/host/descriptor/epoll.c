@@ -102,7 +102,7 @@ struct _Epoll {
 /* forward declaration */
 static void _epoll_tryNotify(Epoll* epoll, gpointer userData);
 
-static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, struct epoll_event* event) {
+static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, const struct epoll_event* event) {
     EpollWatch* watch = g_new0(EpollWatch, 1);
     MAGIC_INIT(watch);
     utility_assert(event);
@@ -406,7 +406,7 @@ static const gchar* _epoll_operationToStr(gint op) {
     }
 }
 
-gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, struct epoll_event* event) {
+gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, const struct epoll_event* event) {
     MAGIC_ASSERT(epoll);
 
     debug("epoll descriptor %i, operation %s, descriptor %i",
@@ -488,13 +488,26 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, struct 
 }
 
 gint epoll_controlOS(Epoll* epoll, gint operation, gint fileDescriptor,
-        struct epoll_event* event) {
+        const struct epoll_event* event) {
     MAGIC_ASSERT(epoll);
-    /* ask the OS about any events on our kernel epoll descriptor */
-    gint ret = epoll_ctl(epoll->osEpollChild, operation, fileDescriptor, event);
+
+    /* We need a non-const struct for the epoll_ctl call. */
+    struct epoll_event osevent = {};
+    if(event) {
+        osevent = *event;
+    }
+
+    /* Ask the OS about any events on our kernel epoll descriptor. */
+    gint ret = epoll_ctl(epoll->osEpollChild, operation, fileDescriptor, &osevent);
     if(ret < 0) {
         ret = errno;
     }
+
+    /* Check if the OS attempted to modify the event data. */
+    if(event && memcmp(&osevent, event, sizeof(*event)) != 0) {
+        warning("epoll_ctl unexpectedly modified the event struct. Ignoring.");
+    }
+
     return ret;
 }
 
