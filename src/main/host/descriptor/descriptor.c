@@ -95,45 +95,57 @@ static void _descriptor_notifyEpollListener(gpointer key, gpointer value, gpoint
 void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gboolean doSetBits){
     MAGIC_ASSERT(descriptor);
 
+    DescriptorStatus statusesChanged = DS_NONE;
+
     /* adjust our status as requested */
     if(doSetBits) {
         if((status & DS_ACTIVE) && !(descriptor->status & DS_ACTIVE)) {
             /* status changed - is now active */
+            statusesChanged |= DS_ACTIVE;
             descriptor->status |= DS_ACTIVE;
         }
         if((status & DS_READABLE) && !(descriptor->status & DS_READABLE)) {
             /* status changed - is now readable */
+            statusesChanged |= DS_READABLE;
             descriptor->status |= DS_READABLE;
         }
         if((status & DS_WRITABLE) && !(descriptor->status & DS_WRITABLE)) {
             /* status changed - is now writable */
+            statusesChanged |= DS_WRITABLE;
             descriptor->status |= DS_WRITABLE;
         }
         if((status & DS_CLOSED) && !(descriptor->status & DS_CLOSED)) {
             /* status changed - is now closed to user */
+            statusesChanged |= DS_CLOSED;
             descriptor->status |= DS_CLOSED;
         }
     } else {
         if((status & DS_ACTIVE) && (descriptor->status & DS_ACTIVE)) {
             /* status changed - no longer active */
+            statusesChanged |= DS_ACTIVE;
             descriptor->status &= ~DS_ACTIVE;
         }
         if((status & DS_READABLE) && (descriptor->status & DS_READABLE)) {
             /* status changed - no longer readable */
+            statusesChanged |= DS_READABLE;
             descriptor->status &= ~DS_READABLE;
         }
         if((status & DS_WRITABLE) && (descriptor->status & DS_WRITABLE)) {
             /* status changed - no longer writable */
+            statusesChanged |= DS_WRITABLE;
             descriptor->status &= ~DS_WRITABLE;
         }
         if((status & DS_CLOSED) && (descriptor->status & DS_CLOSED)) {
             /* status changed - no longer closed to user */
+            statusesChanged |= DS_CLOSED;
             descriptor->status &= ~DS_CLOSED;
         }
     }
 
     /* tell our epoll listeners their was some activity on this descriptor */
-    g_hash_table_foreach(descriptor->epollListeners, _descriptor_notifyEpollListener, descriptor);
+    if(statusesChanged != DS_NONE) {
+        g_hash_table_foreach(descriptor->epollListeners, _descriptor_notifyEpollListener, descriptor);
+    }
 }
 
 DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
