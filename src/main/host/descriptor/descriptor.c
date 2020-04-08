@@ -10,7 +10,7 @@
 
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
-#include "main/host/descriptor/epoll.h"
+#include "main/host/descriptor/shd-descriptor-listener.h"
 #include "main/host/host.h"
 #include "main/utility/utility.h"
 
@@ -23,7 +23,8 @@ void descriptor_init(Descriptor* descriptor, DescriptorType type,
     descriptor->funcTable = funcTable;
     descriptor->handle = handle;
     descriptor->type = type;
-    descriptor->epollListeners = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
+    descriptor->listeners = g_hash_table_new_full(g_direct_hash, g_direct_equal,
+            NULL, (GDestroyNotify)descriptorlistener_unref);
     descriptor->referenceCount = 1;
 
     worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_NEW);
@@ -33,8 +34,8 @@ static void _descriptor_free(Descriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
-    if(descriptor->epollListeners) {
-        g_hash_table_destroy(descriptor->epollListeners);
+    if(descriptor->listeners) {
+        g_hash_table_destroy(descriptor->listeners);
     }
 
     MAGIC_CLEAR(descriptor);
@@ -84,12 +85,6 @@ DescriptorType descriptor_getType(Descriptor* descriptor) {
 gint* descriptor_getHandleReference(Descriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return &(descriptor->handle);
-}
-
-static void _descriptor_notifyEpollListener(gpointer key, gpointer value, gpointer user_data) {
-    Descriptor* descriptor = user_data;
-    Epoll* epoll = value;
-    epoll_descriptorStatusChanged(epoll, descriptor);
 }
 
 void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gboolean doSetBits){
@@ -142,9 +137,16 @@ void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gb
         }
     }
 
-    /* tell our epoll listeners their was some activity on this descriptor */
+    /* tell our listeners their was some activity on this descriptor */
     if(statusesChanged != DS_NONE) {
-        g_hash_table_foreach(descriptor->epollListeners, _descriptor_notifyEpollListener, descriptor);
+        GHashTableIter iter;
+        gpointer key, value;
+        g_hash_table_iter_init(&iter, descriptor->listeners);
+
+        while(g_hash_table_iter_next(&iter, &key, &value)) {
+            DescriptorListener* listener = value;
+            descriptorlistener_onStatusChanged(listener, descriptor->status, statusesChanged);
+        }
     }
 }
 
@@ -169,17 +171,17 @@ DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
     return status;
 }
 
-void descriptor_addEpollListener(Descriptor* descriptor, Descriptor* epoll) {
+void descriptor_addListener(Descriptor* descriptor, DescriptorListener* listener) {
     MAGIC_ASSERT(descriptor);
-    /* we are string the epoll instance, so increase the ref */
-    descriptor_ref(epoll);
-    g_hash_table_insert(descriptor->epollListeners, &epoll->handle, epoll);
+    /* We are storing a listener instance, so count the ref. */
+    descriptorlistener_ref(listener);
+    g_hash_table_insert(descriptor->listeners, listener, listener);
 }
 
-void descriptor_removeEpollListener(Descriptor* descriptor, Descriptor* epoll) {
+void descriptor_removeListener(Descriptor* descriptor, DescriptorListener* listener) {
     MAGIC_ASSERT(descriptor);
-    /* this will automatically call descriptor_unref on the epoll instance */
-    g_hash_table_remove(descriptor->epollListeners, &epoll->handle);
+    /* This will automatically call descriptorlistener_ref on the instance. */
+    g_hash_table_remove(descriptor->listeners, listener);
 }
 
 gint descriptor_getFlags(Descriptor* descriptor) {

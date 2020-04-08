@@ -8,6 +8,7 @@
 #define SHD_EPOLL_H_
 
 #include <glib.h>
+#include <sys/epoll.h>
 
 #include "main/host/descriptor/descriptor.h"
 

@@ -3,6 +3,7 @@
  * Copyright (c) 2010-2011, Rob Jansen
  * See LICENSE for licensing information
  */
+#include "main/host/descriptor/epoll.h"
 
 #include <errno.h>
 #include <glib.h>
@@ -15,7 +16,7 @@
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/descriptor/epoll.h"
+#include "main/host/descriptor/shd-descriptor-listener.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/utility/utility.h"
@@ -58,6 +59,8 @@ typedef struct _EpollWatch EpollWatch;
 struct _EpollWatch {
     /* the shadow descriptor we are watching for events */
     Descriptor* descriptor;
+    /* The listener that notifies us when status changes. */
+    DescriptorListener* listener;
     /* holds the actual event info */
     struct epoll_event event;
     /* current status of the underlying shadow descriptor */
@@ -101,6 +104,7 @@ struct _Epoll {
 
 /* forward declaration */
 static void _epoll_tryNotify(Epoll* epoll, gpointer userData);
+static void _epoll_descriptorStatusChanged(Epoll* epoll, Descriptor* descriptor);
 
 static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, const struct epoll_event* event) {
     EpollWatch* watch = g_new0(EpollWatch, 1);
@@ -115,12 +119,20 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, const s
     watch->event = *event;
     watch->referenceCount = 1;
 
+    /* Create the listener and ref the objects held by the listener.
+     * The watch object already holds a ref to the descriptor so we
+     * don't ref it again. */
+    watch->listener = descriptorlistener_new(
+            (DescriptorStatusCallbackFunc)_epoll_descriptorStatusChanged,
+            epoll, NULL, descriptor, NULL);
+
     return watch;
 }
 
 static void _epollwatch_free(EpollWatch* watch) {
     MAGIC_ASSERT(watch);
 
+    descriptorlistener_unref(watch->listener);
     descriptor_unref(watch->descriptor);
 
     MAGIC_CLEAR(watch);
@@ -171,7 +183,8 @@ void epoll_clearWatchListeners(Epoll* epoll) {
     while(g_hash_table_iter_next(&iter, &key, &value)) {
         EpollWatch* watch = value;
         MAGIC_ASSERT(watch);
-        descriptor_removeEpollListener(watch->descriptor, (Descriptor*)epoll);
+        descriptorlistener_setEvents(watch->listener, DS_NONE);
+        descriptor_removeListener(watch->descriptor, watch->listener);
     }
 }
 
@@ -429,11 +442,15 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, const s
             watch->flags |= EWF_WATCHING;
             g_hash_table_replace(epoll->watching, watchHandleRef, watch);
 
-            /* its added, so we need to listen for changes */
-            descriptor_addEpollListener(watch->descriptor, (Descriptor*)epoll);
+            /* It's added, so we need to listen for changes. Here we listen for all
+             * statuses, because epoll will filter what it needs.
+             * TODO: lean more heavily on descriptorlistener and simplify epoll. */
+            descriptorlistener_setEvents(watch->listener,
+                    DS_ACTIVE|DS_CLOSED|DS_READABLE|DS_WRITABLE);
+            descriptor_addListener(watch->descriptor, watch->listener);
 
             /* initiate a callback if the new watched descriptor is ready */
-            epoll_descriptorStatusChanged(epoll, descriptor);
+            _epoll_descriptorStatusChanged(epoll, descriptor);
 
             break;
         }
@@ -454,7 +471,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, const s
             watch->flags &= ~EWF_ONESHOT_REPORTED;
 
             /* initiate a callback if the new event type on the watched descriptor is ready */
-            epoll_descriptorStatusChanged(epoll, descriptor);
+            _epoll_descriptorStatusChanged(epoll, descriptor);
 
             break;
         }
@@ -469,7 +486,8 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, const s
             watch->flags &= ~EWF_WATCHING;
 
             /* its deleted, so stop listening for updates */
-            descriptor_removeEpollListener(watch->descriptor, (Descriptor*)epoll);
+            descriptorlistener_setEvents(watch->listener, DS_NONE);
+            descriptor_removeListener(watch->descriptor, watch->listener);
 
             /* unref gets called on the watch when it is removed from these tables */
             g_hash_table_remove(epoll->ready, watchHandleRef);
@@ -593,7 +611,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
     return 0;
 }
 
-void epoll_descriptorStatusChanged(Epoll* epoll, Descriptor* descriptor) {
+static void _epoll_descriptorStatusChanged(Epoll* epoll, Descriptor* descriptor) {
     MAGIC_ASSERT(epoll);
 
     /* make sure we are actually watching the descriptor */
