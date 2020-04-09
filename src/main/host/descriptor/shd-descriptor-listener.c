@@ -30,9 +30,10 @@ struct _DescriptorListener {
     MAGIC_DECLARE;
 };
 
-DescriptorListener* descriptorlistener_new(DescriptorStatusCallbackFunc notifyFunc,
-        void *callbackObject, DescriptorStatusObjectFreeFunc objectFreeFunc,
-        void *callbackArgument, DescriptorStatusArgumentFreeFunc argumentFreeFunc) {
+DescriptorListener* descriptorlistener_new(
+    DescriptorStatusCallbackFunc notifyFunc, void* callbackObject,
+    DescriptorStatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
+    DescriptorStatusArgumentFreeFunc argumentFreeFunc) {
     DescriptorListener* listener = calloc(1, sizeof(DescriptorListener));
     MAGIC_INIT(listener);
 
@@ -50,11 +51,11 @@ DescriptorListener* descriptorlistener_new(DescriptorStatusCallbackFunc notifyFu
 static void _descriptorlistener_free(DescriptorListener* listener) {
     MAGIC_ASSERT(listener);
 
-    if(listener->callbackObject && listener->objectFreeFunc) {
+    if (listener->callbackObject && listener->objectFreeFunc) {
         listener->objectFreeFunc(listener->callbackObject);
     }
 
-    if(listener->callbackArgument && listener->argumentFreeFunc) {
+    if (listener->callbackArgument && listener->argumentFreeFunc) {
         listener->argumentFreeFunc(listener->callbackArgument);
     }
 
@@ -71,17 +72,17 @@ void descriptorlistener_unref(DescriptorListener* listener) {
     MAGIC_ASSERT(listener);
     (listener->referenceCount)--;
     utility_assert(listener->referenceCount >= 0);
-    if(listener->referenceCount == 0) {
+    if (listener->referenceCount == 0) {
         _descriptorlistener_free(listener);
     }
 }
 
 static gboolean _descriptorlistener_shouldNotify(DescriptorListener* listener,
-        DescriptorStatus changed) {
+                                                 DescriptorStatus changed) {
     MAGIC_ASSERT(listener);
 
     /* If any status bits are set that match our listening bits. */
-    if(changed & listener->events) {
+    if (changed & listener->events) {
         return TRUE;
     } else {
         return FALSE;
@@ -92,21 +93,24 @@ static void _descriptorlistener_invokeNotifyFunc(DescriptorListener* listener) {
     MAGIC_ASSERT(listener);
 
     /* Trigger the callback function. */
-    if(listener->notifyFunc) {
-        listener->notifyFunc(listener->callbackObject, listener->callbackArgument);
+    if (listener->notifyFunc) {
+        listener->notifyFunc(
+            listener->callbackObject, listener->callbackArgument);
     }
 }
 
 void descriptorlistener_onStatusChanged(DescriptorListener* listener,
-        DescriptorStatus current, DescriptorStatus changed) {
+                                        DescriptorStatus current,
+                                        DescriptorStatus changed) {
     MAGIC_ASSERT(listener);
 
-    if(_descriptorlistener_shouldNotify(listener, changed)) {
+    if (_descriptorlistener_shouldNotify(listener, changed)) {
         _descriptorlistener_invokeNotifyFunc(listener);
     }
 }
 
-void descriptorlistener_setEvents(DescriptorListener* listener, DescriptorStatus events) {
+void descriptorlistener_setEvents(DescriptorListener* listener,
+                                  DescriptorStatus events) {
     MAGIC_ASSERT(listener);
     listener->events = events;
 }

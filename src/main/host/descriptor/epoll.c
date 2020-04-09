@@ -9,7 +9,6 @@
 #include <glib.h>
 #include <string.h>
 #include <sys/epoll.h>
-#include <unistd.h>
 
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
@@ -104,9 +103,11 @@ struct _Epoll {
 
 /* forward declaration */
 static void _epoll_tryNotify(Epoll* epoll, gpointer userData);
-static void _epoll_descriptorStatusChanged(Epoll* epoll, Descriptor* descriptor);
+static void _epoll_descriptorStatusChanged(Epoll* epoll,
+                                           Descriptor* descriptor);
 
-static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, const struct epoll_event* event) {
+static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor,
+                                   const struct epoll_event* event) {
     EpollWatch* watch = g_new0(EpollWatch, 1);
     MAGIC_INIT(watch);
     utility_assert(event);
@@ -123,8 +124,8 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor, const s
      * The watch object already holds a ref to the descriptor so we
      * don't ref it again. */
     watch->listener = descriptorlistener_new(
-            (DescriptorStatusCallbackFunc)_epoll_descriptorStatusChanged,
-            epoll, NULL, descriptor, NULL);
+        (DescriptorStatusCallbackFunc)_epoll_descriptorStatusChanged, epoll,
+        NULL, descriptor, NULL);
 
     return watch;
 }
@@ -419,7 +420,8 @@ static const gchar* _epoll_operationToStr(gint op) {
     }
 }
 
-gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, const struct epoll_event* event) {
+gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
+                   const struct epoll_event* event) {
     MAGIC_ASSERT(epoll);
 
     debug("epoll descriptor %i, operation %s, descriptor %i",
@@ -442,11 +444,13 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, const s
             watch->flags |= EWF_WATCHING;
             g_hash_table_replace(epoll->watching, watchHandleRef, watch);
 
-            /* It's added, so we need to listen for changes. Here we listen for all
-             * statuses, because epoll will filter what it needs.
-             * TODO: lean more heavily on descriptorlistener and simplify epoll. */
-            descriptorlistener_setEvents(watch->listener,
-                    DS_ACTIVE|DS_CLOSED|DS_READABLE|DS_WRITABLE);
+            /* It's added, so we need to listen for changes. Here we listen for
+             * all statuses, because epoll will filter what it needs.
+             * TODO: lean more heavily on descriptorlistener and simplify epoll.
+             */
+            descriptorlistener_setEvents(
+                watch->listener,
+                DS_ACTIVE | DS_CLOSED | DS_READABLE | DS_WRITABLE);
             descriptor_addListener(watch->descriptor, watch->listener);
 
             /* initiate a callback if the new watched descriptor is ready */
@@ -506,23 +510,24 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor, const s
 }
 
 gint epoll_controlOS(Epoll* epoll, gint operation, gint fileDescriptor,
-        const struct epoll_event* event) {
+                     const struct epoll_event* event) {
     MAGIC_ASSERT(epoll);
 
     /* We need a non-const struct for the epoll_ctl call. */
     struct epoll_event osevent = {};
-    if(event) {
+    if (event) {
         osevent = *event;
     }
 
     /* Ask the OS about any events on our kernel epoll descriptor. */
-    gint ret = epoll_ctl(epoll->osEpollChild, operation, fileDescriptor, &osevent);
+    gint ret =
+        epoll_ctl(epoll->osEpollChild, operation, fileDescriptor, &osevent);
     if(ret < 0) {
         ret = errno;
     }
 
     /* Check if the OS attempted to modify the event data. */
-    if(event && memcmp(&osevent, event, sizeof(*event)) != 0) {
+    if (event && memcmp(&osevent, event, sizeof(*event)) != 0) {
         warning("epoll_ctl unexpectedly modified the event struct. Ignoring.");
     }
 
@@ -611,7 +616,8 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
     return 0;
 }
 
-static void _epoll_descriptorStatusChanged(Epoll* epoll, Descriptor* descriptor) {
+static void _epoll_descriptorStatusChanged(Epoll* epoll,
+                                           Descriptor* descriptor) {
     MAGIC_ASSERT(epoll);
 
     /* make sure we are actually watching the descriptor */

@@ -23,8 +23,9 @@ void descriptor_init(Descriptor* descriptor, DescriptorType type,
     descriptor->funcTable = funcTable;
     descriptor->handle = handle;
     descriptor->type = type;
-    descriptor->listeners = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-            NULL, (GDestroyNotify)descriptorlistener_unref);
+    descriptor->listeners =
+        g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL,
+                              (GDestroyNotify)descriptorlistener_unref);
     descriptor->referenceCount = 1;
 
     worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_NEW);
@@ -34,7 +35,7 @@ static void _descriptor_free(Descriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
-    if(descriptor->listeners) {
+    if (descriptor->listeners) {
         g_hash_table_destroy(descriptor->listeners);
     }
 
@@ -138,14 +139,15 @@ void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gb
     }
 
     /* tell our listeners their was some activity on this descriptor */
-    if(statusesChanged != DS_NONE) {
+    if (statusesChanged != DS_NONE) {
         GHashTableIter iter;
         gpointer key, value;
         g_hash_table_iter_init(&iter, descriptor->listeners);
 
-        while(g_hash_table_iter_next(&iter, &key, &value)) {
+        while (g_hash_table_iter_next(&iter, &key, &value)) {
             DescriptorListener* listener = value;
-            descriptorlistener_onStatusChanged(listener, descriptor->status, statusesChanged);
+            descriptorlistener_onStatusChanged(
+                listener, descriptor->status, statusesChanged);
         }
     }
 }
@@ -171,14 +173,16 @@ DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
     return status;
 }
 
-void descriptor_addListener(Descriptor* descriptor, DescriptorListener* listener) {
+void descriptor_addListener(Descriptor* descriptor,
+                            DescriptorListener* listener) {
     MAGIC_ASSERT(descriptor);
     /* We are storing a listener instance, so count the ref. */
     descriptorlistener_ref(listener);
     g_hash_table_insert(descriptor->listeners, listener, listener);
 }
 
-void descriptor_removeListener(Descriptor* descriptor, DescriptorListener* listener) {
+void descriptor_removeListener(Descriptor* descriptor,
+                               DescriptorListener* listener) {
     MAGIC_ASSERT(descriptor);
     /* This will automatically call descriptorlistener_ref on the instance. */
     g_hash_table_remove(descriptor->listeners, listener);

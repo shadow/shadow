@@ -58,8 +58,10 @@ gint* descriptor_getHandleReference(Descriptor* descriptor);
 void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gboolean doSetBits);
 DescriptorStatus descriptor_getStatus(Descriptor* descriptor);
 
-void descriptor_addListener(Descriptor* descriptor, DescriptorListener* listener);
-void descriptor_removeListener(Descriptor* descriptor, DescriptorListener* listener);
+void descriptor_addListener(Descriptor* descriptor,
+                            DescriptorListener* listener);
+void descriptor_removeListener(Descriptor* descriptor,
+                               DescriptorListener* listener);
 
 gint descriptor_getFlags(Descriptor* descriptor);
 void descriptor_setFlags(Descriptor* descriptor, gint flags);

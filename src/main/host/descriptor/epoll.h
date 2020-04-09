@@ -18,9 +18,9 @@ typedef struct _Epoll Epoll;
 Epoll* epoll_new(gint handle);
 
 gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
-        const struct epoll_event* event);
+                   const struct epoll_event* event);
 gint epoll_controlOS(Epoll* epoll, gint operation, gint fileDescriptor,
-        const struct epoll_event* event);
+                     const struct epoll_event* event);
 gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
         gint eventArrayLength, gint* nEvents);
 

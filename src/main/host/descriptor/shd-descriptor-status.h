@@ -10,7 +10,8 @@ typedef enum _DescriptorStatus DescriptorStatus;
 enum _DescriptorStatus {
     DS_NONE = 0,
     /* ok to notify user as far as we know, socket is ready.
-     * o/w never notify user (b/c they e.g. closed the socket or did not accept yet) */
+     * o/w never notify user (b/c they e.g. closed the socket or did not accept
+     * yet) */
     DS_ACTIVE = 1 << 0,
     /* can be read, i.e. there is data waiting for user */
     DS_READABLE = 1 << 1,

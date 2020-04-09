@@ -114,7 +114,7 @@ gboolean host_isRandomHandle(Host* host, gint handle);
 void host_destroyShadowHandle(Host* host, gint shadowHandle);
 
 gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
-        gint fileDescriptor, const struct epoll_event* event);
+                       gint fileDescriptor, const struct epoll_event* event);
 gint host_epollGetEvents(Host* host, gint handle, struct epoll_event* eventArray,
         gint eventArrayLength, gint* nEvents);
 gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* erroneous);

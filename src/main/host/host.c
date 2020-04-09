@@ -785,7 +785,7 @@ void host_closeDescriptor(Host* host, gint handle) {
 }
 
 gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
-        gint fileDescriptor, const struct epoll_event* event) {
+                       gint fileDescriptor, const struct epoll_event* event) {
     MAGIC_ASSERT(host);
 
     /* EBADF  epfd is not a valid file descriptor. */
