@@ -11,8 +11,8 @@
 #include "main/utility/utility.h"
 
 struct _DescriptorListener {
-    /* Specifies the type of descriptor status we want to wait for. */
-    DescriptorStatus events;
+    /* The descriptor status bits we want to monitor for transitions. */
+    DescriptorStatus monitoring;
 
     /* The callback function to trigger. */
     DescriptorStatusCallbackFunc notifyFunc;
@@ -79,17 +79,19 @@ void descriptorlistener_unref(DescriptorListener* listener) {
     }
 }
 
+/* Return TRUE if a transition (bit flip) occurred on any status bits that we
+ * are monitoring.
+ */
 static gboolean _descriptorlistener_shouldNotify(DescriptorListener* listener,
-                                                 DescriptorStatus changed) {
+                                                 DescriptorStatus transitions) {
     MAGIC_ASSERT(listener);
-    /* Return TRUE if any status bits are set that match our listening bits. */
-    return listener->events & changed;
+    return listener->monitoring & transitions;
 }
 
+/* Trigger the callback function. */
 static void _descriptorlistener_invokeNotifyFunc(DescriptorListener* listener) {
     MAGIC_ASSERT(listener);
 
-    /* Trigger the callback function. */
     if (listener->notifyFunc) {
         listener->notifyFunc(
             listener->callbackObject, listener->callbackArgument);
@@ -97,17 +99,16 @@ static void _descriptorlistener_invokeNotifyFunc(DescriptorListener* listener) {
 }
 
 void descriptorlistener_onStatusChanged(DescriptorListener* listener,
-                                        DescriptorStatus current,
-                                        DescriptorStatus changed) {
+                                        DescriptorStatus transitions) {
     MAGIC_ASSERT(listener);
 
-    if (_descriptorlistener_shouldNotify(listener, changed)) {
+    if (_descriptorlistener_shouldNotify(listener, transitions)) {
         _descriptorlistener_invokeNotifyFunc(listener);
     }
 }
 
-void descriptorlistener_setEvents(DescriptorListener* listener,
-                                  DescriptorStatus events) {
+void descriptorlistener_setMonitorStatus(DescriptorListener* listener,
+                                         DescriptorStatus status) {
     MAGIC_ASSERT(listener);
-    listener->events = events;
+    listener->monitoring = status;
 }

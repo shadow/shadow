@@ -6,12 +6,12 @@
 #ifndef SRC_MAIN_HOST_DESCRIPTOR_SHD_DESCRIPTOR_STATUS_H_
 #define SRC_MAIN_HOST_DESCRIPTOR_SHD_DESCRIPTOR_STATUS_H_
 
+/* Bitfield representing possible status types and their states. */
 typedef enum _DescriptorStatus DescriptorStatus;
 enum _DescriptorStatus {
     DS_NONE = 0,
-    /* ok to notify user as far as we know, socket is ready.
-     * o/w never notify user (b/c they e.g. closed the socket or did not accept
-     * yet) */
+    /* the descriptor has been initialized and it is now OK to
+     * unblock any plugin waiting on a particular status  */
     DS_ACTIVE = 1 << 0,
     /* can be read, i.e. there is data waiting for user */
     DS_READABLE = 1 << 1,

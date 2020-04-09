@@ -138,7 +138,7 @@ void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gb
         }
     }
 
-    /* tell our listeners their was some activity on this descriptor */
+    /* tell our listeners there was some activity on this descriptor */
     if (statusesChanged != DS_NONE) {
         GHashTableIter iter;
         gpointer key, value;
@@ -146,8 +146,7 @@ void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gb
 
         while (g_hash_table_iter_next(&iter, &key, &value)) {
             DescriptorListener* listener = value;
-            descriptorlistener_onStatusChanged(
-                listener, descriptor->status, statusesChanged);
+            descriptorlistener_onStatusChanged(listener, statusesChanged);
         }
     }
 }

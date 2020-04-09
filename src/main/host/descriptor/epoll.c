@@ -184,7 +184,7 @@ void epoll_clearWatchListeners(Epoll* epoll) {
     while(g_hash_table_iter_next(&iter, &key, &value)) {
         EpollWatch* watch = value;
         MAGIC_ASSERT(watch);
-        descriptorlistener_setEvents(watch->listener, DS_NONE);
+        descriptorlistener_setMonitorStatus(watch->listener, DS_NONE);
         descriptor_removeListener(watch->descriptor, watch->listener);
     }
 }
@@ -448,7 +448,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
              * all statuses, because epoll will filter what it needs.
              * TODO: lean more heavily on descriptorlistener and simplify epoll.
              */
-            descriptorlistener_setEvents(
+            descriptorlistener_setMonitorStatus(
                 watch->listener,
                 DS_ACTIVE | DS_CLOSED | DS_READABLE | DS_WRITABLE);
             descriptor_addListener(watch->descriptor, watch->listener);
@@ -490,7 +490,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
             watch->flags &= ~EWF_WATCHING;
 
             /* its deleted, so stop listening for updates */
-            descriptorlistener_setEvents(watch->listener, DS_NONE);
+            descriptorlistener_setMonitorStatus(watch->listener, DS_NONE);
             descriptor_removeListener(watch->descriptor, watch->listener);
 
             /* unref gets called on the watch when it is removed from these tables */

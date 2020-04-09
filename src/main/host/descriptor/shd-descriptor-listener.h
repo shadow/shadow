@@ -18,8 +18,10 @@ typedef void (*DescriptorStatusObjectFreeFunc)(void* data);
 typedef void (*DescriptorStatusArgumentFreeFunc)(void* data);
 
 /* Create an object that can be set to listen to a descriptor's status
- * and execute a callback when the status includes the requested events
- * from setEvents. */
+ * and execute a callback whenever a state transition (bit flips) occurs
+ * on one of the status bits that are requested in setMonitorStatus.
+ * Note that the callback will never be called unless setMonitorStatus is first
+ * used to specify which status bits this listner should monitor. */
 DescriptorListener* descriptorlistener_new(
     DescriptorStatusCallbackFunc notifyFunc, void* callbackObject,
     DescriptorStatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
@@ -30,15 +32,17 @@ void descriptorlistener_ref(DescriptorListener* listener);
 /* Decrement the reference count and free the listener if no refs remain. */
 void descriptorlistener_unref(DescriptorListener* listener);
 
-/* Called by the descriptor when it's status changes. This will
- * trigger a notification via the callback supplied to the new func
- * if the status of the descriptor matches the requested events. */
+/* Called by the descriptor when a transition (bit flip) occurred on
+ * at least one of its status bits. (This function should only be called
+ * by the descriptor base class.)
+ * If this listener is monitoring (via setMonitorStatus) any of the status bits
+ * that just transitioned, then this function will trigger a notification
+ * via the callback supplied to the new func.*/
 void descriptorlistener_onStatusChanged(DescriptorListener* listener,
-                                        DescriptorStatus current,
-                                        DescriptorStatus changed);
+                                        DescriptorStatus transitions);
 
-/* Set the requested events that we should listen for. */
-void descriptorlistener_setEvents(DescriptorListener* listener,
-                                  DescriptorStatus events);
+/* Set the status bits that we should monitor for transitions (flips). */
+void descriptorlistener_setMonitorStatus(DescriptorListener* listener,
+                                         DescriptorStatus status);
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_SHD_DESCRIPTOR_LISTENER_H_ */
