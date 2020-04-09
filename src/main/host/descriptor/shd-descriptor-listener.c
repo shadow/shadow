@@ -67,12 +67,12 @@ static void _descriptorlistener_free(DescriptorListener* listener) {
 
 void descriptorlistener_ref(DescriptorListener* listener) {
     MAGIC_ASSERT(listener);
-    (listener->referenceCount)++;
+    listener->referenceCount++;
 }
 
 void descriptorlistener_unref(DescriptorListener* listener) {
     MAGIC_ASSERT(listener);
-    (listener->referenceCount)--;
+    listener->referenceCount--;
     utility_assert(listener->referenceCount >= 0);
     if (listener->referenceCount == 0) {
         _descriptorlistener_free(listener);
@@ -82,13 +82,8 @@ void descriptorlistener_unref(DescriptorListener* listener) {
 static gboolean _descriptorlistener_shouldNotify(DescriptorListener* listener,
                                                  DescriptorStatus changed) {
     MAGIC_ASSERT(listener);
-
-    /* If any status bits are set that match our listening bits. */
-    if (changed & listener->events) {
-        return TRUE;
-    } else {
-        return FALSE;
-    }
+    /* Return TRUE if any status bits are set that match our listening bits. */
+    return listener->events & changed;
 }
 
 static void _descriptorlistener_invokeNotifyFunc(DescriptorListener* listener) {
