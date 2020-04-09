@@ -91,55 +91,22 @@ gint* descriptor_getHandleReference(Descriptor* descriptor) {
 void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gboolean doSetBits){
     MAGIC_ASSERT(descriptor);
 
-    DescriptorStatus statusesChanged = DS_NONE;
+    DescriptorStatus oldStatus = descriptor->status;
 
     /* adjust our status as requested */
-    if(doSetBits) {
-        if((status & DS_ACTIVE) && !(descriptor->status & DS_ACTIVE)) {
-            /* status changed - is now active */
-            statusesChanged |= DS_ACTIVE;
-            descriptor->status |= DS_ACTIVE;
-        }
-        if((status & DS_READABLE) && !(descriptor->status & DS_READABLE)) {
-            /* status changed - is now readable */
-            statusesChanged |= DS_READABLE;
-            descriptor->status |= DS_READABLE;
-        }
-        if((status & DS_WRITABLE) && !(descriptor->status & DS_WRITABLE)) {
-            /* status changed - is now writable */
-            statusesChanged |= DS_WRITABLE;
-            descriptor->status |= DS_WRITABLE;
-        }
-        if((status & DS_CLOSED) && !(descriptor->status & DS_CLOSED)) {
-            /* status changed - is now closed to user */
-            statusesChanged |= DS_CLOSED;
-            descriptor->status |= DS_CLOSED;
-        }
+    if (doSetBits) {
+        /* Set all bits indicated by status */
+        descriptor->status |= status;
     } else {
-        if((status & DS_ACTIVE) && (descriptor->status & DS_ACTIVE)) {
-            /* status changed - no longer active */
-            statusesChanged |= DS_ACTIVE;
-            descriptor->status &= ~DS_ACTIVE;
-        }
-        if((status & DS_READABLE) && (descriptor->status & DS_READABLE)) {
-            /* status changed - no longer readable */
-            statusesChanged |= DS_READABLE;
-            descriptor->status &= ~DS_READABLE;
-        }
-        if((status & DS_WRITABLE) && (descriptor->status & DS_WRITABLE)) {
-            /* status changed - no longer writable */
-            statusesChanged |= DS_WRITABLE;
-            descriptor->status &= ~DS_WRITABLE;
-        }
-        if((status & DS_CLOSED) && (descriptor->status & DS_CLOSED)) {
-            /* status changed - no longer closed to user */
-            statusesChanged |= DS_CLOSED;
-            descriptor->status &= ~DS_CLOSED;
-        }
+        /* Unset all bits indicated by status */
+        descriptor->status &= ~status;
     }
 
-    /* tell our listeners there was some activity on this descriptor */
-    if (statusesChanged != DS_NONE) {
+    /* Identify which bits changed */
+    DescriptorStatus statusesChanged = descriptor->status ^ oldStatus;
+
+    if (statusesChanged) {
+        /* Tell our listeners there was some activity on this descriptor */
         GHashTableIter iter;
         gpointer key, value;
         g_hash_table_iter_init(&iter, descriptor->listeners);
@@ -153,23 +120,7 @@ void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gb
 
 DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
-
-    DescriptorStatus status = DS_NONE;
-
-    if(descriptor->status & DS_ACTIVE) {
-        status |= DS_ACTIVE;
-    }
-    if(descriptor->status & DS_READABLE) {
-        status |= DS_READABLE;
-    }
-    if(descriptor->status & DS_WRITABLE) {
-        status |= DS_WRITABLE;
-    }
-    if(descriptor->status & DS_CLOSED) {
-        status |= DS_CLOSED;
-    }
-
-    return status;
+    return descriptor->status;
 }
 
 void descriptor_addListener(Descriptor* descriptor,
