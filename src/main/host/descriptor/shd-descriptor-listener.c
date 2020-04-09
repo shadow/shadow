@@ -34,16 +34,18 @@ DescriptorListener* descriptorlistener_new(
     DescriptorStatusCallbackFunc notifyFunc, void* callbackObject,
     DescriptorStatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
     DescriptorStatusArgumentFreeFunc argumentFreeFunc) {
-    DescriptorListener* listener = calloc(1, sizeof(DescriptorListener));
+    DescriptorListener* listener = malloc(sizeof(DescriptorListener));
+
+    *listener = (DescriptorListener){
+        .notifyFunc = notifyFunc,
+        .callbackObject = callbackObject,
+        .objectFreeFunc = objectFreeFunc,
+        .callbackArgument = callbackArgument,
+        .argumentFreeFunc = argumentFreeFunc,
+        .referenceCount = 1
+    };
+
     MAGIC_INIT(listener);
-
-    listener->notifyFunc = notifyFunc;
-    listener->callbackObject = callbackObject;
-    listener->objectFreeFunc = objectFreeFunc;
-    listener->callbackArgument = callbackArgument;
-    listener->argumentFreeFunc = argumentFreeFunc;
-
-    listener->referenceCount = 1;
 
     return listener;
 }
