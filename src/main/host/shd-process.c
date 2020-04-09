@@ -7728,16 +7728,10 @@ void* process_emu_shadow_lock_try_set_global_entry(Process* proc, void* ptr, siz
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
-GMutex virtual_host_id_lock;
-int virtual_host_id = 0;
-void _init_virtual_host_id_lock() {
-    g_mutex_init(&(virtual_host_id_lock));
-}
+// BLEEP random id assignment per call
 int process_emu_shadow_assign_virtual_id(Process* proc) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    g_mutex_lock(&virtual_host_id_lock);
-    gssize ret = virtual_host_id++;
-    g_mutex_unlock(&virtual_host_id_lock);
+    int ret = shadow_assign_virtual_id();
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }

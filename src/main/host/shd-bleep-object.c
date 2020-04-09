@@ -10,6 +10,7 @@
 
 #define SHADOW_GLOBAL_LOCK_COUNT    20
 
+/* global object share */
 void* shadow_global_entry = NULL;
 GMutex shadow_global_entry_lock;
 GMutex shadow_global_lock[SHADOW_GLOBAL_LOCK_COUNT];
@@ -19,7 +20,6 @@ void init_global_locks() {
         g_mutex_init(&(shadow_global_lock[i]));
     }
 }
-/*      For Process_Emu_ Function       */
 void shadow_global_gmutex_lock(int lock_no) {
     assert((lock_no > -1)&&(lock_no < SHADOW_GLOBAL_LOCK_COUNT));
     g_mutex_lock(&(shadow_global_lock[lock_no]));
@@ -40,4 +40,16 @@ void* shadow_lock_try_set_global_entry(void* ptr, size_t sz) {
     res = shadow_global_entry;
     g_mutex_unlock(&(shadow_global_entry_lock));
     return res;
+}
+/* random id assignment per call */
+GMutex virtual_host_id_lock;
+int virtual_host_id = 0;
+void init_virtual_host_id_lock() {
+    g_mutex_init(&(virtual_host_id_lock));
+}
+int shadow_assign_virtual_id() {
+    g_mutex_lock(&virtual_host_id_lock);
+    gssize ret = virtual_host_id++;
+    g_mutex_unlock(&virtual_host_id_lock);
+    return ret;
 }

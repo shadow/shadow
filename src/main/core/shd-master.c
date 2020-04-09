@@ -449,7 +449,7 @@ gint master_run(Master* master) {
 
     // BLEEP OBJECT SHARE
     init_global_locks();
-    _init_virtual_host_id_lock();
+    init_virtual_host_id_lock();
 
     /* start running each slave */
     slave_run(master->slave);
