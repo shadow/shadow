@@ -7,7 +7,10 @@
 #ifndef SHD_DNS_H_
 #define SHD_DNS_H_
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+
+#include "routing/shd-address.h"
 
 typedef struct _DNS DNS;
 

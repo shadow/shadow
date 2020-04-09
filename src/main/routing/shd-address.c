@@ -4,14 +4,21 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
-
 /*
  * host order INADDR_LOOPBACK: 2130706433, INADDR_ANY: 0, INADDR_NONE: 4294967295, INADDR_BROADCAST: 4294967295
  * network order INADDR_LOOPBACK: 16777343, INADDR_ANY: 0, INADDR_NONE: 4294967295, INADDR_BROADCAST: 4294967295
  */
 
 /* IP must be first so we can cast an Address to an in_addr_t */
+#include <arpa/inet.h>
+#include <glib.h>
+#include <netinet/in.h>
+#include <stddef.h>
+#include <sys/socket.h>
+
+#include "core/support/shd-definitions.h"
+#include "routing/shd-address.h"
+
 struct _Address {
     /* the IP in network-order */
     guint32 ip;

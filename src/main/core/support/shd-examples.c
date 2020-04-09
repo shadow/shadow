@@ -3,9 +3,9 @@
  * Copyright (c) 2010-2011, Rob Jansen
  * See LICENSE for licensing information
  */
+#include "core/support/shd-examples.h"
 
-#include "shadow.h"
-
+#include <glib.h>
 
 GString* example_getTestContents() {
     /* serve and download /bin/ls 10 times for each of 1000 clients */

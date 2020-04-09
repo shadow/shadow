@@ -4,7 +4,14 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "routing/shd-payload.h"
+
+#include <string.h>
+
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "utility/shd-utility.h"
 
 /* packet payloads may be shared across hosts, so we must lock access to them */
 struct _Payload {

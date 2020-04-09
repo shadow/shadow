@@ -3,10 +3,25 @@
  * See LICENSE for licensing information
  */
 
-#include <time.h>
-#include <sys/timerfd.h>
+#include "host/descriptor/shd-timer.h"
 
-#include "shadow.h"
+#include <bits/types/struct_itimerspec.h>
+#include <bits/types/struct_timespec.h>
+#include <bits/types/time_t.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/time.h>
+#include <sys/timerfd.h>
+#include <time.h>
+
+#include "core/logger/shd-logger.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "core/work/shd-task.h"
+#include "host/descriptor/shd-descriptor.h"
+#include "host/shd-host.h"
+#include "utility/shd-utility.h"
 
 struct _Timer {
     Descriptor super;

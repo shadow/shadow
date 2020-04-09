@@ -10,28 +10,33 @@
 #ifndef __USE_GNU
 #define __USE_GNU 1
 #endif
+#include <bits/stdint-intn.h>
+#include <bits/stdint-uintn.h>
+#include <bits/types/clockid_t.h>
+#include <bits/types/struct_timespec.h>
+#include <bits/types/struct_timeval.h>
+#include <bits/types/struct_tm.h>
+#include <bits/types/time_t.h>
 #include <dlfcn.h>
-#include <unistd.h>
-#include <fcntl.h>
-
-#include <assert.h>
 #include <errno.h>
-#include <time.h>
+#include <fcntl.h>
+#include <ifaddrs.h>
+#include <limits.h>
+#include <net/if.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <poll.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdarg.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stddef.h>
-#include <stdarg.h>
-#include <dlfcn.h>
-#include <unistd.h>
-#include <netdb.h>
 #include <string.h>
-#include <malloc.h>
-#include <signal.h>
-#include <poll.h>
-#include <ifaddrs.h>
-#include <net/if.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
+#include <sys/file.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
@@ -40,23 +45,40 @@
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/statvfs.h>
-#include <sys/time.h>
 #include <sys/timerfd.h>
 #include <sys/types.h>
-#include <sys/file.h>
 #include <sys/uio.h>
-#include <sys/vfs.h>
-#include <sys/syscall.h>
+#include <sys/un.h>
+#include <syscall.h>
+#include <time.h>
+#include <unistd.h>
 #include <linux/sockios.h>
 #include <features.h>
-#include <wchar.h>
-
-#include <pthread.h>
-#include <rpth.h>
 #include <glib.h>
 #include <glib/gstdio.h>
+#include <pthread.h>
+#include <rpth.h>
 
+#include "core/logger/shd-logger.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "core/work/shd-task.h"
 #include "dl.h"
+#include "glib/gprintf.h"
+#include "host/descriptor/shd-channel.h"
+#include "host/descriptor/shd-descriptor.h"
+#include "host/descriptor/shd-socket.h"
+#include "host/descriptor/shd-tcp.h"
+#include "host/descriptor/shd-timer.h"
+#include "host/shd-cpu.h"
+#include "host/shd-host.h"
+#include "host/shd-process.h"
+#include "host/shd-tracker.h"
+#include "routing/shd-address.h"
+#include "routing/shd-dns.h"
+#include "utility/shd-random.h"
+#include "utility/shd-utility.h"
 
 #if defined(FD_SETSIZE)
 #if FD_SETSIZE > 1024
@@ -77,8 +99,6 @@
 #endif
 
 #define PROC_PTH_STACK_SIZE 128*1024
-
-#include "shadow.h"
 
 /**
  * We call this function to run the plugin executable. This is the default

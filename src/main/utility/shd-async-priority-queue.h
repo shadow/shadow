@@ -7,6 +7,8 @@
 #ifndef SHD_ASYNC_PRIORITY_QUEUE_H_
 #define SHD_ASYNC_PRIORITY_QUEUE_H_
 
+#include <glib.h>
+
 typedef struct _AsyncPriorityQueue AsyncPriorityQueue;
 
 AsyncPriorityQueue* asyncpriorityqueue_new(GCompareDataFunc compareFunc,

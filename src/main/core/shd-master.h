@@ -9,6 +9,12 @@
 
 #include <glib.h>
 
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-options.h"
+#include "routing/shd-address.h"
+#include "routing/shd-dns.h"
+#include "routing/shd-topology.h"
+
 typedef struct _Master Master;
 
 Master* master_new(Options*);

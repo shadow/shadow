@@ -5,10 +5,11 @@
  */
 
 #include <glib.h>
+#include <stddef.h>
 
-#include "shd-utility.h"
 #include "shd-async-priority-queue.h"
 #include "shd-priority-queue.h"
+#include "shd-utility.h"
 
 struct _AsyncPriorityQueue {
     PriorityQueue* pq;

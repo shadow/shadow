@@ -1,9 +1,9 @@
 #ifndef SHD_TCP_CONG_H_
 #define SHD_TCP_CONG_H_
 
-#include "shadow.h"
-
 #include <stdbool.h>
+
+#include "host/descriptor/shd-tcp.h"
 
 // congestion event hooks
 

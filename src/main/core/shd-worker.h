@@ -7,7 +7,21 @@
 #ifndef SHD_WORKER_H_
 #define SHD_WORKER_H_
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+
+#include "core/logger/shd-log-level.h"
+#include "core/scheduler/shd-scheduler.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "core/support/shd-options.h"
+#include "core/work/shd-task.h"
+#include "host/shd-host.h"
+#include "routing/shd-address.h"
+#include "routing/shd-dns.h"
+#include "routing/shd-packet.h"
+#include "routing/shd-topology.h"
+#include "utility/shd-count-down-latch.h"
 
 typedef struct _WorkerRunData WorkerRunData;
 struct _WorkerRunData {

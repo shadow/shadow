@@ -11,6 +11,13 @@
 #define _GNU_SOURCE
 #endif
 
+#include <bits/stdint-intn.h>
+#include <bits/types/clockid_t.h>
+#include <bits/types/time_t.h>
+#include <glib.h>
+#include <stdarg.h>
+#include <stdint.h>
+
 #if !defined __USE_LARGEFILE64
 #define __USE_LARGEFILE64
 typedef off_t off64_t;
@@ -24,31 +31,23 @@ typedef off_t off64_t;
 //#define _LARGEFILE64_SOURCE
 //#endif
 
-#include <sys/vfs.h>
-#include <sys/stat.h>
-#include <sys/statfs.h>
-#include <sys/statvfs.h>
-#include <sys/statvfs.h>
-
-#include <fcntl.h>
-
 #include <assert.h>
+#include <dlfcn.h>
 #include <errno.h>
-#include <time.h>
+#include <fcntl.h>
+#include <ifaddrs.h>
+#include <malloc.h>
+#include <net/if.h>
+#include <netdb.h>
+#include <poll.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stddef.h>
-#include <stdarg.h>
-#include <dlfcn.h>
-#include <unistd.h>
-#include <netdb.h>
 #include <string.h>
-#include <malloc.h>
-#include <signal.h>
-#include <poll.h>
-#include <ifaddrs.h>
-#include <net/if.h>
 #include <sys/epoll.h>
+#include <sys/file.h>
 //#include <sys/eventfd.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -56,21 +55,26 @@ typedef off_t off64_t;
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/stat.h>
 #include <sys/statfs.h>
+#include <sys/statfs.h>
+#include <sys/statvfs.h>
+#include <sys/statvfs.h>
 #include <sys/statvfs.h>
 #include <sys/time.h>
 #include <sys/timerfd.h>
 #include <sys/types.h>
-#include <sys/file.h>
 #include <sys/uio.h>
 #include <sys/vfs.h>
+#include <sys/vfs.h>
+#include <time.h>
+#include <unistd.h>
 #include <linux/sockios.h>
 #include <features.h>
+#include <pthread.h>
 #include <wchar.h>
 
-#include <pthread.h>
-
-#include "shadow.h"
+#include "core/support/shd-definitions.h"
 
 Process* process_new(gpointer host, guint processID,
         SimulationTime startTime, SimulationTime stopTime, const gchar* pluginName,

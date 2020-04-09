@@ -7,6 +7,15 @@
 #ifndef SHD_TRACKER_H_
 #define SHD_TRACKER_H_
 
+#include <glib.h>
+#include <netinet/in.h>
+
+#include "core/logger/shd-log-level.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-options.h"
+#include "host/shd-protocol.h"
+#include "routing/shd-packet.h"
+
 typedef struct _Tracker Tracker;
 
 Tracker* tracker_new(SimulationTime interval, LogLevel loglevel, LogInfoFlags loginfo);

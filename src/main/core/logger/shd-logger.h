@@ -6,6 +6,11 @@
 #ifndef SHD_LOGGER_H_
 #define SHD_LOGGER_H_
 
+#include <pthread.h>
+#include <glib.h>
+
+#include "core/logger/shd-log-level.h"
+
 /* convenience macros for logging messages at various levels */
 #define error(...)      logger_log(logger_getDefault(), LOGLEVEL_ERROR, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define critical(...)   logger_log(logger_getDefault(), LOGLEVEL_CRITICAL, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)

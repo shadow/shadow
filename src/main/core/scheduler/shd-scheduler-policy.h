@@ -6,6 +6,9 @@
 #ifndef SHD_SCHEDULER_POLICY_H_
 #define SHD_SCHEDULER_POLICY_H_
 
+#include "core/work/shd-event.h"
+#include "host/shd-host.h"
+
 typedef enum {
     /* one global unlocked priority queue */
     SP_SERIAL_GLOBAL,

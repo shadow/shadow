@@ -7,7 +7,11 @@
 #ifndef SHD_PACKET_H_
 #define SHD_PACKET_H_
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+
+#include "core/support/shd-definitions.h"
+#include "host/shd-protocol.h"
 
 typedef struct _Packet Packet;
 

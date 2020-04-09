@@ -7,7 +7,9 @@
 #ifndef SHD_PARSER_H_
 #define SHD_PARSER_H_
 
-#include "shadow.h"
+#include <glib.h>
+
+#include "core/support/shd-options.h"
 
 /**
  * @addtogroup Configuration

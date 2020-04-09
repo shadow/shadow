@@ -7,7 +7,11 @@
 #ifndef SHD_TRANSPORT_H_
 #define SHD_TRANSPORT_H_
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+
+#include "core/support/shd-definitions.h"
+#include "host/descriptor/shd-descriptor.h"
 
 typedef struct _Transport Transport;
 typedef struct _TransportFunctionTable TransportFunctionTable;

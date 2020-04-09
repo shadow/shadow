@@ -4,7 +4,13 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "core/support/shd-configuration.h"
+
+#include <stddef.h>
+
+#include "core/logger/shd-logger.h"
+#include "core/support/shd-definitions.h"
+#include "utility/shd-utility.h"
 
 /* an internal module to help parse the XML file */
 typedef struct _Parser Parser;

@@ -7,14 +7,23 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
-#include <unistd.h>
-#include <elf.h>
-#include <link.h>
 #include <dlfcn.h>
-#include <sys/types.h>
+#include <elf.h>
+#include <glib.h>
+#include <link.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
-#include "shadow.h"
+#include "core/logger/shd-logger.h"
+#include "core/shd-master.h"
+#include "core/support/shd-configuration.h"
+#include "core/support/shd-options.h"
 #include "dl.h"
+#include "igraph_version.h"
+#include "shd-config.h"
+#include "utility/shd-utility.h"
 
 static Master* shadowMaster;
 

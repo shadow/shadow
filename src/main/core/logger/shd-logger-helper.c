@@ -3,7 +3,14 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "core/logger/shd-logger-helper.h"
+
+#include <stddef.h>
+
+#include "core/logger/shd-log-record.h"
+#include "core/support/shd-definitions.h"
+#include "utility/shd-priority-queue.h"
+#include "utility/shd-utility.h"
 
 struct _LoggerHelperCommand {
     LoggerHelperCommmandType type;

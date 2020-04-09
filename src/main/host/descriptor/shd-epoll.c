@@ -4,8 +4,22 @@
  * See LICENSE for licensing information
  */
 
+#include <errno.h>
+#include <glib.h>
+#include <string.h>
+#include <sys/epoll.h>
 #include <unistd.h>
-#include "shadow.h"
+
+#include "core/logger/shd-logger.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "core/work/shd-task.h"
+#include "host/descriptor/shd-descriptor.h"
+#include "host/descriptor/shd-epoll.h"
+#include "host/shd-host.h"
+#include "host/shd-process.h"
+#include "utility/shd-utility.h"
 
 typedef enum _EpollWatchFlags EpollWatchFlags;
 enum _EpollWatchFlags {

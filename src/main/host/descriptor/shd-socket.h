@@ -7,6 +7,16 @@
 #ifndef SHD_SOCKET_H_
 #define SHD_SOCKET_H_
 
+#include <glib.h>
+#include <netinet/in.h>
+#include <sys/un.h>
+
+#include "core/support/shd-definitions.h"
+#include "host/descriptor/shd-descriptor.h"
+#include "host/descriptor/shd-transport.h"
+#include "host/shd-protocol.h"
+#include "routing/shd-packet.h"
+
 typedef struct _Socket Socket;
 typedef struct _SocketFunctionTable SocketFunctionTable;
 

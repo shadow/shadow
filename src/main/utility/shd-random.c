@@ -6,9 +6,11 @@
 
 #include <glib.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
 
-#include "shd-utility.h"
 #include "shd-random.h"
+#include "shd-utility.h"
 
 struct _Random {
     guint seedState;

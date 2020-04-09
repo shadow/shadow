@@ -17,9 +17,15 @@
  *      Author: rjansen
  */
 
+#include <glib.h>
 #include <math.h>
+#include <stddef.h>
 
-#include "shadow.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "routing/shd-packet.h"
+#include "routing/shd-router.h"
+#include "utility/shd-utility.h"
 
 /* hard limit of queue size, in number of packets. this is recommended to be
  * 1000 in normal routers, but in Shadow we don't enforce a practical limit.

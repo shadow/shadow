@@ -3,7 +3,14 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "utility/shd-pcap-writer.h"
+
+#include <stdio.h>
+
+#include "core/logger/shd-logger.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "host/shd-host.h"
 
 struct _PCapWriter {
     FILE *pcapFile;

@@ -6,6 +6,8 @@
 #ifndef SRC_MAIN_CORE_SUPPORT_SHD_OBJECT_COUNTER_H_
 #define SRC_MAIN_CORE_SUPPORT_SHD_OBJECT_COUNTER_H_
 
+#include <glib.h>
+
 typedef enum _ObjectType ObjectType;
 enum _ObjectType {
     OBJECT_TYPE_NONE,
