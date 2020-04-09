@@ -21,7 +21,7 @@ typedef void (*DescriptorStatusArgumentFreeFunc)(void* data);
  * and execute a callback whenever a state transition (bit flips) occurs
  * on one of the status bits that are requested in setMonitorStatus.
  * Note that the callback will never be called unless setMonitorStatus is first
- * used to specify which status bits this listner should monitor. */
+ * used to specify which status bits this listener should monitor. */
 DescriptorListener* descriptorlistener_new(
     DescriptorStatusCallbackFunc notifyFunc, void* callbackObject,
     DescriptorStatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
