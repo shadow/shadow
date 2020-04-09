@@ -5,7 +5,11 @@
  *      Author: rjansen
  */
 
-#include "shadow.h"
+#include <glib.h>
+
+#include "routing/shd-packet.h"
+#include "routing/shd-router.h"
+#include "utility/shd-utility.h"
 
 #define STATIC_PARAM_MAXSIZE 1024000
 

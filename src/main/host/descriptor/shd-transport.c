@@ -4,7 +4,13 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+
+#include "core/support/shd-definitions.h"
+#include "host/descriptor/shd-descriptor.h"
+#include "host/descriptor/shd-transport.h"
+#include "utility/shd-utility.h"
 
 void transport_free(Transport* transport) {
     MAGIC_ASSERT(transport);

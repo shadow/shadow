@@ -4,10 +4,24 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
-
 /* a packet is a 'data' packet if it has a payload attached, and a 'control' packet otherwise.
  * each packet is either a 'normal' packet or a 'retransmitted' packet. */
+#include <glib.h>
+#include <netinet/in.h>
+#include <string.h>
+
+#include "core/logger/shd-log-level.h"
+#include "core/logger/shd-logger.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-options.h"
+#include "core/work/shd-task.h"
+#include "host/shd-protocol.h"
+#include "host/shd-tracker.h"
+#include "routing/shd-address.h"
+#include "routing/shd-packet.h"
+#include "utility/shd-utility.h"
+
 typedef struct {
     gsize control;
     gsize controlRetransmit;

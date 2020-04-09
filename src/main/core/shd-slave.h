@@ -22,6 +22,17 @@
 #ifndef SHD_SLAVE_H_
 #define SHD_SLAVE_H_
 
+#include <glib.h>
+#include <netinet/in.h>
+
+#include "core/shd-master.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "core/support/shd-options.h"
+#include "host/shd-host.h"
+#include "routing/shd-dns.h"
+#include "routing/shd-topology.h"
+
 typedef struct _Slave Slave;
 
 

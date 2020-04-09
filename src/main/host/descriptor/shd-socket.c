@@ -4,7 +4,23 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+#include <sys/un.h>
+
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "host/descriptor/shd-descriptor.h"
+#include "host/descriptor/shd-socket.h"
+#include "host/descriptor/shd-tcp.h"
+#include "host/descriptor/shd-transport.h"
+#include "host/shd-host.h"
+#include "host/shd-network-interface.h"
+#include "host/shd-protocol.h"
+#include "host/shd-tracker.h"
+#include "routing/shd-address.h"
+#include "routing/shd-packet.h"
+#include "utility/shd-utility.h"
 
 void socket_free(gpointer data) {
     Socket* socket = data;

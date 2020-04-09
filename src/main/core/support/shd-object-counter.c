@@ -3,7 +3,12 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "core/support/shd-object-counter.h"
+
+#include <stddef.h>
+
+#include "core/support/shd-definitions.h"
+#include "utility/shd-utility.h"
 
 typedef struct _ObjectCounts ObjectCounts;
 struct _ObjectCounts {

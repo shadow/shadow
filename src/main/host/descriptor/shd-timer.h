@@ -6,7 +6,8 @@
 #ifndef SHD_TIMER_H_
 #define SHD_TIMER_H_
 
-#include "shadow.h"
+#include <glib.h>
+#include <sys/types.h>
 
 typedef struct _Timer Timer;
 

@@ -14,8 +14,8 @@
 #define PRELOADDEF(returnstatement, returntype, functionname, argumentlist, ...) \
 typedef returntype (*functionname ## _func)argumentlist;
 
-#include "shd-preload-defs.h"
 #include "shd-preload-defs-special.h"
+#include "shd-preload-defs.h"
 
 #if defined(PRELOADDEF)
 #undef PRELOADDEF
@@ -28,8 +28,8 @@ typedef struct {
 #define PRELOADDEF(returnstatement, returntype, functionname, argumentlist, ...) \
     functionname##_func functionname;
 
-#include "shd-preload-defs.h"
 #include "shd-preload-defs-special.h"
+#include "shd-preload-defs.h"
 
 #if defined(PRELOADDEF)
 #undef PRELOADDEF

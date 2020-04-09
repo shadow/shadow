@@ -7,7 +7,10 @@
 #ifndef SHD_UTILITY_H_
 #define SHD_UTILITY_H_
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+
+#include "core/support/shd-definitions.h"
 
 #ifdef DEBUG
 #define utility_assert(expr) \

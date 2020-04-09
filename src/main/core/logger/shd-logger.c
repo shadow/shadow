@@ -3,8 +3,21 @@
  * See LICENSE for licensing information
  */
 
+#include "core/logger/shd-logger.h"
+
 #include <stdarg.h>
-#include "shadow.h"
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "core/logger/shd-log-record.h"
+#include "core/logger/shd-logger-helper.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "host/shd-host.h"
+#include "routing/shd-address.h"
+#include "utility/shd-count-down-latch.h"
+#include "utility/shd-utility.h"
 
 /* this stores thread-specific data for each "worker" thread (the threads that
  * are running the virtual nodes) */

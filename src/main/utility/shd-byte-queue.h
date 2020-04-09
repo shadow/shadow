@@ -8,8 +8,8 @@
 #define SHD_BYTE_QUEUE_H_
 
 #include <glib.h>
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /**
  * A shared buffer that is composed of several chunks. The buffer can be read

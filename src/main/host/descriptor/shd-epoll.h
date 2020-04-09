@@ -7,7 +7,9 @@
 #ifndef SHD_EPOLL_H_
 #define SHD_EPOLL_H_
 
-#include "shadow.h"
+#include <glib.h>
+
+#include "host/descriptor/shd-descriptor.h"
 
 typedef struct _Epoll Epoll;
 

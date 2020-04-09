@@ -4,7 +4,22 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include <errno.h>
+#include <glib.h>
+#include <igraph.h>
+#include <math.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "core/logger/shd-logger.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "routing/shd-address.h"
+#include "routing/shd-path.h"
+#include "routing/shd-topology.h"
+#include "utility/shd-random.h"
+#include "utility/shd-utility.h"
 
 struct _Topology {
     /* the imported igraph graph data - operations on it after initializations

@@ -6,6 +6,11 @@
 #ifndef SHD_DEFINITIONS_H_
 #define SHD_DEFINITIONS_H_
 
+#include <glib.h>
+
+// TODO put into a shd-types.h file
+typedef struct _Process Process;
+
 /**
  * Simulation time in nanoseconds. Allows for a consistent representation
  * of time throughput the simulator.

@@ -4,7 +4,15 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+#include <stdlib.h>
+
+#include "core/logger/shd-logger.h"
+#include "core/support/shd-definitions.h"
+#include "routing/shd-address.h"
+#include "routing/shd-dns.h"
+#include "utility/shd-utility.h"
 
 struct _DNS {
     GMutex lock;

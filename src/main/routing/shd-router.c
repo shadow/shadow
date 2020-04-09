@@ -9,8 +9,20 @@
  *      Author: rjansen
  */
 
-#include "shadow.h"
 
+#include <glib.h>
+
+#include "core/logger/shd-logger.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "host/shd-network-interface.h"
+#include "routing/shd-packet.h"
+#include "routing/shd-router-queue-codel.h"
+#include "routing/shd-router-queue-single.h"
+#include "routing/shd-router-queue-static.h"
+#include "routing/shd-router.h"
+#include "utility/shd-utility.h"
 
 struct _Router {
     /* the algorithm we use to manage the router queue */

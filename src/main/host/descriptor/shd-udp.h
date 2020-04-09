@@ -7,7 +7,7 @@
 #ifndef SHD_UDP_H_
 #define SHD_UDP_H_
 
-#include "shadow.h"
+#include <glib.h>
 
 typedef struct _UDP UDP;
 

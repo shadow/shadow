@@ -6,50 +6,34 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
-#include <fcntl.h>
-
-#include <time.h>
+#include <dlfcn.h>
+#include <stdarg.h>
+#include <stdarg.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stddef.h>
-#include <stdarg.h>
-#include <dlfcn.h>
 #if defined __USE_MISC
 #undef __USE_MISC
-#include <unistd.h>
 #define __USE_MISC 1
 #else
 #include <unistd.h>
 #endif
+#include <features.h>
 #include <netdb.h>
-#include <string.h>
+#include <pthread.h>
 #include <signal.h>
-#include <poll.h>
-#include <malloc.h>
-#include <ifaddrs.h>
-#include <sys/epoll.h>
-//#include <sys/eventfd.h>
-#include <sys/ioctl.h>
-#include <sys/statvfs.h>
+#include <stdnoreturn.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/statfs.h>
 #include <sys/time.h>
-#include <sys/timerfd.h>
-#include <sys/types.h>
-#include <sys/file.h>
 #include <sys/uio.h>
-#include <sys/syscall.h>
-#include <linux/sockios.h>
-#include <features.h>
-#include <stdnoreturn.h>
 
-#include <malloc.h>
-#include <pthread.h>
-
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "host/shd-process.h"
 #include "shd-preload-functions.h"
-#include "shadow.h"
 
 #define SETSYM_OR_FAIL(funcptr, funcstr) { \
     dlerror(); \
@@ -402,7 +386,7 @@ int fprintf(FILE *stream, const char *format, ...) {
 
 /* syscall */
 
-int syscall(int number, ...) {
+long syscall(long number, ...) {
     va_list arglist;
     va_start(arglist, number);
     int result = 0;

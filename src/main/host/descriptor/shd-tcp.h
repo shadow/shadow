@@ -7,7 +7,13 @@
 #ifndef SHD_TCP_H_
 #define SHD_TCP_H_
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/un.h>
+
+#include "routing/shd-packet.h"
+
 #define TCP_MIN_CWND 10
 
 typedef struct _TCP TCP;

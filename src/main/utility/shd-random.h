@@ -7,6 +7,8 @@
 #ifndef SHD_RANDOM_H_
 #define SHD_RANDOM_H_
 
+#include <glib.h>
+
 /**
  * An opaque structure representing a random source.
  */

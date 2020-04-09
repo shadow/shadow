@@ -3,7 +3,12 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "core/work/shd-task.h"
+
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "utility/shd-utility.h"
 
 struct _Task {
     TaskCallbackFunc execute;

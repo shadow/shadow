@@ -7,6 +7,8 @@
 #ifndef SHD_PRIORITY_QUEUE_H
 #define SHD_PRIORITY_QUEUE_H
 
+#include <glib.h>
+
 typedef struct _PriorityQueue PriorityQueue;
 
 PriorityQueue* priorityqueue_new(GCompareDataFunc compareFunc,

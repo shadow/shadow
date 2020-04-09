@@ -5,12 +5,11 @@
  */
 
 #include <glib.h>
-#include <string.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
-#include "shd-utility.h"
 #include "shd-byte-queue.h"
+#include "shd-utility.h"
 
 typedef struct _ByteChunk ByteChunk;
 struct _ByteChunk {

@@ -4,9 +4,34 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
-
 /* thread-level storage structure */
+#include <glib.h>
+#include <math.h>
+#include <netinet/in.h>
+#include <pthread.h>
+#include <stddef.h>
+
+#include "core/logger/shd-log-level.h"
+#include "core/logger/shd-logger.h"
+#include "core/scheduler/shd-scheduler.h"
+#include "core/shd-slave.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "core/support/shd-options.h"
+#include "core/work/shd-event.h"
+#include "core/work/shd-task.h"
+#include "host/shd-host.h"
+#include "host/shd-process.h"
+#include "routing/shd-address.h"
+#include "routing/shd-dns.h"
+#include "routing/shd-packet.h"
+#include "routing/shd-router.h"
+#include "routing/shd-topology.h"
+#include "utility/shd-count-down-latch.h"
+#include "utility/shd-random.h"
+#include "utility/shd-utility.h"
+
 struct _Worker {
     /* our thread and an id that is unique among all threads */
     pthread_t thread;

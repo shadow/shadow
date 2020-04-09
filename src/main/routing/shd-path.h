@@ -7,7 +7,7 @@
 #ifndef SHD_PATH_H_
 #define SHD_PATH_H_
 
-#include "shadow.h"
+#include <glib.h>
 
 typedef struct _Path Path;
 

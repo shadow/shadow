@@ -7,7 +7,10 @@
 #ifndef SHD_TOPOLOGY_H_
 #define SHD_TOPOLOGY_H_
 
-#include "shadow.h"
+#include <glib.h>
+
+#include "routing/shd-address.h"
+#include "utility/shd-random.h"
 
 typedef struct _Topology Topology;
 

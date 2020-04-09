@@ -7,7 +7,10 @@
 #ifndef SHD_ADDRESS_H_
 #define SHD_ADDRESS_H_
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+
+#include "core/support/shd-definitions.h"
 
 /**
  * An Address structure holds information used to identify nodes, allowing for

@@ -6,6 +6,11 @@
 #ifndef SHD_LOG_RECORD_H_
 #define SHD_LOG_RECORD_H_
 
+#include <glib.h>
+
+#include "core/logger/shd-log-level.h"
+#include "core/support/shd-definitions.h"
+
 typedef struct _LogRecord LogRecord;
 
 LogRecord* logrecord_new(LogLevel level, gdouble timespan, const gchar* fileName, const gchar* functionName, const gint lineNumber);

@@ -3,7 +3,11 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "core/logger/shd-log-record.h"
+
+#include <stddef.h>
+
+#include "utility/shd-utility.h"
 
 struct _LogRecord {
     /* required */

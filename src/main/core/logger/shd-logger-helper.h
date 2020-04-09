@@ -6,6 +6,8 @@
 #ifndef SHD_LOGGER_HELPER_H_
 #define SHD_LOGGER_HELPER_H_
 
+#include <glib.h>
+
 #include "utility/shd-count-down-latch.h"
 
 typedef enum _LoggerHelperCommmandType LoggerHelperCommmandType;

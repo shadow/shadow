@@ -4,7 +4,7 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "core/shd-main.h"
 
 int main (int argc, char* argv[]) {
     return main_runShadow(argc, argv);
