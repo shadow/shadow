@@ -9,7 +9,7 @@
 
 #include <glib.h>
 
-#include "core/support/shd-definitions.h"
+#include "utility/shd-utility.h"
 
 typedef enum _DescriptorType DescriptorType;
 enum _DescriptorType {

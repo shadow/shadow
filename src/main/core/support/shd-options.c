@@ -9,6 +9,7 @@
 #include <stddef.h>
 
 #include "core/logger/shd-logger.h"
+#include "utility/shd-utility.h"
 
 struct _Options {
     GOptionContext *context;
