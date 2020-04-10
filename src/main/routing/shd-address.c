@@ -16,8 +16,9 @@
 #include <stddef.h>
 #include <sys/socket.h>
 
-#include "core/support/shd-definitions.h"
 #include "routing/shd-address.h"
+
+#include "utility/shd-utility.h"
 
 struct _Address {
     /* the IP in network-order */

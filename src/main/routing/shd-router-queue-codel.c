@@ -17,10 +17,13 @@
  *      Author: rjansen
  */
 
+#include "routing/shd-router-queue-codel.h"
+
 #include <glib.h>
 #include <math.h>
 #include <stddef.h>
 
+#include "core/logger/shd-logger.h"
 #include "core/shd-worker.h"
 #include "core/support/shd-definitions.h"
 #include "routing/shd-packet.h"

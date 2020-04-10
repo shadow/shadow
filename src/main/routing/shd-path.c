@@ -8,7 +8,7 @@
 
 #include <stddef.h>
 
-#include "core/support/shd-definitions.h"
+#include "utility/shd-utility.h"
 
 struct _Path {
     gboolean isDirect;
