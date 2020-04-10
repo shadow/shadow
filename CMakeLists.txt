@@ -4,6 +4,10 @@
 project(Shadow)
 set(SHADOW_VERSION_FULL 1.14.0)
 
+## This tells cmake to generate a database of compilation commands `compile_commands.json`,
+## which is used by tools such as YouCompleteMe and include-what-you-use.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 message(STATUS "System name: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "System version: ${CMAKE_SYSTEM_VERSION}")
 message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
@@ -125,7 +129,6 @@ endif(SHADOW_DEBUG STREQUAL ON)
 if(SHADOW_WERROR STREQUAL ON)
     add_compile_options(-Werror)
 endif(SHADOW_WERROR STREQUAL ON)
-
 
 if($ENV{VERBOSE})
     add_definitions(-DVERBOSE)
