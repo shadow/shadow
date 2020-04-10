@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?><graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
-  <key attr.name="type" attr.type="string" for="node" id="d6" />
-  <key attr.name="protocol" attr.type="string" for="node" id="d5" />
-  <key attr.name="size" attr.type="string" for="node" id="d4" />
+  <key attr.name="recvsize" attr.type="string" for="node" id="d5" />
+  <key attr.name="sendsize" attr.type="string" for="node" id="d4" />
   <key attr.name="count" attr.type="string" for="node" id="d3" />
   <key attr.name="time" attr.type="string" for="node" id="d2" />
   <key attr.name="serverport" attr.type="string" for="node" id="d1" />
@@ -20,14 +19,13 @@
       <data key="d4">100 MiB</data>
       <data key="d2">3600</data>
     </node>
-    <node id="transfer">
-      <data key="d5">tcp</data>
-      <data key="d6">get</data>
+    <node id="stream">
+      <data key="d5">1 MiB</data>
       <data key="d4">1 MiB</data>
     </node>
-    <edge source="start" target="transfer" />
+    <edge source="start" target="stream" />
     <edge source="pause" target="start" />
     <edge source="end" target="pause" />
-    <edge source="transfer" target="end" />
+    <edge source="stream" target="end" />
   </graph>
 </graphml>
