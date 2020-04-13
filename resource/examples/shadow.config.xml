@@ -23,7 +23,7 @@
 </graphml>
 ]]></topology>
   <plugin id="tgen" path="~/.shadow/bin/tgen"/>
-  <host id="server" quantity="2">
+  <host id="server">
     <process plugin="tgen" starttime="1" arguments="tgen.server.graphml.xml"/>
   </host>
   <host id="client">
