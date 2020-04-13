@@ -8,6 +8,7 @@
 ## we redirect them to our internal shadow versions, or to libc.
 # include_directories(${CMAKE_SOURCE_DIR}/src/main)
 find_package(GLIB REQUIRED)
+find_package(RT REQUIRED)
 include_directories(${GLIB_INCLUDES})
 
 
@@ -35,6 +36,7 @@ set_target_properties(${SHIM_LIB} PROPERTIES
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib"
 )
 target_compile_options(${SHIM_LIB} PRIVATE -pthread -D_GNU_SOURCE)
-target_link_libraries(${SHIM_LIB} ${SHIM_HELPER_LIB} shadow-shmem ${GLIB_LIBRARIES} -pthread -ldl)
+target_link_libraries(${SHIM_LIB} ${SHIM_HELPER_LIB} shadow-shmem
+  ${RT_LIBRARIES} ${GLIB_LIBRARIES} -pthread -ldl)
 install(TARGETS ${SHIM_LIB} DESTINATION lib)
 
