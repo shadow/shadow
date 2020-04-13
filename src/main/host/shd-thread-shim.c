@@ -48,7 +48,8 @@ struct _ThreadShim {
 
 typedef struct _ShMemWriteBlock {
     ShMemBlock blk;
-    PluginPtr plugin_tr;
+    PluginPtr plugin_ptr;
+    size_t n;
 } ShMemWriteBlock;
 
 static ThreadShim* _threadToThreadShim(Thread* thread) {
@@ -85,6 +86,8 @@ static void _threadshim_auxWrite(void* p, void* t) {
 
     req.event_data.shmem_blk.serial =
         shmemallocator_globalBlockSerialize(&write_blk->blk);
+    req.event_data.shmem_blk.plugin_ptr = write_blk->plugin_ptr;
+    req.event_data.shmem_blk.n = write_blk->n;
 
     shimevent_sendEvent(thread->eventFD, &req);
     shimevent_recvEvent(thread->eventFD, &resp);
@@ -260,6 +263,17 @@ void threadshim_resume(Thread* base) {
                 SysCallReturn result = syscallhandler_make_syscall(
                     thread->sys,
                     &thread->currentEvent.event_data.syscall.syscall_args);
+
+                _threadshim_flushReads(thread);
+                _threadshim_flushWrites(thread);
+
+                // We've handled the syscall, so we notify that we are done
+                // with shmem IPC
+                ShimEvent ipc_complete_ev;
+                memset(&ipc_complete_ev, 0, sizeof(ShimEvent));
+                ipc_complete_ev.event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE;
+                shimevent_sendEvent(thread->eventFD, &ipc_complete_ev);
+
                 if (result.state == SYSCALL_RETURN_DONE) {
                     ShimEvent shim_result = {
                         .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
@@ -360,6 +374,8 @@ void* threadshim_clonePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
     memset(&resp, 0, sizeof(ShimEvent));
     req.event_id = SHD_SHIM_EVENT_CLONE_REQ;
     req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(blk);
+    req.event_data.shmem_blk.plugin_ptr = plugin_src;
+    req.event_data.shmem_blk.n = n;
 
     shimevent_sendEvent(thread->eventFD, &req);
     shimevent_recvEvent(thread->eventFD, &resp);
@@ -396,6 +412,8 @@ const void* threadshim_readPluginPtr(Thread* base, PluginPtr plugin_src,
     memset(&resp, 0, sizeof(ShimEvent));
     req.event_id = SHD_SHIM_EVENT_CLONE_REQ;
     req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(blk);
+    req.event_data.shmem_blk.plugin_ptr = plugin_src;
+    req.event_data.shmem_blk.n = n;
 
     shimevent_sendEvent(thread->eventFD, &req);
     shimevent_recvEvent(thread->eventFD, &resp);
@@ -418,6 +436,8 @@ void* threadshim_writePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
     ShMemWriteBlock* write_blk = calloc(1, sizeof(ShMemWriteBlock));
     utility_assert(write_blk);
     write_blk->blk = shmemallocator_globalAlloc(n);
+    write_blk->plugin_ptr = plugin_src;
+    write_blk->n = n;
 
     utility_assert(write_blk->blk.p && write_blk->blk.nbytes == n);
 
@@ -442,7 +462,8 @@ Thread* threadshim_new(Host* host, Process* process, gint threadID) {
                             .free = threadshim_free,
                             .clonePluginPtr = threadshim_clonePluginPtr,
                             .releaseClonedPtr = threadshim_releaseClonedPtr,
-
+                            .readPluginPtr = threadshim_readPluginPtr,
+                            .writePluginPtr = threadshim_writePluginPtr,
                             .type_id = THREADSHIM_TYPE_ID,
                             .referenceCount = 1};
     MAGIC_INIT(&thread->base);

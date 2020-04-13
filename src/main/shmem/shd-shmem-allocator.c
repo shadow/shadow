@@ -264,9 +264,7 @@ static ShMemBlock _shmemallocator_littleAlloc(ShMemAllocator* allocator,
 
     do { // try to make the alloc in the pool
 
-        p = buddy_alloc(nbytes,
-                        pool_node->meta,
-                        pool_node->file_node.shmf.p,
+        p = buddy_alloc(nbytes, pool_node->meta, pool_node->file_node.shmf.p,
                         SHD_SHMEM_ALLOCATOR_POOL_NBYTES);
 
     } while (pool_node != allocator->little_alloc_nodes && p == NULL);
@@ -356,9 +354,7 @@ static void _shmemallocator_littleFree(ShMemAllocator* allocator,
 
     assert(pool_node);
 
-    buddy_free(blk->p,
-               pool_node->meta,
-               pool_node->file_node.shmf.p,
+    buddy_free(blk->p, pool_node->meta, pool_node->file_node.shmf.p,
                SHD_SHMEM_ALLOCATOR_POOL_NBYTES);
 }
 
@@ -492,8 +488,9 @@ ShMemBlockSerialized shmemserializer_blockSerialize(ShMemSerializer* serializer,
     return ret;
 }
 
-ShMemBlock shmemserializer_blockDeserialize(ShMemSerializer* serializer,
-                                            ShMemBlockSerialized* serial) {
+ShMemBlock
+shmemserializer_blockDeserialize(ShMemSerializer* serializer,
+                                 const ShMemBlockSerialized* serial) {
     assert(serializer && serial);
     ShMemBlock ret;
     memset(&ret, 0, sizeof(ShMemBlock));

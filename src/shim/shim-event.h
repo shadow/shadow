@@ -45,6 +45,8 @@ typedef struct _ShimEvent {
 
         struct {
             ShMemBlockSerialized serial;
+            PluginPtr plugin_ptr;
+            size_t n;
         } shmem_blk;
 
     } event_data;

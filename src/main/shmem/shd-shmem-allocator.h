@@ -242,10 +242,10 @@ shmemserializer_globalBlockSerialize(ShMemBlock* blk) {
  * ShMemBlockSerialized created by *some* allocator.
  */
 ShMemBlock shmemserializer_blockDeserialize(ShMemSerializer* serializer,
-                                            ShMemBlockSerialized* serial);
+                                            const ShMemBlockSerialized* serial);
 
 static inline ShMemBlock
-shmemserializer_globalBlockDeserialize(ShMemBlockSerialized* serial) {
+shmemserializer_globalBlockDeserialize(const ShMemBlockSerialized* serial) {
     return shmemserializer_blockDeserialize(
         shmemserializer_getGlobal(), serial);
 }
