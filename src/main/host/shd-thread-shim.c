@@ -380,7 +380,7 @@ void* threadshim_clonePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
     shimevent_sendEvent(thread->eventFD, &req);
     shimevent_recvEvent(thread->eventFD, &resp);
 
-    utility_assert(resp.event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE);
+    utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
 
     g_hash_table_insert(thread->ptr_to_block, &blk->p, blk);
 
@@ -418,7 +418,7 @@ const void* threadshim_readPluginPtr(Thread* base, PluginPtr plugin_src,
     shimevent_sendEvent(thread->eventFD, &req);
     shimevent_recvEvent(thread->eventFD, &resp);
 
-    utility_assert(resp.event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE);
+    utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
 
     GList* new_head = g_list_append(thread->read_list, blk);
     utility_assert(new_head);
