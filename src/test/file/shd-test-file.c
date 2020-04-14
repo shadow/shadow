@@ -5,6 +5,8 @@
 
 //TODO: Implement fwrite
 
+#include <errno.h>
+#include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -15,147 +17,88 @@
 #include <sys/uio.h>
 #include <errno.h>
 
-static int _test_newfile() {
-    FILE* file = fopen("testfile", "w");
-    if(file == NULL) {
-        fprintf(stdout, "error: could not create new file\n");
-        return -1;
+// Similar to g_assert_true, but include stringified errno on failure.
+#define assert_true_errno(c)                                                   \
+    if (!(c)) {                                                                \
+        g_error("!(%s): %s", #c, strerror(errno));                             \
+        g_test_fail();                                                         \
     }
 
+#define assert_nonnull_errno(p) assert_true_errno((p) != NULL)
+#define assert_nonneg_errno(p) assert_true_errno((p) >= 0)
+
+// Assert that errno is the expected value.
+#define assert_errno_is(e)                                                     \
+    {                                                                          \
+        int _errno = errno;                                                    \
+        int _e = e;                                                            \
+        if (_e != _errno) {                                                    \
+            g_error("Got errno %d (%s) instead of %d (%s)", _errno,            \
+                    strerror(_errno), _e, strerror(_e));                       \
+            g_test_fail();                                                     \
+        }                                                                      \
+    }
+
+static void _test_newfile() {
+    FILE* file;
+    assert_nonnull_errno(file = fopen("testfile", "w"));
     fclose(file);
-    /* success! */
-    return 0;
 }
 
-static int _test_write(){
-    FILE* file = fopen("testfile", "r+");
-    if(file == NULL) {
-        fprintf(stdout, "error: could not open file\n");
-        return -1;
-    }
+static void _test_write(){
+    FILE* file;
+    assert_nonnull_errno(file = fopen("testfile", "r+"));
 
-    int filed = fileno(file);
-    if(filed <  0) {
-        fprintf(stdout, "error: fileno did not receive valid stream");
-        fclose(file);
-        return -1;
-    }
+    int filed;
+    assert_nonneg_errno(filed = fileno(file));
+    assert_nonneg_errno(write(filed, "test", 4));
 
-    if(write(filed, "test", 4) < 0) {
-        fprintf(stdout, "error: write failed\n");
-        fclose(file);
-        return -1;
-    }
-
-    /* success */
     fclose(file);
-    return 0;
 }
 
-static int _test_read() {
-    FILE* file = fopen("testfile", "r");
-    if(file == NULL) {
-        fprintf(stdout, "error: could not open file\n");
-        return -1;
-    }
+static void _test_read() {
+    FILE* file;
+    assert_nonnull_errno(file = fopen("testfile", "r"));
 
-    int filed = fileno(file);
-    if(filed <  0) {
-        fprintf(stdout, "error: fileno did not receive valid stream");
-        fclose(file);
-        return -1;
-    }
+    int filed;
+    assert_nonneg_errno(filed = fileno(file));
 
-    char buf[5];
-    memset(buf, '\0', sizeof(buf));
-    if(read(filed, buf, 4) < 0) {
-        fprintf(stdout, "error: read failed\n");
-        fclose(file);
-        return -1;
-    }
+    char buf[5] = {0};
+    assert_nonneg_errno(read(filed, buf, 4));
+    g_assert_cmpstr(buf, ==, "test");
 
-    if(strncmp(buf, "test", 4) != 0) {
-        fprintf(stdout, "error: buf: %s\n", buf);
-        fclose(file);
-        return -1;
-    }
-
-    /* succes */
     fclose(file);
-    return 0;
 }
 
-static int _test_fwrite() {
-    FILE* file = fopen("testfile", "r+");
-    if(file == NULL) {
-        fprintf(stdout, "error: could not open file\n");
-        return -1;
-    }
+static void _test_fwrite() {
+    FILE* file;
+    assert_nonnull_errno(file = fopen("testfile", "r+"));
 
     const char* msg = "test";
-    if(fwrite(msg, sizeof(char), sizeof(msg)/sizeof(char), file) <= 0) {
-        fprintf(stdout, "error: fwrite failed\n");
-        fclose(file);
-        return -1;
-    }
+    assert_nonneg_errno(fwrite(msg, sizeof(char), sizeof(msg)/sizeof(char), file));
 
-    /* succes */
     fclose(file);
-    return 0;
 }
 
-static int _test_fread() {
-    FILE* file = fopen("testfile", "r");
-    if(file == NULL) {
-        fprintf(stdout, "error: could not open file\n");
-        return -1;
-    }
+static void _test_fread() {
+    FILE* file;
+    assert_nonnull_errno(file = fopen("testfile", "r"));
 
-    char buf[5];
-    memset(buf, '\0', sizeof(buf));
-    if(fread(buf, sizeof(char), 4, file) <= 0) {
-        fprintf(stdout, "error: fread failed\n");
-        fclose(file);
-        return -1;
-    }
+    char buf[5] = {0};
+    assert_nonneg_errno(fread(buf, sizeof(char), 4, file));
+    g_assert_cmpstr(buf, ==, "test");
 
-    if(strncmp(buf, "test", 4) != 0) {
-        fprintf(stdout, "error: buf: %s\n", buf);
-        fclose(file);
-        return -1;
-    }
-
-    /* succes */
     fclose(file);
-    return 0;
 }
 
-static int _test_iov(const char* fpath) {
-#undef LOG
-#define LOG(fmt, ...)                                                   \
-    do {                                                                \
-        fprintf(stdout, "line: %d: " fmt "\n",                          \
-                __LINE__, ##__VA_ARGS__);                               \
-    } while (0)
+static void _test_iov() {
+    const char* fpath = "iov_test_file";
 
-#define LOG_ERROR_AND_RETURN(fmt, ...)                                  \
-    do {                                                                \
-        LOG("error: " fmt, ##__VA_ARGS__);                              \
-        fclose(file);                                                   \
-        return -1;                                                      \
-    } while (0)
+    FILE* file;
+    assert_nonnull_errno(file = fopen(fpath, "w+"));
 
-
-    FILE* file = fopen(fpath, "w+");
-    if(file == NULL) {
-        LOG("error: could not open file");
-        return -1;
-    }
-
-    int filed = fileno(file);
-    if(filed <  0) {
-        LOG_ERROR_AND_RETURN("fileno did not receive valid stream");
-    }
+    int filed;
+    assert_nonneg_errno(filed = fileno(file));
 
     struct iovec iov[UIO_MAXIOV];
 
@@ -163,40 +106,18 @@ static int _test_iov(const char* fpath) {
     int expected_errno = 0;
     int expected_rv = 0;
 
-    rv = readv(filed, iov, -1);
-    if (rv != -1) {
-        LOG_ERROR_AND_RETURN("should fail on an invalid arg");
-    }
-    expected_errno = EINVAL;
-    if (errno != expected_errno) {
-        LOG_ERROR_AND_RETURN("expected errno: %d, actual: %d",
-                             expected_errno, errno);
-    }
+    g_assert_cmpint(readv(filed, iov, -1), ==, -1);
+    assert_errno_is(EINVAL);
 
-    rv = readv(filed, iov, UIO_MAXIOV+1);
-    if (rv != -1) {
-        LOG_ERROR_AND_RETURN("should fail on an invalid arg");
-    }
-    expected_errno = EINVAL;
-    if (errno != expected_errno) {
-        LOG_ERROR_AND_RETURN("expected errno: %d, actual: %d",
-                             expected_errno, errno);
-    }
+    g_assert_cmpint(readv(filed, iov, UIO_MAXIOV+1), ==, -1);
+    assert_errno_is(EINVAL);
 
-    rv = readv(1923, iov, UIO_MAXIOV+1);
-    if (rv != -1) {
-        LOG_ERROR_AND_RETURN("should fail on an invalid fd");
-    }
-    expected_errno = EBADF;
-    if (errno != expected_errno) {
-        LOG_ERROR_AND_RETURN("expected errno: %d, actual: %d",
-                             expected_errno, errno);
-    }
+    // Invalid fd
+    g_assert_cmpint(readv(1923, iov, UIO_MAXIOV+1), ==, -1);
+    assert_errno_is(EBADF);
 
-    rv = readv(filed, iov, 0);
-    if (rv == -1) {
-        LOG_ERROR_AND_RETURN("should not fail when passing '0' as the iovcnt");
-    }
+    // '0' iovcnt
+    assert_nonneg_errno(readv(filed, iov, 0));
 
 #define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
 
@@ -207,12 +128,7 @@ static int _test_iov(const char* fpath) {
     }
 
     // should write 0 bytes
-    rv = writev(filed, iov, ARRAY_LENGTH(iov));
-    expected_rv = 0;
-    if (rv != expected_rv) {
-        LOG_ERROR_AND_RETURN(
-            "expected rv: %d, actual: %d", expected_rv, rv);
-    }
+    g_assert_cmpint(writev(filed, iov, ARRAY_LENGTH(iov)), ==, 0);
 
     // make all bases share the same buf
     for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
@@ -221,12 +137,7 @@ static int _test_iov(const char* fpath) {
     }
 
     // should read 0 bytes
-    rv = readv(filed, iov, ARRAY_LENGTH(iov));
-    expected_rv = 0;
-    if (rv != expected_rv) {
-        LOG_ERROR_AND_RETURN(
-            "expected rv: %d, actual: %d", expected_rv, rv);
-    }
+    g_assert_cmpint(readv(filed, iov, ARRAY_LENGTH(iov)), ==, 0);
 
     // write two real blocks
     for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
@@ -242,12 +153,8 @@ static int _test_iov(const char* fpath) {
     iov[972].iov_base = (void*)block_2_data;
     iov[972].iov_len = strlen(block_2_data);
 
-    rv = writev(filed, iov, ARRAY_LENGTH(iov));
-    expected_rv = strlen(block_1_data) + strlen(block_2_data);
-    if (rv != expected_rv) {
-        LOG_ERROR_AND_RETURN(
-            "expected rv: %d, actual: %d", expected_rv, rv);
-    }
+    g_assert_cmpint(writev(filed, iov, ARRAY_LENGTH(iov)), ==,
+                    strlen(block_1_data) + strlen(block_2_data));
 
     // read it back in
 
@@ -265,22 +172,14 @@ static int _test_iov(const char* fpath) {
     }
 
     // should read 0 bytes
-    rv = readv(filed, iov, ARRAY_LENGTH(iov));
-    expected_rv = 0;
-    if (rv != expected_rv) {
-        LOG_ERROR_AND_RETURN(
-            "expected rv: %d, actual: %d", expected_rv, rv);
-    }
+    g_assert_cmpint(readv(filed, iov, ARRAY_LENGTH(iov)), ==, 0);
 
     // make sure our shared buf have not been touched
     for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
-        if (iov[i].iov_len != 0) {
-            LOG_ERROR_AND_RETURN("just BAD!");
-        }
+        g_assert_cmpint(iov[i].iov_len, ==, 0);
     }
-    if (memcmp(sharedreadbuf, compare_buf, sizeof compare_buf)) {
-        LOG_ERROR_AND_RETURN("WHAT DID YOU DO!!!");
-    }
+    g_assert_cmpmem(sharedreadbuf, sizeof(compare_buf), compare_buf,
+                    sizeof(compare_buf));
 
     /****
      **** read into one base
@@ -297,42 +196,27 @@ static int _test_iov(const char* fpath) {
     iov[1023].iov_base = readbuf;
     iov[1023].iov_len = readbuf_size;
 
-    rv = readv(filed, iov, ARRAY_LENGTH(iov));
-
     // verify
-    expected_rv = strlen(block_1_data) + strlen(block_2_data);
-    if (rv != expected_rv) {
-        LOG_ERROR_AND_RETURN(
-            "expected rv: %d, actual: %d", expected_rv, rv);
-    }
+    g_assert_cmpint(readv(filed, iov, ARRAY_LENGTH(iov)), ==,
+                    strlen(block_1_data) + strlen(block_2_data));
 
     for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
         if (i == 1023) {
             // readv should not have touched the iov_len
-            if (iov[i].iov_len != readbuf_size) {
-                LOG_ERROR_AND_RETURN(
-                    "readv produces wrong iov_len: %zu, expected: %zu",
-                    iov[i].iov_len, readbuf_size);
-            }
+            g_assert_cmpint(iov[i].iov_len, ==, readbuf_size);
         } else {
-            if (iov[i].iov_len != 0) {
-                LOG_ERROR_AND_RETURN("just BAD");
-            }
-            if (memcmp(iov[i].iov_base, compare_buf, sizeof compare_buf)) {
-                LOG_ERROR_AND_RETURN("WHAT DID YOU DO!!!");
-            }
+            g_assert_cmpint(iov[i].iov_len, ==, 0);
+            g_assert_cmpmem(iov[i].iov_base, sizeof(compare_buf), compare_buf,
+                            sizeof(compare_buf));
         }
     }
 
-    if (memcmp(readbuf, block_1_data, strlen(block_1_data))) {
-        LOG_ERROR_AND_RETURN("read data has incorrect bytes");
-    }
-    if (memcmp(readbuf + strlen(block_1_data), block_2_data, strlen(block_2_data))) {
-        LOG_ERROR_AND_RETURN("read data has incorrect bytes");
-    }
-    if (memcmp(readbuf + strlen(block_1_data) + strlen(block_2_data), "zzzzz", 5)) {
-        LOG_ERROR_AND_RETURN("readv() touched more memory than it should have");
-    }
+    g_assert_cmpmem(readbuf, strlen(block_1_data), block_1_data,
+                    strlen(block_1_data));
+    g_assert_cmpmem(readbuf + strlen(block_1_data), strlen(block_2_data),
+                    block_2_data, strlen(block_2_data));
+    g_assert_cmpmem(readbuf + strlen(block_1_data) + strlen(block_2_data), 5,
+                    "zzzzz", 5);
 
     free(readbuf);
     readbuf = NULL;
@@ -357,244 +241,104 @@ static int _test_iov(const char* fpath) {
     iov[442].iov_base = buf2;
     iov[442].iov_len = sizeof buf2;
 
-    rv = readv(filed, iov, ARRAY_LENGTH(iov));
-
-    // verify
-    expected_rv = (sizeof buf1) + (sizeof buf2);
-    if (rv != expected_rv) {
-        LOG_ERROR_AND_RETURN(
-            "expected rv: %d, actual: %d", expected_rv, rv);
-    }
+    g_assert_cmpint(readv(filed, iov, ARRAY_LENGTH(iov)), ==,
+                    (sizeof buf1) + (sizeof buf2));
 
     for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
         if (i == 441) {
-            if (iov[i].iov_len != sizeof buf1) {
-                LOG_ERROR_AND_RETURN("BAD");
-            }
-            if (memcmp(iov[i].iov_base, "hellloo o 12 ", sizeof buf1)) {
-                LOG_ERROR_AND_RETURN("BAD");
-            }
+            g_assert_cmpmem(iov[i].iov_base, iov[i].iov_len, "hellloo o 12 ",
+                            sizeof buf1);
         } else if (i == 442) {
-            if (iov[i].iov_len != sizeof buf2) {
-                LOG_ERROR_AND_RETURN("BAD");
-            }
-            if (memcmp(iov[i].iov_base, " o .", sizeof buf2)) {
-                LOG_ERROR_AND_RETURN("BAD");
-            }
+            g_assert_cmpmem(iov[i].iov_base, iov[i].iov_len, " o .",
+                            sizeof buf2);
         } else {
-            if (iov[i].iov_len != 0) {
-                LOG_ERROR_AND_RETURN("BAD");
-            }
+            g_assert_cmpint(iov[i].iov_len, ==, 0);
         }
     }
 
     /* success */
     fclose(file);
-    return 0;
-#undef LOG
 }
 
-static int _test_fprintf() {
-    FILE* file = fopen("testfile", "r+");
-    if(file == NULL) {
-        fprintf(stdout, "error: could not open filed\n");
-        return -1;
-    }
+static void _test_fprintf() {
+    FILE* file;
+    assert_nonnull_errno(file = fopen("testfile", "r+"));
 
-    if(fprintf(file, "canwrite") < 0) {
-        fprintf(stdout, "error: could not fprintf to file\n");
-        fclose(file);
-        return -1;
-    }
+    assert_nonneg_errno(fprintf(file, "canwrite"));
 
-    /* success! */
     fclose(file);
-    return 0;
 }
 
-static int _test_fscanf() {
-    FILE* file = fopen("testfile", "r");
-    if(file == NULL) {
-        fprintf(stdout, "error: could not open file\n");
-        return -1;
-    }
-    
-    char buf[10];
-    memset(buf, '\0', sizeof(buf));
+static void _test_fscanf() {
+    FILE* file;
+    assert_nonnull_errno(file = fopen("testfile", "r"));
+
+    char buf[10] = {0};
 
     /* read through the file */
-    fscanf(file, "%s", buf);
+    assert_true_errno(fscanf(file, "%s", buf) != EOF);
 
     /* check that fscanf read correctly */
-    if(strncmp(buf, "canwrite", 8) != 0) {
-        fprintf(stdout, "error: buf: %s\n", buf);
-        fclose(file);
-        return -1;
-    }
+    g_assert_cmpstr(buf, ==, "canwrite");
 
     /* success! */
     fclose(file);
-    return 0;
 }
 
-static int _test_chmod() {
-    FILE* file = fopen("testfile", "r+");
-    if(file == NULL) {
-        fprintf(stdout, "error: could not open filed\n");
-        return -1;
-    }
+static void _test_chmod() {
+    FILE* file;
+    assert_nonnull_errno(file = fopen("testfile", "r+"));
 
-    int filed = fileno(file);
-    if(filed <  0) {
-        fprintf(stdout, "error: fileno did not receive valid stream\n");
-        fclose(file);
-        return -1;
-    }
+    int filed;
+    assert_nonneg_errno(filed = fileno(file));
 
     /* set permissions to owner user/group only */
-    if(fchmod(filed, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) < 0) {
-        fprintf(stdout, "error: could not change permissions of file\n");
-        fclose(file);
-        return -1;
-    }
+    assert_nonneg_errno(fchmod(filed, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
 
     /* success! */
     fclose(file);
-    return 0;
 }
 
-static int _test_fstat() {
-    FILE* file = fopen("testfile", "r+");
-    if(file == NULL) {
-        fprintf(stdout, "error: could not open file\n");
-        return -1;
-    }
+static void _test_fstat() {
+    FILE* file;
+    assert_nonnull_errno(file = fopen("testfile", "r+"));
 
-    int filed = fileno(file);
-    if(filed <  0) {
-        fprintf(stdout, "error: fileno did not receive valid stream\n");
-        fclose(file);
-        return -1;
-    }
+    int filed;
+    assert_nonneg_errno(filed = fileno(file));
 
-    struct stat filestat;
-    memset(&filestat, 0, sizeof(filestat));
+    struct stat filestat = {0};
+    assert_nonneg_errno(fstat(filed, &filestat));
 
-    if(fstat(filed, &filestat) < 0){
-        fprintf(stdout, "error: fstat failed\n");
-        fclose(file);
-        return -1;
-    }
-
-    if((filestat.st_mode & S_IXOTH) != 0) {
-        fprintf(stdout, "error: S_IXOTH flag still set\n");
-        fclose(file);
-        return -1;
-    }
-
-    if((filestat.st_mode & S_IWOTH) != 0) {
-        fprintf(stdout, "error: S_IWOTH flag still set\n");
-        fclose(file);
-        return -1;
-    }
-
-    if((filestat.st_mode & S_IROTH) != 0) {
-        fprintf(stdout, "error: S_IROTH flag still set\n");
-        fclose(file);
-        return -1;
-    }
+    g_assert_cmpint(filestat.st_mode & S_IXOTH, ==, 0);
+    g_assert_cmpint(filestat.st_mode & S_IWOTH, ==, 0);
+    g_assert_cmpint(filestat.st_mode & S_IROTH, ==, 0);
 
     /* success! */
     fclose(file);
-    return 0;
 }
 
-static int _test_open_close() {
-    int filed = open("testfile", O_RDONLY);
-    if(filed < 0) {
-        fprintf(stdout, "error: could not open testfile\n");
-        return -1;
-    }
-
-    if(close(filed) < 0) {
-        fprintf(stdout, "error: close on testfile failed\n");
-        return -1;
-    }
-
-    /* success! */
-    return 0;
+static void _test_open_close() {
+    int filed;
+    assert_nonneg_errno(filed = open("testfile", O_RDONLY));
+    assert_nonneg_errno(close(filed) < 0);
 }
 
 int main(int argc, char* argv[]) {
-    fprintf(stdout, "########## file-io test starting ##########\n");
+    g_test_init(&argc, &argv, NULL);
+    g_test_add_func("/file/newfile", _test_newfile);
+    g_test_add_func("/file/open_close", _test_open_close);
+    g_test_add_func("/file/write", _test_write);
+    g_test_add_func("/file/read", _test_read);
+    g_test_add_func("/file/fwrite", _test_fwrite);
+    g_test_add_func("/file/fread", _test_fread);
+    g_test_add_func("/file/iov", _test_iov);
+    g_test_add_func("/file/fprintf", _test_fprintf);
+    g_test_add_func("/file/fscanf", _test_fscanf);
+    g_test_add_func("/file/chmod", _test_chmod);
+    g_test_add_func("/file/fstat", _test_fstat);
+    g_test_run();
 
-    if(_test_newfile() < 0) {
-        fprintf(stdout, "########## _test_newfile() failed\n");
-        unlink("testfile");
-        return -1;
-    }
-
-    if(_test_open_close() < 0) {
-        fprintf(stdout, "########## _test_open_close() failed\n");
-        unlink("testfile");
-        return -1;
-    }
-
-    if(_test_write() < 0) {
-        fprintf(stdout, "########## _test_write() failed\n");
-        unlink("testfile");
-        return -1;
-    }
-
-    if(_test_read() < 0) {
-        fprintf(stdout, "########## _test_read() failed\n");
-        unlink("testfile");
-        return -1;
-    }
-
-    if(_test_fwrite() < 0) {
-        fprintf(stdout, "########## _test_fwrite() failed\n");
-        unlink("testfile");
-        return -1;
-    }
-
-    if(_test_fread() < 0) {
-        fprintf(stdout, "########## _test_fread() failed\n");
-        unlink("testfile");
-        return -1;
-    }
-
-    const char* iov_test_file = "iov_test_file";
-    if(_test_iov(iov_test_file) < 0) {
-        fprintf(stdout, "########## _test_iov() failed\n");
-        unlink(iov_test_file);
-        return -1;
-    }
-
-    if(_test_fprintf() < 0) {
-        fprintf(stdout, "########## _test_fprintf() failed\n");
-        unlink("testfile");
-        return -1;
-    }
-
-    if(_test_fscanf() < 0) {
-        fprintf(stdout, "########## _test_fscanf() failed\n");
-        unlink("testfile");
-        return -1;
-    }
-
-    if(_test_chmod() < 0) {
-        fprintf(stdout, "########## _test_fchmod() failed\n");
-        unlink("testfile");
-        return -1;
-    }
-
-    if(_test_fstat() < 0) {
-        fprintf(stdout, "########## _test_fstat() failed\n");
-        unlink("testfile");
-        return -1;
-    }
     unlink("testfile");
-    fprintf(stdout, "########## file-io test passed! ##########\n");
+
     return 0;
 }

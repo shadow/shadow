@@ -1,3 +1,7 @@
+find_package(GLIB REQUIRED)
+include_directories(${GLIB_INCLUDES})
+link_libraries(${GLIB_LIBRARIES})
+
 ## build the test as a dynamic executable that plugs into shadow
 add_shadow_plugin(shadow-plugin-test-file shd-test-file.c)
 
