@@ -39,13 +39,35 @@
         }                                                                      \
     }
 
+// For use in conjunction with g_auto for a file that will delete itself on
+// function exit.
+typedef struct {
+    const char* filename;
+} TmpFile;
+
+// Configure g_auto(TmpFile) to delete the file on function exit.
+void tmpfile_delete(TmpFile* f) { unlink(f->filename); }
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(TmpFile, tmpfile_delete);
+
+static TmpFile tmpfile_make(const char* filename, const char* contents) {
+    TmpFile tf = {.filename = filename};
+    FILE* f = fopen(filename, "w");
+    g_assert(f);
+    g_assert(fwrite(contents, 1, strlen(contents), f) == strlen(contents));
+    fclose(f);
+    return tf;
+}
+
 static void _test_newfile() {
     FILE* file;
     assert_nonnull_errno(file = fopen("testfile", "w"));
     fclose(file);
+    unlink("testfile");
 }
 
 static void _test_write(){
+    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
+
     FILE* file;
     assert_nonnull_errno(file = fopen("testfile", "r+"));
 
@@ -57,6 +79,8 @@ static void _test_write(){
 }
 
 static void _test_read() {
+    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
+
     FILE* file;
     assert_nonnull_errno(file = fopen("testfile", "r"));
 
@@ -71,6 +95,8 @@ static void _test_read() {
 }
 
 static void _test_fwrite() {
+    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
+
     FILE* file;
     assert_nonnull_errno(file = fopen("testfile", "r+"));
 
@@ -81,6 +107,8 @@ static void _test_fwrite() {
 }
 
 static void _test_fread() {
+    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
+
     FILE* file;
     assert_nonnull_errno(file = fopen("testfile", "r"));
 
@@ -92,6 +120,8 @@ static void _test_fread() {
 }
 
 static void _test_iov() {
+    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
+
     const char* fpath = "iov_test_file";
 
     FILE* file;
@@ -261,15 +291,18 @@ static void _test_iov() {
 }
 
 static void _test_fprintf() {
+    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
+
     FILE* file;
     assert_nonnull_errno(file = fopen("testfile", "r+"));
-
     assert_nonneg_errno(fprintf(file, "canwrite"));
 
     fclose(file);
 }
 
 static void _test_fscanf() {
+    g_auto(TmpFile) tf = tmpfile_make("testfile", "canwrite");
+
     FILE* file;
     assert_nonnull_errno(file = fopen("testfile", "r"));
 
@@ -286,6 +319,8 @@ static void _test_fscanf() {
 }
 
 static void _test_chmod() {
+    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
+
     FILE* file;
     assert_nonnull_errno(file = fopen("testfile", "r+"));
 
@@ -300,11 +335,14 @@ static void _test_chmod() {
 }
 
 static void _test_fstat() {
+    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
+
     FILE* file;
     assert_nonnull_errno(file = fopen("testfile", "r+"));
 
     int filed;
     assert_nonneg_errno(filed = fileno(file));
+    assert_nonneg_errno(fchmod(filed, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
 
     struct stat filestat = {0};
     assert_nonneg_errno(fstat(filed, &filestat));
@@ -318,6 +356,8 @@ static void _test_fstat() {
 }
 
 static void _test_open_close() {
+    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
+
     int filed;
     assert_nonneg_errno(filed = open("testfile", O_RDONLY));
     assert_nonneg_errno(close(filed) < 0);
@@ -337,8 +377,6 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/file/chmod", _test_chmod);
     g_test_add_func("/file/fstat", _test_fstat);
     g_test_run();
-
-    unlink("testfile");
 
     return 0;
 }
