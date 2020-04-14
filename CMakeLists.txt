@@ -34,6 +34,8 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
 
 message(STATUS "CMAKE_MODULE_PATH = ${CMAKE_MODULE_PATH}")
 
+enable_language(Rust)
+
 ## additional user-defined library directories
 foreach(library ${CMAKE_EXTRA_LIBRARIES})
     link_directories(${library})
@@ -45,6 +47,7 @@ include(CheckFunctionExists)
 include(CheckLibraryExists)
 include(TestBigEndian)
 include(ShadowTools)
+include(CMakeCargo)
 
 ## general tests and configurations
 TEST_BIG_ENDIAN(IS_BIG_ENDIAN)

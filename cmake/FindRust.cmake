@@ -1,0 +1,1 @@
+../src/external/CMakeRust/cmake/FindRust.cmake
