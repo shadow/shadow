@@ -79,10 +79,11 @@ static void _threadshim_auxWrite(void* p, void* t) {
     ShMemWriteBlock* write_blk = (ShMemWriteBlock*)p;
     ThreadShim* thread = (ThreadShim*)t;
 
-    ShimEvent req, resp;
-    memset(&req, 0, sizeof(ShimEvent));
-    memset(&resp, 0, sizeof(ShimEvent));
-    req.event_id = SHD_SHIM_EVENT_WRITE_REQ;
+    ShimEvent req = {
+        .event_id = SHD_SHIM_EVENT_WRITE_REQ,
+    };
+
+    ShimEvent resp = {0};
 
     req.event_data.shmem_blk.serial =
         shmemallocator_globalBlockSerialize(&write_blk->blk);
@@ -264,14 +265,18 @@ void threadshim_resume(Thread* base) {
                     thread->sys,
                     &thread->currentEvent.event_data.syscall.syscall_args);
 
+                // FIXME(rwails) I need to update where this occurs when we
+                // implement blocking calls
+
                 _threadshim_flushReads(thread);
                 _threadshim_flushWrites(thread);
 
                 // We've handled the syscall, so we notify that we are done
                 // with shmem IPC
-                ShimEvent ipc_complete_ev;
-                memset(&ipc_complete_ev, 0, sizeof(ShimEvent));
-                ipc_complete_ev.event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE;
+                ShimEvent ipc_complete_ev = {
+                    .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
+                };
+
                 shimevent_sendEvent(thread->eventFD, &ipc_complete_ev);
 
                 if (result.state == SYSCALL_RETURN_DONE) {
@@ -360,8 +365,12 @@ gboolean threadshim_isRunning(Thread* base) {
     return thread->isRunning;
 }
 
-void* threadshim_clonePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
-    ThreadShim* thread = _threadToThreadShim(base);
+/*
+ * Helper function, issues a clone/read request to the plugin.
+ * The returned ShMemBlock is owned by the caller and needs to be freed.
+ */
+static ShMemBlock* _threadshim_readPtrImpl(ThreadShim* thread,
+                                           PluginPtr plugin_src, size_t n) {
 
     // Allocate a block for the clone
     ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
@@ -369,9 +378,12 @@ void* threadshim_clonePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
 
     utility_assert(blk->p && blk->nbytes == n);
 
-    ShimEvent req, resp;
-    memset(&req, 0, sizeof(ShimEvent));
-    memset(&resp, 0, sizeof(ShimEvent));
+    ShimEvent req = {
+        .event_id = SHD_SHIM_EVENT_CLONE_REQ,
+    };
+
+    ShimEvent resp = {0};
+
     req.event_id = SHD_SHIM_EVENT_CLONE_REQ;
     req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(blk);
     req.event_data.shmem_blk.plugin_ptr = plugin_src;
@@ -382,8 +394,13 @@ void* threadshim_clonePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
 
     utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
 
-    g_hash_table_insert(thread->ptr_to_block, &blk->p, blk);
+    return blk;
+}
 
+void* threadshim_clonePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
+    ThreadShim* thread = _threadToThreadShim(base);
+    ShMemBlock* blk = _threadshim_readPtrImpl(thread, plugin_src, n);
+    g_hash_table_insert(thread->ptr_to_block, &blk->p, blk);
     return blk->p;
 }
 
@@ -401,24 +418,7 @@ const void* threadshim_readPluginPtr(Thread* base, PluginPtr plugin_src,
                                      size_t n) {
     ThreadShim* thread = _threadToThreadShim(base);
 
-    // Allocate a block for the clone
-    ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
-    *blk = shmemallocator_globalAlloc(n);
-
-    utility_assert(blk->p && blk->nbytes == n);
-
-    ShimEvent req, resp;
-    memset(&req, 0, sizeof(ShimEvent));
-    memset(&resp, 0, sizeof(ShimEvent));
-    req.event_id = SHD_SHIM_EVENT_CLONE_REQ;
-    req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(blk);
-    req.event_data.shmem_blk.plugin_ptr = plugin_src;
-    req.event_data.shmem_blk.n = n;
-
-    shimevent_sendEvent(thread->eventFD, &req);
-    shimevent_recvEvent(thread->eventFD, &resp);
-
-    utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
+    ShMemBlock* blk = _threadshim_readPtrImpl(thread, plugin_src, n);
 
     GList* new_head = g_list_append(thread->read_list, blk);
     utility_assert(new_head);

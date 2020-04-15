@@ -28,9 +28,9 @@ static void _shim_shmemHandleWrite(const ShimEvent* ev) {
 }
 
 static void _shim_shmemNotifyComplete(int fd) {
-    ShimEvent ev;
-    memset(&ev, 0, sizeof(ev));
-    ev.event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE;
+    ShimEvent ev = {
+        .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
+    };
     shimevent_sendEvent(fd, &ev);
 }
 
@@ -44,8 +44,7 @@ static void _shim_shmemHandleEvent(int fd, const ShimEvent* ev) {
             _shim_shmemHandleWrite(ev);
             _shim_shmemNotifyComplete(fd);
             break;
-        case SHD_SHIM_EVENT_SHMEM_COMPLETE:
-            break;
+        case SHD_SHIM_EVENT_SHMEM_COMPLETE: break;
         default:
             assert(false); // We should never get here!
             break;
@@ -54,14 +53,10 @@ static void _shim_shmemHandleEvent(int fd, const ShimEvent* ev) {
 
 void shim_shmemLoop(int fd) {
 
-    ShimEvent ev;
-    memset(&ev, 0, sizeof(ShimEventID));
+    ShimEvent ev = {0};
 
-    while (true) {
+    do {
         shimevent_recvEvent(fd, &ev);
         _shim_shmemHandleEvent(fd, &ev);
-        if (ev.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE) {
-            break;
-        }
-    }
+    } while (ev.event_id != SHD_SHIM_EVENT_SHMEM_COMPLETE);
 }
