@@ -34,12 +34,32 @@ static void _schedulerpolicyglobalsingle_push(SchedulerPolicy* policy, Event* ev
     priorityqueue_push(data->pq, event);
 }
 
+static gboolean _hostsProcessesAreFinished(GlobalSinglePolicyData* policyData) {
+    if (g_queue_is_empty(policyData->assignedHosts))
+        return TRUE;
+
+    gboolean hosts_are_finished = TRUE;
+    GQueue *hosts = g_queue_copy(policyData->assignedHosts);
+
+    while (!g_queue_is_empty(hosts)) {
+        Host *h = g_queue_pop_head(hosts);
+
+        if (host_processesAreFinished(h)) {
+            hosts_are_finished = FALSE;
+            break;
+        }
+    }
+
+    g_queue_free(hosts);
+    return hosts_are_finished;
+}
+
 static Event* _schedulerpolicyglobalsingle_pop(SchedulerPolicy* policy, SimulationTime barrier) {
     MAGIC_ASSERT(policy);
     GlobalSinglePolicyData* data = policy->data;
 
     Event* nextEvent = priorityqueue_peek(data->pq);
-    if(!nextEvent) {
+    if(!nextEvent || _hostsProcessesAreFinished(data)) {
         return NULL;
     }
 
