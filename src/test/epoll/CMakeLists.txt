@@ -9,3 +9,6 @@ add_executable(test-epoll shd-test-epoll.c)
 add_test(NAME epoll COMMAND test-epoll)
 add_test(NAME epoll-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d epoll.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/epoll.test.shadow.config.xml)
 add_test(NAME epoll-writeable-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d epoll-writeable.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/epoll-writeable.test.shadow.config.xml)
+
+# TODO: See https://github.com/shadow/shadow/issues/756
+set_tests_properties(epoll-writeable-shadow PROPERTIES TIMEOUT 200)
