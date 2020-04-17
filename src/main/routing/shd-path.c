@@ -4,7 +4,11 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "routing/shd-path.h"
+
+#include <stddef.h>
+
+#include "utility/shd-utility.h"
 
 struct _Path {
     gboolean isDirect;

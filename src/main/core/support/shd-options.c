@@ -4,7 +4,12 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "core/support/shd-options.h"
+
+#include <stddef.h>
+
+#include "core/logger/shd-logger.h"
+#include "utility/shd-utility.h"
 
 struct _Options {
     GOptionContext *context;

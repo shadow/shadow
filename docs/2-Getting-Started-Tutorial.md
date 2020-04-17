@@ -51,16 +51,16 @@ Once it finishes, you will notice:
 
 You can browse through `shadow.log` to get a feel for Shadow's logging style and format, and each `shadow.data/hosts/<hostname>` directory contains the standard output and standard error for each virtual process that ran in the simulation.
 
-For now, we are most interested in the tgen virtual process output, and the lines containing `transfer-complete`, since those represent completed downloads and contain useful timing statistics. The clients should have completed a total of **1000** transfers:
+For now, we are most interested in the tgen virtual process output, and the lines containing `stream-success`, since those represent completed downloads and contain useful timing statistics. The clients should have completed a total of **100** streams:
 
 ```bash
-for d in shadow.data/hosts/*client*; do grep "transfer-complete" ${d}/* ; done | tee clients.log | wc -l
+for d in shadow.data/hosts/*client*; do grep "stream-success" ${d}/* ; done | tee clients.log | wc -l
 ```
 
 We can also look at the transfers from the servers' perspective:
 
 ```bash
-for d in shadow.data/hosts/*server*; do grep "transfer-complete" ${d}/* ; done | tee servers.log | wc -l
+for d in shadow.data/hosts/*server*; do grep "stream-success" ${d}/* ; done | tee servers.log | wc -l
 ```
 
 We now need to know more about the configuration process, as this is a major part of running Shadow experiments.

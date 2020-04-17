@@ -8,7 +8,9 @@
 #define SHD_CONFIGURATION_H_
 
 #include <glib.h>
-#include "shadow.h"
+
+#include "core/logger/shd-log-level.h"
+#include "core/support/shd-definitions.h"
 
 /**
  * @addtogroup Configuration

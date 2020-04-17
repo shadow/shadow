@@ -3,10 +3,31 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
-
-#include <sys/time.h>
+#include <bits/types/struct_rusage.h>
+#include <bits/types/struct_timeval.h>
+#include <errno.h>
+#include <glib.h>
+#include <netinet/in.h>
+#include <pthread.h>
+#include <stddef.h>
 #include <sys/resource.h>
+
+#include "core/logger/shd-logger.h"
+#include "core/scheduler/shd-scheduler-policy.h"
+#include "core/scheduler/shd-scheduler.h"
+#include "core/shd-master.h"
+#include "core/shd-slave.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "core/support/shd-options.h"
+#include "host/shd-host.h"
+#include "host/shd-network-interface.h"
+#include "routing/shd-address.h"
+#include "routing/shd-dns.h"
+#include "routing/shd-topology.h"
+#include "utility/shd-random.h"
+#include "utility/shd-utility.h"
 
 typedef struct {
 

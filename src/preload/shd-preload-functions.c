@@ -5,6 +5,9 @@
 
 #include "shd-preload-functions.h"
 
+#include <dlfcn.h>
+#include <stddef.h>
+
 void preload_functions_do_lookups(PreloadFuncs* vtable, void* handle) {
     if(vtable == NULL) {
         return;
@@ -26,8 +29,8 @@ void preload_functions_do_lookups(PreloadFuncs* vtable, void* handle) {
 //        exit(EXIT_FAILURE); \
 //    } \
 
-#include "shd-preload-defs.h"
 #include "shd-preload-defs-special.h"
+#include "shd-preload-defs.h"
 
 #if defined(PRELOADDEF)
 #undef PRELOADDEF

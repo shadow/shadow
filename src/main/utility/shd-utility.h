@@ -7,7 +7,10 @@
 #ifndef SHD_UTILITY_H_
 #define SHD_UTILITY_H_
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+
+#include "core/support/shd-definitions.h"
 
 #ifdef DEBUG
 #define utility_assert(expr) \
@@ -20,6 +23,52 @@ do { \
 } while (0)
 #else
 #define utility_assert(expr)
+#endif
+
+#ifdef DEBUG
+/**
+ * Memory magic for assertions that memory has not been freed. The idea behind
+ * this approach is to declare a value in each struct using MAGIC_DECLARE,
+ * define it using MAGIC_INIT during object creation, and clear it during
+ * cleanup using MAGIC_CLEAR. Any time the object is referenced, we can check
+ * the magic value using MAGIC_ASSERT. If the assert fails, there is a bug.
+ *
+ * In general, this should only be used in DEBUG mode. Once we are somewhat
+ * convinced on Shadow's stability (for releases), these macros will do nothing.
+ *
+ * MAGIC_VALUE is an arbitrary value.
+ *
+ * @todo add #ifdef DEBUG
+ */
+#define MAGIC_VALUE 0xAABBCCDD
+
+/**
+ * Declare a member of a struct to hold a MAGIC_VALUE. This should be placed in
+ * the declaration of a struct, generally as the last member of the struct.
+ */
+#define MAGIC_DECLARE guint magic
+
+/**
+ * Initialize a value declared with MAGIC_DECLARE to MAGIC_VALUE
+ */
+#define MAGIC_INIT(object) object->magic = MAGIC_VALUE
+
+/**
+ * Assert that a struct declared with MAGIC_DECLARE and initialized with
+ * MAGIC_INIT still holds the value MAGIC_VALUE.
+ */
+#define MAGIC_ASSERT(object) utility_assert(object && (object->magic == MAGIC_VALUE))
+
+/**
+ * CLear a magic value. Future assertions with MAGIC_ASSERT will fail.
+ */
+#define MAGIC_CLEAR(object) object->magic = 0
+#else
+#define MAGIC_VALUE
+#define MAGIC_DECLARE
+#define MAGIC_INIT(object)
+#define MAGIC_ASSERT(object)
+#define MAGIC_CLEAR(object)
 #endif
 
 guint utility_ipPortHash(in_addr_t ip, in_port_t port);

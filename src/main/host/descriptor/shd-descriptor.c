@@ -4,7 +4,15 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "host/descriptor/shd-descriptor.h"
+
+#include <stddef.h>
+
+#include "core/shd-worker.h"
+#include "core/support/shd-object-counter.h"
+#include "host/descriptor/shd-epoll.h"
+#include "host/shd-host.h"
+#include "utility/shd-utility.h"
 
 void descriptor_init(Descriptor* descriptor, DescriptorType type,
         DescriptorFunctionTable* funcTable, gint handle) {

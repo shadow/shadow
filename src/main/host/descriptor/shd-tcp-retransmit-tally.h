@@ -1,5 +1,7 @@
 #ifndef SHD_TCP_RETRANSMIT_TALLY_H_
 #define SHD_TCP_RETRANSMIT_TALLY_H_
+#include <bits/stdint-intn.h>
+#include <bits/stdint-uintn.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -7,8 +9,8 @@
 #ifdef __cplusplus
 #include <cstddef>
 #include <cstdint>
-#include <vector>
 #include <utility>
+#include <vector>
 #endif // __cplusplus
 
 struct _GList;

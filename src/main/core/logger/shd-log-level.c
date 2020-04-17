@@ -3,7 +3,11 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "core/logger/shd-log-level.h"
+
+#include <glib.h>
+#include <stddef.h>
+#include <stddef.h>
 
 const char* loglevel_toStr(LogLevel level) {
     switch (level) {

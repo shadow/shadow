@@ -4,7 +4,47 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include <bits/stdint-uintn.h>
+#include <bits/types/struct_timeval.h>
+#include <errno.h>
+#include <glib.h>
+#include <math.h>
+#include <netinet/in.h>
+#include <poll.h>
+#include <pthread.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/un.h>
+
+#include "core/logger/shd-log-level.h"
+#include "core/logger/shd-logger.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "host/descriptor/shd-channel.h"
+#include "host/descriptor/shd-descriptor.h"
+#include "host/descriptor/shd-epoll.h"
+#include "host/descriptor/shd-socket.h"
+#include "host/descriptor/shd-tcp.h"
+#include "host/descriptor/shd-timer.h"
+#include "host/descriptor/shd-transport.h"
+#include "host/descriptor/shd-udp.h"
+#include "host/shd-cpu.h"
+#include "host/shd-host.h"
+#include "host/shd-network-interface.h"
+#include "host/shd-process.h"
+#include "host/shd-protocol.h"
+#include "host/shd-tracker.h"
+#include "routing/shd-address.h"
+#include "routing/shd-dns.h"
+#include "routing/shd-packet.h"
+#include "routing/shd-router.h"
+#include "routing/shd-topology.h"
+#include "utility/shd-random.h"
+#include "utility/shd-utility.h"
 
 struct _Host {
     /* general node lock. nothing that belongs to the node should be touched

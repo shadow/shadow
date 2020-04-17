@@ -7,7 +7,12 @@
 #ifndef SHD_SCHEDULER_H_
 #define SHD_SCHEDULER_H_
 
-#include "shadow.h"
+#include <glib.h>
+
+#include "core/scheduler/shd-scheduler-policy.h"
+#include "core/support/shd-definitions.h"
+#include "core/work/shd-event.h"
+#include "host/shd-host.h"
 
 typedef struct _Scheduler Scheduler;
 

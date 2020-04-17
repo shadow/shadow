@@ -8,11 +8,13 @@
 #ifndef SRC_MAIN_ROUTING_SHD_ROUTER_H_
 #define SRC_MAIN_ROUTING_SHD_ROUTER_H_
 
+#include <glib.h>
+
+#include "routing/shd-packet.h"
+
 typedef struct _Router Router;
 typedef enum _QueueManagerMode QueueManagerMode;
 typedef struct _QueueManagerHooks QueueManagerHooks;
-
-#include "shadow.h"
 
 enum _QueueManagerMode {
     QUEUE_MANAGER_SINGLE, // buffers only a single packet

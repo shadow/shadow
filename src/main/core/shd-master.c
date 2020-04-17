@@ -11,15 +11,26 @@
 #if !defined __USE_LARGEFILE64
 #define __USE_LARGEFILE64
 #endif
-#include <sys/stat.h>
-
-/* these are only avail in glib >= 2.30, needed for signals */
-#include <glib-unix.h>
-#include <signal.h>
-
+#include <errno.h>
+#include <glib.h>
 #include <glib/gstdio.h>
+#include <stddef.h>
+#include <unistd.h>
 
-#include "shadow.h"
+#include "core/logger/shd-log-level.h"
+#include "core/logger/shd-logger.h"
+#include "core/shd-master.h"
+#include "core/shd-slave.h"
+#include "core/support/shd-configuration.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-examples.h"
+#include "core/support/shd-options.h"
+#include "host/shd-host.h"
+#include "routing/shd-address.h"
+#include "routing/shd-dns.h"
+#include "routing/shd-topology.h"
+#include "utility/shd-random.h"
+#include "utility/shd-utility.h"
 
 struct _Master {
     /* general options and user configuration for the simulation */

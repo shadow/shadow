@@ -7,6 +7,10 @@
 #ifndef SHD_CPU_H_
 #define SHD_CPU_H_
 
+#include <glib.h>
+
+#include "core/support/shd-definitions.h"
+
 typedef struct _CPU CPU;
 
 CPU* cpu_new(guint64 frequencyKHz, guint64 rawFrequencyKHz, guint64 threshold, guint64 precision);

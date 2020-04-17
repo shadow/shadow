@@ -7,7 +7,9 @@
 #ifndef SHD_DESCRIPTOR_H_
 #define SHD_DESCRIPTOR_H_
 
-#include "shadow.h"
+#include <glib.h>
+
+#include "utility/shd-utility.h"
 
 typedef enum _DescriptorType DescriptorType;
 enum _DescriptorType {

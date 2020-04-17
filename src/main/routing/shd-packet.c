@@ -4,7 +4,18 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include <netinet/in.h>
+#include <stddef.h>
+
+#include "core/logger/shd-log-level.h"
+#include "core/logger/shd-logger.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-object-counter.h"
+#include "host/shd-host.h"
+#include "routing/shd-address.h"
+#include "routing/shd-packet.h"
+#include "routing/shd-payload.h"
+#include "utility/shd-utility.h"
 
 /* thread-safe structure representing a data/network packet */
 

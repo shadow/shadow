@@ -4,7 +4,30 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+#include <stddef.h>
+
+#include "core/logger/shd-logger.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "core/support/shd-options.h"
+#include "core/work/shd-task.h"
+#include "host/descriptor/shd-descriptor.h"
+#include "host/descriptor/shd-socket.h"
+#include "host/descriptor/shd-tcp.h"
+#include "host/shd-host.h"
+#include "host/shd-network-interface.h"
+#include "host/shd-protocol.h"
+#include "host/shd-tracker.h"
+#include "routing/shd-address.h"
+#include "routing/shd-dns.h"
+#include "routing/shd-packet.h"
+#include "routing/shd-router.h"
+#include "utility/shd-pcap-writer.h"
+#include "utility/shd-priority-queue.h"
+#include "utility/shd-utility.h"
 
 typedef struct _NetworkInterfaceTokenBucket NetworkInterfaceTokenBucket;
 struct _NetworkInterfaceTokenBucket {

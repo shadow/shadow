@@ -6,7 +6,10 @@
 #ifndef SHD_EVENT_H_
 #define SHD_EVENT_H_
 
-#include "shadow.h"
+#include <glib.h>
+
+#include "core/support/shd-definitions.h"
+#include "core/work/shd-task.h"
 
 /* An event for a local virtual host, i.e.,
  * a host running on the same slave machine as the event initiator.

@@ -4,7 +4,24 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "host/descriptor/shd-udp.h"
+
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+
+#include "core/logger/shd-logger.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-object-counter.h"
+#include "host/descriptor/shd-descriptor.h"
+#include "host/descriptor/shd-socket.h"
+#include "host/descriptor/shd-transport.h"
+#include "host/shd-host.h"
+#include "host/shd-protocol.h"
+#include "host/shd-tracker.h"
+#include "routing/shd-packet.h"
+#include "utility/shd-utility.h"
 
 struct _UDP {
     Socket super;

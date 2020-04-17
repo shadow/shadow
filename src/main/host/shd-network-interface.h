@@ -7,7 +7,14 @@
 #ifndef SHD_NETWORK_INTERFACE_H_
 #define SHD_NETWORK_INTERFACE_H_
 
-#include "shadow.h"
+#include <glib.h>
+#include <netinet/in.h>
+
+#include "core/support/shd-options.h"
+#include "host/descriptor/shd-socket.h"
+#include "host/shd-protocol.h"
+#include "routing/shd-address.h"
+#include "routing/shd-router.h"
 
 typedef struct _NetworkInterface NetworkInterface;
 

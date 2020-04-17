@@ -4,10 +4,25 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
-
 /* manages the scheduling of events and hosts to threads,
  * following one of several scheduling policies */
+#include <glib.h>
+#include <math.h>
+#include <pthread.h>
+#include <stddef.h>
+#include <sys/types.h>
+
+#include "core/logger/shd-logger.h"
+#include "core/scheduler/shd-scheduler-policy.h"
+#include "core/scheduler/shd-scheduler.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-definitions.h"
+#include "core/work/shd-event.h"
+#include "host/shd-host.h"
+#include "utility/shd-count-down-latch.h"
+#include "utility/shd-random.h"
+#include "utility/shd-utility.h"
+
 struct _Scheduler {
     /* all worker threads used by the scheduler */
     GQueue* threadItems;

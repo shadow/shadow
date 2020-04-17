@@ -3,7 +3,16 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include <glib.h>
+#include <pthread.h>
+#include <stddef.h>
+
+#include "core/scheduler/shd-scheduler-policy.h"
+#include "core/support/shd-definitions.h"
+#include "core/work/shd-event.h"
+#include "host/shd-host.h"
+#include "utility/shd-priority-queue.h"
+#include "utility/shd-utility.h"
 
 typedef struct _GlobalSinglePolicyData GlobalSinglePolicyData;
 struct _GlobalSinglePolicyData {

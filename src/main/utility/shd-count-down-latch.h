@@ -7,6 +7,8 @@
 #ifndef SHD_COUNT_DOWN_LATCH_H_
 #define SHD_COUNT_DOWN_LATCH_H_
 
+#include <glib.h>
+
 typedef struct _CountDownLatch CountDownLatch;
 
 CountDownLatch* countdownlatch_new(guint count);

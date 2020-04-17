@@ -7,6 +7,8 @@
 #ifndef SRC_MAIN_ROUTING_SHD_PAYLOAD_H_
 #define SRC_MAIN_ROUTING_SHD_PAYLOAD_H_
 
+#include <glib.h>
+
 typedef struct _Payload Payload;
 
 Payload* payload_new(gconstpointer data, gsize dataLength);

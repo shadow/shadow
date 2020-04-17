@@ -7,9 +7,26 @@
 #ifndef SHD_HOST_H_
 #define SHD_HOST_H_
 
-#include "shadow.h"
-
+#include <glib.h>
 #include <netinet/in.h>
+#include <poll.h>
+#include <pthread.h>
+#include <sys/epoll.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+
+#include "core/logger/shd-log-level.h"
+#include "core/support/shd-definitions.h"
+#include "core/support/shd-options.h"
+#include "host/descriptor/shd-descriptor.h"
+#include "host/shd-cpu.h"
+#include "host/shd-network-interface.h"
+#include "host/shd-tracker.h"
+#include "routing/shd-address.h"
+#include "routing/shd-dns.h"
+#include "routing/shd-router.h"
+#include "routing/shd-topology.h"
+#include "utility/shd-random.h"
 
 typedef struct _Host Host;
 

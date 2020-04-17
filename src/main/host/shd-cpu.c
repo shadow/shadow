@@ -4,13 +4,13 @@
  * See LICENSE for licensing information
  */
 
+#include "host/shd-cpu.h"
+
 #include <glib.h>
 #include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <math.h>
 
-#include "shadow.h"
+#include "core/logger/shd-logger.h"
+#include "utility/shd-utility.h"
 
 struct _CPU {
     guint64 frequencyKHz;

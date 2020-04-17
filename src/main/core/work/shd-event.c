@@ -3,7 +3,17 @@
  * See LICENSE for licensing information
  */
 
-#include "shadow.h"
+#include "core/work/shd-event.h"
+
+#include <stddef.h>
+
+#include "core/logger/shd-logger.h"
+#include "core/shd-worker.h"
+#include "core/support/shd-object-counter.h"
+#include "host/shd-cpu.h"
+#include "host/shd-host.h"
+#include "host/shd-tracker.h"
+#include "utility/shd-utility.h"
 
 struct _Event {
     Host* srcHost;

@@ -7,7 +7,7 @@
 #ifndef SHD_CHANNEL_H_
 #define SHD_CHANNEL_H_
 
-#include "shadow.h"
+#include <glib.h>
 
 typedef enum _ChannelType ChannelType;
 enum _ChannelType {

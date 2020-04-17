@@ -4,10 +4,13 @@
  * See LICENSE for licensing information
  */
 
-#include <glib.h>
+#include "utility/shd-priority-queue.h"
 
-#include "shd-utility.h"
+#include <glib.h>
+#include <stddef.h>
+
 #include "shd-priority-queue.h"
+#include "shd-utility.h"
 
 static const gsize INITIAL_SIZE = 100;
 

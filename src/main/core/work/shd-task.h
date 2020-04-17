@@ -6,6 +6,8 @@
 #ifndef SHD_TASK_H_
 #define SHD_TASK_H_
 
+#include <glib.h>
+
 typedef void (*TaskCallbackFunc)(gpointer callbackObject, gpointer callbackArgument);
 typedef void (*TaskObjectFreeFunc)(gpointer data);
 typedef void (*TaskArgumentFreeFunc)(gpointer data);
