@@ -356,6 +356,21 @@ guint host_getNewProcessID(Host* host) {
     return host->processIDCounter++;
 }
 
+gboolean host_processAreFinished(Host *host){
+    if (g_queue_is_empty(host->processes))
+        return TRUE;
+
+    gboolean processes_are_done = FALSE;
+    GQueue *processes = g_queue_copy(host->processes);
+    while (!processes_are_done && !g_queue_is_empty(processes)) {
+        Process *p = g_queue_pop_head(processes);
+        processes_are_done = process_isFinished(p);
+    }
+
+    g_queue_free(processes);
+    return processes_are_done;
+}
+
 guint64 host_getNewEventID(Host* host) {
     MAGIC_ASSERT(host);
     return host->eventIDCounter++;
