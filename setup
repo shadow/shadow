@@ -115,6 +115,15 @@ def main():
         action="store", dest="njobs",
         default=4)#multiprocessing.cpu_count())
 
+    # TODO: Ideally make the default more like 1s, and add more individual
+    # exceptions as needed (using e.g. `set_tests_properties(slow_test_name
+    # PROPERTIES TIMEOUT 30)`
+    parser_test.add_argument('-t', '--timeout',
+        help="default test timeout, in seconds",
+        metavar="s", type=int,
+        action="store", dest="timeout",
+        default=20)
+
     # configure install subcommand
     parser_install = subparsers_main.add_parser('install', help='install Shadow',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -237,7 +246,7 @@ def run_tests(testdir, args):
     os.chdir(testdir)
 
     # test, wait for it to finish
-    testcmd = "ctest -j{0}".format(args.njobs)
+    testcmd = "ctest -j{0} --timeout {1}".format(args.njobs, args.timeout)
 
     logging.info("calling \'"+testcmd+"\'")
     retcode = subprocess.call(testcmd.strip().split())
