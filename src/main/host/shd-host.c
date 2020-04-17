@@ -356,19 +356,27 @@ guint host_getNewProcessID(Host* host) {
     return host->processIDCounter++;
 }
 
-gboolean host_processAreFinished(Host *host){
+gboolean host_processesAreFinished(Host *host){
+    /*
+     * Return TRUE is all processes of a host are finished
+     */
     if (g_queue_is_empty(host->processes))
         return TRUE;
 
-    gboolean processes_are_done = FALSE;
+    gboolean processes_are_finished = TRUE;
     GQueue *processes = g_queue_copy(host->processes);
-    while (!processes_are_done && !g_queue_is_empty(processes)) {
+
+    while (!g_queue_is_empty(processes)) {
         Process *p = g_queue_pop_head(processes);
-        processes_are_done = process_isFinished(p);
+
+        if (process_isFinished(p)) {
+            processes_are_finished = FALSE;
+            break;
+        }
     }
 
     g_queue_free(processes);
-    return processes_are_done;
+    return processes_are_finished;
 }
 
 guint64 host_getNewEventID(Host* host) {
