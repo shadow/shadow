@@ -1363,6 +1363,11 @@ gboolean process_isRunning(Process* proc) {
     return (proc->tstate != NULL) ? TRUE : FALSE;
 }
 
+gboolean process_isFinished(Process *proc) {
+    MAGIC_ASSERT(proc);
+    return proc->returnCodeLogged;
+}
+
 gboolean process_shouldEmulate(Process* proc) {
     return ((!proc) || (proc->activeContext == PCTX_SHADOW)) ? FALSE : TRUE;
 }

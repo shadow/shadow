@@ -91,6 +91,7 @@ void process_migrate(Process* proc, gpointer threads);
 
 gboolean process_wantsNotify(Process* proc, gint epollfd);
 gboolean process_isRunning(Process* proc);
+gboolean process_isFinished(Process *proc);
 gboolean process_shouldEmulate(Process* proc);
 
 gboolean process_addAtExitCallback(Process* proc, gpointer userCallback, gpointer userArgument,
