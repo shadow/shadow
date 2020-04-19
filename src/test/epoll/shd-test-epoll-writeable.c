@@ -16,8 +16,10 @@
 
 #define PORT_STR "22222"
 #define WRITE_SZ 65535
+#define TARGET_NODE "testnode"
 
 static void _client(void) {
+   char buf[WRITE_SZ];
    struct addrinfo *client_info, hints;
 
    memset(&hints, 0, sizeof(hints));
@@ -25,7 +27,7 @@ static void _client(void) {
    hints.ai_socktype = SOCK_STREAM;
 
    const char *port = PORT_STR;
-   getaddrinfo("testnode", port, &hints, &client_info);
+   getaddrinfo(TARGET_NODE, port, &hints, &client_info);
 
    int client_socket = socket(client_info->ai_family,
                               client_info->ai_socktype,
@@ -33,7 +35,8 @@ static void _client(void) {
 
    connect(client_socket, client_info->ai_addr, client_info->ai_addrlen);
 
-   for (;;) { sleep(10); }
+   // Read messages until the server stops the communication
+   while (0 < read(client_socket, buf, sizeof(buf)));
 }
 
 static int _server(void) {
@@ -80,6 +83,11 @@ static int _server(void) {
    for (int idx = 0; idx < 30; ++idx) {
       int num_events = epoll_wait(epoll_fd, events, 5, -1);
 
+      if (num_events == -1) {
+          printf("epoll_wait failed and returns -1.\n");
+          return EXIT_FAILURE;
+      }
+
       if (num_events > 0) {
          // Sanity check to ensure epoll only returned one event for the socket
          // we are monitoring.
@@ -104,6 +112,9 @@ static int _server(void) {
          }
       }
    }
+
+   // Close the socket to allow client to stop running
+   close(client_socket);
 
    return EXIT_SUCCESS;
 }
