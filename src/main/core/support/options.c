@@ -29,6 +29,7 @@ struct _Options {
     gboolean debug;
     gchar* dataDirPath;
     gchar* dataTemplatePath;
+    gboolean cleanupSharedMemory;
 
     GOptionGroup* networkOptionGroup;
     gint cpuThreshold;
@@ -82,10 +83,13 @@ Options* options_new(gint argc, gchar* argv[]) {
     options->cpuThreshold = -1;
     options->cpuPrecision = 200;
     options->heartbeatInterval = 1;
+    options->cleanupSharedMemory = FALSE;
 
     /* set options to change defaults for the main group */
     options->mainOptionGroup = g_option_group_new("main", "Main Options", "Primary simulator options", NULL, NULL);
     const GOptionEntry mainEntries[] = {
+        {"cleanup-shared-memory", 'c', 0, G_OPTION_ARG_NONE, &(options->cleanupSharedMemory),
+         "Reclaim orphaned shared memory from previous Shadow processes", NULL},
         {"data-directory", 'd', 0, G_OPTION_ARG_STRING, &(options->dataDirPath),
          "PATH to store simulation output ['shadow.data']", "PATH"},
         {"data-template", 'e', 0, G_OPTION_ARG_STRING,
@@ -398,6 +402,11 @@ gboolean options_doRunValgrind(Options* options) {
 gboolean options_doRunDebug(Options* options) {
     MAGIC_ASSERT(options);
     return options->debug;
+}
+
+gboolean options_getCleanupSharedMemory(Options* options) {
+    MAGIC_ASSERT(options);
+    return options->cleanupSharedMemory;
 }
 
 gboolean options_doRunTGenExample(Options* options) {
