@@ -145,27 +145,23 @@ if(SHADOW_EXPORT STREQUAL ON)
 endif(SHADOW_EXPORT STREQUAL ON)
 
 ## generate config header and make sure its on the include path
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h)
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/shd-config.h DESTINATION include/)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_BINARY_DIR}/src/shd-config.h)
+install(FILES ${CMAKE_BINARY_DIR}/src/shd-config.h DESTINATION include/)
 
 if(POLICY  CMP0026)
     cmake_policy(SET  CMP0026  OLD)
 endif()
 
-include_directories(${CMAKE_SOURCE_DIR}/src)
+if(SHADOW_TEST STREQUAL ON)
+    ## http://www.cmake.org/Wiki/CMake_Testing_With_CTest
+    message(STATUS "SHADOW_TEST enabled")
+    enable_testing()
+endif(SHADOW_TEST STREQUAL ON)
 
 ## recurse our project tree
 add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
-
-if(SHADOW_TEST STREQUAL ON)
-    ## http://www.cmake.org/Wiki/CMake_Testing_With_CTest
-    message(STATUS "SHADOW_TEST enabled")
-    enable_testing()
-    add_subdirectory(src/test)
-endif(SHADOW_TEST STREQUAL ON)
 
 ## install our 'exported' libs so they can be imported by others
 file(GLOB CMAKE_CUSTOM_MODULES "${CMAKE_SOURCE_DIR}/cmake/*cmake")
