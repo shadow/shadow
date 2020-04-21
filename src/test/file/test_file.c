@@ -3,19 +3,18 @@
  * See LICENSE for licensing information
  */
 
-//TODO: Implement fwrite
+// TODO: Implement fwrite
 
 #include <errno.h>
+#include <fcntl.h>
 #include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <fcntl.h>
 #include <sys/uio.h>
-#include <errno.h>
+#include <unistd.h>
 
 #include "test/test_glib_helpers.h"
 

@@ -9,19 +9,18 @@
  *      Author: rjansen
  */
 
-
 #include <glib.h>
 
 #include "main/core/logger/logger.h"
-#include "main/core/worker.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
+#include "main/core/worker.h"
 #include "main/host/network_interface.h"
 #include "main/routing/packet.h"
+#include "main/routing/router.h"
 #include "main/routing/router_queue_codel.h"
 #include "main/routing/router_queue_single.h"
 #include "main/routing/router_queue_static.h"
-#include "main/routing/router.h"
 #include "main/utility/utility.h"
 
 struct _Router {

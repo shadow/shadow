@@ -2,9 +2,9 @@
  * gcc -Wall -D _GNU_SOURCE -fPIC -shared -ldl -o test_preload_lib.so test_preload_lib.c
  */
 
+#include <dlfcn.h>
 #include <stdio.h>
 #include <time.h>
-#include <dlfcn.h>
 
 # define RTLD_NEXT  ((void *) -1l)
 

@@ -3,9 +3,9 @@
  * See LICENSE for licensing information
  */
 #define _POSIX_C_SOURCE 199309L
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <chrono>
 #include <iostream>

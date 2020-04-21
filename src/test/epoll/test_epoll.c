@@ -3,15 +3,15 @@
  * See LICENSE for licensing information
  */
 
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <fcntl.h>
-#include <sys/types.h> 
-#include <sys/stat.h>
 #include <sys/epoll.h>
-#include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 static int _test_fd_write(int fd) {
     return write(fd, "test", 4);

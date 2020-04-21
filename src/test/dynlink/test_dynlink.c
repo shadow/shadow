@@ -17,14 +17,14 @@
 #if !defined(_GNU_SOURCE)
 #define _GNU_SOURCE
 #endif
-#include <link.h>
 #include <dlfcn.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <stdio.h>
 #include <errno.h>
-#include <string.h>
+#include <link.h>
 #include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 //#include <glib.h>
 

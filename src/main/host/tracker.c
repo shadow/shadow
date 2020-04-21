@@ -12,10 +12,10 @@
 
 #include "main/core/logger/log_level.h"
 #include "main/core/logger/logger.h"
-#include "main/core/worker.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/options.h"
 #include "main/core/work/task.h"
+#include "main/core/worker.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
 #include "main/routing/address.h"

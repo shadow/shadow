@@ -3,18 +3,18 @@
  * See LICENSE for licensing information
  */
 
-#include <glib.h>
-#include <sys/epoll.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <arpa/inet.h>
-#include <netdb.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
 #include <errno.h>
-#include <string.h>
+#include <glib.h>
 #include <math.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #if 1 /* #ifdef DEBUG */
 #define PHOLD_MAGIC 0xABBABAAB

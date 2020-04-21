@@ -13,11 +13,11 @@
 #include <sys/types.h>
 
 #include "main/core/logger/logger.h"
-#include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/scheduler/scheduler.h"
-#include "main/core/worker.h"
+#include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
+#include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/utility/count_down_latch.h"
 #include "main/utility/random.h"

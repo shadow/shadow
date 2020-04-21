@@ -8,8 +8,8 @@
 
 #include <stddef.h>
 
-#include "main/core/worker.h"
 #include "main/core/support/object_counter.h"
+#include "main/core/worker.h"
 #include "main/host/descriptor/epoll.h"
 #include "main/host/host.h"
 #include "main/utility/utility.h"

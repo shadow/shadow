@@ -5,9 +5,9 @@
 
 #include "main/core/work/task.h"
 
-#include "main/core/worker.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
+#include "main/core/worker.h"
 #include "main/utility/utility.h"
 
 struct _Task {

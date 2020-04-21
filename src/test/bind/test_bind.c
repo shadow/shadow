@@ -3,16 +3,16 @@
  * See LICENSE for licensing information
  */
 
+#include <arpa/inet.h>
 #include <errno.h>
+#include <netinet/in.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 

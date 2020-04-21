@@ -13,14 +13,14 @@
 #include <sys/resource.h>
 
 #include "main/core/logger/logger.h"
-#include "main/core/scheduler/scheduler_policy.h"
-#include "main/core/scheduler/scheduler.h"
 #include "main/core/master.h"
+#include "main/core/scheduler/scheduler.h"
+#include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/slave.h"
-#include "main/core/worker.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
+#include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/host/network_interface.h"
 #include "main/routing/address.h"

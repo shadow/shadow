@@ -13,8 +13,8 @@
 #include <string.h>
 
 #include "main/core/logger/logger.h"
-#include "main/core/worker.h"
 #include "main/core/support/definitions.h"
+#include "main/core/worker.h"
 #include "main/routing/address.h"
 #include "main/routing/path.h"
 #include "main/routing/topology.h"

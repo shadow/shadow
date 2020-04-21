@@ -6,8 +6,8 @@
 #ifndef SHD_LOGGER_H_
 #define SHD_LOGGER_H_
 
-#include <pthread.h>
 #include <glib.h>
+#include <pthread.h>
 
 #include "main/core/logger/log_level.h"
 

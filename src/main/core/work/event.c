@@ -8,8 +8,8 @@
 #include <stddef.h>
 
 #include "main/core/logger/logger.h"
-#include "main/core/worker.h"
 #include "main/core/support/object_counter.h"
+#include "main/core/worker.h"
 #include "main/host/cpu.h"
 #include "main/host/host.h"
 #include "main/host/tracker.h"
