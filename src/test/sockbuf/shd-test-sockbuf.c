@@ -22,7 +22,7 @@
 #include <linux/sockios.h>
 #include <sys/ioctl.h>
 
-#include <../shd-test-common.h>
+#include "../shd-test-common.h"
 
 #define BUFFERSIZE 1048576
 
