@@ -260,14 +260,6 @@ Options* options_new(gint argc, gchar* argv[]) {
     }
 
     options->inputXMLFilename = g_string_new(argv[1]);
-    // if (argv[1]) {
-    //     // rwails: This check is required -- for options that don't require an
-    //     // XML file (e.g., a call to --version) this copies out of a null ptr.
-    //     printf("using this\n");
-    // } else {
-    //     printf("using that\n");
-    //     options->inputXMLFilename = g_string_new("ryan");
-    // }
 
     if(socksend) {
         g_string_free(socksend, TRUE);

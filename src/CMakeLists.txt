@@ -10,6 +10,7 @@ find_package(DL REQUIRED)
 find_package(M REQUIRED)
 find_package(IGRAPH REQUIRED)
 find_package(GLIB REQUIRED)
+find_package(PROCPS REQUIRED)
 
 ## pthreads
 set(CMAKE_THREAD_PREFER_PTHREAD 1)
