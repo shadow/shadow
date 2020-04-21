@@ -3,8 +3,10 @@
 
 /* Intended to be private to shd-shmem-allocator. */
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <sys/param.h>
+#include <unistd.h>
 
 #define SHD_SHMEM_FILE_NAME_NBYTES (NAME_MAX < 256 ? NAME_MAX : 256)
 
@@ -13,6 +15,9 @@ typedef struct _ShMemFile {
     size_t nbytes;
     char name[SHD_SHMEM_FILE_NAME_NBYTES];
 } ShMemFile;
+
+bool shmemfile_nameHasShadowPrefix(const char *name);
+pid_t shmemfile_pidFromName(const char *name);
 
 int shmemfile_alloc(size_t nbytes, ShMemFile *shmf);
 

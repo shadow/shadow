@@ -1,4 +1,4 @@
-/*
+            /*
  * The Shadow Simulator
  * Copyright (c) 2010-2011, Rob Jansen
  * See LICENSE for licensing information
@@ -19,6 +19,8 @@
 #include "main/core/support/configuration.h"
 #include "main/core/support/options.h"
 #include "main/utility/utility.h"
+#include "../shmem/shmem-cleanup.h"
+#include "igraph_version.h"
 #include "shd-config.h"
 #include "support/logger/logger.h"
 
@@ -196,8 +198,14 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         return EXIT_FAILURE;
     }
 
-    printf("%d\n", options_getCleanupSharedMemory(options));
-    return 0;
+    if (options_getCleanupSharedMemory(options)) {
+        shmemcleanup_tryCleanup();
+
+        if (!options_doRunPrintVersion(options) &&
+            options_getInputXMLFilename(options)->len == 0) {
+            return EXIT_SUCCESS;
+        }
+    }
 
     /* if they just want the shadow version, print it and exit */
     if(options_doRunPrintVersion(options)) {

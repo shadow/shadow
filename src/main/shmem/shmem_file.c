@@ -4,7 +4,9 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -17,14 +19,42 @@
 #include "main/shmem/shmem_util.h"
 #include "support/logger/logger.h"
 
+static const char* _kShadowPrefix = "shd_shmemfile";
+static const char _kPIDDelim = '-';
+
 static void _shmemfile_getName(size_t nbytes, char* str) {
     assert(str != NULL && nbytes >= 3);
 
-    struct timespec ts;
+    struct timespec ts = {0};
     clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    pid_t pid = getpid();
+
     snprintf(str, MIN(SHD_SHMEM_FILE_NAME_NBYTES, nbytes),
-             "/shd_shmemfile_%llu.%llu", (unsigned long long)ts.tv_sec,
-             (unsigned long long)ts.tv_nsec);
+             "/%s_%llu.%llu%c%lld", _kShadowPrefix,
+             (unsigned long long)ts.tv_sec, (unsigned long long)ts.tv_nsec,
+             _kPIDDelim, (int64_t)pid);
+}
+
+bool shmemfile_nameHasShadowPrefix(const char* name) {
+    const char* pfx = strstr(name, _kShadowPrefix);
+    return (pfx != NULL);
+}
+
+pid_t shmemfile_pidFromName(const char* name) {
+    pid_t ret = -1;
+
+    const char* delim = strchr(name, '-');
+    if (delim) {
+        // try to parse the end of the string
+        ret = (pid_t)strtol(delim + 1, NULL, 10);
+        if (ret == 0 || ret == LONG_MAX ||
+            ret == LONG_MIN) { // we had trouble parsing
+            ret = -1;
+        }
+    }
+
+    return ret;
 }
 
 static size_t _shmemfile_roundUpToMultiple(size_t x, size_t multiple) {
@@ -141,7 +171,7 @@ int shmemfile_map(const char* name, size_t nbytes, ShMemFile* shmf) {
     return -1 * (bad);
 }
 
-int shmemfile_unmap(ShMemFile *shmf) {
+int shmemfile_unmap(ShMemFile* shmf) {
     int rc = munmap(shmf->p, shmf->nbytes);
     if (rc) {
         error("error on munmap: %s", strerror(errno));
@@ -162,6 +192,6 @@ int shmemfile_free(ShMemFile* shmf) {
 }
 
 size_t shmemfile_goodSizeNBytes(size_t requested_nbytes) {
-    return _shmemfile_roundUpToMultiple(requested_nbytes,
-                                        _shmemfile_systemPageNBytes());
+    return _shmemfile_roundUpToMultiple(
+        requested_nbytes, _shmemfile_systemPageNBytes());
 }

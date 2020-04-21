@@ -194,10 +194,12 @@ Options* options_new(gint argc, gchar* argv[]) {
     /* make sure we have the required arguments. program name is first arg.
      * printing the software version requires no other args. running a
      * plug-in example also requires no other args. */
-    if(!(options->printSoftwareVersion) && !(options->runTGenExample) &&
-            !(options->runTestExample) && (argc != nRequiredXMLFiles + 1)) {
+    if (!(options->printSoftwareVersion) && !(options->cleanupSharedMemory) &&
+        !(options->runTGenExample) && !(options->runTestExample) &&
+        (argc != nRequiredXMLFiles + 1)) {
         g_printerr("** Please provide the required parameters **\n");
-        gchar* helpString = g_option_context_get_help(options->context, TRUE, NULL);
+        gchar* helpString =
+            g_option_context_get_help(options->context, TRUE, NULL);
         g_printerr("%s", helpString);
         g_free(helpString);
         options_free(options);
@@ -258,6 +260,14 @@ Options* options_new(gint argc, gchar* argv[]) {
     }
 
     options->inputXMLFilename = g_string_new(argv[1]);
+    // if (argv[1]) {
+    //     // rwails: This check is required -- for options that don't require an
+    //     // XML file (e.g., a call to --version) this copies out of a null ptr.
+    //     printf("using this\n");
+    // } else {
+    //     printf("using that\n");
+    //     options->inputXMLFilename = g_string_new("ryan");
+    // }
 
     if(socksend) {
         g_string_free(socksend, TRUE);
