@@ -3,11 +3,11 @@
  * LD_PRELOAD=`pwd`/test_preload_lib.so ./test_preload
  */
 
+#include <dlfcn.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <dlfcn.h>
-#include <limits.h>
 
 void call_to_ensure_linkage();
 void set_call_next(int should_call_next);

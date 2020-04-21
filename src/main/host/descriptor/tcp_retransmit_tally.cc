@@ -1,11 +1,11 @@
 #include "main/host/descriptor/tcp_retransmit_tally.h"
-#include <cassert>
 #include <algorithm>
-#include <utility>
+#include <cassert>
 #include <gmodule.h>
 #include <iostream>
-#include <string>
 #include <random>
+#include <string>
+#include <utility>
 
 static bool still_sorted_(const Ranges &r) {
    bool sorted = true;

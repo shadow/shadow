@@ -9,8 +9,8 @@
 
 #include "main/core/logger/log_level.h"
 #include "main/core/logger/logger.h"
-#include "main/core/worker.h"
 #include "main/core/support/object_counter.h"
+#include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/routing/address.h"
 #include "main/routing/packet.h"

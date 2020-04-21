@@ -8,7 +8,6 @@
 #endif
 #include <dlfcn.h>
 #include <stdarg.h>
-#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,8 +29,8 @@
 #include <sys/time.h>
 #include <sys/uio.h>
 
-#include "main/core/worker.h"
 #include "main/core/support/definitions.h"
+#include "main/core/worker.h"
 #include "main/host/process.h"
 #include "preload/preload_functions.h"
 

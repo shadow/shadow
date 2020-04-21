@@ -3,10 +3,10 @@
  * See LICENSE for licensing information
  */
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define NUM_THREADS 5

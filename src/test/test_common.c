@@ -5,8 +5,8 @@
 
 #include <errno.h>
 #include <netdb.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 int common_setup_tcp_sockets(int* server_listener_fd_out, int* client_fd_out, in_port_t* server_listener_port_out) {

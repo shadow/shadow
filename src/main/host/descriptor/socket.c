@@ -8,8 +8,8 @@
 #include <netinet/in.h>
 #include <sys/un.h>
 
-#include "main/core/worker.h"
 #include "main/core/support/definitions.h"
+#include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"

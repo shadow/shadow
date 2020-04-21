@@ -1,10 +1,10 @@
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
-#include <time.h>
+#include <string.h>
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
-#include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 #define S_TO_NS 1000000000L
 

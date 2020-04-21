@@ -8,8 +8,8 @@
 #include <stdio.h>
 
 #include "main/core/logger/logger.h"
-#include "main/core/worker.h"
 #include "main/core/support/definitions.h"
+#include "main/core/worker.h"
 #include "main/host/host.h"
 
 struct _PCapWriter {

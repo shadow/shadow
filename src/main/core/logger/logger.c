@@ -6,14 +6,13 @@
 #include "main/core/logger/logger.h"
 
 #include <stdarg.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "main/core/logger/log_record.h"
 #include "main/core/logger/logger_helper.h"
-#include "main/core/worker.h"
 #include "main/core/support/definitions.h"
+#include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/routing/address.h"
 #include "main/utility/count_down_latch.h"

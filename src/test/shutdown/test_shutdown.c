@@ -1,15 +1,15 @@
+#include <errno.h>
+#include <linux/sockios.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <errno.h>
 #include <string.h>
-#include <signal.h>
-#include <linux/sockios.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include "test/test_common.h"
 

@@ -7,7 +7,6 @@
 
 #include <glib.h>
 #include <stddef.h>
-#include <stddef.h>
 
 const char* loglevel_toStr(LogLevel level) {
     switch (level) {

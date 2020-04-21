@@ -4,10 +4,10 @@
  */
 
 #include <stdio.h>
-#include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 /*
  * Launches multiple processes as separated by a ':' arg. For example, the arg string:
