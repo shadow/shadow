@@ -3,7 +3,7 @@
 #endif
 #include <dlfcn.h>
 #include <stdio.h>
-#include "test.h"
+#include "test/test.h"
 LIB(test15)
 
 typedef void (*Function)(void);

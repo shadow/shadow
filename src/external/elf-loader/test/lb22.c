@@ -1,4 +1,4 @@
-#include "test.h"
+#include "test/test.h"
 
 typedef void (*Fn)(void);
 

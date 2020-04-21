@@ -1,5 +1,5 @@
 #include <dlfcn.h>
-#include "test.h"
+#include "test/test.h"
 LIB(test6)
 
 int main (__attribute__((unused)) int argc,

@@ -1,3 +1,3 @@
-#include "test.h"
+#include "test/test.h"
 
 LIB(j)

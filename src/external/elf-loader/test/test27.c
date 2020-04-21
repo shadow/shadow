@@ -1,6 +1,6 @@
 // tests support for GNU ifunc extension
 #include <dlfcn.h>
-#include "test.h"
+#include "test/test.h"
 LIB(test27)
 
 int main (__attribute__((unused)) int argc,

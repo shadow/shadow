@@ -2,7 +2,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <semaphore.h>
-#include "test.h"
+#include "test/test.h"
 LIB(test24)
 
 static void *thread (__attribute__((unused)) void*ctx)

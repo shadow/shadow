@@ -1,5 +1,5 @@
 #define _GNU_SOURCE 1
-#include "test.h"
+#include "test/test.h"
 #include <dlfcn.h>
 #include <stdio.h>
 LIB(test18)

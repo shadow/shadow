@@ -1,4 +1,4 @@
-#include "test.h"
+#include "test/test.h"
 #include <dlfcn.h>
 LIB(test23);
 int main (__attribute__((unused)) int argc,

@@ -2,7 +2,7 @@
 #define _GNU_SOURCE
 #endif
 #include <dlfcn.h>
-#include "test.h"
+#include "test/test.h"
 LIB(test1)
 
 static void * __attribute__ ((noinline)) get_pc (void)

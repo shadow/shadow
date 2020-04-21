@@ -2,7 +2,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <semaphore.h>
-#include "test.h"
+#include "test/test.h"
 LIB(test10)
 
 static int *(*g_get_i) (void) = 0;

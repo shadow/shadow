@@ -181,10 +181,6 @@ def build(args):
     # run build tasks
     os.chdir(builddir)
 
-    # hack to make passing args to CMAKE work... doesnt seem to like the first arg
-    args.extra_includes.insert(0, "./")
-    args.extra_libraries.insert(0, "./")
-
     # add extra library and include directories as absolution paths
     make_paths_absolute(args.extra_includes)
     make_paths_absolute(args.extra_libraries)
