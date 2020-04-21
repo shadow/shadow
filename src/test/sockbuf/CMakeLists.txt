@@ -1,8 +1,8 @@
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_plugin(shadow-plugin-test-sockbuf shd-test-sockbuf.c ../shd-test-common.c)
+add_shadow_plugin(shadow-plugin-test-sockbuf test_sockbuf.c ../test_common.c)
 
 ## create and install an executable that can run outside of shadow
-add_executable(test-sockbuf shd-test-sockbuf.c ../shd-test-common.c)
+add_executable(test-sockbuf test_sockbuf.c ../test_common.c)
 
 ## register the tests
 add_test(NAME sockbuf COMMAND test-sockbuf)

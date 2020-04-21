@@ -1,8 +1,8 @@
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_plugin(shadow-plugin-test-poll shd-test-poll.c)
+add_shadow_plugin(shadow-plugin-test-poll test_poll.c)
 
 ## create and install an executable that can run outside of shadow
-add_executable(test-poll shd-test-poll.c)
+add_executable(test-poll test_poll.c)
 
 ## if the test needs any libraries, link them here
 target_link_libraries(shadow-plugin-test-poll ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})

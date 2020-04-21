@@ -1,8 +1,8 @@
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_plugin(shadow-plugin-test-tcp shd-test-tcp.c)
+add_shadow_plugin(shadow-plugin-test-tcp test_tcp.c)
 
 ## create and install an executable that can run outside of shadow
-add_executable(test-tcp shd-test-tcp.c)
+add_executable(test-tcp test_tcp.c)
 
 ## register the tests
 

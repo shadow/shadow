@@ -3,7 +3,7 @@ include_directories(${GLIB_INCLUDES})
 link_libraries(${GLIB_LIBRARIES})
 
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_exe(test-udp shd-test-udp.c)
+add_shadow_exe(test-udp test_udp.c)
 
 ## register the tests
 add_test(NAME udp COMMAND /bin/bash -c "rm -f udp-fifo && mkfifo udp-fifo && ../shadow-test-launcher test-udp client 0 udp-fifo : test-udp server 0 udp-fifo")
