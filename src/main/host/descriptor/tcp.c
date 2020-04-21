@@ -5,7 +5,7 @@
  * See LICENSE for licensing information
  */
 
-#include "host/descriptor/tcp.h"
+#include "main/host/descriptor/tcp.h"
 
 #include <bits/stdint-uintn.h>
 #include <errno.h>
@@ -20,25 +20,25 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include "core/logger/logger.h"
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "core/support/object_counter.h"
-#include "core/support/options.h"
-#include "core/work/task.h"
-#include "host/descriptor/descriptor.h"
-#include "host/descriptor/socket.h"
-#include "host/descriptor/transport.h"
-#include "host/host.h"
-#include "host/network_interface.h"
-#include "host/protocol.h"
-#include "host/tracker.h"
-#include "routing/address.h"
-#include "tcp_cong_reno.h"
-#include "tcp_cong.h"
-#include "tcp_retransmit_tally.h"
-#include "utility/priority_queue.h"
-#include "utility/utility.h"
+#include "main/core/logger/logger.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/object_counter.h"
+#include "main/core/support/options.h"
+#include "main/core/work/task.h"
+#include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/socket.h"
+#include "main/host/descriptor/transport.h"
+#include "main/host/host.h"
+#include "main/host/network_interface.h"
+#include "main/host/protocol.h"
+#include "main/host/tracker.h"
+#include "main/routing/address.h"
+#include "main/host/descriptor/tcp_cong_reno.h"
+#include "main/host/descriptor/tcp_cong.h"
+#include "main/host/descriptor/tcp_retransmit_tally.h"
+#include "main/utility/priority_queue.h"
+#include "main/utility/utility.h"
 
 enum TCPState {
     TCPS_CLOSED, TCPS_LISTEN,

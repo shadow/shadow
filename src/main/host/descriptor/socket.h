@@ -11,11 +11,11 @@
 #include <netinet/in.h>
 #include <sys/un.h>
 
-#include "core/support/definitions.h"
-#include "host/descriptor/descriptor.h"
-#include "host/descriptor/transport.h"
-#include "host/protocol.h"
-#include "routing/packet.h"
+#include "main/core/support/definitions.h"
+#include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/transport.h"
+#include "main/host/protocol.h"
+#include "main/routing/packet.h"
 
 typedef struct _Socket Socket;
 typedef struct _SocketFunctionTable SocketFunctionTable;

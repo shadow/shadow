@@ -10,8 +10,8 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "core/support/definitions.h"
-#include "host/descriptor/descriptor.h"
+#include "main/core/support/definitions.h"
+#include "main/host/descriptor/descriptor.h"
 
 typedef struct _Transport Transport;
 typedef struct _TransportFunctionTable TransportFunctionTable;

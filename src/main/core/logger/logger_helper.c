@@ -3,14 +3,14 @@
  * See LICENSE for licensing information
  */
 
-#include "core/logger/logger_helper.h"
+#include "main/core/logger/logger_helper.h"
 
 #include <stddef.h>
 
-#include "core/logger/log_record.h"
-#include "core/support/definitions.h"
-#include "utility/priority_queue.h"
-#include "utility/utility.h"
+#include "main/core/logger/log_record.h"
+#include "main/core/support/definitions.h"
+#include "main/utility/priority_queue.h"
+#include "main/utility/utility.h"
 
 struct _LoggerHelperCommand {
     LoggerHelperCommmandType type;

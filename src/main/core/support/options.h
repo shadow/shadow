@@ -9,8 +9,8 @@
 
 #include <glib.h>
 
-#include "core/logger/log_level.h"
-#include "core/support/definitions.h"
+#include "main/core/logger/log_level.h"
+#include "main/core/support/definitions.h"
 
 /**
  * @addtogroup Configuration

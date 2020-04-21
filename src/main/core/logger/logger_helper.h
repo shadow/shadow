@@ -8,7 +8,7 @@
 
 #include <glib.h>
 
-#include "utility/count_down_latch.h"
+#include "main/utility/count_down_latch.h"
 
 typedef enum _LoggerHelperCommmandType LoggerHelperCommmandType;
 enum _LoggerHelperCommmandType {

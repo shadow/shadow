@@ -9,8 +9,8 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "random.h"
-#include "utility.h"
+#include "main/utility/random.h"
+#include "main/utility/utility.h"
 
 struct _Random {
     guint seedState;

@@ -12,22 +12,22 @@
 #include <stddef.h>
 #include <sys/resource.h>
 
-#include "core/logger/logger.h"
-#include "core/scheduler/scheduler_policy.h"
-#include "core/scheduler/scheduler.h"
-#include "core/master.h"
-#include "core/slave.h"
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "core/support/object_counter.h"
-#include "core/support/options.h"
-#include "host/host.h"
-#include "host/network_interface.h"
-#include "routing/address.h"
-#include "routing/dns.h"
-#include "routing/topology.h"
-#include "utility/random.h"
-#include "utility/utility.h"
+#include "main/core/logger/logger.h"
+#include "main/core/scheduler/scheduler_policy.h"
+#include "main/core/scheduler/scheduler.h"
+#include "main/core/master.h"
+#include "main/core/slave.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/object_counter.h"
+#include "main/core/support/options.h"
+#include "main/host/host.h"
+#include "main/host/network_interface.h"
+#include "main/routing/address.h"
+#include "main/routing/dns.h"
+#include "main/routing/topology.h"
+#include "main/utility/random.h"
+#include "main/utility/utility.h"
 
 typedef struct {
 

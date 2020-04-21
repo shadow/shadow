@@ -3,12 +3,12 @@
  * See LICENSE for licensing information
  */
 
-#include "core/support/object_counter.h"
+#include "main/core/support/object_counter.h"
 
 #include <stddef.h>
 
-#include "core/support/definitions.h"
-#include "utility/utility.h"
+#include "main/core/support/definitions.h"
+#include "main/utility/utility.h"
 
 typedef struct _ObjectCounts ObjectCounts;
 struct _ObjectCounts {

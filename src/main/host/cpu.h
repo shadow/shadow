@@ -9,7 +9,7 @@
 
 #include <glib.h>
 
-#include "core/support/definitions.h"
+#include "main/core/support/definitions.h"
 
 typedef struct _CPU CPU;
 

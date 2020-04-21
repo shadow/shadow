@@ -4,24 +4,24 @@
  * See LICENSE for licensing information
  */
 
-#include "host/descriptor/udp.h"
+#include "main/host/descriptor/udp.h"
 
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#include "core/logger/logger.h"
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "core/support/object_counter.h"
-#include "host/descriptor/descriptor.h"
-#include "host/descriptor/socket.h"
-#include "host/descriptor/transport.h"
-#include "host/host.h"
-#include "host/protocol.h"
-#include "host/tracker.h"
-#include "routing/packet.h"
-#include "utility/utility.h"
+#include "main/core/logger/logger.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/object_counter.h"
+#include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/socket.h"
+#include "main/host/descriptor/transport.h"
+#include "main/host/host.h"
+#include "main/host/protocol.h"
+#include "main/host/tracker.h"
+#include "main/routing/packet.h"
+#include "main/utility/utility.h"
 
 struct _UDP {
     Socket super;

@@ -10,11 +10,11 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "core/support/options.h"
-#include "host/descriptor/socket.h"
-#include "host/protocol.h"
-#include "routing/address.h"
-#include "routing/router.h"
+#include "main/core/support/options.h"
+#include "main/host/descriptor/socket.h"
+#include "main/host/protocol.h"
+#include "main/routing/address.h"
+#include "main/routing/router.h"
 
 typedef struct _NetworkInterface NetworkInterface;
 

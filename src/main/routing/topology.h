@@ -9,8 +9,8 @@
 
 #include <glib.h>
 
-#include "routing/address.h"
-#include "utility/random.h"
+#include "main/routing/address.h"
+#include "main/utility/random.h"
 
 typedef struct _Topology Topology;
 

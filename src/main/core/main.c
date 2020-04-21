@@ -16,14 +16,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "core/logger/logger.h"
-#include "core/master.h"
-#include "core/support/configuration.h"
-#include "core/support/options.h"
-#include "dl.h"
+#include "main/core/logger/logger.h"
+#include "main/core/master.h"
+#include "main/core/support/configuration.h"
+#include "main/core/support/options.h"
+#include "external/elf-loader/dl.h"
 #include "igraph_version.h"
 #include "shd-config.h"
-#include "utility/utility.h"
+#include "main/utility/utility.h"
 
 static Master* shadowMaster;
 

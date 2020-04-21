@@ -7,9 +7,9 @@
 #include <glib.h>
 #include <stddef.h>
 
-#include "async_priority_queue.h"
-#include "priority_queue.h"
-#include "utility.h"
+#include "main/utility/async_priority_queue.h"
+#include "main/utility/priority_queue.h"
+#include "main/utility/utility.h"
 
 struct _AsyncPriorityQueue {
     PriorityQueue* pq;

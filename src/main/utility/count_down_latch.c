@@ -6,8 +6,8 @@
 
 #include <glib.h>
 
-#include "utility.h"
-#include "count_down_latch.h"
+#include "main/utility/utility.h"
+#include "main/utility/count_down_latch.h"
 
 struct _CountDownLatch {
     guint initialCount;

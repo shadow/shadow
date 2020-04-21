@@ -10,17 +10,17 @@
 #include <netinet/in.h>
 #include <string.h>
 
-#include "core/logger/log_level.h"
-#include "core/logger/logger.h"
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "core/support/options.h"
-#include "core/work/task.h"
-#include "host/protocol.h"
-#include "host/tracker.h"
-#include "routing/address.h"
-#include "routing/packet.h"
-#include "utility/utility.h"
+#include "main/core/logger/log_level.h"
+#include "main/core/logger/logger.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/options.h"
+#include "main/core/work/task.h"
+#include "main/host/protocol.h"
+#include "main/host/tracker.h"
+#include "main/routing/address.h"
+#include "main/routing/packet.h"
+#include "main/utility/utility.h"
 
 typedef struct {
     gsize control;

@@ -9,7 +9,7 @@
 
 #include <glib.h>
 
-#include "utility/utility.h"
+#include "main/utility/utility.h"
 
 typedef enum _DescriptorType DescriptorType;
 enum _DescriptorType {

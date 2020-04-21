@@ -4,13 +4,13 @@
  * See LICENSE for licensing information
  */
 
-#include "utility/priority_queue.h"
+#include "main/utility/priority_queue.h"
 
 #include <glib.h>
 #include <stddef.h>
 
-#include "priority_queue.h"
-#include "utility.h"
+#include "main/utility/priority_queue.h"
+#include "main/utility/utility.h"
 
 static const gsize INITIAL_SIZE = 100;
 

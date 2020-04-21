@@ -3,14 +3,14 @@
  * See LICENSE for licensing information
  */
 
-#include "utility/pcap_writer.h"
+#include "main/utility/pcap_writer.h"
 
 #include <stdio.h>
 
-#include "core/logger/logger.h"
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "host/host.h"
+#include "main/core/logger/logger.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/host/host.h"
 
 struct _PCapWriter {
     FILE *pcapFile;

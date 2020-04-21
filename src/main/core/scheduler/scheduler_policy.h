@@ -6,8 +6,8 @@
 #ifndef SHD_SCHEDULER_POLICY_H_
 #define SHD_SCHEDULER_POLICY_H_
 
-#include "core/work/event.h"
-#include "host/host.h"
+#include "main/core/work/event.h"
+#include "main/host/host.h"
 
 typedef enum {
     /* one global unlocked priority queue */

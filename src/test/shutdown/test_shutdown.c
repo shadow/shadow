@@ -11,7 +11,7 @@
 #include <linux/sockios.h>
 #include <sys/ioctl.h>
 
-#include "../test_common.h"
+#include "test/test_common.h"
 
 static int _test_shutdown_tcp(int call_connect, int shut_client, int how) {
     int sd = 0, cd = 0, sd_child = 0;

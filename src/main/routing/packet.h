@@ -10,8 +10,8 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "core/support/definitions.h"
-#include "host/protocol.h"
+#include "main/core/support/definitions.h"
+#include "main/host/protocol.h"
 
 typedef struct _Packet Packet;
 

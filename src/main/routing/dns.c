@@ -8,11 +8,11 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 
-#include "core/logger/logger.h"
-#include "core/support/definitions.h"
-#include "routing/address.h"
-#include "routing/dns.h"
-#include "utility/utility.h"
+#include "main/core/logger/logger.h"
+#include "main/core/support/definitions.h"
+#include "main/routing/address.h"
+#include "main/routing/dns.h"
+#include "main/utility/utility.h"
 
 struct _DNS {
     GMutex lock;

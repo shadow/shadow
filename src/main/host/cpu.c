@@ -4,13 +4,13 @@
  * See LICENSE for licensing information
  */
 
-#include "host/cpu.h"
+#include "main/host/cpu.h"
 
 #include <glib.h>
 #include <stddef.h>
 
-#include "core/logger/logger.h"
-#include "utility/utility.h"
+#include "main/core/logger/logger.h"
+#include "main/utility/utility.h"
 
 struct _CPU {
     guint64 frequencyKHz;

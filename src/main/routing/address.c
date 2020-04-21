@@ -16,9 +16,9 @@
 #include <stddef.h>
 #include <sys/socket.h>
 
-#include "routing/address.h"
+#include "main/routing/address.h"
 
-#include "utility/utility.h"
+#include "main/utility/utility.h"
 
 struct _Address {
     /* the IP in network-order */

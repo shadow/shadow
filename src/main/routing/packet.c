@@ -7,15 +7,15 @@
 #include <netinet/in.h>
 #include <stddef.h>
 
-#include "core/logger/log_level.h"
-#include "core/logger/logger.h"
-#include "core/worker.h"
-#include "core/support/object_counter.h"
-#include "host/host.h"
-#include "routing/address.h"
-#include "routing/packet.h"
-#include "routing/payload.h"
-#include "utility/utility.h"
+#include "main/core/logger/log_level.h"
+#include "main/core/logger/logger.h"
+#include "main/core/worker.h"
+#include "main/core/support/object_counter.h"
+#include "main/host/host.h"
+#include "main/routing/address.h"
+#include "main/routing/packet.h"
+#include "main/routing/payload.h"
+#include "main/utility/utility.h"
 
 /* thread-safe structure representing a data/network packet */
 
