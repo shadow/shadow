@@ -3,11 +3,11 @@
  * See LICENSE for licensing information
  */
 
-#include "core/logger/log_record.h"
+#include "main/core/logger/log_record.h"
 
 #include <stddef.h>
 
-#include "utility/utility.h"
+#include "main/utility/utility.h"
 
 struct _LogRecord {
     /* required */

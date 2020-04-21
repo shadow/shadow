@@ -9,10 +9,10 @@
 
 #include <glib.h>
 
-#include "core/scheduler/scheduler_policy.h"
-#include "core/support/definitions.h"
-#include "core/work/event.h"
-#include "host/host.h"
+#include "main/core/scheduler/scheduler_policy.h"
+#include "main/core/support/definitions.h"
+#include "main/core/work/event.h"
+#include "main/host/host.h"
 
 typedef struct _Scheduler Scheduler;
 

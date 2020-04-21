@@ -8,7 +8,7 @@
 #ifndef SRC_MAIN_ROUTING_SHD_ROUTER_QUEUE_SINGLE_H_
 #define SRC_MAIN_ROUTING_SHD_ROUTER_QUEUE_SINGLE_H_
 
-#include "router.h"
+#include "main/routing/router.h"
 
 const QueueManagerHooks* routerqueuesingle_getHooks();
 

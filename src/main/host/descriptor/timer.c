@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "host/descriptor/timer.h"
+#include "main/host/descriptor/timer.h"
 
 #include <bits/types/struct_itimerspec.h>
 #include <bits/types/struct_timespec.h>
@@ -14,14 +14,14 @@
 #include <sys/timerfd.h>
 #include <time.h>
 
-#include "core/logger/logger.h"
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "core/support/object_counter.h"
-#include "core/work/task.h"
-#include "host/descriptor/descriptor.h"
-#include "host/host.h"
-#include "utility/utility.h"
+#include "main/core/logger/logger.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/object_counter.h"
+#include "main/core/work/task.h"
+#include "main/host/descriptor/descriptor.h"
+#include "main/host/host.h"
+#include "main/utility/utility.h"
 
 struct _Timer {
     Descriptor super;

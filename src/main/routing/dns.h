@@ -10,7 +10,7 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "routing/address.h"
+#include "main/routing/address.h"
 
 typedef struct _DNS DNS;
 

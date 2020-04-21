@@ -4,15 +4,15 @@
  * See LICENSE for licensing information
  */
 
-#include "host/descriptor/descriptor.h"
+#include "main/host/descriptor/descriptor.h"
 
 #include <stddef.h>
 
-#include "core/worker.h"
-#include "core/support/object_counter.h"
-#include "host/descriptor/epoll.h"
-#include "host/host.h"
-#include "utility/utility.h"
+#include "main/core/worker.h"
+#include "main/core/support/object_counter.h"
+#include "main/host/descriptor/epoll.h"
+#include "main/host/host.h"
+#include "main/utility/utility.h"
 
 void descriptor_init(Descriptor* descriptor, DescriptorType type,
         DescriptorFunctionTable* funcTable, gint handle) {

@@ -4,11 +4,11 @@
  * See LICENSE for licensing information
  */
 
-#include "routing/path.h"
+#include "main/routing/path.h"
 
 #include <stddef.h>
 
-#include "utility/utility.h"
+#include "main/utility/utility.h"
 
 struct _Path {
     gboolean isDirect;

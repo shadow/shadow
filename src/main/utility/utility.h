@@ -10,7 +10,7 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "core/support/definitions.h"
+#include "main/core/support/definitions.h"
 
 #ifdef DEBUG
 #define utility_assert(expr) \

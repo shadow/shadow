@@ -9,11 +9,11 @@
 
 #include <glib.h>
 
-#include "core/support/definitions.h"
-#include "core/support/options.h"
-#include "routing/address.h"
-#include "routing/dns.h"
-#include "routing/topology.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/options.h"
+#include "main/routing/address.h"
+#include "main/routing/dns.h"
+#include "main/routing/topology.h"
 
 typedef struct _Master Master;
 

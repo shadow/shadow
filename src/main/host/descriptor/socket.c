@@ -8,19 +8,19 @@
 #include <netinet/in.h>
 #include <sys/un.h>
 
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "host/descriptor/descriptor.h"
-#include "host/descriptor/socket.h"
-#include "host/descriptor/tcp.h"
-#include "host/descriptor/transport.h"
-#include "host/host.h"
-#include "host/network_interface.h"
-#include "host/protocol.h"
-#include "host/tracker.h"
-#include "routing/address.h"
-#include "routing/packet.h"
-#include "utility/utility.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/socket.h"
+#include "main/host/descriptor/tcp.h"
+#include "main/host/descriptor/transport.h"
+#include "main/host/host.h"
+#include "main/host/network_interface.h"
+#include "main/host/protocol.h"
+#include "main/host/tracker.h"
+#include "main/routing/address.h"
+#include "main/routing/packet.h"
+#include "main/utility/utility.h"
 
 void socket_free(gpointer data) {
     Socket* socket = data;

@@ -3,12 +3,12 @@
  * See LICENSE for licensing information
  */
 
-#include "core/work/task.h"
+#include "main/core/work/task.h"
 
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "core/support/object_counter.h"
-#include "utility/utility.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/object_counter.h"
+#include "main/utility/utility.h"
 
 struct _Task {
     TaskCallbackFunc execute;

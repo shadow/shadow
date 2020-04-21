@@ -4,13 +4,13 @@
  * See LICENSE for licensing information
  */
 
-#include "core/support/configuration.h"
+#include "main/core/support/configuration.h"
 
 #include <stddef.h>
 
-#include "core/logger/logger.h"
-#include "core/support/definitions.h"
-#include "utility/utility.h"
+#include "main/core/logger/logger.h"
+#include "main/core/support/definitions.h"
+#include "main/utility/utility.h"
 
 /* an internal module to help parse the XML file */
 typedef struct _Parser Parser;

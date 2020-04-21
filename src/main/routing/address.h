@@ -10,7 +10,7 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "core/support/definitions.h"
+#include "main/core/support/definitions.h"
 
 /**
  * An Address structure holds information used to identify nodes, allowing for

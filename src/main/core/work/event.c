@@ -3,17 +3,17 @@
  * See LICENSE for licensing information
  */
 
-#include "core/work/event.h"
+#include "main/core/work/event.h"
 
 #include <stddef.h>
 
-#include "core/logger/logger.h"
-#include "core/worker.h"
-#include "core/support/object_counter.h"
-#include "host/cpu.h"
-#include "host/host.h"
-#include "host/tracker.h"
-#include "utility/utility.h"
+#include "main/core/logger/logger.h"
+#include "main/core/worker.h"
+#include "main/core/support/object_counter.h"
+#include "main/host/cpu.h"
+#include "main/host/host.h"
+#include "main/host/tracker.h"
+#include "main/utility/utility.h"
 
 struct _Event {
     Host* srcHost;

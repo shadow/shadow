@@ -59,26 +59,26 @@
 #include <pthread.h>
 #include <rpth.h>
 
-#include "core/logger/logger.h"
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "core/support/object_counter.h"
-#include "core/work/task.h"
-#include "dl.h"
+#include "main/core/logger/logger.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/object_counter.h"
+#include "main/core/work/task.h"
+#include "external/elf-loader/dl.h"
 #include "glib/gprintf.h"
-#include "host/descriptor/channel.h"
-#include "host/descriptor/descriptor.h"
-#include "host/descriptor/socket.h"
-#include "host/descriptor/tcp.h"
-#include "host/descriptor/timer.h"
-#include "host/cpu.h"
-#include "host/host.h"
-#include "host/process.h"
-#include "host/tracker.h"
-#include "routing/address.h"
-#include "routing/dns.h"
-#include "utility/random.h"
-#include "utility/utility.h"
+#include "main/host/descriptor/channel.h"
+#include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/socket.h"
+#include "main/host/descriptor/tcp.h"
+#include "main/host/descriptor/timer.h"
+#include "main/host/cpu.h"
+#include "main/host/host.h"
+#include "main/host/process.h"
+#include "main/host/tracker.h"
+#include "main/routing/address.h"
+#include "main/routing/dns.h"
+#include "main/utility/random.h"
+#include "main/utility/utility.h"
 
 #if defined(FD_SETSIZE)
 #if FD_SETSIZE > 1024
@@ -7666,7 +7666,7 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
         return returnval; \
     }
 
-#include "process_undefined.h"
+#include "main/host/process_undefined.h"
 
 #undef PROCESS_EMU_UNSUPPORTED
 

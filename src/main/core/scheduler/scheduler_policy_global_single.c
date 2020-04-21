@@ -7,12 +7,12 @@
 #include <pthread.h>
 #include <stddef.h>
 
-#include "core/scheduler/scheduler_policy.h"
-#include "core/support/definitions.h"
-#include "core/work/event.h"
-#include "host/host.h"
-#include "utility/priority_queue.h"
-#include "utility/utility.h"
+#include "main/core/scheduler/scheduler_policy.h"
+#include "main/core/support/definitions.h"
+#include "main/core/work/event.h"
+#include "main/host/host.h"
+#include "main/utility/priority_queue.h"
+#include "main/utility/utility.h"
 
 typedef struct _GlobalSinglePolicyData GlobalSinglePolicyData;
 struct _GlobalSinglePolicyData {

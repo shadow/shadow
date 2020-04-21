@@ -10,18 +10,18 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "core/logger/log_level.h"
-#include "core/scheduler/scheduler.h"
-#include "core/support/definitions.h"
-#include "core/support/object_counter.h"
-#include "core/support/options.h"
-#include "core/work/task.h"
-#include "host/host.h"
-#include "routing/address.h"
-#include "routing/dns.h"
-#include "routing/packet.h"
-#include "routing/topology.h"
-#include "utility/count_down_latch.h"
+#include "main/core/logger/log_level.h"
+#include "main/core/scheduler/scheduler.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/object_counter.h"
+#include "main/core/support/options.h"
+#include "main/core/work/task.h"
+#include "main/host/host.h"
+#include "main/routing/address.h"
+#include "main/routing/dns.h"
+#include "main/routing/packet.h"
+#include "main/routing/topology.h"
+#include "main/utility/count_down_latch.h"
 
 typedef struct _WorkerRunData WorkerRunData;
 struct _WorkerRunData {

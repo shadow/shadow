@@ -25,13 +25,13 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "core/master.h"
-#include "core/support/definitions.h"
-#include "core/support/object_counter.h"
-#include "core/support/options.h"
-#include "host/host.h"
-#include "routing/dns.h"
-#include "routing/topology.h"
+#include "main/core/master.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/object_counter.h"
+#include "main/core/support/options.h"
+#include "main/host/host.h"
+#include "main/routing/dns.h"
+#include "main/routing/topology.h"
 
 typedef struct _Slave Slave;
 

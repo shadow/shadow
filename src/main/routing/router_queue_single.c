@@ -8,9 +8,9 @@
 #include <glib.h>
 #include <stddef.h>
 
-#include "routing/packet.h"
-#include "routing/router.h"
-#include "utility/utility.h"
+#include "main/routing/packet.h"
+#include "main/routing/router.h"
+#include "main/utility/utility.h"
 
 typedef struct _QueueManagerSingle QueueManagerSingle;
 struct _QueueManagerSingle {

@@ -12,16 +12,16 @@
 #include <stddef.h>
 #include <sys/types.h>
 
-#include "core/logger/logger.h"
-#include "core/scheduler/scheduler_policy.h"
-#include "core/scheduler/scheduler.h"
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "core/work/event.h"
-#include "host/host.h"
-#include "utility/count_down_latch.h"
-#include "utility/random.h"
-#include "utility/utility.h"
+#include "main/core/logger/logger.h"
+#include "main/core/scheduler/scheduler_policy.h"
+#include "main/core/scheduler/scheduler.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/core/work/event.h"
+#include "main/host/host.h"
+#include "main/utility/count_down_latch.h"
+#include "main/utility/random.h"
+#include "main/utility/utility.h"
 
 struct _Scheduler {
     /* all worker threads used by the scheduler */

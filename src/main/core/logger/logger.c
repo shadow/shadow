@@ -3,21 +3,21 @@
  * See LICENSE for licensing information
  */
 
-#include "core/logger/logger.h"
+#include "main/core/logger/logger.h"
 
 #include <stdarg.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "core/logger/log_record.h"
-#include "core/logger/logger_helper.h"
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "host/host.h"
-#include "routing/address.h"
-#include "utility/count_down_latch.h"
-#include "utility/utility.h"
+#include "main/core/logger/log_record.h"
+#include "main/core/logger/logger_helper.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/host/host.h"
+#include "main/routing/address.h"
+#include "main/utility/count_down_latch.h"
+#include "main/utility/utility.h"
 
 /* this stores thread-specific data for each "worker" thread (the threads that
  * are running the virtual nodes) */

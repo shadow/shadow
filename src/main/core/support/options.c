@@ -4,12 +4,12 @@
  * See LICENSE for licensing information
  */
 
-#include "core/support/options.h"
+#include "main/core/support/options.h"
 
 #include <stddef.h>
 
-#include "core/logger/logger.h"
-#include "utility/utility.h"
+#include "main/core/logger/logger.h"
+#include "main/utility/utility.h"
 
 struct _Options {
     GOptionContext *context;

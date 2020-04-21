@@ -15,18 +15,18 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 
-#include "core/logger/log_level.h"
-#include "core/support/definitions.h"
-#include "core/support/options.h"
-#include "host/descriptor/descriptor.h"
-#include "host/cpu.h"
-#include "host/network_interface.h"
-#include "host/tracker.h"
-#include "routing/address.h"
-#include "routing/dns.h"
-#include "routing/router.h"
-#include "routing/topology.h"
-#include "utility/random.h"
+#include "main/core/logger/log_level.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/options.h"
+#include "main/host/descriptor/descriptor.h"
+#include "main/host/cpu.h"
+#include "main/host/network_interface.h"
+#include "main/host/tracker.h"
+#include "main/routing/address.h"
+#include "main/routing/dns.h"
+#include "main/routing/router.h"
+#include "main/routing/topology.h"
+#include "main/utility/random.h"
 
 typedef struct _Host Host;
 

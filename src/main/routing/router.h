@@ -10,7 +10,7 @@
 
 #include <glib.h>
 
-#include "routing/packet.h"
+#include "main/routing/packet.h"
 
 typedef struct _Router Router;
 typedef enum _QueueManagerMode QueueManagerMode;

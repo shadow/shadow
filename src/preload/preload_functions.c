@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "preload_functions.h"
+#include "preload/preload_functions.h"
 
 #include <dlfcn.h>
 #include <stddef.h>
@@ -29,8 +29,8 @@ void preload_functions_do_lookups(PreloadFuncs* vtable, void* handle) {
 //        exit(EXIT_FAILURE); \
 //    } \
 
-#include "preload_defs_special.h"
-#include "preload_defs.h"
+#include "preload/preload_defs_special.h"
+#include "preload/preload_defs.h"
 
 #if defined(PRELOADDEF)
 #undef PRELOADDEF

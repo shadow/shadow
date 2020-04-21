@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "byte_queue.h"
-#include "utility.h"
+#include "main/utility/byte_queue.h"
+#include "main/utility/utility.h"
 
 typedef struct _ByteChunk ByteChunk;
 struct _ByteChunk {

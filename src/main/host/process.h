@@ -74,7 +74,7 @@ typedef off_t off64_t;
 #include <pthread.h>
 #include <wchar.h>
 
-#include "core/support/definitions.h"
+#include "main/core/support/definitions.h"
 
 Process* process_new(gpointer host, guint processID,
         SimulationTime startTime, SimulationTime stopTime, const gchar* pluginName,
@@ -440,7 +440,7 @@ int process_emu_ppoll(Process* proc, struct pollfd *fds, nfds_t nfds, const stru
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
   returntype process_emu_##functionname(Process* proc, ...);
 
-#include "process_undefined.h"
+#include "main/host/process_undefined.h"
 
 #undef PROCESS_EMU_UNSUPPORTED
 

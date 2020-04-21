@@ -3,7 +3,7 @@
  * Copyright (c) 2010-2011, Rob Jansen
  * See LICENSE for licensing information
  */
-#include "core/support/examples.h"
+#include "main/core/support/examples.h"
 
 #include <glib.h>
 

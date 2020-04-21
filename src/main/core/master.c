@@ -17,20 +17,20 @@
 #include <stddef.h>
 #include <unistd.h>
 
-#include "core/logger/log_level.h"
-#include "core/logger/logger.h"
-#include "core/master.h"
-#include "core/slave.h"
-#include "core/support/configuration.h"
-#include "core/support/definitions.h"
-#include "core/support/examples.h"
-#include "core/support/options.h"
-#include "host/host.h"
-#include "routing/address.h"
-#include "routing/dns.h"
-#include "routing/topology.h"
-#include "utility/random.h"
-#include "utility/utility.h"
+#include "main/core/logger/log_level.h"
+#include "main/core/logger/logger.h"
+#include "main/core/master.h"
+#include "main/core/slave.h"
+#include "main/core/support/configuration.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/examples.h"
+#include "main/core/support/options.h"
+#include "main/host/host.h"
+#include "main/routing/address.h"
+#include "main/routing/dns.h"
+#include "main/routing/topology.h"
+#include "main/utility/random.h"
+#include "main/utility/utility.h"
 
 struct _Master {
     /* general options and user configuration for the simulation */

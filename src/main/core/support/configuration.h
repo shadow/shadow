@@ -9,7 +9,7 @@
 
 #include <glib.h>
 
-#include "core/support/options.h"
+#include "main/core/support/options.h"
 
 /**
  * @addtogroup Configuration

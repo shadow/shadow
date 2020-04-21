@@ -30,10 +30,10 @@
 #include <sys/time.h>
 #include <sys/uio.h>
 
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "host/process.h"
-#include "preload_functions.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/host/process.h"
+#include "preload/preload_functions.h"
 
 #define SETSYM_OR_FAIL(funcptr, funcstr) { \
     dlerror(); \
@@ -216,7 +216,7 @@ returntype functionname argumentlist { \
     } \
 }
 
-#include "preload_defs.h"
+#include "preload/preload_defs.h"
 
 #if defined(PRELOADDEF)
 #undef PRELOADDEF

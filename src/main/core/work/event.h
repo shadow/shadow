@@ -8,8 +8,8 @@
 
 #include <glib.h>
 
-#include "core/support/definitions.h"
-#include "core/work/task.h"
+#include "main/core/support/definitions.h"
+#include "main/core/work/task.h"
 
 /* An event for a local virtual host, i.e.,
  * a host running on the same slave machine as the event initiator.

@@ -7,9 +7,9 @@
 
 #include <glib.h>
 
-#include "routing/packet.h"
-#include "routing/router.h"
-#include "utility/utility.h"
+#include "main/routing/packet.h"
+#include "main/routing/router.h"
+#include "main/utility/utility.h"
 
 #define STATIC_PARAM_MAXSIZE 1024000
 

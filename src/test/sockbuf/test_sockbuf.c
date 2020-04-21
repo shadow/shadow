@@ -22,7 +22,7 @@
 #include <linux/sockios.h>
 #include <sys/ioctl.h>
 
-#include "../test_common.h"
+#include "test/test_common.h"
 
 #define BUFFERSIZE 1048576
 

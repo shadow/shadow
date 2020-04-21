@@ -4,14 +4,14 @@
  * See LICENSE for licensing information
  */
 
-#include "routing/payload.h"
+#include "main/routing/payload.h"
 
 #include <string.h>
 
-#include "core/worker.h"
-#include "core/support/definitions.h"
-#include "core/support/object_counter.h"
-#include "utility/utility.h"
+#include "main/core/worker.h"
+#include "main/core/support/definitions.h"
+#include "main/core/support/object_counter.h"
+#include "main/utility/utility.h"
 
 /* packet payloads may be shared across hosts, so we must lock access to them */
 struct _Payload {
