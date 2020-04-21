@@ -5,10 +5,10 @@ find_package(M REQUIRED)
 include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES})
 
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_plugin(shadow-plugin-test-signal shd-test-signal.c)
+add_shadow_plugin(shadow-plugin-test-signal test_signal.c)
 
 ## create and install an executable that can run outside of shadow
-add_executable(test-signal shd-test-signal.c)
+add_executable(test-signal test_signal.c)
 
 ## if the test needs any libraries, link them here
 target_link_libraries(shadow-plugin-test-signal ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES})

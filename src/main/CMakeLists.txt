@@ -51,69 +51,69 @@ endif(SHADOW_PROFILE STREQUAL ON)
 
 ## sources for our main shadow program
 set(shadow_srcs
-    core/logger/shd-logger.c
-    core/logger/shd-logger-helper.c
-    core/logger/shd-log-level.c
-    core/logger/shd-log-record.c
-    core/scheduler/shd-scheduler.c
-    core/scheduler/shd-scheduler-policy-global-single.c
-    core/scheduler/shd-scheduler-policy-host-single.c
-    core/scheduler/shd-scheduler-policy-host-steal.c
-    core/scheduler/shd-scheduler-policy-thread-perhost.c
-    core/scheduler/shd-scheduler-policy-thread-perthread.c
-    core/scheduler/shd-scheduler-policy-thread-single.c
-    core/support/shd-options.c
-    core/support/shd-examples.c
-    core/support/shd-configuration.c
-    core/support/shd-object-counter.c
-    core/work/shd-event.c
-    core/work/shd-message.c
-    core/work/shd-task.c
-    core/shd-main.c
-    core/shd-master.c
-    core/shd-slave.c
-    core/shd-worker.c
+    core/logger/logger.c
+    core/logger/logger_helper.c
+    core/logger/log_level.c
+    core/logger/log_record.c
+    core/scheduler/scheduler.c
+    core/scheduler/scheduler_policy_global_single.c
+    core/scheduler/scheduler_policy_host_single.c
+    core/scheduler/scheduler_policy_host_steal.c
+    core/scheduler/scheduler_policy_thread_perhost.c
+    core/scheduler/scheduler_policy_thread_perthread.c
+    core/scheduler/scheduler_policy_thread_single.c
+    core/support/options.c
+    core/support/examples.c
+    core/support/configuration.c
+    core/support/object_counter.c
+    core/work/event.c
+    core/work/message.c
+    core/work/task.c
+    core/main.c
+    core/master.c
+    core/slave.c
+    core/worker.c
 
-    host/descriptor/shd-channel.c
-    host/descriptor/shd-descriptor.c
-    host/descriptor/shd-epoll.c
-    host/descriptor/shd-socket.c
-    host/descriptor/shd-tcp.c
-    host/descriptor/shd-tcp-cong.c
-    host/descriptor/shd-tcp-cong-reno.c
-    host/descriptor/shd-timer.c
-    host/descriptor/shd-transport.c
-    host/descriptor/shd-udp.c
-    host/shd-process.c
-    host/shd-cpu.c
-    host/shd-host.c
-    host/shd-network-interface.c
-    host/shd-tracker.c
+    host/descriptor/channel.c
+    host/descriptor/descriptor.c
+    host/descriptor/epoll.c
+    host/descriptor/socket.c
+    host/descriptor/tcp.c
+    host/descriptor/tcp_cong.c
+    host/descriptor/tcp_cong_reno.c
+    host/descriptor/timer.c
+    host/descriptor/transport.c
+    host/descriptor/udp.c
+    host/process.c
+    host/cpu.c
+    host/host.c
+    host/network_interface.c
+    host/tracker.c
 
-    routing/shd-payload.c
-    routing/shd-packet.c
-    routing/shd-address.c
-    routing/shd-router-queue-single.c
-    routing/shd-router-queue-static.c
-    routing/shd-router-queue-codel.c
-    routing/shd-router.c
-    routing/shd-dns.c
-    routing/shd-path.c
-    routing/shd-topology.c
+    routing/payload.c
+    routing/packet.c
+    routing/address.c
+    routing/router_queue_single.c
+    routing/router_queue_static.c
+    routing/router_queue_codel.c
+    routing/router.c
+    routing/dns.c
+    routing/path.c
+    routing/topology.c
 
-    utility/shd-async-priority-queue.c
-    utility/shd-byte-queue.c
-    utility/shd-count-down-latch.c
-    utility/shd-pcap-writer.c
-    utility/shd-priority-queue.c
-    utility/shd-random.c
-    utility/shd-utility.c
+    utility/async_priority_queue.c
+    utility/byte_queue.c
+    utility/count_down_latch.c
+    utility/pcap_writer.c
+    utility/priority_queue.c
+    utility/random.c
+    utility/utility.c
 
     main.c
 )
 
 set(REMORA_SRC
-   host/descriptor/shd-tcp-retransmit-tally.cc
+   host/descriptor/tcp_retransmit_tally.cc
 )
 
 add_library(shadow-remora SHARED ${REMORA_SRC})

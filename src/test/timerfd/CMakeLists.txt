@@ -1,8 +1,8 @@
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_plugin(shadow-plugin-test-timerfd shd-test-timerfd.c)
+add_shadow_plugin(shadow-plugin-test-timerfd test_timerfd.c)
 
 ## create and install an executable that can run outside of shadow
-add_executable(test-timerfd shd-test-timerfd.c)
+add_executable(test-timerfd test_timerfd.c)
 
 ## register the tests
 add_test(NAME timerfd COMMAND test-timerfd)

@@ -1,9 +1,9 @@
 ## build the test as a dynamic executable that plugs into shadow
-add_library(shadow-plugin-test-epoll SHARED shd-test-epoll.c)
-add_library(shadow-plugin-test-epoll-writeable SHARED shd-test-epoll-writeable.c)
+add_library(shadow-plugin-test-epoll SHARED test_epoll.c)
+add_library(shadow-plugin-test-epoll-writeable SHARED test_epoll_writeable.c)
 
 ## create and install an executable that can run outside of shadow
-add_executable(test-epoll shd-test-epoll.c)
+add_executable(test-epoll test_epoll.c)
 
 ## register the tests
 add_test(NAME epoll COMMAND test-epoll)

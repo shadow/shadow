@@ -5,16 +5,16 @@ add_cflags("-ftls-model=global-dynamic")
 add_definitions(-ftls-model=global-dynamic)
 
 ## build the dynamically loaded plugin
-add_library(shadow-test-dynlink-plugin SHARED shd-test-dynlink-plugin.c)
+add_library(shadow-test-dynlink-plugin SHARED test_dynlink_plugin.c)
 
 ## build the helper library used by the plugin
-add_library(shadow-test-dynlink-lib SHARED shd-test-dynlink-lib.c)
+add_library(shadow-test-dynlink-lib SHARED test_dynlink_lib.c)
 
 ## link the helper library to the plugin
 target_link_libraries(shadow-test-dynlink-plugin shadow-test-dynlink-lib)
 
 ## build test executable
-add_executable(shadow-test-dynlink shd-test-dynlink.c shd-test-dynlink-main.c)
+add_executable(shadow-test-dynlink test_dynlink.c test_dynlink_main.c)
 link_directories(${CMAKE_CURRENT_BINARY_DIR})
 set_target_properties(shadow-test-dynlink PROPERTIES 
     INSTALL_RPATH ${CMAKE_BINARY_DIR}/src/external/elf-loader
@@ -26,7 +26,7 @@ set_target_properties(shadow-test-dynlink PROPERTIES
 target_link_libraries(shadow-test-dynlink ${DL_LIBRARIES} ${GLIB_LIBRARIES})
 
 ## build .so test for running in shadow
-add_library(shadow-plugin-test-dynlink SHARED shd-test-dynlink.c shd-test-dynlink-main-shadow.c)
+add_library(shadow-plugin-test-dynlink SHARED test_dynlink.c test_dynlink_main_shadow.c)
 target_link_libraries(shadow-plugin-test-dynlink ${DL_LIBRARIES} ${GLIB_LIBRARIES})
 
 ## register the test
@@ -38,9 +38,9 @@ SET_TESTS_PROPERTIES(dynlink-shadow PROPERTIES ENVIRONMENT "LD_STATIC_TLS_EXTRA=
 ## To do this manually: ##
 ##########################
 ## Link the lib, plugin, and executable; then run the test
-# gcc -shared -Wl,-soname,libshadow-test-dynlink-lib.so -fPIC -ftls-model=global-dynamic -o libshadow-test-dynlink-lib.so shd-test-dynlink-lib.c
-# gcc -L`pwd` -shared -Wl,-rpath=`pwd`,-soname,libshadow-test-dynlink-plugin.so -fPIC -ftls-model=global-dynamic -o libshadow-test-dynlink-plugin.so shd-test-dynlink-plugin.c -lshadow-test-dynlink-lib
-# gcc -Wl,-rpath=`pwd` -fPIC -ftls-model=global-dynamic `pkg-config --cflags glib-2.0 gmodule-2.0` -o shd-test-dynlink shd-test-dynlink.c `pkg-config --libs glib-2.0 gmodule-2.0` -ldl -lpthread
+# gcc -shared -Wl,-soname,libshadow-test-dynlink-lib.so -fPIC -ftls-model=global-dynamic -o libshadow-test-dynlink-lib.so test_dynlink_lib.c
+# gcc -L`pwd` -shared -Wl,-rpath=`pwd`,-soname,libshadow-test-dynlink-plugin.so -fPIC -ftls-model=global-dynamic -o libshadow-test-dynlink-plugin.so test_dynlink_plugin.c -lshadow-test-dynlink-lib
+# gcc -Wl,-rpath=`pwd` -fPIC -ftls-model=global-dynamic `pkg-config --cflags glib-2.0 gmodule-2.0` -o shd-test-dynlink test_dynlink.c `pkg-config --libs glib-2.0 gmodule-2.0` -ldl -lpthread
 # ./shd-test-dynlink
 ##
 ## important links ##

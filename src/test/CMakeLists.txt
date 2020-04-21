@@ -9,8 +9,8 @@ add_definitions(-fPIC -g3 -DDEBUG -D_GNU_SOURCE)
 #get_property(LLVMHoistGlobalsPATH TARGET LLVMHoistGlobals PROPERTY LOCATION)
 
 ## a helper program for tests needing multiple processes
-add_executable(shadow-test-launcher shd-test-launcher.c shd-test-launcher-common.c)
-add_executable(shadow-test-launcher-fail shd-test-launcher-fail.c shd-test-launcher-common.c)
+add_executable(shadow-test-launcher test_launcher.c test_launcher_common.c)
+add_executable(shadow-test-launcher-fail test_launcher_fail.c test_launcher_common.c)
 
 ## add the test directories
 add_subdirectory(dynlink)

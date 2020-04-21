@@ -3,10 +3,10 @@ include_directories(${GLIB_INCLUDES})
 link_libraries(${GLIB_LIBRARIES})
 
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_plugin(shadow-plugin-test-file shd-test-file.c)
+add_shadow_plugin(shadow-plugin-test-file test_file.c)
 
 ## create and install an executable that can run outside of shadow
-add_executable(test-file shd-test-file.c)
+add_executable(test-file test_file.c)
 
 ## register the tests
 add_test(NAME file COMMAND test-file)

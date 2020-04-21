@@ -3,7 +3,7 @@
 find_package(Threads REQUIRED)
 
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_exe(shadow-plugin-test-determinism shd-test-determinism.c)
+add_shadow_exe(shadow-plugin-test-determinism test_determinism.c)
 target_link_libraries(shadow-plugin-test-determinism ${CMAKE_THREAD_LIBS_INIT})
 
 ## We need to run twice to make sure the 'random' output is the same both times

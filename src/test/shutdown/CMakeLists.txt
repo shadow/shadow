@@ -1,8 +1,8 @@
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_plugin(shadow-plugin-test-shutdown shd-test-shutdown.c ../shd-test-common.c)
+add_shadow_plugin(shadow-plugin-test-shutdown test_shutdown.c ../test_common.c)
 
 ## create and install an executable that can run outside of shadow
-add_executable(test-shutdown shd-test-shutdown.c ../shd-test-common.c)
+add_executable(test-shutdown test_shutdown.c ../test_common.c)
 
 ## register the tests
 add_test(NAME shutdown COMMAND test-shutdown)
