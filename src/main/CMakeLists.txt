@@ -17,16 +17,10 @@ message(STATUS "Using Threads library: ${CMAKE_THREAD_LIBS_INIT}")
 
 include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
 
-## make sure shadow.h is in the include path
-include_directories(${CMAKE_SOURCE_DIR}/src/main)
-
-## make sure rpth.h is in the include and link path
-include_directories(${CMAKE_BINARY_DIR}/src/external/rpth)
+## make sure rpth.h is in the link path
 link_directories(${CMAKE_BINARY_DIR}/src/external/rpth/.libs)
 
-## make sure vdl.h is in the include and link path
-include_directories(${CMAKE_SOURCE_DIR}/src/external/elf-loader)
-include_directories(${CMAKE_BINARY_DIR}/src/external/elf-loader)
+## make sure vdl.h is in the link path
 link_directories(${CMAKE_BINARY_DIR}/src/external/elf-loader)
 
 ## compile defs and flags

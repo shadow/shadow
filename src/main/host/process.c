@@ -57,7 +57,6 @@
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <pthread.h>
-#include <rpth.h>
 
 #include "main/core/logger/logger.h"
 #include "main/core/worker.h"
@@ -65,6 +64,7 @@
 #include "main/core/support/object_counter.h"
 #include "main/core/work/task.h"
 #include "external/elf-loader/dl.h"
+#include "external/rpth/rpth.h"
 #include "glib/gprintf.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
