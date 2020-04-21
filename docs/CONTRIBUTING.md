@@ -20,6 +20,8 @@ tool on the command-line to modify the lines touched by your commits.
 
 ### Including headers
 
+#### Which headers to include
+
 Every source and header file should directly include the headers that export
 all referenced symbols and macros.
 
@@ -37,3 +39,13 @@ This style is loosely based on that used in
 [glib](https://wiki.gnome.org/Projects/GTK/BestPractices/GlibIncludes) and
 supported by the [include what you use](https://include-what-you-use.org/)
 tool.
+
+#### Inclusion style
+
+Headers included from within the project should use quote-includes, and should
+use paths relative to `src/`. e.g. `#include "main/utility/byte_queue.h"`, not
+`#include "byte_queue.h"` (even from within the same directory), and not
+`#include <main/utility/byte_queue.h>`.
+
+Headers included external to this repository should use angle-bracket includes.
+e.g. `#include <glib.h>`, not `#include "glib.h"`.
