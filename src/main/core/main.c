@@ -10,6 +10,7 @@
 #include <dlfcn.h>
 #include <elf.h>
 #include <glib.h>
+#include <igraph_version.h>
 #include <link.h>
 #include <signal.h>
 #include <stdio.h>
@@ -17,7 +18,6 @@
 #include <unistd.h>
 
 #include "external/elf-loader/dl.h"
-#include "igraph_version.h"
 #include "main/core/logger/logger.h"
 #include "main/core/master.h"
 #include "main/core/support/configuration.h"
