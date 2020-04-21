@@ -24,6 +24,7 @@ add_cflags(-fPIC)
 add_cflags(-MD)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/x86_64)
 
 

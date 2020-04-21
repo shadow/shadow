@@ -2,7 +2,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <semaphore.h>
-#include "test.h"
+#include "test/test.h"
 LIB(test26)
 
 __thread int g_a = 0;

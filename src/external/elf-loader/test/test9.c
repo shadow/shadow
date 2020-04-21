@@ -1,4 +1,4 @@
-#include "test.h"
+#include "test/test.h"
 #include <pthread.h>
 #include <semaphore.h>
 #include <errno.h>

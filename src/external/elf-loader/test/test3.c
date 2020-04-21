@@ -1,5 +1,5 @@
 #include <dlfcn.h>
-#include "test.h"
+#include "test/test.h"
 LIB(test3)
 
 

@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <semaphore.h>
 #include <unistd.h>
-#include "test.h"
+#include "test/test.h"
 #include "../vdl-dl-public.h"
 LIB(test28)
 
