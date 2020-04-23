@@ -185,7 +185,7 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
         // Build a regex to match an IPv4 address entry for the given `node` in
         // /etc/hosts. See HOSTS(5) for format specification.
         int rv =
-            asprintf(&pattern, "^(\\d+\\.\\d+\\.\\d+\\.\\d+)[^#]*\\b%s\\b$",
+            asprintf(&pattern, "^(\\d+\\.\\d+\\.\\d+\\.\\d+)[^#]*\\b%s\\b",
                      escaped_node);
         g_free(escaped_node);
         if (rv < 0) {
