@@ -11,7 +11,7 @@
 
 #include <stddef.h>
 
-#include "shd-shmem-file.h"
+#include "shmem_file.h"
 
 typedef struct _ShMemAllocator ShMemAllocator;
 typedef struct _ShMemSerializer ShMemSerializer;

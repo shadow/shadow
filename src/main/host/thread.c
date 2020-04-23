@@ -4,7 +4,7 @@
  *  Created on: Dec 13, 2019
  *      Author: rjansen
  */
-#include "main/host/shd-thread.h"
+#include "main/host/thread.h"
 
 #include <fcntl.h>
 #include <signal.h>
@@ -12,9 +12,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "shim/shim-event.h"
-#include "main/host/shd-syscall-handler.h"
-#include "main/host/shd-thread-protected.h"
+#include "shim/shim_event.h"
+#include "main/host/syscall_handler.h"
+#include "main/host/thread_protected.h"
 #include "support/logger/logger.h"
 
 void thread_ref(Thread* thread) {

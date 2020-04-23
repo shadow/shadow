@@ -13,8 +13,8 @@
 #include <unistd.h>
 
 #include "shim.h"
-#include "shim-event.h"
-#include "shim-shmem.h"
+#include "shim_event.h"
+#include "shim_shmem.h"
 
 // Handle to the real syscall function, initialized once at load-time for
 // thread-safety.

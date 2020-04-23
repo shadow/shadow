@@ -8,8 +8,8 @@
  * interface.
  */
 
-#include "shim/shim-event.h"
-#include "main/host/shd-thread.h"
+#include "shim/shim_event.h"
+#include "main/host/thread.h"
 
 struct _Thread {
     void (*run)(Thread* thread, gchar** argv, gchar** envv);

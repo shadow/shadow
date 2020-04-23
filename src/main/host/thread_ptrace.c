@@ -1,4 +1,4 @@
-#include "main/host/shd-thread-ptrace.h"
+#include "main/host/thread_ptrace.h"
 
 #include <errno.h>
 #include <glib.h>
@@ -12,7 +12,7 @@
 #include <x86intrin.h>
 
 #include "main/core/worker.h"
-#include "main/host/shd-thread-protected.h"
+#include "main/host/thread_protected.h"
 #include "main/host/tsc.h"
 #include "support/logger/logger.h"
 

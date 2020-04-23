@@ -155,7 +155,7 @@ if(SHADOW_TEST STREQUAL ON)
     ## http://www.cmake.org/Wiki/CMake_Testing_With_CTest
     message(STATUS "SHADOW_TEST enabled")
     enable_testing()
-    add_subdirectory(src/test-plugins)
+    add_subdirectory(src/test_plugins)
 endif(SHADOW_TEST STREQUAL ON)
 
 ## recurse our project tree

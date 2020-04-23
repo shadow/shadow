@@ -1,4 +1,4 @@
-#include "main/host/shd-thread-shim.h"
+#include "main/host/thread_shim.h"
 
 /*
  * shd-thread.c
@@ -17,10 +17,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "shim/shim-event.h"
-#include "main/host/shd-thread-protected.h"
-#include "main/host/shd-thread-shim.h"
-#include "main/shmem/shd-shmem-allocator.h"
+#include "shim/shim_event.h"
+#include "main/host/thread_protected.h"
+#include "main/host/thread_shim.h"
+#include "main/shmem/shmem_allocator.h"
 #include "support/logger/logger.h"
 
 #define THREADSHIM_TYPE_ID 13357

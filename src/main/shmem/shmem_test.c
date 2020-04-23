@@ -1,7 +1,7 @@
-#include "shd-buddy.h"
-#include "shd-shmem-allocator.h"
-#include "shd-shmem-file.h"
-#include "shd-shmem-util.h"
+#include "buddy.h"
+#include "shmem_allocator.h"
+#include "shmem_file.h"
+#include "shmem_util.h"
 
 #include <math.h>
 #include <stdbool.h>

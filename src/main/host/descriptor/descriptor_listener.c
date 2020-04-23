@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/descriptor/shd-descriptor-listener.h"
+#include "main/host/descriptor/descriptor_listener.h"
 
 #include <glib.h>
 #include <stdlib.h>

@@ -6,7 +6,7 @@
 #ifndef SRC_MAIN_HOST_DESCRIPTOR_SHD_DESCRIPTOR_LISTENER_H_
 #define SRC_MAIN_HOST_DESCRIPTOR_SHD_DESCRIPTOR_LISTENER_H_
 
-#include "shd-descriptor-status.h"
+#include "descriptor_status.h"
 
 /* Opaque object to store the state needed to implement the module. */
 typedef struct _DescriptorListener DescriptorListener;

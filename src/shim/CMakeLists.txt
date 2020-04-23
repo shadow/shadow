@@ -16,7 +16,7 @@ add_cflags(-fPIC)
 
 set(SHIM_HELPER_LIB shadow-shim-helper)
 set(SHIM_HELPER_FILES
-  shim-event.c
+  shim_event.c
 )
 add_library(${SHIM_HELPER_LIB} STATIC ${SHIM_HELPER_FILES})
 # -D_GNU_SOURCE enables some additional features in libc, such at RTLD_NEXT.
@@ -24,10 +24,10 @@ target_compile_options(${SHIM_HELPER_LIB} PRIVATE -D_GNU_SOURCE)
 
 set(SHIM_LIB shadow-shim)
 set(SHIM_FILES
-  preload-libraries.c
-  preload-syscalls.c
+  preload_libraries.c
+  preload_syscalls.c
   shim.c
-  shim-shmem.c
+  shim_shmem.c
 )
 add_library(${SHIM_LIB} SHARED ${SHIM_FILES})
 set_target_properties(${SHIM_LIB} PROPERTIES 

@@ -4,7 +4,7 @@
  *  Created on: Dec 26, 2019
  *      Author: rjansen
  */
-#include "main/host/shd-syscall-handler.h"
+#include "main/host/syscall_handler.h"
 
 #include <errno.h>
 #include <glib.h>
@@ -15,7 +15,7 @@
 #include <unistd.h>
 
 #include "main/core/worker.h"
-#include "main/host/shd-syscall-types.h"
+#include "main/host/syscall_types.h"
 #include "support/logger/logger.h"
 
 struct _SysCallHandler {

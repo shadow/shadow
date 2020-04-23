@@ -34,7 +34,7 @@
 #include <unistd.h>
 #include <wchar.h>
 #include "main/core/support/definitions.h"
-#include "main/host/shd-syscall-handler.h"
+#include "main/host/syscall_handler.h"
 
 Process* process_new(Host* host, guint processID, SimulationTime startTime,
                      SimulationTime stopTime, InterposeMethod interposeMethod,

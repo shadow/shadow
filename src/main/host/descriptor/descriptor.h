@@ -9,8 +9,8 @@
 
 #include <glib.h>
 
-#include "main/host/descriptor/shd-descriptor-status.h"
-#include "main/host/descriptor/shd-descriptor-listener.h"
+#include "main/host/descriptor/descriptor_status.h"
+#include "main/host/descriptor/descriptor_listener.h"
 #include "main/utility/utility.h"
 
 typedef enum _DescriptorType DescriptorType;

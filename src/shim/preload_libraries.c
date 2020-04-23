@@ -17,7 +17,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "shim-event.h"
+#include "shim_event.h"
 #include "shim.h"
 
 // man 3 usleep

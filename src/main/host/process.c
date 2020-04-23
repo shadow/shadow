@@ -43,7 +43,7 @@
 #include "main/host/cpu.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/shd-thread.h"
+#include "main/host/thread.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
@@ -56,8 +56,8 @@
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
-#include "main/host/shd-thread-ptrace.h"
-#include "main/host/shd-thread-shim.h"
+#include "main/host/thread_ptrace.h"
+#include "main/host/thread_shim.h"
 
 struct _Process {
     /* Host owning this process */

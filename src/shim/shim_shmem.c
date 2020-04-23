@@ -1,11 +1,11 @@
-#include "shim-shmem.h"
+#include "shim_shmem.h"
 
 #include <assert.h>
 #include <stdbool.h>
 #include <string.h>
 
-#include "../main/shmem/shd-shmem-allocator.h"
-#include "shim-event.h"
+#include "../main/shmem/shmem_allocator.h"
+#include "shim_event.h"
 
 static void _shim_shmemHandleClone(const ShimEvent* ev) {
     assert(ev && ev->event_id == SHD_SHIM_EVENT_CLONE_REQ);

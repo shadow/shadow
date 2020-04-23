@@ -50,7 +50,7 @@ set(shadow_srcs
 
     host/descriptor/channel.c
     host/descriptor/descriptor.c
-    host/descriptor/shd-descriptor-listener.c
+    host/descriptor/descriptor_listener.c
     host/descriptor/epoll.c
     host/descriptor/socket.c
     host/descriptor/tcp.c
@@ -61,11 +61,11 @@ set(shadow_srcs
     host/descriptor/udp.c
     host/process.c
     host/cpu.c
-    host/shd-syscall-handler.c
-    host/shd-thread.c
+    host/syscall_handler.c
+    host/thread.c
     host/host.c
-    host/shd-thread-ptrace.c
-    host/shd-thread-shim.c
+    host/thread_ptrace.c
+    host/thread_shim.c
     host/network_interface.c
     host/tracker.c
 
@@ -103,13 +103,13 @@ target_link_libraries(tsc_test ${GLIB_LIBRARIES} shadow-tsc)
 add_test(NAME tsc_test COMMAND tsc_test)
 
 set(SHD_SHMEM_SRC
-    shmem/shd-buddy.c
-    shmem/shd-shmem-allocator.c
-    shmem/shd-shmem-file.c
-    shmem/shd-shmem-util.c)
+    shmem/buddy.c
+    shmem/shmem_allocator.c
+    shmem/shmem_file.c
+    shmem/shmem_util.c)
 
 add_library(shadow-shmem STATIC ${SHD_SHMEM_SRC})
-add_executable(shd-shmem-test shmem/shd-shmem-test.c)
+add_executable(shd-shmem-test shmem/shmem_test.c)
 target_link_libraries(shd-shmem-test shadow-shmem ${GLIB_LIBRARIES} ${RT_LIBRARIES} ${M_LIBRARIES})
 include_directories(${CMAKE_SOURCE_DIR}/src/main/shmem)
 add_test(NAME shmem COMMAND shd-shmem-test)
