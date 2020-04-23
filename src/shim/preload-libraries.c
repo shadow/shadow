@@ -405,7 +405,6 @@ int getaddrinfo(const char* node, const char* service,
 }
 
 void freeaddrinfo(struct addrinfo* res) {
-    assert(res != NULL);
     while (res != NULL) {
         struct addrinfo* next = res->ai_next;
         assert(res->ai_addr != NULL);

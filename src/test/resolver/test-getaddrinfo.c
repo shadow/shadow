@@ -274,7 +274,7 @@ void test_numeric_host() {
 
 void test_host_file() {
     // Don't know of a way to inject a fake /etc/hosts file (outside of
-    // Shadow), so we just check "localhost", which we can expect to be there.
+    // Shadow), so we just check "127.0.0.1", which we can expect to be there.
     // This at least validates that the hosts file is being checked, and we can
     // use more focused unit-testing on the hosts-file-parsing code.
     struct addrinfo hints = {.ai_family = AF_INET, .ai_socktype = SOCK_STREAM};
@@ -290,7 +290,7 @@ void test_host_file() {
         .ai_addr = (struct sockaddr*)&expected_sockaddr_in,
     };
     assert_getaddrinfo_rv_equals(
-        getaddrinfo("localhost", NULL, &hints, &res), 0);
+        getaddrinfo("127.0.0.1", NULL, &hints, &res), 0);
     freeaddrinfo(res);
 }
 
