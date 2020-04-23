@@ -7,7 +7,7 @@
 #include <pthread.h>
 #include <string.h>
 
-#include "main/core/logger/logger.h"
+#include "support/logger/logger.h"
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"

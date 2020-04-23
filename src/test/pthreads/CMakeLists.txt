@@ -1,4 +1,3 @@
-find_package(Threads REQUIRED)
 include_directories(${RT_INCLUDES})
 
 ## build the test as a dynamic executable that plugs into shadow

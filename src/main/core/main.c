@@ -18,7 +18,8 @@
 #include <unistd.h>
 
 #include "external/elf-loader/dl.h"
-#include "main/core/logger/logger.h"
+#include "support/logger/logger.h"
+#include "main/core/logger/shd_logger.h"
 #include "main/core/master.h"
 #include "main/core/support/configuration.h"
 #include "main/core/support/options.h"
@@ -650,10 +651,10 @@ static gint _main_helper(Options* options) {
 
         message("environment was updated; shadow is relaunching now with new environment");
 
-        Logger* logger = logger_getDefault();
+        ShdLogger* logger = shd_logger_getDefault();
         if(logger) {
-            logger_setDefault(NULL);
-            logger_unref(logger);
+            shd_logger_setDefault(NULL);
+            shd_logger_unref(logger);
         }
 
         /* execvpe only returns if there is an error, otherwise the current process
@@ -780,19 +781,19 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     }
 
     /* start up the logging subsystem to handle all future messages */
-    Logger* shadowLogger = logger_new(options_getLogLevel(options));
-    logger_setDefault(shadowLogger);
+    ShdLogger* shadowLogger = shd_logger_new(options_getLogLevel(options));
+    shd_logger_setDefault(shadowLogger);
 
     /* disable buffering during startup so that we see every message immediately in the terminal */
-    logger_setEnableBuffering(shadowLogger, FALSE);
+    shd_logger_setEnableBuffering(shadowLogger, FALSE);
 
     gint returnCode = _main_helper(options);
 
     options_free(options);
-    Logger* logger = logger_getDefault();
+    ShdLogger* logger = shd_logger_getDefault();
     if(logger) {
-        logger_setDefault(NULL);
-        logger_unref(logger);
+        shd_logger_setDefault(NULL);
+        shd_logger_unref(logger);
     }
 
     g_printerr("** Stopping Shadow, returning code %i (%s)\n", returnCode, (returnCode == 0) ? "success" : "error");

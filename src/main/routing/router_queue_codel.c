@@ -23,7 +23,7 @@
 #include <math.h>
 #include <stddef.h>
 
-#include "main/core/logger/logger.h"
+#include "support/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/routing/packet.h"

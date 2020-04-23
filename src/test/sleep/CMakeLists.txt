@@ -1,7 +1,3 @@
-## if this test needs any libraries, find and include them here
-find_package(RT REQUIRED)
-find_package(DL REQUIRED)
-find_package(M REQUIRED)
 include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES})
 
 ## build the test as a dynamic executable that plugs into shadow

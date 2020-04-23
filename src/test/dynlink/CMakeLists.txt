@@ -1,4 +1,3 @@
-find_package(GLIB REQUIRED)
 include_directories(${DL_INCLUDES} ${GLIB_INCLUDES})
 
 add_cflags("-ftls-model=global-dynamic")

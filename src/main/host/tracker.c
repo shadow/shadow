@@ -10,8 +10,8 @@
 #include <netinet/in.h>
 #include <string.h>
 
-#include "main/core/logger/log_level.h"
-#include "main/core/logger/logger.h"
+#include "support/logger/log_level.h"
+#include "support/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/options.h"
 #include "main/core/work/task.h"
@@ -429,12 +429,13 @@ static void _tracker_logNode(Tracker* tracker, LogLevel level, SimulationTime in
     if(!tracker->didLogNodeHeader) {
         tracker->didLogNodeHeader = TRUE;
         logger_log(logger_getDefault(), level, __FILE__, __FUNCTION__, __LINE__,
-                "[shadow-heartbeat] [node-header] "
-                "interval-seconds,recv-bytes,send-bytes,cpu-percent,delayed-count,avgdelay-milliseconds;"
-                "inbound-localhost-counters;outbound-localhost-counters;"
-                "inbound-remote-counters;outbound-remote-counters "
-                "where counters are: %s", _tracker_getCounterHeaderString()
-        );
+                   "[shadow-heartbeat] [node-header] "
+                   "interval-seconds,recv-bytes,send-bytes,cpu-percent,delayed-"
+                   "count,avgdelay-milliseconds;"
+                   "inbound-localhost-counters;outbound-localhost-counters;"
+                   "inbound-remote-counters;outbound-remote-counters "
+                   "where counters are: %s",
+                   _tracker_getCounterHeaderString());
     }
 
     gsize totalRecvBytes = _tracker_sumBytes(&tracker->remote.inCounters.bytes);
@@ -451,7 +452,8 @@ static void _tracker_logNode(Tracker* tracker, LogLevel level, SimulationTime in
             seconds, totalRecvBytes, totalSendBytes, cpuutil, tracker->numDelayedLastInterval, avgdelayms);
     g_string_append_printf(buffer, "%s;%s;%s;%s", inLocal, outLocal, inRemote, outRemote);
 
-    logger_log(logger_getDefault(), level, __FILE__, __FUNCTION__, __LINE__, "%s", buffer->str);
+    logger_log(logger_getDefault(), level, __FILE__, __FUNCTION__, __LINE__,
+               "%s", buffer->str);
 
     g_free(inLocal);
     g_free(outLocal);

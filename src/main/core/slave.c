@@ -12,7 +12,8 @@
 #include <stddef.h>
 #include <sys/resource.h>
 
-#include "main/core/logger/logger.h"
+#include "support/logger/logger.h"
+#include "main/core/logger/shd_logger.h"
 #include "main/core/master.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
@@ -444,10 +445,10 @@ void slave_run(Slave* slave) {
             _slave_heartbeat(slave, windowStart);
 
             /* flush slave threads messages */
-            logger_flushRecords(logger_getDefault(), pthread_self());
+            shd_logger_flushRecords(shd_logger_getDefault(), pthread_self());
 
             /* let the logger know it can flush everything prior to this round */
-            logger_syncToDisk(logger_getDefault());
+            shd_logger_syncToDisk(shd_logger_getDefault());
 
             /* wait for the workers to finish processing nodes before we update the execution window */
             minNextEventTime = scheduler_awaitNextRound(slave->scheduler);

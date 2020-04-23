@@ -11,8 +11,9 @@
 #include <pthread.h>
 #include <stddef.h>
 
-#include "main/core/logger/log_level.h"
-#include "main/core/logger/logger.h"
+#include "support/logger/log_level.h"
+#include "support/logger/logger.h"
+#include "main/core/logger/shd_logger.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/slave.h"
 #include "main/core/support/definitions.h"
@@ -419,7 +420,7 @@ void worker_setCurrentTime(SimulationTime time) {
 }
 
 gboolean worker_isFiltered(LogLevel level) {
-    return logger_shouldFilter(logger_getDefault(), level);
+    return shd_logger_shouldFilter(shd_logger_getDefault(), level);
 }
 
 void worker_incrementPluginError() {

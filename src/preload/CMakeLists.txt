@@ -1,7 +1,3 @@
-## for now, interposer includes shadow.h, so it needs to know about glib and igraph
-find_package(GLIB REQUIRED)
-find_package(IGRAPH REQUIRED)
-find_package(DL REQUIRED)
 include_directories(${DL_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
 
 #add_cflags(-Wno-invalid-noreturn)

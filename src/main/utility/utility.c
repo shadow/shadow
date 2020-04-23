@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "main/core/logger/logger.h"
+#include "support/logger/logger.h"
 #include "main/utility/utility.h"
 
 guint utility_ipPortHash(in_addr_t ip, in_port_t port) {

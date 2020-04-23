@@ -19,8 +19,8 @@
 #include <sys/time.h>
 #include <sys/un.h>
 
-#include "main/core/logger/log_level.h"
-#include "main/core/logger/logger.h"
+#include "support/logger/log_level.h"
+#include "support/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
