@@ -8,7 +8,7 @@
 
 #include <stddef.h>
 
-#include "main/core/logger/logger.h"
+#include "support/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/utility/utility.h"
 

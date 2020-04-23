@@ -1,4 +1,3 @@
-find_package(GLIB REQUIRED)
 include_directories(${GLIB_INCLUDES})
 link_libraries(${GLIB_LIBRARIES})
 

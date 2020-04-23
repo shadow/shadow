@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/core/logger/log_level.h"
+#include "support/logger/log_level.h"
 
 #include <glib.h>
 #include <stddef.h>

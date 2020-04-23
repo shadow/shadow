@@ -11,7 +11,7 @@
 
 #include <glib.h>
 
-#include "main/core/logger/logger.h"
+#include "support/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"

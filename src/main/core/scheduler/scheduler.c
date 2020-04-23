@@ -12,7 +12,8 @@
 #include <stddef.h>
 #include <sys/types.h>
 
-#include "main/core/logger/logger.h"
+#include "support/logger/logger.h"
+#include "main/core/logger/shd_logger.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
@@ -210,7 +211,7 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
         utility_assert(item->thread);
 
         g_queue_push_tail(scheduler->threadItems, item);
-        logger_register(logger_getDefault(), item->thread);
+        shd_logger_register(shd_logger_getDefault(), item->thread);
 
         g_string_free(name, TRUE);
     }
@@ -397,7 +398,7 @@ Event* scheduler_pop(Scheduler* scheduler) {
             }
 
             /* clear all log messages from the last round */
-            logger_flushRecords(logger_getDefault(), pthread_self());
+            shd_logger_flushRecords(shd_logger_getDefault(), pthread_self());
 
             /* wait for other threads to finish their collect step */
             countdownlatch_countDownAwait(scheduler->collectInfoBarrier);

@@ -1,4 +1,3 @@
-find_package(GLIB REQUIRED)
 include_directories(${GLIB_INCLUDES})
 
 ## build the test as a dynamic executable that plugs into shadow

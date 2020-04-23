@@ -1,16 +1,3 @@
-## check for dependencies with our own Find scripts in "./cmake"
-## these don't have built-in cmake files in /usr/share/cmake/Modules/Findxxx.cmake
-find_package(RT REQUIRED)
-find_package(DL REQUIRED)
-find_package(M REQUIRED)
-find_package(IGRAPH REQUIRED)
-find_package(GLIB REQUIRED)
-
-## pthreads
-set(CMAKE_THREAD_PREFER_PTHREAD 1)
-find_package(Threads REQUIRED)
-message(STATUS "Using Threads library: ${CMAKE_THREAD_LIBS_INIT}")
-
 ## TODO if we have cmake > 3.1, can we do the following?
 #pkg_check_modules (GLIB2   glib-2.0>=2.32)
 #message(STATUS "GLIB2_VERSION = ${GLIB2_VERSION}")
@@ -45,10 +32,9 @@ endif(SHADOW_PROFILE STREQUAL ON)
 
 ## sources for our main shadow program
 set(shadow_srcs
-    core/logger/logger.c
     core/logger/logger_helper.c
-    core/logger/log_level.c
     core/logger/log_record.c
+    core/logger/shd_logger.c
     core/scheduler/scheduler.c
     core/scheduler/scheduler_policy_global_single.c
     core/scheduler/scheduler_policy_host_single.c
@@ -115,11 +101,11 @@ install(TARGETS shadow-remora DESTINATION lib)
 
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
-add_dependencies(shadow shadow-remora shadow-interpose-helper elf-loader rpth)
+add_dependencies(shadow elf-loader rpth)
 ## 'shadow-interpose-helper' and 'vdl' are cmake targets, the rest are external libs for which '-l' is needed
 target_link_libraries(shadow shadow-interpose-helper vdl -lrpth
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
-   ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} shadow-remora)
+   ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} shadow-remora logger)
 install(TARGETS shadow DESTINATION bin)
 
 
