@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "support/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/routing/address.h"
@@ -20,6 +19,7 @@
 #include "main/routing/topology.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 struct _Topology {
     /* the imported igraph graph data - operations on it after initializations

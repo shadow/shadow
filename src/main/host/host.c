@@ -19,8 +19,6 @@
 #include <sys/time.h>
 #include <sys/un.h>
 
-#include "support/logger/log_level.h"
-#include "support/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
@@ -45,6 +43,8 @@
 #include "main/routing/topology.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
+#include "support/logger/log_level.h"
+#include "support/logger/logger.h"
 
 struct _Host {
     /* general node lock. nothing that belongs to the node should be touched

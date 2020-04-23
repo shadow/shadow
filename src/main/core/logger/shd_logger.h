@@ -32,9 +32,11 @@ gboolean shd_logger_shouldFilter(ShdLogger* logger, LogLevel level);
 
 void shd_logger_setEnableBuffering(ShdLogger* logger, gboolean enabled);
 
-void shd_logger_logVA(ShdLogger* logger, LogLevel level, const gchar* fileName, const gchar* functionName,
-        const gint lineNumber, const gchar *format, va_list vargs);
-void shd_logger_log(ShdLogger* logger, LogLevel level, const gchar* fileName, const gchar* functionName,
-        const gint lineNumber, const gchar *format, ...);
+void shd_logger_logVA(ShdLogger* logger, LogLevel level, const gchar* fileName,
+                      const gchar* functionName, const gint lineNumber,
+                      const gchar* format, va_list vargs);
+void shd_logger_log(ShdLogger* logger, LogLevel level, const gchar* fileName,
+                    const gchar* functionName, const gint lineNumber,
+                    const gchar* format, ...);
 
 #endif /* SHD_LOGGER_H_ */

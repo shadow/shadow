@@ -14,8 +14,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "support/logger/logger.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 guint utility_ipPortHash(in_addr_t ip, in_port_t port) {
     GString* buffer = g_string_new(NULL);

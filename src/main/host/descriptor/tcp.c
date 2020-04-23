@@ -20,7 +20,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include "support/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
@@ -39,6 +38,7 @@
 #include "main/routing/address.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 enum TCPState {
     TCPS_CLOSED, TCPS_LISTEN,

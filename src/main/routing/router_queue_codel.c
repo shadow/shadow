@@ -23,12 +23,12 @@
 #include <math.h>
 #include <stddef.h>
 
-#include "support/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/routing/packet.h"
 #include "main/routing/router.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 /* hard limit of queue size, in number of packets. this is recommended to be
  * 1000 in normal routers, but in Shadow we don't enforce a practical limit.
