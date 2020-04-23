@@ -8,8 +8,8 @@
 #include <stdint.h>
 #include <time.h>
 
-#include "../main/host/syscall_types.h"
-#include "../main/shmem/shmem_allocator.h"
+#include "main/host/syscall_types.h"
+#include "main/shmem/shmem_allocator.h"
 
 typedef enum {
     SHD_SHIM_EVENT_NULL = 0,

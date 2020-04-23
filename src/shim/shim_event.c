@@ -1,4 +1,4 @@
-#include "shim_event.h"
+#include "shim/shim_event.h"
 
 static inline void shim_determinedSend(int sock_fd, const void* ptr,
                                        size_t nbytes) {

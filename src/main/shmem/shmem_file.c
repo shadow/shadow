@@ -1,4 +1,4 @@
-#include "shmem_file.h"
+#include "main/shmem/shmem_file.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "shmem_util.h"
+#include "main/shmem/shmem_util.h"
 
 static void _shmemfile_getName(size_t nbytes, char* str) {
     assert(str != NULL && nbytes >= 3);

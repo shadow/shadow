@@ -12,9 +12,9 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-#include "shim.h"
-#include "shim_event.h"
-#include "shim_shmem.h"
+#include "shim/shim.h"
+#include "shim/shim_event.h"
+#include "shim/shim_shmem.h"
 
 // Handle to the real syscall function, initialized once at load-time for
 // thread-safety.

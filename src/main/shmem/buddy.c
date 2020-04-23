@@ -1,8 +1,8 @@
-#include "buddy.h"
+#include "main/shmem/buddy.h"
 
 #include <stddef.h>
 
-#include "shmem_util.h"
+#include "main/shmem/shmem_util.h"
 
 static BuddyControlBlock*
 _buddycontrolblock_computeBuddy(BuddyControlBlock* bcb, unsigned order,

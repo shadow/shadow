@@ -1,4 +1,4 @@
-#include "shmem_util.h"
+#include "main/shmem/shmem_util.h"
 
 /*
 logarithm code adopted from:

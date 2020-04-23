@@ -1,4 +1,4 @@
-#include "shmem_allocator.h"
+#include "main/shmem/shmem_allocator.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -7,9 +7,9 @@
 
 #include <pthread.h>
 
-#include "buddy.h"
-#include "shmem_file.h"
-#include "shmem_util.h"
+#include "main/shmem/buddy.h"
+#include "main/shmem/shmem_file.h"
+#include "main/shmem/shmem_util.h"
 
 #define SHD_SHMEM_ALLOCATOR_POOL_NBYTES SHD_BUDDY_POOL_MAX_NBYTES
 

@@ -17,8 +17,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "shim_event.h"
-#include "shim.h"
+#include "shim/shim_event.h"
+#include "shim/shim.h"
 
 // man 3 usleep
 int usleep(useconds_t usec) {
