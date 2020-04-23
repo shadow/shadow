@@ -12,9 +12,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "shim/shim_event.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/thread_protected.h"
+#include "shim/shim_event.h"
 #include "support/logger/logger.h"
 
 void thread_ref(Thread* thread) {

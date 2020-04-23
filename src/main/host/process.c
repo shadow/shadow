@@ -34,7 +34,6 @@
 #include <time.h>
 #include <unistd.h>
 
-
 #include "glib/gprintf.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
@@ -43,12 +42,12 @@
 #include "main/host/cpu.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/thread.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
+#include "main/host/thread.h"
 #include "main/host/tracker.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"

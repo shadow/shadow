@@ -1,8 +1,8 @@
 #ifndef SHD_SHMEM_UTIL_H_
 #define SHD_SHMEM_UTIL_H_
 
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 
 /* Intended to be private to shd-shmem-allocator. */
 

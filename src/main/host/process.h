@@ -10,29 +10,28 @@
 #include <bits/stdint-intn.h>
 #include <bits/types/clockid_t.h>
 #include <bits/types/time_t.h>
-#include <glib.h>
-#include <stdarg.h>
-#include <stdint.h>
-
 #include <dlfcn.h>
 #include <fcntl.h>
+#include <features.h>
+#include <glib.h>
 #include <ifaddrs.h>
+#include <linux/sockios.h>
 #include <malloc.h>
 #include <net/if.h>
 #include <netdb.h>
 #include <poll.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <sys/file.h>
-#include <features.h>
-#include <linux/sockios.h>
-#include <pthread.h>
 #include <sys/statfs.h>
 #include <sys/statvfs.h>
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
+
 #include "main/core/support/definitions.h"
 #include "main/host/syscall_handler.h"
 
