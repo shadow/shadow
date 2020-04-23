@@ -15,7 +15,6 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 
-#include "support/logger/log_level.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/options.h"
 #include "main/host/cpu.h"
@@ -27,6 +26,7 @@
 #include "main/routing/router.h"
 #include "main/routing/topology.h"
 #include "main/utility/random.h"
+#include "support/logger/log_level.h"
 
 typedef struct _Host Host;
 

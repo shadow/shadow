@@ -18,13 +18,13 @@
 #include <unistd.h>
 
 #include "external/elf-loader/dl.h"
-#include "support/logger/logger.h"
 #include "main/core/logger/shd_logger.h"
 #include "main/core/master.h"
 #include "main/core/support/configuration.h"
 #include "main/core/support/options.h"
 #include "main/utility/utility.h"
 #include "shd-config.h"
+#include "support/logger/logger.h"
 
 static Master* shadowMaster;
 

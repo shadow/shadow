@@ -8,9 +8,9 @@
 
 #include <stddef.h>
 
-#include "support/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 /* an internal module to help parse the XML file */
 typedef struct _Parser Parser;

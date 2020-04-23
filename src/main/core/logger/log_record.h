@@ -8,8 +8,8 @@
 
 #include <glib.h>
 
-#include "support/logger/log_level.h"
 #include "main/core/support/definitions.h"
+#include "support/logger/log_level.h"
 
 typedef struct _LogRecord LogRecord;
 

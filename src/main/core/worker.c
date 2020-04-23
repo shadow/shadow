@@ -11,8 +11,6 @@
 #include <pthread.h>
 #include <stddef.h>
 
-#include "support/logger/log_level.h"
-#include "support/logger/logger.h"
 #include "main/core/logger/shd_logger.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/slave.h"
@@ -32,6 +30,8 @@
 #include "main/utility/count_down_latch.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
+#include "support/logger/log_level.h"
+#include "support/logger/logger.h"
 
 struct _Worker {
     /* our thread and an id that is unique among all threads */

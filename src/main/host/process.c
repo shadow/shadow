@@ -60,7 +60,6 @@
 #include "external/elf-loader/dl.h"
 #include "external/rpth/rpth.h"
 #include "glib/gprintf.h"
-#include "support/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/work/task.h"
@@ -78,6 +77,7 @@
 #include "main/routing/dns.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 #if defined(FD_SETSIZE)
 #if FD_SETSIZE > 1024

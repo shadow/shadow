@@ -9,8 +9,8 @@
 #include <glib.h>
 #include <stddef.h>
 
-#include "support/logger/logger.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 struct _CPU {
     guint64 frequencyKHz;

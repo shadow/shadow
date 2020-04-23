@@ -12,7 +12,6 @@
 #include <stddef.h>
 #include <sys/resource.h>
 
-#include "support/logger/logger.h"
 #include "main/core/logger/shd_logger.h"
 #include "main/core/master.h"
 #include "main/core/scheduler/scheduler.h"
@@ -29,6 +28,7 @@
 #include "main/routing/topology.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 typedef struct {
 

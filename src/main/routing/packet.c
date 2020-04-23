@@ -7,8 +7,6 @@
 #include <netinet/in.h>
 #include <stddef.h>
 
-#include "support/logger/log_level.h"
-#include "support/logger/logger.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/host.h"
@@ -16,6 +14,8 @@
 #include "main/routing/packet.h"
 #include "main/routing/payload.h"
 #include "main/utility/utility.h"
+#include "support/logger/log_level.h"
+#include "support/logger/logger.h"
 
 /* thread-safe structure representing a data/network packet */
 

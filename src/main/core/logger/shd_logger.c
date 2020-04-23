@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "support/logger/logger.h"
 #include "main/core/logger/log_record.h"
 #include "main/core/logger/logger_helper.h"
 #include "main/core/support/definitions.h"
@@ -18,6 +17,7 @@
 #include "main/routing/address.h"
 #include "main/utility/count_down_latch.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 /* this stores thread-specific data for each "worker" thread (the threads that
  * are running the virtual nodes) */
@@ -53,7 +53,8 @@ struct _ShdLogger {
     GAsyncQueue* helperCommands;
     CountDownLatch* helperLatch;
 
-    /* store map of other threads that will call logging functions to thread-specific data */
+    /* store map of other threads that will call logging functions to
+     * thread-specific data */
     GHashTable* threadToDataMap;
 
     /* for memory management */
@@ -79,7 +80,7 @@ static void _loggerthreaddata_free(LoggerThreadData* threadData) {
 
     /* free any remaining log records and the record queue */
     LogRecord* record = NULL;
-    while((record = g_queue_pop_head(threadData->localRecordBundle)) != NULL) {
+    while ((record = g_queue_pop_head(threadData->localRecordBundle)) != NULL) {
         logrecord_unref(record);
     }
     g_queue_free(threadData->localRecordBundle);
@@ -112,16 +113,19 @@ gboolean shd_logger_shouldFilter(ShdLogger* logger, LogLevel level) {
     /* check if the message should be filtered */
     LogLevel nodeLevel = LOGLEVEL_UNSET;
 
-    /* if we have a host, its log level filter override default logger level filter */
-    if(worker_isAlive()) {
+    /* if we have a host, its log level filter override default logger level
+     * filter */
+    if (worker_isAlive()) {
         Host* currentHost = worker_getActiveHost();
-        if(currentHost != NULL) {
+        if (currentHost != NULL) {
             nodeLevel = host_getLogLevel(currentHost);
         }
     }
 
-    /* prefer the node filter level if we have one, fall back to default logger filter */
-    LogLevel filter = (nodeLevel != LOGLEVEL_UNSET) ? nodeLevel : logger->filterLevel;
+    /* prefer the node filter level if we have one, fall back to default logger
+     * filter */
+    LogLevel filter =
+        (nodeLevel != LOGLEVEL_UNSET) ? nodeLevel : logger->filterLevel;
     return (level > filter) ? TRUE : FALSE;
 }
 
@@ -130,8 +134,10 @@ void shd_logger_setEnableBuffering(ShdLogger* logger, gboolean enabled) {
     logger->shouldBuffer = enabled;
 }
 
-static void _logger_sendRegisterCommandToHelper(ShdLogger* logger, LoggerThreadData* threadData) {
-    LoggerHelperCommand* command = loggerhelpercommand_new(LHC_REGISTER, threadData->remoteLogHelperMailbox);
+static void _logger_sendRegisterCommandToHelper(ShdLogger* logger,
+                                                LoggerThreadData* threadData) {
+    LoggerHelperCommand* command = loggerhelpercommand_new(
+        LHC_REGISTER, threadData->remoteLogHelperMailbox);
     g_async_queue_ref(threadData->remoteLogHelperMailbox);
     g_async_queue_push(logger->helperCommands, command);
 }
@@ -152,44 +158,49 @@ static void _logger_stopHelper(ShdLogger* logger) {
     _logger_sendStopCommandToHelper(logger);
 
     /* wait until the thread exits.
-     * XXX: calling thread_join may cause deadlocks in the loader, so let's just wait for the
-     * thread to indicate that it finished everything instead. */
-    //pthread_join(logger->helper);
+     * XXX: calling thread_join may cause deadlocks in the loader, so let's just
+     * wait for the thread to indicate that it finished everything instead. */
+    // pthread_join(logger->helper);
     countdownlatch_await(logger->helperLatch);
 }
 
-void shd_logger_logVA(ShdLogger* logger, LogLevel level, const gchar* fileName, const gchar* functionName,
-        const gint lineNumber, const gchar *format, va_list vargs) {
-    if(!logger) {
+void shd_logger_logVA(ShdLogger* logger, LogLevel level, const gchar* fileName,
+                      const gchar* functionName, const gint lineNumber,
+                      const gchar* format, va_list vargs) {
+    if (!logger) {
         vfprintf(stderr, format, vargs);
         return;
     }
 
     MAGIC_ASSERT(logger);
 
-    if(shd_logger_shouldFilter(logger, level)) {
+    if (shd_logger_shouldFilter(logger, level)) {
         return;
     }
 
-    LoggerThreadData* threadData = g_hash_table_lookup(logger->threadToDataMap, GUINT_TO_POINTER(pthread_self()));
+    LoggerThreadData* threadData = g_hash_table_lookup(
+        logger->threadToDataMap, GUINT_TO_POINTER(pthread_self()));
     MAGIC_ASSERT(threadData);
 
     gdouble timespan = g_timer_elapsed(threadData->runTimer, NULL);
 
-    LogRecord* record = logrecord_new(level, timespan, fileName, functionName, lineNumber);
+    LogRecord* record =
+        logrecord_new(level, timespan, fileName, functionName, lineNumber);
     logrecord_formatMessageVA(record, format, vargs);
 
-    if(worker_isAlive()) {
+    if (worker_isAlive()) {
         /* time info */
         logrecord_setTime(record, worker_getCurrentTime());
 
         /* name info for the host */
         GString* hostNameBuffer = g_string_new("n/a");
         Host* activeHost = worker_getActiveHost();
-        if(activeHost) {
+        if (activeHost) {
             Address* hostAddress = host_getDefaultAddress(activeHost);
-            if(hostAddress) {
-                g_string_printf(hostNameBuffer, "%s~%s", host_getName(activeHost), address_toHostIPString(hostAddress));
+            if (hostAddress) {
+                g_string_printf(hostNameBuffer, "%s~%s",
+                                host_getName(activeHost),
+                                address_toHostIPString(hostAddress));
             }
         }
 
@@ -205,15 +216,17 @@ void shd_logger_logVA(ShdLogger* logger, LogLevel level, const gchar* fileName, 
 
     g_queue_push_tail(threadData->localRecordBundle, record);
 
-    if(level == LOGLEVEL_ERROR || !logger->shouldBuffer || (timespan - logger->lastTimespan) >= 5) {
+    if (level == LOGLEVEL_ERROR || !logger->shouldBuffer ||
+        (timespan - logger->lastTimespan) >= 5) {
         /* make sure we have logged everything */
         shd_logger_flushRecords(logger, pthread_self());
         shd_logger_syncToDisk(logger);
         logger->lastTimespan = timespan;
     }
 
-    if(level == LOGLEVEL_ERROR) {
-        /* tell the helper to stop, and join to make sure it finished flushing */
+    if (level == LOGLEVEL_ERROR) {
+        /* tell the helper to stop, and join to make sure it finished flushing
+         */
         _logger_stopHelper(logger);
 
         /* now abort, but get a backtrace */
@@ -221,22 +234,27 @@ void shd_logger_logVA(ShdLogger* logger, LogLevel level, const gchar* fileName, 
     }
 }
 
-void shd_logger_log(ShdLogger* logger, LogLevel level, const gchar* fileName, const gchar* functionName,
-        const gint lineNumber, const gchar *format, ...) {
+void shd_logger_log(ShdLogger* logger, LogLevel level, const gchar* fileName,
+                    const gchar* functionName, const gint lineNumber,
+                    const gchar* format, ...) {
     va_list vargs;
     va_start(vargs, format);
-    shd_logger_logVA(logger, level, fileName, functionName, lineNumber, format, vargs);
+    shd_logger_logVA(logger, level, fileName, functionName, lineNumber, format,
+                     vargs);
     va_end(vargs);
 }
 
 void shd_logger_register(ShdLogger* logger, pthread_t callerThread) {
     MAGIC_ASSERT(logger);
 
-    /* this must be called by main thread before the workers start accessing the logger! */
+    /* this must be called by main thread before the workers start accessing the
+     * logger! */
 
-    if(g_hash_table_lookup(logger->threadToDataMap, GUINT_TO_POINTER(callerThread)) == NULL) {
+    if (g_hash_table_lookup(logger->threadToDataMap,
+                            GUINT_TO_POINTER(callerThread)) == NULL) {
         LoggerThreadData* threadData = _loggerthreaddata_new(logger->runTimer);
-        g_hash_table_replace(logger->threadToDataMap, GUINT_TO_POINTER(callerThread), threadData);
+        g_hash_table_replace(logger->threadToDataMap,
+                             GUINT_TO_POINTER(callerThread), threadData);
         _logger_sendRegisterCommandToHelper(logger, threadData);
     }
 }
@@ -248,11 +266,13 @@ void shd_logger_syncToDisk(ShdLogger* logger) {
 
 void shd_logger_flushRecords(ShdLogger* logger, pthread_t callerThread) {
     MAGIC_ASSERT(logger);
-    LoggerThreadData* threadData = g_hash_table_lookup(logger->threadToDataMap, GUINT_TO_POINTER(callerThread));
+    LoggerThreadData* threadData = g_hash_table_lookup(
+        logger->threadToDataMap, GUINT_TO_POINTER(callerThread));
     MAGIC_ASSERT(threadData);
     /* send log messages from this thread to the helper */
-    if(!g_queue_is_empty(threadData->localRecordBundle)) {
-        g_async_queue_push(threadData->remoteLogHelperMailbox, threadData->localRecordBundle);
+    if (!g_queue_is_empty(threadData->localRecordBundle)) {
+        g_async_queue_push(threadData->remoteLogHelperMailbox,
+                           threadData->localRecordBundle);
         threadData->localRecordBundle = g_queue_new();
     }
 }
@@ -262,11 +282,10 @@ static gchar* _logger_getNewLocalTimeStr(ShdLogger* logger) {
 
     GDateTime* nowDateTime = g_date_time_new_now_local();
 
-    gchar* nowStr = nowDateTime ?
-            g_date_time_format(nowDateTime, "%F %H:%M:%S") :
-            strdup("0000-00-00 00:00:00");
+    gchar* nowStr = nowDateTime ? g_date_time_format(nowDateTime, "%F %H:%M:%S")
+                                : strdup("0000-00-00 00:00:00");
 
-    if(nowDateTime) {
+    if (nowDateTime) {
         g_date_time_unref(nowDateTime);
     }
 
@@ -278,17 +297,18 @@ static gchar* _logger_getNewRunTimeStr(ShdLogger* logger) {
 
     /* compute our run time */
     guint64 elapsed = g_timer_elapsed(logger->runTimer, NULL);
-    guint64 hours = elapsed/3600;
+    guint64 hours = elapsed / 3600;
     elapsed %= 3600;
-    guint64 minutes = elapsed/60;
+    guint64 minutes = elapsed / 60;
     elapsed %= 60;
     guint64 seconds = elapsed;
 
     /* create a buffer to hold the string */
     GString* runTimeString = g_string_new(NULL);
     g_string_printf(runTimeString,
-            "%02"G_GUINT64_FORMAT":%02"G_GUINT64_FORMAT":%02"G_GUINT64_FORMAT,
-            hours, minutes, seconds);
+                    "%02" G_GUINT64_FORMAT ":%02" G_GUINT64_FORMAT
+                    ":%02" G_GUINT64_FORMAT,
+                    hours, minutes, seconds);
 
     /* free the gstring and return the str */
     return g_string_free(runTimeString, FALSE);
@@ -300,9 +320,9 @@ static void _logger_logStartupMessage(ShdLogger* logger) {
     gchar* nowStr = _logger_getNewLocalTimeStr(logger);
 
     shd_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__,
-            "logging system started at %s", nowStr);
+                   "logging system started at %s", nowStr);
 
-    if(nowStr) {
+    if (nowStr) {
         g_free(nowStr);
     }
 }
@@ -314,12 +334,13 @@ static void _logger_logShutdownMessage(ShdLogger* logger) {
     gchar* runTimeStr = _logger_getNewRunTimeStr(logger);
 
     shd_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__,
-            "logging system stopped at %s, run time was %s", nowStr, runTimeStr);
+                   "logging system stopped at %s, run time was %s", nowStr,
+                   runTimeStr);
 
-    if(nowStr) {
+    if (nowStr) {
         g_free(nowStr);
     }
-    if(runTimeStr) {
+    if (runTimeStr) {
         g_free(runTimeStr);
     }
 }
@@ -339,10 +360,11 @@ static void _shd_logger_destroy_cb(Logger* logger) {
 ShdLogger* shd_logger_new(LogLevel filterLevel) {
     ShdLogger* logger = g_new(ShdLogger, 1);
     *logger = (ShdLogger){
-        .base = {
-            .log = _shd_logger_log_cb,
-            .destroy = _shd_logger_destroy_cb,
-        },
+        .base =
+            {
+                .log = _shd_logger_log_cb,
+                .destroy = _shd_logger_destroy_cb,
+            },
         .runTimer = g_timer_new(),
         .filterLevel = filterLevel,
         .shouldBuffer = TRUE,
@@ -361,9 +383,12 @@ ShdLogger* shd_logger_new(LogLevel filterLevel) {
     runArgs->commands = logger->helperCommands;
     runArgs->notifyDoneRunning = logger->helperLatch;
 
-    /* the thread will consume the reference to the runArgs struct, and will free it */
-    gint returnVal = pthread_create(&(logger->helper), NULL, (void*(*)(void*))loggerhelper_runHelperThread, runArgs);
-    if(returnVal != 0) {
+    /* the thread will consume the reference to the runArgs struct, and will
+     * free it */
+    gint returnVal =
+        pthread_create(&(logger->helper), NULL,
+                       (void* (*)(void*))loggerhelper_runHelperThread, runArgs);
+    if (returnVal != 0) {
         return NULL;
     }
 
@@ -411,7 +436,7 @@ void shd_logger_unref(ShdLogger* logger) {
     MAGIC_ASSERT(logger);
     logger->referenceCount--;
     gboolean shouldFree = (logger->referenceCount <= 0) ? TRUE : FALSE;
-    if(shouldFree) {
+    if (shouldFree) {
         _logger_free(logger);
     }
 }

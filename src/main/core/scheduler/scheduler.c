@@ -12,7 +12,6 @@
 #include <stddef.h>
 #include <sys/types.h>
 
-#include "support/logger/logger.h"
 #include "main/core/logger/shd_logger.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
@@ -23,6 +22,7 @@
 #include "main/utility/count_down_latch.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 struct _Scheduler {
     /* all worker threads used by the scheduler */

@@ -10,7 +10,6 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "support/logger/log_level.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
@@ -22,6 +21,7 @@
 #include "main/routing/packet.h"
 #include "main/routing/topology.h"
 #include "main/utility/count_down_latch.h"
+#include "support/logger/log_level.h"
 
 typedef struct _WorkerRunData WorkerRunData;
 struct _WorkerRunData {

@@ -10,11 +10,11 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "support/logger/log_level.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/options.h"
 #include "main/host/protocol.h"
 #include "main/routing/packet.h"
+#include "support/logger/log_level.h"
 
 typedef struct _Tracker Tracker;
 

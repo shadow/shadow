@@ -48,4 +48,3 @@ void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
     }
     va_end(vargs);
 }
-

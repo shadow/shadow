@@ -17,8 +17,6 @@
 #include <stddef.h>
 #include <unistd.h>
 
-#include "support/logger/log_level.h"
-#include "support/logger/logger.h"
 #include "main/core/logger/shd_logger.h"
 #include "main/core/master.h"
 #include "main/core/slave.h"
@@ -32,6 +30,8 @@
 #include "main/routing/topology.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
+#include "support/logger/log_level.h"
+#include "support/logger/logger.h"
 
 struct _Master {
     /* general options and user configuration for the simulation */

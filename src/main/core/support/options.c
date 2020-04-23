@@ -8,8 +8,8 @@
 
 #include <stddef.h>
 
-#include "support/logger/logger.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 struct _Options {
     GOptionContext *context;
