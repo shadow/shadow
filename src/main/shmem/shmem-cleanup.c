@@ -69,7 +69,7 @@ static void _shmemcleanup_unlinkIfShadow(const char* d_name,
         strncpy(name_buf + 1, d_name, SHD_SHMEM_FILE_NAME_NBYTES - 1);
         int rc = shm_unlink(name_buf);
         if (rc == 0) {
-            // FIXME(rwails) Change to use logging module when refactored.
+            // FIXME(rwails) Change to use logging module when refactored(?)
             g_printerr(
                 "** Removing orphaned shared memory file: %s\n", name_buf);
         }

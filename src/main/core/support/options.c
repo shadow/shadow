@@ -89,7 +89,7 @@ Options* options_new(gint argc, gchar* argv[]) {
     options->mainOptionGroup = g_option_group_new("main", "Main Options", "Primary simulator options", NULL, NULL);
     const GOptionEntry mainEntries[] = {
         {"cleanup-shared-memory", 'c', 0, G_OPTION_ARG_NONE, &(options->cleanupSharedMemory),
-         "Reclaim orphaned shared memory from previous Shadow processes", NULL},
+         "Exit after running cleanup routine.", NULL},
         {"data-directory", 'd', 0, G_OPTION_ARG_STRING, &(options->dataDirPath),
          "PATH to store simulation output ['shadow.data']", "PATH"},
         {"data-template", 'e', 0, G_OPTION_ARG_STRING,

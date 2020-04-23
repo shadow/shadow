@@ -198,13 +198,10 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         return EXIT_FAILURE;
     }
 
-    if (options_getCleanupSharedMemory(options)) {
-        shmemcleanup_tryCleanup();
+    shmemcleanup_tryCleanup();
 
-        if (!options_doRunPrintVersion(options) &&
-            options_getInputXMLFilename(options)->len == 0) {
-            return EXIT_SUCCESS;
-        }
+    if (options_getCleanupSharedMemory(options)) {
+        return EXIT_SUCCESS;
     }
 
     /* if they just want the shadow version, print it and exit */
