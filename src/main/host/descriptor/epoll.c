@@ -451,7 +451,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
             descriptorlistener_setMonitorStatus(
                 watch->listener,
                 DS_ACTIVE | DS_CLOSED | DS_READABLE | DS_WRITABLE,
-                DLF_OFF_TO_ON|DLF_ON_TO_OFF);
+                DLF_OFF_TO_ON | DLF_ON_TO_OFF);
             descriptor_addListener(watch->descriptor, watch->listener);
 
             /* initiate a callback if the new watched descriptor is ready */
@@ -491,7 +491,8 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
             watch->flags &= ~EWF_WATCHING;
 
             /* its deleted, so stop listening for updates */
-            descriptorlistener_setMonitorStatus(watch->listener, DS_NONE, DLF_NONE);
+            descriptorlistener_setMonitorStatus(
+                watch->listener, DS_NONE, DLF_NONE);
             descriptor_removeListener(watch->descriptor, watch->listener);
 
             /* unref gets called on the watch when it is removed from these tables */

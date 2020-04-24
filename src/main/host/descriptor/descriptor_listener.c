@@ -92,16 +92,12 @@ static gboolean _descriptorlistener_shouldNotify(DescriptorListener* listener,
     gboolean flipped = listener->monitoring & transitions;
     gboolean on = listener->monitoring & currentStatus;
 
-    switch(listener->filter) {
-        case DLF_OFF_TO_ON:
-            return flipped && on;
-        case DLF_ON_TO_OFF:
-            return flipped && !on;
-        case DLF_OFF_TO_ON|DLF_ON_TO_OFF:
-            return flipped;
+    switch (listener->filter) {
+        case DLF_OFF_TO_ON: return flipped && on;
+        case DLF_ON_TO_OFF: return flipped && !on;
+        case DLF_OFF_TO_ON | DLF_ON_TO_OFF: return flipped;
         case DLF_NONE:
-        default:
-            return 0;
+        default: return 0;
     }
 }
 
@@ -120,7 +116,8 @@ void descriptorlistener_onStatusChanged(DescriptorListener* listener,
                                         DescriptorStatus transitions) {
     MAGIC_ASSERT(listener);
 
-    if (_descriptorlistener_shouldNotify(listener, currentStatus, transitions)) {
+    if (_descriptorlistener_shouldNotify(
+            listener, currentStatus, transitions)) {
         _descriptorlistener_invokeNotifyFunc(listener);
     }
 }

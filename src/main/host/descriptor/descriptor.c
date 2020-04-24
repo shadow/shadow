@@ -90,7 +90,7 @@ gint* descriptor_getHandleReference(Descriptor* descriptor) {
 
 static void _descriptor_handleStatusChange(gpointer object, gpointer argument) {
     Descriptor* descriptor = object;
-    DescriptorStatus oldStatus = (DescriptorStatus) GPOINTER_TO_INT(argument);
+    DescriptorStatus oldStatus = (DescriptorStatus)GPOINTER_TO_INT(argument);
     MAGIC_ASSERT(descriptor);
 
     /* Identify which bits changed since this task was queued. */
@@ -113,8 +113,8 @@ static void _descriptor_handleStatusChange(gpointer object, gpointer argument) {
 
         /* Call only if the listener is still in the table. */
         if (g_hash_table_contains(descriptor->listeners, listener)) {
-            descriptorlistener_onStatusChanged(listener, descriptor->status,
-                    statusesChanged);
+            descriptorlistener_onStatusChanged(
+                listener, descriptor->status, statusesChanged);
         }
 
         /* The above callback may have changes status again,
@@ -146,8 +146,9 @@ void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gb
          * code called adjustStatus finishes it's logic first before
          * the listener callbacks are executed and potentially change
          * the state of the descriptor again. */
-        Task* handleStatusChange = task_new(_descriptor_handleStatusChange,
-                descriptor, GINT_TO_POINTER(oldStatus), descriptor_unref, NULL);
+        Task* handleStatusChange =
+            task_new(_descriptor_handleStatusChange, descriptor,
+                     GINT_TO_POINTER(oldStatus), descriptor_unref, NULL);
         worker_scheduleTask(handleStatusChange, 0);
 
         /* The descriptor will be unreffed after the task executes. */

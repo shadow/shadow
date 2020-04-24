@@ -432,11 +432,11 @@ static void _process_unrefWaiter(ProcessWaiter* waiter) {
             thread_unref(waiter->thread);
         }
         if (waiter->timer) {
-    		descriptor_unref((Descriptor*)waiter->timer);
+            descriptor_unref((Descriptor*)waiter->timer);
         }
         if (waiter->descriptor) {
-    		descriptor_unref(waiter->descriptor);
-    	}
+            descriptor_unref(waiter->descriptor);
+        }
         free(waiter);
     }
 }
@@ -446,14 +446,15 @@ static void _process_notifyAsync(gpointer object, gpointer argument) {
     ProcessWaiter* waiter = argument;
     MAGIC_ASSERT(proc);
 
-    debug("Unblocking thread %p of process %s",
-        		waiter->thread, _process_getName(proc));
+    debug("Unblocking thread %p of process %s", waiter->thread,
+          _process_getName(proc));
 
     /* Unregister both listeners whenever either one triggers. */
     if (waiter->timer && waiter->timerListener) {
         descriptor_removeListener(
             (Descriptor*)waiter->timer, waiter->timerListener);
-        descriptorlistener_setMonitorStatus(waiter->timerListener, DS_NONE, DLF_NONE);
+        descriptorlistener_setMonitorStatus(
+            waiter->timerListener, DS_NONE, DLF_NONE);
     }
 
     if (waiter->descriptor && waiter->descriptorListener) {
@@ -466,10 +467,10 @@ static void _process_notifyAsync(gpointer object, gpointer argument) {
     process_continue(proc, waiter->thread);
 
     /* Destroy the listeners, which will also unref and free the waiter. */
-    if(waiter->timerListener) {
-    	descriptorlistener_unref(waiter->timerListener);
+    if (waiter->timerListener) {
+        descriptorlistener_unref(waiter->timerListener);
     }
-    if(waiter->descriptorListener) {
+    if (waiter->descriptorListener) {
         descriptorlistener_unref(waiter->descriptorListener);
     }
 }
@@ -495,29 +496,31 @@ void process_waitAsync(Process* proc, Thread* thread, Timer* timer,
         thread_ref(waiter->thread);
     }
     if (waiter->timer) {
-		descriptor_ref(waiter->timer);
+        descriptor_ref(waiter->timer);
     }
     if (waiter->descriptor) {
-		descriptor_ref(waiter->descriptor);
-	}
+        descriptor_ref(waiter->descriptor);
+    }
 
     /* Now set up the listeners. */
     if (waiter->timer) {
-    	/* The timer is used for timeouts. */
+        /* The timer is used for timeouts. */
         waiter->timerListener = descriptorlistener_new(
             _process_notifyAsync, proc,
             (DescriptorStatusObjectFreeFunc)process_unref, waiter,
             (DescriptorStatusArgumentFreeFunc)_process_unrefWaiter);
 
         /* The listener holds refs to the process and waiter. */
-    	process_ref(proc);
+        process_ref(proc);
         waiter->referenceCount++;
 
         /* The timer is readable when it expires */
-        descriptorlistener_setMonitorStatus(waiter->timerListener, DS_READABLE, DLF_OFF_TO_ON);
+        descriptorlistener_setMonitorStatus(
+            waiter->timerListener, DS_READABLE, DLF_OFF_TO_ON);
 
         /* Attach the listener to the timer. */
-        descriptor_addListener((Descriptor*)waiter->timer, waiter->timerListener);
+        descriptor_addListener(
+            (Descriptor*)waiter->timer, waiter->timerListener);
     }
 
     if (waiter->descriptor) {
@@ -528,7 +531,7 @@ void process_waitAsync(Process* proc, Thread* thread, Timer* timer,
             (DescriptorStatusArgumentFreeFunc)_process_unrefWaiter);
 
         /* The listener holds refs to the process and waiter. */
-    	process_ref(proc);
+        process_ref(proc);
         waiter->referenceCount++;
 
         /* Monitor the requested status. */
@@ -536,9 +539,8 @@ void process_waitAsync(Process* proc, Thread* thread, Timer* timer,
             waiter->descriptorListener, waitStatus, DLF_OFF_TO_ON);
 
         /* Attach the listener to the descriptor. */
-		descriptor_addListener(waiter->descriptor, waiter->descriptorListener);
+        descriptor_addListener(waiter->descriptor, waiter->descriptorListener);
     }
 
-    debug("Blocking thread %p of process %s",
-    		thread, _process_getName(proc));
+    debug("Blocking thread %p of process %s", thread, _process_getName(proc));
 }

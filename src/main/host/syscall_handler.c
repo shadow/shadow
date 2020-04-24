@@ -189,8 +189,7 @@ static SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     if (requestToBlock && !wasBlocked) {
         /* We need to block for a while following the requested timeout. */
         _syscallhandler_setBlockTimeout(sys, req);
-        process_waitAsync(
-            sys->process, sys->thread, sys->timer, NULL, DS_NONE);
+        process_waitAsync(sys->process, sys->thread, sys->timer, NULL, DS_NONE);
 
         /* tell the thread we blocked it */
         return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};

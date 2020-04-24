@@ -110,7 +110,8 @@ void threadpreload_free(Thread* base) {
     g_free(thread);
 }
 
-static void _threadpreload_create_ipc_sockets(ThreadPreload* thread, int* child_fd) {
+static void _threadpreload_create_ipc_sockets(ThreadPreload* thread,
+                                              int* child_fd) {
     utility_assert(thread != NULL && child_fd != NULL);
 
     int socks[2] = {0, 0};
@@ -130,7 +131,7 @@ static void _threadpreload_create_ipc_sockets(ThreadPreload* thread, int* child_
 }
 
 static int _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
-                                 char* const argv[], char* const envp[]) {
+                                    char* const argv[], char* const envp[]) {
     int rc = 0;
     pid_t pid = fork();
 
@@ -257,28 +258,28 @@ void threadpreload_resume(Thread* base) {
                     &thread->currentEvent.event_data.syscall.syscall_args);
 
                 if (result.state == SYSCALL_RETURN_NATIVE) {
-                	// FIXME: SYSCALL_RETURN_NATIVE unhandled, and we might want
-					// it e.g. for a read that turns out to be to a file rather
-					// than a socket.
+                    // FIXME: SYSCALL_RETURN_NATIVE unhandled, and we might want
+                    // it e.g. for a read that turns out to be to a file rather
+                    // than a socket.
                 } else if (result.state == SYSCALL_RETURN_BLOCKED) {
-                	blocked = true;
+                    blocked = true;
                 } else if (result.state == SYSCALL_RETURN_DONE) {
-					_threadpreload_flushReads(thread);
-					_threadpreload_flushWrites(thread);
+                    _threadpreload_flushReads(thread);
+                    _threadpreload_flushWrites(thread);
 
-					// We've handled the syscall, so we notify that we are done
-					// with shmem IPC
-					ShimEvent ipc_complete_ev = {
-						.event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
-					};
+                    // We've handled the syscall, so we notify that we are done
+                    // with shmem IPC
+                    ShimEvent ipc_complete_ev = {
+                        .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
+                    };
 
-					shimevent_sendEvent(thread->eventFD, &ipc_complete_ev);
+                    shimevent_sendEvent(thread->eventFD, &ipc_complete_ev);
 
-					// Now send the result of the syscall
-					ShimEvent shim_result = {
-						.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
-						.event_data.syscall_complete.retval = result.retval};
-					shimevent_sendEvent(thread->eventFD, &shim_result);
+                    // Now send the result of the syscall
+                    ShimEvent shim_result = {
+                        .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                        .event_data.syscall_complete.retval = result.retval};
+                    shimevent_sendEvent(thread->eventFD, &shim_result);
                 }
                 break;
             }
@@ -352,7 +353,7 @@ gboolean threadpreload_isRunning(Thread* base) {
  * The returned ShMemBlock is owned by the caller and needs to be freed.
  */
 static ShMemBlock* _threadpreload_readPtrImpl(ThreadPreload* thread,
-                                           PluginPtr plugin_src, size_t n) {
+                                              PluginPtr plugin_src, size_t n) {
 
     // Allocate a block for the clone
     ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
@@ -379,7 +380,8 @@ static ShMemBlock* _threadpreload_readPtrImpl(ThreadPreload* thread,
     return blk;
 }
 
-void* threadpreload_clonePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
+void* threadpreload_clonePluginPtr(Thread* base, PluginPtr plugin_src,
+                                   size_t n) {
     ThreadPreload* thread = _threadToThreadPreload(base);
     ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n);
     g_hash_table_insert(thread->ptr_to_block, &blk->p, blk);
@@ -397,7 +399,7 @@ void threadpreload_releaseClonedPtr(Thread* base, void* p) {
 }
 
 const void* threadpreload_readPluginPtr(Thread* base, PluginPtr plugin_src,
-                                     size_t n) {
+                                        size_t n) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n);
@@ -411,7 +413,8 @@ const void* threadpreload_readPluginPtr(Thread* base, PluginPtr plugin_src,
     return blk->p;
 }
 
-void* threadpreload_writePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
+void* threadpreload_writePluginPtr(Thread* base, PluginPtr plugin_src,
+                                   size_t n) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     // Allocate a block for the clone

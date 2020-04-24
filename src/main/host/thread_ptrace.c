@@ -300,8 +300,8 @@ void threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
 }
 
 static void _threadptrace_handleSyscall(ThreadPtrace* thread) {
-	utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE);
-	struct user_regs_struct* const regs = &thread->syscall.regs;
+    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE);
+    struct user_regs_struct* const regs = &thread->syscall.regs;
 
     SysCallArgs args = {
         .number = regs->orig_rax,
@@ -327,8 +327,8 @@ void threadptrace_resume(Thread* base) {
             case THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE:
                 debug("THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE");
 
-				// Ask the syscall handler to handle it.
-				_threadptrace_handleSyscall(thread);
+                // Ask the syscall handler to handle it.
+                _threadptrace_handleSyscall(thread);
 
                 switch (thread->syscall.sysCallReturn.state) {
                     case SYSCALL_RETURN_BLOCKED: return;

@@ -32,8 +32,8 @@
 #include <unistd.h>
 #include <wchar.h>
 
-#include "main/host/descriptor/timer.h"
 #include "main/core/support/definitions.h"
+#include "main/host/descriptor/timer.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/thread.h"
 
