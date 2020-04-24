@@ -1,12 +1,3 @@
-#include "main/host/thread_shim.h"
-
-/*
- * shd-thread.c
- *
- *  Created on: Dec 13, 2019
- *      Author: rjansen
- */
-
 #include <signal.h>
 #include <string.h>
 
@@ -17,15 +8,15 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "main/host/thread_preload.h"
 #include "main/host/thread_protected.h"
-#include "main/host/thread_shim.h"
 #include "main/shmem/shmem_allocator.h"
 #include "shim/shim_event.h"
 #include "support/logger/logger.h"
 
-#define THREADSHIM_TYPE_ID 13357
+#define THREADPRELOAD_TYPE_ID 13357
 
-struct _ThreadShim {
+struct _ThreadPreload {
     Thread base;
 
     // needs to store comm channel state, etc.
@@ -52,32 +43,32 @@ typedef struct _ShMemWriteBlock {
     size_t n;
 } ShMemWriteBlock;
 
-static ThreadShim* _threadToThreadShim(Thread* thread) {
-    utility_assert(thread->type_id == THREADSHIM_TYPE_ID);
-    return (ThreadShim*)thread;
+static ThreadPreload* _threadToThreadPreload(Thread* thread) {
+    utility_assert(thread->type_id == THREADPRELOAD_TYPE_ID);
+    return (ThreadPreload*)thread;
 }
 
-static Thread* _threadShimToThread(ThreadShim* thread) {
+static Thread* _threadPreloadToThread(ThreadPreload* thread) {
     return (Thread*)thread;
 }
 
-static void _threadshim_auxFree(void* p, void* _) {
+static void _threadpreload_auxFree(void* p, void* _) {
     ShMemBlock* blk = (ShMemBlock*)p;
     shmemallocator_globalFree(blk);
     free(blk);
 }
 
-static void _threadshim_flushReads(ThreadShim* thread) {
+static void _threadpreload_flushReads(ThreadPreload* thread) {
     if (thread->read_list) {
-        g_list_foreach(thread->read_list, _threadshim_auxFree, NULL);
+        g_list_foreach(thread->read_list, _threadpreload_auxFree, NULL);
         g_list_free(thread->read_list);
         thread->read_list = NULL;
     }
 }
 
-static void _threadshim_auxWrite(void* p, void* t) {
+static void _threadpreload_auxWrite(void* p, void* t) {
     ShMemWriteBlock* write_blk = (ShMemWriteBlock*)p;
-    ThreadShim* thread = (ThreadShim*)t;
+    ThreadPreload* thread = (ThreadPreload*)t;
 
     ShimEvent req = {
         .event_id = SHD_SHIM_EVENT_WRITE_REQ,
@@ -96,16 +87,16 @@ static void _threadshim_auxWrite(void* p, void* t) {
     utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
 }
 
-static void _threadshim_flushWrites(ThreadShim* thread) {
+static void _threadpreload_flushWrites(ThreadPreload* thread) {
     if (thread->write_list) {
-        g_list_foreach(thread->write_list, _threadshim_auxWrite, thread);
+        g_list_foreach(thread->write_list, _threadpreload_auxWrite, thread);
         g_list_free(thread->write_list);
         thread->write_list = NULL;
     }
 }
 
-void threadshim_free(Thread* base) {
-    ThreadShim* thread = _threadToThreadShim(base);
+void threadpreload_free(Thread* base) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
 
     if (thread->sys) {
         syscallhandler_unref(thread->sys);
@@ -119,7 +110,7 @@ void threadshim_free(Thread* base) {
     g_free(thread);
 }
 
-static void _threadshim_create_ipc_sockets(ThreadShim* thread, int* child_fd) {
+static void _threadpreload_create_ipc_sockets(ThreadPreload* thread, int* child_fd) {
     utility_assert(thread != NULL && child_fd != NULL);
 
     int socks[2] = {0, 0};
@@ -138,7 +129,7 @@ static void _threadshim_create_ipc_sockets(ThreadShim* thread, int* child_fd) {
     }
 }
 
-static int _threadshim_fork_exec(ThreadShim* thread, const char* file,
+static int _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
                                  char* const argv[], char* const envp[]) {
     int rc = 0;
     pid_t pid = fork();
@@ -166,7 +157,7 @@ static int _threadshim_fork_exec(ThreadShim* thread, const char* file,
 }
 
 // status should have been set by caller using waitpid.
-static void _threadshim_cleanup(ThreadShim* thread, int status) {
+static void _threadpreload_cleanup(ThreadPreload* thread, int status) {
     if (WIFEXITED(status)) {
         thread->returnCode = WEXITSTATUS(status);
         debug("child %d exited with status %d", thread->childPID,
@@ -183,14 +174,14 @@ static void _threadshim_cleanup(ThreadShim* thread, int status) {
     thread->isRunning = 0;
 }
 
-void threadshim_run(Thread* base, gchar** argv, gchar** envv) {
-    ThreadShim* thread = _threadToThreadShim(base);
+void threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
 
     /* set the env for the child */
     gchar** myenvv = g_strdupv(envv);
 
     int child_fd = 0;
-    _threadshim_create_ipc_sockets(thread, &child_fd);
+    _threadpreload_create_ipc_sockets(thread, &child_fd);
     utility_assert(thread->eventFD != -1 && child_fd != -1);
 
     char buf[64];
@@ -206,7 +197,7 @@ void threadshim_run(Thread* base, gchar** argv, gchar** envv) {
     g_free(envStr);
     g_free(argStr);
 
-    _threadshim_fork_exec(thread, argv[0], argv, myenvv);
+    _threadpreload_fork_exec(thread, argv[0], argv, myenvv);
 
     // close the child sock, it is no longer needed
     close(child_fd);
@@ -223,18 +214,18 @@ void threadshim_run(Thread* base, gchar** argv, gchar** envv) {
     thread->isRunning = 1;
 
     /* this will cause us to call main() */
-    thread_resume(_threadShimToThread(thread));
+    thread_resume(_threadPreloadToThread(thread));
 }
 
-static inline void _threadshim_waitForNextEvent(ThreadShim* thread) {
-    MAGIC_ASSERT(_threadShimToThread(thread));
+static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread) {
+    MAGIC_ASSERT(_threadPreloadToThread(thread));
     utility_assert(thread->eventFD > 0);
     shimevent_recvEvent(thread->eventFD, &thread->currentEvent);
     debug("received shim_event %d", thread->currentEvent.event_id);
 }
 
-void threadshim_resume(Thread* base) {
-    ThreadShim* thread = _threadToThreadShim(base);
+void threadpreload_resume(Thread* base) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
 
     utility_assert(thread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
 
@@ -256,7 +247,7 @@ void threadshim_resume(Thread* base) {
                 int status;
                 pid_t rc = waitpid(thread->childPID, &status, 0);
                 utility_assert(rc == thread->childPID);
-                _threadshim_cleanup(thread, status);
+                _threadpreload_cleanup(thread, status);
                 // it will not be sending us any more events
                 return;
             }
@@ -272,8 +263,8 @@ void threadshim_resume(Thread* base) {
                 } else if (result.state == SYSCALL_RETURN_BLOCKED) {
                 	blocked = true;
                 } else if (result.state == SYSCALL_RETURN_DONE) {
-					_threadshim_flushReads(thread);
-					_threadshim_flushWrites(thread);
+					_threadpreload_flushReads(thread);
+					_threadpreload_flushWrites(thread);
 
 					// We've handled the syscall, so we notify that we are done
 					// with shmem IPC
@@ -306,14 +297,14 @@ void threadshim_resume(Thread* base) {
             return;
         } else {
             /* previous event was handled, wait for next one */
-            _threadshim_waitForNextEvent(thread);
+            _threadpreload_waitForNextEvent(thread);
         }
     }
 }
 
-void threadshim_terminate(Thread* base) {
+void threadpreload_terminate(Thread* base) {
     MAGIC_ASSERT(base);
-    ThreadShim* thread = _threadToThreadShim(base);
+    ThreadPreload* thread = _threadToThreadPreload(base);
     // TODO [rwails]: come back and make this logic more solid
 
     /* make sure we cleanup circular refs */
@@ -339,16 +330,16 @@ void threadshim_terminate(Thread* base) {
         rc = waitpid(thread->childPID, &status, 0);
         utility_assert(rc != -1 && rc > 0);
     }
-    _threadshim_cleanup(thread, status);
+    _threadpreload_cleanup(thread, status);
 }
 
-int threadshim_getReturnCode(Thread* base) {
-    ThreadShim* thread = _threadToThreadShim(base);
+int threadpreload_getReturnCode(Thread* base) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
     return thread->returnCode;
 }
 
-gboolean threadshim_isRunning(Thread* base) {
-    ThreadShim* thread = _threadToThreadShim(base);
+gboolean threadpreload_isRunning(Thread* base) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
 
     // TODO
     // return TRUE if at least one thread is still running
@@ -360,7 +351,7 @@ gboolean threadshim_isRunning(Thread* base) {
  * Helper function, issues a clone/read request to the plugin.
  * The returned ShMemBlock is owned by the caller and needs to be freed.
  */
-static ShMemBlock* _threadshim_readPtrImpl(ThreadShim* thread,
+static ShMemBlock* _threadpreload_readPtrImpl(ThreadPreload* thread,
                                            PluginPtr plugin_src, size_t n) {
 
     // Allocate a block for the clone
@@ -388,15 +379,15 @@ static ShMemBlock* _threadshim_readPtrImpl(ThreadShim* thread,
     return blk;
 }
 
-void* threadshim_clonePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
-    ThreadShim* thread = _threadToThreadShim(base);
-    ShMemBlock* blk = _threadshim_readPtrImpl(thread, plugin_src, n);
+void* threadpreload_clonePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
+    ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n);
     g_hash_table_insert(thread->ptr_to_block, &blk->p, blk);
     return blk->p;
 }
 
-void threadshim_releaseClonedPtr(Thread* base, void* p) {
-    ThreadShim* thread = _threadToThreadShim(base);
+void threadpreload_releaseClonedPtr(Thread* base, void* p) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
 
     ShMemBlock* blk = g_hash_table_lookup(thread->ptr_to_block, &p);
     utility_assert(blk != NULL);
@@ -405,11 +396,11 @@ void threadshim_releaseClonedPtr(Thread* base, void* p) {
     free(blk);
 }
 
-const void* threadshim_readPluginPtr(Thread* base, PluginPtr plugin_src,
+const void* threadpreload_readPluginPtr(Thread* base, PluginPtr plugin_src,
                                      size_t n) {
-    ThreadShim* thread = _threadToThreadShim(base);
+    ThreadPreload* thread = _threadToThreadPreload(base);
 
-    ShMemBlock* blk = _threadshim_readPtrImpl(thread, plugin_src, n);
+    ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n);
 
     GList* new_head = g_list_append(thread->read_list, blk);
     utility_assert(new_head);
@@ -420,8 +411,8 @@ const void* threadshim_readPluginPtr(Thread* base, PluginPtr plugin_src,
     return blk->p;
 }
 
-void* threadshim_writePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
-    ThreadShim* thread = _threadToThreadShim(base);
+void* threadpreload_writePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
 
     // Allocate a block for the clone
     ShMemWriteBlock* write_blk = calloc(1, sizeof(ShMemWriteBlock));
@@ -441,29 +432,29 @@ void* threadshim_writePluginPtr(Thread* base, PluginPtr plugin_src, size_t n) {
     return write_blk->blk.p;
 }
 
-Thread* threadshim_new(Host* host, Process* process, gint threadID) {
-    ThreadShim* thread = g_new0(ThreadShim, 1);
+Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
+    ThreadPreload* thread = g_new0(ThreadPreload, 1);
 
-    thread->base = (Thread){.run = threadshim_run,
-                            .resume = threadshim_resume,
-                            .terminate = threadshim_terminate,
-                            .getReturnCode = threadshim_getReturnCode,
-                            .isRunning = threadshim_isRunning,
-                            .free = threadshim_free,
-                            .clonePluginPtr = threadshim_clonePluginPtr,
-                            .releaseClonedPtr = threadshim_releaseClonedPtr,
-                            .readPluginPtr = threadshim_readPluginPtr,
-                            .writePluginPtr = threadshim_writePluginPtr,
-                            .type_id = THREADSHIM_TYPE_ID,
+    thread->base = (Thread){.run = threadpreload_run,
+                            .resume = threadpreload_resume,
+                            .terminate = threadpreload_terminate,
+                            .getReturnCode = threadpreload_getReturnCode,
+                            .isRunning = threadpreload_isRunning,
+                            .free = threadpreload_free,
+                            .clonePluginPtr = threadpreload_clonePluginPtr,
+                            .releaseClonedPtr = threadpreload_releaseClonedPtr,
+                            .readPluginPtr = threadpreload_readPluginPtr,
+                            .writePluginPtr = threadpreload_writePluginPtr,
+                            .type_id = THREADPRELOAD_TYPE_ID,
                             .referenceCount = 1};
     MAGIC_INIT(&thread->base);
 
     thread->threadID = threadID;
     thread->sys =
-        syscallhandler_new(host, process, _threadShimToThread(thread));
+        syscallhandler_new(host, process, _threadPreloadToThread(thread));
 
     _Static_assert(
-        sizeof(void*) == 8, "thread-shim impl assumes 8 byte pointers");
+        sizeof(void*) == 8, "thread-preload impl assumes 8 byte pointers");
     thread->ptr_to_block = g_hash_table_new(g_int64_hash, g_int64_equal);
     thread->read_list = NULL;
     thread->write_list = NULL;
@@ -474,5 +465,5 @@ Thread* threadshim_new(Host* host, Process* process, gint threadID) {
     // of the sim. but the process may not launch/start until later. any
     // resources for launch/start should be allocated in the respective funcs.
 
-    return _threadShimToThread(thread);
+    return _threadPreloadToThread(thread);
 }

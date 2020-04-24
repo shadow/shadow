@@ -64,8 +64,8 @@ set(shadow_srcs
     host/syscall_handler.c
     host/thread.c
     host/host.c
+    host/thread_preload.c
     host/thread_ptrace.c
-    host/thread_shim.c
     host/network_interface.c
     host/tracker.c
 

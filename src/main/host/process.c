@@ -48,6 +48,7 @@
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/thread.h"
+#include "main/host/thread_preload.h"
 #include "main/host/tracker.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
@@ -56,7 +57,6 @@
 #include "support/logger/logger.h"
 
 #include "main/host/thread_ptrace.h"
-#include "main/host/thread_shim.h"
 
 struct _Process {
     /* Host owning this process */
@@ -179,7 +179,7 @@ static void _process_start(Process* proc) {
             threadptrace_new(proc->host, proc, proc->threadIDCounter++);
     } else if (proc->interposeMethod == INTERPOSE_PRELOAD) {
         proc->mainThread =
-            threadshim_new(proc->host, proc, proc->threadIDCounter++);
+            threadpreload_new(proc->host, proc, proc->threadIDCounter++);
     } else {
         error("Bad interposeMethod %d", proc->interposeMethod);
     }
