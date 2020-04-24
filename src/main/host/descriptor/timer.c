@@ -46,9 +46,12 @@ struct _Timer {
 
 static void _timer_close(Timer* timer) {
     MAGIC_ASSERT(timer);
+    debug("timer fd %i closing now", timer->super.handle);
     timer->isClosed = TRUE;
     descriptor_adjustStatus(&(timer->super), DS_ACTIVE, FALSE);
-    host_closeDescriptor(worker_getActiveHost(), timer->super.handle);
+    if(timer->super.handle > 0) {
+		host_closeDescriptor(worker_getActiveHost(), timer->super.handle);
+    }
 }
 
 static void _timer_free(Timer* timer) {
@@ -231,7 +234,9 @@ static void _timer_expire(Timer* timer, gpointer data) {
     /* this is a task callback event */
 
     guint expireID = GPOINTER_TO_UINT(data);
-    debug("timer fd %i expired; isClosed=%i expireID=%u minValidExpireID=%u", timer->isClosed, expireID, timer->minValidExpireID);
+    debug("timer fd %i expired; isClosed=%i expireID=%u minValidExpireID=%u",
+    		timer->super.handle,
+    		timer->isClosed, expireID, timer->minValidExpireID);
 
     timer->numEventsScheduled--;
 
@@ -311,6 +316,15 @@ gint timer_setTime(Timer* timer, gint flags,
         return -1;
     }
 
+    debug("Setting timer value to "
+            "%"G_GUINT64_FORMAT".%09"G_GUINT64_FORMAT" seconds "
+            "and timer interval to "
+            "%"G_GUINT64_FORMAT".%09"G_GUINT64_FORMAT" seconds "
+            "on timer fd %d",
+            new_value->it_value.tv_sec, new_value->it_value.tv_nsec,
+            new_value->it_interval.tv_sec, new_value->it_interval.tv_nsec,
+            timer->super.handle);
+
     /* first get the old value if requested */
     if(old_value) {
         /* old value is always relative, even if TFD_TIMER_ABSTIME is set */
@@ -346,6 +360,9 @@ ssize_t timer_read(Timer* timer, void *buf, size_t count) {
             return (ssize_t) -1;
         }
 
+        debug("Reading %"G_GUINT64_FORMAT" expirations from timer fd %d",
+                timer->expireCountSinceLastSet, timer->super.handle);
+
         memcpy(buf, &(timer->expireCountSinceLastSet), sizeof(guint64));
 
         /* reset the expire count since we reported it */
@@ -358,4 +375,9 @@ ssize_t timer_read(Timer* timer, void *buf, size_t count) {
         errno = EAGAIN;
         return (ssize_t) -1;
     }
+}
+
+guint64 timer_getExpirationCount(Timer* timer) {
+    MAGIC_ASSERT(timer);
+    return timer->expireCountSinceLastSet;
 }

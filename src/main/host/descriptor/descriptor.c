@@ -88,6 +88,42 @@ gint* descriptor_getHandleReference(Descriptor* descriptor) {
     return &(descriptor->handle);
 }
 
+static void _descriptor_handleStatusChange(gpointer object, gpointer argument) {
+    Descriptor* descriptor = object;
+    DescriptorStatus oldStatus = (DescriptorStatus) GPOINTER_TO_INT(argument);
+    MAGIC_ASSERT(descriptor);
+
+    /* Identify which bits changed since this task was queued. */
+    DescriptorStatus statusesChanged = descriptor->status ^ oldStatus;
+
+    if (!statusesChanged) {
+        return;
+    }
+
+    /* Tell our listeners there was some activity on this descriptor.
+     * We can't use an iterator here, because the listener table may
+     * be modified in the onStatusChanged callback. Instead we get a
+     * list of the keys and do lookups on those. */
+    GList* listenerList = g_hash_table_get_keys(descriptor->listeners);
+
+    /* Iterate the listeners. */
+    GList* item = g_list_first(listenerList);
+    while (statusesChanged && item) {
+        DescriptorListener* listener = item->data;
+
+        /* Call only if the listener is still in the table. */
+        if (g_hash_table_contains(descriptor->listeners, listener)) {
+            descriptorlistener_onStatusChanged(listener, descriptor->status,
+                    statusesChanged);
+        }
+
+        /* The above callback may have changes status again,
+         * so make sure we consider the latest status state. */
+        statusesChanged = descriptor->status ^ oldStatus;
+        item = g_list_next(item);
+    }
+}
+
 void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gboolean doSetBits){
     MAGIC_ASSERT(descriptor);
 
@@ -106,15 +142,20 @@ void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gb
     DescriptorStatus statusesChanged = descriptor->status ^ oldStatus;
 
     if (statusesChanged) {
-        /* Tell our listeners there was some activity on this descriptor */
-        GHashTableIter iter;
-        gpointer key, value;
-        g_hash_table_iter_init(&iter, descriptor->listeners);
+        /* We execute the handler via a task, to make sure whatever
+         * code called adjustStatus finishes it's logic first before
+         * the listener callbacks are executed and potentially change
+         * the state of the descriptor again. */
+        Task* handleStatusChange = task_new(_descriptor_handleStatusChange,
+                descriptor, GINT_TO_POINTER(oldStatus), descriptor_unref, NULL);
+        worker_scheduleTask(handleStatusChange, 0);
 
-        while (g_hash_table_iter_next(&iter, &key, &value)) {
-            DescriptorListener* listener = value;
-            descriptorlistener_onStatusChanged(listener, statusesChanged);
-        }
+        /* The descriptor will be unreffed after the task executes. */
+        descriptor_ref(descriptor);
+
+        /* A ref to the task is held by the event in the scheduler.
+         * We don't need our reference anymore. */
+        task_unref(handleStatusChange);
     }
 }
 

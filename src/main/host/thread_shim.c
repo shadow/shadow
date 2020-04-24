@@ -265,31 +265,29 @@ void threadshim_resume(Thread* base) {
                     thread->sys,
                     &thread->currentEvent.event_data.syscall.syscall_args);
 
-                // FIXME(rwails) I need to update where this occurs when we
-                // implement blocking calls
+                if (result.state == SYSCALL_RETURN_NATIVE) {
+                	// FIXME: SYSCALL_RETURN_NATIVE unhandled, and we might want
+					// it e.g. for a read that turns out to be to a file rather
+					// than a socket.
+                } else if (result.state == SYSCALL_RETURN_BLOCKED) {
+                	blocked = true;
+                } else if (result.state == SYSCALL_RETURN_DONE) {
+					_threadshim_flushReads(thread);
+					_threadshim_flushWrites(thread);
 
-                _threadshim_flushReads(thread);
-                _threadshim_flushWrites(thread);
+					// We've handled the syscall, so we notify that we are done
+					// with shmem IPC
+					ShimEvent ipc_complete_ev = {
+						.event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
+					};
 
-                // We've handled the syscall, so we notify that we are done
-                // with shmem IPC
-                ShimEvent ipc_complete_ev = {
-                    .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
-                };
+					shimevent_sendEvent(thread->eventFD, &ipc_complete_ev);
 
-                shimevent_sendEvent(thread->eventFD, &ipc_complete_ev);
-
-                if (result.state == SYSCALL_RETURN_DONE) {
-                    ShimEvent shim_result = {
-                        .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
-                        .event_data.syscall_complete.retval = result.retval};
-                    shimevent_sendEvent(thread->eventFD, &shim_result);
-                } else {
-                    // FIXME: SYSCALL_RETURN_NATIVE unhandled, and we might want
-                    // it e.g. for a read that turns out to be to a file rather
-                    // than a socket.
-                    utility_assert(result.state == SYSCALL_RETURN_BLOCKED);
-                    blocked = true;
+					// Now send the result of the syscall
+					ShimEvent shim_result = {
+						.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+						.event_data.syscall_complete.retval = result.retval};
+					shimevent_sendEvent(thread->eventFD, &shim_result);
                 }
                 break;
             }
@@ -311,13 +309,6 @@ void threadshim_resume(Thread* base) {
             _threadshim_waitForNextEvent(thread);
         }
     }
-}
-
-void threadshim_setSysCallResult(Thread* base, SysCallReg retval) {
-    ThreadShim* thread = _threadToThreadShim(base);
-    thread->currentEvent =
-        (ShimEvent){.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
-                    .event_data.syscall_complete.retval = retval};
 }
 
 void threadshim_terminate(Thread* base) {
@@ -456,7 +447,6 @@ Thread* threadshim_new(Host* host, Process* process, gint threadID) {
     thread->base = (Thread){.run = threadshim_run,
                             .resume = threadshim_resume,
                             .terminate = threadshim_terminate,
-                            .setSysCallResult = threadshim_setSysCallResult,
                             .getReturnCode = threadshim_getReturnCode,
                             .isRunning = threadshim_isRunning,
                             .free = threadshim_free,

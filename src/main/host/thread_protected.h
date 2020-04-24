@@ -15,7 +15,6 @@ struct _Thread {
     void (*run)(Thread* thread, gchar** argv, gchar** envv);
     void (*resume)(Thread* thread);
     void (*terminate)(Thread* thread);
-    void (*setSysCallResult)(Thread* thread, SysCallReg retval);
     int (*getReturnCode)(Thread* thread);
     gboolean (*isRunning)(Thread* thread);
     void (*free)(Thread* thread);

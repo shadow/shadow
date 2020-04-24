@@ -32,8 +32,10 @@
 #include <unistd.h>
 #include <wchar.h>
 
+#include "main/host/descriptor/timer.h"
 #include "main/core/support/definitions.h"
 #include "main/host/syscall_handler.h"
+#include "main/host/thread.h"
 
 Process* process_new(Host* host, guint processID, SimulationTime startTime,
                      SimulationTime stopTime, InterposeMethod interposeMethod,
@@ -44,7 +46,7 @@ void process_ref(Process* proc);
 void process_unref(Process* proc);
 
 void process_schedule(Process* proc, gpointer nothing);
-void process_continue(Process* proc);
+void process_continue(Process* proc, Thread* thread);
 void process_stop(Process* proc);
 
 gboolean process_wantsNotify(Process* proc, gint epollfd);
@@ -53,5 +55,11 @@ gboolean process_isRunning(Process* proc);
 // FIXME: This shouldn't be public. Exposing for temporary hack in
 // syscallhandler.
 InterposeMethod process_getInterposeMethod(Process* proc);
+
+/* Wait for an event to occur on descriptor, or the timer to expire.
+ * When either of those occur, the process calls thread_resume on
+ * the given thread. */
+void process_waitAsync(Process* proc, Thread* thread, Timer* timer,
+                       Descriptor* descriptor, DescriptorStatus waitStatus);
 
 #endif /* SHD_PROCESS_H_ */

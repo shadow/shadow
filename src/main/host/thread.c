@@ -43,12 +43,6 @@ void thread_resume(Thread* thread) {
     thread->resume(thread);
 }
 
-void thread_setSysCallResult(Thread* thread, SysCallReg retval) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->setSysCallResult);
-    thread->setSysCallResult(thread, retval);
-}
-
 void thread_terminate(Thread* thread) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->terminate);

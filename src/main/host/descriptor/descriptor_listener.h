@@ -11,6 +11,17 @@
 /* Opaque object to store the state needed to implement the module. */
 typedef struct _DescriptorListener DescriptorListener;
 
+/* Indicates when the listener should trigger a callback, i.e.,
+ * when the status bits flip from off to on, from on to off,
+ * or never. A callback can be triggered on all flips using
+ * DLF_STATUS_OFF_TO_ON|DLF_STATUS_ON_TO_OFF. */
+typedef enum _DescriptorListenerFilter DescriptorListenerFilter;
+enum _DescriptorListenerFilter {
+    DLF_NONE = 0,
+    DLF_OFF_TO_ON = 1 << 0,
+    DLF_ON_TO_OFF = 1 << 1,
+};
+
 /* Function definitions used by the module. */
 typedef void (*DescriptorStatusCallbackFunc)(void* callbackObject,
                                              void* callbackArgument);
@@ -39,10 +50,14 @@ void descriptorlistener_unref(DescriptorListener* listener);
  * that just transitioned, then this function will trigger a notification
  * via the callback supplied to the new func.*/
 void descriptorlistener_onStatusChanged(DescriptorListener* listener,
+                                        DescriptorStatus currentStatus,
                                         DescriptorStatus transitions);
 
-/* Set the status bits that we should monitor for transitions (flips). */
+/* Set the status bits that we should monitor for transitions (flips),
+ * and a filter that specifies which flips should cause the callback
+ * to be invoked. */
 void descriptorlistener_setMonitorStatus(DescriptorListener* listener,
-                                         DescriptorStatus status);
+                                         DescriptorStatus status,
+                                         DescriptorListenerFilter filter);
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_SHD_DESCRIPTOR_LISTENER_H_ */

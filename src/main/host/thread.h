@@ -22,7 +22,6 @@ void thread_unref(Thread* thread);
 void thread_run(Thread* thread, gchar** argv, gchar** envv);
 void thread_resume(Thread* thread);
 void thread_terminate(Thread* thread);
-void thread_setSysCallResult(Thread* thread, SysCallReg retval);
 int thread_getReturnCode(Thread* thread);
 
 // Make the data at plugin_src available in shadow's address space.

@@ -207,7 +207,7 @@ static void _process_start(Process* proc) {
 
 InterposeMethod process_getInterposeMethod(Process* proc) { return proc->interposeMethod; }
 
-void process_continue(Process* proc) {
+void process_continue(Process* proc, Thread* thread) {
     MAGIC_ASSERT(proc);
 
     /* if we are not running, no need to notify anyone */
@@ -223,7 +223,11 @@ void process_continue(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 
     proc->plugin.isExecuting = TRUE;
-    thread_resume(proc->mainThread);
+    if (thread) {
+        thread_resume(thread);
+    } else {
+        thread_resume(proc->mainThread);
+    }
     proc->plugin.isExecuting = FALSE;
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -410,4 +414,131 @@ void process_unref(Process* proc) {
     if(proc->referenceCount == 0) {
         _process_free(proc);
     }
+}
+
+typedef struct _ProcessWaiter ProcessWaiter;
+struct _ProcessWaiter {
+    Thread* thread;
+    Timer* timer;
+    DescriptorListener* timerListener;
+    Descriptor* descriptor;
+    DescriptorListener* descriptorListener;
+    gint referenceCount;
+};
+
+static void _process_unrefWaiter(ProcessWaiter* waiter) {
+    if (--waiter->referenceCount == 0) {
+        if (waiter->thread) {
+            thread_unref(waiter->thread);
+        }
+        if (waiter->timer) {
+    		descriptor_unref((Descriptor*)waiter->timer);
+        }
+        if (waiter->descriptor) {
+    		descriptor_unref(waiter->descriptor);
+    	}
+        free(waiter);
+    }
+}
+
+static void _process_notifyAsync(gpointer object, gpointer argument) {
+    Process* proc = object;
+    ProcessWaiter* waiter = argument;
+    MAGIC_ASSERT(proc);
+
+    debug("Unblocking thread %p of process %s",
+        		waiter->thread, _process_getName(proc));
+
+    /* Unregister both listeners whenever either one triggers. */
+    if (waiter->timer && waiter->timerListener) {
+        descriptor_removeListener(
+            (Descriptor*)waiter->timer, waiter->timerListener);
+        descriptorlistener_setMonitorStatus(waiter->timerListener, DS_NONE, DLF_NONE);
+    }
+
+    if (waiter->descriptor && waiter->descriptorListener) {
+        descriptor_removeListener(
+            waiter->descriptor, waiter->descriptorListener);
+        descriptorlistener_setMonitorStatus(
+            waiter->descriptorListener, DS_NONE, DLF_NONE);
+    }
+
+    process_continue(proc, waiter->thread);
+
+    /* Destroy the listeners, which will also unref and free the waiter. */
+    if(waiter->timerListener) {
+    	descriptorlistener_unref(waiter->timerListener);
+    }
+    if(waiter->descriptorListener) {
+        descriptorlistener_unref(waiter->descriptorListener);
+    }
+}
+
+void process_waitAsync(Process* proc, Thread* thread, Timer* timer,
+                       Descriptor* descriptor, DescriptorStatus waitStatus) {
+    MAGIC_ASSERT(proc);
+
+    if (!timer && !descriptor) {
+        return;
+    }
+
+    ProcessWaiter* waiter = malloc(sizeof(ProcessWaiter));
+
+    *waiter = (ProcessWaiter){
+        .thread = thread,
+        .timer = timer,
+        .descriptor = descriptor,
+    };
+
+    /* The waiter will hold refs to these objects. */
+    if (waiter->thread) {
+        thread_ref(waiter->thread);
+    }
+    if (waiter->timer) {
+		descriptor_ref(waiter->timer);
+    }
+    if (waiter->descriptor) {
+		descriptor_ref(waiter->descriptor);
+	}
+
+    /* Now set up the listeners. */
+    if (waiter->timer) {
+    	/* The timer is used for timeouts. */
+        waiter->timerListener = descriptorlistener_new(
+            _process_notifyAsync, proc,
+            (DescriptorStatusObjectFreeFunc)process_unref, waiter,
+            (DescriptorStatusArgumentFreeFunc)_process_unrefWaiter);
+
+        /* The listener holds refs to the process and waiter. */
+    	process_ref(proc);
+        waiter->referenceCount++;
+
+        /* The timer is readable when it expires */
+        descriptorlistener_setMonitorStatus(waiter->timerListener, DS_READABLE, DLF_OFF_TO_ON);
+
+        /* Attach the listener to the timer. */
+        descriptor_addListener((Descriptor*)waiter->timer, waiter->timerListener);
+    }
+
+    if (waiter->descriptor) {
+        /* We listen for status change on the descriptor. */
+        waiter->descriptorListener = descriptorlistener_new(
+            _process_notifyAsync, proc,
+            (DescriptorStatusObjectFreeFunc)process_unref, waiter,
+            (DescriptorStatusArgumentFreeFunc)_process_unrefWaiter);
+
+        /* The listener holds refs to the process and waiter. */
+    	process_ref(proc);
+        waiter->referenceCount++;
+
+        /* Monitor the requested status. */
+        descriptorlistener_setMonitorStatus(
+            waiter->descriptorListener, waitStatus, DLF_OFF_TO_ON);
+
+        /* Attach the listener to the descriptor. */
+		descriptor_addListener(waiter->descriptor, waiter->descriptorListener);
+    }
+
+    debug("Blocking thread %p of process %s",
+    		thread, _process_getName(proc));
 }

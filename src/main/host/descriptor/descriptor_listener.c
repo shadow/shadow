@@ -13,6 +13,8 @@
 struct _DescriptorListener {
     /* The descriptor status bits we want to monitor for transitions. */
     DescriptorStatus monitoring;
+    /* A filter that specifies when we should trigger a callback. */
+    DescriptorListenerFilter filter;
 
     /* The callback function to trigger. */
     DescriptorStatusCallbackFunc notifyFunc;
@@ -83,9 +85,24 @@ void descriptorlistener_unref(DescriptorListener* listener) {
  * are monitoring.
  */
 static gboolean _descriptorlistener_shouldNotify(DescriptorListener* listener,
+                                                 DescriptorStatus currentStatus,
                                                  DescriptorStatus transitions) {
     MAGIC_ASSERT(listener);
-    return listener->monitoring & transitions;
+
+    gboolean flipped = listener->monitoring & transitions;
+    gboolean on = listener->monitoring & currentStatus;
+
+    switch(listener->filter) {
+        case DLF_OFF_TO_ON:
+            return flipped && on;
+        case DLF_ON_TO_OFF:
+            return flipped && !on;
+        case DLF_OFF_TO_ON|DLF_ON_TO_OFF:
+            return flipped;
+        case DLF_NONE:
+        default:
+            return 0;
+    }
 }
 
 /* Trigger the callback function. */
@@ -99,16 +116,19 @@ static void _descriptorlistener_invokeNotifyFunc(DescriptorListener* listener) {
 }
 
 void descriptorlistener_onStatusChanged(DescriptorListener* listener,
+                                        DescriptorStatus currentStatus,
                                         DescriptorStatus transitions) {
     MAGIC_ASSERT(listener);
 
-    if (_descriptorlistener_shouldNotify(listener, transitions)) {
+    if (_descriptorlistener_shouldNotify(listener, currentStatus, transitions)) {
         _descriptorlistener_invokeNotifyFunc(listener);
     }
 }
 
 void descriptorlistener_setMonitorStatus(DescriptorListener* listener,
-                                         DescriptorStatus status) {
+                                         DescriptorStatus status,
+                                         DescriptorListenerFilter filter) {
     MAGIC_ASSERT(listener);
     listener->monitoring = status;
+    listener->filter = filter;
 }

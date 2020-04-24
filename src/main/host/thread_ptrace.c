@@ -159,12 +159,6 @@ static void _threadptrace_enterStateSyscallPre(ThreadPtrace* thread) {
         error("ptrace: %s", g_strerror(errno));
         return;
     }
-    SysCallArgs args = {
-        .number = regs->orig_rax,
-        .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8},
-    };
-    thread->syscall.sysCallReturn =
-        syscallhandler_make_syscall(thread->sys, &args);
 }
 
 static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
@@ -305,6 +299,19 @@ void threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
     thread_resume(_threadPtraceToThread(thread));
 }
 
+static void _threadptrace_handleSyscall(ThreadPtrace* thread) {
+	utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE);
+	struct user_regs_struct* const regs = &thread->syscall.regs;
+
+    SysCallArgs args = {
+        .number = regs->orig_rax,
+        .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8},
+    };
+
+    thread->syscall.sysCallReturn =
+        syscallhandler_make_syscall(thread->sys, &args);
+}
+
 void threadptrace_resume(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
@@ -319,6 +326,10 @@ void threadptrace_resume(Thread* base) {
                 break;
             case THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE:
                 debug("THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE");
+
+				// Ask the syscall handler to handle it.
+				_threadptrace_handleSyscall(thread);
+
                 switch (thread->syscall.sysCallReturn.state) {
                     case SYSCALL_RETURN_BLOCKED: return;
                     case SYSCALL_RETURN_DONE:
@@ -438,13 +449,6 @@ int threadptrace_getReturnCode(Thread* base) {
     return thread->returnCode;
 }
 
-void threadptrace_setSysCallResult(Thread* base, SysCallReg retval) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE);
-    thread->syscall.sysCallReturn =
-        (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval = retval};
-}
-
 void threadptrace_free(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
@@ -528,7 +532,6 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
         .base = (Thread){.run = threadptrace_run,
                          .resume = threadptrace_resume,
                          .terminate = threadptrace_terminate,
-                         .setSysCallResult = threadptrace_setSysCallResult,
                          .getReturnCode = threadptrace_getReturnCode,
                          .isRunning = threadptrace_isRunning,
                          .free = threadptrace_free,

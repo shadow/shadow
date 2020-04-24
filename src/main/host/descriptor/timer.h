@@ -20,4 +20,8 @@ gint timer_getTime(Timer* timer, struct itimerspec *curr_value);
 ssize_t timer_read(Timer* timer, void *buf, size_t count);
 gint timer_close(Timer* timer);
 
+/* Returns the number of timer expirations that have occurred
+ * since the last time the timer was set. */
+guint64 timer_getExpirationCount(Timer* timer);
+
 #endif /* SHD_TIMER_H_ */
