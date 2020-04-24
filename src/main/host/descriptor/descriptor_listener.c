@@ -95,8 +95,8 @@ static gboolean _descriptorlistener_shouldNotify(DescriptorListener* listener,
     switch (listener->filter) {
         case DLF_OFF_TO_ON: return flipped && on;
         case DLF_ON_TO_OFF: return flipped && !on;
-        case DLF_OFF_TO_ON | DLF_ON_TO_OFF: return flipped;
-        case DLF_NONE:
+        case DLF_ALWAYS: return flipped;
+        case DLF_NEVER:
         default: return 0;
     }
 }

@@ -12,14 +12,14 @@
 typedef struct _DescriptorListener DescriptorListener;
 
 /* Indicates when the listener should trigger a callback, i.e.,
- * when the status bits flip from off to on, from on to off,
- * or never. A callback can be triggered on all flips using
- * DLF_STATUS_OFF_TO_ON|DLF_STATUS_ON_TO_OFF. */
+ * when the status bits that we are monitoring flip from off to on,
+ * from on to off, always (on any flip), or never. */
 typedef enum _DescriptorListenerFilter DescriptorListenerFilter;
 enum _DescriptorListenerFilter {
-    DLF_NONE = 0,
-    DLF_OFF_TO_ON = 1 << 0,
-    DLF_ON_TO_OFF = 1 << 1,
+    DLF_NEVER,
+    DLF_OFF_TO_ON,
+    DLF_ON_TO_OFF,
+    DLF_ALWAYS
 };
 
 /* Function definitions used by the module. */

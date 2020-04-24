@@ -454,14 +454,14 @@ static void _process_notifyAsync(gpointer object, gpointer argument) {
         descriptor_removeListener(
             (Descriptor*)waiter->timer, waiter->timerListener);
         descriptorlistener_setMonitorStatus(
-            waiter->timerListener, DS_NONE, DLF_NONE);
+            waiter->timerListener, DS_NONE, DLF_NEVER);
     }
 
     if (waiter->descriptor && waiter->descriptorListener) {
         descriptor_removeListener(
             waiter->descriptor, waiter->descriptorListener);
         descriptorlistener_setMonitorStatus(
-            waiter->descriptorListener, DS_NONE, DLF_NONE);
+            waiter->descriptorListener, DS_NONE, DLF_NEVER);
     }
 
     process_continue(proc, waiter->thread);
