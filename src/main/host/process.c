@@ -434,7 +434,9 @@ struct _ProcessWaiter {
 };
 
 static void _process_unrefWaiter(ProcessWaiter* waiter) {
-    if (--waiter->referenceCount <= 0) {
+    waiter->referenceCount--;
+    utility_assert(waiter->referenceCount >= 0);
+    if (waiter->referenceCount == 0) {
         if (waiter->thread) {
             thread_unref(waiter->thread);
         }
