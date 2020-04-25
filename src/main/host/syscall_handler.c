@@ -1,10 +1,8 @@
 /*
- * shd-syscall-handler.c
- * shd-syscall-handler.c
- *
- *  Created on: Dec 26, 2019
- *      Author: rjansen
+ * The Shadow Simulator
+ * See LICENSE for licensing information
  */
+
 #include "main/host/syscall_handler.h"
 
 #include <errno.h>
@@ -48,6 +46,10 @@ struct _SysCallHandler {
 
 SysCallHandler* syscallhandler_new(Host* host, Process* process,
                                    Thread* thread) {
+    utility_assert(host);
+    utility_assert(process);
+    utility_assert(thread);
+
     SysCallHandler* sys = malloc(sizeof(SysCallHandler));
 
     *sys = (SysCallHandler){
@@ -65,15 +67,9 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
 
     MAGIC_INIT(sys);
 
-    if (host) {
-        host_ref(host);
-    }
-    if (process) {
-        process_ref(process);
-    }
-    if (thread) {
-        thread_ref(thread);
-    }
+    host_ref(host);
+    process_ref(process);
+    thread_ref(thread);
 
     return sys;
 }
@@ -81,10 +77,10 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
 static void _syscallhandler_free(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
-    if(sys->host) {
+    if (sys->host) {
         host_unref(sys->host);
     }
-    if(sys->process) {
+    if (sys->process) {
         process_unref(sys->process);
     }
     if (sys->thread) {
@@ -139,7 +135,7 @@ static void _syscallhandler_setBlockTimeout(SysCallHandler* sys,
     }
 }
 
-static int _syscallhandler_blockTimeoutIsPending(SysCallHandler* sys) {
+static int _syscallhandler_isListenTimeoutPending(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
     struct itimerspec value = {0};
@@ -150,13 +146,14 @@ static int _syscallhandler_blockTimeoutIsPending(SysCallHandler* sys) {
     return value.it_value.tv_sec > 0 || value.it_value.tv_nsec > 0;
 }
 
-static inline int _syscallhandler_blockTimeoutExpired(SysCallHandler* sys) {
+static inline int
+_syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys) {
     /* Note that the timer is "readable" if it has a positive
      * expiration count; this call does not adjust the status. */
     return timer_getExpirationCount(sys->timer) > 0;
 }
 
-static inline int _syscallhandler_wasBlocked(SysCallHandler* sys) {
+static inline int _syscallhandler_wasBlocked(const SysCallHandler* sys) {
     return sys->blockedSyscallNR >= 0;
 }
 
@@ -189,7 +186,8 @@ static SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     if (requestToBlock && !wasBlocked) {
         /* We need to block for a while following the requested timeout. */
         _syscallhandler_setBlockTimeout(sys, req);
-        process_waitAsync(sys->process, sys->thread, sys->timer, NULL, DS_NONE);
+        process_listenForStatus(
+            sys->process, sys->thread, sys->timer, NULL, DS_NONE);
 
         /* tell the thread we blocked it */
         return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
@@ -198,12 +196,12 @@ static SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     /* If needed, verify that the timer expired correctly. */
     if (requestToBlock && wasBlocked) {
         /* Make sure we don't have a pending timer. */
-        if (_syscallhandler_blockTimeoutIsPending(sys)) {
+        if (_syscallhandler_isListenTimeoutPending(sys)) {
             error("nanosleep unblocked but a timer is still pending.");
         }
 
         /* The timer must have expired. */
-        if (!_syscallhandler_blockTimeoutExpired(sys)) {
+        if (!_syscallhandler_didListenTimeoutExpire(sys)) {
             error("nanosleep unblocked but the timer did not expire.");
         }
 

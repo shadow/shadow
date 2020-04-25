@@ -56,10 +56,10 @@ gboolean process_isRunning(Process* proc);
 // syscallhandler.
 InterposeMethod process_getInterposeMethod(Process* proc);
 
-/* Wait for an event to occur on descriptor, or the timer to expire.
+/* Listen for the given status to occur on descriptor, or the timer to expire.
  * When either of those occur, the process calls thread_resume on
  * the given thread. */
-void process_waitAsync(Process* proc, Thread* thread, Timer* timer,
-                       Descriptor* descriptor, DescriptorStatus waitStatus);
+void process_listenForStatus(Process* proc, Thread* thread, Timer* timeout,
+                             Descriptor* descriptor, DescriptorStatus status);
 
 #endif /* SHD_PROCESS_H_ */

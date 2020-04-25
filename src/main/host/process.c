@@ -427,7 +427,7 @@ struct _ProcessWaiter {
 };
 
 static void _process_unrefWaiter(ProcessWaiter* waiter) {
-    if (--waiter->referenceCount == 0) {
+    if (--waiter->referenceCount <= 0) {
         if (waiter->thread) {
             thread_unref(waiter->thread);
         }
@@ -441,7 +441,7 @@ static void _process_unrefWaiter(ProcessWaiter* waiter) {
     }
 }
 
-static void _process_notifyAsync(gpointer object, gpointer argument) {
+static void _process_notifyStatusChanged(gpointer object, gpointer argument) {
     Process* proc = object;
     ProcessWaiter* waiter = argument;
     MAGIC_ASSERT(proc);
@@ -475,19 +475,19 @@ static void _process_notifyAsync(gpointer object, gpointer argument) {
     }
 }
 
-void process_waitAsync(Process* proc, Thread* thread, Timer* timer,
-                       Descriptor* descriptor, DescriptorStatus waitStatus) {
+void process_listenForStatus(Process* proc, Thread* thread, Timer* timeout,
+                             Descriptor* descriptor, DescriptorStatus status) {
     MAGIC_ASSERT(proc);
 
-    if (!timer && !descriptor) {
+    if (!timeout && !descriptor) {
         return;
     }
 
-    ProcessWaiter* waiter = malloc(sizeof(ProcessWaiter));
+    ProcessWaiter* waiter = malloc(sizeof(*waiter));
 
     *waiter = (ProcessWaiter){
         .thread = thread,
-        .timer = timer,
+        .timer = timeout,
         .descriptor = descriptor,
     };
 
@@ -506,7 +506,7 @@ void process_waitAsync(Process* proc, Thread* thread, Timer* timer,
     if (waiter->timer) {
         /* The timer is used for timeouts. */
         waiter->timerListener = descriptorlistener_new(
-            _process_notifyAsync, proc,
+            _process_notifyStatusChanged, proc,
             (DescriptorStatusObjectFreeFunc)process_unref, waiter,
             (DescriptorStatusArgumentFreeFunc)_process_unrefWaiter);
 
@@ -526,7 +526,7 @@ void process_waitAsync(Process* proc, Thread* thread, Timer* timer,
     if (waiter->descriptor) {
         /* We listen for status change on the descriptor. */
         waiter->descriptorListener = descriptorlistener_new(
-            _process_notifyAsync, proc,
+            _process_notifyStatusChanged, proc,
             (DescriptorStatusObjectFreeFunc)process_unref, waiter,
             (DescriptorStatusArgumentFreeFunc)_process_unrefWaiter);
 
@@ -536,7 +536,7 @@ void process_waitAsync(Process* proc, Thread* thread, Timer* timer,
 
         /* Monitor the requested status. */
         descriptorlistener_setMonitorStatus(
-            waiter->descriptorListener, waitStatus, DLF_OFF_TO_ON);
+            waiter->descriptorListener, status, DLF_OFF_TO_ON);
 
         /* Attach the listener to the descriptor. */
         descriptor_addListener(waiter->descriptor, waiter->descriptorListener);

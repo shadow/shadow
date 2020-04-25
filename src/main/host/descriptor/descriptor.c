@@ -103,7 +103,10 @@ static void _descriptor_handleStatusChange(gpointer object, gpointer argument) {
     /* Tell our listeners there was some activity on this descriptor.
      * We can't use an iterator here, because the listener table may
      * be modified in the onStatusChanged callback. Instead we get a
-     * list of the keys and do lookups on those. */
+     * list of the keys and do lookups on those. That way, if any
+     * call to onStatusChanged causes us to remove some listeners,
+     * we won't try to execute their callbacks when the stack returns
+     * here to continue iterating. */
     GList* listenerList = g_hash_table_get_keys(descriptor->listeners);
 
     /* Iterate the listeners. */
@@ -122,6 +125,8 @@ static void _descriptor_handleStatusChange(gpointer object, gpointer argument) {
         statusesChanged = descriptor->status ^ oldStatus;
         item = g_list_next(item);
     }
+
+    g_list_free(listenerList);
 }
 
 void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gboolean doSetBits){

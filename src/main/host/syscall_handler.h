@@ -1,8 +1,6 @@
 /*
- * shd-syscall-handler.h
- *
- *  Created on: Dec 26, 2019
- *      Author: rjansen
+ * The Shadow Simulator
+ * See LICENSE for licensing information
  */
 
 #ifndef SRC_MAIN_HOST_SHD_SYSCALL_HANDLER_H_
