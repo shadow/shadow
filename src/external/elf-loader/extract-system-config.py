@@ -16,7 +16,6 @@ class DebugData:
             elffile = ELFFile(f)
             assert elffile.has_dwarf_info(), debug_filename + ' has no DWARF info'
             self.dwarfinfo = elffile.get_dwarf_info()
-            return
     def get_struct_size(self, struct_die, required=True):
         if struct_die is not None:
             return struct_die.attributes['DW_AT_byte_size'].value
