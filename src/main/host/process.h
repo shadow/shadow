@@ -52,6 +52,12 @@ void process_stop(Process* proc);
 gboolean process_wantsNotify(Process* proc, gint epollfd);
 gboolean process_isRunning(Process* proc);
 
+/* Returns the name of the process from an internal buffer.
+ * The returned pointer will become invalid when the process
+ * is freed and therefore should not be persistently stored
+ * outside of the process module. */
+const gchar* process_getName(Process* proc);
+
 // FIXME: This shouldn't be public. Exposing for temporary hack in
 // syscallhandler.
 InterposeMethod process_getInterposeMethod(Process* proc);

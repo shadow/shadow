@@ -107,7 +107,7 @@ struct _Process {
     MAGIC_DECLARE;
 };
 
-static const gchar* _process_getName(Process* proc) {
+const gchar* process_getName(Process* proc) {
     MAGIC_ASSERT(proc);
     utility_assert(proc->processName->str);
     return proc->processName->str;
@@ -125,8 +125,8 @@ static void _process_logReturnCode(Process* proc, gint code) {
     if(!proc->didLogReturnCode) {
         GString* mainResultString = g_string_new(NULL);
         g_string_printf(mainResultString, "main %s code '%i' for process '%s'",
-                ((code==0) ? "success" : "error"),
-                code, _process_getName(proc));
+                        ((code == 0) ? "success" : "error"), code,
+                        process_getName(proc));
 
         if(code == 0) {
             message("%s", mainResultString->str);
@@ -149,19 +149,23 @@ static void _process_check(Process* proc) {
     }
 
     if(thread_isRunning(proc->mainThread)) {
-        info("process '%s' is running, but threads are blocked waiting for events", _process_getName(proc));
+        info("process '%s' is running, but threads are blocked waiting for "
+             "events",
+             process_getName(proc));
     } else {
         /* collect return code */
         int returnCode = thread_getReturnCode(proc->mainThread);
 
-        message("process '%s' has completed or is otherwise no longer running", _process_getName(proc));
+        message("process '%s' has completed or is otherwise no longer running",
+                process_getName(proc));
         _process_logReturnCode(proc, returnCode);
 
         thread_terminate(proc->mainThread);
         thread_unref(proc->mainThread);
         proc->mainThread = NULL;
 
-        message("total runtime for process '%s' was %f seconds", _process_getName(proc), proc->totalRunTime);
+        message("total runtime for process '%s' was %f seconds",
+                process_getName(proc), proc->totalRunTime);
     }
 }
 
@@ -184,7 +188,7 @@ static void _process_start(Process* proc) {
         error("Bad interposeMethod %d", proc->interposeMethod);
     }
 
-    message("starting process '%s'", _process_getName(proc));
+    message("starting process '%s'", process_getName(proc));
 
     /* now we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
@@ -200,7 +204,8 @@ static void _process_start(Process* proc) {
 
     worker_setActiveProcess(NULL);
 
-    message("process '%s' started in %f seconds", _process_getName(proc), elapsed);
+    message(
+        "process '%s' started in %f seconds", process_getName(proc), elapsed);
 
     _process_check(proc);
 }
@@ -215,7 +220,8 @@ void process_continue(Process* proc, Thread* thread) {
         return;
     }
 
-    info("switching to thread controller to continue executing process '%s'", _process_getName(proc));
+    info("switching to thread controller to continue executing process '%s'",
+         process_getName(proc));
 
     worker_setActiveProcess(proc);
 
@@ -235,7 +241,7 @@ void process_continue(Process* proc, Thread* thread) {
 
     worker_setActiveProcess(NULL);
 
-    info("process '%s' ran for %f seconds", _process_getName(proc), elapsed);
+    info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
 
     _process_check(proc);
 }
@@ -243,7 +249,7 @@ void process_continue(Process* proc, Thread* thread) {
 void process_stop(Process* proc) {
     MAGIC_ASSERT(proc);
 
-    message("terminating process '%s'", _process_getName(proc));
+    message("terminating process '%s'", process_getName(proc));
 
     worker_setActiveProcess(proc);
 
@@ -263,7 +269,8 @@ void process_stop(Process* proc) {
 
     worker_setActiveProcess(NULL);
 
-    message("process '%s' stopped in %f seconds", _process_getName(proc), elapsed);
+    message(
+        "process '%s' stopped in %f seconds", process_getName(proc), elapsed);
 
     _process_check(proc);
 }
@@ -441,13 +448,43 @@ static void _process_unrefWaiter(ProcessWaiter* waiter) {
     }
 }
 
+#ifdef DEBUG
+static void _process_logListeningState(Process* proc, ProcessWaiter* waiter,
+                                       gint started) {
+    GString* string = g_string_new(NULL);
+
+    g_string_append_printf(string, "Process %s thread %p %s listening for ",
+                           process_getName(proc), waiter->thread,
+                           started ? "started" : "stopped");
+
+    if (waiter->descriptor) {
+        g_string_append_printf(
+            string, "status on descriptor %d%s",
+            *descriptor_getHandleReference(waiter->descriptor),
+            waiter->timer ? " and " : "");
+    }
+    if (waiter->timer) {
+        struct itimerspec value = {0};
+        utility_assert(timer_getTime(waiter->timer, &value) == 0);
+        g_string_append_printf(string, "a timeout of %lu.%09lu seconds",
+                               (unsigned long)value.it_value.tv_sec,
+                               (unsigned long)value.it_value.tv_nsec);
+    }
+
+    debug("%s", string->str);
+
+    g_string_free(string, TRUE);
+}
+#endif
+
 static void _process_notifyStatusChanged(gpointer object, gpointer argument) {
     Process* proc = object;
     ProcessWaiter* waiter = argument;
     MAGIC_ASSERT(proc);
 
-    debug("Unblocking thread %p of process %s", waiter->thread,
-          _process_getName(proc));
+#ifdef DEBUG
+    _process_logListeningState(proc, waiter, 0);
+#endif
 
     /* Unregister both listeners whenever either one triggers. */
     if (waiter->timer && waiter->timerListener) {
@@ -542,5 +579,7 @@ void process_listenForStatus(Process* proc, Thread* thread, Timer* timeout,
         descriptor_addListener(waiter->descriptor, waiter->descriptorListener);
     }
 
-    debug("Blocking thread %p of process %s", thread, _process_getName(proc));
+#ifdef DEBUG
+    _process_logListeningState(proc, waiter, 1);
+#endif
 }

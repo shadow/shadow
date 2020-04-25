@@ -289,8 +289,14 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     /* If we are blocking, store the syscall number so we know
      * to expect the same syscall again when it unblocks. */
     if (scr.state == SYSCALL_RETURN_BLOCKED) {
+        debug("syscall %ld on thread %p of process %s is blocked", args->number,
+              sys->thread, process_getName(sys->process));
         sys->blockedSyscallNR = args->number;
     } else {
+        debug("syscall %ld on thread %p of process %s %s", args->number,
+              sys->thread, process_getName(sys->process),
+              sys->blockedSyscallNR >= 0 ? "is unblocked"
+                                         : "completed without blocking");
         sys->blockedSyscallNR = -1;
     }
 
