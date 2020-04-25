@@ -8,6 +8,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "main/core/support/object_counter.h"
+#include "main/core/worker.h"
 #include "main/host/thread_preload.h"
 #include "main/host/thread_protected.h"
 #include "main/shmem/shmem_allocator.h"
@@ -108,6 +110,7 @@ void threadpreload_free(Thread* base) {
 
     MAGIC_CLEAR(base);
     g_free(thread);
+    worker_countObject(OBJECT_TYPE_THREAD_PRELOAD, COUNTER_TYPE_FREE);
 }
 
 static void _threadpreload_create_ipc_sockets(ThreadPreload* thread,
@@ -468,5 +471,6 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
     // of the sim. but the process may not launch/start until later. any
     // resources for launch/start should be allocated in the respective funcs.
 
+    worker_countObject(OBJECT_TYPE_THREAD_PRELOAD, COUNTER_TYPE_NEW);
     return _threadPreloadToThread(thread);
 }

@@ -447,6 +447,7 @@ static void _process_unrefWaiter(ProcessWaiter* waiter) {
             descriptor_unref(waiter->descriptor);
         }
         free(waiter);
+        worker_countObject(OBJECT_TYPE_PROCESS_WAITER, COUNTER_TYPE_FREE);
     }
 }
 
@@ -540,6 +541,8 @@ void process_listenForStatus(Process* proc, Thread* thread, Timer* timeout,
     if (waiter->descriptor) {
         descriptor_ref(waiter->descriptor);
     }
+
+    worker_countObject(OBJECT_TYPE_PROCESS_WAITER, COUNTER_TYPE_NEW);
 
     /* Now set up the listeners. */
     if (waiter->timer) {

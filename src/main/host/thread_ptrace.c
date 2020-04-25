@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <x86intrin.h>
 
+#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/thread_protected.h"
 #include "main/host/tsc.h"
@@ -458,6 +459,7 @@ void threadptrace_free(Thread* base) {
 
     MAGIC_CLEAR(base);
     g_free(thread);
+    worker_countObject(OBJECT_TYPE_THREAD_PTRACE, COUNTER_TYPE_FREE);
 }
 
 static void _threadptrace_memcpyToShadow(ThreadPtrace* thread, void* shadow_dst,
@@ -554,5 +556,6 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
     thread->pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite));
     thread->readPointers = g_array_new(FALSE, FALSE, sizeof(void*));
 
+    worker_countObject(OBJECT_TYPE_THREAD_PTRACE, COUNTER_TYPE_NEW);
     return _threadPtraceToThread(thread);
 }

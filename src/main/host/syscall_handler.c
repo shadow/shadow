@@ -13,6 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/process.h"
 #include "main/host/syscall_types.h"
@@ -71,6 +72,7 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
     process_ref(process);
     thread_ref(thread);
 
+    worker_countObject(OBJECT_TYPE_SYSCALL_HANDLER, COUNTER_TYPE_NEW);
     return sys;
 }
 
@@ -93,6 +95,7 @@ static void _syscallhandler_free(SysCallHandler* sys) {
 
     MAGIC_CLEAR(sys);
     free(sys);
+    worker_countObject(OBJECT_TYPE_SYSCALL_HANDLER, COUNTER_TYPE_FREE);
 }
 
 void syscallhandler_ref(SysCallHandler* sys) {

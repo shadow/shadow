@@ -27,6 +27,11 @@ struct _ObjectCounter {
         ObjectCounts host;
         ObjectCounts netiface;
         ObjectCounts process;
+        ObjectCounts processwaiter;
+        ObjectCounts threadpreload;
+        ObjectCounts threadptrace;
+        ObjectCounts syscallhandler;
+        ObjectCounts descriptorlistener;
         ObjectCounts descriptor;
         ObjectCounts channel;
         ObjectCounts tcp;
@@ -131,6 +136,34 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
 
+        case OBJECT_TYPE_PROCESS_WAITER: {
+            _objectcount_incrementOne(&(counter->counters.processwaiter), ctype);
+            break;
+        }
+
+        case OBJECT_TYPE_THREAD_PRELOAD: {
+            _objectcount_incrementOne(
+                &(counter->counters.threadpreload), ctype);
+            break;
+        }
+
+        case OBJECT_TYPE_THREAD_PTRACE: {
+            _objectcount_incrementOne(&(counter->counters.threadptrace), ctype);
+            break;
+        }
+
+        case OBJECT_TYPE_SYSCALL_HANDLER: {
+            _objectcount_incrementOne(
+                &(counter->counters.syscallhandler), ctype);
+            break;
+        }
+
+        case OBJECT_TYPE_DESCRIPTOR_LISTENER: {
+            _objectcount_incrementOne(
+                &(counter->counters.descriptorlistener), ctype);
+            break;
+        }
+
         case OBJECT_TYPE_DESCRIPTOR: {
             _objectcount_incrementOne(&(counter->counters.descriptor), ctype);
             break;
@@ -171,20 +204,44 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
 void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment) {
     MAGIC_ASSERT(counter);
     MAGIC_ASSERT(increment);
-    _objectcount_incrementAll(&(counter->counters.task), &(increment->counters.task));
-    _objectcount_incrementAll(&(counter->counters.event), &(increment->counters.event));
-    _objectcount_incrementAll(&(counter->counters.packet), &(increment->counters.packet));
-    _objectcount_incrementAll(&(counter->counters.payload), &(increment->counters.payload));
-    _objectcount_incrementAll(&(counter->counters.router), &(increment->counters.router));
-    _objectcount_incrementAll(&(counter->counters.host), &(increment->counters.host));
-    _objectcount_incrementAll(&(counter->counters.netiface), &(increment->counters.netiface));
-    _objectcount_incrementAll(&(counter->counters.process), &(increment->counters.process));
-    _objectcount_incrementAll(&(counter->counters.descriptor), &(increment->counters.descriptor));
-    _objectcount_incrementAll(&(counter->counters.channel), &(increment->counters.channel));
-    _objectcount_incrementAll(&(counter->counters.tcp), &(increment->counters.tcp));
-    _objectcount_incrementAll(&(counter->counters.udp), &(increment->counters.udp));
-    _objectcount_incrementAll(&(counter->counters.epoll), &(increment->counters.epoll));
-    _objectcount_incrementAll(&(counter->counters.timer), &(increment->counters.timer));
+    _objectcount_incrementAll(&(counter->counters.task),
+            &(increment->counters.task));
+    _objectcount_incrementAll(&(counter->counters.event),
+            &(increment->counters.event));
+    _objectcount_incrementAll(&(counter->counters.packet),
+            &(increment->counters.packet));
+    _objectcount_incrementAll(&(counter->counters.payload),
+            &(increment->counters.payload));
+    _objectcount_incrementAll(&(counter->counters.router),
+            &(increment->counters.router));
+    _objectcount_incrementAll(&(counter->counters.host),
+            &(increment->counters.host));
+    _objectcount_incrementAll(&(counter->counters.netiface),
+            &(increment->counters.netiface));
+    _objectcount_incrementAll(&(counter->counters.process),
+            &(increment->counters.process));
+    _objectcount_incrementAll(&(counter->counters.processwaiter),
+            &(increment->counters.processwaiter));
+    _objectcount_incrementAll(&(counter->counters.threadpreload),
+            &(increment->counters.threadpreload));
+    _objectcount_incrementAll(&(counter->counters.threadptrace),
+            &(increment->counters.threadptrace));
+    _objectcount_incrementAll(&(counter->counters.syscallhandler),
+            &(increment->counters.syscallhandler));
+    _objectcount_incrementAll(&(counter->counters.descriptorlistener),
+            &(increment->counters.descriptorlistener));
+    _objectcount_incrementAll(&(counter->counters.descriptor),
+            &(increment->counters.descriptor));
+    _objectcount_incrementAll(&(counter->counters.channel),
+            &(increment->counters.channel));
+    _objectcount_incrementAll(&(counter->counters.tcp),
+            &(increment->counters.tcp));
+    _objectcount_incrementAll(&(counter->counters.udp),
+            &(increment->counters.udp));
+    _objectcount_incrementAll(&(counter->counters.epoll),
+            &(increment->counters.epoll));
+    _objectcount_incrementAll(&(counter->counters.timer),
+            &(increment->counters.timer));
 }
 
 const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
@@ -194,35 +251,85 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         counter->stringBuffer = g_string_new(NULL);
     }
 
-    g_string_printf(counter->stringBuffer, "ObjectCounter: counter values: "
-            "task_new=%"G_GUINT64_FORMAT" task_free=%"G_GUINT64_FORMAT" "
-            "event_new=%"G_GUINT64_FORMAT" event_free=%"G_GUINT64_FORMAT" "
-            "packet_new=%"G_GUINT64_FORMAT" packet_free=%"G_GUINT64_FORMAT" "
-            "payload_new=%"G_GUINT64_FORMAT" payload_free=%"G_GUINT64_FORMAT" "
-            "router_new=%"G_GUINT64_FORMAT" router_free=%"G_GUINT64_FORMAT" "
-            "host_new=%"G_GUINT64_FORMAT" host_free=%"G_GUINT64_FORMAT" "
-            "netiface_new=%"G_GUINT64_FORMAT" netiface_free=%"G_GUINT64_FORMAT" "
-            "process_new=%"G_GUINT64_FORMAT" process_free=%"G_GUINT64_FORMAT" "
-            "descriptor_new=%"G_GUINT64_FORMAT" descriptor_free=%"G_GUINT64_FORMAT" "
-            "channel_new=%"G_GUINT64_FORMAT" channel_free=%"G_GUINT64_FORMAT" "
-            "tcp_new=%"G_GUINT64_FORMAT" tcp_free=%"G_GUINT64_FORMAT" "
-            "udp_new=%"G_GUINT64_FORMAT" udp_free=%"G_GUINT64_FORMAT" "
-            "epoll_new=%"G_GUINT64_FORMAT" epoll_free=%"G_GUINT64_FORMAT" "
-            "timer_new=%"G_GUINT64_FORMAT" timer_free=%"G_GUINT64_FORMAT" ",
-            counter->counters.task.new, counter->counters.task.free,
-            counter->counters.event.new, counter->counters.event.free,
-            counter->counters.packet.new, counter->counters.packet.free,
-            counter->counters.payload.new, counter->counters.payload.free,
-            counter->counters.router.new, counter->counters.router.free,
-            counter->counters.host.new, counter->counters.host.free,
-            counter->counters.netiface.new, counter->counters.netiface.free,
-            counter->counters.process.new, counter->counters.process.free,
-            counter->counters.descriptor.new, counter->counters.descriptor.free,
-            counter->counters.channel.new, counter->counters.channel.free,
-            counter->counters.tcp.new, counter->counters.tcp.free,
-            counter->counters.udp.new, counter->counters.udp.free,
-            counter->counters.epoll.new, counter->counters.epoll.free,
-            counter->counters.timer.new, counter->counters.timer.free);
+    g_string_printf(
+        counter->stringBuffer,
+        "ObjectCounter: counter values: "
+        "task_new=%" G_GUINT64_FORMAT " "
+        "task_free=%" G_GUINT64_FORMAT " "
+        "event_new=%" G_GUINT64_FORMAT " "
+        "event_free=%" G_GUINT64_FORMAT " "
+        "packet_new=%" G_GUINT64_FORMAT " "
+        "packet_free=%" G_GUINT64_FORMAT " "
+        "payload_new=%" G_GUINT64_FORMAT " "
+        "payload_free=%" G_GUINT64_FORMAT " "
+        "router_new=%" G_GUINT64_FORMAT " "
+        "router_free=%" G_GUINT64_FORMAT " "
+        "host_new=%" G_GUINT64_FORMAT " "
+        "host_free=%" G_GUINT64_FORMAT " "
+        "netiface_new=%" G_GUINT64_FORMAT " "
+        "netiface_free=%" G_GUINT64_FORMAT " "
+        "process_new=%" G_GUINT64_FORMAT " "
+        "process_free=%" G_GUINT64_FORMAT " "
+        "processwaiter_new=%" G_GUINT64_FORMAT " "
+        "processwaiter_free=%" G_GUINT64_FORMAT " "
+        "threadpreload_new=%" G_GUINT64_FORMAT " "
+        "threadpreload_free=%" G_GUINT64_FORMAT " "
+        "threadptrace_new=%" G_GUINT64_FORMAT " "
+        "threadptrace_free=%" G_GUINT64_FORMAT " "
+        "syscallhandler_new=%" G_GUINT64_FORMAT " "
+        "syscallhandler_free=%" G_GUINT64_FORMAT " "
+        "descriptorlistener_new=%" G_GUINT64_FORMAT " "
+        "descriptorlistener_free=%" G_GUINT64_FORMAT " "
+        "descriptor_new=%" G_GUINT64_FORMAT " "
+        "descriptor_free=%" G_GUINT64_FORMAT " "
+        "channel_new=%" G_GUINT64_FORMAT " "
+        "channel_free=%" G_GUINT64_FORMAT " "
+        "tcp_new=%" G_GUINT64_FORMAT " "
+        "tcp_free=%" G_GUINT64_FORMAT " "
+        "udp_new=%" G_GUINT64_FORMAT " "
+        "udp_free=%" G_GUINT64_FORMAT " "
+        "epoll_new=%" G_GUINT64_FORMAT " "
+        "epoll_free=%" G_GUINT64_FORMAT " "
+        "timer_new=%" G_GUINT64_FORMAT " "
+        "timer_free=%" G_GUINT64_FORMAT " ",
+        counter->counters.task.new,
+        counter->counters.task.free,
+        counter->counters.event.new,
+        counter->counters.event.free,
+        counter->counters.packet.new,
+        counter->counters.packet.free,
+        counter->counters.payload.new,
+        counter->counters.payload.free,
+        counter->counters.router.new,
+        counter->counters.router.free,
+        counter->counters.host.new,
+        counter->counters.host.free,
+        counter->counters.netiface.new,
+        counter->counters.netiface.free,
+        counter->counters.process.new,
+        counter->counters.process.free,
+        counter->counters.processwaiter.new,
+        counter->counters.processwaiter.free,
+        counter->counters.threadpreload.new,
+        counter->counters.threadpreload.free,
+        counter->counters.threadptrace.new,
+        counter->counters.threadptrace.free,
+        counter->counters.syscallhandler.new,
+        counter->counters.syscallhandler.free,
+        counter->counters.descriptorlistener.new,
+        counter->counters.descriptorlistener.free,
+        counter->counters.descriptor.new,
+        counter->counters.descriptor.free,
+        counter->counters.channel.new,
+        counter->counters.channel.free,
+        counter->counters.tcp.new,
+        counter->counters.tcp.free,
+        counter->counters.udp.new,
+        counter->counters.udp.free,
+        counter->counters.epoll.new,
+        counter->counters.epoll.free,
+        counter->counters.timer.new,
+        counter->counters.timer.free);
 
     return (const gchar*) counter->stringBuffer->str;
 }
@@ -234,35 +341,66 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
         counter->stringBuffer = g_string_new(NULL);
     }
 
-    g_string_printf(counter->stringBuffer, "ObjectCounter: counter diffs: "
-            "task=%"G_GUINT64_FORMAT" "
-            "event=%"G_GUINT64_FORMAT" "
-            "packet=%"G_GUINT64_FORMAT" "
-            "payload=%"G_GUINT64_FORMAT" "
-            "router=%"G_GUINT64_FORMAT" "
-            "host=%"G_GUINT64_FORMAT" "
-            "netiface=%"G_GUINT64_FORMAT" "
-            "process=%"G_GUINT64_FORMAT" "
-            "descriptor=%"G_GUINT64_FORMAT" "
-            "channel=%"G_GUINT64_FORMAT" "
-            "tcp=%"G_GUINT64_FORMAT" "
-            "udp=%"G_GUINT64_FORMAT" "
-            "epoll=%"G_GUINT64_FORMAT" "
-            "timer=%"G_GUINT64_FORMAT" ",
-            counter->counters.task.new - counter->counters.task.free,
-            counter->counters.event.new - counter->counters.event.free,
-            counter->counters.packet.new - counter->counters.packet.free,
-            counter->counters.payload.new - counter->counters.payload.free,
-            counter->counters.router.new - counter->counters.router.free,
-            counter->counters.host.new - counter->counters.host.free,
-            counter->counters.netiface.new - counter->counters.netiface.free,
-            counter->counters.process.new - counter->counters.process.free,
-            counter->counters.descriptor.new - counter->counters.descriptor.free,
-            counter->counters.channel.new - counter->counters.channel.free,
-            counter->counters.tcp.new - counter->counters.tcp.free,
-            counter->counters.udp.new - counter->counters.udp.free,
-            counter->counters.epoll.new - counter->counters.epoll.free,
-            counter->counters.timer.new - counter->counters.timer.free);
+    g_string_printf(
+        counter->stringBuffer,
+        "ObjectCounter: counter diffs: "
+        "task=%" G_GUINT64_FORMAT " "
+        "event=%" G_GUINT64_FORMAT " "
+        "packet=%" G_GUINT64_FORMAT " "
+        "payload=%" G_GUINT64_FORMAT " "
+        "router=%" G_GUINT64_FORMAT " "
+        "host=%" G_GUINT64_FORMAT " "
+        "netiface=%" G_GUINT64_FORMAT " "
+        "process=%" G_GUINT64_FORMAT " "
+        "processwaiter=%" G_GUINT64_FORMAT " "
+        "threadpreload=%" G_GUINT64_FORMAT " "
+        "threadptrace=%" G_GUINT64_FORMAT " "
+        "syscallhandler=%" G_GUINT64_FORMAT " "
+        "descriptorlistener=%" G_GUINT64_FORMAT " "
+        "descriptor=%" G_GUINT64_FORMAT " "
+        "channel=%" G_GUINT64_FORMAT " "
+        "tcp=%" G_GUINT64_FORMAT " "
+        "udp=%" G_GUINT64_FORMAT " "
+        "epoll=%" G_GUINT64_FORMAT " "
+        "timer=%" G_GUINT64_FORMAT " ",
+        counter->counters.task.new -
+            counter->counters.task.free,
+        counter->counters.event.new -
+            counter->counters.event.free,
+        counter->counters.packet.new -
+            counter->counters.packet.free,
+        counter->counters.payload.new -
+            counter->counters.payload.free,
+        counter->counters.router.new -
+            counter->counters.router.free,
+        counter->counters.host.new -
+            counter->counters.host.free,
+        counter->counters.netiface.new -
+            counter->counters.netiface.free,
+        counter->counters.process.new -
+            counter->counters.process.free,
+        counter->counters.processwaiter.new -
+            counter->counters.processwaiter.free,
+        counter->counters.threadpreload.new -
+            counter->counters.threadpreload.free,
+        counter->counters.threadptrace.new -
+            counter->counters.threadptrace.free,
+        counter->counters.syscallhandler.new -
+            counter->counters.syscallhandler.free,
+        counter->counters.descriptorlistener.new -
+            counter->counters.descriptorlistener.free,
+        counter->counters.descriptor.new -
+            counter->counters.descriptor.free,
+        counter->counters.channel.new -
+            counter->counters.channel.free,
+        counter->counters.tcp.new -
+            counter->counters.tcp.free,
+        counter->counters.udp.new -
+            counter->counters.udp.free,
+        counter->counters.epoll.new -
+            counter->counters.epoll.free,
+        counter->counters.timer.new -
+            counter->counters.timer.free);
 
     return (const gchar*) counter->stringBuffer->str;
 }

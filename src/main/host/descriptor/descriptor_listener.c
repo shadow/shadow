@@ -8,6 +8,8 @@
 #include <glib.h>
 #include <stdlib.h>
 
+#include "main/core/support/object_counter.h"
+#include "main/core/worker.h"
 #include "main/utility/utility.h"
 
 struct _DescriptorListener {
@@ -49,6 +51,7 @@ DescriptorListener* descriptorlistener_new(
 
     MAGIC_INIT(listener);
 
+    worker_countObject(OBJECT_TYPE_DESCRIPTOR_LISTENER, COUNTER_TYPE_NEW);
     return listener;
 }
 
@@ -65,6 +68,7 @@ static void _descriptorlistener_free(DescriptorListener* listener) {
 
     MAGIC_CLEAR(listener);
     free(listener);
+    worker_countObject(OBJECT_TYPE_DESCRIPTOR_LISTENER, COUNTER_TYPE_FREE);
 }
 
 void descriptorlistener_ref(DescriptorListener* listener) {
