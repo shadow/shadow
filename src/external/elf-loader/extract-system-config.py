@@ -7,7 +7,7 @@ import os
 import codecs
 from elftools.elf.elffile import ELFFile
 
-class CouldNotFindFile:
+class CouldNotFindFile(FileNotFoundError):
     pass
 
 class DebugData:
@@ -125,7 +125,7 @@ def search_debug_file():
         file = find_build_id(library)
         if file and os.path.isfile(file):
             return file
-    raise CouldNotFindFile()
+    raise CouldNotFindFile('Debug file not found')
 
 def list_lib_path():
     paths = []
