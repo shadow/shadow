@@ -12,7 +12,7 @@
 #include <proc/readproc.h>
 #include <sys/mman.h>
 
-#include "shd-shmem-file.h"
+#include "shmem-file.h"
 
 static const char* _kShmDir = "/dev/shm";
 
