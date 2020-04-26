@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -31,8 +32,9 @@ static void _shmemfile_getName(size_t nbytes, char* str) {
     pid_t pid = getpid();
 
     snprintf(str, MIN(SHD_SHMEM_FILE_NAME_NBYTES, nbytes),
-             "/%s_%llu.%llu%c%lld", _kShadowPrefix,
-             (unsigned long long)ts.tv_sec, (unsigned long long)ts.tv_nsec,
+             "/%s_%llu.%llu%c%" PRId64, _kShadowPrefix,
+             (unsigned long long)ts.tv_sec,
+             (unsigned long long)ts.tv_nsec,
              _kPIDDelim, (int64_t)pid);
 }
 
