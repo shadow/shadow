@@ -33,8 +33,7 @@ static void _shmemfile_getName(size_t nbytes, char* str) {
 
     snprintf(str, MIN(SHD_SHMEM_FILE_NAME_NBYTES, nbytes),
              "/%s_%llu.%llu%c%" PRId64, _kShadowPrefix,
-             (unsigned long long)ts.tv_sec,
-             (unsigned long long)ts.tv_nsec,
+             (unsigned long long)ts.tv_sec, (unsigned long long)ts.tv_nsec,
              _kPIDDelim, (int64_t)pid);
 }
 
@@ -46,13 +45,17 @@ bool shmemfile_nameHasShadowPrefix(const char* name) {
 pid_t shmemfile_pidFromName(const char* name) {
     pid_t ret = -1;
 
+    long long int x = 0;
+
     const char* delim = strchr(name, '-');
     if (delim) {
         // try to parse the end of the string
-        ret = (pid_t)strtol(delim + 1, NULL, 10);
-        if (ret == 0 || ret == LONG_MAX ||
-            ret == LONG_MIN) { // we had trouble parsing
+        x = strtol(delim + 1, NULL, 10);
+        if (x == 0 || x > INT_MAX ||
+            x <= INT_MIN) { // we had trouble parsing
             ret = -1;
+        } else {
+            ret = (pid_t)x;
         }
     }
 
