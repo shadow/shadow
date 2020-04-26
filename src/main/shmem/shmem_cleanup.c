@@ -1,4 +1,4 @@
-#include "shmem-cleanup.h"
+#include "shmem_cleanup.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -12,7 +12,7 @@
 #include <proc/readproc.h>
 #include <sys/mman.h>
 
-#include "shmem-file.h"
+#include "shmem_file.h"
 
 static const char* _kShmDir = "/dev/shm";
 

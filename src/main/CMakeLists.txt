@@ -108,7 +108,7 @@ set(SHD_SHMEM_SRC
     shmem/shmem_allocator.c
     shmem/shmem_file.c
     shmem/shmem_util.c
-    shmem/shmem-cleanup.c)
+    shmem/shmem_cleanup.c)
 
 add_library(shadow-shmem STATIC ${SHD_SHMEM_SRC})
 target_link_libraries(shadow-shmem logger)

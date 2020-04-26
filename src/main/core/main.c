@@ -19,7 +19,7 @@
 #include "main/core/support/configuration.h"
 #include "main/core/support/options.h"
 #include "main/utility/utility.h"
-#include "../shmem/shmem-cleanup.h"
+#include "main/shmem/shmem_cleanup.h"
 #include "igraph_version.h"
 #include "shd-config.h"
 #include "support/logger/logger.h"
