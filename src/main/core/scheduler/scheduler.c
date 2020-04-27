@@ -265,7 +265,7 @@ static void _scheduler_joinThreads(SchedulerThreadItem* item, Scheduler* schedul
 
         GTimer* executeEventsBarrierWaitTime = g_hash_table_lookup(scheduler->threadToWaitTimerMap, GUINT_TO_POINTER(item->thread));
         gdouble totalWaitTime = g_timer_elapsed(executeEventsBarrierWaitTime, NULL);
-        message("joined thread %p, total wait time for round execution barrier was %f seconds", item->thread, totalWaitTime);
+        message("joined thread %p, total wait time for round execution barrier was %f seconds", GUINT_TO_POINTER(item->thread), totalWaitTime);
     }
 }
 
