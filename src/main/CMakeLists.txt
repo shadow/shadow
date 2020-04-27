@@ -98,6 +98,7 @@ set(REMORA_SRC
 add_library(shadow-remora STATIC ${REMORA_SRC})
 
 add_library(shadow-tsc STATIC host/tsc.c)
+target_link_libraries(shadow-tsc ${GLIB_LIBRARIES} logger)
 add_executable(tsc_test host/tsc_test.c)
 target_link_libraries(tsc_test ${GLIB_LIBRARIES} shadow-tsc)
 add_test(NAME tsc_test COMMAND tsc_test)

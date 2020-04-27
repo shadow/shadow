@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <x86intrin.h>
 
+#include "support/logger/logger.h"
+
 // Assumes lhs >= rhs
 void _timespec_sub(struct timespec* res, const struct timespec* lhs,
                    const struct timespec* rhs) {
@@ -39,7 +41,7 @@ Tsc Tsc_measure() {
         struct timespec ts_start;
         unsigned int unused;
         if (clock_gettime(CLOCK_MONOTONIC, &ts_start) < 0) {
-            g_error("clock_gettime: %s", strerror(errno));
+            error("clock_gettime: %s", strerror(errno));
         }
         uint64_t rdtsc_start = __rdtscp(&unused);
 
@@ -47,7 +49,7 @@ Tsc Tsc_measure() {
 
         struct timespec ts_end;
         if (clock_gettime(CLOCK_MONOTONIC, &ts_end) < 0) {
-            g_error("clock_gettime: %s", strerror(errno));
+            error("clock_gettime: %s", strerror(errno));
         }
 
         uint64_t rdtsc_end = __rdtscp(&unused);
@@ -58,7 +60,7 @@ Tsc Tsc_measure() {
         tsc.cyclesPerSecond =
             MIN(tsc.cyclesPerSecond, cycles * 1000000000 / ns);
     }
-    g_info("Calculated %" PRIu64 " cyclesPerSecond", tsc.cyclesPerSecond);
+    info("Calculated %" PRIu64 " cyclesPerSecond", tsc.cyclesPerSecond);
 
     return tsc;
 }
