@@ -445,7 +445,8 @@ void slave_run(Slave* slave) {
             _slave_heartbeat(slave, windowStart);
 
             /* flush slave threads messages */
-            shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
+            shadow_logger_flushRecords(shadow_logger_getDefault(),
+                                       pthread_self());
 
             /* let the logger know it can flush everything prior to this round */
             shadow_logger_syncToDisk(shadow_logger_getDefault());

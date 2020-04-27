@@ -398,7 +398,8 @@ Event* scheduler_pop(Scheduler* scheduler) {
             }
 
             /* clear all log messages from the last round */
-            shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
+            shadow_logger_flushRecords(shadow_logger_getDefault(),
+                                       pthread_self());
 
             /* wait for other threads to finish their collect step */
             countdownlatch_countDownAwait(scheduler->collectInfoBarrier);

@@ -100,7 +100,9 @@ void shadow_logger_setDefault(ShadowLogger* logger) {
     logger_setDefault((Logger*)logger);
 }
 
-ShadowLogger* shadow_logger_getDefault() { return (ShadowLogger*)logger_getDefault(); }
+ShadowLogger* shadow_logger_getDefault() {
+    return (ShadowLogger*)logger_getDefault();
+}
 
 void shadow_logger_setFilterLevel(ShadowLogger* logger, LogLevel level) {
     MAGIC_ASSERT(logger);
@@ -164,9 +166,10 @@ static void _logger_stopHelper(ShadowLogger* logger) {
     countdownlatch_await(logger->helperLatch);
 }
 
-void shadow_logger_logVA(ShadowLogger* logger, LogLevel level, const gchar* fileName,
-                      const gchar* functionName, const gint lineNumber,
-                      const gchar* format, va_list vargs) {
+void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
+                         const gchar* fileName, const gchar* functionName,
+                         const gint lineNumber, const gchar* format,
+                         va_list vargs) {
     if (!logger) {
         vfprintf(stderr, format, vargs);
         return;
@@ -234,13 +237,13 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level, const gchar* file
     }
 }
 
-void shadow_logger_log(ShadowLogger* logger, LogLevel level, const gchar* fileName,
-                    const gchar* functionName, const gint lineNumber,
-                    const gchar* format, ...) {
+void shadow_logger_log(ShadowLogger* logger, LogLevel level,
+                       const gchar* fileName, const gchar* functionName,
+                       const gint lineNumber, const gchar* format, ...) {
     va_list vargs;
     va_start(vargs, format);
-    shadow_logger_logVA(logger, level, fileName, functionName, lineNumber, format,
-                     vargs);
+    shadow_logger_logVA(logger, level, fileName, functionName, lineNumber,
+                        format, vargs);
     va_end(vargs);
 }
 
@@ -319,8 +322,8 @@ static void _logger_logStartupMessage(ShadowLogger* logger) {
 
     gchar* nowStr = _logger_getNewLocalTimeStr(logger);
 
-    shadow_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__,
-                   "logging system started at %s", nowStr);
+    shadow_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__,
+                      __LINE__, "logging system started at %s", nowStr);
 
     if (nowStr) {
         g_free(nowStr);
@@ -333,9 +336,9 @@ static void _logger_logShutdownMessage(ShadowLogger* logger) {
     gchar* nowStr = _logger_getNewLocalTimeStr(logger);
     gchar* runTimeStr = _logger_getNewRunTimeStr(logger);
 
-    shadow_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__,
-                   "logging system stopped at %s, run time was %s", nowStr,
-                   runTimeStr);
+    shadow_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__,
+                      __LINE__, "logging system stopped at %s, run time was %s",
+                      nowStr, runTimeStr);
 
     if (nowStr) {
         g_free(nowStr);
@@ -346,11 +349,12 @@ static void _logger_logShutdownMessage(ShadowLogger* logger) {
 }
 
 static void _shadow_logger_log_cb(Logger* logger, LogLevel level,
-                               const gchar* fileName, const gchar* functionName,
-                               const gint lineNumber, const gchar* format,
-                               va_list vargs) {
+                                  const gchar* fileName,
+                                  const gchar* functionName,
+                                  const gint lineNumber, const gchar* format,
+                                  va_list vargs) {
     shadow_logger_logVA((ShadowLogger*)logger, level, fileName, functionName,
-                     lineNumber, format, vargs);
+                        lineNumber, format, vargs);
 }
 
 static void _shadow_logger_destroy_cb(Logger* logger) {
