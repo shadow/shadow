@@ -7,7 +7,8 @@ import os
 import codecs
 from elftools.elf.elffile import ELFFile
 
-class CouldNotFindFile(FileNotFoundError):
+# Should be inheriting FileNotFoundError but we use Exception to ensure python2 compatibility
+class CouldNotFindFile(Exception):
     pass
 
 class DebugData:
