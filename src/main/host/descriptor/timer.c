@@ -231,7 +231,7 @@ static void _timer_expire(Timer* timer, gpointer data) {
     /* this is a task callback event */
 
     guint expireID = GPOINTER_TO_UINT(data);
-    debug("timer fd %i expired; isClosed=%i expireID=%u minValidExpireID=%u", timer->isClosed, expireID, timer->minValidExpireID);
+    debug("timer fd %i expired; isClosed=%i expireID=%u minValidExpireID=%u", timer->super.handle, timer->isClosed, expireID, timer->minValidExpireID);
 
     timer->numEventsScheduled--;
 
