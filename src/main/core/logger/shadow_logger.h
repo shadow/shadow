@@ -11,8 +11,8 @@
 
 #include "support/logger/log_level.h"
 
-// ShadowLogger is a Logger that uses per-thread log queues to avoid global lock,
-// and adds Shadow-specific context to each log entry.
+// ShadowLogger is a Logger that uses per-thread log queues to avoid global
+// lock, and adds Shadow-specific context to each log entry.
 typedef struct _ShadowLogger ShadowLogger;
 
 ShadowLogger* shadow_logger_new(LogLevel filterLevel);
@@ -32,11 +32,12 @@ gboolean shadow_logger_shouldFilter(ShadowLogger* logger, LogLevel level);
 
 void shadow_logger_setEnableBuffering(ShadowLogger* logger, gboolean enabled);
 
-void shadow_logger_logVA(ShadowLogger* logger, LogLevel level, const gchar* fileName,
-                      const gchar* functionName, const gint lineNumber,
-                      const gchar* format, va_list vargs);
-void shadow_logger_log(ShadowLogger* logger, LogLevel level, const gchar* fileName,
-                    const gchar* functionName, const gint lineNumber,
-                    const gchar* format, ...);
+void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
+                         const gchar* fileName, const gchar* functionName,
+                         const gint lineNumber, const gchar* format,
+                         va_list vargs);
+void shadow_logger_log(ShadowLogger* logger, LogLevel level,
+                       const gchar* fileName, const gchar* functionName,
+                       const gint lineNumber, const gchar* format, ...);
 
 #endif /* SHD_LOGGER_H_ */

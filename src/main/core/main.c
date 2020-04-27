@@ -781,7 +781,8 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     }
 
     /* start up the logging subsystem to handle all future messages */
-    ShadowLogger* shadowLogger = shadow_logger_new(options_getLogLevel(options));
+    ShadowLogger* shadowLogger =
+        shadow_logger_new(options_getLogLevel(options));
     shadow_logger_setDefault(shadowLogger);
 
     /* disable buffering during startup so that we see every message immediately in the terminal */
