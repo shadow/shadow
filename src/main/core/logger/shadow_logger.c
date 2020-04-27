@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/core/logger/shd_logger.h"
+#include "main/core/logger/shadow_logger.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -36,7 +36,7 @@ struct _LoggerThreadData {
 };
 
 /* manages the logging of messages among multiple worker threads */
-struct _ShdLogger {
+struct _ShadowLogger {
     Logger base;
 
     GTimer* runTimer;
@@ -92,22 +92,22 @@ static void _loggerthreaddata_free(LoggerThreadData* threadData) {
     g_free(threadData);
 }
 
-void shd_logger_setDefault(ShdLogger* logger) {
+void shadow_logger_setDefault(ShadowLogger* logger) {
     if (logger != NULL) {
         MAGIC_ASSERT(logger);
-        shd_logger_ref(logger);
+        shadow_logger_ref(logger);
     }
     logger_setDefault((Logger*)logger);
 }
 
-ShdLogger* shd_logger_getDefault() { return (ShdLogger*)logger_getDefault(); }
+ShadowLogger* shadow_logger_getDefault() { return (ShadowLogger*)logger_getDefault(); }
 
-void shd_logger_setFilterLevel(ShdLogger* logger, LogLevel level) {
+void shadow_logger_setFilterLevel(ShadowLogger* logger, LogLevel level) {
     MAGIC_ASSERT(logger);
     logger->filterLevel = level;
 }
 
-gboolean shd_logger_shouldFilter(ShdLogger* logger, LogLevel level) {
+gboolean shadow_logger_shouldFilter(ShadowLogger* logger, LogLevel level) {
     MAGIC_ASSERT(logger);
 
     /* check if the message should be filtered */
@@ -129,12 +129,12 @@ gboolean shd_logger_shouldFilter(ShdLogger* logger, LogLevel level) {
     return (level > filter) ? TRUE : FALSE;
 }
 
-void shd_logger_setEnableBuffering(ShdLogger* logger, gboolean enabled) {
+void shadow_logger_setEnableBuffering(ShadowLogger* logger, gboolean enabled) {
     MAGIC_ASSERT(logger);
     logger->shouldBuffer = enabled;
 }
 
-static void _logger_sendRegisterCommandToHelper(ShdLogger* logger,
+static void _logger_sendRegisterCommandToHelper(ShadowLogger* logger,
                                                 LoggerThreadData* threadData) {
     LoggerHelperCommand* command = loggerhelpercommand_new(
         LHC_REGISTER, threadData->remoteLogHelperMailbox);
@@ -142,17 +142,17 @@ static void _logger_sendRegisterCommandToHelper(ShdLogger* logger,
     g_async_queue_push(logger->helperCommands, command);
 }
 
-static void _logger_sendFlushCommandToHelper(ShdLogger* logger) {
+static void _logger_sendFlushCommandToHelper(ShadowLogger* logger) {
     LoggerHelperCommand* command = loggerhelpercommand_new(LHC_FLUSH, NULL);
     g_async_queue_push(logger->helperCommands, command);
 }
 
-static void _logger_sendStopCommandToHelper(ShdLogger* logger) {
+static void _logger_sendStopCommandToHelper(ShadowLogger* logger) {
     LoggerHelperCommand* command = loggerhelpercommand_new(LHC_STOP, NULL);
     g_async_queue_push(logger->helperCommands, command);
 }
 
-static void _logger_stopHelper(ShdLogger* logger) {
+static void _logger_stopHelper(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
     /* tell the logger helper that we are done sending commands */
     _logger_sendStopCommandToHelper(logger);
@@ -164,7 +164,7 @@ static void _logger_stopHelper(ShdLogger* logger) {
     countdownlatch_await(logger->helperLatch);
 }
 
-void shd_logger_logVA(ShdLogger* logger, LogLevel level, const gchar* fileName,
+void shadow_logger_logVA(ShadowLogger* logger, LogLevel level, const gchar* fileName,
                       const gchar* functionName, const gint lineNumber,
                       const gchar* format, va_list vargs) {
     if (!logger) {
@@ -174,7 +174,7 @@ void shd_logger_logVA(ShdLogger* logger, LogLevel level, const gchar* fileName,
 
     MAGIC_ASSERT(logger);
 
-    if (shd_logger_shouldFilter(logger, level)) {
+    if (shadow_logger_shouldFilter(logger, level)) {
         return;
     }
 
@@ -219,8 +219,8 @@ void shd_logger_logVA(ShdLogger* logger, LogLevel level, const gchar* fileName,
     if (level == LOGLEVEL_ERROR || !logger->shouldBuffer ||
         (timespan - logger->lastTimespan) >= 5) {
         /* make sure we have logged everything */
-        shd_logger_flushRecords(logger, pthread_self());
-        shd_logger_syncToDisk(logger);
+        shadow_logger_flushRecords(logger, pthread_self());
+        shadow_logger_syncToDisk(logger);
         logger->lastTimespan = timespan;
     }
 
@@ -234,17 +234,17 @@ void shd_logger_logVA(ShdLogger* logger, LogLevel level, const gchar* fileName,
     }
 }
 
-void shd_logger_log(ShdLogger* logger, LogLevel level, const gchar* fileName,
+void shadow_logger_log(ShadowLogger* logger, LogLevel level, const gchar* fileName,
                     const gchar* functionName, const gint lineNumber,
                     const gchar* format, ...) {
     va_list vargs;
     va_start(vargs, format);
-    shd_logger_logVA(logger, level, fileName, functionName, lineNumber, format,
+    shadow_logger_logVA(logger, level, fileName, functionName, lineNumber, format,
                      vargs);
     va_end(vargs);
 }
 
-void shd_logger_register(ShdLogger* logger, pthread_t callerThread) {
+void shadow_logger_register(ShadowLogger* logger, pthread_t callerThread) {
     MAGIC_ASSERT(logger);
 
     /* this must be called by main thread before the workers start accessing the
@@ -259,12 +259,12 @@ void shd_logger_register(ShdLogger* logger, pthread_t callerThread) {
     }
 }
 
-void shd_logger_syncToDisk(ShdLogger* logger) {
+void shadow_logger_syncToDisk(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
     _logger_sendFlushCommandToHelper(logger);
 }
 
-void shd_logger_flushRecords(ShdLogger* logger, pthread_t callerThread) {
+void shadow_logger_flushRecords(ShadowLogger* logger, pthread_t callerThread) {
     MAGIC_ASSERT(logger);
     LoggerThreadData* threadData = g_hash_table_lookup(
         logger->threadToDataMap, GUINT_TO_POINTER(callerThread));
@@ -277,7 +277,7 @@ void shd_logger_flushRecords(ShdLogger* logger, pthread_t callerThread) {
     }
 }
 
-static gchar* _logger_getNewLocalTimeStr(ShdLogger* logger) {
+static gchar* _logger_getNewLocalTimeStr(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
 
     GDateTime* nowDateTime = g_date_time_new_now_local();
@@ -292,7 +292,7 @@ static gchar* _logger_getNewLocalTimeStr(ShdLogger* logger) {
     return nowStr;
 }
 
-static gchar* _logger_getNewRunTimeStr(ShdLogger* logger) {
+static gchar* _logger_getNewRunTimeStr(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
 
     /* compute our run time */
@@ -314,12 +314,12 @@ static gchar* _logger_getNewRunTimeStr(ShdLogger* logger) {
     return g_string_free(runTimeString, FALSE);
 }
 
-static void _logger_logStartupMessage(ShdLogger* logger) {
+static void _logger_logStartupMessage(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
 
     gchar* nowStr = _logger_getNewLocalTimeStr(logger);
 
-    shd_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__,
+    shadow_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__,
                    "logging system started at %s", nowStr);
 
     if (nowStr) {
@@ -327,13 +327,13 @@ static void _logger_logStartupMessage(ShdLogger* logger) {
     }
 }
 
-static void _logger_logShutdownMessage(ShdLogger* logger) {
+static void _logger_logShutdownMessage(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
 
     gchar* nowStr = _logger_getNewLocalTimeStr(logger);
     gchar* runTimeStr = _logger_getNewRunTimeStr(logger);
 
-    shd_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__,
+    shadow_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__,
                    "logging system stopped at %s, run time was %s", nowStr,
                    runTimeStr);
 
@@ -345,25 +345,25 @@ static void _logger_logShutdownMessage(ShdLogger* logger) {
     }
 }
 
-static void _shd_logger_log_cb(Logger* logger, LogLevel level,
+static void _shadow_logger_log_cb(Logger* logger, LogLevel level,
                                const gchar* fileName, const gchar* functionName,
                                const gint lineNumber, const gchar* format,
                                va_list vargs) {
-    shd_logger_logVA((ShdLogger*)logger, level, fileName, functionName,
+    shadow_logger_logVA((ShadowLogger*)logger, level, fileName, functionName,
                      lineNumber, format, vargs);
 }
 
-static void _shd_logger_destroy_cb(Logger* logger) {
-    shd_logger_unref((ShdLogger*)logger);
+static void _shadow_logger_destroy_cb(Logger* logger) {
+    shadow_logger_unref((ShadowLogger*)logger);
 }
 
-ShdLogger* shd_logger_new(LogLevel filterLevel) {
-    ShdLogger* logger = g_new(ShdLogger, 1);
-    *logger = (ShdLogger){
+ShadowLogger* shadow_logger_new(LogLevel filterLevel) {
+    ShadowLogger* logger = g_new(ShadowLogger, 1);
+    *logger = (ShadowLogger){
         .base =
             {
-                .log = _shd_logger_log_cb,
-                .destroy = _shd_logger_destroy_cb,
+                .log = _shadow_logger_log_cb,
+                .destroy = _shadow_logger_destroy_cb,
             },
         .runTimer = g_timer_new(),
         .filterLevel = filterLevel,
@@ -394,14 +394,14 @@ ShdLogger* shd_logger_new(LogLevel filterLevel) {
 
     pthread_setname_np(logger->helper, "logger-helper");
 
-    shd_logger_register(logger, pthread_self());
+    shadow_logger_register(logger, pthread_self());
 
     _logger_logStartupMessage(logger);
 
     return logger;
 }
 
-static void _logger_free(ShdLogger* logger) {
+static void _logger_free(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
 
     /* print the final log message that we are shutting down
@@ -409,8 +409,8 @@ static void _logger_free(ShdLogger* logger) {
     _logger_logShutdownMessage(logger);
 
     /* one last flush for the above message before we stop */
-    shd_logger_flushRecords(logger, pthread_self());
-    shd_logger_syncToDisk(logger);
+    shadow_logger_flushRecords(logger, pthread_self());
+    shadow_logger_syncToDisk(logger);
 
     /* tell the helper to stop, waiting for it to stop */
     _logger_stopHelper(logger);
@@ -427,12 +427,12 @@ static void _logger_free(ShdLogger* logger) {
     g_free(logger);
 }
 
-void shd_logger_ref(ShdLogger* logger) {
+void shadow_logger_ref(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
     logger->referenceCount++;
 }
 
-void shd_logger_unref(ShdLogger* logger) {
+void shadow_logger_unref(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
     logger->referenceCount--;
     gboolean shouldFree = (logger->referenceCount <= 0) ? TRUE : FALSE;

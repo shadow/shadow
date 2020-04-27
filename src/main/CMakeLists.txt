@@ -34,7 +34,7 @@ endif(SHADOW_PROFILE STREQUAL ON)
 set(shadow_srcs
     core/logger/logger_helper.c
     core/logger/log_record.c
-    core/logger/shd_logger.c
+    core/logger/shadow_logger.c
     core/scheduler/scheduler.c
     core/scheduler/scheduler_policy_global_single.c
     core/scheduler/scheduler_policy_host_single.c
