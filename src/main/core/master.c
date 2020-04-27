@@ -17,7 +17,7 @@
 #include <stddef.h>
 #include <unistd.h>
 
-#include "main/core/logger/shd_logger.h"
+#include "main/core/logger/shadow_logger.h"
 #include "main/core/master.h"
 #include "main/core/slave.h"
 #include "main/core/support/configuration.h"
@@ -429,7 +429,7 @@ gint master_run(Master* master) {
     /* dont buffer log messages in debug mode */
     if(options_getLogLevel(master->options) != LOGLEVEL_DEBUG) {
         message("log message buffering is enabled for efficiency");
-        shd_logger_setEnableBuffering(shd_logger_getDefault(), TRUE);
+        shadow_logger_setEnableBuffering(shadow_logger_getDefault(), TRUE);
     }
 
     /* start running each slave */
@@ -439,7 +439,7 @@ gint master_run(Master* master) {
      * don't log the message as it may confuse the user. */
     if(options_getLogLevel(master->options) != LOGLEVEL_DEBUG) {
         message("log message buffering is disabled during cleanup");
-        shd_logger_setEnableBuffering(shd_logger_getDefault(), FALSE);
+        shadow_logger_setEnableBuffering(shadow_logger_getDefault(), FALSE);
     }
 
     message("simulation finished, cleaning up now");
