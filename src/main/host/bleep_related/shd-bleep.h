@@ -17,7 +17,8 @@ void* shadow_claim_shared_entry(void* ptr, size_t sz, int shared_id);
 int shadow_assign_virtual_id();
 // Memory Instrumentation Marker Functions
 void shadow_instrumentation_marker_set(int file_symbol, int line_cnt);
-void shadow_instrumentation_marker_log();
+void shadow_instrumentation_marker_alloc_log(size_t sz);
+void shadow_instrumentation_marker_free_log(size_t sz);
 // BLEEP related initialization
 void init_bleep_related();
 
