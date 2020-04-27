@@ -15,6 +15,9 @@ void shadow_gmutex_unlock(int shared_id);
 void* shadow_claim_shared_entry(void* ptr, size_t sz, int shared_id);
 // BLEEP Virtual ID Functions
 int shadow_assign_virtual_id();
+// Memory Instrumentation Marker Functions
+void shadow_instrumentation_marker_set(int file_symbol, int line_cnt);
+void shadow_instrumentation_marker_log();
 // BLEEP related initialization
 void init_bleep_related();
 

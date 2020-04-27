@@ -519,3 +519,15 @@ int shadow_assign_virtual_id() {
         return director.next.shadow_assign_virtual_id();
     }
 }
+// BLEEP TCP PTR send/recv Functions
+
+// Memory Instrumentation Marker Functions
+void shadow_instrumentation_marker_set(int file_symbol, int line_cnt) {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_shadow_instrumentation_marker_set(proc, file_symbol, line_cnt);
+    } else {
+        ENSURE(shadow_instrumentation_marker_set);
+        return director.next.shadow_instrumentation_marker_set(file_symbol, line_cnt);
+    }
+}

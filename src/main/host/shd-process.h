@@ -447,6 +447,9 @@ void process_emu_shadow_gmutex_unlock(Process* proc, int shared_id);
 int process_emu_shadow_assign_virtual_id(Process* proc);
 // BLEEP TCP PTR send/recv Functions
 
+// Memory Instrumentation Marker Functions
+void process_emu_shadow_instrumentation_marker_set(Process* proc, int file_symbol, int line_cnt);
+
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
   returntype process_emu_##functionname(Process* proc, ...);
 

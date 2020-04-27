@@ -7739,6 +7739,14 @@ int process_emu_shadow_assign_virtual_id(Process* proc) {
 }
 // BLEEP TCP PTR send/recv Functions
 
+// Memory Instrumentation Marker Functions
+void process_emu_shadow_instrumentation_marker_set(Process* proc, int file_symbol, int line_cnt) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    shadow_instrumentation_marker_set(file_symbol, line_cnt);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return;
+}
+
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
     returntype process_emu_##functionname(Process* proc, ...) { \
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW); \

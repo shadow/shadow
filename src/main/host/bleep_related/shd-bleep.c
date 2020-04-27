@@ -44,6 +44,23 @@ int shadow_assign_virtual_id() {
     return ret;
 }
 
+// Memory Instrumentation Marker Functions
+int g_file_symbol = 0;
+int g_line_cnt = 0;
+void shadow_instrumentation_marker_set(int file_symbol, int line_cnt) {
+    g_file_symbol = file_symbol;
+    g_line_cnt = line_cnt;
+    return;
+}
+void shadow_instrumentation_marker_alloc_log() {
+    message("SMLA,%d,%d",g_file_symbol, g_line_cnt);
+    return;
+}
+void shadow_instrumentation_marker_free_log() {
+    message("SMLF,%d,%d",g_file_symbol, g_line_cnt);
+    return;
+}
+
 // BLEEP related initialization
 void init_bleep_related() {
     // BLEEP Shared Entry Functions
