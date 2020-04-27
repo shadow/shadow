@@ -437,11 +437,15 @@ int process_emu_pselect(Process* proc, int nfds, fd_set *readfds, fd_set *writef
 int process_emu_poll(Process* proc, struct pollfd *pfd, nfds_t nfd, int timeout);
 int process_emu_ppoll(Process* proc, struct pollfd *fds, nfds_t nfds, const struct timespec *timeout_ts, const sigset_t *sigmask);
 
-// BLEEP OBJECT SHARE
-void process_emu_shadow_global_gmutex_lock(Process* proc, int lock_no);
-void process_emu_shadow_global_gmutex_unlock(Process* proc, int lock_no);
-void* process_emu_shadow_lock_try_set_global_entry(Process* proc, void* ptr, size_t sz);
+
+/* BLEEP related functions*/
+// BLEEP Shared Entry Functions
+void* process_emu_shadow_claim_shared_entry(Process* proc, void* ptr, size_t sz, int shared_id);
+void process_emu_shadow_gmutex_lock(Process* proc, int shared_id);
+void process_emu_shadow_gmutex_unlock(Process* proc, int shared_id);
+// BLEEP Virtual ID Functions
 int process_emu_shadow_assign_virtual_id(Process* proc);
+// BLEEP TCP PTR send/recv Functions
 
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
   returntype process_emu_##functionname(Process* proc, ...);

@@ -55,8 +55,11 @@ PRELOADDEF(return, int, shadow_push_eventlog, (const char *a), a);
 PRELOADDEF(return, int, shadow_usleep, (unsigned int a), a);
 PRELOADDEF(return, int, shadow_clock_gettime, (clockid_t a, struct timespec *b), a, b);
 
-// BLEEP OBJECT SHARE
-PRELOADDEF(return, void, shadow_global_gmutex_lock, (int lock_no), lock_no);
-PRELOADDEF(return, void, shadow_global_gmutex_unlock, (int lock_no), lock_no);
-PRELOADDEF(return, void*, shadow_lock_try_set_global_entry, (void* ptr, size_t sz), ptr, sz);
+/* BLEEP related functions*/
+// BLEEP Shared Entry Functions
+PRELOADDEF(return, void*, shadow_claim_shared_entry, (void* ptr, size_t sz, int shared_id), ptr, sz, shared_id);
+PRELOADDEF(return, void, shadow_gmutex_lock, (int shared_id), shared_id);
+PRELOADDEF(return, void, shadow_gmutex_unlock, (int shared_id), shared_id);
+// BLEEP Virtual ID Functions
 PRELOADDEF(return, int, shadow_assign_virtual_id, (void));
+// BLEEP TCP PTR send/recv Functions

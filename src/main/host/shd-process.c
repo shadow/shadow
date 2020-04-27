@@ -7708,33 +7708,36 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
-// BLEEP OBJECT SHARE
-void process_emu_shadow_global_gmutex_lock(Process* proc, int lock_no) {
-    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    shadow_global_gmutex_lock(lock_no);
-    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return;
-}
-void process_emu_shadow_global_gmutex_unlock(Process* proc, int lock_no) {
-    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    shadow_global_gmutex_unlock(lock_no);
-    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return;
-}
-void* process_emu_shadow_lock_try_set_global_entry(Process* proc, void* ptr, size_t sz) {
+
+/* BLEEP related functions*/
+// BLEEP Shared Entry Functions
+void* process_emu_shadow_claim_shared_entry(Process* proc, void* ptr, size_t sz, int shared_id) {
     void* ret;
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    ret = shadow_lock_try_set_global_entry(ptr, sz);
+    ret = shadow_claim_shared_entry(ptr, sz, shared_id);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
-// BLEEP random id assignment per call
+void process_emu_shadow_gmutex_lock(Process* proc, int shared_id) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    shadow_gmutex_lock(shared_id);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return;
+}
+void process_emu_shadow_gmutex_unlock(Process* proc, int shared_id) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    shadow_gmutex_unlock(shared_id);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return;
+}
+// BLEEP Virtual ID Functions
 int process_emu_shadow_assign_virtual_id(Process* proc) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = shadow_assign_virtual_id();
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
 }
+// BLEEP TCP PTR send/recv Functions
 
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
     returntype process_emu_##functionname(Process* proc, ...) { \

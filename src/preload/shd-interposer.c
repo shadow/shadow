@@ -480,34 +480,36 @@ int shadow_clock_gettime(clockid_t clk_id, struct timespec *tp) {
     return director.next.clock_gettime(clk_id, tp);
 }
 
-// BLEEP OBJECT SHARE
-void shadow_global_gmutex_lock(int lock_no) {
+/* BLEEP related functions*/
+// BLEEP Shared Entry Functions
+void* shadow_claim_shared_entry(void* ptr, size_t sz, int shared_id) {
     Process* proc = NULL;
     if((proc = _doEmulate()) != NULL) {
-        return process_emu_shadow_global_gmutex_lock(proc, lock_no);
+        return process_emu_shadow_claim_shared_entry(proc, ptr, sz, shared_id);
     } else {
-        ENSURE(shadow_global_gmutex_lock);
-        return director.next.shadow_global_gmutex_lock(lock_no);
+        ENSURE(shadow_claim_shared_entry);
+        return director.next.shadow_claim_shared_entry(ptr, sz, shared_id);
     }
 }
-void shadow_global_gmutex_unlock(int lock_no) {
+void shadow_gmutex_lock(int shared_id) {
     Process* proc = NULL;
     if((proc = _doEmulate()) != NULL) {
-        return process_emu_shadow_global_gmutex_unlock(proc, lock_no);
+        return process_emu_shadow_gmutex_lock(proc, shared_id);
     } else {
-        ENSURE(shadow_global_gmutex_unlock);
-        return director.next.shadow_global_gmutex_unlock(lock_no);
+        ENSURE(shadow_gmutex_lock);
+        return director.next.shadow_gmutex_lock(shared_id);
     }
 }
-void* shadow_lock_try_set_global_entry(void* ptr, size_t sz) {
+void shadow_gmutex_unlock(int shared_id) {
     Process* proc = NULL;
     if((proc = _doEmulate()) != NULL) {
-        return process_emu_shadow_lock_try_set_global_entry(proc, ptr, sz);
+        return process_emu_shadow_gmutex_unlock(proc, shared_id);
     } else {
-        ENSURE(shadow_lock_try_set_global_entry);
-        return director.next.shadow_lock_try_set_global_entry(ptr, sz);
+        ENSURE(shadow_gmutex_unlock);
+        return director.next.shadow_gmutex_unlock(shared_id);
     }
 }
+// BLEEP Virtual ID Functions
 int shadow_assign_virtual_id() {
     Process* proc = NULL;
     if((proc = _doEmulate()) != NULL) {

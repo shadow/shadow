@@ -106,8 +106,8 @@ typedef struct _Process Process;
 #include "host/shd-network-interface.h"
 #include "host/shd-tracker.h"
 #include "host/shd-host.h"
-// BLEEP Related functionalities
-#include "host/shd-bleep.h"
+// BLEEP Related Functions
+#include "host/bleep_related/shd-bleep.h"
 
 
 #include "core/scheduler/shd-scheduler-policy.h"
