@@ -110,6 +110,7 @@ set(SHD_SHMEM_SRC
     shmem/shmem_util.c)
 
 add_library(shadow-shmem STATIC ${SHD_SHMEM_SRC})
+target_link_libraries(shadow-shmem logger)
 add_executable(shd-shmem-test shmem/shmem_test.c)
 target_link_libraries(shd-shmem-test shadow-shmem ${GLIB_LIBRARIES} ${RT_LIBRARIES} ${M_LIBRARIES})
 include_directories(${CMAKE_SOURCE_DIR}/src/main/shmem)

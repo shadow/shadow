@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include "main/shmem/shmem_util.h"
+#include "support/logger/logger.h"
 
 static void _shmemfile_getName(size_t nbytes, char* str) {
     assert(str != NULL && nbytes >= 3);
@@ -37,16 +38,15 @@ static size_t _shmemfile_systemPageNBytes() {
 
 int shmemfile_alloc(size_t nbytes, ShMemFile* shmf) {
     if (nbytes == 0 || nbytes % _shmemfile_systemPageNBytes() != 0) {
-        SHD_SHMEM_LOG_ERROR(
-            "ShMemFile size must be a positive multiple of %zu but requested "
-            "size was %zu",
-            _shmemfile_systemPageNBytes(), nbytes);
+        error("ShMemFile size must be a positive multiple of %zu but requested "
+              "size was %zu",
+              _shmemfile_systemPageNBytes(), nbytes);
 
         return -1;
     }
 
     if (shmf == NULL) {
-        SHD_SHMEM_LOG_ERROR("shmf must not be null");
+        error("shmf must not be null");
         return -1;
     }
 
@@ -68,12 +68,12 @@ int shmemfile_alloc(size_t nbytes, ShMemFile* shmf) {
                 shmf->p = p;
                 shmf->nbytes = nbytes;
             } else {
-                SHD_SHMEM_LOG_ERROR("error on mmap: %s", strerror(errno));
+                error("error on mmap: %s", strerror(errno));
                 bad = true;
             }
 
         } else { // failed truncate
-            SHD_SHMEM_LOG_ERROR("error on truncate: %s", strerror(errno));
+            error("error on truncate: %s", strerror(errno));
             bad = true;
         }
 
@@ -85,7 +85,7 @@ int shmemfile_alloc(size_t nbytes, ShMemFile* shmf) {
         }
     } else {
         bad = true;
-        SHD_SHMEM_LOG_ERROR("error on shm_open: %s", strerror(errno));
+        error("error on shm_open: %s", strerror(errno));
     }
 
     return -1 * (bad);
@@ -94,16 +94,15 @@ int shmemfile_alloc(size_t nbytes, ShMemFile* shmf) {
 // rwails: cleanup redundant logic
 int shmemfile_map(const char* name, size_t nbytes, ShMemFile* shmf) {
     if (nbytes == 0 || nbytes % _shmemfile_systemPageNBytes() != 0) {
-        SHD_SHMEM_LOG_ERROR(
-            "ShMemFile size must be a positive multiple of %zu but requested "
-            "size was %zu",
-            _shmemfile_systemPageNBytes(), nbytes);
+        error("ShMemFile size must be a positive multiple of %zu but requested "
+              "size was %zu",
+              _shmemfile_systemPageNBytes(), nbytes);
 
         return -1;
     }
 
     if (shmf == NULL) {
-        SHD_SHMEM_LOG_ERROR("shmf must not be null");
+        error("shmf must not be null");
         return -1;
     }
 
@@ -124,7 +123,7 @@ int shmemfile_map(const char* name, size_t nbytes, ShMemFile* shmf) {
             shmf->p = p;
             shmf->nbytes = nbytes;
         } else {
-            SHD_SHMEM_LOG_ERROR("error on mmap: %s", strerror(errno));
+            error("error on mmap: %s", strerror(errno));
             bad = true;
         }
 
@@ -136,7 +135,7 @@ int shmemfile_map(const char* name, size_t nbytes, ShMemFile* shmf) {
         }
     } else {
         bad = true;
-        SHD_SHMEM_LOG_ERROR("error on shm_open: %s", strerror(errno));
+        error("error on shm_open: %s", strerror(errno));
     }
 
     return -1 * (bad);
@@ -145,7 +144,7 @@ int shmemfile_map(const char* name, size_t nbytes, ShMemFile* shmf) {
 int shmemfile_unmap(ShMemFile *shmf) {
     int rc = munmap(shmf->p, shmf->nbytes);
     if (rc) {
-        SHD_SHMEM_LOG_ERROR("error on munmap: %s", strerror(errno));
+        error("error on munmap: %s", strerror(errno));
     }
     return rc;
 }
@@ -155,7 +154,7 @@ int shmemfile_free(ShMemFile* shmf) {
     if (rc == 0) {
         rc = shm_unlink(shmf->name);
         if (rc) {
-            SHD_SHMEM_LOG_ERROR("error on shm_unlink: %s", strerror(errno));
+            error("error on shm_unlink: %s", strerror(errno));
         }
     }
 

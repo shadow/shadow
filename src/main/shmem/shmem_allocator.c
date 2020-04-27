@@ -10,6 +10,7 @@
 #include "main/shmem/buddy.h"
 #include "main/shmem/shmem_file.h"
 #include "main/shmem/shmem_util.h"
+#include "support/logger/logger.h"
 
 #define SHD_SHMEM_ALLOCATOR_POOL_NBYTES SHD_BUDDY_POOL_MAX_NBYTES
 
@@ -137,8 +138,7 @@ ShMemAllocator* shmemallocator_getGlobal() {
         if (_global_allocator) { // set up hooks for free on exit
             atexit(_shmemallocator_destroyGlobal);
         } else { // something bad happened, and we definitely can't continue
-            SHD_SHMEM_LOG_ERROR(
-                "error allocating global shared memory allocator");
+            error("error allocating global shared memory allocator");
             abort();
         }
     }
@@ -157,8 +157,7 @@ ShMemSerializer* shmemserializer_getGlobal() {
         if (_global_serializer) { // set up hooks for free on exit
             atexit(_shmemserializer_destroyGlobal);
         } else { // something bad happened, and we definitely can't continue
-            SHD_SHMEM_LOG_ERROR(
-                "error allocating global shared memory serializer");
+            error("error allocating global shared memory serializer");
             abort();
         }
     }
