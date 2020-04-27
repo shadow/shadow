@@ -114,11 +114,11 @@ static EmulatedTime _syscallhandler_getEmulatedTime() {
     return worker_getEmulatedTime();
 }
 
-static void _syscallhandler_setBlockTimeout(SysCallHandler* sys,
-                                            const struct timespec* timeout) {
+static void _syscallhandler_setListenTimeout(SysCallHandler* sys,
+                                             const struct timespec* timeout) {
     MAGIC_ASSERT(sys);
 
-    /* Set a non-repeating timer to the given timeout.
+    /* Set a non-repeating (one-shot) timer to the given timeout.
      * A NULL timeout indicates we should turn off the timer. */
     struct itimerspec value = {
         .it_value = timeout ? *timeout : (struct timespec){0},
@@ -157,10 +157,6 @@ static inline int _syscallhandler_wasBlocked(const SysCallHandler* sys) {
     return sys->blockedSyscallNR >= 0;
 }
 
-static inline void _syscallhandler_resetTimer(SysCallHandler* sys) {
-    _syscallhandler_setBlockTimeout(sys, NULL);
-}
-
 ///////////////////////////////////////////////////////////
 // System Calls
 ///////////////////////////////////////////////////////////
@@ -185,7 +181,7 @@ static SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
 
     if (requestToBlock && !wasBlocked) {
         /* We need to block for a while following the requested timeout. */
-        _syscallhandler_setBlockTimeout(sys, req);
+        _syscallhandler_setListenTimeout(sys, req);
         process_listenForStatus(
             sys->process, sys->thread, sys->timer, NULL, DS_NONE);
 
@@ -205,7 +201,8 @@ static SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
             error("nanosleep unblocked but the timer did not expire.");
         }
 
-        _syscallhandler_resetTimer(sys);
+        /* We are done blocking now, make sure to clear the old timeout. */
+        _syscallhandler_setListenTimeout(sys, NULL);
     }
 
     /* The syscall is now complete. */
