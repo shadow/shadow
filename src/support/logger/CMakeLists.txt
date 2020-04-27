@@ -1,3 +1,5 @@
+add_cflags(-fPIC)
+
 add_library(logger STATIC
     logger.c
     log_level.c)
