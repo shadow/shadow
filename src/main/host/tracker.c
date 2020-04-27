@@ -429,12 +429,14 @@ static void _tracker_logNode(Tracker* tracker, LogLevel level, SimulationTime in
     if(!tracker->didLogNodeHeader) {
         tracker->didLogNodeHeader = TRUE;
         logger_log(logger_getDefault(), level, __FILE__, __FUNCTION__, __LINE__,
+                   // clang-format off (Tries to break at -'s)
                    "[shadow-heartbeat] [node-header] "
-                   "interval-seconds,recv-bytes,send-bytes,cpu-percent,delayed-"
-                   "count,avgdelay-milliseconds;"
+                   "interval-seconds,recv-bytes,send-bytes,cpu-percent,"
+                   "delayed-count,avgdelay-milliseconds;"
                    "inbound-localhost-counters;outbound-localhost-counters;"
                    "inbound-remote-counters;outbound-remote-counters "
                    "where counters are: %s",
+                   // clang-format on
                    _tracker_getCounterHeaderString());
     }
 
