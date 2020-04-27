@@ -51,6 +51,7 @@ Logger* logger_getDefault();
 
 // Thread safe. `logger` may be NULL, in which case glib's logging
 // functionality will be used.
+__attribute__((__format__ (__printf__, 6, 7)))
 void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
                 const gchar* functionName, const gint lineNumber,
                 const gchar* format, ...);

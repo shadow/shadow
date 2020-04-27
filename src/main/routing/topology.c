@@ -1030,7 +1030,7 @@ static gboolean _topology_checkGraphVertices(Topology* top) {
 
     top->vertexCount = igraph_vcount(&top->graph);
     if(top->vertexCount != vertexCount) {
-        warning("igraph_vcount %f does not match iterator count %f", top->vertexCount, vertexCount);
+        warning("igraph_vcount %d does not match iterator count %d", top->vertexCount, vertexCount);
     }
 
     message("%u graph vertices ok", (guint) top->vertexCount);
@@ -1176,7 +1176,7 @@ static gboolean _topology_checkGraphEdges(Topology* top) {
 
     top->edgeCount = igraph_ecount(&top->graph);
     if(top->edgeCount != edgeCount) {
-        warning("igraph_vcount %f does not match iterator count %f", top->edgeCount, edgeCount);
+        warning("igraph_vcount %d does not match iterator count %d", top->edgeCount, edgeCount);
     }
 
     message("%u graph edges ok", (guint) top->edgeCount);

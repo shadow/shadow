@@ -622,7 +622,7 @@ static void _process_logCachedWarnings(Process* proc) {
     if(proc->cachedWarningMessages) {
         gchar* msgStr = NULL;
         while((msgStr = g_queue_pop_head(proc->cachedWarningMessages)) != NULL) {
-            warning(msgStr);
+            warning("%s", msgStr);
             g_free(msgStr);
         }
     }
@@ -1401,7 +1401,7 @@ void process_migrate(Process* proc, gpointer threads) {
     }
     int ret = dl_lmid_swap_tls (proc->lmid, ts->t1, ts->t2);
     if (ret != 0) {
-        error("could not find lmid %p", proc->lmid);
+        error("could not find lmid %p", GUINT_TO_POINTER(proc->lmid));
     }
     /* now that we migrated the TLS, the errno location for this proc is no longer valid.
      * set the flag so that the next thread executing this process does a new lookup before
@@ -2722,9 +2722,9 @@ ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
     } else if(prevCTX == PCTX_PTH && (fd == STDOUT_FILENO || fd == STDERR_FILENO)) {
         /* XXX this hack is to remove rpth's newline char since shadow will add another one */
         if(fd == STDERR_FILENO) {
-            error("%.*s", n-1, buff);
+            error("%.*s", (int)n-1, (const char*)buff);
         } else {
-            debug("%.*s", n-1, buff);
+            debug("%.*s", (int)n-1, (const char*)buff);
         }
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
