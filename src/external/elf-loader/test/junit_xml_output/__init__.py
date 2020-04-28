@@ -5,6 +5,17 @@ import xml.dom.minidom
 __version__ = "0.0.2"
 
 
+def to_str(obj):
+	'''
+	Function that allow compatibility between python2 and python3
+	unicode becomes str in python3
+	'''
+	try:
+		return unicode(obj)
+	except:
+		return str(obj)
+
+
 class JunitXml(object):
 	""" A class which is designed to create a junit test xml file.
 	    Note: currently this class is designed to return the junit xml file
@@ -22,9 +33,9 @@ class JunitXml(object):
 			self.total_failures = len(self.failing_test_cases)
 		self.root = ET.Element("testsuite",
 			{
-				"name" : unicode(self.testsuit_name),
-				"failures": unicode(self.total_failures),
-				"tests" : unicode(self.total_tests)
+				"name" : to_str(self.testsuit_name),
+				"failures": to_str(self.total_failures),
+				"tests" : to_str(self.total_tests)
 			}
 		)
 		self.build_junit_xml()
@@ -39,7 +50,7 @@ class JunitXml(object):
 		"""
 		for case in self.test_cases:
 			test_case_element = ET.SubElement(self.root,
-				"testcase", {"name" : unicode(case.name)})
+				"testcase", {"name" : to_str(case.name)})
 			if case.is_failure():
 				failure_element = ET.Element("failure")
 				failure_element.text = case.contents

@@ -7,7 +7,8 @@ import os
 import codecs
 from elftools.elf.elffile import ELFFile
 
-class CouldNotFindFile:
+# Should be inheriting FileNotFoundError but we use Exception to ensure python2 compatibility
+class CouldNotFindFile(Exception):
     pass
 
 class DebugData:
@@ -16,7 +17,6 @@ class DebugData:
             elffile = ELFFile(f)
             assert elffile.has_dwarf_info(), debug_filename + ' has no DWARF info'
             self.dwarfinfo = elffile.get_dwarf_info()
-            return
     def get_struct_size(self, struct_die, required=True):
         if struct_die is not None:
             return struct_die.attributes['DW_AT_byte_size'].value
@@ -126,7 +126,7 @@ def search_debug_file():
         file = find_build_id(library)
         if file and os.path.isfile(file):
             return file
-    raise CouldNotFindFile()
+    raise CouldNotFindFile('Debug file not found')
 
 def list_lib_path():
     paths = []
