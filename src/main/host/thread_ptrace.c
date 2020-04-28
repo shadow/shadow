@@ -209,7 +209,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
                              &regs,
                              worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
             if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &regs) < 0) {
-                error("ptrace", g_strerror(errno));
+                error("ptrace: %s", g_strerror(errno));
                 return;
             }
             return;
@@ -219,7 +219,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
                               &regs,
                               worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
             if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &regs) < 0) {
-                error("ptrace", g_strerror(errno));
+                error("ptrace: %s", g_strerror(errno));
                 return;
             }
             return;
@@ -475,7 +475,7 @@ static void _threadptrace_memcpyToShadow(ThreadPtrace* thread, void* shadow_dst,
             error("EOF");
             return;
         }
-        error("fread %u -> %u: %s", n, count, g_strerror(errno));
+        error("fread %zu -> %zu: %s", n, count, g_strerror(errno));
     }
     return;
 }
@@ -489,7 +489,7 @@ static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
     }
     size_t count = fwrite(shadow_src, 1, n, thread->childMemFile);
     if (count != n) {
-        error("fwrite %u -> %u: %s", n, count, g_strerror(errno));
+        error("fwrite %zu -> %zu: %s", n, count, g_strerror(errno));
     }
     thread->childMemFileIsDirty = true;
     return;

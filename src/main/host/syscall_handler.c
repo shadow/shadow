@@ -216,7 +216,7 @@ static SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
                                                   const SysCallArgs* args) {
     clockid_t clk_id = args->args[0].as_u64;
     debug("syscallhandler_clock_gettime with %d %p", clk_id,
-          args->args[1].as_ptr);
+          GUINT_TO_POINTER(args->args[1].as_ptr.val));
 
     struct timespec* res_timespec = thread_writePluginPtr(
         sys->thread, args->args[1].as_ptr, sizeof(*res_timespec));
@@ -234,12 +234,12 @@ static SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
 
 #define HANDLE(s)                                                              \
     case SYS_##s:                                                              \
-        debug("handled syscall %d " #s, args->number);                         \
+        debug("handled syscall %ld " #s, args->number);                        \
         scr = syscallhandler_##s(sys, args);                                   \
         break
 #define NATIVE(s)                                                              \
     case SYS_##s:                                                              \
-        debug("native syscall %d " #s, args->number);                          \
+        debug("native syscall %ld " #s, args->number);                         \
         scr = (SysCallReturn){.state = SYSCALL_RETURN_NATIVE};                 \
         break
 SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
@@ -252,7 +252,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
      * or if we blocked a syscall, then that same syscall
      * should be executed again when it becomes unblocked. */
     if (sys->blockedSyscallNR >= 0 && sys->blockedSyscallNR != args->number) {
-        error("We blocked syscall number %l but syscall number %l "
+        error("We blocked syscall number %ld but syscall number %ld "
               "is unexpectedly being invoked",
               sys->blockedSyscallNR, args->number);
     }
@@ -281,7 +281,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(write);
 
         default:
-            info("unhandled syscall %d", args->number);
+            info("unhandled syscall %ld", args->number);
             scr = (SysCallReturn){.state = SYSCALL_RETURN_NATIVE};
             break;
     }
