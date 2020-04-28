@@ -51,6 +51,11 @@ Logger* logger_getDefault();
 
 // Thread safe. `logger` may be NULL, in which case glib's logging
 // functionality will be used.
+//
+// The `__format__` attribute tells the compiler to apply the same format-string
+// diagnostics that it does for `printf`.
+// https://clang.llvm.org/docs/AttributeReference.html#format
+// https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#Common-Function-Attributes
 __attribute__((__format__ (__printf__, 6, 7)))
 void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
                 const gchar* functionName, const gint lineNumber,
