@@ -1,15 +1,17 @@
 #include "shim/shim.h"
-#include "shim/shim_event.h"
 
 #include <assert.h>
+#include <pthread.h>
+#include <search.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <pthread.h>
-#include <search.h>
 #include <sys/types.h>
+
+#include "shim/shim_event.h"
+#include "shim/shim_logger.h"
+#include "support/logger/logger.h"
 
 typedef struct _TIDFDPair {
     pthread_t tid;
@@ -80,6 +82,9 @@ _shim_load() {
     if (!_using_interpose_preload) {
         return;
     }
+
+    logger_setDefault(shimlogger_new(stderr));
+
     const char *shd_event_sock_fd = getenv("_SHD_IPC_SOCKET");
     assert(shd_event_sock_fd);
     int event_sock_fd = atoi(shd_event_sock_fd);
@@ -94,10 +99,10 @@ _shim_load() {
 
     _shim_tidFDTreeAdd(tid_fd);
 
-    SHD_SHIM_LOG("waiting for event on %d\n", event_sock_fd);
+    debug("waiting for event on %d", event_sock_fd);
     _shim_wait_start(event_sock_fd);
 
-    SHD_SHIM_LOG("starting main\n");
+    debug("starting main");
     shim_enableInterposition();
 }
 
@@ -110,7 +115,7 @@ static void _shim_unload() {
 
     ShimEvent shim_event;
     shim_event.event_id = SHD_SHIM_EVENT_STOP;
-    SHD_SHIM_LOG("sending stop event on %d\n", event_fd);
+    debug("sending stop event on %d", event_fd);
     shimevent_sendEvent(event_fd, &shim_event);
 
     pthread_mutex_destroy(&tid_fd_tree_mtx);
@@ -126,10 +131,6 @@ static void _shim_wait_start(int event_fd) {
 
     shimevent_recvEvent(event_fd, &event);
     assert(event.event_id == SHD_SHIM_EVENT_START);
-}
-
-FILE *shim_logFD() {
-    return stderr;
 }
 
 int shim_thisThreadEventFD() {

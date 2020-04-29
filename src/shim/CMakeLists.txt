@@ -27,6 +27,7 @@ set(SHIM_FILES
   preload_libraries.c
   preload_syscalls.c
   shim.c
+  shim_logger.c
   shim_shmem.c
 )
 add_library(${SHIM_LIB} SHARED ${SHIM_FILES})
@@ -36,7 +37,7 @@ set_target_properties(${SHIM_LIB} PROPERTIES
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib"
 )
 target_compile_options(${SHIM_LIB} PRIVATE -pthread -D_GNU_SOURCE)
-target_link_libraries(${SHIM_LIB} ${SHIM_HELPER_LIB} shadow-shmem
+target_link_libraries(${SHIM_LIB} ${SHIM_HELPER_LIB} shadow-shmem logger
   ${RT_LIBRARIES} ${GLIB_LIBRARIES} -pthread -ldl)
 install(TARGETS ${SHIM_LIB} DESTINATION lib)
 

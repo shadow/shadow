@@ -15,6 +15,7 @@
 #include "shim/shim.h"
 #include "shim/shim_event.h"
 #include "shim/shim_shmem.h"
+#include "support/logger/logger.h"
 
 // Handle to the real syscall function, initialized once at load-time for
 // thread-safety.
@@ -39,15 +40,15 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* ev) {
     shim_disableInterposition();
 
     const int fd = shim_thisThreadEventFD();
-    SHD_SHIM_LOG("sending event on %d\n", fd);
+    debug("sending event on %d\n", fd);
     shimevent_sendEvent(fd, ev);
 
     shim_shmemLoop(fd);
 
-    SHD_SHIM_LOG("waiting for event on %d\n", fd);
+    debug("waiting for event on %d\n", fd);
     ShimEvent res;
     shimevent_recvEvent(fd, &res);
-    SHD_SHIM_LOG("got response on %d\n", fd);
+    debug("got response on %d\n", fd);
     assert(res.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
 
     shim_enableInterposition();

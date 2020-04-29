@@ -9,12 +9,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-FILE *shim_logFD();
 int shim_thisThreadEventFD();
-
-#define SHD_SHIM_LOG(...) \
-    fprintf(shim_logFD(), "[shd-shim]\t"); \
-    fprintf(shim_logFD(), __VA_ARGS__)
 
 // Disables syscall interposition for the current thread if it's enabled. (And
 // if not, increments a counter). Should be matched with a call to

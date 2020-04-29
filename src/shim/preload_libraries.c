@@ -19,6 +19,7 @@
 
 #include "shim/shim.h"
 #include "shim/shim_event.h"
+#include "support/logger/logger.h"
 
 // man 3 usleep
 int usleep(useconds_t usec) {
@@ -175,7 +176,7 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
 
     g_file_get_contents("/etc/hosts", &hosts, NULL, &error);
     if (error != NULL) {
-        SHD_SHIM_LOG("Reading /etc/hosts: %s", error->message);
+        error("Reading /etc/hosts: %s", error->message);
         goto out;
     }
     assert(hosts != NULL);
@@ -189,14 +190,14 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
                      escaped_node);
         g_free(escaped_node);
         if (rv < 0) {
-            SHD_SHIM_LOG("asprintf failed: %d", rv);
+            error("asprintf failed: %d", rv);
             goto out;
         }
     }
 
     regex = g_regex_new(pattern, G_REGEX_MULTILINE, 0, &error);
     if (error != NULL) {
-        SHD_SHIM_LOG("g_regex_new: %s", error->message);
+        error("g_regex_new: %s", error->message);
         goto out;
     }
     assert(regex != NULL);
@@ -211,7 +212,7 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
         uint32_t addr;
         int rv = inet_pton(AF_INET, address_string, &addr);
         if (rv != 1) {
-            SHD_SHIM_LOG("Bad address in /etc/hosts: %s\n", address_string);
+            error("Bad address in /etc/hosts: %s\n", address_string);
         } else {
             _getaddrinfo_appendv4(
                 head, tail, add_tcp, add_udp, add_raw, addr, port);
