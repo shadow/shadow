@@ -83,6 +83,11 @@ DescriptorType descriptor_getType(Descriptor* descriptor) {
     return descriptor->type;
 }
 
+gint descriptor_getHandle(Descriptor* descriptor) {
+    MAGIC_ASSERT(descriptor);
+    return descriptor->handle;
+}
+
 gint* descriptor_getHandleReference(Descriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return &(descriptor->handle);
@@ -190,4 +195,9 @@ gint descriptor_getFlags(Descriptor* descriptor) {
 void descriptor_setFlags(Descriptor* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
     descriptor->flags = flags;
+}
+
+void descriptor_addFlags(Descriptor* descriptor, gint flags) {
+    MAGIC_ASSERT(descriptor);
+    descriptor->flags |= flags;
 }

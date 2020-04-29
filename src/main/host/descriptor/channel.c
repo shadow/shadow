@@ -94,8 +94,7 @@ static gssize channel_sendUserData(Channel* channel, gconstpointer buffer, gsize
         result = channel_linkedWrite(channel->linkedChannel, buffer, nBytes);
     } else {
         /* the other end closed or doesn't exist */
-        result = -1;
-        errno = EPIPE;
+        result = -EPIPE;
     }
 
     /* our end cant write anymore if they returned error */
@@ -119,7 +118,7 @@ static gssize channel_receiveUserData(Channel* channel, gpointer buffer, gsize n
             return (gssize)0;
         } else {
             /* blocking on read */
-            return (gssize)-1;
+            return (gssize)-EAGAIN;
         }
     }
 

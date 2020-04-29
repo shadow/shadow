@@ -571,15 +571,13 @@ static void _host_disassociateInterface(Host* host, Socket* socket) {
 
 }
 
-static gint _host_monitorDescriptor(Host* host, Descriptor* descriptor) {
+static void _host_monitorDescriptor(Host* host, Descriptor* descriptor) {
     MAGIC_ASSERT(host);
 
     /* make sure there are no collisions before inserting */
     gint* handle = descriptor_getHandleReference(descriptor);
     utility_assert(handle && !host_lookupDescriptor(host, *handle));
     g_hash_table_replace(host->descriptors, handle, descriptor);
-
-    return *handle;
 }
 
 static void _host_unmonitorDescriptor(Host* host, gint handle) {
@@ -625,11 +623,6 @@ void host_returnHandleHack(gint handle) {
             _host_returnPreviousDescriptorHandle(host, handle);
         }
     }
-}
-
-gboolean host_isShadowDescriptor(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-    return host_lookupDescriptor(host, handle) == NULL ? FALSE : TRUE;
 }
 
 gint host_createShadowHandle(Host* host, gint osHandle) {
@@ -707,7 +700,7 @@ void host_destroyShadowHandle(Host* host, gint shadowHandle) {
     g_hash_table_remove(host->randomShadowHandleMap, GINT_TO_POINTER(shadowHandle));
 }
 
-gint host_createDescriptor(Host* host, DescriptorType type) {
+Descriptor* host_createDescriptor(Host* host, DescriptorType type) {
     MAGIC_ASSERT(host);
 
     /* get a unique descriptor that can be "closed" later */
@@ -772,95 +765,17 @@ gint host_createDescriptor(Host* host, DescriptorType type) {
         default: {
             warning("unknown descriptor type: %i", (gint)type);
             errno = EINVAL;
-            return -1;
+            return NULL;
         }
     }
 
-    return _host_monitorDescriptor(host, descriptor);
+    _host_monitorDescriptor(host, descriptor);
+    return descriptor;
 }
 
 void host_closeDescriptor(Host* host, gint handle) {
     MAGIC_ASSERT(host);
     _host_unmonitorDescriptor(host, handle);
-}
-
-gint host_epollControl(Host* host, gint epollDescriptor, gint operation,
-                       gint fileDescriptor, const struct epoll_event* event) {
-    MAGIC_ASSERT(host);
-
-    /* EBADF  epfd is not a valid file descriptor. */
-    Descriptor* descriptor = host_lookupDescriptor(host, epollDescriptor);
-    if(descriptor == NULL) {
-        return EBADF;
-    }
-
-    DescriptorStatus status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", epollDescriptor);
-        return EBADF;
-    }
-
-    /* EINVAL epfd is not an epoll file descriptor */
-    if(descriptor_getType(descriptor) != DT_EPOLL) {
-        return EINVAL;
-    }
-
-    /* now we know its an epoll */
-    Epoll* epoll = (Epoll*) descriptor;
-
-    /* if this is for a system file, forward to system call */
-    if(!host_isShadowDescriptor(host, fileDescriptor)) {
-        gint osfd = host_getOSHandle(host, fileDescriptor);
-        osfd = osfd >= 0 ? osfd : fileDescriptor;
-        return epoll_controlOS(epoll, operation, osfd, event);
-    }
-
-    /* EBADF  fd is not a valid shadow file descriptor. */
-    descriptor = host_lookupDescriptor(host, fileDescriptor);
-    if(descriptor == NULL) {
-        warning("descriptor handle '%i' not a valid shadow descriptor", fileDescriptor);
-        return EBADF;
-    }
-
-    return epoll_control(epoll, operation, descriptor, event);
-}
-
-gint host_epollGetEvents(Host* host, gint handle,
-        struct epoll_event* eventArray, gint eventArrayLength, gint* nEvents) {
-    MAGIC_ASSERT(host);
-
-    /* EBADF  epfd is not a valid file descriptor. */
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor == NULL) {
-        return EBADF;
-    }
-
-    DescriptorStatus status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", handle);
-        return EBADF;
-    }
-
-    /* EINVAL epfd is not an epoll file descriptor */
-    if(descriptor_getType(descriptor) != DT_EPOLL) {
-        return EINVAL;
-    }
-
-    Epoll* epoll = (Epoll*) descriptor;
-    gint ret = epoll_getEvents(epoll, eventArray, eventArrayLength, nEvents);
-
-    /* i think data is a user-only struct, and a union - which may not have fd set
-     * so lets just leave it alone */
-//    for(gint i = 0; i < *nEvents; i++) {
-//        if(!host_isShadowDescriptor(host, eventArray[i].data.fd)) {
-//            /* the fd is a file that the OS handled for us, translate to shadow fd */
-//            gint shadowHandle = host_getShadowHandle(host, eventArray[i].data.fd);
-//            utility_assert(shadowHandle >= 0);
-//            eventArray[i].data.fd = shadowHandle;
-//        }
-//    }
-
-    return ret;
 }
 
 gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* erroneous) {
@@ -984,7 +899,8 @@ gint host_poll(Host* host, struct pollfd *pollFDs, nfds_t numPollFDs) {
             continue;
         }
 
-        if(host_isShadowDescriptor(host, pfd->fd)){
+        gboolean exists = host_lookupDescriptor(host, pfd->fd) != NULL;
+        if (exists) {
             /* descriptor lookup is not NULL */
             Descriptor* descriptor = host_lookupDescriptor(host, pfd->fd);
             DescriptorStatus status = descriptor_getStatus(descriptor);

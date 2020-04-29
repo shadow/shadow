@@ -1828,8 +1828,8 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
                 /* we need to multiplex a new child */
                 Host* node = worker_getActiveHost();
-                gint multiplexedHandle = host_createDescriptor(node, DT_TCPSOCKET);
-                TCP* multiplexed = (TCP*) host_lookupDescriptor(node, multiplexedHandle);
+                TCP* multiplexed =
+                    (TCP*)host_createDescriptor(node, DT_TCPSOCKET);
 
                 multiplexed->child = _tcpchild_new(multiplexed, tcp, header->sourceIP, header->sourcePort);
                 utility_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);

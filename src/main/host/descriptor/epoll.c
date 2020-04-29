@@ -536,6 +536,11 @@ gint epoll_controlOS(Epoll* epoll, gint operation, gint fileDescriptor,
     return ret;
 }
 
+guint epoll_getNumReadyEvents(Epoll* epoll) {
+    MAGIC_ASSERT(epoll);
+    return g_hash_table_size(epoll->ready);
+}
+
 gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArrayLength, gint* nEvents) {
     MAGIC_ASSERT(epoll);
     utility_assert(nEvents);

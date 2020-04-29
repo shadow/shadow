@@ -6,7 +6,9 @@
 #include "main/host/syscall_handler.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <glib.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -15,10 +17,17 @@
 
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
+#include "main/host/descriptor/channel.h"
+#include "main/host/descriptor/epoll.h"
+#include "main/host/descriptor/timer.h"
 #include "main/host/process.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "support/logger/logger.h"
+
+#ifndef O_DIRECT
+#define O_DIRECT 040000
+#endif
 
 struct _SysCallHandler {
     /* We store pointers to the host, process, and thread that the syscall
@@ -160,6 +169,47 @@ static inline int _syscallhandler_wasBlocked(const SysCallHandler* sys) {
     return sys->blockedSyscallNR >= 0;
 }
 
+static int _syscallhandler_validateDescriptor(Descriptor* descriptor,
+                                              DescriptorType expectedType) {
+    if (descriptor) {
+        DescriptorStatus status = descriptor_getStatus(descriptor);
+
+        if (status & DS_CLOSED) {
+            warning("descriptor handle '%i' is closed",
+                    descriptor_getHandle(descriptor));
+            return EBADF;
+        }
+
+        DescriptorType type = descriptor_getType(descriptor);
+
+        if (expectedType != DT_NONE && type != expectedType) {
+            warning("descriptor handle '%i' is of type %i, expected type %i",
+                    descriptor_getHandle(descriptor), type, expectedType);
+            return EINVAL;
+        }
+
+        return 0;
+    } else {
+        return EBADF;
+    }
+}
+
+static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
+                                             int64_t flags) {
+    if (size <= 0 || (flags != 0 && flags != EPOLL_CLOEXEC)) {
+        return -EINVAL;
+    }
+
+    Descriptor* desc = host_createDescriptor(sys->host, DT_EPOLL);
+    utility_assert(desc);
+
+    if (flags & EPOLL_CLOEXEC) {
+        descriptor_addFlags(desc, EPOLL_CLOEXEC);
+    }
+
+    return descriptor_getHandle(desc);
+}
+
 ///////////////////////////////////////////////////////////
 // System Calls
 ///////////////////////////////////////////////////////////
@@ -228,13 +278,393 @@ static SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
     return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
 }
 
+static SysCallReturn syscallhandler_epoll_create(SysCallHandler* sys,
+                                                 const SysCallArgs* args) {
+    int64_t size = args->args[0].as_i64;
+
+    int result = _syscallhandler_createEpollHelper(sys, size, 0);
+
+    return (SysCallReturn){
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)result};
+}
+
+static SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
+                                                  const SysCallArgs* args) {
+    int64_t flags = args->args[0].as_i64;
+
+    int result = _syscallhandler_createEpollHelper(sys, 1, flags);
+
+    return (SysCallReturn){
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)result};
+}
+
+static SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
+                                              const SysCallArgs* args) {
+    gint epfd = (gint)args->args[0].as_i64;
+    gint op = (gint)args->args[1].as_i64;
+    gint fd = (gint)args->args[2].as_i64;
+    const struct epoll_event* event = NULL; // args->args[3]
+
+    /* EINVAL if fd is the same as epfd, or the requested operation op is not
+     * supported by this interface */
+    if (epfd == fd) {
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
+    }
+
+    /* Get and check the epoll descriptor. */
+    Descriptor* descriptor = host_lookupDescriptor(sys->host, epfd);
+    gint errorCode = _syscallhandler_validateDescriptor(descriptor, DT_EPOLL);
+
+    if (errorCode || !descriptor) {
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -errorCode};
+    }
+
+    /* It's now safe to cast. */
+    Epoll* epoll = (Epoll*)descriptor;
+    utility_assert(epoll);
+
+    /* Find the child descriptor that the epoll is monitoring. */
+    descriptor = host_lookupDescriptor(sys->host, fd);
+    errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
+
+    event =
+        thread_readPluginPtr(sys->thread, args->args[3].as_ptr, sizeof(*event));
+    gint result = 0;
+
+    if (descriptor) {
+        result = epoll_control(epoll, op, descriptor, event);
+    } else {
+        /* child is not a shadow descriptor, check for OS file */
+        gint osfd = host_getOSHandle(sys->host, fd);
+        osfd = osfd >= 0 ? osfd : fd;
+        result = epoll_controlOS(epoll, op, osfd, event);
+    }
+
+    if (result > 0) {
+        result = -result;
+    }
+    return (SysCallReturn){
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = result};
+}
+
+static SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
+                                               const SysCallArgs* args) {
+    gint epfd = (gint)args->args[0].as_i64;
+    struct epoll_event* events = NULL; // args->args[1]
+    gint maxevents = (gint)args->args[2].as_i64;
+    gint timeout_ms = (gint)args->args[3].as_i64;
+
+    /* Check input args. */
+    if (maxevents <= 0) {
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
+    }
+
+    /* Get and check the epoll descriptor. */
+    Descriptor* descriptor = host_lookupDescriptor(sys->host, epfd);
+    gint errorCode = _syscallhandler_validateDescriptor(descriptor, DT_EPOLL);
+
+    if (errorCode || !descriptor) {
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -errorCode};
+    }
+
+    /* It's now safe to cast. */
+    Epoll* epoll = (Epoll*)descriptor;
+    utility_assert(epoll);
+
+    /* figure out how many events we actually have so we can request
+     * less memory than maxevents if possible. */
+    guint numReadyEvents = epoll_getNumReadyEvents(epoll);
+
+    /* If no events are ready, our behavior depends on timeout. */
+    if (numReadyEvents == 0) {
+        /* Did we already block? */
+        int wasBlocked = _syscallhandler_wasBlocked(sys);
+
+        /* Return immediately if timeout is 0 or we were already
+         * blocked for a while and still have no events. */
+        if (timeout_ms == 0 || wasBlocked) {
+            if (wasBlocked) {
+                _syscallhandler_setListenTimeout(sys, NULL);
+            }
+
+            /* Return 0; no events are ready. */
+            return (SysCallReturn){
+                .state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
+        } else {
+            /* We need to block, either for timeout_ms time if it's positive,
+             * or indefinitely if it's negative. */
+            if (timeout_ms > 0) {
+                struct timespec timeout = {
+                    .tv_sec = timeout_ms / 1000,              // ms to sec
+                    .tv_nsec = (timeout_ms % 1000) * 1000000, // ms to ns
+                };
+                _syscallhandler_setListenTimeout(sys, &timeout);
+            }
+
+            /* An epoll descriptor is readable when it has events. We either
+             * use our timer as a timeout, or no timeout. */
+            process_listenForStatus(sys->process, sys->thread,
+                                    (timeout_ms > 0) ? sys->timer : NULL,
+                                    (Descriptor*)epoll, DS_READABLE);
+
+            return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
+        }
+    }
+
+    /* We have events. Get a pointer where we should write the result. */
+    guint numEventsNeeded = MIN((guint)maxevents, numReadyEvents);
+    size_t sizeNeeded = sizeof(*events) * numEventsNeeded;
+    events =
+        thread_writePluginPtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
+
+    /* Retrieve the events. */
+    gint nEvents = 0;
+    gint result = epoll_getEvents(epoll, events, numEventsNeeded, &nEvents);
+    utility_assert(result == 0);
+
+    /* Return the number of events that are ready. */
+    return (SysCallReturn){
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = nEvents};
+}
+
+static SysCallReturn syscallhandler_close(SysCallHandler* sys,
+                                          const SysCallArgs* args) {
+    gint fd = (gint)args->args[0].as_i64;
+    gint errorCode = 0;
+
+    /* Check that fd is within bounds. */
+    if (fd <= 0) {
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EBADF};
+    }
+
+    /* Check if this is a virtual Shadow descriptor. */
+    Descriptor* descriptor = host_lookupDescriptor(sys->host, fd);
+    errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
+
+    if (descriptor && !errorCode) {
+        /* Yes! Handle it in the host netstack. */
+        errorCode = host_closeUser(sys->host, fd);
+        errorCode = -errorCode; // If we got an err, e.g. EBADF, make it neg
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
+    }
+
+    /* Check if we have a mapped os fd. This call returns -1 to
+     * us if this fd does not correspond to any os-backed file
+     * that Shadow created internally. */
+    gint osfd = host_getOSHandle(sys->host, fd);
+    if (osfd < 0) {
+        /* The fd is not part of a special file that Shadow handles internally.
+         * It might be a regular OS file, and should be handled natively by
+         * libc. */
+        return (SysCallReturn){.state = SYSCALL_RETURN_NATIVE};
+    }
+
+    /* OK. The given FD from the plugin corresponds to a real
+     * OS file that Shadow created and handles. */
+
+    // TODO: handle special files
+
+    return (SysCallReturn){
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)-errorCode};
+}
+
+static SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,
+                                          const SysCallArgs* args) {
+    gint* pipefd = NULL; // args->args[0]
+    gint flags = (gint)args->args[1].as_i64;
+
+    if (flags & O_DIRECT) {
+        warning("We don't currently support pipes in 'O_DIRECT' mode.");
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
+    }
+
+    /* Create and check the pipe descriptor. */
+    Descriptor* pipeReader = host_createDescriptor(sys->host, DT_PIPE);
+    utility_assert(pipeReader);
+    gint errorCode = _syscallhandler_validateDescriptor(pipeReader, DT_PIPE);
+    utility_assert(errorCode == 0);
+
+    /* A pipe descriptor is actually simulated with our Channel object,
+     * the other end of which will represent the write end. */
+    Descriptor* pipeWriter =
+        (Descriptor*)channel_getLinkedChannel((Channel*)pipeReader);
+    utility_assert(pipeWriter);
+    errorCode = _syscallhandler_validateDescriptor(pipeWriter, DT_PIPE);
+    utility_assert(errorCode == 0);
+
+    /* Set any options that were given. */
+    if (flags & O_NONBLOCK) {
+        descriptor_addFlags(pipeReader, O_NONBLOCK);
+        descriptor_addFlags(pipeWriter, O_NONBLOCK);
+    }
+    if (flags & O_CLOEXEC) {
+        descriptor_addFlags(pipeReader, O_CLOEXEC);
+        descriptor_addFlags(pipeWriter, O_CLOEXEC);
+    }
+
+    /* Return the pipe fds to the caller. */
+    size_t sizeNeeded = sizeof(int) * 2;
+    pipefd =
+        thread_writePluginPtr(sys->thread, args->args[0].as_ptr, sizeNeeded);
+    pipefd[0] = descriptor_getHandle(pipeReader);
+    pipefd[1] = descriptor_getHandle(pipeWriter);
+
+    debug("pipe() returning reader fd %i and writer fd %i",
+          descriptor_getHandle(pipeReader), descriptor_getHandle(pipeWriter));
+
+    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
+}
+
+static SysCallReturn syscallhandler_pipe(SysCallHandler* sys,
+                                         const SysCallArgs* args) {
+    /* This assumes that the unused args->args[1] is set to 0 by default. */
+    return syscallhandler_pipe2(sys, args);
+}
+
+static SysCallReturn syscallhandler_read(SysCallHandler* sys,
+                                         const SysCallArgs* args) {
+    int fd = (int)args->args[0].as_i64;
+    void* buf; // args->args[1]
+    size_t bufSize = (size_t)args->args[2].as_u64;
+
+    debug(
+        "trying to read %llu bytes on fd %i", (unsigned long long)bufSize, fd);
+
+    /* Get the descriptor. */
+    Descriptor* desc = host_lookupDescriptor(sys->host, fd);
+
+    // TODO: I think every read/write on FDs needs to come through shadow.
+    // The following needs to change when we add file support.
+    if (!desc) {
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_NATIVE, .retval.as_i64 = 0};
+    }
+
+    gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
+    if (errorCode != 0) {
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -errorCode};
+    }
+    utility_assert(desc);
+
+    DescriptorType dType = descriptor_getType(desc);
+    gint dFlags = descriptor_getFlags(desc);
+
+    /* TODO: Dynamically compute size based on how much data is actually
+     * available in the descriptor. */
+    size_t sizeNeeded = MIN(bufSize, 1024 * 16);
+    buf = thread_writePluginPtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
+
+    ssize_t result = 0;
+    switch (dType) {
+        case DT_TIMER:
+            result = timer_read((Timer*)desc, buf, sizeNeeded);
+            break;
+        case DT_PIPE:
+            result = transport_receiveUserData(
+                (Transport*)desc, buf, sizeNeeded, NULL, NULL);
+            break;
+        case DT_TCPSOCKET:
+        case DT_UDPSOCKET:
+        case DT_SOCKETPAIR:
+        case DT_EPOLL:
+        default:
+            warning("write() not yet implemented for descriptor type %i",
+                    (int)dType);
+            result = -EBADF;
+            break;
+    }
+
+    if ((result == -EWOULDBLOCK || result == -EAGAIN) &&
+        !(dFlags & O_NONBLOCK)) {
+        /* We need to block until the descriptor is ready to read. */
+        process_listenForStatus(
+            sys->process, sys->thread, NULL, desc, DS_READABLE);
+        return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
+    }
+
+    return (SysCallReturn){
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = result};
+}
+
+static SysCallReturn syscallhandler_write(SysCallHandler* sys,
+                                          const SysCallArgs* args) {
+    int fd = (int)args->args[0].as_i64;
+    const void* buf; // args->args[1]
+    size_t bufSize = (size_t)args->args[2].as_u64;
+
+    debug(
+        "trying to write %llu bytes on fd %i", (unsigned long long)bufSize, fd);
+
+    /* Get the descriptor. */
+    Descriptor* desc = host_lookupDescriptor(sys->host, fd);
+
+    // TODO: I think every read/write on FDs needs to come through shadow.
+    // The following needs to change when we add file support.
+    if (!desc) {
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_NATIVE, .retval.as_i64 = 0};
+    }
+
+    gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
+    if (errorCode != 0) {
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -errorCode};
+    }
+    utility_assert(desc);
+
+    DescriptorType dType = descriptor_getType(desc);
+    gint dFlags = descriptor_getFlags(desc);
+
+    /* TODO: Dynamically compute size based on how much data is actually
+     * available in the descriptor. */
+    size_t sizeNeeded = MIN(bufSize, 1024 * 16);
+    buf = thread_readPluginPtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
+
+    ssize_t result = 0;
+    switch (dType) {
+        case DT_TIMER: result = -EINVAL; break;
+        case DT_PIPE:
+            result =
+                transport_sendUserData((Transport*)desc, buf, sizeNeeded, 0, 0);
+            break;
+        case DT_TCPSOCKET:
+        case DT_UDPSOCKET:
+        case DT_SOCKETPAIR:
+        case DT_EPOLL:
+        default:
+            warning("write() not yet implemented for descriptor type %i",
+                    (int)dType);
+            result = -EBADF;
+            break;
+    }
+
+    if ((result == -EWOULDBLOCK || result == -EAGAIN) &&
+        !(dFlags & O_NONBLOCK)) {
+        /* We need to block until the descriptor is ready to read. */
+        process_listenForStatus(
+            sys->process, sys->thread, NULL, desc, DS_WRITABLE);
+        return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
+    }
+
+    return (SysCallReturn){
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = result};
+}
+
 ///////////////////////////////////////////////////////////
 // Single public API function for calling Shadow syscalls
 ///////////////////////////////////////////////////////////
 
 #define HANDLE(s)                                                              \
     case SYS_##s:                                                              \
-        debug("handled syscall %ld " #s, args->number);                        \
+        debug("handling syscall %ld " #s, args->number);                        \
         scr = syscallhandler_##s(sys, args);                                   \
         break
 #define NATIVE(s)                                                              \
@@ -259,12 +689,20 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
 
     switch (args->number) {
         HANDLE(clock_gettime);
+        HANDLE(close);
+        HANDLE(epoll_create);
+        HANDLE(epoll_create1);
+        HANDLE(epoll_ctl);
+        HANDLE(epoll_wait);
         HANDLE(nanosleep);
+        HANDLE(pipe);
+        HANDLE(pipe2);
+        HANDLE(read);
+        HANDLE(write);
 
         NATIVE(access);
         NATIVE(arch_prctl);
         NATIVE(brk);
-        NATIVE(close);
         NATIVE(execve);
         NATIVE(fstat);
         NATIVE(mmap);
@@ -272,13 +710,11 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(munmap);
         NATIVE(openat);
         NATIVE(prlimit64);
-        NATIVE(read);
         NATIVE(rt_sigaction);
         NATIVE(rt_sigprocmask);
         NATIVE(set_robust_list);
         NATIVE(set_tid_address);
         NATIVE(stat);
-        NATIVE(write);
 
         default:
             info("unhandled syscall %ld", args->number);
@@ -292,10 +728,14 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         debug("syscall %ld on thread %p of process %s is blocked", args->number,
               sys->thread, process_getName(sys->process));
         sys->blockedSyscallNR = args->number;
+    } else if (scr.state == SYSCALL_RETURN_NATIVE) {
+        debug("syscall %ld on thread %p of process %s will be handled natively",
+              args->number, sys->thread, process_getName(sys->process));
+        sys->blockedSyscallNR = -1;
     } else {
         debug("syscall %ld on thread %p of process %s %s", args->number,
               sys->thread, process_getName(sys->process),
-              sys->blockedSyscallNR >= 0 ? "is unblocked"
+              sys->blockedSyscallNR >= 0 ? "was blocked but is now unblocked"
                                          : "completed without blocking");
         sys->blockedSyscallNR = -1;
     }

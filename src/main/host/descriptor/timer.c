@@ -356,8 +356,7 @@ ssize_t timer_read(Timer* timer, void *buf, size_t count) {
     if(timer->expireCountSinceLastSet > 0) {
         /* we have something to report, make sure the buf is big enough */
         if(count < sizeof(guint64)) {
-            errno = EINVAL;
-            return (ssize_t) -1;
+            return (ssize_t)-EINVAL;
         }
 
         debug("Reading %" G_GUINT64_FORMAT " expirations from timer fd %d",
@@ -372,8 +371,7 @@ ssize_t timer_read(Timer* timer, void *buf, size_t count) {
         return (ssize_t) sizeof(guint64);
     } else {
         /* the timer has not yet expired, try again later */
-        errno = EAGAIN;
-        return (ssize_t) -1;
+        return (ssize_t)-EAGAIN;
     }
 }
 

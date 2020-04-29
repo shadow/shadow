@@ -15,7 +15,13 @@
 
 typedef enum _DescriptorType DescriptorType;
 enum _DescriptorType {
-    DT_TCPSOCKET, DT_UDPSOCKET, DT_PIPE, DT_SOCKETPAIR, DT_EPOLL, DT_TIMER
+    DT_NONE,
+    DT_TCPSOCKET,
+    DT_UDPSOCKET,
+    DT_PIPE,
+    DT_SOCKETPAIR,
+    DT_EPOLL,
+    DT_TIMER
 };
 
 typedef struct _Descriptor Descriptor;
@@ -53,10 +59,12 @@ void descriptor_close(Descriptor* descriptor);
 gint descriptor_compare(const Descriptor* foo, const Descriptor* bar, gpointer user_data);
 
 DescriptorType descriptor_getType(Descriptor* descriptor);
+gint descriptor_getHandle(Descriptor* descriptor);
 gint* descriptor_getHandleReference(Descriptor* descriptor);
 
 gint descriptor_getFlags(Descriptor* descriptor);
 void descriptor_setFlags(Descriptor* descriptor, gint flags);
+void descriptor_addFlags(Descriptor* descriptor, gint flags);
 
 /*
  * One of the main functions of the descriptor is to track its poll status,

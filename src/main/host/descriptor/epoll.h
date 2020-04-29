@@ -24,7 +24,7 @@ gint epoll_controlOS(Epoll* epoll, gint operation, gint fileDescriptor,
 gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
         gint eventArrayLength, gint* nEvents);
 
-void epoll_descriptorStatusChanged(Epoll* epoll, Descriptor* descriptor);
 void epoll_clearWatchListeners(Epoll* epoll);
+guint epoll_getNumReadyEvents(Epoll* epoll);
 
 #endif /* SHD_EPOLL_H_ */
