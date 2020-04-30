@@ -437,7 +437,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
             /* EEXIST op was EPOLL_CTL_ADD, and the supplied file descriptor
              * fd is already registered with this epoll instance. */
             if(watch) {
-                return EEXIST;
+                return -EEXIST;
             }
 
             /* start watching for status changes */
@@ -463,7 +463,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
         case EPOLL_CTL_MOD: {
             /* ENOENT op was EPOLL_CTL_MOD, and fd is not registered with this epoll instance */
             if(!watch) {
-                return ENOENT;
+                return -ENOENT;
             }
 
             MAGIC_ASSERT(watch);
@@ -484,7 +484,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
         case EPOLL_CTL_DEL: {
             /* ENOENT op was EPOLL_CTL_DEL, and fd is not registered with this epoll instance */
             if(!watch) {
-                return ENOENT;
+                return -ENOENT;
             }
 
             MAGIC_ASSERT(watch);
@@ -525,7 +525,7 @@ gint epoll_controlOS(Epoll* epoll, gint operation, gint fileDescriptor,
     gint ret =
         epoll_ctl(epoll->osEpollChild, operation, fileDescriptor, &osevent);
     if(ret < 0) {
-        ret = errno;
+        ret = -errno;
     }
 
     /* Check if the OS attempted to modify the event data. */

@@ -177,7 +177,7 @@ static int _syscallhandler_validateDescriptor(Descriptor* descriptor,
         if (status & DS_CLOSED) {
             warning("descriptor handle '%i' is closed",
                     descriptor_getHandle(descriptor));
-            return EBADF;
+            return -EBADF;
         }
 
         DescriptorType type = descriptor_getType(descriptor);
@@ -185,12 +185,12 @@ static int _syscallhandler_validateDescriptor(Descriptor* descriptor,
         if (expectedType != DT_NONE && type != expectedType) {
             warning("descriptor handle '%i' is of type %i, expected type %i",
                     descriptor_getHandle(descriptor), type, expectedType);
-            return EINVAL;
+            return -EINVAL;
         }
 
         return 0;
     } else {
-        return EBADF;
+        return -EBADF;
     }
 }
 
@@ -318,7 +318,7 @@ static SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
 
     if (errorCode || !descriptor) {
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -errorCode};
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
     }
 
     /* It's now safe to cast. */
@@ -331,22 +331,18 @@ static SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
 
     event =
         thread_readPluginPtr(sys->thread, args->args[3].as_ptr, sizeof(*event));
-    gint result = 0;
 
     if (descriptor) {
-        result = epoll_control(epoll, op, descriptor, event);
+        errorCode = epoll_control(epoll, op, descriptor, event);
     } else {
         /* child is not a shadow descriptor, check for OS file */
         gint osfd = host_getOSHandle(sys->host, fd);
         osfd = osfd >= 0 ? osfd : fd;
-        result = epoll_controlOS(epoll, op, osfd, event);
+        errorCode = epoll_controlOS(epoll, op, osfd, event);
     }
 
-    if (result > 0) {
-        result = -result;
-    }
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = result};
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
 }
 
 static SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
@@ -368,7 +364,7 @@ static SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
 
     if (errorCode || !descriptor) {
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -errorCode};
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
     }
 
     /* It's now safe to cast. */
@@ -428,7 +424,7 @@ static SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
 
     /* Return the number of events that are ready. */
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = nEvents};
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)nEvents};
 }
 
 static SysCallReturn syscallhandler_close(SysCallHandler* sys,
@@ -449,7 +445,6 @@ static SysCallReturn syscallhandler_close(SysCallHandler* sys,
     if (descriptor && !errorCode) {
         /* Yes! Handle it in the host netstack. */
         errorCode = host_closeUser(sys->host, fd);
-        errorCode = -errorCode; // If we got an err, e.g. EBADF, make it neg
         return (SysCallReturn){
             .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
     }
@@ -471,7 +466,7 @@ static SysCallReturn syscallhandler_close(SysCallHandler* sys,
     // TODO: handle special files
 
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)-errorCode};
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
 }
 
 static SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,
@@ -482,7 +477,7 @@ static SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,
     if (flags & O_DIRECT) {
         warning("We don't currently support pipes in 'O_DIRECT' mode.");
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -ENOTSUP};
     }
 
     /* Create and check the pipe descriptor. */
@@ -550,7 +545,7 @@ static SysCallReturn syscallhandler_read(SysCallHandler* sys,
     gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
     if (errorCode != 0) {
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -errorCode};
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
     }
     utility_assert(desc);
 
@@ -578,7 +573,7 @@ static SysCallReturn syscallhandler_read(SysCallHandler* sys,
         default:
             warning("write() not yet implemented for descriptor type %i",
                     (int)dType);
-            result = -EBADF;
+            result = -ENOTSUP;
             break;
     }
 
@@ -591,7 +586,7 @@ static SysCallReturn syscallhandler_read(SysCallHandler* sys,
     }
 
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = result};
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)result};
 }
 
 static SysCallReturn syscallhandler_write(SysCallHandler* sys,
@@ -616,7 +611,7 @@ static SysCallReturn syscallhandler_write(SysCallHandler* sys,
     gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
     if (errorCode != 0) {
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -errorCode};
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
     }
     utility_assert(desc);
 
@@ -642,7 +637,7 @@ static SysCallReturn syscallhandler_write(SysCallHandler* sys,
         default:
             warning("write() not yet implemented for descriptor type %i",
                     (int)dType);
-            result = -EBADF;
+            result = -ENOTSUP;
             break;
     }
 
@@ -655,7 +650,7 @@ static SysCallReturn syscallhandler_write(SysCallHandler* sys,
     }
 
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = result};
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)result};
 }
 
 ///////////////////////////////////////////////////////////

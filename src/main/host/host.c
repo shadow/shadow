@@ -764,7 +764,6 @@ Descriptor* host_createDescriptor(Host* host, DescriptorType type) {
 
         default: {
             warning("unknown descriptor type: %i", (gint)type);
-            errno = EINVAL;
             return NULL;
         }
     }
@@ -1539,13 +1538,13 @@ gint host_closeUser(Host* host, gint handle) {
     Descriptor* descriptor = host_lookupDescriptor(host, handle);
     if(descriptor == NULL) {
         warning("descriptor handle '%i' not found", handle);
-        return EBADF;
+        return -EBADF;
     }
 
     DescriptorStatus status = descriptor_getStatus(descriptor);
     if(status & DS_CLOSED) {
         warning("descriptor handle '%i' not a valid open descriptor", handle);
-        return EBADF;
+        return -EBADF;
     }
 
     descriptor_close(descriptor);
