@@ -529,8 +529,7 @@ static SysCallReturn syscallhandler_read(SysCallHandler* sys,
     void* buf; // args->args[1]
     size_t bufSize = (size_t)args->args[2].as_u64;
 
-    debug(
-        "trying to read %llu bytes on fd %i", (unsigned long long)bufSize, fd);
+    debug("trying to read %zu bytes on fd %i", bufSize, fd);
 
     /* Get the descriptor. */
     Descriptor* desc = host_lookupDescriptor(sys->host, fd);
@@ -595,8 +594,7 @@ static SysCallReturn syscallhandler_write(SysCallHandler* sys,
     const void* buf; // args->args[1]
     size_t bufSize = (size_t)args->args[2].as_u64;
 
-    debug(
-        "trying to write %llu bytes on fd %i", (unsigned long long)bufSize, fd);
+    debug("trying to write %zu bytes on fd %i", bufSize, fd);
 
     /* Get the descriptor. */
     Descriptor* desc = host_lookupDescriptor(sys->host, fd);
