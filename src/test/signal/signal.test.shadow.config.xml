@@ -19,7 +19,7 @@
 </graphml>
 ]]></topology>
   <kill time="5"/>
-  <plugin id="testsignal" path="libshadow-plugin-test-signal.so"/>
+  <plugin id="testsignal" path="test-signal"/>
   <node id="testnode" quantity="3">
     <application plugin="testsignal" starttime="1" arguments=""/>
   </node>
