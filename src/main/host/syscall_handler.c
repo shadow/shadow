@@ -333,7 +333,7 @@ static SysCallReturn syscallhandler_epoll_create(SysCallHandler* sys,
     int result = _syscallhandler_createEpollHelper(sys, size, 0);
 
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)result};
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = result};
 }
 
 static SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
@@ -343,7 +343,7 @@ static SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
     int result = _syscallhandler_createEpollHelper(sys, 1, flags);
 
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)result};
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = result};
 }
 
 static SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
@@ -366,7 +366,7 @@ static SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
 
     if (errorCode || !descriptor) {
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
     }
 
     /* It's now safe to cast. */
@@ -390,7 +390,7 @@ static SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
 }
 
 static SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
@@ -412,7 +412,7 @@ static SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
 
     if (errorCode || !descriptor) {
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
     }
 
     /* It's now safe to cast. */
@@ -461,7 +461,7 @@ static SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
 
     /* Return the number of events that are ready. */
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)nEvents};
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = nEvents};
 }
 
 static SysCallReturn syscallhandler_close(SysCallHandler* sys,
@@ -483,7 +483,7 @@ static SysCallReturn syscallhandler_close(SysCallHandler* sys,
         /* Yes! Handle it in the host netstack. */
         errorCode = host_closeUser(sys->host, fd);
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
     }
 
     /* Check if we have a mapped os fd. This call returns -1 to
@@ -503,7 +503,7 @@ static SysCallReturn syscallhandler_close(SysCallHandler* sys,
     // TODO: handle special files
 
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
 }
 
 static SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,
@@ -537,7 +537,7 @@ static SysCallReturn syscallhandler_read(SysCallHandler* sys,
     gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
     if (errorCode != 0) {
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
     }
     utility_assert(desc);
 
@@ -602,7 +602,7 @@ static SysCallReturn syscallhandler_write(SysCallHandler* sys,
     gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
     if (errorCode != 0) {
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)errorCode};
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
     }
     utility_assert(desc);
 
