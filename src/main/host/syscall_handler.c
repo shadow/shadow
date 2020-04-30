@@ -253,9 +253,6 @@ static SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
         if (!_syscallhandler_didListenTimeoutExpire(sys)) {
             error("nanosleep unblocked but the timer did not expire.");
         }
-
-        /* We are done blocking now, make sure to clear the old timeout. */
-        _syscallhandler_setListenTimeout(sys, NULL);
     }
 
     /* The syscall is now complete. */
@@ -377,16 +374,9 @@ static SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
 
     /* If no events are ready, our behavior depends on timeout. */
     if (numReadyEvents == 0) {
-        /* Did we already block? */
-        int wasBlocked = _syscallhandler_wasBlocked(sys);
-
         /* Return immediately if timeout is 0 or we were already
          * blocked for a while and still have no events. */
-        if (timeout_ms == 0 || wasBlocked) {
-            if (wasBlocked) {
-                _syscallhandler_setListenTimeout(sys, NULL);
-            }
-
+        if (timeout_ms == 0 || _syscallhandler_wasBlocked(sys)) {
             /* Return 0; no events are ready. */
             return (SysCallReturn){
                 .state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
@@ -721,15 +711,24 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         debug("syscall %ld on thread %p of process %s is blocked", args->number,
               sys->thread, process_getName(sys->process));
         sys->blockedSyscallNR = args->number;
-    } else if (scr.state == SYSCALL_RETURN_NATIVE) {
-        debug("syscall %ld on thread %p of process %s will be handled natively",
-              args->number, sys->thread, process_getName(sys->process));
-        sys->blockedSyscallNR = -1;
     } else {
-        debug("syscall %ld on thread %p of process %s %s", args->number,
-              sys->thread, process_getName(sys->process),
-              sys->blockedSyscallNR >= 0 ? "was blocked but is now unblocked"
-                                         : "completed without blocking");
+        /* We are not blocking anymore, clear the block timeout. */
+        if (_syscallhandler_wasBlocked(sys)) {
+            _syscallhandler_setListenTimeout(sys, NULL);
+        }
+
+        /* Log some debugging info. */
+        if (scr.state == SYSCALL_RETURN_NATIVE) {
+            debug("syscall %ld on thread %p of process %s will be handled natively",
+                  args->number, sys->thread, process_getName(sys->process));
+        } else {
+            debug("syscall %ld on thread %p of process %s %s", args->number,
+                  sys->thread, process_getName(sys->process),
+                  sys->blockedSyscallNR >= 0 ? "was blocked but is now unblocked"
+                                             : "completed without blocking");
+        }
+
+        /* We are no longer blocked on a syscall. */
         sys->blockedSyscallNR = -1;
     }
 
