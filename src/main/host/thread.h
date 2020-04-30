@@ -18,7 +18,8 @@ typedef struct _Thread Thread;
 void thread_ref(Thread* thread);
 void thread_unref(Thread* thread);
 
-void thread_run(Thread* thread, gchar** argv, gchar** envv);
+void thread_run(Thread* thread, gchar** argv, gchar** envv, int stderrFD,
+                int stdoutFD);
 void thread_resume(Thread* thread);
 void thread_terminate(Thread* thread);
 int thread_getReturnCode(Thread* thread);

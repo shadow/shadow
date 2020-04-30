@@ -12,7 +12,8 @@
 #include "shim/shim_event.h"
 
 struct _Thread {
-    void (*run)(Thread* thread, gchar** argv, gchar** envv);
+    void (*run)(Thread* thread, gchar** argv, gchar** envv, int stderrFD,
+                int stdoutFD);
     void (*resume)(Thread* thread);
     void (*terminate)(Thread* thread);
     int (*getReturnCode)(Thread* thread);

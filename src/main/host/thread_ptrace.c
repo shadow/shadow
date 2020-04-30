@@ -291,7 +291,8 @@ static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     return;
 }
 
-void threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
+void threadptrace_run(Thread* base, gchar** argv, gchar** envv, int stderrFD,
+                      int stdoutFD) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     thread->childPID = _threadptrace_fork_exec(argv[0], argv, envv);

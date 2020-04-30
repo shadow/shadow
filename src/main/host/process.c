@@ -186,7 +186,8 @@ static void _process_start(Process* proc) {
         gchar* stdoutFileName =
             g_strdup_printf("%s/%s.stdout", host_getDataPath(proc->host),
                             proc->processName->str);
-        proc->stdoutFD = open(stdoutFileName, O_WRONLY|O_CREAT|O_TRUNC);
+        proc->stdoutFD = open(stdoutFileName, O_WRONLY | O_CREAT | O_TRUNC,
+                              S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
         if (proc->stdoutFD < 0) {
             error("Opening %s: %s", stdoutFileName, strerror(errno));
         }
@@ -198,7 +199,8 @@ static void _process_start(Process* proc) {
         gchar* stderrFileName =
             g_strdup_printf("%s/%s.stderr", host_getDataPath(proc->host),
                             proc->processName->str);
-        proc->stderrFD = open(stderrFileName, O_WRONLY|O_CREAT|O_TRUNC);
+        proc->stderrFD = open(stderrFileName, O_WRONLY | O_CREAT | O_TRUNC,
+                              S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
         if (proc->stderrFD < 0) {
             error("Opening %s: %s", stderrFileName, strerror(errno));
         }
@@ -226,7 +228,7 @@ static void _process_start(Process* proc) {
 
     proc->plugin.isExecuting = TRUE;
     /* exec the process and call main to start it */
-    thread_run(proc->mainThread, proc->argv, proc->envv);
+    thread_run(proc->mainThread, proc->argv, proc->envv, proc->stderrFD, proc->stdoutFD);
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
 
