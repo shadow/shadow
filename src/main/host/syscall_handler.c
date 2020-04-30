@@ -215,6 +215,50 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
     return descriptor_getHandle(desc);
 }
 
+static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys, PluginPtr pipefdPluginPtr, gint flags) {
+    if (flags & O_DIRECT) {
+        warning("We don't currently support pipes in 'O_DIRECT' mode.");
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -ENOTSUP};
+    }
+
+    /* Create and check the pipe descriptor. */
+    Descriptor* pipeReader = host_createDescriptor(sys->host, DT_PIPE);
+    utility_assert(pipeReader);
+    gint errorCode = _syscallhandler_validateDescriptor(pipeReader, DT_PIPE);
+    utility_assert(errorCode == 0);
+
+    /* A pipe descriptor is actually simulated with our Channel object,
+     * the other end of which will represent the write end. */
+    Descriptor* pipeWriter =
+        (Descriptor*)channel_getLinkedChannel((Channel*)pipeReader);
+    utility_assert(pipeWriter);
+    errorCode = _syscallhandler_validateDescriptor(pipeWriter, DT_PIPE);
+    utility_assert(errorCode == 0);
+
+    /* Set any options that were given. */
+    if (flags & O_NONBLOCK) {
+        descriptor_addFlags(pipeReader, O_NONBLOCK);
+        descriptor_addFlags(pipeWriter, O_NONBLOCK);
+    }
+    if (flags & O_CLOEXEC) {
+        descriptor_addFlags(pipeReader, O_CLOEXEC);
+        descriptor_addFlags(pipeWriter, O_CLOEXEC);
+    }
+
+    /* Return the pipe fds to the caller. */
+    size_t sizeNeeded = sizeof(int) * 2;
+    gint* pipefd =
+        thread_getWriteablePtr(sys->thread, pipefdPluginPtr, sizeNeeded);
+    pipefd[0] = descriptor_getHandle(pipeReader);
+    pipefd[1] = descriptor_getHandle(pipeWriter);
+
+    debug("pipe() returning reader fd %i and writer fd %i",
+          descriptor_getHandle(pipeReader), descriptor_getHandle(pipeWriter));
+
+    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
+}
+
 ///////////////////////////////////////////////////////////
 // System Calls
 ///////////////////////////////////////////////////////////
@@ -462,56 +506,12 @@ static SysCallReturn syscallhandler_close(SysCallHandler* sys,
 
 static SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,
                                           const SysCallArgs* args) {
-    gint* pipefd = NULL; // args->args[0]
-    gint flags = (gint)args->args[1].as_i64;
-
-    if (flags & O_DIRECT) {
-        warning("We don't currently support pipes in 'O_DIRECT' mode.");
-        return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -ENOTSUP};
-    }
-
-    /* Create and check the pipe descriptor. */
-    Descriptor* pipeReader = host_createDescriptor(sys->host, DT_PIPE);
-    utility_assert(pipeReader);
-    gint errorCode = _syscallhandler_validateDescriptor(pipeReader, DT_PIPE);
-    utility_assert(errorCode == 0);
-
-    /* A pipe descriptor is actually simulated with our Channel object,
-     * the other end of which will represent the write end. */
-    Descriptor* pipeWriter =
-        (Descriptor*)channel_getLinkedChannel((Channel*)pipeReader);
-    utility_assert(pipeWriter);
-    errorCode = _syscallhandler_validateDescriptor(pipeWriter, DT_PIPE);
-    utility_assert(errorCode == 0);
-
-    /* Set any options that were given. */
-    if (flags & O_NONBLOCK) {
-        descriptor_addFlags(pipeReader, O_NONBLOCK);
-        descriptor_addFlags(pipeWriter, O_NONBLOCK);
-    }
-    if (flags & O_CLOEXEC) {
-        descriptor_addFlags(pipeReader, O_CLOEXEC);
-        descriptor_addFlags(pipeWriter, O_CLOEXEC);
-    }
-
-    /* Return the pipe fds to the caller. */
-    size_t sizeNeeded = sizeof(int) * 2;
-    pipefd =
-        thread_getWriteablePtr(sys->thread, args->args[0].as_ptr, sizeNeeded);
-    pipefd[0] = descriptor_getHandle(pipeReader);
-    pipefd[1] = descriptor_getHandle(pipeWriter);
-
-    debug("pipe() returning reader fd %i and writer fd %i",
-          descriptor_getHandle(pipeReader), descriptor_getHandle(pipeWriter));
-
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
+    return _syscallhandler_pipeHelper(sys, args->args[0].as_ptr, (gint)args->args[1].as_i64);
 }
 
 static SysCallReturn syscallhandler_pipe(SysCallHandler* sys,
                                          const SysCallArgs* args) {
-    /* This assumes that the unused args->args[1] is set to 0 by default. */
-    return syscallhandler_pipe2(sys, args);
+    return _syscallhandler_pipeHelper(sys, args->args[0].as_ptr, 0);
 }
 
 static SysCallReturn syscallhandler_read(SysCallHandler* sys,
