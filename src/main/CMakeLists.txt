@@ -124,13 +124,8 @@ add_executable(shadow ${shadow_srcs})
 add_dependencies(shadow shadow-remora)
 target_link_libraries(shadow
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
-<<<<<<< HEAD
-   ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES}
-   logger shadow-remora shadow-shim-helper shadow-shmem shadow-tsc procps)
-=======
    ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} ${PROCPS_LIBRARIES}
-   shadow-remora shadow-shim-helper shadow-shmem shadow-tsc)
->>>>>>> adding cmake find file
+   logger shadow-remora shadow-shim-helper shadow-shmem shadow-tsc)
 install(TARGETS shadow DESTINATION bin)
 
 ## shadow needs to find libs after install
