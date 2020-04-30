@@ -60,11 +60,8 @@ static void _test_epoll_wait_noevents_timeout(int timeout_millis) {
 
     /* Now make sure the correct amount of time passed */
     double timeout_seconds = (double)timeout_millis / 1000.0F;
-    if (elapsed_seconds > timeout_seconds + TOLERANCE_SECONDS) {
-        g_error("epoll_wait() for %f seconds but %f seconds elapsed",
-                timeout_seconds, elapsed_seconds);
-        g_test_fail();
-    }
+    g_assert_cmpfloat(elapsed_seconds, >=, timeout_seconds);
+    g_assert_cmpfloat(elapsed_seconds, <, timeout_seconds + TOLERANCE_SECONDS);
 }
 
 static void _test_epoll_wait() {
@@ -93,17 +90,11 @@ static void _test_wait_helper(int epoll_fd, struct epoll_event* epoll_ev,
 
     for (int i = 0; i < num_iter; i++) {
         /* Read up to one event with a timeout of 100ms. */
-        retval = epoll_wait(epoll_fd, epoll_ev, 1, 100);
-        assert_nonneg_errno(retval);
+        assert_nonneg_errno(retval = epoll_wait(epoll_fd, epoll_ev, 1, 100));
         total_events_reported += retval;
     }
 
-    if (total_events_reported != 1) {
-        g_message(
-            "error: epoll reported %i events instead of the expected 1 event\n",
-            total_events_reported);
-        g_test_fail();
-    }
+    g_assert_cmpint(total_events_reported, ==, 1);
 }
 
 static void _test_pipe_helper(int do_oneshot) {

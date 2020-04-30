@@ -3,7 +3,7 @@ include_directories(${GLIB_INCLUDES})
 link_libraries(${GLIB_LIBRARIES})
 
 ## create and install an executable that can run outside of shadow
-add_shadow_exe(test-epoll test_epoll.c)
+add_executable(test-epoll test_epoll.c)
 
 ## register the tests
 add_test(NAME epoll COMMAND test-epoll)
