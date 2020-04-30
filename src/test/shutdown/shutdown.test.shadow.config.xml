@@ -18,7 +18,7 @@
   </graph>
 </graphml>
 ]]></topology>
-  <plugin id="testshutdown" path="libshadow-plugin-test-shutdown.so"/>
+  <plugin id="testshutdown" path="test-shutdown"/>
   <node id="testnode" quantity="1">
     <application plugin="testshutdown" starttime="1" arguments=""/>
   </node>
