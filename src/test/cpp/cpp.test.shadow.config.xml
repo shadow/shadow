@@ -19,7 +19,7 @@
 </graphml>
 ]]></topology>
   <kill time="5"/>
-  <plugin id="testcpp" path="shadow-plugin-test-cpp"/>
+  <plugin id="testcpp" path="test-cpp"/>
   <node id="testnode" quantity="1">
     <application plugin="testcpp" starttime="1" arguments=""/>
   </node>

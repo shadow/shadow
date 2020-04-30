@@ -18,7 +18,7 @@ add_executable(shadow-test-launcher-fail test_launcher_fail.c test_launcher_comm
 # FIXME add_subdirectory(preload)
 
 add_subdirectory(bind)
-# FIXME add_subdirectory(cpp)
+add_subdirectory(cpp)
 # FIXME add_subdirectory(determinism)
 # FIXME add_subdirectory(epoll)
 add_subdirectory(file)
