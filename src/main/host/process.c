@@ -12,6 +12,7 @@
 #include <bits/types/struct_timeval.h>
 #include <bits/types/struct_tm.h>
 #include <bits/types/time_t.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <features.h>
 #include <glib.h>
@@ -103,6 +104,9 @@ struct _Process {
 
     // TODO add spawned threads
 
+    int stderrFD;
+    int stdoutFD;
+
     gint referenceCount;
     MAGIC_DECLARE;
 };
@@ -175,6 +179,30 @@ static void _process_start(Process* proc) {
     /* dont do anything if we are already running */
     if(process_isRunning(proc)) {
         return;
+    }
+
+    // Set up stdout
+    {
+        gchar* stdoutFileName =
+            g_strdup_printf("%s/%s.stdout", host_getDataPath(proc->host),
+                            proc->processName->str);
+        proc->stdoutFD = open(stdoutFileName, O_WRONLY|O_CREAT|O_TRUNC);
+        if (proc->stdoutFD < 0) {
+            error("Opening %s: %s", stdoutFileName, strerror(errno));
+        }
+        g_free(stdoutFileName);
+    }
+
+    // Set up stderr
+    {
+        gchar* stderrFileName =
+            g_strdup_printf("%s/%s.stderr", host_getDataPath(proc->host),
+                            proc->processName->str);
+        proc->stderrFD = open(stderrFileName, O_WRONLY|O_CREAT|O_TRUNC);
+        if (proc->stderrFD < 0) {
+            error("Opening %s: %s", stderrFileName, strerror(errno));
+        }
+        g_free(stderrFileName);
     }
 
     utility_assert(proc->mainThread == NULL);
@@ -361,6 +389,10 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
     proc->argv = argv;
     proc->envv = envv;
 
+    // We'll open these when the process starts.
+    proc->stderrFD = -1;
+    proc->stdoutFD = -1;
+
     proc->referenceCount = 1;
 
     worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_NEW);
@@ -401,6 +433,13 @@ static void _process_free(Process* proc) {
 
     if (proc->host) {
         host_unref(proc->host);
+    }
+
+    if (proc->stderrFD >= 0) {
+        close(proc->stderrFD);
+    }
+    if (proc->stdoutFD >= 0) {
+        close(proc->stdoutFD);
     }
 
     worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_FREE);
