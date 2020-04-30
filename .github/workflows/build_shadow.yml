@@ -41,7 +41,7 @@ jobs:
         run: python setup install
 
       - name: Test
-        run: python setup test --verbose
+        run: python setup test
 
 # FIXME
 #  shadow-plugin-tor-ci:
