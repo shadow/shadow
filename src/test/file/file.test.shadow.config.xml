@@ -19,7 +19,7 @@
 </graphml>
 ]]></topology>
   <kill time="5"/>
-  <plugin id="testfile" path="libshadow-plugin-test-file.so"/>
+  <plugin id="testfile" path="test-file"/>
   <node id="testnode" quantity="1">
     <application plugin="testfile" starttime="1" arguments=""/>
   </node>
