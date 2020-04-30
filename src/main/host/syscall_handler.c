@@ -201,6 +201,8 @@ static int _syscallhandler_validateDescriptor(Descriptor* descriptor,
 
 static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
                                              int64_t flags) {
+    /* `man 2 epoll_create`: the size argument is ignored, but must be greater
+     * than zero */
     if (size <= 0 || (flags != 0 && flags != EPOLL_CLOEXEC)) {
         return -EINVAL;
     }
