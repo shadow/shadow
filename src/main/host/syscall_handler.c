@@ -147,6 +147,11 @@ static void _syscallhandler_setListenTimeout(SysCallHandler* sys,
     }
 }
 
+static void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys, gint timeout_ms) {
+    struct timespec timeout = utility_timespecFromMillis((int64_t)timeout_ms);
+    _syscallhandler_setListenTimeout(sys, &timeout);
+}
+
 static int _syscallhandler_isListenTimeoutPending(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
@@ -384,11 +389,7 @@ static SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
             /* We need to block, either for timeout_ms time if it's positive,
              * or indefinitely if it's negative. */
             if (timeout_ms > 0) {
-                struct timespec timeout = {
-                    .tv_sec = timeout_ms / 1000,              // ms to sec
-                    .tv_nsec = (timeout_ms % 1000) * 1000000, // ms to ns
-                };
-                _syscallhandler_setListenTimeout(sys, &timeout);
+                _syscallhandler_setListenTimeoutMillis(sys, timeout_ms);
             }
 
             /* An epoll descriptor is readable when it has events. We either

@@ -92,4 +92,8 @@ gchar* utility_strvToNewStr(gchar** strv);
 
 void utility_handleError(const gchar* file, gint line, const gchar* funtcion, const gchar* message);
 
+/* Converts millis milliseconds to a timespec with the corresponding number
+ * of seconds and nanoseconds. */
+struct timespec utility_timespecFromMillis(int64_t millis);
+
 #endif /* SHD_UTILITY_H_ */

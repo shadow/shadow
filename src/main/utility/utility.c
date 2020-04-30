@@ -350,3 +350,9 @@ gchar* utility_strvToNewStr(gchar** strv) {
     return g_string_free(strBuffer, FALSE);
 }
 
+struct timespec utility_timespecFromMillis(int64_t millis) {
+    return (struct timespec) {
+        .tv_sec = millis / 1000,              // ms to sec
+        .tv_nsec = (millis % 1000) * 1000000, // ms to ns
+    };
+}
