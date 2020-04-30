@@ -94,7 +94,8 @@ static Thread* _threadPtraceToThread(ThreadPtrace* thread) {
 }
 
 static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
-                                     char* const envp[]) {
+                                     char* const envp[], int stderrFD,
+                                     int stdoutFD) {
     pid_t pid = fork();
 
     switch (pid) {
@@ -107,6 +108,16 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
             // Disable RDTSC
             if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
                 error("prctl: %s", g_strerror(errno));
+                return -1;
+            }
+            // Redirect stderr
+            if (dup2(stderrFD, STDERR_FILENO) < 0) {
+                error("dup2 failed: %s", g_strerror(errno));
+                return -1;
+            }
+            // Redirect stdout
+            if (dup2(stdoutFD, STDOUT_FILENO) < 0) {
+                error("dup2 failed: %s", g_strerror(errno));
                 return -1;
             }
             // Allow parent to trace.
@@ -295,7 +306,8 @@ void threadptrace_run(Thread* base, gchar** argv, gchar** envv, int stderrFD,
                       int stdoutFD) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
-    thread->childPID = _threadptrace_fork_exec(argv[0], argv, envv);
+    thread->childPID =
+        _threadptrace_fork_exec(argv[0], argv, envv, stderrFD, stdoutFD);
 
     _threadptrace_nextChildState(thread);
     thread_resume(_threadPtraceToThread(thread));
