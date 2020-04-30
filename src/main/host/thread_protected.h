@@ -21,7 +21,7 @@ struct _Thread {
     void* (*newClonedPtr)(Thread* base, PluginPtr plugin_src, size_t n);
     void (*releaseClonedPtr)(Thread* base, void* p);
     const void* (*getReadablePtr)(Thread* thread, PluginPtr plugin_src,
-                                 size_t n);
+                                  size_t n);
     void* (*getWriteablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
 
     // For safe down-casting. Set and checked by child class.

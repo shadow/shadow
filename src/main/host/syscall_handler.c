@@ -147,7 +147,8 @@ static void _syscallhandler_setListenTimeout(SysCallHandler* sys,
     }
 }
 
-static void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys, gint timeout_ms) {
+static void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
+                                                   gint timeout_ms) {
     struct timespec timeout = utility_timespecFromMillis((int64_t)timeout_ms);
     _syscallhandler_setListenTimeout(sys, &timeout);
 }
@@ -217,7 +218,9 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
     return descriptor_getHandle(desc);
 }
 
-static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys, PluginPtr pipefdPluginPtr, gint flags) {
+static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
+                                                PluginPtr pipefdPluginPtr,
+                                                gint flags) {
     if (flags & O_DIRECT) {
         warning("We don't currently support pipes in 'O_DIRECT' mode.");
         return (SysCallReturn){
@@ -377,8 +380,8 @@ static SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     descriptor = host_lookupDescriptor(sys->host, fd);
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
-    event =
-        thread_getReadablePtr(sys->thread, args->args[3].as_ptr, sizeof(*event));
+    event = thread_getReadablePtr(
+        sys->thread, args->args[3].as_ptr, sizeof(*event));
 
     if (descriptor) {
         errorCode = epoll_control(epoll, op, descriptor, event);
@@ -508,7 +511,8 @@ static SysCallReturn syscallhandler_close(SysCallHandler* sys,
 
 static SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,
                                           const SysCallArgs* args) {
-    return _syscallhandler_pipeHelper(sys, args->args[0].as_ptr, (gint)args->args[1].as_i64);
+    return _syscallhandler_pipeHelper(
+        sys, args->args[0].as_ptr, (gint)args->args[1].as_i64);
 }
 
 static SysCallReturn syscallhandler_pipe(SysCallHandler* sys,
@@ -650,7 +654,7 @@ static SysCallReturn syscallhandler_write(SysCallHandler* sys,
 
 #define HANDLE(s)                                                              \
     case SYS_##s:                                                              \
-        debug("handling syscall %ld " #s, args->number);                        \
+        debug("handling syscall %ld " #s, args->number);                       \
         scr = syscallhandler_##s(sys, args);                                   \
         break
 #define NATIVE(s)                                                              \
@@ -722,13 +726,15 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
 
         /* Log some debugging info. */
         if (scr.state == SYSCALL_RETURN_NATIVE) {
-            debug("syscall %ld on thread %p of process %s will be handled natively",
+            debug("syscall %ld on thread %p of process %s will be handled "
+                  "natively",
                   args->number, sys->thread, process_getName(sys->process));
         } else {
             debug("syscall %ld on thread %p of process %s %s", args->number,
                   sys->thread, process_getName(sys->process),
-                  sys->blockedSyscallNR >= 0 ? "was blocked but is now unblocked"
-                                             : "completed without blocking");
+                  sys->blockedSyscallNR >= 0
+                      ? "was blocked but is now unblocked"
+                      : "completed without blocking");
         }
 
         /* We are no longer blocked on a syscall. */

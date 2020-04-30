@@ -82,7 +82,7 @@ static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
                                          PluginPtr plugin_dst, void* shadow_src,
                                          size_t n);
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
-                                       size_t n);
+                                        size_t n);
 
 static ThreadPtrace* _threadToThreadPtrace(Thread* thread) {
     utility_assert(thread->type_id == THREADPTRACE_TYPE_ID);
@@ -495,8 +495,7 @@ static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
     return;
 }
 
-void* threadptrace_newClonedPtr(Thread* base, PluginPtr plugin_src,
-                                  size_t n) {
+void* threadptrace_newClonedPtr(Thread* base, PluginPtr plugin_src, size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     void* rv = g_new(void, n);
     _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
@@ -506,7 +505,7 @@ void* threadptrace_newClonedPtr(Thread* base, PluginPtr plugin_src,
 void threadptrace_releaseClonedPtr(Thread* base, void* p) { g_free(p); }
 
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
-                                       size_t n) {
+                                        size_t n) {
     // TODO: Use mmap instead.
 
     ThreadPtrace* thread = _threadToThreadPtrace(base);
@@ -517,7 +516,7 @@ const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
 }
 
 void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
-                                  size_t n) {
+                                   size_t n) {
     // TODO: Use mmap instead.
 
     ThreadPtrace* thread = _threadToThreadPtrace(base);

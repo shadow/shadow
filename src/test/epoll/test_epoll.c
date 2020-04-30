@@ -181,9 +181,9 @@ static void _test_pipe_edgetrigger() {
 
     ready = epoll_wait(efd, &pevent, 1, 100);
     assert_nonneg_errno(ready);
-    assert_true_errstring(
-        ready > 0, "error: pipe writable event was not reported in "
-                   "edge-trigger mode after epoll_ctl MOD operation\n");
+    assert_true_errstring(ready > 0,
+                          "error: pipe writable event was not reported in "
+                          "edge-trigger mode after epoll_ctl MOD operation\n");
 
     /* success! */
     close(pfds[0]);

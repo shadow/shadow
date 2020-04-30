@@ -383,8 +383,7 @@ static ShMemBlock* _threadpreload_readPtrImpl(ThreadPreload* thread,
     return blk;
 }
 
-void* threadpreload_newClonedPtr(Thread* base, PluginPtr plugin_src,
-                                   size_t n) {
+void* threadpreload_newClonedPtr(Thread* base, PluginPtr plugin_src, size_t n) {
     ThreadPreload* thread = _threadToThreadPreload(base);
     ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n);
     g_hash_table_insert(thread->ptr_to_block, &blk->p, blk);
@@ -402,7 +401,7 @@ void threadpreload_releaseClonedPtr(Thread* base, void* p) {
 }
 
 const void* threadpreload_getReadablePtr(Thread* base, PluginPtr plugin_src,
-                                        size_t n) {
+                                         size_t n) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n);
@@ -417,7 +416,7 @@ const void* threadpreload_getReadablePtr(Thread* base, PluginPtr plugin_src,
 }
 
 void* threadpreload_getWriteablePtr(Thread* base, PluginPtr plugin_src,
-                                   size_t n) {
+                                    size_t n) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     // Allocate a block for the clone

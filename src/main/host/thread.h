@@ -29,7 +29,7 @@ int thread_getReturnCode(Thread* thread);
 // The returned pointer is read-only, and is automatically invalidated when the
 // plugin runs again.
 const void* thread_getReadablePtr(Thread* thread, PluginPtr plugin_src,
-                                 size_t n);
+                                  size_t n);
 
 // Returns a writable pointer corresponding to the named region. The initial
 // contents of the returned memory are unspecified.
