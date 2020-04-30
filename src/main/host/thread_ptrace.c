@@ -81,7 +81,7 @@ typedef struct _ThreadPtrace {
 static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
                                          PluginPtr plugin_dst, void* shadow_src,
                                          size_t n);
-const void* threadptrace_readPluginPtr(Thread* base, PluginPtr plugin_src,
+const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                        size_t n);
 
 static ThreadPtrace* _threadToThreadPtrace(Thread* thread) {
@@ -202,7 +202,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
             return;
         }
         uint64_t eip = regs.rip;
-        const uint8_t* buf = thread_readPluginPtr(
+        const uint8_t* buf = thread_getReadablePtr(
             _threadPtraceToThread(thread), (PluginPtr){eip}, 16);
         if (isRdtsc(buf)) {
             Tsc_emulateRdtsc(&thread->tsc,
@@ -495,7 +495,7 @@ static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
     return;
 }
 
-void* threadptrace_clonePluginPtr(Thread* base, PluginPtr plugin_src,
+void* threadptrace_newClonedPtr(Thread* base, PluginPtr plugin_src,
                                   size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     void* rv = g_new(void, n);
@@ -505,7 +505,7 @@ void* threadptrace_clonePluginPtr(Thread* base, PluginPtr plugin_src,
 
 void threadptrace_releaseClonedPtr(Thread* base, void* p) { g_free(p); }
 
-const void* threadptrace_readPluginPtr(Thread* base, PluginPtr plugin_src,
+const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                        size_t n) {
     // TODO: Use mmap instead.
 
@@ -516,7 +516,7 @@ const void* threadptrace_readPluginPtr(Thread* base, PluginPtr plugin_src,
     return rv;
 }
 
-void* threadptrace_writePluginPtr(Thread* base, PluginPtr plugin_src,
+void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
                                   size_t n) {
     // TODO: Use mmap instead.
 
@@ -537,10 +537,10 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
                          .getReturnCode = threadptrace_getReturnCode,
                          .isRunning = threadptrace_isRunning,
                          .free = threadptrace_free,
-                         .clonePluginPtr = threadptrace_clonePluginPtr,
+                         .newClonedPtr = threadptrace_newClonedPtr,
                          .releaseClonedPtr = threadptrace_releaseClonedPtr,
-                         .readPluginPtr = threadptrace_readPluginPtr,
-                         .writePluginPtr = threadptrace_writePluginPtr,
+                         .getReadablePtr = threadptrace_getReadablePtr,
+                         .getWriteablePtr = threadptrace_getWriteablePtr,
 
                          .type_id = THREADPTRACE_TYPE_ID,
                          .referenceCount = 1},

@@ -218,7 +218,7 @@ static SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
                                               const SysCallArgs* args) {
     /* Grab the arg from the syscall register. */
     const struct timespec* req =
-        thread_readPluginPtr(sys->thread, args->args[0].as_ptr, sizeof(*req));
+        thread_getReadablePtr(sys->thread, args->args[0].as_ptr, sizeof(*req));
 
     /* Bounds checking. */
     if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
@@ -268,7 +268,7 @@ static SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
     debug("syscallhandler_clock_gettime with %d %p", clk_id,
           GUINT_TO_POINTER(args->args[1].as_ptr.val));
 
-    struct timespec* res_timespec = thread_writePluginPtr(
+    struct timespec* res_timespec = thread_getWriteablePtr(
         sys->thread, args->args[1].as_ptr, sizeof(*res_timespec));
 
     EmulatedTime now = _syscallhandler_getEmulatedTime();
@@ -330,7 +330,7 @@ static SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
     event =
-        thread_readPluginPtr(sys->thread, args->args[3].as_ptr, sizeof(*event));
+        thread_getReadablePtr(sys->thread, args->args[3].as_ptr, sizeof(*event));
 
     if (descriptor) {
         errorCode = epoll_control(epoll, op, descriptor, event);
@@ -415,7 +415,7 @@ static SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     guint numEventsNeeded = MIN((guint)maxevents, numReadyEvents);
     size_t sizeNeeded = sizeof(*events) * numEventsNeeded;
     events =
-        thread_writePluginPtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
+        thread_getWriteablePtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
 
     /* Retrieve the events. */
     gint nEvents = 0;
@@ -507,7 +507,7 @@ static SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,
     /* Return the pipe fds to the caller. */
     size_t sizeNeeded = sizeof(int) * 2;
     pipefd =
-        thread_writePluginPtr(sys->thread, args->args[0].as_ptr, sizeNeeded);
+        thread_getWriteablePtr(sys->thread, args->args[0].as_ptr, sizeNeeded);
     pipefd[0] = descriptor_getHandle(pipeReader);
     pipefd[1] = descriptor_getHandle(pipeWriter);
 
@@ -554,7 +554,7 @@ static SysCallReturn syscallhandler_read(SysCallHandler* sys,
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, 1024 * 16);
-    buf = thread_writePluginPtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
+    buf = thread_getWriteablePtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
 
     ssize_t result = 0;
     switch (dType) {
@@ -619,7 +619,7 @@ static SysCallReturn syscallhandler_write(SysCallHandler* sys,
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, 1024 * 16);
-    buf = thread_readPluginPtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
+    buf = thread_getReadablePtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
 
     ssize_t result = 0;
     switch (dType) {

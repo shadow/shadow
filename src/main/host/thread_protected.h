@@ -18,11 +18,11 @@ struct _Thread {
     int (*getReturnCode)(Thread* thread);
     gboolean (*isRunning)(Thread* thread);
     void (*free)(Thread* thread);
-    void* (*clonePluginPtr)(Thread* base, PluginPtr plugin_src, size_t n);
+    void* (*newClonedPtr)(Thread* base, PluginPtr plugin_src, size_t n);
     void (*releaseClonedPtr)(Thread* base, void* p);
-    const void* (*readPluginPtr)(Thread* thread, PluginPtr plugin_src,
+    const void* (*getReadablePtr)(Thread* thread, PluginPtr plugin_src,
                                  size_t n);
-    void* (*writePluginPtr)(Thread* thread, PluginPtr plugin_src, size_t n);
+    void* (*getWriteablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
 
     // For safe down-casting. Set and checked by child class.
     int type_id;

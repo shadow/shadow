@@ -59,10 +59,10 @@ gboolean thread_isRunning(Thread* thread) {
     return thread->isRunning(thread);
 }
 
-void* thread_clonePluginPtr(Thread* thread, PluginPtr plugin_src, size_t n) {
+void* thread_newClonedPtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->clonePluginPtr);
-    return thread->clonePluginPtr(thread, plugin_src, n);
+    utility_assert(thread->newClonedPtr);
+    return thread->newClonedPtr(thread, plugin_src, n);
 }
 
 void thread_releaseClonedPtr(Thread* thread, void* p) {
@@ -71,14 +71,14 @@ void thread_releaseClonedPtr(Thread* thread, void* p) {
     thread->releaseClonedPtr(thread, p);
 }
 
-const void* thread_readPluginPtr(Thread* thread, PluginPtr plugin_src, size_t n) {
+const void* thread_getReadablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->readPluginPtr);
-    return thread->readPluginPtr(thread, plugin_src, n);
+    utility_assert(thread->getReadablePtr);
+    return thread->getReadablePtr(thread, plugin_src, n);
 }
 
-void* thread_writePluginPtr(Thread* thread, PluginPtr plugin_src, size_t n){
+void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n){
     MAGIC_ASSERT(thread);
-    utility_assert(thread->readPluginPtr);
-    return thread->writePluginPtr(thread, plugin_src, n);
+    utility_assert(thread->getReadablePtr);
+    return thread->getWriteablePtr(thread, plugin_src, n);
 }
