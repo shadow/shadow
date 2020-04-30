@@ -19,7 +19,7 @@
 </graphml>
 ]]></topology>
   <kill time="15"/>
-  <plugin id="sockbuf" path="libshadow-plugin-test-sockbuf.so"/>
+  <plugin id="sockbuf" path="test-sockbuf"/>
   <node id="testnode" quantity="1">
     <application plugin="sockbuf" starttime="1" arguments=""/>
   </node>
