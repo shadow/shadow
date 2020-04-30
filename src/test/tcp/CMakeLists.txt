@@ -1,7 +1,3 @@
-## build the test as a dynamic executable that plugs into shadow
-add_shadow_plugin(shadow-plugin-test-tcp test_tcp.c)
-
-## create and install an executable that can run outside of shadow
 add_executable(test-tcp test_tcp.c)
 
 ## register the tests
@@ -12,18 +8,26 @@ add_test(
     NAME tcp-blocking-loopback
     COMMAND shadow-test-launcher test-tcp blocking server : test-tcp blocking client localhost
 )
+
 add_test(
-    NAME tcp-blocking-loopback-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d blocking-loopback.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-loopback.test.shadow.config.xml
+    NAME tcp-blocking-loopback-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d blocking-loopback.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-loopback.test.shadow.config.xml
 )
+# FIXME add_test(
+# FIXME     NAME tcp-blocking-loopback-shadow-preload
+# FIXME     COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d blocking-loopback.shadow-preload.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-loopback.test.shadow.config.xml
+# FIXME )
+
 add_test(
-    NAME tcp-blocking-lossless-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d blocking-lossless.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-lossless.test.shadow.config.xml
+    NAME tcp-blocking-lossless-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d blocking-lossless.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-lossless.test.shadow.config.xml
 )
+# FIXME add preload test
 add_test(
-    NAME tcp-blocking-lossy-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d blocking-lossy.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-lossy.test.shadow.config.xml
+    NAME tcp-blocking-lossy-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d blocking-lossy.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-lossy.test.shadow.config.xml
 )
+# FIXME add preload test
 
 ## tcp nonblocking poll - loopback, lossless and lossy
 add_test(
@@ -31,17 +35,20 @@ add_test(
     COMMAND shadow-test-launcher test-tcp nonblocking-poll server : test-tcp nonblocking-poll client 127.0.0.1
 )
 add_test(
-    NAME tcp-nonblocking-poll-loopback-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-poll-loopback.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-loopback.test.shadow.config.xml
+    NAME tcp-nonblocking-poll-loopback-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-poll-loopback.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-loopback.test.shadow.config.xml
 )
+# FIXME add preload test
 add_test(
-    NAME tcp-nonblocking-poll-lossless-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-poll-lossless.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-lossless.test.shadow.config.xml
+    NAME tcp-nonblocking-poll-lossless-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-poll-lossless.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-lossless.test.shadow.config.xml
 )
+# FIXME add preload test
 add_test(
-    NAME tcp-nonblocking-poll-lossy-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-poll-lossy.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-lossy.test.shadow.config.xml
+    NAME tcp-nonblocking-poll-lossy-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-poll-lossy.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-lossy.test.shadow.config.xml
 )
+# FIXME add preload test
 
 ## tcp nonblocking epoll - loopback, lossless and lossy
 add_test(
@@ -49,17 +56,20 @@ add_test(
     COMMAND shadow-test-launcher test-tcp nonblocking-epoll server : test-tcp nonblocking-epoll client 127.0.0.1
 )
 add_test(
-    NAME tcp-nonblocking-epoll-loopback-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-epoll-loopback.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-loopback.test.shadow.config.xml
+    NAME tcp-nonblocking-epoll-loopback-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-epoll-loopback.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-loopback.test.shadow.config.xml
 )
+# FIXME add preload test
 add_test(
-    NAME tcp-nonblocking-epoll-lossless-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-epoll-lossless.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-lossless.test.shadow.config.xml
+    NAME tcp-nonblocking-epoll-lossless-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-epoll-lossless.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-lossless.test.shadow.config.xml
 )
+# FIXME add preload test
 add_test(
-    NAME tcp-nonblocking-epoll-lossy-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-epoll-lossy.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-lossy.test.shadow.config.xml
+    NAME tcp-nonblocking-epoll-lossy-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-epoll-lossy.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-lossy.test.shadow.config.xml
 )
+# FIXME add preload test
 
 ## tcp nonblocking select - loopback, lossless and lossy
 add_test(
@@ -67,26 +77,30 @@ add_test(
     COMMAND shadow-test-launcher test-tcp nonblocking-select server : test-tcp nonblocking-select client 127.0.0.1
 )
 add_test(
-    NAME tcp-nonblocking-select-loopback-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-select-loopback.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-loopback.test.shadow.config.xml
+    NAME tcp-nonblocking-select-loopback-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-select-loopback.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-loopback.test.shadow.config.xml
 )
+# FIXME add preload test
 add_test(
-    NAME tcp-nonblocking-select-lossless-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-select-lossless.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossless.test.shadow.config.xml
+    NAME tcp-nonblocking-select-lossless-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-select-lossless.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossless.test.shadow.config.xml
 )
+# FIXME add preload test
 add_test(
-    NAME tcp-nonblocking-select-lossy-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-select-lossy.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossy.test.shadow.config.xml
+    NAME tcp-nonblocking-select-lossy-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-select-lossy.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossy.test.shadow.config.xml
 )
+# FIXME add preload test
 
 add_test(
     NAME tcp-iov
     COMMAND shadow-test-launcher test-tcp iov server : test-tcp iov client 127.0.0.1
 )
 add_test(
-    NAME tcp-iov-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d iov.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-iov.test.shadow.config.xml
+    NAME tcp-iov-shadow-ptrace
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d iov.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-iov.test.shadow.config.xml
 )
+# FIXME add preload test
 
 set_tests_properties(
   tcp-blocking-loopback tcp-nonblocking-poll-loopback tcp-nonblocking-epoll-loopback tcp-nonblocking-select-loopback tcp-iov

@@ -19,7 +19,7 @@
 </graphml>
 ]]></topology>
   <kill time="60"/>
-  <plugin id="testtcp" path="libshadow-plugin-test-tcp.so"/>
+  <plugin id="testtcp" path="test-tcp"/>
   <node id="iov.tcpserver" >
     <application plugin="testtcp" time="1" arguments="iov server" />
   </node >

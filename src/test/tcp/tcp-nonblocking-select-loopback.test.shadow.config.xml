@@ -19,7 +19,7 @@
 </graphml>
 ]]></topology>
   <kill time="300"/>
-  <plugin id="testtcp" path="libshadow-plugin-test-tcp.so"/>
+  <plugin id="testtcp" path="test-tcp"/>
   <node id="tcptestnode" >
     <application plugin="testtcp" time="1" arguments="nonblocking-select server" />
     <application plugin="testtcp" time="2" arguments="nonblocking-select client 127.0.0.1" />
