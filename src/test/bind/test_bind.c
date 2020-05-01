@@ -17,23 +17,6 @@
 
 #include "test/test_glib_helpers.h"
 
-#define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
-
-static void _mylog(const char* fileName, const int lineNum, const char* funcName, const char* format, ...) {
-    struct timeval t;
-    memset(&t, 0, sizeof(struct timeval));
-    gettimeofday(&t, NULL);
-    fprintf(stdout, "[%ld.%.06ld] [%s:%i] [%s] ", (long)t.tv_sec, (long)t.tv_usec, fileName, lineNum, funcName);
-
-    va_list vargs;
-    va_start(vargs, format);
-    vfprintf(stdout, format, vargs);
-    va_end(vargs);
-
-    fprintf(stdout, "\n");
-    fflush(stdout);
-}
-
 static int _do_bind(int fd, in_addr_t address, in_port_t port) {
     struct sockaddr_in bindaddr;
     memset(&bindaddr, 0, sizeof(struct sockaddr_in));
