@@ -43,16 +43,7 @@ static int _do_bind(int fd, in_addr_t address, in_port_t port) {
     bindaddr.sin_port = port;
 
     /* bind the socket to the server port */
-    int result = bind(fd, (struct sockaddr *) &bindaddr, sizeof(struct sockaddr_in));
-
-    MYLOG("bind() returned %i", result);
-
-    if (result < 0) {
-        MYLOG("bind() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
-
-    return EXIT_SUCCESS;
+    return bind(fd, (struct sockaddr *) &bindaddr, sizeof(struct sockaddr_in));
 }
 
 static int _do_listen(int fd) {
@@ -146,25 +137,30 @@ static void _test_explicit_bind(gconstpointer gp) {
 
     g_debug("binding one socket to localhost:11111");
     assert_true_errno(_do_bind(fd1, (in_addr_t)htonl(INADDR_LOOPBACK),
-                               (in_port_t)htons(11111)) == EXIT_SUCCESS);
+                               (in_port_t)htons(11111)) == 0);
 
     g_debug("try to bind the same socket again, which this should fail since we already did bind");
-    g_assert_cmpint(_do_bind(fd1, (in_addr_t) htonl(INADDR_LOOPBACK), (in_port_t) htons(11111)),==,EXIT_FAILURE);
+    g_assert_true(_do_bind(fd1, (in_addr_t)htonl(INADDR_LOOPBACK),
+                           (in_port_t)htons(11111)) == -1);
     assert_errno_is(EINVAL);
 
     g_debug("binding a second socket to the same address as the first should fail");
-    g_assert_cmpint(_do_bind(fd2, (in_addr_t) htonl(INADDR_LOOPBACK), (in_port_t) htons(11111)),==,EXIT_FAILURE);
+    g_assert_true(_do_bind(fd2, (in_addr_t)htonl(INADDR_LOOPBACK),
+                           (in_port_t)htons(11111)) == -1);
     assert_errno_is(EADDRINUSE);
 
     g_debug("binding a second socket to ANY with same port as the first should fail");
-    g_assert_cmpint(_do_bind(fd2, (in_addr_t) htonl(INADDR_ANY), (in_port_t) htons(11111)),==,EXIT_FAILURE);
+    g_assert_true(_do_bind(fd2, (in_addr_t)htonl(INADDR_ANY),
+                           (in_port_t)htons(11111)) == -1);
     assert_errno_is(EADDRINUSE);
 
     g_debug("binding to 0.0.0.0:0 should succeed");
-    assert_true_errno(_do_bind(fd2, (in_addr_t) htonl(INADDR_ANY), (in_port_t) htons(0)) == EXIT_SUCCESS);
+    assert_true_errno(
+        _do_bind(fd2, (in_addr_t)htonl(INADDR_ANY), (in_port_t)htons(0)) == 0);
 
     g_debug("re-binding a socket bound to 0.0.0.0:0 should fail");
-    g_assert_cmpint(_do_bind(fd2, (in_addr_t) htonl(INADDR_ANY), (in_port_t) htons(22222)),==,EXIT_FAILURE);
+    g_assert_true(_do_bind(fd2, (in_addr_t)htonl(INADDR_ANY),
+                           (in_port_t)htons(22222)) == -1);
     assert_errno_is(EINVAL);
 
     close(fd1);
