@@ -51,30 +51,17 @@ static int _do_connect(int fd, struct sockaddr_in* serveraddr) {
 
     while(1) {
         int result = connect(fd, (struct sockaddr *) serveraddr, sizeof(struct sockaddr_in));
-
-        MYLOG("connect() returned %i", result);
-
-        if (result < 0 && errno == EINPROGRESS) {
-            MYLOG("connect() returned EINPROGRESS, retrying in 1 millisecond");
-            usleep((useconds_t)1000);
-
-            count++;
-
-            if(count > 1000) {
-                MYLOG("waited for accept for 1 second, giving up");
-                return EXIT_FAILURE;
-            }
-
-            continue;
-        } else if (result < 0) {
-            MYLOG("connect() error was: %s", strerror(errno));
-            return EXIT_FAILURE;
-        } else {
-            break;
+        g_debug("connect() returned %i", result);
+        if (result == 0 || errno != EINPROGRESS) {
+            return result;
         }
+        if (count++ > 1000) {
+            g_message("waited for accept for 1 second, giving up");
+            return result;
+        }
+        g_debug("connect() returned EINPROGRESS, retrying in 1 millisecond");
+        usleep((useconds_t)1000);
     }
-
-    return EXIT_SUCCESS;
 }
 
 static int _do_accept(int fd, int* outfd) {
@@ -272,7 +259,7 @@ static void _test_implicit_bind(gconstpointer gp) {
     // FIXME end
 
     g_debug("connecting client socket to server at 0.0.0.0");
-    assert_true_errno(_do_connect(fd2, &serveraddr) == EXIT_SUCCESS);
+    assert_true_errno(_do_connect(fd2, &serveraddr) == 0);
 
     close(fd2);
     fd2 = 0;
@@ -280,7 +267,7 @@ static void _test_implicit_bind(gconstpointer gp) {
 
     g_debug("connecting client socket to server at 127.0.0.1");
     serveraddr.sin_addr.s_addr = (in_addr_t) htonl(INADDR_LOOPBACK);
-    assert_true_errno(_do_connect(fd2, &serveraddr) == EXIT_SUCCESS);
+    assert_true_errno(_do_connect(fd2, &serveraddr) == 0);
 
     g_debug("accepting client connection");
     assert_true_errno(_do_accept(fd1, &fd3) == EXIT_SUCCESS);
