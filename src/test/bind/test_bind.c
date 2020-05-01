@@ -34,24 +34,6 @@ static void _mylog(const char* fileName, const int lineNum, const char* funcName
     fflush(stdout);
 }
 
-static int _do_socket(int type, int* fdout) {
-    /* create a socket and get a socket descriptor */
-    int sd = socket(AF_INET, type, 0);
-
-    MYLOG("socket() returned %i", sd);
-
-    if (sd < 0) {
-        MYLOG("socket() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
-
-    if(fdout) {
-        *fdout = sd;
-    }
-
-    return EXIT_SUCCESS;
-}
-
 static int _do_bind(int fd, in_addr_t address, in_port_t port) {
     struct sockaddr_in bindaddr;
     memset(&bindaddr, 0, sizeof(struct sockaddr_in));
@@ -159,8 +141,8 @@ static void _test_explicit_bind(gconstpointer gp) {
 
     g_debug("creating sockets");
 
-    g_assert_cmpint(_do_socket(socket_type, &fd1),==,EXIT_SUCCESS);
-    g_assert_cmpint(_do_socket(socket_type, &fd2),==,EXIT_SUCCESS);
+    assert_true_errno((fd1 = socket(AF_INET, socket_type, 0)) >= 0);
+    assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
     g_debug("binding one socket to localhost:11111");
     assert_true_errno(_do_bind(fd1, (in_addr_t)htonl(INADDR_LOOPBACK),
@@ -288,8 +270,8 @@ static void _test_implicit_bind(gconstpointer gp) {
     memset(&serveraddr, 0, sizeof(struct sockaddr_in));
 
     g_debug("creating sockets");
-    g_assert_cmpint(_do_socket(socket_type, &fd1),==,EXIT_SUCCESS);
-    g_assert_cmpint(_do_socket(socket_type, &fd2),==,EXIT_SUCCESS);
+    assert_true_errno((fd1 = socket(AF_INET, socket_type, 0)) >= 0);
+    assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
     g_debug("listening on server socket with implicit bind");
     assert_true_errno(_do_listen(fd1) == EXIT_SUCCESS);
@@ -311,7 +293,7 @@ static void _test_implicit_bind(gconstpointer gp) {
 
     close(fd2);
     fd2 = 0;
-    assert_true_errno(_do_socket(socket_type, &fd2) == EXIT_SUCCESS);
+    assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
     g_debug("connecting client socket to server at 127.0.0.1");
     serveraddr.sin_addr.s_addr = (in_addr_t) htonl(INADDR_LOOPBACK);
