@@ -48,56 +48,48 @@ static int _do_bind(int fd, in_addr_t address, in_port_t port) {
 
 static int _do_connect(int fd, struct sockaddr_in* serveraddr) {
     int count = 0;
+    int saved_errno = 0;
+    int result = 0;
 
-    while(1) {
-        int result = connect(fd, (struct sockaddr *) serveraddr, sizeof(struct sockaddr_in));
-        g_debug("connect() returned %i", result);
+    while (1) {
+        result = connect(fd, (struct sockaddr*)serveraddr,
+                         sizeof(struct sockaddr_in));
+        saved_errno = errno;
         if (result == 0 || errno != EINPROGRESS) {
-            return result;
+            break;
         }
         if (count++ > 1000) {
-            g_message("waited for accept for 1 second, giving up");
-            return result;
+            g_message("waited for connect for 1 second, giving up");
+            break;
         }
         g_debug("connect() returned EINPROGRESS, retrying in 1 millisecond");
         usleep((useconds_t)1000);
     }
+    errno = saved_errno;
+    return result;
 }
 
-static int _do_accept(int fd, int* outfd) {
+static int _do_accept(int fd) {
     int count = 0;
     int result = 0;
+    int saved_errno = 0;
 
-    while(1) {
+    while (1) {
         result = accept(fd, NULL, NULL);
-
-        MYLOG("accept() returned %i", result);
-
-        if (result < 0 && errno == EINPROGRESS) {
-            MYLOG("accept() returned EINPROGRESS, retrying in 1 millisecond");
-            usleep((useconds_t)1000);
-
-            count++;
-
-            if(count > 1000) {
-                MYLOG("waited for accept for 1 second, giving up");
-                return EXIT_FAILURE;
-            }
-
-            continue;
-        } else if (result < 0) {
-            MYLOG("accept() error was: %s", strerror(errno));
-            return EXIT_FAILURE;
-        } else {
+        saved_errno = errno;
+        g_debug("accept() returned %i %s", result, strerror(errno));
+        if (result >= 0 || errno != EINPROGRESS) {
             break;
         }
+        if (count++ > 1000) {
+            g_message("waited for accept for 1 second, giving up");
+            break;
+        }
+        g_debug("accept() returned EINPROGRESS, retrying in 1 millisecond");
+        usleep((useconds_t)1000);
     }
-
-    if(outfd) {
-        *outfd = result;
-    }
-
-    return EXIT_SUCCESS;
+    errno = saved_errno;
+    return result;
 }
 
 static void _test_explicit_bind(gconstpointer gp) {
@@ -270,7 +262,7 @@ static void _test_implicit_bind(gconstpointer gp) {
     assert_true_errno(_do_connect(fd2, &serveraddr) == 0);
 
     g_debug("accepting client connection");
-    assert_true_errno(_do_accept(fd1, &fd3) == EXIT_SUCCESS);
+    assert_true_errno((fd3 = _do_accept(fd1)) >= 0);
 
     g_debug("checking that server and client addresses match");
     g_assert_true(_check_matching_addresses(fd1, fd3, fd2) == EXIT_SUCCESS);
