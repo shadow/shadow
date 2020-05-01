@@ -46,19 +46,6 @@ static int _do_bind(int fd, in_addr_t address, in_port_t port) {
     return bind(fd, (struct sockaddr *) &bindaddr, sizeof(struct sockaddr_in));
 }
 
-static int _do_listen(int fd) {
-    int result = listen(fd, 0);
-
-    MYLOG("listen() returned %i", result);
-
-    if (result < 0) {
-     MYLOG("listen() error was: %s", strerror(errno));
-     return EXIT_FAILURE;
-    }
-
-    return EXIT_SUCCESS;
-}
-
 static int _do_connect(int fd, struct sockaddr_in* serveraddr) {
     int count = 0;
 
@@ -270,7 +257,7 @@ static void _test_implicit_bind(gconstpointer gp) {
     assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
     g_debug("listening on server socket with implicit bind");
-    assert_true_errno(_do_listen(fd1) == EXIT_SUCCESS);
+    assert_true_errno(listen(fd1, 0) == 0);
 
     assert_true_errno(
         getsockname(fd1, (struct sockaddr*)&serveraddr, &addr_len) >= 0);
