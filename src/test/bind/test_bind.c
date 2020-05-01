@@ -146,45 +146,39 @@ static int _check_matching_addresses(int fd_server_listen, int fd_server_accept,
     memset(&server_accept_peername, 0, sizeof(struct sockaddr_in));
     memset(&client_peername, 0, sizeof(struct sockaddr_in));
 
-    if(getsockname(fd_server_listen, (struct sockaddr*) &server_listen_sockname, &addr_len) < 0) {
-        MYLOG("getsockname() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(getsockname(fd_server_listen, (struct sockaddr*) &server_listen_sockname, &addr_len) == 0);
 
-    MYLOG("found sockname %s:%i for server listen fd %i", inet_ntoa(server_listen_sockname.sin_addr),
+    g_debug("found sockname %s:%i for server listen fd %i",
+            inet_ntoa(server_listen_sockname.sin_addr),
             (int)server_listen_sockname.sin_port, fd_server_listen);
 
-    if(getsockname(fd_server_accept, (struct sockaddr*) &server_accept_sockname, &addr_len) < 0) {
-        MYLOG("getsockname() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(getsockname(fd_server_accept, (struct sockaddr*) &server_accept_sockname, &addr_len) == 0);
 
-    MYLOG("found sockname %s:%i for server accept fd %i", inet_ntoa(server_accept_sockname.sin_addr),
+    g_debug("found sockname %s:%i for server accept fd %i",
+            inet_ntoa(server_accept_sockname.sin_addr),
             (int)server_accept_sockname.sin_port, fd_server_accept);
 
-    if(getsockname(fd_client, (struct sockaddr*) &client_sockname, &addr_len) < 0) {
-        MYLOG("getsockname() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(getsockname(fd_client, (struct sockaddr*)&client_sockname,
+                                  &addr_len) == 0);
 
-    MYLOG("found sockname %s:%i for client fd %i", inet_ntoa(client_sockname.sin_addr),
-            (int)client_sockname.sin_port, fd_client);
+    g_debug("found sockname %s:%i for client fd %i",
+            inet_ntoa(client_sockname.sin_addr), (int)client_sockname.sin_port,
+            fd_client);
 
-    if(getpeername(fd_server_accept, (struct sockaddr*) &server_accept_peername, &addr_len) < 0) {
-        MYLOG("getpeername() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(getpeername(fd_server_accept,
+                                  (struct sockaddr*)&server_accept_peername,
+                                  &addr_len) == 0);
 
-    MYLOG("found peername %s:%i for server accept fd %i", inet_ntoa(server_accept_peername.sin_addr),
+    g_debug("found peername %s:%i for server accept fd %i",
+            inet_ntoa(server_accept_peername.sin_addr),
             (int)server_accept_peername.sin_port, fd_server_accept);
 
-    if(getpeername(fd_client, (struct sockaddr*) &client_peername, &addr_len) < 0) {
-        MYLOG("getpeername() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(getpeername(fd_client, (struct sockaddr*)&client_peername,
+                                  &addr_len) == 0);
 
-    MYLOG("found peername %s:%i for client fd %i", inet_ntoa(client_peername.sin_addr),
-            (int)client_peername.sin_port, fd_client);
+    g_debug("found peername %s:%i for client fd %i",
+            inet_ntoa(client_peername.sin_addr), (int)client_peername.sin_port,
+            fd_client);
 
     /*
      * the following should hold on linux:
@@ -195,30 +189,11 @@ static int _check_matching_addresses(int fd_server_listen, int fd_server_accept,
      *   + client socket pot != accepted peer ports
      */
 
-    if(server_listen_sockname.sin_port != server_accept_sockname.sin_port) {
-        MYLOG("expected server listener and accepted socket ports to match but they didn't");
-        return EXIT_FAILURE;
-    }
-
-    if(server_accept_sockname.sin_port != client_peername.sin_port) {
-        MYLOG("expected server accepted socket port to match client peer port but they didn't");
-        return EXIT_FAILURE;
-    }
-
-    if(server_accept_sockname.sin_addr.s_addr != client_peername.sin_addr.s_addr) {
-        MYLOG("expected server accepted socket addr to match client peer addr but they didn't");
-        return EXIT_FAILURE;
-    }
-
-    if(client_sockname.sin_addr.s_addr != server_accept_peername.sin_addr.s_addr) {
-        MYLOG("expected client socket addr to match server accepted peer addr but they didn't");
-        return EXIT_FAILURE;
-    }
-
-    if(client_sockname.sin_port == server_accept_peername.sin_port) {
-        MYLOG("expected client socket port NOT to match server accepted peer port but they did");
-        return EXIT_FAILURE;
-    }
+    g_assert_cmpint(server_listen_sockname.sin_port,==,server_accept_sockname.sin_port);
+    g_assert_cmpint(server_accept_sockname.sin_port,==,client_peername.sin_port);
+    g_assert_cmpint(server_accept_sockname.sin_addr.s_addr,==,client_peername.sin_addr.s_addr);
+    g_assert_cmpint(client_sockname.sin_addr.s_addr,==,server_accept_peername.sin_addr.s_addr);
+    g_assert_cmpint(client_sockname.sin_port,!=,server_accept_peername.sin_port);
 
     return EXIT_SUCCESS;
 }
