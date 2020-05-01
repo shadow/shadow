@@ -279,118 +279,74 @@ static int _check_matching_addresses(int fd_server_listen, int fd_server_accept,
     return EXIT_SUCCESS;
 }
 
-static int _test_implicit_bind(int socket_type) {
+static void _test_implicit_bind(gconstpointer gp) {
+    int socket_type = GPOINTER_TO_INT(gp);
     int fd1 = 0, fd2 = 0, fd3 = 0;
     struct sockaddr_in clientaddr;
     struct sockaddr_in serveraddr;
     socklen_t addr_len = sizeof(struct sockaddr_in);
     memset(&serveraddr, 0, sizeof(struct sockaddr_in));
 
-    MYLOG("creating sockets");
+    g_debug("creating sockets");
+    g_assert_cmpint(_do_socket(socket_type, &fd1),==,EXIT_SUCCESS);
+    g_assert_cmpint(_do_socket(socket_type, &fd2),==,EXIT_SUCCESS);
 
-    if(_do_socket(socket_type, &fd1) == EXIT_FAILURE) {
-        MYLOG("unable to create socket");
-        return EXIT_FAILURE;
-    }
+    g_debug("listening on server socket with implicit bind");
+    assert_true_errno(_do_listen(fd1) == EXIT_SUCCESS);
 
-    if(_do_socket(socket_type, &fd2) == EXIT_FAILURE) {
-        MYLOG("unable to create socket");
-        return EXIT_FAILURE;
-    }
-
-    MYLOG("listening on server socket with implicit bind");
-
-    if(_do_listen(fd1) == EXIT_FAILURE) {
-        MYLOG("unable to listen on server socket");
-        return EXIT_FAILURE;
-    } else {
-        if(getsockname(fd1, (struct sockaddr*) &serveraddr, &addr_len) < 0) {
-            MYLOG("getsockname() error was: %s", strerror(errno));
-            return EXIT_FAILURE;
-        }
-    }
-
-    if(serveraddr.sin_addr.s_addr != htonl(INADDR_ANY)) {
-        MYLOG("unexpected behavior, server socket was not implicitly bound to 0.0.0.0");
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(
+        getsockname(fd1, (struct sockaddr*)&serveraddr, &addr_len) >= 0);
+    g_assert_cmpint(serveraddr.sin_addr.s_addr,==,htonl(INADDR_ANY));
 
     // FIXME start
     // on ubuntu, the firewall 'ufw' blocks the remaining tests from succeeding
     // ufw auto-blocks 0.0.0.0 and 127.0.0.1, and can't seem to be made to allow it
     // so we bail out early until we have a fix
     close(fd1);
-    return EXIT_SUCCESS;
+    return;
     // FIXME end
 
-    MYLOG("connecting client socket to server at 0.0.0.0");
-
-    if(_do_connect(fd2, &serveraddr) == EXIT_FAILURE) {
-        MYLOG("unexpected behavior, client should be able to connect to 0.0.0.0");
-        return EXIT_FAILURE;
-    }
+    g_debug("connecting client socket to server at 0.0.0.0");
+    assert_true_errno(_do_connect(fd2, &serveraddr) == EXIT_SUCCESS);
 
     close(fd2);
     fd2 = 0;
-    if(_do_socket(socket_type, &fd2) == EXIT_FAILURE) {
-        MYLOG("unable to create socket");
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(_do_socket(socket_type, &fd2) == EXIT_SUCCESS);
 
-    MYLOG("connecting client socket to server at 127.0.0.1");
-
+    g_debug("connecting client socket to server at 127.0.0.1");
     serveraddr.sin_addr.s_addr = (in_addr_t) htonl(INADDR_LOOPBACK);
+    assert_true_errno(_do_connect(fd2, &serveraddr) == EXIT_SUCCESS);
 
-    if(_do_connect(fd2, &serveraddr) == EXIT_FAILURE) {
-        MYLOG("unable to connect to server at 127.0.0.1:%i", (int)ntohs(serveraddr.sin_port));
-        return EXIT_FAILURE;
-    }
+    g_debug("accepting client connection");
+    assert_true_errno(_do_accept(fd1, &fd3) == EXIT_SUCCESS);
 
-    MYLOG("accepting client connection");
-
-    if(_do_accept(fd1, &fd3) == EXIT_FAILURE) {
-        MYLOG("unable to accept client connection");
-        return EXIT_FAILURE;
-    }
-
-    MYLOG("checking that server and client addresses match");
-
-    if(_check_matching_addresses(fd1, fd3, fd2) == EXIT_FAILURE) {
-        return EXIT_FAILURE;
-    }
+    g_debug("checking that server and client addresses match");
+    g_assert_true(_check_matching_addresses(fd1, fd3, fd2) == EXIT_SUCCESS);
 
     close(fd1);
     close(fd2);
     close(fd3);
-
-    return EXIT_SUCCESS;
 }
 
 int main(int argc, char* argv[]) {
     g_test_init(&argc, &argv, NULL);
 
-    g_test_add_data_func("/bind/explicit_bind_sock_stream", GUINT_TO_POINTER(SOCK_STREAM), &_test_explicit_bind);
-    g_test_add_data_func("/bind/explicit_bind_sock_stream_nonblock", GUINT_TO_POINTER(SOCK_STREAM|SOCK_NONBLOCK), &_test_explicit_bind);
-    g_test_add_data_func("/bind/explicit_bind_dgram", GUINT_TO_POINTER(SOCK_DGRAM), &_test_explicit_bind);
-    g_test_add_data_func("/bind/explicit_bind_dgram_nonblock", GUINT_TO_POINTER(SOCK_DGRAM|SOCK_NONBLOCK), &_test_explicit_bind);
+    g_test_add_data_func("/bind/explicit_bind_stream",
+                         GUINT_TO_POINTER(SOCK_STREAM), &_test_explicit_bind);
+    g_test_add_data_func("/bind/explicit_bind_stream_nonblock",
+                         GUINT_TO_POINTER(SOCK_STREAM | SOCK_NONBLOCK),
+                         &_test_explicit_bind);
+    g_test_add_data_func("/bind/explicit_bind_dgram",
+                         GUINT_TO_POINTER(SOCK_DGRAM), &_test_explicit_bind);
+    g_test_add_data_func("/bind/explicit_bind_dgram_nonblock",
+                         GUINT_TO_POINTER(SOCK_DGRAM | SOCK_NONBLOCK),
+                         &_test_explicit_bind);
 
+    g_test_add_data_func("/bind/implicit_bind_stream",
+                         GUINT_TO_POINTER(SOCK_STREAM), &_test_implicit_bind);
+    g_test_add_data_func("/bind/implicit_bind_stream_nonblock",
+                         GUINT_TO_POINTER(SOCK_STREAM | SOCK_NONBLOCK),
+                         &_test_implicit_bind);
     g_test_run();
-
-    fprintf(stdout, "########## running test: _test_implicit_bind(SOCK_STREAM)\n");
-
-    if(_test_implicit_bind(SOCK_STREAM) == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_implicit_bind(SOCK_STREAM) failed\n");
-        return EXIT_FAILURE;
-    }
-
-    fprintf(stdout, "########## running test: _test_implicit_bind(SOCK_STREAM|SOCK_NONBLOCK)\n");
-
-    if(_test_implicit_bind(SOCK_STREAM|SOCK_NONBLOCK) == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_implicit_bind(SOCK_STREAM|SOCK_NONBLOCK) failed\n");
-        return EXIT_FAILURE;
-    }
-
-    fprintf(stdout, "########## bind test passed! ##########\n");
-
     return EXIT_SUCCESS;
 }
