@@ -690,17 +690,29 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(read);
         HANDLE(write);
 
+        // **************************************
         // Needed for phold, but not handled yet:
+        // **************************************
+        // Test coverage: test/bind
         NATIVE(bind);
+        // Test coverage: test/file
         NATIVE(fstat);
+        // Test coverage: test/determinism
         NATIVE(getpid);
+        // Test coverage: test/file (via open(3))
         NATIVE(openat);
+        // Test coverage: test/udp
         NATIVE(recvfrom);
+        // Test coverage: test/udp
         NATIVE(sendto);
+        // Test coverage: test/udp
         NATIVE(socket);
+        // Test coverage: test/determinism (via gethostname(2))
         NATIVE(uname);
 
+        // **************************************
         // Not handled (yet):
+        // **************************************
         NATIVE(access);
         NATIVE(arch_prctl);
         NATIVE(brk);
