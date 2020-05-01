@@ -719,11 +719,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
               sys->thread, process_getName(sys->process));
         sys->blockedSyscallNR = args->number;
     } else {
-        /* We are not blocking anymore, clear the block timeout. */
-        if (_syscallhandler_wasBlocked(sys)) {
-            _syscallhandler_setListenTimeout(sys, NULL);
-        }
-
         /* Log some debugging info. */
         if (scr.state == SYSCALL_RETURN_NATIVE) {
             debug("syscall %ld on thread %p of process %s will be handled "
@@ -738,7 +733,10 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         }
 
         /* We are no longer blocked on a syscall. */
-        sys->blockedSyscallNR = -1;
+        if (_syscallhandler_wasBlocked(sys)) {
+            _syscallhandler_setListenTimeout(sys, NULL);
+            sys->blockedSyscallNR = -1;
+        }
     }
 
     return scr;
