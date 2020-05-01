@@ -690,22 +690,30 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(read);
         HANDLE(write);
 
+        // Needed for phold, but not handled yet:
+        NATIVE(bind);
+        NATIVE(fstat);
+        NATIVE(getpid);
+        NATIVE(openat);
+        NATIVE(recvfrom);
+        NATIVE(sendto);
+        NATIVE(socket);
+        NATIVE(uname);
+
+        // Not handled (yet):
         NATIVE(access);
         NATIVE(arch_prctl);
         NATIVE(brk);
         NATIVE(execve);
-        NATIVE(fstat);
         NATIVE(mmap);
         NATIVE(mprotect);
         NATIVE(munmap);
-        NATIVE(openat);
         NATIVE(prlimit64);
         NATIVE(rt_sigaction);
         NATIVE(rt_sigprocmask);
         NATIVE(set_robust_list);
         NATIVE(set_tid_address);
         NATIVE(stat);
-
         default:
             info("unhandled syscall %ld", args->number);
             scr = (SysCallReturn){.state = SYSCALL_RETURN_NATIVE};
