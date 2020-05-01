@@ -13,6 +13,9 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <glib.h>
+
+#include "test/test_glib_helpers.h"
 
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 
@@ -150,83 +153,40 @@ static int _do_accept(int fd, int* outfd) {
     return EXIT_SUCCESS;
 }
 
-static int _test_explicit_bind(int socket_type) {
+static void _test_explicit_bind(gconstpointer gp) {
+    int socket_type = GPOINTER_TO_INT(gp);
     int fd1 = 0, fd2 = 0;
 
-    MYLOG("creating sockets");
+    g_debug("creating sockets");
 
-    if(_do_socket(socket_type, &fd1) == EXIT_FAILURE) {
-        MYLOG("unable to create socket");
-        return EXIT_FAILURE;
-    }
+    g_assert_cmpint(_do_socket(socket_type, &fd1),==,EXIT_SUCCESS);
+    g_assert_cmpint(_do_socket(socket_type, &fd2),==,EXIT_SUCCESS);
 
-    if(_do_socket(socket_type, &fd2) == EXIT_FAILURE) {
-        MYLOG("unable to create socket");
-        return EXIT_FAILURE;
-    }
+    g_debug("binding one socket to localhost:11111");
+    assert_true_errno(_do_bind(fd1, (in_addr_t)htonl(INADDR_LOOPBACK),
+                               (in_port_t)htons(11111)) == EXIT_SUCCESS);
 
-    MYLOG("binding one socket to localhost:11111");
+    g_debug("try to bind the same socket again, which this should fail since we already did bind");
+    g_assert_cmpint(_do_bind(fd1, (in_addr_t) htonl(INADDR_LOOPBACK), (in_port_t) htons(11111)),==,EXIT_FAILURE);
+    assert_errno_is(EINVAL);
 
-    if(_do_bind(fd1, (in_addr_t) htonl(INADDR_LOOPBACK), (in_port_t) htons(11111)) == EXIT_FAILURE) {
-        MYLOG("unable to bind new socket to localhost:11111");
-        return EXIT_FAILURE;
-    }
+    g_debug("binding a second socket to the same address as the first should fail");
+    g_assert_cmpint(_do_bind(fd2, (in_addr_t) htonl(INADDR_LOOPBACK), (in_port_t) htons(11111)),==,EXIT_FAILURE);
+    assert_errno_is(EADDRINUSE);
 
-    MYLOG("try to bind the same socket again, which this should fail since we already did bind");
+    g_debug("binding a second socket to ANY with same port as the first should fail");
+    g_assert_cmpint(_do_bind(fd2, (in_addr_t) htonl(INADDR_ANY), (in_port_t) htons(11111)),==,EXIT_FAILURE);
+    assert_errno_is(EADDRINUSE);
 
-    if(_do_bind(fd1, (in_addr_t) htonl(INADDR_LOOPBACK), (in_port_t) htons(11111)) == EXIT_SUCCESS) {
-        MYLOG("unexpected behavior, binding LOOPBACK socket twice succeeded");
-        return EXIT_FAILURE;
-    } else if(errno != EINVAL) {
-        MYLOG("unexpected behavior, binding LOOPBACK socket twice failed with errno %i but we expected %i (EINVAL)",
-                errno, EINVAL);
-        return EXIT_FAILURE;
-    }
+    g_debug("binding to 0.0.0.0:0 should succeed");
+    assert_true_errno(_do_bind(fd2, (in_addr_t) htonl(INADDR_ANY), (in_port_t) htons(0)) == EXIT_SUCCESS);
 
-    MYLOG("binding a second socket to the same address as the first should fail");
-
-    if(_do_bind(fd2, (in_addr_t) htonl(INADDR_LOOPBACK), (in_port_t) htons(11111)) == EXIT_SUCCESS) {
-        MYLOG("unexpected behavior, binding two sockets to the same LOOPBACK address succeeded");
-        return EXIT_FAILURE;
-    } else if(errno != EADDRINUSE) {
-        MYLOG("unexpected behavior, binding two sockets to the same LOOPBACK address failed with errno %i but we expected %i (EINVAL)",
-                errno, EADDRINUSE);
-        return EXIT_FAILURE;
-    }
-
-    MYLOG("binding a second socket to ANY with same port as the first should fail");
-
-    if(_do_bind(fd2, (in_addr_t) htonl(INADDR_ANY), (in_port_t) htons(11111)) == EXIT_SUCCESS) {
-        MYLOG("unexpected behavior, binding two sockets to LOOPBACK:11111 and ANY:11111 succeeded");
-        return EXIT_FAILURE;
-    } else if(errno != EADDRINUSE) {
-        MYLOG("unexpected behavior, binding two sockets to LOOPBACK:11111 and ANY:11111 failed with errno %i but we expected %i (EADDRINUSE)",
-                errno, EADDRINUSE);
-        return EXIT_FAILURE;
-    }
-
-    MYLOG("binding to 0.0.0.0:0 should succeed");
-
-    if(_do_bind(fd2, (in_addr_t) htonl(INADDR_ANY), (in_port_t) htons(0)) == EXIT_FAILURE) {
-        MYLOG("unable to bind to ANY:0");
-        return EXIT_FAILURE;
-    }
-
-    MYLOG("re-binding a socket bound to 0.0.0.0:0 should fail");
-
-    if(_do_bind(fd2, (in_addr_t) htonl(INADDR_ANY), (in_port_t) htons(22222)) == EXIT_SUCCESS) {
-        MYLOG("unexpected behavior, binding a socket to ANY:0 and then ANY:22222 succeeded");
-        return EXIT_FAILURE;
-    } else if(errno != EINVAL) {
-        MYLOG("unexpected behavior, binding socket to ANY:0 and then ANY:22222 failed with errno %i but we expected %i (EINVAL)",
-                errno, EINVAL);
-        return EXIT_FAILURE;
-    }
+    g_debug("re-binding a socket bound to 0.0.0.0:0 should fail");
+    g_assert_cmpint(_do_bind(fd2, (in_addr_t) htonl(INADDR_ANY), (in_port_t) htons(22222)),==,EXIT_FAILURE);
+    assert_errno_is(EINVAL);
 
     close(fd1);
     close(fd2);
-
-    return EXIT_SUCCESS;
 }
 
 static int _check_matching_addresses(int fd_server_listen, int fd_server_accept, int fd_client) {
@@ -407,35 +367,14 @@ static int _test_implicit_bind(int socket_type) {
 }
 
 int main(int argc, char* argv[]) {
-    fprintf(stdout, "########## bind test starting ##########\n");
+    g_test_init(&argc, &argv, NULL);
 
-    fprintf(stdout, "########## running test: _test_explicit_bind(SOCK_STREAM)\n");
+    g_test_add_data_func("/bind/explicit_bind_sock_stream", GUINT_TO_POINTER(SOCK_STREAM), &_test_explicit_bind);
+    g_test_add_data_func("/bind/explicit_bind_sock_stream_nonblock", GUINT_TO_POINTER(SOCK_STREAM|SOCK_NONBLOCK), &_test_explicit_bind);
+    g_test_add_data_func("/bind/explicit_bind_dgram", GUINT_TO_POINTER(SOCK_DGRAM), &_test_explicit_bind);
+    g_test_add_data_func("/bind/explicit_bind_dgram_nonblock", GUINT_TO_POINTER(SOCK_DGRAM|SOCK_NONBLOCK), &_test_explicit_bind);
 
-    if(_test_explicit_bind(SOCK_STREAM) == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_explicit_bind(SOCK_STREAM) failed\n");
-        return EXIT_FAILURE;
-    }
-
-    fprintf(stdout, "########## running test: _test_explicit_bind(SOCK_STREAM|SOCK_NONBLOCK)\n");
-
-    if(_test_explicit_bind(SOCK_STREAM|SOCK_NONBLOCK) == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_explicit_bind(SOCK_STREAM|SOCK_NONBLOCK) failed\n");
-        return EXIT_FAILURE;
-    }
-
-    fprintf(stdout, "########## running test: _test_explicit_bind(SOCK_DGRAM)\n");
-
-    if(_test_explicit_bind(SOCK_DGRAM) == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_explicit_bind(SOCK_DGRAM) failed\n");
-        return EXIT_FAILURE;
-    }
-
-    fprintf(stdout, "########## running test: _test_explicit_bind(SOCK_DGRAM|SOCK_NONBLOCK)\n");
-
-    if(_test_explicit_bind(SOCK_DGRAM|SOCK_NONBLOCK) == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_explicit_bind(SOCK_DGRAM|SOCK_NONBLOCK) failed\n");
-        return EXIT_FAILURE;
-    }
+    g_test_run();
 
     fprintf(stdout, "########## running test: _test_implicit_bind(SOCK_STREAM)\n");
 

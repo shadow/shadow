@@ -1,3 +1,6 @@
+include_directories(${GLIB_INCLUDES})
+link_libraries(${GLIB_LIBRARIES})
+
 ## build the test as a dynamic executable that plugs into shadow
 add_library(shadow-plugin-test-bind SHARED test_bind.c)
 
