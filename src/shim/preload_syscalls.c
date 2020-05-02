@@ -40,7 +40,8 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* ev) {
     shim_disableInterposition();
 
     const int fd = shim_thisThreadEventFD();
-    debug("sending event on %d\n", fd);
+    debug("sending syscall event %ld on %d\n",
+          ev->event_data.syscall.syscall_args.number, fd);
     shimevent_sendEvent(fd, ev);
 
     shim_shmemLoop(fd);
@@ -92,10 +93,13 @@ long syscall(long n, ...) {
 // the syscall `sysname`.
 #define REMAP(type, fnname, sysname, params, ...)                              \
     type fnname params {                                                       \
-        if (shim_interpositionEnabled())                                       \
+        if (shim_interpositionEnabled()) {                                     \
+            debug("Making interposed syscall " #sysname);                      \
             return (type)syscall(SYS_##sysname, __VA_ARGS__);                  \
-        else                                                                   \
+        } else {                                                               \
+            debug("Making real syscall " #sysname);                            \
             return (type)_real_syscall(SYS_##sysname, __VA_ARGS__);            \
+        }                                                                      \
     }
 
 // Specialization of REMAP for defining a function `fnname` that invokes a
