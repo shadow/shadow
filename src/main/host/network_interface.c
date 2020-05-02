@@ -81,20 +81,11 @@ static gint _networkinterface_compareSocket(const Socket* sa, const Socket* sb, 
     return packet_getPriority(pa) > packet_getPriority(pb) ? +1 : -1;
 }
 
-static inline SimulationTime _networkinterface_getRefillIntervalSend() {
+static inline SimulationTime _networkinterface_getRefillInterval() {
     return (SimulationTime) SIMTIME_ONE_MILLISECOND*1;
 }
 
-static inline SimulationTime _networkinterface_getRefillIntervalReceive() {
-    return (SimulationTime) SIMTIME_ONE_MILLISECOND*1;
-}
-
-static inline guint64 _networkinterface_getCapacityFactorSend() {
-    /* the capacity is this much times the refill rate */
-    return (guint64) 1;
-}
-
-static inline guint64 _networkinterface_getCapacityFactorReceive() {
+static inline guint64 _networkinterface_getCapacityFactor() {
     /* the capacity is this much times the refill rate */
     return (guint64) 1;
 }
@@ -113,7 +104,7 @@ static inline void _networkinterface_scheduleRefillTask(NetworkInterface* interf
     task_unref(refillTask);
 }
 
-static void _networkinterface_refillTokenBucketsBoth(NetworkInterface* interface, gpointer userData) {
+static void _networkinterface_refillTokenBuckets(NetworkInterface* interface, gpointer userData) {
     MAGIC_ASSERT(interface);
 
     /* add more bytes to the token buckets */
@@ -121,12 +112,9 @@ static void _networkinterface_refillTokenBucketsBoth(NetworkInterface* interface
     _networkinterface_refillTokenBucket(&interface->sendBucket);
 
     /* call back when we need the next refill */
-    utility_assert(_networkinterface_getRefillIntervalSend() ==
-            _networkinterface_getRefillIntervalReceive());
-
     _networkinterface_scheduleRefillTask(interface,
-            (TaskCallbackFunc) _networkinterface_refillTokenBucketsBoth,
-            _networkinterface_getRefillIntervalReceive());
+            (TaskCallbackFunc) _networkinterface_refillTokenBuckets,
+            _networkinterface_getRefillInterval());
 
     /* the refill may have caused us to be able to receive and send again.
      * we only receive packets from an upstream router if we have one (i.e.,
@@ -137,48 +125,9 @@ static void _networkinterface_refillTokenBucketsBoth(NetworkInterface* interface
     _networkinterface_sendPackets(interface);
 }
 
-static void _networkinterface_refillTokenBucketSend(NetworkInterface* interface, gpointer userData) {
-    MAGIC_ASSERT(interface);
-
-    /* add more bytes to the token buckets */
-    _networkinterface_refillTokenBucket(&interface->sendBucket);
-
-    /* call back when we need the next refill */
-    _networkinterface_scheduleRefillTask(interface,
-            (TaskCallbackFunc) _networkinterface_refillTokenBucketSend,
-            _networkinterface_getRefillIntervalSend());
-
-    /* the refill may have caused us to be able to send again */
-    _networkinterface_sendPackets(interface);
-}
-
-static void _networkinterface_refillTokenBucketReceive(NetworkInterface* interface, gpointer userData) {
-    MAGIC_ASSERT(interface);
-
-    /* add more bytes to the token buckets */
-    _networkinterface_refillTokenBucket(&interface->receiveBucket);
-
-    /* call back when we need the next refill */
-    _networkinterface_scheduleRefillTask(interface,
-            (TaskCallbackFunc) _networkinterface_refillTokenBucketReceive,
-            _networkinterface_getRefillIntervalReceive());
-
-    /* the refill may have caused us to be able to receive again.
-     * we only receive packets from an upstream router if we have one (i.e.,
-     * if this is not a loopback interface). */
-    if(interface->router) {
-        networkinterface_receivePackets(interface);
-    }
-}
-
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
-    if(_networkinterface_getRefillIntervalSend() == _networkinterface_getRefillIntervalReceive()) {
-        _networkinterface_refillTokenBucketsBoth(interface, NULL);
-    } else {
-        _networkinterface_refillTokenBucketReceive(interface, NULL);
-        _networkinterface_refillTokenBucketSend(interface, NULL);
-    }
+    _networkinterface_refillTokenBuckets(interface, NULL);
 }
 
 static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
@@ -186,13 +135,10 @@ static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
     MAGIC_ASSERT(interface);
 
     /* set up the token buckets */
-    g_assert(_networkinterface_getRefillIntervalSend() <= SIMTIME_ONE_SECOND);
-    SimulationTime timeFactorSend = SIMTIME_ONE_SECOND / _networkinterface_getRefillIntervalSend();
-    guint64 bytesPerIntervalSend = bwUpKiBps * 1024 / timeFactorSend;
-
-    g_assert(_networkinterface_getRefillIntervalReceive() <= SIMTIME_ONE_SECOND);
-    SimulationTime timeFactorReceive = SIMTIME_ONE_SECOND / _networkinterface_getRefillIntervalReceive();
-    guint64 bytesPerIntervalReceive = bwDownKiBps * 1024 / timeFactorReceive;
+    g_assert(_networkinterface_getRefillInterval() <= SIMTIME_ONE_SECOND);
+    SimulationTime timeFactor = SIMTIME_ONE_SECOND / _networkinterface_getRefillInterval();
+    guint64 bytesPerIntervalSend = bwUpKiBps * 1024 / timeFactor;
+    guint64 bytesPerIntervalReceive = bwDownKiBps * 1024 / timeFactor;
 
     interface->receiveBucket.bytesRefill = bytesPerIntervalReceive;
     interface->sendBucket.bytesRefill = bytesPerIntervalSend;
@@ -200,20 +146,18 @@ static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
     /* the CONFIG_MTU parts make sure we don't lose any partial bytes we had left
      * from last round when we do the refill. */
 
-    guint64 sendFactor = _networkinterface_getCapacityFactorSend();
-    interface->sendBucket.bytesCapacity = (interface->sendBucket.bytesRefill * sendFactor) + CONFIG_MTU;
-
-    guint64 receiveFactor = _networkinterface_getCapacityFactorReceive();
-    interface->receiveBucket.bytesCapacity = (interface->receiveBucket.bytesRefill * receiveFactor) + CONFIG_MTU;
+    guint64 capacityFactor = _networkinterface_getCapacityFactor();
+    interface->sendBucket.bytesCapacity = (interface->sendBucket.bytesRefill * capacityFactor) + CONFIG_MTU;
+    interface->receiveBucket.bytesCapacity = (interface->receiveBucket.bytesRefill * capacityFactor) + CONFIG_MTU;
 
     info("interface %s token buckets can send %"G_GUINT64_FORMAT" bytes "
             "every %"G_GUINT64_FORMAT" nanoseconds",
             address_toString(interface->address), interface->sendBucket.bytesRefill,
-            _networkinterface_getRefillIntervalSend());
+            _networkinterface_getRefillInterval());
     info("interface %s token buckets can receive %"G_GUINT64_FORMAT" bytes "
             "every %"G_GUINT64_FORMAT" nanoseconds",
             address_toString(interface->address), interface->receiveBucket.bytesRefill,
-            _networkinterface_getRefillIntervalReceive());
+            _networkinterface_getRefillInterval());
 }
 
 Address* networkinterface_getAddress(NetworkInterface* interface) {
@@ -224,7 +168,7 @@ Address* networkinterface_getAddress(NetworkInterface* interface) {
 guint32 networkinterface_getSpeedUpKiBps(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
 
-    SimulationTime timeFactor = SIMTIME_ONE_SECOND / _networkinterface_getRefillIntervalSend();
+    SimulationTime timeFactor = SIMTIME_ONE_SECOND / _networkinterface_getRefillInterval();
     guint64 bytesPerSecond = ((guint64)interface->sendBucket.bytesRefill) * ((guint64)timeFactor);
     guint64 kibPerSecond = bytesPerSecond / 1024;
 
@@ -234,7 +178,7 @@ guint32 networkinterface_getSpeedUpKiBps(NetworkInterface* interface) {
 guint32 networkinterface_getSpeedDownKiBps(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
 
-    SimulationTime timeFactor = SIMTIME_ONE_SECOND / _networkinterface_getRefillIntervalReceive();
+    SimulationTime timeFactor = SIMTIME_ONE_SECOND / _networkinterface_getRefillInterval();
     guint64 bytesPerSecond = ((guint64)interface->receiveBucket.bytesRefill) * ((guint64)timeFactor);
     guint64 kibPerSecond = bytesPerSecond / 1024;
 
