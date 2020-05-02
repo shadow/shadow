@@ -20,12 +20,15 @@
 #include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
+#include <glib.h>
+#include <mqueue.h>
 
 #define USAGE "USAGE: 'shd-test-tcp iomode type'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server')"
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 #define SERVER_PORT 58333
 #define BUFFERSIZE 20000
 #define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
+#define QUEUENAME "/tcp_shadow_queue"
 
 int tempa = 0;
 int tempb = 1;
@@ -47,6 +50,45 @@ static void _mylog(const char* fileName, const int lineNum, const char* funcName
 
     fprintf(stdout, "\n");
     fflush(stdout);
+}
+
+static void queue_send_u16(const char* queuename, uint16_t i) {
+    mqd_t mq = mq_open(queuename, O_WRONLY|O_CREAT, 0644, NULL);
+    g_assert(mq != (mqd_t)-1);
+
+    // convert i in string before sending it
+    char buf[10] = {0};
+    int len = snprintf(buf, 10, "%d", i);
+    mq_send(mq, buf, len, 10);
+
+    mq_close(mq);
+}
+
+static short queue_recv_u16(const char* queuename) {
+    mqd_t mq;
+    guint64 val;
+    GError *error = NULL;
+    struct mq_attr attr;
+    unsigned int priorite;
+    char buf[10] = {0};
+
+    // let the server write in the queue
+    usleep(1000);
+
+    mq = mq_open(queuename, O_RDONLY);
+    g_assert(mq != (mqd_t)-1);
+
+    // get the queue attributes to obtain the message length
+    g_assert(mq_getattr(mq, &attr) == 0);
+
+    mq_receive(mq, buf, attr.mq_msgsize, &priorite);
+    g_ascii_string_to_unsigned(buf, /* base= */ 10, /* min= */ 0,
+            /* max= */ UINT16_MAX, &val, &error);
+    g_assert_no_error(error);
+
+    mq_close(mq);
+    mq_unlink(queuename);
+    return val;
 }
 
 /* fills buffer with size random characters */
@@ -144,13 +186,16 @@ static int _wait_select(int fd, waittype t) {
     }
 }
 
-static int _do_addr(const char* name, struct sockaddr_in* addrout) {
+static int _do_addr(const char* name, struct sockaddr_in* addrout, const char* queuename) {
     memset(addrout, 0, sizeof(struct sockaddr_in));
     addrout->sin_family = AF_INET;
     addrout->sin_addr.s_addr = htonl(INADDR_ANY);
-    addrout->sin_port = htons(SERVER_PORT);
+    addrout->sin_port = 0;
 
     if(name) {
+        int port = queue_recv_u16(queuename);
+        addrout->sin_port = htons(port);
+
         /* attempt to get the correct server ip address */
         struct addrinfo* info;
         int result = getaddrinfo(name, NULL, NULL, &info);
@@ -212,9 +257,18 @@ static int _do_connect(int fd, struct sockaddr_in* serveraddr, iowait_func iowai
     return 0;
 }
 
-static int _do_serve(int fd, struct sockaddr_in* bindaddr, iowait_func iowait, int* clientsdout) {
+static void send_port_in_queue(int fd, struct sockaddr_in* bindaddr, const char *queuename){
+    socklen_t len = sizeof(bindaddr);
+
+    g_assert(getsockname(fd, (struct sockaddr *)bindaddr, &len) != -1);
+    queue_send_u16(queuename, ntohs(bindaddr->sin_port));
+}
+
+static int _do_serve(int fd, struct sockaddr_in* bindaddr, iowait_func iowait, int* clientsdout, const char *queuename) {
     /* bind the socket to the server port */
     int result = bind(fd, (struct sockaddr *) bindaddr, sizeof(struct sockaddr_in));
+    send_port_in_queue(fd, bindaddr, queuename);
+
     MYLOG("bind() returned %i", result);
     if (result < 0) {
         MYLOG("bind() error was: %s", strerror(errno));
@@ -648,9 +702,9 @@ static int _test_iov_server(int clientfd)
     return 0;
 }
 
-static int _run_client(iowait_func iowait, const char* servername, const int use_iov) {
+static int _run_client(iowait_func iowait, const char* servername, const int use_iov, char* queuename) {
     struct sockaddr_in serveraddr;
-    if(_do_addr(servername, &serveraddr) < 0) {
+    if(_do_addr(servername, &serveraddr, queuename) < 0) {
         return -1;
     }
 
@@ -663,18 +717,15 @@ static int _run_client(iowait_func iowait, const char* servername, const int use
     if(_do_connect(serversd, &serveraddr, iowait) < 0) {
         return -1;
     }
-
     if (!use_iov) {
         /* now prepare a message */
         char outbuf[BUFFERSIZE];
         memset(outbuf, 0, BUFFERSIZE);
         _fillcharbuf(outbuf, BUFFERSIZE);
-
         /* send to server */
         if(_do_send(serversd, outbuf, iowait) < 0) {
             return -1;
         }
-
         /* get ready to recv the response */
         char inbuf[BUFFERSIZE];
         memset(inbuf, 0, BUFFERSIZE);
@@ -683,7 +734,6 @@ static int _run_client(iowait_func iowait, const char* servername, const int use
         if(_do_recv(serversd, inbuf, iowait) < 0) {
             return -1;
         }
-
         /* check that the buffers match */
         if(memcmp(outbuf, inbuf, BUFFERSIZE)) {
             MYLOG("inconsistent message - we did not receive the same bytes that we sent :(");
@@ -704,21 +754,20 @@ static int _run_client(iowait_func iowait, const char* servername, const int use
     return 0;
 }
 
-static int _run_server(iowait_func iowait, int use_iov) {
+static int _run_server(iowait_func iowait, int use_iov, const char *queuename) {
     int listensd;
     int type = iowait ? (SOCK_STREAM|SOCK_NONBLOCK) : SOCK_STREAM;
     if(_do_socket(type, &listensd) < 0) {
         return -1;
     }
-
     /* setup the socket address info, client has outgoing connection to server */
     struct sockaddr_in bindaddr;
-    if(_do_addr(NULL, &bindaddr) < 0) {
+    if(_do_addr(NULL, &bindaddr, queuename) < 0) {
         return -1;
     }
 
     int clientsd;
-    if(_do_serve(listensd, &bindaddr, iowait, &clientsd) < 0) {
+    if(_do_serve(listensd, &bindaddr, iowait, &clientsd, queuename) < 0) {
         return -1;
     }
 
@@ -726,7 +775,6 @@ static int _run_server(iowait_func iowait, int use_iov) {
         /* got one, now read the entire message */
         char buf[BUFFERSIZE];
         memset(buf, 0, BUFFERSIZE);
-
         if(_do_recv(clientsd, buf, iowait) < 0) {
             return -1;
         }
@@ -783,10 +831,10 @@ int main(int argc, char *argv[]) {
             return -1;
         }
         MYLOG("running client in mode %s", argv[1]);
-        result = _run_client(wait, argv[3], use_iov);
+        result = _run_client(wait, argv[3], use_iov, QUEUENAME);
     } else if(strncasecmp(argv[2], "server", 6) == 0) {
         MYLOG("running server in mode %s", argv[1]);
-        result = _run_server(wait, use_iov);
+        result = _run_server(wait, use_iov, QUEUENAME);
     } else {
         MYLOG("error, invalid type specified; see usage");
         result = -1;
