@@ -23,7 +23,7 @@
 #include <glib.h>
 #include <mqueue.h>
 
-#define USAGE "USAGE: 'shd-test-tcp iomode type'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server')"
+#define USAGE "USAGE: 'shd-test-tcp iomode type [queuename]'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server') [queuname=(default='/tcp_shadow_queue')]"
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 #define SERVER_PORT 58333
 #define BUFFERSIZE 20000
@@ -717,15 +717,18 @@ static int _run_client(iowait_func iowait, const char* servername, const int use
     if(_do_connect(serversd, &serveraddr, iowait) < 0) {
         return -1;
     }
+
     if (!use_iov) {
         /* now prepare a message */
         char outbuf[BUFFERSIZE];
         memset(outbuf, 0, BUFFERSIZE);
         _fillcharbuf(outbuf, BUFFERSIZE);
+
         /* send to server */
         if(_do_send(serversd, outbuf, iowait) < 0) {
             return -1;
         }
+
         /* get ready to recv the response */
         char inbuf[BUFFERSIZE];
         memset(inbuf, 0, BUFFERSIZE);
@@ -734,6 +737,7 @@ static int _run_client(iowait_func iowait, const char* servername, const int use
         if(_do_recv(serversd, inbuf, iowait) < 0) {
             return -1;
         }
+
         /* check that the buffers match */
         if(memcmp(outbuf, inbuf, BUFFERSIZE)) {
             MYLOG("inconsistent message - we did not receive the same bytes that we sent :(");
@@ -760,6 +764,7 @@ static int _run_server(iowait_func iowait, int use_iov, const char *queuename) {
     if(_do_socket(type, &listensd) < 0) {
         return -1;
     }
+
     /* setup the socket address info, client has outgoing connection to server */
     struct sockaddr_in bindaddr;
     if(_do_addr(NULL, &bindaddr, queuename) < 0) {
@@ -775,6 +780,7 @@ static int _run_server(iowait_func iowait, int use_iov, const char *queuename) {
         /* got one, now read the entire message */
         char buf[BUFFERSIZE];
         memset(buf, 0, BUFFERSIZE);
+
         if(_do_recv(clientsd, buf, iowait) < 0) {
             return -1;
         }
@@ -807,6 +813,7 @@ int main(int argc, char *argv[]) {
 
     iowait_func wait = NULL;
     int use_iov = 0;
+    char *queuename = QUEUENAME;
 
     if(strncasecmp(argv[1], "blocking", 8) == 0) {
         wait = NULL;
@@ -830,11 +837,17 @@ int main(int argc, char *argv[]) {
             MYLOG("error, client mode also needs a server ip address; see usage");
             return -1;
         }
+        if (argc == 5) {
+            queuename = argv[4];
+        }
         MYLOG("running client in mode %s", argv[1]);
-        result = _run_client(wait, argv[3], use_iov, QUEUENAME);
+        result = _run_client(wait, argv[3], use_iov, queuename);
     } else if(strncasecmp(argv[2], "server", 6) == 0) {
+        if (argc == 4) {
+            queuename = argv[3];
+        }
         MYLOG("running server in mode %s", argv[1]);
-        result = _run_server(wait, use_iov, QUEUENAME);
+        result = _run_server(wait, use_iov, queuename);
     } else {
         MYLOG("error, invalid type specified; see usage");
         result = -1;
