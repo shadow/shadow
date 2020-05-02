@@ -91,13 +91,23 @@ static inline guint64 _networkinterface_getCapacityFactor() {
 }
 
 static void _networkinterface_refillTokenBucket(NetworkInterfaceTokenBucket* bucket) {
+    /* We have room to add more tokens. */
     bucket->bytesRemaining += bucket->bytesRefill;
+    /* Make sure we stay within capacity. */
     if(bucket->bytesRemaining > bucket->bytesCapacity) {
         bucket->bytesRemaining = bucket->bytesCapacity;
     }
 }
 
-static inline void _networkinterface_scheduleRefillTask(NetworkInterface* interface,
+static void _networkinterface_consumeTokenBucket(NetworkInterfaceTokenBucket* bucket, guint64 bytesConsumed) {
+    if(bytesConsumed >= bucket->bytesRemaining) {
+        bucket->bytesRemaining = 0;
+    } else {
+        bucket->bytesRemaining -= bytesConsumed;
+    }
+}
+
+static void _networkinterface_scheduleRefillTask(NetworkInterface* interface,
         TaskCallbackFunc func, SimulationTime delay) {
     Task* refillTask = task_new(func, interface, NULL, NULL, NULL);
     worker_scheduleTask(refillTask, delay);
@@ -380,11 +390,7 @@ void networkinterface_receivePackets(NetworkInterface* interface) {
 
         /* update bandwidth accounting when not in infinite bandwidth mode */
         if(!bootstrapping) {
-            if(length > interface->receiveBucket.bytesRemaining) {
-                interface->receiveBucket.bytesRemaining = 0;
-            } else {
-                interface->receiveBucket.bytesRemaining -= length;
-            }
+            _networkinterface_consumeTokenBucket(&interface->receiveBucket, length);
         }
     }
 }
@@ -498,11 +504,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface) {
         /* successfully sent, calculate how long it took to 'send' this packet */
         if(!bootstrapping) {
             guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
-            if(length >= interface->sendBucket.bytesRemaining) {
-                interface->sendBucket.bytesRemaining = 0;
-            } else {
-                interface->sendBucket.bytesRemaining -= length;
-            }
+            _networkinterface_consumeTokenBucket(&interface->sendBucket, length);
         }
 
         tracker_addOutputBytes(host_getTracker(worker_getActiveHost()), packet, socketHandle);
