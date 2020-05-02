@@ -66,14 +66,22 @@ struct _NetworkInterface {
      * packets that do not conform to incoming rate limits are dropped. */
     NetworkInterfaceTokenBucket receiveBucket;
 
+    /* Store the time we started refilling our token buckets. This is used to
+     * help us compute when refills should occur following an idle period. */
+    SimulationTime timeStartedRefillingBuckets;
+
+    /* If we have scheduled a refill task but it has not yet executed. */
+    gboolean isRefillPending;
+
     /* To support capturing incoming and outgoing packets */
     PCapWriter* pcap;
 
     MAGIC_DECLARE;
 };
 
-/* forward declaration */
+/* forward declarations */
 static void _networkinterface_sendPackets(NetworkInterface* interface);
+static void _networkinterface_refillTokenBucketsCB(NetworkInterface* interface, gpointer userData);
 
 static gint _networkinterface_compareSocket(const Socket* sa, const Socket* sb, gpointer userData) {
     Packet* pa = socket_peekNextPacket(sa);
@@ -112,19 +120,47 @@ static void _networkinterface_scheduleRefillTask(NetworkInterface* interface,
     Task* refillTask = task_new(func, interface, NULL, NULL, NULL);
     worker_scheduleTask(refillTask, delay);
     task_unref(refillTask);
+    interface->isRefillPending = TRUE;
 }
 
-static void _networkinterface_refillTokenBuckets(NetworkInterface* interface, gpointer userData) {
-    MAGIC_ASSERT(interface);
+static void _networkinterface_scheduleNextRefill(NetworkInterface* interface) {
+    SimulationTime now = worker_getCurrentTime();
+    SimulationTime interval = _networkinterface_getRefillInterval();
 
-    /* add more bytes to the token buckets */
-    _networkinterface_refillTokenBucket(&interface->receiveBucket);
-    _networkinterface_refillTokenBucket(&interface->sendBucket);
+    /* This computes the time that the next refill should have occurred if we
+     * were to always call the refill function every interval, even though in
+     * practice we stop scheduling refill tasks once we notice we are idle. */
+    SimulationTime offset = now - interface->timeStartedRefillingBuckets;
+    SimulationTime relTimeSincelastRefill = offset % interval;
+    SimulationTime relTimeUntilNextRefill = interval - relTimeSincelastRefill;
 
     /* call back when we need the next refill */
     _networkinterface_scheduleRefillTask(interface,
-            (TaskCallbackFunc) _networkinterface_refillTokenBuckets,
-            _networkinterface_getRefillInterval());
+        (TaskCallbackFunc) _networkinterface_refillTokenBucketsCB,
+        relTimeUntilNextRefill);
+}
+
+static gboolean _networkinterface_isRefillNeeded(NetworkInterface* interface) {
+    gboolean sendNeedsRefill = interface->sendBucket.bytesRemaining < interface->sendBucket.bytesCapacity;
+    gboolean receiveNeedsRefill = interface->receiveBucket.bytesRemaining < interface->receiveBucket.bytesCapacity;
+    return (sendNeedsRefill || receiveNeedsRefill) && !interface->isRefillPending;
+}
+
+static void _networkinterface_scheduleNextRefillIfNeeded(NetworkInterface* interface) {
+    if(_networkinterface_isRefillNeeded(interface)) {
+        _networkinterface_scheduleNextRefill(interface);
+    }
+}
+
+static void _networkinterface_refillTokenBucketsCB(NetworkInterface* interface, gpointer userData) {
+    MAGIC_ASSERT(interface);
+
+    /* We no longer have an outstanding event in the event queue. */
+    interface->isRefillPending = FALSE;
+
+    /* Refill the token buckets. */
+    _networkinterface_refillTokenBucket(&interface->receiveBucket);
+    _networkinterface_refillTokenBucket(&interface->sendBucket);
 
     /* the refill may have caused us to be able to receive and send again.
      * we only receive packets from an upstream router if we have one (i.e.,
@@ -133,11 +169,15 @@ static void _networkinterface_refillTokenBuckets(NetworkInterface* interface, gp
         networkinterface_receivePackets(interface);
     }
     _networkinterface_sendPackets(interface);
+
+    _networkinterface_scheduleNextRefillIfNeeded(interface);
 }
 
 void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
-    _networkinterface_refillTokenBuckets(interface, NULL);
+
+    interface->timeStartedRefillingBuckets = worker_getCurrentTime();
+    _networkinterface_refillTokenBucketsCB(interface, NULL);
 }
 
 static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
@@ -146,6 +186,7 @@ static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
 
     /* set up the token buckets */
     g_assert(_networkinterface_getRefillInterval() <= SIMTIME_ONE_SECOND);
+
     SimulationTime timeFactor = SIMTIME_ONE_SECOND / _networkinterface_getRefillInterval();
     guint64 bytesPerIntervalSend = bwUpKiBps * 1024 / timeFactor;
     guint64 bytesPerIntervalReceive = bwDownKiBps * 1024 / timeFactor;
@@ -391,6 +432,7 @@ void networkinterface_receivePackets(NetworkInterface* interface) {
         /* update bandwidth accounting when not in infinite bandwidth mode */
         if(!bootstrapping) {
             _networkinterface_consumeTokenBucket(&interface->receiveBucket, length);
+            _networkinterface_scheduleNextRefillIfNeeded(interface);
         }
     }
 }
@@ -505,6 +547,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface) {
         if(!bootstrapping) {
             guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
             _networkinterface_consumeTokenBucket(&interface->sendBucket, length);
+            _networkinterface_scheduleNextRefillIfNeeded(interface);
         }
 
         tracker_addOutputBytes(host_getTracker(worker_getActiveHost()), packet, socketHandle);
