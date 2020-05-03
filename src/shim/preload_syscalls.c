@@ -49,10 +49,20 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* ev) {
     ShimEvent res;
     shimevent_recvEvent(fd, &res);
     debug("got response on %d\n", fd);
-    assert(res.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
-
+    SysCallReg rv;
+    if (res.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE) {
+        rv = res.event_data.syscall_complete.retval;
+    } else if (res.event_id == SHD_SHIM_EVENT_SYSCALL_DO_NATIVE) {
+        const SysCallReg* regs = ev->event_data.syscall.syscall_args.args;
+        rv.as_i64 =
+            _real_syscall(ev->event_data.syscall.syscall_args.number,
+                          regs[0].as_u64, regs[1].as_u64, regs[2].as_u64,
+                          regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
+    } else {
+        error("Got unexpected event %d", res.event_id);
+    }
     shim_enableInterposition();
-    return res.event_data.syscall_complete.retval;
+    return rv;
 }
 
 static long _shadow_syscall(ShimEvent* event) {

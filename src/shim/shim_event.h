@@ -12,11 +12,13 @@
 #include "main/shmem/shmem_allocator.h"
 
 typedef enum {
+    // Next val: 9
     SHD_SHIM_EVENT_NULL = 0,
     SHD_SHIM_EVENT_START = 1,
     SHD_SHIM_EVENT_STOP = 2,
     SHD_SHIM_EVENT_SYSCALL = 3,
     SHD_SHIM_EVENT_SYSCALL_COMPLETE = 4,
+    SHD_SHIM_EVENT_SYSCALL_DO_NATIVE = 8,
     SHD_SHIM_EVENT_CLONE_REQ = 5,
     SHD_SHIM_EVENT_SHMEM_COMPLETE = 6,
     SHD_SHIM_EVENT_WRITE_REQ = 7
