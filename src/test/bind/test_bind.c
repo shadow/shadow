@@ -169,7 +169,7 @@ static int _check_matching_addresses(int fd_server_listen, int fd_server_accept,
      *   + accept socket port == client peer port
      *   + accept socket addr == client peer addr
      *   + client socket addr == accepted peer addr
-     *   + client socket pot != accepted peer ports
+     *   + client socket port != accepted peer ports
      */
 
     g_assert_cmpint(server_listen_sockname.sin_port,==,server_accept_sockname.sin_port);
