@@ -7,6 +7,7 @@
 #include <poll.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <sys/epoll.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -100,6 +101,11 @@ NOREMAP(int, clock_gettime, (clockid_t a, struct timespec* b), a,b);
 NOREMAP(int, close, (int a), a);
 NOREMAP(int, connect, (int a, const struct sockaddr* b, socklen_t c), a,b,c);
 NOREMAP(int, creat, (const char *a, mode_t b), a,b);
+NOREMAP(int, epoll_create, (int a), a);
+NOREMAP(int, epoll_create1, (int a), a);
+NOREMAP(int, epoll_ctl, (int a, int b, int c, struct epoll_event* d), a,b,c,d);
+NOREMAP(int, epoll_wait, (int a, struct epoll_event* b, int c, int d), a,b,c,d);
+NOREMAP(int, epoll_pwait, (int a, struct epoll_event* b, int c, int d, const sigset_t *e), a,b,c,d,e);
 NOREMAP(int, fstat, (int a, struct stat* b), a,b);
 static REMAP(int, ioctl_explicit, ioctl, (int a, unsigned long b, char* c), a,b,c);
 NOREMAP(int, lstat, (const char* a, struct stat* b), a,b);
