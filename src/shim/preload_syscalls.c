@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <sys/utsname.h>
 
 #include "shim/shim.h"
 #include "shim/shim_event.h"
@@ -123,6 +124,7 @@ REMAP(ssize_t, send, sendto, (int a, const void* b, size_t c, int d), a,b,c,d,NU
 NOREMAP(ssize_t, sendto, (int a, const void* b, size_t c, int d, const struct sockaddr* e, socklen_t f), a,b,c,d,e,f);
 NOREMAP(int, socket, (int a, int b, int c), a,b,c);
 NOREMAP(int, stat, (const char* a, struct stat* b), a,b);
+NOREMAP(int, uname, (struct utsname* a), a);
 NOREMAP(ssize_t, write, (int a, const void *b, size_t c), a,b,c);
 // clang-format on
 
