@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <glib.h>
 #include <mqueue.h>
+#include "test/test_glib_helpers.h"
 
 #define USAGE "USAGE: 'shd-test-tcp iomode type [queuename]'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server') [queuname=(default='/tcp_shadow_queue')]"
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
@@ -54,12 +55,12 @@ static void _mylog(const char* fileName, const int lineNum, const char* funcName
 
 static void queue_send_u16(const char* queuename, uint16_t i) {
     mqd_t mq = mq_open(queuename, O_WRONLY|O_CREAT, 0644, NULL);
-    g_assert(mq != (mqd_t)-1);
+    assert_true_errno(mq != (mqd_t)-1);
 
     // convert i in string before sending it
     char buf[10] = {0};
     int len = snprintf(buf, 10, "%d", i);
-    mq_send(mq, buf, len, 10);
+    assert_true_errno(mq_send(mq, buf, len, 10) != len);
 
     mq_close(mq);
 }
@@ -76,12 +77,12 @@ static short queue_recv_u16(const char* queuename) {
     usleep(1000);
 
     mq = mq_open(queuename, O_RDONLY);
-    g_assert(mq != (mqd_t)-1);
+    assert_true_errno(mq != (mqd_t)-1);
 
     // get the queue attributes to obtain the message length
-    g_assert(mq_getattr(mq, &attr) == 0);
+    assert_true_errno(mq_getattr(mq, &attr) == 0);
 
-    mq_receive(mq, buf, attr.mq_msgsize, &priorite);
+    assert_true_errno(mq_receive(mq, buf, attr.mq_msgsize, &priorite) != -1);
     g_ascii_string_to_unsigned(buf, /* base= */ 10, /* min= */ 0,
             /* max= */ UINT16_MAX, &val, &error);
     g_assert_no_error(error);
@@ -260,7 +261,7 @@ static int _do_connect(int fd, struct sockaddr_in* serveraddr, iowait_func iowai
 static void send_port_in_queue(int fd, struct sockaddr_in* bindaddr, const char *queuename){
     socklen_t len = sizeof(bindaddr);
 
-    g_assert(getsockname(fd, (struct sockaddr *)bindaddr, &len) != -1);
+    assert_true_errno(getsockname(fd, (struct sockaddr *)bindaddr, &len) != -1);
     queue_send_u16(queuename, ntohs(bindaddr->sin_port));
 }
 
