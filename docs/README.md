@@ -16,7 +16,7 @@ This wiki contains important information about installing and using the Shadow d
  * The Shadow project
    * [Contributing](CONTRIBUTING.md)
      * [Coding style](coding-style.md)
-     * [Version control](version-control.md)
+     * [Pull requests](pull-requests.md)
    * [Maintainer playbook](maintainer-playbook.md)
 
 ## Plug-in Info:
