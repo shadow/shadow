@@ -1,0 +1,20 @@
+# Syntax reference:
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
+name: Git Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  # Fixup commits are OK in pull requests, but should generally be squashed
+  # before merging to master, e.g. using `git rebase -i --autosquash master`.
+  # See https://github.com/marketplace/actions/block-autosquash-commits
+  block-fixup:
+    runs-on: ubuntu-latest
+
+    steps:
+        - name: Block autosquash commits
+          uses: xt0rted/block-autosquash-commits-action@master
+          with:
+            repo-token: ${{ secrets.GITHUB_TOKEN }}
