@@ -15,6 +15,6 @@ jobs:
 
     steps:
         - name: Block autosquash commits
-          uses: xt0rted/block-autosquash-commits-action@master
+          uses: xt0rted/block-autosquash-commits-action@3c9ba6760eba3c160eead6ed4b6449024ec406ad
           with:
             repo-token: ${{ secrets.GITHUB_TOKEN }}
