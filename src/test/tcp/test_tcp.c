@@ -29,7 +29,7 @@
 #define SERVER_PORT 58333
 #define BUFFERSIZE 20000
 #define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
-#define QUEUENAME "/tcp_shadow_queue"
+#define QUEUENAME "/shadow_src_test_tcp_test_tcp"
 
 int tempa = 0;
 int tempb = 1;
