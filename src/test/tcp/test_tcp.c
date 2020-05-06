@@ -88,7 +88,6 @@ static short queue_recv_u16(const char* queuename) {
     g_assert_no_error(error);
 
     mq_close(mq);
-    mq_unlink(queuename);
     return val;
 }
 
