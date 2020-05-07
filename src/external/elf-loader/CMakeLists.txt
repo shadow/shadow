@@ -190,8 +190,6 @@ install(TARGETS ldso vdl
 
 ## build test if enabled
 if(SHADOW_TEST STREQUAL ON)
-    enable_testing()
-
     set(test_srcs
         internal-tests.cc
         internal-test-alloc.cc
