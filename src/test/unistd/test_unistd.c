@@ -1,7 +1,9 @@
 #include <glib.h>
 #include <signal.h>
-#include <unistd.h>
+#include <stdbool.h>
 #include <stdio.h>
+#include <sys/utsname.h>
+#include <unistd.h>
 
 #include "test/test_glib_helpers.h"
 
@@ -13,9 +15,10 @@ static void _test_getpid_nodeps() {
     g_assert_cmpint(getpid(),==,pid);
 }
 
-static int sigaction_inc_count = 0;
+// Must be declared volatile because it is modified in the signal handler.
+static volatile int sigaction_count = 0;
 static void sigaction_inc(int sig) {
-    ++sigaction_inc_count;
+    ++sigaction_count;
 }
 
 // Validates that the returned pid is ours by using it to send a signal to
@@ -25,9 +28,10 @@ static void _test_getpid_kill() {
     assert_nonneg_errno(sigaction(SIGUSR1, &action, NULL));
 
     int pid = getpid();
-    sigaction_inc_count = 0;
+
+    sigaction_count = 0;
     assert_nonneg_errno(kill(pid, SIGUSR1));
-    g_assert_cmpint(sigaction_inc_count, ==, 1);
+    g_assert_cmpint(sigaction_count, ==, 1);
 }
 
 static void _test_gethostname(gconstpointer gp_nodename) {
@@ -56,23 +60,56 @@ static void _test_gethostname(gconstpointer gp_nodename) {
     g_assert_cmpstr(buf,==,nodename);
 }
 
+typedef struct UnameResult {
+    const char* sysname;
+    const char* nodename;
+    const char* release;
+    const char* version;
+    const char* machine;
+} ExpectedName;
+
+static void _test_uname(gconstpointer gp_expected_name) {
+    const ExpectedName* expected_name = gp_expected_name;
+
+    struct utsname utsname = {0};
+    assert_nonneg_errno(uname(&utsname));
+    g_assert_cmpstr(utsname.sysname, ==, expected_name->sysname);
+    g_assert_cmpstr(utsname.nodename, ==, expected_name->nodename);
+    g_assert_cmpstr(utsname.release, ==, expected_name->release);
+    g_assert_cmpstr(utsname.version, ==, expected_name->version);
+    g_assert_cmpstr(utsname.machine, ==, expected_name->machine);
+}
+
 int main(int argc, char* argv[]) {
+    bool running_in_shadow = getenv("SHADOW_SPAWNED") != NULL;
     g_test_init(&argc, &argv, NULL);
 
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s expected-node-name\n", argv[0]);
+    if (argc < 6) {
+        fprintf(stderr, "Usage: %s sysname nodename release version machine\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-    const char* nodename = argv[1];
+    ExpectedName expected_name = {
+        .sysname = argv[1],
+        .nodename = argv[2],
+        .release = argv[3],
+        .version = argv[4],
+        .machine = argv[5],
+    };
 
     g_test_add_func("/unistd/getpid_nodeps", _test_getpid_nodeps);
     // TODO: Support `kill` in shadow (and/or find another way of validating
     // the pid)
-    if (getenv("SHADOW_SPAWNED") == NULL) {
+    if (!running_in_shadow) {
         g_test_add_func("/unistd/getpid_kill", _test_getpid_kill);
     }
 
-    g_test_add_data_func("/unistd/gethostname", nodename, _test_gethostname);
+    g_test_add_data_func("/unistd/gethostname", expected_name.nodename,
+                         _test_gethostname);
+
+    // TODO: Implement uname in shadow
+    if (!running_in_shadow) {
+        g_test_add_data_func("/unistd/uname", &expected_name, _test_uname);
+    }
 
     g_test_run();
 
