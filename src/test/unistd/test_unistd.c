@@ -30,14 +30,50 @@ static void _test_getpid_kill() {
     g_assert_cmpint(sigaction_inc_count, ==, 1);
 }
 
+static void _test_gethostname(gconstpointer gp_nodename) {
+    const char* nodename = gp_nodename;
+    char buf[1000] = {0};
+
+    // Invalid pointer. Documented to return errno=EFAULT in gethostname(2),
+    // but segfaults on Ubuntu 18.
+    //
+    // g_assert_cmpint(gethostname(NULL+1, 100),==,-1);
+    // assert_errno_is(EFAULT);
+
+    // Negative len. Documented to return errno=EINVAL in gethostname(2), but
+    // segfaults on Ubuntu 18.
+    //
+    // g_assert_cmpint(gethostname(buf, -1),==,-1);
+    // assert_errno_is(EINVAL);
+
+    // Short buffer
+    g_assert_cmpint(gethostname(buf, 1),==,-1);
+    assert_errno_is(ENAMETOOLONG);
+
+    // Get the hostname and compare with expected name passed through the
+    // command-line.
+    assert_nonneg_errno(gethostname(buf, sizeof(buf)));
+    g_assert_cmpstr(buf,==,nodename);
+}
+
 int main(int argc, char* argv[]) {
     g_test_init(&argc, &argv, NULL);
+
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s expected-node-name\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+    const char* nodename = argv[1];
+
     g_test_add_func("/unistd/getpid_nodeps", _test_getpid_nodeps);
-    // TODO: Support kill in shadow (and/or find another way of validating the
-    // pid)
+    // TODO: Support `kill` in shadow (and/or find another way of validating
+    // the pid)
     if (getenv("SHADOW_SPAWNED") == NULL) {
         g_test_add_func("/unistd/getpid_kill", _test_getpid_kill);
     }
+
+    g_test_add_data_func("/unistd/gethostname", nodename, _test_gethostname);
+
     g_test_run();
 
     return 0;
