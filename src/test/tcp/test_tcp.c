@@ -60,7 +60,10 @@ static void queue_send_u16(const char* queuename, uint16_t i) {
     // convert i in string before sending it
     char buf[10] = {0};
     int len = snprintf(buf, 10, "%d", i);
-    assert_true_errno(mq_send(mq, buf, len, 10) == 0);
+    if (mq_send(mq, buf, len, 10) != 0) {
+        perror("mq_send");
+        exit(EXIT_FAILURE);
+    }
 
     mq_close(mq);
 }
