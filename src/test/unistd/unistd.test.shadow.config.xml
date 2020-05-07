@@ -21,7 +21,7 @@
   <kill time="5"/>
   <plugin id="test-unistd" path="test-unistd"/>
   <node id="testnode" quantity="1">
-    <application plugin="test-unistd" starttime="1" arguments=""/>
+    <application plugin="test-unistd" starttime="1" arguments="testnode"/>
   </node>
 </shadow>
 
