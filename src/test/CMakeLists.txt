@@ -32,6 +32,7 @@ add_subdirectory(sockbuf)
 add_subdirectory(tcp)
 add_subdirectory(timerfd)
 add_subdirectory(udp)
+add_subdirectory(unistd)
 
 ## FIXME - the LastTest.log.tmp file does not contain all output when we do
 ## the grep above, so we get an inconsistent number of results in the output.
