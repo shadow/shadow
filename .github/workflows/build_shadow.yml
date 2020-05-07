@@ -43,6 +43,14 @@ jobs:
       - name: Test
         run: python setup test
 
+      - name: Upload shadow logs
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: shadow-data
+          path: build/**/*shadow.data/*
+
+
   shadow-plugin-tor-ci:
     runs-on: ubuntu-latest
     strategy:
