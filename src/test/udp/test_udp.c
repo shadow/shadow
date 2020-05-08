@@ -30,7 +30,7 @@ static void fifo_send_u16(const char* pipename, uint16_t i) {
 }
 
 // Recv a u16 from a fifo(7) named `pipename`.
-static short fifo_recv_u16(const char* pipename) {
+static uint16_t fifo_recv_u16(const char* pipename) {
     FILE* f = fopen(pipename, "r");
     assert_nonnull_errno(f);
     char buf[10] = {0};
