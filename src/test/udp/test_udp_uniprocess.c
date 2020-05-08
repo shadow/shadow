@@ -48,24 +48,24 @@ static void test_getaddrinfo() {
     assert_nonneg_errno(close(sock));
 }
 
+static void _udp_socketpair(int* client, int* server,
+                            struct sockaddr_in* addr) {
+    assert_nonneg_errno(*server = socket(AF_INET, SOCK_DGRAM, 0));
+
+    *addr = (struct sockaddr_in){.sin_family = AF_INET,
+                                 .sin_addr = htonl(INADDR_LOOPBACK)};
+    assert_nonneg_errno(bind(*server, addr, sizeof(*addr)));
+
+    socklen_t addr_len = sizeof(*addr);
+    assert_nonneg_errno(getsockname(*server, addr, &addr_len));
+
+    assert_nonneg_errno(*client = socket(AF_INET, SOCK_DGRAM, 0));
+}
+
 static void test_sendto_one_byte() {
-    // Bind the server socket *first* so that the OS will buffer sent data
-    // instead of just dropping it.
-
-    int server_sock;
-    assert_nonneg_errno(server_sock = socket(AF_INET, SOCK_DGRAM, 0));
-
-    struct sockaddr_in addr = {.sin_family = AF_INET,
-                               .sin_addr = htonl(INADDR_LOOPBACK)};
-    assert_nonneg_errno(bind(server_sock, &addr, sizeof(addr)));
-
-    socklen_t addr_len = sizeof(addr);
-    assert_nonneg_errno(getsockname(server_sock, &addr, &addr_len));
-
-    // Set up the client and send from it.
-
-    int client_sock;
-    assert_nonneg_errno(client_sock = socket(AF_INET, SOCK_DGRAM, 0));
+    int client_sock, server_sock;
+    struct sockaddr_in addr = {0};
+    _udp_socketpair(&client_sock, &server_sock, &addr);
 
     const char client_data[] = {42};
     ssize_t sent;
@@ -74,8 +74,6 @@ static void test_sendto_one_byte() {
                                       sizeof(addr)));
     g_assert_cmpint(sent, ==, sizeof(client_data));
 
-    // Receive the data on the server end.
-
     char server_buf[10];
     struct sockaddr recvfrom_addr = {0};
     socklen_t recvfrom_addr_len = sizeof(recvfrom_addr);
@@ -83,8 +81,57 @@ static void test_sendto_one_byte() {
     assert_nonneg_errno(recvd = recvfrom(server_sock, server_buf,
                                          sizeof(server_buf), 0, &recvfrom_addr,
                                          &recvfrom_addr_len));
-    g_assert_cmpint(recvd, ==, sizeof(client_data));
     g_assert_cmpmem(server_buf, recvd, client_data, sizeof(client_data));
+
+    assert_nonneg_errno(close(server_sock));
+    assert_nonneg_errno(close(client_sock));
+}
+
+static void test_echo() {
+    int client_sock, server_sock;
+    struct sockaddr_in addr = {0};
+    _udp_socketpair(&client_sock, &server_sock, &addr);
+
+    char client_send_buf[1024];
+    memset(client_send_buf, 42, sizeof(client_send_buf));
+
+    {
+        ssize_t sent;
+        assert_nonneg_errno(sent = sendto(client_sock, client_send_buf,
+                                          sizeof(client_send_buf), 0, &addr,
+                                          sizeof(addr)));
+        g_assert_cmpint(sent, ==, sizeof(client_send_buf));
+    }
+
+    char server_buf[sizeof(client_send_buf)];
+    struct sockaddr recvfrom_addr = {0};
+    socklen_t recvfrom_addr_len = sizeof(recvfrom_addr);
+    {
+        ssize_t recvd;
+        assert_nonneg_errno(
+            recvd = recvfrom(server_sock, server_buf, sizeof(server_buf), 0,
+                             &recvfrom_addr, &recvfrom_addr_len));
+        g_assert_cmpmem(server_buf, recvd, client_send_buf,
+                        sizeof(client_send_buf));
+    }
+
+    {
+        ssize_t sent;
+        assert_nonneg_errno(sent = sendto(server_sock, server_buf,
+                                          sizeof(server_buf), 0, &recvfrom_addr,
+                                          recvfrom_addr_len));
+        g_assert_cmpint(sent, ==, sizeof(client_send_buf));
+    }
+
+    char client_recv_buf[sizeof(client_send_buf)];
+    {
+        ssize_t recvd;
+        assert_nonneg_errno(recvd = recvfrom(client_sock, client_recv_buf,
+                                             sizeof(client_recv_buf), 0, NULL,
+                                             NULL));
+        g_assert_cmpmem(client_recv_buf, recvd, client_send_buf,
+                        sizeof(client_send_buf));
+    }
 
     assert_nonneg_errno(close(server_sock));
     assert_nonneg_errno(close(client_sock));
@@ -96,6 +143,7 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/udp_uniprocess/bind_socket", test_bind_socket);
     g_test_add_func("/udp_uniprocess/getaddrinfo", test_getaddrinfo);
     g_test_add_func("/udp_uniprocess/sendto_one_byte", test_sendto_one_byte);
+    g_test_add_func("/udp_uniprocess/echo", test_echo);
     g_test_run();
     return EXIT_SUCCESS;
 }
