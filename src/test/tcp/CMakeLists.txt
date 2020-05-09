@@ -19,82 +19,82 @@ endif()
 ## these also test "localhost" instead of "127.0.0.1" in the loopback tests
 add_test(
     NAME tcp-blocking-loopback
-    COMMAND rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && shadow-test-launcher test-tcp blocking server : test-tcp blocking client localhost
+    COMMAND shadow-test-launcher test-tcp blocking server : test-tcp blocking client localhost
 )
 add_test(
     NAME tcp-blocking-loopback-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d blocking-loopback.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-loopback.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d blocking-loopback.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-loopback.test.shadow.config.xml
 )
 add_test(
     NAME tcp-blocking-lossless-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d blocking-lossless.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-lossless.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d blocking-lossless.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-lossless.test.shadow.config.xml
 )
 add_test(
     NAME tcp-blocking-lossy-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d blocking-lossy.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-lossy.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d blocking-lossy.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-lossy.test.shadow.config.xml
 )
 
 ## tcp nonblocking poll - loopback, lossless and lossy
 add_test(
     NAME tcp-nonblocking-poll-loopback
-    COMMAND rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && shadow-test-launcher test-tcp nonblocking-poll server : test-tcp nonblocking-poll client 127.0.0.1
+    COMMAND shadow-test-launcher test-tcp nonblocking-poll server : test-tcp nonblocking-poll client 127.0.0.1
 )
 add_test(
     NAME tcp-nonblocking-poll-loopback-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-poll-loopback.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-loopback.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-poll-loopback.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-loopback.test.shadow.config.xml
 )
 add_test(
     NAME tcp-nonblocking-poll-lossless-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-poll-lossless.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-lossless.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-poll-lossless.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-lossless.test.shadow.config.xml
 )
 add_test(
     NAME tcp-nonblocking-poll-lossy-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-poll-lossy.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-lossy.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-poll-lossy.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-lossy.test.shadow.config.xml
 )
 
 ## tcp nonblocking epoll - loopback, lossless and lossy
 add_test(
     NAME tcp-nonblocking-epoll-loopback
-    COMMAND rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && shadow-test-launcher test-tcp nonblocking-epoll server : test-tcp nonblocking-epoll client 127.0.0.1
+    COMMAND shadow-test-launcher test-tcp nonblocking-epoll server : test-tcp nonblocking-epoll client 127.0.0.1
 )
 add_test(
     NAME tcp-nonblocking-epoll-loopback-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-epoll-loopback.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-loopback.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-epoll-loopback.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-loopback.test.shadow.config.xml
 )
 add_test(
     NAME tcp-nonblocking-epoll-lossless-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-epoll-lossless.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-lossless.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-epoll-lossless.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-lossless.test.shadow.config.xml
 )
 add_test(
     NAME tcp-nonblocking-epoll-lossy-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-epoll-lossy.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-lossy.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-epoll-lossy.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-lossy.test.shadow.config.xml
 )
 
 ## tcp nonblocking select - loopback, lossless and lossy
 add_test(
     NAME tcp-nonblocking-select-loopback
-    COMMAND rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && shadow-test-launcher test-tcp nonblocking-select server : test-tcp nonblocking-select client 127.0.0.1
+    COMMAND shadow-test-launcher test-tcp nonblocking-select server : test-tcp nonblocking-select client 127.0.0.1
 )
 add_test(
     NAME tcp-nonblocking-select-loopback-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-select-loopback.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-loopback.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-select-loopback.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-loopback.test.shadow.config.xml
 )
 add_test(
     NAME tcp-nonblocking-select-lossless-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-select-lossless.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossless.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-select-lossless.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossless.test.shadow.config.xml
 )
 add_test(
     NAME tcp-nonblocking-select-lossy-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-select-lossy.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossy.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d nonblocking-select-lossy.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossy.test.shadow.config.xml
 )
 
 add_test(
     NAME tcp-iov
-    COMMAND rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && shadow-test-launcher test-tcp iov server : test-tcp iov client 127.0.0.1
+    COMMAND shadow-test-launcher test-tcp iov server : test-tcp iov client 127.0.0.1
 )
 add_test(
     NAME tcp-iov-shadow
-    COMMAND /bin/bash -c "rm -f /dev/mqueue/shadow_src_test_tcp_test_tcp && touch /dev/mqueue/shadow_src_test_tcp_test_tcp && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d iov.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-iov.test.shadow.config.xml"
+    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d iov.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-iov.test.shadow.config.xml
 )
 
 set_tests_properties(
