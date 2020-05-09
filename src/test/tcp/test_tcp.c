@@ -22,6 +22,8 @@
 #include <unistd.h>
 #include <glib.h>
 #include <mqueue.h>
+#include <sys/msg.h>
+#include <sys/types.h>
 #include "test/test_glib_helpers.h"
 
 #define USAGE "USAGE: 'shd-test-tcp iomode type [queuename]'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server') [queuname=(default='/tcp_shadow_queue')]"
@@ -29,7 +31,8 @@
 #define SERVER_PORT 58333
 #define BUFFERSIZE 20000
 #define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
-#define QUEUENAME "/shadow_src_test_tcp_test_tcp"
+//#define QUEUENAME "/shadow_src_test_tcp_test_tcp"
+#define QUEUENAME "./test-tcp"
 
 int tempa = 0;
 int tempb = 1;
@@ -37,6 +40,11 @@ typedef enum _waittype {
     WAIT_WRITE, WAIT_READ
 } waittype;
 typedef int (*iowait_func)(int fd, waittype t);
+
+typedef struct _serverport {
+    long mtype;
+    int val;
+} serverport;
 
 static void _mylog(const char* fileName, const int lineNum, const char* funcName, const char* format, ...) {
     struct timeval t;
@@ -54,46 +62,33 @@ static void _mylog(const char* fileName, const int lineNum, const char* funcName
 }
 
 static void queue_send_u16(const char* queuename, uint16_t i) {
-    mqd_t mq = mq_open(queuename, O_WRONLY|O_CREAT, 0644, NULL);
-    assert_true_errno(mq != (mqd_t)-1);
+    serverport msg;
 
-    // convert i in string before sending it
-    char buf[10] = {0};
-    int len = snprintf(buf, 10, "%d", i);
-    int result = mq_send(mq, buf, len, 10);
-    if (result != 0) {
-        perror("mq_send");
-        MYLOG("mq_send error: result(%d), len(%d), message(%s) ", result, len, buf);
-        exit(EXIT_FAILURE);
-    }
-
-    mq_close(mq);
+    msg.val = i;
+    msg.mtype = 1;
+    key_t key = ftok(queuename, 0);
+    //fprintf(stderr, "msget create %d\n", key);
+    int fd = msgget(key, IPC_CREAT | 0666);
+    //fprintf(stderr, "msget get fd %d\n", fd);
+    int r = msgsnd(fd, &msg, sizeof(msg.val), IPC_NOWAIT);
+    if (r == -1)
+        perror("msgsend");
+    //fprintf(stderr, "msget send: %d, res code: %d\n", msg.val, r);
 }
 
 static short queue_recv_u16(const char* queuename) {
-    mqd_t mq;
-    guint64 val;
-    GError *error = NULL;
-    struct mq_attr attr;
-    unsigned int priorite;
-    char buf[10] = {0};
+    serverport msg;
 
-    // let the server write in the queue
-    usleep(1000);
+    key_t key = ftok(queuename, 0);
+    //fprintf(stderr, "msget create client %d\n", key);
+    int fd = msgget(key, IPC_CREAT | 0666);
+    //fprintf(stderr, "msget %d\n", fd);
+    int r = msgrcv(fd, &msg, sizeof(msg.val), 1, MSG_NOERROR | IPC_NOWAIT);
+    if (r == -1)
+        perror("msgrcv");
+    //fprintf(stderr, "msget received: %d\n", msg.val);
 
-    mq = mq_open(queuename, O_RDONLY);
-    assert_true_errno(mq != (mqd_t)-1);
-
-    // get the queue attributes to obtain the message length
-    assert_true_errno(mq_getattr(mq, &attr) == 0);
-
-    assert_true_errno(mq_receive(mq, buf, attr.mq_msgsize, &priorite) != -1);
-    g_ascii_string_to_unsigned(buf, /* base= */ 10, /* min= */ 0,
-            /* max= */ UINT16_MAX, &val, &error);
-    g_assert_no_error(error);
-
-    mq_close(mq);
-    return val;
+    return msg.val;
 }
 
 /* fills buffer with size random characters */
