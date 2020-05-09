@@ -21,18 +21,18 @@
 #include <time.h>
 #include <unistd.h>
 #include <glib.h>
-#include <mqueue.h>
 #include <sys/msg.h>
 #include <sys/types.h>
 #include "test/test_glib_helpers.h"
 
 #define USAGE "USAGE: 'shd-test-tcp iomode type [queuename]'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server') [queuname=(default='/tcp_shadow_queue')]"
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
-#define SERVER_PORT 58333
 #define BUFFERSIZE 20000
 #define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
-//#define QUEUENAME "/shadow_src_test_tcp_test_tcp"
+// default queue filename for IPC communication
 #define QUEUENAME "./test-tcp"
+// System V queue message type
+#define QUEUE_MTYPE 1
 
 int tempa = 0;
 int tempb = 1;
@@ -41,10 +41,10 @@ typedef enum _waittype {
 } waittype;
 typedef int (*iowait_func)(int fd, waittype t);
 
-typedef struct _serverport {
+typedef struct _IntegerMessage {
     long mtype;
-    int val;
-} serverport;
+    int msg;
+} IntegerMessage;
 
 static void _mylog(const char* fileName, const int lineNum, const char* funcName, const char* format, ...) {
     struct timeval t;
@@ -61,34 +61,35 @@ static void _mylog(const char* fileName, const int lineNum, const char* funcName
     fflush(stdout);
 }
 
-static void queue_send_u16(const char* queuename, uint16_t i) {
-    serverport msg;
-
-    msg.val = i;
-    msg.mtype = 1;
+// create a System V queue with key based on a file queue name
+static int get_queue(const char* queuename) {
     key_t key = ftok(queuename, 0);
-    //fprintf(stderr, "msget create %d\n", key);
+    assert_true_errno(key != -1);
+
     int fd = msgget(key, IPC_CREAT | 0666);
-    //fprintf(stderr, "msget get fd %d\n", fd);
-    int r = msgsnd(fd, &msg, sizeof(msg.val), IPC_NOWAIT);
-    if (r == -1)
-        perror("msgsend");
-    //fprintf(stderr, "msget send: %d, res code: %d\n", msg.val, r);
+    assert_true_errno(fd != -1);
+
+    return fd;
+}
+
+static void queue_send_u16(const char* queuename, uint16_t i) {
+    int queue, r;
+    IntegerMessage msg = {QUEUE_MTYPE, i};
+
+    queue = get_queue(queuename);
+    r = msgsnd(queue, &msg, sizeof(msg.msg), IPC_NOWAIT);
+    assert_true_errno(r != -1);
 }
 
 static short queue_recv_u16(const char* queuename) {
-    serverport msg;
+    int queue, r;
+    IntegerMessage msg;
 
-    key_t key = ftok(queuename, 0);
-    //fprintf(stderr, "msget create client %d\n", key);
-    int fd = msgget(key, IPC_CREAT | 0666);
-    //fprintf(stderr, "msget %d\n", fd);
-    int r = msgrcv(fd, &msg, sizeof(msg.val), 1, MSG_NOERROR | IPC_NOWAIT);
-    if (r == -1)
-        perror("msgrcv");
-    //fprintf(stderr, "msget received: %d\n", msg.val);
+    queue = get_queue(queuename);
+    r = msgrcv(queue, &msg, sizeof(msg.msg), QUEUE_MTYPE, MSG_NOERROR | IPC_NOWAIT);
+    assert_true_errno(r != -1);
 
-    return msg.val;
+    return msg.msg;
 }
 
 /* fills buffer with size random characters */
