@@ -20,8 +20,8 @@
 #include "main/shmem/shmem_util.h"
 #include "support/logger/logger.h"
 
-static const char* _kShadowPrefix = "shd_shmemfile";
-static const char _kPIDDelim = '-';
+static const char* SHADOW_PREFIX = "shadow_shmemfile";
+static const char PID_DELIM = '-';
 
 static void _shmemfile_getName(size_t nbytes, char* str) {
     assert(str != NULL && nbytes >= 3);
@@ -32,13 +32,13 @@ static void _shmemfile_getName(size_t nbytes, char* str) {
     pid_t pid = getpid();
 
     snprintf(str, MIN(SHD_SHMEM_FILE_NAME_NBYTES, nbytes),
-             "/%s_%llu.%llu%c%" PRId64, _kShadowPrefix,
+             "/%s_%llu.%llu%c%" PRId64, SHADOW_PREFIX,
              (unsigned long long)ts.tv_sec, (unsigned long long)ts.tv_nsec,
-             _kPIDDelim, (int64_t)pid);
+             PID_DELIM, (int64_t)pid);
 }
 
 bool shmemfile_nameHasShadowPrefix(const char* name) {
-    const char* pfx = strstr(name, _kShadowPrefix);
+    const char* pfx = strstr(name, SHADOW_PREFIX);
     return (pfx != NULL);
 }
 
@@ -51,8 +51,7 @@ pid_t shmemfile_pidFromName(const char* name) {
     if (delim) {
         // try to parse the end of the string
         x = strtol(delim + 1, NULL, 10);
-        if (x == 0 || x > INT_MAX ||
-            x <= INT_MIN) { // we had trouble parsing
+        if (x == 0 || x > INT_MAX || x <= INT_MIN) { // we had trouble parsing
             ret = -1;
         } else {
             ret = (pid_t)x;
