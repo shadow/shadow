@@ -302,7 +302,8 @@ static const gchar* _process_getPluginName(Process* proc) {
 
 static const gchar* _process_getPluginStartSymbol(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->plugin.startSymbol ? proc->plugin.startSymbol->str : NULL;
+    return proc->plugin.startSymbol ? proc->plugin.startSymbol->str
+                                    : PLUGIN_DEFAULT_SYMBOL;
 }
 
 static const gchar* _process_getName(Process* proc) {
@@ -495,18 +496,16 @@ static void _process_loadPlugin(Process* proc) {
     /* make sure it has the required init function */
     gpointer symbol = NULL;
 
-    symbol = dlsym(proc->plugin.handle, _process_getPluginStartSymbol(proc) ?
-                   _process_getPluginStartSymbol(proc) : PLUGIN_DEFAULT_SYMBOL);
+    symbol = dlsym(proc->plugin.handle, _process_getPluginStartSymbol(proc));
     if(symbol) {
         proc->plugin.main = symbol;
         message("found '%s' at %p", _process_getPluginStartSymbol(proc), symbol);
     } else {
         const gchar* errorMessage = dlerror();
         critical("dlsym() failed: %s", errorMessage);
-        error("unable to find the required function symbol '%s' in plug-in '%s'",
-                _process_getPluginStartSymbol(proc) ? 
-                _process_getPluginStartSymbol(proc) : PLUGIN_DEFAULT_SYMBOL,
-                _process_getPluginPath(proc));
+        error(
+            "unable to find the required function symbol '%s' in plug-in '%s'",
+            _process_getPluginStartSymbol(proc), _process_getPluginPath(proc));
     }
 
     /* search for the location of errno and save it in the plugin state */
