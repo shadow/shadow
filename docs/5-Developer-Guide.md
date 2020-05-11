@@ -1,3 +1,5 @@
+## Debugging
+
 ### Debugging Shadow using GDB
 
 When debugging, it will be helpful to use the Shadow option `--cpu-threshold=-1`. It disables the automatic virtual CPU delay measurement feature. This feature may introduce non-deterministic behaviors, even when running the exact same experiment twice, by the re-ordering of events that occurs due to how the kernel schedules the physical CPU of the experiment machine. Disabling the feature with the above option will ensure a deterministic experiment, making debugging easier.
@@ -72,7 +74,7 @@ with the compiler flag `-g` when manually building a local version of GLib.
 
 ### Profiling Shadow
 
-##### Profiling with `gprof`
+#### Profiling with `gprof`
 
 This method only provides profiling info for the core of Shadow, not for elf-loader, plug-ins, or other libraries. Also, the profiling info is limited since gprof only measures active CPU usage and function call counts and misses performance related to blocking IO and barrier waits.
 
@@ -85,7 +87,7 @@ gprof `which shadow` gmon.out > analysis.txt
 less analysis.txt
 ```
 
-##### Profiling with `perf`
+#### Profiling with `perf`
 
 Either run perf when starting Shadow:
 
@@ -145,20 +147,3 @@ fi
 
 If you find non-deterministic behavior in your Shadow experiment, please consider helping to diagnose the problem by opening a [new issue](https://github.com/shadow/shadow/issues/new).
 
-### Tagging Shadow releases
-
-The following commands can be used to tag a new version of Shadow, after which an
-archive will be available on github's [releases page](https://github.com/shadow/shadow/releases).
-
-```bash
-git checkout master
-git tag -s v1.10.0
-git push origin v1.10.0
-```
-Our releases will then be tagged off of the master branch. Once tagged, a signed archive of a release can be created like this:
-
-```bash
-git archive --prefix=shadow-v1.10.0/ --format=tar v1.10.0 | gzip > shadow-v1.10.0.tar.gz
-gpg -a -b shadow-v1.10.0.tar.gz
-gpg --verify shadow-v1.10.0.tar.gz.asc
-```
