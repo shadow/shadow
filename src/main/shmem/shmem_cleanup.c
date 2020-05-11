@@ -119,16 +119,12 @@ void shmemcleanup_tryCleanup(bool use_shadow_logging) {
     GHashTable* proc_set = _shmemcleanup_getProcSet();
 
     if (!proc_set) {
-        SHMEMCLEANUP_LOG(use_shadow_logging, LOGLEVEL_INFO,
-                         "Num. processes in system's procfs: %u\n",
-                         g_hash_table_size(proc_set));
-
         return;
     }
 
     SHMEMCLEANUP_LOG(use_shadow_logging, LOGLEVEL_INFO,
                      "Running shared memory cleanup routines.\n",
-                     g_hash_table_size(proc_set));
+                     NULL);
 
     SHMEMCLEANUP_LOG(
         use_shadow_logging, LOGLEVEL_INFO,
