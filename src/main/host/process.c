@@ -4557,18 +4557,26 @@ int process_emu_gethostname(Process* proc, char* name, size_t len) {
 //  in_addr_t ip = proc->host_getDefaultIP(proc->host);
 //  const gchar* hostname = internetwork_resolveID(worker_getPrivate()->cached_engine->internet, (GQuark)ip);
 
-    if(name != NULL && proc->host != NULL) {
-        /* resolve my address to a hostname */
-        const gchar* sysname = host_getName(proc->host);
-
-        if(sysname != NULL && len > strlen(sysname)) {
-            if(strncpy(name, sysname, len) != NULL) {
-                result = 0;
-            }
-        }
+    if (name == NULL || proc->host == NULL) {
+        errno = EFAULT;
+        goto out;
     }
 
-    _process_setErrno(proc, EFAULT);
+    const gchar* sysname = host_getName(proc->host);
+    if (strncpy(name, sysname, len) == NULL) {
+        errno = EFAULT;
+        goto out;
+    }
+
+    if (name[len-1] != '\0') {
+        errno = ENAMETOOLONG;
+        goto out;
+    }
+
+    result = 0;
+
+out:
+    _process_setErrno(proc, errno);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return result;
 }
