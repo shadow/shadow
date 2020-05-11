@@ -47,8 +47,8 @@ jobs:
         uses: actions/upload-artifact@v2
         if: failure()
         with:
-          name: shadow-data
-          path: build/**/*shadow.data/*
+          name: shadow-build
+          path: build
 
 
   shadow-plugin-tor-ci:
