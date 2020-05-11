@@ -115,6 +115,11 @@ def main():
         action="store", dest="njobs",
         default=4)#multiprocessing.cpu_count())
 
+    parser_test.add_argument('-r', '--rerun-failed',
+        help="Run only the tests that failed previously",
+        action="store_true", dest="rerun_failed",
+        default=False)
+
     # TODO: Ideally make the default more like 1s, and add more individual
     # exceptions as needed (using e.g. `set_tests_properties(slow_test_name
     # PROPERTIES TIMEOUT 30)`
@@ -237,6 +242,9 @@ def test(args):
     testcmd = "ctest --output-on-failure -j{0} --timeout {1}".format(args.njobs, args.timeout)
     if args.do_verbose:
         testcmd += " --verbose"
+
+    if args.rerun_failed:
+        testcmd += " --rerun-failed"
 
     logging.info("calling \'"+testcmd+"\'")
     retcode = subprocess.call(testcmd.strip().split())
