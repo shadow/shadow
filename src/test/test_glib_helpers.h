@@ -1,6 +1,7 @@
 #ifndef SHD_TEST_GLIB_HELPERS_H
 #define SHD_TEST_GLIB_HELPERS_H
 
+#include <errno.h>
 #include <glib.h>
 #include <unistd.h>
 

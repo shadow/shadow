@@ -1,6 +1,7 @@
 include_directories(${GLIB_INCLUDES})
 link_libraries(${GLIB_LIBRARIES})
 
+
 add_executable(test-bind test_bind.c)
 
 ## register the tests

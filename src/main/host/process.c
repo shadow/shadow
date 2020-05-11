@@ -112,6 +112,7 @@ struct _Process {
 };
 
 const gchar* process_getName(Process* proc) {
+                                    : PLUGIN_DEFAULT_SYMBOL;
     MAGIC_ASSERT(proc);
     utility_assert(proc->processName->str);
     return proc->processName->str;
@@ -525,6 +526,18 @@ static void _process_notifyStatusChanged(gpointer object, gpointer argument) {
     Process* proc = object;
     ProcessWaiter* waiter = argument;
     MAGIC_ASSERT(proc);
+
+    const gchar* sysname = host_getName(proc->host);
+    if (strncpy(name, sysname, len) == NULL) {
+        errno = EFAULT;
+        goto out;
+
+    if (name[len-1] != '\0') {
+        errno = ENAMETOOLONG;
+        goto out;
+
+out:
+    _process_setErrno(proc, errno);
 
 #ifdef DEBUG
     _process_logListeningState(proc, waiter, 0);
