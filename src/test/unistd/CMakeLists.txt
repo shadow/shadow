@@ -33,4 +33,5 @@ execute_process(
 
 ## register the tests
 add_test(NAME unistd COMMAND test-unistd "${UNAME_SYSNAME}" "${UNAME_NODENAME}" "${UNAME_RELEASE}" "${UNAME_VERSION}" "${UNAME_MACHINE}")
-add_test(NAME unistd-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d unistd.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/unistd.test.shadow.config.xml)
+# FIXME add_test(NAME unistd-shadow-ptrace COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d unistd.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/unistd.test.shadow.config.xml)
+# FIXME add_test(NAME unistd-shadow-preload COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d unistd.shadow-preload.data ${CMAKE_CURRENT_SOURCE_DIR}/unistd.test.shadow.config.xml)
