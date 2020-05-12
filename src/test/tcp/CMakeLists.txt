@@ -13,7 +13,7 @@ add_executable(test-tcp test_tcp.c)
 ## these also test "localhost" instead of "127.0.0.1" in the loopback tests
 add_test(
     NAME tcp-blocking-loopback
-    COMMAND shadow-test-launcher test-tcp blocking server : test-tcp blocking client localhost
+    COMMAND shadow-test-launcher test-tcp blocking ./test-tcp server : test-tcp blocking ./test-tcp client localhost
 )
 add_test(
     NAME tcp-blocking-loopback-shadow
@@ -31,7 +31,7 @@ add_test(
 ## tcp nonblocking poll - loopback, lossless and lossy
 add_test(
     NAME tcp-nonblocking-poll-loopback
-    COMMAND shadow-test-launcher test-tcp nonblocking-poll server : test-tcp nonblocking-poll client 127.0.0.1
+    COMMAND shadow-test-launcher test-tcp nonblocking-poll ./test-tcp server : test-tcp nonblocking-poll ./test-tcp client 127.0.0.1
 )
 add_test(
     NAME tcp-nonblocking-poll-loopback-shadow
@@ -49,7 +49,7 @@ add_test(
 ## tcp nonblocking epoll - loopback, lossless and lossy
 add_test(
     NAME tcp-nonblocking-epoll-loopback
-    COMMAND shadow-test-launcher test-tcp nonblocking-epoll server : test-tcp nonblocking-epoll client 127.0.0.1
+    COMMAND shadow-test-launcher test-tcp nonblocking-epoll ./test-tcp server : test-tcp nonblocking-epoll ./test-tcp client 127.0.0.1
 )
 add_test(
     NAME tcp-nonblocking-epoll-loopback-shadow
@@ -67,7 +67,7 @@ add_test(
 ## tcp nonblocking select - loopback, lossless and lossy
 add_test(
     NAME tcp-nonblocking-select-loopback
-    COMMAND shadow-test-launcher test-tcp nonblocking-select server : test-tcp nonblocking-select client 127.0.0.1
+    COMMAND shadow-test-launcher test-tcp nonblocking-select ./test-tcp server : test-tcp nonblocking-select ./test-tcp client 127.0.0.1
 )
 add_test(
     NAME tcp-nonblocking-select-loopback-shadow
@@ -84,7 +84,7 @@ add_test(
 
 add_test(
     NAME tcp-iov
-    COMMAND shadow-test-launcher test-tcp iov server : test-tcp iov client 127.0.0.1
+    COMMAND shadow-test-launcher test-tcp iov ./test-tcp server : test-tcp iov ./test-tcp client 127.0.0.1
 )
 add_test(
     NAME tcp-iov-shadow

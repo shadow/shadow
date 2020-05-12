@@ -21,9 +21,9 @@
   <kill time="60"/>
   <plugin id="testtcp" path="libshadow-plugin-test-tcp.so"/>
   <node id="iov.tcpserver" >
-    <application plugin="testtcp" time="1" arguments="iov server" />
+    <application plugin="testtcp" time="1" arguments="iov ./libshadow-plugin-test-tcp.so server" />
   </node >
   <node id="iov.tcpclient" >
-    <application plugin="testtcp" time="2" arguments="iov client iov.tcpserver" />
+    <application plugin="testtcp" time="2" arguments="iov ./libshadow-plugin-test-tcp.so client iov.tcpserver" />
   </node >
 </shadow>

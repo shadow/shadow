@@ -25,12 +25,10 @@
 
 #include "test/test_glib_helpers.h"
 
-#define USAGE "USAGE: 'shd-test-tcp iomode type [queuename]'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server') [queuname=(default='/tcp_shadow_queue')]"
+#define USAGE "USAGE: 'shd-test-tcp iomode type queuename'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') queuname=(filename) type=('client' server_ip|'server')"
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 #define BUFFERSIZE 20000
 #define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
-// default queue filename for IPC communication
-#define QUEUENAME "./test-tcp"
 // System V queue message type
 #define QUEUE_MTYPE 1
 
@@ -813,24 +811,26 @@ int main(int argc, char *argv[]) {
 
     MYLOG("program started; %s", USAGE);
 
-    if(argc < 3) {
+    if(argc < 4) {
         MYLOG("error, iomode and type not specified in args; see usage");
         return -1;
     }
 
+    const char *io_mode = argv[1];
+    const char *queuename = argv[2];
+    const char *execution_mode = argv[3];
     iowait_func wait = NULL;
     int use_iov = 0;
-    char *queuename = QUEUENAME;
 
-    if(strncasecmp(argv[1], "blocking", 8) == 0) {
+    if(strncasecmp(io_mode, "blocking", 8) == 0) {
         wait = NULL;
-    } else if(strncasecmp(argv[1], "nonblocking-poll", 16) == 0) {
+    } else if(strncasecmp(io_mode, "nonblocking-poll", 16) == 0) {
         wait = _wait_poll;
-    } else if(strncasecmp(argv[1], "nonblocking-epoll", 17) == 0) {
+    } else if(strncasecmp(io_mode, "nonblocking-epoll", 17) == 0) {
         wait = _wait_epoll;
-    } else if(strncasecmp(argv[1], "nonblocking-select", 18) == 0) {
+    } else if(strncasecmp(io_mode, "nonblocking-select", 18) == 0) {
         wait = _wait_select;
-    } else if(strncasecmp(argv[1], "iov", 3) == 0) {
+    } else if(strncasecmp(io_mode, "iov", 3) == 0) {
         wait = NULL;
         use_iov = 1;
     } else {
@@ -839,23 +839,17 @@ int main(int argc, char *argv[]) {
     }
 
     int result = 0;
-    if(strncasecmp(argv[2], "client", 5) == 0) {
-        if(argc < 4) {
+    if(strncasecmp(execution_mode, "client", 5) == 0) {
+        if(argc < 5) {
             MYLOG("error, client mode also needs a server ip address; see usage");
             return -1;
         }
-        if (argc == 5) {
-            queuename = argv[4];
-        }
         create_msgqueue(queuename, IS_CLIENT);
-        MYLOG("running client in mode %s", argv[1]);
-        result = _run_client(wait, argv[3], use_iov);
-    } else if(strncasecmp(argv[2], "server", 6) == 0) {
-        if (argc == 4) {
-            queuename = argv[3];
-        }
+        MYLOG("running client in mode %s", io_mode);
+        result = _run_client(wait, argv[4], use_iov);
+    } else if(strncasecmp(execution_mode, "server", 6) == 0) {
         create_msgqueue(queuename, IS_SERVER);
-        MYLOG("running server in mode %s", argv[1]);
+        MYLOG("running server in mode %s", io_mode);
         result = _run_server(wait, use_iov);
     } else {
         MYLOG("error, invalid type specified; see usage");
