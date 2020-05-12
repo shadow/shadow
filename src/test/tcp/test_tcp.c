@@ -77,17 +77,16 @@ static void queue_send_u16(const char* queuename, uint16_t i) {
     IntegerMessage msg = {QUEUE_MTYPE, i};
 
     queue = get_queue(queuename);
-    r = msgsnd(queue, &msg, sizeof(msg.msg), MSG_NOERROR);
-    assert_true_errno(r != -1);
+    assert_true_errno((r = msgsnd(queue, &msg, sizeof(msg.msg), MSG_NOERROR)) != -1);
 }
 
 static short queue_recv_u16(const char* queuename) {
-    int queue, r;
+    int queue, r, size;
     IntegerMessage msg;
 
+    size = sizeof(msg.msg);
     queue = get_queue(queuename);
-    r = msgrcv(queue, &msg, sizeof(msg.msg), QUEUE_MTYPE, MSG_NOERROR);
-    assert_true_errno(r != -1);
+    assert_true_errno((r = msgrcv(queue, &msg, size, QUEUE_MTYPE, MSG_NOERROR)) != -1);
 
     return msg.msg;
 }
