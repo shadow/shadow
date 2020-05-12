@@ -3,7 +3,7 @@ link_libraries(${GLIB_LIBRARIES})
 
 ## build the test as a dynamic executable that plugs into shadow
 add_executable(test-udp test_udp.c)
-add_shadow_exe(test-udp-uniprocess test_udp_uniprocess.c)
+add_executable(test-udp-uniprocess test_udp_uniprocess.c)
 
 ## register the tests
 add_test(NAME udp-uniprocess COMMAND test-udp-uniprocess)

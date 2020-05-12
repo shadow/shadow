@@ -2,7 +2,7 @@ include_directories(${GLIB_INCLUDES})
 link_libraries(${GLIB_LIBRARIES})
 
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_exe(test-unistd test_unistd.c)
+add_executable(test-unistd test_unistd.c)
 
 # Use `uname` command-line program to get expected results for native uname(2).
 execute_process(
