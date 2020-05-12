@@ -122,10 +122,6 @@ void shmemcleanup_tryCleanup(bool use_shadow_logging) {
         return;
     }
 
-    SHMEMCLEANUP_LOG(use_shadow_logging, LOGLEVEL_INFO,
-                     "Running shared memory cleanup routines.\n",
-                     NULL);
-
     SHMEMCLEANUP_LOG(
         use_shadow_logging, LOGLEVEL_INFO,
         "[Shared Memory Cleanup] Num. processes in system's procfs: %u\n",
