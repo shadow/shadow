@@ -67,7 +67,7 @@ static int get_queue(const char* queuename) {
     int fd;
 
     assert_true_errno((key = ftok(queuename, 0)) != -1);
-    assert_true_errno((fd = msgget(key, IPC_CREAT | 0666)) != -1);
+    assert_true_errno((fd = msgget(key, IPC_CREAT | 0600)) != -1);
 
     return fd;
 }
