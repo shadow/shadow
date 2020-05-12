@@ -86,13 +86,13 @@ static void create_msgqueue(const char* queuename, runningmode mode) {
 static void queue_send_u16(uint16_t i) {
     IntegerMessage msg = {QUEUE_MTYPE, i};
 
-    assert_true_errno(msgsnd(msgqueue, &msg, sizeof(msg.msg), MSG_NOERROR) != -1);
+    assert_true_errno(msgsnd(msgqueue, &msg, sizeof(msg.msg), 0) != -1);
 }
 
 static short queue_recv_u16() {
     IntegerMessage msg;
 
-    assert_true_errno(msgrcv(msgqueue, &msg, sizeof(msg.msg), QUEUE_MTYPE, MSG_NOERROR) != -1);
+    assert_true_errno(msgrcv(msgqueue, &msg, sizeof(msg.msg), QUEUE_MTYPE, 0) != -1);
     return msg.msg;
 }
 
