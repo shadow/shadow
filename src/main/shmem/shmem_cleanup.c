@@ -154,7 +154,7 @@ void shmemcleanup_tryCleanup(bool use_shadow_logging) {
     SHMEMCLEANUP_LOG(
         use_shadow_logging, LOGLEVEL_INFO,
         "[Shared Memory Cleanup] Num. removed shared memory files: %zu\n",
-        n_removed, g_hash_table_size(proc_set));
+        n_removed);
 
     g_hash_table_destroy(proc_set);
 }
