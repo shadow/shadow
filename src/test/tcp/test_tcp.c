@@ -265,7 +265,7 @@ static int _do_connect(int fd, struct sockaddr_in* serveraddr, iowait_func iowai
 }
 
 static void send_port_in_queue(int fd, struct sockaddr_in* bindaddr){
-    socklen_t len = sizeof(bindaddr);
+    socklen_t len = sizeof(*bindaddr);
 
     assert_true_errno(getsockname(fd, (struct sockaddr *)bindaddr, &len) != -1);
     queue_send_u16(ntohs(bindaddr->sin_port));
