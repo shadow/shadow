@@ -7,12 +7,6 @@ add_shadow_plugin(shadow-plugin-test-tcp test_tcp.c)
 ## create and install an executable that can run outside of shadow
 add_executable(test-tcp test_tcp.c)
 
-## add mqueue library
-find_library(LIBRT rt)
-if(LIBRT)
-    target_link_libraries(test-tcp ${LIBRT})
-endif()
-
 ## register the tests
 
 ## tcp blocking - loopback, lossless and lossy
