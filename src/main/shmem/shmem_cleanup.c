@@ -21,12 +21,12 @@ static const char* SHM_DIR = "/dev/shm";
  * Helper logging macro. We use this because at this point we don't know if
  * the logging module is initialized.
  */
-#define SHMEMCLEANUP_LOG(USE_SHADOW_LOGGING, LOG_LEVEL, FORMAT, ...)           \
+#define SHMEMCLEANUP_LOG(USE_SHADOW_LOGGING, LOG_LEVEL, ...)                   \
     if (USE_SHADOW_LOGGING) {                                                  \
         logger_log(logger_getDefault(), LOG_LEVEL, __FILE__, __FUNCTION__,     \
-                   __LINE__, FORMAT, __VA_ARGS__);                             \
+                   __LINE__, __VA_ARGS__);                                     \
     } else {                                                                   \
-        g_printerr(FORMAT, __VA_ARGS__);                                       \
+        g_printerr(__VA_ARGS__);                                               \
     }
 
 /*
