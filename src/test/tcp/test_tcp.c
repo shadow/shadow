@@ -63,11 +63,11 @@ static void _mylog(const char* fileName, const int lineNum, const char* funcName
 
 // create a System V queue with key based on a file queue name
 static int get_queue(const char* queuename) {
-    key_t key = ftok(queuename, 0);
-    assert_true_errno(key != -1);
+    key_t key;
+    int fd;
 
-    int fd = msgget(key, IPC_CREAT | 0666);
-    assert_true_errno(fd != -1);
+    assert_true_errno((key = ftok(queuename, 0)) != -1);
+    assert_true_errno((fd = msgget(key, IPC_CREAT | 0666)) != -1);
 
     return fd;
 }
