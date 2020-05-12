@@ -20,9 +20,9 @@
 #include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
-#include <glib.h>
 #include <sys/msg.h>
 #include <sys/types.h>
+
 #include "test/test_glib_helpers.h"
 
 #define USAGE "USAGE: 'shd-test-tcp iomode type [queuename]'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server') [queuname=(default='/tcp_shadow_queue')]"
