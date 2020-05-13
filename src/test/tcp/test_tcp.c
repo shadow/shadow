@@ -70,13 +70,28 @@ static void remove_queue() {
     assert_true_errno(msgctl(msgqueue, IPC_RMID, NULL) != -1);
 }
 
-// create a System V queue with key based on a file queue name
+// create a System V queue
+// the key can be provide directly as number or put in env variable
 // if the program is running as client, we should remove the message queue at the end
-static void create_msgqueue(const char* queuename, runningmode mode) {
-    key_t key;
+static void create_msgqueue(const char *queueid, runningmode mode) {
+    char *endptr;
+    long int key;
 
-    assert_true_errno((key = ftok(queuename, 0)) != -1);
-    assert_true_errno((msgqueue = msgget(key, IPC_CREAT | 0600)) != -1);
+    if (queueid[0] == '$'){
+        queueid = getenv(queueid + 1);
+    }
+
+    errno = 0;
+    key = strtol(queueid, &endptr, 10);
+    // Check for various possible errors
+    if ((errno == ERANGE && (key == LONG_MAX || key == LONG_MIN))
+        || (errno != 0 && key == 0)
+        || endptr == queueid) {
+        perror("strtol");
+        exit(EXIT_FAILURE);
+    }
+
+    assert_true_errno((msgqueue = msgget(key, 0600)) != -1);
 
     if (mode == IS_CLIENT) {
         atexit(remove_queue);

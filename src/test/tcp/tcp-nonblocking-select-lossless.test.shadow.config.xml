@@ -21,9 +21,9 @@
   <kill time="300"/>
   <plugin id="testtcp" path="libshadow-plugin-test-tcp.so"/>
   <node id="lossless.tcpserver.echo" >
-    <application plugin="testtcp" time="1" arguments="nonblocking-select ./libshadow-plugin-test-tcp.so server" />
+    <application plugin="testtcp" time="1" arguments="nonblocking-select $QUEUE server" />
   </node >
   <node id="lossless.tcpclient.echo" >
-    <application plugin="testtcp" time="2" arguments="nonblocking-select ./libshadow-plugin-test-tcp.so client lossless.tcpserver.echo" />
+    <application plugin="testtcp" time="2" arguments="nonblocking-select $QUEUE client lossless.tcpserver.echo" />
   </node >
 </shadow>
