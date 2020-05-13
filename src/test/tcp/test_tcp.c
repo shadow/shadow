@@ -39,10 +39,6 @@ typedef enum _waittype {
 } waittype;
 typedef int (*iowait_func)(int fd, waittype t);
 
-typedef enum _runningmode {
-    IS_CLIENT, IS_SERVER
-} runningmode;
-
 typedef struct _IntegerMessage {
     long mtype;
     int msg;
@@ -73,7 +69,7 @@ static void remove_queue() {
 // create a System V queue
 // the key can be provide directly as number or put in env variable
 // if the program is running as client, we should remove the message queue at the end
-static void create_msgqueue(const char *queueid, runningmode mode) {
+static void create_msgqueue(const char *queueid) {
     char *endptr;
     long int key;
 
@@ -92,10 +88,6 @@ static void create_msgqueue(const char *queueid, runningmode mode) {
     }
 
     assert_true_errno((msgqueue = msgget(key, 0600)) != -1);
-
-    if (mode == IS_CLIENT) {
-        atexit(remove_queue);
-    }
 }
 
 static void queue_send_u16(uint16_t i) {
@@ -859,11 +851,11 @@ int main(int argc, char *argv[]) {
             MYLOG("error, client mode also needs a server ip address; see usage");
             return -1;
         }
-        create_msgqueue(queuename, IS_CLIENT);
+        create_msgqueue(queuename);
         MYLOG("running client in mode %s", io_mode);
         result = _run_client(wait, argv[4], use_iov);
     } else if(strncasecmp(execution_mode, "server", 6) == 0) {
-        create_msgqueue(queuename, IS_SERVER);
+        create_msgqueue(queuename);
         MYLOG("running server in mode %s", io_mode);
         result = _run_server(wait, use_iov);
     } else {
