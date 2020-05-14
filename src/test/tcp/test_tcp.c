@@ -25,7 +25,7 @@
 
 #include "test/test_glib_helpers.h"
 
-#define USAGE "USAGE: 'shd-test-tcp iomode type queuename'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') queuname=(filename) type=('client' server_ip|'server')"
+#define USAGE "USAGE: 'shd-test-tcp iomode queuename type'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') queuname=(filename) type=('client' server_ip|'server')"
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 #define BUFFERSIZE 20000
 #define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
@@ -87,7 +87,7 @@ static void create_msgqueue(const char *queueid) {
         exit(EXIT_FAILURE);
     }
 
-    assert_true_errno((msgqueue = msgget(key, 0600)) != -1);
+    assert_true_errno((msgqueue = msgget(key, 0)) != -1);
 }
 
 static void queue_send_u16(uint16_t i) {
