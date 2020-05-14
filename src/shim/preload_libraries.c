@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -415,4 +416,21 @@ void freeaddrinfo(struct addrinfo* res) {
         free(res);
         res = next;
     }
+}
+
+int gethostname(char* name, size_t len) {
+    if (len < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    struct utsname utsname;
+    if (uname(&utsname) < 0) {
+        return -1;
+    }
+    strncpy(name, utsname.nodename, len);
+    if (len == 0 || name[len-1] != '\0') {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    return 0;
 }

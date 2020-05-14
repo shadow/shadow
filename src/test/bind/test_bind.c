@@ -13,41 +13,9 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <glib.h>
 
-#define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
-
-static void _mylog(const char* fileName, const int lineNum, const char* funcName, const char* format, ...) {
-    struct timeval t;
-    memset(&t, 0, sizeof(struct timeval));
-    gettimeofday(&t, NULL);
-    fprintf(stdout, "[%ld.%.06ld] [%s:%i] [%s] ", (long)t.tv_sec, (long)t.tv_usec, fileName, lineNum, funcName);
-
-    va_list vargs;
-    va_start(vargs, format);
-    vfprintf(stdout, format, vargs);
-    va_end(vargs);
-
-    fprintf(stdout, "\n");
-    fflush(stdout);
-}
-
-static int _do_socket(int type, int* fdout) {
-    /* create a socket and get a socket descriptor */
-    int sd = socket(AF_INET, type, 0);
-
-    MYLOG("socket() returned %i", sd);
-
-    if (sd < 0) {
-        MYLOG("socket() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
-
-    if(fdout) {
-        *fdout = sd;
-    }
-
-    return EXIT_SUCCESS;
-}
+#include "test/test_glib_helpers.h"
 
 static int _do_bind(int fd, in_addr_t address, in_port_t port) {
     struct sockaddr_in bindaddr;
@@ -58,175 +26,94 @@ static int _do_bind(int fd, in_addr_t address, in_port_t port) {
     bindaddr.sin_port = port;
 
     /* bind the socket to the server port */
-    int result = bind(fd, (struct sockaddr *) &bindaddr, sizeof(struct sockaddr_in));
-
-    MYLOG("bind() returned %i", result);
-
-    if (result < 0) {
-        MYLOG("bind() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
-
-    return EXIT_SUCCESS;
-}
-
-static int _do_listen(int fd) {
-    int result = listen(fd, 0);
-
-    MYLOG("listen() returned %i", result);
-
-    if (result < 0) {
-     MYLOG("listen() error was: %s", strerror(errno));
-     return EXIT_FAILURE;
-    }
-
-    return EXIT_SUCCESS;
+    return bind(fd, (struct sockaddr *) &bindaddr, sizeof(struct sockaddr_in));
 }
 
 static int _do_connect(int fd, struct sockaddr_in* serveraddr) {
     int count = 0;
-
-    while(1) {
-        int result = connect(fd, (struct sockaddr *) serveraddr, sizeof(struct sockaddr_in));
-
-        MYLOG("connect() returned %i", result);
-
-        if (result < 0 && errno == EINPROGRESS) {
-            MYLOG("connect() returned EINPROGRESS, retrying in 1 millisecond");
-            usleep((useconds_t)1000);
-
-            count++;
-
-            if(count > 1000) {
-                MYLOG("waited for accept for 1 second, giving up");
-                return EXIT_FAILURE;
-            }
-
-            continue;
-        } else if (result < 0) {
-            MYLOG("connect() error was: %s", strerror(errno));
-            return EXIT_FAILURE;
-        } else {
-            break;
-        }
-    }
-
-    return EXIT_SUCCESS;
-}
-
-static int _do_accept(int fd, int* outfd) {
-    int count = 0;
+    int saved_errno = 0;
     int result = 0;
 
-    while(1) {
-        result = accept(fd, NULL, NULL);
-
-        MYLOG("accept() returned %i", result);
-
-        if (result < 0 && errno == EINPROGRESS) {
-            MYLOG("accept() returned EINPROGRESS, retrying in 1 millisecond");
-            usleep((useconds_t)1000);
-
-            count++;
-
-            if(count > 1000) {
-                MYLOG("waited for accept for 1 second, giving up");
-                return EXIT_FAILURE;
-            }
-
-            continue;
-        } else if (result < 0) {
-            MYLOG("accept() error was: %s", strerror(errno));
-            return EXIT_FAILURE;
-        } else {
+    while (1) {
+        result = connect(fd, (struct sockaddr*)serveraddr,
+                         sizeof(struct sockaddr_in));
+        saved_errno = errno;
+        if (result == 0 || errno != EINPROGRESS) {
             break;
         }
+        if (count++ > 1000) {
+            g_message("waited for connect for 1 second, giving up");
+            break;
+        }
+        g_debug("connect() returned EINPROGRESS, retrying in 1 millisecond");
+        usleep((useconds_t)1000);
     }
-
-    if(outfd) {
-        *outfd = result;
-    }
-
-    return EXIT_SUCCESS;
+    errno = saved_errno;
+    return result;
 }
 
-static int _test_explicit_bind(int socket_type) {
+static int _do_accept(int fd) {
+    int count = 0;
+    int result = 0;
+    int saved_errno = 0;
+
+    while (1) {
+        result = accept(fd, NULL, NULL);
+        saved_errno = errno;
+        g_debug("accept() returned %i %s", result, strerror(errno));
+        if (result >= 0 || errno != EINPROGRESS) {
+            break;
+        }
+        if (count++ > 1000) {
+            g_message("waited for accept for 1 second, giving up");
+            break;
+        }
+        g_debug("accept() returned EINPROGRESS, retrying in 1 millisecond");
+        usleep((useconds_t)1000);
+    }
+    errno = saved_errno;
+    return result;
+}
+
+static void _test_explicit_bind(gconstpointer gp) {
+    int socket_type = GPOINTER_TO_INT(gp);
     int fd1 = 0, fd2 = 0;
 
-    MYLOG("creating sockets");
+    g_debug("creating sockets");
 
-    if(_do_socket(socket_type, &fd1) == EXIT_FAILURE) {
-        MYLOG("unable to create socket");
-        return EXIT_FAILURE;
-    }
+    assert_true_errno((fd1 = socket(AF_INET, socket_type, 0)) >= 0);
+    assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
-    if(_do_socket(socket_type, &fd2) == EXIT_FAILURE) {
-        MYLOG("unable to create socket");
-        return EXIT_FAILURE;
-    }
+    g_debug("binding one socket to localhost:11111");
+    assert_true_errno(_do_bind(fd1, (in_addr_t)htonl(INADDR_LOOPBACK),
+                               (in_port_t)htons(11111)) == 0);
 
-    MYLOG("binding one socket to localhost:11111");
+    g_debug("try to bind the same socket again, which this should fail since we already did bind");
+    g_assert_true(_do_bind(fd1, (in_addr_t)htonl(INADDR_LOOPBACK),
+                           (in_port_t)htons(11111)) == -1);
+    assert_errno_is(EINVAL);
 
-    if(_do_bind(fd1, (in_addr_t) htonl(INADDR_LOOPBACK), (in_port_t) htons(11111)) == EXIT_FAILURE) {
-        MYLOG("unable to bind new socket to localhost:11111");
-        return EXIT_FAILURE;
-    }
+    g_debug("binding a second socket to the same address as the first should fail");
+    g_assert_true(_do_bind(fd2, (in_addr_t)htonl(INADDR_LOOPBACK),
+                           (in_port_t)htons(11111)) == -1);
+    assert_errno_is(EADDRINUSE);
 
-    MYLOG("try to bind the same socket again, which this should fail since we already did bind");
+    g_debug("binding a second socket to ANY with same port as the first should fail");
+    g_assert_true(_do_bind(fd2, (in_addr_t)htonl(INADDR_ANY),
+                           (in_port_t)htons(11111)) == -1);
+    assert_errno_is(EADDRINUSE);
 
-    if(_do_bind(fd1, (in_addr_t) htonl(INADDR_LOOPBACK), (in_port_t) htons(11111)) == EXIT_SUCCESS) {
-        MYLOG("unexpected behavior, binding LOOPBACK socket twice succeeded");
-        return EXIT_FAILURE;
-    } else if(errno != EINVAL) {
-        MYLOG("unexpected behavior, binding LOOPBACK socket twice failed with errno %i but we expected %i (EINVAL)",
-                errno, EINVAL);
-        return EXIT_FAILURE;
-    }
+    g_debug("binding to 0.0.0.0:0 should succeed");
+    assert_true_errno(
+        _do_bind(fd2, (in_addr_t)htonl(INADDR_ANY), (in_port_t)htons(0)) == 0);
 
-    MYLOG("binding a second socket to the same address as the first should fail");
-
-    if(_do_bind(fd2, (in_addr_t) htonl(INADDR_LOOPBACK), (in_port_t) htons(11111)) == EXIT_SUCCESS) {
-        MYLOG("unexpected behavior, binding two sockets to the same LOOPBACK address succeeded");
-        return EXIT_FAILURE;
-    } else if(errno != EADDRINUSE) {
-        MYLOG("unexpected behavior, binding two sockets to the same LOOPBACK address failed with errno %i but we expected %i (EINVAL)",
-                errno, EADDRINUSE);
-        return EXIT_FAILURE;
-    }
-
-    MYLOG("binding a second socket to ANY with same port as the first should fail");
-
-    if(_do_bind(fd2, (in_addr_t) htonl(INADDR_ANY), (in_port_t) htons(11111)) == EXIT_SUCCESS) {
-        MYLOG("unexpected behavior, binding two sockets to LOOPBACK:11111 and ANY:11111 succeeded");
-        return EXIT_FAILURE;
-    } else if(errno != EADDRINUSE) {
-        MYLOG("unexpected behavior, binding two sockets to LOOPBACK:11111 and ANY:11111 failed with errno %i but we expected %i (EADDRINUSE)",
-                errno, EADDRINUSE);
-        return EXIT_FAILURE;
-    }
-
-    MYLOG("binding to 0.0.0.0:0 should succeed");
-
-    if(_do_bind(fd2, (in_addr_t) htonl(INADDR_ANY), (in_port_t) htons(0)) == EXIT_FAILURE) {
-        MYLOG("unable to bind to ANY:0");
-        return EXIT_FAILURE;
-    }
-
-    MYLOG("re-binding a socket bound to 0.0.0.0:0 should fail");
-
-    if(_do_bind(fd2, (in_addr_t) htonl(INADDR_ANY), (in_port_t) htons(22222)) == EXIT_SUCCESS) {
-        MYLOG("unexpected behavior, binding a socket to ANY:0 and then ANY:22222 succeeded");
-        return EXIT_FAILURE;
-    } else if(errno != EINVAL) {
-        MYLOG("unexpected behavior, binding socket to ANY:0 and then ANY:22222 failed with errno %i but we expected %i (EINVAL)",
-                errno, EINVAL);
-        return EXIT_FAILURE;
-    }
+    g_debug("re-binding a socket bound to 0.0.0.0:0 should fail");
+    g_assert_true(_do_bind(fd2, (in_addr_t)htonl(INADDR_ANY),
+                           (in_port_t)htons(22222)) == -1);
+    assert_errno_is(EINVAL);
 
     close(fd1);
     close(fd2);
-
-    return EXIT_SUCCESS;
 }
 
 static int _check_matching_addresses(int fd_server_listen, int fd_server_accept, int fd_client) {
@@ -242,45 +129,39 @@ static int _check_matching_addresses(int fd_server_listen, int fd_server_accept,
     memset(&server_accept_peername, 0, sizeof(struct sockaddr_in));
     memset(&client_peername, 0, sizeof(struct sockaddr_in));
 
-    if(getsockname(fd_server_listen, (struct sockaddr*) &server_listen_sockname, &addr_len) < 0) {
-        MYLOG("getsockname() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(getsockname(fd_server_listen, (struct sockaddr*) &server_listen_sockname, &addr_len) == 0);
 
-    MYLOG("found sockname %s:%i for server listen fd %i", inet_ntoa(server_listen_sockname.sin_addr),
+    g_debug("found sockname %s:%i for server listen fd %i",
+            inet_ntoa(server_listen_sockname.sin_addr),
             (int)server_listen_sockname.sin_port, fd_server_listen);
 
-    if(getsockname(fd_server_accept, (struct sockaddr*) &server_accept_sockname, &addr_len) < 0) {
-        MYLOG("getsockname() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(getsockname(fd_server_accept, (struct sockaddr*) &server_accept_sockname, &addr_len) == 0);
 
-    MYLOG("found sockname %s:%i for server accept fd %i", inet_ntoa(server_accept_sockname.sin_addr),
+    g_debug("found sockname %s:%i for server accept fd %i",
+            inet_ntoa(server_accept_sockname.sin_addr),
             (int)server_accept_sockname.sin_port, fd_server_accept);
 
-    if(getsockname(fd_client, (struct sockaddr*) &client_sockname, &addr_len) < 0) {
-        MYLOG("getsockname() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(getsockname(fd_client, (struct sockaddr*)&client_sockname,
+                                  &addr_len) == 0);
 
-    MYLOG("found sockname %s:%i for client fd %i", inet_ntoa(client_sockname.sin_addr),
-            (int)client_sockname.sin_port, fd_client);
+    g_debug("found sockname %s:%i for client fd %i",
+            inet_ntoa(client_sockname.sin_addr), (int)client_sockname.sin_port,
+            fd_client);
 
-    if(getpeername(fd_server_accept, (struct sockaddr*) &server_accept_peername, &addr_len) < 0) {
-        MYLOG("getpeername() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(getpeername(fd_server_accept,
+                                  (struct sockaddr*)&server_accept_peername,
+                                  &addr_len) == 0);
 
-    MYLOG("found peername %s:%i for server accept fd %i", inet_ntoa(server_accept_peername.sin_addr),
+    g_debug("found peername %s:%i for server accept fd %i",
+            inet_ntoa(server_accept_peername.sin_addr),
             (int)server_accept_peername.sin_port, fd_server_accept);
 
-    if(getpeername(fd_client, (struct sockaddr*) &client_peername, &addr_len) < 0) {
-        MYLOG("getpeername() error was: %s", strerror(errno));
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(getpeername(fd_client, (struct sockaddr*)&client_peername,
+                                  &addr_len) == 0);
 
-    MYLOG("found peername %s:%i for client fd %i", inet_ntoa(client_peername.sin_addr),
-            (int)client_peername.sin_port, fd_client);
+    g_debug("found peername %s:%i for client fd %i",
+            inet_ntoa(client_peername.sin_addr), (int)client_peername.sin_port,
+            fd_client);
 
     /*
      * the following should hold on linux:
@@ -288,170 +169,86 @@ static int _check_matching_addresses(int fd_server_listen, int fd_server_accept,
      *   + accept socket port == client peer port
      *   + accept socket addr == client peer addr
      *   + client socket addr == accepted peer addr
-     *   + client socket pot != accepted peer ports
+     *   + client socket port != accepted peer ports
      */
 
-    if(server_listen_sockname.sin_port != server_accept_sockname.sin_port) {
-        MYLOG("expected server listener and accepted socket ports to match but they didn't");
-        return EXIT_FAILURE;
-    }
-
-    if(server_accept_sockname.sin_port != client_peername.sin_port) {
-        MYLOG("expected server accepted socket port to match client peer port but they didn't");
-        return EXIT_FAILURE;
-    }
-
-    if(server_accept_sockname.sin_addr.s_addr != client_peername.sin_addr.s_addr) {
-        MYLOG("expected server accepted socket addr to match client peer addr but they didn't");
-        return EXIT_FAILURE;
-    }
-
-    if(client_sockname.sin_addr.s_addr != server_accept_peername.sin_addr.s_addr) {
-        MYLOG("expected client socket addr to match server accepted peer addr but they didn't");
-        return EXIT_FAILURE;
-    }
-
-    if(client_sockname.sin_port == server_accept_peername.sin_port) {
-        MYLOG("expected client socket port NOT to match server accepted peer port but they did");
-        return EXIT_FAILURE;
-    }
+    g_assert_cmpint(server_listen_sockname.sin_port,==,server_accept_sockname.sin_port);
+    g_assert_cmpint(server_accept_sockname.sin_port,==,client_peername.sin_port);
+    g_assert_cmpint(server_accept_sockname.sin_addr.s_addr,==,client_peername.sin_addr.s_addr);
+    g_assert_cmpint(client_sockname.sin_addr.s_addr,==,server_accept_peername.sin_addr.s_addr);
+    g_assert_cmpint(client_sockname.sin_port,!=,server_accept_peername.sin_port);
 
     return EXIT_SUCCESS;
 }
 
-static int _test_implicit_bind(int socket_type) {
+static void _test_implicit_bind(gconstpointer gp) {
+    int socket_type = GPOINTER_TO_INT(gp);
     int fd1 = 0, fd2 = 0, fd3 = 0;
     struct sockaddr_in clientaddr;
     struct sockaddr_in serveraddr;
     socklen_t addr_len = sizeof(struct sockaddr_in);
     memset(&serveraddr, 0, sizeof(struct sockaddr_in));
 
-    MYLOG("creating sockets");
+    g_debug("creating sockets");
+    assert_true_errno((fd1 = socket(AF_INET, socket_type, 0)) >= 0);
+    assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
-    if(_do_socket(socket_type, &fd1) == EXIT_FAILURE) {
-        MYLOG("unable to create socket");
-        return EXIT_FAILURE;
-    }
+    g_debug("listening on server socket with implicit bind");
+    assert_true_errno(listen(fd1, 0) == 0);
 
-    if(_do_socket(socket_type, &fd2) == EXIT_FAILURE) {
-        MYLOG("unable to create socket");
-        return EXIT_FAILURE;
-    }
-
-    MYLOG("listening on server socket with implicit bind");
-
-    if(_do_listen(fd1) == EXIT_FAILURE) {
-        MYLOG("unable to listen on server socket");
-        return EXIT_FAILURE;
-    } else {
-        if(getsockname(fd1, (struct sockaddr*) &serveraddr, &addr_len) < 0) {
-            MYLOG("getsockname() error was: %s", strerror(errno));
-            return EXIT_FAILURE;
-        }
-    }
-
-    if(serveraddr.sin_addr.s_addr != htonl(INADDR_ANY)) {
-        MYLOG("unexpected behavior, server socket was not implicitly bound to 0.0.0.0");
-        return EXIT_FAILURE;
-    }
+    assert_true_errno(
+        getsockname(fd1, (struct sockaddr*)&serveraddr, &addr_len) >= 0);
+    g_assert_cmpint(serveraddr.sin_addr.s_addr,==,htonl(INADDR_ANY));
 
     // FIXME start
     // on ubuntu, the firewall 'ufw' blocks the remaining tests from succeeding
     // ufw auto-blocks 0.0.0.0 and 127.0.0.1, and can't seem to be made to allow it
     // so we bail out early until we have a fix
     close(fd1);
-    return EXIT_SUCCESS;
+    return;
     // FIXME end
 
-    MYLOG("connecting client socket to server at 0.0.0.0");
-
-    if(_do_connect(fd2, &serveraddr) == EXIT_FAILURE) {
-        MYLOG("unexpected behavior, client should be able to connect to 0.0.0.0");
-        return EXIT_FAILURE;
-    }
+    g_debug("connecting client socket to server at 0.0.0.0");
+    assert_true_errno(_do_connect(fd2, &serveraddr) == 0);
 
     close(fd2);
     fd2 = 0;
-    if(_do_socket(socket_type, &fd2) == EXIT_FAILURE) {
-        MYLOG("unable to create socket");
-        return EXIT_FAILURE;
-    }
+    assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
-    MYLOG("connecting client socket to server at 127.0.0.1");
-
+    g_debug("connecting client socket to server at 127.0.0.1");
     serveraddr.sin_addr.s_addr = (in_addr_t) htonl(INADDR_LOOPBACK);
+    assert_true_errno(_do_connect(fd2, &serveraddr) == 0);
 
-    if(_do_connect(fd2, &serveraddr) == EXIT_FAILURE) {
-        MYLOG("unable to connect to server at 127.0.0.1:%i", (int)ntohs(serveraddr.sin_port));
-        return EXIT_FAILURE;
-    }
+    g_debug("accepting client connection");
+    assert_true_errno((fd3 = _do_accept(fd1)) >= 0);
 
-    MYLOG("accepting client connection");
-
-    if(_do_accept(fd1, &fd3) == EXIT_FAILURE) {
-        MYLOG("unable to accept client connection");
-        return EXIT_FAILURE;
-    }
-
-    MYLOG("checking that server and client addresses match");
-
-    if(_check_matching_addresses(fd1, fd3, fd2) == EXIT_FAILURE) {
-        return EXIT_FAILURE;
-    }
+    g_debug("checking that server and client addresses match");
+    g_assert_true(_check_matching_addresses(fd1, fd3, fd2) == EXIT_SUCCESS);
 
     close(fd1);
     close(fd2);
     close(fd3);
-
-    return EXIT_SUCCESS;
 }
 
 int main(int argc, char* argv[]) {
-    fprintf(stdout, "########## bind test starting ##########\n");
+    g_test_init(&argc, &argv, NULL);
 
-    fprintf(stdout, "########## running test: _test_explicit_bind(SOCK_STREAM)\n");
+    g_test_add_data_func("/bind/explicit_bind_stream",
+                         GUINT_TO_POINTER(SOCK_STREAM), &_test_explicit_bind);
+    g_test_add_data_func("/bind/explicit_bind_stream_nonblock",
+                         GUINT_TO_POINTER(SOCK_STREAM | SOCK_NONBLOCK),
+                         &_test_explicit_bind);
+    g_test_add_data_func("/bind/explicit_bind_dgram",
+                         GUINT_TO_POINTER(SOCK_DGRAM), &_test_explicit_bind);
+    g_test_add_data_func("/bind/explicit_bind_dgram_nonblock",
+                         GUINT_TO_POINTER(SOCK_DGRAM | SOCK_NONBLOCK),
+                         &_test_explicit_bind);
 
-    if(_test_explicit_bind(SOCK_STREAM) == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_explicit_bind(SOCK_STREAM) failed\n");
-        return EXIT_FAILURE;
-    }
-
-    fprintf(stdout, "########## running test: _test_explicit_bind(SOCK_STREAM|SOCK_NONBLOCK)\n");
-
-    if(_test_explicit_bind(SOCK_STREAM|SOCK_NONBLOCK) == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_explicit_bind(SOCK_STREAM|SOCK_NONBLOCK) failed\n");
-        return EXIT_FAILURE;
-    }
-
-    fprintf(stdout, "########## running test: _test_explicit_bind(SOCK_DGRAM)\n");
-
-    if(_test_explicit_bind(SOCK_DGRAM) == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_explicit_bind(SOCK_DGRAM) failed\n");
-        return EXIT_FAILURE;
-    }
-
-    fprintf(stdout, "########## running test: _test_explicit_bind(SOCK_DGRAM|SOCK_NONBLOCK)\n");
-
-    if(_test_explicit_bind(SOCK_DGRAM|SOCK_NONBLOCK) == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_explicit_bind(SOCK_DGRAM|SOCK_NONBLOCK) failed\n");
-        return EXIT_FAILURE;
-    }
-
-    fprintf(stdout, "########## running test: _test_implicit_bind(SOCK_STREAM)\n");
-
-    if(_test_implicit_bind(SOCK_STREAM) == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_implicit_bind(SOCK_STREAM) failed\n");
-        return EXIT_FAILURE;
-    }
-
-    fprintf(stdout, "########## running test: _test_implicit_bind(SOCK_STREAM|SOCK_NONBLOCK)\n");
-
-    if(_test_implicit_bind(SOCK_STREAM|SOCK_NONBLOCK) == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_implicit_bind(SOCK_STREAM|SOCK_NONBLOCK) failed\n");
-        return EXIT_FAILURE;
-    }
-
-    fprintf(stdout, "########## bind test passed! ##########\n");
-
+    g_test_add_data_func("/bind/implicit_bind_stream",
+                         GUINT_TO_POINTER(SOCK_STREAM), &_test_implicit_bind);
+    g_test_add_data_func("/bind/implicit_bind_stream_nonblock",
+                         GUINT_TO_POINTER(SOCK_STREAM | SOCK_NONBLOCK),
+                         &_test_implicit_bind);
+    g_test_run();
     return EXIT_SUCCESS;
 }
