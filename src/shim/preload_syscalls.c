@@ -42,7 +42,8 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* ev) {
     shim_disableInterposition();
 
     const int fd = shim_thisThreadEventFD();
-    debug("sending event on %d\n", fd);
+    debug("sending syscall event %ld on %d\n",
+          ev->event_data.syscall.syscall_args.number, fd);
     shimevent_sendEvent(fd, ev);
 
     shim_shmemLoop(fd);
@@ -51,10 +52,20 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* ev) {
     ShimEvent res;
     shimevent_recvEvent(fd, &res);
     debug("got response on %d\n", fd);
-    assert(res.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
-
+    SysCallReg rv;
+    if (res.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE) {
+        rv = res.event_data.syscall_complete.retval;
+    } else if (res.event_id == SHD_SHIM_EVENT_SYSCALL_DO_NATIVE) {
+        const SysCallReg* regs = ev->event_data.syscall.syscall_args.args;
+        rv.as_i64 =
+            _real_syscall(ev->event_data.syscall.syscall_args.number,
+                          regs[0].as_u64, regs[1].as_u64, regs[2].as_u64,
+                          regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
+    } else {
+        error("Got unexpected event %d", res.event_id);
+    }
     shim_enableInterposition();
-    return res.event_data.syscall_complete.retval;
+    return rv;
 }
 
 static long _shadow_syscall(ShimEvent* event) {
@@ -84,10 +95,13 @@ long syscall(long n, ...) {
 // the syscall `sysname`.
 #define REMAP(type, fnname, sysname, params, ...)                              \
     type fnname params {                                                       \
-        if (shim_interpositionEnabled())                                       \
+        if (shim_interpositionEnabled()) {                                     \
+            debug("Making interposed syscall " #sysname);                      \
             return (type)syscall(SYS_##sysname, __VA_ARGS__);                  \
-        else                                                                   \
+        } else {                                                               \
+            debug("Making real syscall " #sysname);                            \
             return (type)_real_syscall(SYS_##sysname, __VA_ARGS__);            \
+        }                                                                      \
     }
 
 // Specialization of REMAP for defining a function `fnname` that invokes a
