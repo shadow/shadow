@@ -4,11 +4,10 @@
 /*
  * A simple logger API.
  *
- * By default this simply wraps glib's logging functionality. However, it also
- * supports overriding with a custom Logger.  Unlike in glib, when a custom
- * Logger is supplied, it's that logger's job to do any necessary
- * synchronization. This allows us to use a custom Logger in Shadow that avoids
- * a global lock.
+ * By default this simply writes to stderr. However, it also supports
+ * overriding with a custom Logger.  Unlike in glib, when a custom Logger is
+ * supplied, it's that logger's job to do any necessary synchronization. This
+ * allows us to use a custom Logger in Shadow that avoids a global lock.
  */
 
 #include <glib.h>
