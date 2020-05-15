@@ -271,30 +271,35 @@ void threadpreload_resume(Thread* base) {
                     thread->sys,
                     &thread->currentEvent.event_data.syscall.syscall_args);
 
-                if (result.state == SYSCALL_RETURN_NATIVE) {
-                    // FIXME: SYSCALL_RETURN_NATIVE unhandled, and we might want
-                    // it e.g. for a read that turns out to be to a file rather
-                    // than a socket.
-                } else if (result.state == SYSCALL_RETURN_BLOCKED) {
+                if (result.state == SYSCALL_RETURN_BLOCKED) {
                     blocked = true;
-                } else if (result.state == SYSCALL_RETURN_DONE) {
-                    _threadpreload_flushReads(thread);
-                    _threadpreload_flushWrites(thread);
+                    break;
+                }
 
-                    // We've handled the syscall, so we notify that we are done
-                    // with shmem IPC
-                    ShimEvent ipc_complete_ev = {
-                        .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
-                    };
+                _threadpreload_flushReads(thread);
+                _threadpreload_flushWrites(thread);
 
-                    shimevent_sendEvent(thread->eventFD, &ipc_complete_ev);
+                // We've handled the syscall, so we notify that we are done
+                // with shmem IPC
+                ShimEvent ipc_complete_ev = {
+                    .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
+                };
 
+                shimevent_sendEvent(thread->eventFD, &ipc_complete_ev);
+
+                ShimEvent shim_result;
+                if (result.state == SYSCALL_RETURN_DONE) {
                     // Now send the result of the syscall
-                    ShimEvent shim_result = {
+                    shim_result = (ShimEvent){
                         .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
                         .event_data.syscall_complete.retval = result.retval};
-                    shimevent_sendEvent(thread->eventFD, &shim_result);
+                } else if (result.state == SYSCALL_RETURN_NATIVE) {
+                    // Tell the shim to make the syscall itself
+                    shim_result = (ShimEvent){
+                        .event_id = SHD_SHIM_EVENT_SYSCALL_DO_NATIVE,
+                    };
                 }
+                shimevent_sendEvent(thread->eventFD, &shim_result);
                 break;
             }
             case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {

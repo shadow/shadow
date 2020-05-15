@@ -697,7 +697,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(bind);
         // Test coverage: test/file
         NATIVE(fstat);
-        // Test coverage: test/determinism
+        // Test coverage: test/unistd
         NATIVE(getpid);
         // Test coverage: test/file (via open(3))
         NATIVE(openat);
@@ -707,7 +707,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(sendto);
         // Test coverage: test/udp
         NATIVE(socket);
-        // Test coverage: test/determinism (via gethostname(2))
+        // Test coverage: test/unistd
         NATIVE(uname);
 
         // **************************************
