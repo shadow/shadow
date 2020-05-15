@@ -21,7 +21,7 @@
   <kill time="300"/>
   <plugin id="testtcp" path="libshadow-plugin-test-tcp.so"/>
   <node id="tcptestnode" >
-    <application plugin="testtcp" time="1" arguments="blocking $QUEUE server" />
-    <application plugin="testtcp" time="2" arguments="blocking $QUEUE client localhost" />
+    <application plugin="testtcp" time="1" arguments="blocking server" />
+    <application plugin="testtcp" time="2" arguments="blocking client localhost" />
   </node >
 </shadow>

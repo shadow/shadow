@@ -25,7 +25,7 @@
 
 #include "test/test_glib_helpers.h"
 
-#define USAGE "USAGE: 'shd-test-tcp iomode queuename type'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') queuname=(filename) type=('client' server_ip|'server')"
+#define USAGE "USAGE: 'shd-test-tcp iomode type'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server')"
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 #define BUFFERSIZE 20000
 #define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
@@ -814,13 +814,13 @@ int main(int argc, char *argv[]) {
 
     MYLOG("program started; %s", USAGE);
 
-    if(argc < 4) {
+    if(argc < 3) {
         MYLOG("error, iomode and type not specified in args; see usage");
         return -1;
     }
 
     const char *io_mode = argv[1];
-    const char *execution_mode = argv[3];
+    const char *execution_mode = argv[2];
     iowait_func wait = NULL;
     int use_iov = 0;
     int message_queue = get_msgqueue();
@@ -843,12 +843,12 @@ int main(int argc, char *argv[]) {
 
     int result = 0;
     if(strncasecmp(execution_mode, "client", 5) == 0) {
-        if(argc < 5) {
+        if(argc < 4) {
             MYLOG("error, client mode also needs a server ip address; see usage");
             return -1;
         }
         MYLOG("running client in mode %s", io_mode);
-        result = _run_client(wait, argv[4], use_iov, message_queue);
+        result = _run_client(wait, argv[3], use_iov, message_queue);
     } else if(strncasecmp(execution_mode, "server", 6) == 0) {
         MYLOG("running server in mode %s", io_mode);
         result = _run_server(wait, use_iov, message_queue);

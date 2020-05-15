@@ -13,7 +13,7 @@ add_executable(test-tcp test_tcp.c)
 ## these also test localhost instead of 127.0.0.1 in the loopback tests
 add_test(
     NAME tcp-blocking-loopback
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ../shadow-test-launcher test-tcp blocking $QUEUE server : test-tcp blocking $QUEUE client localhost
+    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ../shadow-test-launcher test-tcp blocking server : test-tcp blocking client localhost
 )
 add_test(
     NAME tcp-blocking-loopback-shadow
@@ -31,7 +31,7 @@ add_test(
 ## tcp nonblocking poll - loopback, lossless and lossy
 add_test(
     NAME tcp-nonblocking-poll-loopback
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ../shadow-test-launcher test-tcp nonblocking-poll $QUEUE server : test-tcp nonblocking-poll $QUEUE client 127.0.0.1
+    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ../shadow-test-launcher test-tcp nonblocking-poll server : test-tcp nonblocking-poll client 127.0.0.1
 )
 add_test(
     NAME tcp-nonblocking-poll-loopback-shadow
@@ -49,7 +49,7 @@ add_test(
 ## tcp nonblocking epoll - loopback, lossless and lossy
 add_test(
     NAME tcp-nonblocking-epoll-loopback
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ../shadow-test-launcher test-tcp nonblocking-epoll $QUEUE server : test-tcp nonblocking-epoll $QUEUE client 127.0.0.1
+    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ../shadow-test-launcher test-tcp nonblocking-epoll server : test-tcp nonblocking-epoll client 127.0.0.1
 )
 add_test(
     NAME tcp-nonblocking-epoll-loopback-shadow
@@ -67,7 +67,7 @@ add_test(
 ## tcp nonblocking select - loopback, lossless and lossy
 add_test(
     NAME tcp-nonblocking-select-loopback
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ../shadow-test-launcher test-tcp nonblocking-select $QUEUE server : test-tcp nonblocking-select $QUEUE client 127.0.0.1
+    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ../shadow-test-launcher test-tcp nonblocking-select server : test-tcp nonblocking-select client 127.0.0.1
 )
 add_test(
     NAME tcp-nonblocking-select-loopback-shadow
@@ -84,7 +84,7 @@ add_test(
 
 add_test(
     NAME tcp-iov
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ../shadow-test-launcher test-tcp iov $QUEUE server : test-tcp iov $QUEUE client 127.0.0.1
+    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ../shadow-test-launcher test-tcp iov server : test-tcp iov client 127.0.0.1
 )
 add_test(
     NAME tcp-iov-shadow

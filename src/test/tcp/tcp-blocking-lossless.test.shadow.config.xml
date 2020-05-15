@@ -21,9 +21,9 @@
   <kill time="300"/>
   <plugin id="testtcp" path="libshadow-plugin-test-tcp.so"/>
   <node id="lossless.tcpserver.echo" >
-    <application plugin="testtcp" time="1" arguments="blocking $QUEUE server" />
+    <application plugin="testtcp" time="1" arguments="blocking server" />
   </node >
   <node id="lossless.tcpclient.echo" >
-    <application plugin="testtcp" time="2" arguments="blocking $QUEUE client lossless.tcpserver.echo" />
+    <application plugin="testtcp" time="2" arguments="blocking client lossless.tcpserver.echo" />
   </node >
 </shadow>
