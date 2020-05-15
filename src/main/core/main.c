@@ -214,7 +214,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
                 SHADOW_INFO_STRING);
 
         if (options_shouldExitAfterShmCleanup(options)) {
-            shmemcleanup_tryCleanup(false);
+            shmemcleanup_tryCleanup();
         }
 
         options_free(options);
@@ -230,7 +230,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     shadow_logger_setEnableBuffering(shadowLogger, FALSE);
 
     // before we run the simluation, clean up any orphaned shared memory
-    shmemcleanup_tryCleanup(true);
+    shmemcleanup_tryCleanup();
 
     gint returnCode = _main_helper(options);
 

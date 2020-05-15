@@ -18,18 +18,6 @@
 static const char* SHM_DIR = "/dev/shm";
 
 /*
- * Helper logging macro. We use this because at this point we don't know if
- * the logging module is initialized.
- */
-#define SHMEMCLEANUP_LOG(USE_SHADOW_LOGGING, LOG_LEVEL, ...)                   \
-    if (USE_SHADOW_LOGGING) {                                                  \
-        logger_log(logger_getDefault(), LOG_LEVEL, __FILE__, __FUNCTION__,     \
-                   __LINE__, __VA_ARGS__);                                     \
-    } else {                                                                   \
-        g_printerr(__VA_ARGS__);                                               \
-    }
-
-/*
  * POST: returns a pointer to hash table that contains int-valued PIDs for
  * running processes on the system, or NULL if this table could not be created.
  * Caller owns the table and is responsible for cleanup (use
@@ -76,8 +64,7 @@ static GHashTable* _shmemcleanup_getProcSet() {
  * Returns if the remove was successful or not.
  */
 static bool _shmemcleanup_unlinkIfShadow(const char* filename,
-                                         GHashTable* proc_set,
-                                         bool use_shadow_logging) {
+                                         GHashTable* proc_set) {
     bool did_remove = false;
 
     char name_buf[SHD_SHMEM_FILE_NAME_NBYTES];
@@ -103,10 +90,7 @@ static bool _shmemcleanup_unlinkIfShadow(const char* filename,
         strncpy(name_buf + 1, filename, SHD_SHMEM_FILE_NAME_NBYTES - 1);
         int rc = shm_unlink(name_buf);
         if (rc == 0) {
-            SHMEMCLEANUP_LOG(use_shadow_logging, LOGLEVEL_INFO,
-                             "[Shared Memory Cleanup] Removing orphaned shared "
-                             "memory file: %s\n",
-                             name_buf);
+            info("Removing orphaned shared memory file: %s\n", name_buf);
             did_remove = true;
         }
     }
@@ -114,7 +98,7 @@ static bool _shmemcleanup_unlinkIfShadow(const char* filename,
     return did_remove;
 }
 
-void shmemcleanup_tryCleanup(bool use_shadow_logging) {
+void shmemcleanup_tryCleanup() {
 
     GHashTable* proc_set = _shmemcleanup_getProcSet();
 
@@ -122,10 +106,8 @@ void shmemcleanup_tryCleanup(bool use_shadow_logging) {
         return;
     }
 
-    SHMEMCLEANUP_LOG(
-        use_shadow_logging, LOGLEVEL_INFO,
-        "[Shared Memory Cleanup] Num. processes in system's procfs: %u\n",
-        g_hash_table_size(proc_set));
+    info(
+        "Num. processes in system's procfs: %u\n", g_hash_table_size(proc_set));
 
     // If we can get a list of running processes on the machine, iterate
     // through the files in shared memory and try to remove them.
@@ -140,7 +122,7 @@ void shmemcleanup_tryCleanup(bool use_shadow_logging) {
 
         while (ent) {
             bool did_remove = _shmemcleanup_unlinkIfShadow(
-                ent->d_name, proc_set, use_shadow_logging);
+                ent->d_name, proc_set);
 
             if (did_remove) {
                 ++n_removed;
@@ -151,10 +133,7 @@ void shmemcleanup_tryCleanup(bool use_shadow_logging) {
         closedir(dir);
     }
 
-    SHMEMCLEANUP_LOG(
-        use_shadow_logging, LOGLEVEL_INFO,
-        "[Shared Memory Cleanup] Num. removed shared memory files: %zu\n",
-        n_removed);
+    info("Num. removed shared memory files: %zu\n", n_removed);
 
     g_hash_table_destroy(proc_set);
 }
