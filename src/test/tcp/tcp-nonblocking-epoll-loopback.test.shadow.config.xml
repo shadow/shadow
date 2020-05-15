@@ -22,6 +22,6 @@
   <plugin id="testtcp" path="libshadow-plugin-test-tcp.so"/>
   <node id="tcptestnode" >
     <application plugin="testtcp" time="1" arguments="nonblocking-epoll server" />
-    <application plugin="testtcp" time="2" arguments="nonblocking-epoll client 127.0.0.1 " />
+    <application plugin="testtcp" time="2" arguments="nonblocking-epoll client 127.0.0.1" />
   </node >
 </shadow>
