@@ -19,6 +19,8 @@
 #include "main/core/support/configuration.h"
 #include "main/core/support/options.h"
 #include "main/utility/utility.h"
+#include "main/shmem/shmem_cleanup.h"
+#include "igraph_version.h"
 #include "shd-config.h"
 #include "support/logger/logger.h"
 
@@ -196,8 +198,11 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         return EXIT_FAILURE;
     }
 
-    /* if they just want the shadow version, print it and exit */
-    if(options_doRunPrintVersion(options)) {
+
+    // If we are just printing the version or running a cleanup+exit,
+    // then print the version, cleanup if requested, and exit with success.
+    if (options_doRunPrintVersion(options) ||
+        options_shouldExitAfterShmCleanup(options)) {
         g_printerr("%s running GLib v%u.%u.%u and IGraph v%s\n%s\n",
                 SHADOW_VERSION_STRING,
                 (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
@@ -207,6 +212,11 @@ gint main_runShadow(gint argc, gchar* argv[]) {
                 "(n/a)",
 #endif
                 SHADOW_INFO_STRING);
+
+        if (options_shouldExitAfterShmCleanup(options)) {
+            shmemcleanup_tryCleanup();
+        }
+
         options_free(options);
         return EXIT_SUCCESS;
     }
@@ -218,6 +228,9 @@ gint main_runShadow(gint argc, gchar* argv[]) {
 
     /* disable buffering during startup so that we see every message immediately in the terminal */
     shadow_logger_setEnableBuffering(shadowLogger, FALSE);
+
+    // before we run the simluation, clean up any orphaned shared memory
+    shmemcleanup_tryCleanup();
 
     gint returnCode = _main_helper(options);
 

@@ -138,7 +138,7 @@ static int _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
                                     char* const argv[], char* const envp[],
                                     int stderrFD, int stdoutFD) {
     int rc = 0;
-    pid_t pid = fork();
+    pid_t pid = vfork();
 
     switch (pid) {
         case -1:
