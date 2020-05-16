@@ -29,6 +29,7 @@ struct _Options {
     gboolean debug;
     gchar* dataDirPath;
     gchar* dataTemplatePath;
+    gboolean shouldExitAfterShmCleanup;
 
     GOptionGroup* networkOptionGroup;
     gint cpuThreshold;
@@ -82,10 +83,13 @@ Options* options_new(gint argc, gchar* argv[]) {
     options->cpuThreshold = -1;
     options->cpuPrecision = 200;
     options->heartbeatInterval = 1;
+    options->shouldExitAfterShmCleanup = FALSE;
 
     /* set options to change defaults for the main group */
     options->mainOptionGroup = g_option_group_new("main", "Main Options", "Primary simulator options", NULL, NULL);
     const GOptionEntry mainEntries[] = {
+        {"exit-after-shm-cleanup", 'c', 0, G_OPTION_ARG_NONE, &(options->shouldExitAfterShmCleanup),
+         "Exit after running shared memory cleanup routine.", NULL},
         {"data-directory", 'd', 0, G_OPTION_ARG_STRING, &(options->dataDirPath),
          "PATH to store simulation output ['shadow.data']", "PATH"},
         {"data-template", 'e', 0, G_OPTION_ARG_STRING,
@@ -190,10 +194,12 @@ Options* options_new(gint argc, gchar* argv[]) {
     /* make sure we have the required arguments. program name is first arg.
      * printing the software version requires no other args. running a
      * plug-in example also requires no other args. */
-    if(!(options->printSoftwareVersion) && !(options->runTGenExample) &&
-            !(options->runTestExample) && (argc != nRequiredXMLFiles + 1)) {
+    if (!(options->printSoftwareVersion) &&
+        !(options->shouldExitAfterShmCleanup) && !(options->runTGenExample) &&
+        !(options->runTestExample) && (argc != nRequiredXMLFiles + 1)) {
         g_printerr("** Please provide the required parameters **\n");
-        gchar* helpString = g_option_context_get_help(options->context, TRUE, NULL);
+        gchar* helpString =
+            g_option_context_get_help(options->context, TRUE, NULL);
         g_printerr("%s", helpString);
         g_free(helpString);
         options_free(options);
@@ -398,6 +404,11 @@ gboolean options_doRunValgrind(Options* options) {
 gboolean options_doRunDebug(Options* options) {
     MAGIC_ASSERT(options);
     return options->debug;
+}
+
+gboolean options_shouldExitAfterShmCleanup(Options* options) {
+    MAGIC_ASSERT(options);
+    return options->shouldExitAfterShmCleanup;
 }
 
 gboolean options_doRunTGenExample(Options* options) {

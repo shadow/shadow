@@ -109,6 +109,7 @@ const gchar* options_getHeartbeatLogInfoString(Options* options);
 const gchar* options_getPreloadString(Options* options);
 guint options_getRandomSeed(Options* options);
 
+gboolean options_shouldExitAfterShmCleanup(Options* options);
 gboolean options_doRunPrintVersion(Options* options);
 gboolean options_doRunValgrind(Options* options);
 gboolean options_doRunDebug(Options* options);
