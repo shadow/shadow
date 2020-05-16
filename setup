@@ -223,20 +223,11 @@ def build(args):
     return retcode
 
 def test(args):
-    builddir=getfullpath(BUILD_PREFIX)
+    testdir=getfullpath(BUILD_PREFIX)
 
-    # run the shadow tests
-    retcode = run_tests(builddir, args)
-
-    if retcode != 0:
-        logging.warning("Failed to pass all test cases!")
-
-    return retcode
-
-def run_tests(testdir, args):
     if not os.path.exists(testdir+'/CTestTestfile.cmake'):
         logging.error("please run './setup build --test' before testing!")
-        return
+        return -1
 
     # go to build dir and install from makefile
     calledDirectory = os.getcwd()
@@ -259,7 +250,7 @@ def install(args):
     builddir=getfullpath(BUILD_PREFIX)
     if not os.path.exists(builddir):
         logging.error("please build before installing!")
-        return
+        return -1
 
     # go to build dir and install from makefile
     calledDirectory = os.getcwd()

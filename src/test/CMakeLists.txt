@@ -34,6 +34,7 @@ add_subdirectory(sleep)
 # FIXME add_subdirectory(tcp)
 # FIXME add_subdirectory(timerfd)
 # FIXME add_subdirectory(udp)
+add_subdirectory(unistd)
 
 ## grep the LastTest.log.tmp file for the counter diff lines, and make sure
 ## that each such line matches the line in src/test/leakcheck.log

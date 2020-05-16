@@ -11,6 +11,3 @@ add_test(NAME epoll-shadow-ptrace COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --
 
 # TODO: re-enable this test once the corresponding socket functions are supported
 #add_test(NAME epoll-writeable-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d epoll-writeable.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/epoll-writeable.test.shadow.config.xml)
-
-# TODO: See https://github.com/shadow/shadow/issues/756
-#set_tests_properties(epoll-writeable-shadow PROPERTIES TIMEOUT 200)

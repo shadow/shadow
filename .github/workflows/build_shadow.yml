@@ -43,6 +43,14 @@ jobs:
       - name: Test
         run: python setup test
 
+      - name: Upload shadow logs
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: shadow-data
+          path: build/**/*shadow.data/*
+
+
 # FIXME
 #  shadow-plugin-tor-ci:
 #    runs-on: ubuntu-latest
@@ -81,7 +89,7 @@ jobs:
 #        run: shadow-plugin-tor/tools/continuous_integration_test.sh
 #
 #      - name: Upload simulation logs
-#        uses: actions/upload-artifact@v1
+#        uses: actions/upload-artifact@v2
 #        if: failure()
 #        with:
 #          name: simulation-output

@@ -526,6 +526,8 @@ static void _process_notifyStatusChanged(gpointer object, gpointer argument) {
     ProcessWaiter* waiter = argument;
     MAGIC_ASSERT(proc);
 
+    const gchar* sysname = host_getName(proc->host);
+
 #ifdef DEBUG
     _process_logListeningState(proc, waiter, 0);
 #endif
