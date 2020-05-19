@@ -1,6 +1,7 @@
 #include "support/logger/logger.h"
 
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <sys/time.h>
 
@@ -15,22 +16,38 @@ void logger_setDefault(Logger* logger) {
 
 Logger* logger_getDefault() { return defaultLogger; }
 
-// Process start time, initialized on first use.
-// TODO: Parse out of /proc/$$/stat instead to get the true process start time.
-static pthread_once_t _start_time_init_once = PTHREAD_ONCE_INIT;
+// Process start time, initialized explicitly or on first use.
+static pthread_mutex_t _start_time_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool _start_time_initd = false;
 static struct timeval _start_time;
 static void _init_start_time() { gettimeofday(&_start_time, NULL); }
-static const struct timeval* _get_start_time() {
-    pthread_once(&_start_time_init_once, _init_start_time);
-    return &_start_time;
+
+struct timeval logger_get_global_start_time() {
+    pthread_mutex_lock(&_start_time_mutex);
+    if (!_start_time_initd) {
+        // TODO: Parse out of /proc/$$/stat instead to get the true process
+        // start time.
+        gettimeofday(&_start_time, NULL);
+        _start_time_initd = true;
+    }
+    struct timeval start_time = _start_time;
+    pthread_mutex_unlock(&_start_time_mutex);
+    return start_time;
+}
+
+void logger_set_global_start_time(const struct timeval* t) {
+    pthread_mutex_lock(&_start_time_mutex);
+    _start_time = *t;
+    _start_time_initd = true;
+    pthread_mutex_unlock(&_start_time_mutex);
 }
 
 static struct timeval _elapsed() {
-    const struct timeval* start_time = _get_start_time();
+    const struct timeval start_time = logger_get_global_start_time();
     struct timeval now;
     gettimeofday(&now, NULL);
     struct timeval elapsed;
-    timersub(&now, start_time, &elapsed);
+    timersub(&now, &start_time, &elapsed);
     return elapsed;
 }
 
