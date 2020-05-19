@@ -60,4 +60,13 @@ void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
                 const gchar* functionName, const gint lineNumber,
                 const gchar* format, ...);
 
+// Logger implementations should use this to get the logging "start" time.
+// This ensures consistency when switching loggers, and enables us to
+// synchronize loggers across processes.
+struct timeval logger_get_global_start_time();
+
+// Set the global start time used in log messages. If this isn't called, the
+// start time will be set to the current time the first time it's accessed.
+void logger_set_global_start_time(const struct timeval* t);
+
 #endif
