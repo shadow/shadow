@@ -20,7 +20,6 @@ Logger* logger_getDefault() { return defaultLogger; }
 static pthread_mutex_t _start_time_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool _start_time_initd = false;
 static struct timeval _start_time;
-static void _init_start_time() { gettimeofday(&_start_time, NULL); }
 
 struct timeval logger_get_global_start_time() {
     pthread_mutex_lock(&_start_time_mutex);
@@ -42,7 +41,7 @@ void logger_set_global_start_time(const struct timeval* t) {
     pthread_mutex_unlock(&_start_time_mutex);
 }
 
-static struct timeval _elapsed() {
+struct timeval logger_get_global_elapsed_time() {
     const struct timeval start_time = logger_get_global_start_time();
     struct timeval now;
     gettimeofday(&now, NULL);
@@ -58,7 +57,7 @@ static void _logger_default_log(LogLevel level, const gchar* fileName,
     gchar* message = g_strdup_vprintf(format, vargs);
     gchar* baseName = g_path_get_basename(fileName);
 
-    struct timeval tv = _elapsed();
+    struct timeval tv = logger_get_global_elapsed_time();
     struct tm tm;
     gmtime_r(&tv.tv_sec, &tm);
     gchar* timeString = g_strdup_printf("%02d:%02d:%02d.%06ld", tm.tm_hour,
