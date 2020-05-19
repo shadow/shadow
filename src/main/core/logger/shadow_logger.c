@@ -25,7 +25,6 @@ typedef struct _LoggerThreadData LoggerThreadData;
 struct _LoggerThreadData {
     /* keep wall time without relying on main logger data */
     GTimer* runTimer;
-    gdouble loggerRunOffset;
 
     /* local temporary store for this threads log records */
     GQueue* localRecordBundle;
@@ -67,7 +66,6 @@ static LoggerThreadData* _loggerthreaddata_new(GTimer* loggerTimer) {
     MAGIC_INIT(threadData);
 
     threadData->runTimer = g_timer_new();
-    threadData->loggerRunOffset = g_timer_elapsed(loggerTimer, NULL);
 
     threadData->localRecordBundle = g_queue_new();
     threadData->remoteLogHelperMailbox = g_async_queue_new();
