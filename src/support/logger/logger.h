@@ -60,19 +60,21 @@ void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
                 const gchar* functionName, const gint lineNumber,
                 const gchar* format, ...);
 
-// Returns an agreed-upon start time for logging purposes, expressed as elapsed
-// time since the Unix epoch, as returned by gettimeofday(2).
+// Returns an agreed-upon start time for logging purposes, as returned by
+// logger_now_micros.
 //
 // Logger implementations should use this to get the logging "start" time.
 // This ensures consistency when switching loggers, and enables us to
 // synchronize loggers across processes.
-struct timeval logger_get_global_start_time();
+int64_t logger_get_global_start_time_micros();
+
+// Returns "now" according to a monotonic system clock.
+int64_t logger_now_micros();
+
+// Returns elapsed micros since agreed-upon start time.
+int64_t logger_elapsed_micros();
 
 // Set the global start time used in log messages. If this isn't called, the
 // start time will be set to the current time the first time it's accessed.
-void logger_set_global_start_time(const struct timeval* t);
-
-// Convenience function to get the current time as returned by `gettimeofday`
-// and subtract the global start time.
-struct timeval logger_get_global_elapsed_time();
+void logger_set_global_start_time_micros(int64_t);
 #endif
