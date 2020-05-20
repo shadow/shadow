@@ -5,6 +5,7 @@
 
 #include "main/core/logger/shadow_logger.h"
 
+#include <glib.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -126,8 +127,7 @@ void shadow_logger_setEnableBuffering(ShadowLogger* logger, gboolean enabled) {
 }
 
 static gdouble _logger_elapsed_double() {
-    struct timeval elapsed = logger_get_global_elapsed_time();
-    return elapsed.tv_sec + elapsed.tv_usec/1000000.0;
+    return (double)logger_elapsed_micros() / G_USEC_PER_SEC;
 }
 
 static void _logger_sendRegisterCommandToHelper(ShadowLogger* logger,
