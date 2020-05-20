@@ -1,0 +1,32 @@
+host:
+- id: server
+  process:
+  - arguments: tgen.server.graphml.xml
+    plugin: tgen
+    starttime: '1'
+- id: client
+  process:
+  - arguments: tgen.client.graphml.xml
+    plugin: tgen
+    starttime: '2'
+option:
+  stoptime: '3600'
+plugin:
+- id: tgen
+  path: ~/.shadow/bin/tgen
+topology:
+- graphml: "<?xml version=\"1.0\" encoding=\"utf-8\"?><graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\"\
+    \ xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"\
+    http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd\"\
+    >\n  <key attr.name=\"packetloss\" attr.type=\"double\" for=\"edge\" id=\"d6\"\
+    \ />\n  <key attr.name=\"latency\" attr.type=\"double\" for=\"edge\" id=\"d5\"\
+    \ />\n  <key attr.name=\"packetloss\" attr.type=\"double\" for=\"node\" id=\"\
+    d4\" />\n  <key attr.name=\"countrycode\" attr.type=\"string\" for=\"node\" id=\"\
+    d3\" />\n  <key attr.name=\"bandwidthdown\" attr.type=\"int\" for=\"node\" id=\"\
+    d2\" />\n  <key attr.name=\"bandwidthup\" attr.type=\"int\" for=\"node\" id=\"\
+    d1\" />\n  <key attr.name=\"ip\" attr.type=\"string\" for=\"node\" id=\"d0\" />\n\
+    \  <graph edgedefault=\"undirected\">\n    <node id=\"isp\">\n      <data key=\"\
+    d0\">0.0.0.0</data>\n      <data key=\"d1\">2251</data>\n      <data key=\"d2\"\
+    >17038</data>\n      <data key=\"d3\">US</data>\n      <data key=\"d4\">0.0</data>\n\
+    \    </node>\n    <edge source=\"isp\" target=\"isp\">\n      <data key=\"d5\"\
+    >50.0</data>\n      <data key=\"d6\">0.01</data>\n    </edge>\n  </graph>\n</graphml>\n"
