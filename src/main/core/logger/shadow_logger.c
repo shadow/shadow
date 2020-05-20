@@ -8,6 +8,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
 
 #include "main/core/logger/log_record.h"
 #include "main/core/logger/logger_helper.h"
@@ -185,6 +186,8 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         logger->threadToDataMap, GUINT_TO_POINTER(pthread_self()));
     MAGIC_ASSERT(threadData);
 
+    struct timeval t;
+    gettimeofday(&t, NULL);
     gdouble timespan = g_timer_elapsed(threadData->runTimer, NULL);
 
     LogRecord* record =
