@@ -103,7 +103,7 @@ gsize payload_getData(Payload* payload, gsize offset, gpointer destBuffer, gsize
     gsize copyLength = MIN(targetLength, destBufferLength);
 
     if(copyLength > 0) {
-        g_memmove(destBuffer, payload->data + offset, copyLength);
+        memmove(destBuffer, payload->data + offset, copyLength);
     }
 
     _payload_unlock(payload);
