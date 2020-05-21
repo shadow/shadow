@@ -74,7 +74,8 @@ int64_t logger_now_micros();
 // Returns elapsed micros since agreed-upon start time.
 int64_t logger_elapsed_micros();
 
-// Set the global start time used in log messages. If this isn't called, the
-// start time will be set to the current time the first time it's accessed.
+// Not thread safe.  Set the global start time used in log messages. If this
+// isn't called, the start time will be set to the current time the first time
+// it's accessed.
 void logger_set_global_start_time_micros(int64_t);
 #endif

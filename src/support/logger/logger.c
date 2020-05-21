@@ -17,32 +17,32 @@ void logger_setDefault(Logger* logger) {
 Logger* logger_getDefault() { return defaultLogger; }
 
 // Process start time, initialized explicitly or on first use.
-static pthread_mutex_t _start_time_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_once_t _start_time_once = PTHREAD_ONCE_INIT;
 static bool _start_time_initd = false;
 static int64_t _monotonic_start_time_micros;
+static void _init_start_time() {
+    if (_start_time_initd) {
+        // Was already initialized explicitly using
+        // logger_set_global_start_time_micros.
+        return;
+    }
+    _start_time_initd = true;
+    _monotonic_start_time_micros = logger_now_micros();
+}
 
 int64_t logger_now_micros() {
     return g_get_monotonic_time();
 }
 
 int64_t logger_get_global_start_time_micros() {
-    pthread_mutex_lock(&_start_time_mutex);
-    if (!_start_time_initd) {
-        // TODO: Parse out of /proc/$$/stat instead to get the true process
-        // start time?
-        _monotonic_start_time_micros = logger_now_micros();
-        _start_time_initd = true;
-    }
+    pthread_once(&_start_time_once, _init_start_time);
     int64_t t = _monotonic_start_time_micros;
-    pthread_mutex_unlock(&_start_time_mutex);
     return t;
 }
 
 void logger_set_global_start_time_micros(int64_t t) {
-    pthread_mutex_lock(&_start_time_mutex);
     _monotonic_start_time_micros = t;
     _start_time_initd = true;
-    pthread_mutex_unlock(&_start_time_mutex);
 }
 
 int64_t logger_elapsed_micros() {
