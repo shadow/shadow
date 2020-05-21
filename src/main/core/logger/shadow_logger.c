@@ -126,10 +126,6 @@ void shadow_logger_setEnableBuffering(ShadowLogger* logger, gboolean enabled) {
     logger->shouldBuffer = enabled;
 }
 
-static gdouble _logger_elapsed_double() {
-    return (double)logger_elapsed_micros() / G_USEC_PER_SEC;
-}
-
 static void _logger_sendRegisterCommandToHelper(ShadowLogger* logger,
                                                 LoggerThreadData* threadData) {
     LoggerHelperCommand* command = loggerhelpercommand_new(
@@ -179,7 +175,7 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         logger->threadToDataMap, GUINT_TO_POINTER(pthread_self()));
     MAGIC_ASSERT(threadData);
 
-    gdouble timespan = _logger_elapsed_double();
+    gdouble timespan = (double)logger_elapsed_micros() / G_USEC_PER_SEC;
 
     LogRecord* record =
         logrecord_new(level, timespan, fileName, functionName, lineNumber);
@@ -293,7 +289,7 @@ static gchar* _logger_getNewRunTimeStr(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
 
     /* compute our run time */
-    guint64 elapsed = _logger_elapsed_double();
+    guint64 elapsed = logger_elapsed_micros() / G_USEC_PER_SEC;
     guint64 hours = elapsed / 3600;
     elapsed %= 3600;
     guint64 minutes = elapsed / 60;
