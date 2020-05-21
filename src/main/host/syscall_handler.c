@@ -12,6 +12,7 @@
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -648,6 +649,30 @@ static SysCallReturn syscallhandler_write(SysCallHandler* sys,
         .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)result};
 }
 
+static SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
+                                          const SysCallArgs* args) {
+    // We can't handle this natively in the plugin if we want determinism
+    guint pid = process_getProcessID(sys->process);
+    return (SysCallReturn){
+        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)pid};
+}
+
+static SysCallReturn syscallhandler_uname(SysCallHandler* sys,
+                                          const SysCallArgs* args) {
+    struct utsname* buf = NULL;
+    buf = thread_getWriteablePtr(sys->thread, args->args[0].as_ptr, sizeof(*buf));
+
+    const gchar* hostname = host_getName(sys->host);
+
+    snprintf(buf->sysname, _UTSNAME_SYSNAME_LENGTH, "shadowsys");
+    snprintf(buf->nodename, _UTSNAME_NODENAME_LENGTH, "%s", hostname);
+    snprintf(buf->release, _UTSNAME_RELEASE_LENGTH, "shadowrelease");
+    snprintf(buf->version, _UTSNAME_VERSION_LENGTH, "shadowversion");
+    snprintf(buf->machine, _UTSNAME_MACHINE_LENGTH, "shadowmachine");
+
+    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
+}
+
 ///////////////////////////////////////////////////////////
 // Single public API function for calling Shadow syscalls
 ///////////////////////////////////////////////////////////
@@ -684,10 +709,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(epoll_create1);
         HANDLE(epoll_ctl);
         HANDLE(epoll_wait);
+        HANDLE(getpid);
         HANDLE(nanosleep);
         HANDLE(pipe);
         HANDLE(pipe2);
         HANDLE(read);
+        HANDLE(uname);
         HANDLE(write);
 
         // **************************************
@@ -697,8 +724,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(bind);
         // Test coverage: test/file
         NATIVE(fstat);
-        // Test coverage: test/unistd
-        NATIVE(getpid);
         // Test coverage: test/file (via open(3))
         NATIVE(openat);
         // Test coverage: test/udp
@@ -707,8 +732,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(sendto);
         // Test coverage: test/udp
         NATIVE(socket);
-        // Test coverage: test/unistd
-        NATIVE(uname);
 
         // **************************************
         // Not handled (yet):

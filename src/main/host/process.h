@@ -58,6 +58,8 @@ gboolean process_isRunning(Process* proc);
  * outside of the process module. */
 const gchar* process_getName(Process* proc);
 
+/* Returns the processID that was assigned to us in process_new */
+guint process_getProcessID(Process* proc);
 
 /* Listen for the given status to occur on descriptor, or the timer to expire.
  * When either of those occur, the process calls thread_resume on

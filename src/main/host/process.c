@@ -117,6 +117,11 @@ const gchar* process_getName(Process* proc) {
     return proc->processName->str;
 }
 
+guint process_getProcessID(Process* proc) {
+    MAGIC_ASSERT(proc);
+    return proc->processID;
+}
+
 static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
     SimulationTime delay = (SimulationTime) (elapsedTimeSec * SIMTIME_ONE_SECOND);
     Host* currentHost = worker_getActiveHost();
