@@ -62,6 +62,7 @@ set(shadow_srcs
     host/process.c
     host/cpu.c
     host/syscall_handler.c
+    host/syscall/unistd.c
     host/thread.c
     host/host.c
     host/thread_preload.c

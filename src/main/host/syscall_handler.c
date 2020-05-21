@@ -3,8 +3,6 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/syscall_handler.h"
-
 #include <errno.h>
 #include <fcntl.h>
 #include <glib.h>
@@ -12,7 +10,6 @@
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <sys/utsname.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -22,6 +19,9 @@
 #include "main/host/descriptor/epoll.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/process.h"
+#include "main/host/syscall/protected.h"
+#include "main/host/syscall/unistd.h"
+#include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "support/logger/logger.h"
@@ -29,31 +29,6 @@
 #ifndef O_DIRECT
 #define O_DIRECT 040000
 #endif
-
-struct _SysCallHandler {
-    /* We store pointers to the host, process, and thread that the syscall
-     * handler is associated with. We typically need to makes calls into
-     * these modules in order to handle syscalls. */
-    Host* host;
-    Process* process;
-    Thread* thread;
-
-    /* Timers are used to support the timerfd syscalls (man timerfd_create);
-     * they are types of descriptors on which we can listen for events.
-     * Here we use it to help us handling blocking syscalls that include a
-     * timeout after which we should stop blocking. */
-    Timer* timer;
-
-    /* If we are currently blocking a specific syscall, i.e., waiting for
-     * a socket to be readable/writable or waiting for a timeout, the
-     * syscall number of that function is stored here. The value is set
-     * to negative to indicate that no syscalls are currently blocked. */
-    long blockedSyscallNR;
-
-    int referenceCount;
-
-    MAGIC_DECLARE;
-};
 
 SysCallHandler* syscallhandler_new(Host* host, Process* process,
                                    Thread* thread) {
@@ -647,30 +622,6 @@ static SysCallReturn syscallhandler_write(SysCallHandler* sys,
 
     return (SysCallReturn){
         .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)result};
-}
-
-static SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
-                                          const SysCallArgs* args) {
-    // We can't handle this natively in the plugin if we want determinism
-    guint pid = process_getProcessID(sys->process);
-    return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)pid};
-}
-
-static SysCallReturn syscallhandler_uname(SysCallHandler* sys,
-                                          const SysCallArgs* args) {
-    struct utsname* buf = NULL;
-    buf = thread_getWriteablePtr(sys->thread, args->args[0].as_ptr, sizeof(*buf));
-
-    const gchar* hostname = host_getName(sys->host);
-
-    snprintf(buf->sysname, _UTSNAME_SYSNAME_LENGTH, "shadowsys");
-    snprintf(buf->nodename, _UTSNAME_NODENAME_LENGTH, "%s", hostname);
-    snprintf(buf->release, _UTSNAME_RELEASE_LENGTH, "shadowrelease");
-    snprintf(buf->version, _UTSNAME_VERSION_LENGTH, "shadowversion");
-    snprintf(buf->machine, _UTSNAME_MACHINE_LENGTH, "shadowmachine");
-
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
 }
 
 ///////////////////////////////////////////////////////////
