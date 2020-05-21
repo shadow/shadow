@@ -58,9 +58,6 @@ gboolean process_isRunning(Process* proc);
  * outside of the process module. */
 const gchar* process_getName(Process* proc);
 
-// FIXME: This shouldn't be public. Exposing for temporary hack in
-// syscallhandler.
-InterposeMethod process_getInterposeMethod(Process* proc);
 
 /* Listen for the given status to occur on descriptor, or the timer to expire.
  * When either of those occur, the process calls thread_resume on

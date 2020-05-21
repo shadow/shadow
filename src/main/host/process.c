@@ -240,8 +240,6 @@ static void _process_start(Process* proc) {
     _process_check(proc);
 }
 
-InterposeMethod process_getInterposeMethod(Process* proc) { return proc->interposeMethod; }
-
 void process_continue(Process* proc, Thread* thread) {
     MAGIC_ASSERT(proc);
 
