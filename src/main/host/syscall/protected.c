@@ -14,7 +14,7 @@
 #include "support/logger/logger.h"
 
 void _syscallhandler_setListenTimeout(SysCallHandler* sys,
-                                             const struct timespec* timeout) {
+                                      const struct timespec* timeout) {
     MAGIC_ASSERT(sys);
 
     /* Set a non-repeating (one-shot) timer to the given timeout.
@@ -35,7 +35,7 @@ void _syscallhandler_setListenTimeout(SysCallHandler* sys,
 }
 
 void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
-                                                   gint timeout_ms) {
+                                            gint timeout_ms) {
     struct timespec timeout = utility_timespecFromMillis((int64_t)timeout_ms);
     _syscallhandler_setListenTimeout(sys, &timeout);
 }
@@ -62,7 +62,7 @@ int _syscallhandler_wasBlocked(const SysCallHandler* sys) {
 }
 
 int _syscallhandler_validateDescriptor(Descriptor* descriptor,
-                                              DescriptorType expectedType) {
+                                       DescriptorType expectedType) {
     if (descriptor) {
         DescriptorStatus status = descriptor_getStatus(descriptor);
 

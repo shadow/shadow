@@ -4,15 +4,15 @@
  */
 
 #include <errno.h>
-#include <sys/utsname.h>
 #include <stdio.h>
+#include <sys/utsname.h>
 
-#include "main/host/host.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/host.h"
 #include "main/host/process.h"
-#include "main/host/syscall_handler.h"
 #include "main/host/syscall/protected.h"
+#include "main/host/syscall_handler.h"
 #include "main/host/thread.h"
 #include "support/logger/logger.h"
 
@@ -75,7 +75,7 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
 ///////////////////////////////////////////////////////////
 
 SysCallReturn syscallhandler_close(SysCallHandler* sys,
-                                          const SysCallArgs* args) {
+                                   const SysCallArgs* args) {
     gint fd = (gint)args->args[0].as_i64;
     gint errorCode = 0;
 
@@ -117,18 +117,18 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
 }
 
 SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,
-                                          const SysCallArgs* args) {
+                                   const SysCallArgs* args) {
     return _syscallhandler_pipeHelper(
         sys, args->args[0].as_ptr, (gint)args->args[1].as_i64);
 }
 
 SysCallReturn syscallhandler_pipe(SysCallHandler* sys,
-                                         const SysCallArgs* args) {
+                                  const SysCallArgs* args) {
     return _syscallhandler_pipeHelper(sys, args->args[0].as_ptr, 0);
 }
 
 SysCallReturn syscallhandler_read(SysCallHandler* sys,
-                                         const SysCallArgs* args) {
+                                  const SysCallArgs* args) {
     int fd = (int)args->args[0].as_i64;
     void* buf; // args->args[1]
     size_t bufSize = (size_t)args->args[2].as_u64;
@@ -193,7 +193,7 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
 }
 
 SysCallReturn syscallhandler_write(SysCallHandler* sys,
-                                          const SysCallArgs* args) {
+                                   const SysCallArgs* args) {
     int fd = (int)args->args[0].as_i64;
     const void* buf; // args->args[1]
     size_t bufSize = (size_t)args->args[2].as_u64;
@@ -256,7 +256,7 @@ SysCallReturn syscallhandler_write(SysCallHandler* sys,
 }
 
 SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
-                                          const SysCallArgs* args) {
+                                    const SysCallArgs* args) {
     // We can't handle this natively in the plugin if we want determinism
     guint pid = process_getProcessID(sys->process);
     return (SysCallReturn){
@@ -264,9 +264,10 @@ SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
 }
 
 SysCallReturn syscallhandler_uname(SysCallHandler* sys,
-                                          const SysCallArgs* args) {
+                                   const SysCallArgs* args) {
     struct utsname* buf = NULL;
-    buf = thread_getWriteablePtr(sys->thread, args->args[0].as_ptr, sizeof(*buf));
+    buf =
+        thread_getWriteablePtr(sys->thread, args->args[0].as_ptr, sizeof(*buf));
 
     const gchar* hostname = host_getName(sys->host);
 

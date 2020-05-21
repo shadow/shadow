@@ -37,7 +37,7 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
 ///////////////////////////////////////////////////////////
 
 SysCallReturn syscallhandler_epoll_create(SysCallHandler* sys,
-                                                 const SysCallArgs* args) {
+                                          const SysCallArgs* args) {
     int64_t size = args->args[0].as_i64;
 
     int result = _syscallhandler_createEpollHelper(sys, size, 0);
@@ -47,7 +47,7 @@ SysCallReturn syscallhandler_epoll_create(SysCallHandler* sys,
 }
 
 SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
-                                                  const SysCallArgs* args) {
+                                           const SysCallArgs* args) {
     int64_t flags = args->args[0].as_i64;
 
     int result = _syscallhandler_createEpollHelper(sys, 1, flags);
@@ -57,7 +57,7 @@ SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
 }
 
 SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
-                                              const SysCallArgs* args) {
+                                       const SysCallArgs* args) {
     gint epfd = (gint)args->args[0].as_i64;
     gint op = (gint)args->args[1].as_i64;
     gint fd = (gint)args->args[2].as_i64;
@@ -104,7 +104,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
 }
 
 SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
-                                               const SysCallArgs* args) {
+                                        const SysCallArgs* args) {
     gint epfd = (gint)args->args[0].as_i64;
     struct epoll_event* events = NULL; // args->args[1]
     gint maxevents = (gint)args->args[2].as_i64;
@@ -173,4 +173,3 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     return (SysCallReturn){
         .state = SYSCALL_RETURN_DONE, .retval.as_i64 = nEvents};
 }
-

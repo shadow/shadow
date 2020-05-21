@@ -48,17 +48,17 @@ struct _SysCallHandler {
 
 /* Use this to define the syscalls that a particular handler implements. */
 #define SYSCALL_HANDLER(s)                                                     \
-    SysCallReturn syscallhandler_##s(SysCallHandler* sys,                      \
-                                     const SysCallArgs* args);
+    SysCallReturn syscallhandler_##s(                                          \
+        SysCallHandler* sys, const SysCallArgs* args);
 
 void _syscallhandler_setListenTimeout(SysCallHandler* sys,
-                                             const struct timespec* timeout);
+                                      const struct timespec* timeout);
 void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
-                                                   gint timeout_ms);
+                                            gint timeout_ms);
 int _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
 int _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
 int _syscallhandler_wasBlocked(const SysCallHandler* sys);
 int _syscallhandler_validateDescriptor(Descriptor* descriptor,
-                                              DescriptorType expectedType);
+                                       DescriptorType expectedType);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_PROTECTED_H_ */

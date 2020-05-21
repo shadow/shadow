@@ -16,7 +16,8 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-/* make sure we return the 'emulated' time, and not the actual simulation clock */
+/* make sure we return the 'emulated' time, and not the actual simulation clock
+ */
 static EmulatedTime _syscallhandler_getEmulatedTime() {
     return worker_getEmulatedTime();
 }
@@ -26,15 +27,15 @@ static EmulatedTime _syscallhandler_getEmulatedTime() {
 ///////////////////////////////////////////////////////////
 
 SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
-                                              const SysCallArgs* args) {
+                                       const SysCallArgs* args) {
     /* Grab the arg from the syscall register. */
     const struct timespec* req =
         thread_getReadablePtr(sys->thread, args->args[0].as_ptr, sizeof(*req));
 
     /* Bounds checking. */
     if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
-        return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
-                               .retval.as_i64 = -EINVAL};
+        return (SysCallReturn){
+            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Does the timeout request require us to block? */
@@ -71,7 +72,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
 }
 
 SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
-                                                  const SysCallArgs* args) {
+                                           const SysCallArgs* args) {
     clockid_t clk_id = args->args[0].as_u64;
     debug("syscallhandler_clock_gettime with %d %p", clk_id,
           GUINT_TO_POINTER(args->args[1].as_ptr.val));
