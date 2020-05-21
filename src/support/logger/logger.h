@@ -45,7 +45,7 @@ struct _Logger {
 // `logger` may be NULL.
 void logger_setDefault(Logger* logger);
 
-// Not thread safe. May return NULL.
+// May return NULL.
 Logger* logger_getDefault();
 
 // Thread safe. `logger` may be NULL, in which case glib's logging
