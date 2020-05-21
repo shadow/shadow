@@ -16,6 +16,8 @@
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
+#include "main/host/syscall_handler.h"
+#include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "main/utility/utility.h"
 
@@ -43,5 +45,20 @@ struct _SysCallHandler {
 
     MAGIC_DECLARE;
 };
+
+/* Use this to define the syscalls that a particular handler implements. */
+#define SYSCALL_HANDLER(s)                                                     \
+    SysCallReturn syscallhandler_##s(SysCallHandler* sys,                      \
+                                     const SysCallArgs* args);
+
+void _syscallhandler_setListenTimeout(SysCallHandler* sys,
+                                             const struct timespec* timeout);
+void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
+                                                   gint timeout_ms);
+int _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
+int _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
+int _syscallhandler_wasBlocked(const SysCallHandler* sys);
+int _syscallhandler_validateDescriptor(Descriptor* descriptor,
+                                              DescriptorType expectedType);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_PROTECTED_H_ */

@@ -6,12 +6,14 @@
 #ifndef SRC_MAIN_HOST_SYSCALL_UNISTD_H_
 #define SRC_MAIN_HOST_SYSCALL_UNISTD_H_
 
-#include "main/host/syscall_handler.h"
+#include "main/host/syscall/protected.h"
 
-SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
-                                          const SysCallArgs* args);
-
-SysCallReturn syscallhandler_uname(SysCallHandler* sys,
-                                          const SysCallArgs* args);
+SYSCALL_HANDLER(read);
+SYSCALL_HANDLER(write);
+SYSCALL_HANDLER(close);
+SYSCALL_HANDLER(pipe);
+SYSCALL_HANDLER(pipe2);
+SYSCALL_HANDLER(getpid);
+SYSCALL_HANDLER(uname);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_UNISTD_H_ */

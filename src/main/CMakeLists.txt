@@ -62,6 +62,9 @@ set(shadow_srcs
     host/process.c
     host/cpu.c
     host/syscall_handler.c
+    host/syscall/protected.c
+    host/syscall/epoll.c
+    host/syscall/time.c
     host/syscall/unistd.c
     host/thread.c
     host/host.c
