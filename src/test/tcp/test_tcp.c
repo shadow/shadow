@@ -20,12 +20,19 @@
 #include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/msg.h>
+#include <sys/types.h>
+
+#include "test/test_glib_helpers.h"
 
 #define USAGE "USAGE: 'shd-test-tcp iomode type'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server')"
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
-#define SERVER_PORT 58333
 #define BUFFERSIZE 20000
 #define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
+// Env variable that contains the message queue id used for server port exchange
+#define MESSAGE_QUEUE_ID_ENV_NAME "QUEUE"
+// System V queue message type
+#define QUEUE_MTYPE 1
 
 int tempa = 0;
 int tempb = 1;
@@ -33,6 +40,12 @@ typedef enum _waittype {
     WAIT_WRITE, WAIT_READ
 } waittype;
 typedef int (*iowait_func)(int fd, waittype t);
+
+typedef struct _IntegerMessage {
+    long mtype;
+    int msg;
+} IntegerMessage;
+
 
 static void _mylog(const char* fileName, const int lineNum, const char* funcName, const char* format, ...) {
     struct timeval t;
@@ -47,6 +60,43 @@ static void _mylog(const char* fileName, const int lineNum, const char* funcName
 
     fprintf(stdout, "\n");
     fflush(stdout);
+}
+
+// Get the message queue id
+static int get_msgqueue() {
+    char *endptr;
+    long int message_queue;
+    char* message_queue_string = getenv(MESSAGE_QUEUE_ID_ENV_NAME);
+
+    if (!message_queue_string) {
+        MYLOG("Can't find message queue id in env");
+        exit(EXIT_FAILURE);
+    }
+
+    errno = 0;
+    message_queue = strtol(message_queue_string, &endptr, 10);
+    // Check for various possible errors
+    if ((errno == ERANGE && (message_queue == LONG_MAX || message_queue == LONG_MIN))
+        || (errno != 0 && message_queue == 0)
+        || endptr == message_queue_string) {
+        perror("strtol");
+        exit(EXIT_FAILURE);
+    }
+
+    return message_queue;
+}
+
+static void queue_send_u16(int message_queue, uint16_t i) {
+    IntegerMessage msg = {QUEUE_MTYPE, i};
+
+    assert_true_errno(msgsnd(message_queue, &msg, sizeof(msg.msg), 0) != -1);
+}
+
+static short queue_recv_u16(int message_queue) {
+    IntegerMessage msg;
+
+    assert_true_errno(msgrcv(message_queue, &msg, sizeof(msg.msg), QUEUE_MTYPE, 0) != -1);
+    return msg.msg;
 }
 
 /* fills buffer with size random characters */
@@ -144,13 +194,16 @@ static int _wait_select(int fd, waittype t) {
     }
 }
 
-static int _do_addr(const char* name, struct sockaddr_in* addrout) {
+static int _do_addr(const char* name, struct sockaddr_in* addrout, int message_queue) {
     memset(addrout, 0, sizeof(struct sockaddr_in));
     addrout->sin_family = AF_INET;
     addrout->sin_addr.s_addr = htonl(INADDR_ANY);
-    addrout->sin_port = htons(SERVER_PORT);
+    addrout->sin_port = 0;
 
     if(name) {
+        int port = queue_recv_u16(message_queue);
+        addrout->sin_port = htons(port);
+
         /* attempt to get the correct server ip address */
         struct addrinfo* info;
         int result = getaddrinfo(name, NULL, NULL, &info);
@@ -212,9 +265,18 @@ static int _do_connect(int fd, struct sockaddr_in* serveraddr, iowait_func iowai
     return 0;
 }
 
-static int _do_serve(int fd, struct sockaddr_in* bindaddr, iowait_func iowait, int* clientsdout) {
+static void send_port_in_queue(int fd, struct sockaddr_in* bindaddr, int message_queue){
+    socklen_t len = sizeof(*bindaddr);
+
+    assert_true_errno(getsockname(fd, (struct sockaddr *)bindaddr, &len) != -1);
+    queue_send_u16(message_queue, ntohs(bindaddr->sin_port));
+}
+
+static int _do_serve(int fd, struct sockaddr_in* bindaddr, iowait_func iowait, int* clientsdout, int message_queue) {
     /* bind the socket to the server port */
     int result = bind(fd, (struct sockaddr *) bindaddr, sizeof(struct sockaddr_in));
+    send_port_in_queue(fd, bindaddr, message_queue);
+
     MYLOG("bind() returned %i", result);
     if (result < 0) {
         MYLOG("bind() error was: %s", strerror(errno));
@@ -648,9 +710,9 @@ static int _test_iov_server(int clientfd)
     return 0;
 }
 
-static int _run_client(iowait_func iowait, const char* servername, const int use_iov) {
+static int _run_client(iowait_func iowait, const char* servername, const int use_iov, int message_queue) {
     struct sockaddr_in serveraddr;
-    if(_do_addr(servername, &serveraddr) < 0) {
+    if(_do_addr(servername, &serveraddr, message_queue) < 0) {
         return -1;
     }
 
@@ -704,7 +766,7 @@ static int _run_client(iowait_func iowait, const char* servername, const int use
     return 0;
 }
 
-static int _run_server(iowait_func iowait, int use_iov) {
+static int _run_server(iowait_func iowait, int use_iov, int message_queue) {
     int listensd;
     int type = iowait ? (SOCK_STREAM|SOCK_NONBLOCK) : SOCK_STREAM;
     if(_do_socket(type, &listensd) < 0) {
@@ -713,12 +775,12 @@ static int _run_server(iowait_func iowait, int use_iov) {
 
     /* setup the socket address info, client has outgoing connection to server */
     struct sockaddr_in bindaddr;
-    if(_do_addr(NULL, &bindaddr) < 0) {
+    if(_do_addr(NULL, &bindaddr, message_queue) < 0) {
         return -1;
     }
 
     int clientsd;
-    if(_do_serve(listensd, &bindaddr, iowait, &clientsd) < 0) {
+    if(_do_serve(listensd, &bindaddr, iowait, &clientsd, message_queue) < 0) {
         return -1;
     }
 
@@ -757,18 +819,21 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    const char *io_mode = argv[1];
+    const char *execution_mode = argv[2];
     iowait_func wait = NULL;
     int use_iov = 0;
+    int message_queue = get_msgqueue();
 
-    if(strncasecmp(argv[1], "blocking", 8) == 0) {
+    if(strncasecmp(io_mode, "blocking", 8) == 0) {
         wait = NULL;
-    } else if(strncasecmp(argv[1], "nonblocking-poll", 16) == 0) {
+    } else if(strncasecmp(io_mode, "nonblocking-poll", 16) == 0) {
         wait = _wait_poll;
-    } else if(strncasecmp(argv[1], "nonblocking-epoll", 17) == 0) {
+    } else if(strncasecmp(io_mode, "nonblocking-epoll", 17) == 0) {
         wait = _wait_epoll;
-    } else if(strncasecmp(argv[1], "nonblocking-select", 18) == 0) {
+    } else if(strncasecmp(io_mode, "nonblocking-select", 18) == 0) {
         wait = _wait_select;
-    } else if(strncasecmp(argv[1], "iov", 3) == 0) {
+    } else if(strncasecmp(io_mode, "iov", 3) == 0) {
         wait = NULL;
         use_iov = 1;
     } else {
@@ -777,16 +842,16 @@ int main(int argc, char *argv[]) {
     }
 
     int result = 0;
-    if(strncasecmp(argv[2], "client", 5) == 0) {
+    if(strncasecmp(execution_mode, "client", 5) == 0) {
         if(argc < 4) {
             MYLOG("error, client mode also needs a server ip address; see usage");
             return -1;
         }
-        MYLOG("running client in mode %s", argv[1]);
-        result = _run_client(wait, argv[3], use_iov);
-    } else if(strncasecmp(argv[2], "server", 6) == 0) {
-        MYLOG("running server in mode %s", argv[1]);
-        result = _run_server(wait, use_iov);
+        MYLOG("running client in mode %s", io_mode);
+        result = _run_client(wait, argv[3], use_iov, message_queue);
+    } else if(strncasecmp(execution_mode, "server", 6) == 0) {
+        MYLOG("running server in mode %s", io_mode);
+        result = _run_server(wait, use_iov, message_queue);
     } else {
         MYLOG("error, invalid type specified; see usage");
         result = -1;

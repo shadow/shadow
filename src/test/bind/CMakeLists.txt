@@ -1,5 +1,5 @@
 include_directories(${GLIB_INCLUDES})
-link_libraries(${GLIB_LIBRARIES})
+link_libraries(${GLIB_LIBRARIES} logger)
 
 
 add_executable(test-bind test_bind.c)

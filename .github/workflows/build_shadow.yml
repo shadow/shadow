@@ -41,7 +41,10 @@ jobs:
         run: python setup install
 
       - name: Test
-        run: python setup test
+        # For now, if the first batch of tests fails, rerun the failing tests
+        # and continue on if they then pass. This is to work around sporadic
+        # and difficult to debug errors such as #798
+        run: python setup test || python setup test --rerun-failed
 
       - name: Upload shadow logs
         uses: actions/upload-artifact@v2

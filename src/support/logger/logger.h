@@ -4,11 +4,10 @@
 /*
  * A simple logger API.
  *
- * By default this simply wraps glib's logging functionality. However, it also
- * supports overriding with a custom Logger.  Unlike in glib, when a custom
- * Logger is supplied, it's that logger's job to do any necessary
- * synchronization. This allows us to use a custom Logger in Shadow that avoids
- * a global lock.
+ * By default this simply writes to stdout. However, it also supports
+ * overriding with a custom Logger.  Unlike in glib, when a custom Logger is
+ * supplied, it's that logger's job to do any necessary synchronization. This
+ * allows us to use a custom Logger in Shadow that avoids a global lock.
  */
 
 #include <glib.h>
@@ -46,7 +45,7 @@ struct _Logger {
 // `logger` may be NULL.
 void logger_setDefault(Logger* logger);
 
-// Not thread safe. May return NULL.
+// May return NULL.
 Logger* logger_getDefault();
 
 // Thread safe. `logger` may be NULL, in which case glib's logging
@@ -61,4 +60,22 @@ void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
                 const gchar* functionName, const gint lineNumber,
                 const gchar* format, ...);
 
+// Returns an agreed-upon start time for logging purposes, as returned by
+// logger_now_micros.
+//
+// Logger implementations should use this to get the logging "start" time.
+// This ensures consistency when switching loggers, and enables us to
+// synchronize loggers across processes.
+int64_t logger_get_global_start_time_micros();
+
+// Returns "now" according to a monotonic system clock.
+int64_t logger_now_micros();
+
+// Returns elapsed micros since agreed-upon start time.
+int64_t logger_elapsed_micros();
+
+// Not thread safe.  Set the global start time used in log messages. If this
+// isn't called, the start time will be set to the current time the first time
+// it's accessed.
+void logger_set_global_start_time_micros(int64_t);
 #endif
