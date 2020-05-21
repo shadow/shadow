@@ -59,8 +59,7 @@ static void _logger_default_log(LogLevel level, const gchar* fileName,
     gchar* message = g_strdup_vprintf(format, vargs);
     gchar* baseName = g_path_get_basename(fileName);
 
-    int64_t elapsed_micros =
-        logger_now_micros() - logger_get_global_start_time_micros();
+    int64_t elapsed_micros = logger_elapsed_micros();
     struct timeval tv = {
         .tv_sec = elapsed_micros / G_USEC_PER_SEC,
         .tv_usec = elapsed_micros % G_USEC_PER_SEC,
