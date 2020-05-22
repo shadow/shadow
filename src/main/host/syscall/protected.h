@@ -46,7 +46,9 @@ struct _SysCallHandler {
     MAGIC_DECLARE;
 };
 
-/* Use this to define the syscalls that a particular handler implements. */
+/* Use this to define the syscalls that a particular handler implements.
+ * The functions defined with this macro should never be called outside
+ * of syscall_handler.c. */
 #define SYSCALL_HANDLER(s)                                                     \
     SysCallReturn syscallhandler_##s(                                          \
         SysCallHandler* sys, const SysCallArgs* args);

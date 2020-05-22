@@ -3,6 +3,8 @@
  * See LICENSE for licensing information
  */
 
+#include "main/host/syscall/epoll.h"
+
 #include <errno.h>
 
 #include "main/host/descriptor/descriptor.h"

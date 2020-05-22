@@ -3,6 +3,8 @@
  * See LICENSE for licensing information
  */
 
+#include "main/host/syscall/time.h"
+
 #include <errno.h>
 #include <stddef.h>
 

@@ -3,6 +3,8 @@
  * See LICENSE for licensing information
  */
 
+#include "main/host/syscall/unistd.h"
+
 #include <errno.h>
 #include <stdio.h>
 #include <sys/utsname.h>

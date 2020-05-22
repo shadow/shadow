@@ -3,6 +3,8 @@
  * See LICENSE for licensing information
  */
 
+#include "main/host/syscall/protected.h"
+
 #include <errno.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -10,7 +12,6 @@
 #include <unistd.h>
 
 #include "main/host/descriptor/timer.h"
-#include "main/host/syscall/protected.h"
 #include "support/logger/logger.h"
 
 void _syscallhandler_setListenTimeout(SysCallHandler* sys,
