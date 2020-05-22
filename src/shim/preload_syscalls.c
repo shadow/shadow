@@ -99,7 +99,7 @@ long syscall(long n, ...) {
             debug("Making interposed syscall " #sysname);                      \
             return (type)syscall(SYS_##sysname, __VA_ARGS__);                  \
         } else {                                                               \
-            debug("Making real syscall " #sysname);                            \
+            debug("Making real syscall " #sysname);                         \
             return (type)_real_syscall(SYS_##sysname, __VA_ARGS__);            \
         }                                                                      \
     }

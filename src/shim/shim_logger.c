@@ -1,5 +1,6 @@
 #include "shim/shim_logger.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 
 #include "support/logger/logger.h"
@@ -13,12 +14,20 @@ typedef struct _ShimLogger {
 void shimlogger_log(Logger* base, LogLevel level, const gchar* fileName,
                     const gchar* functionName, const gint lineNumber,
                     const gchar* format, va_list vargs) {
+    static _Thread_local bool in_logger = false;
+    if (in_logger) {
+        // Avoid recursion in logging around syscall handling.
+        return;
+    }
+    in_logger = true;
+
     ShimLogger* logger = (ShimLogger*)base;
 
     gchar* message = g_strdup_vprintf(format, vargs);
     fprintf(logger->file, "[shd-shim] [%s] [%s:%i] [%s] %s\n",
             loglevel_toStr(level), fileName, lineNumber, functionName, message);
     g_free(message);
+    in_logger = false;
 }
 
 void shimlogger_destroy(Logger* logger) {

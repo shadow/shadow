@@ -79,11 +79,10 @@ _shim_load() {
     const char* interpose_method = getenv("SHADOW_INTERPOSE_METHOD");
     _using_interpose_preload =
         interpose_method != NULL && !strcmp(interpose_method, "PRELOAD");
+    logger_setDefault(shimlogger_new(stderr));
     if (!_using_interpose_preload) {
         return;
     }
-
-    logger_setDefault(shimlogger_new(stderr));
 
     const char *shd_event_sock_fd = getenv("_SHD_IPC_SOCKET");
     assert(shd_event_sock_fd);
