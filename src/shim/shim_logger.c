@@ -24,9 +24,11 @@ void shimlogger_log(Logger* base, LogLevel level, const gchar* fileName,
     ShimLogger* logger = (ShimLogger*)base;
 
     gchar* message = g_strdup_vprintf(format, vargs);
-    fprintf(logger->file, "[shd-shim] [%s] [%s:%i] [%s] %s\n",
+    gchar* time_string = logger_elapsed_string();
+    fprintf(logger->file, "%s [shd-shim] [%s] [%s:%i] [%s] %s\n", time_string,
             loglevel_toStr(level), fileName, lineNumber, functionName, message);
     g_free(message);
+    g_free(time_string);
     in_logger = false;
 }
 
