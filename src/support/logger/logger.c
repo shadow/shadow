@@ -52,13 +52,7 @@ int64_t logger_elapsed_micros() {
     return logger_now_micros() - t0;
 }
 
-static void _logger_default_log(LogLevel level, const gchar* fileName,
-                                const gchar* functionName,
-                                const gint lineNumber, const gchar* format,
-                                va_list vargs) {
-    gchar* message = g_strdup_vprintf(format, vargs);
-    gchar* baseName = g_path_get_basename(fileName);
-
+gchar* logger_elapsed_string() {
     int64_t elapsed_micros = logger_elapsed_micros();
     struct timeval tv = {
         .tv_sec = elapsed_micros / G_USEC_PER_SEC,
@@ -66,8 +60,18 @@ static void _logger_default_log(LogLevel level, const gchar* fileName,
     };
     struct tm tm;
     gmtime_r(&tv.tv_sec, &tm);
-    gchar* timeString = g_strdup_printf("%02d:%02d:%02d.%06ld", tm.tm_hour,
-                                        tm.tm_min, tm.tm_sec, tv.tv_usec);
+    return g_strdup_printf(
+        "%02d:%02d:%02d.%06ld", tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
+}
+
+static void _logger_default_log(LogLevel level, const gchar* fileName,
+                                const gchar* functionName,
+                                const gint lineNumber, const gchar* format,
+                                va_list vargs) {
+    gchar* message = g_strdup_vprintf(format, vargs);
+    gchar* baseName = g_path_get_basename(fileName);
+    gchar* timeString = logger_elapsed_string();
+
     g_print("%s %s [%s:%i] [%s] %s\n", timeString, loglevel_toStr(level),
             baseName, lineNumber, functionName, message);
     g_free(message);

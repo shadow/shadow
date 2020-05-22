@@ -74,6 +74,10 @@ int64_t logger_now_micros();
 // Returns elapsed micros since agreed-upon start time.
 int64_t logger_elapsed_micros();
 
+// Elapsed time as a string suitable for logging. Caller should `g_free`
+// the returned pointer.
+gchar* logger_elapsed_string();
+
 // Not thread safe.  Set the global start time used in log messages. If this
 // isn't called, the start time will be set to the current time the first time
 // it's accessed.
