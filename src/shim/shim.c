@@ -148,6 +148,7 @@ static void _shim_wait_start(int event_fd) {
 
     shimevent_recvEvent(event_fd, &event);
     assert(event.event_id == SHD_SHIM_EVENT_START);
+    shimlogger_set_simulation_nanos(event.event_data.start.simulation_nanos);
 }
 
 int shim_thisThreadEventFD() {

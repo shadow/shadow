@@ -12,6 +12,21 @@ typedef struct _ShimLogger {
     FILE* file;
 } ShimLogger;
 
+static uint64_t _simulation_nanos;
+void shimlogger_set_simulation_nanos(uint64_t simulation_nanos) {
+    _simulation_nanos = simulation_nanos;
+}
+
+static gchar* _simulation_nanos_string() {
+    const long nanos_per_sec = 1000000000l;
+    time_t seconds = _simulation_nanos / nanos_per_sec;
+    uint64_t nanos = _simulation_nanos % nanos_per_sec;
+    struct tm tm;
+    gmtime_r(&seconds, &tm);
+    return g_strdup_printf(
+        "%02d:%02d:%02d.%09" PRIu64, tm.tm_hour, tm.tm_min, tm.tm_sec, nanos);
+}
+
 void shimlogger_log(Logger* base, LogLevel level, const gchar* fileName,
                     const gchar* functionName, const gint lineNumber,
                     const gchar* format, va_list vargs) {
@@ -27,10 +42,13 @@ void shimlogger_log(Logger* base, LogLevel level, const gchar* fileName,
 
     gchar* message = g_strdup_vprintf(format, vargs);
     gchar* time_string = logger_elapsed_string();
-    fprintf(logger->file, "%s [shd-shim] [%s] [%s:%i] [%s] %s\n", time_string,
-            loglevel_toStr(level), fileName, lineNumber, functionName, message);
+    gchar* simulation_nanos_string = _simulation_nanos_string();
+    fprintf(logger->file, "%s [%s] [shd-shim] [%s] [%s:%i] [%s] %s\n",
+            time_string, simulation_nanos_string, loglevel_toStr(level), fileName,
+            lineNumber, functionName, message);
     g_free(message);
     g_free(time_string);
+    g_free(simulation_nanos_string);
     shim_enableInterposition();
     in_logger = false;
 }

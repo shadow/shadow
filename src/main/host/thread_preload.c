@@ -253,6 +253,8 @@ void threadpreload_resume(Thread* base) {
                 // the plugin will run until it makes a blocking call
                 debug("sending start event code to %d on %d", thread->childPID,
                       thread->eventFD);
+                thread->currentEvent.event_data.start.simulation_nanos =
+                    worker_getEmulatedTime();
                 shimevent_sendEvent(thread->eventFD, &thread->currentEvent);
                 break;
             }
@@ -292,7 +294,12 @@ void threadpreload_resume(Thread* base) {
                     // Now send the result of the syscall
                     shim_result = (ShimEvent){
                         .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
-                        .event_data.syscall_complete.retval = result.retval};
+                        .event_data = {
+                            .syscall_complete = {.retval = result.retval,
+                                                 .simulation_nanos =
+                                                     worker_getEmulatedTime()},
+
+                        }};
                 } else if (result.state == SYSCALL_RETURN_NATIVE) {
                     // Tell the shim to make the syscall itself
                     shim_result = (ShimEvent){
