@@ -3,8 +3,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "support/logger/logger.h"
+#include "shim/shim.h"
 #include "support/logger/log_level.h"
+#include "support/logger/logger.h"
 
 typedef struct _ShimLogger {
     Logger base;
@@ -20,6 +21,7 @@ void shimlogger_log(Logger* base, LogLevel level, const gchar* fileName,
         return;
     }
     in_logger = true;
+    shim_disableInterposition();
 
     ShimLogger* logger = (ShimLogger*)base;
 
@@ -29,6 +31,7 @@ void shimlogger_log(Logger* base, LogLevel level, const gchar* fileName,
             loglevel_toStr(level), fileName, lineNumber, functionName, message);
     g_free(message);
     g_free(time_string);
+    shim_enableInterposition();
     in_logger = false;
 }
 
