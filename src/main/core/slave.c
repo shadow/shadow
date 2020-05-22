@@ -7,6 +7,7 @@
 #include <bits/types/struct_timeval.h>
 #include <errno.h>
 #include <glib.h>
+#include <inttypes.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stddef.h>
@@ -328,6 +329,12 @@ static gchar** _slave_generateEnvv(Slave* slave, InterposeMethod interposeMethod
 
     /* start with an empty environment */
     gchar** envv = g_environ_setenv(NULL, "SHADOW_SPAWNED", "TRUE", TRUE);
+
+    char buf[64];
+    g_snprintf(
+        buf, sizeof(buf), "%" PRId64, logger_get_global_start_time_micros());
+    envv = g_environ_setenv(envv, "SHADOW_LOG_START_TIME", buf, TRUE);
+
     if (interposeMethod == INTERPOSE_PRELOAD) {
         envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD", 0);
     }
