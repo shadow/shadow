@@ -235,9 +235,13 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
             }
             return;
         }
-        error("Unhandled SIGSEGV addr:%016lx contents:%x %x %x %x %x %x %x %x",
-              eip, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6],
-              buf[7]);
+        // Do not use `error` here, since that'll cause us to immediately abort
+        // in debug builds. Better to let the SIGSEGV be delivered so that it
+        // can generate a core file for debugging.
+        warning(
+            "Unhandled SIGSEGV addr:%016lx contents:%x %x %x %x %x %x %x %x",
+            eip, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6],
+            buf[7]);
         // fall through
     }
     // Deliver the signal.

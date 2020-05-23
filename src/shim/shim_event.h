@@ -29,6 +29,11 @@ typedef struct _ShimEvent {
 
     union {
         struct {
+            // Update shim-side simulation clock
+            uint64_t simulation_nanos;
+        } start;
+
+        struct {
             struct timespec ts;
         } data_nano_sleep;
 
@@ -43,6 +48,8 @@ typedef struct _ShimEvent {
 
         struct {
             SysCallReg retval;
+            // Update shim-side simulation clock
+            uint64_t simulation_nanos;
         } syscall_complete;
 
         struct {

@@ -16,6 +16,7 @@
 
 #include "shim/shim.h"
 #include "shim/shim_event.h"
+#include "shim/shim_logger.h"
 #include "shim/shim_shmem.h"
 #include "support/logger/logger.h"
 
@@ -55,6 +56,8 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* ev) {
     SysCallReg rv;
     if (res.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE) {
         rv = res.event_data.syscall_complete.retval;
+        shimlogger_set_simulation_nanos(
+            res.event_data.syscall_complete.simulation_nanos);
     } else if (res.event_id == SHD_SHIM_EVENT_SYSCALL_DO_NATIVE) {
         const SysCallReg* regs = ev->event_data.syscall.syscall_args.args;
         rv.as_i64 =
@@ -99,7 +102,7 @@ long syscall(long n, ...) {
             debug("Making interposed syscall " #sysname);                      \
             return (type)syscall(SYS_##sysname, __VA_ARGS__);                  \
         } else {                                                               \
-            debug("Making real syscall " #sysname);                            \
+            debug("Making real syscall " #sysname);                         \
             return (type)_real_syscall(SYS_##sysname, __VA_ARGS__);            \
         }                                                                      \
     }

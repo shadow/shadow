@@ -5,6 +5,7 @@
 
 #include "main/core/logger/shadow_logger.h"
 
+#include <glib.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -23,10 +24,6 @@
  * are running the virtual nodes) */
 typedef struct _LoggerThreadData LoggerThreadData;
 struct _LoggerThreadData {
-    /* keep wall time without relying on main logger data */
-    GTimer* runTimer;
-    gdouble loggerRunOffset;
-
     /* local temporary store for this threads log records */
     GQueue* localRecordBundle;
 
@@ -38,8 +35,6 @@ struct _LoggerThreadData {
 /* manages the logging of messages among multiple worker threads */
 struct _ShadowLogger {
     Logger base;
-
-    GTimer* runTimer;
 
     /* the level below which we filter messages */
     LogLevel filterLevel;
@@ -62,12 +57,9 @@ struct _ShadowLogger {
     MAGIC_DECLARE;
 };
 
-static LoggerThreadData* _loggerthreaddata_new(GTimer* loggerTimer) {
+static LoggerThreadData* _loggerthreaddata_new() {
     LoggerThreadData* threadData = g_new0(LoggerThreadData, 1);
     MAGIC_INIT(threadData);
-
-    threadData->runTimer = g_timer_new();
-    threadData->loggerRunOffset = g_timer_elapsed(loggerTimer, NULL);
 
     threadData->localRecordBundle = g_queue_new();
     threadData->remoteLogHelperMailbox = g_async_queue_new();
@@ -85,8 +77,6 @@ static void _loggerthreaddata_free(LoggerThreadData* threadData) {
     }
     g_queue_free(threadData->localRecordBundle);
     g_async_queue_unref(threadData->remoteLogHelperMailbox);
-
-    g_timer_destroy(threadData->runTimer);
 
     MAGIC_CLEAR(threadData);
     g_free(threadData);
@@ -185,7 +175,7 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         logger->threadToDataMap, GUINT_TO_POINTER(pthread_self()));
     MAGIC_ASSERT(threadData);
 
-    gdouble timespan = g_timer_elapsed(threadData->runTimer, NULL);
+    gdouble timespan = (double)logger_elapsed_micros() / G_USEC_PER_SEC;
 
     LogRecord* record =
         logrecord_new(level, timespan, fileName, functionName, lineNumber);
@@ -255,7 +245,7 @@ void shadow_logger_register(ShadowLogger* logger, pthread_t callerThread) {
 
     if (g_hash_table_lookup(logger->threadToDataMap,
                             GUINT_TO_POINTER(callerThread)) == NULL) {
-        LoggerThreadData* threadData = _loggerthreaddata_new(logger->runTimer);
+        LoggerThreadData* threadData = _loggerthreaddata_new();
         g_hash_table_replace(logger->threadToDataMap,
                              GUINT_TO_POINTER(callerThread), threadData);
         _logger_sendRegisterCommandToHelper(logger, threadData);
@@ -299,7 +289,7 @@ static gchar* _logger_getNewRunTimeStr(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
 
     /* compute our run time */
-    guint64 elapsed = g_timer_elapsed(logger->runTimer, NULL);
+    guint64 elapsed = logger_elapsed_micros() / G_USEC_PER_SEC;
     guint64 hours = elapsed / 3600;
     elapsed %= 3600;
     guint64 minutes = elapsed / 60;
@@ -369,7 +359,6 @@ ShadowLogger* shadow_logger_new(LogLevel filterLevel) {
                 .log = _shadow_logger_log_cb,
                 .destroy = _shadow_logger_destroy_cb,
             },
-        .runTimer = g_timer_new(),
         .filterLevel = filterLevel,
         .shouldBuffer = TRUE,
         .referenceCount = 1,
@@ -425,7 +414,6 @@ static void _logger_free(ShadowLogger* logger) {
     countdownlatch_free(logger->helperLatch);
 
     g_hash_table_destroy(logger->threadToDataMap);
-    g_timer_destroy(logger->runTimer);
 
     MAGIC_CLEAR(logger);
     g_free(logger);

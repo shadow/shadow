@@ -1,5 +1,10 @@
 #include "support/logger/logger.h"
 
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <sys/time.h>
+
 static Logger* defaultLogger = NULL;
 
 void logger_setDefault(Logger* logger) {
@@ -11,17 +16,52 @@ void logger_setDefault(Logger* logger) {
 
 Logger* logger_getDefault() { return defaultLogger; }
 
-static GLogLevelFlags _gloglevelflags(LogLevel level) {
-    switch (level) {
-        case LOGLEVEL_CRITICAL: return G_LOG_LEVEL_CRITICAL;
-        case LOGLEVEL_WARNING: return G_LOG_LEVEL_WARNING;
-        case LOGLEVEL_MESSAGE: return G_LOG_LEVEL_MESSAGE;
-        case LOGLEVEL_INFO: return G_LOG_LEVEL_INFO;
-        case LOGLEVEL_DEBUG: return G_LOG_LEVEL_DEBUG;
-        case LOGLEVEL_UNSET:
-        case LOGLEVEL_ERROR:
-        default: return G_LOG_LEVEL_ERROR;
+// Process start time, initialized explicitly or on first use.
+static pthread_once_t _start_time_once = PTHREAD_ONCE_INIT;
+static bool _start_time_initd = false;
+static int64_t _monotonic_start_time_micros;
+static void _init_start_time() {
+    if (_start_time_initd) {
+        // Was already initialized explicitly using
+        // logger_set_global_start_time_micros.
+        return;
     }
+    _start_time_initd = true;
+    _monotonic_start_time_micros = logger_now_micros();
+}
+
+int64_t logger_now_micros() {
+    return g_get_monotonic_time();
+}
+
+int64_t logger_get_global_start_time_micros() {
+    pthread_once(&_start_time_once, _init_start_time);
+    int64_t t = _monotonic_start_time_micros;
+    return t;
+}
+
+void logger_set_global_start_time_micros(int64_t t) {
+    _monotonic_start_time_micros = t;
+    _start_time_initd = true;
+}
+
+int64_t logger_elapsed_micros() {
+    // We need to be careful here to get t0 first, since the first time this
+    // function is called it will cause the start time to be lazily initialized.
+    int64_t t0 = logger_get_global_start_time_micros();
+    return logger_now_micros() - t0;
+}
+
+gchar* logger_elapsed_string() {
+    int64_t elapsed_micros = logger_elapsed_micros();
+    struct timeval tv = {
+        .tv_sec = elapsed_micros / G_USEC_PER_SEC,
+        .tv_usec = elapsed_micros % G_USEC_PER_SEC,
+    };
+    struct tm tm;
+    gmtime_r(&tv.tv_sec, &tm);
+    return g_strdup_printf(
+        "%02d:%02d:%02d.%06ld", tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
 }
 
 static void _logger_default_log(LogLevel level, const gchar* fileName,
@@ -29,9 +69,19 @@ static void _logger_default_log(LogLevel level, const gchar* fileName,
                                 const gint lineNumber, const gchar* format,
                                 va_list vargs) {
     gchar* message = g_strdup_vprintf(format, vargs);
-    g_log("shadow", _gloglevelflags(level), "[%s:%i] [%s] %s", fileName,
-          lineNumber, functionName, message);
+    gchar* baseName = g_path_get_basename(fileName);
+    gchar* timeString = logger_elapsed_string();
+
+    g_print("%s %s [%s:%i] [%s] %s\n", timeString, loglevel_toStr(level),
+            baseName, lineNumber, functionName, message);
     g_free(message);
+    g_free(timeString);
+    g_free(baseName);
+#ifdef DEBUG
+    if (level == LOGLEVEL_ERROR) {
+        abort();
+    }
+#endif
 }
 
 void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
