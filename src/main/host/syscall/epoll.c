@@ -67,6 +67,12 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     gint fd = (gint)args->args[2].as_i64;
     const struct epoll_event* event = NULL; // args->args[3]
 
+    /* Make sure they didn't pass a NULL pointer. */
+    if(!args->args[3].as_ptr.val) {
+        return (SysCallReturn){
+                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EFAULT};
+    }
+
     /* EINVAL if fd is the same as epfd, or the requested operation op is not
      * supported by this interface */
     if (epfd == fd) {
@@ -118,6 +124,12 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     if (maxevents <= 0) {
         return (SysCallReturn){
             .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
+    }
+
+    /* Make sure they didn't pass a NULL pointer. */
+    if(!args->args[1].as_ptr.val) {
+        return (SysCallReturn){
+                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* Get and check the epoll descriptor. */

@@ -27,12 +27,18 @@
 ///////////////////////////////////////////////////////////
 
 static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
-                                                PluginPtr pipefdPluginPtr,
+                                                PluginPtr pipefdPtr,
                                                 gint flags) {
     if (flags & O_DIRECT) {
         warning("We don't currently support pipes in 'O_DIRECT' mode.");
         return (SysCallReturn){
             .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -ENOTSUP};
+    }
+
+    /* Make sure they didn't pass a NULL pointer. */
+    if(!pipefdPtr.val) {
+        return (SysCallReturn){
+                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* Create and check the pipe descriptor. */
@@ -61,8 +67,7 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
 
     /* Return the pipe fds to the caller. */
     size_t sizeNeeded = sizeof(int) * 2;
-    gint* pipefd =
-        thread_getWriteablePtr(sys->thread, pipefdPluginPtr, sizeNeeded);
+    gint* pipefd = thread_getWriteablePtr(sys->thread, pipefdPtr, sizeNeeded);
     pipefd[0] = descriptor_getHandle(pipeReader);
     pipefd[1] = descriptor_getHandle(pipeWriter);
 
@@ -155,6 +160,12 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
     DescriptorType dType = descriptor_getType(desc);
     gint dFlags = descriptor_getFlags(desc);
 
+    /* Make sure they didn't pass a NULL pointer. */
+    if(!args->args[1].as_ptr.val) {
+        return (SysCallReturn){
+                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EFAULT};
+    }
+
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, 1024 * 16);
@@ -220,6 +231,12 @@ SysCallReturn syscallhandler_write(SysCallHandler* sys,
     DescriptorType dType = descriptor_getType(desc);
     gint dFlags = descriptor_getFlags(desc);
 
+    /* Make sure they didn't pass a NULL pointer. */
+    if(!args->args[1].as_ptr.val) {
+        return (SysCallReturn){
+                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EFAULT};
+    }
+
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, 1024 * 16);
@@ -266,6 +283,13 @@ SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
 SysCallReturn syscallhandler_uname(SysCallHandler* sys,
                                    const SysCallArgs* args) {
     struct utsname* buf = NULL;
+
+    /* Make sure they didn't pass a NULL pointer. */
+    if(!args->args[0].as_ptr.val) {
+        return (SysCallReturn){
+                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EFAULT};
+    }
+
     buf =
         thread_getWriteablePtr(sys->thread, args->args[0].as_ptr, sizeof(*buf));
 

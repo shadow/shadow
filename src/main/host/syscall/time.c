@@ -30,6 +30,12 @@ static EmulatedTime _syscallhandler_getEmulatedTime() {
 
 SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
                                        const SysCallArgs* args) {
+    /* Make sure they didn't pass a NULL pointer. */
+    if(!args->args[0].as_ptr.val) {
+        return (SysCallReturn){
+                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EFAULT};
+    }
+
     /* Grab the arg from the syscall register. */
     const struct timespec* req =
         thread_getReadablePtr(sys->thread, args->args[0].as_ptr, sizeof(*req));
@@ -78,6 +84,12 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
     clockid_t clk_id = args->args[0].as_u64;
     debug("syscallhandler_clock_gettime with %d %p", clk_id,
           GUINT_TO_POINTER(args->args[1].as_ptr.val));
+
+    /* Make sure they didn't pass a NULL pointer. */
+    if(!args->args[1].as_ptr.val) {
+        return (SysCallReturn){
+                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EFAULT};
+    }
 
     struct timespec* res_timespec = thread_getWriteablePtr(
         sys->thread, args->args[1].as_ptr, sizeof(*res_timespec));
