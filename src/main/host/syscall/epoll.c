@@ -26,6 +26,8 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
 
     Descriptor* desc = host_createDescriptor(sys->host, DT_EPOLL);
     utility_assert(desc);
+    gint errorCode = _syscallhandler_validateDescriptor(desc, DT_EPOLL);
+    utility_assert(errorCode == 0);
 
     if (flags & EPOLL_CLOEXEC) {
         descriptor_addFlags(desc, EPOLL_CLOEXEC);
