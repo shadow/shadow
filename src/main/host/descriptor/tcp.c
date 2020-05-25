@@ -1368,25 +1368,27 @@ gboolean tcp_isListeningAllowed(TCP* tcp) {
 gint tcp_getConnectionError(TCP* tcp) {
     MAGIC_ASSERT(tcp);
 
-    if(tcp->flags & TCPF_WAS_ESTABLISHED) {
+    if (tcp->flags & TCPF_WAS_ESTABLISHED) {
         /* The 3-way handshake completed at some point. */
-        if(tcp->error & TCPE_CONNECTION_RESET) {
+        if (tcp->error & TCPE_CONNECTION_RESET) {
             tcp->flags |= TCPF_RESET_SIGNALED;
             return -ECONNRESET;
         }
 
-        if(tcp->state == TCPS_CLOSED) {
+        if (tcp->state == TCPS_CLOSED) {
             /* Check if we reported a close by returning 0 to the user yet. */
-            int readDone = (tcp->flags & TCPF_LOCAL_CLOSED_RD) || (tcp->flags & TCPF_EOF_RD_SIGNALED);
-            int writeDone = (tcp->flags & TCPF_LOCAL_CLOSED_WR) || (tcp->flags & TCPF_EOF_WR_SIGNALED);
+            int readDone = (tcp->flags & TCPF_LOCAL_CLOSED_RD) ||
+                           (tcp->flags & TCPF_EOF_RD_SIGNALED);
+            int writeDone = (tcp->flags & TCPF_LOCAL_CLOSED_WR) ||
+                            (tcp->flags & TCPF_EOF_WR_SIGNALED);
 
-            if(readDone && writeDone) {
+            if (readDone && writeDone) {
                 return -ENOTCONN;
             }
         }
 
         /* We are reporting that we are connected. */
-        if(!(tcp->flags & TCPF_CONNECT_SIGNALED)) {
+        if (!(tcp->flags & TCPF_CONNECT_SIGNALED)) {
             tcp->flags |= TCPF_CONNECT_SIGNALED;
             return 0;
         } else {
@@ -1394,12 +1396,12 @@ gint tcp_getConnectionError(TCP* tcp) {
         }
     } else {
         /* 3-way handshake has not completed yet. */
-        if(tcp->error & TCPE_CONNECTION_RESET) {
+        if (tcp->error & TCPE_CONNECTION_RESET) {
             tcp->flags |= TCPF_RESET_SIGNALED;
             return -ECONNREFUSED;
         }
 
-        if(tcp->state == TCPS_SYNSENT || tcp->state == TCPS_SYNRECEIVED) {
+        if (tcp->state == TCPS_SYNSENT || tcp->state == TCPS_SYNRECEIVED) {
             return -EALREADY;
         }
 
@@ -1482,7 +1484,7 @@ gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t famil
 
     /* Only try to connect if we haven't already started. */
     gint errorCode = tcp_getConnectionError(tcp);
-    if(errorCode <= 0) {
+    if (errorCode <= 0) {
         return errorCode;
     }
 

@@ -48,8 +48,7 @@ SysCallReturn syscallhandler_epoll_create(SysCallHandler* sys,
 
     int result = _syscallhandler_createEpollHelper(sys, size, 0);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = result};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
 }
 
 SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
@@ -58,8 +57,7 @@ SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
 
     int result = _syscallhandler_createEpollHelper(sys, 1, flags);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = result};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
 }
 
 SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
@@ -70,18 +68,16 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     const struct epoll_event* event = NULL; // args->args[3]
 
     /* Make sure they didn't pass a NULL pointer. */
-    if(!args->args[3].as_ptr.val) {
+    if (!args->args[3].as_ptr.val) {
         debug("NULL event pointer passed for epoll %i", epfd);
-        return (SysCallReturn){
-                    .state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* EINVAL if fd is the same as epfd, or the requested operation op is not
      * supported by this interface */
     if (epfd == fd) {
         debug("Epoll fd %i cannot be used to wait on itself.", epfd);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Get and check the epoll descriptor. */
@@ -117,8 +113,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
         errorCode = epoll_controlOS(epoll, op, osfd, event);
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }
 
 SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
@@ -131,15 +126,13 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     /* Check input args. */
     if (maxevents <= 0) {
         debug("Maxevents %i is not greater than 0.", maxevents);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Make sure they didn't pass a NULL pointer. */
-    if(!args->args[1].as_ptr.val) {
+    if (!args->args[1].as_ptr.val) {
         debug("NULL event pointer passed for epoll %i", epfd);
-        return (SysCallReturn){
-                    .state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* Get and check the epoll descriptor. */
@@ -168,11 +161,11 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
         /* Return immediately if timeout is 0 or we were already
          * blocked for a while and still have no events. */
         if (timeout_ms == 0 || _syscallhandler_wasBlocked(sys)) {
-            debug("No events are ready on epoll %i and we need to return now", epfd);
+            debug("No events are ready on epoll %i and we need to return now",
+                  epfd);
 
             /* Return 0; no events are ready. */
-            return (SysCallReturn){
-                .state = SYSCALL_DONE, .retval.as_i64 = 0};
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
         } else {
             debug("No events are ready on epoll %i and we need to block", epfd);
 
@@ -206,6 +199,5 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     debug("Found %i ready events on epoll %i.", nEvents, epfd);
 
     /* Return the number of events that are ready. */
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = nEvents};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = nEvents};
 }

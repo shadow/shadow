@@ -36,9 +36,8 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
     }
 
     /* Make sure they didn't pass a NULL pointer. */
-    if(!pipefdPtr.val) {
-        return (SysCallReturn){
-                    .state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    if (!pipefdPtr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* Create and check the pipe descriptor. */
@@ -88,8 +87,7 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
 
     /* Check that fd is within bounds. */
     if (fd <= 0) {
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
     /* Check if this is a virtual Shadow descriptor. */
@@ -117,8 +115,7 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
 
     // TODO: handle special files
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }
 
 SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,
@@ -146,8 +143,7 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
     // TODO: I think every read/write on FDs needs to come through shadow.
     // The following needs to change when we add file support.
     if (!desc) {
-        return (SysCallReturn){
-            .state = SYSCALL_NATIVE, .retval.as_i64 = 0};
+        return (SysCallReturn){.state = SYSCALL_NATIVE, .retval.as_i64 = 0};
     }
 
     gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
@@ -161,9 +157,8 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
     gint dFlags = descriptor_getFlags(desc);
 
     /* Make sure they didn't pass a NULL pointer. */
-    if(!args->args[1].as_ptr.val) {
-        return (SysCallReturn){
-                    .state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    if (!args->args[1].as_ptr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* TODO: Dynamically compute size based on how much data is actually
@@ -217,8 +212,7 @@ SysCallReturn syscallhandler_write(SysCallHandler* sys,
     // TODO: I think every read/write on FDs needs to come through shadow.
     // The following needs to change when we add file support.
     if (!desc) {
-        return (SysCallReturn){
-            .state = SYSCALL_NATIVE, .retval.as_i64 = 0};
+        return (SysCallReturn){.state = SYSCALL_NATIVE, .retval.as_i64 = 0};
     }
 
     gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
@@ -232,9 +226,8 @@ SysCallReturn syscallhandler_write(SysCallHandler* sys,
     gint dFlags = descriptor_getFlags(desc);
 
     /* Make sure they didn't pass a NULL pointer. */
-    if(!args->args[1].as_ptr.val) {
-        return (SysCallReturn){
-                    .state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    if (!args->args[1].as_ptr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* TODO: Dynamically compute size based on how much data is actually
@@ -285,9 +278,8 @@ SysCallReturn syscallhandler_uname(SysCallHandler* sys,
     struct utsname* buf = NULL;
 
     /* Make sure they didn't pass a NULL pointer. */
-    if(!args->args[0].as_ptr.val) {
-        return (SysCallReturn){
-                    .state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    if (!args->args[0].as_ptr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     buf =

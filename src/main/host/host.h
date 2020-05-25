@@ -125,10 +125,13 @@ const gchar* host_getDataPath(Host* host);
 
 gboolean host_doesInterfaceExist(Host* host, in_addr_t interfaceIP);
 gboolean host_isInterfaceAvailable(Host* host, ProtocolType type,
-        in_addr_t interfaceIP, in_port_t port, in_addr_t peerIP, in_port_t peerPort);
-void host_associateInterface(Host* host, Socket* socket,
-        in_addr_t bindAddress, in_port_t bindPort, in_addr_t peerAddress, in_port_t peerPort);
+                                   in_addr_t interfaceIP, in_port_t port,
+                                   in_addr_t peerIP, in_port_t peerPort);
+void host_associateInterface(Host* host, Socket* socket, in_addr_t bindAddress,
+                             in_port_t bindPort, in_addr_t peerAddress,
+                             in_port_t peerPort);
 in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
-        in_addr_t interfaceIP, in_addr_t peerIP, in_port_t peerPort);
+                                 in_addr_t interfaceIP, in_addr_t peerIP,
+                                 in_port_t peerPort);
 
 #endif /* SHD_HOST_H_ */

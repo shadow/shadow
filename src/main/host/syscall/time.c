@@ -31,9 +31,8 @@ static EmulatedTime _syscallhandler_getEmulatedTime() {
 SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
                                        const SysCallArgs* args) {
     /* Make sure they didn't pass a NULL pointer. */
-    if(!args->args[0].as_ptr.val) {
-        return (SysCallReturn){
-                    .state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    if (!args->args[0].as_ptr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* Grab the arg from the syscall register. */
@@ -42,8 +41,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
 
     /* Bounds checking. */
     if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Does the timeout request require us to block? */
@@ -86,9 +84,8 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
           GUINT_TO_POINTER(args->args[1].as_ptr.val));
 
     /* Make sure they didn't pass a NULL pointer. */
-    if(!args->args[1].as_ptr.val) {
-        return (SysCallReturn){
-                    .state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    if (!args->args[1].as_ptr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     struct timespec* res_timespec = thread_getWriteablePtr(

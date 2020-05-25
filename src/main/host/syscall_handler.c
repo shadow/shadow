@@ -95,24 +95,27 @@ void syscallhandler_unref(SysCallHandler* sys) {
     }
 }
 
-static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number, const char* name, SysCallReturn* scr) {
+static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
+                                        const char* name, SysCallReturn* scr) {
     debug("SYSCALL_HANDLER_PRE(%s,pid=%u): handling syscall %ld %s%s",
-            process_getPluginName(sys->process),
-            process_getProcessID(sys->process),
-            number, name,
-            _syscallhandler_wasBlocked(sys) ? " (previously BLOCKed)" : "");
+          process_getPluginName(sys->process),
+          process_getProcessID(sys->process), number, name,
+          _syscallhandler_wasBlocked(sys) ? " (previously BLOCKed)" : "");
 }
 
-static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const char* name, SysCallReturn* scr) {
-    debug("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s code=%d",
-            process_getPluginName(sys->process),
-            process_getProcessID(sys->process),
-            number, name,
-            _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "",
-            scr->state == SYSCALL_DONE ? "DONE" :
-            scr->state == SYSCALL_BLOCK ? "BLOCK" :
-            scr->state == SYSCALL_NATIVE ? "NATIVE" : "UNKNOWN",
-            (int)scr->retval.as_i64);
+static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
+                                         const char* name, SysCallReturn* scr) {
+    debug("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
+          "code=%d",
+          process_getPluginName(sys->process),
+          process_getProcessID(sys->process), number, name,
+          _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "",
+          scr->state == SYSCALL_DONE
+              ? "DONE"
+              : scr->state == SYSCALL_BLOCK
+                    ? "BLOCK"
+                    : scr->state == SYSCALL_NATIVE ? "NATIVE" : "UNKNOWN",
+          (int)scr->retval.as_i64);
 }
 
 ///////////////////////////////////////////////////////////

@@ -520,8 +520,9 @@ Router* host_getUpstreamRouter(Host* host, in_addr_t handle) {
     return networkinterface_getRouter(interface);
 }
 
-void host_associateInterface(Host* host, Socket* socket,
-        in_addr_t bindAddress, in_port_t bindPort, in_addr_t peerAddress, in_port_t peerPort) {
+void host_associateInterface(Host* host, Socket* socket, in_addr_t bindAddress,
+                             in_port_t bindPort, in_addr_t peerAddress,
+                             in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
     /* connect up socket layer */
@@ -956,7 +957,8 @@ gboolean host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
 }
 
 gboolean host_isInterfaceAvailable(Host* host, ProtocolType type,
-        in_addr_t interfaceIP, in_port_t port, in_addr_t peerIP, in_port_t peerPort) {
+                                   in_addr_t interfaceIP, in_port_t port,
+                                   in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
     gboolean isAvailable = FALSE;
@@ -999,7 +1001,8 @@ static in_port_t _host_getRandomPort(Host* host) {
 }
 
 in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
-        in_addr_t interfaceIP, in_addr_t peerIP, in_port_t peerPort) {
+                                 in_addr_t interfaceIP, in_addr_t peerIP,
+                                 in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
     /* we need a random port that is free everywhere we need it to be.
@@ -1013,7 +1016,8 @@ in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
         in_port_t randomPort = _host_getRandomPort(host);
 
         /* this will check all interfaces in the case of INADDR_ANY */
-        if(host_isInterfaceAvailable(host, type, interfaceIP, randomPort, peerIP, peerPort)) {
+        if (host_isInterfaceAvailable(
+                host, type, interfaceIP, randomPort, peerIP, peerPort)) {
             return randomPort;
         }
     }
@@ -1025,7 +1029,8 @@ in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
     in_port_t next = (start == UINT16_MAX) ? MIN_RANDOM_PORT : start + 1;
     while(next != start) {
         /* this will check all interfaces in the case of INADDR_ANY */
-        if(host_isInterfaceAvailable(host, type, interfaceIP, next, peerIP, peerPort)) {
+        if (host_isInterfaceAvailable(
+                host, type, interfaceIP, next, peerIP, peerPort)) {
             return next;
         }
         next = (next == UINT16_MAX) ? MIN_RANDOM_PORT : next + 1;
@@ -1090,7 +1095,8 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
             ProtocolType ptype = socket_getProtocol(socket);
             in_addr_t bindAddress = ip == htonl(INADDR_LOOPBACK) ? htonl(INADDR_LOOPBACK) :
                     address_toNetworkIP(host->defaultAddress);
-            in_port_t bindPort = host_getRandomFreePort(host, ptype, bindAddress, 0, 0);
+            in_port_t bindPort =
+                host_getRandomFreePort(host, ptype, bindAddress, 0, 0);
             if(!bindPort) {
                 return EADDRNOTAVAIL;
             }
@@ -1101,7 +1107,7 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
     }
 
     if(dtype == DT_TCPSOCKET) {
-        gint error = tcp_getConnectionError((TCP*) transport);
+        gint error = tcp_getConnectionError((TCP*)transport);
         if(error != EISCONN) {
             if(error == EALREADY) {
                 /* we should not be writing if the connection is not ready */
