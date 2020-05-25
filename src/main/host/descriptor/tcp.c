@@ -1365,29 +1365,46 @@ gboolean tcp_isListeningAllowed(TCP* tcp) {
     }
 }
 
-gint tcp_getConnectError(TCP* tcp) {
+gint tcp_getConnectionError(TCP* tcp) {
     MAGIC_ASSERT(tcp);
 
-    if(tcp->error & TCPE_CONNECTION_RESET) {
-        tcp->flags |= TCPF_RESET_SIGNALED;
-        if(tcp->flags & TCPF_WAS_ESTABLISHED) {
-            return ECONNRESET;
-        } else {
-            return ECONNREFUSED;
+    if(tcp->flags & TCPF_WAS_ESTABLISHED) {
+        /* The 3-way handshake completed at some point. */
+        if(tcp->error & TCPE_CONNECTION_RESET) {
+            tcp->flags |= TCPF_RESET_SIGNALED;
+            return -ECONNRESET;
         }
-    } else if(tcp->state == TCPS_SYNSENT || tcp->state == TCPS_SYNRECEIVED) {
-        return EALREADY;
-    } else if((tcp->flags & TCPF_EOF_RD_SIGNALED) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
-        /* we already signaled close, now its an error */
-        return ENOTCONN;
-    } else if(tcp->state != TCPS_CLOSED) {
-        /* @todo: this affects ability to connect. if a socket is closed, can
-         * we start over and connect again? (reuseaddr socket opt)
-         * if so, this should change
-         */
-        return EISCONN;
+
+        if(tcp->state == TCPS_CLOSED) {
+            /* Check if we reported a close by returning 0 to the user yet. */
+            int readDone = (tcp->flags & TCPF_LOCAL_CLOSED_RD) || (tcp->flags & TCPF_EOF_RD_SIGNALED);
+            int writeDone = (tcp->flags & TCPF_LOCAL_CLOSED_WR) || (tcp->flags & TCPF_EOF_WR_SIGNALED);
+
+            if(readDone && writeDone) {
+                return -ENOTCONN;
+            }
+        }
+
+        /* We are reporting that we are connected. */
+        if(!(tcp->flags & TCPF_CONNECT_SIGNALED)) {
+            tcp->flags |= TCPF_CONNECT_SIGNALED;
+            return 0;
+        } else {
+            return -EISCONN;
+        }
+    } else {
+        /* 3-way handshake has not completed yet. */
+        if(tcp->error & TCPE_CONNECTION_RESET) {
+            tcp->flags |= TCPF_RESET_SIGNALED;
+            return -ECONNREFUSED;
+        }
+
+        if(tcp->state == TCPS_SYNSENT || tcp->state == TCPS_SYNRECEIVED) {
+            return -EALREADY;
+        }
+
+        return 1; // have not sent a SYN yet
     }
-    return 0;
 }
 
 static guint8 _tcp_getTCPInfoState(TCP* tcp) {
@@ -1463,16 +1480,11 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t family) {
     MAGIC_ASSERT(tcp);
 
-    gint error = tcp_getConnectError(tcp);
-    if(error == EISCONN && !(tcp->flags & TCPF_CONNECT_SIGNALED)) {
-        /* we need to signal that connect was successful  */
-        tcp->flags |= TCPF_CONNECT_SIGNALED;
-        return 0;
-    } else if(error) {
-        return error;
+    /* Only try to connect if we haven't already started. */
+    gint errorCode = tcp_getConnectionError(tcp);
+    if(errorCode <= 0) {
+        return errorCode;
     }
-
-    /* no error, so we need to do the connect */
 
     /* send 1st part of 3-way handshake, state->syn_sent */
     _tcp_sendControlPacket(tcp, PTCP_SYN);
@@ -1481,7 +1493,7 @@ gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t famil
     _tcp_setState(tcp, TCPS_SYNSENT);
 
     /* we dont block, so return EINPROGRESS while waiting for establishment */
-    return EINPROGRESS;
+    return -EINPROGRESS;
 }
 
 void tcp_enterServerMode(TCP* tcp, gint backlog) {
@@ -1500,12 +1512,12 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
 
     /* make sure we are listening and bound to an ip and port */
     if(tcp->state != TCPS_LISTEN || !(tcp->super.flags & SF_BOUND)) {
-        return EINVAL;
+        return -EINVAL;
     }
 
     /* we must be a server to accept child connections */
     if(tcp->server == NULL){
-        return EINVAL;
+        return -EINVAL;
     }
 
     /* if there are no pending connection ready to accept, dont block waiting */
@@ -1513,18 +1525,18 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
         /* listen sockets should have no data, and should not be readable if no pending conns */
         utility_assert(socket_getInputBufferLength(&tcp->super) == 0);
         descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, FALSE);
-        return EWOULDBLOCK;
+        return -EWOULDBLOCK;
     }
 
     /* double check the pending child before its accepted */
     TCP* tcpChild = g_queue_pop_head(tcp->server->pending);
     if(!tcpChild) {
-        return ECONNABORTED;
+        return -ECONNABORTED;
     }
 
     MAGIC_ASSERT(tcpChild);
     if(tcpChild->error == TCPE_CONNECTION_RESET) {
-        return ECONNABORTED;
+        return -ECONNABORTED;
     }
 
     /* better have a peer if we are established */

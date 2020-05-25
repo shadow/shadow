@@ -115,18 +115,20 @@ void host_destroyShadowHandle(Host* host, gint shadowHandle);
 gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* erroneous);
 gint host_poll(Host* host, struct pollfd *pollFDs, nfds_t numPollFDs);
 
-gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* address);
-gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address);
-gint host_listenForPeer(Host* host, gint handle, gint backlog);
-gint host_acceptNewPeer(Host* host, gint handle, in_addr_t* ip, in_port_t* port, gint* acceptedHandle);
 gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_addr_t port, gsize* bytesCopied);
 gint host_receiveUserData(Host* host, gint handle, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port, gsize* bytesCopied);
-gint host_getPeerName(Host* host, gint handle, const struct sockaddr* address, socklen_t* len);
-gint host_getSocketName(Host* host, gint handle, const struct sockaddr* address, socklen_t* len);
 
 Tracker* host_getTracker(Host* host);
 LogLevel host_getLogLevel(Host* host);
 
 const gchar* host_getDataPath(Host* host);
+
+gboolean host_doesInterfaceExist(Host* host, in_addr_t interfaceIP);
+gboolean host_isInterfaceAvailable(Host* host, ProtocolType type,
+        in_addr_t interfaceIP, in_port_t port, in_addr_t peerIP, in_port_t peerPort);
+void host_associateInterface(Host* host, Socket* socket,
+        in_addr_t bindAddress, in_port_t bindPort, in_addr_t peerAddress, in_port_t peerPort);
+in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
+        in_addr_t interfaceIP, in_addr_t peerIP, in_port_t peerPort);
 
 #endif /* SHD_HOST_H_ */

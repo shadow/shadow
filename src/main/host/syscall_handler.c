@@ -20,6 +20,7 @@
 #include "main/host/process.h"
 #include "main/host/syscall/epoll.h"
 #include "main/host/syscall/protected.h"
+#include "main/host/syscall/socket.h"
 #include "main/host/syscall/time.h"
 #include "main/host/syscall/unistd.h"
 #include "main/host/syscall_handler.h"
@@ -145,25 +146,31 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     }
 
     switch (args->number) {
+        HANDLE(accept);
+        HANDLE(accept4);
+        HANDLE(bind);
         HANDLE(clock_gettime);
         HANDLE(close);
+        HANDLE(connect);
         HANDLE(epoll_create);
         HANDLE(epoll_create1);
         HANDLE(epoll_ctl);
         HANDLE(epoll_wait);
+        HANDLE(getpeername);
         HANDLE(getpid);
+        HANDLE(getsockname);
+        HANDLE(listen);
         HANDLE(nanosleep);
         HANDLE(pipe);
         HANDLE(pipe2);
         HANDLE(read);
+        HANDLE(socket);
         HANDLE(uname);
         HANDLE(write);
 
         // **************************************
         // Needed for phold, but not handled yet:
         // **************************************
-        // Test coverage: test/bind
-        NATIVE(bind);
         // Test coverage: test/file
         NATIVE(fstat);
         // Test coverage: test/file (via open(3))
@@ -172,8 +179,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(recvfrom);
         // Test coverage: test/udp
         NATIVE(sendto);
-        // Test coverage: test/udp
-        NATIVE(socket);
 
         // **************************************
         // Not handled (yet):

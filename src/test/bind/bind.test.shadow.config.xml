@@ -19,9 +19,9 @@
 </graphml>
 ]]></topology>
   <kill time="5"/>
-  <plugin id="testfile" path="test-bind"/>
+  <plugin id="testbind" path="test-bind"/>
   <node id="testnode" quantity="1">
-    <application plugin="testfile" starttime="1" arguments=""/>
+    <application plugin="testbind" starttime="1" arguments=""/>
   </node>
 </shadow>
 
