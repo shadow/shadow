@@ -186,8 +186,8 @@ static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
 
 static void _threadptrace_enterStateSyscallPost(ThreadPtrace* thread) {
     switch (thread->syscall.sysCallReturn.state) {
-        case SYSCALL_RETURN_BLOCKED: utility_assert(false); return;
-        case SYSCALL_RETURN_DONE:
+        case SYSCALL_BLOCK: utility_assert(false); return;
+        case SYSCALL_DONE:
             // Return the specified result.
             thread->syscall.regs.rax =
                 thread->syscall.sysCallReturn.retval.as_u64;
@@ -197,7 +197,7 @@ static void _threadptrace_enterStateSyscallPost(ThreadPtrace* thread) {
                 return;
             }
             break;
-        case SYSCALL_RETURN_NATIVE:
+        case SYSCALL_NATIVE:
             // Nothing to do. Just let it continue normally.
             break;
     }
@@ -349,8 +349,8 @@ void threadptrace_resume(Thread* base) {
                 _threadptrace_handleSyscall(thread);
 
                 switch (thread->syscall.sysCallReturn.state) {
-                    case SYSCALL_RETURN_BLOCKED: return;
-                    case SYSCALL_RETURN_DONE:
+                    case SYSCALL_BLOCK: return;
+                    case SYSCALL_DONE:
                         // We have to let the child make *a* syscall, so we
                         // ensure that it will fail.
                         thread->syscall.regs.orig_rax = -1;
@@ -360,7 +360,7 @@ void threadptrace_resume(Thread* base) {
                             return;
                         }
                         break;
-                    case SYSCALL_RETURN_NATIVE: {
+                    case SYSCALL_NATIVE: {
                         // Nothing to do. Just let it continue normally.
                         break;
                     }

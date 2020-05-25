@@ -100,7 +100,7 @@ static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number, const 
             process_getPluginName(sys->process),
             process_getProcessID(sys->process),
             number, name,
-            _syscallhandler_wasBlocked(sys) ? " (previously BLOCKED)" : "");
+            _syscallhandler_wasBlocked(sys) ? " (previously BLOCKed)" : "");
 }
 
 static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const char* name, SysCallReturn* scr) {
@@ -108,10 +108,10 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
             process_getPluginName(sys->process),
             process_getProcessID(sys->process),
             number, name,
-            _syscallhandler_wasBlocked(sys) ? "BLOCKED->" : "",
-            scr->state == SYSCALL_RETURN_DONE ? "DONE" :
-            scr->state == SYSCALL_RETURN_BLOCKED ? "BLOCKED" :
-            scr->state == SYSCALL_RETURN_NATIVE ? "NATIVE" : "UNKNOWN",
+            _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "",
+            scr->state == SYSCALL_DONE ? "DONE" :
+            scr->state == SYSCALL_BLOCK ? "BLOCK" :
+            scr->state == SYSCALL_NATIVE ? "NATIVE" : "UNKNOWN",
             (int)scr->retval.as_i64);
 }
 
@@ -128,7 +128,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
 #define NATIVE(s)                                                              \
     case SYS_##s:                                                              \
         debug("native syscall %ld " #s, args->number);                         \
-        scr = (SysCallReturn){.state = SYSCALL_RETURN_NATIVE};                 \
+        scr = (SysCallReturn){.state = SYSCALL_NATIVE};                        \
         break
 SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args) {
@@ -198,11 +198,11 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(stat);
         default:
             info("unhandled syscall %ld", args->number);
-            scr = (SysCallReturn){.state = SYSCALL_RETURN_NATIVE};
+            scr = (SysCallReturn){.state = SYSCALL_NATIVE};
             break;
     }
 
-    if (scr.state == SYSCALL_RETURN_BLOCKED) {
+    if (scr.state == SYSCALL_BLOCK) {
         /* We are blocking: store the syscall number so we know
          * to expect the same syscall again when it unblocks. */
         sys->blockedSyscallNR = args->number;

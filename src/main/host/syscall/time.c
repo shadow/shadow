@@ -33,7 +33,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     /* Make sure they didn't pass a NULL pointer. */
     if(!args->args[0].as_ptr.val) {
         return (SysCallReturn){
-                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EFAULT};
+                    .state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* Grab the arg from the syscall register. */
@@ -43,7 +43,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     /* Bounds checking. */
     if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
+            .state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Does the timeout request require us to block? */
@@ -59,7 +59,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
             sys->process, sys->thread, sys->timer, NULL, DS_NONE);
 
         /* tell the thread we blocked it */
-        return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
+        return (SysCallReturn){.state = SYSCALL_BLOCK};
     }
 
     /* If needed, verify that the timer expired correctly. */
@@ -76,7 +76,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     }
 
     /* The syscall is now complete. */
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
 
 SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
@@ -88,7 +88,7 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
     /* Make sure they didn't pass a NULL pointer. */
     if(!args->args[1].as_ptr.val) {
         return (SysCallReturn){
-                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EFAULT};
+                    .state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     struct timespec* res_timespec = thread_getWriteablePtr(
@@ -98,5 +98,5 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
     res_timespec->tv_sec = now / SIMTIME_ONE_SECOND;
     res_timespec->tv_nsec = now % SIMTIME_ONE_SECOND;
 
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }

@@ -27,11 +27,11 @@ typedef struct _SysCallArgs {
 
 typedef enum {
     // Done executing the syscall; ready to let the plugin thread resume.
-    SYSCALL_RETURN_DONE,
+    SYSCALL_DONE,
     // We don't have the result yet.
-    SYSCALL_RETURN_BLOCKED,
+    SYSCALL_BLOCK,
     // Direct plugin to make the syscall natively.
-    SYSCALL_RETURN_NATIVE
+    SYSCALL_NATIVE
 } SysCallReturnState;
 
 typedef struct _SysCallReturn {

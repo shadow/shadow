@@ -27,7 +27,7 @@
 
 #define SYSCALL_RETURN_IF_ERROR(errcode)                                       \
     if(errcode < 0) {                                                          \
-        return (SysCallReturn){.state = SYSCALL_RETURN_DONE,                   \
+        return (SysCallReturn){.state = SYSCALL_DONE,                          \
                                .retval.as_i64 = errcode};                      \
     }
 
@@ -90,7 +90,7 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
         info("invalid flags \"%i\", only SOCK_NONBLOCK and SOCK_CLOEXEC are allowed",
                         flags);
         return (SysCallReturn){
-                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
+                    .state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Get and validate the TCP socket. */
@@ -99,7 +99,7 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
 
     if(errorCode < 0) {
         return (SysCallReturn){
-                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
+                    .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
     utility_assert(tcp_desc);
 
@@ -107,13 +107,13 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
     if(!tcp_isValidListener(tcp_desc)) {
         info("socket %i is not listening", sockfd);
         return (SysCallReturn){
-                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
+                    .state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Make sure they supplied addrlen if they requested an addr. */
     if(addrPtr.val && !addrlenPtr.val) {
         info("addrlen was NULL when addr was non-NULL");
-        return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* OK, now we can check if we have anything to accept. */
@@ -129,11 +129,11 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
          * This blocks indefinitely without a timeout. */
         debug("Listening socket %i waiting for acceptable connection.", sockfd);
         process_listenForStatus(sys->process, sys->thread, NULL, desc, DS_READABLE);
-        return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
+        return (SysCallReturn){.state = SYSCALL_BLOCK};
     } else if(errorCode < 0) {
         debug("TCP error when accepting connection on socket %i", sockfd);
         return (SysCallReturn){
-                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
+                    .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
 
     /* We accepted something! */
@@ -163,7 +163,7 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
         *addrlen_out = sizeof(*addr_out);
     }
     return (SysCallReturn){
-                        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = accepted_fd};
+                        .state = SYSCALL_DONE, .retval.as_i64 = accepted_fd};
 }
 
 
@@ -238,7 +238,7 @@ static SysCallReturn _syscallhandler_getnameHelper(SysCallHandler* sys, struct s
     memcpy(addr, inet_addr, retSize);
     *addrlen = (socklen_t)retSize;
 
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE};
+    return (SysCallReturn){.state = SYSCALL_DONE};
 }
 
 ///////////////////////////////////////////////////////////
@@ -307,7 +307,7 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
 
     errorCode = _syscallhandler_bindHelper(sys, socket_desc, bindAddr, bindPort, 0, 0);
     return (SysCallReturn){
-                    .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
+                    .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }
 
 SysCallReturn syscallhandler_connect(SysCallHandler* sys,
@@ -390,7 +390,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
              * need to wait for the 3-way handshake to complete.
              * We will wait indefinitely for a success or failure. */
             process_listenForStatus(sys->process, sys->thread, NULL, desc, DS_WRITABLE);
-            return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
+            return (SysCallReturn){.state = SYSCALL_BLOCK};
         } else if(_syscallhandler_wasBlocked(sys) && errorCode == -EISCONN) {
             /* It was EINPROGRESS, but is now a successful blocking connect. */
             errorCode = 0;
@@ -407,7 +407,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     }
 
     /* Return 0, -EINPROGRESS, etc. now. */
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
+    return (SysCallReturn){.state = SYSCALL_DONE,
                            .retval.as_i64 = errorCode};
 }
 
@@ -503,7 +503,7 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
      * but we currently do not make use of the backlog. */
     if(tcp_isValidListener(tcp_desc)) {
         debug("Socket %i already set up as a listener", sockfd);
-        return (SysCallReturn){.state = SYSCALL_RETURN_DONE};
+        return (SysCallReturn){.state = SYSCALL_DONE};
     }
 
     /* We are allowed to listen but not already listening, start now. */
@@ -515,7 +515,7 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
     }
 
     tcp_enterServerMode(tcp_desc, backlog);
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE};
+    return (SysCallReturn){.state = SYSCALL_DONE};
 }
 
 SysCallReturn syscallhandler_socket(SysCallHandler* sys,
@@ -570,6 +570,6 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
 
     debug("socket() returning fd %i", socket_fd);
 
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE,
+    return (SysCallReturn){.state = SYSCALL_DONE,
                            .retval.as_i64 = socket_fd};
 }

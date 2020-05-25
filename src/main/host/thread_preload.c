@@ -273,7 +273,7 @@ void threadpreload_resume(Thread* base) {
                     thread->sys,
                     &thread->currentEvent.event_data.syscall.syscall_args);
 
-                if (result.state == SYSCALL_RETURN_BLOCKED) {
+                if (result.state == SYSCALL_BLOCK) {
                     blocked = true;
                     break;
                 }
@@ -290,7 +290,7 @@ void threadpreload_resume(Thread* base) {
                 shimevent_sendEvent(thread->eventFD, &ipc_complete_ev);
 
                 ShimEvent shim_result;
-                if (result.state == SYSCALL_RETURN_DONE) {
+                if (result.state == SYSCALL_DONE) {
                     // Now send the result of the syscall
                     shim_result = (ShimEvent){
                         .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
@@ -300,7 +300,7 @@ void threadpreload_resume(Thread* base) {
                                                      worker_getEmulatedTime()},
 
                         }};
-                } else if (result.state == SYSCALL_RETURN_NATIVE) {
+                } else if (result.state == SYSCALL_NATIVE) {
                     // Tell the shim to make the syscall itself
                     shim_result = (ShimEvent){
                         .event_id = SHD_SHIM_EVENT_SYSCALL_DO_NATIVE,
