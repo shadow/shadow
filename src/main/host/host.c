@@ -1532,26 +1532,6 @@ gint host_receiveUserData(Host* host, gint handle, gpointer buffer, gsize nBytes
     return 0;
 }
 
-gint host_closeUser(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor == NULL) {
-        warning("descriptor handle '%i' not found", handle);
-        return -EBADF;
-    }
-
-    DescriptorStatus status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", handle);
-        return -EBADF;
-    }
-
-    descriptor_close(descriptor);
-
-    return 0;
-}
-
 gint host_shutdownSocket(Host* host, gint handle, gint how) {
     MAGIC_ASSERT(host);
 

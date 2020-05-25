@@ -100,7 +100,6 @@ Descriptor* host_createDescriptor(Host* host, DescriptorType type);
 Descriptor* host_lookupDescriptor(Host* host, gint handle);
 void host_closeDescriptor(Host* host, gint handle);
 
-gint host_closeUser(Host* host, gint handle);
 gint host_shutdownSocket(Host* host, gint handle, gint how);
 NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle);
 Router* host_getUpstreamRouter(Host* host, in_addr_t handle);

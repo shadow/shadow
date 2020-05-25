@@ -92,10 +92,8 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
     if (descriptor && !errorCode) {
-        /* Yes! Handle it in the host netstack. */
-        errorCode = host_closeUser(sys->host, fd);
-        return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
+        descriptor_close(descriptor);
+        return (SysCallReturn){.state = SYSCALL_RETURN_DONE};
     }
 
     /* Check if we have a mapped os fd. This call returns -1 to
