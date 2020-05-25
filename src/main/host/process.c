@@ -117,6 +117,12 @@ const gchar* process_getName(Process* proc) {
     return proc->processName->str;
 }
 
+const gchar* process_getPluginName(Process* proc) {
+    MAGIC_ASSERT(proc);
+    utility_assert(proc->plugin.exeName->str);
+    return proc->plugin.exeName->str;
+}
+
 guint process_getProcessID(Process* proc) {
     MAGIC_ASSERT(proc);
     return proc->processID;

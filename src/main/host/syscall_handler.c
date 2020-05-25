@@ -94,14 +94,35 @@ void syscallhandler_unref(SysCallHandler* sys) {
     }
 }
 
+static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number, const char* name, SysCallReturn* scr) {
+    debug("SYSCALL_HANDLER_PRE(%s,pid=%u): handling syscall %ld %s%s",
+            process_getPluginName(sys->process),
+            process_getProcessID(sys->process),
+            number, name,
+            _syscallhandler_wasBlocked(sys) ? " (previously BLOCKED)" : "");
+}
+
+static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const char* name, SysCallReturn* scr) {
+    debug("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s code=%d",
+            process_getPluginName(sys->process),
+            process_getProcessID(sys->process),
+            number, name,
+            _syscallhandler_wasBlocked(sys) ? "BLOCKED->" : "",
+            scr->state == SYSCALL_RETURN_DONE ? "DONE" :
+            scr->state == SYSCALL_RETURN_BLOCKED ? "BLOCKED" :
+            scr->state == SYSCALL_RETURN_NATIVE ? "NATIVE" : "UNKNOWN",
+            (int)scr->retval.as_i64);
+}
+
 ///////////////////////////////////////////////////////////
 // Single public API function for calling Shadow syscalls
 ///////////////////////////////////////////////////////////
 
 #define HANDLE(s)                                                              \
     case SYS_##s:                                                              \
-        debug("handling syscall %ld " #s, args->number);                       \
+        _syscallhandler_pre_syscall(sys, args->number, #s, &scr);              \
         scr = syscallhandler_##s(sys, args);                                   \
+        _syscallhandler_post_syscall(sys, args->number, #s, &scr);             \
         break
 #define NATIVE(s)                                                              \
     case SYS_##s:                                                              \
@@ -176,31 +197,15 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             break;
     }
 
-    /* If we are blocking, store the syscall number so we know
-     * to expect the same syscall again when it unblocks. */
     if (scr.state == SYSCALL_RETURN_BLOCKED) {
-        debug("syscall %ld on thread %p of process %s is blocked", args->number,
-              sys->thread, process_getName(sys->process));
+        /* We are blocking: store the syscall number so we know
+         * to expect the same syscall again when it unblocks. */
         sys->blockedSyscallNR = args->number;
-    } else {
-        /* Log some debugging info. */
-        if (scr.state == SYSCALL_RETURN_NATIVE) {
-            debug("syscall %ld on thread %p of process %s will be handled "
-                  "natively",
-                  args->number, sys->thread, process_getName(sys->process));
-        } else {
-            debug("syscall %ld on thread %p of process %s %s", args->number,
-                  sys->thread, process_getName(sys->process),
-                  sys->blockedSyscallNR >= 0
-                      ? "was blocked but is now unblocked"
-                      : "completed without blocking");
-        }
-
-        /* We are no longer blocked on a syscall. */
-        if (_syscallhandler_wasBlocked(sys)) {
-            _syscallhandler_setListenTimeout(sys, NULL);
-            sys->blockedSyscallNR = -1;
-        }
+    } else if (_syscallhandler_wasBlocked(sys)) {
+        /* We were but are no longer blocked on a syscall. Make
+         * sure any previously used listener timeouts are ignored.*/
+        _syscallhandler_setListenTimeout(sys, NULL);
+        sys->blockedSyscallNR = -1;
     }
 
     return scr;
