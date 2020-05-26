@@ -96,7 +96,7 @@ void syscallhandler_unref(SysCallHandler* sys) {
 }
 
 static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
-                                        const char* name, SysCallReturn* scr) {
+                                        const char* name) {
     debug("SYSCALL_HANDLER_PRE(%s,pid=%u): handling syscall %ld %s%s",
           process_getPluginName(sys->process),
           process_getProcessID(sys->process), number, name,
@@ -124,7 +124,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
 
 #define HANDLE(s)                                                              \
     case SYS_##s:                                                              \
-        _syscallhandler_pre_syscall(sys, args->number, #s, &scr);              \
+        _syscallhandler_pre_syscall(sys, args->number, #s);                    \
         scr = syscallhandler_##s(sys, args);                                   \
         _syscallhandler_post_syscall(sys, args->number, #s, &scr);             \
         break

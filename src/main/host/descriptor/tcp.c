@@ -1377,10 +1377,10 @@ gint tcp_getConnectionError(TCP* tcp) {
 
         if (tcp->state == TCPS_CLOSED) {
             /* Check if we reported a close by returning 0 to the user yet. */
-            int readDone = (tcp->flags & TCPF_LOCAL_CLOSED_RD) ||
-                           (tcp->flags & TCPF_EOF_RD_SIGNALED);
-            int writeDone = (tcp->flags & TCPF_LOCAL_CLOSED_WR) ||
-                            (tcp->flags & TCPF_EOF_WR_SIGNALED);
+            int readDone =
+                tcp->flags & (TCPF_LOCAL_CLOSED_RD | TCPF_EOF_RD_SIGNALED);
+            int writeDone =
+                tcp->flags & (TCPF_LOCAL_CLOSED_WR | TCPF_EOF_WR_SIGNALED);
 
             if (readDone && writeDone) {
                 return -ENOTCONN;

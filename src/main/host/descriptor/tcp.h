@@ -39,7 +39,27 @@ enum _TCPCongestionType {
 };
 
 TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize);
+
+// clang-format off
+/* Returns a positive number to indicate that we have not yet sent a SYN
+ * packet, i.e., connect() has not been called.
+ *
+ * Returns 0 to signal that a previous connect() attempt succeeded. A 0 return
+ * code is only returned once, after which it is assumed that the successful
+ * connect() has been signaled to the user.
+ *
+ * Otherwise returns a negative code:
+ * -ECONNRESET: an established connection failed unexpectedly
+ * -ENOTCONN: the connection was established, but now both reading and writing
+ *            are done
+ * -EISCONN: the connection is established and we already returned 0 once to
+ *           indicate a successful 3-way handshake
+ * -ECONNREFUSED: the 3-way handshake failed
+ * -EALREADY: connect() was called and we are waiting for the 3-way handshake
+ */
 gint tcp_getConnectionError(TCP* tcp);
+// clang-format on
+
 void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo);
 void tcp_enterServerMode(TCP* tcp, gint backlog);
 gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* acceptedHandle);
