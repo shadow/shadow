@@ -169,6 +169,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(read);
         HANDLE(recvfrom);
         HANDLE(sendto);
+        HANDLE(shutdown);
         HANDLE(socket);
         HANDLE(uname);
         HANDLE(write);

@@ -67,7 +67,7 @@ enum TCPFlags {
     TCPF_EOF_WR_SIGNALED = 1 << 4,
     TCPF_RESET_SIGNALED = 1 << 5,
     TCPF_WAS_ESTABLISHED = 1 << 6,
-    TCPF_CONNECT_SIGNALED = 1 << 7,
+    TCPF_CONNECT_SIGNAL_NEEDED = 1 << 7,
     TCPF_SHOULD_SEND_WR_FIN = 1 << 8,
 };
 
@@ -838,6 +838,9 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpo
 static void _tcp_sendControlPacket(TCP* tcp, enum ProtocolTCPFlags flags) {
     MAGIC_ASSERT(tcp);
 
+    debug("%s <-> %s: sending response control packet now",
+                    tcp->super.boundString, tcp->super.peerString);
+
     /* create the ack packet, without any payload data */
     Packet* control = _tcp_createPacket(tcp, flags, NULL, 0);
 
@@ -1388,8 +1391,8 @@ gint tcp_getConnectionError(TCP* tcp) {
         }
 
         /* We are reporting that we are connected. */
-        if (!(tcp->flags & TCPF_CONNECT_SIGNALED)) {
-            tcp->flags |= TCPF_CONNECT_SIGNALED;
+        if (tcp->flags & TCPF_CONNECT_SIGNAL_NEEDED) {
+            tcp->flags &= ~TCPF_CONNECT_SIGNAL_NEEDED;
             return 0;
         } else {
             return -EISCONN;
@@ -1493,6 +1496,9 @@ gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t famil
 
     debug("%s <-> %s: user initiated connection", tcp->super.boundString, tcp->super.peerString);
     _tcp_setState(tcp, TCPS_SYNSENT);
+
+    /* We need to signal when we it succeeds. */
+    tcp->flags |= TCPF_CONNECT_SIGNAL_NEEDED;
 
     /* we dont block, so return EINPROGRESS while waiting for establishment */
     return -EINPROGRESS;
@@ -1612,6 +1618,8 @@ static GList* _tcp_removeSacks(GList* selectiveACKs, gint sequence) {
 TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *header) {
     MAGIC_ASSERT(tcp);
 
+    debug("processing data");
+
     TCPProcessFlags flags = TCP_PF_NONE;
     SimulationTime now = worker_getCurrentTime();
     guint packetLength = packet_getPayloadLength(packet);
@@ -1671,11 +1679,15 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
         }
     }
 
+    debug("processing data returning flags %i", (int)flags);
+
     return flags;
 }
 
 TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *header) {
     MAGIC_ASSERT(tcp);
+
+    debug("processing acks");
 
     TCPProcessFlags flags = TCP_PF_PROCESSED;
     SimulationTime now = worker_getCurrentTime();
@@ -1761,6 +1773,8 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
 
     tcp->info.lastAckReceived = now;
 
+    debug("processing acks returning flags %i", (int)flags);
+
     return flags;
 }
 
@@ -1783,8 +1797,11 @@ static void _tcp_sendACKTaskCallback(TCP* tcp, gpointer userData) {
     MAGIC_ASSERT(tcp);
     tcp->send.delayedACKIsScheduled = FALSE;
     if(tcp->send.delayedACKCounter > 0) {
+        debug("sending a delayed ACK now");
         _tcp_sendControlPacket(tcp, PTCP_ACK);
         tcp->send.delayedACKCounter = 0;
+    } else {
+        debug("delayed ACK was cancelled");
     }
 }
 
@@ -1833,6 +1850,8 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     TCPProcessFlags flags = TCP_PF_NONE;
     enum ProtocolTCPFlags responseFlags = PTCP_NONE;
 
+    debug("processing packet while in state %s", tcp_stateToAscii(tcp->state));
+
     switch(tcp->state) {
         case TCPS_LISTEN: {
             /* receive SYN, send SYNACK, move to SYNRECEIVED */
@@ -1865,6 +1884,8 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 /* child will send response */
                 tcp = multiplexed;
                 responseFlags = PTCP_SYN|PTCP_ACK;
+
+                debug("new child state %s", tcp_stateToAscii(tcp->state));
             }
             break;
         }
@@ -1987,6 +2008,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 flags |= TCP_PF_PROCESSED;
                 _tcp_setState(tcp, TCPS_CLOSED);
                 /* we closed, cant use tcp anymore */
+                debug("packet caused us to close and won't send response");
                 return;
             }
             break;
@@ -1996,6 +2018,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         case TCPS_CLOSED: {
             /* stray packet, drop without retransmit */
             packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
+            debug("already closed and won't send response");
             return;
             break;
         }
@@ -2006,8 +2029,11 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         if(!(flags & TCP_PF_PROCESSED)) {
             packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
         }
+        debug("listener does not respond to packets");
         return;
     }
+
+    debug("state after switch is %s", tcp_stateToAscii(tcp->state));
 
     /* if TCPE_RECEIVE_EOF, we are not supposed to receive any more */
     if(packetLength > 0 && !(tcp->error & TCPE_RECEIVE_EOF)) {
@@ -2021,6 +2047,7 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     /* if it is a spurious packet, drop it */
     if(!(flags & TCP_PF_PROCESSED)) {
         _rswlog(tcp, "Dropping spurious packet %d.\n", header->sequence);
+        debug("dropping packet that had no useful info for us");
         utility_assert(responseFlags == PTCP_NONE);
         packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
         return;
@@ -2064,6 +2091,9 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         responseFlags |= PTCP_ACK;
     }
 
+    debug("checking if response is needed: flags=%i RCV_EOF=%i FIN=%i", (int)responseFlags,
+            (int)(tcp->error & TCPE_RECEIVE_EOF), (int)(responseFlags & PTCP_FIN));
+
     /* send control packet if we have one. we always need to send any packet with a FIN set
      * to ensure the connection close sequence completes on both sides. */
     if(responseFlags != PTCP_NONE &&
@@ -2071,13 +2101,12 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         _rswlog(tcp, "Sending control packet on %d\n",
                 header->sequence);
 
-        debug("%s <-> %s: sending response control packet",
-                tcp->super.boundString, tcp->super.peerString);
-
         if(responseFlags != PTCP_ACK) { // includes DUPACKs
             /* just send the response now */
+            debug("sending ACK control packet now");
             _tcp_sendControlPacket(tcp, responseFlags);
         } else {
+            debug("waiting for delayed ACK control packet");
             if(tcp->send.delayedACKIsScheduled == FALSE) {
                 /* we need to send an ACK, lets schedule a task so we don't send an ACK
                  * for all packets that are received during this same simtime receiving round. */
@@ -2111,6 +2140,8 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
     /* clear it so we dont send outdated timestamp echos */
     tcp->receive.lastTimestamp = 0;
+
+    debug("done processing in state %s", tcp_stateToAscii(tcp->state));
 }
 
 void tcp_dropPacket(TCP* tcp, Packet* packet) {
@@ -2144,6 +2175,7 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
     /* return 0 to signal close, if necessary */
     if(tcp->error & TCPE_SEND_EOF)
     {
+        debug("send EOF is set");
         if(tcp->flags & TCPF_EOF_WR_SIGNALED) {
             /* we already signaled close, now its an error */
             return -ENOTCONN;
@@ -2427,7 +2459,7 @@ gint tcp_shutdown(TCP* tcp, gint how) {
 
     if(tcp->state == TCPS_SYNSENT || tcp->state == TCPS_SYNRECEIVED ||
             tcp->state == TCPS_LISTEN || tcp->state == TCPS_CLOSED) {
-        return ENOTCONN;
+        return -ENOTCONN;
     }
 
     if(how == SHUT_RD || how == SHUT_RDWR) {

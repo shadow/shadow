@@ -329,10 +329,34 @@ static int _test_write_blocked_shutdown() {
     result = shutdown(sd_child, SHUT_WR);
     printf("shutdown(SHUT_WR) on server child returned %i\n", result);
 
-    char buf[60000];
-    memset(buf, 0, 60000);
+#define BYTES_TO_TRANSFER 60000
+    char buf[BYTES_TO_TRANSFER];
+    memset(buf, 0, BYTES_TO_TRANSFER);
 
-    ssize_t bytes = send(cd, buf, 60000, 0);
+    size_t totalBytesSend = 0;
+    while(1) {
+        size_t remaining = BYTES_TO_TRANSFER-totalBytesSend;
+        if(!remaining) {
+            printf("send() sent everything!");
+            break;
+        }
+
+        ssize_t bytes = send(cd, buf, remaining, 0);
+
+        if(bytes > 0) {
+            totalBytesSend += (size_t)bytes;
+            printf("send() sent %li more bytes, total is %li\n", (long int)bytes, (long int) totalBytesSend);
+        } else if(bytes == -1 && errno == EWOULDBLOCK) {
+            printf("send() would block, pausing for 1 millisecond\n");
+            usleep(1000); // 1 milli
+        } else if(bytes == 0) {
+            printf("send() returned EOF\n");
+            break;
+        } else {
+            printf("send() returned error %i: %s\n", errno, strerror(errno));
+            break;
+        }
+    }
 
     result = shutdown(cd, SHUT_WR);
     printf("shutdown(SHUT_WR) on client returned %i\n", result);
@@ -345,13 +369,13 @@ static int _test_write_blocked_shutdown() {
     /* wait for the data to get to the receiver */
     usleep(10000); // 10 millis
 
-    size_t totalBytes = 0;
+    size_t totalBytesRecv = 0;
     while(1) {
-        bytes = recv(sd_child, buf, 4096, 0);
+        ssize_t bytes = recv(sd_child, buf, 4096, 0);
 
         if(bytes > 0) {
-            totalBytes += (size_t)bytes;
-            printf("recv() got %li more bytes, total is %li\n", (long int)bytes, (long int) totalBytes);
+            totalBytesRecv += (size_t)bytes;
+            printf("recv() got %li more bytes, total is %li\n", (long int)bytes, (long int) totalBytesRecv);
         } else if(bytes == -1 && errno == EWOULDBLOCK) {
             printf("recv() would block, pausing for 1 millisecond\n");
             usleep(1000); // 1 milli
@@ -364,9 +388,9 @@ static int _test_write_blocked_shutdown() {
         }
     }
 
-    printf("recv() %li total bytes after SHUT_WR\n", (long int)totalBytes);
+    printf("recv() %li total bytes after SHUT_WR\n", (long int)totalBytesRecv);
 
-    if(totalBytes != 60000) {
+    if(totalBytesRecv != 60000) {
         printf("after shutdown(SHUT_WR) peer should be able to read the 60000 bytes we sent\n");
         goto fail;
     }

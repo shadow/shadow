@@ -82,6 +82,8 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
                                                   int sockfd, PluginPtr addrPtr,
                                                   PluginPtr addrlenPtr,
                                                   int flags) {
+    debug("trying to accept on socket %i", sockfd);
+
     /* Check that non-valid flags are not given. */
     if (flags & ~(SOCK_NONBLOCK | SOCK_CLOEXEC)) {
         info("invalid flags \"%i\", only SOCK_NONBLOCK and SOCK_CLOEXEC are "
@@ -274,6 +276,8 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
     const struct sockaddr* addr; // args->args[1]
     socklen_t addrlen = (socklen_t)args->args[2].as_u64;
 
+    debug("trying to bind on socket %i", sockfd);
+
     /* Get and validate the socket. */
     Socket* socket_desc = NULL;
     int errcode =
@@ -328,6 +332,8 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     int sockfd = (int)args->args[0].as_i64;
     const struct sockaddr* addr; // args->args[1]
     socklen_t addrlen = (socklen_t)args->args[2].as_u64;
+
+    debug("trying to connect on socket %i", sockfd);
 
     /* Get and validate the socket. */
     Socket* socket_desc = NULL;
@@ -445,6 +451,8 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
                                          const SysCallArgs* args) {
     int sockfd = (int)args->args[0].as_i64;
 
+    debug("trying to get peer name on socket %i", sockfd);
+
     /* Get and validate the socket. */
     Socket* socket_desc = NULL;
     int errcode =
@@ -487,6 +495,8 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
                                          const SysCallArgs* args) {
     int sockfd = (int)args->args[0].as_i64;
 
+    debug("trying to get sock name on socket %i", sockfd);
+
     /* Get and validate the socket. */
     Socket* socket_desc = NULL;
     int errcode =
@@ -527,6 +537,8 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
                                     const SysCallArgs* args) {
     int sockfd = (int)args->args[0].as_i64;
     int backlog = (int)args->args[1].as_i64;
+
+    debug("trying to listen on socket %i", sockfd);
 
     /* Get and validate the TCP socket. */
     TCP* tcp_desc = NULL;
@@ -576,6 +588,8 @@ SysCallReturn syscallhandler_recvfrom(SysCallHandler* sys,
     int flags = (int)(int)args->args[3].as_i64;
     struct sockaddr* src_addr; // args->args[4]
     socklen_t* addrlen; // args->args[5]
+
+    debug("trying to recv %zu bytes on socket %i", bufSize, sockfd);
 
     /* Get and validate the socket. */
     Socket* socket_desc = NULL;
@@ -643,6 +657,8 @@ SysCallReturn syscallhandler_sendto(SysCallHandler* sys,
     const struct sockaddr* dest_addr; // args->args[4]
     socklen_t addrlen = (socklen_t)args->args[5].as_u64;
 
+    debug("trying to send %zu bytes on socket %i", bufSize, sockfd);
+
     /* Get and validate the socket. */
     Socket* socket_desc = NULL;
     int errcode =
@@ -689,6 +705,7 @@ SysCallReturn syscallhandler_sendto(SysCallHandler* sys,
     }
 
     Descriptor* desc = (Descriptor*)socket_desc;
+    errcode = 0;
 
     if(descriptor_getType(desc) == DT_UDPSOCKET) {
         /* make sure that we have somewhere to send it */
@@ -720,23 +737,39 @@ SysCallReturn syscallhandler_sendto(SysCallHandler* sys,
         }
     } else { // DT_TCPSOCKET
         errcode = tcp_getConnectionError((TCP*)socket_desc);
-        if(errcode != -EISCONN) {
-            if(errcode > 0 || errcode == -EALREADY) {
-                /* we should not be writing if the connection is not ready */
-                descriptor_adjustStatus(desc, DS_WRITABLE, FALSE);
-                return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EWOULDBLOCK};
-            } else {
-                return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
-            }
+
+        debug("connection error state is currently %i", errcode);
+
+        if(errcode > 0) {
+            /* connect() was not called yet.
+             * TODO: Can they can piggy back a connect() on sendto() if they
+             * provide an address for the connection? */
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
+        } else if (errcode == 0) {
+            /* They connected, but never read the success code with a second
+             * call to connect(). That's OK, proceed to send as usual. */
+        } else if (errcode == -EISCONN) {
+            /* They are connected, and we can send now. */
+            errcode = 0;
+        } else if(errcode == -EALREADY) {
+            /* Connection in progress.
+             * TODO: should we wait, or just return -EALREADY? */
+            errcode = -EWOULDBLOCK;
         }
     }
 
-    /* TODO: Dynamically compute size based on how much data is actually
-     * available in the descriptor. */
-    size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
-    buf = thread_getReadablePtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
+    gssize retval = (gssize)errcode;
 
-    gssize retval = transport_sendUserData((Transport*)socket_desc, buf, sizeNeeded, dest_ip, dest_port);
+    if(errcode == 0) {
+        /* TODO: Dynamically compute size based on how much data is actually
+         * available in the descriptor. */
+        size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
+        buf = thread_getReadablePtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
+
+        retval = transport_sendUserData((Transport*)socket_desc, buf, sizeNeeded, dest_ip, dest_port);
+
+        debug("send returned %z", retval);
+    }
 
     if (retval == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
         /* We need to block until the descriptor is ready to read. */
@@ -748,11 +781,38 @@ SysCallReturn syscallhandler_sendto(SysCallHandler* sys,
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = (int64_t)retval};
 }
 
+SysCallReturn syscallhandler_shutdown(SysCallHandler* sys,
+                                    const SysCallArgs* args) {
+    int sockfd = (int)args->args[0].as_i64;
+    int how = (int)args->args[1].as_i64;
+
+    debug("trying to shutdown on socket %i with how %i", sockfd, how);
+
+    if(how != SHUT_RD && how != SHUT_WR && how != SHUT_RDWR) {
+        info("invalid how %i", how);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    }
+
+    /* Get and validate the socket. */
+    TCP* tcp_desc = NULL;
+    int errcode = _syscallhandler_validateTCPSocketHelper(sys, sockfd, &tcp_desc);
+    if (errcode < 0) {
+        if(errcode == -EOPNOTSUPP) {
+            errcode = -ENOTCONN;
+        }
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = (int64_t)tcp_shutdown(tcp_desc, how)};
+}
+
 SysCallReturn syscallhandler_socket(SysCallHandler* sys,
                                     const SysCallArgs* args) {
     int domain = (int)args->args[0].as_i64;
     int type = (int)args->args[1].as_i64;
     int protocol = (int)args->args[2].as_i64;
+
+    debug("trying to create new socket");
 
     /* Remove the two possible flags to get the type. */
     int type_no_flags = type & ~(SOCK_NONBLOCK | SOCK_CLOEXEC);
