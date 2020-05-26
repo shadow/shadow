@@ -323,7 +323,7 @@ static void _threadptrace_handleSyscall(ThreadPtrace* thread) {
 
     SysCallArgs args = {
         .number = regs->orig_rax,
-        .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8},
+        .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8, regs->r9},
     };
 
     thread->syscall.sysCallReturn =
