@@ -371,7 +371,7 @@ ssize_t timer_read(Timer* timer, void *buf, size_t count) {
         return (ssize_t) sizeof(guint64);
     } else {
         /* the timer has not yet expired, try again later */
-        return (ssize_t)-EAGAIN;
+        return (ssize_t)-EWOULDBLOCK;
     }
 }
 

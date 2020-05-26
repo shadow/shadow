@@ -33,7 +33,7 @@ add_subdirectory(sleep)
 # FIXME add_subdirectory(sockbuf)
 # FIXME add_subdirectory(tcp)
 # FIXME add_subdirectory(timerfd)
-# FIXME add_subdirectory(udp)
+add_subdirectory(udp)
 add_subdirectory(unistd)
 
 ## grep the LastTest.log.tmp file for the counter diff lines, and make sure
@@ -45,7 +45,7 @@ add_test(
 )
 ## FIXME - eventually need all Shadow tests in the DEPENDS list
 #set_tests_properties(shadow-leakcheck-grep PROPERTIES DEPENDS "determinism1-shadow;determinism2-shadow;dynlink-shadow;preload-shadow-dl-run;preload-shadow-dl-env;bind-shadow;cpp-shadow;determinism-shadow-compare;epoll-shadow;epoll-writeable-shadow;epoll-shadow;file-shadow;phold-shadow;phold-threaded-shadow;pthreads-shadow;random-shadow;signal-shadow;sleep-shadow;sockbuf-shadow;tcp-blocking-loopback-shadow;tcp-blocking-lossless-shadow;tcp-blocking-lossy-shadow;tcp-nonblocking-poll-lossy-shadow;tcp-nonblocking-poll-lossless-shadow;tcp-nonblocking-poll-loopback-shadow;tcp-nonblocking-epoll-lossless-shadow;tcp-nonblocking-epoll-loopback-shadow;tcp-nonblocking-epoll-lossy-shadow;tcp-nonblocking-epoll-lossy-shadow;tcp-nonblocking-select-lossless-shadow;tcp-nonblocking-select-lossy-shadow;tcp-nonblocking-select-loopback-shadow;timerfd-shadow;tcp-iov-shadow")
-set_tests_properties(shadow-leakcheck-grep PROPERTIES DEPENDS "sleep-shadow-ptrace;sleep-shadow-preload;epoll-shadow-ptrace")
+set_tests_properties(shadow-leakcheck-grep PROPERTIES DEPENDS "sleep-shadow-ptrace;sleep-shadow-preload;unistd-shadow-ptrace;unistd-shadow-preload;epoll-shadow-ptrace;bind-shadow-ptrace;udp-uniprocess-shadow-ptrace")
 
 add_test(
 	NAME shadow-leakcheck-compare

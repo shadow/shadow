@@ -11,6 +11,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
 #include "support/logger/logger.h"
 
@@ -85,4 +87,14 @@ int _syscallhandler_validateDescriptor(Descriptor* descriptor,
     } else {
         return -EBADF;
     }
+}
+
+int _syscallhandler_readableWhenClosed(SysCallHandler* sys, Descriptor* desc) {
+    if(desc && descriptor_getType(desc) == DT_TCPSOCKET && (descriptor_getStatus(desc) & DS_CLOSED)) {
+        /* Connection error will be -ENOTCONN when reading is done. */
+        if(tcp_getConnectionError((TCP*) desc) == -EISCONN) {
+            return 1;
+        }
+    }
+    return 0;
 }

@@ -2146,11 +2146,11 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
     {
         if(tcp->flags & TCPF_EOF_WR_SIGNALED) {
             /* we already signaled close, now its an error */
-            return -2;
+            return -ENOTCONN;
         } else {
             /* we have not signaled close, do that now */
             _tcp_endOfFileSignalled(tcp, TCPF_EOF_WR_SIGNALED);
-            return -3;
+            return -EPIPE;
         }
     }
 
@@ -2189,7 +2189,7 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
     /* now flush as much as possible out to socket */
     _tcp_flush(tcp);
 
-    return (gssize) (bytesCopied == 0 ? -1 : bytesCopied);
+    return (gssize) (bytesCopied == 0 ? -EWOULDBLOCK : bytesCopied);
 }
 
 static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
@@ -2298,7 +2298,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
                 /* OK, no more data and nothing just received. */
                 if(tcp->flags & TCPF_EOF_RD_SIGNALED) {
                     /* we already signaled close, now its an error */
-                    return -2;
+                    return -ENOTCONN;
                 } else {
                     /* we have not signaled close, do that now and close out the socket */
                     _tcp_endOfFileSignalled(tcp, TCPF_EOF_RD_SIGNALED);
@@ -2338,7 +2338,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 
     debug("%s <-> %s: receiving %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, totalCopied);
 
-    return (gssize) (totalCopied == 0 ? -1 : totalCopied);
+    return (gssize) (totalCopied == 0 ? -EWOULDBLOCK : totalCopied);
 }
 
 void tcp_free(TCP* tcp) {

@@ -115,9 +115,6 @@ void host_destroyShadowHandle(Host* host, gint shadowHandle);
 gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* erroneous);
 gint host_poll(Host* host, struct pollfd *pollFDs, nfds_t numPollFDs);
 
-gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_addr_t port, gsize* bytesCopied);
-gint host_receiveUserData(Host* host, gint handle, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port, gsize* bytesCopied);
-
 Tracker* host_getTracker(Host* host);
 LogLevel host_getLogLevel(Host* host);
 

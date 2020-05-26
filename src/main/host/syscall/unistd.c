@@ -147,6 +147,11 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
     }
 
     gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
+
+    if(errorCode < 0 && _syscallhandler_readableWhenClosed(sys, desc)) {
+        errorCode = 0;
+    }
+
     if (errorCode != 0) {
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
@@ -161,9 +166,14 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
+    if (!bufSize) {
+        info("Invalid length %zu provided on descriptor %i", bufSize, fd);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    }
+
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
-    size_t sizeNeeded = MIN(bufSize, 1024 * 16);
+    size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
     buf = thread_getWriteablePtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
 
     ssize_t result = 0;
@@ -172,11 +182,15 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
             result = timer_read((Timer*)desc, buf, sizeNeeded);
             break;
         case DT_PIPE:
+        case DT_TCPSOCKET:
+        case DT_UDPSOCKET:
+            /* TODO: is read() on a socket identical to recvfrom()? If so, then
+             * we should probably redirect to the socket syscall handler as
+             * soon as we know we have a non-NULL desc of type socket to pick
+             * up the error checks etc. */
             result = transport_receiveUserData(
                 (Transport*)desc, buf, sizeNeeded, NULL, NULL);
             break;
-        case DT_TCPSOCKET:
-        case DT_UDPSOCKET:
         case DT_SOCKETPAIR:
         case DT_EPOLL:
         default:
@@ -186,8 +200,7 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
             break;
     }
 
-    if ((result == -EWOULDBLOCK || result == -EAGAIN) &&
-        !(dFlags & O_NONBLOCK)) {
+    if (result == -EWOULDBLOCK && !(dFlags & O_NONBLOCK)) {
         /* We need to block until the descriptor is ready to read. */
         process_listenForStatus(
             sys->process, sys->thread, NULL, desc, DS_READABLE);
@@ -230,20 +243,29 @@ SysCallReturn syscallhandler_write(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
+    if (!bufSize) {
+        info("Invalid length %zu provided on descriptor %i", bufSize, fd);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    }
+
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
-    size_t sizeNeeded = MIN(bufSize, 1024 * 16);
+    size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
     buf = thread_getReadablePtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
 
     ssize_t result = 0;
     switch (dType) {
         case DT_TIMER: result = -EINVAL; break;
         case DT_PIPE:
+        case DT_TCPSOCKET:
+        case DT_UDPSOCKET:
+            /* TODO: is write() on a socket identical to sendto()? If so, then
+             * we should probably redirect to the socket syscall handler as
+             * soon as we know we have a non-NULL desc of type socket to pick
+             * up the error checks etc. */
             result =
                 transport_sendUserData((Transport*)desc, buf, sizeNeeded, 0, 0);
             break;
-        case DT_TCPSOCKET:
-        case DT_UDPSOCKET:
         case DT_SOCKETPAIR:
         case DT_EPOLL:
         default:
@@ -253,8 +275,7 @@ SysCallReturn syscallhandler_write(SysCallHandler* sys,
             break;
     }
 
-    if ((result == -EWOULDBLOCK || result == -EAGAIN) &&
-        !(dFlags & O_NONBLOCK)) {
+    if (result == -EWOULDBLOCK && !(dFlags & O_NONBLOCK)) {
         /* We need to block until the descriptor is ready to read. */
         process_listenForStatus(
             sys->process, sys->thread, NULL, desc, DS_WRITABLE);
