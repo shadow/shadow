@@ -7,6 +7,12 @@ import xml.etree.ElementTree as ET
 import yaml
 
 
+def yaml_str_presenter(dumper, data):
+    if len(data.splitlines()) > 1:  # check for multiline string
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
+    return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+
+
 def convert_integer(d):
     r = {}
 
@@ -52,6 +58,7 @@ def xml_nodes_to_dict(xml_nodes):
 
 def save_dict_in_yaml_file(d, filename):
     with open(filename, 'w', encoding='utf8') as f:
+        yaml.add_representer(str, yaml_str_presenter)
         _yaml = yaml.dump(d, f)
 
 
