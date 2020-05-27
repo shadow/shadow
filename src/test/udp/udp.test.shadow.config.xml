@@ -1,4 +1,4 @@
-<shadow>
+<shadow stoptime="5">
   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
   <key attr.name="latency" attr.type="double" for="edge" id="d3" />
@@ -18,13 +18,18 @@
   </graph>
 </graphml>
 ]]></topology>
-  <kill time="5"/>
   <plugin id="testudp" path="test-udp"/>
-  <node id="testclient" quantity="1">
-    <application plugin="testudp" starttime="1" arguments="client 5678"/>
-  </node>
-  <node id="testserver" quantity="1">
-    <application plugin="testudp" starttime="1" arguments="server 5678"/>
-  </node>
+  <host id="localnode" quantity="1">
+    <process plugin="testudp" starttime="1" arguments="client localhost:5678"/>
+    <process plugin="testudp" starttime="1" arguments="server localhost:5678"/>
+  </host>
+  <!-- FIXME once we support dns, uncomment to test a remote client/server
+  <host id="testclient" quantity="1">
+    <process plugin="testudp" starttime="2" arguments="client testserver:5678"/>
+  </host>
+  <host id="testserver" quantity="1">
+    <process plugin="testudp" starttime="2" arguments="server 0.0.0.0:5678"/>
+  </host>
+  -->
 </shadow>
 
