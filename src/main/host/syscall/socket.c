@@ -631,6 +631,8 @@ SysCallReturn syscallhandler_recvfrom(SysCallHandler* sys,
         (Transport*)socket_desc, buf, sizeNeeded, &inet_addr.sin_addr.s_addr,
         &inet_addr.sin_port);
 
+    debug("recv returned %zd", retval);
+
     if (retval == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
         debug("recv would block on socket %i", sockfd);
         /* We need to block until the descriptor is ready to read. */
@@ -781,7 +783,7 @@ SysCallReturn syscallhandler_sendto(SysCallHandler* sys,
         retval = transport_sendUserData(
             (Transport*)socket_desc, buf, sizeNeeded, dest_ip, dest_port);
 
-        debug("send returned %z", retval);
+        debug("send returned %zd", retval);
     }
 
     if (retval == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
