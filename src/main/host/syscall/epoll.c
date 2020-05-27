@@ -11,6 +11,7 @@
 #include "main/host/descriptor/epoll.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
+#include "support/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers
@@ -21,11 +22,13 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
     /* `man 2 epoll_create`: the size argument is ignored, but must be greater
      * than zero */
     if (size <= 0 || (flags != 0 && flags != EPOLL_CLOEXEC)) {
+        debug("Invalid size or flags argument.");
         return -EINVAL;
     }
 
     Descriptor* desc = host_createDescriptor(sys->host, DT_EPOLL);
     utility_assert(desc);
+    utility_assert(_syscallhandler_validateDescriptor(desc, DT_EPOLL) == 0);
 
     if (flags & EPOLL_CLOEXEC) {
         descriptor_addFlags(desc, EPOLL_CLOEXEC);
@@ -44,8 +47,7 @@ SysCallReturn syscallhandler_epoll_create(SysCallHandler* sys,
 
     int result = _syscallhandler_createEpollHelper(sys, size, 0);
 
-    return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = result};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
 }
 
 SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
@@ -54,8 +56,7 @@ SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
 
     int result = _syscallhandler_createEpollHelper(sys, 1, flags);
 
-    return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = result};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
 }
 
 SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
@@ -65,20 +66,27 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     gint fd = (gint)args->args[2].as_i64;
     const struct epoll_event* event = NULL; // args->args[3]
 
+    /* Make sure they didn't pass a NULL pointer. */
+    if (!args->args[3].as_ptr.val) {
+        debug("NULL event pointer passed for epoll %i", epfd);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
     /* EINVAL if fd is the same as epfd, or the requested operation op is not
      * supported by this interface */
     if (epfd == fd) {
-        return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
+        debug("Epoll fd %i cannot be used to wait on itself.", epfd);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Get and check the epoll descriptor. */
     Descriptor* descriptor = host_lookupDescriptor(sys->host, epfd);
     gint errorCode = _syscallhandler_validateDescriptor(descriptor, DT_EPOLL);
 
-    if (errorCode || !descriptor) {
+    if (errorCode) {
+        debug("Error when trying to validate epoll %i", epfd);
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
+            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
 
     /* It's now safe to cast. */
@@ -92,17 +100,19 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     event = thread_getReadablePtr(
         sys->thread, args->args[3].as_ptr, sizeof(*event));
 
-    if (descriptor) {
+    if (!errorCode) {
+        utility_assert(descriptor);
+        debug("Calling epoll_control on epoll %i with child %i", epfd, fd);
         errorCode = epoll_control(epoll, op, descriptor, event);
     } else {
+        debug("Child %i is not a shadow descriptor, try OS epoll", fd);
         /* child is not a shadow descriptor, check for OS file */
         gint osfd = host_getOSHandle(sys->host, fd);
         osfd = osfd >= 0 ? osfd : fd;
         errorCode = epoll_controlOS(epoll, op, osfd, event);
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }
 
 SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
@@ -114,18 +124,26 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
 
     /* Check input args. */
     if (maxevents <= 0) {
-        return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
+        debug("Maxevents %i is not greater than 0.", maxevents);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    }
+
+    /* Make sure they didn't pass a NULL pointer. */
+    if (!args->args[1].as_ptr.val) {
+        debug("NULL event pointer passed for epoll %i", epfd);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* Get and check the epoll descriptor. */
     Descriptor* descriptor = host_lookupDescriptor(sys->host, epfd);
     gint errorCode = _syscallhandler_validateDescriptor(descriptor, DT_EPOLL);
 
-    if (errorCode || !descriptor) {
+    if (errorCode) {
+        debug("Error when trying to validate epoll %i", epfd);
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
+            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
+    utility_assert(descriptor);
 
     /* It's now safe to cast. */
     Epoll* epoll = (Epoll*)descriptor;
@@ -135,15 +153,21 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
      * less memory than maxevents if possible. */
     guint numReadyEvents = epoll_getNumReadyEvents(epoll);
 
+    debug("Epoll %i says %u events are ready.", epfd, numReadyEvents);
+
     /* If no events are ready, our behavior depends on timeout. */
     if (numReadyEvents == 0) {
         /* Return immediately if timeout is 0 or we were already
          * blocked for a while and still have no events. */
         if (timeout_ms == 0 || _syscallhandler_wasBlocked(sys)) {
+            debug("No events are ready on epoll %i and we need to return now",
+                  epfd);
+
             /* Return 0; no events are ready. */
-            return (SysCallReturn){
-                .state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
         } else {
+            debug("No events are ready on epoll %i and we need to block", epfd);
+
             /* We need to block, either for timeout_ms time if it's positive,
              * or indefinitely if it's negative. */
             if (timeout_ms > 0) {
@@ -156,7 +180,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
                                     (timeout_ms > 0) ? sys->timer : NULL,
                                     (Descriptor*)epoll, DS_READABLE);
 
-            return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
+            return (SysCallReturn){.state = SYSCALL_BLOCK};
         }
     }
 
@@ -171,7 +195,8 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     gint result = epoll_getEvents(epoll, events, numEventsNeeded, &nEvents);
     utility_assert(result == 0);
 
+    debug("Found %i ready events on epoll %i.", nEvents, epfd);
+
     /* Return the number of events that are ready. */
-    return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = nEvents};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = nEvents};
 }

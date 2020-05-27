@@ -114,6 +114,8 @@ long syscall(long n, ...) {
 
 // Sorted by function name (e.g. using `sort -t',' -k2`).
 // clang-format off
+NOREMAP(int, accept, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
+NOREMAP(int, accept4, (int a, struct sockaddr* b, socklen_t* c, int d), a, b, c, d);
 NOREMAP(int, bind, (int a, const struct sockaddr* b, socklen_t c), a,b,c);
 NOREMAP(int, clock_gettime, (clockid_t a, struct timespec* b), a,b);
 NOREMAP(int, close, (int a), a);
@@ -125,7 +127,10 @@ NOREMAP(int, epoll_ctl, (int a, int b, int c, struct epoll_event* d), a,b,c,d);
 NOREMAP(int, epoll_wait, (int a, struct epoll_event* b, int c, int d), a,b,c,d);
 NOREMAP(int, epoll_pwait, (int a, struct epoll_event* b, int c, int d, const sigset_t *e), a,b,c,d,e);
 NOREMAP(int, fstat, (int a, struct stat* b), a,b);
+NOREMAP(int, getpeername, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
+NOREMAP(int, getsockname, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
 static REMAP(int, ioctl_explicit, ioctl, (int a, unsigned long b, char* c), a,b,c);
+NOREMAP(int, listen, (int a, int b), a, b);
 NOREMAP(int, lstat, (const char* a, struct stat* b), a,b);
 NOREMAP(int, nanosleep, (const struct timespec* a, struct timespec* b), a,b);
 static REMAP(int, openat_explicit, openat, (int a, const char* b, int c, mode_t d), a,b,c,d);

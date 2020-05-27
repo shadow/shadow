@@ -58,6 +58,12 @@ gboolean process_isRunning(Process* proc);
  * outside of the process module. */
 const gchar* process_getName(Process* proc);
 
+/* Returns the name of the plugin from an internal buffer.
+ * The returned pointer will become invalid when the process
+ * is freed and therefore should not be persistently stored
+ * outside of the process module. */
+const gchar* process_getPluginName(Process* proc);
+
 /* Returns the processID that was assigned to us in process_new */
 guint process_getProcessID(Process* proc);
 

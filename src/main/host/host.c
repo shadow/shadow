@@ -520,8 +520,9 @@ Router* host_getUpstreamRouter(Host* host, in_addr_t handle) {
     return networkinterface_getRouter(interface);
 }
 
-static void _host_associateInterface(Host* host, Socket* socket,
-        in_addr_t bindAddress, in_port_t bindPort, in_addr_t peerAddress, in_port_t peerPort) {
+void host_associateInterface(Host* host, Socket* socket, in_addr_t bindAddress,
+                             in_port_t bindPort, in_addr_t peerAddress,
+                             in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
     /* connect up socket layer */
@@ -936,7 +937,7 @@ gint host_poll(Host* host, struct pollfd *pollFDs, nfds_t numPollFDs) {
     return numReady;
 }
 
-static gboolean _host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
+gboolean host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
     MAGIC_ASSERT(host);
 
     if(interfaceIP == htonl(INADDR_ANY)) {
@@ -955,8 +956,9 @@ static gboolean _host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
     return FALSE;
 }
 
-static gboolean _host_isInterfaceAvailable(Host* host, ProtocolType type,
-        in_addr_t interfaceIP, in_port_t port, in_addr_t peerIP, in_port_t peerPort) {
+gboolean host_isInterfaceAvailable(Host* host, ProtocolType type,
+                                   in_addr_t interfaceIP, in_port_t port,
+                                   in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
     gboolean isAvailable = FALSE;
@@ -998,8 +1000,9 @@ static in_port_t _host_getRandomPort(Host* host) {
     return htons(randomHostPort);
 }
 
-static in_port_t _host_getRandomFreePort(Host* host, ProtocolType type,
-        in_addr_t interfaceIP, in_addr_t peerIP, in_port_t peerPort) {
+in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
+                                 in_addr_t interfaceIP, in_addr_t peerIP,
+                                 in_port_t peerPort) {
     MAGIC_ASSERT(host);
 
     /* we need a random port that is free everywhere we need it to be.
@@ -1013,7 +1016,8 @@ static in_port_t _host_getRandomFreePort(Host* host, ProtocolType type,
         in_port_t randomPort = _host_getRandomPort(host);
 
         /* this will check all interfaces in the case of INADDR_ANY */
-        if(_host_isInterfaceAvailable(host, type, interfaceIP, randomPort, peerIP, peerPort)) {
+        if (host_isInterfaceAvailable(
+                host, type, interfaceIP, randomPort, peerIP, peerPort)) {
             return randomPort;
         }
     }
@@ -1025,7 +1029,8 @@ static in_port_t _host_getRandomFreePort(Host* host, ProtocolType type,
     in_port_t next = (start == UINT16_MAX) ? MIN_RANDOM_PORT : start + 1;
     while(next != start) {
         /* this will check all interfaces in the case of INADDR_ANY */
-        if(_host_isInterfaceAvailable(host, type, interfaceIP, next, peerIP, peerPort)) {
+        if (host_isInterfaceAvailable(
+                host, type, interfaceIP, next, peerIP, peerPort)) {
             return next;
         }
         next = (next == UINT16_MAX) ? MIN_RANDOM_PORT : next + 1;
@@ -1035,361 +1040,6 @@ static in_port_t _host_getRandomFreePort(Host* host, ProtocolType type,
     warning("unable to find free ephemeral port for %s peer %s:%"G_GUINT16_FORMAT,
             protocol_toString(type), peerIPStr, (guint16) ntohs((uint16_t) peerPort));
     return 0;
-}
-
-gint host_bindToInterface(Host* host, gint handle, const struct sockaddr* address) {
-    MAGIC_ASSERT(host);
-
-    in_addr_t bindAddress = 0;
-    in_port_t bindPort = 0;
-
-    if(address->sa_family == AF_INET) {
-        struct sockaddr_in* saddr = (struct sockaddr_in*) address;
-        bindAddress = saddr->sin_addr.s_addr;
-        bindPort = saddr->sin_port;
-    } else if (address->sa_family == AF_UNIX) {
-        struct sockaddr_un* saddr = (struct sockaddr_un*) address;
-        /* cant bind twice to the same unix path */
-        if(g_hash_table_lookup(host->unixPathToPortMap, saddr->sun_path)) {
-            return EADDRINUSE;
-        }
-        bindAddress = htonl(INADDR_LOOPBACK);
-        bindPort = 0; /* choose a random free port below */
-    }
-
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor == NULL) {
-        warning("descriptor handle '%i' not found", handle);
-        return EBADF;
-    }
-
-    DescriptorStatus status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", handle);
-        return EBADF;
-    }
-
-    DescriptorType dtype = descriptor_getType(descriptor);
-    if(dtype != DT_TCPSOCKET && dtype != DT_UDPSOCKET) {
-        warning("wrong type for descriptor handle '%i'", handle);
-        return ENOTSOCK;
-    }
-
-    /* make sure we have an interface at that address */
-    if(!_host_doesInterfaceExist(host, bindAddress)) {
-        return EADDRNOTAVAIL;
-    }
-
-    Socket* socket = (Socket*) descriptor;
-
-    /* make sure socket is not bound */
-    if(socket_isBound(socket)) {
-        warning("socket already bound to requested address");
-        return EINVAL;
-    }
-
-    ProtocolType ptype = socket_getProtocol(socket);
-
-    /* make sure we have a proper port */
-    if(bindPort == 0) {
-        /* we know it will be available */
-        bindPort = _host_getRandomFreePort(host, ptype, bindAddress, 0, 0);
-        if(!bindPort) {
-            return EADDRNOTAVAIL;
-        }
-    } else {
-        /* make sure their port is available at that address for this protocol. */
-        if(!_host_isInterfaceAvailable(host, ptype, bindAddress, bindPort, 0, 0)) {
-            return EADDRINUSE;
-        }
-    }
-
-    /* bind port and set associations */
-    _host_associateInterface(host, socket, bindAddress, bindPort, 0, 0);
-
-    if (address->sa_family == AF_UNIX) {
-        struct sockaddr_un* saddr = (struct sockaddr_un*) address;
-        gchar* sockpath = g_strndup(saddr->sun_path, 108); /* UNIX_PATH_MAX=108 */
-        socket_setUnixPath(socket, sockpath, TRUE);
-        g_hash_table_replace(host->unixPathToPortMap, sockpath, GUINT_TO_POINTER(bindPort));
-    }
-
-    return 0;
-}
-
-gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address) {
-    MAGIC_ASSERT(host);
-
-    sa_family_t family = 0;
-    in_addr_t peerIP = 0;
-    in_port_t peerPort = 0;
-
-    if(address->sa_family == AF_INET) {
-        struct sockaddr_in* saddr = (struct sockaddr_in*) address;
-
-        family = saddr->sin_family;
-        peerIP = saddr->sin_addr.s_addr;
-        peerPort = saddr->sin_port;
-
-        if(peerIP == htonl(INADDR_ANY)) {
-            peerIP = htonl(INADDR_LOOPBACK);
-        }
-    } else if (address->sa_family == AF_UNIX) {
-        struct sockaddr_un* saddr = (struct sockaddr_un*) address;
-
-        family = saddr->sun_family;
-        gchar* sockpath = saddr->sun_path;
-
-        peerIP = htonl(INADDR_LOOPBACK);
-        gpointer val = g_hash_table_lookup(host->unixPathToPortMap, sockpath);
-        if(val) {
-            peerPort = (in_port_t)GPOINTER_TO_UINT(val);
-        }
-    }
-
-    in_addr_t loIP = htonl(INADDR_LOOPBACK);
-
-    /* make sure we will be able to route this later */
-    if(peerIP != loIP) {
-        Address* myAddress = host->defaultAddress;
-        Address* peerAddress = worker_resolveIPToAddress(peerIP);
-        if(!peerAddress || !topology_isRoutable(worker_getTopology(), myAddress, peerAddress)) {
-            /* can't route it - there is no node with this address */
-            gchar* peerAddressString = address_ipToNewString(peerIP);
-            warning("attempting to connect to address '%s:%u' for which no host exists", peerAddressString, ntohs(peerPort));
-            g_free(peerAddressString);
-            return ECONNREFUSED;
-        }
-    }
-
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor == NULL) {
-        warning("descriptor handle '%i' not found", handle);
-        return EBADF;
-    }
-
-    DescriptorStatus status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", handle);
-        return EBADF;
-    }
-
-    DescriptorType dtype = descriptor_getType(descriptor);
-    if(dtype != DT_TCPSOCKET && dtype != DT_UDPSOCKET) {
-        warning("wrong type for descriptor handle '%i'", handle);
-        return ENOTSOCK;
-    }
-
-    Socket* socket = (Socket*) descriptor;
-
-    if(!socket_isFamilySupported(socket, family)) {
-        return EAFNOSUPPORT;
-    }
-
-    if (address->sa_family == AF_UNIX) {
-        struct sockaddr_un* saddr = (struct sockaddr_un*) address;
-        socket_setUnixPath(socket, saddr->sun_path, FALSE);
-    }
-
-    if(!socket_isBound(socket)) {
-        /* do an implicit bind to a random port.
-         * use default interface unless the remote peer is on loopback */
-        in_addr_t defaultIP = address_toNetworkIP(host->defaultAddress);
-
-        ProtocolType ptype = socket_getProtocol(socket);
-
-        in_addr_t bindAddr = loIP == peerIP ? loIP : defaultIP;
-        in_port_t bindPort = _host_getRandomFreePort(host, ptype, bindAddr, peerIP, peerPort);
-        if(!bindPort) {
-            return EADDRNOTAVAIL;
-        }
-
-        _host_associateInterface(host, socket, bindAddr, bindPort, peerIP, peerPort);
-    }
-
-    return socket_connectToPeer(socket, peerIP, peerPort, family);
-}
-
-gint host_listenForPeer(Host* host, gint handle, gint backlog) {
-    MAGIC_ASSERT(host);
-
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor == NULL) {
-        warning("descriptor handle '%i' not found", handle);
-        return EBADF;
-    }
-
-    DescriptorStatus status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", handle);
-        return EBADF;
-    }
-
-    DescriptorType dtype = descriptor_getType(descriptor);
-    if(dtype != DT_TCPSOCKET) {
-        warning("wrong type for descriptor handle '%i'", handle);
-        return EOPNOTSUPP;
-    }
-
-    Socket* socket = (Socket*) descriptor;
-    TCP* tcp = (TCP*) descriptor;
-
-    /* only listen on the socket if it is not used for other functions */
-    if(!tcp_isListeningAllowed(tcp)) {
-        return EOPNOTSUPP;
-    }
-
-    /* if we are already listening, just return 0.
-     * linux may actually update the backlog to the new backlog passed into this function,
-     * but shadow currently does not make use of the backlog. */
-    if(tcp_isValidListener(tcp)) {
-        return 0;
-    }
-
-    /* if we get here, we are allowed to listen and are not already listening, start listening now */
-    if(!socket_isBound(socket)) {
-        /* implicit bind */
-        ProtocolType ptype = socket_getProtocol(socket);
-        in_addr_t bindAddress = htonl(INADDR_ANY);
-        in_port_t bindPort = _host_getRandomFreePort(host, ptype, bindAddress, 0, 0);
-        if(!bindPort) {
-            return EADDRNOTAVAIL;
-        }
-
-        _host_associateInterface(host, socket, bindAddress, bindPort, 0, 0);
-    }
-
-    tcp_enterServerMode(tcp, backlog);
-    return 0;
-}
-
-gint host_acceptNewPeer(Host* host, gint handle, in_addr_t* ip, in_port_t* port, gint* acceptedHandle) {
-    MAGIC_ASSERT(host);
-
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor == NULL) {
-        warning("descriptor handle '%i' not found", handle);
-        return EBADF;
-    }
-
-    DescriptorStatus status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", handle);
-        return EBADF;
-    }
-
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type != DT_TCPSOCKET) {
-        return EOPNOTSUPP;
-    }
-
-    return tcp_acceptServerPeer((TCP*)descriptor, ip, port, acceptedHandle);
-}
-
-gint host_getPeerName(Host* host, gint handle, const struct sockaddr* address, socklen_t* len) {
-    MAGIC_ASSERT(host);
-
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor == NULL) {
-        warning("descriptor handle '%i' not found", handle);
-        return EBADF;
-    }
-
-    DescriptorStatus status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", handle);
-        return EBADF;
-    }
-
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type != DT_TCPSOCKET) {
-        return ENOTCONN;
-    }
-
-    Socket* sock = (Socket*)descriptor;
-    in_addr_t ip = 0;
-    in_port_t port = 0;
-
-    gboolean hasPeer = socket_getPeerName(sock, &ip, &port);
-    if(hasPeer) {
-        if(socket_isUnix(sock)) {
-            struct sockaddr_un* saddr = (struct sockaddr_un*) address;
-            saddr->sun_family = AF_UNIX;
-            gchar* unixPath = socket_getUnixPath(sock);
-            if(unixPath) {
-                g_snprintf(saddr->sun_path, 107, "%s\\0", unixPath);
-                *len = offsetof(struct sockaddr_un, sun_path) + strlen(saddr->sun_path) + 1;
-            } else {
-                *len = sizeof(sa_family_t);
-            }
-        } else {
-            struct sockaddr_in* saddr = (struct sockaddr_in*) address;
-            saddr->sin_family = AF_INET;
-            saddr->sin_addr.s_addr = ip;
-            saddr->sin_port = port;
-        }
-        return 0;
-    } else {
-        return ENOTCONN;
-    }
-}
-
-gint host_getSocketName(Host* host, gint handle, const struct sockaddr* address, socklen_t* len) {
-    MAGIC_ASSERT(host);
-
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor == NULL) {
-        warning("descriptor handle '%i' not found", handle);
-        return EBADF;
-    }
-
-    DescriptorStatus status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", handle);
-        return EBADF;
-    }
-
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
-        warning("wrong type for descriptor handle '%i'", handle);
-        return ENOTSOCK;
-    }
-
-    Socket* sock = (Socket*)descriptor;
-    in_addr_t ip = 0;
-    in_port_t port = 0;
-
-    gboolean isBound = socket_getSocketName((Socket*)descriptor, &ip, &port);
-
-    if(isBound) {
-        if(socket_isUnix(sock)) {
-            struct sockaddr_un* saddr = (struct sockaddr_un*) address;
-            saddr->sun_family = AF_UNIX;
-            gchar* unixPath = socket_getUnixPath(sock);
-            if(unixPath) {
-                g_snprintf(saddr->sun_path, 107, "%s\\0", unixPath);
-                *len = offsetof(struct sockaddr_un, sun_path) + strlen(saddr->sun_path) + 1;
-            } else {
-                *len = sizeof(sa_family_t);
-            }
-        } else {
-            struct sockaddr_in* saddr = (struct sockaddr_in*) address;
-            saddr->sin_family = AF_INET;
-            saddr->sin_port = port;
-
-            if(ip == htonl(INADDR_ANY)) {
-                in_addr_t peerIP = 0;
-                if(socket_getPeerName(sock, &peerIP, NULL) && peerIP != htonl(INADDR_LOOPBACK)) {
-                    ip = (in_addr_t) address_toNetworkIP(host->defaultAddress);
-                }
-            }
-
-            saddr->sin_addr.s_addr = ip;
-        }
-        return 0;
-    } else {
-        return ENOTCONN;
-    }
 }
 
 gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nBytes,
@@ -1445,18 +1095,19 @@ gint host_sendUserData(Host* host, gint handle, gconstpointer buffer, gsize nByt
             ProtocolType ptype = socket_getProtocol(socket);
             in_addr_t bindAddress = ip == htonl(INADDR_LOOPBACK) ? htonl(INADDR_LOOPBACK) :
                     address_toNetworkIP(host->defaultAddress);
-            in_port_t bindPort = _host_getRandomFreePort(host, ptype, bindAddress, 0, 0);
+            in_port_t bindPort =
+                host_getRandomFreePort(host, ptype, bindAddress, 0, 0);
             if(!bindPort) {
                 return EADDRNOTAVAIL;
             }
 
             /* bind port and set associations */
-            _host_associateInterface(host, socket, bindAddress, bindPort, 0, 0);
+            host_associateInterface(host, socket, bindAddress, bindPort, 0, 0);
         }
     }
 
     if(dtype == DT_TCPSOCKET) {
-        gint error = tcp_getConnectError((TCP*) transport);
+        gint error = tcp_getConnectionError((TCP*)transport);
         if(error != EISCONN) {
             if(error == EALREADY) {
                 /* we should not be writing if the connection is not ready */
@@ -1528,26 +1179,6 @@ gint host_receiveUserData(Host* host, gint handle, gpointer buffer, gsize nBytes
     } else if(n < 0) {
         return EWOULDBLOCK;
     }
-
-    return 0;
-}
-
-gint host_closeUser(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor == NULL) {
-        warning("descriptor handle '%i' not found", handle);
-        return -EBADF;
-    }
-
-    DescriptorStatus status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", handle);
-        return -EBADF;
-    }
-
-    descriptor_close(descriptor);
 
     return 0;
 }

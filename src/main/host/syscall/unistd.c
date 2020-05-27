@@ -27,12 +27,17 @@
 ///////////////////////////////////////////////////////////
 
 static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
-                                                PluginPtr pipefdPluginPtr,
+                                                PluginPtr pipefdPtr,
                                                 gint flags) {
     if (flags & O_DIRECT) {
         warning("We don't currently support pipes in 'O_DIRECT' mode.");
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -ENOTSUP};
+            .state = SYSCALL_DONE, .retval.as_i64 = -ENOTSUP};
+    }
+
+    /* Make sure they didn't pass a NULL pointer. */
+    if (!pipefdPtr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* Create and check the pipe descriptor. */
@@ -61,15 +66,14 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
 
     /* Return the pipe fds to the caller. */
     size_t sizeNeeded = sizeof(int) * 2;
-    gint* pipefd =
-        thread_getWriteablePtr(sys->thread, pipefdPluginPtr, sizeNeeded);
+    gint* pipefd = thread_getWriteablePtr(sys->thread, pipefdPtr, sizeNeeded);
     pipefd[0] = descriptor_getHandle(pipeReader);
     pipefd[1] = descriptor_getHandle(pipeWriter);
 
     debug("pipe() returning reader fd %i and writer fd %i",
           descriptor_getHandle(pipeReader), descriptor_getHandle(pipeWriter));
 
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
 
 ///////////////////////////////////////////////////////////
@@ -83,8 +87,7 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
 
     /* Check that fd is within bounds. */
     if (fd <= 0) {
-        return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EBADF};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
     /* Check if this is a virtual Shadow descriptor. */
@@ -92,10 +95,8 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
     if (descriptor && !errorCode) {
-        /* Yes! Handle it in the host netstack. */
-        errorCode = host_closeUser(sys->host, fd);
-        return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
+        descriptor_close(descriptor);
+        return (SysCallReturn){.state = SYSCALL_DONE};
     }
 
     /* Check if we have a mapped os fd. This call returns -1 to
@@ -106,7 +107,7 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
         /* The fd is not part of a special file that Shadow handles internally.
          * It might be a regular OS file, and should be handled natively by
          * libc. */
-        return (SysCallReturn){.state = SYSCALL_RETURN_NATIVE};
+        return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
 
     /* OK. The given FD from the plugin corresponds to a real
@@ -114,8 +115,7 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
 
     // TODO: handle special files
 
-    return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }
 
 SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,
@@ -143,19 +143,23 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
     // TODO: I think every read/write on FDs needs to come through shadow.
     // The following needs to change when we add file support.
     if (!desc) {
-        return (SysCallReturn){
-            .state = SYSCALL_RETURN_NATIVE, .retval.as_i64 = 0};
+        return (SysCallReturn){.state = SYSCALL_NATIVE, .retval.as_i64 = 0};
     }
 
     gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
     if (errorCode != 0) {
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
+            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
     utility_assert(desc);
 
     DescriptorType dType = descriptor_getType(desc);
     gint dFlags = descriptor_getFlags(desc);
+
+    /* Make sure they didn't pass a NULL pointer. */
+    if (!args->args[1].as_ptr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
 
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
@@ -187,11 +191,11 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
         /* We need to block until the descriptor is ready to read. */
         process_listenForStatus(
             sys->process, sys->thread, NULL, desc, DS_READABLE);
-        return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
+        return (SysCallReturn){.state = SYSCALL_BLOCK};
     }
 
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)result};
+        .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)result};
 }
 
 SysCallReturn syscallhandler_write(SysCallHandler* sys,
@@ -208,19 +212,23 @@ SysCallReturn syscallhandler_write(SysCallHandler* sys,
     // TODO: I think every read/write on FDs needs to come through shadow.
     // The following needs to change when we add file support.
     if (!desc) {
-        return (SysCallReturn){
-            .state = SYSCALL_RETURN_NATIVE, .retval.as_i64 = 0};
+        return (SysCallReturn){.state = SYSCALL_NATIVE, .retval.as_i64 = 0};
     }
 
     gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
     if (errorCode != 0) {
         return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = errorCode};
+            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
     utility_assert(desc);
 
     DescriptorType dType = descriptor_getType(desc);
     gint dFlags = descriptor_getFlags(desc);
+
+    /* Make sure they didn't pass a NULL pointer. */
+    if (!args->args[1].as_ptr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
 
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
@@ -250,11 +258,11 @@ SysCallReturn syscallhandler_write(SysCallHandler* sys,
         /* We need to block until the descriptor is ready to read. */
         process_listenForStatus(
             sys->process, sys->thread, NULL, desc, DS_WRITABLE);
-        return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
+        return (SysCallReturn){.state = SYSCALL_BLOCK};
     }
 
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)result};
+        .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)result};
 }
 
 SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
@@ -262,12 +270,18 @@ SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
     // We can't handle this natively in the plugin if we want determinism
     guint pid = process_getProcessID(sys->process);
     return (SysCallReturn){
-        .state = SYSCALL_RETURN_DONE, .retval.as_i64 = (int64_t)pid};
+        .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)pid};
 }
 
 SysCallReturn syscallhandler_uname(SysCallHandler* sys,
                                    const SysCallArgs* args) {
     struct utsname* buf = NULL;
+
+    /* Make sure they didn't pass a NULL pointer. */
+    if (!args->args[0].as_ptr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
     buf =
         thread_getWriteablePtr(sys->thread, args->args[0].as_ptr, sizeof(*buf));
 
@@ -279,5 +293,5 @@ SysCallReturn syscallhandler_uname(SysCallHandler* sys,
     snprintf(buf->version, _UTSNAME_VERSION_LENGTH, "shadowversion");
     snprintf(buf->machine, _UTSNAME_MACHINE_LENGTH, "shadowmachine");
 
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }

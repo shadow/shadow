@@ -30,14 +30,18 @@ static EmulatedTime _syscallhandler_getEmulatedTime() {
 
 SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
                                        const SysCallArgs* args) {
+    /* Make sure they didn't pass a NULL pointer. */
+    if (!args->args[0].as_ptr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
     /* Grab the arg from the syscall register. */
     const struct timespec* req =
         thread_getReadablePtr(sys->thread, args->args[0].as_ptr, sizeof(*req));
 
     /* Bounds checking. */
     if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
-        return (SysCallReturn){
-            .state = SYSCALL_RETURN_DONE, .retval.as_i64 = -EINVAL};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Does the timeout request require us to block? */
@@ -53,7 +57,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
             sys->process, sys->thread, sys->timer, NULL, DS_NONE);
 
         /* tell the thread we blocked it */
-        return (SysCallReturn){.state = SYSCALL_RETURN_BLOCKED};
+        return (SysCallReturn){.state = SYSCALL_BLOCK};
     }
 
     /* If needed, verify that the timer expired correctly. */
@@ -70,7 +74,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     }
 
     /* The syscall is now complete. */
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
 
 SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
@@ -79,6 +83,11 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
     debug("syscallhandler_clock_gettime with %d %p", clk_id,
           GUINT_TO_POINTER(args->args[1].as_ptr.val));
 
+    /* Make sure they didn't pass a NULL pointer. */
+    if (!args->args[1].as_ptr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
     struct timespec* res_timespec = thread_getWriteablePtr(
         sys->thread, args->args[1].as_ptr, sizeof(*res_timespec));
 
@@ -86,5 +95,5 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
     res_timespec->tv_sec = now / SIMTIME_ONE_SECOND;
     res_timespec->tv_nsec = now % SIMTIME_ONE_SECOND;
 
-    return (SysCallReturn){.state = SYSCALL_RETURN_DONE, .retval.as_i64 = 0};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
