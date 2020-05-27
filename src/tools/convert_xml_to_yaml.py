@@ -7,6 +7,17 @@ import xml.etree.ElementTree as ET
 import yaml
 
 
+def convert_integer(d):
+    r = {}
+
+    for k, v in d.items():
+        if v.isnumeric():
+            r[k] = int(v)
+        else:
+            r[k] = v
+    return r
+
+
 def xml_to_dict(node):
     # Special case, contains network graph as text
     if node.tag == 'topology':
@@ -17,12 +28,12 @@ def xml_to_dict(node):
     # Iterates over each XML node and transforms those in dict
     if node.getchildren():
         return {
-            **node.attrib,
+            **convert_integer(node.attrib),
             **xml_nodes_to_dict(node.getchildren())
         }
 
     # No sub XML nodes included in this node, returns node attributes only
-    return node.attrib
+    return convert_integer(node.attrib)
 
 
 def xml_nodes_to_dict(xml_nodes):
@@ -46,7 +57,7 @@ def save_dict_in_yaml_file(d, filename):
 
 def shadow_xml_to_dict(root):
     return {
-        'option': root.attrib,
+        'option': convert_integer(root.attrib),
         **xml_nodes_to_dict(root.getchildren())
     }
 

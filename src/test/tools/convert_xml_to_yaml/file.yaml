@@ -3,14 +3,14 @@ host:
   process:
   - arguments: tgen.server.graphml.xml
     plugin: tgen
-    starttime: '1'
+    starttime: 1
 - id: client
   process:
   - arguments: tgen.client.graphml.xml
     plugin: tgen
-    starttime: '2'
+    starttime: 2
 option:
-  stoptime: '3600'
+  stoptime: 3600
 plugin:
 - id: tgen
   path: ~/.shadow/bin/tgen
