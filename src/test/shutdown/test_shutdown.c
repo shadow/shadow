@@ -337,11 +337,11 @@ static int _test_write_blocked_shutdown() {
     while (1) {
         size_t remaining = BYTES_TO_TRANSFER - totalBytesSend;
         if (!remaining) {
-            printf("send() sent everything!");
+            printf("send() sent everything!\n");
             break;
         }
 
-        ssize_t bytes = send(cd, buf, remaining, 0);
+        ssize_t bytes = send(cd, buf+totalBytesSend, remaining, 0);
 
         if (bytes > 0) {
             totalBytesSend += (size_t)bytes;
@@ -392,8 +392,8 @@ static int _test_write_blocked_shutdown() {
 
     printf("recv() %li total bytes after SHUT_WR\n", (long int)totalBytesRecv);
 
-    if (totalBytesRecv != 60000) {
-        printf("after shutdown(SHUT_WR) peer should be able to read the 60000 bytes we sent\n");
+    if (totalBytesRecv != totalBytesSend) {
+        printf("after shutdown(SHUT_WR) peer should be able to read the %zu bytes we sent\n", totalBytesSend);
         goto fail;
     }
 
