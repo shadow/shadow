@@ -50,8 +50,8 @@ static uint16_t fifo_recv_u16(const char* pipename) {
 // Creates and returns a client UDP socket to localhost at `port`, and sets
 // `addr` and `len` to the server address. If `port` is 0, reads the port number
 // over the fifo(7) `fifo_name`.
-int connect_client(struct sockaddr* addr, socklen_t* len, const char* name, uint16_t port,
-                   const char* fifo_name) {
+int connect_client(struct sockaddr* addr, socklen_t* len, const char* name,
+                   uint16_t port, const char* fifo_name) {
     struct addrinfo hints = {
         .ai_family = AF_INET,
         .ai_socktype = SOCK_DGRAM,
@@ -131,7 +131,8 @@ void test_sendto_one_byte(const void* void_params) {
                                           &server_addr, server_addr_len));
         g_assert_cmpint(sent, ==, sizeof(data));
     } else {
-        int sock = connect_server(params->name, params->port, params->fifo_name);
+        int sock =
+            connect_server(params->name, params->port, params->fifo_name);
         char recv_buf[10];
         struct sockaddr recvfrom_addr = {};
         socklen_t recvfrom_addr_len = sizeof(recvfrom_addr);
@@ -184,7 +185,7 @@ int main(int argc, char* argv[]) {
 
     // parse the address info of form localhost:port
     gchar** addr_parts = g_strsplit(argv[0], ":", 2);
-    if(!addr_parts[0] | !addr_parts[1]) {
+    if (!addr_parts[0] | !addr_parts[1]) {
         g_error("The name:port argument is missing name or port");
         g_strfreev(addr_parts);
         return EXIT_FAILURE;

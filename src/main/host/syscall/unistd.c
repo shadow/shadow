@@ -148,7 +148,7 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
 
     gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
 
-    if(errorCode < 0 && _syscallhandler_readableWhenClosed(sys, desc)) {
+    if (errorCode < 0 && _syscallhandler_readableWhenClosed(sys, desc)) {
         errorCode = 0;
     }
 

@@ -334,22 +334,23 @@ static int _test_write_blocked_shutdown() {
     memset(buf, 0, BYTES_TO_TRANSFER);
 
     size_t totalBytesSend = 0;
-    while(1) {
-        size_t remaining = BYTES_TO_TRANSFER-totalBytesSend;
-        if(!remaining) {
+    while (1) {
+        size_t remaining = BYTES_TO_TRANSFER - totalBytesSend;
+        if (!remaining) {
             printf("send() sent everything!");
             break;
         }
 
         ssize_t bytes = send(cd, buf, remaining, 0);
 
-        if(bytes > 0) {
+        if (bytes > 0) {
             totalBytesSend += (size_t)bytes;
-            printf("send() sent %li more bytes, total is %li\n", (long int)bytes, (long int) totalBytesSend);
-        } else if(bytes == -1 && errno == EWOULDBLOCK) {
+            printf("send() sent %li more bytes, total is %li\n",
+                   (long int)bytes, (long int)totalBytesSend);
+        } else if (bytes == -1 && errno == EWOULDBLOCK) {
             printf("send() would block, pausing for 1 millisecond\n");
             usleep(1000); // 1 milli
-        } else if(bytes == 0) {
+        } else if (bytes == 0) {
             printf("send() returned EOF\n");
             break;
         } else {
@@ -375,7 +376,8 @@ static int _test_write_blocked_shutdown() {
 
         if(bytes > 0) {
             totalBytesRecv += (size_t)bytes;
-            printf("recv() got %li more bytes, total is %li\n", (long int)bytes, (long int) totalBytesRecv);
+            printf("recv() got %li more bytes, total is %li\n", (long int)bytes,
+                   (long int)totalBytesRecv);
         } else if(bytes == -1 && errno == EWOULDBLOCK) {
             printf("recv() would block, pausing for 1 millisecond\n");
             usleep(1000); // 1 milli
@@ -390,7 +392,7 @@ static int _test_write_blocked_shutdown() {
 
     printf("recv() %li total bytes after SHUT_WR\n", (long int)totalBytesRecv);
 
-    if(totalBytesRecv != 60000) {
+    if (totalBytesRecv != 60000) {
         printf("after shutdown(SHUT_WR) peer should be able to read the 60000 bytes we sent\n");
         goto fail;
     }

@@ -139,7 +139,7 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
 
     debug("buffered %"G_GSIZE_FORMAT" outbound UDP bytes from user", offset);
 
-    return offset > 0 ? (gssize) offset : -EWOULDBLOCK;
+    return offset > 0 ? (gssize)offset : -EWOULDBLOCK;
 }
 
 gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {

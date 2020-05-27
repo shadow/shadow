@@ -50,7 +50,7 @@ struct _SysCallHandler {
  * send/recv or read/write syscall. It would be more efficient to dynamically
  * compute how much we can read/write rather than using this static size.
  * TODO: remove this when we switch to dynamic size calculations. */
-#define SYSCALL_IO_BUFSIZE (1024*16) // 16 KiB
+#define SYSCALL_IO_BUFSIZE (1024 * 16) // 16 KiB
 
 /* Use this to define the syscalls that a particular handler implements.
  * The functions defined with this macro should never be called outside

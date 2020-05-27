@@ -839,7 +839,7 @@ static void _tcp_sendControlPacket(TCP* tcp, enum ProtocolTCPFlags flags) {
     MAGIC_ASSERT(tcp);
 
     debug("%s <-> %s: sending response control packet now",
-                    tcp->super.boundString, tcp->super.peerString);
+          tcp->super.boundString, tcp->super.peerString);
 
     /* create the ack packet, without any payload data */
     Packet* control = _tcp_createPacket(tcp, flags, NULL, 0);
@@ -2091,8 +2091,9 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
         responseFlags |= PTCP_ACK;
     }
 
-    debug("checking if response is needed: flags=%i RCV_EOF=%i FIN=%i", (int)responseFlags,
-            (int)(tcp->error & TCPE_RECEIVE_EOF), (int)(responseFlags & PTCP_FIN));
+    debug("checking if response is needed: flags=%i RCV_EOF=%i FIN=%i",
+          (int)responseFlags, (int)(tcp->error & TCPE_RECEIVE_EOF),
+          (int)(responseFlags & PTCP_FIN));
 
     /* send control packet if we have one. we always need to send any packet with a FIN set
      * to ensure the connection close sequence completes on both sides. */
@@ -2221,7 +2222,7 @@ gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t 
     /* now flush as much as possible out to socket */
     _tcp_flush(tcp);
 
-    return (gssize) (bytesCopied == 0 ? -EWOULDBLOCK : bytesCopied);
+    return (gssize)(bytesCopied == 0 ? -EWOULDBLOCK : bytesCopied);
 }
 
 static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
@@ -2370,7 +2371,7 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
 
     debug("%s <-> %s: receiving %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, totalCopied);
 
-    return (gssize) (totalCopied == 0 ? -EWOULDBLOCK : totalCopied);
+    return (gssize)(totalCopied == 0 ? -EWOULDBLOCK : totalCopied);
 }
 
 void tcp_free(TCP* tcp) {

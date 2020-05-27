@@ -90,9 +90,10 @@ int _syscallhandler_validateDescriptor(Descriptor* descriptor,
 }
 
 int _syscallhandler_readableWhenClosed(SysCallHandler* sys, Descriptor* desc) {
-    if(desc && descriptor_getType(desc) == DT_TCPSOCKET && (descriptor_getStatus(desc) & DS_CLOSED)) {
+    if (desc && descriptor_getType(desc) == DT_TCPSOCKET &&
+        (descriptor_getStatus(desc) & DS_CLOSED)) {
         /* Connection error will be -ENOTCONN when reading is done. */
-        if(tcp_getConnectionError((TCP*) desc) == -EISCONN) {
+        if (tcp_getConnectionError((TCP*)desc) == -EISCONN) {
             return 1;
         }
     }
