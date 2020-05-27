@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import sys
+import argparse
 from collections import defaultdict
 import xml.etree.ElementTree as ET
 
@@ -75,13 +76,11 @@ def get_xml_root_from_filename(filename):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print(f'Usage: {sys.argv[0]} <xml_filename> <yaml_filename>', file=sys.stderr)
-        exit(1)
+    parser = argparse.ArgumentParser(description='Convert a XML file into a YAML file.')
+    parser.add_argument('xml', help='XML file to convert')
+    parser.add_argument('yaml', help='YAML output file')
+    args = parser.parse_args()
 
-    xml_filename = sys.argv[1]
-    yaml_filename = sys.argv[2]
-
-    xml_root = get_xml_root_from_filename(xml_filename)
+    xml_root = get_xml_root_from_filename(args.xml)
     d = shadow_xml_to_dict(xml_root)
-    save_dict_in_yaml_file(d, yaml_filename)
+    save_dict_in_yaml_file(d, args.yaml)
