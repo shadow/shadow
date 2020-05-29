@@ -330,8 +330,7 @@ static int _test_write_blocked_shutdown() {
     printf("shutdown(SHUT_WR) on server child returned %i\n", result);
 
 #define BYTES_TO_TRANSFER 60000
-    char buf[BYTES_TO_TRANSFER];
-    memset(buf, 0, BYTES_TO_TRANSFER);
+    char buf[BYTES_TO_TRANSFER] = {0};
 
     size_t totalBytesSend = 0;
     while (1) {

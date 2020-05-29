@@ -69,10 +69,4 @@ int _syscallhandler_wasBlocked(const SysCallHandler* sys);
 int _syscallhandler_validateDescriptor(Descriptor* descriptor,
                                        DescriptorType expectedType);
 
-/* It's valid to read data from a socket even if close() was already called,
- * as long as the EOF has not yet been read (i.e., there is still data that
- * must be read from the socket). This function checks if the descriptor is
- * in this corner case and we should be allowed to read from it. */
-int _syscallhandler_readableWhenClosed(SysCallHandler* sys, Descriptor* desc);
-
 #endif /* SRC_MAIN_HOST_SYSCALL_PROTECTED_H_ */

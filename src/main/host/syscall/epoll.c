@@ -61,13 +61,13 @@ SysCallReturn syscallhandler_epoll_create1(SysCallHandler* sys,
 
 SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
                                        const SysCallArgs* args) {
-    gint epfd = (gint)args->args[0].as_i64;
-    gint op = (gint)args->args[1].as_i64;
-    gint fd = (gint)args->args[2].as_i64;
-    const struct epoll_event* event = NULL; // args->args[3]
+    gint epfd = args->args[0].as_i64;
+    gint op = args->args[1].as_i64;
+    gint fd = args->args[2].as_i64;
+    PluginPtr eventPtr = args->args[3].as_ptr; // const struct epoll_event*
 
     /* Make sure they didn't pass a NULL pointer. */
-    if (!args->args[3].as_ptr.val) {
+    if (!eventPtr.val) {
         debug("NULL event pointer passed for epoll %i", epfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
@@ -97,8 +97,8 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     descriptor = host_lookupDescriptor(sys->host, fd);
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
-    event = thread_getReadablePtr(
-        sys->thread, args->args[3].as_ptr, sizeof(*event));
+    const struct epoll_event* event =
+        thread_getReadablePtr(sys->thread, eventPtr, sizeof(*event));
 
     if (!errorCode) {
         utility_assert(descriptor);
@@ -117,10 +117,10 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
 
 SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
                                         const SysCallArgs* args) {
-    gint epfd = (gint)args->args[0].as_i64;
-    struct epoll_event* events = NULL; // args->args[1]
-    gint maxevents = (gint)args->args[2].as_i64;
-    gint timeout_ms = (gint)args->args[3].as_i64;
+    gint epfd = args->args[0].as_i64;
+    PluginPtr eventsPtr = args->args[1].as_ptr; // struct epoll_event*
+    gint maxevents = args->args[2].as_i64;
+    gint timeout_ms = args->args[3].as_i64;
 
     /* Check input args. */
     if (maxevents <= 0) {
@@ -129,7 +129,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     }
 
     /* Make sure they didn't pass a NULL pointer. */
-    if (!args->args[1].as_ptr.val) {
+    if (!eventsPtr.val) {
         debug("NULL event pointer passed for epoll %i", epfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
@@ -186,9 +186,9 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
 
     /* We have events. Get a pointer where we should write the result. */
     guint numEventsNeeded = MIN((guint)maxevents, numReadyEvents);
-    size_t sizeNeeded = sizeof(*events) * numEventsNeeded;
-    events =
-        thread_getWriteablePtr(sys->thread, args->args[1].as_ptr, sizeNeeded);
+    size_t sizeNeeded = sizeof(struct epoll_event) * numEventsNeeded;
+    struct epoll_event* events =
+        thread_getWriteablePtr(sys->thread, eventsPtr, sizeNeeded);
 
     /* Retrieve the events. */
     gint nEvents = 0;
