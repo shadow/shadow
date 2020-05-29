@@ -182,14 +182,13 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
             result = timer_read((Timer*)desc, buf, sizeNeeded);
             break;
         case DT_PIPE:
-        case DT_TCPSOCKET:
-        case DT_UDPSOCKET:
-            /* TODO: is read() on a socket identical to recvfrom()? If so, then
-             * we should probably redirect to the socket syscall handler as
-             * soon as we know we have a non-NULL desc of type socket to pick
-             * up the error checks etc. */
             result = transport_receiveUserData(
                 (Transport*)desc, buf, sizeNeeded, NULL, NULL);
+            break;
+        case DT_TCPSOCKET:
+        case DT_UDPSOCKET:
+            // We already diverted these to the socket handler above.
+            utility_assert(0);
             break;
         case DT_SOCKETPAIR:
         case DT_EPOLL:
@@ -261,14 +260,13 @@ SysCallReturn syscallhandler_write(SysCallHandler* sys,
     switch (dType) {
         case DT_TIMER: result = -EINVAL; break;
         case DT_PIPE:
-        case DT_TCPSOCKET:
-        case DT_UDPSOCKET:
-            /* TODO: is write() on a socket identical to sendto()? If so, then
-             * we should probably redirect to the socket syscall handler as
-             * soon as we know we have a non-NULL desc of type socket to pick
-             * up the error checks etc. */
             result =
                 transport_sendUserData((Transport*)desc, buf, sizeNeeded, 0, 0);
+            break;
+        case DT_TCPSOCKET:
+        case DT_UDPSOCKET:
+            // We already diverted these to the socket handler above.
+            utility_assert(0);
             break;
         case DT_SOCKETPAIR:
         case DT_EPOLL:
