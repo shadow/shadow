@@ -54,7 +54,6 @@ typedef struct _ThreadPtrace {
     Tsc tsc;
 
     FILE* childMemFile;
-    bool childMemFileIsDirty;
 
     pid_t childPID;
 
@@ -323,7 +322,8 @@ static void _threadptrace_handleSyscall(ThreadPtrace* thread) {
 
     SysCallArgs args = {
         .number = regs->orig_rax,
-        .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8},
+        .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8,
+                 regs->r9},
     };
 
     thread->syscall.sysCallReturn =
@@ -398,14 +398,12 @@ void threadptrace_resume(Thread* base) {
                 g_free(write->ptr);
             }
             thread->pendingWrites = g_array_set_size(thread->pendingWrites, 0);
-            thread->childMemFileIsDirty = true;
         }
-        // Flush writes if needed
-        if (thread->childMemFileIsDirty) {
-            if (fflush(thread->childMemFile) != 0) {
-                error("fflush: %s", g_strerror(errno));
-            }
-            thread->childMemFileIsDirty = false;
+        // Flush the mem file. In addition to flushing any pending writes, this
+        // invalidates the *input* buffers, which are no longer valid after
+        // returning control to the child.
+        if (fflush(thread->childMemFile) != 0) {
+            error("fflush: %s", g_strerror(errno));
         }
         // Allow child to start executing.
         if (ptrace(PTRACE_SYSCALL, thread->childPID, 0,
@@ -508,7 +506,6 @@ static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
     if (count != n) {
         error("fwrite %zu -> %zu: %s", n, count, g_strerror(errno));
     }
-    thread->childMemFileIsDirty = true;
     return;
 }
 

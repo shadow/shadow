@@ -167,6 +167,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(pipe);
         HANDLE(pipe2);
         HANDLE(read);
+        HANDLE(recvfrom);
+        HANDLE(sendto);
+        HANDLE(shutdown);
         HANDLE(socket);
         HANDLE(uname);
         HANDLE(write);
@@ -178,10 +181,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(fstat);
         // Test coverage: test/file (via open(3))
         NATIVE(openat);
-        // Test coverage: test/udp
-        NATIVE(recvfrom);
-        // Test coverage: test/udp
-        NATIVE(sendto);
 
         // **************************************
         // Not handled (yet):

@@ -11,6 +11,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
 #include "support/logger/logger.h"
 

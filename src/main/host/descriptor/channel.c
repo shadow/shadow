@@ -69,7 +69,7 @@ static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize 
     gsize available = channel->bufferSize - channel->bufferLength;
     if(available == 0) {
         /* we have no space */
-        return (gssize)-1;
+        return (gssize)-EWOULDBLOCK;
     }
 
     /* accept some data from the other end of the pipe */
@@ -118,7 +118,7 @@ static gssize channel_receiveUserData(Channel* channel, gpointer buffer, gsize n
             return (gssize)0;
         } else {
             /* blocking on read */
-            return (gssize)-EAGAIN;
+            return (gssize)-EWOULDBLOCK;
         }
     }
 

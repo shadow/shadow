@@ -50,8 +50,8 @@ static uint16_t fifo_recv_u16(const char* pipename) {
 // Creates and returns a client UDP socket to localhost at `port`, and sets
 // `addr` and `len` to the server address. If `port` is 0, reads the port number
 // over the fifo(7) `fifo_name`.
-int connect_client(struct sockaddr* addr, socklen_t* len, uint16_t port,
-                   const char* fifo_name) {
+int connect_client(struct sockaddr* addr, socklen_t* len, const char* name,
+                   uint16_t port, const char* fifo_name) {
     struct addrinfo hints = {
         .ai_family = AF_INET,
         .ai_socktype = SOCK_DGRAM,
@@ -63,7 +63,7 @@ int connect_client(struct sockaddr* addr, socklen_t* len, uint16_t port,
     struct addrinfo* addrs = NULL;
     int rv;
     assert_true_errstring(
-        (rv = getaddrinfo(NULL, port_string, &hints, &addrs)) == 0,
+        (rv = getaddrinfo(name, port_string, &hints, &addrs)) == 0,
         gai_strerror(rv));
     g_assert_nonnull(addrs);
     g_assert_cmpint(addrs->ai_addrlen, <=, *len);
@@ -78,7 +78,7 @@ int connect_client(struct sockaddr* addr, socklen_t* len, uint16_t port,
 
 // Creates and returns a UDP listening on `port`. If `port` is 0, uses an
 // automatically assigned port number and writes it to the fifo(7) `fifo_name`.
-int connect_server(uint16_t port, const char* fifo_name) {
+int connect_server(const char* name, uint16_t port, const char* fifo_name) {
     int sock;
     assert_nonneg_errno(sock = socket(AF_INET, SOCK_DGRAM, 0));
     struct addrinfo hints = {
@@ -90,7 +90,7 @@ int connect_server(uint16_t port, const char* fifo_name) {
     struct addrinfo* addrs = NULL;
     int rv;
     assert_true_errstring(
-        (rv = getaddrinfo(NULL, port_string, &hints, &addrs)) == 0,
+        (rv = getaddrinfo(name, port_string, &hints, &addrs)) == 0,
         gai_strerror(rv));
     g_free(port_string);
     port_string =  NULL;
@@ -112,6 +112,7 @@ int connect_server(uint16_t port, const char* fifo_name) {
 typedef enum { CLIENT, SERVER } Type;
 typedef struct {
     Type type;
+    const char* name;
     uint16_t port;
     const char* fifo_name;
 } TestParams;
@@ -124,13 +125,14 @@ void test_sendto_one_byte(const void* void_params) {
         socklen_t server_addr_len = sizeof(server_addr);
         int sock =
             connect_client((struct sockaddr*)&server_addr, &server_addr_len,
-                           params->port, params->fifo_name);
+                           params->name, params->port, params->fifo_name);
         ssize_t sent;
         assert_nonneg_errno(sent = sendto(sock, data, sizeof(data), 0,
                                           &server_addr, server_addr_len));
         g_assert_cmpint(sent, ==, sizeof(data));
     } else {
-        int sock = connect_server(params->port, params->fifo_name);
+        int sock =
+            connect_server(params->name, params->port, params->fifo_name);
         char recv_buf[10];
         struct sockaddr recvfrom_addr = {};
         socklen_t recvfrom_addr_len = sizeof(recvfrom_addr);
@@ -180,11 +182,21 @@ int main(int argc, char* argv[]) {
         g_error("Missing port number");
         return EXIT_FAILURE;
     }
+
+    // parse the address info of form localhost:port
+    gchar** addr_parts = g_strsplit(argv[0], ":", 2);
+    if (!addr_parts[0] | !addr_parts[1]) {
+        g_error("The name:port argument is missing name or port");
+        g_strfreev(addr_parts);
+        return EXIT_FAILURE;
+    }
+
     guint64 port64;
     GError* error = NULL;
-    if (!g_ascii_string_to_unsigned(argv[0], /* base= */ 10, /* min= */ 0,
+    if (!g_ascii_string_to_unsigned(addr_parts[1], /* base= */ 10, /* min= */ 0,
                                     /* max= */ UINT16_MAX, &port64, &error)) {
-        g_error("Parsing port '%s': %s", argv[1], error->message);
+        g_error("Parsing port '%s': %s", addr_parts[1], error->message);
+        g_strfreev(addr_parts);
         return EXIT_FAILURE;
     }
     in_port_t port = port64;
@@ -204,11 +216,13 @@ int main(int argc, char* argv[]) {
 
     TestParams test_params = {
         .type = type,
+        .name = addr_parts[0],
         .port = port,
         .fifo_name = fifo_name,
     };
 
     g_test_add_data_func("/udp/sendto_one_byte", &test_params, test_sendto_one_byte);
     g_test_run();
+    g_strfreev(addr_parts);
     return EXIT_SUCCESS;
 }

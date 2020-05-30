@@ -84,8 +84,11 @@ typedef guint64 EmulatedTime;
 
 /**
  * The minimum file descriptor shadow returns to the plugin.
+ * TODO: this is set high so that the FDs returned to the plugin by the OS
+ * (e.g., when handling files) do not conflict with the FDs returned by
+ * shadow. Change this to 3 when we properly handle all descriptor types.
  */
-#define MIN_DESCRIPTOR 10
+#define MIN_DESCRIPTOR 100
 
 /**
  * The start of our random port range in host order, used if application doesn't

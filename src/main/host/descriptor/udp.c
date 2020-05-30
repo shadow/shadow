@@ -6,6 +6,7 @@
 
 #include "main/host/descriptor/udp.h"
 
+#include <errno.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -78,7 +79,7 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
     gsize space = socket_getOutputBufferSpace(&(udp->super));
     if(space < nBytes) {
         /* not enough space to buffer the data */
-        return -1;
+        return -EWOULDBLOCK;
     }
 
     /* break data into segments and send each in a packet */
@@ -138,7 +139,7 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
 
     debug("buffered %"G_GSIZE_FORMAT" outbound UDP bytes from user", offset);
 
-    return (gssize) offset;
+    return offset > 0 ? (gssize)offset : -EWOULDBLOCK;
 }
 
 gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
@@ -146,7 +147,7 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
 
     Packet* packet = socket_removeFromInputBuffer((Socket*)udp);
     if(!packet) {
-        return -1;
+        return -EWOULDBLOCK;
     }
 
     /* copy lesser of requested and available amount to application buffer */
@@ -178,7 +179,7 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
 
     debug("user read %u inbound UDP bytes", bytesCopied);
 
-    return (gssize)bytesCopied;
+    return bytesCopied > 0 ? (gssize)bytesCopied : EWOULDBLOCK;
 }
 
 void udp_free(UDP* udp) {
