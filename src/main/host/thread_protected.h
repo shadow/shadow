@@ -23,6 +23,8 @@ struct _Thread {
     void (*releaseClonedPtr)(Thread* base, void* p);
     const void* (*getReadablePtr)(Thread* thread, PluginPtr plugin_src,
                                   size_t n);
+    int (*getReadableString)(Thread* thread, PluginPtr plugin_src, size_t n,
+                             const char** str, size_t* strlen);
     void* (*getWriteablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
 
     // For safe down-casting. Set and checked by child class.
