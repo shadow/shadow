@@ -79,6 +79,13 @@ const void* thread_getReadablePtr(Thread* thread, PluginPtr plugin_src,
     return thread->getReadablePtr(thread, plugin_src, n);
 }
 
+int thread_getReadableString(Thread* thread, PluginPtr plugin_src, size_t n,
+                             const char** str, size_t* strlen) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->getReadableString);
+    return thread->getReadableString(thread, plugin_src, n, str, strlen);
+}
+
 void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->getReadablePtr);

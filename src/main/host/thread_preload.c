@@ -379,7 +379,8 @@ gboolean threadpreload_isRunning(Thread* base) {
  * The returned ShMemBlock is owned by the caller and needs to be freed.
  */
 static ShMemBlock* _threadpreload_readPtrImpl(ThreadPreload* thread,
-                                              PluginPtr plugin_src, size_t n) {
+                                              PluginPtr plugin_src, size_t n,
+                                              bool is_string) {
 
     // Allocate a block for the clone
     ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
@@ -393,7 +394,7 @@ static ShMemBlock* _threadpreload_readPtrImpl(ThreadPreload* thread,
 
     ShimEvent resp = {0};
 
-    req.event_id = SHD_SHIM_EVENT_CLONE_REQ;
+    req.event_id = is_string ? SHD_SHIM_EVENT_CLONE_STRING_REQ : SHD_SHIM_EVENT_CLONE_REQ;
     req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(blk);
     req.event_data.shmem_blk.plugin_ptr = plugin_src;
     req.event_data.shmem_blk.n = n;
@@ -408,7 +409,7 @@ static ShMemBlock* _threadpreload_readPtrImpl(ThreadPreload* thread,
 
 void* threadpreload_newClonedPtr(Thread* base, PluginPtr plugin_src, size_t n) {
     ThreadPreload* thread = _threadToThreadPreload(base);
-    ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n);
+    ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n, false);
     g_hash_table_insert(thread->ptr_to_block, &blk->p, blk);
     return blk->p;
 }
@@ -427,7 +428,7 @@ const void* threadpreload_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                          size_t n) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
-    ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n);
+    ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n, false);
 
     GList* new_head = g_list_append(thread->read_list, blk);
     utility_assert(new_head);
@@ -436,6 +437,33 @@ const void* threadpreload_getReadablePtr(Thread* base, PluginPtr plugin_src,
     }
 
     return blk->p;
+}
+
+int threadpreload_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
+                             const char** str_out, size_t* strlen_out) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
+
+    ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n, true);
+
+    const char* str = blk->p;
+    size_t strlen = strnlen(str, n);
+    if (strlen == n) {
+        shmemallocator_globalFree(blk);
+        return -ENAMETOOLONG;
+    }
+    if (strlen_out) {
+        *strlen_out = strlen;
+    }
+
+    GList* new_head = g_list_append(thread->read_list, blk);
+    utility_assert(new_head);
+    if (!thread->read_list) {
+        thread->read_list = new_head;
+    }
+
+    utility_assert(str_out);
+    *str_out = blk->p;
+    return 0;
 }
 
 void* threadpreload_getWriteablePtr(Thread* base, PluginPtr plugin_src,
@@ -472,6 +500,7 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                             .newClonedPtr = threadpreload_newClonedPtr,
                             .releaseClonedPtr = threadpreload_releaseClonedPtr,
                             .getReadablePtr = threadpreload_getReadablePtr,
+                            .getReadableString = threadpreload_getReadableString,
                             .getWriteablePtr = threadpreload_getWriteablePtr,
                             .type_id = THREADPRELOAD_TYPE_ID,
                             .referenceCount = 1};

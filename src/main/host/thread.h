@@ -31,6 +31,20 @@ int thread_getReturnCode(Thread* thread);
 const void* thread_getReadablePtr(Thread* thread, PluginPtr plugin_src,
                                   size_t n);
 
+// Make the data starting at plugin_src, and extending until the first NULL
+// byte, up at most `n` bytes, available in shadow's address space.
+//
+// * `str` must be non-NULL, and is set to point to the given string. It is
+//   invalidated when the plugin runs again.
+// * `strlen` may be NULL. If it isn't, is set to `strlen(str)`.
+//
+// Returns:
+// 0 on success.
+// -ENAMETOOLONG if there was no NULL byte in the first `n` characters.
+// -EFAULT if the string extends beyond the accessible address space.
+int thread_getReadableString(Thread* thread, PluginPtr plugin_src, size_t n,
+                             const char** str, size_t* strlen);
+
 // Returns a writable pointer corresponding to the named region. The initial
 // contents of the returned memory are unspecified.
 //

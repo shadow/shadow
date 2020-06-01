@@ -529,6 +529,47 @@ const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
     return rv;
 }
 
+int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
+                             const char** out_str, size_t* strlen) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+    char *str = g_new(char, n);
+    int err = 0;
+
+    clearerr(thread->childMemFile);
+    if (fseek(thread->childMemFile, plugin_src.val, SEEK_SET) < 0) {
+        info("fseek %p: %s", (void*)plugin_src.val, g_strerror(errno));
+        err = -EFAULT;
+    }
+    size_t count = 0;
+    while (!err) {
+        if (count >= n) {
+            err = -ENAMETOOLONG;
+            break;
+        }
+        int c = fgetc(thread->childMemFile);
+        if (c == EOF) {
+            err = -EFAULT;
+            break;
+        }
+        str[count++] = c;
+        if (c == '\0') {
+            break;
+        }
+    }
+    if (err != 0) {
+        g_free(str);
+        return err;
+    }
+    str = g_realloc(str, count);
+    g_array_append_val(thread->readPointers, str);
+    utility_assert(out_str);
+    *out_str = str;
+    if (strlen) {
+        *strlen = count-1;
+    }
+    return 0;
+}
+
 void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
                                    size_t n) {
     // TODO: Use mmap instead.
@@ -553,6 +594,7 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
                          .newClonedPtr = threadptrace_newClonedPtr,
                          .releaseClonedPtr = threadptrace_releaseClonedPtr,
                          .getReadablePtr = threadptrace_getReadablePtr,
+                         .getReadableString = threadptrace_getReadableString,
                          .getWriteablePtr = threadptrace_getWriteablePtr,
 
                          .type_id = THREADPTRACE_TYPE_ID,
