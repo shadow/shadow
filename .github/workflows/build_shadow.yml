@@ -46,13 +46,19 @@ jobs:
         # and difficult to debug errors such as #798
         run: python setup test || python setup test --rerun-failed
 
-      - name: Upload shadow logs
+      - name: Upload shadow data directories
         uses: actions/upload-artifact@v2
         if: failure()
         with:
-          name: shadow-data
-          path: build/**/*shadow.data/*
+          name: shadow-data-dirs
+          path: build/**/*.data/*
 
+      - name: Upload shadow log file
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: shadow-log-file
+          path: build/Testing/Temporary/*
 
 # FIXME
 #  shadow-plugin-tor-ci:
