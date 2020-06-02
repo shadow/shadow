@@ -7,12 +7,13 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/file.h"
+#include "main/host/syscall/dirent.h"
 #include "main/host/syscall/protected.h"
 #include "support/logger/logger.h"
 
@@ -360,4 +361,107 @@ SysCallReturn syscallhandler_fremovexattr(SysCallHandler* sys,
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = file_fremovexattr(file_desc, name)};
+}
+
+SysCallReturn syscallhandler_sync_file_range(SysCallHandler* sys,
+                                          const SysCallArgs* args) {
+    int fd = args->args[0].as_i64;
+    off64_t offset = args->args[1].as_u64;
+    off64_t nbytes = args->args[2].as_u64;
+    unsigned int flags = args->args[3].as_u64;
+
+    /* Get and validate the file descriptor. */
+    File* file_desc = NULL;
+    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = file_sync_range(file_desc, offset, nbytes, flags)};
+}
+
+SysCallReturn syscallhandler_readahead(SysCallHandler* sys,
+                                          const SysCallArgs* args) {
+    int fd = args->args[0].as_i64;
+    off64_t offset = args->args[1].as_u64;
+    size_t count = args->args[2].as_u64;
+
+    /* Get and validate the file descriptor. */
+    File* file_desc = NULL;
+    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = file_readahead(file_desc, offset, count)};
+}
+
+SysCallReturn syscallhandler_lseek(SysCallHandler* sys,
+                                          const SysCallArgs* args) {
+    int fd = args->args[0].as_i64;
+    off_t offset = args->args[1].as_u64;
+    int whence = args->args[2].as_i64;
+
+    /* Get and validate the file descriptor. */
+    File* file_desc = NULL;
+    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = file_lseek(file_desc, offset, whence)};
+}
+
+SysCallReturn syscallhandler_getdents(SysCallHandler* sys,
+                                          const SysCallArgs* args) {
+    unsigned int fd = args->args[0].as_u64;
+    PluginPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent*
+    unsigned int count = args->args[2].as_u64;
+
+    /* Get and validate the file descriptor. */
+    File* file_desc = NULL;
+    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    /* Path should be non-NULL. */
+    if(!dirpPtr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
+    /* Get the path string from the plugin. */
+    struct linux_dirent* dirp = thread_getWriteablePtr(sys->thread, dirpPtr, sizeof(*dirp));
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = file_getdents(file_desc, dirp, count)};
+}
+
+SysCallReturn syscallhandler_getdents64(SysCallHandler* sys,
+                                          const SysCallArgs* args) {
+    unsigned int fd = args->args[0].as_u64;
+    PluginPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent64*
+    unsigned int count = args->args[2].as_u64;
+
+    /* Get and validate the file descriptor. */
+    File* file_desc = NULL;
+    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    /* Path should be non-NULL. */
+    if(!dirpPtr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
+    /* Get the path string from the plugin. */
+    struct linux_dirent64* dirp = thread_getWriteablePtr(sys->thread, dirpPtr, sizeof(*dirp));
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = file_getdents64(file_desc, dirp, count)};
 }

@@ -424,3 +424,34 @@ SysCallReturn syscallhandler_renameat2(SysCallHandler* sys,
                                           const SysCallArgs* args) {
     return _syscallhandler_renameatHelper(sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_i64, args->args[3].as_ptr, args->args[4].as_u64);
 }
+
+SysCallReturn syscallhandler_statx(SysCallHandler* sys,
+                                          const SysCallArgs* args) {
+    int dirfd = args->args[0].as_i64;
+    PluginPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    int flags = args->args[2].as_i64;
+    unsigned int mask = args->args[3].as_u64;
+    PluginPtr statxbufPtr = args->args[4].as_ptr; // struct statx*
+
+    /* Validate params. */
+    File* dir_desc = NULL;
+    const char* pathname;
+
+    int errcode = _syscallhandler_validateDirAndPathnameHelper(sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    /* Path should be non-NULL. */
+    if(!statxbufPtr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
+    /* Get the path string from the plugin. */
+    struct statx* statxbuf = thread_getWriteablePtr(sys->thread, statxbufPtr, sizeof(*statxbuf));
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = file_statx(dir_desc, pathname, flags, mask, statxbuf)};
+}

@@ -181,11 +181,14 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(fsync);
         HANDLE(ftruncate);
         HANDLE(futimesat);
+        HANDLE(getdents);
+        HANDLE(getdents64);
         HANDLE(getpeername);
         HANDLE(getpid);
         HANDLE(getsockname);
         HANDLE(linkat);
         HANDLE(listen);
+        HANDLE(lseek);
         HANDLE(mkdirat);
         HANDLE(mknodat);
         HANDLE(nanosleep);
@@ -195,6 +198,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(pipe);
         HANDLE(pipe2);
         HANDLE(read);
+        HANDLE(readahead);
         HANDLE(readlinkat);
         HANDLE(recvfrom);
         HANDLE(renameat);
@@ -202,23 +206,14 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(sendto);
         HANDLE(shutdown);
         HANDLE(socket);
+        HANDLE(statx);
         HANDLE(symlinkat);
+        HANDLE(sync_file_range);
         HANDLE(syncfs);
         HANDLE(uname);
         HANDLE(unlinkat);
         HANDLE(utimensat);
         HANDLE(write);
-
-        // wip, coming soon...
-        NATIVE(copy_file_range);
-        NATIVE(sync_file_range);
-
-        NATIVE(lseek);
-        NATIVE(statx);
-        NATIVE(getdents);
-        NATIVE(getdents64);
-        NATIVE(sendfile);
-        NATIVE(readahead);
 
 
         // **************************************
@@ -261,6 +256,10 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(ppoll);
         NATIVE(select);
         NATIVE(pselect6);
+
+        // copying data between various types of fds
+        NATIVE(copy_file_range);
+        NATIVE(sendfile);
         NATIVE(splice);
         NATIVE(vmsplice);
         NATIVE(tee);

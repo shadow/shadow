@@ -12,14 +12,36 @@
 #include <sys/time.h>
 #include <sys/types.h>
 
+#include "main/host/syscall/dirent.h"
+
 /* Opaque type representing a file-backed file descriptor. */
 typedef struct _File File;
 
-/* free this with descriptor_unref() */
-File* file_new(int handle);
+/* In order to operate on a file, you must first create one with file_new()
+ * and open it with either file_open() or file_openat(). Internally, we use
+ * OS-backed files to support the Shadow file descriptor API.
+ *
+ * There are two main types of functions supported by this API:
+ * - The first set operates on the given File*. The file must have been
+ *   created and the File* must be non-null.
+ * - The second set operates on paths, and optionally includes a file object
+ *   that represents a directory from which a relative path is computed.
+ *   These calls usually end with "at". The directory File* can be null, in
+ *   which case the current working directory (AT_FDCWD) will be used instead.
+ */
 
-/* Close the file with descriptor_close() */
+// ************************
+// Initialization and setup
+// ************************
+
+File* file_new(int handle); // Close the file with descriptor_close()
 int file_open(File* file, const char* pathname, int flags, mode_t mode);
+int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t mode);
+
+// ****************************************
+// Operations that require a non-null File*
+// ****************************************
+
 ssize_t file_read(File* file, void* buf, size_t bufSize);
 ssize_t file_write(File* file, const void* buf, size_t bufSize);
 int file_fstat(File* file, struct stat* statbuf);
@@ -36,11 +58,16 @@ int file_fsetxattr(File* file, const char* name, const void* value, size_t size,
 ssize_t file_fgetxattr(File* file, const char* name, void* value, size_t size);
 ssize_t file_flistxattr(File* file, char* list, size_t size);
 int file_fremovexattr(File* file, const char* name);
+int file_sync_range(File* file, off64_t offset, off64_t nbytes, unsigned int flags);
+ssize_t file_readahead(File* file, off64_t offset, size_t count);
+off_t file_lseek(File* file, off_t offset, int whence);
+int file_getdents(File* file, struct linux_dirent* dirp, unsigned int count);
+int file_getdents64(File* file, struct linux_dirent64* dirp, unsigned int count);
 
-/* NULL dir File pointers are valid for *at functions. If a NULL dir file
- * is given, we use the special dir value AT_FDCWD on the file operation.*/
+// ******************************************
+// Operations where the dir File* may be null
+// ******************************************
 
-int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t mode);
 int file_fstatat(File* dir, const char* pathname, struct stat* statbuf, int flags);
 int file_fchownat(File* dir, const char* pathname, uid_t owner, gid_t group, int flags);
 int file_fchmodat(File* dir, const char* pathname, mode_t mode, int flags);
@@ -54,8 +81,6 @@ int file_unlinkat(File* dir, const char* pathname, int flags);
 int file_symlinkat(File* dir, const char* linkpath, const char* target);
 ssize_t file_readlinkat(File* dir, const char* pathname, char* buf, size_t bufsize);
 int file_renameat2(File* olddir, const char* oldpath, File* newdir, const char* newpath, unsigned int flags);
-
-/* Return the OS-backed file descriptor we use to operate on the file. */
-int file_getOSBackedFD(File* file);
+int file_statx(File* dir, const char* pathname, int flags, unsigned int mask, struct statx* statxbuf);
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_FILE_H_ */

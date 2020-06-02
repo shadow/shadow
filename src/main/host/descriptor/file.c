@@ -10,6 +10,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <syscall.h>
 #include <sys/file.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -20,6 +21,7 @@
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/syscall/dirent.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
@@ -89,7 +91,7 @@ File* file_new(int handle) {
     return file;
 }
 
-int file_getOSBackedFD(File* file) {
+static int _file_getOSBackedFD(File* file) {
     MAGIC_ASSERT(file);
     return file->osBackedFD;
 }
@@ -102,7 +104,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
      * epolling on all such files with a shadow support thread. */
     int osfd = 0;
     if(dir) {
-        osfd = openat(file_getOSBackedFD(dir), pathname, flags, mode);
+        osfd = openat(_file_getOSBackedFD(dir), pathname, flags, mode);
     } else {
         osfd = open(pathname, flags, mode);
     }
@@ -347,6 +349,72 @@ int file_fremovexattr(File* file, const char* name) {
     return (result < 0) ? -errno : result;
 }
 
+int file_sync_range(File* file, off64_t offset, off64_t nbytes, unsigned int flags) {
+    MAGIC_ASSERT(file);
+
+    if(!file->osBackedFD) {
+        return -EBADF;
+    }
+
+    debug("File %i sync_file_range os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+
+    int result = sync_file_range(file->osBackedFD, offset, nbytes, flags);
+    return (result < 0) ? -errno : result;
+}
+
+ssize_t file_readahead(File* file, off64_t offset, size_t count) {
+    MAGIC_ASSERT(file);
+
+    if(!file->osBackedFD) {
+        return -EBADF;
+    }
+
+    debug("File %i readahead os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+
+    ssize_t result = readahead(file->osBackedFD, offset, count);
+    return (result < 0) ? -errno : result;
+}
+
+off_t file_lseek(File* file, off_t offset, int whence) {
+    MAGIC_ASSERT(file);
+
+    if(!file->osBackedFD) {
+        return -EBADF;
+    }
+
+    debug("File %i lseek os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+
+    ssize_t result = lseek(file->osBackedFD, offset, whence);
+    return (result < 0) ? -errno : result;
+}
+
+int file_getdents(File* file, struct linux_dirent* dirp, unsigned int count) {
+    MAGIC_ASSERT(file);
+
+    if(!file->osBackedFD) {
+        return -EBADF;
+    }
+
+    debug("File %i getdents os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+
+    // getdents is not available for a direct call
+    int result = (int)syscall(SYS_getdents, file->osBackedFD, dirp, count);
+    return (result < 0) ? -errno : result;
+}
+
+int file_getdents64(File* file, struct linux_dirent64* dirp, unsigned int count) {
+    MAGIC_ASSERT(file);
+
+    if(!file->osBackedFD) {
+        return -EBADF;
+    }
+
+    debug("File %i getdents64 os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+
+    int result = getdents64(file->osBackedFD, dirp, count);
+    return (result < 0) ? -errno : result;
+}
+
 ///////////////////////////////////////////////
 // *at functions (NULL directory file is valid)
 ///////////////////////////////////////////////
@@ -476,5 +544,14 @@ int file_renameat2(File* olddir, const char* oldpath, File* newdir, const char* 
     debug("File %i renameat2 os-backed file %i", olddir ? descriptor_getHandle(&olddir->super) : 0, oldosdirfd);
 
     int result = renameat2(oldosdirfd, oldpath, newosdirfd, newpath, flags);
+    return (result < 0) ? -errno : result;
+}
+
+int file_statx(File* dir, const char* pathname, int flags, unsigned int mask, struct statx* statxbuf) {
+    int osdirfd = _file_getOSDirFDHelper(dir);
+
+    debug("File %i statx os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
+
+    int result = statx(osdirfd, pathname, flags, mask, statxbuf);
     return (result < 0) ? -errno : result;
 }

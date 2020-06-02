@@ -21,6 +21,7 @@ SYSCALL_HANDLER(openat);
 SYSCALL_HANDLER(readlinkat);
 SYSCALL_HANDLER(renameat);
 SYSCALL_HANDLER(renameat2);
+SYSCALL_HANDLER(statx);
 SYSCALL_HANDLER(symlinkat);
 SYSCALL_HANDLER(unlinkat);
 SYSCALL_HANDLER(utimensat);
