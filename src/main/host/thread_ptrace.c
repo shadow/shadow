@@ -581,6 +581,80 @@ void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
     return rv;
 }
 
+long threadptrace_syscall(Thread* base, long n, va_list args) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+
+    // Unimplemented for other states.
+    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE);
+    // The last ptrace stop was just before executing a syscall instruction.
+    // We'll use that to execute the desired syscall, and then restore the
+    // original state.
+
+    // Inject the requested syscall number and arguments.
+    struct user_regs_struct regs = thread->syscall.regs;
+    regs.orig_rax = n;
+    regs.rdi = va_arg(args, long);
+    regs.rsi = va_arg(args, long);
+    regs.rdx = va_arg(args, long);
+    regs.r10 = va_arg(args, long);
+    regs.r8 = va_arg(args, long);
+    regs.r9 = va_arg(args, long);
+    if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &regs) <
+        0) {
+        error("ptrace: %s", g_strerror(errno));
+        abort();
+    }
+
+    // Allow the current syscall to complete.
+    if (ptrace(PTRACE_SYSCALL, thread->childPID, 0, 0) < 0) {
+        error("ptrace %d: %s", thread->childPID, g_strerror(errno));
+        abort();
+    }
+    int wstatus;
+    if (waitpid(thread->childPID, &wstatus, 0) < 0) {
+        error("waitpid: %s", g_strerror(errno));
+        abort();
+    }
+    int signal = WSTOPSIG(wstatus);
+    if(signal != (SIGTRAP | 0x80)) {
+        error("unhandled signal %d", signal);
+        abort();
+    }
+
+    // Get the result.
+    if (ptrace(PTRACE_GETREGS, thread->childPID, 0, &regs) < 0) {
+        error("ptrace: %s", g_strerror(errno));
+        abort();
+    }
+    long syscall_result = regs.rax;
+
+    // Restore the original registers, rewinding the instruction pointer so that
+    // we'll re-execute the original syscall.
+    regs = thread->syscall.regs;
+    regs.rip -= 2;  // Size of the syscall instruction.
+    if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &regs) < 0) {
+        error("ptrace: %s", g_strerror(errno));
+        abort();
+    }
+
+    // Continue, putting us back in the original pre-syscall state.
+    if (ptrace(PTRACE_SYSCALL, thread->childPID, 0, 0) < 0) {
+        error("ptrace %d: %s", thread->childPID, g_strerror(errno));
+        abort();
+    }
+    if (waitpid(thread->childPID, &wstatus, 0) < 0) {
+        error("waitpid: %s", g_strerror(errno));
+        abort();
+    }
+    signal = WSTOPSIG(wstatus);
+    if(signal != (SIGTRAP | 0x80)) {
+        error("unhandled signal %d", signal);
+        abort();
+    }
+
+    return syscall_result;
+}
+
 Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
     ThreadPtrace* thread = g_new(ThreadPtrace, 1);
 
@@ -596,6 +670,7 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
                          .getReadablePtr = threadptrace_getReadablePtr,
                          .getReadableString = threadptrace_getReadableString,
                          .getWriteablePtr = threadptrace_getWriteablePtr,
+                         .syscall = threadptrace_syscall,
 
                          .type_id = THREADPTRACE_TYPE_ID,
                          .referenceCount = 1},
