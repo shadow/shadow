@@ -46,7 +46,7 @@ static void _shim_shmemNotifyComplete(int fd) {
     shimevent_sendEvent(fd, &ev);
 }
 
-static void _shim_shmemHandleEvent(int fd, const ShimEvent* ev) {
+void shim_shmemHandleEvent(int fd, const ShimEvent* ev) {
     switch (ev->event_id) {
         case SHD_SHIM_EVENT_CLONE_REQ:
             _shim_shmemHandleClone(ev);
@@ -67,12 +67,3 @@ static void _shim_shmemHandleEvent(int fd, const ShimEvent* ev) {
     }
 }
 
-void shim_shmemLoop(int fd) {
-
-    ShimEvent ev = {0};
-
-    do {
-        shimevent_recvEvent(fd, &ev);
-        _shim_shmemHandleEvent(fd, &ev);
-    } while (ev.event_id != SHD_SHIM_EVENT_SHMEM_COMPLETE);
-}

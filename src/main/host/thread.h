@@ -63,6 +63,8 @@ void thread_releaseClonedPtr(Thread* thread, void* p);
 // Make the requested syscall from within the plugin. For now, does *not* flush
 // or invalidate pointers, but we may need to revisit this to support some
 // use-cases.
+//
+// Arguments are treated opaquely. e.g. no pointer-marshalling is done.
 long thread_syscall(Thread* thread, long n, ...);
 
 gboolean thread_isRunning(Thread* thread);

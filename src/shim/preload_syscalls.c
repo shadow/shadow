@@ -39,40 +39,72 @@ static long shadow_retval_to_errno(long retval) {
     return retval;
 }
 
-static SysCallReg _shadow_syscall_event(const ShimEvent* ev) {
-    shim_disableInterposition();
-
+static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
     const int fd = shim_thisThreadEventFD();
-    debug("sending syscall event %ld on %d\n",
-          ev->event_data.syscall.syscall_args.number, fd);
-    shimevent_sendEvent(fd, ev);
+    debug("sending syscall event %ld on %d",
+          syscall_event->event_data.syscall.syscall_args.number, fd);
+    shimevent_sendEvent(fd, syscall_event);
+    SysCallReg rv = {0};
 
-    shim_shmemLoop(fd);
-
-    debug("waiting for event on %d\n", fd);
-    ShimEvent res;
-    shimevent_recvEvent(fd, &res);
-    debug("got response on %d\n", fd);
-    SysCallReg rv;
-    if (res.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE) {
-        rv = res.event_data.syscall_complete.retval;
-        shimlogger_set_simulation_nanos(
-            res.event_data.syscall_complete.simulation_nanos);
-    } else if (res.event_id == SHD_SHIM_EVENT_SYSCALL_DO_NATIVE) {
-        const SysCallReg* regs = ev->event_data.syscall.syscall_args.args;
-        rv.as_i64 =
-            _real_syscall(ev->event_data.syscall.syscall_args.number,
-                          regs[0].as_u64, regs[1].as_u64, regs[2].as_u64,
-                          regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
-    } else {
-        error("Got unexpected event %d", res.event_id);
+    while (true) {
+        debug("waiting for event on %d", fd);
+        ShimEvent res = {0};
+        shimevent_recvEvent(fd, &res);
+        debug("got response of type %d on %d", res.event_id, fd);
+        switch (res.event_id) {
+            case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
+                // Use provided result.
+                SysCallReg rv = res.event_data.syscall_complete.retval;
+                shimlogger_set_simulation_nanos(
+                    res.event_data.syscall_complete.simulation_nanos);
+                return rv;
+            }
+            case SHD_SHIM_EVENT_SYSCALL_DO_NATIVE: {
+                // Make the original syscall ourselves and use the result.
+                SysCallReg rv = res.event_data.syscall_complete.retval;
+                const SysCallReg* regs =
+                    syscall_event->event_data.syscall.syscall_args.args;
+                rv.as_i64 = _real_syscall(
+                    syscall_event->event_data.syscall.syscall_args.number,
+                    regs[0].as_u64, regs[1].as_u64, regs[2].as_u64,
+                    regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
+                return rv;
+            }
+            case SHD_SHIM_EVENT_SYSCALL: {
+                // Make the requested syscall ourselves and return the result
+                // to Shadow.
+                const SysCallReg* regs =
+                    res.event_data.syscall.syscall_args.args;
+                long syscall_rv = _real_syscall(
+                    res.event_data.syscall.syscall_args.number, regs[0].as_u64,
+                    regs[1].as_u64, regs[2].as_u64, regs[3].as_u64,
+                    regs[4].as_u64, regs[5].as_u64);
+                ShimEvent syscall_complete_event = {
+                    .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                    .event_data.syscall_complete.retval.as_i64 = syscall_rv,
+                };
+                shimevent_sendEvent(fd, &syscall_complete_event);
+                break;
+            }
+            case SHD_SHIM_EVENT_CLONE_REQ:
+            case SHD_SHIM_EVENT_CLONE_STRING_REQ:
+            case SHD_SHIM_EVENT_WRITE_REQ:
+            case SHD_SHIM_EVENT_SHMEM_COMPLETE:
+                shim_shmemHandleEvent(fd, &res);
+                break;
+            default: {
+                error("Got unexpected event %d", res.event_id);
+                abort();
+            }
+        }
     }
-    shim_enableInterposition();
-    return rv;
 }
 
 static long _shadow_syscall(ShimEvent* event) {
-    return shadow_retval_to_errno(_shadow_syscall_event(event).as_i64);
+    shim_disableInterposition();
+    long rv = shadow_retval_to_errno(_shadow_syscall_event(event).as_i64);
+    shim_enableInterposition();
+    return rv;
 }
 
 long syscall(long n, ...) {
