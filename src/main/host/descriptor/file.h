@@ -43,7 +43,9 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
 // ****************************************
 
 ssize_t file_read(File* file, void* buf, size_t bufSize);
+ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset);
 ssize_t file_write(File* file, const void* buf, size_t bufSize);
+ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset);
 int file_fstat(File* file, struct stat* statbuf);
 int file_fstatfs(File* file, struct statfs* statbuf);
 int file_fsync(File* file);

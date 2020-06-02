@@ -144,11 +144,26 @@ ssize_t file_read(File* file, void* buf, size_t bufSize) {
         return -EBADF;
     }
 
-    debug("File %i reading %zu bytes from os-backed file %i", descriptor_getHandle(&file->super), bufSize, file->osBackedFD);
+    debug("File %i read %zu bytes from os-backed file %i", descriptor_getHandle(&file->super), bufSize, file->osBackedFD);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
     ssize_t result = read(file->osBackedFD, buf, bufSize);
+    return (result < 0) ? -errno : result;
+}
+
+ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
+    MAGIC_ASSERT(file);
+
+    if(!file->osBackedFD) {
+        return -EBADF;
+    }
+
+    debug("File %i pread %zu bytes from os-backed file %i", descriptor_getHandle(&file->super), bufSize, file->osBackedFD);
+
+    /* TODO: this may block the shadow thread until we properly handle
+     * os-backed files in non-blocking mode. */
+    ssize_t result = pread(file->osBackedFD, buf, bufSize, offset);
     return (result < 0) ? -errno : result;
 }
 
@@ -164,6 +179,21 @@ ssize_t file_write(File* file, const void* buf, size_t bufSize) {
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
     ssize_t result = write(file->osBackedFD, buf, bufSize);
+    return (result < 0) ? -errno : result;
+}
+
+ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset) {
+    MAGIC_ASSERT(file);
+
+    if(!file->osBackedFD) {
+        return -EBADF;
+    }
+
+    debug("File %i writing %zu bytes to os-backed file %i", descriptor_getHandle(&file->super), bufSize, file->osBackedFD);
+
+    /* TODO: this may block the shadow thread until we properly handle
+     * os-backed files in non-blocking mode. */
+    ssize_t result = pwrite(file->osBackedFD, buf, bufSize, offset);
     return (result < 0) ? -errno : result;
 }
 

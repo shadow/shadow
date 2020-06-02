@@ -79,6 +79,192 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
 
+static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr, size_t bufSize, off_t offset) {
+    debug("trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
+
+    /* Get the descriptor. */
+    Descriptor* desc = host_lookupDescriptor(sys->host, fd);
+    if (!desc) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
+    }
+
+    /* Some logic depends on the descriptor type. */
+    DescriptorType dType = descriptor_getType(desc);
+
+    /* We can only seek on files, otherwise its a pipe error. */
+    if(dType != DT_FILE && offset != 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESPIPE};
+    }
+
+    /* Divert io on sockets to socket handler to pick up special checks. */
+    if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
+        return _syscallhandler_recvfromHelper(
+            sys, fd, bufPtr, bufSize, 0, (PluginPtr){0}, (PluginPtr){0});
+    }
+
+    /* Now it's an error if the descriptor is closed. */
+    int errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
+    if (errorCode != 0) {
+        return (SysCallReturn){
+            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+    }
+    utility_assert(desc);
+
+    /* Need a non-null buffer. */
+    if (!bufPtr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
+    /* Need a non-zero size. */
+    if (!bufSize) {
+        info("Invalid length %zu provided on descriptor %i", bufSize, fd);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    }
+
+    /* TODO: Dynamically compute size based on how much data is actually
+     * available in the descriptor. */
+    size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
+    void* buf = thread_getWriteablePtr(sys->thread, bufPtr, sizeNeeded);
+
+    ssize_t result = 0;
+    switch (dType) {
+        case DT_FILE:
+            if(offset == 0) {
+                result = file_read((File*)desc, buf, sizeNeeded);
+            } else {
+                result = file_pread((File*)desc, buf, sizeNeeded, offset);
+            }
+            break;
+        case DT_TIMER:
+            result = timer_read((Timer*)desc, buf, sizeNeeded);
+            break;
+        case DT_PIPE:
+            result = transport_receiveUserData(
+                (Transport*)desc, buf, sizeNeeded, NULL, NULL);
+            break;
+        case DT_TCPSOCKET:
+        case DT_UDPSOCKET:
+            // We already diverted these to the socket handler above.
+            utility_assert(0);
+            break;
+        case DT_SOCKETPAIR:
+        case DT_EPOLL:
+        default:
+            warning("write() not yet implemented for descriptor type %i",
+                    (int)dType);
+            result = -ENOTSUP;
+            break;
+    }
+
+    if (result == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
+        /* Blocking for file io will lock up the plugin because we don't
+         * yet have a way to wait on file descriptors. */
+        if(dType == DT_FILE) {
+            critical("Indefinitely blocking a read of %zu bytes on file %i at offset %li", bufSize, fd, offset);
+        }
+
+        /* We need to block until the descriptor is ready to read. */
+        process_listenForStatus(
+            sys->process, sys->thread, NULL, desc, DS_READABLE);
+        return (SysCallReturn){.state = SYSCALL_BLOCK};
+    }
+
+    return (SysCallReturn){
+        .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)result};
+}
+
+static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr, size_t bufSize, off_t offset) {
+    debug("trying to write %zu bytes on fd %i at offset %li", bufSize, fd, offset);
+
+    /* Get the descriptor. */
+    Descriptor* desc = host_lookupDescriptor(sys->host, fd);
+    if (!desc) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
+    }
+
+    /* Some logic depends on the descriptor type. */
+    DescriptorType dType = descriptor_getType(desc);
+
+    /* We can only seek on files, otherwise its a pipe error. */
+    if(dType != DT_FILE && offset != 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESPIPE};
+    }
+
+    /* Divert io on sockets to socket handler to pick up special checks. */
+    if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
+        return _syscallhandler_sendtoHelper(
+            sys, fd, bufPtr, bufSize, 0, (PluginPtr){0}, 0);
+    }
+
+    /* Now it's an error if the descriptor is closed. */
+    gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
+    if (errorCode != 0) {
+        return (SysCallReturn){
+            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+    }
+    utility_assert(desc);
+
+    /* Need a non-null buffer. */
+    if (!bufPtr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
+    /* Need a non-zero size. */
+    if (!bufSize) {
+        info("Invalid length %zu provided on descriptor %i", bufSize, fd);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    }
+
+    /* TODO: Dynamically compute size based on how much data is actually
+     * available in the descriptor. */
+    size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
+    const void* buf = thread_getReadablePtr(sys->thread, bufPtr, sizeNeeded);
+
+    ssize_t result = 0;
+    switch (dType) {
+        case DT_FILE:
+            if(offset == 0) {
+                result = file_write((File*)desc, buf, sizeNeeded);
+            } else {
+                result = file_pwrite((File*)desc, buf, sizeNeeded, offset);
+            }
+            break;
+        case DT_TIMER: result = -EINVAL; break;
+        case DT_PIPE:
+            result =
+                transport_sendUserData((Transport*)desc, buf, sizeNeeded, 0, 0);
+            break;
+        case DT_TCPSOCKET:
+        case DT_UDPSOCKET:
+            // We already diverted these to the socket handler above.
+            utility_assert(0);
+            break;
+        case DT_SOCKETPAIR:
+        case DT_EPOLL:
+        default:
+            warning("write() not yet implemented for descriptor type %i",
+                    (int)dType);
+            result = -ENOTSUP;
+            break;
+    }
+
+    if (result == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
+        /* Blocking for file io will lock up the plugin because we don't
+         * yet have a way to wait on file descriptors. */
+        if(dType == DT_FILE) {
+            critical("Indefinitely blocking a write of %zu bytes on file %i at offset %li", bufSize, fd, offset);
+        }
+
+        /* We need to block until the descriptor is ready to read. */
+        process_listenForStatus(
+            sys->process, sys->thread, NULL, desc, DS_WRITABLE);
+        return (SysCallReturn){.state = SYSCALL_BLOCK};
+    }
+
+    return (SysCallReturn){
+        .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)result};
+}
+
 ///////////////////////////////////////////////////////////
 // System Calls
 ///////////////////////////////////////////////////////////
@@ -121,160 +307,22 @@ SysCallReturn syscallhandler_pipe(SysCallHandler* sys,
 
 SysCallReturn syscallhandler_read(SysCallHandler* sys,
                                   const SysCallArgs* args) {
-    int fd = args->args[0].as_i64;
-    PluginPtr bufPtr = args->args[1].as_ptr; // void*
-    size_t bufSize = args->args[2].as_u64;
+    return _syscallhandler_readHelper(sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0);
+}
 
-    debug("trying to read %zu bytes on fd %i", bufSize, fd);
-
-    /* Get the descriptor. */
-    Descriptor* desc = host_lookupDescriptor(sys->host, fd);
-    if (!desc) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
-    }
-
-    // Divert io on socket descriptors to socket handler
-    DescriptorType dType = descriptor_getType(desc);
-    if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
-        return _syscallhandler_recvfromHelper(
-            sys, fd, bufPtr, bufSize, 0, (PluginPtr){0}, (PluginPtr){0});
-    }
-
-    gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
-    if (errorCode != 0) {
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
-    }
-    utility_assert(desc);
-
-    /* Make sure they didn't pass a NULL pointer. */
-    if (!bufPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
-    if (!bufSize) {
-        info("Invalid length %zu provided on descriptor %i", bufSize, fd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
-    /* TODO: Dynamically compute size based on how much data is actually
-     * available in the descriptor. */
-    size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
-    void* buf = thread_getWriteablePtr(sys->thread, bufPtr, sizeNeeded);
-
-    ssize_t result = 0;
-    switch (dType) {
-        case DT_FILE:
-            result = file_read((File*)desc, buf, sizeNeeded);
-            break;
-        case DT_TIMER:
-            result = timer_read((Timer*)desc, buf, sizeNeeded);
-            break;
-        case DT_PIPE:
-            result = transport_receiveUserData(
-                (Transport*)desc, buf, sizeNeeded, NULL, NULL);
-            break;
-        case DT_TCPSOCKET:
-        case DT_UDPSOCKET:
-            // We already diverted these to the socket handler above.
-            utility_assert(0);
-            break;
-        case DT_SOCKETPAIR:
-        case DT_EPOLL:
-        default:
-            warning("write() not yet implemented for descriptor type %i",
-                    (int)dType);
-            result = -ENOTSUP;
-            break;
-    }
-
-    if (result == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
-        /* We need to block until the descriptor is ready to read. */
-        process_listenForStatus(
-            sys->process, sys->thread, NULL, desc, DS_READABLE);
-        return (SysCallReturn){.state = SYSCALL_BLOCK};
-    }
-
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)result};
+SysCallReturn syscallhandler_pread64(SysCallHandler* sys,
+                                   const SysCallArgs* args) {
+    return _syscallhandler_readHelper(sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, args->args[3].as_i64);
 }
 
 SysCallReturn syscallhandler_write(SysCallHandler* sys,
                                    const SysCallArgs* args) {
-    int fd = (int)args->args[0].as_i64;
-    PluginPtr bufPtr = args->args[1].as_ptr; // const void*
-    size_t bufSize = (size_t)args->args[2].as_u64;
+    return _syscallhandler_writeHelper(sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0);
+}
 
-    debug("trying to write %zu bytes on fd %i", bufSize, fd);
-
-    /* Get the descriptor. */
-    Descriptor* desc = host_lookupDescriptor(sys->host, fd);
-    if (!desc) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
-    }
-
-    // Divert io on socket descriptors to socket handler
-    DescriptorType dType = descriptor_getType(desc);
-    if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
-        return _syscallhandler_sendtoHelper(
-            sys, fd, bufPtr, bufSize, 0, (PluginPtr){0}, 0);
-    }
-
-    gint errorCode = _syscallhandler_validateDescriptor(desc, DT_NONE);
-    if (errorCode != 0) {
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
-    }
-    utility_assert(desc);
-
-    /* Make sure they didn't pass a NULL pointer. */
-    if (!bufPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
-    if (!bufSize) {
-        info("Invalid length %zu provided on descriptor %i", bufSize, fd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
-    /* TODO: Dynamically compute size based on how much data is actually
-     * available in the descriptor. */
-    size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
-    const void* buf = thread_getReadablePtr(sys->thread, bufPtr, sizeNeeded);
-
-    ssize_t result = 0;
-    switch (dType) {
-        case DT_FILE:
-            result = file_write((File*)desc, buf, sizeNeeded);
-            break;
-        case DT_TIMER: result = -EINVAL; break;
-        case DT_PIPE:
-            result =
-                transport_sendUserData((Transport*)desc, buf, sizeNeeded, 0, 0);
-            break;
-        case DT_TCPSOCKET:
-        case DT_UDPSOCKET:
-            // We already diverted these to the socket handler above.
-            utility_assert(0);
-            break;
-        case DT_SOCKETPAIR:
-        case DT_EPOLL:
-        default:
-            warning("write() not yet implemented for descriptor type %i",
-                    (int)dType);
-            result = -ENOTSUP;
-            break;
-    }
-
-    if (result == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
-        /* We need to block until the descriptor is ready to read. */
-        process_listenForStatus(
-            sys->process, sys->thread, NULL, desc, DS_WRITABLE);
-        return (SysCallReturn){.state = SYSCALL_BLOCK};
-    }
-
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)result};
+SysCallReturn syscallhandler_pwrite64(SysCallHandler* sys,
+                                   const SysCallArgs* args) {
+    return _syscallhandler_writeHelper(sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, args->args[3].as_i64);
 }
 
 SysCallReturn syscallhandler_getpid(SysCallHandler* sys,

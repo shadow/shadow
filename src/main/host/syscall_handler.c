@@ -197,6 +197,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(openat);
         HANDLE(pipe);
         HANDLE(pipe2);
+        HANDLE(pread64);
+        HANDLE(pwrite64);
         HANDLE(read);
         HANDLE(readahead);
         HANDLE(readlinkat);
@@ -238,13 +240,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(sched_setaffinity);
 
         // operations on file descriptors
-        NATIVE(pread64);
-        NATIVE(pwrite64);
         NATIVE(readv);
-        NATIVE(writev);
         NATIVE(preadv);
-        NATIVE(pwritev);
         NATIVE(preadv2);
+
+        NATIVE(writev);
+        NATIVE(pwritev);
         NATIVE(pwritev2);
 
         NATIVE(dup);
