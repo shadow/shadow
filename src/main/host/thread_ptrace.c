@@ -37,6 +37,71 @@ typedef struct _PendingWrite {
     size_t n;
 } PendingWrite;
 
+typedef enum {
+    STOPREASON_EXITED_NORMAL,
+    STOPREASON_EXITED_SIGNAL,
+    STOPREASON_SIGNAL,
+    STOPREASON_SYSCALL,
+    STOPREASON_EXEC,
+    STOPREASON_CONTINUED,
+    STOPREASON_UNKNOWN,
+} StopReasonType;
+
+typedef struct {
+    StopReasonType type;
+    union {
+        struct {
+            int exit_code;
+        } exited_normal;
+        struct {
+            int signal;
+        } exited_signal;
+        struct {
+            int signal;
+        } signal;
+    };
+} StopReason;
+
+static StopReason _getStopReason(int wstatus) {
+    if (WIFSIGNALED(wstatus)) {
+        return (StopReason){
+            .type = STOPREASON_EXITED_SIGNAL,
+            .exited_signal.signal = WTERMSIG(wstatus),
+        };
+    } else if (WIFEXITED(wstatus)) {
+        return (StopReason){
+            .type = STOPREASON_EXITED_NORMAL,
+            .exited_normal.exit_code = WEXITSTATUS(wstatus),
+        };
+    } else if (WIFSTOPPED(wstatus)) {
+        const int signal = WSTOPSIG(wstatus);
+        if (signal == (SIGTRAP | 0x80)) {
+            // See PTRACE_O_TRACESYSGOOD in ptrace(2).
+            return (StopReason){
+                .type = STOPREASON_SYSCALL,
+            };
+        } else if (wstatus >> 8 == (SIGTRAP | (PTRACE_EVENT_EXEC << 8))) {
+            // See PTRACE_O_TRACEEXEC in ptrace(2).
+            return (StopReason){
+                .type = STOPREASON_EXEC,
+            };
+        } else {
+            return (StopReason){
+                .type = STOPREASON_SIGNAL,
+                .signal.signal = WSTOPSIG(wstatus),
+            };
+        }
+    } else if (WIFCONTINUED(wstatus)) {
+        return (StopReason){
+            .type = STOPREASON_CONTINUED,
+        };
+    } else {
+        return (StopReason){
+            .type = STOPREASON_UNKNOWN,
+        };
+    }
+}
+
 typedef struct _ThreadPtrace {
     Thread base;
 
@@ -255,54 +320,48 @@ static void _threadptrace_nextChildState(ThreadPtrace* thread) {
         error("waitpid: %s", g_strerror(errno));
         return;
     }
+    StopReason reason = _getStopReason(wstatus);
 
-    if (WIFSIGNALED(wstatus)) {
-        // Killed by a signal.
-        int signum = WTERMSIG(wstatus);
-        debug("child %d terminated by signal %d", thread->childPID, signum);
-        thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
-        thread->returnCode = -1;
+    switch(reason.type) {
+        case STOPREASON_EXITED_SIGNAL:
+            debug("child %d terminated by signal %d", thread->childPID,
+                  reason.exited_signal.signal);
+            thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
+            thread->returnCode = -1;
+            return;
+        case STOPREASON_EXITED_NORMAL:
+            thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
+            thread->returnCode = reason.exited_normal.exit_code;
+            return;
+        case STOPREASON_EXEC:
+            thread->childState = THREAD_PTRACE_CHILD_STATE_EXECVE;
+            _threadptrace_enterStateExecve(thread);
+            return;
+        case STOPREASON_SYSCALL:
+            if (thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE ||
+                thread->childState == THREAD_PTRACE_CHILD_STATE_EXECVE) {
+                thread->childState = THREAD_PTRACE_CHILD_STATE_SYSCALL_POST;
+                _threadptrace_enterStateSyscallPost(thread);
+            } else {
+                thread->childState = THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE;
+                _threadptrace_enterStateSyscallPre(thread);
+            }
+            return;
+        case STOPREASON_SIGNAL:
+            if (reason.signal.signal == SIGSTOP &&
+                thread->childState == THREAD_PTRACE_CHILD_STATE_NONE) {
+                // We caught the "raise(SIGSTOP)" just after forking.
+                thread->childState = THREAD_PTRACE_CHILD_STATE_TRACE_ME;
+                _threadptrace_enterStateTraceMe(thread);
+                return;
+            }
+            _threadptrace_enterStateSignalled(thread, reason.signal.signal);
+            return;
+        case STOPREASON_CONTINUED:
+        default:
+            error("Unhandled stop reason. wstatus: %x. stop type: %d", wstatus, reason.type);
+            return;
     }
-    if (WIFEXITED(wstatus)) {
-        // Exited for some other reason.
-        thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
-        thread->returnCode = WEXITSTATUS(wstatus);
-        return;
-    }
-    if (!WIFSTOPPED(wstatus)) {
-        // NOT stopped by a ptrace event.
-        error("Unknown waitpid reason. wstatus: %x", wstatus);
-        return;
-    }
-    const int signal = WSTOPSIG(wstatus);
-    if (signal == SIGSTOP &&
-        thread->childState == THREAD_PTRACE_CHILD_STATE_NONE) {
-        // We caught the "raise(SIGSTOP)" just after forking.
-        thread->childState = THREAD_PTRACE_CHILD_STATE_TRACE_ME;
-        _threadptrace_enterStateTraceMe(thread);
-        return;
-    }
-    // Condition taken from 'man ptrace' for PTRACE_O_TRACEEXEC
-    if (wstatus >> 8 == (SIGTRAP | (PTRACE_EVENT_EXEC << 8))) {
-        thread->childState = THREAD_PTRACE_CHILD_STATE_EXECVE;
-        _threadptrace_enterStateExecve(thread);
-        return;
-    }
-    // See PTRACE_O_TRACESYSGOOD in `man 2 ptrace`
-    if (signal == (SIGTRAP | 0x80)) {
-        if (thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE ||
-            thread->childState == THREAD_PTRACE_CHILD_STATE_EXECVE) {
-            thread->childState = THREAD_PTRACE_CHILD_STATE_SYSCALL_POST;
-            _threadptrace_enterStateSyscallPost(thread);
-        } else {
-            thread->childState = THREAD_PTRACE_CHILD_STATE_SYSCALL_PRE;
-            _threadptrace_enterStateSyscallPre(thread);
-        }
-        return;
-    }
-    _threadptrace_enterStateSignalled(thread, signal);
-
-    return;
 }
 
 void threadptrace_run(Thread* base, gchar** argv, gchar** envv, int stderrFD,
@@ -615,9 +674,10 @@ long threadptrace_syscall(Thread* base, long n, va_list args) {
         error("waitpid: %s", g_strerror(errno));
         abort();
     }
-    int signal = WSTOPSIG(wstatus);
-    if(signal != (SIGTRAP | 0x80)) {
-        error("unhandled signal %d", signal);
+    StopReason reason = _getStopReason(wstatus);
+    if (reason.type != STOPREASON_SYSCALL) {
+        error("Unexpected stop reason type: %d, wstatus: %d", reason.type,
+              wstatus);
         abort();
     }
 
@@ -646,9 +706,10 @@ long threadptrace_syscall(Thread* base, long n, va_list args) {
         error("waitpid: %s", g_strerror(errno));
         abort();
     }
-    signal = WSTOPSIG(wstatus);
-    if(signal != (SIGTRAP | 0x80)) {
-        error("unhandled signal %d", signal);
+    reason = _getStopReason(wstatus);
+    if (reason.type != STOPREASON_SYSCALL) {
+        error("Unexpected stop reason type: %d, wstatus: %d", reason.type,
+              wstatus);
         abort();
     }
 
