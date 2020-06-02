@@ -20,6 +20,7 @@
 #include "main/host/process.h"
 #include "main/host/syscall/epoll.h"
 #include "main/host/syscall/file.h"
+#include "main/host/syscall/fileat.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/socket.h"
 #include "main/host/syscall/time.h"
@@ -161,11 +162,14 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(epoll_create1);
         HANDLE(epoll_ctl);
         HANDLE(epoll_wait);
+        HANDLE(faccessat);
         HANDLE(fadvise64);
         HANDLE(fallocate);
         HANDLE(fchdir);
         HANDLE(fchmod);
+        HANDLE(fchmodat);
         HANDLE(fchown);
+        HANDLE(fchownat);
         HANDLE(fdatasync);
         HANDLE(fgetxattr);
         HANDLE(flistxattr);
@@ -176,22 +180,33 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(fstatfs);
         HANDLE(fsync);
         HANDLE(ftruncate);
+        HANDLE(futimesat);
         HANDLE(getpeername);
         HANDLE(getpid);
         HANDLE(getsockname);
+        HANDLE(linkat);
         HANDLE(listen);
+        HANDLE(mkdirat);
+        HANDLE(mknodat);
         HANDLE(nanosleep);
+        HANDLE(newfstatat);
         HANDLE(open);
         HANDLE(openat);
         HANDLE(pipe);
         HANDLE(pipe2);
         HANDLE(read);
+        HANDLE(readlinkat);
         HANDLE(recvfrom);
+        HANDLE(renameat);
+        HANDLE(renameat2);
         HANDLE(sendto);
         HANDLE(shutdown);
         HANDLE(socket);
+        HANDLE(symlinkat);
         HANDLE(syncfs);
         HANDLE(uname);
+        HANDLE(unlinkat);
+        HANDLE(utimensat);
         HANDLE(write);
 
         // wip, coming soon...
@@ -205,20 +220,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(sendfile);
         NATIVE(readahead);
 
-        HANDLE(newfstatat);
-        NATIVE(fchownat);
-        NATIVE(fchmodat);
-        NATIVE(futimesat);
-        NATIVE(faccessat);
-        NATIVE(mkdirat);
-        NATIVE(mknodat);
-        NATIVE(unlinkat);
-        NATIVE(renameat);
-        NATIVE(renameat2);
-        NATIVE(linkat);
-        NATIVE(symlinkat);
-        NATIVE(readlinkat);
-        NATIVE(utimensat);
 
         // **************************************
         // Not handled (yet):

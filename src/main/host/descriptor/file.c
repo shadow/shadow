@@ -8,7 +8,10 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <stdbool.h>
+#include <stdio.h>
 #include <sys/file.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
@@ -91,14 +94,18 @@ int file_getOSBackedFD(File* file) {
     return file->osBackedFD;
 }
 
-int file_open(File* file, File* dir, const char* pathname, int flags, mode_t mode) {
+int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t mode) {
     MAGIC_ASSERT(file);
 
     /* TODO: we should open the os-backed file in non-blocking mode even if a
      * non-block is not requested, and then properly handle the io by, e.g.,
      * epolling on all such files with a shadow support thread. */
-    int dirfd = dir ? file_getOSBackedFD(dir) : AT_FDCWD;
-    int osfd = openat(dirfd, pathname, flags, mode);
+    int osfd = 0;
+    if(dir) {
+        osfd = openat(file_getOSBackedFD(dir), pathname, flags, mode);
+    } else {
+        osfd = open(pathname, flags, mode);
+    }
 
     if(osfd < 0) {
         return -errno;
@@ -122,6 +129,10 @@ int file_open(File* file, File* dir, const char* pathname, int flags, mode_t mod
     debug("File %i opened os-backed file %i at path %s", descriptor_getHandle(&file->super), file->osBackedFD, pathname ? pathname : "NULL");
 
     return file->super.handle;
+}
+
+int file_open(File* file, const char* pathname, int flags, mode_t mode) {
+    return file_openat(file, NULL, pathname, flags, mode);
 }
 
 ssize_t file_read(File* file, void* buf, size_t bufSize) {
@@ -177,19 +188,6 @@ int file_fstatfs(File* file, struct statfs* statbuf) {
     debug("File %i fstatfs os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
 
     int result = fstatfs(file->osBackedFD, statbuf);
-    return (result < 0) ? -errno : result;
-}
-
-int file_fstatat(File* file, const char* pathname, struct stat* statbuf, int flags) {
-    MAGIC_ASSERT(file);
-
-    if(!file->osBackedFD) {
-        return -EBADF;
-    }
-
-    debug("File %i fstatat os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
-
-    int result = fstatat(file->osBackedFD, pathname, statbuf, flags);
     return (result < 0) ? -errno : result;
 }
 
@@ -349,3 +347,134 @@ int file_fremovexattr(File* file, const char* name) {
     return (result < 0) ? -errno : result;
 }
 
+///////////////////////////////////////////////
+// *at functions (NULL directory file is valid)
+///////////////////////////////////////////////
+
+static inline int _file_getOSDirFDHelper(File* dir) {
+    if(dir) {
+        MAGIC_ASSERT(dir);
+        return dir->osBackedFD > 0 ? dir->osBackedFD : AT_FDCWD;
+    } else {
+        return AT_FDCWD;
+    }
+}
+
+int file_fstatat(File* dir, const char* pathname, struct stat* statbuf, int flags) {
+    int osdirfd = _file_getOSDirFDHelper(dir);
+
+    debug("File %i fstatat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
+
+    int result = fstatat(osdirfd, pathname, statbuf, flags);
+    return (result < 0) ? -errno : result;
+}
+
+int file_fchownat(File* dir, const char* pathname, uid_t owner, gid_t group, int flags) {
+    int osdirfd = _file_getOSDirFDHelper(dir);
+
+    debug("File %i fchownat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
+
+    int result = fchownat(osdirfd, pathname, owner, group, flags);
+    return (result < 0) ? -errno : result;
+}
+
+int file_fchmodat(File* dir, const char* pathname, mode_t mode, int flags) {
+    int osdirfd = _file_getOSDirFDHelper(dir);
+
+    debug("File %i fchmodat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
+
+    int result = fchmodat(osdirfd, pathname, mode, flags);
+    return (result < 0) ? -errno : result;
+}
+
+int file_futimesat(File* dir, const char* pathname, const struct timeval times[2]) {
+    int osdirfd = _file_getOSDirFDHelper(dir);
+
+    debug("File %i futimesat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
+
+    int result = futimesat(osdirfd, pathname, times);
+    return (result < 0) ? -errno : result;
+}
+
+int file_utimensat(File* dir, const char* pathname, const struct timespec times[2], int flags) {
+    int osdirfd = _file_getOSDirFDHelper(dir);
+
+    debug("File %i utimesat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
+
+    int result = utimensat(osdirfd, pathname, times, flags);
+    return (result < 0) ? -errno : result;
+}
+
+int file_faccessat(File* dir, const char* pathname, int mode, int flags) {
+    int osdirfd = _file_getOSDirFDHelper(dir);
+
+    debug("File %i faccessat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
+
+    int result = faccessat(osdirfd, pathname, mode, flags);
+    return (result < 0) ? -errno : result;
+}
+
+int file_mkdirat(File* dir, const char* pathname, mode_t mode) {
+    int osdirfd = _file_getOSDirFDHelper(dir);
+
+    debug("File %i mkdirat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
+
+    int result = mkdirat(osdirfd, pathname, mode);
+    return (result < 0) ? -errno : result;
+}
+
+int file_mknodat(File* dir, const char* pathname, mode_t mode, dev_t dev) {
+    int osdirfd = _file_getOSDirFDHelper(dir);
+
+    debug("File %i mknodat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
+
+    int result = mknodat(osdirfd, pathname, mode, dev);
+    return (result < 0) ? -errno : result;
+}
+
+int file_linkat(File* olddir, const char* oldpath, File* newdir, const char* newpath, int flags) {
+    int oldosdirfd = _file_getOSDirFDHelper(olddir);
+    int newosdirfd = _file_getOSDirFDHelper(newdir);
+
+    debug("File %i linkat os-backed file %i", olddir ? descriptor_getHandle(&olddir->super) : 0, oldosdirfd);
+
+    int result = linkat(oldosdirfd, oldpath, newosdirfd, newpath, flags);
+    return (result < 0) ? -errno : result;
+}
+
+int file_unlinkat(File* dir, const char* pathname, int flags) {
+    int osdirfd = _file_getOSDirFDHelper(dir);
+
+    debug("File %i unlinkat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
+
+    int result = unlinkat(osdirfd, pathname, flags);
+    return (result < 0) ? -errno : result;
+}
+
+int file_symlinkat(File* dir, const char* linkpath, const char* target) {
+    int osdirfd = _file_getOSDirFDHelper(dir);
+
+    debug("File %i symlinkat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
+
+    int result = symlinkat(target, osdirfd, linkpath);
+    return (result < 0) ? -errno : result;
+}
+
+ssize_t file_readlinkat(File* dir, const char* pathname, char* buf, size_t bufsize) {
+    int osdirfd = _file_getOSDirFDHelper(dir);
+
+    debug("File %i readlinkat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
+
+    ssize_t result = readlinkat(osdirfd, pathname, buf, bufsize);
+    return (result < 0) ? -errno : result;
+}
+
+int file_renameat2(File* olddir, const char* oldpath, File* newdir, const char* newpath, unsigned int flags) {
+    int oldosdirfd = _file_getOSDirFDHelper(olddir);
+    int newosdirfd = _file_getOSDirFDHelper(newdir);
+
+    debug("File %i renameat2 os-backed file %i", olddir ? descriptor_getHandle(&olddir->super) : 0, oldosdirfd);
+
+    int result = renameat2(oldosdirfd, oldpath, newosdirfd, newpath, flags);
+    return (result < 0) ? -errno : result;
+}
