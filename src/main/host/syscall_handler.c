@@ -183,21 +183,121 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(openat);
 
         // **************************************
+        // Needed for tor, but not handled yet:
+        // **************************************
+        // Manipulate file descriptor.
+        //
+        // Called from tor(tor_fopen_cloexec) -> libpthread(__fcntl)
+        NATIVE(fcntl);
+        // Apply or remove advisory lock on an open file.
+        //
+        // Called from tor(tor_init) -> ... tor(set_options) -> ...
+        // tor(tor_lockfile_lock)
+        NATIVE(flock);
+        // fast user-space locking. Basically handles blocking until a lock is
+        // released, and conversely waking up blocked threads when it is
+        // released.
+        //
+        // Called from CRYPTO_THREAD_run_once -> __pthread_once_slow
+        NATIVE(futex);
+        // get directory entries.
+        // We'll need handle file descriptor remapping.
+        NATIVE(getdents);
+        // Called a few places in libcrypto.
+        NATIVE(getrandom);
+        NATIVE(getsockopt);
+        NATIVE(ioctl);
+        NATIVE(lseek);
+        NATIVE(mmap);
+        // Only deals in address and offset, so might not need for correctness.
+        // Might want it to GC any bookkeeping from corresponding mmap calls,
+        // though.
+        NATIVE(munmap);
+        NATIVE(recvmsg);
+        // get/set list of robust futexes. The  purpose  of  the  robust futex
+        // list is to ensure that if a thread accidentally fails to unlock a
+        // futex before terminating or calling execve.
+        //
+        // Might be able to get away without emulating, but should take a closer
+        // look when supporting threading, futex, etc.
+        //
+        // Called from pthread(__pthread_initialize_minimal)
+        NATIVE(set_robust_list);
+        NATIVE(setsockopt);
+        // Set pointer to thread ID.
+        //
+        // Might be able to get away without emulating, but should take a closer
+        // look when supporting threading, futex, etc.
+        //
+        // Called from pthread(__pthread_initialize_minimal)
+        NATIVE(set_tid_address);
+
+        // **************************************
         // Not handled (yet):
         // **************************************
-        NATIVE(access);
-        NATIVE(arch_prctl);
-        NATIVE(brk);
         NATIVE(execve);
-        NATIVE(mmap);
+
+        // **************************************
+        // Called from tor, but probably can continue to let plugin execute
+        // natively.
+        // **************************************
+        // Checks if a file is accessible.
+        NATIVE(access);
+        // Change data segment size. Not needed for correctness, though might
+        // be useful to intercept this later to put the heap in a pre-shared
+        // memory region.
+        NATIVE(brk);
+        // Gets or sets segment registers.
+        NATIVE(arch_prctl);
+        // get real group id of calling process.
+        NATIVE(getgid);
+        // Returns effective user ID of the calling process.
+        NATIVE(geteuid);
+        // get effective group id of calling process.
+        NATIVE(getegid);
+        // get real user ID of calling process.
+        NATIVE(getuid);
+        // give advice to kernel about address range... to improve system or
+        // application performance.
+        NATIVE(madvise);
+        // Change access protections of calling process's memory pages.
         NATIVE(mprotect);
-        NATIVE(munmap);
+        // Expands, shrinks, and/or moves a memory mapping.
+        NATIVE(mremap);
+        // Get and set resource limits for a specified process. Takes a pid, so
+        // *may* need to remap if anything tries to set limits for other
+        // processes. In the strace calls I see in Tor though, pid 0 is used,
+        // meaning "this" process.
+        //
+        // Called from tor(set_max_file_descriptors)
         NATIVE(prlimit64);
+        // Rename a file. Takes paths rather than file descriptors, so can
+        // probably allow natively.
+        //
+        // Called from tor(save_state_callback) -> ... tor(finish_writing_to_file_impl)
+        NATIVE(rename);
+        // Change action taken by a process on receipt of a signal. Can probably
+        // get away without this, assuming signals aren't used for non-error
+        // cases.
+        //
+        // Called from:
+        // - tor(handle_signals) -> ...
         NATIVE(rt_sigaction);
+        // Fetch and/or change signal mask. As with rt_sigaction, we can
+        // probably get away without it for now.
         NATIVE(rt_sigprocmask);
-        NATIVE(set_robust_list);
-        NATIVE(set_tid_address);
+        // Deals in paths rather than file descriptors. Should be ok to allow
+        // natively.
         NATIVE(stat);
+        // Returns stats on memory, swap, load average.
+        //
+        // Might be needed for determinism, but the only call I see is actually
+        // in libc's qsort.
+        //
+        // Called from libssl(SSL_rstate_string) -> libc(qsort_r)
+        NATIVE(sysinfo);
+        // unlinks (deletes) a file by name.
+        NATIVE(unlink);
         default:
             info("unhandled syscall %ld", args->number);
             scr = (SysCallReturn){.state = SYSCALL_NATIVE};
