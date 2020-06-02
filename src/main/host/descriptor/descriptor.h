@@ -21,7 +21,8 @@ enum _DescriptorType {
     DT_PIPE,
     DT_SOCKETPAIR,
     DT_EPOLL,
-    DT_TIMER
+    DT_TIMER,
+    DT_FILE,
 };
 
 typedef struct _Descriptor Descriptor;

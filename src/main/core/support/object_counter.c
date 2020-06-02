@@ -38,6 +38,7 @@ struct _ObjectCounter {
         ObjectCounts udp;
         ObjectCounts epoll;
         ObjectCounts timer;
+        ObjectCounts file;
     } counters;
 
     GString* stringBuffer;
@@ -92,6 +93,7 @@ static void _objectcount_incrementAll(ObjectCounts* counts, ObjectCounts* increm
     counts->free += increments->free;
 }
 
+// clang-format off
 void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, CounterType ctype) {
     MAGIC_ASSERT(counter);
 
@@ -194,6 +196,11 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
 
+        case OBJECT_TYPE_FILE: {
+            _objectcount_incrementOne(&(counter->counters.file), ctype);
+            break;
+        }
+
         default:
         case OBJECT_TYPE_NONE: {
             break;
@@ -242,6 +249,8 @@ void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment
             &(increment->counters.epoll));
     _objectcount_incrementAll(&(counter->counters.timer),
             &(increment->counters.timer));
+    _objectcount_incrementAll(&(counter->counters.file),
+            &(increment->counters.file));
 }
 
 const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
@@ -291,7 +300,9 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         "epoll_new=%" G_GUINT64_FORMAT " "
         "epoll_free=%" G_GUINT64_FORMAT " "
         "timer_new=%" G_GUINT64_FORMAT " "
-        "timer_free=%" G_GUINT64_FORMAT " ",
+        "timer_free=%" G_GUINT64_FORMAT " "
+        "file_new=%" G_GUINT64_FORMAT " "
+        "file_free=%" G_GUINT64_FORMAT " ",
         counter->counters.task.new,
         counter->counters.task.free,
         counter->counters.event.new,
@@ -329,7 +340,9 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         counter->counters.epoll.new,
         counter->counters.epoll.free,
         counter->counters.timer.new,
-        counter->counters.timer.free);
+        counter->counters.timer.free,
+        counter->counters.file.new,
+        counter->counters.file.free);
 
     return (const gchar*) counter->stringBuffer->str;
 }
@@ -362,7 +375,8 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
         "tcp=%" G_GUINT64_FORMAT " "
         "udp=%" G_GUINT64_FORMAT " "
         "epoll=%" G_GUINT64_FORMAT " "
-        "timer=%" G_GUINT64_FORMAT " ",
+        "timer=%" G_GUINT64_FORMAT " "
+        "file=%" G_GUINT64_FORMAT " ",
         counter->counters.task.new -
             counter->counters.task.free,
         counter->counters.event.new -
@@ -400,7 +414,10 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
         counter->counters.epoll.new -
             counter->counters.epoll.free,
         counter->counters.timer.new -
-            counter->counters.timer.free);
+            counter->counters.timer.free,
+        counter->counters.file.new -
+            counter->counters.file.free);
 
     return (const gchar*) counter->stringBuffer->str;
 }
+// clang-format on

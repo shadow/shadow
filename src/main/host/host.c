@@ -24,6 +24,7 @@
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/epoll.h"
+#include "main/host/descriptor/file.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
@@ -758,6 +759,12 @@ Descriptor* host_createDescriptor(Host* host, DescriptorType type) {
         case DT_TIMER: {
             gint handle = _host_getNextDescriptorHandle(host);
             descriptor = (Descriptor*) timer_new(handle, CLOCK_MONOTONIC, 0);
+            break;
+        }
+
+        case DT_FILE: {
+            gint handle = _host_getNextDescriptorHandle(host);
+            descriptor = (Descriptor*) file_new(handle);
             break;
         }
 

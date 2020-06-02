@@ -11,6 +11,8 @@
 
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/file.h"
+#include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
@@ -86,6 +88,8 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
     gint fd = args->args[0].as_i64;
     gint errorCode = 0;
 
+    debug("Trying to close fd %i", fd);
+
     /* Check that fd is within bounds. */
     if (fd <= 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
@@ -96,25 +100,10 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
     if (descriptor && !errorCode) {
+        debug("Closing descriptor %i", descriptor_getHandle(descriptor));
         descriptor_close(descriptor);
         return (SysCallReturn){.state = SYSCALL_DONE};
     }
-
-    /* Check if we have a mapped os fd. This call returns -1 to
-     * us if this fd does not correspond to any os-backed file
-     * that Shadow created internally. */
-    gint osfd = host_getOSHandle(sys->host, fd);
-    if (osfd < 0) {
-        /* The fd is not part of a special file that Shadow handles internally.
-         * It might be a regular OS file, and should be handled natively by
-         * libc. */
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
-
-    /* OK. The given FD from the plugin corresponds to a real
-     * OS file that Shadow created and handles. */
-
-    // TODO: handle special files
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }
@@ -140,11 +129,8 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
 
     /* Get the descriptor. */
     Descriptor* desc = host_lookupDescriptor(sys->host, fd);
-
-    // TODO: I think every read/write on FDs needs to come through shadow.
-    // The following needs to change when we add file support.
     if (!desc) {
-        return (SysCallReturn){.state = SYSCALL_NATIVE, .retval.as_i64 = 0};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
     // Divert io on socket descriptors to socket handler
@@ -178,6 +164,9 @@ SysCallReturn syscallhandler_read(SysCallHandler* sys,
 
     ssize_t result = 0;
     switch (dType) {
+        case DT_FILE:
+            result = file_read((File*)desc, buf, sizeNeeded);
+            break;
         case DT_TIMER:
             result = timer_read((Timer*)desc, buf, sizeNeeded);
             break;
@@ -220,11 +209,8 @@ SysCallReturn syscallhandler_write(SysCallHandler* sys,
 
     /* Get the descriptor. */
     Descriptor* desc = host_lookupDescriptor(sys->host, fd);
-
-    // TODO: I think every read/write on FDs needs to come through shadow.
-    // The following needs to change when we add file support.
     if (!desc) {
-        return (SysCallReturn){.state = SYSCALL_NATIVE, .retval.as_i64 = 0};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
     // Divert io on socket descriptors to socket handler
@@ -258,6 +244,9 @@ SysCallReturn syscallhandler_write(SysCallHandler* sys,
 
     ssize_t result = 0;
     switch (dType) {
+        case DT_FILE:
+            result = file_write((File*)desc, buf, sizeNeeded);
+            break;
         case DT_TIMER: result = -EINVAL; break;
         case DT_PIPE:
             result =

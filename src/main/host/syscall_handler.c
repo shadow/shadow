@@ -19,6 +19,7 @@
 #include "main/host/descriptor/timer.h"
 #include "main/host/process.h"
 #include "main/host/syscall/epoll.h"
+#include "main/host/syscall/file.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/socket.h"
 #include "main/host/syscall/time.h"
@@ -155,15 +156,33 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(clock_gettime);
         HANDLE(close);
         HANDLE(connect);
+        HANDLE(creat);
         HANDLE(epoll_create);
         HANDLE(epoll_create1);
         HANDLE(epoll_ctl);
         HANDLE(epoll_wait);
+        HANDLE(fadvise64);
+        HANDLE(fallocate);
+        HANDLE(fchdir);
+        HANDLE(fchmod);
+        HANDLE(fchown);
+        HANDLE(fdatasync);
+        HANDLE(fgetxattr);
+        HANDLE(flistxattr);
+        HANDLE(flock);
+        HANDLE(fremovexattr);
+        HANDLE(fsetxattr);
+        HANDLE(fstat);
+        HANDLE(fstatfs);
+        HANDLE(fsync);
+        HANDLE(ftruncate);
         HANDLE(getpeername);
         HANDLE(getpid);
         HANDLE(getsockname);
         HANDLE(listen);
         HANDLE(nanosleep);
+        HANDLE(open);
+        HANDLE(openat);
         HANDLE(pipe);
         HANDLE(pipe2);
         HANDLE(read);
@@ -171,21 +190,39 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(sendto);
         HANDLE(shutdown);
         HANDLE(socket);
+        HANDLE(syncfs);
         HANDLE(uname);
         HANDLE(write);
 
-        // **************************************
-        // Needed for phold, but not handled yet:
-        // **************************************
-        // Test coverage: test/file
-        NATIVE(fstat);
-        // Test coverage: test/file (via open(3))
-        NATIVE(openat);
+        // wip, coming soon...
+        NATIVE(copy_file_range);
+        NATIVE(sync_file_range);
+
+        NATIVE(lseek);
+        NATIVE(statx);
+        NATIVE(getdents);
+        NATIVE(getdents64);
+        NATIVE(sendfile);
+        NATIVE(readahead);
+
+        HANDLE(newfstatat);
+        NATIVE(fchownat);
+        NATIVE(fchmodat);
+        NATIVE(futimesat);
+        NATIVE(faccessat);
+        NATIVE(mkdirat);
+        NATIVE(mknodat);
+        NATIVE(unlinkat);
+        NATIVE(renameat);
+        NATIVE(renameat2);
+        NATIVE(linkat);
+        NATIVE(symlinkat);
+        NATIVE(readlinkat);
+        NATIVE(utimensat);
 
         // **************************************
         // Not handled (yet):
         // **************************************
-        NATIVE(access);
         NATIVE(arch_prctl);
         NATIVE(brk);
         NATIVE(execve);
@@ -197,7 +234,52 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(rt_sigprocmask);
         NATIVE(set_robust_list);
         NATIVE(set_tid_address);
+
+        // operations on pids (shadow overrides pids)
+        NATIVE(tkill);
+        NATIVE(tgkill);
+        NATIVE(sched_getaffinity);
+        NATIVE(sched_setaffinity);
+
+        // operations on file descriptors
+        NATIVE(pread64);
+        NATIVE(pwrite64);
+        NATIVE(readv);
+        NATIVE(writev);
+        NATIVE(preadv);
+        NATIVE(pwritev);
+        NATIVE(preadv2);
+        NATIVE(pwritev2);
+
+        NATIVE(dup);
+        NATIVE(dup2);
+        NATIVE(dup3);
+        NATIVE(ioctl);
+        NATIVE(fcntl);
+        NATIVE(poll);
+        NATIVE(ppoll);
+        NATIVE(select);
+        NATIVE(pselect6);
+        NATIVE(splice);
+        NATIVE(vmsplice);
+        NATIVE(tee);
+
+        // additional socket io
+        NATIVE(recvmsg);
+        NATIVE(sendmsg);
+        NATIVE(recvmmsg);
+        NATIVE(sendmmsg);
+
+        // ***************************************
+        // We think we don't need to handle these
+        // (because the plugin can natively):
+        // ***************************************
+        NATIVE(access);
         NATIVE(stat);
+        NATIVE(lstat);
+        NATIVE(statfs);
+        NATIVE(unlink);
+
         default:
             info("unhandled syscall %ld", args->number);
             scr = (SysCallReturn){.state = SYSCALL_NATIVE};
