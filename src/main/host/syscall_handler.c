@@ -213,6 +213,11 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Might want it to GC any bookkeeping from corresponding mmap calls,
         // though.
         NATIVE(munmap);
+        // Surprisingly, gets called while building the list of local
+        // interfaces, using sa_family=AF_NETLINK.
+        //
+        // Called from tor(get_interface_addresses_raw) -> libc(getifaddrs) ->
+        // libc(if_indextoname)
         NATIVE(recvmsg);
         // get/set list of robust futexes. The  purpose  of  the  robust futex
         // list is to ensure that if a thread accidentally fails to unlock a
