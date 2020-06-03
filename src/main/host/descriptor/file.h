@@ -11,6 +11,7 @@
 #include <sys/statfs.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 
 #include "main/host/syscall/dirent.h"
 
@@ -44,8 +45,10 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
 
 ssize_t file_read(File* file, void* buf, size_t bufSize);
 ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset);
+ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt, off_t offset, int flags);
 ssize_t file_write(File* file, const void* buf, size_t bufSize);
 ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset);
+ssize_t file_pwritev2(File* file, const struct iovec* iov, int iovcnt, off_t offset, int flags);
 int file_fstat(File* file, struct stat* statbuf);
 int file_fstatfs(File* file, struct statfs* statbuf);
 int file_fsync(File* file);

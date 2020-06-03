@@ -18,15 +18,16 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/process.h"
+#include "main/host/syscall_handler.h"
+#include "main/host/syscall_types.h"
 #include "main/host/syscall/epoll.h"
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/socket.h"
 #include "main/host/syscall/time.h"
+#include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
-#include "main/host/syscall_handler.h"
-#include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "support/logger/logger.h"
 
@@ -198,10 +199,15 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(pipe);
         HANDLE(pipe2);
         HANDLE(pread64);
+        HANDLE(preadv);
+        HANDLE(preadv2);
         HANDLE(pwrite64);
+        HANDLE(pwritev);
+        HANDLE(pwritev2);
         HANDLE(read);
         HANDLE(readahead);
         HANDLE(readlinkat);
+        HANDLE(readv);
         HANDLE(recvfrom);
         HANDLE(renameat);
         HANDLE(renameat2);
@@ -216,7 +222,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(unlinkat);
         HANDLE(utimensat);
         HANDLE(write);
-
+        HANDLE(writev);
 
         // **************************************
         // Not handled (yet):
@@ -240,14 +246,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(sched_setaffinity);
 
         // operations on file descriptors
-        NATIVE(readv);
-        NATIVE(preadv);
-        NATIVE(preadv2);
-
-        NATIVE(writev);
-        NATIVE(pwritev);
-        NATIVE(pwritev2);
-
         NATIVE(dup);
         NATIVE(dup2);
         NATIVE(dup3);

@@ -70,6 +70,7 @@ set(shadow_srcs
     host/syscall/socket.c
     host/syscall/time.c
     host/syscall/unistd.c
+    host/syscall/uio.c
     host/thread.c
     host/host.c
     host/thread_preload.c

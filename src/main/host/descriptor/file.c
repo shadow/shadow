@@ -15,6 +15,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/uio.h>
 #include <sys/xattr.h>
 #include <unistd.h>
 
@@ -167,6 +168,21 @@ ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
     return (result < 0) ? -errno : result;
 }
 
+ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt, off_t offset, int flags) {
+    MAGIC_ASSERT(file);
+
+    if(!file->osBackedFD) {
+        return -EBADF;
+    }
+
+    debug("File %i preadv2 %d vector items from os-backed file %i", descriptor_getHandle(&file->super), iovcnt, file->osBackedFD);
+
+    /* TODO: this may block the shadow thread until we properly handle
+     * os-backed files in non-blocking mode. */
+    ssize_t result = preadv2(file->osBackedFD, iov, iovcnt, offset, flags);
+    return (result < 0) ? -errno : result;
+}
+
 ssize_t file_write(File* file, const void* buf, size_t bufSize) {
     MAGIC_ASSERT(file);
 
@@ -194,6 +210,21 @@ ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset) {
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
     ssize_t result = pwrite(file->osBackedFD, buf, bufSize, offset);
+    return (result < 0) ? -errno : result;
+}
+
+ssize_t file_pwritev2(File* file, const struct iovec* iov, int iovcnt, off_t offset, int flags) {
+    MAGIC_ASSERT(file);
+
+    if(!file->osBackedFD) {
+        return -EBADF;
+    }
+
+    debug("File %i pwritev2 %d vector items from os-backed file %i", descriptor_getHandle(&file->super), iovcnt, file->osBackedFD);
+
+    /* TODO: this may block the shadow thread until we properly handle
+     * os-backed files in non-blocking mode. */
+    ssize_t result = pwritev2(file->osBackedFD, iov, iovcnt, offset, flags);
     return (result < 0) ? -errno : result;
 }
 

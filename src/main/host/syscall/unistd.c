@@ -255,7 +255,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
             critical("Indefinitely blocking a write of %zu bytes on file %i at offset %li", bufSize, fd, offset);
         }
 
-        /* We need to block until the descriptor is ready to read. */
+        /* We need to block until the descriptor is ready to write. */
         process_listenForStatus(
             sys->process, sys->thread, NULL, desc, DS_WRITABLE);
         return (SysCallReturn){.state = SYSCALL_BLOCK};
