@@ -63,6 +63,12 @@ def save_dict_in_yaml_file(d, filename):
         _yaml = yaml.dump(d, f)
 
 
+def get_filename_converted(original_filename, optional_filename_result, original_extension, target_extension):
+    if optional_filename_result:
+        return optional_filename_result
+    return original_filename.replace(original_extension, target_extension)
+
+
 def shadow_xml_to_dict(root):
     return {
         'option': convert_integer(root.attrib),
@@ -77,10 +83,16 @@ def get_xml_root_from_filename(filename):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convert a XML file into a YAML file.')
-    parser.add_argument('xml', help='XML file to convert')
-    parser.add_argument('yaml', help='YAML output file')
+    parser.add_argument('operation', help='yaml2xml or xml2yaml')
+    parser.add_argument('filename', help='Filename to convert')
+    parser.add_argument('--output', help='Output filename', default=None, nargs='?')
     args = parser.parse_args()
 
-    xml_root = get_xml_root_from_filename(args.xml)
+    if args.operation == 'yaml2xml':
+        print('Not yet implemented', file=sys.stderr)s
+
+    xml_root = get_xml_root_from_filename(args.filename)
     d = shadow_xml_to_dict(xml_root)
-    save_dict_in_yaml_file(d, args.yaml)
+
+    filename_converted = get_filename_converted(args.filename, args.output, 'xml', 'yaml')
+    save_dict_in_yaml_file(d, filename_converted)
