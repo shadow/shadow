@@ -87,11 +87,18 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
                 break;
             }
             case SHD_SHIM_EVENT_CLONE_REQ:
-            case SHD_SHIM_EVENT_CLONE_STRING_REQ:
-            case SHD_SHIM_EVENT_WRITE_REQ:
-            case SHD_SHIM_EVENT_SHMEM_COMPLETE:
-                shim_shmemHandleEvent(fd, &res);
+                shim_shmemHandleClone(&res);
+                shim_shmemNotifyComplete(fd);
                 break;
+            case SHD_SHIM_EVENT_CLONE_STRING_REQ:
+                shim_shmemHandleCloneString(&res);
+                shim_shmemNotifyComplete(fd);
+                break;
+            case SHD_SHIM_EVENT_WRITE_REQ:
+                shim_shmemHandleWrite(&res);
+                shim_shmemNotifyComplete(fd);
+                break;
+            case SHD_SHIM_EVENT_SHMEM_COMPLETE: break;
             default: {
                 error("Got unexpected event %d", res.event_id);
                 abort();
