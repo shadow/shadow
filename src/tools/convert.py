@@ -89,7 +89,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.operation == 'yaml2xml':
-        print('Not yet implemented', file=sys.stderr)s
+        print('Not yet implemented', file=sys.stderr)
 
     xml_root = get_xml_root_from_filename(args.filename)
     d = shadow_xml_to_dict(xml_root)
