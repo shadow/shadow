@@ -488,7 +488,7 @@ void* threadpreload_getWriteablePtr(Thread* base, PluginPtr plugin_src,
     return write_blk->blk.p;
 }
 
-long threadpreload_syscall(Thread* base, long n, va_list args) {
+long threadpreload_nativeSyscall(Thread* base, long n, va_list args) {
     ThreadPreload* thread = _threadToThreadPreload(base);
     ShimEvent req = {
         .event_id = SHD_SHIM_EVENT_SYSCALL,
@@ -523,7 +523,7 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                             .getReadablePtr = threadpreload_getReadablePtr,
                             .getReadableString = threadpreload_getReadableString,
                             .getWriteablePtr = threadpreload_getWriteablePtr,
-                            .syscall = threadpreload_syscall,
+                            .nativeSyscall = threadpreload_nativeSyscall,
                             .type_id = THREADPRELOAD_TYPE_ID,
                             .referenceCount = 1};
     MAGIC_INIT(&thread->base);

@@ -65,7 +65,7 @@ void thread_releaseClonedPtr(Thread* thread, void* p);
 // use-cases.
 //
 // Arguments are treated opaquely. e.g. no pointer-marshalling is done.
-long thread_syscall(Thread* thread, long n, ...);
+long thread_nativeSyscall(Thread* thread, long n, ...);
 
 gboolean thread_isRunning(Thread* thread);
 

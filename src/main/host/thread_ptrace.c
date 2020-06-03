@@ -640,7 +640,7 @@ void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
     return rv;
 }
 
-long threadptrace_syscall(Thread* base, long n, va_list args) {
+long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     // Unimplemented for other states.
@@ -731,7 +731,7 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
                          .getReadablePtr = threadptrace_getReadablePtr,
                          .getReadableString = threadptrace_getReadableString,
                          .getWriteablePtr = threadptrace_getWriteablePtr,
-                         .syscall = threadptrace_syscall,
+                         .nativeSyscall = threadptrace_nativeSyscall,
 
                          .type_id = THREADPTRACE_TYPE_ID,
                          .referenceCount = 1},
