@@ -1,8 +1,8 @@
 ---
-name: Question
-about: How or why Shadow works as it does
+name: 'Question'
+about: 'How or why Shadow works as it does'
 title: ''
-labels: Type: Question
+labels: 'Type: Question'
 assignees: ''
 
 ---
