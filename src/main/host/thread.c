@@ -94,6 +94,12 @@ void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     return thread->getWriteablePtr(thread, plugin_src, n);
 }
 
+void thread_flushPtrs(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->flushPtrs);
+    thread->flushPtrs(thread);
+}
+
 long thread_nativeSyscall(Thread* thread, long n, ...) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->nativeSyscall);
