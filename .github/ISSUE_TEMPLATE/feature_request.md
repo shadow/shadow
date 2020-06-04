@@ -1,6 +1,6 @@
 ---
-name: Feature request
-about: Suggest an idea for a new functionality or improved design
+name: 'Feature request'
+about: 'Suggest an idea for a new functionality or improved design'
 title: ''
 labels: 'Type: Enhancement'
 assignees: ''
