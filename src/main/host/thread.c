@@ -91,3 +91,13 @@ void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     utility_assert(thread->getReadablePtr);
     return thread->getWriteablePtr(thread, plugin_src, n);
 }
+
+long thread_nativeSyscall(Thread* thread, long n, ...) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->nativeSyscall);
+    va_list(args);
+    va_start(args, n);
+    long rv = thread->nativeSyscall(thread, n, args);
+    va_end(args);
+    return rv;
+}

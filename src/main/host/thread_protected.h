@@ -26,6 +26,7 @@ struct _Thread {
     int (*getReadableString)(Thread* thread, PluginPtr plugin_src, size_t n,
                              const char** str, size_t* strlen);
     void* (*getWriteablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
+    long (*nativeSyscall)(Thread* thread, long n, va_list args);
 
     // For safe down-casting. Set and checked by child class.
     int type_id;

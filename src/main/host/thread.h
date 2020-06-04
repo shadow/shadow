@@ -60,6 +60,13 @@ void* thread_newClonedPtr(Thread* thread, PluginPtr plugin_src, size_t n);
 // Release a pointer returned by thread_clonePluginPtr.
 void thread_releaseClonedPtr(Thread* thread, void* p);
 
+// Make the requested syscall from within the plugin. For now, does *not* flush
+// or invalidate pointers, but we may need to revisit this to support some
+// use-cases.
+//
+// Arguments are treated opaquely. e.g. no pointer-marshalling is done.
+long thread_nativeSyscall(Thread* thread, long n, ...);
+
 gboolean thread_isRunning(Thread* thread);
 
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */

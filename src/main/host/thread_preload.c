@@ -488,6 +488,27 @@ void* threadpreload_getWriteablePtr(Thread* base, PluginPtr plugin_src,
     return write_blk->blk.p;
 }
 
+long threadpreload_nativeSyscall(Thread* base, long n, va_list args) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
+    ShimEvent req = {
+        .event_id = SHD_SHIM_EVENT_SYSCALL,
+        .event_data.syscall.syscall_args.number = n,
+    };
+    // We don't know how many arguments there actually are, but the x86_64 linux
+    // ABI supports at most 6 arguments, and processing more arguments here than
+    // were actually passed doesn't hurt anything. e.g. this is what libc's
+    // syscall(2) function does as well.
+    for (int i=0; i<6; ++i) {
+        req.event_data.syscall.syscall_args.args[i].as_i64 = va_arg(args, int64_t);
+    }
+    shimevent_sendEvent(thread->eventFD, &req);
+
+    ShimEvent resp = {0};
+    shimevent_recvEvent(thread->eventFD, &resp);
+    utility_assert(resp.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
+    return resp.event_data.syscall_complete.retval.as_i64;
+}
+
 Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
     ThreadPreload* thread = g_new0(ThreadPreload, 1);
 
@@ -502,6 +523,7 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                             .getReadablePtr = threadpreload_getReadablePtr,
                             .getReadableString = threadpreload_getReadableString,
                             .getWriteablePtr = threadpreload_getWriteablePtr,
+                            .nativeSyscall = threadpreload_nativeSyscall,
                             .type_id = THREADPRELOAD_TYPE_ID,
                             .referenceCount = 1};
     MAGIC_INIT(&thread->base);
