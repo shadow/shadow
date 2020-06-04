@@ -1,8 +1,8 @@
 ---
 name: Question
-about: Learn more about how Shadow works.
+about: How or why Shadow works as it does
 title: ''
-labels: support
+labels: Type: Question
 assignees: ''
 
 ---
