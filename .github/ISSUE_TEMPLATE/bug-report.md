@@ -1,8 +1,8 @@
 ---
 name: Bug report
-about: If you have trouble installing or using Shadow.
+about: An error or flaw producing unexpected results
 title: ''
-labels: support
+labels: Type: Bug
 assignees: ''
 
 ---
