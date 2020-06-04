@@ -15,19 +15,28 @@ on:
 jobs:
   testing:
     runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.container }}
+      # the default for ubuntu:18.04, but with noexec replaced by exec and
+      # the size increased from 65536k
+      options: '--tmpfs /dev/shm:rw,nosuid,nodev,exec,relatime,size=1g'
     strategy:
       matrix:
+        container: ['ubuntu:18.04']
         cc: ['gcc', 'clang']
         buildtype: ['debug', 'release']
     steps:
       - name: Update packages
-        run: sudo apt-get update
+        run: apt-get update
 
       - name: Checkout
         uses: actions/checkout@v2
 
       - name: Install dependencies
-        run: sudo apt-get install -y ${{ matrix.cc }} g++ cmake make xz-utils python libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg python-pyelftools libprocps-dev
+        env:
+          # prevent prompts for user input during package install
+          DEBIAN_FRONTEND: 'noninteractive'
+        run: apt-get install -y ${{ matrix.cc }} g++ cmake make xz-utils python libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg python-pyelftools libprocps-dev
 
       - name: Build Debug
         if: ${{ matrix.buildtype == 'debug' }}
