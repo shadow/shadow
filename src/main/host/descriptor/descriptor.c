@@ -13,6 +13,7 @@
 #include "main/host/descriptor/descriptor_listener.h"
 #include "main/host/host.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 void descriptor_init(Descriptor* descriptor, DescriptorType type,
         DescriptorFunctionTable* funcTable, gint handle) {
@@ -28,6 +29,8 @@ void descriptor_init(Descriptor* descriptor, DescriptorType type,
                               (GDestroyNotify)descriptorlistener_unref);
     descriptor->referenceCount = 1;
 
+    debug("Descriptor %i has been initialized now", descriptor->handle);
+
     worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_NEW);
 }
 
@@ -39,8 +42,12 @@ static void _descriptor_free(Descriptor* descriptor) {
         g_hash_table_destroy(descriptor->listeners);
     }
 
-    MAGIC_CLEAR(descriptor);
+    debug("Descriptor %i calling vtable free now", descriptor->handle);
+
     descriptor->funcTable->free(descriptor);
+
+    /* Clear *after* free, since the above call may access our content. */
+    MAGIC_CLEAR(descriptor);
 
     worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_FREE);
 }
@@ -49,12 +56,16 @@ void descriptor_ref(gpointer data) {
     Descriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
+    debug("Descriptor %i, refcount before ref++ is %i", descriptor->handle, descriptor->referenceCount);
+
     (descriptor->referenceCount)++;
 }
 
 void descriptor_unref(gpointer data) {
     Descriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
+
+    debug("Descriptor %i, refcount before ref-- is %i", descriptor->handle, descriptor->referenceCount);
 
     (descriptor->referenceCount)--;
     utility_assert(descriptor->referenceCount >= 0);
@@ -68,6 +79,7 @@ void descriptor_unref(gpointer data) {
 void descriptor_close(Descriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
+    debug("Descriptor %i calling vtable close now", descriptor->handle);
     descriptor_adjustStatus(descriptor, DS_CLOSED, TRUE);
     descriptor->funcTable->close(descriptor);
 }
