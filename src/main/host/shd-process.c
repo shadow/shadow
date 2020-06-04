@@ -2917,7 +2917,7 @@ ssize_t process_emu_pwrite(Process* proc, int fd, const void *buf, size_t nbytes
         } else {
             gint osfd = host_getOSHandle(proc->host, fd);
             if(osfd >= 0) {
-                ret = pwrite(fd, buf, nbytes, offset);
+                ret = pwrite(osfd, buf, nbytes, offset);
                 if(ret < 0) {
                     _process_setErrno(proc, errno);
                 }
