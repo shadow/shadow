@@ -79,7 +79,7 @@ static void _test_fwrite() {
     FILE* file;
     assert_nonnull_errno(file = fopen("testfile", "r+"));
 
-    const char* msg = "test";
+    const char msg[] = "test";
     assert_nonneg_errno(fwrite(msg, sizeof(char), sizeof(msg)/sizeof(char), file));
 
     fclose(file);
