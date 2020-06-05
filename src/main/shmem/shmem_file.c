@@ -23,6 +23,8 @@
 static const char* SHADOW_PREFIX = "shadow_shmemfile";
 static const char PID_DELIM = '-';
 
+const static int SHMEM_PERMISSION_BITS = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
+
 static void _shmemfile_getName(size_t nbytes, char* str) {
     assert(str != NULL && nbytes >= 3);
 
@@ -90,13 +92,14 @@ int shmemfile_alloc(size_t nbytes, ShMemFile* shmf) {
 
     bool bad = false;
 
-    int fd = shm_open(shmf->name, O_RDWR | O_CREAT | O_EXCL, S_IRWXU | S_IRWXG);
+    int fd =
+        shm_open(shmf->name, O_RDWR | O_CREAT | O_EXCL, SHMEM_PERMISSION_BITS);
 
     if (fd >= 0) {
         int rc = ftruncate(fd, nbytes);
         if (rc == 0) {
-            void* p = mmap(NULL, nbytes, PROT_READ | PROT_WRITE | PROT_EXEC,
-                           MAP_SHARED, fd, 0);
+            void* p =
+                mmap(NULL, nbytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
             if (p != MAP_FAILED) {
                 shmf->p = p;
@@ -146,11 +149,11 @@ int shmemfile_map(const char* name, size_t nbytes, ShMemFile* shmf) {
 
     bool bad = false;
 
-    int fd = shm_open(shmf->name, O_RDWR, S_IRWXU | S_IRWXG);
+    int fd = shm_open(shmf->name, O_RDWR, SHMEM_PERMISSION_BITS);
 
     if (fd >= 0) {
 
-        void* p = mmap(NULL, nbytes, PROT_READ | PROT_WRITE | PROT_EXEC,
+        void* p = mmap(NULL, nbytes, PROT_READ | PROT_WRITE,
                        MAP_SHARED, fd, 0);
 
         if (p != MAP_FAILED) {
