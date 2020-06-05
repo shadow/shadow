@@ -22,7 +22,7 @@ jobs:
       options: '--tmpfs /dev/shm:rw,nosuid,nodev,exec,relatime,size=1g'
     strategy:
       matrix:
-        container: ['ubuntu:18.04', 'ubuntu:20.04']
+        container: ['ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim']
         cc: ['gcc', 'clang']
         buildtype: ['debug', 'release']
     steps:
