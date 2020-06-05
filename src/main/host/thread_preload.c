@@ -239,6 +239,16 @@ static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread) {
     debug("received shim_event %d", thread->currentEvent.event_id);
 }
 
+static void _threadpreload_flushPtrs(ThreadPreload* thread) {
+    _threadpreload_flushReads(thread);
+    _threadpreload_flushWrites(thread);
+}
+
+void threadpreload_flushPtrs(Thread* base) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
+    _threadpreload_flushPtrs(thread);
+}
+
 void threadpreload_resume(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
@@ -278,8 +288,7 @@ void threadpreload_resume(Thread* base) {
                     break;
                 }
 
-                _threadpreload_flushReads(thread);
-                _threadpreload_flushWrites(thread);
+                _threadpreload_flushPtrs(thread);
 
                 // We've handled the syscall, so we notify that we are done
                 // with shmem IPC
@@ -523,6 +532,7 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                             .getReadablePtr = threadpreload_getReadablePtr,
                             .getReadableString = threadpreload_getReadableString,
                             .getWriteablePtr = threadpreload_getWriteablePtr,
+                            .flushPtrs = threadpreload_flushPtrs,
                             .nativeSyscall = threadpreload_nativeSyscall,
                             .type_id = THREADPRELOAD_TYPE_ID,
                             .referenceCount = 1};

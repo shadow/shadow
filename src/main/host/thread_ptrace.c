@@ -389,6 +389,39 @@ static void _threadptrace_handleSyscall(ThreadPtrace* thread) {
         syscallhandler_make_syscall(thread->sys, &args);
 }
 
+static void _threadptrace_flushPtrs(ThreadPtrace* thread) {
+    // Free any read pointers
+    if (thread->readPointers->len > 0) {
+        for (int i = 0; i < thread->readPointers->len; ++i) {
+            void* p = g_array_index(thread->readPointers, void*, i);
+            g_free(p);
+        }
+        thread->readPointers = g_array_set_size(thread->readPointers, 0);
+    }
+    // Perform writes if needed
+    if (thread->pendingWrites->len > 0) {
+        for (int i = 0; i < thread->pendingWrites->len; ++i) {
+            PendingWrite* write =
+                &g_array_index(thread->pendingWrites, PendingWrite, i);
+            _threadptrace_memcpyToPlugin(
+                thread, write->pluginPtr, write->ptr, write->n);
+            g_free(write->ptr);
+        }
+        thread->pendingWrites = g_array_set_size(thread->pendingWrites, 0);
+    }
+    // Flush the mem file. In addition to flushing any pending writes, this
+    // invalidates the *input* buffers, which are no longer valid after
+    // returning control to the child.
+    if (fflush(thread->childMemFile) != 0) {
+        error("fflush: %s", g_strerror(errno));
+    }
+}
+
+static void threadptrace_flushPtrs(Thread* base) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+    _threadptrace_flushPtrs(thread);
+}
+
 void threadptrace_resume(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
@@ -439,31 +472,7 @@ void threadptrace_resume(Thread* base) {
                 break;
                 // no default
         }
-        // Free any read pointers
-        if (thread->readPointers->len > 0) {
-            for (int i = 0; i < thread->pendingWrites->len; ++i) {
-                void* p = g_array_index(thread->pendingWrites, void*, i);
-                g_free(p);
-            }
-            thread->readPointers = g_array_set_size(thread->readPointers, 0);
-        }
-        // Perform writes if needed
-        if (thread->pendingWrites->len > 0) {
-            for (int i = 0; i < thread->pendingWrites->len; ++i) {
-                PendingWrite* write =
-                    &g_array_index(thread->pendingWrites, PendingWrite, i);
-                _threadptrace_memcpyToPlugin(
-                    thread, write->pluginPtr, write->ptr, write->n);
-                g_free(write->ptr);
-            }
-            thread->pendingWrites = g_array_set_size(thread->pendingWrites, 0);
-        }
-        // Flush the mem file. In addition to flushing any pending writes, this
-        // invalidates the *input* buffers, which are no longer valid after
-        // returning control to the child.
-        if (fflush(thread->childMemFile) != 0) {
-            error("fflush: %s", g_strerror(errno));
-        }
+        _threadptrace_flushPtrs(thread);
         // Allow child to start executing.
         if (ptrace(PTRACE_SYSCALL, thread->childPID, 0,
                    thread->signalToDeliver) < 0) {
@@ -731,6 +740,7 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
                          .getReadablePtr = threadptrace_getReadablePtr,
                          .getReadableString = threadptrace_getReadableString,
                          .getWriteablePtr = threadptrace_getWriteablePtr,
+                         .flushPtrs = threadptrace_flushPtrs,
                          .nativeSyscall = threadptrace_nativeSyscall,
 
                          .type_id = THREADPTRACE_TYPE_ID,

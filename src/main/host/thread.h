@@ -51,6 +51,11 @@ int thread_getReadableString(Thread* thread, PluginPtr plugin_src, size_t n,
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n);
 
+// Flushes and invalidates all previously returned readable/writeable plugin
+// pointers, as if returning control to the plugin. This can be useful in
+// conjunction with `thread_nativeSyscall` operations that touch memory.
+void thread_flushPtrs(Thread* thread);
+
 // Clone the data at plugin_src into shadow's address space.
 //
 // The caller has sole ownership of the returned pointer. It must be released
@@ -66,6 +71,21 @@ void thread_releaseClonedPtr(Thread* thread, void* p);
 //
 // Arguments are treated opaquely. e.g. no pointer-marshalling is done.
 long thread_nativeSyscall(Thread* thread, long n, ...);
+
+// Allocate some memory in the plugin's address space. The returned pointer
+// should be freed with `thread_free`.
+PluginPtr thread_mallocPluginPtr(Thread* thread, size_t size);
+
+// Free memory allocated with `thread_mallocPluginPtr`. `size` should be the
+// original size passed to `thread_mallocPluginPtr`.
+//
+// TODO: It's a bit unfortunate to have to require the size here, but at this
+// time the underlying implementation (based on mmap) needs it. The alternatives
+// to this API awkwardness is either for thread_mallocPluginPtr to return an
+// opaque struct where this can be squirreled away (a different kind of API
+// awkwardness and more boilerplate), or keeping an internal map of ptr->size.
+void thread_freePluginPtr(Thread* thread, PluginPtr ptr, size_t size);
+
 
 gboolean thread_isRunning(Thread* thread);
 

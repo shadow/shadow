@@ -8,9 +8,11 @@
 
 #include <fcntl.h>
 #include <signal.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <unistd.h>
 
 #include "main/host/syscall_handler.h"
 #include "main/host/thread_protected.h"
@@ -92,6 +94,12 @@ void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     return thread->getWriteablePtr(thread, plugin_src, n);
 }
 
+void thread_flushPtrs(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->flushPtrs);
+    thread->flushPtrs(thread);
+}
+
 long thread_nativeSyscall(Thread* thread, long n, ...) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->nativeSyscall);
@@ -100,4 +108,44 @@ long thread_nativeSyscall(Thread* thread, long n, ...) {
     long rv = thread->nativeSyscall(thread, n, args);
     va_end(args);
     return rv;
+}
+
+// TODO put this into a common utility library.
+static long _errnoForSyscallRetval(long rv) {
+    // Linux reserves -1 through -4095 for errors. See
+    // https://sourceware.org/git/?p=glibc.git;a=blob;f=sysdeps/unix/sysv/linux/x86_64/sysdep.h;h=24d8b8ec20a55824a4806f8821ecba2622d0fe8e;hb=HEAD#l41
+    if (rv <= -1 && rv >= -4095) {
+        return -rv;
+    }
+    return 0;
+}
+
+PluginPtr thread_mallocPluginPtr(Thread* thread, size_t size) {
+    // For now we just implement in terms of thread_nativeSyscall.
+    // TODO: We might be able to do something more efficient by delegating to
+    // the specific thread implementation.
+    MAGIC_ASSERT(thread);
+    long ptr = thread_nativeSyscall(thread, SYS_mmap, NULL, size,
+                                    PROT_READ | PROT_WRITE,
+                                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    long err = _errnoForSyscallRetval(ptr);
+    if (err) {
+        error("thread_nativeSyscall(mmap): %s", strerror(err));
+        abort();
+    }
+
+    // Should be page-aligned.
+    utility_assert((ptr % sysconf(_SC_PAGE_SIZE)) == 0);
+
+    return (PluginPtr){.val = ptr};
+}
+
+void thread_freePluginPtr(Thread* thread, PluginPtr ptr, size_t size) {
+    MAGIC_ASSERT(thread);
+    long err = _errnoForSyscallRetval(
+        thread_nativeSyscall(thread, SYS_munmap, ptr.val, size));
+    if (err) {
+        error("thread_nativeSyscall(munmap): %s", strerror(err));
+        abort();
+    }
 }
