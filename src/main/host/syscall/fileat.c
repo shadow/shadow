@@ -106,7 +106,7 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
     int flags = args->args[2].as_i64;
     mode_t mode = args->args[3].as_u64;
 
-    debug("Trying to openat file with path name at %p", pathnamePtr.val);
+    debug("Trying to openat file with path name at plugin addr %p", pathnamePtr.val);
 
     /* Validate params. */
     File* dir_desc = NULL;

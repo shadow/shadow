@@ -56,18 +56,17 @@ void descriptor_ref(gpointer data) {
     Descriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
-    debug("Descriptor %i, refcount before ref++ is %i", descriptor->handle, descriptor->referenceCount);
-
     (descriptor->referenceCount)++;
+    debug("Descriptor %i ref++ to %i", descriptor->handle, descriptor->referenceCount);
 }
 
 void descriptor_unref(gpointer data) {
     Descriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
-    debug("Descriptor %i, refcount before ref-- is %i", descriptor->handle, descriptor->referenceCount);
-
     (descriptor->referenceCount)--;
+    debug("Descriptor %i ref-- to %i", descriptor->handle, descriptor->referenceCount);
+
     utility_assert(descriptor->referenceCount >= 0);
     if(descriptor->referenceCount == 0) {
         gint handle = descriptor->handle;
@@ -160,7 +159,7 @@ void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gb
     /* Identify which bits changed */
     DescriptorStatus statusesChanged = descriptor->status ^ oldStatus;
 
-    if (statusesChanged) {
+    if (statusesChanged && g_hash_table_size(descriptor->listeners) > 0) {
         /* We execute the handler via a task, to make sure whatever
          * code called adjustStatus finishes it's logic first before
          * the listener callbacks are executed and potentially change
@@ -195,7 +194,7 @@ void descriptor_addListener(Descriptor* descriptor,
 void descriptor_removeListener(Descriptor* descriptor,
                                DescriptorListener* listener) {
     MAGIC_ASSERT(descriptor);
-    /* This will automatically call descriptorlistener_ref on the instance. */
+    /* This will automatically call descriptorlistener_unref on the instance. */
     g_hash_table_remove(descriptor->listeners, listener);
 }
 
