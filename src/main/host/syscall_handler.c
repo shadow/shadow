@@ -23,6 +23,7 @@
 #include "main/host/syscall/epoll.h"
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
+#include "main/host/syscall/mman.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/socket.h"
 #include "main/host/syscall/time.h"
@@ -192,6 +193,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(lseek);
         HANDLE(mkdirat);
         HANDLE(mknodat);
+        HANDLE(mmap);
         HANDLE(nanosleep);
         HANDLE(newfstatat);
         HANDLE(open);
@@ -230,9 +232,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(arch_prctl);
         NATIVE(brk);
         NATIVE(execve);
-        NATIVE(mmap);
-        NATIVE(mprotect);
-        NATIVE(munmap);
         NATIVE(prlimit64);
         NATIVE(rt_sigaction);
         NATIVE(rt_sigprocmask);
@@ -274,8 +273,10 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // (because the plugin can natively):
         // ***************************************
         NATIVE(access);
-        NATIVE(stat);
         NATIVE(lstat);
+        NATIVE(mprotect);
+        NATIVE(munmap);
+        NATIVE(stat);
         NATIVE(statfs);
         NATIVE(unlink);
 

@@ -39,35 +39,83 @@ struct _File {
     /* File is a sub-type of a descriptor. */
     Descriptor super;
     FileType type;
-    int osBackedFD;
+    /* Info related to our OS-backed file. */
+    struct {
+        int fd;
+        int flags;
+        mode_t mode;
+        char* pathabs;
+    } osfile;
     MAGIC_DECLARE;
 };
 
-static File* _file_descriptorToFile(Descriptor* desc) {
-    utility_assert(descriptor_getType(desc) == DT_FILE);
-    File* f = (File*)desc;
-    MAGIC_ASSERT(f);
-    return f;
+int file_getFlags(File* file) {
+    MAGIC_ASSERT(file);
+    return file->osfile.flags;
 }
 
-static void _file_closeHelper(Descriptor* desc) {
-    File* file = _file_descriptorToFile(desc);
-    if(file->osBackedFD) {
-        close(file->osBackedFD);
-        file->osBackedFD = 0;
+mode_t file_getMode(File* file) {
+    MAGIC_ASSERT(file);
+    return file->osfile.mode;
+}
+
+char* file_getAbsolutePath(File* file) {
+    MAGIC_ASSERT(file);
+    return file->osfile.pathabs;
+}
+
+static inline File* _file_descriptorToFile(Descriptor* desc) {
+    utility_assert(descriptor_getType(desc) == DT_FILE);
+    File* file = (File*)desc;
+    MAGIC_ASSERT(file);
+    return file;
+}
+
+static inline int _file_getFD(File* file) {
+    MAGIC_ASSERT(file);
+    return descriptor_getHandle(&file->super);
+}
+
+static inline int _file_getOSBackedFD(File* file) {
+    MAGIC_ASSERT(file);
+    return file->osfile.fd;
+}
+
+static void _file_closeHelper(File* file) {
+    if(file && file->osfile.fd) {
+        debug("On file %i, closing os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
+
+        close(file->osfile.fd);
+        file->osfile.fd = 0;
+
+        /* The os-backed file is no longer ready. */
+        descriptor_adjustStatus(&file->super, DS_ACTIVE, FALSE);
     }
 }
 
 static void _file_close(Descriptor* desc) {
+    File* file = _file_descriptorToFile(desc);
+
+    debug("Closing file %i with os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
+
+    /* Make sure we mimic the close on the OS-backed file now. */
+    _file_closeHelper(file);
+
     /* tell the host to stop tracking us, and unref the descriptor.
      * this should trigger _file_free in most cases. */
-    host_closeDescriptor(worker_getActiveHost(), descriptor_getHandle(desc));
+    host_closeDescriptor(worker_getActiveHost(), _file_getFD(file));
 }
 
 static void _file_free(Descriptor* desc) {
     File* file = _file_descriptorToFile(desc);
 
-    _file_closeHelper(desc);
+    debug("Freeing file %i with os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
+
+    _file_closeHelper(file);
+
+    if(file->osfile.pathabs) {
+        free(file->osfile.pathabs);
+    }
 
     MAGIC_CLEAR(file);
     free(file);
@@ -92,13 +140,37 @@ File* file_new(int handle) {
     return file;
 }
 
-static int _file_getOSBackedFD(File* file) {
+static void _file_storePathHelper(File* file, File* dir, const char* pathname) {
     MAGIC_ASSERT(file);
-    return file->osBackedFD;
+    utility_assert(pathname);
+
+    /* Store the absolute path, which will allow us to reopen later. */
+    if(!strncmp("/", pathname, 1)) {
+        /* The path is already absolute. Just copy it. */
+        file->osfile.pathabs = strdup(pathname);
+        return;
+    }
+
+    /* The path is relative, try dir prefix first. */
+    if(dir && dir->osfile.pathabs) {
+        if(asprintf(&file->osfile.pathabs, "%s/%s", dir->osfile.pathabs, pathname) < 0) {
+            file->osfile.pathabs = NULL;
+        }
+        return;
+    }
+
+    /* Use current working directory as prefix. */
+    char prefix[PATH_MAX];
+    if(getcwd(prefix, sizeof(prefix)) != NULL) {
+        if(asprintf(&file->osfile.pathabs, "%s/%s", prefix, pathname) < 0) {
+            file->osfile.pathabs = NULL;
+        }
+    }
 }
 
 int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t mode) {
     MAGIC_ASSERT(file);
+    utility_assert(file->osfile.fd == 0);
 
     /* TODO: we should open the os-backed file in non-blocking mode even if a
      * non-block is not requested, and then properly handle the io by, e.g.,
@@ -110,9 +182,17 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
         osfd = open(pathname, flags, mode);
     }
 
+
     if(osfd < 0) {
+        debug("File %i opening path '%s' returned %i: %s", _file_getFD(file),
+                pathname, osfd, strerror(errno));
         return -errno;
     }
+
+    /* Store the create information so we can open later if needed. */
+    file->osfile.fd = osfd;
+    file->osfile.flags = flags;
+    file->osfile.mode = mode;
 
     if(pathname) {
         /* TODO handle special file types. */
@@ -125,13 +205,20 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
         } else {
             file->type = FILE_TYPE_FILE;
         }
+        /* TODO: make sure we don't open special files in the plugin via mmap */
+        _file_storePathHelper(file, dir, pathname);
     }
 
-    file->osBackedFD = osfd;
+    if(file->osfile.pathabs) {
+        debug("File %i opened os-backed file %i at absolute path %s", _file_getFD(file), _file_getOSBackedFD(file), file->osfile.pathabs);
+    } else {
+        info("File %i opened os-backed file %i at unknown absolute path (pathname was %s)", _file_getFD(file), _file_getOSBackedFD(file), pathname ? pathname : "NULL");
+    }
 
-    debug("File %i opened os-backed file %i at path %s", descriptor_getHandle(&file->super), file->osBackedFD, pathname ? pathname : "NULL");
+    /* The os-backed file is now ready. */
+    descriptor_adjustStatus(&file->super, DS_ACTIVE, TRUE);
 
-    return file->super.handle;
+    return _file_getFD(file);
 }
 
 int file_open(File* file, const char* pathname, int flags, mode_t mode) {
@@ -141,338 +228,338 @@ int file_open(File* file, const char* pathname, int flags, mode_t mode) {
 ssize_t file_read(File* file, void* buf, size_t bufSize) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i read %zu bytes from os-backed file %i", descriptor_getHandle(&file->super), bufSize, file->osBackedFD);
+    debug("File %i will read %zu bytes from os-backed file %i", _file_getFD(file), bufSize, _file_getOSBackedFD(file));
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
-    ssize_t result = read(file->osBackedFD, buf, bufSize);
+    ssize_t result = read(_file_getOSBackedFD(file), buf, bufSize);
     return (result < 0) ? -errno : result;
 }
 
 ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i pread %zu bytes from os-backed file %i", descriptor_getHandle(&file->super), bufSize, file->osBackedFD);
+    debug("File %i will pread %zu bytes from os-backed file %i", _file_getFD(file), bufSize, _file_getOSBackedFD(file));
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
-    ssize_t result = pread(file->osBackedFD, buf, bufSize, offset);
+    ssize_t result = pread(_file_getOSBackedFD(file), buf, bufSize, offset);
     return (result < 0) ? -errno : result;
 }
 
 ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt, off_t offset, int flags) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i preadv2 %d vector items from os-backed file %i", descriptor_getHandle(&file->super), iovcnt, file->osBackedFD);
+    debug("File %i will preadv2 %d vector items from os-backed file %i", _file_getFD(file), iovcnt, _file_getOSBackedFD(file));
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
-    ssize_t result = preadv2(file->osBackedFD, iov, iovcnt, offset, flags);
+    ssize_t result = preadv2(_file_getOSBackedFD(file), iov, iovcnt, offset, flags);
     return (result < 0) ? -errno : result;
 }
 
 ssize_t file_write(File* file, const void* buf, size_t bufSize) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i writing %zu bytes to os-backed file %i", descriptor_getHandle(&file->super), bufSize, file->osBackedFD);
+    debug("File %i will write %zu bytes to os-backed file %i", _file_getFD(file), bufSize, _file_getOSBackedFD(file));
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
-    ssize_t result = write(file->osBackedFD, buf, bufSize);
+    ssize_t result = write(_file_getOSBackedFD(file), buf, bufSize);
     return (result < 0) ? -errno : result;
 }
 
 ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i writing %zu bytes to os-backed file %i", descriptor_getHandle(&file->super), bufSize, file->osBackedFD);
+    debug("File %i will pwrite %zu bytes to os-backed file %i", _file_getFD(file), bufSize, _file_getOSBackedFD(file));
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
-    ssize_t result = pwrite(file->osBackedFD, buf, bufSize, offset);
+    ssize_t result = pwrite(_file_getOSBackedFD(file), buf, bufSize, offset);
     return (result < 0) ? -errno : result;
 }
 
 ssize_t file_pwritev2(File* file, const struct iovec* iov, int iovcnt, off_t offset, int flags) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i pwritev2 %d vector items from os-backed file %i", descriptor_getHandle(&file->super), iovcnt, file->osBackedFD);
+    debug("File %i will pwritev2 %d vector items from os-backed file %i", _file_getFD(file), iovcnt, _file_getOSBackedFD(file));
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
-    ssize_t result = pwritev2(file->osBackedFD, iov, iovcnt, offset, flags);
+    ssize_t result = pwritev2(_file_getOSBackedFD(file), iov, iovcnt, offset, flags);
     return (result < 0) ? -errno : result;
 }
 
 int file_fstat(File* file, struct stat* statbuf) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i fstat os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i fstat os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = fstat(file->osBackedFD, statbuf);
+    int result = fstat(_file_getOSBackedFD(file), statbuf);
     return (result < 0) ? -errno : result;
 }
 
 int file_fstatfs(File* file, struct statfs* statbuf) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i fstatfs os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i fstatfs os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = fstatfs(file->osBackedFD, statbuf);
+    int result = fstatfs(_file_getOSBackedFD(file), statbuf);
     return (result < 0) ? -errno : result;
 }
 
 int file_fsync(File* file) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i fsync os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i fsync os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = fsync(file->osBackedFD);
+    int result = fsync(_file_getOSBackedFD(file));
     return (result < 0) ? -errno : result;
 }
 
 int file_fchown(File* file, uid_t owner, gid_t group) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i fchown os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i fchown os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = fchown(file->osBackedFD, owner, group);
+    int result = fchown(_file_getOSBackedFD(file), owner, group);
     return (result < 0) ? -errno : result;
 }
 
 int file_fchmod(File* file, mode_t mode) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i fchmod os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i fchmod os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = fchmod(file->osBackedFD, mode);
+    int result = fchmod(_file_getOSBackedFD(file), mode);
     return (result < 0) ? -errno : result;
 }
 
 int file_fchdir(File* file) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i fchdir os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i fchdir os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = fchdir(file->osBackedFD);
+    int result = fchdir(_file_getOSBackedFD(file));
     return (result < 0) ? -errno : result;
 }
 
 int file_ftruncate(File* file, off_t length) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i ftruncate os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i ftruncate os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = ftruncate(file->osBackedFD, length);
+    int result = ftruncate(_file_getOSBackedFD(file), length);
     return (result < 0) ? -errno : result;
 }
 
 int file_fallocate(File* file, int mode, off_t offset, off_t length) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i fallocate os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i fallocate os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = fallocate(file->osBackedFD, mode, offset, length);
+    int result = fallocate(_file_getOSBackedFD(file), mode, offset, length);
     return (result < 0) ? -errno : result;
 }
 
 int file_fadvise(File* file, off_t offset, off_t len, int advice) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i fadvise os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i fadvise os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = posix_fadvise(file->osBackedFD, offset, len, advice);
+    int result = posix_fadvise(_file_getOSBackedFD(file), offset, len, advice);
     return (result < 0) ? -errno : result;
 }
 
 int file_flock(File* file, int operation) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i flock os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i flock os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = flock(file->osBackedFD, operation);
+    int result = flock(_file_getOSBackedFD(file), operation);
     return (result < 0) ? -errno : result;
 }
 
 int file_fsetxattr(File* file, const char* name, const void* value, size_t size, int flags) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i fsetxattr os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i fsetxattr os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = fsetxattr(file->osBackedFD, name, value, size, flags);
+    int result = fsetxattr(_file_getOSBackedFD(file), name, value, size, flags);
     return (result < 0) ? -errno : result;
 }
 
 ssize_t file_fgetxattr(File* file, const char* name, void* value, size_t size) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i fgetxattr os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i fgetxattr os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    ssize_t result = fgetxattr(file->osBackedFD, name, value, size);
+    ssize_t result = fgetxattr(_file_getOSBackedFD(file), name, value, size);
     return (result < 0) ? -errno : result;
 }
 
 ssize_t file_flistxattr(File* file, char* list, size_t size) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i flistxattr os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i flistxattr os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    ssize_t result = flistxattr(file->osBackedFD, list, size);
+    ssize_t result = flistxattr(_file_getOSBackedFD(file), list, size);
     return (result < 0) ? -errno : result;
 }
 
 int file_fremovexattr(File* file, const char* name) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i fremovexattr os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i fremovexattr os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = fremovexattr(file->osBackedFD, name);
+    int result = fremovexattr(_file_getOSBackedFD(file), name);
     return (result < 0) ? -errno : result;
 }
 
 int file_sync_range(File* file, off64_t offset, off64_t nbytes, unsigned int flags) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i sync_file_range os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i sync_file_range os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = sync_file_range(file->osBackedFD, offset, nbytes, flags);
+    int result = sync_file_range(_file_getOSBackedFD(file), offset, nbytes, flags);
     return (result < 0) ? -errno : result;
 }
 
 ssize_t file_readahead(File* file, off64_t offset, size_t count) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i readahead os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i readahead os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    ssize_t result = readahead(file->osBackedFD, offset, count);
+    ssize_t result = readahead(_file_getOSBackedFD(file), offset, count);
     return (result < 0) ? -errno : result;
 }
 
 off_t file_lseek(File* file, off_t offset, int whence) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i lseek os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i lseek os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    ssize_t result = lseek(file->osBackedFD, offset, whence);
+    ssize_t result = lseek(_file_getOSBackedFD(file), offset, whence);
     return (result < 0) ? -errno : result;
 }
 
 int file_getdents(File* file, struct linux_dirent* dirp, unsigned int count) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i getdents os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i getdents os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
     // getdents is not available for a direct call
-    int result = (int)syscall(SYS_getdents, file->osBackedFD, dirp, count);
+    int result = (int)syscall(SYS_getdents, _file_getOSBackedFD(file), dirp, count);
     return (result < 0) ? -errno : result;
 }
 
 int file_getdents64(File* file, struct linux_dirent64* dirp, unsigned int count) {
     MAGIC_ASSERT(file);
 
-    if(!file->osBackedFD) {
+    if(!_file_getOSBackedFD(file)) {
         return -EBADF;
     }
 
-    debug("File %i getdents64 os-backed file %i", descriptor_getHandle(&file->super), file->osBackedFD);
+    debug("File %i getdents64 os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
-    int result = getdents64(file->osBackedFD, dirp, count);
+    int result = getdents64(_file_getOSBackedFD(file), dirp, count);
     return (result < 0) ? -errno : result;
 }
 
@@ -480,139 +567,115 @@ int file_getdents64(File* file, struct linux_dirent64* dirp, unsigned int count)
 // *at functions (NULL directory file is valid)
 ///////////////////////////////////////////////
 
-static inline int _file_getOSDirFDHelper(File* dir) {
+static inline int _file_getOSDirFD(File* dir) {
     if(dir) {
         MAGIC_ASSERT(dir);
-        return dir->osBackedFD > 0 ? dir->osBackedFD : AT_FDCWD;
+        return dir->osfile.fd > 0 ? dir->osfile.fd : AT_FDCWD;
     } else {
         return AT_FDCWD;
     }
 }
 
 int file_fstatat(File* dir, const char* pathname, struct stat* statbuf, int flags) {
-    int osdirfd = _file_getOSDirFDHelper(dir);
+    debug("File %i fstatat os-backed file %i", dir ? _file_getFD(dir) : 0, _file_getOSDirFD(dir));
 
-    debug("File %i fstatat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
-
-    int result = fstatat(osdirfd, pathname, statbuf, flags);
+    int result = fstatat(_file_getOSDirFD(dir), pathname, statbuf, flags);
     return (result < 0) ? -errno : result;
 }
 
 int file_fchownat(File* dir, const char* pathname, uid_t owner, gid_t group, int flags) {
-    int osdirfd = _file_getOSDirFDHelper(dir);
+    debug("File %i fchownat os-backed file %i", dir ? _file_getFD(dir) : 0, _file_getOSDirFD(dir));
 
-    debug("File %i fchownat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
-
-    int result = fchownat(osdirfd, pathname, owner, group, flags);
+    int result = fchownat(_file_getOSDirFD(dir), pathname, owner, group, flags);
     return (result < 0) ? -errno : result;
 }
 
 int file_fchmodat(File* dir, const char* pathname, mode_t mode, int flags) {
-    int osdirfd = _file_getOSDirFDHelper(dir);
+    debug("File %i fchmodat os-backed file %i", dir ? _file_getFD(dir) : 0, _file_getOSDirFD(dir));
 
-    debug("File %i fchmodat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
-
-    int result = fchmodat(osdirfd, pathname, mode, flags);
+    int result = fchmodat(_file_getOSDirFD(dir), pathname, mode, flags);
     return (result < 0) ? -errno : result;
 }
 
 int file_futimesat(File* dir, const char* pathname, const struct timeval times[2]) {
-    int osdirfd = _file_getOSDirFDHelper(dir);
+    debug("File %i futimesat os-backed file %i", dir ? _file_getFD(dir) : 0, _file_getOSDirFD(dir));
 
-    debug("File %i futimesat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
-
-    int result = futimesat(osdirfd, pathname, times);
+    int result = futimesat(_file_getOSDirFD(dir), pathname, times);
     return (result < 0) ? -errno : result;
 }
 
 int file_utimensat(File* dir, const char* pathname, const struct timespec times[2], int flags) {
-    int osdirfd = _file_getOSDirFDHelper(dir);
+    debug("File %i utimesat os-backed file %i", dir ? _file_getFD(dir) : 0, _file_getOSDirFD(dir));
 
-    debug("File %i utimesat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
-
-    int result = utimensat(osdirfd, pathname, times, flags);
+    int result = utimensat(_file_getOSDirFD(dir), pathname, times, flags);
     return (result < 0) ? -errno : result;
 }
 
 int file_faccessat(File* dir, const char* pathname, int mode, int flags) {
-    int osdirfd = _file_getOSDirFDHelper(dir);
+    debug("File %i faccessat os-backed file %i", dir ? _file_getFD(dir) : 0, _file_getOSDirFD(dir));
 
-    debug("File %i faccessat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
-
-    int result = faccessat(osdirfd, pathname, mode, flags);
+    int result = faccessat(_file_getOSDirFD(dir), pathname, mode, flags);
     return (result < 0) ? -errno : result;
 }
 
 int file_mkdirat(File* dir, const char* pathname, mode_t mode) {
-    int osdirfd = _file_getOSDirFDHelper(dir);
+    debug("File %i mkdirat os-backed file %i", dir ? _file_getFD(dir) : 0, _file_getOSDirFD(dir));
 
-    debug("File %i mkdirat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
-
-    int result = mkdirat(osdirfd, pathname, mode);
+    int result = mkdirat(_file_getOSDirFD(dir), pathname, mode);
     return (result < 0) ? -errno : result;
 }
 
 int file_mknodat(File* dir, const char* pathname, mode_t mode, dev_t dev) {
-    int osdirfd = _file_getOSDirFDHelper(dir);
+    debug("File %i mknodat os-backed file %i", dir ? _file_getFD(dir) : 0, _file_getOSDirFD(dir));
 
-    debug("File %i mknodat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
-
-    int result = mknodat(osdirfd, pathname, mode, dev);
+    int result = mknodat(_file_getOSDirFD(dir), pathname, mode, dev);
     return (result < 0) ? -errno : result;
 }
 
 int file_linkat(File* olddir, const char* oldpath, File* newdir, const char* newpath, int flags) {
-    int oldosdirfd = _file_getOSDirFDHelper(olddir);
-    int newosdirfd = _file_getOSDirFDHelper(newdir);
+    int oldosdirfd = _file_getOSDirFD(olddir);
+    int newosdirfd = _file_getOSDirFD(newdir);
 
-    debug("File %i linkat os-backed file %i", olddir ? descriptor_getHandle(&olddir->super) : 0, oldosdirfd);
+    debug("File %i linkat os-backed file %i", olddir ? _file_getFD(olddir) : 0, oldosdirfd);
 
     int result = linkat(oldosdirfd, oldpath, newosdirfd, newpath, flags);
     return (result < 0) ? -errno : result;
 }
 
 int file_unlinkat(File* dir, const char* pathname, int flags) {
-    int osdirfd = _file_getOSDirFDHelper(dir);
+    debug("File %i unlinkat os-backed file %i", dir ? _file_getFD(dir) : 0, _file_getOSDirFD(dir));
 
-    debug("File %i unlinkat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
-
-    int result = unlinkat(osdirfd, pathname, flags);
+    int result = unlinkat(_file_getOSDirFD(dir), pathname, flags);
     return (result < 0) ? -errno : result;
 }
 
 int file_symlinkat(File* dir, const char* linkpath, const char* target) {
-    int osdirfd = _file_getOSDirFDHelper(dir);
+    debug("File %i symlinkat os-backed file %i", dir ? _file_getFD(dir) : 0, _file_getOSDirFD(dir));
 
-    debug("File %i symlinkat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
-
-    int result = symlinkat(target, osdirfd, linkpath);
+    int result = symlinkat(target, _file_getOSDirFD(dir), linkpath);
     return (result < 0) ? -errno : result;
 }
 
 ssize_t file_readlinkat(File* dir, const char* pathname, char* buf, size_t bufsize) {
-    int osdirfd = _file_getOSDirFDHelper(dir);
+    debug("File %i readlinkat os-backed file %i", dir ? _file_getFD(dir) : 0, _file_getOSDirFD(dir));
 
-    debug("File %i readlinkat os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
-
-    ssize_t result = readlinkat(osdirfd, pathname, buf, bufsize);
+    ssize_t result = readlinkat(_file_getOSDirFD(dir), pathname, buf, bufsize);
     return (result < 0) ? -errno : result;
 }
 
 int file_renameat2(File* olddir, const char* oldpath, File* newdir, const char* newpath, unsigned int flags) {
-    int oldosdirfd = _file_getOSDirFDHelper(olddir);
-    int newosdirfd = _file_getOSDirFDHelper(newdir);
+    int oldosdirfd = _file_getOSDirFD(olddir);
+    int newosdirfd = _file_getOSDirFD(newdir);
 
-    debug("File %i renameat2 os-backed file %i", olddir ? descriptor_getHandle(&olddir->super) : 0, oldosdirfd);
+    debug("File %i renameat2 os-backed file %i", olddir ? _file_getFD(olddir) : 0, oldosdirfd);
 
     int result = renameat2(oldosdirfd, oldpath, newosdirfd, newpath, flags);
     return (result < 0) ? -errno : result;
 }
 
 int file_statx(File* dir, const char* pathname, int flags, unsigned int mask, struct statx* statxbuf) {
-    int osdirfd = _file_getOSDirFDHelper(dir);
+    debug("File %i statx os-backed file %i", dir ? _file_getFD(dir) : 0, _file_getOSDirFD(dir));
 
-    debug("File %i statx os-backed file %i", dir ? descriptor_getHandle(&dir->super) : 0, osdirfd);
-
-    int result = statx(osdirfd, pathname, flags, mask, statxbuf);
+    int result = statx(_file_getOSDirFD(dir), pathname, flags, mask, statxbuf);
     return (result < 0) ? -errno : result;
 }

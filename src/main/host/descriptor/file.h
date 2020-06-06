@@ -39,6 +39,17 @@ File* file_new(int handle); // Close the file with descriptor_close()
 int file_open(File* file, const char* pathname, int flags, mode_t mode);
 int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t mode);
 
+// ************************
+// Accessors
+// ************************
+
+/* Returns the flags that were used to open the file. */
+int file_getFlags(File* file);
+/* Returns the mode that was used to open the file. */
+mode_t file_getMode(File* file);
+/* Returns the absolute file path in a buffer that is owned by the file. */
+char* file_getAbsolutePath(File* file);
+
 // ****************************************
 // Operations that require a non-null File*
 // ****************************************
