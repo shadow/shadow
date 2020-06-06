@@ -79,6 +79,8 @@ ssize_t file_readahead(File* file, off64_t offset, size_t count);
 off_t file_lseek(File* file, off_t offset, int whence);
 int file_getdents(File* file, struct linux_dirent* dirp, unsigned int count);
 int file_getdents64(File* file, struct linux_dirent64* dirp, unsigned int count);
+int file_ioctl(File* file, unsigned long request, void* arg);
+int file_fcntl(File* file, unsigned long command, void* arg);
 
 // ******************************************
 // Operations where the dir File* may be null

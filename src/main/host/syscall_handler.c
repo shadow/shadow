@@ -21,8 +21,10 @@
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/host/syscall/epoll.h"
+#include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
+#include "main/host/syscall/ioctl.h"
 #include "main/host/syscall/mman.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/socket.h"
@@ -172,6 +174,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(fchmodat);
         HANDLE(fchown);
         HANDLE(fchownat);
+        HANDLE(fcntl);
         HANDLE(fdatasync);
         HANDLE(fgetxattr);
         HANDLE(flistxattr);
@@ -188,6 +191,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(getpeername);
         HANDLE(getpid);
         HANDLE(getsockname);
+        HANDLE(ioctl);
         HANDLE(linkat);
         HANDLE(listen);
         HANDLE(lseek);
@@ -248,8 +252,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(dup);
         NATIVE(dup2);
         NATIVE(dup3);
-        NATIVE(ioctl);
-        NATIVE(fcntl);
         NATIVE(poll);
         NATIVE(ppoll);
         NATIVE(select);

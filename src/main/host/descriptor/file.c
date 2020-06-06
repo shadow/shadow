@@ -7,16 +7,18 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <string.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <syscall.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/file.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/uio.h>
 #include <sys/xattr.h>
+#include <syscall.h>
 #include <unistd.h>
 
 #include "main/core/support/object_counter.h"
@@ -29,7 +31,8 @@
 typedef enum _FileType FileType;
 enum _FileType {
     FILE_TYPE_NOTSET,
-    FILE_TYPE_FILE,
+    FILE_TYPE_REGULAR,
+    FILE_TYPE_TEMP,
     FILE_TYPE_RANDOM, // TODO: special handling for /dev/random etc.
     FILE_TYPE_HOSTS, // TODO: special handling for /etc/hosts
     FILE_TYPE_LOCALTIME, // TODO: special handling for /etc/localtime
@@ -44,7 +47,7 @@ struct _File {
         int fd;
         int flags;
         mode_t mode;
-        char* pathabs;
+        char* abspath;
     } osfile;
     MAGIC_DECLARE;
 };
@@ -61,7 +64,7 @@ mode_t file_getMode(File* file) {
 
 char* file_getAbsolutePath(File* file) {
     MAGIC_ASSERT(file);
-    return file->osfile.pathabs;
+    return file->osfile.abspath;
 }
 
 static inline File* _file_descriptorToFile(Descriptor* desc) {
@@ -113,8 +116,8 @@ static void _file_free(Descriptor* desc) {
 
     _file_closeHelper(file);
 
-    if(file->osfile.pathabs) {
-        free(file->osfile.pathabs);
+    if(file->osfile.abspath) {
+        free(file->osfile.abspath);
     }
 
     MAGIC_CLEAR(file);
@@ -140,32 +143,49 @@ File* file_new(int handle) {
     return file;
 }
 
-static void _file_storePathHelper(File* file, File* dir, const char* pathname) {
+static char* _file_getConcatStr(const char* prefix, const char* suffix) {
+    char* path = NULL;
+    if(asprintf(&path, "%s/%s", prefix, suffix) < 0) {
+        error("asprintf could not allocate a buffer");
+        return NULL;
+    }
+    return path;
+}
+
+static char* _file_getPath(File* file, File* dir, const char* pathname) {
     MAGIC_ASSERT(file);
     utility_assert(pathname);
 
-    /* Store the absolute path, which will allow us to reopen later. */
+    /* Compute the absolute path, which will allow us to reopen later. */
     if(!strncmp("/", pathname, 1)) {
         /* The path is already absolute. Just copy it. */
-        file->osfile.pathabs = strdup(pathname);
-        return;
+        return strdup(pathname);
     }
 
     /* The path is relative, try dir prefix first. */
-    if(dir && dir->osfile.pathabs) {
-        if(asprintf(&file->osfile.pathabs, "%s/%s", dir->osfile.pathabs, pathname) < 0) {
-            file->osfile.pathabs = NULL;
-        }
-        return;
+    if(dir && dir->osfile.abspath) {
+        return _file_getConcatStr(dir->osfile.abspath, pathname);
     }
 
     /* Use current working directory as prefix. */
-    char prefix[PATH_MAX];
-    if(getcwd(prefix, sizeof(prefix)) != NULL) {
-        if(asprintf(&file->osfile.pathabs, "%s/%s", prefix, pathname) < 0) {
-            file->osfile.pathabs = NULL;
-        }
+    char* cwd = getcwd(NULL, 0);
+    if(!cwd) {
+        error("getcwd unable to allocate string buffer");
+        return NULL;
     }
+
+    char* abspath = _file_getConcatStr(cwd, pathname);;
+    free(cwd);
+    return abspath;
+}
+
+static char* _file_getTempPath(File* file, const char* pathname) {
+    char* abspath = NULL;
+    if(asprintf(&abspath, "%s/shadow-tmpfd%d-XXXXXX", pathname, _file_getFD(file)) < 0) {
+        error("asprintf could not allocate string for temp file");
+        abort();
+    }
+    return abspath;
 }
 
 int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t mode) {
@@ -176,44 +196,48 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
      * non-block is not requested, and then properly handle the io by, e.g.,
      * epolling on all such files with a shadow support thread. */
     int osfd = 0;
-    if(dir) {
-        osfd = openat(_file_getOSBackedFD(dir), pathname, flags, mode);
-    } else {
-        osfd = open(pathname, flags, mode);
-    }
+    char* abspath = NULL;
 
+    if(flags & O_TMPFILE) {
+        /* We need to store a copy of the temp path so we can reopen it. */
+        abspath = _file_getTempPath(file, pathname);
+        osfd = mkostemp(abspath, flags & ~O_TMPFILE);
+    } else {
+        abspath = _file_getPath(file, dir, pathname);
+        osfd = open(abspath, flags, mode);
+    }
 
     if(osfd < 0) {
         debug("File %i opening path '%s' returned %i: %s", _file_getFD(file),
-                pathname, osfd, strerror(errno));
+                abspath, osfd, strerror(errno));
+        if(abspath) {
+            free(abspath);
+        }
         return -errno;
     }
 
     /* Store the create information so we can open later if needed. */
     file->osfile.fd = osfd;
-    file->osfile.flags = flags;
+    file->osfile.abspath = abspath;
+    /* We can't use O_TMPFILE, because if we reopen, we'll get a new file. */
+    file->osfile.flags = (flags & ~O_TMPFILE);
     file->osfile.mode = mode;
 
-    if(pathname) {
-        /* TODO handle special file types. */
-        if(utility_isRandomPath(pathname)) {
-            file->type = FILE_TYPE_RANDOM;
-        } else if(!strncmp("/etc/hosts", pathname, 10)) {
-            file->type = FILE_TYPE_HOSTS;
-        } else if(!strncmp("/etc/localtime", pathname, 14)) {
-            file->type = FILE_TYPE_LOCALTIME;
-        } else {
-            file->type = FILE_TYPE_FILE;
-        }
-        /* TODO: make sure we don't open special files in the plugin via mmap */
-        _file_storePathHelper(file, dir, pathname);
+    /* TODO handle special file types. */
+    if(utility_isRandomPath(file->osfile.abspath)) {
+        file->type = FILE_TYPE_RANDOM;
+    } else if(!strncmp("/etc/hosts", file->osfile.abspath, 10)) {
+        file->type = FILE_TYPE_HOSTS;
+    } else if(!strncmp("/etc/localtime", file->osfile.abspath, 14)) {
+        file->type = FILE_TYPE_LOCALTIME;
+    } else if(flags & O_TMPFILE) {
+        file->type = FILE_TYPE_TEMP;
+    } else {
+        file->type = FILE_TYPE_REGULAR;
     }
 
-    if(file->osfile.pathabs) {
-        debug("File %i opened os-backed file %i at absolute path %s", _file_getFD(file), _file_getOSBackedFD(file), file->osfile.pathabs);
-    } else {
-        info("File %i opened os-backed file %i at unknown absolute path (pathname was %s)", _file_getFD(file), _file_getOSBackedFD(file), pathname ? pathname : "NULL");
-    }
+    debug("File %i opened os-backed file %i at absolute path %s",
+            _file_getFD(file), _file_getOSBackedFD(file), file->osfile.abspath);
 
     /* The os-backed file is now ready. */
     descriptor_adjustStatus(&file->super, DS_ACTIVE, TRUE);
@@ -560,6 +584,32 @@ int file_getdents64(File* file, struct linux_dirent64* dirp, unsigned int count)
     debug("File %i getdents64 os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
     int result = getdents64(_file_getOSBackedFD(file), dirp, count);
+    return (result < 0) ? -errno : result;
+}
+
+int file_ioctl(File* file, unsigned long request, void* arg) {
+    MAGIC_ASSERT(file);
+
+    if(!_file_getOSBackedFD(file)) {
+        return -EBADF;
+    }
+
+    debug("File %i ioctl os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
+
+    int result = ioctl(_file_getOSBackedFD(file), request, arg);
+    return (result < 0) ? -errno : result;
+}
+
+int file_fcntl(File* file, unsigned long command, void* arg) {
+    MAGIC_ASSERT(file);
+
+    if(!_file_getOSBackedFD(file)) {
+        return -EBADF;
+    }
+
+    debug("File %i fcntl os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
+
+    int result = fcntl(_file_getOSBackedFD(file), command, arg);
     return (result < 0) ? -errno : result;
 }
 

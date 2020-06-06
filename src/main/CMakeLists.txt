@@ -65,8 +65,10 @@ set(shadow_srcs
     host/syscall_handler.c
     host/syscall/protected.c
     host/syscall/epoll.c
+    host/syscall/fcntl.c
     host/syscall/file.c
     host/syscall/fileat.c
+    host/syscall/ioctl.c
     host/syscall/mman.c
     host/syscall/socket.c
     host/syscall/time.c

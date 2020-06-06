@@ -69,6 +69,9 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
 
     debug("Trying to open file %i in the plugin", fd);
 
+    /* TODO: make sure we don't open special files like /dev/urandom,
+     * /etc/localtime etc. in the plugin via mmap */
+
     /* file is in the shadow process, and we want to open it in the plugin. */
     char* abspath = file_getAbsolutePath(file);
     if(abspath == NULL) {
