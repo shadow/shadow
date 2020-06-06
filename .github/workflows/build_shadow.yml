@@ -22,7 +22,7 @@ jobs:
       options: '--tmpfs /dev/shm:rw,nosuid,nodev,exec,relatime,size=1g'
     strategy:
       matrix:
-        container: ['ubuntu:18.04'] #, 'ubuntu:16.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32']
+        container: ['ubuntu:18.04'] #, 'ubuntu:16.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32', 'centos:7']
         cc: ['gcc'] #, 'clang']
         buildtype: ['debug', 'release']
         include:
@@ -36,6 +36,8 @@ jobs:
 #            package_manager: 'apt'
 #          - container: 'fedora:32'
 #            package_manager: 'dnf'
+#          - container: 'centos:7'
+#            package_manager: 'yum-centos-7'
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -52,6 +54,12 @@ jobs:
       - name: Install Dependencies (dnf)
         if: ${{ matrix.package_manager == 'dnf' }}
         run: dnf install --best -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python python-pyelftools xz xz-devel yum-utils procps-devel
+
+      - name: Install Dependencies (yum-centos-7)
+        if: ${{ matrix.package_manager == 'yum-centos-7' }}
+        run: |
+          yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+          yum install -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python python-pyelftools xz xz-devel yum-utils procps-devel
 
       - name: Build Debug
         if: ${{ matrix.buildtype == 'debug' }}
