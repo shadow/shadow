@@ -97,20 +97,17 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     descriptor = host_lookupDescriptor(sys->host, fd);
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
+    if(errorCode) {
+        info("Child %i is not a shadow descriptor", fd);
+        return (SysCallReturn){
+                    .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+    }
+
     const struct epoll_event* event =
         thread_getReadablePtr(sys->thread, eventPtr, sizeof(*event));
 
-    if (!errorCode) {
-        utility_assert(descriptor);
-        debug("Calling epoll_control on epoll %i with child %i", epfd, fd);
-        errorCode = epoll_control(epoll, op, descriptor, event);
-    } else {
-        debug("Child %i is not a shadow descriptor, try OS epoll", fd);
-        /* child is not a shadow descriptor, check for OS file */
-        gint osfd = host_getOSHandle(sys->host, fd);
-        osfd = osfd >= 0 ? osfd : fd;
-        errorCode = epoll_controlOS(epoll, op, osfd, event);
-    }
+    debug("Calling epoll_control on epoll %i with child %i", epfd, fd);
+    errorCode = epoll_control(epoll, op, descriptor, event);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }

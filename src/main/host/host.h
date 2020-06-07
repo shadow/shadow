@@ -100,20 +100,10 @@ Descriptor* host_createDescriptor(Host* host, DescriptorType type);
 Descriptor* host_lookupDescriptor(Host* host, gint handle);
 void host_closeDescriptor(Host* host, gint handle);
 
-gint host_shutdownSocket(Host* host, gint handle, gint how);
 NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle);
 Router* host_getUpstreamRouter(Host* host, in_addr_t handle);
 
 void host_returnHandleHack(gint handle);
-gint host_createShadowHandle(Host* host, gint osHandle);
-gint host_getOSHandle(Host* host, gint shadowHandle);
-gint host_getShadowHandle(Host* host, gint osHandle);
-void host_setRandomHandle(Host* host, gint handle);
-gboolean host_isRandomHandle(Host* host, gint handle);
-void host_destroyShadowHandle(Host* host, gint shadowHandle);
-
-gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* erroneous);
-gint host_poll(Host* host, struct pollfd *pollFDs, nfds_t numPollFDs);
 
 Tracker* host_getTracker(Host* host);
 LogLevel host_getLogLevel(Host* host);

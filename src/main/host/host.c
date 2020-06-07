@@ -77,16 +77,6 @@ struct _Host {
     /* all file, socket, and epoll descriptors we know about and track */
     GHashTable* descriptors;
 
-    /* map from the descriptor handle we returned to the plug-in, and
-     * descriptor handle that the OS gave us for files, etc.
-     * We do this so that we can give out low descriptor numbers even though the OS
-     * may give out those same low numbers when files are opened. */
-    GHashTable* shadowToOSHandleMap;
-    GHashTable* osToShadowHandleMap;
-
-    /* list of all /dev/random shadow handles that have been created */
-    GHashTable* randomShadowHandleMap;
-
     /* map path to ports for unix sockets */
     GHashTable* unixPathToPortMap;
 
@@ -138,9 +128,6 @@ Host* host_new(HostParameters* params) {
 
     /* virtual descriptor management */
     host->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
-    host->shadowToOSHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
-    host->osToShadowHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
-    host->randomShadowHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
     host->unixPathToPortMap = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
     /* applications this node will run */
@@ -272,15 +259,6 @@ void host_shutdown(Host* host) {
         g_hash_table_destroy(host->descriptors);
     }
 
-    if(host->shadowToOSHandleMap) {
-        g_hash_table_destroy(host->shadowToOSHandleMap);
-    }
-    if(host->osToShadowHandleMap) {
-        g_hash_table_destroy(host->osToShadowHandleMap);
-    }
-    if(host->randomShadowHandleMap) {
-        g_hash_table_destroy(host->randomShadowHandleMap);
-    }
     if(host->unixPathToPortMap) {
         g_hash_table_destroy(host->unixPathToPortMap);
     }
@@ -625,81 +603,6 @@ void host_returnHandleHack(gint handle) {
     }
 }
 
-gint host_createShadowHandle(Host* host, gint osHandle) {
-    MAGIC_ASSERT(host);
-
-    /* stdin, stdout, stderr */
-    if(osHandle >=0 && osHandle <= 2) {
-        return osHandle;
-    }
-
-    /* reserve a new virtual descriptor number to emulate the given osHandle,
-     * so that the plugin will not be given duplicate shadow/os numbers. */
-    gint shadowHandle = _host_getNextDescriptorHandle(host);
-
-    g_hash_table_replace(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle), GINT_TO_POINTER(osHandle));
-    g_hash_table_replace(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle), GINT_TO_POINTER(shadowHandle));
-
-    return shadowHandle;
-}
-
-gint host_getShadowHandle(Host* host, gint osHandle) {
-    MAGIC_ASSERT(host);
-
-    /* stdin, stdout, stderr */
-    if(osHandle >=0 && osHandle <= 2) {
-        return osHandle;
-    }
-
-    /* find shadow handle that we mapped, if one exists */
-    gpointer shadowHandleP = g_hash_table_lookup(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle));
-
-    return shadowHandleP ? GPOINTER_TO_INT(shadowHandleP) : -1;
-}
-
-gint host_getOSHandle(Host* host, gint shadowHandle) {
-    MAGIC_ASSERT(host);
-
-    /* stdin, stdout, stderr */
-    if(shadowHandle >=0 && shadowHandle <= 2) {
-        return shadowHandle;
-    }
-
-    /* find os handle that we mapped, if one exists */
-    gpointer osHandleP = g_hash_table_lookup(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle));
-
-    return osHandleP ? GPOINTER_TO_INT(osHandleP) : -1;
-}
-
-void host_setRandomHandle(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-    g_hash_table_insert(host->randomShadowHandleMap, GINT_TO_POINTER(handle), GINT_TO_POINTER(handle));
-}
-
-gboolean host_isRandomHandle(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-    return g_hash_table_contains(host->randomShadowHandleMap, GINT_TO_POINTER(handle));
-}
-
-
-void host_destroyShadowHandle(Host* host, gint shadowHandle) {
-    MAGIC_ASSERT(host);
-
-    /* stdin, stdout, stderr */
-    if(shadowHandle >=0 && shadowHandle <= 2) {
-        return;
-    }
-
-    gint osHandle = host_getOSHandle(host, shadowHandle);
-    gboolean didExist = g_hash_table_remove(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle));
-    if(didExist) {
-        g_hash_table_remove(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle));
-        _host_returnPreviousDescriptorHandle(host, shadowHandle);
-    }
-
-    g_hash_table_remove(host->randomShadowHandleMap, GINT_TO_POINTER(shadowHandle));
-}
-
 Descriptor* host_createDescriptor(Host* host, DescriptorType type) {
     MAGIC_ASSERT(host);
 
@@ -781,165 +684,6 @@ Descriptor* host_createDescriptor(Host* host, DescriptorType type) {
 void host_closeDescriptor(Host* host, gint handle) {
     MAGIC_ASSERT(host);
     _host_unmonitorDescriptor(host, handle);
-}
-
-gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* erroneous) {
-    MAGIC_ASSERT(host);
-
-    /* if they dont want readability or writeability, then we have nothing to do */
-    if(readable == NULL && writeable == NULL) {
-        if(erroneous != NULL) {
-            FD_ZERO(erroneous);
-        }
-        return 0;
-    }
-
-    GQueue* readyDescsRead = g_queue_new();
-    GQueue* readyDescsWrite = g_queue_new();
-
-    /* first look at shadow internal descriptors */
-    GList* descs = g_hash_table_get_values(host->descriptors);
-    GList* item = g_list_first(descs);
-
-    /* iterate all descriptors */
-    while(item) {
-        Descriptor* desc = item->data;
-        if(desc) {
-            DescriptorStatus status = descriptor_getStatus(desc);
-            if((readable != NULL) && FD_ISSET(desc->handle, readable) && (status & DS_ACTIVE) && (status & DS_READABLE)) {
-                g_queue_push_head(readyDescsRead, GINT_TO_POINTER(desc->handle));
-            }
-            if((writeable != NULL) && FD_ISSET(desc->handle, writeable) && (status & DS_ACTIVE) && (status & DS_WRITABLE)) {
-                g_queue_push_head(readyDescsWrite, GINT_TO_POINTER(desc->handle));
-            }
-        }
-        item = g_list_next(item);
-    }
-    /* cleanup the iterator lists */
-    g_list_free(descs);
-    item = descs = NULL;
-
-    /* now check on OS descriptors */
-    struct timeval zeroTimeout;
-    zeroTimeout.tv_sec = 0;
-    zeroTimeout.tv_usec = 0;
-    fd_set osFDSet;
-
-    /* setup our iterator */
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, host->shadowToOSHandleMap);
-
-    /* iterate all os handles and ask the os for events */
-    while (g_hash_table_iter_next(&iter, &key, &value)) {
-        gint shadowHandle = GPOINTER_TO_INT(key);
-        gint osHandle = GPOINTER_TO_INT(value);
-
-        if ((readable != NULL) && FD_ISSET(shadowHandle, readable)) {
-            FD_ZERO(&osFDSet);
-            FD_SET(osHandle, &osFDSet);
-            select(osHandle+1, &osFDSet, NULL, NULL, &zeroTimeout);
-            if (FD_ISSET(osHandle, &osFDSet)) {
-                g_queue_push_head(readyDescsRead, GINT_TO_POINTER(shadowHandle));
-            }
-        }
-        if ((writeable != NULL) && FD_ISSET(shadowHandle, writeable)) {
-            FD_ZERO(&osFDSet);
-            FD_SET(osHandle, &osFDSet);
-            select(osHandle+1, NULL, &osFDSet, NULL, &zeroTimeout);
-            if (FD_ISSET(osHandle, &osFDSet)) {
-                g_queue_push_head(readyDescsWrite, GINT_TO_POINTER(shadowHandle));
-            }
-        }
-    }
-
-    /* now prepare and return the response, start with empty sets */
-    if(readable != NULL) {
-        FD_ZERO(readable);
-    }
-    if(writeable != NULL) {
-        FD_ZERO(writeable);
-    }
-    if(erroneous != NULL) {
-        FD_ZERO(erroneous);
-    }
-    gint nReady = 0;
-
-    /* mark all of the readable handles */
-    if(readable != NULL) {
-        while(!g_queue_is_empty(readyDescsRead)) {
-            gint handle = GPOINTER_TO_INT(g_queue_pop_head(readyDescsRead));
-            FD_SET(handle, readable);
-            nReady++;
-        }
-    }
-    /* cleanup */
-    g_queue_free(readyDescsRead);
-
-    /* mark all of the writeable handles */
-    if(writeable != NULL) {
-        while(!g_queue_is_empty(readyDescsWrite)) {
-            gint handle = GPOINTER_TO_INT(g_queue_pop_head(readyDescsWrite));
-            FD_SET(handle, writeable);
-            nReady++;
-        }
-    }
-    /* cleanup */
-    g_queue_free(readyDescsWrite);
-
-    /* return the total number of bits that are set in all three fdsets */
-    return nReady;
-}
-
-gint host_poll(Host* host, struct pollfd *pollFDs, nfds_t numPollFDs) {
-    MAGIC_ASSERT(host);
-
-    gint numReady = 0;
-
-    for(nfds_t i = 0; i < numPollFDs; i++) {
-        struct pollfd* pfd = &pollFDs[i];
-        pfd->revents = 0;
-
-        if(pfd->fd == -1) {
-            continue;
-        }
-
-        gboolean exists = host_lookupDescriptor(host, pfd->fd) != NULL;
-        if (exists) {
-            /* descriptor lookup is not NULL */
-            Descriptor* descriptor = host_lookupDescriptor(host, pfd->fd);
-            DescriptorStatus status = descriptor_getStatus(descriptor);
-            if(status & DS_CLOSED) {
-                pfd->revents |= POLLNVAL;
-            }
-
-            if(pfd->events != 0) {
-                if((pfd->events & POLLIN) && (status & DS_ACTIVE) && (status & DS_READABLE)) {
-                    pfd->revents |= POLLIN;
-                }
-                if((pfd->events & POLLOUT) && (status & DS_ACTIVE) && (status & DS_WRITABLE)) {
-                    pfd->revents |= POLLOUT;
-                }
-            }
-        } else {
-            /* check if we have a mapped os fd */
-            gint osfd = host_getOSHandle(host, pfd->fd);
-            if(osfd >= 0) {
-                /* ask the OS, but dont let them block */
-                gint oldfd = pfd->fd;
-                pfd->fd = osfd;
-                gint rc = poll(pfd, (nfds_t)1, 0);
-                pfd->fd = oldfd;
-                if(rc < 0) {
-                    return -1;
-                }
-            }
-        }
-
-        numReady += (pfd->revents == 0) ? 0 : 1;
-    }
-
-    return numReady;
 }
 
 gboolean host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
@@ -1045,33 +789,6 @@ in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
     warning("unable to find free ephemeral port for %s peer %s:%"G_GUINT16_FORMAT,
             protocol_toString(type), peerIPStr, (guint16) ntohs((uint16_t) peerPort));
     return 0;
-}
-
-gint host_shutdownSocket(Host* host, gint handle, gint how) {
-    MAGIC_ASSERT(host);
-
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor == NULL) {
-        warning("descriptor handle '%i' not found", handle);
-        return EBADF;
-    }
-
-    DescriptorStatus status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", handle);
-        return EBADF;
-    }
-
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type == DT_TCPSOCKET) {
-        return tcp_shutdown((TCP*)descriptor, how);
-    } else if(type == DT_UDPSOCKET) {
-        return ENOTCONN;
-    } else if(type == DT_PIPE || type == DT_EPOLL || type == DT_TIMER) {
-        return ENOTSOCK;
-    } else {
-        return 0;
-    }
 }
 
 Tracker* host_getTracker(Host* host) {
