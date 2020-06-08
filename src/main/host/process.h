@@ -11,9 +11,6 @@
 #define _GNU_SOURCE
 #endif
 
-#include <bits/stdint-intn.h>
-#include <bits/types/clockid_t.h>
-#include <bits/types/time_t.h>
 #include <glib.h>
 #include <stdarg.h>
 #include <stdint.h>

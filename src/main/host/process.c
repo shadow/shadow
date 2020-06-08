@@ -10,13 +10,6 @@
 #ifndef __USE_GNU
 #define __USE_GNU 1
 #endif
-#include <bits/stdint-intn.h>
-#include <bits/stdint-uintn.h>
-#include <bits/types/clockid_t.h>
-#include <bits/types/struct_timespec.h>
-#include <bits/types/struct_timeval.h>
-#include <bits/types/struct_tm.h>
-#include <bits/types/time_t.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>

@@ -3,8 +3,6 @@
  * See LICENSE for licensing information
  */
 
-#include <bits/types/struct_rusage.h>
-#include <bits/types/struct_timeval.h>
 #include <errno.h>
 #include <glib.h>
 #include <netinet/in.h>
