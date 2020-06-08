@@ -4,8 +4,6 @@
  * See LICENSE for licensing information
  */
 
-#include <bits/stdint-uintn.h>
-#include <bits/types/struct_timeval.h>
 #include <errno.h>
 #include <glib.h>
 #include <math.h>

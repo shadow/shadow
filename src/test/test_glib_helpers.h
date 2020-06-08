@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <glib.h>
+#include <string.h>
 #include <unistd.h>
 
 #define assert_true_errstring(c, s)                                            \
