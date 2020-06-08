@@ -185,10 +185,18 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // **************************************
         // Needed for tor, but not handled yet:
         // **************************************
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c
+        NATIVE(chown);
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c
+        NATIVE(chmod);
         // Manipulate file descriptor.
         //
         // Called from tor(tor_fopen_cloexec) -> libpthread(__fcntl)
         NATIVE(fcntl);
+#ifdef SYS_fcntl64
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c
+        NATIVE(fcntl64);
+#endif
         // Apply or remove advisory lock on an open file.
         //
         // Called from tor(tor_init) -> ... tor(set_options) -> ...
@@ -205,14 +213,28 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(getdents);
         // Called a few places in libcrypto.
         NATIVE(getrandom);
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c
         NATIVE(getsockopt);
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c
         NATIVE(ioctl);
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c.
+        // It looks like it's configured to only work with signal=0; i.e.
+        // check for process existence, but not actually send a signal.
+        NATIVE(kill);
         NATIVE(lseek);
         NATIVE(mmap);
+#ifdef SYS_mmap2
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c
+        NATIVE(mmap2);
+#endif
         // Only deals in address and offset, so might not need for correctness.
         // Might want it to GC any bookkeeping from corresponding mmap calls,
         // though.
         NATIVE(munmap);
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c
+        NATIVE(open);
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c
+        NATIVE(prctl);
         // Surprisingly, gets called while building the list of local
         // interfaces, using sa_family=AF_NETLINK.
         //
@@ -228,6 +250,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         //
         // Called from pthread(__pthread_initialize_minimal)
         NATIVE(set_robust_list);
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c
         NATIVE(setsockopt);
         // Set pointer to thread ID.
         //
@@ -236,6 +259,10 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         //
         // Called from pthread(__pthread_initialize_minimal)
         NATIVE(set_tid_address);
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c
+        NATIVE(socketpair);
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c
+        NATIVE(time);
 
         // **************************************
         // Not handled (yet):
@@ -294,6 +321,10 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Deals in paths rather than file descriptors. Should be ok to allow
         // natively.
         NATIVE(stat);
+#ifdef SYS_stat64
+        // Whitelisted in tor/src/lib/sandbox/sandbox.c
+        NATIVE(stat64);
+#endif
         // Returns stats on memory, swap, load average.
         //
         // Might be needed for determinism, but the only call I see is actually
