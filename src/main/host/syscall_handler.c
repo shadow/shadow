@@ -187,8 +187,16 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // **************************************
         // Whitelisted in tor/src/lib/sandbox/sandbox.c
         NATIVE(chown);
+        // Found in strace of shadow-plugin-tor integration test.
+        NATIVE(clone);
         // Whitelisted in tor/src/lib/sandbox/sandbox.c
         NATIVE(chmod);
+        // Found in strace of shadow-plugin-tor integration test.
+        NATIVE(eventfd2);
+        // Found in strace of shadow-plugin-tor integration test.
+        NATIVE(fallocate);
+        // Found in strace of shadow-plugin-tor integration test.
+        NATIVE(fchmod);
         // Manipulate file descriptor.
         //
         // Called from tor(tor_fopen_cloexec) -> libpthread(__fcntl)
@@ -202,6 +210,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Called from tor(tor_init) -> ... tor(set_options) -> ...
         // tor(tor_lockfile_lock)
         NATIVE(flock);
+        // Found in strace of shadow-plugin-tor integration test.
+        NATIVE(fstatfs);
         // fast user-space locking. Basically handles blocking until a lock is
         // released, and conversely waking up blocked threads when it is
         // released.
@@ -213,8 +223,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(getdents);
         // Called a few places in libcrypto.
         NATIVE(getrandom);
+        // Found in strace of shadow-plugin-tor integration test.
+        NATIVE(getrlimit);
         // Whitelisted in tor/src/lib/sandbox/sandbox.c
         NATIVE(getsockopt);
+        // Found in strace of shadow-plugin-tor integration test.
+        NATIVE(gettimeofday);
         // Whitelisted in tor/src/lib/sandbox/sandbox.c
         NATIVE(ioctl);
         // Whitelisted in tor/src/lib/sandbox/sandbox.c.
@@ -241,6 +255,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Called from tor(get_interface_addresses_raw) -> libc(getifaddrs) ->
         // libc(if_indextoname)
         NATIVE(recvmsg);
+        // Found in strace of shadow-plugin-tor integration test.
+        NATIVE(setrlimit);
         // get/set list of robust futexes. The  purpose  of  the  robust futex
         // list is to ensure that if a thread accidentally fails to unlock a
         // futex before terminating or calling execve.
@@ -289,9 +305,13 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(getegid);
         // get real user ID of calling process.
         NATIVE(getuid);
+        // Found in strace of shadow-plugin-tor integration test.
+        NATIVE(lstat);
         // give advice to kernel about address range... to improve system or
         // application performance.
         NATIVE(madvise);
+        // Found in strace of shadow-plugin-tor integration test.
+        NATIVE(mkdir);
         // Change access protections of calling process's memory pages.
         NATIVE(mprotect);
         // Expands, shrinks, and/or moves a memory mapping.
