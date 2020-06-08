@@ -26,6 +26,9 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd,
                                                   int flags,
                                                   File** file_desc_out) {
     /* At least one of these values is required according to man page. */
+#ifndef MAP_SHARED_VALIDATE
+#define MAP_SHARED_VALIDATE 0x03
+#endif
     int reqFlags = (MAP_PRIVATE | MAP_SHARED | MAP_SHARED_VALIDATE);
     int reqProt = (PROT_NONE | PROT_READ | PROT_WRITE | PROT_EXEC);
 
@@ -180,7 +183,7 @@ SysCallReturn syscallhandler_mmap(SysCallHandler* sys,
 
     debug("Plugin-native mmap syscall at plugin addr %p with plugin fd %i for "
           "%zu bytes returned %p",
-          addrPtr.val, pluginFD, len, (void*)result);
+          (void*)addrPtr.val, pluginFD, len, (void*)result);
 
     /* Close the file we asked them to open. */
     if (pluginFD >= 0) {

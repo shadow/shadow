@@ -86,7 +86,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 
     debug("Trying to readv from fd %d, ptr %p, size %zu, pos_l %lu, pos_h %lu, "
           "offset %ld, flags %d",
-          fd, iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
+          fd, (void*)iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
 
     Descriptor* desc = NULL;
     const struct iovec* iov;
@@ -199,7 +199,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
 
     debug("Trying to writev to fd %d, ptr %p, size %zu, pos_l %lu, pos_h %lu, "
           "offset %ld, flags %d",
-          fd, iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
+          fd, (void*)iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
 
     Descriptor* desc = NULL;
     const struct iovec* iov;

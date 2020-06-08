@@ -50,7 +50,7 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
                                                 PluginPtr pathnamePtr,
                                                 int flags, mode_t mode) {
     debug("Trying to open file with path name at plugin addr %p",
-          pathnamePtr.val);
+          (void*)pathnamePtr.val);
 
     if (!pathnamePtr.val) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};

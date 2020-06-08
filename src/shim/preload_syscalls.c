@@ -17,6 +17,7 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 
+#include "main/host/syscall/kernel_types.h"
 #include "shim/shim.h"
 #include "shim/shim_event.h"
 #include "shim/shim_logger.h"

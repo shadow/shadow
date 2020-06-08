@@ -54,6 +54,7 @@ struct linux_dirent64 {
  */
 
 #if defined(HAVE_STRUCT_STATX_TIMESTAMP) && HAVE_STRUCT_STATX_TIMESTAMP == 0
+#define DEF_U32 1
 typedef unsigned int __u32;
 typedef long long __s64;
 struct statx_timestamp {
@@ -64,8 +65,10 @@ struct statx_timestamp {
 
 #if defined(HAVE_STRUCT_STATX) && HAVE_STRUCT_STATX == 0
 typedef unsigned short __u16;
-typedef unsigned int __u32;
 typedef long long __u64;
+#ifndef DEF_U32
+typedef unsigned int __u32;
+#endif
 struct statx {
    __u32 stx_mask;        /* Mask of bits indicating
                              filled fields */
