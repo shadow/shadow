@@ -175,7 +175,7 @@ void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gb
     /* Identify which bits changed */
     DescriptorStatus statusesChanged = descriptor->status ^ oldStatus;
 
-    if (statusesChanged && g_hash_table_size(descriptor->listeners) > 0) {
+    if (statusesChanged) {
         /* We execute the handler via a task, to make sure whatever
          * code called adjustStatus finishes it's logic first before
          * the listener callbacks are executed and potentially change

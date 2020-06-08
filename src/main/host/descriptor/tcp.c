@@ -2177,12 +2177,6 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
 gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
     MAGIC_ASSERT(tcp);
 
-    if(tcp->flags & TCPF_LOCAL_CLOSED_WR) {
-        /* The user already called close() or shutdown(SHUT_WR).
-         * TODO: validate Linux error code here. */
-        return -EBADF;
-    }
-
     /* return 0 to signal close, if necessary */
     if(tcp->error & TCPE_SEND_EOF)
     {
@@ -2249,12 +2243,6 @@ static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
 
 gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
     MAGIC_ASSERT(tcp);
-
-    if(tcp->flags & TCPF_LOCAL_CLOSED_RD) {
-        /* The user already called close() or shutdown(SHUT_RD).
-         * TODO: validate Linux error code here. */
-        return -EBADF;
-    }
 
     /*
      * TODO
