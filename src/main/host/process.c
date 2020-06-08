@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <sys/file.h>
 #include <sys/un.h>
@@ -38,6 +39,7 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_table.h"
 #include "main/host/descriptor/descriptor_types.h"
+#include "main/host/descriptor/file.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
@@ -102,8 +104,9 @@ struct _Process {
 
     // TODO add spawned threads
 
-    int stderrFD;
-    int stdoutFD;
+    /* File descriptors to handle plugin out and err streams. */
+    File* stdoutFile;
+    File* stderrFile;
 
     gint referenceCount;
     MAGIC_DECLARE;
@@ -182,6 +185,42 @@ static void _process_check(Process* proc) {
     }
 }
 
+static void _process_openStdIOFileHelper(Process* proc, bool isStdOut) {
+    MAGIC_ASSERT(proc);
+
+    gchar* fileName =
+        g_strdup_printf("%s/%s.%s", host_getDataPath(proc->host),
+                        proc->processName->str,
+                        isStdOut ? "stdout" : "stderr");
+
+    File* stdfile = file_new();
+    int errcode = file_open(stdfile, fileName,
+                            O_WRONLY | O_CREAT | O_TRUNC,
+                            S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+    if (errcode < 0) {
+        error("Opening %s: %s", fileName, strerror(-errcode));
+        /* Unref and free the file object. */
+        descriptor_close((Descriptor*)stdfile);
+    } else {
+        debug("Successfully opened %s file at %s",
+                isStdOut ? "stdout" : "stderr", fileName);
+
+        if(isStdOut) {
+            descriptortable_setStdOut(proc->descTable, (Descriptor*)stdfile);
+            proc->stdoutFile = stdfile;
+        } else {
+            descriptortable_setStdErr(proc->descTable, (Descriptor*)stdfile);
+            proc->stderrFile = stdfile;
+        }
+
+        /* Ref once since both the proc class and the table are storing it. */
+        descriptor_ref((Descriptor*) stdfile);
+    }
+
+    g_free(fileName);
+}
+
 static void _process_start(Process* proc) {
     MAGIC_ASSERT(proc);
 
@@ -191,30 +230,10 @@ static void _process_start(Process* proc) {
     }
 
     // Set up stdout
-    {
-        gchar* stdoutFileName =
-            g_strdup_printf("%s/%s.stdout", host_getDataPath(proc->host),
-                            proc->processName->str);
-        proc->stdoutFD = open(stdoutFileName, O_WRONLY | O_CREAT | O_TRUNC,
-                              S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        if (proc->stdoutFD < 0) {
-            error("Opening %s: %s", stdoutFileName, strerror(errno));
-        }
-        g_free(stdoutFileName);
-    }
+    _process_openStdIOFileHelper(proc, true);
 
     // Set up stderr
-    {
-        gchar* stderrFileName =
-            g_strdup_printf("%s/%s.stderr", host_getDataPath(proc->host),
-                            proc->processName->str);
-        proc->stderrFD = open(stderrFileName, O_WRONLY | O_CREAT | O_TRUNC,
-                              S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        if (proc->stderrFD < 0) {
-            error("Opening %s: %s", stderrFileName, strerror(errno));
-        }
-        g_free(stderrFileName);
-    }
+    _process_openStdIOFileHelper(proc, false);
 
     utility_assert(proc->mainThread == NULL);
     if (proc->interposeMethod == INTERPOSE_PTRACE) {
@@ -237,7 +256,7 @@ static void _process_start(Process* proc) {
 
     proc->plugin.isExecuting = TRUE;
     /* exec the process and call main to start it */
-    thread_run(proc->mainThread, proc->argv, proc->envv, proc->stderrFD, proc->stdoutFD);
+    thread_run(proc->mainThread, proc->argv, proc->envv);
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
 
@@ -402,10 +421,6 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
 
     proc->descTable = descriptortable_new();
 
-    // We'll open these when the process starts.
-    proc->stderrFD = -1;
-    proc->stdoutFD = -1;
-
     proc->referenceCount = 1;
 
     worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_NEW);
@@ -452,11 +467,11 @@ static void _process_free(Process* proc) {
         host_unref(proc->host);
     }
 
-    if (proc->stderrFD >= 0) {
-        close(proc->stderrFD);
+    if (proc->stderrFile) {
+        descriptor_close((Descriptor*)proc->stderrFile);
     }
-    if (proc->stdoutFD >= 0) {
-        close(proc->stdoutFD);
+    if (proc->stdoutFile) {
+        descriptor_close((Descriptor*)proc->stdoutFile);
     }
 
     worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_FREE);

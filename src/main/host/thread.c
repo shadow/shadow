@@ -33,11 +33,10 @@ void thread_unref(Thread* thread) {
     }
 }
 
-void thread_run(Thread* thread, gchar** argv, gchar** envv, int stderrFD,
-                int stdoutFD) {
+void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->run);
-    thread->run(thread, argv, envv, stderrFD, stdoutFD);
+    thread->run(thread, argv, envv);
 }
 
 void thread_resume(Thread* thread) {

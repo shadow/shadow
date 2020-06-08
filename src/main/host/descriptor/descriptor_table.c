@@ -41,7 +41,7 @@ DescriptorTable* descriptortable_new() {
     *table = (DescriptorTable){
         .descriptors = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, descriptor_unref),
         .availableIndices = g_queue_new(),
-        .indexCounter = 2, // the first allocatable index is 3 (due to stdio)
+        .indexCounter = STDERR_FILENO, // the first allocatable index is 3
         .referenceCount = 1
     };
 
