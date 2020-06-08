@@ -623,7 +623,8 @@ int file_getdents64(File* file, struct linux_dirent64* dirp,
     debug("File %i getdents64 os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
-    int result = getdents64(_file_getOSBackedFD(file), dirp, count);
+    int result =
+        (int)syscall(SYS_getdents64, _file_getOSBackedFD(file), dirp, count);
     return (result < 0) ? -errno : result;
 }
 
@@ -781,7 +782,8 @@ int file_renameat2(File* olddir, const char* oldpath, File* newdir,
     debug("File %i renameat2 os-backed file %i",
           olddir ? _file_getFD(olddir) : 0, oldosdirfd);
 
-    int result = renameat2(oldosdirfd, oldpath, newosdirfd, newpath, flags);
+    int result =
+        (int)syscall(SYS_renameat2, oldosdirfd, oldpath, newosdirfd, newpath, flags);
     return (result < 0) ? -errno : result;
 }
 
@@ -790,6 +792,7 @@ int file_statx(File* dir, const char* pathname, int flags, unsigned int mask,
     debug("File %i statx os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
-    int result = statx(_file_getOSDirFD(dir), pathname, flags, mask, statxbuf);
+    int result =
+        (int)syscall(SYS_statx, _file_getOSBackedFD(dir), pathname, flags, mask, statxbuf);
     return (result < 0) ? -errno : result;
 }
