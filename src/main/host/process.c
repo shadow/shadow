@@ -457,21 +457,28 @@ static void _process_free(Process* proc) {
         g_strfreev(proc->envv);
     }
 
+    g_timer_destroy(proc->cpuDelayTimer);
+
+    /* Free the stdio files before the descriptor table.
+     * Closing the descriptors will remove them from the table and the table
+     * will release it's ref. We also need to release our proc ref. */
+    if (proc->stderrFile) {
+        descriptor_close((Descriptor*)proc->stderrFile);
+        descriptor_unref((Descriptor*)proc->stderrFile);
+    }
+    if (proc->stdoutFile) {
+        descriptor_close((Descriptor*)proc->stdoutFile);
+        descriptor_unref((Descriptor*)proc->stdoutFile);
+    }
+
+    /* Now free all remaining descriptors stored in our table. */
     if(proc->descTable) {
         descriptortable_unref(proc->descTable);
     }
 
-    g_timer_destroy(proc->cpuDelayTimer);
-
+    /* And we no longer need to access the host. */
     if (proc->host) {
         host_unref(proc->host);
-    }
-
-    if (proc->stderrFile) {
-        descriptor_close((Descriptor*)proc->stderrFile);
-    }
-    if (proc->stdoutFile) {
-        descriptor_close((Descriptor*)proc->stdoutFile);
     }
 
     worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_FREE);
