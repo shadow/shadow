@@ -14,9 +14,9 @@
 #include "main/core/support/object_counter.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
-#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_listener.h"
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/utility/utility.h"
@@ -198,7 +198,8 @@ static void _epoll_close(Epoll* epoll) {
 
     /* tell the process to stop tracking us, and unref the descriptor.
      * this should trigger _epoll_free in most cases. */
-    process_deregisterDescriptor(descriptor_getOwnerProcess(&epoll->super), &epoll->super);
+    process_deregisterDescriptor(
+        descriptor_getOwnerProcess(&epoll->super), &epoll->super);
 }
 
 static gboolean _epoll_tryToClose(Epoll* epoll) {
@@ -217,10 +218,8 @@ static gboolean _epoll_tryToClose(Epoll* epoll) {
 }
 
 DescriptorFunctionTable epollFunctions = {
-    (DescriptorCloseFunc) _epoll_tryToClose,
-    (DescriptorFreeFunc) _epoll_free,
-    MAGIC_VALUE
-};
+    (DescriptorCloseFunc)_epoll_tryToClose, (DescriptorFreeFunc)_epoll_free,
+    MAGIC_VALUE};
 
 Epoll* epoll_new() {
     Epoll* epoll = g_new0(Epoll, 1);

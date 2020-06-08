@@ -891,14 +891,15 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     guint64 sendBufSize = host_getConfiguredSendBufSize(sys->host);
 
     Socket* sock_desc = NULL;
-    if(type_no_flags == SOCK_STREAM) {
+    if (type_no_flags == SOCK_STREAM) {
         sock_desc = (Socket*)tcp_new(recvBufSize, sendBufSize);
     } else {
         sock_desc = (Socket*)udp_new(recvBufSize, sendBufSize);
     }
 
     /* Now make sure it will be valid when we operate on it. */
-    int sockfd = process_registerDescriptor(sys->process, &sock_desc->super.super);
+    int sockfd =
+        process_registerDescriptor(sys->process, &sock_desc->super.super);
 
     int errcode = _syscallhandler_validateSocketHelper(sys, sockfd, NULL);
     if (errcode != 0) {

@@ -83,15 +83,13 @@ gssize socket_receiveUserData(Socket* socket, gpointer buffer, gsize nBytes,
 }
 
 TransportFunctionTable socket_functions = {
-    (DescriptorCloseFunc) socket_close,
-    (DescriptorFreeFunc) socket_free,
-    (TransportSendFunc) socket_sendUserData,
-    (TransportReceiveFunc) socket_receiveUserData,
-    MAGIC_VALUE
-};
+    (DescriptorCloseFunc)socket_close, (DescriptorFreeFunc)socket_free,
+    (TransportSendFunc)socket_sendUserData,
+    (TransportReceiveFunc)socket_receiveUserData, MAGIC_VALUE};
 
-void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type,
-        guint receiveBufferSize, guint sendBufferSize) {
+void socket_init(Socket* socket, SocketFunctionTable* vtable,
+                 DescriptorType type, guint receiveBufferSize,
+                 guint sendBufferSize) {
     utility_assert(socket && vtable);
 
     transport_init(&(socket->super), &socket_functions, type);

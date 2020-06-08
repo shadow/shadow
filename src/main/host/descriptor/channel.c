@@ -136,12 +136,9 @@ static gssize channel_receiveUserData(Channel* channel, gpointer buffer, gsize n
 }
 
 TransportFunctionTable channel_functions = {
-    (DescriptorCloseFunc) channel_close,
-    (DescriptorFreeFunc) channel_free,
-    (TransportSendFunc) channel_sendUserData,
-    (TransportReceiveFunc) channel_receiveUserData,
-    MAGIC_VALUE
-};
+    (DescriptorCloseFunc)channel_close, (DescriptorFreeFunc)channel_free,
+    (TransportSendFunc)channel_sendUserData,
+    (TransportReceiveFunc)channel_receiveUserData, MAGIC_VALUE};
 
 Channel* channel_new(ChannelType type) {
     Channel* channel = g_new0(Channel, 1);

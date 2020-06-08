@@ -27,12 +27,11 @@ gboolean transport_close(Transport* transport) {
 }
 
 DescriptorFunctionTable transport_functions = {
-    (DescriptorCloseFunc) transport_close,
-    (DescriptorFreeFunc) transport_free,
-    MAGIC_VALUE
-};
+    (DescriptorCloseFunc)transport_close, (DescriptorFreeFunc)transport_free,
+    MAGIC_VALUE};
 
-void transport_init(Transport* transport, TransportFunctionTable* vtable, DescriptorType type) {
+void transport_init(Transport* transport, TransportFunctionTable* vtable,
+                    DescriptorType type) {
     utility_assert(transport && vtable);
 
     descriptor_init(&(transport->super), type, &transport_functions);
@@ -41,7 +40,6 @@ void transport_init(Transport* transport, TransportFunctionTable* vtable, Descri
     MAGIC_INIT(vtable);
 
     transport->vtable = vtable;
-
 }
 
 gssize transport_sendUserData(Transport* transport, gconstpointer buffer, gsize nBytes,

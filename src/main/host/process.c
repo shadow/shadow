@@ -190,12 +190,10 @@ static void _process_openStdIOFileHelper(Process* proc, bool isStdOut) {
 
     gchar* fileName =
         g_strdup_printf("%s/%s.%s", host_getDataPath(proc->host),
-                        proc->processName->str,
-                        isStdOut ? "stdout" : "stderr");
+                        proc->processName->str, isStdOut ? "stdout" : "stderr");
 
     File* stdfile = file_new();
-    int errcode = file_open(stdfile, fileName,
-                            O_WRONLY | O_CREAT | O_TRUNC,
+    int errcode = file_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
                             S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
     if (errcode < 0) {
@@ -204,9 +202,9 @@ static void _process_openStdIOFileHelper(Process* proc, bool isStdOut) {
         descriptor_close((Descriptor*)stdfile);
     } else {
         debug("Successfully opened %s file at %s",
-                isStdOut ? "stdout" : "stderr", fileName);
+              isStdOut ? "stdout" : "stderr", fileName);
 
-        if(isStdOut) {
+        if (isStdOut) {
             descriptortable_setStdOut(proc->descTable, (Descriptor*)stdfile);
             proc->stdoutFile = stdfile;
         } else {
@@ -215,7 +213,7 @@ static void _process_openStdIOFileHelper(Process* proc, bool isStdOut) {
         }
 
         /* Ref once since both the proc class and the table are storing it. */
-        descriptor_ref((Descriptor*) stdfile);
+        descriptor_ref((Descriptor*)stdfile);
     }
 
     g_free(fileName);
@@ -472,7 +470,7 @@ static void _process_free(Process* proc) {
     }
 
     /* Now free all remaining descriptors stored in our table. */
-    if(proc->descTable) {
+    if (proc->descTable) {
         descriptortable_unref(proc->descTable);
     }
 
@@ -515,9 +513,9 @@ int process_registerDescriptor(Process* proc, Descriptor* desc) {
 void process_deregisterDescriptor(Process* proc, Descriptor* desc) {
     MAGIC_ASSERT(proc);
 
-    if(desc) {
+    if (desc) {
         DescriptorType dType = descriptor_getType(desc);
-        if(dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
+        if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
             host_disassociateInterface(proc->host, (Socket*)desc);
         }
         descriptor_setOwnerProcess(desc, NULL);

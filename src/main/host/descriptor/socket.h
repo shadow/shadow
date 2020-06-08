@@ -77,8 +77,9 @@ struct _Socket {
     MAGIC_DECLARE;
 };
 
-void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type,
-        guint receiveBufferSize, guint sendBufferSize);
+void socket_init(Socket* socket, SocketFunctionTable* vtable,
+                 DescriptorType type, guint receiveBufferSize,
+                 guint sendBufferSize);
 
 void socket_pushInPacket(Socket* socket, Packet* packet);
 void socket_dropPacket(Socket* socket, Packet* packet);

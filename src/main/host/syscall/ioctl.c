@@ -22,13 +22,16 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static int _syscallhandler_ioctlHelper(SysCallHandler* sys, File* file, int fd, unsigned long request, PluginPtr argPtr) {
+static int _syscallhandler_ioctlHelper(SysCallHandler* sys, File* file, int fd,
+                                       unsigned long request,
+                                       PluginPtr argPtr) {
     int result = 0;
 
-    switch(request) {
+    switch (request) {
         default: {
             result = -EINVAL;
-            warning("We do not yet handle ioctl request %lu on file %i", request, fd);
+            warning("We do not yet handle ioctl request %lu on file %i",
+                    request, fd);
             break;
         }
     }
@@ -50,7 +53,7 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
 
     Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
     int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
-    if(errcode < 0) {
+    if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
@@ -60,19 +63,21 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
     DescriptorType dtype = descriptor_getType(desc);
 
     int result = 0;
-    if(dtype == DT_FILE) {
-        result = _syscallhandler_ioctlHelper(sys, (File*)desc, fd, request, argPtr);
-    } else if((dtype == DT_TCPSOCKET || dtype == DT_UDPSOCKET) && (isInbufLenRequest || isOutbufLenRequest)) {
+    if (dtype == DT_FILE) {
+        result =
+            _syscallhandler_ioctlHelper(sys, (File*)desc, fd, request, argPtr);
+    } else if ((dtype == DT_TCPSOCKET || dtype == DT_UDPSOCKET) &&
+               (isInbufLenRequest || isOutbufLenRequest)) {
         size_t buflen = 0;
 
-        if(dtype == DT_TCPSOCKET) {
-            if(isInbufLenRequest) {
+        if (dtype == DT_TCPSOCKET) {
+            if (isInbufLenRequest) {
                 buflen = tcp_getInputBufferLength((TCP*)desc);
             } else {
                 buflen = tcp_getOutputBufferLength((TCP*)desc);
             }
         } else {
-            if(isInbufLenRequest) {
+            if (isInbufLenRequest) {
                 buflen = socket_getInputBufferLength((Socket*)desc);
             } else {
                 buflen = socket_getOutputBufferLength((Socket*)desc);
@@ -82,7 +87,8 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
         int* lenout = thread_getWriteablePtr(sys->thread, argPtr, sizeof(int));
         *lenout = (int)buflen;
     } else {
-        warning("We do not support ioctl request %lu on descriptor %i", request, fd);
+        warning("We do not support ioctl request %lu on descriptor %i", request,
+                fd);
         result = -ENOTTY;
     }
 

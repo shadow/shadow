@@ -29,7 +29,8 @@ static void _test_mmap() {
     assert_nonneg_errno(snprintf(msg, MAPLEN, "Hello world!"));
 
     /* Do the mmap and write the message into the resulting mem location. */
-    void* mapbuf = mmap(NULL, MAPLEN, PROT_READ|PROT_WRITE, MAP_SHARED, tempFD, 0);
+    void* mapbuf =
+        mmap(NULL, MAPLEN, PROT_READ | PROT_WRITE, MAP_SHARED, tempFD, 0);
     g_assert_cmpint((long)mapbuf, !=, -1);
 
     assert_nonneg_errno(snprintf(mapbuf, MAPLEN, "%s", msg));

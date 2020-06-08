@@ -350,8 +350,8 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/file/read", _test_read);
     g_test_add_func("/file/fwrite", _test_fwrite);
     g_test_add_func("/file/fread", _test_fread);
-//    TODO: debug and fix iov test
-//    g_test_add_func("/file/iov", _test_iov);
+    //    TODO: debug and fix iov test
+    //    g_test_add_func("/file/iov", _test_iov);
     g_test_add_func("/file/fprintf", _test_fprintf);
     g_test_add_func("/file/fscanf", _test_fscanf);
     g_test_add_func("/file/chmod", _test_chmod);

@@ -658,14 +658,16 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
                     /* if i was the server's last child and its waiting to close, close it */
                     if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
                         /* this will unbind from the network interface and free socket */
-                        Descriptor* parentDesc = (Descriptor*) parent;
-                        process_deregisterDescriptor(descriptor_getOwnerProcess(parentDesc), parentDesc);
+                        Descriptor* parentDesc = (Descriptor*)parent;
+                        process_deregisterDescriptor(
+                            descriptor_getOwnerProcess(parentDesc), parentDesc);
                     }
                 }
 
                 /* this will unbind from the network interface and free socket */
-                Descriptor* desc = (Descriptor*) tcp;
-                process_deregisterDescriptor(descriptor_getOwnerProcess(desc), desc);
+                Descriptor* desc = (Descriptor*)tcp;
+                process_deregisterDescriptor(
+                    descriptor_getOwnerProcess(desc), desc);
             }
             break;
         }
@@ -1866,7 +1868,9 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
                 guint64 sendBufSize = host_getConfiguredSendBufSize(node);
 
                 TCP* multiplexed = tcp_new(recvBufSize, sendBufSize);
-                process_registerDescriptor(descriptor_getOwnerProcess((Descriptor*)tcp), (Descriptor*)multiplexed);
+                process_registerDescriptor(
+                    descriptor_getOwnerProcess((Descriptor*)tcp),
+                    (Descriptor*)multiplexed);
 
                 multiplexed->child = _tcpchild_new(multiplexed, tcp, header->sourceIP, header->sourcePort);
                 utility_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
@@ -2495,22 +2499,22 @@ gint tcp_shutdown(TCP* tcp, gint how) {
 
 /* we implement the socket interface, this describes our function suite */
 SocketFunctionTable tcp_functions = {
-    (DescriptorCloseFunc) tcp_close,
-    (DescriptorFreeFunc) tcp_free,
-    (TransportSendFunc) tcp_sendUserData,
-    (TransportReceiveFunc) tcp_receiveUserData,
-    (SocketProcessFunc) tcp_processPacket,
-    (SocketIsFamilySupportedFunc) tcp_isFamilySupported,
-    (SocketConnectToPeerFunc) tcp_connectToPeer,
-    (SocketDropFunc) tcp_dropPacket,
-    MAGIC_VALUE
-};
+    (DescriptorCloseFunc)tcp_close,
+    (DescriptorFreeFunc)tcp_free,
+    (TransportSendFunc)tcp_sendUserData,
+    (TransportReceiveFunc)tcp_receiveUserData,
+    (SocketProcessFunc)tcp_processPacket,
+    (SocketIsFamilySupportedFunc)tcp_isFamilySupported,
+    (SocketConnectToPeerFunc)tcp_connectToPeer,
+    (SocketDropFunc)tcp_dropPacket,
+    MAGIC_VALUE};
 
 TCP* tcp_new(guint receiveBufferSize, guint sendBufferSize) {
     TCP* tcp = g_new0(TCP, 1);
     MAGIC_INIT(tcp);
 
-    socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, receiveBufferSize, sendBufferSize);
+    socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, receiveBufferSize,
+                sendBufferSize);
 
     Options* options = worker_getOptions();
     guint32 initial_window = options_getTCPWindow(options);

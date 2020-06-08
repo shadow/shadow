@@ -12,8 +12,8 @@
  *   linux_dirent64 structure yourself.
  */
 
-#include <sys/types.h>
 #include <dirent.h>
+#include <sys/types.h>
 
 // clang-format off
 struct linux_dirent {

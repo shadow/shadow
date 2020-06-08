@@ -79,7 +79,8 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     /* Get and check the epoll descriptor. */
-    Descriptor* descriptor = process_getRegisteredDescriptor(sys->process, epfd);
+    Descriptor* descriptor =
+        process_getRegisteredDescriptor(sys->process, epfd);
     gint errorCode = _syscallhandler_validateDescriptor(descriptor, DT_EPOLL);
 
     if (errorCode) {
@@ -96,10 +97,10 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     descriptor = process_getRegisteredDescriptor(sys->process, fd);
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
-    if(errorCode) {
+    if (errorCode) {
         info("Child %i is not a shadow descriptor", fd);
         return (SysCallReturn){
-                    .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
 
     const struct epoll_event* event =

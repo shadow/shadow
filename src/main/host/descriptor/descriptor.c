@@ -11,13 +11,13 @@
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor_listener.h"
-#include "main/host/process.h"
 #include "main/host/host.h"
+#include "main/host/process.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
 void descriptor_init(Descriptor* descriptor, DescriptorType type,
-        DescriptorFunctionTable* funcTable) {
+                     DescriptorFunctionTable* funcTable) {
     utility_assert(descriptor && funcTable);
 
     MAGIC_INIT(descriptor);
@@ -57,7 +57,8 @@ void descriptor_ref(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     (descriptor->referenceCount)++;
-    debug("Descriptor %i ref++ to %i", descriptor->handle, descriptor->referenceCount);
+    debug("Descriptor %i ref++ to %i", descriptor->handle,
+          descriptor->referenceCount);
 }
 
 void descriptor_unref(gpointer data) {
@@ -65,7 +66,8 @@ void descriptor_unref(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     (descriptor->referenceCount)--;
-    debug("Descriptor %i ref-- to %i", descriptor->handle, descriptor->referenceCount);
+    debug("Descriptor %i ref-- to %i", descriptor->handle,
+          descriptor->referenceCount);
 
     utility_assert(descriptor->referenceCount >= 0);
     if(descriptor->referenceCount == 0) {
@@ -79,7 +81,7 @@ void descriptor_close(Descriptor* descriptor) {
     MAGIC_ASSERT(descriptor->funcTable);
     debug("Descriptor %i calling vtable close now", descriptor->handle);
     descriptor_adjustStatus(descriptor, DS_CLOSED, TRUE);
-    if(descriptor->funcTable->close(descriptor) && descriptor->ownerProcess) {
+    if (descriptor->funcTable->close(descriptor) && descriptor->ownerProcess) {
         process_deregisterDescriptor(descriptor->ownerProcess, descriptor);
     }
 }

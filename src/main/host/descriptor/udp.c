@@ -199,22 +199,22 @@ gboolean udp_close(UDP* udp) {
 
 /* we implement the socket interface, this describes our function suite */
 SocketFunctionTable udp_functions = {
-    (DescriptorCloseFunc) udp_close,
-    (DescriptorFreeFunc) udp_free,
-    (TransportSendFunc) udp_sendUserData,
-    (TransportReceiveFunc) udp_receiveUserData,
-    (SocketProcessFunc) udp_processPacket,
-    (SocketIsFamilySupportedFunc) udp_isFamilySupported,
-    (SocketConnectToPeerFunc) udp_connectToPeer,
-    (SocketDropFunc) udp_dropPacket,
-    MAGIC_VALUE
-};
+    (DescriptorCloseFunc)udp_close,
+    (DescriptorFreeFunc)udp_free,
+    (TransportSendFunc)udp_sendUserData,
+    (TransportReceiveFunc)udp_receiveUserData,
+    (SocketProcessFunc)udp_processPacket,
+    (SocketIsFamilySupportedFunc)udp_isFamilySupported,
+    (SocketConnectToPeerFunc)udp_connectToPeer,
+    (SocketDropFunc)udp_dropPacket,
+    MAGIC_VALUE};
 
 UDP* udp_new(guint receiveBufferSize, guint sendBufferSize) {
     UDP* udp = g_new0(UDP, 1);
     MAGIC_INIT(udp);
 
-    socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, receiveBufferSize, sendBufferSize);
+    socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, receiveBufferSize,
+                sendBufferSize);
 
     /* we are immediately active because UDP doesnt wait for accept or connect */
     descriptor_adjustStatus((Descriptor*) udp, DS_ACTIVE|DS_WRITABLE, TRUE);

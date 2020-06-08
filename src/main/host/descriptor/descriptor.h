@@ -9,12 +9,12 @@
 
 #include <glib.h>
 
-#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/descriptor_listener.h"
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/process.h"
 
 void descriptor_init(Descriptor* descriptor, DescriptorType type,
-        DescriptorFunctionTable* funcTable);
+                     DescriptorFunctionTable* funcTable);
 void descriptor_ref(gpointer data);
 void descriptor_unref(gpointer data);
 void descriptor_close(Descriptor* descriptor);

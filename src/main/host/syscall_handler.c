@@ -19,8 +19,6 @@
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
-#include "main/host/syscall_handler.h"
-#include "main/host/syscall_types.h"
 #include "main/host/syscall/epoll.h"
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
@@ -32,6 +30,8 @@
 #include "main/host/syscall/time.h"
 #include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
+#include "main/host/syscall_handler.h"
+#include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "support/logger/logger.h"
 

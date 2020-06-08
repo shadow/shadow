@@ -15,8 +15,8 @@
 #include "main/core/support/object_counter.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
-#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/host.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
@@ -62,10 +62,8 @@ static void _timer_free(Timer* timer) {
 }
 
 static DescriptorFunctionTable _timerFunctions = {
-    (DescriptorCloseFunc) _timer_close,
-    (DescriptorFreeFunc) _timer_free,
-    MAGIC_VALUE
-};
+    (DescriptorCloseFunc)_timer_close, (DescriptorFreeFunc)_timer_free,
+    MAGIC_VALUE};
 
 Timer* timer_new(gint clockid, gint flags) {
     if(clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC) {

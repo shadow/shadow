@@ -20,18 +20,19 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd, unsigned long command, PluginPtr argPtr) {
+static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
+                                       unsigned long command,
+                                       PluginPtr argPtr) {
     int result = 0;
 
-    switch(command) {
+    switch (command) {
         case F_GETFD:
         case F_GETFL:
         case F_GETOWN:
         case F_GETSIG:
         case F_GETLEASE:
         case F_GETPIPE_SZ:
-        case F_GET_SEALS:
-        {
+        case F_GET_SEALS: {
             // arg is ignored
             result = file_fcntl(file, command, NULL);
             break;
@@ -44,20 +45,20 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd, 
         case F_SETLEASE:
         case F_NOTIFY:
         case F_SETPIPE_SZ:
-        case F_ADD_SEALS:
-        {
+        case F_ADD_SEALS: {
             // arg is an int
             result = file_fcntl(file, command, (void*)argPtr.val);
             break;
         }
 
         case F_GETLK:
-        case F_OFD_GETLK:
-        {
-            const struct flock* flk_in = thread_getReadablePtr(sys->thread, argPtr, sizeof(*flk_in));
+        case F_OFD_GETLK: {
+            const struct flock* flk_in =
+                thread_getReadablePtr(sys->thread, argPtr, sizeof(*flk_in));
             result = file_fcntl(file, command, (void*)flk_in);
 
-            struct flock* flk_out = thread_getWriteablePtr(sys->thread, argPtr, sizeof(*flk_out));
+            struct flock* flk_out =
+                thread_getWriteablePtr(sys->thread, argPtr, sizeof(*flk_out));
 
             memcpy(flk_out, flk_in, sizeof(*flk_out));
             break;
@@ -66,52 +67,52 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd, 
         case F_SETLK:
         case F_OFD_SETLK:
         case F_SETLKW:
-        case F_OFD_SETLKW:
-        {
-            const struct flock* flk = thread_getReadablePtr(sys->thread, argPtr, sizeof(*flk));
+        case F_OFD_SETLKW: {
+            const struct flock* flk =
+                thread_getReadablePtr(sys->thread, argPtr, sizeof(*flk));
             result = file_fcntl(file, command, (void*)flk);
             break;
         }
 
-        case F_GETOWN_EX:
-        {
-            struct f_owner_ex* foe = thread_getWriteablePtr(sys->thread, argPtr, sizeof(*foe));
+        case F_GETOWN_EX: {
+            struct f_owner_ex* foe =
+                thread_getWriteablePtr(sys->thread, argPtr, sizeof(*foe));
             result = file_fcntl(file, command, foe);
             break;
         }
 
-        case F_SETOWN_EX:
-        {
-            const struct f_owner_ex* foe = thread_getReadablePtr(sys->thread, argPtr, sizeof(*foe));
+        case F_SETOWN_EX: {
+            const struct f_owner_ex* foe =
+                thread_getReadablePtr(sys->thread, argPtr, sizeof(*foe));
             result = file_fcntl(file, command, (void*)foe);
             break;
         }
 
         case F_GET_RW_HINT:
-        case F_GET_FILE_RW_HINT:
-        {
-            uint64_t* hint = thread_getWriteablePtr(sys->thread, argPtr, sizeof(*hint));
+        case F_GET_FILE_RW_HINT: {
+            uint64_t* hint =
+                thread_getWriteablePtr(sys->thread, argPtr, sizeof(*hint));
             result = file_fcntl(file, command, hint);
             break;
         }
 
         case F_SET_RW_HINT:
-        case F_SET_FILE_RW_HINT:
-        {
-            const uint64_t* hint = thread_getReadablePtr(sys->thread, argPtr, sizeof(*hint));
+        case F_SET_FILE_RW_HINT: {
+            const uint64_t* hint =
+                thread_getReadablePtr(sys->thread, argPtr, sizeof(*hint));
             result = file_fcntl(file, command, (void*)hint);
             break;
         }
 
         case F_DUPFD:
-        case F_DUPFD_CLOEXEC:
-        {
+        case F_DUPFD_CLOEXEC: {
             // TODO: update this once we implement dup
             // no break: fall through to default case
         }
 
         default: {
-            warning("We do not yet handle fcntl command %lu on file %i", command, fd);
+            warning("We do not yet handle fcntl command %lu on file %i",
+                    command, fd);
             result = -EINVAL; // kernel does not recognize command
             break;
         }
@@ -134,16 +135,17 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
 
     Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
     int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
-    if(errcode < 0) {
+    if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
     int result = 0;
-    if(descriptor_getType(desc) == DT_FILE) {
-        result = _syscallhandler_fcntlHelper(sys, (File*)desc, fd, command, argPtr);
+    if (descriptor_getType(desc) == DT_FILE) {
+        result =
+            _syscallhandler_fcntlHelper(sys, (File*)desc, fd, command, argPtr);
     } else {
         /* TODO: add additional support for important operations. */
-        switch(command) {
+        switch (command) {
             case F_GETFL: {
                 result = descriptor_getFlags(desc);
                 break;
@@ -153,7 +155,8 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
                 break;
             }
             default: {
-                warning("We do not support fcntl command %lu on descriptor %i", command, fd);
+                warning("We do not support fcntl command %lu on descriptor %i",
+                        command, fd);
                 result = -EINVAL; // kernel does not recognize command
                 break;
             }

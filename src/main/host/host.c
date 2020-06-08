@@ -497,7 +497,6 @@ void host_disassociateInterface(Host* host, Socket* socket) {
         NetworkInterface* interface = host_lookupInterface(host, bindAddress);
         networkinterface_disassociate(interface, socket);
     }
-
 }
 
 guint64 host_getConfiguredRecvBufSize(Host* host) {
