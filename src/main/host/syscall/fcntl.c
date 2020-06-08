@@ -11,6 +11,7 @@
 
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/file.h"
+#include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
 #include "support/logger/logger.h"
@@ -131,7 +132,7 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
 
     debug("fcntl called on fd %d for command %lu", fd, command);
 
-    Descriptor* desc = host_lookupDescriptor(sys->host, fd);
+    Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
     int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
     if(errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};

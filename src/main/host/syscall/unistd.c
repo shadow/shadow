@@ -43,38 +43,31 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    /* Create and check the pipe descriptor. */
-    Descriptor* pipeReader = host_createDescriptor(sys->host, DT_PIPE);
-    utility_assert(pipeReader);
-    gint errorCode = _syscallhandler_validateDescriptor(pipeReader, DT_PIPE);
-    utility_assert(errorCode == 0);
-
-    /* A pipe descriptor is actually simulated with our Channel object,
-     * the other end of which will represent the write end. */
-    Descriptor* pipeWriter =
-        (Descriptor*)channel_getLinkedChannel((Channel*)pipeReader);
-    utility_assert(pipeWriter);
-    errorCode = _syscallhandler_validateDescriptor(pipeWriter, DT_PIPE);
-    utility_assert(errorCode == 0);
+    /* A pipe descriptor is simulated with our Channel object, where
+     * one side is readonly, the other is writeonly. */
+    Channel* pipeReader = channel_new(CT_READONLY);
+    Channel* pipeWriter = channel_new(CT_WRITEONLY);
+    channel_setLinkedChannel(pipeReader, pipeWriter);
+    channel_setLinkedChannel(pipeWriter, pipeReader);
 
     /* Set any options that were given. */
     if (flags & O_NONBLOCK) {
-        descriptor_addFlags(pipeReader, O_NONBLOCK);
-        descriptor_addFlags(pipeWriter, O_NONBLOCK);
+        descriptor_addFlags((Descriptor*)pipeReader, O_NONBLOCK);
+        descriptor_addFlags((Descriptor*)pipeWriter, O_NONBLOCK);
     }
     if (flags & O_CLOEXEC) {
-        descriptor_addFlags(pipeReader, O_CLOEXEC);
-        descriptor_addFlags(pipeWriter, O_CLOEXEC);
+        descriptor_addFlags((Descriptor*)pipeReader, O_CLOEXEC);
+        descriptor_addFlags((Descriptor*)pipeWriter, O_CLOEXEC);
     }
 
     /* Return the pipe fds to the caller. */
     size_t sizeNeeded = sizeof(int) * 2;
     gint* pipefd = thread_getWriteablePtr(sys->thread, pipefdPtr, sizeNeeded);
-    pipefd[0] = descriptor_getHandle(pipeReader);
-    pipefd[1] = descriptor_getHandle(pipeWriter);
 
-    debug("pipe() returning reader fd %i and writer fd %i",
-          descriptor_getHandle(pipeReader), descriptor_getHandle(pipeWriter));
+    pipefd[0] = process_registerDescriptor(sys->process, (Descriptor*)pipeReader);
+    pipefd[1] = process_registerDescriptor(sys->process, (Descriptor*)pipeWriter);
+
+    debug("Created pipe reader fd %i and writer fd %i", pipefd[0], pipefd[1]);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
@@ -83,7 +76,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
     debug("trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
 
     /* Get the descriptor. */
-    Descriptor* desc = host_lookupDescriptor(sys->host, fd);
+    Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
     if (!desc) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
@@ -177,7 +170,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
     debug("trying to write %zu bytes on fd %i at offset %li", bufSize, fd, offset);
 
     /* Get the descriptor. */
-    Descriptor* desc = host_lookupDescriptor(sys->host, fd);
+    Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
     if (!desc) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
@@ -282,7 +275,7 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    Descriptor* descriptor = host_lookupDescriptor(sys->host, fd);
+    Descriptor* descriptor = process_getRegisteredDescriptor(sys->process, fd);
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
     if (descriptor && !errorCode) {

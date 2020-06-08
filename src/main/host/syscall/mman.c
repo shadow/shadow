@@ -12,6 +12,7 @@
 
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/file.h"
+#include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
 #include "support/logger/logger.h"
@@ -41,7 +42,7 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd,
 
     /* We only need a file if it's not an anonymous mapping. */
     if(!(flags & MAP_ANONYMOUS)) {
-        Descriptor* desc = host_lookupDescriptor(sys->host, fd);
+        Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
         int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
         if (errcode) {
             info("Invalid fd %i", fd);

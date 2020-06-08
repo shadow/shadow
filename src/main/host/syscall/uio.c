@@ -10,6 +10,7 @@
 
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/file.h"
+#include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/socket.h"
 #include "main/host/thread.h"
@@ -22,7 +23,7 @@
 static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, PluginPtr iovPtr, unsigned long iovlen, off_t offset,
         Descriptor** desc_out, const struct iovec** iov_out) {
     /* Get the descriptor. */
-    Descriptor* desc = host_lookupDescriptor(sys->host, fd);
+    Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
     if (!desc) {
         return -EBADF;
     }

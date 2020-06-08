@@ -658,12 +658,14 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
                     /* if i was the server's last child and its waiting to close, close it */
                     if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
                         /* this will unbind from the network interface and free socket */
-                        host_closeDescriptor(worker_getActiveHost(), parent->super.super.super.handle);
+                        Descriptor* parentDesc = (Descriptor*) parent;
+                        process_deregisterDescriptor(descriptor_getOwnerProcess(parentDesc), parentDesc);
                     }
                 }
 
                 /* this will unbind from the network interface and free socket */
-                host_closeDescriptor(worker_getActiveHost(), tcp->super.super.super.handle);
+                Descriptor* desc = (Descriptor*) tcp;
+                process_deregisterDescriptor(descriptor_getOwnerProcess(desc), desc);
             }
             break;
         }
@@ -1860,8 +1862,11 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
                 /* we need to multiplex a new child */
                 Host* node = worker_getActiveHost();
-                TCP* multiplexed =
-                    (TCP*)host_createDescriptor(node, DT_TCPSOCKET);
+                guint64 recvBufSize = host_getConfiguredRecvBufSize(node);
+                guint64 sendBufSize = host_getConfiguredSendBufSize(node);
+
+                TCP* multiplexed = tcp_new(recvBufSize, sendBufSize);
+                process_registerDescriptor(descriptor_getOwnerProcess((Descriptor*)tcp), (Descriptor*)multiplexed);
 
                 multiplexed->child = _tcpchild_new(multiplexed, tcp, header->sourceIP, header->sourcePort);
                 utility_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
@@ -2419,8 +2424,11 @@ void tcp_free(TCP* tcp) {
     worker_countObject(OBJECT_TYPE_TCP, COUNTER_TYPE_FREE);
 }
 
-void tcp_close(TCP* tcp) {
+gboolean tcp_close(TCP* tcp) {
     MAGIC_ASSERT(tcp);
+
+    /* We always return FALSE because we handle process deregististration
+     * on our own. */
 
     debug("%s <-> %s:  user closed connection", tcp->super.boundString, tcp->super.peerString);
     tcp->flags |= TCPF_LOCAL_CLOSED_WR;
@@ -2433,7 +2441,7 @@ void tcp_close(TCP* tcp) {
         case TCPS_LISTEN:
         case TCPS_SYNSENT: {
             _tcp_setState(tcp, TCPS_CLOSED);
-            return;
+            return FALSE;
         }
 
         case TCPS_SYNRECEIVED:
@@ -2454,16 +2462,18 @@ void tcp_close(TCP* tcp) {
         case TCPS_TIMEWAIT:
         case TCPS_LASTACK: {
             /* close was already called, do nothing */
-            return;
+            return FALSE;
         }
 
         default: {
             /* if we didnt start connection yet, we still want to make sure
              * we set the state to closed so we unbind the socket */
             _tcp_setState(tcp, TCPS_CLOSED);
-            return;
+            return FALSE;
         }
     }
+
+    return FALSE;
 }
 
 gint tcp_shutdown(TCP* tcp, gint how) {
@@ -2497,8 +2507,8 @@ gint tcp_shutdown(TCP* tcp, gint how) {
 
 /* we implement the socket interface, this describes our function suite */
 SocketFunctionTable tcp_functions = {
-    (DescriptorFunc) tcp_close,
-    (DescriptorFunc) tcp_free,
+    (DescriptorCloseFunc) tcp_close,
+    (DescriptorFreeFunc) tcp_free,
     (TransportSendFunc) tcp_sendUserData,
     (TransportReceiveFunc) tcp_receiveUserData,
     (SocketProcessFunc) tcp_processPacket,
@@ -2508,11 +2518,11 @@ SocketFunctionTable tcp_functions = {
     MAGIC_VALUE
 };
 
-TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
+TCP* tcp_new(guint receiveBufferSize, guint sendBufferSize) {
     TCP* tcp = g_new0(TCP, 1);
     MAGIC_INIT(tcp);
 
-    socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, handle, receiveBufferSize, sendBufferSize);
+    socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, receiveBufferSize, sendBufferSize);
 
     Options* options = worker_getOptions();
     guint32 initial_window = options_getTCPWindow(options);

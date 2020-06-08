@@ -9,58 +9,22 @@
 
 #include <glib.h>
 
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/descriptor_listener.h"
-#include "main/host/descriptor/descriptor_status.h"
-#include "main/utility/utility.h"
-
-typedef enum _DescriptorType DescriptorType;
-enum _DescriptorType {
-    DT_NONE,
-    DT_TCPSOCKET,
-    DT_UDPSOCKET,
-    DT_PIPE,
-    DT_SOCKETPAIR,
-    DT_EPOLL,
-    DT_TIMER,
-    DT_FILE,
-};
-
-typedef struct _Descriptor Descriptor;
-typedef struct _DescriptorFunctionTable DescriptorFunctionTable;
-
-/* required functions */
-typedef void (*DescriptorFunc)(Descriptor* descriptor);
-
-/*
- * Virtual function table for base descriptor, storing pointers to required
- * callable functions.
- */
-struct _DescriptorFunctionTable {
-    DescriptorFunc close;
-    DescriptorFunc free;
-    MAGIC_DECLARE;
-};
-
-struct _Descriptor {
-    DescriptorFunctionTable* funcTable;
-    gint handle;
-    DescriptorType type;
-    DescriptorStatus status;
-    GHashTable* listeners;
-    gint referenceCount;
-    gint flags;
-    MAGIC_DECLARE;
-};
+#include "main/host/process.h"
 
 void descriptor_init(Descriptor* descriptor, DescriptorType type,
-        DescriptorFunctionTable* funcTable, gint handle);
+        DescriptorFunctionTable* funcTable);
 void descriptor_ref(gpointer data);
 void descriptor_unref(gpointer data);
 void descriptor_close(Descriptor* descriptor);
 gint descriptor_compare(const Descriptor* foo, const Descriptor* bar, gpointer user_data);
 
-DescriptorType descriptor_getType(Descriptor* descriptor);
+void descriptor_setHandle(Descriptor* descriptor, gint handle);
 gint descriptor_getHandle(Descriptor* descriptor);
+void descriptor_setOwnerProcess(Descriptor* descriptor, Process* ownerProcess);
+Process* descriptor_getOwnerProcess(Descriptor* descriptor);
+DescriptorType descriptor_getType(Descriptor* descriptor);
 gint* descriptor_getHandleReference(Descriptor* descriptor);
 
 gint descriptor_getFlags(Descriptor* descriptor);

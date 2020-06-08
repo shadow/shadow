@@ -15,6 +15,7 @@
 #include "main/core/support/object_counter.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/host.h"
 #include "main/utility/utility.h"
@@ -41,13 +42,15 @@ struct _Timer {
     MAGIC_DECLARE;
 };
 
-static void _timer_close(Timer* timer) {
+static gboolean _timer_close(Timer* timer) {
     MAGIC_ASSERT(timer);
     debug("timer fd %i closing now", timer->super.handle);
     timer->isClosed = TRUE;
     descriptor_adjustStatus(&(timer->super), DS_ACTIVE, FALSE);
     if (timer->super.handle > 0) {
-        host_closeDescriptor(worker_getActiveHost(), timer->super.handle);
+        return TRUE; // deregister from process
+    } else {
+        return FALSE; // we are not owned by a process
     }
 }
 
@@ -59,12 +62,12 @@ static void _timer_free(Timer* timer) {
 }
 
 static DescriptorFunctionTable _timerFunctions = {
-    (DescriptorFunc) _timer_close,
-    (DescriptorFunc) _timer_free,
+    (DescriptorCloseFunc) _timer_close,
+    (DescriptorFreeFunc) _timer_free,
     MAGIC_VALUE
 };
 
-Timer* timer_new(gint handle, gint clockid, gint flags) {
+Timer* timer_new(gint clockid, gint flags) {
     if(clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC) {
         errno = EINVAL;
         return NULL;
@@ -83,7 +86,7 @@ Timer* timer_new(gint handle, gint clockid, gint flags) {
     Timer* timer = g_new0(Timer, 1);
     MAGIC_INIT(timer);
 
-    descriptor_init(&(timer->super), DT_TIMER, &_timerFunctions, handle);
+    descriptor_init(&(timer->super), DT_TIMER, &_timerFunctions);
     descriptor_adjustStatus(&(timer->super), DS_ACTIVE, TRUE);
 
     worker_countObject(OBJECT_TYPE_TIMER, COUNTER_TYPE_NEW);

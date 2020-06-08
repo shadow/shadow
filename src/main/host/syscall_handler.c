@@ -17,6 +17,7 @@
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/timer.h"
+#include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
@@ -48,11 +49,11 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
         .thread = thread,
         .blockedSyscallNR = -1,
         .referenceCount = 1,
-        /* Here we create the timer directly rather than going
-         * through host_createDescriptor because the descriptor
+        /* Here we create the timer directly and do not register
+         * with the process descriptor table because the descriptor
          * is not being used to service a plugin syscall and it
          * should not be tracked with an fd handle. */
-        .timer = timer_new(0, CLOCK_MONOTONIC, 0),
+        .timer = timer_new(CLOCK_MONOTONIC, 0),
     };
 
     MAGIC_INIT(sys);

@@ -191,15 +191,16 @@ void udp_free(UDP* udp) {
     g_free(udp);
 }
 
-void udp_close(UDP* udp) {
+gboolean udp_close(UDP* udp) {
     MAGIC_ASSERT(udp);
-    host_closeDescriptor(worker_getActiveHost(), udp->super.super.super.handle);
+    /* Deregister us from the process upon return. */
+    return TRUE;
 }
 
 /* we implement the socket interface, this describes our function suite */
 SocketFunctionTable udp_functions = {
-    (DescriptorFunc) udp_close,
-    (DescriptorFunc) udp_free,
+    (DescriptorCloseFunc) udp_close,
+    (DescriptorFreeFunc) udp_free,
     (TransportSendFunc) udp_sendUserData,
     (TransportReceiveFunc) udp_receiveUserData,
     (SocketProcessFunc) udp_processPacket,
@@ -209,11 +210,11 @@ SocketFunctionTable udp_functions = {
     MAGIC_VALUE
 };
 
-UDP* udp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
+UDP* udp_new(guint receiveBufferSize, guint sendBufferSize) {
     UDP* udp = g_new0(UDP, 1);
     MAGIC_INIT(udp);
 
-    socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, handle, receiveBufferSize, sendBufferSize);
+    socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, receiveBufferSize, sendBufferSize);
 
     /* we are immediately active because UDP doesnt wait for accept or connect */
     descriptor_adjustStatus((Descriptor*) udp, DS_ACTIVE|DS_WRITABLE, TRUE);

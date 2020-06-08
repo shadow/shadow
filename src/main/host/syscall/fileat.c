@@ -15,6 +15,7 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/file.h"
 #include "main/host/syscall/protected.h"
+#include "main/host/process.h"
 #include "support/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
@@ -37,7 +38,7 @@ static int _syscallhandler_validateDirHelper(SysCallHandler* sys, int dirfd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    Descriptor* desc = host_lookupDescriptor(sys->host, dirfd);
+    Descriptor* desc = process_getRegisteredDescriptor(sys->process, dirfd);
     if (desc && dir_desc_out) {
         *dir_desc_out = (File*)desc;
     }
@@ -118,15 +119,16 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
     }
 
     /* Create the new descriptor for this file. */
-    Descriptor* file_desc = host_createDescriptor(sys->host, DT_FILE);
-    utility_assert(file_desc);
-    utility_assert(_syscallhandler_validateDescriptor(file_desc, DT_FILE) == 0);
+    File* file_desc = file_new();
+    int handle = process_registerDescriptor(sys->process, (Descriptor*)file_desc);
 
     /* Now open the file. */
-    errcode = file_openat((File*)file_desc, dir_desc, pathname, flags, mode);
+    errcode = file_openat(file_desc, dir_desc, pathname, flags, mode);
     if (errcode < 0) {
         /* This will remove the descriptor entry and unref/free the File. */
-        descriptor_close(file_desc);
+        descriptor_close((Descriptor*)file_desc);
+    } else {
+        utility_assert(errcode == handle);
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};

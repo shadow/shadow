@@ -20,22 +20,22 @@ void transport_free(Transport* transport) {
     transport->vtable->free((Descriptor*)transport);
 }
 
-void transport_close(Transport* transport) {
+gboolean transport_close(Transport* transport) {
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
-    transport->vtable->close((Descriptor*)transport);
+    return transport->vtable->close((Descriptor*)transport);
 }
 
 DescriptorFunctionTable transport_functions = {
-    (DescriptorFunc) transport_close,
-    (DescriptorFunc) transport_free,
+    (DescriptorCloseFunc) transport_close,
+    (DescriptorFreeFunc) transport_free,
     MAGIC_VALUE
 };
 
-void transport_init(Transport* transport, TransportFunctionTable* vtable, DescriptorType type, gint handle) {
+void transport_init(Transport* transport, TransportFunctionTable* vtable, DescriptorType type) {
     utility_assert(transport && vtable);
 
-    descriptor_init(&(transport->super), type, &transport_functions, handle);
+    descriptor_init(&(transport->super), type, &transport_functions);
 
     MAGIC_INIT(transport);
     MAGIC_INIT(vtable);

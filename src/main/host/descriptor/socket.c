@@ -57,7 +57,7 @@ void socket_free(gpointer data) {
     socket->vtable->free((Descriptor*)socket);
 }
 
-void socket_close(Socket* socket) {
+gboolean socket_close(Socket* socket) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
 
@@ -65,7 +65,7 @@ void socket_close(Socket* socket) {
     Descriptor* descriptor = (Descriptor *)socket;
     tracker_removeSocket(tracker, descriptor->handle);
 
-    socket->vtable->close((Descriptor*)socket);
+    return socket->vtable->close((Descriptor*)socket);
 }
 
 gssize socket_sendUserData(Socket* socket, gconstpointer buffer, gsize nBytes,
@@ -83,18 +83,18 @@ gssize socket_receiveUserData(Socket* socket, gpointer buffer, gsize nBytes,
 }
 
 TransportFunctionTable socket_functions = {
-    (DescriptorFunc) socket_close,
-    (DescriptorFunc) socket_free,
+    (DescriptorCloseFunc) socket_close,
+    (DescriptorFreeFunc) socket_free,
     (TransportSendFunc) socket_sendUserData,
     (TransportReceiveFunc) socket_receiveUserData,
     MAGIC_VALUE
 };
 
-void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type, gint handle,
+void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type,
         guint receiveBufferSize, guint sendBufferSize) {
     utility_assert(socket && vtable);
 
-    transport_init(&(socket->super), &socket_functions, type, handle);
+    transport_init(&(socket->super), &socket_functions, type);
 
     MAGIC_INIT(socket);
     MAGIC_INIT(vtable);

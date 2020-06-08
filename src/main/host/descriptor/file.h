@@ -35,7 +35,7 @@ typedef struct _File File;
 // Initialization and setup
 // ************************
 
-File* file_new(int handle); // Close the file with descriptor_close()
+File* file_new(); // Close the file with descriptor_close()
 int file_open(File* file, const char* pathname, int flags, mode_t mode);
 int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t mode);
 

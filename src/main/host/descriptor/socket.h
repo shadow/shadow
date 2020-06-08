@@ -12,7 +12,7 @@
 #include <sys/un.h>
 
 #include "main/core/support/definitions.h"
-#include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/transport.h"
 #include "main/host/protocol.h"
 #include "main/routing/packet.h"
@@ -26,8 +26,8 @@ typedef void (*SocketProcessFunc)(Socket* socket, Packet* packet);
 typedef void (*SocketDropFunc)(Socket* socket, Packet* packet);
 
 struct _SocketFunctionTable {
-    DescriptorFunc close;
-    DescriptorFunc free;
+    DescriptorCloseFunc close;
+    DescriptorFreeFunc free;
     TransportSendFunc send;
     TransportReceiveFunc receive;
     SocketProcessFunc process;
@@ -77,7 +77,7 @@ struct _Socket {
     MAGIC_DECLARE;
 };
 
-void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type, gint handle,
+void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type,
         guint receiveBufferSize, guint sendBufferSize);
 
 void socket_pushInPacket(Socket* socket, Packet* packet);

@@ -96,7 +96,7 @@ static void _file_closeHelper(File* file) {
     }
 }
 
-static void _file_close(Descriptor* desc) {
+static gboolean _file_close(Descriptor* desc) {
     File* file = _file_descriptorToFile(desc);
 
     debug("Closing file %i with os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
@@ -106,7 +106,7 @@ static void _file_close(Descriptor* desc) {
 
     /* tell the host to stop tracking us, and unref the descriptor.
      * this should trigger _file_free in most cases. */
-    host_closeDescriptor(worker_getActiveHost(), _file_getFD(file));
+    return TRUE;
 }
 
 static void _file_free(Descriptor* desc) {
@@ -131,12 +131,12 @@ static DescriptorFunctionTable _fileFunctions = (DescriptorFunctionTable){
     .free = _file_free,
 };
 
-File* file_new(int handle) {
+File* file_new() {
     File* file = malloc(sizeof(File));
 
     *file = (File){0};
 
-    descriptor_init(&(file->super), DT_FILE, &_fileFunctions, handle);
+    descriptor_init(&(file->super), DT_FILE, &_fileFunctions);
     MAGIC_INIT(file);
 
     worker_countObject(OBJECT_TYPE_FILE, COUNTER_TYPE_NEW);

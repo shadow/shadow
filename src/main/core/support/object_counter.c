@@ -32,6 +32,7 @@ struct _ObjectCounter {
         ObjectCounts threadptrace;
         ObjectCounts syscallhandler;
         ObjectCounts descriptorlistener;
+        ObjectCounts descriptortable;
         ObjectCounts descriptor;
         ObjectCounts channel;
         ObjectCounts tcp;
@@ -166,6 +167,12 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
 
+        case OBJECT_TYPE_DESCRIPTOR_TABLE: {
+            _objectcount_incrementOne(
+                &(counter->counters.descriptortable), ctype);
+            break;
+        }
+
         case OBJECT_TYPE_DESCRIPTOR: {
             _objectcount_incrementOne(&(counter->counters.descriptor), ctype);
             break;
@@ -237,6 +244,8 @@ void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment
             &(increment->counters.syscallhandler));
     _objectcount_incrementAll(&(counter->counters.descriptorlistener),
             &(increment->counters.descriptorlistener));
+    _objectcount_incrementAll(&(counter->counters.descriptortable),
+            &(increment->counters.descriptortable));
     _objectcount_incrementAll(&(counter->counters.descriptor),
             &(increment->counters.descriptor));
     _objectcount_incrementAll(&(counter->counters.channel),
@@ -289,6 +298,8 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         "syscallhandler_free=%" G_GUINT64_FORMAT " "
         "descriptorlistener_new=%" G_GUINT64_FORMAT " "
         "descriptorlistener_free=%" G_GUINT64_FORMAT " "
+        "descriptortable_new=%" G_GUINT64_FORMAT " "
+        "descriptortable_free=%" G_GUINT64_FORMAT " "
         "descriptor_new=%" G_GUINT64_FORMAT " "
         "descriptor_free=%" G_GUINT64_FORMAT " "
         "channel_new=%" G_GUINT64_FORMAT " "
@@ -329,6 +340,8 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         counter->counters.syscallhandler.free,
         counter->counters.descriptorlistener.new,
         counter->counters.descriptorlistener.free,
+        counter->counters.descriptortable.new,
+        counter->counters.descriptortable.free,
         counter->counters.descriptor.new,
         counter->counters.descriptor.free,
         counter->counters.channel.new,
@@ -370,6 +383,7 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
         "threadptrace=%" G_GUINT64_FORMAT " "
         "syscallhandler=%" G_GUINT64_FORMAT " "
         "descriptorlistener=%" G_GUINT64_FORMAT " "
+        "descriptortable=%" G_GUINT64_FORMAT " "
         "descriptor=%" G_GUINT64_FORMAT " "
         "channel=%" G_GUINT64_FORMAT " "
         "tcp=%" G_GUINT64_FORMAT " "
@@ -403,6 +417,8 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
             counter->counters.syscallhandler.free,
         counter->counters.descriptorlistener.new -
             counter->counters.descriptorlistener.free,
+        counter->counters.descriptortable.new -
+            counter->counters.descriptortable.free,
         counter->counters.descriptor.new -
             counter->counters.descriptor.free,
         counter->counters.channel.new -

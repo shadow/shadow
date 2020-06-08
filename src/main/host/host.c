@@ -65,17 +65,10 @@ struct _Host {
     /* a statistics tracker for in/out bytes, CPU, memory, etc. */
     Tracker* tracker;
 
-    /* virtual descriptor numbers */
-    GQueue* availableDescriptors;
-    gint descriptorHandleCounter;
-
     /* virtual process and event id counter */
     guint processIDCounter;
     guint64 eventIDCounter;
     guint64 packetIDCounter;
-
-    /* all file, socket, and epoll descriptors we know about and track */
-    GHashTable* descriptors;
 
     /* map path to ports for unix sockets */
     GHashTable* unixPathToPortMap;
@@ -123,11 +116,8 @@ Host* host_new(HostParameters* params) {
 
     host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
             NULL, (GDestroyNotify) networkinterface_free);
-    host->availableDescriptors = g_queue_new();
-    host->descriptorHandleCounter = MIN_DESCRIPTOR;
 
-    /* virtual descriptor management */
-    host->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
+    /* TODO: deprecated, used to support UNIX sockets. */
     host->unixPathToPortMap = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
     /* applications this node will run */
@@ -240,25 +230,6 @@ void host_shutdown(Host* host) {
         router_unref(host->router);
     }
 
-    if(host->descriptors) {
-        GHashTableIter iter;
-        gpointer key, value;
-        g_hash_table_iter_init(&iter, host->descriptors);
-        while(g_hash_table_iter_next(&iter, &key, &value)) {
-            Descriptor* desc = value;
-            if(desc && desc->type == DT_TCPSOCKET) {
-              /* tcp servers and their children holds refs to each other. make
-               * sure they all get freed by removing the refs in one direction */
-                tcp_clearAllChildrenIfServer((TCP*)desc);
-            } else if(desc && (desc->type == DT_SOCKETPAIR || desc->type == DT_PIPE)) {
-              /* we need to correctly update the linked channel refs */
-              channel_setLinkedChannel((Channel*)desc, NULL);
-            }
-        }
-
-        g_hash_table_destroy(host->descriptors);
-    }
-
     if(host->unixPathToPortMap) {
         g_hash_table_destroy(host->unixPathToPortMap);
     }
@@ -270,9 +241,6 @@ void host_shutdown(Host* host) {
         tracker_free(host->tracker);
     }
 
-    if(host->availableDescriptors) {
-        g_queue_free(host->availableDescriptors);
-    }
     if(host->random) {
         random_free(host->random);
     }
@@ -413,18 +381,6 @@ void host_freeAllApplications(Host* host) {
         process_unref(proc);
     }
     debug("done freeing application for host '%s'", host->params.hostname);
-
-    debug("start clearing epoll descriptors for host '%s'", host->params.hostname);
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, host->descriptors);
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
-        Descriptor* descriptor = value;
-        if(descriptor->type == DT_EPOLL) {
-            epoll_clearWatchListeners((Epoll*) descriptor);
-        }
-    }
-    debug("done clearing epoll descriptors for host '%s'", host->params.hostname);
 }
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
@@ -480,11 +436,6 @@ gboolean host_autotuneSendBuffer(Host* host) {
     return host->params.autotuneSendBuf;
 }
 
-Descriptor* host_lookupDescriptor(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-    return g_hash_table_lookup(host->descriptors, (gconstpointer) &handle);
-}
-
 NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle) {
     MAGIC_ASSERT(host);
     return g_hash_table_lookup(host->interfaces, GUINT_TO_POINTER(handle));
@@ -523,7 +474,7 @@ void host_associateInterface(Host* host, Socket* socket, in_addr_t bindAddress,
     }
 }
 
-static void _host_disassociateInterface(Host* host, Socket* socket) {
+void host_disassociateInterface(Host* host, Socket* socket) {
     if(!socket || !socket_isBound(socket)) {
         return;
     }
@@ -549,141 +500,14 @@ static void _host_disassociateInterface(Host* host, Socket* socket) {
 
 }
 
-static void _host_monitorDescriptor(Host* host, Descriptor* descriptor) {
+guint64 host_getConfiguredRecvBufSize(Host* host) {
     MAGIC_ASSERT(host);
-
-    /* make sure there are no collisions before inserting */
-    gint* handle = descriptor_getHandleReference(descriptor);
-    utility_assert(handle && !host_lookupDescriptor(host, *handle));
-    g_hash_table_replace(host->descriptors, handle, descriptor);
+    return host->params.recvBufSize;
 }
 
-static void _host_unmonitorDescriptor(Host* host, gint handle) {
+guint64 host_getConfiguredSendBufSize(Host* host) {
     MAGIC_ASSERT(host);
-
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor) {
-        if(descriptor->type == DT_TCPSOCKET || descriptor->type == DT_UDPSOCKET) {
-            Socket* socket = (Socket*) descriptor;
-            _host_disassociateInterface(host, socket);
-        }
-
-        g_hash_table_remove(host->descriptors, (gconstpointer) &handle);
-    }
-}
-
-static gint _host_compareDescriptors(gconstpointer a, gconstpointer b, gpointer userData) {
-  gint aint = GPOINTER_TO_INT(a);
-  gint bint = GPOINTER_TO_INT(b);
-  return aint < bint ? -1 : aint == bint ? 0 : 1;
-}
-
-static gint _host_getNextDescriptorHandle(Host* host) {
-    MAGIC_ASSERT(host);
-    if(g_queue_get_length(host->availableDescriptors) > 0) {
-        return GPOINTER_TO_INT(g_queue_pop_head(host->availableDescriptors));
-    }
-    return (host->descriptorHandleCounter)++;
-}
-
-static void _host_returnPreviousDescriptorHandle(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-    if(handle >= 3) {
-        g_queue_insert_sorted(host->availableDescriptors, GINT_TO_POINTER(handle), _host_compareDescriptors, NULL);
-    }
-}
-
-void host_returnHandleHack(gint handle) {
-    /* TODO replace this with something more graceful? */
-    if(worker_isAlive()) {
-        Host* host = worker_getActiveHost();
-        if(host) {
-            _host_returnPreviousDescriptorHandle(host, handle);
-        }
-    }
-}
-
-Descriptor* host_createDescriptor(Host* host, DescriptorType type) {
-    MAGIC_ASSERT(host);
-
-    /* get a unique descriptor that can be "closed" later */
-    Descriptor* descriptor;
-
-    switch(type) {
-        case DT_EPOLL: {
-            descriptor = (Descriptor*) epoll_new(_host_getNextDescriptorHandle(host));
-            break;
-        }
-
-        case DT_TCPSOCKET: {
-            descriptor = (Descriptor*) tcp_new(_host_getNextDescriptorHandle(host),
-                    host->params.recvBufSize, host->params.sendBufSize);
-            break;
-        }
-
-        case DT_UDPSOCKET: {
-            descriptor = (Descriptor*) udp_new(_host_getNextDescriptorHandle(host),
-                    host->params.recvBufSize, host->params.sendBufSize);
-            break;
-        }
-
-        case DT_SOCKETPAIR: {
-            gint handle = _host_getNextDescriptorHandle(host);
-            gint linkedHandle = _host_getNextDescriptorHandle(host);
-
-            /* each channel is readable and writable */
-            Channel* channel = channel_new(handle, CT_NONE);
-            Channel* linked = channel_new(linkedHandle, CT_NONE);
-            channel_setLinkedChannel(channel, linked);
-            channel_setLinkedChannel(linked, channel);
-
-            _host_monitorDescriptor(host, (Descriptor*)linked);
-            descriptor = (Descriptor*) channel;
-
-            break;
-        }
-
-        case DT_PIPE: {
-            gint handle = _host_getNextDescriptorHandle(host);
-            gint linkedHandle = _host_getNextDescriptorHandle(host);
-
-            /* one side is readonly, the other is writeonly */
-            Channel* channel = channel_new(handle, CT_READONLY);
-            Channel* linked = channel_new(linkedHandle, CT_WRITEONLY);
-            channel_setLinkedChannel(channel, linked);
-            channel_setLinkedChannel(linked, channel);
-
-            _host_monitorDescriptor(host, (Descriptor*)linked);
-            descriptor = (Descriptor*) channel;
-
-            break;
-        }
-
-        case DT_TIMER: {
-            gint handle = _host_getNextDescriptorHandle(host);
-            descriptor = (Descriptor*) timer_new(handle, CLOCK_MONOTONIC, 0);
-            break;
-        }
-
-        case DT_FILE: {
-            gint handle = _host_getNextDescriptorHandle(host);
-            descriptor = (Descriptor*) file_new(handle);
-            break;
-        }
-
-        default: {
-            warning("unknown descriptor type: %i", (gint)type);
-            return NULL;
-        }
-    }
-
-    _host_monitorDescriptor(host, descriptor);
-    return descriptor;
-}
-
-void host_closeDescriptor(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-    _host_unmonitorDescriptor(host, handle);
+    return host->params.sendBufSize;
 }
 
 gboolean host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {

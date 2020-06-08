@@ -36,6 +36,8 @@
 #include "main/host/cpu.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/descriptor_table.h"
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
@@ -62,6 +64,9 @@ struct _Process {
 
     /* Which InterposeMethod to use for this process's threads */
     InterposeMethod interposeMethod;
+
+    /* All of the descriptors opened by this process. */
+    DescriptorTable* descTable;
 
     /* the shadow plugin executable */
     struct {
@@ -299,6 +304,8 @@ void process_stop(Process* proc) {
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
 
+    descriptortable_shutdownHelper(proc->descTable);
+
     worker_setActiveProcess(NULL);
 
     message(
@@ -393,6 +400,8 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
     proc->argv = argv;
     proc->envv = envv;
 
+    proc->descTable = descriptortable_new();
+
     // We'll open these when the process starts.
     proc->stderrFD = -1;
     proc->stdoutFD = -1;
@@ -433,6 +442,10 @@ static void _process_free(Process* proc) {
         g_strfreev(proc->envv);
     }
 
+    if(proc->descTable) {
+        descriptortable_unref(proc->descTable);
+    }
+
     g_timer_destroy(proc->cpuDelayTimer);
 
     if (proc->host) {
@@ -465,6 +478,39 @@ void process_unref(Process* proc) {
         _process_free(proc);
     }
 }
+
+// ******************************************************
+// Handler the descriptors owned by this process
+// ******************************************************
+
+int process_registerDescriptor(Process* proc, Descriptor* desc) {
+    MAGIC_ASSERT(proc);
+    utility_assert(desc);
+    descriptor_setOwnerProcess(desc, proc);
+    return descriptortable_add(proc->descTable, desc);
+}
+
+void process_deregisterDescriptor(Process* proc, Descriptor* desc) {
+    MAGIC_ASSERT(proc);
+
+    if(desc) {
+        DescriptorType dType = descriptor_getType(desc);
+        if(dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
+            host_disassociateInterface(proc->host, (Socket*)desc);
+        }
+        descriptor_setOwnerProcess(desc, NULL);
+        descriptortable_remove(proc->descTable, desc);
+    }
+}
+
+Descriptor* process_getRegisteredDescriptor(Process* proc, int handle) {
+    MAGIC_ASSERT(proc);
+    return descriptortable_get(proc->descTable, handle);
+}
+
+// ******************************************************
+// Handler descriptor listeners to enable plugin blocking
+// ******************************************************
 
 typedef struct _ProcessWaiter ProcessWaiter;
 struct _ProcessWaiter {

@@ -30,6 +30,7 @@
 #include <wchar.h>
 
 #include "main/core/support/definitions.h"
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/thread.h"
@@ -69,5 +70,9 @@ guint process_getProcessID(Process* proc);
  * the given thread. */
 void process_listenForStatus(Process* proc, Thread* thread, Timer* timeout,
                              Descriptor* descriptor, DescriptorStatus status);
+
+int process_registerDescriptor(Process* proc, Descriptor* desc);
+void process_deregisterDescriptor(Process* proc, Descriptor* desc);
+Descriptor* process_getRegisteredDescriptor(Process* proc, int handle);
 
 #endif /* SHD_PROCESS_H_ */

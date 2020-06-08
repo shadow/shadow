@@ -26,15 +26,14 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
         return -EINVAL;
     }
 
-    Descriptor* desc = host_createDescriptor(sys->host, DT_EPOLL);
-    utility_assert(desc);
-    utility_assert(_syscallhandler_validateDescriptor(desc, DT_EPOLL) == 0);
+    Epoll* epolld = epoll_new();
+    int handle = process_registerDescriptor(sys->process, (Descriptor*)epolld);
 
     if (flags & EPOLL_CLOEXEC) {
-        descriptor_addFlags(desc, EPOLL_CLOEXEC);
+        descriptor_addFlags((Descriptor*)epolld, EPOLL_CLOEXEC);
     }
 
-    return descriptor_getHandle(desc);
+    return handle;
 }
 
 ///////////////////////////////////////////////////////////
@@ -80,7 +79,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     /* Get and check the epoll descriptor. */
-    Descriptor* descriptor = host_lookupDescriptor(sys->host, epfd);
+    Descriptor* descriptor = process_getRegisteredDescriptor(sys->process, epfd);
     gint errorCode = _syscallhandler_validateDescriptor(descriptor, DT_EPOLL);
 
     if (errorCode) {
@@ -94,7 +93,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     utility_assert(epoll);
 
     /* Find the child descriptor that the epoll is monitoring. */
-    descriptor = host_lookupDescriptor(sys->host, fd);
+    descriptor = process_getRegisteredDescriptor(sys->process, fd);
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
     if(errorCode) {
@@ -132,18 +131,18 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     }
 
     /* Get and check the epoll descriptor. */
-    Descriptor* descriptor = host_lookupDescriptor(sys->host, epfd);
-    gint errorCode = _syscallhandler_validateDescriptor(descriptor, DT_EPOLL);
+    Descriptor* desc = process_getRegisteredDescriptor(sys->process, epfd);
+    gint errorCode = _syscallhandler_validateDescriptor(desc, DT_EPOLL);
 
     if (errorCode) {
         debug("Error when trying to validate epoll %i", epfd);
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
-    utility_assert(descriptor);
+    utility_assert(desc);
 
     /* It's now safe to cast. */
-    Epoll* epoll = (Epoll*)descriptor;
+    Epoll* epoll = (Epoll*)desc;
     utility_assert(epoll);
 
     /* figure out how many events we actually have so we can request

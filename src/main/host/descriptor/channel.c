@@ -32,7 +32,7 @@ struct _Channel {
     MAGIC_DECLARE;
 };
 
-static void channel_close(Channel* channel) {
+static gboolean channel_close(Channel* channel) {
     MAGIC_ASSERT(channel);
     /* tell our link that we are done */
     if(channel->linkedChannel) {
@@ -47,7 +47,7 @@ static void channel_close(Channel* channel) {
     }
 
     /* host can stop monitoring us for changes */
-    host_closeDescriptor(worker_getActiveHost(), channel->super.super.handle);
+    return TRUE;
 }
 
 static void channel_free(Channel* channel) {
@@ -136,18 +136,18 @@ static gssize channel_receiveUserData(Channel* channel, gpointer buffer, gsize n
 }
 
 TransportFunctionTable channel_functions = {
-    (DescriptorFunc) channel_close,
-    (DescriptorFunc) channel_free,
+    (DescriptorCloseFunc) channel_close,
+    (DescriptorFreeFunc) channel_free,
     (TransportSendFunc) channel_sendUserData,
     (TransportReceiveFunc) channel_receiveUserData,
     MAGIC_VALUE
 };
 
-Channel* channel_new(gint handle, ChannelType type) {
+Channel* channel_new(ChannelType type) {
     Channel* channel = g_new0(Channel, 1);
     MAGIC_INIT(channel);
 
-    transport_init(&(channel->super), &channel_functions, DT_PIPE, handle);
+    transport_init(&(channel->super), &channel_functions, DT_PIPE);
 
     channel->type = type;
     channel->buffer = bytequeue_new(8192);
