@@ -24,7 +24,7 @@
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/syscall/dirent.h"
+#include "main/host/syscall/kernel_types.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 

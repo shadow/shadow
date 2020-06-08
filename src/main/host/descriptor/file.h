@@ -14,7 +14,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-#include "main/host/syscall/dirent.h"
+#include "main/host/syscall/kernel_types.h"
 
 /* Opaque type representing a file-backed file descriptor. */
 typedef struct _File File;
