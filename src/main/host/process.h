@@ -7,9 +7,6 @@
 #ifndef SHD_PROCESS_H_
 #define SHD_PROCESS_H_
 
-#include <bits/stdint-intn.h>
-#include <bits/types/clockid_t.h>
-#include <bits/types/time_t.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <features.h>

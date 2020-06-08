@@ -4,6 +4,7 @@
 #include <inttypes.h>
 #include <locale.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 void measureGivesConsistentResults() {
     Tsc baseline = Tsc_measure();

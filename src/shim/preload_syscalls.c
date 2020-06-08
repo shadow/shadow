@@ -7,12 +7,13 @@
 #include <poll.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/epoll.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
-#include <unistd.h>
 #include <sys/utsname.h>
+#include <unistd.h>
 
 #include "shim/shim.h"
 #include "shim/shim_event.h"

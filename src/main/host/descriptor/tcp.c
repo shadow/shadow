@@ -7,7 +7,6 @@
 
 #include "main/host/descriptor/tcp.h"
 
-#include <bits/stdint-uintn.h>
 #include <errno.h>
 #include <math.h>
 #include <netinet/tcp.h>

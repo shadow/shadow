@@ -5,9 +5,6 @@
 
 #include "main/host/descriptor/timer.h"
 
-#include <bits/types/struct_itimerspec.h>
-#include <bits/types/struct_timespec.h>
-#include <bits/types/time_t.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/time.h>
