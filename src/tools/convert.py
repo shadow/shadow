@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 
-import sys
 import argparse
 from collections import defaultdict
 import xml.etree.ElementTree as ET
+from xml.dom import minidom
+from xml.sax.saxutils import unescape
 
 import yaml
 
@@ -77,8 +78,53 @@ def shadow_xml_to_dict(root):
 
 
 def get_xml_root_from_filename(filename):
-    tree = ET.parse('./file.xml')
+    tree = ET.parse(filename)
     return tree.getroot()
+
+
+def get_yaml_from_filename(filename):
+    with open(filename) as yaml_fd:
+        return yaml.load(yaml_fd, Loader=yaml.Loader)
+
+
+def get_xml_root(yaml_as_dict):
+    xml_root = ET.Element('shadow')
+    if 'option' in yaml_as_dict:
+        for k, v in yaml_as_dict['option'].items():
+            xml_root.set(k, str(v))
+        del yaml_as_dict['option']
+    return xml_root
+
+
+def dict_to_xml(xml_root, yaml_as_dict, tag=None):
+    attr = {}
+    for k, v in yaml_as_dict.items():
+        if isinstance(v, list):
+            list_to_xml(xml_root, k, v)
+        elif isinstance(v, dict):
+            dict_to_xml(xml_root, v, k)
+        else:
+            attr[k] = str(v)
+    ET.SubElement(xml_root, tag, attrib=attr)
+
+
+def list_to_xml(xml_root, tag, l):
+    for element in l:
+        sub = ET.SubElement(xml_root, tag)
+        for k, v in element.items():
+            if isinstance(v, list):
+                list_to_xml(sub, k, v)
+            else:
+                if 'graphml' == k:
+                    sub.text = f'<![CDATA[{v}]]>'
+                else:
+                    sub.set(k, str(v))
+
+
+def save_xml(xml_root, filename_converted):
+    xmlstr = minidom.parseString(ET.tostring(xml_root)).toprettyxml(indent="   ")
+    with open(filename_converted, "w", encoding='utf8') as f:
+        f.write(unescape(xmlstr, entities={'&quot;': '"'}))
 
 
 if __name__ == '__main__':
@@ -89,10 +135,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.operation == 'yaml2xml':
-        print('Not yet implemented', file=sys.stderr)
+        yaml_as_dict = get_yaml_from_filename(args.filename)
+        xml_root = get_xml_root(yaml_as_dict)
+        dict_to_xml(xml_root, yaml_as_dict)
+        filename_converted = get_filename_converted(args.filename, args.output, 'yaml', 'xml')
+        save_xml(xml_root, filename_converted)
+    else:
+        xml_root = get_xml_root_from_filename(args.filename)
+        d = shadow_xml_to_dict(xml_root)
 
-    xml_root = get_xml_root_from_filename(args.filename)
-    d = shadow_xml_to_dict(xml_root)
-
-    filename_converted = get_filename_converted(args.filename, args.output, 'xml', 'yaml')
-    save_dict_in_yaml_file(d, filename_converted)
+        filename_converted = get_filename_converted(args.filename, args.output, 'xml', 'yaml')
+        save_dict_in_yaml_file(d, filename_converted)
