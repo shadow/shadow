@@ -21,12 +21,8 @@ static void fifo_send_u16(const char* pipename, uint16_t i) {
     FILE* f = fopen(pipename, "w");
     assert_nonnull_errno(f);
 
-    char buf[10];
-    int len = snprintf(buf, 10, "%d", i);
-    g_assert(len < sizeof(buf));
-
-    int count = fwrite(buf, 1, len, f);
-    assert_true_errno(count == len);
+    int count = fprintf(f, "%u\n", i);
+    assert_nonneg_errno(count);
     fclose(f);
 }
 
@@ -34,18 +30,17 @@ static void fifo_send_u16(const char* pipename, uint16_t i) {
 static uint16_t fifo_recv_u16(const char* pipename) {
     FILE* f = fopen(pipename, "r");
     assert_nonnull_errno(f);
-    char buf[10] = {0};
-    int count = fread(buf, 1, sizeof(buf)-1, f);
-    assert_true_errstring(count != 0, feof(f) ? "Unexpected end of file"
-                                              : strerror(ferror(f)));
+
+    unsigned int i = 0;
+    int count = fscanf(f, "%u\n", &i);
+    assert_true_errstring(
+        count == 1, feof(f) ? "Unexpected end of file" : strerror(ferror(f)));
     fclose(f);
 
-    guint64 val;
-    GError *error = NULL;
-    g_ascii_string_to_unsigned(buf, /* base= */ 10, /* min= */ 0,
-                                    /* max= */ UINT16_MAX, &val, &error);
-    g_assert_no_error(error);
-    return val;
+    if (i > UINT16_MAX) {
+        g_error("The uint %u was too large to be a uint16_t", i);
+    }
+    return i;
 }
 
 // Creates and returns a client UDP socket to localhost at `port`, and sets
@@ -192,15 +187,15 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    guint64 port64;
-    GError* error = NULL;
-    if (!g_ascii_string_to_unsigned(addr_parts[1], /* base= */ 10, /* min= */ 0,
-                                    /* max= */ UINT16_MAX, &port64, &error)) {
-        g_error("Parsing port '%s': %s", addr_parts[1], error->message);
+    unsigned int port_uint = 0;
+    int count = sscanf(addr_parts[1], "%u", &port_uint);
+    if (count != 1 || port_uint > UINT16_MAX) {
+        g_error("Error parsing port '%s'", addr_parts[1]);
         g_strfreev(addr_parts);
         return EXIT_FAILURE;
     }
-    in_port_t port = port64;
+    in_port_t port = port_uint;
+
     --argc;
     ++argv;
 
