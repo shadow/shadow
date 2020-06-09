@@ -4,9 +4,14 @@
  * See LICENSE for licensing information
  */
 
+#include <errno.h>
 #include <glib.h>
 #include <netinet/in.h>
+#include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "main/core/support/definitions.h"
 #include "main/routing/address.h"
@@ -23,6 +28,12 @@ struct _DNS {
     /* address mappings */
     GHashTable* addressByIP;
     GHashTable* addressByName;
+
+    struct {
+        int filenum;
+        char* path;
+        bool isStale;
+    } hosts;
 
     MAGIC_DECLARE;
 };
@@ -144,6 +155,9 @@ Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP) {
         address_ref(address);
     }
 
+    /* Any existing hosts file needs to be (lazily) updated. */
+    dns->hosts.isStale;
+
     g_mutex_unlock(&dns->lock);
 
     return address;
@@ -153,9 +167,14 @@ void dns_deregister(DNS* dns, Address* address) {
     MAGIC_ASSERT(dns);
     if(!address_isLocal(address)) {
         g_mutex_lock(&dns->lock);
+
         /* these remove functions will call address_unref as necessary */
         g_hash_table_remove(dns->addressByIP, GUINT_TO_POINTER(address_toNetworkIP(address)));
         g_hash_table_remove(dns->addressByName, address_toHostName(address));
+
+        /* Any existing hosts file needs to be (lazily) updated. */
+        dns->hosts.isStale;
+
         g_mutex_unlock(&dns->lock);
     }
 }
@@ -180,6 +199,94 @@ Address* dns_resolveNameToAddress(DNS* dns, const gchar* name) {
     return result;
 }
 
+static void _dns_cleanupHostsFile(DNS* dns) {
+    MAGIC_ASSERT(dns);
+
+    if(dns->hosts.filenum > 0) {
+        close(dns->hosts.filenum);
+        dns->hosts.filenum = 0;
+    }
+
+    if(dns->hosts.path) {
+        free(dns->hosts.path);
+        dns->hosts.path = NULL;
+    }
+}
+
+static char* _dns_getHostsPath(DNS* dns) {
+    char* abspath = NULL;
+    if (asprintf(&abspath, "/tmp/shadow-%i-hosts-XXXXXX", (int)getpid()) < 0) {
+        error("asprintf could not allocate string for hosts file");
+        abort();
+    }
+    return abspath;
+}
+
+static void _dns_writeHostLine(gpointer key, gpointer value, gpointer data) {
+    gchar* name = key;
+    Address* address = value;
+    GString* buf = data;
+    g_string_append_printf(buf, "%s %s\n", address_toHostIPString(address), name);
+}
+
+static bool _dns_writeNewHostsFile(DNS* dns) {
+    MAGIC_ASSERT(dns);
+    utility_assert(!dns->hosts.path);
+
+    dns->hosts.path = _dns_getHostsPath(dns);
+    dns->hosts.filenum = mkstemp(dns->hosts.path);
+    if(dns->hosts.filenum < 0) {
+        warning("Unable create temp hosts file, mkstemp() error %i: %s", errno, strerror(errno));
+        return false;
+    }
+
+    GString* buf = g_string_new("127.0.0.1 localhost\n");
+    g_hash_table_foreach(dns->addressByName, _dns_writeHostLine, buf);
+
+    debug("Hosts file string buffer is %zu bytes.", buf->len);
+
+    size_t amt = 0;
+    while(amt < buf->len) {
+        ssize_t ret = write(dns->hosts.filenum, &buf->str[amt], buf->len-amt);
+        if(ret < 0 && errno != EAGAIN) {
+            warning("Unable to write to temp hosts file, write() error %i: %s", errno, strerror(errno));
+            g_string_free(buf, TRUE);
+            return false;
+        } else if(ret >= 0) {
+            amt += (size_t)ret;
+        }
+    }
+
+    message("Wrote new hosts file of size %zu bytes at path '%s'", amt, dns->hosts.path);
+    dns->hosts.isStale = false;
+    g_string_free(buf, TRUE);
+    return true;
+}
+
+gchar* dns_getHostsFilePath(DNS* dns) {
+    MAGIC_ASSERT(dns);
+
+    char* path = NULL;
+
+    g_mutex_lock(&dns->lock);
+
+    if(dns->hosts.isStale || !dns->hosts.path) {
+        _dns_cleanupHostsFile(dns);
+        if(!_dns_writeNewHostsFile(dns)) {
+            warning("Unable to create hosts file; expect networking errors.");
+            _dns_cleanupHostsFile(dns);
+        }
+    }
+
+    if(dns->hosts.path) {
+        path = strdup(dns->hosts.path);
+    }
+
+    g_mutex_unlock(&dns->lock);
+
+    return path;
+}
+
 DNS* dns_new() {
     DNS* dns = g_new0(DNS, 1);
     MAGIC_INIT(dns);
@@ -197,6 +304,8 @@ DNS* dns_new() {
 
 void dns_free(DNS* dns) {
     MAGIC_ASSERT(dns);
+
+    _dns_cleanupHostsFile(dns);
 
     g_hash_table_destroy(dns->addressByIP);
     g_hash_table_destroy(dns->addressByName);

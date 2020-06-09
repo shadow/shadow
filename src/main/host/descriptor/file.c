@@ -25,6 +25,7 @@
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/syscall/kernel_types.h"
+#include "main/routing/dns.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
@@ -34,7 +35,7 @@ enum _FileType {
     FILE_TYPE_REGULAR,
     FILE_TYPE_TEMP,
     FILE_TYPE_RANDOM,    // TODO: special handling for /dev/random etc.
-    FILE_TYPE_HOSTS,     // TODO: special handling for /etc/hosts
+    FILE_TYPE_HOSTS,     // special handling for /etc/hosts
     FILE_TYPE_LOCALTIME, // TODO: special handling for /etc/localtime
 };
 
@@ -187,8 +188,8 @@ static char* _file_getPath(File* file, File* dir, const char* pathname) {
 
 static char* _file_getTempPathTemplate(File* file, const char* pathname) {
     char* abspath = NULL;
-    if (asprintf(&abspath, "%s/shadow-tmpfd%d-XXXXXX", pathname,
-                 _file_getFD(file)) < 0) {
+    if (asprintf(&abspath, "%s/shadow-%i-tmpfd-%d-XXXXXX", pathname,
+                 (int)getpid(), _file_getFD(file)) < 0) {
         error("asprintf could not allocate string for temp file, error %i: %s",
               errno, strerror(errno));
         abort();
@@ -207,12 +208,34 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
     int osfd = 0;
     char* abspath = NULL;
 
+    debug("Attempting to open file with pathname '%s'", pathname);
+
     if (flags & O_TMPFILE) {
         /* We need to store a copy of the temp path so we can reopen it. */
+        file->type = FILE_TYPE_TEMP;
         abspath = _file_getTempPathTemplate(file, pathname);
         osfd = mkostemp(abspath, flags & ~O_TMPFILE);
     } else {
+        /* The default case is a regular file. We do this first so that we have
+         * an absolute path to compare for special files. */
         abspath = _file_getPath(file, dir, pathname);
+
+        /* TODO: Handle special files. */
+        if (utility_isRandomPath(abspath)) {
+            file->type = FILE_TYPE_RANDOM;
+        } else if (!strncmp("/etc/hosts", abspath, 10)) {
+            file->type = FILE_TYPE_HOSTS;
+            char* hostspath = dns_getHostsFilePath(worker_getDNS());
+            if(hostspath && abspath) {
+                free(abspath);
+                abspath = hostspath;
+            }
+        } else if (!strncmp("/etc/localtime", abspath, 14)) {
+            file->type = FILE_TYPE_LOCALTIME;
+        } else {
+            file->type = FILE_TYPE_REGULAR;
+        }
+
         osfd = open(abspath, flags, mode);
     }
 
@@ -222,6 +245,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
         if (abspath) {
             free(abspath);
         }
+        file->type = FILE_TYPE_NOTSET;
         return -errno;
     }
 
@@ -231,19 +255,6 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
     /* We can't use O_TMPFILE, because if we reopen, we'll get a new file. */
     file->osfile.flags = (flags & ~O_TMPFILE);
     file->osfile.mode = mode;
-
-    /* TODO handle special file types. */
-    if (utility_isRandomPath(file->osfile.abspath)) {
-        file->type = FILE_TYPE_RANDOM;
-    } else if (!strncmp("/etc/hosts", file->osfile.abspath, 10)) {
-        file->type = FILE_TYPE_HOSTS;
-    } else if (!strncmp("/etc/localtime", file->osfile.abspath, 14)) {
-        file->type = FILE_TYPE_LOCALTIME;
-    } else if (flags & O_TMPFILE) {
-        file->type = FILE_TYPE_TEMP;
-    } else {
-        file->type = FILE_TYPE_REGULAR;
-    }
 
     debug("File %i opened os-backed file %i at absolute path %s",
           _file_getFD(file), _file_getOSBackedFD(file), file->osfile.abspath);
