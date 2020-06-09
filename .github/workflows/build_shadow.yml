@@ -22,10 +22,12 @@ jobs:
       options: '--tmpfs /dev/shm:rw,nosuid,nodev,exec,relatime,size=1g'
     strategy:
       matrix:
-        container: ['ubuntu:18.04'] #, 'ubuntu:20.04', 'debian:10-slim', 'fedora:32']
+        container: ['ubuntu:18.04'] #, 'ubuntu:16.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32']
         cc: ['gcc'] #, 'clang']
         buildtype: ['debug', 'release']
         include:
+#          - container: 'ubuntu:16.04'
+#            package_manager: 'apt'
           - container: 'ubuntu:18.04'
             package_manager: 'apt'
 #          - container: 'ubuntu:20.04'
