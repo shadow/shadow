@@ -22,18 +22,18 @@ jobs:
       options: '--tmpfs /dev/shm:rw,nosuid,nodev,exec,relatime,size=1g'
     strategy:
       matrix:
-        container: ['ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32']
-        cc: ['gcc', 'clang']
+        container: ['ubuntu:18.04'] #, 'ubuntu:20.04', 'debian:10-slim', 'fedora:32']
+        cc: ['gcc'] #, 'clang']
         buildtype: ['debug', 'release']
         include:
           - container: 'ubuntu:18.04'
             package_manager: 'apt'
-          - container: 'ubuntu:20.04'
-            package_manager: 'apt'
-          - container: 'debian:10-slim'
-            package_manager: 'apt'
-          - container: 'fedora:32'
-            package_manager: 'dnf'
+#          - container: 'ubuntu:20.04'
+#            package_manager: 'apt'
+#          - container: 'debian:10-slim'
+#            package_manager: 'apt'
+#          - container: 'fedora:32'
+#            package_manager: 'dnf'
     steps:
       - name: Checkout
         uses: actions/checkout@v2
