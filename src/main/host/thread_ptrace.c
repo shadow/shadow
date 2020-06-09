@@ -19,6 +19,12 @@
 
 #define THREADPTRACE_TYPE_ID 3024
 
+// glibc in centos 7 does not include the following, but it does use a supported
+// kernel (3.10 > 3.8)
+#if !defined(PTRACE_O_EXITKILL)
+#define PTRACE_O_EXITKILL (1 << 20)
+#endif
+
 typedef enum {
     // Doesn't exist yet.
     THREAD_PTRACE_CHILD_STATE_NONE = 0,
