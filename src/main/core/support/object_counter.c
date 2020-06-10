@@ -94,10 +94,11 @@ static void _objectcount_incrementAll(ObjectCounts* counts, ObjectCounts* increm
     counts->free += increments->free;
 }
 
-// clang-format off
 void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, CounterType ctype) {
     MAGIC_ASSERT(counter);
 
+    // Disable clang-format to avoid line breaks across counter types
+    // clang-format off
     switch(otype) {
         case OBJECT_TYPE_TASK: {
             _objectcount_incrementOne(&(counter->counters.task), ctype);
@@ -213,11 +214,14 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
     }
+    // clang-format on
 }
 
 void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment) {
     MAGIC_ASSERT(counter);
     MAGIC_ASSERT(increment);
+    // Disable clang-format to avoid line breaks across counter types
+    // clang-format off
     _objectcount_incrementAll(&(counter->counters.task),
             &(increment->counters.task));
     _objectcount_incrementAll(&(counter->counters.event),
@@ -260,6 +264,7 @@ void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment
             &(increment->counters.timer));
     _objectcount_incrementAll(&(counter->counters.file),
             &(increment->counters.file));
+    // clang-format on
 }
 
 const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
@@ -269,6 +274,8 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         counter->stringBuffer = g_string_new(NULL);
     }
 
+    // Disable clang-format to avoid line breaks in string template
+    // clang-format off
     g_string_printf(
         counter->stringBuffer,
         "ObjectCounter: counter values: "
@@ -356,6 +363,7 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         counter->counters.timer.free,
         counter->counters.file.new,
         counter->counters.file.free);
+    // clang-format on
 
     return (const gchar*) counter->stringBuffer->str;
 }
@@ -367,6 +375,8 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
         counter->stringBuffer = g_string_new(NULL);
     }
 
+    // Disable clang-format to avoid line breaks in string template or math
+    // clang-format off
     g_string_printf(
         counter->stringBuffer,
         "ObjectCounter: counter diffs: "
@@ -433,7 +443,7 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
             counter->counters.timer.free,
         counter->counters.file.new -
             counter->counters.file.free);
+    // clang-format on
 
     return (const gchar*) counter->stringBuffer->str;
 }
-// clang-format on
