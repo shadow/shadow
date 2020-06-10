@@ -49,17 +49,17 @@ jobs:
           DEBIAN_FRONTEND: 'noninteractive'
         run: |
           apt-get update
-          apt-get install -y ${{ matrix.cc }} g++ cmake make xz-utils python libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg python-pyelftools libprocps-dev
+          apt-get install -y ${{ matrix.cc }} g++ cmake make xz-utils python libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg libprocps-dev
 
       - name: Install Dependencies (dnf)
         if: ${{ matrix.package_manager == 'dnf' }}
-        run: dnf install --best -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python python-pyelftools xz xz-devel yum-utils procps-devel
+        run: dnf install --best -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python xz xz-devel yum-utils procps-devel
 
       - name: Install Dependencies (yum-centos-7)
         if: ${{ matrix.package_manager == 'yum-centos-7' }}
         run: |
           yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum install -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python python-pyelftools xz xz-devel yum-utils procps-devel
+          yum install -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python xz xz-devel yum-utils procps-devel
 
       - name: Build Debug
         if: ${{ matrix.buildtype == 'debug' }}
