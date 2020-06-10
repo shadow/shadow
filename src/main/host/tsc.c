@@ -6,9 +6,15 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <x86intrin.h>
 
 #include "support/logger/logger.h"
+
+// using assembly to support older compilers such as clang 3.4 in centos 7
+static __inline__ uint64_t rdtscp(uint32_t* aux) {
+    uint32_t hi, lo;
+    __asm__ __volatile__("rdtscp" : "=a"(lo), "=d"(hi), "=c"(*aux));
+    return ((uint64_t)hi) << 32 | lo;
+}
 
 // Assumes lhs >= rhs
 void _timespec_sub(struct timespec* res, const struct timespec* lhs,
@@ -44,7 +50,7 @@ Tsc Tsc_measure() {
         if (clock_gettime(CLOCK_MONOTONIC, &ts_start) < 0) {
             error("clock_gettime: %s", strerror(errno));
         }
-        uint64_t rdtsc_start = __rdtscp(&unused);
+        uint64_t rdtsc_start = rdtscp(&unused);
 
         usleep(1000);
 
@@ -53,7 +59,7 @@ Tsc Tsc_measure() {
             error("clock_gettime: %s", strerror(errno));
         }
 
-        uint64_t rdtsc_end = __rdtscp(&unused);
+        uint64_t rdtsc_end = rdtscp(&unused);
         uint64_t cycles = rdtsc_end - rdtsc_start;
         struct timespec ts_diff;
         _timespec_sub(&ts_diff, &ts_end, &ts_start);
@@ -118,7 +124,7 @@ void Tsc_emulateRdtscp(const Tsc* tsc, struct user_regs_struct* regs,
     // probably want an emulated value. It's some metadata about the processor,
     // including the processor ID.
     unsigned int a;
-    __rdtscp(&a);
+    rdtscp(&a);
     regs->rcx = a;
     regs->rip += 3;
 }
