@@ -16,6 +16,9 @@ void transport_free(Transport* transport) {
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
 
+    // TODO: assertion errors will occur if the subclass uses the transpor
+    // during the free call. This could be fixed by making all descriptor types
+    // a direct child of the descriptor class.
     MAGIC_CLEAR(transport);
     transport->vtable->free((Descriptor*)transport);
 }

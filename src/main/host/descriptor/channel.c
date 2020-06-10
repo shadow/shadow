@@ -55,6 +55,7 @@ static void channel_free(Channel* channel) {
 
     bytequeue_free(channel->buffer);
 
+    descriptor_clear((Descriptor*)channel);
     MAGIC_CLEAR(channel);
     g_free(channel);
 

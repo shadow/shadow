@@ -56,6 +56,7 @@ static gboolean _timer_close(Timer* timer) {
 
 static void _timer_free(Timer* timer) {
     MAGIC_ASSERT(timer);
+    descriptor_clear((Descriptor*)timer);
     MAGIC_CLEAR(timer);
     g_free(timer);
     worker_countObject(OBJECT_TYPE_TIMER, COUNTER_TYPE_FREE);

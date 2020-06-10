@@ -185,10 +185,11 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
 void udp_free(UDP* udp) {
     MAGIC_ASSERT(udp);
 
-    worker_countObject(OBJECT_TYPE_UDP, COUNTER_TYPE_FREE);
-
+    descriptor_clear((Descriptor*)udp);
     MAGIC_CLEAR(udp);
     g_free(udp);
+
+    worker_countObject(OBJECT_TYPE_UDP, COUNTER_TYPE_FREE);
 }
 
 gboolean udp_close(UDP* udp) {

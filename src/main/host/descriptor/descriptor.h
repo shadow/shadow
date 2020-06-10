@@ -13,8 +13,14 @@
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/process.h"
 
+/* Initialize the parent parts of a new descriptor subclass. This call should
+ * be paired with a call to clear() before freeing the subclass object. */
 void descriptor_init(Descriptor* descriptor, DescriptorType type,
                      DescriptorFunctionTable* funcTable);
+/* Clear the bits that were initialized in init(). Following this call, the
+ * descriptor becomes invalid and the subclass should be freed. */
+void descriptor_clear(Descriptor* descriptor);
+
 void descriptor_ref(gpointer data);
 void descriptor_unref(gpointer data);
 void descriptor_close(Descriptor* descriptor);

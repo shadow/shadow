@@ -34,20 +34,20 @@ void descriptor_init(Descriptor* descriptor, DescriptorType type,
     worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_NEW);
 }
 
+void descriptor_clear(Descriptor* descriptor) {
+    MAGIC_ASSERT(descriptor);
+    if (descriptor->listeners) {
+        g_hash_table_destroy(descriptor->listeners);
+    }
+    MAGIC_CLEAR(descriptor);
+}
+
 static void _descriptor_free(Descriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
-    if (descriptor->listeners) {
-        g_hash_table_destroy(descriptor->listeners);
-    }
-
     debug("Descriptor %i calling vtable free now", descriptor->handle);
-
     descriptor->funcTable->free(descriptor);
-
-    /* Clear *after* free, since the above call may access our content. */
-    MAGIC_CLEAR(descriptor);
 
     worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_FREE);
 }

@@ -123,6 +123,7 @@ static void _file_free(Descriptor* desc) {
         free(file->osfile.abspath);
     }
 
+    descriptor_clear((Descriptor*)file);
     MAGIC_CLEAR(file);
     free(file);
 

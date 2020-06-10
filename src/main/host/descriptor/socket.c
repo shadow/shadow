@@ -53,6 +53,9 @@ void socket_free(gpointer data) {
     }
     g_queue_free(socket->outputControlBuffer);
 
+    // TODO: assertion errors will occur if the subclass uses the socket
+    // during the free call. This could be fixed by making all descriptor types
+    // a direct child of the descriptor class.
     MAGIC_CLEAR(socket);
     socket->vtable->free((Descriptor*)socket);
 }

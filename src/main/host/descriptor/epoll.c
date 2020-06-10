@@ -169,6 +169,7 @@ static void _epoll_free(Epoll* epoll) {
     utility_assert(epoll->ownerProcess);
     process_unref(epoll->ownerProcess);
 
+    descriptor_clear((Descriptor*)epoll);
     MAGIC_CLEAR(epoll);
     g_free(epoll);
 

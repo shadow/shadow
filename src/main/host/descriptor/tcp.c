@@ -2410,6 +2410,7 @@ void tcp_free(TCP* tcp) {
     tcp->cong.hooks->tcp_cong_delete(tcp);
     retransmit_tally_destroy(tcp->retransmit.tally);
 
+    descriptor_clear((Descriptor*)tcp);
     MAGIC_CLEAR(tcp);
     g_free(tcp);
 
