@@ -49,34 +49,34 @@ jobs:
           DEBIAN_FRONTEND: 'noninteractive'
         run: |
           apt-get update
-          apt-get install -y ${{ matrix.cc }} g++ cmake make xz-utils python libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg libprocps-dev
+          apt-get install -y ${{ matrix.cc }} g++ cmake make xz-utils python3 libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg libprocps-dev
 
       - name: Install Dependencies (dnf)
         if: ${{ matrix.package_manager == 'dnf' }}
-        run: dnf install --best -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python xz xz-devel yum-utils procps-devel
+        run: dnf install --best -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python3 xz xz-devel yum-utils procps-devel
 
       - name: Install Dependencies (yum-centos-7)
         if: ${{ matrix.package_manager == 'yum-centos-7' }}
         run: |
           yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum install -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python xz xz-devel yum-utils procps-devel
+          yum install -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python3 xz xz-devel yum-utils procps-devel
 
       - name: Build Debug
         if: ${{ matrix.buildtype == 'debug' }}
-        run: CC=${{ matrix.cc }} python setup build --clean --test --werror --debug
+        run: CC=${{ matrix.cc }} ./setup build --clean --test --werror --debug
 
       - name: Build Release
         if: ${{ matrix.buildtype == 'release' }}
-        run: CC=${{ matrix.cc }} python setup build --clean --test --werror
+        run: CC=${{ matrix.cc }} ./setup build --clean --test --werror
 
       - name: Install
-        run: python setup install
+        run: ./setup install
 
       - name: Test
         # For now, if the first batch of tests fails, rerun the failing tests
         # and continue on if they then pass. This is to work around sporadic
         # and difficult to debug errors such as #798
-        run: python setup test || python setup test --rerun-failed
+        run: ./setup test || ./setup test --rerun-failed
 
       - name: Upload shadow data directories
         uses: actions/upload-artifact@v2
