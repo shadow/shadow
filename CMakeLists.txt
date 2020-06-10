@@ -56,45 +56,15 @@ set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 #set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-## Check if we have struct statx
-try_compile(HAVE_STRUCT_STATX "${CMAKE_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_statx.c" 
-    COMPILE_DEFINITIONS "-D_GNU_SOURCE=1")
-if("${HAVE_STRUCT_STATX}" STREQUAL "TRUE")
-    set(HAVE_STRUCT_STATX 1)
-else()
-    set(HAVE_STRUCT_STATX 0)
-endif()
-MESSAGE(STATUS "HAVE_STRUCT_STATX = ${HAVE_STRUCT_STATX}")
-
-## Check if we have struct statx_timestamp
-try_compile(HAVE_STRUCT_STATX_TIMESTAMP "${CMAKE_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_statx_timestamp.c" 
-    COMPILE_DEFINITIONS "-D_GNU_SOURCE=1")
-if("${HAVE_STRUCT_STATX_TIMESTAMP}" STREQUAL "TRUE")
-    set(HAVE_STRUCT_STATX_TIMESTAMP 1)
-else()
-    set(HAVE_STRUCT_STATX_TIMESTAMP 0)
-endif()
-MESSAGE(STATUS "HAVE_STRUCT_STATX_TIMESTAMP = ${HAVE_STRUCT_STATX_TIMESTAMP}")
-
-## Check if we have struct linux_dirent
-try_compile(HAVE_STRUCT_LINUX_DIRENT "${CMAKE_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent.c" 
-    COMPILE_DEFINITIONS "-D_GNU_SOURCE=1")
-if("${HAVE_STRUCT_LINUX_DIRENT}" STREQUAL "TRUE")
-    set(HAVE_STRUCT_LINUX_DIRENT 1)
-else()
-    set(HAVE_STRUCT_LINUX_DIRENT 0)
-endif()
-MESSAGE(STATUS "HAVE_STRUCT_LINUX_DIRENT = ${HAVE_STRUCT_LINUX_DIRENT}")
-
-## Check if we have struct linux_dirent64
-try_compile(HAVE_STRUCT_LINUX_DIRENT64 "${CMAKE_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent.c" 
-    COMPILE_DEFINITIONS "-D_GNU_SOURCE=1")
-if("${HAVE_STRUCT_LINUX_DIRENT64}" STREQUAL "TRUE")
-    set(HAVE_STRUCT_LINUX_DIRENT64 1)
-else()
-    set(HAVE_STRUCT_LINUX_DIRENT64 0)
-endif()
-MESSAGE(STATUS "HAVE_STRUCT_LINUX_DIRENT64 = ${HAVE_STRUCT_LINUX_DIRENT64}")
+## Check if we are able to compile various compilation units
+compile_test(HAVE_STRUCT_STATX 
+            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_statx.c)
+compile_test(HAVE_STRUCT_STATX_TIMESTAMP 
+            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_statx_timestamp.c)
+compile_test(HAVE_STRUCT_LINUX_DIRENT 
+            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent.c)
+compile_test(HAVE_STRUCT_LINUX_DIRENT64 
+            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent64.c)
 
 ## construct info/version strings
 string(REGEX REPLACE "^([0-9]+)\\.[0-9]+\\.[0-9]+$" "\\1" SHADOW_VERSION_MAJOR ${SHADOW_VERSION_FULL})
