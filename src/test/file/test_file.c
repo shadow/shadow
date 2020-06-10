@@ -339,7 +339,7 @@ static void _test_open_close() {
 
     int filed;
     assert_nonneg_errno(filed = open("testfile", O_RDONLY));
-    assert_nonneg_errno(close(filed) < 0);
+    assert_nonneg_errno(close(filed));
 }
 
 int main(int argc, char* argv[]) {

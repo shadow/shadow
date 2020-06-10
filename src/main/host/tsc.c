@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <glib.h>
 #include <inttypes.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 #include <x86intrin.h>
