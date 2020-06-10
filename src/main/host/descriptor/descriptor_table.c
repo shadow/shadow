@@ -43,9 +43,8 @@ DescriptorTable* descriptortable_new() {
             g_direct_hash, g_direct_equal, NULL, descriptor_unref),
         .availableIndices = g_queue_new(),
         .indexCounter = STDERR_FILENO, // the first allocatable index is 3
-        .referenceCount = 1};
-
-    MAGIC_INIT(table);
+        .referenceCount = 1,
+        MAGIC_INITIALIZER};
 
     worker_countObject(OBJECT_TYPE_DESCRIPTOR_TABLE, COUNTER_TYPE_NEW);
     return table;
