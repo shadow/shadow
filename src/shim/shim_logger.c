@@ -31,7 +31,7 @@ static gchar* _simulation_nanos_string() {
 void shimlogger_log(Logger* base, LogLevel level, const gchar* fileName,
                     const gchar* functionName, const gint lineNumber,
                     const gchar* format, va_list vargs) {
-    static _Thread_local bool in_logger = false;
+    static __thread bool in_logger = false;
     if (in_logger) {
         // Avoid recursion in logging around syscall handling.
         return;
