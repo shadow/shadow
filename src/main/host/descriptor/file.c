@@ -284,8 +284,9 @@ ssize_t file_read(File* file, void* buf, size_t bufSize) {
         return -EBADF;
     }
 
-    debug("File %i will read %zu bytes from os-backed file %i",
-          _file_getFD(file), bufSize, _file_getOSBackedFD(file));
+    debug("File %i will read %zu bytes from os-backed file %i at path '%s'",
+          _file_getFD(file), bufSize, _file_getOSBackedFD(file),
+          file->osfile.abspath);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -300,8 +301,9 @@ ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
         return -EBADF;
     }
 
-    debug("File %i will pread %zu bytes from os-backed file %i",
-          _file_getFD(file), bufSize, _file_getOSBackedFD(file));
+    debug("File %i will pread %zu bytes from os-backed file %i at path '%s'",
+          _file_getFD(file), bufSize, _file_getOSBackedFD(file),
+          file->osfile.abspath);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -317,8 +319,10 @@ ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt,
         return -EBADF;
     }
 
-    debug("File %i will preadv2 %d vector items from os-backed file %i",
-          _file_getFD(file), iovcnt, _file_getOSBackedFD(file));
+    debug("File %i will preadv2 %d vector items from os-backed file %i at path "
+          "'%s'",
+          _file_getFD(file), iovcnt, _file_getOSBackedFD(file),
+          file->osfile.abspath);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -334,8 +338,9 @@ ssize_t file_write(File* file, const void* buf, size_t bufSize) {
         return -EBADF;
     }
 
-    debug("File %i will write %zu bytes to os-backed file %i",
-          _file_getFD(file), bufSize, _file_getOSBackedFD(file));
+    debug("File %i will write %zu bytes to os-backed file %i at path '%s'",
+          _file_getFD(file), bufSize, _file_getOSBackedFD(file),
+          file->osfile.abspath);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -350,8 +355,9 @@ ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset) {
         return -EBADF;
     }
 
-    debug("File %i will pwrite %zu bytes to os-backed file %i",
-          _file_getFD(file), bufSize, _file_getOSBackedFD(file));
+    debug("File %i will pwrite %zu bytes to os-backed file %i at path '%s'",
+          _file_getFD(file), bufSize, _file_getOSBackedFD(file),
+          file->osfile.abspath);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -367,8 +373,10 @@ ssize_t file_pwritev2(File* file, const struct iovec* iov, int iovcnt,
         return -EBADF;
     }
 
-    debug("File %i will pwritev2 %d vector items from os-backed file %i",
-          _file_getFD(file), iovcnt, _file_getOSBackedFD(file));
+    debug("File %i will pwritev2 %d vector items from os-backed file %i at "
+          "path '%s'",
+          _file_getFD(file), iovcnt, _file_getOSBackedFD(file),
+          file->osfile.abspath);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
