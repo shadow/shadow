@@ -32,7 +32,13 @@ struct _Channel {
     MAGIC_DECLARE;
 };
 
-static gboolean channel_close(Channel* channel) {
+static Channel* _channel_fromDescriptor(Descriptor* descriptor) {
+    utility_assert(descriptor_getType(descriptor) == DT_PIPE);
+    return (Channel*)descriptor;
+}
+
+static gboolean channel_close(Descriptor* descriptor) {
+    Channel* channel = _channel_fromDescriptor(descriptor);
     MAGIC_ASSERT(channel);
     /* tell our link that we are done */
     if(channel->linkedChannel) {
@@ -50,7 +56,8 @@ static gboolean channel_close(Channel* channel) {
     return TRUE;
 }
 
-static void channel_free(Channel* channel) {
+static void channel_free(Descriptor* descriptor) {
+    Channel* channel = _channel_fromDescriptor(descriptor);
     MAGIC_ASSERT(channel);
 
     bytequeue_free(channel->buffer);
@@ -84,7 +91,9 @@ static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize 
     return (gssize)numCopied;
 }
 
-static gssize channel_sendUserData(Channel* channel, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
+static gssize channel_sendUserData(Transport* transport, gconstpointer buffer,
+                                   gsize nBytes, in_addr_t ip, in_port_t port) {
+    Channel* channel = _channel_fromDescriptor((Descriptor*)transport);
     MAGIC_ASSERT(channel);
     /* the read end of a unidirectional pipe can not write! */
     utility_assert(channel->type != CT_READONLY);
@@ -106,7 +115,10 @@ static gssize channel_sendUserData(Channel* channel, gconstpointer buffer, gsize
     return result;
 }
 
-static gssize channel_receiveUserData(Channel* channel, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
+static gssize channel_receiveUserData(Transport* transport, gpointer buffer,
+                                      gsize nBytes, in_addr_t* ip,
+                                      in_port_t* port) {
+    Channel* channel = _channel_fromDescriptor((Descriptor*)transport);
     MAGIC_ASSERT(channel);
     /* the write end of a unidirectional pipe can not read! */
     utility_assert(channel->type != CT_WRITEONLY);
@@ -137,9 +149,8 @@ static gssize channel_receiveUserData(Channel* channel, gpointer buffer, gsize n
 }
 
 TransportFunctionTable channel_functions = {
-    (DescriptorCloseFunc)channel_close, (DescriptorFreeFunc)channel_free,
-    (TransportSendFunc)channel_sendUserData,
-    (TransportReceiveFunc)channel_receiveUserData, MAGIC_VALUE};
+    channel_close, channel_free, channel_sendUserData, channel_receiveUserData,
+    MAGIC_VALUE};
 
 Channel* channel_new(ChannelType type) {
     Channel* channel = g_new0(Channel, 1);

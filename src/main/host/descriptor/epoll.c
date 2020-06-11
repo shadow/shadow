@@ -154,8 +154,14 @@ static void _epollwatch_unref(EpollWatch* watch) {
     }
 }
 
+static Epoll* _epoll_fromDescriptor(Descriptor* descriptor) {
+    utility_assert(descriptor_getType(descriptor) == DT_EPOLL);
+    return (Epoll*)descriptor;
+}
+
 /* should only be called from descriptor dereferencing the functionTable */
-static void _epoll_free(Epoll* epoll) {
+static void _epoll_free(Descriptor* descriptor) {
+    Epoll* epoll = _epoll_fromDescriptor(descriptor);
     MAGIC_ASSERT(epoll);
 
     /* this unrefs all of the remaining watches */
@@ -203,7 +209,8 @@ static void _epoll_close(Epoll* epoll) {
         descriptor_getOwnerProcess(&epoll->super), &epoll->super);
 }
 
-static gboolean _epoll_tryToClose(Epoll* epoll) {
+static gboolean _epoll_tryToClose(Descriptor* descriptor) {
+    Epoll* epoll = _epoll_fromDescriptor(descriptor);
     MAGIC_ASSERT(epoll);
 
     /* mark the descriptor as closed */
@@ -219,8 +226,7 @@ static gboolean _epoll_tryToClose(Epoll* epoll) {
 }
 
 DescriptorFunctionTable epollFunctions = {
-    (DescriptorCloseFunc)_epoll_tryToClose, (DescriptorFreeFunc)_epoll_free,
-    MAGIC_VALUE};
+    _epoll_tryToClose, _epoll_free, MAGIC_VALUE};
 
 Epoll* epoll_new() {
     Epoll* epoll = g_new0(Epoll, 1);

@@ -42,7 +42,13 @@ struct _Timer {
     MAGIC_DECLARE;
 };
 
-static gboolean _timer_close(Timer* timer) {
+static Timer* _timer_fromDescriptor(Descriptor* descriptor) {
+    utility_assert(descriptor_getType(descriptor) == DT_TIMER);
+    return (Timer*)descriptor;
+}
+
+static gboolean _timer_close(Descriptor* descriptor) {
+    Timer* timer = _timer_fromDescriptor(descriptor);
     MAGIC_ASSERT(timer);
     debug("timer fd %i closing now", timer->super.handle);
     timer->isClosed = TRUE;
@@ -54,7 +60,8 @@ static gboolean _timer_close(Timer* timer) {
     }
 }
 
-static void _timer_free(Timer* timer) {
+static void _timer_free(Descriptor* descriptor) {
+    Timer* timer = _timer_fromDescriptor(descriptor);
     MAGIC_ASSERT(timer);
     descriptor_clear((Descriptor*)timer);
     MAGIC_CLEAR(timer);
@@ -63,8 +70,7 @@ static void _timer_free(Timer* timer) {
 }
 
 static DescriptorFunctionTable _timerFunctions = {
-    (DescriptorCloseFunc)_timer_close, (DescriptorFreeFunc)_timer_free,
-    MAGIC_VALUE};
+    _timer_close, _timer_free, MAGIC_VALUE};
 
 Timer* timer_new(gint clockid, gint flags) {
     if(clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC) {

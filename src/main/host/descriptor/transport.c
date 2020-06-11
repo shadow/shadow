@@ -12,7 +12,15 @@
 #include "main/host/descriptor/transport.h"
 #include "main/utility/utility.h"
 
-void transport_free(Transport* transport) {
+static Transport* _transport_fromDescriptor(Descriptor* descriptor) {
+    utility_assert(descriptor_getType(descriptor) == DT_TCPSOCKET ||
+                   descriptor_getType(descriptor) == DT_UDPSOCKET ||
+                   descriptor_getType(descriptor) == DT_PIPE);
+    return (Transport*)descriptor;
+}
+
+static void _transport_free(Descriptor* descriptor) {
+    Transport* transport = _transport_fromDescriptor(descriptor);
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
 
@@ -20,18 +28,18 @@ void transport_free(Transport* transport) {
     // during the free call. This could be fixed by making all descriptor types
     // a direct child of the descriptor class.
     MAGIC_CLEAR(transport);
-    transport->vtable->free((Descriptor*)transport);
+    transport->vtable->free(descriptor);
 }
 
-gboolean transport_close(Transport* transport) {
+static gboolean _transport_close(Descriptor* descriptor) {
+    Transport* transport = _transport_fromDescriptor(descriptor);
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
-    return transport->vtable->close((Descriptor*)transport);
+    return transport->vtable->close(descriptor);
 }
 
 DescriptorFunctionTable transport_functions = {
-    (DescriptorCloseFunc)transport_close, (DescriptorFreeFunc)transport_free,
-    MAGIC_VALUE};
+    _transport_close, _transport_free, MAGIC_VALUE};
 
 void transport_init(Transport* transport, TransportFunctionTable* vtable,
                     DescriptorType type) {

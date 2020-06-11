@@ -74,7 +74,6 @@ gsize tcp_getInputBufferLength(TCP* tcp);
 void tcp_disableSendBufferAutotuning(TCP* tcp);
 void tcp_disableReceiveBufferAutotuning(TCP* tcp);
 
-gboolean tcp_isFamilySupported(TCP* tcp, sa_family_t family);
 gboolean tcp_isValidListener(TCP* tcp);
 gboolean tcp_isListeningAllowed(TCP* tcp);
 
