@@ -7,7 +7,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <glib.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -148,6 +147,44 @@ File* file_new() {
     return file;
 }
 
+static char* _file_getConcatStr(const char* prefix, const char* suffix) {
+    char* path = NULL;
+    if (asprintf(&path, "%s/%s", prefix, suffix) < 0) {
+        error("asprintf could not allocate a buffer, error %i: %s", errno,
+              strerror(errno));
+        abort();
+    }
+    return path;
+}
+
+static char* _file_getPath(File* file, File* dir, const char* pathname) {
+    MAGIC_ASSERT(file);
+    utility_assert(pathname);
+
+    /* Compute the absolute path, which will allow us to reopen later. */
+    if (pathname[0] == '/') {
+        /* The path is already absolute. Just copy it. */
+        return strdup(pathname);
+    }
+
+    /* The path is relative, try dir prefix first. */
+    if (dir && dir->osfile.abspath) {
+        return _file_getConcatStr(dir->osfile.abspath, pathname);
+    }
+
+    /* Use current working directory as prefix. */
+    char* cwd = getcwd(NULL, 0);
+    if (!cwd) {
+        error("getcwd unable to allocate string buffer, error %i: %s", errno,
+              strerror(errno));
+        abort();
+    }
+
+    char* abspath = _file_getConcatStr(cwd, pathname);
+    free(cwd);
+    return abspath;
+}
+
 static char* _file_getTempPathTemplate(File* file, const char* pathname) {
     char* abspath = NULL;
     if (asprintf(&abspath, "%s/shadow-tmpfd%d-XXXXXX", pathname,
@@ -175,8 +212,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
         abspath = _file_getTempPathTemplate(file, pathname);
         osfd = mkostemp(abspath, flags & ~O_TMPFILE);
     } else {
-        abspath =
-            g_canonicalize_filename(pathname, dir ? dir->osfile.abspath : NULL);
+        abspath = _file_getPath(file, dir, pathname);
         osfd = open(abspath, flags, mode);
     }
 
