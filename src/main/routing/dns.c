@@ -208,6 +208,10 @@ static void _dns_cleanupHostsFile(DNS* dns) {
     }
 
     if(dns->hosts.path) {
+        if (unlink(dns->hosts.path) < 0) {
+            info("unlink unable to remove hosts file at '%s', error %i: %s",
+                 dns->hosts.path, errno, strerror(errno));
+        }
         free(dns->hosts.path);
         dns->hosts.path = NULL;
     }

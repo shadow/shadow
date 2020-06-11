@@ -93,6 +93,14 @@ static void _file_closeHelper(File* file) {
         close(file->osfile.fd);
         file->osfile.fd = 0;
 
+        if (file->type == FILE_TYPE_TEMP && file->osfile.abspath) {
+            if (unlink(file->osfile.abspath) < 0) {
+                info("unlink unable to remove temporary file at '%s', error "
+                     "%i: %s",
+                     file->osfile.abspath, errno, strerror(errno));
+            }
+        }
+
         /* The os-backed file is no longer ready. */
         descriptor_adjustStatus(&file->super, DS_ACTIVE, FALSE);
     }
