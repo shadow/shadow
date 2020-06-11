@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <glib.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -147,48 +148,12 @@ File* file_new() {
     return file;
 }
 
-static char* _file_getConcatStr(const char* prefix, const char* suffix) {
-    char* path = NULL;
-    if (asprintf(&path, "%s/%s", prefix, suffix) < 0) {
-        error("asprintf could not allocate a buffer");
-        return NULL;
-    }
-    return path;
-}
-
-static char* _file_getPath(File* file, File* dir, const char* pathname) {
-    MAGIC_ASSERT(file);
-    utility_assert(pathname);
-
-    /* Compute the absolute path, which will allow us to reopen later. */
-    if (!strncmp("/", pathname, 1)) {
-        /* The path is already absolute. Just copy it. */
-        return strdup(pathname);
-    }
-
-    /* The path is relative, try dir prefix first. */
-    if (dir && dir->osfile.abspath) {
-        return _file_getConcatStr(dir->osfile.abspath, pathname);
-    }
-
-    /* Use current working directory as prefix. */
-    char* cwd = getcwd(NULL, 0);
-    if (!cwd) {
-        error("getcwd unable to allocate string buffer");
-        return NULL;
-    }
-
-    char* abspath = _file_getConcatStr(cwd, pathname);
-    ;
-    free(cwd);
-    return abspath;
-}
-
-static char* _file_getTempPath(File* file, const char* pathname) {
+static char* _file_getTempPathTemplate(File* file, const char* pathname) {
     char* abspath = NULL;
     if (asprintf(&abspath, "%s/shadow-tmpfd%d-XXXXXX", pathname,
                  _file_getFD(file)) < 0) {
-        error("asprintf could not allocate string for temp file");
+        error("asprintf could not allocate string for temp file, error %i: %s",
+              errno, strerror(errno));
         abort();
     }
     return abspath;
@@ -207,10 +172,11 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
 
     if (flags & O_TMPFILE) {
         /* We need to store a copy of the temp path so we can reopen it. */
-        abspath = _file_getTempPath(file, pathname);
+        abspath = _file_getTempPathTemplate(file, pathname);
         osfd = mkostemp(abspath, flags & ~O_TMPFILE);
     } else {
-        abspath = _file_getPath(file, dir, pathname);
+        abspath =
+            g_canonicalize_filename(pathname, dir ? dir->osfile.abspath : NULL);
         osfd = open(abspath, flags, mode);
     }
 
