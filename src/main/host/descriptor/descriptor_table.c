@@ -17,7 +17,9 @@
 #include "main/utility/utility.h"
 
 struct _DescriptorTable {
-    /* All descriptors that we are tracking. */
+    /* All descriptors that we are tracking. Each descriptor has a unique
+     * fd descriptor number associated with it when it is stored in our table,
+     * which we refer to as a table index or table indices. */
     GHashTable* descriptors;
 
     /* Table indices that were previously allocated to store descriptors but
@@ -83,17 +85,21 @@ void descriptortable_unref(DescriptorTable* table) {
 int descriptortable_add(DescriptorTable* table, Descriptor* descriptor) {
     MAGIC_ASSERT(table);
 
-    gpointer indexp = g_queue_get_length(table->availableIndices)
-                          ? g_queue_pop_head(table->availableIndices)
-                          : GINT_TO_POINTER(++table->indexCounter);
+    int index = 0;
 
-    utility_assert(!g_hash_table_contains(table->descriptors, indexp));
+    if (g_queue_get_length(table->availableIndices) > 0) {
+        index = GPOINTER_TO_INT(g_queue_pop_head(table->availableIndices));
+    } else {
+        index = ++table->indexCounter;
+    }
 
-    g_hash_table_insert(table->descriptors, indexp, descriptor);
+    utility_assert(
+        !g_hash_table_contains(table->descriptors, GINT_TO_POINTER(index)));
 
-    gint handle = GPOINTER_TO_INT(indexp);
-    descriptor_setHandle(descriptor, handle);
-    return handle;
+    g_hash_table_insert(table->descriptors, GINT_TO_POINTER(index), descriptor);
+
+    descriptor_setHandle(descriptor, index);
+    return index;
 }
 
 /* Compare function for sorting the indices queue from low to high valued ints.
@@ -106,7 +112,7 @@ static gint _descriptortable_compareInts(gconstpointer a, gconstpointer b,
 }
 
 /* Remove unnecessary items from the tail of the indices queue. */
-static void _descriptortable_trimIndiciesTail(DescriptorTable* table) {
+static void _descriptortable_trimIndicesTail(DescriptorTable* table) {
     MAGIC_ASSERT(table);
     while (GPOINTER_TO_INT(g_queue_peek_tail(table->availableIndices)) ==
            table->indexCounter) {
@@ -118,16 +124,16 @@ static void _descriptortable_trimIndiciesTail(DescriptorTable* table) {
 bool descriptortable_remove(DescriptorTable* table, Descriptor* descriptor) {
     MAGIC_ASSERT(table);
 
-    gpointer indexp = GINT_TO_POINTER(descriptor_getHandle(descriptor));
+    int index = descriptor_getHandle(descriptor);
 
-    if (g_hash_table_contains(table->descriptors, indexp)) {
+    if (g_hash_table_contains(table->descriptors, GINT_TO_POINTER(index))) {
         /* Make sure we do not operate on the descriptor after we remove it,
          * because that could cause it to be freed and invalidate it. */
         descriptor_setHandle(descriptor, 0);
-        g_hash_table_remove(table->descriptors, indexp);
-        g_queue_insert_sorted(table->availableIndices, indexp,
+        g_hash_table_remove(table->descriptors, GINT_TO_POINTER(index));
+        g_queue_insert_sorted(table->availableIndices, GINT_TO_POINTER(index),
                               _descriptortable_compareInts, NULL);
-        _descriptortable_trimIndiciesTail(table);
+        _descriptortable_trimIndicesTail(table);
         return true;
     } else {
         return false;
@@ -139,18 +145,19 @@ Descriptor* descriptortable_get(DescriptorTable* table, int index) {
     return g_hash_table_lookup(table->descriptors, GINT_TO_POINTER(index));
 }
 
-void descriptortable_setStdOut(DescriptorTable* table, Descriptor* descriptor) {
+void descriptortable_set(DescriptorTable* table, int index,
+                         Descriptor* descriptor) {
     MAGIC_ASSERT(table);
-    g_hash_table_insert(
-        table->descriptors, GINT_TO_POINTER(STDOUT_FILENO), descriptor);
-    descriptor_setHandle(descriptor, STDOUT_FILENO);
-}
 
-void descriptortable_setStdErr(DescriptorTable* table, Descriptor* descriptor) {
-    MAGIC_ASSERT(table);
-    g_hash_table_insert(
-        table->descriptors, GINT_TO_POINTER(STDERR_FILENO), descriptor);
-    descriptor_setHandle(descriptor, STDERR_FILENO);
+    /* We may be replacing a descriptor that is already set at index. */
+    Descriptor* existing = descriptortable_get(table, index);
+    if (existing) {
+        descriptor_setHandle(existing, 0);
+    }
+
+    /* Store the new descriptor at the index. */
+    g_hash_table_insert(table->descriptors, GINT_TO_POINTER(index), descriptor);
+    descriptor_setHandle(descriptor, index);
 }
 
 /* TODO: remove this once the TCP layer is better designed. */

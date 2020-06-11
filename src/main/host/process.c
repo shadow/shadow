@@ -205,10 +205,12 @@ static void _process_openStdIOFileHelper(Process* proc, bool isStdOut) {
               isStdOut ? "stdout" : "stderr", fileName);
 
         if (isStdOut) {
-            descriptortable_setStdOut(proc->descTable, (Descriptor*)stdfile);
+            descriptortable_set(
+                proc->descTable, STDOUT_FILENO, (Descriptor*)stdfile);
             proc->stdoutFile = stdfile;
         } else {
-            descriptortable_setStdErr(proc->descTable, (Descriptor*)stdfile);
+            descriptortable_set(
+                proc->descTable, STDERR_FILENO, (Descriptor*)stdfile);
             proc->stderrFile = stdfile;
         }
 

@@ -47,15 +47,12 @@ bool descriptortable_remove(DescriptorTable* table, Descriptor* descriptor);
  * storing a descriptor at the given index. */
 Descriptor* descriptortable_get(DescriptorTable* table, int index);
 
-/* Store the given descriptor at the special index reserved for STDOUT. Any
- * previous descriptor that was stored there will be removed and its table
- * index will be cleared. See the note about refs in add(). */
-void descriptortable_setStdOut(DescriptorTable* table, Descriptor* descriptor);
-
-/* Store the given descriptor at the special index reserved for STDERR. Any
- * previous descriptor that was stored there will be removed and its table
- * index will be cleared. See the note about refs in add(). */
-void descriptortable_setStdErr(DescriptorTable* table, Descriptor* descriptor);
+/* Store the given descriptor at given index. Any previous descriptor that was
+ * stored there will be removed and its table index will be cleared. This
+ * unrefs any existing descriptor stored at index as in remove(), and consumes
+ * a ref to the existing descriptor as in add(). */
+void descriptortable_set(DescriptorTable* table, int index,
+                         Descriptor* descriptor);
 
 /* This is a helper function that handles some corner cases where some
  * descriptors are linked to each other and we must remove that link in
