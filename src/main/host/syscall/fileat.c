@@ -70,13 +70,8 @@ static int _syscallhandler_validateDirAndPathnameHelper(
     }
 
     /* Get the path string from the plugin. */
-    errcode = thread_getReadableString(
+    return thread_getReadableString(
         sys->thread, pathnamePtr, PATH_MAX, pathname_out, NULL);
-    if (errcode < 0) {
-        return errcode;
-    }
-
-    return 0;
 }
 
 static SysCallReturn

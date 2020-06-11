@@ -22,7 +22,7 @@
 
 static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
                                        unsigned long command,
-                                       PluginPtr argPtr) {
+                                       SysCallReg argReg) {
     int result = 0;
 
     switch (command) {
@@ -46,21 +46,22 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
         case F_NOTIFY:
         case F_SETPIPE_SZ:
         case F_ADD_SEALS: {
-            // arg is an int
-            result = file_fcntl(file, command, (void*)argPtr.val);
+            // arg is an int (we cast to void* here to appease the fcntl api)
+            result = file_fcntl(file, command, (void*)argReg.as_i64);
             break;
         }
 
         case F_GETLK:
         case F_OFD_GETLK: {
-            const struct flock* flk_in =
-                thread_getReadablePtr(sys->thread, argPtr, sizeof(*flk_in));
+            struct flock* flk_in = thread_newClonedPtr(
+                sys->thread, argReg.as_ptr, sizeof(*flk_in));
             result = file_fcntl(file, command, (void*)flk_in);
 
-            struct flock* flk_out =
-                thread_getWriteablePtr(sys->thread, argPtr, sizeof(*flk_out));
+            struct flock* flk_out = thread_getWriteablePtr(
+                sys->thread, argReg.as_ptr, sizeof(*flk_out));
 
             memcpy(flk_out, flk_in, sizeof(*flk_out));
+            thread_releaseClonedPtr(sys->thread, flk_in);
             break;
         }
 
@@ -69,37 +70,37 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
         case F_SETLKW:
         case F_OFD_SETLKW: {
             const struct flock* flk =
-                thread_getReadablePtr(sys->thread, argPtr, sizeof(*flk));
+                thread_getReadablePtr(sys->thread, argReg.as_ptr, sizeof(*flk));
             result = file_fcntl(file, command, (void*)flk);
             break;
         }
 
         case F_GETOWN_EX: {
-            struct f_owner_ex* foe =
-                thread_getWriteablePtr(sys->thread, argPtr, sizeof(*foe));
+            struct f_owner_ex* foe = thread_getWriteablePtr(
+                sys->thread, argReg.as_ptr, sizeof(*foe));
             result = file_fcntl(file, command, foe);
             break;
         }
 
         case F_SETOWN_EX: {
             const struct f_owner_ex* foe =
-                thread_getReadablePtr(sys->thread, argPtr, sizeof(*foe));
+                thread_getReadablePtr(sys->thread, argReg.as_ptr, sizeof(*foe));
             result = file_fcntl(file, command, (void*)foe);
             break;
         }
 
         case F_GET_RW_HINT:
         case F_GET_FILE_RW_HINT: {
-            uint64_t* hint =
-                thread_getWriteablePtr(sys->thread, argPtr, sizeof(*hint));
+            uint64_t* hint = thread_getWriteablePtr(
+                sys->thread, argReg.as_ptr, sizeof(*hint));
             result = file_fcntl(file, command, hint);
             break;
         }
 
         case F_SET_RW_HINT:
         case F_SET_FILE_RW_HINT: {
-            const uint64_t* hint =
-                thread_getReadablePtr(sys->thread, argPtr, sizeof(*hint));
+            const uint64_t* hint = thread_getReadablePtr(
+                sys->thread, argReg.as_ptr, sizeof(*hint));
             result = file_fcntl(file, command, (void*)hint);
             break;
         }
@@ -129,7 +130,7 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
                                    const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     unsigned long command = args->args[1].as_i64;
-    PluginPtr argPtr = args->args[2].as_ptr; // type depends on command
+    SysCallReg argReg = args->args[2]; // type depends on command
 
     debug("fcntl called on fd %d for command %lu", fd, command);
 
@@ -142,7 +143,7 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
     int result = 0;
     if (descriptor_getType(desc) == DT_FILE) {
         result =
-            _syscallhandler_fcntlHelper(sys, (File*)desc, fd, command, argPtr);
+            _syscallhandler_fcntlHelper(sys, (File*)desc, fd, command, argReg);
     } else {
         /* TODO: add additional support for important operations. */
         switch (command) {
@@ -151,7 +152,7 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
                 break;
             }
             case F_SETFL: {
-                descriptor_setFlags(desc, (int)argPtr.val);
+                descriptor_setFlags(desc, argReg.as_i64);
                 break;
             }
             default: {
