@@ -88,10 +88,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
 
     /* We need enough mem for the string, but no more than PATH_MAX. */
     size_t maplen = strnlen(abspath, PATH_MAX - 1) + 1; // an extra 1 for null
-    if (maplen <= 1) {
-        debug("File %i path length of '%s' is 0.", fd, abspath);
-        return -1;
-    }
+    utility_assert(maplen > 1);
 
     debug("Opening path '%s' in plugin.", abspath);
 
@@ -108,9 +105,8 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     thread_flushPtrs(sys->thread);
 
     /* Instruct the plugin to open the file at the path we sent. */
-    int result =
-        (int)thread_nativeSyscall(sys->thread, SYS_open, pluginBufPtr.val,
-                                  file_getFlags(file), file_getMode(file));
+    int result = thread_nativeSyscall(sys->thread, SYS_open, pluginBufPtr.val,
+                                      file_getFlags(file), file_getMode(file));
     if (result < 0) {
         // TODO: not sure if errno is valid here, i.e., if we got copied it
         // back from the plugin after the call.
@@ -129,12 +125,10 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
 
 static void _syscallhandler_closePluginFile(SysCallHandler* sys, int pluginFD) {
     /* Instruct the plugin to close the file at given fd. */
-    long result = thread_nativeSyscall(sys->thread, SYS_close, pluginFD);
+    int result = thread_nativeSyscall(sys->thread, SYS_close, pluginFD);
     if (result < 0) {
-        // TODO: not sure if errno is valid here, i.e., if we got copied it
-        // back from the plugin after the call.
         debug("Failed to close file at fd %i in plugin, error %i: %s.",
-              pluginFD, errno, strerror(errno));
+              pluginFD, -result, strerror(-result));
     } else {
         debug("Successfully closed file at fd %i in plugin.", pluginFD);
     }
@@ -172,7 +166,7 @@ SysCallReturn syscallhandler_mmap(SysCallHandler* sys,
         if (pluginFD < 0) {
             warning("mmap on fd %d for %zu bytes failed.", fd, len);
             return (SysCallReturn){
-                .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)MAP_FAILED};
+                .state = SYSCALL_DONE, .retval.as_i64 = -EACCES};
         }
     }
 
