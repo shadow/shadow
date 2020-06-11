@@ -38,7 +38,7 @@ enum _TCPCongestionType {
     TCP_CC_UNKNOWN, TCP_CC_AIMD, TCP_CC_RENO, TCP_CC_CUBIC,
 };
 
-TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize);
+TCP* tcp_new(guint receiveBufferSize, guint sendBufferSize);
 
 // clang-format off
 /* Returns a positive number to indicate that we have not yet sent a SYN
@@ -74,7 +74,6 @@ gsize tcp_getInputBufferLength(TCP* tcp);
 void tcp_disableSendBufferAutotuning(TCP* tcp);
 void tcp_disableReceiveBufferAutotuning(TCP* tcp);
 
-gboolean tcp_isFamilySupported(TCP* tcp, sa_family_t family);
 gboolean tcp_isValidListener(TCP* tcp);
 gboolean tcp_isListeningAllowed(TCP* tcp);
 

@@ -56,6 +56,16 @@ set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 #set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+## Check if we are able to compile various compilation units
+compile_test(HAVE_STRUCT_STATX 
+            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_statx.c)
+compile_test(HAVE_STRUCT_STATX_TIMESTAMP 
+            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_statx_timestamp.c)
+compile_test(HAVE_STRUCT_LINUX_DIRENT 
+            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent.c)
+compile_test(HAVE_STRUCT_LINUX_DIRENT64 
+            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent64.c)
+
 ## construct info/version strings
 string(REGEX REPLACE "^([0-9]+)\\.[0-9]+\\.[0-9]+$" "\\1" SHADOW_VERSION_MAJOR ${SHADOW_VERSION_FULL})
 string(REGEX REPLACE "^[0-9]+\\.([0-9]+)\\.[0-9]+$" "\\1" SHADOW_VERSION_MINOR ${SHADOW_VERSION_FULL})

@@ -30,12 +30,20 @@ struct _UDP {
     MAGIC_DECLARE;
 };
 
-gboolean udp_isFamilySupported(UDP* udp, sa_family_t family) {
+static UDP* _udp_fromDescriptor(Descriptor* descriptor) {
+    utility_assert(descriptor_getType(descriptor) == DT_UDPSOCKET);
+    return (UDP*)descriptor;
+}
+
+static gboolean _udp_isFamilySupported(Socket* socket, sa_family_t family) {
+    UDP* udp = _udp_fromDescriptor((Descriptor*)socket);
     MAGIC_ASSERT(udp);
     return (family == AF_INET || family == AF_UNSPEC || family == AF_UNIX) ? TRUE : FALSE;
 }
 
-gint udp_connectToPeer(UDP* udp, in_addr_t ip, in_port_t port, sa_family_t family) {
+static gint _udp_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port,
+                               sa_family_t family) {
+    UDP* udp = _udp_fromDescriptor((Descriptor*)socket);
     MAGIC_ASSERT(udp);
 
 
@@ -51,7 +59,8 @@ gint udp_connectToPeer(UDP* udp, in_addr_t ip, in_port_t port, sa_family_t famil
     return 0;
 }
 
-void udp_processPacket(UDP* udp, Packet* packet) {
+static void _udp_processPacket(Socket* socket, Packet* packet) {
+    UDP* udp = _udp_fromDescriptor((Descriptor*)socket);
     MAGIC_ASSERT(udp);
 
     /* UDP packet contains data for user and can be buffered immediately */
@@ -62,7 +71,8 @@ void udp_processPacket(UDP* udp, Packet* packet) {
     }
 }
 
-void udp_dropPacket(UDP* udp, Packet* packet) {
+static void _udp_dropPacket(Socket* socket, Packet* packet) {
+    UDP* udp = _udp_fromDescriptor((Descriptor*)socket);
     MAGIC_ASSERT(udp);
 
     /* do nothing */
@@ -73,7 +83,9 @@ void udp_dropPacket(UDP* udp, Packet* packet) {
  * ip and port parameters. this function assumes that the socket is already
  * bound to a local port, no matter if that happened explicitly or implicitly.
  */
-gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
+static gssize _udp_sendUserData(Transport* transport, gconstpointer buffer,
+                                gsize nBytes, in_addr_t ip, in_port_t port) {
+    UDP* udp = _udp_fromDescriptor((Descriptor*)transport);
     MAGIC_ASSERT(udp);
 
     gsize space = socket_getOutputBufferSpace(&(udp->super));
@@ -132,17 +144,20 @@ gssize udp_sendUserData(UDP* udp, gconstpointer buffer, gsize nBytes, in_addr_t 
     /* update the tracker output buffer stats */
     Tracker* tracker = host_getTracker(worker_getActiveHost());
     Socket* socket = (Socket* )udp;
-    Descriptor* descriptor = (Descriptor *)socket;
     gsize outLength = socket_getOutputBufferLength(socket);
     gsize outSize = socket_getOutputBufferSize(socket);
-    tracker_updateSocketOutputBuffer(tracker, descriptor->handle, outLength, outSize);
+    tracker_updateSocketOutputBuffer(
+        tracker, descriptor_getHandle((Descriptor*)udp), outLength, outSize);
 
     debug("buffered %"G_GSIZE_FORMAT" outbound UDP bytes from user", offset);
 
     return offset > 0 ? (gssize)offset : -EWOULDBLOCK;
 }
 
-gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
+static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
+                                   gsize nBytes, in_addr_t* ip,
+                                   in_port_t* port) {
+    UDP* udp = _udp_fromDescriptor((Descriptor*)transport);
     MAGIC_ASSERT(udp);
 
     Packet* packet = socket_removeFromInputBuffer((Socket*)udp);
@@ -172,48 +187,46 @@ gssize udp_receiveUserData(UDP* udp, gpointer buffer, gsize nBytes, in_addr_t* i
     /* update the tracker output buffer stats */
     Tracker* tracker = host_getTracker(worker_getActiveHost());
     Socket* socket = (Socket* )udp;
-    Descriptor* descriptor = (Descriptor *)socket;
     gsize outLength = socket_getOutputBufferLength(socket);
     gsize outSize = socket_getOutputBufferSize(socket);
-    tracker_updateSocketOutputBuffer(tracker, descriptor->handle, outLength, outSize);
+    tracker_updateSocketOutputBuffer(
+        tracker, descriptor_getHandle((Descriptor*)udp), outLength, outSize);
 
     debug("user read %u inbound UDP bytes", bytesCopied);
 
     return bytesCopied > 0 ? (gssize)bytesCopied : EWOULDBLOCK;
 }
 
-void udp_free(UDP* udp) {
+static void _udp_free(Descriptor* descriptor) {
+    UDP* udp = _udp_fromDescriptor(descriptor);
     MAGIC_ASSERT(udp);
 
-    worker_countObject(OBJECT_TYPE_UDP, COUNTER_TYPE_FREE);
-
+    descriptor_clear(descriptor);
     MAGIC_CLEAR(udp);
     g_free(udp);
+
+    worker_countObject(OBJECT_TYPE_UDP, COUNTER_TYPE_FREE);
 }
 
-void udp_close(UDP* udp) {
+static gboolean _udp_close(Descriptor* descriptor) {
+    UDP* udp = _udp_fromDescriptor(descriptor);
     MAGIC_ASSERT(udp);
-    host_closeDescriptor(worker_getActiveHost(), udp->super.super.super.handle);
+    /* Deregister us from the process upon return. */
+    return TRUE;
 }
 
 /* we implement the socket interface, this describes our function suite */
 SocketFunctionTable udp_functions = {
-    (DescriptorFunc) udp_close,
-    (DescriptorFunc) udp_free,
-    (TransportSendFunc) udp_sendUserData,
-    (TransportReceiveFunc) udp_receiveUserData,
-    (SocketProcessFunc) udp_processPacket,
-    (SocketIsFamilySupportedFunc) udp_isFamilySupported,
-    (SocketConnectToPeerFunc) udp_connectToPeer,
-    (SocketDropFunc) udp_dropPacket,
-    MAGIC_VALUE
-};
+    _udp_close,           _udp_free,          _udp_sendUserData,
+    _udp_receiveUserData, _udp_processPacket, _udp_isFamilySupported,
+    _udp_connectToPeer,   _udp_dropPacket,    MAGIC_VALUE};
 
-UDP* udp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
+UDP* udp_new(guint receiveBufferSize, guint sendBufferSize) {
     UDP* udp = g_new0(UDP, 1);
     MAGIC_INIT(udp);
 
-    socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, handle, receiveBufferSize, sendBufferSize);
+    socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, receiveBufferSize,
+                sendBufferSize);
 
     /* we are immediately active because UDP doesnt wait for accept or connect */
     descriptor_adjustStatus((Descriptor*) udp, DS_ACTIVE|DS_WRITABLE, TRUE);

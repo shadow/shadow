@@ -16,6 +16,7 @@
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_listener.h"
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/utility/utility.h"
@@ -153,8 +154,14 @@ static void _epollwatch_unref(EpollWatch* watch) {
     }
 }
 
+static Epoll* _epoll_fromDescriptor(Descriptor* descriptor) {
+    utility_assert(descriptor_getType(descriptor) == DT_EPOLL);
+    return (Epoll*)descriptor;
+}
+
 /* should only be called from descriptor dereferencing the functionTable */
-static void _epoll_free(Epoll* epoll) {
+static void _epoll_free(Descriptor* descriptor) {
+    Epoll* epoll = _epoll_fromDescriptor(descriptor);
     MAGIC_ASSERT(epoll);
 
     /* this unrefs all of the remaining watches */
@@ -168,6 +175,7 @@ static void _epoll_free(Epoll* epoll) {
     utility_assert(epoll->ownerProcess);
     process_unref(epoll->ownerProcess);
 
+    descriptor_clear((Descriptor*)epoll);
     MAGIC_CLEAR(epoll);
     g_free(epoll);
 
@@ -195,12 +203,14 @@ static void _epoll_close(Epoll* epoll) {
 
     epoll_clearWatchListeners(epoll);
 
-    /* tell the host to stop tracking us, and unref the descriptor.
+    /* tell the process to stop tracking us, and unref the descriptor.
      * this should trigger _epoll_free in most cases. */
-    host_closeDescriptor(worker_getActiveHost(), epoll->super.handle);
+    process_deregisterDescriptor(
+        descriptor_getOwnerProcess(&epoll->super), &epoll->super);
 }
 
-static void _epoll_tryToClose(Epoll* epoll) {
+static gboolean _epoll_tryToClose(Descriptor* descriptor) {
+    Epoll* epoll = _epoll_fromDescriptor(descriptor);
     MAGIC_ASSERT(epoll);
 
     /* mark the descriptor as closed */
@@ -211,19 +221,18 @@ static void _epoll_tryToClose(Epoll* epoll) {
     if(!isScheduled) {
         _epoll_close(epoll);
     }
+
+    return FALSE;
 }
 
 DescriptorFunctionTable epollFunctions = {
-    (DescriptorFunc) _epoll_tryToClose,
-    (DescriptorFunc) _epoll_free,
-    MAGIC_VALUE
-};
+    _epoll_tryToClose, _epoll_free, MAGIC_VALUE};
 
-Epoll* epoll_new(gint handle) {
+Epoll* epoll_new() {
     Epoll* epoll = g_new0(Epoll, 1);
     MAGIC_INIT(epoll);
 
-    descriptor_init(&(epoll->super), DT_EPOLL, &epollFunctions, handle);
+    descriptor_init(&(epoll->super), DT_EPOLL, &epollFunctions);
 
     /* allocate backend needed for managing events for this descriptor */
     epoll->watching = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_epollwatch_unref);

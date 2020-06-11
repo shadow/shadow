@@ -135,8 +135,7 @@ static void _threadpreload_create_ipc_sockets(ThreadPreload* thread,
 }
 
 static int _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
-                                    char* const argv[], char* const envp[],
-                                    int stderrFD, int stdoutFD) {
+                                    char* const argv[], char* const envp[]) {
     int rc = 0;
     pid_t pid = vfork();
 
@@ -146,14 +145,6 @@ static int _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
             return -1;
             break;
         case 0: // child
-            if (dup2(stderrFD, STDERR_FILENO) < 0) {
-                error("dup2 failed: %s", strerror(errno));
-                return -1;
-            }
-            if (dup2(stdoutFD, STDOUT_FILENO) < 0) {
-                error("dup2 failed: %s", strerror(errno));
-                return -1;
-            }
             execvpe(file, argv, envp);
             if (rc == -1) {
                 error("execvpe() call failed");
@@ -188,8 +179,7 @@ static void _threadpreload_cleanup(ThreadPreload* thread, int status) {
     thread->isRunning = 0;
 }
 
-void threadpreload_run(Thread* base, gchar** argv, gchar** envv, int stderrFD,
-                       int stdoutFD) {
+void threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     /* set the env for the child */
@@ -212,7 +202,7 @@ void threadpreload_run(Thread* base, gchar** argv, gchar** envv, int stderrFD,
     g_free(envStr);
     g_free(argStr);
 
-    _threadpreload_fork_exec(thread, argv[0], argv, myenvv, stderrFD, stdoutFD);
+    _threadpreload_fork_exec(thread, argv[0], argv, myenvv);
 
     // close the child sock, it is no longer needed
     close(child_fd);

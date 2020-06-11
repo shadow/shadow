@@ -22,8 +22,14 @@
 #include "main/routing/packet.h"
 #include "main/utility/utility.h"
 
-void socket_free(gpointer data) {
-    Socket* socket = data;
+static Socket* _socket_fromDescriptor(Descriptor* descriptor) {
+    utility_assert(descriptor_getType(descriptor) == DT_TCPSOCKET ||
+                   descriptor_getType(descriptor) == DT_UDPSOCKET);
+    return (Socket*)descriptor;
+}
+
+static void _socket_free(Descriptor* descriptor) {
+    Socket* socket = _socket_fromDescriptor(descriptor);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
 
@@ -53,48 +59,51 @@ void socket_free(gpointer data) {
     }
     g_queue_free(socket->outputControlBuffer);
 
+    // TODO: assertion errors will occur if the subclass uses the socket
+    // during the free call. This could be fixed by making all descriptor types
+    // a direct child of the descriptor class.
     MAGIC_CLEAR(socket);
     socket->vtable->free((Descriptor*)socket);
 }
 
-void socket_close(Socket* socket) {
+static gboolean _socket_close(Descriptor* descriptor) {
+    Socket* socket = _socket_fromDescriptor(descriptor);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
 
     Tracker* tracker = host_getTracker(worker_getActiveHost());
-    Descriptor* descriptor = (Descriptor *)socket;
-    tracker_removeSocket(tracker, descriptor->handle);
+    tracker_removeSocket(tracker, descriptor_getHandle(descriptor));
 
-    socket->vtable->close((Descriptor*)socket);
+    return socket->vtable->close((Descriptor*)socket);
 }
 
-gssize socket_sendUserData(Socket* socket, gconstpointer buffer, gsize nBytes,
-        in_addr_t ip, in_port_t port) {
+static gssize _socket_sendUserData(Transport* transport, gconstpointer buffer,
+                                   gsize nBytes, in_addr_t ip, in_port_t port) {
+    Socket* socket = _socket_fromDescriptor((Descriptor*)transport);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     return socket->vtable->send((Transport*)socket, buffer, nBytes, ip, port);
 }
 
-gssize socket_receiveUserData(Socket* socket, gpointer buffer, gsize nBytes,
-        in_addr_t* ip, in_port_t* port) {
+static gssize _socket_receiveUserData(Transport* transport, gpointer buffer,
+                                      gsize nBytes, in_addr_t* ip,
+                                      in_port_t* port) {
+    Socket* socket = _socket_fromDescriptor((Descriptor*)transport);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     return socket->vtable->receive((Transport*)socket, buffer, nBytes, ip, port);
 }
 
 TransportFunctionTable socket_functions = {
-    (DescriptorFunc) socket_close,
-    (DescriptorFunc) socket_free,
-    (TransportSendFunc) socket_sendUserData,
-    (TransportReceiveFunc) socket_receiveUserData,
-    MAGIC_VALUE
-};
+    _socket_close, _socket_free, _socket_sendUserData, _socket_receiveUserData,
+    MAGIC_VALUE};
 
-void socket_init(Socket* socket, SocketFunctionTable* vtable, DescriptorType type, gint handle,
-        guint receiveBufferSize, guint sendBufferSize) {
+void socket_init(Socket* socket, SocketFunctionTable* vtable,
+                 DescriptorType type, guint receiveBufferSize,
+                 guint sendBufferSize) {
     utility_assert(socket && vtable);
 
-    transport_init(&(socket->super), &socket_functions, type, handle);
+    transport_init(&(socket->super), &socket_functions, type);
 
     MAGIC_INIT(socket);
     MAGIC_INIT(vtable);

@@ -32,12 +32,14 @@ struct _ObjectCounter {
         ObjectCounts threadptrace;
         ObjectCounts syscallhandler;
         ObjectCounts descriptorlistener;
+        ObjectCounts descriptortable;
         ObjectCounts descriptor;
         ObjectCounts channel;
         ObjectCounts tcp;
         ObjectCounts udp;
         ObjectCounts epoll;
         ObjectCounts timer;
+        ObjectCounts file;
     } counters;
 
     GString* stringBuffer;
@@ -95,6 +97,8 @@ static void _objectcount_incrementAll(ObjectCounts* counts, ObjectCounts* increm
 void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, CounterType ctype) {
     MAGIC_ASSERT(counter);
 
+    // Disable clang-format to avoid line breaks across counter types
+    // clang-format off
     switch(otype) {
         case OBJECT_TYPE_TASK: {
             _objectcount_incrementOne(&(counter->counters.task), ctype);
@@ -164,6 +168,12 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
 
+        case OBJECT_TYPE_DESCRIPTOR_TABLE: {
+            _objectcount_incrementOne(
+                &(counter->counters.descriptortable), ctype);
+            break;
+        }
+
         case OBJECT_TYPE_DESCRIPTOR: {
             _objectcount_incrementOne(&(counter->counters.descriptor), ctype);
             break;
@@ -194,16 +204,24 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
 
+        case OBJECT_TYPE_FILE: {
+            _objectcount_incrementOne(&(counter->counters.file), ctype);
+            break;
+        }
+
         default:
         case OBJECT_TYPE_NONE: {
             break;
         }
     }
+    // clang-format on
 }
 
 void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment) {
     MAGIC_ASSERT(counter);
     MAGIC_ASSERT(increment);
+    // Disable clang-format to avoid line breaks across counter types
+    // clang-format off
     _objectcount_incrementAll(&(counter->counters.task),
             &(increment->counters.task));
     _objectcount_incrementAll(&(counter->counters.event),
@@ -230,6 +248,8 @@ void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment
             &(increment->counters.syscallhandler));
     _objectcount_incrementAll(&(counter->counters.descriptorlistener),
             &(increment->counters.descriptorlistener));
+    _objectcount_incrementAll(&(counter->counters.descriptortable),
+            &(increment->counters.descriptortable));
     _objectcount_incrementAll(&(counter->counters.descriptor),
             &(increment->counters.descriptor));
     _objectcount_incrementAll(&(counter->counters.channel),
@@ -242,6 +262,9 @@ void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment
             &(increment->counters.epoll));
     _objectcount_incrementAll(&(counter->counters.timer),
             &(increment->counters.timer));
+    _objectcount_incrementAll(&(counter->counters.file),
+            &(increment->counters.file));
+    // clang-format on
 }
 
 const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
@@ -251,6 +274,8 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         counter->stringBuffer = g_string_new(NULL);
     }
 
+    // Disable clang-format to avoid line breaks in string template
+    // clang-format off
     g_string_printf(
         counter->stringBuffer,
         "ObjectCounter: counter values: "
@@ -280,6 +305,8 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         "syscallhandler_free=%" G_GUINT64_FORMAT " "
         "descriptorlistener_new=%" G_GUINT64_FORMAT " "
         "descriptorlistener_free=%" G_GUINT64_FORMAT " "
+        "descriptortable_new=%" G_GUINT64_FORMAT " "
+        "descriptortable_free=%" G_GUINT64_FORMAT " "
         "descriptor_new=%" G_GUINT64_FORMAT " "
         "descriptor_free=%" G_GUINT64_FORMAT " "
         "channel_new=%" G_GUINT64_FORMAT " "
@@ -291,7 +318,9 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         "epoll_new=%" G_GUINT64_FORMAT " "
         "epoll_free=%" G_GUINT64_FORMAT " "
         "timer_new=%" G_GUINT64_FORMAT " "
-        "timer_free=%" G_GUINT64_FORMAT " ",
+        "timer_free=%" G_GUINT64_FORMAT " "
+        "file_new=%" G_GUINT64_FORMAT " "
+        "file_free=%" G_GUINT64_FORMAT " ",
         counter->counters.task.new,
         counter->counters.task.free,
         counter->counters.event.new,
@@ -318,6 +347,8 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         counter->counters.syscallhandler.free,
         counter->counters.descriptorlistener.new,
         counter->counters.descriptorlistener.free,
+        counter->counters.descriptortable.new,
+        counter->counters.descriptortable.free,
         counter->counters.descriptor.new,
         counter->counters.descriptor.free,
         counter->counters.channel.new,
@@ -329,7 +360,10 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         counter->counters.epoll.new,
         counter->counters.epoll.free,
         counter->counters.timer.new,
-        counter->counters.timer.free);
+        counter->counters.timer.free,
+        counter->counters.file.new,
+        counter->counters.file.free);
+    // clang-format on
 
     return (const gchar*) counter->stringBuffer->str;
 }
@@ -341,6 +375,8 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
         counter->stringBuffer = g_string_new(NULL);
     }
 
+    // Disable clang-format to avoid line breaks in string template or math
+    // clang-format off
     g_string_printf(
         counter->stringBuffer,
         "ObjectCounter: counter diffs: "
@@ -357,12 +393,14 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
         "threadptrace=%" G_GUINT64_FORMAT " "
         "syscallhandler=%" G_GUINT64_FORMAT " "
         "descriptorlistener=%" G_GUINT64_FORMAT " "
+        "descriptortable=%" G_GUINT64_FORMAT " "
         "descriptor=%" G_GUINT64_FORMAT " "
         "channel=%" G_GUINT64_FORMAT " "
         "tcp=%" G_GUINT64_FORMAT " "
         "udp=%" G_GUINT64_FORMAT " "
         "epoll=%" G_GUINT64_FORMAT " "
-        "timer=%" G_GUINT64_FORMAT " ",
+        "timer=%" G_GUINT64_FORMAT " "
+        "file=%" G_GUINT64_FORMAT " ",
         counter->counters.task.new -
             counter->counters.task.free,
         counter->counters.event.new -
@@ -389,6 +427,8 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
             counter->counters.syscallhandler.free,
         counter->counters.descriptorlistener.new -
             counter->counters.descriptorlistener.free,
+        counter->counters.descriptortable.new -
+            counter->counters.descriptortable.free,
         counter->counters.descriptor.new -
             counter->counters.descriptor.free,
         counter->counters.channel.new -
@@ -400,7 +440,10 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
         counter->counters.epoll.new -
             counter->counters.epoll.free,
         counter->counters.timer.new -
-            counter->counters.timer.free);
+            counter->counters.timer.free,
+        counter->counters.file.new -
+            counter->counters.file.free);
+    // clang-format on
 
     return (const gchar*) counter->stringBuffer->str;
 }

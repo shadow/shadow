@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -11,10 +12,12 @@
 #include <sys/epoll.h>
 #include <sys/select.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/syscall.h>
 #include <sys/utsname.h>
 #include <unistd.h>
 
+#include "main/host/syscall/kernel_types.h"
 #include "shim/shim.h"
 #include "shim/shim_event.h"
 #include "shim/shim_logger.h"
@@ -165,31 +168,88 @@ NOREMAP(int, epoll_create, (int a), a);
 NOREMAP(int, epoll_create1, (int a), a);
 NOREMAP(int, epoll_ctl, (int a, int b, int c, struct epoll_event* d), a,b,c,d);
 NOREMAP(int, epoll_wait, (int a, struct epoll_event* b, int c, int d), a,b,c,d);
-NOREMAP(int, epoll_pwait, (int a, struct epoll_event* b, int c, int d, const sigset_t *e), a,b,c,d,e);
+//NOREMAP(int, epoll_pwait, (int a, struct epoll_event* b, int c, int d, const sigset_t *e), a,b,c,d,e);
+NOREMAP(int, faccessat, (int a, const char *b, int c, int d), a, b, c, d);
+NOREMAP(int, fadvise64, (int a, off_t b, off_t c, int d), a, b, c, d);
+NOREMAP(int, fallocate, (int a, int b, off_t c, off_t d), a, b, c, d);
+NOREMAP(int, fchdir, (int a), a);
+NOREMAP(int, fchmod, (int a, mode_t b), a, b);
+NOREMAP(int, fchown, (int a, uid_t b, gid_t c), a, b, c);
+NOREMAP(int, fchmodat, (int a, const char *b, mode_t c, int d), a, b, c, d);
+NOREMAP(int, fchownat, (int a, const char *b, uid_t c, gid_t d, int e), a, b, c, d, e);
+static REMAP(int, fcntl_explicit, fcntl, (int a, unsigned long b, char* c), a,b,c);
+NOREMAP(int, fdatasync, (int a), a);
+NOREMAP(ssize_t, fgetxattr, (int a, const char *b, void *c, size_t d), a, b, c, d);
+NOREMAP(ssize_t, flistxattr, (int a, char* b, size_t c), a, b, c);
+NOREMAP(int, flock, (int a, int b), a, b);
+NOREMAP(int, fremovexattr, (int a, const char* b), a, b);
+NOREMAP(int, fsetxattr, (int a, const char* b, const void* c, size_t d, int e), a, b, c, d, e);
 NOREMAP(int, fstat, (int a, struct stat* b), a,b);
+NOREMAP(int, fstatfs, (int a, struct statfs *b), a, b);
+NOREMAP(int, fsync, (int a), a);
+NOREMAP(int, ftruncate, (int a, off_t b), a, b);
+NOREMAP(int, futimesat, (int a, const char* b, const struct timeval c[2]), a, b, c);
+NOREMAP(ssize_t, getdents, (int a, void* b, size_t c), a, b, c);
+NOREMAP(ssize_t, getdents64, (int a, void* b, size_t c), a, b, c);
 NOREMAP(int, getpeername, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
 NOREMAP(int, getsockname, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
 static REMAP(int, ioctl_explicit, ioctl, (int a, unsigned long b, char* c), a,b,c);
+NOREMAP(int, linkat, (int a, const char* b, int c, const char* d, int e), a, b, c, d, e);
 NOREMAP(int, listen, (int a, int b), a, b);
-NOREMAP(int, lstat, (const char* a, struct stat* b), a,b);
+NOREMAP(off_t, lseek, (int a, off_t b, int c), a, b, c);
+//NOREMAP(int, lstat, (const char* a, struct stat* b), a,b);
+NOREMAP(int, mkdirat, (int a, const char* b, mode_t c), a, b, c);
+NOREMAP(int, mknodat, (int a, const char* b, mode_t c, dev_t d), a, b, c, d);
+NOREMAP(void*, mmap, (void* a, size_t b, int c, int d, int e, off_t f), a, b, c, d, e, f);
 NOREMAP(int, nanosleep, (const struct timespec* a, struct timespec* b), a,b);
+NOREMAP(int, newfstatat, (int a, const char* b, struct stat* c, int d), a, b, c, d);
 static REMAP(int, openat_explicit, openat, (int a, const char* b, int c, mode_t d), a,b,c,d);
 static REMAP(int, open_explicit, open, (const char *a, int b, mode_t c), a,b,c);
-NOREMAP(int, poll, (struct pollfd* a, nfds_t b, int c), a,b,c);
-NOREMAP(int, ppoll, (struct pollfd* a, nfds_t b, const struct timespec* c, const sigset_t* d), a,b,c,d);
+NOREMAP(int, pipe, (int a[2]), a);
+NOREMAP(int, pipe2, (int a[2], int b), a, b);
+//NOREMAP(int, poll, (struct pollfd* a, nfds_t b, int c), a,b,c);
+//NOREMAP(int, ppoll, (struct pollfd* a, nfds_t b, const struct timespec* c, const sigset_t* d), a,b,c,d);
+NOREMAP(ssize_t, pread64, (int a, void* b, size_t c, off_t d), a, b, c, d);
+NOREMAP(ssize_t, preadv, (int a, const struct iovec* b, int c, off_t d), a, b, c, d);
+NOREMAP(ssize_t, preadv2, (int a, const struct iovec* b, int c, off_t d, int e), a, b, c, d, e);
+NOREMAP(ssize_t, pwrite64, (int a, const void* b, size_t c, off_t d), a, b, c, d);
+NOREMAP(ssize_t, pwritev, (int a, const struct iovec* b, int c, off_t d), a, b, c, d);
+NOREMAP(ssize_t, pwritev2, (int a, const struct iovec* b, int c, off_t d, int e), a, b, c, d, e);
 NOREMAP(ssize_t, read, (int a, void *b, size_t c), a,b,c);
+NOREMAP(ssize_t, readahead, (int a, off64_t b, size_t c), a, b, c);
+NOREMAP(ssize_t, readlinkat, (int a, const char* b, char* c, size_t d), a, b, c, d);
+NOREMAP(ssize_t, readv, (int a, const struct iovec* b, int c), a, b, c);
 NOREMAP(ssize_t, recvfrom, (int a, void* b, size_t c, int d, struct sockaddr* e, socklen_t* f), a,b,c,d,e,f);
-NOREMAP(ssize_t, recvmsg, (int a, struct msghdr* b, int c), a,b,c);
+//NOREMAP(ssize_t, recvmsg, (int a, struct msghdr* b, int c), a,b,c);
 REMAP(ssize_t, recv, recvfrom, (int a, void* b, size_t c, int d), a,b,c,d,NULL,NULL);
-NOREMAP(ssize_t, sendmsg, (int a, const struct msghdr* b, int c), a,b,c);
+NOREMAP(int, renameat, (int a, const char* b, int c, const char* d), a, b, c, d);
+NOREMAP(int, renameat2, (int a, const char* b, int c, const char* d, unsigned int e), a, b, c, d, e);
+//NOREMAP(ssize_t, sendmsg, (int a, const struct msghdr* b, int c), a,b,c);
 REMAP(ssize_t, send, sendto, (int a, const void* b, size_t c, int d), a,b,c,d,NULL,0);
 NOREMAP(ssize_t, sendto, (int a, const void* b, size_t c, int d, const struct sockaddr* e, socklen_t f), a,b,c,d,e,f);
 NOREMAP(int, shutdown, (int a, int b), a,b);
 NOREMAP(int, socket, (int a, int b, int c), a,b,c);
-NOREMAP(int, stat, (const char* a, struct stat* b), a,b);
+NOREMAP(int, statx, (int a, const char* b, int c, unsigned int d, struct statx* e), a, b, c, d, e);
+NOREMAP(int, symlinkat, (const char* a, int b, const char* c), a, b, c);
+NOREMAP(int, sync_file_range, (int a, off64_t b, off64_t c, unsigned int d), a, b, c, d);
+NOREMAP(int, syncfs, (int a), a);
 NOREMAP(int, uname, (struct utsname* a), a);
+NOREMAP(int, unlinkat, (int a, const char *b, int c), a, b, c);
+NOREMAP(int, utimensat, (int a, const char* b, const struct timespec c[2], int d), a, b, c, d);
 NOREMAP(ssize_t, write, (int a, const void *b, size_t c), a,b,c);
+NOREMAP(ssize_t, writev, (int a, const struct iovec* b, int c), a, b, c);
 // clang-format on
+
+// TODO: The NOREMAP macro doesn't seem to work with no param list
+pid_t getpid() {
+    if (shim_interpositionEnabled()) {
+        debug("Making interposed syscall getpid");
+        return (pid_t)syscall(SYS_getpid);
+    } else {
+        debug("Making real syscall getpid");
+        return (pid_t)_real_syscall(SYS_getpid);
+    }
+}
 
 /*
  * libc uses variadic functions to implement optional parameters. For those
@@ -219,4 +279,12 @@ int ioctl(int fd, unsigned long request, ...) {
     char* argp = va_arg(args, char*);
     va_end(args);
     return ioctl_explicit(fd, request, argp);
+}
+
+int fcntl(int fd, int command, ...) {
+    va_list args;
+    va_start(args, command);
+    char* argp = va_arg(args, char*);
+    va_end(args);
+    return fcntl_explicit(fd, command, argp);
 }

@@ -24,6 +24,7 @@
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/epoll.h"
+#include "main/host/descriptor/file.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
@@ -64,27 +65,10 @@ struct _Host {
     /* a statistics tracker for in/out bytes, CPU, memory, etc. */
     Tracker* tracker;
 
-    /* virtual descriptor numbers */
-    GQueue* availableDescriptors;
-    gint descriptorHandleCounter;
-
     /* virtual process and event id counter */
     guint processIDCounter;
     guint64 eventIDCounter;
     guint64 packetIDCounter;
-
-    /* all file, socket, and epoll descriptors we know about and track */
-    GHashTable* descriptors;
-
-    /* map from the descriptor handle we returned to the plug-in, and
-     * descriptor handle that the OS gave us for files, etc.
-     * We do this so that we can give out low descriptor numbers even though the OS
-     * may give out those same low numbers when files are opened. */
-    GHashTable* shadowToOSHandleMap;
-    GHashTable* osToShadowHandleMap;
-
-    /* list of all /dev/random shadow handles that have been created */
-    GHashTable* randomShadowHandleMap;
 
     /* map path to ports for unix sockets */
     GHashTable* unixPathToPortMap;
@@ -132,14 +116,8 @@ Host* host_new(HostParameters* params) {
 
     host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
             NULL, (GDestroyNotify) networkinterface_free);
-    host->availableDescriptors = g_queue_new();
-    host->descriptorHandleCounter = MIN_DESCRIPTOR;
 
-    /* virtual descriptor management */
-    host->descriptors = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, descriptor_unref);
-    host->shadowToOSHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
-    host->osToShadowHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
-    host->randomShadowHandleMap = g_hash_table_new(g_direct_hash, g_direct_equal);
+    /* TODO: deprecated, used to support UNIX sockets. */
     host->unixPathToPortMap = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
     /* applications this node will run */
@@ -252,34 +230,6 @@ void host_shutdown(Host* host) {
         router_unref(host->router);
     }
 
-    if(host->descriptors) {
-        GHashTableIter iter;
-        gpointer key, value;
-        g_hash_table_iter_init(&iter, host->descriptors);
-        while(g_hash_table_iter_next(&iter, &key, &value)) {
-            Descriptor* desc = value;
-            if(desc && desc->type == DT_TCPSOCKET) {
-              /* tcp servers and their children holds refs to each other. make
-               * sure they all get freed by removing the refs in one direction */
-                tcp_clearAllChildrenIfServer((TCP*)desc);
-            } else if(desc && (desc->type == DT_SOCKETPAIR || desc->type == DT_PIPE)) {
-              /* we need to correctly update the linked channel refs */
-              channel_setLinkedChannel((Channel*)desc, NULL);
-            }
-        }
-
-        g_hash_table_destroy(host->descriptors);
-    }
-
-    if(host->shadowToOSHandleMap) {
-        g_hash_table_destroy(host->shadowToOSHandleMap);
-    }
-    if(host->osToShadowHandleMap) {
-        g_hash_table_destroy(host->osToShadowHandleMap);
-    }
-    if(host->randomShadowHandleMap) {
-        g_hash_table_destroy(host->randomShadowHandleMap);
-    }
     if(host->unixPathToPortMap) {
         g_hash_table_destroy(host->unixPathToPortMap);
     }
@@ -291,9 +241,6 @@ void host_shutdown(Host* host) {
         tracker_free(host->tracker);
     }
 
-    if(host->availableDescriptors) {
-        g_queue_free(host->availableDescriptors);
-    }
     if(host->random) {
         random_free(host->random);
     }
@@ -434,18 +381,6 @@ void host_freeAllApplications(Host* host) {
         process_unref(proc);
     }
     debug("done freeing application for host '%s'", host->params.hostname);
-
-    debug("start clearing epoll descriptors for host '%s'", host->params.hostname);
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, host->descriptors);
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
-        Descriptor* descriptor = value;
-        if(descriptor->type == DT_EPOLL) {
-            epoll_clearWatchListeners((Epoll*) descriptor);
-        }
-    }
-    debug("done clearing epoll descriptors for host '%s'", host->params.hostname);
 }
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {
@@ -501,11 +436,6 @@ gboolean host_autotuneSendBuffer(Host* host) {
     return host->params.autotuneSendBuf;
 }
 
-Descriptor* host_lookupDescriptor(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-    return g_hash_table_lookup(host->descriptors, (gconstpointer) &handle);
-}
-
 NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle) {
     MAGIC_ASSERT(host);
     return g_hash_table_lookup(host->interfaces, GUINT_TO_POINTER(handle));
@@ -544,7 +474,7 @@ void host_associateInterface(Host* host, Socket* socket, in_addr_t bindAddress,
     }
 }
 
-static void _host_disassociateInterface(Host* host, Socket* socket) {
+void host_disassociateInterface(Host* host, Socket* socket) {
     if(!socket || !socket_isBound(socket)) {
         return;
     }
@@ -567,372 +497,16 @@ static void _host_disassociateInterface(Host* host, Socket* socket) {
         NetworkInterface* interface = host_lookupInterface(host, bindAddress);
         networkinterface_disassociate(interface, socket);
     }
-
 }
 
-static void _host_monitorDescriptor(Host* host, Descriptor* descriptor) {
+guint64 host_getConfiguredRecvBufSize(Host* host) {
     MAGIC_ASSERT(host);
-
-    /* make sure there are no collisions before inserting */
-    gint* handle = descriptor_getHandleReference(descriptor);
-    utility_assert(handle && !host_lookupDescriptor(host, *handle));
-    g_hash_table_replace(host->descriptors, handle, descriptor);
+    return host->params.recvBufSize;
 }
 
-static void _host_unmonitorDescriptor(Host* host, gint handle) {
+guint64 host_getConfiguredSendBufSize(Host* host) {
     MAGIC_ASSERT(host);
-
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor) {
-        if(descriptor->type == DT_TCPSOCKET || descriptor->type == DT_UDPSOCKET) {
-            Socket* socket = (Socket*) descriptor;
-            _host_disassociateInterface(host, socket);
-        }
-
-        g_hash_table_remove(host->descriptors, (gconstpointer) &handle);
-    }
-}
-
-static gint _host_compareDescriptors(gconstpointer a, gconstpointer b, gpointer userData) {
-  gint aint = GPOINTER_TO_INT(a);
-  gint bint = GPOINTER_TO_INT(b);
-  return aint < bint ? -1 : aint == bint ? 0 : 1;
-}
-
-static gint _host_getNextDescriptorHandle(Host* host) {
-    MAGIC_ASSERT(host);
-    if(g_queue_get_length(host->availableDescriptors) > 0) {
-        return GPOINTER_TO_INT(g_queue_pop_head(host->availableDescriptors));
-    }
-    return (host->descriptorHandleCounter)++;
-}
-
-static void _host_returnPreviousDescriptorHandle(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-    if(handle >= 3) {
-        g_queue_insert_sorted(host->availableDescriptors, GINT_TO_POINTER(handle), _host_compareDescriptors, NULL);
-    }
-}
-
-void host_returnHandleHack(gint handle) {
-    /* TODO replace this with something more graceful? */
-    if(worker_isAlive()) {
-        Host* host = worker_getActiveHost();
-        if(host) {
-            _host_returnPreviousDescriptorHandle(host, handle);
-        }
-    }
-}
-
-gint host_createShadowHandle(Host* host, gint osHandle) {
-    MAGIC_ASSERT(host);
-
-    /* stdin, stdout, stderr */
-    if(osHandle >=0 && osHandle <= 2) {
-        return osHandle;
-    }
-
-    /* reserve a new virtual descriptor number to emulate the given osHandle,
-     * so that the plugin will not be given duplicate shadow/os numbers. */
-    gint shadowHandle = _host_getNextDescriptorHandle(host);
-
-    g_hash_table_replace(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle), GINT_TO_POINTER(osHandle));
-    g_hash_table_replace(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle), GINT_TO_POINTER(shadowHandle));
-
-    return shadowHandle;
-}
-
-gint host_getShadowHandle(Host* host, gint osHandle) {
-    MAGIC_ASSERT(host);
-
-    /* stdin, stdout, stderr */
-    if(osHandle >=0 && osHandle <= 2) {
-        return osHandle;
-    }
-
-    /* find shadow handle that we mapped, if one exists */
-    gpointer shadowHandleP = g_hash_table_lookup(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle));
-
-    return shadowHandleP ? GPOINTER_TO_INT(shadowHandleP) : -1;
-}
-
-gint host_getOSHandle(Host* host, gint shadowHandle) {
-    MAGIC_ASSERT(host);
-
-    /* stdin, stdout, stderr */
-    if(shadowHandle >=0 && shadowHandle <= 2) {
-        return shadowHandle;
-    }
-
-    /* find os handle that we mapped, if one exists */
-    gpointer osHandleP = g_hash_table_lookup(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle));
-
-    return osHandleP ? GPOINTER_TO_INT(osHandleP) : -1;
-}
-
-void host_setRandomHandle(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-    g_hash_table_insert(host->randomShadowHandleMap, GINT_TO_POINTER(handle), GINT_TO_POINTER(handle));
-}
-
-gboolean host_isRandomHandle(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-    return g_hash_table_contains(host->randomShadowHandleMap, GINT_TO_POINTER(handle));
-}
-
-
-void host_destroyShadowHandle(Host* host, gint shadowHandle) {
-    MAGIC_ASSERT(host);
-
-    /* stdin, stdout, stderr */
-    if(shadowHandle >=0 && shadowHandle <= 2) {
-        return;
-    }
-
-    gint osHandle = host_getOSHandle(host, shadowHandle);
-    gboolean didExist = g_hash_table_remove(host->shadowToOSHandleMap, GINT_TO_POINTER(shadowHandle));
-    if(didExist) {
-        g_hash_table_remove(host->osToShadowHandleMap, GINT_TO_POINTER(osHandle));
-        _host_returnPreviousDescriptorHandle(host, shadowHandle);
-    }
-
-    g_hash_table_remove(host->randomShadowHandleMap, GINT_TO_POINTER(shadowHandle));
-}
-
-Descriptor* host_createDescriptor(Host* host, DescriptorType type) {
-    MAGIC_ASSERT(host);
-
-    /* get a unique descriptor that can be "closed" later */
-    Descriptor* descriptor;
-
-    switch(type) {
-        case DT_EPOLL: {
-            descriptor = (Descriptor*) epoll_new(_host_getNextDescriptorHandle(host));
-            break;
-        }
-
-        case DT_TCPSOCKET: {
-            descriptor = (Descriptor*) tcp_new(_host_getNextDescriptorHandle(host),
-                    host->params.recvBufSize, host->params.sendBufSize);
-            break;
-        }
-
-        case DT_UDPSOCKET: {
-            descriptor = (Descriptor*) udp_new(_host_getNextDescriptorHandle(host),
-                    host->params.recvBufSize, host->params.sendBufSize);
-            break;
-        }
-
-        case DT_SOCKETPAIR: {
-            gint handle = _host_getNextDescriptorHandle(host);
-            gint linkedHandle = _host_getNextDescriptorHandle(host);
-
-            /* each channel is readable and writable */
-            Channel* channel = channel_new(handle, CT_NONE);
-            Channel* linked = channel_new(linkedHandle, CT_NONE);
-            channel_setLinkedChannel(channel, linked);
-            channel_setLinkedChannel(linked, channel);
-
-            _host_monitorDescriptor(host, (Descriptor*)linked);
-            descriptor = (Descriptor*) channel;
-
-            break;
-        }
-
-        case DT_PIPE: {
-            gint handle = _host_getNextDescriptorHandle(host);
-            gint linkedHandle = _host_getNextDescriptorHandle(host);
-
-            /* one side is readonly, the other is writeonly */
-            Channel* channel = channel_new(handle, CT_READONLY);
-            Channel* linked = channel_new(linkedHandle, CT_WRITEONLY);
-            channel_setLinkedChannel(channel, linked);
-            channel_setLinkedChannel(linked, channel);
-
-            _host_monitorDescriptor(host, (Descriptor*)linked);
-            descriptor = (Descriptor*) channel;
-
-            break;
-        }
-
-        case DT_TIMER: {
-            gint handle = _host_getNextDescriptorHandle(host);
-            descriptor = (Descriptor*) timer_new(handle, CLOCK_MONOTONIC, 0);
-            break;
-        }
-
-        default: {
-            warning("unknown descriptor type: %i", (gint)type);
-            return NULL;
-        }
-    }
-
-    _host_monitorDescriptor(host, descriptor);
-    return descriptor;
-}
-
-void host_closeDescriptor(Host* host, gint handle) {
-    MAGIC_ASSERT(host);
-    _host_unmonitorDescriptor(host, handle);
-}
-
-gint host_select(Host* host, fd_set* readable, fd_set* writeable, fd_set* erroneous) {
-    MAGIC_ASSERT(host);
-
-    /* if they dont want readability or writeability, then we have nothing to do */
-    if(readable == NULL && writeable == NULL) {
-        if(erroneous != NULL) {
-            FD_ZERO(erroneous);
-        }
-        return 0;
-    }
-
-    GQueue* readyDescsRead = g_queue_new();
-    GQueue* readyDescsWrite = g_queue_new();
-
-    /* first look at shadow internal descriptors */
-    GList* descs = g_hash_table_get_values(host->descriptors);
-    GList* item = g_list_first(descs);
-
-    /* iterate all descriptors */
-    while(item) {
-        Descriptor* desc = item->data;
-        if(desc) {
-            DescriptorStatus status = descriptor_getStatus(desc);
-            if((readable != NULL) && FD_ISSET(desc->handle, readable) && (status & DS_ACTIVE) && (status & DS_READABLE)) {
-                g_queue_push_head(readyDescsRead, GINT_TO_POINTER(desc->handle));
-            }
-            if((writeable != NULL) && FD_ISSET(desc->handle, writeable) && (status & DS_ACTIVE) && (status & DS_WRITABLE)) {
-                g_queue_push_head(readyDescsWrite, GINT_TO_POINTER(desc->handle));
-            }
-        }
-        item = g_list_next(item);
-    }
-    /* cleanup the iterator lists */
-    g_list_free(descs);
-    item = descs = NULL;
-
-    /* now check on OS descriptors */
-    struct timeval zeroTimeout;
-    zeroTimeout.tv_sec = 0;
-    zeroTimeout.tv_usec = 0;
-    fd_set osFDSet;
-
-    /* setup our iterator */
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, host->shadowToOSHandleMap);
-
-    /* iterate all os handles and ask the os for events */
-    while (g_hash_table_iter_next(&iter, &key, &value)) {
-        gint shadowHandle = GPOINTER_TO_INT(key);
-        gint osHandle = GPOINTER_TO_INT(value);
-
-        if ((readable != NULL) && FD_ISSET(shadowHandle, readable)) {
-            FD_ZERO(&osFDSet);
-            FD_SET(osHandle, &osFDSet);
-            select(osHandle+1, &osFDSet, NULL, NULL, &zeroTimeout);
-            if (FD_ISSET(osHandle, &osFDSet)) {
-                g_queue_push_head(readyDescsRead, GINT_TO_POINTER(shadowHandle));
-            }
-        }
-        if ((writeable != NULL) && FD_ISSET(shadowHandle, writeable)) {
-            FD_ZERO(&osFDSet);
-            FD_SET(osHandle, &osFDSet);
-            select(osHandle+1, NULL, &osFDSet, NULL, &zeroTimeout);
-            if (FD_ISSET(osHandle, &osFDSet)) {
-                g_queue_push_head(readyDescsWrite, GINT_TO_POINTER(shadowHandle));
-            }
-        }
-    }
-
-    /* now prepare and return the response, start with empty sets */
-    if(readable != NULL) {
-        FD_ZERO(readable);
-    }
-    if(writeable != NULL) {
-        FD_ZERO(writeable);
-    }
-    if(erroneous != NULL) {
-        FD_ZERO(erroneous);
-    }
-    gint nReady = 0;
-
-    /* mark all of the readable handles */
-    if(readable != NULL) {
-        while(!g_queue_is_empty(readyDescsRead)) {
-            gint handle = GPOINTER_TO_INT(g_queue_pop_head(readyDescsRead));
-            FD_SET(handle, readable);
-            nReady++;
-        }
-    }
-    /* cleanup */
-    g_queue_free(readyDescsRead);
-
-    /* mark all of the writeable handles */
-    if(writeable != NULL) {
-        while(!g_queue_is_empty(readyDescsWrite)) {
-            gint handle = GPOINTER_TO_INT(g_queue_pop_head(readyDescsWrite));
-            FD_SET(handle, writeable);
-            nReady++;
-        }
-    }
-    /* cleanup */
-    g_queue_free(readyDescsWrite);
-
-    /* return the total number of bits that are set in all three fdsets */
-    return nReady;
-}
-
-gint host_poll(Host* host, struct pollfd *pollFDs, nfds_t numPollFDs) {
-    MAGIC_ASSERT(host);
-
-    gint numReady = 0;
-
-    for(nfds_t i = 0; i < numPollFDs; i++) {
-        struct pollfd* pfd = &pollFDs[i];
-        pfd->revents = 0;
-
-        if(pfd->fd == -1) {
-            continue;
-        }
-
-        gboolean exists = host_lookupDescriptor(host, pfd->fd) != NULL;
-        if (exists) {
-            /* descriptor lookup is not NULL */
-            Descriptor* descriptor = host_lookupDescriptor(host, pfd->fd);
-            DescriptorStatus status = descriptor_getStatus(descriptor);
-            if(status & DS_CLOSED) {
-                pfd->revents |= POLLNVAL;
-            }
-
-            if(pfd->events != 0) {
-                if((pfd->events & POLLIN) && (status & DS_ACTIVE) && (status & DS_READABLE)) {
-                    pfd->revents |= POLLIN;
-                }
-                if((pfd->events & POLLOUT) && (status & DS_ACTIVE) && (status & DS_WRITABLE)) {
-                    pfd->revents |= POLLOUT;
-                }
-            }
-        } else {
-            /* check if we have a mapped os fd */
-            gint osfd = host_getOSHandle(host, pfd->fd);
-            if(osfd >= 0) {
-                /* ask the OS, but dont let them block */
-                gint oldfd = pfd->fd;
-                pfd->fd = osfd;
-                gint rc = poll(pfd, (nfds_t)1, 0);
-                pfd->fd = oldfd;
-                if(rc < 0) {
-                    return -1;
-                }
-            }
-        }
-
-        numReady += (pfd->revents == 0) ? 0 : 1;
-    }
-
-    return numReady;
+    return host->params.sendBufSize;
 }
 
 gboolean host_doesInterfaceExist(Host* host, in_addr_t interfaceIP) {
@@ -1038,33 +612,6 @@ in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
     warning("unable to find free ephemeral port for %s peer %s:%"G_GUINT16_FORMAT,
             protocol_toString(type), peerIPStr, (guint16) ntohs((uint16_t) peerPort));
     return 0;
-}
-
-gint host_shutdownSocket(Host* host, gint handle, gint how) {
-    MAGIC_ASSERT(host);
-
-    Descriptor* descriptor = host_lookupDescriptor(host, handle);
-    if(descriptor == NULL) {
-        warning("descriptor handle '%i' not found", handle);
-        return EBADF;
-    }
-
-    DescriptorStatus status = descriptor_getStatus(descriptor);
-    if(status & DS_CLOSED) {
-        warning("descriptor handle '%i' not a valid open descriptor", handle);
-        return EBADF;
-    }
-
-    DescriptorType type = descriptor_getType(descriptor);
-    if(type == DT_TCPSOCKET) {
-        return tcp_shutdown((TCP*)descriptor, how);
-    } else if(type == DT_UDPSOCKET) {
-        return ENOTCONN;
-    } else if(type == DT_PIPE || type == DT_EPOLL || type == DT_TIMER) {
-        return ENOTSOCK;
-    } else {
-        return 0;
-    }
 }
 
 Tracker* host_getTracker(Host* host) {
