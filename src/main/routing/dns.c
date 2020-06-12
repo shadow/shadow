@@ -156,7 +156,7 @@ Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP) {
     }
 
     /* Any existing hosts file needs to be (lazily) updated. */
-    dns->hosts.isStale;
+    dns->hosts.isStale = true;
 
     g_mutex_unlock(&dns->lock);
 
@@ -173,7 +173,7 @@ void dns_deregister(DNS* dns, Address* address) {
         g_hash_table_remove(dns->addressByName, address_toHostName(address));
 
         /* Any existing hosts file needs to be (lazily) updated. */
-        dns->hosts.isStale;
+        dns->hosts.isStale = true;
 
         g_mutex_unlock(&dns->lock);
     }
