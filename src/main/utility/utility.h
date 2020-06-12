@@ -49,7 +49,14 @@ do { \
 #define MAGIC_DECLARE guint magic
 
 /**
- * Initialize a value declared with MAGIC_DECLARE to MAGIC_VALUE
+ * Initialize a value declared with MAGIC_DECLARE to MAGIC_VALUE. This is useful
+ * for initializing the magic value in a struct initializer.
+ */
+#define MAGIC_INITIALIZER .magic = MAGIC_VALUE,
+
+/**
+ * Initialize a value declared with MAGIC_DECLARE to MAGIC_VALUE. This is useful
+ * for initializing the magic value in an independent statement.
  */
 #define MAGIC_INIT(object) (object)->magic = MAGIC_VALUE
 
@@ -66,6 +73,7 @@ do { \
 #else
 #define MAGIC_VALUE
 #define MAGIC_DECLARE
+#define MAGIC_INITIALIZER
 #define MAGIC_INIT(object)
 #define MAGIC_ASSERT(object)
 #define MAGIC_CLEAR(object)

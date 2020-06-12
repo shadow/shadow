@@ -15,6 +15,9 @@ message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
 ## ensure cmake version
 cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
 
+## building with support for C11 on platforms that default to C99 or C89
+set (CMAKE_C_FLAGS "-std=gnu11 ${CMAKE_C_FLAGS}")
+
 ## ensure unix environment (CMAKE_SYSTEM_NAME == "Linux")
 if((NOT UNIX) OR (NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux")))
     message(FATAL_ERROR "Shadow requires a Unix/Linux environment.")
@@ -52,6 +55,16 @@ set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
 set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 #set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+## Check if we are able to compile various compilation units
+compile_test(HAVE_STRUCT_STATX 
+            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_statx.c)
+compile_test(HAVE_STRUCT_STATX_TIMESTAMP 
+            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_statx_timestamp.c)
+compile_test(HAVE_STRUCT_LINUX_DIRENT 
+            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent.c)
+compile_test(HAVE_STRUCT_LINUX_DIRENT64 
+            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent64.c)
 
 ## construct info/version strings
 string(REGEX REPLACE "^([0-9]+)\\.[0-9]+\\.[0-9]+$" "\\1" SHADOW_VERSION_MAJOR ${SHADOW_VERSION_FULL})

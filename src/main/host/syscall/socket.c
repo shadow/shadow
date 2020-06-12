@@ -6,6 +6,7 @@
 #include "main/host/syscall/socket.h"
 
 #include <errno.h>
+#include <glib.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <sys/socket.h>
@@ -15,6 +16,7 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
+#include "main/host/descriptor/udp.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
@@ -51,7 +53,7 @@ static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    Descriptor* desc = host_lookupDescriptor(sys->host, sockfd);
+    Descriptor* desc = process_getRegisteredDescriptor(sys->process, sockfd);
     if (desc && sock_desc_out) {
         *sock_desc_out = (Socket*)desc;
     }
@@ -885,28 +887,35 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     }
 
     /* We are all set to create the socket. */
-    DescriptorType dtype =
-        (type_no_flags == SOCK_STREAM) ? DT_TCPSOCKET : DT_UDPSOCKET;
-    Descriptor* desc = host_createDescriptor(sys->host, dtype);
-    utility_assert(desc);
+    guint64 recvBufSize = host_getConfiguredRecvBufSize(sys->host);
+    guint64 sendBufSize = host_getConfiguredSendBufSize(sys->host);
+
+    Socket* sock_desc = NULL;
+    if (type_no_flags == SOCK_STREAM) {
+        sock_desc = (Socket*)tcp_new(recvBufSize, sendBufSize);
+    } else {
+        sock_desc = (Socket*)udp_new(recvBufSize, sendBufSize);
+    }
 
     /* Now make sure it will be valid when we operate on it. */
-    int socket_fd = descriptor_getHandle(desc);
-    int errcode = _syscallhandler_validateSocketHelper(sys, socket_fd, NULL);
+    int sockfd =
+        process_registerDescriptor(sys->process, &sock_desc->super.super);
+
+    int errcode = _syscallhandler_validateSocketHelper(sys, sockfd, NULL);
     if (errcode != 0) {
-        error("Unable to find socket %i that we just created.", socket_fd);
+        error("Unable to find socket %i that we just created.", sockfd);
     }
     utility_assert(errcode == 0);
 
     /* Set any options that were given. */
     if (type & SOCK_NONBLOCK) {
-        descriptor_addFlags(desc, O_NONBLOCK);
+        descriptor_addFlags(&sock_desc->super.super, O_NONBLOCK);
     }
     if (type & SOCK_CLOEXEC) {
-        descriptor_addFlags(desc, O_CLOEXEC);
+        descriptor_addFlags(&sock_desc->super.super, O_CLOEXEC);
     }
 
-    debug("socket() returning fd %i", socket_fd);
+    debug("socket() returning fd %i", sockfd);
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = socket_fd};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = sockfd};
 }

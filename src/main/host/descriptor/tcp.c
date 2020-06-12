@@ -7,7 +7,6 @@
 
 #include "main/host/descriptor/tcp.h"
 
-#include <bits/stdint-uintn.h>
 #include <errno.h>
 #include <math.h>
 #include <netinet/tcp.h>
@@ -257,6 +256,11 @@ static void _rswlog(const TCP *tcp, const char *format, ...) {
 }
 
 static void _tcp_flush(TCP* tcp);
+
+static TCP* _tcp_fromDescriptor(Descriptor* descriptor) {
+    utility_assert(descriptor_getType(descriptor) == DT_TCPSOCKET);
+    return (TCP*)descriptor;
+}
 
 static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_t peerPort) {
     MAGIC_ASSERT(tcp);
@@ -659,12 +663,16 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
                     /* if i was the server's last child and its waiting to close, close it */
                     if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
                         /* this will unbind from the network interface and free socket */
-                        host_closeDescriptor(worker_getActiveHost(), parent->super.super.super.handle);
+                        Descriptor* parentDesc = (Descriptor*)parent;
+                        process_deregisterDescriptor(
+                            descriptor_getOwnerProcess(parentDesc), parentDesc);
                     }
                 }
 
                 /* this will unbind from the network interface and free socket */
-                host_closeDescriptor(worker_getActiveHost(), tcp->super.super.super.handle);
+                Descriptor* desc = (Descriptor*)tcp;
+                process_deregisterDescriptor(
+                    descriptor_getOwnerProcess(desc), desc);
             }
             break;
         }
@@ -1336,7 +1344,8 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
     _tcp_flush(tcp);
 }
 
-gboolean tcp_isFamilySupported(TCP* tcp, sa_family_t family) {
+static gboolean _tcp_isFamilySupported(Socket* socket, sa_family_t family) {
+    TCP* tcp = _tcp_fromDescriptor((Descriptor*)socket);
     MAGIC_ASSERT(tcp);
     return family == AF_INET || family == AF_UNIX ? TRUE : FALSE;
 }
@@ -1481,8 +1490,9 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
     tcpinfo->tcpi_total_retrans = (u_int32_t)tcp->info.retransmitCount;
 }
 
-
-gint tcp_connectToPeer(TCP* tcp, in_addr_t ip, in_port_t port, sa_family_t family) {
+static gint _tcp_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port,
+                               sa_family_t family) {
+    TCP* tcp = _tcp_fromDescriptor((Descriptor*)socket);
     MAGIC_ASSERT(tcp);
 
     /* Only try to connect if we haven't already started. */
@@ -1806,7 +1816,8 @@ static void _tcp_sendACKTaskCallback(TCP* tcp, gpointer userData) {
 }
 
 /* return TRUE if the packet should be retransmitted */
-void tcp_processPacket(TCP* tcp, Packet* packet) {
+static void _tcp_processPacket(Socket* socket, Packet* packet) {
+    TCP* tcp = _tcp_fromDescriptor((Descriptor*)socket);
     MAGIC_ASSERT(tcp);
 
     /* fetch the TCP info from the packet */
@@ -1861,8 +1872,13 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
 
                 /* we need to multiplex a new child */
                 Host* node = worker_getActiveHost();
-                TCP* multiplexed =
-                    (TCP*)host_createDescriptor(node, DT_TCPSOCKET);
+                guint64 recvBufSize = host_getConfiguredRecvBufSize(node);
+                guint64 sendBufSize = host_getConfiguredSendBufSize(node);
+
+                TCP* multiplexed = tcp_new(recvBufSize, sendBufSize);
+                process_registerDescriptor(
+                    descriptor_getOwnerProcess((Descriptor*)tcp),
+                    (Descriptor*)multiplexed);
 
                 multiplexed->child = _tcpchild_new(multiplexed, tcp, header->sourceIP, header->sourcePort);
                 utility_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
@@ -2145,7 +2161,8 @@ void tcp_processPacket(TCP* tcp, Packet* packet) {
     debug("done processing in state %s", tcp_stateToAscii(tcp->state));
 }
 
-void tcp_dropPacket(TCP* tcp, Packet* packet) {
+static void _tcp_dropPacket(Socket* socket, Packet* packet) {
+    TCP* tcp = _tcp_fromDescriptor((Descriptor*)socket);
     MAGIC_ASSERT(tcp);
 
     /* if we run a server, the packet could be for an existing child */
@@ -2170,7 +2187,9 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
     }
 }
 
-gssize tcp_sendUserData(TCP* tcp, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port) {
+static gssize _tcp_sendUserData(Transport* transport, gconstpointer buffer,
+                                gsize nBytes, in_addr_t ip, in_port_t port) {
+    TCP* tcp = _tcp_fromDescriptor((Descriptor*)transport);
     MAGIC_ASSERT(tcp);
 
     /* return 0 to signal close, if necessary */
@@ -2237,7 +2256,10 @@ static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
     tcp->receive.windowUpdatePending = FALSE;
 }
 
-gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port) {
+static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
+                                   gsize nBytes, in_addr_t* ip,
+                                   in_port_t* port) {
+    TCP* tcp = _tcp_fromDescriptor((Descriptor*)transport);
     MAGIC_ASSERT(tcp);
 
     /*
@@ -2374,7 +2396,8 @@ gssize tcp_receiveUserData(TCP* tcp, gpointer buffer, gsize nBytes, in_addr_t* i
     return (gssize)(totalCopied == 0 ? -EWOULDBLOCK : totalCopied);
 }
 
-void tcp_free(TCP* tcp) {
+static void _tcp_free(Descriptor* descriptor) {
+    TCP* tcp = _tcp_fromDescriptor(descriptor);
     MAGIC_ASSERT(tcp);
 
     priorityqueue_free(tcp->throttledOutput);
@@ -2402,14 +2425,19 @@ void tcp_free(TCP* tcp) {
     tcp->cong.hooks->tcp_cong_delete(tcp);
     retransmit_tally_destroy(tcp->retransmit.tally);
 
+    descriptor_clear((Descriptor*)tcp);
     MAGIC_CLEAR(tcp);
     g_free(tcp);
 
     worker_countObject(OBJECT_TYPE_TCP, COUNTER_TYPE_FREE);
 }
 
-void tcp_close(TCP* tcp) {
+static gboolean _tcp_close(Descriptor* descriptor) {
+    TCP* tcp = _tcp_fromDescriptor(descriptor);
     MAGIC_ASSERT(tcp);
+
+    /* We always return FALSE because we handle process deregististration
+     * on our own. */
 
     debug("%s <-> %s:  user closed connection", tcp->super.boundString, tcp->super.peerString);
     tcp->flags |= TCPF_LOCAL_CLOSED_WR;
@@ -2422,7 +2450,7 @@ void tcp_close(TCP* tcp) {
         case TCPS_LISTEN:
         case TCPS_SYNSENT: {
             _tcp_setState(tcp, TCPS_CLOSED);
-            return;
+            return FALSE;
         }
 
         case TCPS_SYNRECEIVED:
@@ -2443,16 +2471,18 @@ void tcp_close(TCP* tcp) {
         case TCPS_TIMEWAIT:
         case TCPS_LASTACK: {
             /* close was already called, do nothing */
-            return;
+            return FALSE;
         }
 
         default: {
             /* if we didnt start connection yet, we still want to make sure
              * we set the state to closed so we unbind the socket */
             _tcp_setState(tcp, TCPS_CLOSED);
-            return;
+            return FALSE;
         }
     }
+
+    return FALSE;
 }
 
 gint tcp_shutdown(TCP* tcp, gint how) {
@@ -2486,22 +2516,16 @@ gint tcp_shutdown(TCP* tcp, gint how) {
 
 /* we implement the socket interface, this describes our function suite */
 SocketFunctionTable tcp_functions = {
-    (DescriptorFunc) tcp_close,
-    (DescriptorFunc) tcp_free,
-    (TransportSendFunc) tcp_sendUserData,
-    (TransportReceiveFunc) tcp_receiveUserData,
-    (SocketProcessFunc) tcp_processPacket,
-    (SocketIsFamilySupportedFunc) tcp_isFamilySupported,
-    (SocketConnectToPeerFunc) tcp_connectToPeer,
-    (SocketDropFunc) tcp_dropPacket,
-    MAGIC_VALUE
-};
+    _tcp_close,           _tcp_free,          _tcp_sendUserData,
+    _tcp_receiveUserData, _tcp_processPacket, _tcp_isFamilySupported,
+    _tcp_connectToPeer,   _tcp_dropPacket,    MAGIC_VALUE};
 
-TCP* tcp_new(gint handle, guint receiveBufferSize, guint sendBufferSize) {
+TCP* tcp_new(guint receiveBufferSize, guint sendBufferSize) {
     TCP* tcp = g_new0(TCP, 1);
     MAGIC_INIT(tcp);
 
-    socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, handle, receiveBufferSize, sendBufferSize);
+    socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, receiveBufferSize,
+                sendBufferSize);
 
     Options* options = worker_getOptions();
     guint32 initial_window = options_getTCPWindow(options);

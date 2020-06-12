@@ -51,7 +51,9 @@ set(shadow_srcs
     host/descriptor/channel.c
     host/descriptor/descriptor.c
     host/descriptor/descriptor_listener.c
+    host/descriptor/descriptor_table.c
     host/descriptor/epoll.c
+    host/descriptor/file.c
     host/descriptor/socket.c
     host/descriptor/tcp.c
     host/descriptor/tcp_cong.c
@@ -64,9 +66,15 @@ set(shadow_srcs
     host/syscall_handler.c
     host/syscall/protected.c
     host/syscall/epoll.c
+    host/syscall/fcntl.c
+    host/syscall/file.c
+    host/syscall/fileat.c
+    host/syscall/ioctl.c
+    host/syscall/mman.c
     host/syscall/socket.c
     host/syscall/time.c
     host/syscall/unistd.c
+    host/syscall/uio.c
     host/thread.c
     host/host.c
     host/thread_preload.c

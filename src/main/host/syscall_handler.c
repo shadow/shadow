@@ -17,11 +17,18 @@
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/timer.h"
+#include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall/epoll.h"
+#include "main/host/syscall/fcntl.h"
+#include "main/host/syscall/file.h"
+#include "main/host/syscall/fileat.h"
+#include "main/host/syscall/ioctl.h"
+#include "main/host/syscall/mman.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/socket.h"
 #include "main/host/syscall/time.h"
+#include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
@@ -42,11 +49,11 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
         .thread = thread,
         .blockedSyscallNR = -1,
         .referenceCount = 1,
-        /* Here we create the timer directly rather than going
-         * through host_createDescriptor because the descriptor
+        /* Here we create the timer directly and do not register
+         * with the process descriptor table because the descriptor
          * is not being used to service a plugin syscall and it
          * should not be tracked with an fd handle. */
-        .timer = timer_new(0, CLOCK_MONOTONIC, 0),
+        .timer = timer_new(CLOCK_MONOTONIC, 0),
     };
 
     MAGIC_INIT(sys);
@@ -155,49 +162,127 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(clock_gettime);
         HANDLE(close);
         HANDLE(connect);
+        HANDLE(creat);
         HANDLE(epoll_create);
         HANDLE(epoll_create1);
         HANDLE(epoll_ctl);
         HANDLE(epoll_wait);
+        HANDLE(faccessat);
+        HANDLE(fadvise64);
+        HANDLE(fallocate);
+        HANDLE(fchdir);
+        HANDLE(fchmod);
+        HANDLE(fchmodat);
+        HANDLE(fchown);
+        HANDLE(fchownat);
+        HANDLE(fcntl);
+        HANDLE(fdatasync);
+        HANDLE(fgetxattr);
+        HANDLE(flistxattr);
+        HANDLE(flock);
+        HANDLE(fremovexattr);
+        HANDLE(fsetxattr);
+        HANDLE(fstat);
+        HANDLE(fstatfs);
+        HANDLE(fsync);
+        HANDLE(ftruncate);
+        HANDLE(futimesat);
+        HANDLE(getdents);
+        HANDLE(getdents64);
         HANDLE(getpeername);
         HANDLE(getpid);
         HANDLE(getsockname);
+        HANDLE(ioctl);
+        HANDLE(linkat);
         HANDLE(listen);
+        HANDLE(lseek);
+        HANDLE(mkdirat);
+        HANDLE(mknodat);
+        HANDLE(mmap);
         HANDLE(nanosleep);
+        HANDLE(newfstatat);
+        HANDLE(open);
+        HANDLE(openat);
         HANDLE(pipe);
         HANDLE(pipe2);
+        HANDLE(pread64);
+        HANDLE(preadv);
+        HANDLE(preadv2);
+        HANDLE(pwrite64);
+        HANDLE(pwritev);
+        HANDLE(pwritev2);
         HANDLE(read);
+        HANDLE(readahead);
+        HANDLE(readlinkat);
+        HANDLE(readv);
         HANDLE(recvfrom);
+        HANDLE(renameat);
+        HANDLE(renameat2);
         HANDLE(sendto);
         HANDLE(shutdown);
         HANDLE(socket);
+        HANDLE(statx);
+        HANDLE(symlinkat);
+        HANDLE(sync_file_range);
+        HANDLE(syncfs);
         HANDLE(uname);
+        HANDLE(unlinkat);
+        HANDLE(utimensat);
         HANDLE(write);
-
-        // **************************************
-        // Needed for phold, but not handled yet:
-        // **************************************
-        // Test coverage: test/file
-        NATIVE(fstat);
-        // Test coverage: test/file (via open(3))
-        NATIVE(openat);
+        HANDLE(writev);
 
         // **************************************
         // Not handled (yet):
         // **************************************
-        NATIVE(access);
         NATIVE(arch_prctl);
         NATIVE(brk);
         NATIVE(execve);
-        NATIVE(mmap);
-        NATIVE(mprotect);
-        NATIVE(munmap);
         NATIVE(prlimit64);
         NATIVE(rt_sigaction);
         NATIVE(rt_sigprocmask);
         NATIVE(set_robust_list);
         NATIVE(set_tid_address);
+
+        // operations on pids (shadow overrides pids)
+        NATIVE(tkill);
+        NATIVE(tgkill);
+        NATIVE(sched_getaffinity);
+        NATIVE(sched_setaffinity);
+
+        // operations on file descriptors
+        NATIVE(dup);
+        NATIVE(dup2);
+        NATIVE(dup3);
+        NATIVE(poll);
+        NATIVE(ppoll);
+        NATIVE(select);
+        NATIVE(pselect6);
+
+        // copying data between various types of fds
+        NATIVE(copy_file_range);
+        NATIVE(sendfile);
+        NATIVE(splice);
+        NATIVE(vmsplice);
+        NATIVE(tee);
+
+        // additional socket io
+        NATIVE(recvmsg);
+        NATIVE(sendmsg);
+        NATIVE(recvmmsg);
+        NATIVE(sendmmsg);
+
+        // ***************************************
+        // We think we don't need to handle these
+        // (because the plugin can natively):
+        // ***************************************
+        NATIVE(access);
+        NATIVE(lstat);
+        NATIVE(mprotect);
+        NATIVE(munmap);
         NATIVE(stat);
+        NATIVE(statfs);
+        NATIVE(unlink);
+
         default:
             info("unhandled syscall %ld", args->number);
             scr = (SysCallReturn){.state = SYSCALL_NATIVE};

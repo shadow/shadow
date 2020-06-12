@@ -5,13 +5,6 @@
  */
 #include "main/host/process.h"
 
-#include <bits/stdint-intn.h>
-#include <bits/stdint-uintn.h>
-#include <bits/types/clockid_t.h>
-#include <bits/types/struct_timespec.h>
-#include <bits/types/struct_timeval.h>
-#include <bits/types/struct_tm.h>
-#include <bits/types/time_t.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <features.h>
@@ -28,6 +21,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <sys/file.h>
 #include <sys/un.h>
@@ -43,6 +37,9 @@
 #include "main/host/cpu.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/descriptor_table.h"
+#include "main/host/descriptor/descriptor_types.h"
+#include "main/host/descriptor/file.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
@@ -69,6 +66,9 @@ struct _Process {
 
     /* Which InterposeMethod to use for this process's threads */
     InterposeMethod interposeMethod;
+
+    /* All of the descriptors opened by this process. */
+    DescriptorTable* descTable;
 
     /* the shadow plugin executable */
     struct {
@@ -104,8 +104,9 @@ struct _Process {
 
     // TODO add spawned threads
 
-    int stderrFD;
-    int stdoutFD;
+    /* File descriptors to handle plugin out and err streams. */
+    File* stdoutFile;
+    File* stderrFile;
 
     gint referenceCount;
     MAGIC_DECLARE;
@@ -184,6 +185,42 @@ static void _process_check(Process* proc) {
     }
 }
 
+static void _process_openStdIOFileHelper(Process* proc, bool isStdOut) {
+    MAGIC_ASSERT(proc);
+
+    gchar* fileName =
+        g_strdup_printf("%s/%s.%s", host_getDataPath(proc->host),
+                        proc->processName->str, isStdOut ? "stdout" : "stderr");
+
+    File* stdfile = file_new();
+    int errcode = file_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
+                            S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+    if (errcode < 0) {
+        error("Opening %s: %s", fileName, strerror(-errcode));
+        /* Unref and free the file object. */
+        descriptor_close((Descriptor*)stdfile);
+    } else {
+        debug("Successfully opened %s file at %s",
+              isStdOut ? "stdout" : "stderr", fileName);
+
+        if (isStdOut) {
+            descriptortable_set(
+                proc->descTable, STDOUT_FILENO, (Descriptor*)stdfile);
+            proc->stdoutFile = stdfile;
+        } else {
+            descriptortable_set(
+                proc->descTable, STDERR_FILENO, (Descriptor*)stdfile);
+            proc->stderrFile = stdfile;
+        }
+
+        /* Ref once since both the proc class and the table are storing it. */
+        descriptor_ref((Descriptor*)stdfile);
+    }
+
+    g_free(fileName);
+}
+
 static void _process_start(Process* proc) {
     MAGIC_ASSERT(proc);
 
@@ -193,30 +230,10 @@ static void _process_start(Process* proc) {
     }
 
     // Set up stdout
-    {
-        gchar* stdoutFileName =
-            g_strdup_printf("%s/%s.stdout", host_getDataPath(proc->host),
-                            proc->processName->str);
-        proc->stdoutFD = open(stdoutFileName, O_WRONLY | O_CREAT | O_TRUNC,
-                              S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        if (proc->stdoutFD < 0) {
-            error("Opening %s: %s", stdoutFileName, strerror(errno));
-        }
-        g_free(stdoutFileName);
-    }
+    _process_openStdIOFileHelper(proc, true);
 
     // Set up stderr
-    {
-        gchar* stderrFileName =
-            g_strdup_printf("%s/%s.stderr", host_getDataPath(proc->host),
-                            proc->processName->str);
-        proc->stderrFD = open(stderrFileName, O_WRONLY | O_CREAT | O_TRUNC,
-                              S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        if (proc->stderrFD < 0) {
-            error("Opening %s: %s", stderrFileName, strerror(errno));
-        }
-        g_free(stderrFileName);
-    }
+    _process_openStdIOFileHelper(proc, false);
 
     utility_assert(proc->mainThread == NULL);
     if (proc->interposeMethod == INTERPOSE_PTRACE) {
@@ -239,7 +256,7 @@ static void _process_start(Process* proc) {
 
     proc->plugin.isExecuting = TRUE;
     /* exec the process and call main to start it */
-    thread_run(proc->mainThread, proc->argv, proc->envv, proc->stderrFD, proc->stdoutFD);
+    thread_run(proc->mainThread, proc->argv, proc->envv);
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
 
@@ -305,6 +322,8 @@ void process_stop(Process* proc) {
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
+
+    descriptortable_shutdownHelper(proc->descTable);
 
     worker_setActiveProcess(NULL);
 
@@ -400,9 +419,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
     proc->argv = argv;
     proc->envv = envv;
 
-    // We'll open these when the process starts.
-    proc->stderrFD = -1;
-    proc->stdoutFD = -1;
+    proc->descTable = descriptortable_new();
 
     proc->referenceCount = 1;
 
@@ -442,15 +459,26 @@ static void _process_free(Process* proc) {
 
     g_timer_destroy(proc->cpuDelayTimer);
 
-    if (proc->host) {
-        host_unref(proc->host);
+    /* Free the stdio files before the descriptor table.
+     * Closing the descriptors will remove them from the table and the table
+     * will release it's ref. We also need to release our proc ref. */
+    if (proc->stderrFile) {
+        descriptor_close((Descriptor*)proc->stderrFile);
+        descriptor_unref((Descriptor*)proc->stderrFile);
+    }
+    if (proc->stdoutFile) {
+        descriptor_close((Descriptor*)proc->stdoutFile);
+        descriptor_unref((Descriptor*)proc->stdoutFile);
     }
 
-    if (proc->stderrFD >= 0) {
-        close(proc->stderrFD);
+    /* Now free all remaining descriptors stored in our table. */
+    if (proc->descTable) {
+        descriptortable_unref(proc->descTable);
     }
-    if (proc->stdoutFD >= 0) {
-        close(proc->stdoutFD);
+
+    /* And we no longer need to access the host. */
+    if (proc->host) {
+        host_unref(proc->host);
     }
 
     worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_FREE);
@@ -472,6 +500,39 @@ void process_unref(Process* proc) {
         _process_free(proc);
     }
 }
+
+// ******************************************************
+// Handler the descriptors owned by this process
+// ******************************************************
+
+int process_registerDescriptor(Process* proc, Descriptor* desc) {
+    MAGIC_ASSERT(proc);
+    utility_assert(desc);
+    descriptor_setOwnerProcess(desc, proc);
+    return descriptortable_add(proc->descTable, desc);
+}
+
+void process_deregisterDescriptor(Process* proc, Descriptor* desc) {
+    MAGIC_ASSERT(proc);
+
+    if (desc) {
+        DescriptorType dType = descriptor_getType(desc);
+        if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
+            host_disassociateInterface(proc->host, (Socket*)desc);
+        }
+        descriptor_setOwnerProcess(desc, NULL);
+        descriptortable_remove(proc->descTable, desc);
+    }
+}
+
+Descriptor* process_getRegisteredDescriptor(Process* proc, int handle) {
+    MAGIC_ASSERT(proc);
+    return descriptortable_get(proc->descTable, handle);
+}
+
+// ******************************************************
+// Handler descriptor listeners to enable plugin blocking
+// ******************************************************
 
 typedef struct _ProcessWaiter ProcessWaiter;
 struct _ProcessWaiter {

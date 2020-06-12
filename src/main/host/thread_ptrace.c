@@ -19,6 +19,12 @@
 
 #define THREADPTRACE_TYPE_ID 3024
 
+// glibc in centos 7 does not include the following, but it does use a supported
+// kernel (3.10 > 3.8)
+#if !defined(PTRACE_O_EXITKILL)
+#define PTRACE_O_EXITKILL (1 << 20)
+#endif
+
 typedef enum {
     // Doesn't exist yet.
     THREAD_PTRACE_CHILD_STATE_NONE = 0,
@@ -158,8 +164,7 @@ static Thread* _threadPtraceToThread(ThreadPtrace* thread) {
 }
 
 static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
-                                     char* const envp[], int stderrFD,
-                                     int stdoutFD) {
+                                     char* const envp[]) {
     pid_t pid = fork();
 
     switch (pid) {
@@ -172,16 +177,6 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
             // Disable RDTSC
             if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
                 error("prctl: %s", g_strerror(errno));
-                return -1;
-            }
-            // Redirect stderr
-            if (dup2(stderrFD, STDERR_FILENO) < 0) {
-                error("dup2 failed: %s", g_strerror(errno));
-                return -1;
-            }
-            // Redirect stdout
-            if (dup2(stdoutFD, STDOUT_FILENO) < 0) {
-                error("dup2 failed: %s", g_strerror(errno));
                 return -1;
             }
             // Allow parent to trace.
@@ -364,12 +359,10 @@ static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     }
 }
 
-void threadptrace_run(Thread* base, gchar** argv, gchar** envv, int stderrFD,
-                      int stdoutFD) {
+void threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
-    thread->childPID =
-        _threadptrace_fork_exec(argv[0], argv, envv, stderrFD, stdoutFD);
+    thread->childPID = _threadptrace_fork_exec(argv[0], argv, envv);
 
     _threadptrace_nextChildState(thread);
     thread_resume(_threadPtraceToThread(thread));

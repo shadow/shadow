@@ -9,11 +9,17 @@
 
 #include <dirent.h>
 #include <gmodule.h>
-#include <proc/readproc.h>
 #include <sys/mman.h>
 
 #include "shmem_file.h"
 #include "support/logger/logger.h"
+
+// a bug with procps on Ubuntu 16.04 builds procps with WITH_SYSTEMD, but
+// when we include the header it doesn't know that
+// see: https://gitlab.com/procps-ng/procps/-/issues/31
+#define WITH_SYSTEMD
+#include <proc/readproc.h>
+#undef WITH_SYSTEMD
 
 static const char* SHM_DIR = "/dev/shm";
 

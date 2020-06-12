@@ -419,10 +419,6 @@ void freeaddrinfo(struct addrinfo* res) {
 }
 
 int gethostname(char* name, size_t len) {
-    if (len < 0) {
-        errno = EINVAL;
-        return -1;
-    }
     struct utsname utsname;
     if (uname(&utsname) < 0) {
         return -1;

@@ -12,34 +12,41 @@
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor_listener.h"
 #include "main/host/host.h"
+#include "main/host/process.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 void descriptor_init(Descriptor* descriptor, DescriptorType type,
-        DescriptorFunctionTable* funcTable, gint handle) {
+                     DescriptorFunctionTable* funcTable) {
     utility_assert(descriptor && funcTable);
 
     MAGIC_INIT(descriptor);
     MAGIC_INIT(funcTable);
     descriptor->funcTable = funcTable;
-    descriptor->handle = handle;
     descriptor->type = type;
     descriptor->listeners =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL,
                               (GDestroyNotify)descriptorlistener_unref);
     descriptor->referenceCount = 1;
 
+    debug("Descriptor %i has been initialized now", descriptor->handle);
+
     worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_NEW);
+}
+
+void descriptor_clear(Descriptor* descriptor) {
+    MAGIC_ASSERT(descriptor);
+    if (descriptor->listeners) {
+        g_hash_table_destroy(descriptor->listeners);
+    }
+    MAGIC_CLEAR(descriptor);
 }
 
 static void _descriptor_free(Descriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
-    if (descriptor->listeners) {
-        g_hash_table_destroy(descriptor->listeners);
-    }
-
-    MAGIC_CLEAR(descriptor);
+    debug("Descriptor %i calling vtable free now", descriptor->handle);
     descriptor->funcTable->free(descriptor);
 
     worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_FREE);
@@ -50,6 +57,8 @@ void descriptor_ref(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     (descriptor->referenceCount)++;
+    debug("Descriptor %i ref++ to %i", descriptor->handle,
+          descriptor->referenceCount);
 }
 
 void descriptor_unref(gpointer data) {
@@ -57,19 +66,24 @@ void descriptor_unref(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     (descriptor->referenceCount)--;
+    debug("Descriptor %i ref-- to %i", descriptor->handle,
+          descriptor->referenceCount);
+
     utility_assert(descriptor->referenceCount >= 0);
     if(descriptor->referenceCount == 0) {
         gint handle = descriptor->handle;
         _descriptor_free(descriptor);
-        host_returnHandleHack(handle);
     }
 }
 
 void descriptor_close(Descriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
+    debug("Descriptor %i calling vtable close now", descriptor->handle);
     descriptor_adjustStatus(descriptor, DS_CLOSED, TRUE);
-    descriptor->funcTable->close(descriptor);
+    if (descriptor->funcTable->close(descriptor) && descriptor->ownerProcess) {
+        process_deregisterDescriptor(descriptor->ownerProcess, descriptor);
+    }
 }
 
 gint descriptor_compare(const Descriptor* foo, const Descriptor* bar, gpointer user_data) {
@@ -83,9 +97,24 @@ DescriptorType descriptor_getType(Descriptor* descriptor) {
     return descriptor->type;
 }
 
+void descriptor_setHandle(Descriptor* descriptor, gint handle) {
+    MAGIC_ASSERT(descriptor);
+    descriptor->handle = handle;
+}
+
 gint descriptor_getHandle(Descriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->handle;
+}
+
+void descriptor_setOwnerProcess(Descriptor* descriptor, Process* ownerProcess) {
+    MAGIC_ASSERT(descriptor);
+    descriptor->ownerProcess = ownerProcess;
+}
+
+Process* descriptor_getOwnerProcess(Descriptor* descriptor) {
+    MAGIC_ASSERT(descriptor);
+    return descriptor->ownerProcess;
 }
 
 gint* descriptor_getHandleReference(Descriptor* descriptor) {
@@ -183,7 +212,7 @@ void descriptor_addListener(Descriptor* descriptor,
 void descriptor_removeListener(Descriptor* descriptor,
                                DescriptorListener* listener) {
     MAGIC_ASSERT(descriptor);
-    /* This will automatically call descriptorlistener_ref on the instance. */
+    /* This will automatically call descriptorlistener_unref on the instance. */
     g_hash_table_remove(descriptor->listeners, listener);
 }
 
