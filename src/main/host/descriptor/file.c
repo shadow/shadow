@@ -231,14 +231,14 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
         /* TODO: Handle special files. */
         if (utility_isRandomPath(abspath)) {
             file->type = FILE_TYPE_RANDOM;
-        } else if (!strncmp("/etc/hosts", abspath, 10)) {
+        } else if (!strcmp("/etc/hosts", abspath)) {
             file->type = FILE_TYPE_HOSTS;
             char* hostspath = dns_getHostsFilePath(worker_getDNS());
             if(hostspath && abspath) {
                 free(abspath);
                 abspath = hostspath;
             }
-        } else if (!strncmp("/etc/localtime", abspath, 14)) {
+        } else if (!strcmp("/etc/localtime", abspath)) {
             file->type = FILE_TYPE_LOCALTIME;
         } else {
             file->type = FILE_TYPE_REGULAR;
