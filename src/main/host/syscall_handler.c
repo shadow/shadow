@@ -236,14 +236,26 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // **************************************
         NATIVE(arch_prctl);
         NATIVE(brk);
+        NATIVE(clone);
+        NATIVE(eventfd2);
         NATIVE(execve);
+        NATIVE(futex);
+        NATIVE(getrandom);
+        NATIVE(gettimeofday);
+#ifdef SYS_mmap2
+        NATIVE(mmap2);
+#endif
+        NATIVE(prctl);
         NATIVE(prlimit64);
         NATIVE(rt_sigaction);
         NATIVE(rt_sigprocmask);
         NATIVE(set_robust_list);
         NATIVE(set_tid_address);
+        NATIVE(sysinfo);
+        NATIVE(time);
 
         // operations on pids (shadow overrides pids)
+        NATIVE(kill);
         NATIVE(tkill);
         NATIVE(tgkill);
         NATIVE(sched_getaffinity);
@@ -253,9 +265,14 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(dup);
         NATIVE(dup2);
         NATIVE(dup3);
+#ifdef SYS_fcntl64
+        NATIVE(fcntl64);
+#endif
+        NATIVE(getsockopt);
         NATIVE(poll);
         NATIVE(ppoll);
         NATIVE(select);
+        NATIVE(setsockopt);
         NATIVE(pselect6);
 
         // copying data between various types of fds
@@ -276,10 +293,22 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // (because the plugin can natively):
         // ***************************************
         NATIVE(access);
+        NATIVE(geteuid);
+        NATIVE(getegid);
+        NATIVE(getgid);
+        NATIVE(getrlimit);
+        NATIVE(getuid);
         NATIVE(lstat);
+        NATIVE(madvise);
+        NATIVE(mkdir);
         NATIVE(mprotect);
+        NATIVE(mremap);
         NATIVE(munmap);
+        NATIVE(setrlimit);
         NATIVE(stat);
+#ifdef SYS_stat64
+        NATIVE(stat64);
+#endif
         NATIVE(statfs);
         NATIVE(unlink);
 
