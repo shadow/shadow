@@ -23,13 +23,11 @@
     <process plugin="testudp" starttime="1" arguments="client localhost:5678"/>
     <process plugin="testudp" starttime="1" arguments="server localhost:5678"/>
   </host>
-  <!-- FIXME once we support dns, uncomment to test a remote client/server
   <host id="testclient" quantity="1">
     <process plugin="testudp" starttime="2" arguments="client testserver:5678"/>
   </host>
   <host id="testserver" quantity="1">
     <process plugin="testudp" starttime="2" arguments="server 0.0.0.0:5678"/>
   </host>
-  -->
 </shadow>
 
