@@ -195,6 +195,7 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
             goto out;
         }
     }
+    debug("Node:%s -> regex:%s", node, pattern);
 
     regex = g_regex_new(pattern, G_REGEX_MULTILINE, 0, &error);
     if (error != NULL) {
@@ -208,7 +209,15 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
     // the first. The recommended configuration is to only return the first. For
     // now we hard-code that behavior.
     if (g_match_info_matches(match_info)) {
+#ifdef DEBUG
+        {
+            gchar* matched_string = g_match_info_fetch(match_info, 0);
+            debug("Node:%s -> match:%s", node, matched_string);
+            g_free(matched_string);
+        }
+#endif
         gchar* address_string = g_match_info_fetch(match_info, 1);
+        debug("Node:%s -> address string:%s", node, address_string);
         assert(address_string != NULL);
         uint32_t addr;
         int rv = inet_pton(AF_INET, address_string, &addr);
