@@ -1,4 +1,4 @@
-<shadow>
+<shadow stoptime="10000">
   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
   <key attr.name="latency" attr.type="double" for="edge" id="d3" />
@@ -18,15 +18,14 @@
   </graph>
 </graphml>
 ]]></topology>
-  <kill time="10000"/>
-  <plugin id="test_epoll_writeable" path="libshadow-plugin-test-epoll-writeable.so"/>
+  <plugin id="test_epoll_writeable" path="test-epoll-writeable"/>
 
-   <node id="testnode" quantity="1">
-      <application plugin="test_epoll_writeable" starttime="1" arguments="server"/>
-   </node>
+   <host id="server" quantity="1">
+      <process plugin="test_epoll_writeable" starttime="1" arguments="server_mode"/>
+   </host>
 
-   <node id="client" quantity="1">
-      <application plugin="test_epoll_writeable" starttime="10" arguments=""/>
-   </node>
+   <host id="client" quantity="1">
+      <process plugin="test_epoll_writeable" starttime="10" arguments="client_mode"/>
+   </host>
 
 </shadow>

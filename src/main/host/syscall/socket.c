@@ -879,9 +879,14 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
         /* TODO: unclear if we should return EPROTONOSUPPORT or EINVAL */
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
-    } else if (protocol != 0) {
+    } else if (type_no_flags == SOCK_STREAM && protocol != 0 && protocol != IPPROTO_TCP) {
         warning(
-            "unsupported socket protocol \"%i\", we only support 0", protocol);
+            "unsupported socket protocol \"%i\", we only support IPPROTO_TCP on sockets of type SOCK_STREAM", protocol);
+        return (SysCallReturn){
+            .state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
+    } else if (type_no_flags == SOCK_DGRAM && protocol != 0 && protocol != IPPROTO_UDP) {
+        warning(
+            "unsupported socket protocol \"%i\", we only support IPPROTO_UDP on sockets of type SOCK_DGRAM", protocol);
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
     }
