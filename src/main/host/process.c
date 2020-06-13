@@ -370,19 +370,6 @@ gboolean process_isRunning(Process* proc) {
     return (proc->mainThread != NULL && thread_isRunning(proc->mainThread)) ? TRUE : FALSE;
 }
 
-gboolean process_wantsNotify(Process* proc, gint epollfd) {
-    MAGIC_ASSERT(proc);
-    // FIXME TODO XXX
-    // how do we hook up notifations for epollfds?
-    return FALSE;
-    // old code:
-//    if(process_isRunning(proc) && epollfd == proc->epollfd) {
-//        return TRUE;
-//    } else {
-//        return FALSE;
-//    }
-}
-
 Process* process_new(Host* host, guint processID, SimulationTime startTime,
                      SimulationTime stopTime, InterposeMethod interposeMethod,
                      const gchar* hostName, const gchar* pluginName,

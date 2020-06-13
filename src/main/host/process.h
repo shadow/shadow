@@ -47,7 +47,6 @@ void process_schedule(Process* proc, gpointer nothing);
 void process_continue(Process* proc, Thread* thread);
 void process_stop(Process* proc);
 
-gboolean process_wantsNotify(Process* proc, gint epollfd);
 gboolean process_isRunning(Process* proc);
 
 /* Returns the name of the process from an internal buffer.
