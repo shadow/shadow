@@ -61,7 +61,7 @@ def xml_nodes_to_dict(xml_nodes):
 def save_dict_in_yaml_file(d, filename):
     with open(filename, 'w', encoding='utf8') as f:
         yaml.add_representer(str, yaml_str_presenter)
-        _yaml = yaml.dump(d, f)
+        _yaml = yaml.dump(d, f, default_flow_style=False, sort_keys=False)
 
 
 def get_filename_converted(original_filename, optional_filename_result, original_extension, target_extension):

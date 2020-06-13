@@ -1,19 +1,5 @@
-host:
-- id: server
-  process:
-  - arguments: tgen.server.graphml.xml
-    plugin: tgen
-    starttime: 1
-- id: client
-  process:
-  - arguments: tgen.client.graphml.xml
-    plugin: tgen
-    starttime: 2
-option:
+options:
   stoptime: 3600
-plugin:
-- id: tgen
-  path: ~/.shadow/bin/tgen
 topology:
 - graphml: |
     <?xml version="1.0" encoding="utf-8"?><graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
@@ -38,3 +24,17 @@ topology:
         </edge>
       </graph>
     </graphml>
+plugin:
+- id: tgen
+  path: ~/.shadow/bin/tgen
+host:
+- id: server
+  process:
+  - plugin: tgen
+    starttime: 1
+    arguments: tgen.server.graphml.xml
+- id: client
+  process:
+  - plugin: tgen
+    starttime: 2
+    arguments: tgen.client.graphml.xml
