@@ -72,7 +72,7 @@ def get_filename_converted(original_filename, optional_filename_result, original
 
 def shadow_xml_to_dict(root):
     return {
-        'option': convert_integer(root.attrib),
+        'options': convert_integer(root.attrib),
         **xml_nodes_to_dict(root.getchildren())
     }
 
@@ -89,10 +89,10 @@ def get_yaml_from_filename(filename):
 
 def get_xml_root(yaml_as_dict):
     xml_root = ET.Element('shadow')
-    if 'option' in yaml_as_dict:
-        for k, v in yaml_as_dict['option'].items():
+    if 'options' in yaml_as_dict:
+        for k, v in yaml_as_dict['options'].items():
             xml_root.set(k, str(v))
-        del yaml_as_dict['option']
+        del yaml_as_dict['options']
     return xml_root
 
 
