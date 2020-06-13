@@ -1,12 +1,5 @@
 <?xml version="1.0" ?>
 <shadow stoptime="3600">
-   <host id="server">
-      <process arguments="tgen.server.graphml.xml" plugin="tgen" starttime="1"/>
-   </host>
-   <host id="client">
-      <process arguments="tgen.client.graphml.xml" plugin="tgen" starttime="2"/>
-   </host>
-   <plugin id="tgen" path="~/.shadow/bin/tgen"/>
    <topology><![CDATA[<?xml version="1.0" encoding="utf-8"?><graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d6" />
   <key attr.name="latency" attr.type="double" for="edge" id="d5" />
@@ -30,4 +23,11 @@
   </graph>
 </graphml>
 ]]></topology>
+   <plugin id="tgen" path="~/.shadow/bin/tgen"/>
+   <host id="server">
+      <process arguments="tgen.server.graphml.xml" plugin="tgen" starttime="1"/>
+   </host>
+   <host id="client">
+      <process arguments="tgen.client.graphml.xml" plugin="tgen" starttime="2"/>
+   </host>
 </shadow>
