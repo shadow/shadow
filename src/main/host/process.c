@@ -407,6 +407,15 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
 
     proc->interposeMethod = interposeMethod;
 
+    /* add log file to env */
+    {
+        gchar* logFileName =
+            g_strdup_printf("%s/%s.%s.%d.log", host_getDataPath(host), hostName,
+                            pluginName, processID);
+        envv = g_environ_setenv(envv, "SHADOW_LOG_FILE", logFileName, TRUE);
+        g_free(logFileName);
+    }
+
     /* save args and env */
     proc->argv = argv;
     proc->envv = envv;
