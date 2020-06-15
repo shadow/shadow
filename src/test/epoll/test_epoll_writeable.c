@@ -58,6 +58,7 @@ static void _client(void) {
        printf("Recvd %d\n", rc);
        recvd += rc;
    }
+   close(client_socket);
    printf("Exit");
 }
 
@@ -170,6 +171,9 @@ static int _server(void) {
       }
    }
 
+   close(client_socket);
+   close(server_socket);
+   close(epoll_fd);
    return EXIT_SUCCESS;
 }
 

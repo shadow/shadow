@@ -1,4 +1,4 @@
-<shadow stoptime="10000">
+<shadow stoptime="60">
   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
   <key attr.name="latency" attr.type="double" for="edge" id="d3" />

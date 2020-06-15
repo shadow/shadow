@@ -122,17 +122,46 @@ gint* descriptor_getHandleReference(Descriptor* descriptor) {
     return &(descriptor->handle);
 }
 
-static void _descriptor_handleStatusChange(gpointer object, gpointer argument) {
-    Descriptor* descriptor = object;
-    DescriptorStatus oldStatus = (DescriptorStatus)GPOINTER_TO_INT(argument);
+#ifdef DEBUG
+static gchar* _descriptor_statusToString(DescriptorStatus ds) {
+    GString* string = g_string_new(NULL);
+    if(ds & DS_ACTIVE) {
+        g_string_append_printf(string, "ACTIVE|");
+    }
+    if(ds & DS_READABLE) {
+        g_string_append_printf(string, "READABLE|");
+    }
+    if(ds & DS_WRITABLE) {
+        g_string_append_printf(string, "WRITEABLE|");
+    }
+    if(ds & DS_CLOSED) {
+        g_string_append_printf(string, "CLOSED|");
+    }
+    if(string->len == 0) {
+        g_string_append_printf(string, "NONE|");
+    }
+    g_string_truncate(string, string->len-1);
+    return g_string_free(string, FALSE);
+}
+#endif
+
+static void _descriptor_handleStatusChange(Descriptor* descriptor, DescriptorStatus oldStatus) {
     MAGIC_ASSERT(descriptor);
 
-    /* Identify which bits changed since this task was queued. */
+    /* Identify which bits changed, if any. */
     DescriptorStatus statusesChanged = descriptor->status ^ oldStatus;
 
     if (!statusesChanged) {
         return;
     }
+
+#ifdef DEBUG
+    gchar* before = _descriptor_statusToString(oldStatus);
+    gchar* after = _descriptor_statusToString(descriptor->status);
+    debug("Status changed on desc %i, from %s to %s", descriptor->handle, before, after);
+    g_free(before);
+    g_free(after);
+#endif
 
     /* Tell our listeners there was some activity on this descriptor.
      * We can't use an iterator here, because the listener table may
@@ -174,26 +203,8 @@ void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gb
         descriptor->status &= ~status;
     }
 
-    /* Identify which bits changed */
-    DescriptorStatus statusesChanged = descriptor->status ^ oldStatus;
-
-    if (statusesChanged) {
-        /* We execute the handler via a task, to make sure whatever
-         * code called adjustStatus finishes it's logic first before
-         * the listener callbacks are executed and potentially change
-         * the state of the descriptor again. */
-        Task* handleStatusChange =
-            task_new(_descriptor_handleStatusChange, descriptor,
-                     GINT_TO_POINTER(oldStatus), descriptor_unref, NULL);
-        worker_scheduleTask(handleStatusChange, 0);
-
-        /* The descriptor will be unreffed after the task executes. */
-        descriptor_ref(descriptor);
-
-        /* A ref to the task is held by the event in the scheduler.
-         * We don't need our reference anymore. */
-        task_unref(handleStatusChange);
-    }
+    /* Let helper handle the change. */
+    _descriptor_handleStatusChange(descriptor, oldStatus);
 }
 
 DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
