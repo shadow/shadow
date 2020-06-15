@@ -283,7 +283,7 @@ GString* utility_getFileContents(const gchar* fileName) {
 
     /* check for success */
     if (!success) {
-        error("g_file_get_contents: %s", error->message);
+        warning("g_file_get_contents: %s", error->message);
         g_error_free(error);
         return NULL;
     }
