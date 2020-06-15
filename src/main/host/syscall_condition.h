@@ -13,7 +13,7 @@
 #include "main/host/thread.h"
 
 /* Create a new object that will cause a signal to be delivered to
- * a waiting process and thread, condition upon the given descriptor
+ * a waiting process and thread, conditional upon the given descriptor
  * reaching the given status or the given timeout expiring.
  * The condition starts with a reference count of 1. */
 SysCallCondition* syscallcondition_new(Timer* timeout, Descriptor* desc,

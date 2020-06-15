@@ -36,7 +36,7 @@ typedef enum {
 
 /* This is an opaque structure holding the state needed to resume a thread
  * previously blocked by a syscall. Any syscall that returns SYSCALL_BLOCK
- * should inlcude a SysCallCondition by which the thread should be unblocked. */
+ * should include a SysCallCondition by which the thread should be unblocked. */
 typedef struct _SysCallCondition SysCallCondition;
 
 typedef struct _SysCallReturn {

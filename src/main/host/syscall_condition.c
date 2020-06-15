@@ -116,6 +116,7 @@ static void _syscallcondition_free(SysCallCondition* cond) {
         descriptor_unref(cond->desc);
     }
 
+    MAGIC_CLEAR(cond);
     free(cond);
     worker_countObject(OBJECT_TYPE_SYSCALL_CONDITION, COUNTER_TYPE_FREE);
 }
@@ -132,6 +133,10 @@ void syscallcondition_unref(SysCallCondition* cond) {
     if (cond->referenceCount == 0) {
         _syscallcondition_free(cond);
     }
+}
+
+static void _syscallcondition_unrefcb(void* cond_ptr) {
+    syscallcondition_unref(cond_ptr);
 }
 
 #ifdef DEBUG
@@ -253,7 +258,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
         /* The timer is used for timeouts. */
         cond->timeoutListener = descriptorlistener_new(
             _syscallcondition_notifyTimeoutExpired, cond,
-            (DescriptorStatusObjectFreeFunc)syscallcondition_unref, NULL, NULL);
+            _syscallcondition_unrefcb, NULL, NULL);
 
         /* The listener holds refs to the thread condition. */
         syscallcondition_ref(cond);
@@ -271,7 +276,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
         /* We listen for status change on the descriptor. */
         cond->descListener = descriptorlistener_new(
             _syscallcondition_notifyDescStatusChanged, cond,
-            (DescriptorStatusObjectFreeFunc)syscallcondition_unref, NULL, NULL);
+            _syscallcondition_unrefcb, NULL, NULL);
 
         /* The listener holds refs to the thread condition. */
         syscallcondition_ref(cond);
