@@ -34,10 +34,17 @@ typedef enum {
     SYSCALL_NATIVE
 } SysCallReturnState;
 
+/* This is an opaque structure holding the state needed to resume a thread
+ * previously blocked by a syscall. Any syscall that returns SYSCALL_BLOCK
+ * should include a SysCallCondition by which the thread should be unblocked. */
+typedef struct _SysCallCondition SysCallCondition;
+
 typedef struct _SysCallReturn {
     SysCallReturnState state;
-    // Only valid for state SYSCALL_RETURN_DONE.
+    // Only valid for state SYSCALL_DONE.
     SysCallReg retval;
+    // Only valid for state SYSCALL_BLOCK
+    SysCallCondition* cond;
 } SysCallReturn;
 
 #endif

@@ -69,25 +69,9 @@ struct _EpollWatch {
     MAGIC_DECLARE;
 };
 
-typedef enum _EpollFlags EpollFlags;
-enum _EpollFlags {
-    EF_NONE = 0,
-    /* a callback is currently scheduled to notify user
-     * (used to avoid duplicate notifications) */
-    EF_SCHEDULED = 1 << 0,
-    /* we are currently notifying the process of events on its watched descriptors */
-    EF_NOTIFYING = 1 << 1,
-    /* the plugin closed the epoll descriptor, we should close as
-     * soon as the notify is no longer scheduled */
-    EF_CLOSED = 1 << 2,
-};
-
 struct _Epoll {
     /* epoll itself is also a descriptor */
     Descriptor super;
-
-    /* other members specific to epoll */
-    EpollFlags flags;
 
     /* holds the wrappers for the descriptors we are watching for events */
     GHashTable* watching;
@@ -95,15 +79,10 @@ struct _Epoll {
     /* holds the descriptors that we are watching that have events */
     GHashTable* ready;
 
-    Process* ownerProcess;
-    gint osEpollChild;
-    gint osEpollParent;
-
     MAGIC_DECLARE;
 };
 
 /* forward declaration */
-static void _epoll_tryNotify(Epoll* epoll, gpointer userData);
 static void _epoll_descriptorStatusChanged(Epoll* epoll,
                                            Descriptor* descriptor);
 
@@ -168,13 +147,6 @@ static void _epoll_free(Descriptor* descriptor) {
     g_hash_table_destroy(epoll->watching);
     g_hash_table_destroy(epoll->ready);
 
-    epoll_ctl(epoll->osEpollParent, EPOLL_CTL_DEL, epoll->osEpollChild, NULL);
-    close(epoll->osEpollChild);
-    close(epoll->osEpollParent);
-
-    utility_assert(epoll->ownerProcess);
-    process_unref(epoll->ownerProcess);
-
     descriptor_clear((Descriptor*)epoll);
     MAGIC_CLEAR(epoll);
     g_free(epoll);
@@ -198,35 +170,15 @@ void epoll_clearWatchListeners(Epoll* epoll) {
     }
 }
 
-static void _epoll_close(Epoll* epoll) {
-    MAGIC_ASSERT(epoll);
-
-    epoll_clearWatchListeners(epoll);
-
-    /* tell the process to stop tracking us, and unref the descriptor.
-     * this should trigger _epoll_free in most cases. */
-    process_deregisterDescriptor(
-        descriptor_getOwnerProcess(&epoll->super), &epoll->super);
-}
-
-static gboolean _epoll_tryToClose(Descriptor* descriptor) {
+static gboolean _epoll_close(Descriptor* descriptor) {
     Epoll* epoll = _epoll_fromDescriptor(descriptor);
     MAGIC_ASSERT(epoll);
-
-    /* mark the descriptor as closed */
-    epoll->flags |= EF_CLOSED;
-
-    /* only close it if there is no pending epoll notify event */
-    gboolean isScheduled = (epoll->flags & EF_SCHEDULED) ? TRUE : FALSE;
-    if(!isScheduled) {
-        _epoll_close(epoll);
-    }
-
-    return FALSE;
+    epoll_clearWatchListeners(epoll);
+    return TRUE;
 }
 
 DescriptorFunctionTable epollFunctions = {
-    _epoll_tryToClose, _epoll_free, MAGIC_VALUE};
+    _epoll_close, _epoll_free, MAGIC_VALUE};
 
 Epoll* epoll_new() {
     Epoll* epoll = g_new0(Epoll, 1);
@@ -237,33 +189,6 @@ Epoll* epoll_new() {
     /* allocate backend needed for managing events for this descriptor */
     epoll->watching = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_epollwatch_unref);
     epoll->ready = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_epollwatch_unref);
-
-    /* the application may want us to watch some system files, so we need a
-     * real OS epoll fd so we can offload that task.
-     */
-    epoll->osEpollParent = epoll_create(1);
-    if(epoll->osEpollParent == -1) {
-        warning("error in epoll_create for parent OS events, errno=%i msg:%s", errno, g_strerror(errno));
-    }
-    epoll->osEpollChild = epoll_create(1000);
-    if(epoll->osEpollChild == -1) {
-        warning("error in epoll_create for child OS events, errno=%i msg:%s", errno, g_strerror(errno));
-    } else {
-        struct epoll_event epoll_ev;
-        memset(&epoll_ev, 0, sizeof(struct epoll_event));
-        epoll_ev.events = EPOLLIN;
-        /* watch to see when child becomes ready */
-        gint res = epoll_ctl(epoll->osEpollParent, EPOLL_CTL_ADD, epoll->osEpollChild, &epoll_ev);
-        if(res != 0) {
-            warning("error in epoll_ctl for child OS events, errno=%i msg:%s", errno, g_strerror(errno));
-        }
-    }
-
-    /* keep track of which virtual application we need to notify of events
-    epoll_new should be called as a result of an application syscall */
-    epoll->ownerProcess = worker_getActiveProcess();
-    utility_assert(epoll->ownerProcess);
-    process_ref(epoll->ownerProcess);
 
     /* the epoll descriptor itself is always able to be epolled */
     descriptor_adjustStatus(&(epoll->super), DS_ACTIVE, TRUE);
@@ -347,74 +272,6 @@ static gboolean _epollwatch_isReady(EpollWatch* watch) {
     }
 
     return isReady;
-}
-
-static gboolean _epoll_isReadyOS(Epoll* epoll) {
-    MAGIC_ASSERT(epoll);
-
-    /* the os epoll will be readable when ready */
-    struct epoll_event epoll_ev;
-    memset(&epoll_ev, 0, sizeof(struct epoll_event));
-
-    gint ret = epoll_wait(epoll->osEpollParent, &epoll_ev, 1, 0);
-    if(ret > 0 && epoll_ev.events == EPOLLIN) {
-        /* the parent is readable, which means the child has events we should collect */
-        return TRUE;
-    }
-
-    /* the os descriptor has no events */
-    return FALSE;
-}
-
-static void _epoll_scheduleNotification(Epoll* epoll) {
-    MAGIC_ASSERT(epoll);
-
-    /* if we are currently here because epoll called process_continue,
-     * then just skip out because we will schedule another notification
-     * following completion of process_continue */
-    if((epoll->flags & EF_CLOSED) || (epoll->flags & EF_NOTIFYING)) {
-        return;
-    }
-
-    /* schedule a notification event for our node, if wanted and one isnt already scheduled */
-    if(!(epoll->flags & EF_SCHEDULED) && process_wantsNotify(epoll->ownerProcess, epoll->super.handle)) {
-        descriptor_ref(epoll);
-        Task* notifyTask = task_new((TaskCallbackFunc)_epoll_tryNotify,
-                epoll, NULL, descriptor_unref, NULL);
-
-        if(worker_scheduleTask(notifyTask, 1)) {
-            epoll->flags |= EF_SCHEDULED;
-        }
-        task_unref(notifyTask);
-    }
-}
-
-static gboolean _epoll_adjustStatus(Epoll* epoll) {
-    MAGIC_ASSERT(epoll);
-
-    if((epoll->flags & EF_CLOSED)) {
-        return FALSE;
-    }
-
-    /* check the status on the parent epoll fd and adjust as needed */
-    DescriptorStatus status = descriptor_getStatus(&epoll->super);
-
-    /* check status to see if we need to schedule a notification */
-    gboolean isReady = g_hash_table_size(epoll->ready) > 0 || _epoll_isReadyOS(epoll) ? TRUE : FALSE;
-
-    /* for epoll fd, readable means some children watch fds have events.
-     * we only need to take action if the status changed. */
-    if(!(status & DS_READABLE) && isReady) {
-        /* some children are ready, so this epoll is readable */
-        descriptor_adjustStatus(&(epoll->super), DS_READABLE, TRUE);
-        return TRUE;
-    } else if((status & DS_READABLE) && !isReady) {
-        /* no children are ready */
-        descriptor_adjustStatus(&(epoll->super), DS_READABLE, FALSE);
-        return FALSE;
-    }
-
-    return (status & DS_READABLE) ? TRUE : FALSE;
 }
 
 static const gchar* _epoll_operationToStr(gint op) {
@@ -520,31 +377,6 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
     return 0;
 }
 
-gint epoll_controlOS(Epoll* epoll, gint operation, gint fileDescriptor,
-                     const struct epoll_event* event) {
-    MAGIC_ASSERT(epoll);
-
-    /* We need a non-const struct for the epoll_ctl call. */
-    struct epoll_event osevent = {};
-    if (event) {
-        osevent = *event;
-    }
-
-    /* Ask the OS about any events on our kernel epoll descriptor. */
-    gint ret =
-        epoll_ctl(epoll->osEpollChild, operation, fileDescriptor, &osevent);
-    if(ret < 0) {
-        ret = -errno;
-    }
-
-    /* Check if the OS attempted to modify the event data. */
-    if (event && memcmp(&osevent, event, sizeof(*event)) != 0) {
-        warning("epoll_ctl unexpectedly modified the event struct. Ignoring.");
-    }
-
-    return ret;
-}
-
 guint epoll_getNumReadyEvents(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
     return g_hash_table_size(epoll->ready);
@@ -598,36 +430,13 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
         }
     }
 
-    gint space = eventArrayLength - eventIndex;
-    if(space && _epoll_isReadyOS(epoll)) {
-        /* now we have to get events from the OS descriptors */
-        struct epoll_event osEvents[space];
-        memset(&osEvents, 0, space*sizeof(struct epoll_event));
-
-        /* since we are in shadow context, this will be forwarded to the OS epoll */
-        gint nos = epoll_wait(epoll->osEpollChild, osEvents, space, 0);
-
-        if(nos == -1) {
-            warning("error in epoll_wait for OS events on epoll fd %i", epoll->osEpollChild);
-        }
-
-        /* nos will fit into eventArray */
-        for(gint j = 0; j < nos; j++) {
-            eventArray[eventIndex] = osEvents[j];
-            eventIndex++;
-            utility_assert(eventIndex <= eventArrayLength);
-        }
-    }
-
     *nEvents = eventIndex;
 
-    debug("epoll descriptor %i collected %i events", epoll->super.handle, eventIndex);
+    debug("epoll descriptor %i collected %i events", descriptor_getHandle(&epoll->super), eventIndex);
 
     /* if we consumed all the events that we had to report,
      * then our parent descriptor can no longer read child epolls */
-    if(_epoll_adjustStatus(epoll)) {
-        _epoll_scheduleNotification(epoll);
-    }
+    descriptor_adjustStatus(&(epoll->super), DS_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE);
 
     return 0;
 }
@@ -643,7 +452,7 @@ static void _epoll_descriptorStatusChanged(Epoll* epoll,
     /* if we are not watching, its an error because we shouldn't be listening */
     utility_assert(watch && (watch->descriptor == descriptor));
 
-    debug("status changed in epoll %i for descriptor %i", epoll->super.handle, descriptor->handle);
+    debug("status changed in epoll %i for descriptor %i", descriptor_getHandle(&epoll->super), descriptor->handle);
 
     /* update the status for the child watch fd */
     _epollwatch_updateStatus(watch);
@@ -660,81 +469,5 @@ static void _epoll_descriptorStatusChanged(Epoll* epoll,
     }
 
     /* check the status on the parent epoll fd and adjust as needed */
-    if(_epoll_adjustStatus(epoll)) {
-        _epoll_scheduleNotification(epoll);
-    }
-}
-
-#ifdef DEBUG
-static gchar* _epoll_getChildrenStatus(Epoll* epoll, GString* message) {
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, epoll->watching);
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
-        EpollWatch* watch = value;
-        MAGIC_ASSERT(watch);
-
-        gboolean isReady = _epollwatch_isReady(watch);
-        if(watch->descriptor) {
-            g_string_append_printf(message, " %i%s", watch->descriptor->handle, isReady ? "!" : "");
-            if(watch->descriptor->type == DT_EPOLL) {
-                g_string_append_printf(message, "{");
-                _epoll_getChildrenStatus((Epoll*)watch->descriptor, message);
-                g_string_append_printf(message, "}");
-            }
-        }
-    }
-    return message->str;
-}
-#endif
-
-static void _epoll_tryNotify(Epoll* epoll, gpointer userData) {
-    MAGIC_ASSERT(epoll);
-
-    /* event is being executed from the scheduler, so its no longer scheduled */
-    epoll->flags &= ~EF_SCHEDULED;
-
-    /* if it was closed in the meantime, do the actual close now */
-    gboolean isClosed = (epoll->flags & EF_CLOSED) ? TRUE : FALSE;
-    if(isClosed || !process_isRunning(epoll->ownerProcess)) {
-        _epoll_close(epoll);
-        return;
-    }
-
-    /* we should notify the plugin only if we still have some events to report. also
-     * check if there is events on the OS epoll instance, but only if we would otherwise
-     * not call the process. this ensures the process can collect events for which we are
-     * using the OS as a backend, even if none of our own watches have ready events. */
-    gboolean isReady = g_hash_table_size(epoll->ready) > 0 || _epoll_isReadyOS(epoll) ? TRUE : FALSE;
-
-    if(isReady) {
-        /* an event should have only been scheduled for the special epollfd */
-        utility_assert(process_wantsNotify(epoll->ownerProcess, epoll->super.handle));
-
-#ifdef DEBUG
-        /* debug message for looking at the epoll tree */
-        GString* childStatusMessage = g_string_new("");
-        gchar* msg = _epoll_getChildrenStatus(epoll, childStatusMessage);
-        debug("epollfd %i BEFORE process_continue: child fd statuses:%s", epoll->super.handle, msg);
-        g_string_free(childStatusMessage, TRUE);
-#endif
-
-        /* notify application to collect the reportable events */
-        epoll->flags |= EF_NOTIFYING;
-        process_continue(epoll->ownerProcess, NULL);
-        epoll->flags &= ~EF_NOTIFYING;
-
-#ifdef DEBUG
-        /* debug message for looking at the epoll tree */
-        childStatusMessage = g_string_new("");
-        msg = _epoll_getChildrenStatus(epoll, childStatusMessage);
-        debug("epollfd %i AFTER process_continue: child fd statuses:%s", epoll->super.handle, msg);
-        g_string_free(childStatusMessage, TRUE);
-#endif
-
-        /* set up another shadow callback event if needed */
-        if(_epoll_adjustStatus(epoll)) {
-            _epoll_scheduleNotification(epoll);
-        }
-    }
+    descriptor_adjustStatus(&(epoll->super), DS_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE);
 }

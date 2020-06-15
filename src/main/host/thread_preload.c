@@ -217,9 +217,6 @@ void threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
 
     /* thread is now active */
     thread->isRunning = 1;
-
-    /* this will cause us to call main() */
-    thread_resume(_threadPreloadToThread(thread));
 }
 
 static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread) {
@@ -239,14 +236,12 @@ void threadpreload_flushPtrs(Thread* base) {
     _threadpreload_flushPtrs(thread);
 }
 
-void threadpreload_resume(Thread* base) {
+SysCallCondition* threadpreload_resume(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     utility_assert(thread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
 
-    bool blocked = false;
-
-    while (!blocked) {
+    while (true) {
         switch (thread->currentEvent.event_id) {
             case SHD_SHIM_EVENT_START: {
                 // send the message to the shim to call main(),
@@ -266,7 +261,7 @@ void threadpreload_resume(Thread* base) {
                 utility_assert(rc == thread->childPID);
                 _threadpreload_cleanup(thread, status);
                 // it will not be sending us any more events
-                return;
+                return NULL;
             }
             case SHD_SHIM_EVENT_SYSCALL: {
                 SysCallReturn result = syscallhandler_make_syscall(
@@ -274,8 +269,8 @@ void threadpreload_resume(Thread* base) {
                     &thread->currentEvent.event_data.syscall.syscall_args);
 
                 if (result.state == SYSCALL_BLOCK) {
-                    blocked = true;
-                    break;
+                    /* thread is blocked on simulation progress */
+                    return result.cond;
                 }
 
                 _threadpreload_flushPtrs(thread);
@@ -318,13 +313,8 @@ void threadpreload_resume(Thread* base) {
             }
         }
 
-        if (blocked) {
-            /* thread is blocked on simulation progress */
-            return;
-        } else {
-            /* previous event was handled, wait for next one */
-            _threadpreload_waitForNextEvent(thread);
-        }
+        /* previous event was handled, wait for next one */
+        _threadpreload_waitForNextEvent(thread);
     }
 }
 

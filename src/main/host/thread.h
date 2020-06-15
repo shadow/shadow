@@ -12,6 +12,7 @@
 
 typedef struct _Thread Thread;
 
+#include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 
@@ -19,7 +20,7 @@ void thread_ref(Thread* thread);
 void thread_unref(Thread* thread);
 
 void thread_run(Thread* thread, gchar** argv, gchar** envv);
-void thread_resume(Thread* thread);
+SysCallCondition* thread_resume(Thread* thread);
 void thread_terminate(Thread* thread);
 int thread_getReturnCode(Thread* thread);
 

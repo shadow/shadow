@@ -365,7 +365,6 @@ void threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
     thread->childPID = _threadptrace_fork_exec(argv[0], argv, envv);
 
     _threadptrace_nextChildState(thread);
-    thread_resume(_threadPtraceToThread(thread));
 }
 
 static void _threadptrace_handleSyscall(ThreadPtrace* thread) {
@@ -415,7 +414,7 @@ static void threadptrace_flushPtrs(Thread* base) {
     _threadptrace_flushPtrs(thread);
 }
 
-void threadptrace_resume(Thread* base) {
+SysCallCondition* threadptrace_resume(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     while (true) {
@@ -434,7 +433,8 @@ void threadptrace_resume(Thread* base) {
                 _threadptrace_handleSyscall(thread);
 
                 switch (thread->syscall.sysCallReturn.state) {
-                    case SYSCALL_BLOCK: return;
+                    case SYSCALL_BLOCK:
+                        return thread->syscall.sysCallReturn.cond;
                     case SYSCALL_DONE:
                         // We have to let the child make *a* syscall, so we
                         // ensure that it will fail.
@@ -442,7 +442,7 @@ void threadptrace_resume(Thread* base) {
                         if (ptrace(PTRACE_SETREGS, thread->childPID, 0,
                                    &thread->syscall.regs) != 0) {
                             error("ptrace: %s", g_strerror(errno));
-                            return;
+                            return NULL;
                         }
                         break;
                     case SYSCALL_NATIVE: {
@@ -459,7 +459,7 @@ void threadptrace_resume(Thread* base) {
                 break;
             case THREAD_PTRACE_CHILD_STATE_EXITED:
                 debug("THREAD_PTRACE_CHILD_STATE_EXITED");
-                return;
+                return NULL;
             case THREAD_PTRACE_CHILD_STATE_SIGNALLED:
                 debug("THREAD_PTRACE_CHILD_STATE_SIGNALLED");
                 break;
@@ -470,7 +470,7 @@ void threadptrace_resume(Thread* base) {
         if (ptrace(PTRACE_SYSCALL, thread->childPID, 0,
                    thread->signalToDeliver) < 0) {
             error("ptrace %d: %s", thread->childPID, g_strerror(errno));
-            return;
+            return NULL;
         }
         thread->signalToDeliver = 0;
         _threadptrace_nextChildState(thread);

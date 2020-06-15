@@ -47,7 +47,6 @@ void process_schedule(Process* proc, gpointer nothing);
 void process_continue(Process* proc, Thread* thread);
 void process_stop(Process* proc);
 
-gboolean process_wantsNotify(Process* proc, gint epollfd);
 gboolean process_isRunning(Process* proc);
 
 /* Returns the name of the process from an internal buffer.
@@ -64,12 +63,6 @@ const gchar* process_getPluginName(Process* proc);
 
 /* Returns the processID that was assigned to us in process_new */
 guint process_getProcessID(Process* proc);
-
-/* Listen for the given status to occur on descriptor, or the timer to expire.
- * When either of those occur, the process calls thread_resume on
- * the given thread. */
-void process_listenForStatus(Process* proc, Thread* thread, Timer* timeout,
-                             Descriptor* descriptor, DescriptorStatus status);
 
 int process_registerDescriptor(Process* proc, Descriptor* desc);
 void process_deregisterDescriptor(Process* proc, Descriptor* desc);

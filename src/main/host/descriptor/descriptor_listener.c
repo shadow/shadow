@@ -5,7 +5,7 @@
 
 #include "main/host/descriptor/descriptor_listener.h"
 
-#include <glib.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 #include "main/core/support/object_counter.h"
@@ -21,11 +21,11 @@ struct _DescriptorListener {
     /* The callback function to trigger. */
     DescriptorStatusCallbackFunc notifyFunc;
     /* The first argument to pass to the callback function. */
-    gpointer callbackObject;
+    void* callbackObject;
     /* The function we call to free the callback object. */
     DescriptorStatusObjectFreeFunc objectFreeFunc;
     /* The second argument to pass to the callback function. */
-    gpointer callbackArgument;
+    void* callbackArgument;
     /* The function we call to free the callback argument. */
     DescriptorStatusArgumentFreeFunc argumentFreeFunc;
 
@@ -88,13 +88,13 @@ void descriptorlistener_unref(DescriptorListener* listener) {
 /* Return TRUE if a transition (bit flip) occurred on any status bits that we
  * are monitoring.
  */
-static gboolean _descriptorlistener_shouldNotify(DescriptorListener* listener,
+static bool _descriptorlistener_shouldNotify(DescriptorListener* listener,
                                                  DescriptorStatus currentStatus,
                                                  DescriptorStatus transitions) {
     MAGIC_ASSERT(listener);
 
-    gboolean flipped = listener->monitoring & transitions;
-    gboolean on = listener->monitoring & currentStatus;
+    bool flipped = listener->monitoring & transitions;
+    bool on = listener->monitoring & currentStatus;
 
     switch (listener->filter) {
         case DLF_OFF_TO_ON: return flipped && on;

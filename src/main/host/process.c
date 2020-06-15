@@ -255,7 +255,7 @@ static void _process_start(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 
     proc->plugin.isExecuting = TRUE;
-    /* exec the process and call main to start it */
+    /* exec the process */
     thread_run(proc->mainThread, proc->argv, proc->envv);
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
@@ -264,6 +264,9 @@ static void _process_start(Process* proc) {
 
     message(
         "process '%s' started in %f seconds", process_getName(proc), elapsed);
+
+    /* call main and run until blocked */
+    process_continue(proc, proc->mainThread);
 
     _process_check(proc);
 }
@@ -285,11 +288,7 @@ void process_continue(Process* proc, Thread* thread) {
     g_timer_start(proc->cpuDelayTimer);
 
     proc->plugin.isExecuting = TRUE;
-    if (thread) {
-        thread_resume(thread);
-    } else {
-        thread_resume(proc->mainThread);
-    }
+    SysCallCondition* cond = thread_resume(thread ? thread : proc->mainThread);
     proc->plugin.isExecuting = FALSE;
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -298,6 +297,12 @@ void process_continue(Process* proc, Thread* thread) {
     worker_setActiveProcess(NULL);
 
     info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
+
+    /* If the thread has an unblocking condition, listen for it. */
+    if (cond) {
+        syscallcondition_waitNonblock(
+            cond, proc, thread ? thread : proc->mainThread);
+    }
 
     _process_check(proc);
 }
@@ -368,19 +373,6 @@ void process_schedule(Process* proc, gpointer nothing) {
 gboolean process_isRunning(Process* proc) {
     MAGIC_ASSERT(proc);
     return (proc->mainThread != NULL && thread_isRunning(proc->mainThread)) ? TRUE : FALSE;
-}
-
-gboolean process_wantsNotify(Process* proc, gint epollfd) {
-    MAGIC_ASSERT(proc);
-    // FIXME TODO XXX
-    // how do we hook up notifations for epollfds?
-    return FALSE;
-    // old code:
-//    if(process_isRunning(proc) && epollfd == proc->epollfd) {
-//        return TRUE;
-//    } else {
-//        return FALSE;
-//    }
 }
 
 Process* process_new(Host* host, guint processID, SimulationTime startTime,
@@ -530,174 +522,3 @@ Descriptor* process_getRegisteredDescriptor(Process* proc, int handle) {
     return descriptortable_get(proc->descTable, handle);
 }
 
-// ******************************************************
-// Handler descriptor listeners to enable plugin blocking
-// ******************************************************
-
-typedef struct _ProcessWaiter ProcessWaiter;
-struct _ProcessWaiter {
-    Thread* thread;
-    Timer* timer;
-    DescriptorListener* timerListener;
-    Descriptor* descriptor;
-    DescriptorListener* descriptorListener;
-    gint referenceCount;
-};
-
-static void _process_unrefWaiter(ProcessWaiter* waiter) {
-    waiter->referenceCount--;
-    utility_assert(waiter->referenceCount >= 0);
-    if (waiter->referenceCount == 0) {
-        if (waiter->thread) {
-            thread_unref(waiter->thread);
-        }
-        if (waiter->timer) {
-            descriptor_unref((Descriptor*)waiter->timer);
-        }
-        if (waiter->descriptor) {
-            descriptor_unref(waiter->descriptor);
-        }
-        free(waiter);
-        worker_countObject(OBJECT_TYPE_PROCESS_WAITER, COUNTER_TYPE_FREE);
-    }
-}
-
-#ifdef DEBUG
-static void _process_logListeningState(Process* proc, ProcessWaiter* waiter,
-                                       gint started) {
-    GString* string = g_string_new(NULL);
-
-    g_string_append_printf(string, "Process %s thread %p %s listening for ",
-                           process_getName(proc), waiter->thread,
-                           started ? "started" : "stopped");
-
-    if (waiter->descriptor) {
-        g_string_append_printf(
-            string, "status on descriptor %d%s",
-            *descriptor_getHandleReference(waiter->descriptor),
-            waiter->timer ? " and " : "");
-    }
-    if (waiter->timer) {
-        struct itimerspec value = {0};
-        utility_assert(timer_getTime(waiter->timer, &value) == 0);
-        g_string_append_printf(string, "a timeout of %lu.%09lu seconds",
-                               (unsigned long)value.it_value.tv_sec,
-                               (unsigned long)value.it_value.tv_nsec);
-    }
-
-    debug("%s", string->str);
-
-    g_string_free(string, TRUE);
-}
-#endif
-
-static void _process_notifyStatusChanged(gpointer object, gpointer argument) {
-    Process* proc = object;
-    ProcessWaiter* waiter = argument;
-    MAGIC_ASSERT(proc);
-
-    const gchar* sysname = host_getName(proc->host);
-
-#ifdef DEBUG
-    _process_logListeningState(proc, waiter, 0);
-#endif
-
-    /* Unregister both listeners whenever either one triggers. */
-    if (waiter->timer && waiter->timerListener) {
-        descriptor_removeListener(
-            (Descriptor*)waiter->timer, waiter->timerListener);
-        descriptorlistener_setMonitorStatus(
-            waiter->timerListener, DS_NONE, DLF_NEVER);
-    }
-
-    if (waiter->descriptor && waiter->descriptorListener) {
-        descriptor_removeListener(
-            waiter->descriptor, waiter->descriptorListener);
-        descriptorlistener_setMonitorStatus(
-            waiter->descriptorListener, DS_NONE, DLF_NEVER);
-    }
-
-    process_continue(proc, waiter->thread);
-
-    /* Destroy the listeners, which will also unref and free the waiter. */
-    if (waiter->timerListener) {
-        descriptorlistener_unref(waiter->timerListener);
-    }
-    if (waiter->descriptorListener) {
-        descriptorlistener_unref(waiter->descriptorListener);
-    }
-}
-
-void process_listenForStatus(Process* proc, Thread* thread, Timer* timeout,
-                             Descriptor* descriptor, DescriptorStatus status) {
-    MAGIC_ASSERT(proc);
-
-    if (!timeout && !descriptor) {
-        return;
-    }
-
-    ProcessWaiter* waiter = malloc(sizeof(*waiter));
-
-    *waiter = (ProcessWaiter){
-        .thread = thread,
-        .timer = timeout,
-        .descriptor = descriptor,
-    };
-
-    /* The waiter will hold refs to these objects. */
-    if (waiter->thread) {
-        thread_ref(waiter->thread);
-    }
-    if (waiter->timer) {
-        descriptor_ref(waiter->timer);
-    }
-    if (waiter->descriptor) {
-        descriptor_ref(waiter->descriptor);
-    }
-
-    worker_countObject(OBJECT_TYPE_PROCESS_WAITER, COUNTER_TYPE_NEW);
-
-    /* Now set up the listeners. */
-    if (waiter->timer) {
-        /* The timer is used for timeouts. */
-        waiter->timerListener = descriptorlistener_new(
-            _process_notifyStatusChanged, proc,
-            (DescriptorStatusObjectFreeFunc)process_unref, waiter,
-            (DescriptorStatusArgumentFreeFunc)_process_unrefWaiter);
-
-        /* The listener holds refs to the process and waiter. */
-        process_ref(proc);
-        waiter->referenceCount++;
-
-        /* The timer is readable when it expires */
-        descriptorlistener_setMonitorStatus(
-            waiter->timerListener, DS_READABLE, DLF_OFF_TO_ON);
-
-        /* Attach the listener to the timer. */
-        descriptor_addListener(
-            (Descriptor*)waiter->timer, waiter->timerListener);
-    }
-
-    if (waiter->descriptor) {
-        /* We listen for status change on the descriptor. */
-        waiter->descriptorListener = descriptorlistener_new(
-            _process_notifyStatusChanged, proc,
-            (DescriptorStatusObjectFreeFunc)process_unref, waiter,
-            (DescriptorStatusArgumentFreeFunc)_process_unrefWaiter);
-
-        /* The listener holds refs to the process and waiter. */
-        process_ref(proc);
-        waiter->referenceCount++;
-
-        /* Monitor the requested status. */
-        descriptorlistener_setMonitorStatus(
-            waiter->descriptorListener, status, DLF_OFF_TO_ON);
-
-        /* Attach the listener to the descriptor. */
-        descriptor_addListener(waiter->descriptor, waiter->descriptorListener);
-    }
-
-#ifdef DEBUG
-    _process_logListeningState(proc, waiter, 1);
-#endif
-}

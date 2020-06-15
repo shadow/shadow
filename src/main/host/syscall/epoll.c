@@ -171,13 +171,13 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
                 _syscallhandler_setListenTimeoutMillis(sys, timeout_ms);
             }
 
-            /* An epoll descriptor is readable when it has events. We either
+            /* Block on epoll status. An epoll descriptor is readable when it
+             * has events. We either
              * use our timer as a timeout, or no timeout. */
-            process_listenForStatus(sys->process, sys->thread,
-                                    (timeout_ms > 0) ? sys->timer : NULL,
-                                    (Descriptor*)epoll, DS_READABLE);
-
-            return (SysCallReturn){.state = SYSCALL_BLOCK};
+            return (SysCallReturn){.state = SYSCALL_BLOCK,
+                                   .cond = syscallcondition_new(
+                                       (timeout_ms > 0) ? sys->timer : NULL,
+                                       (Descriptor*)epoll, DS_READABLE)};
         }
     }
 
