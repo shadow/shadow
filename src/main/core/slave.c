@@ -328,10 +328,13 @@ static gchar** _slave_generateEnvv(Slave* slave, InterposeMethod interposeMethod
     /* start with an empty environment */
     gchar** envv = g_environ_setenv(NULL, "SHADOW_SPAWNED", "TRUE", TRUE);
 
-    char buf[64];
-    g_snprintf(
-        buf, sizeof(buf), "%" PRId64, logger_get_global_start_time_micros());
-    envv = g_environ_setenv(envv, "SHADOW_LOG_START_TIME", buf, TRUE);
+    {
+        char* timestring =
+            g_strdup_printf("%" PRId64, logger_get_global_start_time_micros());
+        envv =
+            g_environ_setenv(envv, "SHADOW_LOG_START_TIME", timestring, TRUE);
+        g_free(timestring);
+    }
 
     if (interposeMethod == INTERPOSE_PRELOAD) {
         envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD", 0);
