@@ -164,9 +164,9 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
         }
 
         /* We need to block until the descriptor is ready to read. */
-        process_listenForStatus(
-            sys->process, sys->thread, NULL, desc, DS_READABLE);
-        return (SysCallReturn){.state = SYSCALL_BLOCK};
+        return (SysCallReturn){
+            .state = SYSCALL_BLOCK,
+            .cond = syscallcondition_new(NULL, desc, DS_READABLE)};
     }
 
     return (SysCallReturn){
@@ -261,9 +261,9 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
         }
 
         /* We need to block until the descriptor is ready to write. */
-        process_listenForStatus(
-            sys->process, sys->thread, NULL, desc, DS_WRITABLE);
-        return (SysCallReturn){.state = SYSCALL_BLOCK};
+        return (SysCallReturn){
+            .state = SYSCALL_BLOCK,
+            .cond = syscallcondition_new(NULL, desc, DS_WRITABLE)};
     }
 
     return (SysCallReturn){

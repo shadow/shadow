@@ -77,6 +77,7 @@ set(shadow_srcs
     host/syscall/uio.c
     host/thread.c
     host/host.c
+    host/syscall_condition.c
     host/thread_preload.c
     host/thread_ptrace.c
     host/network_interface.c

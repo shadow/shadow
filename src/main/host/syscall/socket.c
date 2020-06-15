@@ -145,9 +145,9 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
          * The socket becomes readable when we have a connection to accept.
          * This blocks indefinitely without a timeout. */
         debug("Listening socket %i waiting for acceptable connection.", sockfd);
-        process_listenForStatus(
-            sys->process, sys->thread, NULL, desc, DS_READABLE);
-        return (SysCallReturn){.state = SYSCALL_BLOCK};
+        return (SysCallReturn){
+            .state = SYSCALL_BLOCK,
+            .cond = syscallcondition_new(NULL, desc, DS_READABLE)};
     } else if (errcode < 0) {
         debug("TCP error when accepting connection on socket %i", sockfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -326,9 +326,9 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
     if (retval == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
         debug("recv would block on socket %i", sockfd);
         /* We need to block until the descriptor is ready to read. */
-        process_listenForStatus(
-            sys->process, sys->thread, NULL, desc, DS_READABLE);
-        return (SysCallReturn){.state = SYSCALL_BLOCK};
+        return (SysCallReturn){
+            .state = SYSCALL_BLOCK,
+            .cond = syscallcondition_new(NULL, desc, DS_READABLE)};
     }
 
     /* check if they wanted to know where we got the data from */
@@ -472,9 +472,9 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
 
     if (retval == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
         /* We need to block until the descriptor is ready to read. */
-        process_listenForStatus(
-            sys->process, sys->thread, NULL, desc, DS_WRITABLE);
-        return (SysCallReturn){.state = SYSCALL_BLOCK};
+        return (SysCallReturn){
+            .state = SYSCALL_BLOCK,
+            .cond = syscallcondition_new(NULL, desc, DS_WRITABLE)};
     }
 
     return (SysCallReturn){
@@ -656,9 +656,9 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
             /* This is the first time we ever called connect, and so we
              * need to wait for the 3-way handshake to complete.
              * We will wait indefinitely for a success or failure. */
-            process_listenForStatus(
-                sys->process, sys->thread, NULL, desc, DS_WRITABLE);
-            return (SysCallReturn){.state = SYSCALL_BLOCK};
+            return (SysCallReturn){.state = SYSCALL_BLOCK,
+                                   .cond = syscallcondition_new(
+                                       NULL, desc, DS_ACTIVE | DS_WRITABLE)};
         } else if (_syscallhandler_wasBlocked(sys) && errcode == -EISCONN) {
             /* It was EINPROGRESS, but is now a successful blocking connect. */
             errcode = 0;

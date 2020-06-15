@@ -53,11 +53,11 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     if (requestToBlock && !wasBlocked) {
         /* We need to block for a while following the requested timeout. */
         _syscallhandler_setListenTimeout(sys, req);
-        process_listenForStatus(
-            sys->process, sys->thread, sys->timer, NULL, DS_NONE);
 
         /* tell the thread we blocked it */
-        return (SysCallReturn){.state = SYSCALL_BLOCK};
+        return (SysCallReturn){
+            .state = SYSCALL_BLOCK,
+            .cond = syscallcondition_new(sys->timer, NULL, DS_NONE)};
     }
 
     /* If needed, verify that the timer expired correctly. */

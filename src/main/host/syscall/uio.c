@@ -182,9 +182,9 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         }
 
         /* We need to block until the descriptor is ready to write. */
-        process_listenForStatus(
-            sys->process, sys->thread, NULL, desc, DS_READABLE);
-        return (SysCallReturn){.state = SYSCALL_BLOCK};
+        return (SysCallReturn){
+            .state = SYSCALL_BLOCK,
+            .cond = syscallcondition_new(NULL, desc, DS_READABLE)};
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
@@ -294,9 +294,9 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         }
 
         /* We need to block until the descriptor is ready to write. */
-        process_listenForStatus(
-            sys->process, sys->thread, NULL, desc, DS_WRITABLE);
-        return (SysCallReturn){.state = SYSCALL_BLOCK};
+        return (SysCallReturn){
+            .state = SYSCALL_BLOCK,
+            .cond = syscallcondition_new(NULL, desc, DS_WRITABLE)};
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};

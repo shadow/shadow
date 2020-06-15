@@ -27,9 +27,9 @@ struct _ObjectCounter {
         ObjectCounts host;
         ObjectCounts netiface;
         ObjectCounts process;
-        ObjectCounts processwaiter;
         ObjectCounts threadpreload;
         ObjectCounts threadptrace;
+        ObjectCounts syscallcondition;
         ObjectCounts syscallhandler;
         ObjectCounts descriptorlistener;
         ObjectCounts descriptortable;
@@ -140,11 +140,6 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
 
-        case OBJECT_TYPE_PROCESS_WAITER: {
-            _objectcount_incrementOne(&(counter->counters.processwaiter), ctype);
-            break;
-        }
-
         case OBJECT_TYPE_THREAD_PRELOAD: {
             _objectcount_incrementOne(
                 &(counter->counters.threadpreload), ctype);
@@ -153,6 +148,11 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
 
         case OBJECT_TYPE_THREAD_PTRACE: {
             _objectcount_incrementOne(&(counter->counters.threadptrace), ctype);
+            break;
+        }
+
+        case OBJECT_TYPE_SYSCALL_CONDITION: {
+            _objectcount_incrementOne(&(counter->counters.syscallcondition), ctype);
             break;
         }
 
@@ -238,12 +238,12 @@ void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment
             &(increment->counters.netiface));
     _objectcount_incrementAll(&(counter->counters.process),
             &(increment->counters.process));
-    _objectcount_incrementAll(&(counter->counters.processwaiter),
-            &(increment->counters.processwaiter));
     _objectcount_incrementAll(&(counter->counters.threadpreload),
             &(increment->counters.threadpreload));
     _objectcount_incrementAll(&(counter->counters.threadptrace),
             &(increment->counters.threadptrace));
+    _objectcount_incrementAll(&(counter->counters.syscallcondition),
+            &(increment->counters.syscallcondition));
     _objectcount_incrementAll(&(counter->counters.syscallhandler),
             &(increment->counters.syscallhandler));
     _objectcount_incrementAll(&(counter->counters.descriptorlistener),
@@ -295,12 +295,12 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         "netiface_free=%" G_GUINT64_FORMAT " "
         "process_new=%" G_GUINT64_FORMAT " "
         "process_free=%" G_GUINT64_FORMAT " "
-        "processwaiter_new=%" G_GUINT64_FORMAT " "
-        "processwaiter_free=%" G_GUINT64_FORMAT " "
         "threadpreload_new=%" G_GUINT64_FORMAT " "
         "threadpreload_free=%" G_GUINT64_FORMAT " "
         "threadptrace_new=%" G_GUINT64_FORMAT " "
         "threadptrace_free=%" G_GUINT64_FORMAT " "
+        "syscallcondition_new=%" G_GUINT64_FORMAT " "
+        "syscallcondition_free=%" G_GUINT64_FORMAT " "
         "syscallhandler_new=%" G_GUINT64_FORMAT " "
         "syscallhandler_free=%" G_GUINT64_FORMAT " "
         "descriptorlistener_new=%" G_GUINT64_FORMAT " "
@@ -337,8 +337,8 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         counter->counters.netiface.free,
         counter->counters.process.new,
         counter->counters.process.free,
-        counter->counters.processwaiter.new,
-        counter->counters.processwaiter.free,
+        counter->counters.syscallcondition.new,
+        counter->counters.syscallcondition.free,
         counter->counters.threadpreload.new,
         counter->counters.threadpreload.free,
         counter->counters.threadptrace.new,
@@ -388,9 +388,9 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
         "host=%" G_GUINT64_FORMAT " "
         "netiface=%" G_GUINT64_FORMAT " "
         "process=%" G_GUINT64_FORMAT " "
-        "processwaiter=%" G_GUINT64_FORMAT " "
         "threadpreload=%" G_GUINT64_FORMAT " "
         "threadptrace=%" G_GUINT64_FORMAT " "
+        "syscallcondition=%" G_GUINT64_FORMAT " "
         "syscallhandler=%" G_GUINT64_FORMAT " "
         "descriptorlistener=%" G_GUINT64_FORMAT " "
         "descriptortable=%" G_GUINT64_FORMAT " "
@@ -417,8 +417,8 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
             counter->counters.netiface.free,
         counter->counters.process.new -
             counter->counters.process.free,
-        counter->counters.processwaiter.new -
-            counter->counters.processwaiter.free,
+        counter->counters.syscallcondition.new -
+            counter->counters.syscallcondition.free,
         counter->counters.threadpreload.new -
             counter->counters.threadpreload.free,
         counter->counters.threadptrace.new -

@@ -39,10 +39,10 @@ void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     thread->run(thread, argv, envv);
 }
 
-void thread_resume(Thread* thread) {
+SysCallCondition* thread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->resume);
-    thread->resume(thread);
+    return thread->resume(thread);
 }
 
 void thread_terminate(Thread* thread) {
