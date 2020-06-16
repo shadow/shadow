@@ -321,17 +321,21 @@ void process_stop(Process* proc) {
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
 
-    proc->plugin.isExecuting = TRUE;
     if (proc->mainThread) {
+        debug("terminating main thread %p", proc->mainThread);
+        proc->plugin.isExecuting = TRUE;
         thread_terminate(proc->mainThread);
+        proc->plugin.isExecuting = FALSE;
+        debug("unreffing main thread %p", proc->mainThread);
         thread_unref(proc->mainThread);
         proc->mainThread = NULL;
+        debug("main thread cleanup complete");
     }
-    proc->plugin.isExecuting = FALSE;
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
 
+    debug("Starting descriptor table shutdown hack");
     descriptortable_shutdownHelper(proc->descTable);
 
     worker_setActiveProcess(NULL);
