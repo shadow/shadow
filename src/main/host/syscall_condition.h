@@ -29,10 +29,12 @@ void syscallcondition_unref(SysCallCondition* cond);
 /* Activate the condition by registering the process and thread that will
  * be notified via process_continue() when the condition occurs. After
  * this call, the condition object will begin listening on the status of
- * the timeout and descriptor given in new(). This call consumes a
- * reference: the condition will unref itself after the condition occurs
- * and it has sent the signal via process_continue(). */
+ * the timeout and descriptor given in new(). */
 void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
                                    Thread* thread);
+
+/* Deactivate the condition by deregistering any open listeners and
+ * clearing any references to the process an thread given in wait(). */
+void syscallcondition_cancel(SysCallCondition* cond);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_CONDITION_H_ */

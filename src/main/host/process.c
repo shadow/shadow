@@ -45,6 +45,7 @@
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
+#include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "main/host/thread_preload.h"
 #include "main/host/tracker.h"
@@ -100,6 +101,10 @@ struct _Process {
 
     /* the main execution unit for the plugin */
     Thread* mainThread;
+
+    /* Non-null if the main thread is blocked by a syscall. */
+    SysCallCondition* mainThreadCond;
+
     gint threadIDCounter;
 
     // TODO add spawned threads
@@ -157,6 +162,15 @@ static void _process_logReturnCode(Process* proc, gint code) {
     }
 }
 
+static void _process_cleanupSysCallCondition(Process* proc) {
+    MAGIC_ASSERT(proc);
+    if (proc->mainThreadCond) {
+        syscallcondition_cancel(proc->mainThreadCond);
+        syscallcondition_unref(proc->mainThreadCond);
+        proc->mainThreadCond = NULL;
+    }
+}
+
 static void _process_check(Process* proc) {
     MAGIC_ASSERT(proc);
 
@@ -179,6 +193,8 @@ static void _process_check(Process* proc) {
         thread_terminate(proc->mainThread);
         thread_unref(proc->mainThread);
         proc->mainThread = NULL;
+
+        _process_cleanupSysCallCondition(proc);
 
         message("total runtime for process '%s' was %f seconds",
                 process_getName(proc), proc->totalRunTime);
@@ -283,6 +299,9 @@ void process_continue(Process* proc, Thread* thread) {
         return;
     }
 
+    /* We will unblock the thread, cleanup any prev condition. */
+    _process_cleanupSysCallCondition(proc);
+
     info("switching to thread controller to continue executing process '%s'",
          process_getName(proc));
 
@@ -292,7 +311,7 @@ void process_continue(Process* proc, Thread* thread) {
     g_timer_start(proc->cpuDelayTimer);
 
     proc->plugin.isExecuting = TRUE;
-    SysCallCondition* cond = thread_resume(thread ? thread : proc->mainThread);
+    proc->mainThreadCond = thread_resume(thread ? thread : proc->mainThread);
     proc->plugin.isExecuting = FALSE;
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -302,10 +321,10 @@ void process_continue(Process* proc, Thread* thread) {
 
     info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
 
-    /* If the thread has an unblocking condition, listen for it. */
-    if (cond) {
+    /* If the thread has a new unblocking condition, listen for it. */
+    if (proc->mainThreadCond) {
         syscallcondition_waitNonblock(
-            cond, proc, thread ? thread : proc->mainThread);
+            proc->mainThreadCond, proc, thread ? thread : proc->mainThread);
     }
 
     _process_check(proc);
@@ -324,8 +343,7 @@ void process_stop(Process* proc) {
     if (proc->mainThread) {
         debug("terminating main thread %p", proc->mainThread);
         proc->plugin.isExecuting = TRUE;
-        // FIXME fix threadptrace_terminate and uncomment this
-        //thread_terminate(proc->mainThread);
+        thread_terminate(proc->mainThread);
         proc->plugin.isExecuting = FALSE;
         debug("unreffing main thread %p", proc->mainThread);
         thread_unref(proc->mainThread);
@@ -335,6 +353,8 @@ void process_stop(Process* proc) {
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
+
+    _process_cleanupSysCallCondition(proc);
 
     debug("Starting descriptor table shutdown hack");
     descriptortable_shutdownHelper(proc->descTable);
