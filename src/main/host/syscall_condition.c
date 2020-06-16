@@ -185,11 +185,8 @@ static void _syscallcondition_signal(void* obj, void* arg) {
         _syscallcondition_logListeningState(cond, "stopped");
 #endif
 
-        _syscallcondition_cleanupListeners(cond);
+        /* Deliver the signal to notify the process to continue. */
         process_continue(cond->proc, cond->thread);
-        _syscallcondition_cleanupProc(cond);
-
-        syscallcondition_unref(cond);
     }
 }
 
@@ -203,7 +200,7 @@ static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
      * the state of the descriptor again. */
     Task* signalTask =
         task_new(_syscallcondition_signal, cond, (void*)wasTimeout,
-                 (TaskObjectFreeFunc)syscallcondition_unref, NULL);
+                 _syscallcondition_unrefcb, NULL);
     worker_scheduleTask(signalTask, 0); // Call without moving time forward
 
     syscallcondition_ref(cond);
@@ -247,11 +244,11 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
     utility_assert(thread);
 
     /* Update the reference counts. */
-    process_ref(proc);
-    thread_ref(thread);
-    _syscallcondition_cleanupProc(cond);
+    syscallcondition_cancel(cond);
     cond->proc = proc;
+    process_ref(proc);
     cond->thread = thread;
+    thread_ref(thread);
 
     /* Now set up the listeners. */
     if (cond->timeout && !cond->timeoutListener) {
@@ -292,4 +289,10 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
 #ifdef DEBUG
     _syscallcondition_logListeningState(cond, "started");
 #endif
+}
+
+void syscallcondition_cancel(SysCallCondition* cond) {
+    MAGIC_ASSERT(cond);
+    _syscallcondition_cleanupListeners(cond);
+    _syscallcondition_cleanupProc(cond);
 }

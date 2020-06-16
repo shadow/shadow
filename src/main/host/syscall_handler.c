@@ -304,6 +304,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(mprotect);
         NATIVE(mremap);
         NATIVE(munmap);
+        NATIVE(readlink);
         NATIVE(setrlimit);
         NATIVE(stat);
 #ifdef SYS_stat64

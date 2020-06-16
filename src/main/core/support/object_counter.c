@@ -337,12 +337,12 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         counter->counters.netiface.free,
         counter->counters.process.new,
         counter->counters.process.free,
-        counter->counters.syscallcondition.new,
-        counter->counters.syscallcondition.free,
         counter->counters.threadpreload.new,
         counter->counters.threadpreload.free,
         counter->counters.threadptrace.new,
         counter->counters.threadptrace.free,
+        counter->counters.syscallcondition.new,
+        counter->counters.syscallcondition.free,
         counter->counters.syscallhandler.new,
         counter->counters.syscallhandler.free,
         counter->counters.descriptorlistener.new,
@@ -417,12 +417,12 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
             counter->counters.netiface.free,
         counter->counters.process.new -
             counter->counters.process.free,
-        counter->counters.syscallcondition.new -
-            counter->counters.syscallcondition.free,
         counter->counters.threadpreload.new -
             counter->counters.threadpreload.free,
         counter->counters.threadptrace.new -
             counter->counters.threadptrace.free,
+        counter->counters.syscallcondition.new -
+            counter->counters.syscallcondition.free,
         counter->counters.syscallhandler.new -
             counter->counters.syscallhandler.free,
         counter->counters.descriptorlistener.new -
