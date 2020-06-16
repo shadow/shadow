@@ -324,7 +324,8 @@ void process_stop(Process* proc) {
     if (proc->mainThread) {
         debug("terminating main thread %p", proc->mainThread);
         proc->plugin.isExecuting = TRUE;
-        thread_terminate(proc->mainThread);
+        // FIXME fix threadptrace_terminate and uncomment this
+        //thread_terminate(proc->mainThread);
         proc->plugin.isExecuting = FALSE;
         debug("unreffing main thread %p", proc->mainThread);
         thread_unref(proc->mainThread);

@@ -1,4 +1,4 @@
-<shadow>
+<shadow stoptime="3">
   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
   <key attr.name="latency" attr.type="double" for="edge" id="d3" />
@@ -18,10 +18,9 @@
   </graph>
 </graphml>
 ]]></topology>
-  <kill time="3"/>
   <plugin id="testphold" path="test-phold"/>
-  <node id="peer" quantity="10">
-    <application plugin="testphold" starttime="1" arguments="loglevel=info basename=peer quantity=10 load=25 weightsfilepath=weights.txt"/>
-  </node>
+  <host id="peer" quantity="10">
+    <process plugin="testphold" starttime="1" arguments="loglevel=info basename=peer quantity=10 load=25 weightsfilepath=weights.txt"/>
+  </host>
 </shadow>
 
