@@ -505,18 +505,8 @@ void threadptrace_terminate(Thread* base) {
         return;
     }
 
-    int status = 0;
-
-    utility_assert(thread->childPID > 0);
-
-    pid_t rc = waitpid(thread->childPID, &status, WNOHANG);
-    utility_assert(rc != -1);
-
-    if (rc == 0) { // child is running, request a stop
-        debug("sending SIGTERM to %d", thread->childPID);
-        kill(thread->childPID, SIGTERM);
-        _threadptrace_nextChildState(thread);
-        utility_assert(!threadptrace_isRunning(base));
+    if (ptrace(PTRACE_CONT, thread->childPID, 0, SIGTERM) < 0) {
+        warning("ptrace %d: %s", thread->childPID, g_strerror(errno));
     }
 }
 
