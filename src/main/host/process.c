@@ -185,12 +185,16 @@ static void _process_check(Process* proc) {
     }
 }
 
+static gchar* _process_outputFileName(Process* proc, const char* type) {
+    return g_strdup_printf(
+        "%s/%s.%s", host_getDataPath(proc->host), proc->processName->str, type);
+}
+
 static void _process_openStdIOFileHelper(Process* proc, bool isStdOut) {
     MAGIC_ASSERT(proc);
 
     gchar* fileName =
-        g_strdup_printf("%s/%s.%s", host_getDataPath(proc->host),
-                        proc->processName->str, isStdOut ? "stdout" : "stderr");
+        _process_outputFileName(proc, isStdOut ? "stdout" : "stderr");
 
     File* stdfile = file_new();
     int errcode = file_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
@@ -406,6 +410,13 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
     proc->stopTime = stopTime;
 
     proc->interposeMethod = interposeMethod;
+
+    /* add log file to env */
+    {
+        gchar* logFileName = _process_outputFileName(proc, "shimlog");
+        envv = g_environ_setenv(envv, "SHADOW_LOG_FILE", logFileName, TRUE);
+        g_free(logFileName);
+    }
 
     /* save args and env */
     proc->argv = argv;
