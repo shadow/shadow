@@ -78,8 +78,9 @@ __attribute__((constructor(SHIM_CONSTRUCTOR_PRIORITY))) static void
 _shim_load() {
     shim_disableInterposition();
 
-    // We *must* override the default logger with one that has
-    // a recursion-guard before making any syscalls.
+    // We ultimately want to log to SHADOW_LOG_FILE, but we must temporarily
+    // override the default logger with one that has a recursion-guard before
+    // making any syscalls (e.g. to open the log file).
     logger_setDefault(shimlogger_new(stderr));
 
     // If we're not running under Shadow, return. This can be useful
@@ -98,7 +99,15 @@ _shim_load() {
         logger_set_global_start_time_micros(logger_start_time);
     }
 
-    // Redirect logger to specified log file.
+    // Redirect logger to specified log file. The shim logger internally
+    // disables interposition while logging, so we open the log file with
+    // interposition disabled to get a native file descriptor.
+    //
+    // At this time, shim_disableInterposition *doesn't* prevent
+    // ptrace-interposition from interposing, so when using ptrace-interposition
+    // this actually *will* be interposed and we'll get a shadow file
+    // descriptor. That's ok since the writes inside the logger will likewise be
+    // interposed.
     {
         const char* name = getenv("SHADOW_LOG_FILE");
         FILE* log_file = fopen(name, "w");

@@ -329,6 +329,8 @@ static gchar** _slave_generateEnvv(Slave* slave, InterposeMethod interposeMethod
     gchar** envv = g_environ_setenv(NULL, "SHADOW_SPAWNED", "TRUE", TRUE);
 
     {
+        // Pass the (real) start time to the plugin, so that shim-side logging
+        // can log real time from the correct offset.
         char* timestring =
             g_strdup_printf("%" PRId64, logger_get_global_start_time_micros());
         envv =
