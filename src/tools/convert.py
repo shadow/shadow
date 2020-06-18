@@ -9,6 +9,23 @@ from xml.sax.saxutils import unescape
 import yaml
 
 
+KEYS_XML_TO_YAML = {
+    'topology': 'topology',
+    'plugin': 'plugins',
+    'host': 'hosts',
+    'process': 'processes'
+}
+KEYS_YAML_TO_XML = {v: k for k, v in KEYS_XML_TO_YAML.items()}
+
+
+def convert_xml_key_to_yaml(tag: str):
+    return KEYS_XML_TO_YAML.get(tag, tag)
+
+
+def convert_yaml_key_to_xml(tag: str):
+    return KEYS_YAML_TO_XML.get(tag, tag)
+
+
 def yaml_str_presenter(dumper, data):
     if len(data.splitlines()) > 1:  # check for multiline string
         return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
@@ -52,7 +69,7 @@ def xml_nodes_to_dict(xml_nodes):
 
     for xml_node in xml_nodes:
         dict_node = xml_to_dict(xml_node)
-        tag = xml_node.tag
+        tag = convert_xml_key_to_yaml(xml_node.tag)
         dict_nodes[tag].append(dict_node)
 
     return dict_nodes
@@ -105,12 +122,14 @@ def dict_to_xml(xml_root, yaml_as_dict, tag=None):
             dict_to_xml(xml_root, v, k)
         else:
             attr[k] = str(v)
-    ET.SubElement(xml_root, tag, attrib=attr)
+    _tag = convert_yaml_key_to_xml(tag)
+    ET.SubElement(xml_root, _tag, attrib=attr)
 
 
 def list_to_xml(xml_root, tag, l):
     for element in l:
-        sub = ET.SubElement(xml_root, tag)
+        _tag = convert_yaml_key_to_xml(tag)
+        sub = ET.SubElement(xml_root, _tag)
         for k, v in element.items():
             if isinstance(v, list):
                 list_to_xml(sub, k, v)
