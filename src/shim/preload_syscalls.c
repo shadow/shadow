@@ -24,15 +24,6 @@
 #include "shim/shim_shmem.h"
 #include "support/logger/logger.h"
 
-// Handle to the real syscall function, initialized once at load-time for
-// thread-safety.
-static long (*_real_syscall)(long n, ...);
-__attribute__((constructor(SHIM_CONSTRUCTOR_PRIORITY - 1))) static void
-_init_real_syscall() {
-    _real_syscall = dlsym(RTLD_NEXT, "syscall");
-    assert(_real_syscall != NULL);
-}
-
 static long shadow_retval_to_errno(long retval) {
     // Linux reserves -1 through -4095 for errors. See
     // https://sourceware.org/git/?p=glibc.git;a=blob;f=sysdeps/unix/sysv/linux/x86_64/sysdep.h;h=24d8b8ec20a55824a4806f8821ecba2622d0fe8e;hb=HEAD#l41
@@ -41,6 +32,42 @@ static long shadow_retval_to_errno(long retval) {
         return -1;
     }
     return retval;
+}
+
+static long _vreal_syscall(long n, va_list args) {
+    long arg1 = va_arg(args, long);
+    long arg2 = va_arg(args, long);
+    long arg3 = va_arg(args, long);
+    long arg4 = va_arg(args, long);
+    long arg5 = va_arg(args, long);
+    long arg6 = va_arg(args, long);
+    long rv;
+
+    // r8, r9, and r10 aren't supported as register-constraints in
+    // extended asm templates. We have to use [local register
+    // variables](https://gcc.gnu.org/onlinedocs/gcc/Local-Register-Variables.html)
+    // instead. Calling any functions in between the register assignment and the
+    // asm template could clobber these registers, which is why we don't do the
+    // assignment directly above.
+    register long r10 __asm__("r10") = arg4;
+    register long r8 __asm__("r8") = arg5;
+    register long r9 __asm__("r9") = arg6;
+    __asm__ __volatile__(
+        "syscall"
+        : "=a"(rv)
+        : "a"(n), "D"(arg1), "S"(arg2), "d"(arg3), "r"(r10), "r"(r8), "r"(r9)
+        : "rcx", "r11", "memory");
+    return shadow_retval_to_errno(rv);
+}
+
+// Handle to the real syscall function, initialized once at load-time for
+// thread-safety.
+static long _real_syscall(long n, ...) {
+    va_list args;
+    va_start(args, n);
+    long rv = _vreal_syscall(n, args);
+    va_end(args);
+    return rv;
 }
 
 static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
@@ -111,30 +138,32 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
     }
 }
 
-static long _shadow_syscall(ShimEvent* event) {
+static long _vshadow_syscall(long n, va_list args) {
     shim_disableInterposition();
-    long rv = shadow_retval_to_errno(_shadow_syscall_event(event).as_i64);
+    ShimEvent e = {
+        .event_id = SHD_SHIM_EVENT_SYSCALL,
+        .event_data.syscall.syscall_args.number = n,
+    };
+    SysCallReg* regs = e.event_data.syscall.syscall_args.args;
+    for (int i = 0; i < 6; ++i) {
+        regs[i].as_u64 = va_arg(args, uint64_t);
+    }
+    long rv = shadow_retval_to_errno(_shadow_syscall_event(&e).as_i64);
     shim_enableInterposition();
     return rv;
 }
 
 long syscall(long n, ...) {
-    ShimEvent e;
-    e.event_id = SHD_SHIM_EVENT_SYSCALL;
-    e.event_data.syscall.syscall_args.number = n;
     va_list(args);
     va_start(args, n);
-    SysCallReg* regs = e.event_data.syscall.syscall_args.args;
-    for (int i = 0; i < 6; ++i) {
-        regs[i].as_u64 = va_arg(args, uint64_t);
+    long rv;
+    if (shim_interpositionEnabled()) {
+        rv = _vshadow_syscall(n, args);
+    } else {
+        rv = _vreal_syscall(n, args);
     }
     va_end(args);
-    if (shim_interpositionEnabled()) {
-        return _shadow_syscall(&e);
-    } else {
-        return _real_syscall(
-            n, regs[0], regs[1], regs[2], regs[3], regs[4], regs[5]);
-    }
+    return rv;
 }
 
 // General-case macro for defining a thin wrapper function `fnname` that invokes

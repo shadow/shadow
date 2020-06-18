@@ -163,7 +163,8 @@ static void _shim_unload() {
     if (tid_fd_tree != NULL) {
         tdestroy(tid_fd_tree, free);
     }
-    shim_enableInterposition();
+    // Leave interposition disabled; shadow is waiting for
+    // this process to die and won't listen to the shim pipe anymore.
 }
 
 static void _shim_wait_start(int event_fd) {
