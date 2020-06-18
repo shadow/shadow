@@ -24,17 +24,17 @@ topology:
         </edge>
       </graph>
     </graphml>
-plugin:
+plugins:
 - id: tgen
   path: ~/.shadow/bin/tgen
-host:
+hosts:
 - id: server
-  process:
-  - plugin: tgen
+  processes:
+  - arguments: tgen.server.graphml.xml
+    plugin: tgen
     starttime: 1
-    arguments: tgen.server.graphml.xml
 - id: client
-  process:
-  - plugin: tgen
+  processes:
+  - arguments: tgen.client.graphml.xml
+    plugin: tgen
     starttime: 2
-    arguments: tgen.client.graphml.xml
