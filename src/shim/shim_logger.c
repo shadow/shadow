@@ -47,6 +47,9 @@ void shimlogger_log(Logger* base, LogLevel level, const gchar* fileName,
     fprintf(logger->file, "%s [%s] [shd-shim] [%s] [%s:%i] [%s] %s\n",
             time_string, simulation_nanos_string, loglevel_toStr(level), fileName,
             lineNumber, functionName, message);
+#ifdef DEBUG
+    fflush(logger->file);
+#endif
     g_free(message);
     g_free(time_string);
     g_free(simulation_nanos_string);
