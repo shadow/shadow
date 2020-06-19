@@ -28,6 +28,7 @@
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/socket.h"
 #include "main/host/syscall/time.h"
+#include "main/host/syscall/timerfd.h"
 #include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
 #include "main/host/syscall_handler.h"
@@ -53,7 +54,7 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
          * with the process descriptor table because the descriptor
          * is not being used to service a plugin syscall and it
          * should not be tracked with an fd handle. */
-        .timer = timer_new(CLOCK_MONOTONIC, 0),
+        .timer = timer_new(),
     };
 
     MAGIC_INIT(sys);
@@ -225,6 +226,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(symlinkat);
         HANDLE(sync_file_range);
         HANDLE(syncfs);
+        HANDLE(timerfd_create);
+        HANDLE(timerfd_gettime);
+        HANDLE(timerfd_settime);
         HANDLE(uname);
         HANDLE(unlinkat);
         HANDLE(utimensat);

@@ -72,22 +72,7 @@ static void _timer_free(Descriptor* descriptor) {
 static DescriptorFunctionTable _timerFunctions = {
     _timer_close, _timer_free, MAGIC_VALUE};
 
-Timer* timer_new(gint clockid, gint flags) {
-    if(clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if(flags != 0 && flags != TFD_NONBLOCK && flags != TFD_CLOEXEC
-            && flags != (TFD_NONBLOCK|TFD_CLOEXEC)) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-//    if(!(flags&TFD_NONBLOCK)) {
-//        warning("Shadow does not support blocking timers, using TFD_NONBLOCK flag implicitly");
-//    }
-
+Timer* timer_new() {
     Timer* timer = g_new0(Timer, 1);
     MAGIC_INIT(timer);
 
@@ -137,8 +122,7 @@ gint timer_getTime(Timer* timer, struct itimerspec *curr_value) {
     MAGIC_ASSERT(timer);
 
     if(!curr_value) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
 
     /* returns relative time */
@@ -306,19 +290,16 @@ gint timer_setTime(Timer* timer, gint flags,
     MAGIC_ASSERT(timer);
 
     if(!new_value) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
 
     if(!_timer_timeIsValid(&(new_value->it_value)) ||
             !_timer_timeIsValid(&(new_value->it_interval))) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     if(flags != 0 && flags != TFD_TIMER_ABSTIME) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     debug("Setting timer value to "
