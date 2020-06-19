@@ -14,9 +14,16 @@ XML_TO_YAML = {
     'topology': 'topology',
     'plugin': 'plugins',
     'host': 'hosts',
-    'process': 'processes'
+    'node': 'hosts',
+    'process': 'processes',
+    'application': 'processes'
 }
-YAML_TO_XML = {v: k for k, v in XML_TO_YAML.items()}
+YAML_TO_XML = {
+    'topology': 'topology',
+    'plugins': 'plugin',
+    'hosts': 'host',
+    'processes': 'process'
+}
 
 
 def convert_xml_tag_to_yaml_key(tag: str) -> str:
