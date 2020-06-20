@@ -14,9 +14,11 @@ SYSCALL_HANDLER(bind);
 SYSCALL_HANDLER(connect);
 SYSCALL_HANDLER(getpeername);
 SYSCALL_HANDLER(getsockname);
+SYSCALL_HANDLER(getsockopt);
 SYSCALL_HANDLER(listen);
 SYSCALL_HANDLER(recvfrom);
 SYSCALL_HANDLER(sendto);
+SYSCALL_HANDLER(setsockopt);
 SYSCALL_HANDLER(shutdown);
 SYSCALL_HANDLER(socket);
 
