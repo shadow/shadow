@@ -109,6 +109,9 @@ def main():
     parser_test.set_defaults(func=test,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+    parser_test.add_argument('testname_regex',
+        help="run only the tests that match this regex", metavar="testname-regex", nargs="?")
+
     parser_test.add_argument('-j', '--jobs',
         help="number of tests to run simultaneously during testing",
         metavar="N", type=int,
@@ -140,15 +143,22 @@ def main():
     parser_install.set_defaults(func=install,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+    # parse arguments after '--' separately
+    argv = sys.argv[1:]
+    remaining = []
+    if '--' in argv:
+        index = argv.index('--')
+        (argv, remaining) = (argv[:index], argv[index+1:])
+
     # get arguments, accessible with args.value
-    args = parser_main.parse_args()
+    args = parser_main.parse_args(argv)
     # run chosen command
-    r = args.func(args)
+    r = args.func(args, remaining)
 
     logging.debug("setup is returning code '{0}'".format(r))
     sys.exit(r)
 
-def build(args):
+def build(args, remaining):
     # get absolute paths
     if args.prefix is not None: args.prefix = getfullpath(args.prefix)
 
@@ -227,7 +237,7 @@ def build(args):
     os.chdir(calledDirectory)
     return retcode
 
-def test(args):
+def test(args, remaining):
     testdir=getfullpath(BUILD_PREFIX)
 
     if not os.path.exists(testdir+'/CTestTestfile.cmake'):
@@ -246,15 +256,21 @@ def test(args):
     if args.rerun_failed:
         testcmd += " --rerun-failed"
 
-    logging.info("calling \'"+testcmd+"\'")
-    retcode = subprocess.call(testcmd.strip().split())
+    if args.testname_regex is not None:
+        testcmd += " -R {}".format(args.testname_regex)
+
+    # pass the remaining arguments (the arguments after a '--') directly to ctest
+    testcmd = testcmd.strip().split() + remaining
+
+    logging.info("calling '{}'".format(' '.join(testcmd)))
+    retcode = subprocess.call(testcmd)
     logging.info(str(testcmd) + " returned " + str(retcode))
 
     # go back to where we came from
     os.chdir(calledDirectory)
     return retcode
 
-def install(args):
+def install(args, remaining):
     builddir=getfullpath(BUILD_PREFIX)
     if not os.path.exists(builddir):
         logging.error("please build before installing!")
