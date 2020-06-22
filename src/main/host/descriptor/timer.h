@@ -12,7 +12,7 @@
 typedef struct _Timer Timer;
 
 /* free this with descriptor_free() */
-Timer* timer_new(gint clockid, gint flags);
+Timer* timer_new();
 gint timer_setTime(Timer* timer, gint flags,
                    const struct itimerspec *new_value,
                    struct itimerspec *old_value);

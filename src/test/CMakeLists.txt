@@ -33,7 +33,7 @@ add_subdirectory(shutdown)
 add_subdirectory(sleep)
 # FIXME add_subdirectory(sockbuf)
 # FIXME add_subdirectory(tcp)
-# FIXME add_subdirectory(timerfd)
+add_subdirectory(timerfd)
 add_subdirectory(udp)
 add_subdirectory(unistd)
 
