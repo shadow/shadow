@@ -69,11 +69,14 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
     Timer* timer = timer_new();
     int tfd = process_registerDescriptor(sys->process, (Descriptor*)timer);
 
+#ifdef DEBUG
+    /* This should always be a valid descriptor. */
     int errcode = _syscallhandler_validateTimerHelper(sys, tfd, NULL);
     if (errcode != 0) {
         error("Unable to find timer %i that we just created.", tfd);
     }
     utility_assert(errcode == 0);
+#endif
 
     /* Set any options that were given. */
     if (flags & TFD_NONBLOCK) {
