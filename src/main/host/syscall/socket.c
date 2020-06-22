@@ -278,15 +278,9 @@ _syscallhandler_getnameHelper(SysCallHandler* sys,
     return (SysCallReturn){.state = SYSCALL_DONE};
 }
 
-static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, Socket* sock,
+static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp,
                                            int optname, PluginPtr optvalPtr,
                                            PluginPtr optlenPtr) {
-    if (descriptor_getType((Descriptor*)sock) != DT_TCPSOCKET) {
-        return -EINVAL;
-    }
-
-    TCP* tcp = (TCP*)socket;
-
     switch (optname) {
         case TCP_INFO: {
             /* Get the len via clone, so we can write to optlenPtr too. */
@@ -941,8 +935,13 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
     errcode = 0;
     switch (level) {
         case SOL_TCP: {
+            if (descriptor_getType((Descriptor*)socket_desc) != DT_TCPSOCKET) {
+                errcode = -EINVAL;
+                break;
+            }
+
             errcode = _syscallhandler_getTCPOptHelper(
-                sys, socket_desc, optname, optvalPtr, optlenPtr);
+                sys, (TCP*)socket_desc, optname, optvalPtr, optlenPtr);
             break;
         }
         case SOL_SOCKET: {
@@ -953,6 +952,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
         default:
             warning("getsockopt called with unsupported level %i", level);
             errcode = -ENOPROTOOPT;
+            break;
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
