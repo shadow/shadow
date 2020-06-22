@@ -67,9 +67,9 @@ compile_test(HAVE_STRUCT_LINUX_DIRENT64
             ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent64.c)
 
 ## construct info/version strings
-string(REGEX REPLACE "^([0-9]+)\\.[0-9]+\\.[0-9]+$" "\\1" SHADOW_VERSION_MAJOR ${SHADOW_VERSION_FULL})
-string(REGEX REPLACE "^[0-9]+\\.([0-9]+)\\.[0-9]+$" "\\1" SHADOW_VERSION_MINOR ${SHADOW_VERSION_FULL})
-string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.([0-9]+)$" "\\1" SHADOW_VERSION_PATCH ${SHADOW_VERSION_FULL})
+string(REGEX REPLACE "^([0-9]+)\\.[0-9]+\\.[0-9]+(\\-[a-z]+)?(\\.[0-9]+)?$" "\\1" SHADOW_VERSION_MAJOR ${SHADOW_VERSION_FULL})
+string(REGEX REPLACE "^[0-9]+\\.([0-9]+)\\.[0-9]+(\\-[a-z]+)?(\\.[0-9]+)?$" "\\1" SHADOW_VERSION_MINOR ${SHADOW_VERSION_FULL})
+string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.([0-9]+)(\\-[a-z]+)?(\\.[0-9]+)?$" "\\1" SHADOW_VERSION_PATCH ${SHADOW_VERSION_FULL})
 
 message(STATUS "SHADOW_VERSION_FULL=${SHADOW_VERSION_FULL}")
 message(STATUS "SHADOW_VERSION_MAJOR=${SHADOW_VERSION_MAJOR}")
