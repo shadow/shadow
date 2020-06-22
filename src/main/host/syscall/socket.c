@@ -104,7 +104,7 @@ static size_t _syscallhandler_getSocklenHelper(SysCallHandler* sys,
      * later will cause crashes in the thread backend. */
     socklen_t* len_cloned =
         thread_newClonedPtr(sys->thread, lenPtr, sizeof(*len_cloned));
-    size_t sizeAvail = (size_t)*len_cloned;
+    size_t sizeAvail = *len_cloned;
     thread_releaseClonedPtr(sys->thread, len_cloned);
     return sizeAvail;
 }
@@ -334,11 +334,11 @@ static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, Socket* sock,
 
     switch (optname) {
         case SO_SNDBUF: {
-            *optval = (int)socket_getOutputBufferSize(sock);
+            *optval = socket_getOutputBufferSize(sock);
             return 0;
         }
         case SO_RCVBUF: {
-            *optval = (int)socket_getInputBufferSize(sock);
+            *optval = socket_getInputBufferSize(sock);
             return 0;
         }
         case SO_ERROR: {
