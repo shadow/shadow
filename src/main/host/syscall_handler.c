@@ -193,6 +193,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(getpeername);
         HANDLE(getpid);
         HANDLE(getsockname);
+        HANDLE(getsockopt);
         HANDLE(ioctl);
         HANDLE(linkat);
         HANDLE(listen);
@@ -220,6 +221,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(renameat);
         HANDLE(renameat2);
         HANDLE(sendto);
+        HANDLE(setsockopt);
         HANDLE(shutdown);
         HANDLE(socket);
         HANDLE(statx);
@@ -272,11 +274,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
 #ifdef SYS_fcntl64
         NATIVE(fcntl64);
 #endif
-        NATIVE(getsockopt);
         NATIVE(poll);
         NATIVE(ppoll);
         NATIVE(select);
-        NATIVE(setsockopt);
         NATIVE(pselect6);
 
         // copying data between various types of fds

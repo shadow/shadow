@@ -97,6 +97,18 @@ static int _syscallhandler_validateTCPSocketHelper(SysCallHandler* sys,
     return 0;
 }
 
+static size_t _syscallhandler_getSocklenHelper(SysCallHandler* sys,
+                                               PluginPtr lenPtr) {
+    /* Read the len first before writing the results. We use clone here
+     * because reading the len PluginPtr here and then trying to write it
+     * later will cause crashes in the thread backend. */
+    socklen_t* len_cloned =
+        thread_newClonedPtr(sys->thread, lenPtr, sizeof(*len_cloned));
+    size_t sizeAvail = *len_cloned;
+    thread_releaseClonedPtr(sys->thread, len_cloned);
+    return sizeAvail;
+}
+
 static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
                                                   int sockfd, PluginPtr addrPtr,
                                                   PluginPtr addrlenPtr,
@@ -243,13 +255,8 @@ _syscallhandler_getnameHelper(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
-    /* Read the addrlen first before writing the results. We use clone here
-     * because reading the addrlen PluginPtr here and then trying to write it
-     * below will cause crashes in the thread backend. */
-    socklen_t* addrlen_cloned =
-        thread_newClonedPtr(sys->thread, addrlenPtr, sizeof(*addrlen_cloned));
-    size_t sizeAvail = (size_t)*addrlen_cloned;
-    thread_releaseClonedPtr(sys->thread, addrlen_cloned);
+    /* Get the len via clone, so we can write to addrlenPtr too. */
+    size_t sizeAvail = _syscallhandler_getSocklenHelper(sys, addrlenPtr);
 
     if (sizeAvail <= 0) {
         info("Unable to store name in %zu bytes.", sizeAvail);
@@ -269,6 +276,142 @@ _syscallhandler_getnameHelper(SysCallHandler* sys,
     *addrlen = (socklen_t)retSize;
 
     return (SysCallReturn){.state = SYSCALL_DONE};
+}
+
+static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp,
+                                           int optname, PluginPtr optvalPtr,
+                                           PluginPtr optlenPtr) {
+    switch (optname) {
+        case TCP_INFO: {
+            /* Get the len via clone, so we can write to optlenPtr too. */
+            size_t sizeAvail = _syscallhandler_getSocklenHelper(sys, optlenPtr);
+            size_t sizeNeeded = sizeof(struct tcp_info);
+
+            if (sizeAvail < sizeNeeded) {
+                info("Unable to store tcp info in %zu bytes.", sizeAvail);
+                return -EINVAL;
+            }
+
+            /* Write the tcp info and its size. */
+            struct tcp_info* info =
+                thread_getWriteablePtr(sys->thread, optvalPtr, sizeNeeded);
+            tcp_getInfo(tcp, info);
+            socklen_t* infolen = thread_getWriteablePtr(
+                sys->thread, optlenPtr, sizeof(*infolen));
+            *infolen = sizeNeeded;
+
+            return 0;
+        }
+        default: {
+            warning(
+                "getsockopt at level SOL_TCP called with unsupported option %i",
+                optname);
+            return -ENOPROTOOPT;
+        }
+    }
+}
+
+static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, Socket* sock,
+                                              int optname, PluginPtr optvalPtr,
+                                              PluginPtr optlenPtr) {
+    /* Get the len via clone, so we can write to optlenPtr too. */
+    size_t sizeAvail = _syscallhandler_getSocklenHelper(sys, optlenPtr);
+
+    /* All options we currently support are integers. When adding support for
+     * more options, make sure to check length requirements. */
+    if (sizeAvail < sizeof(int)) {
+        info("Unable to store option in %zu bytes.", sizeAvail);
+        return -EINVAL;
+    }
+
+    int* optval = thread_getWriteablePtr(sys->thread, optvalPtr, sizeof(int));
+
+    switch (optname) {
+        case SO_SNDBUF: {
+            *optval = socket_getOutputBufferSize(sock);
+            return 0;
+        }
+        case SO_RCVBUF: {
+            *optval = socket_getInputBufferSize(sock);
+            return 0;
+        }
+        case SO_ERROR: {
+            *optval = 0;
+            if (descriptor_getType((Descriptor*)sock) == DT_TCPSOCKET) {
+                /* Return error for failed connect() attempts. */
+                int connerr = tcp_getConnectionError((TCP*)sock);
+                if (connerr == -ECONNRESET || connerr == -ECONNREFUSED) {
+                    *optval = -connerr; // result is a positive errcode
+                }
+            }
+            return 0;
+        }
+        default: {
+            warning("getsockopt at level SOL_SOCKET called with unsupported "
+                    "option %i",
+                    optname);
+            return -ENOPROTOOPT;
+        }
+    }
+}
+
+static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
+                                              int optname, PluginPtr optvalPtr,
+                                              socklen_t optlen) {
+    if (optlen < sizeof(int)) {
+        return -EINVAL;
+    }
+
+    switch (optname) {
+        case SO_SNDBUF: {
+            const unsigned int* val =
+                thread_getReadablePtr(sys->thread, optvalPtr, sizeof(int));
+            size_t newsize =
+                (*val) * 2; // Linux kernel doubles this value upon setting
+            socket_setOutputBufferSize(sock, newsize);
+            if (descriptor_getType((Descriptor*)sock) == DT_TCPSOCKET) {
+                tcp_disableSendBufferAutotuning((TCP*)sock);
+            }
+            return 0;
+        }
+        case SO_RCVBUF: {
+            const unsigned int* val =
+                thread_getReadablePtr(sys->thread, optvalPtr, sizeof(int));
+            size_t newsize =
+                (*val) * 2; // Linux kernel doubles this value upon setting
+            socket_setInputBufferSize(sock, newsize);
+            if (descriptor_getType((Descriptor*)sock) == DT_TCPSOCKET) {
+                tcp_disableReceiveBufferAutotuning((TCP*)sock);
+            }
+            return 0;
+        }
+        case SO_REUSEADDR: {
+            // TODO implement this, tor and tgen use it
+            debug("setsockopt SO_REUSEADDR not yet implemented");
+            return 0;
+        }
+#ifdef SO_REUSEPORT
+        case SO_REUSEPORT: {
+            // TODO implement this, tgen uses it
+            debug("setsockopt SO_REUSEPORT not yet implemented");
+            return 0;
+        }
+#endif
+        case SO_KEEPALIVE: {
+            // TODO implement this, libevent uses it in
+            // evconnlistener_new_bind()
+            debug("setsockopt SO_KEEPALIVE not yet implemented");
+            return 0;
+        }
+        default: {
+            warning("setsockopt on level SOL_SOCKET called with unsupported "
+                    "option %i",
+                    optname);
+            return -ENOPROTOOPT;
+        }
+    }
+
+    return 0;
 }
 
 ///////////////////////////////////////////////////////////
@@ -764,6 +907,57 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
         sys, &inet_addr, args->args[1].as_ptr, args->args[2].as_ptr);
 }
 
+SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
+                                        const SysCallArgs* args) {
+    int sockfd = args->args[0].as_i64;
+    int level = args->args[1].as_i64;
+    int optname = args->args[2].as_i64;
+    PluginPtr optvalPtr = args->args[3].as_ptr; // void*
+    PluginPtr optlenPtr = args->args[4].as_ptr; // socklen_t*
+
+    debug("trying to getsockopt on socket %i at level %i for opt %i", sockfd,
+          level, optname);
+
+    /* Get and validate the socket. */
+    Socket* socket_desc = NULL;
+    int errcode =
+        _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+    utility_assert(socket_desc);
+
+    /* The pointers must be non-null. */
+    if (!optvalPtr.val || !optlenPtr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
+    errcode = 0;
+    switch (level) {
+        case SOL_TCP: {
+            if (descriptor_getType((Descriptor*)socket_desc) != DT_TCPSOCKET) {
+                errcode = -EINVAL;
+                break;
+            }
+
+            errcode = _syscallhandler_getTCPOptHelper(
+                sys, (TCP*)socket_desc, optname, optvalPtr, optlenPtr);
+            break;
+        }
+        case SOL_SOCKET: {
+            errcode = _syscallhandler_getSocketOptHelper(
+                sys, socket_desc, optname, optvalPtr, optlenPtr);
+            break;
+        }
+        default:
+            warning("getsockopt called with unsupported level %i", level);
+            errcode = -ENOPROTOOPT;
+            break;
+    }
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+}
+
 SysCallReturn syscallhandler_listen(SysCallHandler* sys,
                                     const SysCallArgs* args) {
     int sockfd = args->args[0].as_i64;
@@ -823,6 +1017,46 @@ SysCallReturn syscallhandler_sendto(SysCallHandler* sys,
     return _syscallhandler_sendtoHelper(
         sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
         args->args[3].as_i64, args->args[4].as_ptr, args->args[5].as_u64);
+}
+
+SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
+                                        const SysCallArgs* args) {
+    int sockfd = args->args[0].as_i64;
+    int level = args->args[1].as_i64;
+    int optname = args->args[2].as_i64;
+    PluginPtr optvalPtr = args->args[3].as_ptr; // const void*
+    socklen_t optlen = args->args[4].as_u64;
+
+    debug("trying to setsockopt on socket %i at level %i for opt %i", sockfd,
+          level, optname);
+
+    /* Get and validate the socket. */
+    Socket* socket_desc = NULL;
+    int errcode =
+        _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+    utility_assert(socket_desc);
+
+    /* The pointers must be non-null. */
+    if (!optvalPtr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
+    errcode = 0;
+    switch (level) {
+        case SOL_SOCKET: {
+            errcode = _syscallhandler_setSocketOptHelper(
+                sys, socket_desc, optname, optvalPtr, optlen);
+            break;
+        }
+        default:
+            warning("setsockopt called with unsupported level %i", level);
+            errcode = -ENOPROTOOPT;
+    }
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
 }
 
 SysCallReturn syscallhandler_shutdown(SysCallHandler* sys,

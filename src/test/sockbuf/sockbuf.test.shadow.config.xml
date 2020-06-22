@@ -1,4 +1,4 @@
-<shadow>
+<shadow stoptime="15">
   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
   <key attr.name="latency" attr.type="double" for="edge" id="d3" />
@@ -18,10 +18,9 @@
   </graph>
 </graphml>
 ]]></topology>
-  <kill time="15"/>
   <plugin id="sockbuf" path="test-sockbuf"/>
-  <node id="testnode" quantity="1">
-    <application plugin="sockbuf" starttime="1" arguments=""/>
-  </node>
+  <host id="testnode" quantity="1">
+    <process plugin="sockbuf" starttime="1" arguments=""/>
+  </host>
 </shadow>
 
