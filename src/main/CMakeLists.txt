@@ -136,7 +136,6 @@ set(shadow_srcs
     routing/topology.c
 
     utility/async_priority_queue.c
-    utility/byte_queue.c
     utility/count_down_latch.c
     utility/pcap_writer.c
     utility/priority_queue.c

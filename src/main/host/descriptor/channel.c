@@ -10,13 +10,13 @@
 #include <netinet/in.h>
 #include <stddef.h>
 
+#include "main/bindings.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/transport.h"
 #include "main/host/host.h"
-#include "main/utility/byte_queue.h"
 #include "main/utility/utility.h"
 
 struct _Channel {
@@ -82,13 +82,13 @@ static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize 
 
     /* accept some data from the other end of the pipe */
     gsize copyLength = MIN(nBytes, available);
-    gsize numCopied = bytequeue_push(channel->buffer, buffer, copyLength);
-    channel->bufferLength += numCopied;
+    bytequeue_push(channel->buffer, buffer, copyLength);
+    channel->bufferLength += copyLength;
 
     /* we just got some data in our buffer */
     descriptor_adjustStatus((Descriptor*)channel, DS_READABLE, TRUE);
 
-    return (gssize)numCopied;
+    return copyLength;
 }
 
 static gssize channel_sendUserData(Transport* transport, gconstpointer buffer,
