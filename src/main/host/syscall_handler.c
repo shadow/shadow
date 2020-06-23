@@ -303,6 +303,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // (because the plugin can natively):
         // ***************************************
         NATIVE(access);
+        NATIVE(getcwd);
         NATIVE(geteuid);
         NATIVE(getegid);
         NATIVE(getgid);
@@ -324,7 +325,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(unlink);
 
         default:
-            info("unhandled syscall %ld", args->number);
+            warning("unhandled syscall %ld", args->number);
             scr = (SysCallReturn){.state = SYSCALL_NATIVE};
             break;
     }
