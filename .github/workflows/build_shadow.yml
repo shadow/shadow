@@ -22,7 +22,7 @@ jobs:
       options: '--tmpfs /dev/shm:rw,nosuid,nodev,exec,relatime,size=1g'
     strategy:
       matrix:
-        container: ['ubuntu:18.04'] #, 'ubuntu:16.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32', 'centos:7', 'centos:8']
+        container: ['ubuntu:18.04', 'centos:7'] #, 'ubuntu:16.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32', 'centos:8']
         cc: ['gcc'] #, 'clang']
         buildtype: ['debug', 'release']
         include:
@@ -36,8 +36,8 @@ jobs:
 #            package_manager: 'apt'
 #          - container: 'fedora:32'
 #            package_manager: 'dnf-fedora'
-#          - container: 'centos:7'
-#            package_manager: 'yum-centos-7'
+          - container: 'centos:7'
+            package_manager: 'yum-centos-7'
 #          - container: 'centos:8'
 #            package_manager: 'dnf-centos-8'
     steps:
