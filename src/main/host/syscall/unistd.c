@@ -130,7 +130,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
             if (offset == 0) {
                 result = file_read((File*)desc, buf, sizeNeeded);
             } else {
-                result = file_pread((File*)desc, buf, sizeNeeded, offset);
+                result = file_preadv((File*)desc, buf, sizeNeeded, offset);
             }
             break;
         case DT_TIMER:
@@ -229,7 +229,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
             if (offset == 0) {
                 result = file_write((File*)desc, buf, sizeNeeded);
             } else {
-                result = file_pwrite((File*)desc, buf, sizeNeeded, offset);
+                result = file_pwritev((File*)desc, buf, sizeNeeded, offset);
             }
             break;
         case DT_TIMER: result = -EINVAL; break;

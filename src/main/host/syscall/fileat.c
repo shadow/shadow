@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/syscall.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -483,6 +484,7 @@ SysCallReturn syscallhandler_renameat2(SysCallHandler* sys,
         args->args[3].as_ptr, args->args[4].as_u64);
 }
 
+#ifdef SYS_statx
 SysCallReturn syscallhandler_statx(SysCallHandler* sys,
                                    const SysCallArgs* args) {
     int dirfd = args->args[0].as_i64;
@@ -517,3 +519,4 @@ SysCallReturn syscallhandler_statx(SysCallHandler* sys,
         .state = SYSCALL_DONE,
         .retval.as_i64 = file_statx(dir_desc, pathname, flags, mask, statxbuf)};
 }
+#endif

@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
+#include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/uio.h>
@@ -57,13 +58,17 @@ char* file_getAbsolutePath(File* file);
 // ****************************************
 
 ssize_t file_read(File* file, void* buf, size_t bufSize);
-ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset);
+ssize_t file_preadv(File* file, void* buf, size_t bufSize, off_t offset);
+#ifdef SYS_preadv2
 ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt,
                      off_t offset, int flags);
+#endif
 ssize_t file_write(File* file, const void* buf, size_t bufSize);
-ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset);
+ssize_t file_pwritev(File* file, const void* buf, size_t bufSize, off_t offset);
+#ifdef SYS_pwritev2
 ssize_t file_pwritev2(File* file, const struct iovec* iov, int iovcnt,
                       off_t offset, int flags);
+#endif
 int file_fstat(File* file, struct stat* statbuf);
 int file_fstatfs(File* file, struct statfs* statbuf);
 int file_fsync(File* file);
@@ -113,7 +118,9 @@ ssize_t file_readlinkat(File* dir, const char* pathname, char* buf,
                         size_t bufsize);
 int file_renameat2(File* olddir, const char* oldpath, File* newdir,
                    const char* newpath, unsigned int flags);
+#ifdef SYS_statx
 int file_statx(File* dir, const char* pathname, int flags, unsigned int mask,
                struct statx* statxbuf);
+#endif
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_FILE_H_ */

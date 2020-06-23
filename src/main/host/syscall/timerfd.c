@@ -104,6 +104,9 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
     }
 
     /* Check for valid flags. */
+#ifndef TFD_TIMER_CANCEL_ON_SET
+#define TFD_TIMER_CANCEL_ON_SET 0
+#endif
     if (flags & ~(TFD_TIMER_ABSTIME | TFD_TIMER_CANCEL_ON_SET)) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }

@@ -209,10 +209,14 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(pipe2);
         HANDLE(pread64);
         HANDLE(preadv);
+#ifdef SYS_preadv2
         HANDLE(preadv2);
+#endif
         HANDLE(pwrite64);
         HANDLE(pwritev);
+#ifdef SYS_pwritev2
         HANDLE(pwritev2);
+#endif
         HANDLE(read);
         HANDLE(readahead);
         HANDLE(readlinkat);
@@ -224,7 +228,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(setsockopt);
         HANDLE(shutdown);
         HANDLE(socket);
+#ifdef SYS_statx
         HANDLE(statx);
+#endif
         HANDLE(symlinkat);
         HANDLE(sync_file_range);
         HANDLE(syncfs);

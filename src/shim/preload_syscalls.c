@@ -240,10 +240,14 @@ NOREMAP(int, pipe2, (int a[2], int b), a, b);
 //NOREMAP(int, ppoll, (struct pollfd* a, nfds_t b, const struct timespec* c, const sigset_t* d), a,b,c,d);
 NOREMAP(ssize_t, pread64, (int a, void* b, size_t c, off_t d), a, b, c, d);
 NOREMAP(ssize_t, preadv, (int a, const struct iovec* b, int c, off_t d), a, b, c, d);
+#ifdef SYS_preadv2
 NOREMAP(ssize_t, preadv2, (int a, const struct iovec* b, int c, off_t d, int e), a, b, c, d, e);
+#endif
 NOREMAP(ssize_t, pwrite64, (int a, const void* b, size_t c, off_t d), a, b, c, d);
 NOREMAP(ssize_t, pwritev, (int a, const struct iovec* b, int c, off_t d), a, b, c, d);
+#ifdef SYS_pwritev2
 NOREMAP(ssize_t, pwritev2, (int a, const struct iovec* b, int c, off_t d, int e), a, b, c, d, e);
+#endif
 NOREMAP(ssize_t, read, (int a, void *b, size_t c), a,b,c);
 NOREMAP(ssize_t, readahead, (int a, off64_t b, size_t c), a, b, c);
 NOREMAP(ssize_t, readlinkat, (int a, const char* b, char* c, size_t d), a, b, c, d);
@@ -258,7 +262,9 @@ REMAP(ssize_t, send, sendto, (int a, const void* b, size_t c, int d), a,b,c,d,NU
 NOREMAP(ssize_t, sendto, (int a, const void* b, size_t c, int d, const struct sockaddr* e, socklen_t f), a,b,c,d,e,f);
 NOREMAP(int, shutdown, (int a, int b), a,b);
 NOREMAP(int, socket, (int a, int b, int c), a,b,c);
+#ifdef SYS_statx
 NOREMAP(int, statx, (int a, const char* b, int c, unsigned int d, struct statx* e), a, b, c, d, e);
+#endif
 NOREMAP(int, symlinkat, (const char* a, int b, const char* c), a, b, c);
 NOREMAP(int, sync_file_range, (int a, off64_t b, off64_t c, unsigned int d), a, b, c, d);
 NOREMAP(int, syncfs, (int a), a);
