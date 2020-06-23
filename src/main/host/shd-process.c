@@ -57,6 +57,8 @@
 #include <glib/gstdio.h>
 
 #include "dl.h"
+//Modified for BLEEP Response Port Error
+#include "stdlib.h"
 
 #if defined(FD_SETSIZE)
 #if FD_SETSIZE > 1024
@@ -1570,7 +1572,7 @@ static gint _process_emu_ioctlHelper(Process* proc, int fd, unsigned long int re
         /* check if we have a mapped os fd */
         gint osfd = host_getOSHandle(proc->host, fd);
         if(osfd >= 0) {
-            ret = ioctl(fd, request, argp);
+            ret = ioctl(osfd, request, argp);
             if(ret < 0) {
                 _process_setErrno(proc, errno);
             }
@@ -4751,6 +4753,16 @@ int process_emu_getnameinfo(Process* proc, const struct sockaddr* sa, socklen_t 
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
     guint32 convertedIP = (guint32) (((struct sockaddr_in*)sa)->sin_addr.s_addr);
+    char buf[33];
+    //Modified for BLEEP Response Port Error
+    if(serv != NULL) {
+        unsigned short nPort = ((struct sockaddr_in *) sa)->sin_port;
+        guint32 convertedPort = (guint32) ntohs(nPort);
+        memset(buf, 0, sizeof(char)*33);
+        g_sprintf(buf, "%d", convertedPort);
+        memcpy(serv, buf, servlen);
+    }
+
     Address* address = dns_resolveIPToAddress(worker_getDNS(), convertedIP);
 
     if(address != NULL) {
