@@ -32,7 +32,10 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
         case F_GETSIG:
         case F_GETLEASE:
         case F_GETPIPE_SZ:
-        case F_GET_SEALS: {
+#ifdef F_GET_SEALS
+        case F_GET_SEALS:
+#endif
+        {
             // arg is ignored
             result = file_fcntl(file, command, NULL);
             break;
@@ -45,14 +48,20 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
         case F_SETLEASE:
         case F_NOTIFY:
         case F_SETPIPE_SZ:
-        case F_ADD_SEALS: {
+#ifdef F_ADD_SEALS
+        case F_ADD_SEALS:
+#endif
+        {
             // arg is an int (we cast to void* here to appease the fcntl api)
             result = file_fcntl(file, command, (void*)argReg.as_i64);
             break;
         }
 
         case F_GETLK:
-        case F_OFD_GETLK: {
+#ifdef F_OFD_GETLK
+        case F_OFD_GETLK:
+#endif
+        {
             struct flock* flk_in = thread_newClonedPtr(
                 sys->thread, argReg.as_ptr, sizeof(*flk_in));
             result = file_fcntl(file, command, (void*)flk_in);
@@ -66,9 +75,14 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
         }
 
         case F_SETLK:
+#ifdef F_OFD_SETLK
         case F_OFD_SETLK:
+#endif
         case F_SETLKW:
-        case F_OFD_SETLKW: {
+#ifdef F_OFD_SETLKW
+        case F_OFD_SETLKW:
+#endif
+        {
             const struct flock* flk =
                 thread_getReadablePtr(sys->thread, argReg.as_ptr, sizeof(*flk));
             result = file_fcntl(file, command, (void*)flk);
@@ -89,16 +103,26 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
             break;
         }
 
+#ifdef F_GET_RW_HINT
         case F_GET_RW_HINT:
-        case F_GET_FILE_RW_HINT: {
+#endif
+#ifdef F_GET_FILE_RW_HINT
+        case F_GET_FILE_RW_HINT:
+#endif
+        {
             uint64_t* hint = thread_getWriteablePtr(
                 sys->thread, argReg.as_ptr, sizeof(*hint));
             result = file_fcntl(file, command, hint);
             break;
         }
 
+#ifdef F_SET_RW_HINT
         case F_SET_RW_HINT:
-        case F_SET_FILE_RW_HINT: {
+#endif
+#ifdef F_SET_FILE_RW_HINT
+        case F_SET_FILE_RW_HINT:
+#endif
+        {
             const uint64_t* hint = thread_getReadablePtr(
                 sys->thread, argReg.as_ptr, sizeof(*hint));
             result = file_fcntl(file, command, (void*)hint);

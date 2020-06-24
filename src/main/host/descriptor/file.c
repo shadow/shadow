@@ -14,6 +14,7 @@
 #include <sys/file.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/uio.h>
@@ -294,7 +295,7 @@ ssize_t file_read(File* file, void* buf, size_t bufSize) {
     return (result < 0) ? -errno : result;
 }
 
-ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
+ssize_t file_preadv(File* file, void* buf, size_t bufSize, off_t offset) {
     MAGIC_ASSERT(file);
 
     if (!_file_getOSBackedFD(file)) {
@@ -311,6 +312,7 @@ ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
     return (result < 0) ? -errno : result;
 }
 
+#ifdef SYS_preadv2
 ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt,
                      off_t offset, int flags) {
     MAGIC_ASSERT(file);
@@ -330,6 +332,7 @@ ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt,
         preadv2(_file_getOSBackedFD(file), iov, iovcnt, offset, flags);
     return (result < 0) ? -errno : result;
 }
+#endif
 
 ssize_t file_write(File* file, const void* buf, size_t bufSize) {
     MAGIC_ASSERT(file);
@@ -348,7 +351,7 @@ ssize_t file_write(File* file, const void* buf, size_t bufSize) {
     return (result < 0) ? -errno : result;
 }
 
-ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset) {
+ssize_t file_pwritev(File* file, const void* buf, size_t bufSize, off_t offset) {
     MAGIC_ASSERT(file);
 
     if (!_file_getOSBackedFD(file)) {
@@ -365,6 +368,7 @@ ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset) {
     return (result < 0) ? -errno : result;
 }
 
+#ifdef SYS_pwritev2
 ssize_t file_pwritev2(File* file, const struct iovec* iov, int iovcnt,
                       off_t offset, int flags) {
     MAGIC_ASSERT(file);
@@ -384,6 +388,7 @@ ssize_t file_pwritev2(File* file, const struct iovec* iov, int iovcnt,
         pwritev2(_file_getOSBackedFD(file), iov, iovcnt, offset, flags);
     return (result < 0) ? -errno : result;
 }
+#endif
 
 int file_fstat(File* file, struct stat* statbuf) {
     MAGIC_ASSERT(file);
@@ -817,6 +822,7 @@ int file_renameat2(File* olddir, const char* oldpath, File* newdir,
     return (result < 0) ? -errno : result;
 }
 
+#ifdef SYS_statx
 int file_statx(File* dir, const char* pathname, int flags, unsigned int mask,
                struct statx* statxbuf) {
     debug("File %i statx os-backed file %i", dir ? _file_getFD(dir) : 0,
@@ -826,3 +832,4 @@ int file_statx(File* dir, const char* pathname, int flags, unsigned int mask,
         SYS_statx, _file_getOSBackedFD(dir), pathname, flags, mask, statxbuf);
     return (result < 0) ? -errno : result;
 }
+#endif

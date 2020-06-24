@@ -6,6 +6,7 @@
 #include "main/host/syscall/uio.h"
 
 #include <errno.h>
+#include <sys/syscall.h>
 #include <sys/uio.h>
 
 #include "main/host/descriptor/descriptor.h"
@@ -116,7 +117,14 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             buffersv[i].iov_len = bufSize;
         }
 
+#ifdef SYS_preadv2
         result = file_preadv2((File*)desc, buffersv, iovlen, offset, flags);
+#else
+        if (flags) {
+            warning("Ignoring flags");
+        }
+        result = file_preadv((File*)desc, buffersv, iovlen, offset);
+#endif
 
         free(buffersv);
     } else {
@@ -229,7 +237,14 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             buffersv[i].iov_len = bufSize;
         }
 
+#ifdef SYS_pwritev2
         result = file_pwritev2((File*)desc, buffersv, iovlen, offset, flags);
+#else
+        if (flags) {
+            warning("Ignoring flags");
+        }
+        result = file_pwritev((File*)desc, buffersv, iovlen, offset);
+#endif
 
         free(buffersv);
     } else {
