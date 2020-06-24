@@ -463,17 +463,6 @@ FILE *tmpfile(void) {
         goto out;
     }
 
-    if (fclose(temp) != 0) {
-        debug("fclose failed: %s", strerror(errno));
-        goto out;
-    }
-
-    temp = fopen(name, "r+");
-    if (temp == NULL) {
-        debug("fopen failed: %s", strerror(errno));
-        goto out;
-    }
-
     // FIXME: Workaround for https://github.com/shadow/shadow/issues/852.
     // Rather than immediately unlinking the file, we arrange for it to be
     // unlinked at exit.

@@ -104,9 +104,13 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     /* Flush the buffer to the plugin. */
     thread_flushPtrs(sys->thread);
 
+    /* Get original flags when used to open the file,
+       but be careful not to try re-creating or truncating it. */
+    int flags = file_getFlags(file) & ~(O_CREAT|O_EXCL|O_TMPFILE|O_TRUNC);
+
     /* Instruct the plugin to open the file at the path we sent. */
     int result = thread_nativeSyscall(sys->thread, SYS_open, pluginBufPtr.val,
-                                      file_getFlags(file), file_getMode(file));
+                                      flags, file_getMode(file));
     if (result < 0) {
         // TODO: not sure if errno is valid here, i.e., if we got copied it
         // back from the plugin after the call.
