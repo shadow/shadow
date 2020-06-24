@@ -19,7 +19,7 @@ jobs:
       image: ${{ matrix.container }}
       # the default for ubuntu:18.04, but with noexec replaced by exec and
       # the size increased from 65536k
-      options: '--tmpfs /dev/shm:rw,nosuid,nodev,exec,relatime,size=1g'
+      options: '--shm-size="1g"'
     strategy:
       matrix:
         container: ['ubuntu:18.04', 'centos:7'] #, 'ubuntu:16.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32', 'centos:8']
