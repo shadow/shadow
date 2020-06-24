@@ -22,7 +22,10 @@ static void _test_mmap() {
     assert_nonneg_errno(tempFD = fileno(temp));
 
     /* Make sure there is enough space to write after the mmap. */
-    assert_nonneg_errno(posix_fallocate(tempFD, 0, MAPLEN));
+    {
+        int rv = posix_fallocate(tempFD, 0, MAPLEN);
+        assert_true_errstring(rv == 0, strerror(rv));
+    }
 
     /* Init a msg to write. */
     char msg[MAPLEN] = {0};
