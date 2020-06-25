@@ -1,6 +1,6 @@
 # The Shadow Simulator Documentation
 
-This wiki contains important information about installing and using the Shadow discrete event network simulator. Please [open an issue](https://github.com/shadow/shadow/issues/new/choose) if you notice something out of date, or fix it yourself if you can.
+The docs contain important information about installing and using the Shadow discrete event network simulator. Please [open an issue](https://github.com/shadow/shadow/issues/new/choose) if you notice something out of date, or fix it yourself if you can.
 
  * The Shadow simulator
    * [Design Overview](0-Design-Overview.md)
@@ -18,6 +18,7 @@ This wiki contains important information about installing and using the Shadow d
      * [Coding style](coding-style.md)
      * [Pull requests](pull-requests.md)
    * [Maintainer playbook](maintainer-playbook.md)
+   * [NSF Sponsorship](nsf-sponsorship.md)
 
 ## Plug-in Info:
 
