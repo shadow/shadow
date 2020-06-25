@@ -13,6 +13,7 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
+#include <sys/timerfd.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -47,7 +48,13 @@ struct _PHold {
     GString* hostname;
     gint listend;
     gint epolld_in;
+    gint timerd;
+
     guint64 num_msgs_sent;
+    guint64 num_msgs_sent_tot;
+    guint64 num_msgs_recv;
+    guint64 num_msgs_recv_tot;
+
     guint magic;
 };
 
@@ -197,6 +204,7 @@ static int _phold_sendToNode(PHold* phold, char* nodeName, in_port_t port, void*
         ssize_t b = sendto(socketd, msg, msg_len, 0, (struct sockaddr*) (&node), len);
         if(b > 0) {
             phold->num_msgs_sent++;
+            phold->num_msgs_sent_tot++;
             phold_debug("host '%s' sent %i byte%s to host '%s'",
                             phold->hostname->str, (gint)b, b == 1 ? "" : "s", nodeName);
             result = TRUE;
@@ -238,12 +246,15 @@ static void _phold_bootstrapMessages(PHold* phold) {
     }
 }
 
-static void _phold_startListening(PHold* phold) {
+static gint _phold_startListening(PHold* phold) {
     PHOLD_ASSERT(phold);
 
     /* create the socket and get a socket descriptor */
     phold->listend = socket(AF_INET, (SOCK_DGRAM | SOCK_NONBLOCK), 0);
-    g_assert(phold->listend != -1);
+    if (phold->timerd < 0) {
+        phold_warning("Unable to create listener socket, error %i: %s", errno, strerror(errno));
+        return -1;
+    }
 
     phold_info("opened listener at socket %i", phold->listend);
 
@@ -256,26 +267,50 @@ static void _phold_startListening(PHold* phold) {
 
     /* bind the socket to the server port */
     gint result = bind(phold->listend, (struct sockaddr *) &bindAddr, sizeof(bindAddr));
-    g_assert(result != -1);
+    if (result < 0) {
+        phold_warning("Unable to bind listener socket, error %i: %s", errno, strerror(errno));
+        return -1;
+    }
 
-    /* create an epoll so we can wait for IO events */
-    phold->epolld_in = epoll_create(1);
-    g_assert(phold->epolld_in != -1);
+    return 0;
+}
 
-    phold_info("opened epoll %i for socket %i", phold->epolld_in, phold->listend);
+static gint _phold_startHeartbeatTimer(PHold* phold) {
+    PHOLD_ASSERT(phold);
 
-    /* setup the events we will watch for */
-    struct epoll_event ev;
-    ev.events = EPOLLIN;
-    ev.data.fd = phold->listend;
+    phold->timerd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+    if (phold->timerd < 0) {
+        phold_warning("Unable to create heartbeat timer, error %i: %s", errno, strerror(errno));
+        return -1;
+    }
 
-    /* start watching socket */
-    result = epoll_ctl(phold->epolld_in, EPOLL_CTL_ADD, phold->listend, &ev);
-    g_assert(result != -1);
+    phold_info("opened timer at timerfd %i", phold->timerd);
+
+    struct itimerspec heartbeat = {.it_value.tv_sec = 1, .it_interval.tv_sec = 1};
+    int result = timerfd_settime(phold->timerd, 0, &heartbeat, NULL);
+    if (result < 0) {
+        phold_warning(
+            "Unable to set timeout on heartbeat timer, error %i: %s", errno, strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+static inline void _phold_logHeartbeatMessage(PHold* phold) {
+    phold_info("%s: "
+               "heartbeat: sent %" G_GUINT64_FORMAT " recv %" G_GUINT64_FORMAT " "
+               "total: sent %" G_GUINT64_FORMAT " recv %" G_GUINT64_FORMAT,
+               phold->hostname->str, phold->num_msgs_sent, phold->num_msgs_recv,
+               phold->num_msgs_sent_tot, phold->num_msgs_recv_tot);
+    phold->num_msgs_recv = 0;
+    phold->num_msgs_sent = 0;
 }
 
 static void _phold_wait_and_process_events(PHold* phold) {
     PHOLD_ASSERT(phold);
+
+    gchar buffer[102400] = {0};
 
     /* storage for collecting events from our epoll descriptor */
     struct epoll_event epevs[10];
@@ -285,8 +320,16 @@ static void _phold_wait_and_process_events(PHold* phold) {
      * this is a blocking call, it will block until we have packets coming in on listend */
     gint nfds = epoll_wait(phold->epolld_in, epevs, 10, -1);
     for (gint i = 0; i < nfds; i++) {
-        gchar buffer[102400];
-        memset(buffer, 0, 102400);
+        gint fd = epevs[i].data.fd;
+        if (fd == phold->timerd) {
+            _phold_logHeartbeatMessage(phold);
+            /* Read the timer buf so that its not readable again until the next
+             * interval. */
+            uint64_t num_expirations = 0;
+            read(phold->timerd, &num_expirations, sizeof(num_expirations));
+            continue;
+        }
+
         while(TRUE) {
             struct sockaddr_in addrbuf;
             memset(&addrbuf, 0, sizeof(struct sockaddr_in));
@@ -299,6 +342,8 @@ static void _phold_wait_and_process_events(PHold* phold) {
                 break;
             }
             buffer[nBytes] = 0x0;
+            phold->num_msgs_recv++;
+            phold->num_msgs_recv_tot++;
 
             in_addr_t ip = addrbuf.sin_addr.s_addr;
             char netbuf[INET_ADDRSTRLEN+1];
@@ -314,10 +359,42 @@ static void _phold_wait_and_process_events(PHold* phold) {
     }
 }
 
+static gint _phold_addToEpoll(PHold* phold, gint fd) {
+    /* setup the events we will watch for */
+    struct epoll_event ev;
+    ev.events = EPOLLIN; // watch for readability
+    ev.data.fd = fd;
+
+    /* start watching fd */
+    gint result = epoll_ctl(phold->epolld_in, EPOLL_CTL_ADD, fd, &ev);
+    if (result < 0) {
+        phold_warning("Unable to add fd %i to epoll, error %i: %s", fd, errno, strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
 static int _phold_run(PHold* phold) {
     PHOLD_ASSERT(phold);
 
-    _phold_startListening(phold);
+    /* create an epoll so we can wait for IO events */
+    phold->epolld_in = epoll_create(1);
+    if (phold->epolld_in < 0) {
+        phold_warning("Unable to create epoll, error %i: %s", errno, strerror(errno));
+        return EXIT_FAILURE;
+    }
+    phold_info("opened epoll %i", phold->epolld_in);
+
+    if (_phold_startHeartbeatTimer(phold) || _phold_startListening(phold)) {
+        return EXIT_FAILURE;
+    }
+
+    if (_phold_addToEpoll(phold, phold->listend) || _phold_addToEpoll(phold, phold->timerd)) {
+        return EXIT_FAILURE;
+    }
+
+    phold_info("listening on fd %i, heartbeat timer on fd %i", phold->listend, phold->timerd);
+
     _phold_bootstrapMessages(phold);
 
     /* main loop - wait for events from the descriptors */
@@ -465,8 +542,7 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
 static void _phold_free(PHold* phold) {
     PHOLD_ASSERT(phold);
 
-    phold_info("%s sent %"G_GUINT64_FORMAT" messages", phold->hostname->str, phold->num_msgs_sent);
-
+    _phold_logHeartbeatMessage(phold);
     if(phold->listend > 0) {
         close(phold->listend);
     }
