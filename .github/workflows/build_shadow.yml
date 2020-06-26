@@ -51,17 +51,17 @@ jobs:
           DEBIAN_FRONTEND: 'noninteractive'
         run: |
           apt-get update
-          apt-get install -y ${{ matrix.cc }} g++ cmake make xz-utils python3 libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg libprocps-dev
+          apt-get install -y ${{ matrix.cc }} g++ cmake make xz-utils python3 libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg libprocps-dev curl
 
       - name: Install Dependencies (dnf-fedora)
         if: ${{ matrix.package_manager == 'dnf-fedora' }}
-        run: dnf install --best -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python3 xz xz-devel yum-utils procps-devel
+        run: dnf install --best -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python3 xz xz-devel yum-utils procps-devel curl
 
       - name: Install Dependencies (yum-centos-7)
         if: ${{ matrix.package_manager == 'yum-centos-7' }}
         run: |
           yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum install -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python3 xz xz-devel yum-utils procps-devel
+          yum install -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel igraph igraph-devel python3 xz xz-devel yum-utils procps-devel curl
 
       - name: Install Dependencies (dnf-centos-8)
         if: ${{ matrix.package_manager == 'dnf-centos-8' }}
@@ -73,7 +73,13 @@ jobs:
           dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-devel-3.3.10-26.el7.x86_64.rpm
           dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-0.7.1-12.el7.x86_64.rpm
           dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-devel-0.7.1-12.el7.x86_64.rpm
-          dnf install -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel python3 xz xz-devel yum-utils
+          dnf install -y ${{ matrix.cc }} cmake make gcc-c++ glib2 glib2-devel python3 xz xz-devel yum-utils curl
+
+      - name: Install Rust
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+
+      - name: Add Rust to PATH
+        run: echo "::add-path::$HOME/.cargo/bin"
 
       - name: Build Debug
         if: ${{ matrix.buildtype == 'debug' }}

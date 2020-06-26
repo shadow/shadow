@@ -19,7 +19,7 @@
 </graphml>
 ]]></topology>
   <kill time="10"/>
-  <plugin id="testsleep" path="test-sleep"/>
+  <plugin id="testsleep" path="../target/debug/test_sleep"/>
   <node id="testnode" quantity="1">
     <application plugin="testsleep" starttime="1" arguments=""/>
   </node>

@@ -1,0 +1,13 @@
+[package]
+name = "shadow-tests"
+version = "2.0.0-pre"
+edition = "2018"
+publish = false
+
+[[bin]]
+name = "test_sleep"
+path = "sleep/test_sleep.rs"
+#harness = false
+
+[dependencies]
+libc = "0.2"
