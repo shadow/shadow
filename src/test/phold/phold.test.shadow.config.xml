@@ -20,7 +20,7 @@
 ]]></topology>
   <plugin id="testphold" path="test-phold"/>
   <host id="peer" quantity="10">
-    <process plugin="testphold" starttime="1" arguments="loglevel=info basename=peer quantity=10 load=25 weightsfilepath=weights.txt"/>
+    <process plugin="testphold" starttime="1" arguments="loglevel=info basename=peer quantity=10 load=25 size=1 weightsfilepath=weights.txt"/>
   </host>
 </shadow>
 

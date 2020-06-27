@@ -39,6 +39,7 @@ struct _PHold {
     GString* basename;
     guint64 quantity;
     guint64 load;
+    guint64 size;
     GString* weightsfilepath;
 
     guint64 num_peers;
@@ -51,10 +52,16 @@ struct _PHold {
     gint epolld_in;
     gint timerd;
 
+    guint8* sendbuf; // len is size from above
+
     guint64 num_msgs_sent;
     guint64 num_msgs_sent_tot;
+    guint64 num_bytes_sent;
+    guint64 num_bytes_sent_tot;
     guint64 num_msgs_recv;
     guint64 num_msgs_recv_tot;
+    guint64 num_bytes_recv;
+    guint64 num_bytes_recv_tot;
 
     guint magic;
 };
@@ -203,6 +210,8 @@ static int _phold_sendToNode(PHold* phold, gint64 peerIndex, in_port_t port, voi
     if (b > 0) {
         phold->num_msgs_sent++;
         phold->num_msgs_sent_tot++;
+        phold->num_bytes_sent += b;
+        phold->num_bytes_sent_tot += b;
         phold_debug("host '%s' sent %i byte%s to host '%s%" G_GINT64_FORMAT "'",
                     phold->hostname->str, (gint)b, b == 1 ? "" : "s", phold->basename,
                     peerIndex + 1);
@@ -228,8 +237,7 @@ static void _phold_sendNewMessage(PHold* phold) {
     if (peerIndex >= 0) {
         in_port_t port = (in_port_t)htons(PHOLD_LISTEN_PORT);
 
-        gint8 msg = 64;
-        _phold_sendToNode(phold, peerIndex, port, &msg, 1);
+        _phold_sendToNode(phold, peerIndex, port, phold->sendbuf, phold->size);
     } else {
         phold_warning("Unable to choose valid peer index");
     }
@@ -295,18 +303,24 @@ static gint _phold_startHeartbeatTimer(PHold* phold) {
 
 static inline void _phold_logHeartbeatMessage(PHold* phold) {
     phold_info("%s: "
-               "heartbeat: sent %" G_GUINT64_FORMAT " recv %" G_GUINT64_FORMAT " "
-               "total: sent %" G_GUINT64_FORMAT " recv %" G_GUINT64_FORMAT,
+               "heartbeat: "
+               "msgs_sent=%" G_GUINT64_FORMAT " msgs_recv=%" G_GUINT64_FORMAT " "
+               "tot_msgs_sent=%" G_GUINT64_FORMAT " tot_msgs_recv=%" G_GUINT64_FORMAT " "
+               "bytes_sent=%" G_GUINT64_FORMAT " bytes_recv=%" G_GUINT64_FORMAT " "
+               "tot_bytes_sent=%" G_GUINT64_FORMAT " tot_bytes_recv=%" G_GUINT64_FORMAT,
                phold->hostname->str, phold->num_msgs_sent, phold->num_msgs_recv,
-               phold->num_msgs_sent_tot, phold->num_msgs_recv_tot);
+               phold->num_msgs_sent_tot, phold->num_msgs_recv_tot, phold->num_bytes_sent,
+               phold->num_bytes_recv, phold->num_bytes_sent_tot, phold->num_bytes_recv_tot);
     phold->num_msgs_recv = 0;
     phold->num_msgs_sent = 0;
+    phold->num_bytes_recv = 0;
+    phold->num_bytes_sent = 0;
 }
 
 static void _phold_wait_and_process_events(PHold* phold) {
     PHOLD_ASSERT(phold);
 
-    gchar buffer[102400] = {0};
+    guint8* buffer = g_new(guint8, phold->size);
 
     /* storage for collecting events from our epoll descriptor */
     struct epoll_event epevs[10];
@@ -331,8 +345,8 @@ static void _phold_wait_and_process_events(PHold* phold) {
             memset(&addrbuf, 0, sizeof(struct sockaddr_in));
             socklen_t addrlen = sizeof(struct sockaddr_in);
 
-            gssize nBytes = recvfrom(phold->listend, &buffer[0], 102400, 0,
-                    (struct sockaddr*)(&addrbuf), &addrlen);
+            gssize nBytes = recvfrom(
+                phold->listend, &buffer[0], phold->size, 0, (struct sockaddr*)(&addrbuf), &addrlen);
 
             if(nBytes <= 0) {
                 break;
@@ -340,6 +354,8 @@ static void _phold_wait_and_process_events(PHold* phold) {
             buffer[nBytes] = 0x0;
             phold->num_msgs_recv++;
             phold->num_msgs_recv_tot++;
+            phold->num_bytes_recv += nBytes;
+            phold->num_bytes_recv_tot += nBytes;
 
             in_addr_t ip = addrbuf.sin_addr.s_addr;
             char netbuf[INET_ADDRSTRLEN+1];
@@ -348,11 +364,12 @@ static void _phold_wait_and_process_events(PHold* phold) {
 
             phold_debug("got new message of %lu bytes from peer at %s", (unsigned int) nBytes, netbuf);
 
-            for(int i = 0; i < nBytes; i++) {
-                _phold_sendNewMessage(phold);
-            }
+            // send another message to maintain configured load
+            _phold_sendNewMessage(phold);
         }
     }
+
+    g_free(buffer);
 }
 
 static gint _phold_addToEpoll(PHold* phold, gint fd) {
@@ -489,7 +506,7 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
     g_assert(gethostname(&myname[0], 128) == 0);
 
     int num_params_found = 0;
-#define ARGC_PEER 6
+#define ARGC_PEER 7
 
     if(argc == ARGC_PEER && argv != NULL) {
         /* argv[0] is the program name */
@@ -513,7 +530,10 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
             } else if(!g_ascii_strcasecmp(config[0], "load")) {
                 phold->load = g_ascii_strtoull(config[1], NULL, 10);
                 num_params_found++;
-            } else if(!g_ascii_strcasecmp(config[0], "weightsfilepath")) {
+            } else if (!g_ascii_strcasecmp(config[0], "size")) {
+                phold->size = g_ascii_strtoull(config[1], NULL, 10);
+                num_params_found++;
+            } else if (!g_ascii_strcasecmp(config[0], "weightsfilepath")) {
                 phold->weightsfilepath = g_string_new(config[1]);
                 num_params_found++;
             } else {
@@ -547,10 +567,14 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
         ip_lookup_success && phold->peerWeights && num_params_found == ARGC_PEER - 1) {
         phold->hostname = g_string_new(&myname[0]);
 
+        phold->sendbuf = g_new0(guint8, phold->size);
+        memset(phold->sendbuf, 666, phold->size);
+
         phold_info("successfully parsed options for %s: "
-                "basename=%s load=%"G_GUINT64_FORMAT" quantity=%"G_GUINT64_FORMAT" weightsfilepath=%s",
-                &myname[0],
-                phold->basename->str, phold->load, phold->quantity, phold->weightsfilepath->str);
+                   "basename=%s quantity=%" G_GUINT64_FORMAT " load=%" G_GUINT64_FORMAT
+                   " size=%" G_GUINT64_FORMAT " weightsfilepath=%s",
+                   &myname[0], phold->basename->str, phold->quantity, phold->load, phold->size,
+                   phold->weightsfilepath->str);
 
         return TRUE;
     } else {
@@ -586,6 +610,9 @@ static void _phold_free(PHold* phold) {
     }
     if (phold->peerIPs) {
         g_free(phold->peerIPs);
+    }
+    if (phold->sendbuf) {
+        g_free(phold->sendbuf);
     }
 
     phold->magic = 0;
