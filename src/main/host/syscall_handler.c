@@ -55,6 +55,8 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
          * is not being used to service a plugin syscall and it
          * should not be tracked with an fd handle. */
         .timer = timer_new(),
+        // Used to track syscall handler performance
+        .perfTimer = g_timer_new(),
     };
 
     MAGIC_INIT(sys);
@@ -70,6 +72,8 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
 static void _syscallhandler_free(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
+    message("handled %li syscalls in %f seconds", sys->numSyscalls, sys->perfSeconds);
+
     if (sys->host) {
         host_unref(sys->host);
     }
@@ -82,6 +86,9 @@ static void _syscallhandler_free(SysCallHandler* sys) {
 
     if (sys->timer) {
         descriptor_unref(sys->timer);
+    }
+    if (sys->perfTimer) {
+        g_timer_destroy(sys->perfTimer);
     }
 
     MAGIC_CLEAR(sys);
@@ -146,6 +153,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     MAGIC_ASSERT(sys);
 
     SysCallReturn scr;
+
+    /* Track elapsed time during this syscall by marking the start time. */
+    g_timer_start(sys->perfTimer);
 
     /* Make sure that we either don't have a blocked syscall,
      * or if we blocked a syscall, then that same syscall
@@ -340,6 +350,10 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         _syscallhandler_setListenTimeout(sys, NULL);
         sys->blockedSyscallNR = -1;
     }
+
+    /* Add the cumulative elapsed seconds and num syscalls. */
+    sys->perfSeconds += g_timer_elapsed(sys->perfTimer, NULL);
+    sys->numSyscalls++;
 
     return scr;
 }

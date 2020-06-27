@@ -41,6 +41,13 @@ struct _SysCallHandler {
      * to negative to indicate that no syscalls are currently blocked. */
     long blockedSyscallNR;
 
+    /* Used to track the time elapsed while handling a syscall. */
+    GTimer* perfTimer;
+    /* The total time elapsed while handling all syscalls. */
+    gdouble perfSeconds;
+    /* The total number of syscalls that we have handled. */
+    long numSyscalls;
+
     int referenceCount;
 
     MAGIC_DECLARE;
