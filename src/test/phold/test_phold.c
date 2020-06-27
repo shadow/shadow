@@ -41,9 +41,10 @@ struct _PHold {
     guint64 load;
     GString* weightsfilepath;
 
-    double* weights;
+    guint64 num_peers;
+    in_addr_t* peerIPs;
+    double* peerWeights;
     double totalWeight;
-    guint64 num_weights;
 
     GString* hostname;
     gint listend;
@@ -164,62 +165,56 @@ static in_addr_t _phold_lookupIP(PHold* phold, const gchar* hostname) {
     return ip;
 }
 
-static gchar* _phold_chooseNode(PHold* phold) {
+static in_addr_t _phold_chooseNode(PHold* phold) {
     PHOLD_ASSERT(phold);
-    g_assert(phold->weights);
+    g_assert(phold->peerWeights);
+    g_assert(phold->peerIPs);
 
     double r = _phold_get_uniform_double();
 
     double cumulative = 0.0;
-    for(int i = 0; i < phold->num_weights; i++) {
-        double normWeight = phold->weights[i] / phold->totalWeight;
+    for (gint64 i = 0; i < phold->num_peers; i++) {
+        double normWeight = phold->peerWeights[i] / phold->totalWeight;
         cumulative += normWeight;
         if(cumulative >= r) {
-            GString* chosenNodeBuffer = g_string_new(NULL);
-            g_string_append_printf(chosenNodeBuffer, "%s%"G_GUINT64_FORMAT, phold->basename->str, (guint64)(i+1));
-            return g_string_free(chosenNodeBuffer, FALSE);
+            return i;
         }
     }
 
-    return NULL;
+    return -1;
 }
 
-static int _phold_sendToNode(PHold* phold, char* nodeName, in_port_t port, void* msg, size_t msg_len) {
+static int _phold_sendToNode(PHold* phold, gint64 peerIndex, in_port_t port, void* msg,
+                             size_t msg_len) {
     int result = 0;
-    in_addr_t nodeIP = _phold_lookupIP(phold, nodeName);
 
-    if(nodeIP != htonl(INADDR_NONE)) {
-        /* create a new socket */
-        gint socketd = socket(AF_INET, (SOCK_DGRAM | SOCK_NONBLOCK), 0);
+    /* create a new socket */
+    gint socketd = socket(AF_INET, (SOCK_DGRAM | SOCK_NONBLOCK), 0);
 
-        /* get node address for this message */
-        struct sockaddr_in node;
-        memset(&node, 0, sizeof(struct sockaddr_in));
-        node.sin_family = AF_INET;
-        node.sin_addr.s_addr = nodeIP;
-        node.sin_port = port;
-        socklen_t len = sizeof(struct sockaddr_in);
+    /* get node address for this message */
+    struct sockaddr_in node = {0};
+    node.sin_family = AF_INET;
+    node.sin_addr.s_addr = phold->peerIPs[peerIndex];
+    node.sin_port = port;
+    socklen_t len = sizeof(struct sockaddr_in);
 
-        /* send the message to the node */
-        ssize_t b = sendto(socketd, msg, msg_len, 0, (struct sockaddr*) (&node), len);
-        if(b > 0) {
-            phold->num_msgs_sent++;
-            phold->num_msgs_sent_tot++;
-            phold_debug("host '%s' sent %i byte%s to host '%s'",
-                            phold->hostname->str, (gint)b, b == 1 ? "" : "s", nodeName);
-            result = TRUE;
-        } else if(b < 0) {
-            phold_warning("sendto(): returned %i host '%s' errno %i: %s",
-                            (gint)b, phold->hostname->str, errno, g_strerror(errno));
-            result = FALSE;
-        }
-
-        /* close socket */
-        close(socketd);
-    } else {
-        phold_warning("could not find address for node '%s', no message was sent", nodeName);
+    /* send the message to the node */
+    ssize_t b = sendto(socketd, msg, msg_len, 0, (struct sockaddr*)(&node), len);
+    if (b > 0) {
+        phold->num_msgs_sent++;
+        phold->num_msgs_sent_tot++;
+        phold_debug("host '%s' sent %i byte%s to host '%s%" G_GINT64_FORMAT "'",
+                    phold->hostname->str, (gint)b, b == 1 ? "" : "s", phold->basename,
+                    peerIndex + 1);
+        result = TRUE;
+    } else if (b < 0) {
+        phold_warning("sendto(): returned %i host '%s' errno %i: %s", (gint)b, phold->hostname->str,
+                      errno, g_strerror(errno));
         result = FALSE;
     }
+
+    /* close socket */
+    close(socketd);
 
     return result;
 }
@@ -228,14 +223,15 @@ static void _phold_sendNewMessage(PHold* phold) {
     PHOLD_ASSERT(phold);
 
     /* pick a node */
-    gchar* chosenNodeName = _phold_chooseNode(phold);
-    in_port_t port = (in_port_t)htons(PHOLD_LISTEN_PORT);
+    gint64 peerIndex = _phold_chooseNode(phold);
 
-    gint8 msg = 64;
-    _phold_sendToNode(phold, chosenNodeName, port, &msg, 1);
+    if (peerIndex >= 0) {
+        in_port_t port = (in_port_t)htons(PHOLD_LISTEN_PORT);
 
-    if(chosenNodeName) {
-        g_free(chosenNodeName);
+        gint8 msg = 64;
+        _phold_sendToNode(phold, peerIndex, port, &msg, 1);
+    } else {
+        phold_warning("Unable to choose valid peer index");
     }
 }
 
@@ -415,9 +411,9 @@ static int _phold_run(PHold* phold) {
 static int _phold_parseWeightsFile(PHold* phold) {
     PHOLD_ASSERT(phold);
 
-    if(phold->weights) {
-        free(phold->weights);
-        phold->weights = NULL;
+    if (phold->peerWeights) {
+        free(phold->peerWeights);
+        phold->peerWeights = NULL;
     }
 
     gchar* contents = NULL;
@@ -430,19 +426,19 @@ static int _phold_parseWeightsFile(PHold* phold) {
 
     gchar** lines = g_strsplit(contents, (const gchar*) "\n", -1);
 
-    phold->num_weights = 0;
+    phold->num_peers = 0;
     for(int i = 0; lines[i] != NULL; i++) {
-        phold->num_weights++;
+        phold->num_peers++;
     }
 
-    phold_info("found %"G_GUINT64_FORMAT" weights in command", phold->num_weights);
+    phold_info("found %" G_GUINT64_FORMAT " weights in command", phold->num_peers);
 
-    phold->weights = g_new0(double, phold->num_weights);
+    phold->peerWeights = g_new0(double, phold->num_peers);
 
-    for(int i = 0; i < phold->num_weights; i++) {
-        phold->weights[i] = g_ascii_strtod(lines[i], NULL);
-        phold_debug("found weight=%f", phold->weights[i]);
-        phold->totalWeight += phold->weights[i];
+    for (int i = 0; i < phold->num_peers; i++) {
+        phold->peerWeights[i] = g_ascii_strtod(lines[i], NULL);
+        phold_debug("found weight=%f", phold->peerWeights[i]);
+        phold->totalWeight += phold->peerWeights[i];
     }
 
     if(lines) {
@@ -453,6 +449,30 @@ static int _phold_parseWeightsFile(PHold* phold) {
     }
 
     return TRUE;
+}
+
+static int _phold_initPeerIPs(PHold* phold) {
+    PHOLD_ASSERT(phold);
+
+    if (phold->peerIPs) {
+        free(phold->peerIPs);
+    }
+    phold->peerIPs = g_new0(in_addr_t, phold->num_peers);
+
+    GString* nameBuffer = g_string_new(NULL);
+    int errcode = 0;
+
+    for (guint64 i = 0; i < phold->num_peers; i++) {
+        // shadow assigns names starting at 1 rather than 0 (peer1, peer2, etc.)
+        g_string_printf(nameBuffer, "%s%" G_GUINT64_FORMAT, phold->basename->str, i + 1);
+        phold->peerIPs[i] = _phold_lookupIP(phold, nameBuffer->str);
+        if (phold->peerIPs[i] == 0) {
+            errcode = -1;
+        }
+    }
+
+    g_string_free(nameBuffer, TRUE);
+    return errcode;
 }
 
 static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
@@ -508,21 +528,23 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
     if(phold->weightsfilepath && phold->weightsfilepath->str) {
         parse_file_success = _phold_parseWeightsFile(phold);
         if(parse_file_success) {
-            phold_info("We found %"G_GUINT64_FORMAT" weights and we have %"G_GUINT64_FORMAT" nodes",
-                    phold->num_weights, phold->quantity);
-            if(phold->num_weights > phold->quantity) {
+            phold_info("We found %" G_GUINT64_FORMAT " weights and we have %" G_GUINT64_FORMAT
+                       " nodes",
+                       phold->num_peers, phold->quantity);
+            if (phold->num_peers > phold->quantity) {
                 phold_warning("Too many weights in the weights file!");
                 parse_file_success = FALSE;
-            } else if(phold->num_weights < phold->quantity) {
+            } else if (phold->num_peers < phold->quantity) {
                 phold_warning("Not enough weights in the weights file!");
                 parse_file_success = FALSE;
             }
         }
     }
 
-    if(phold->basename != NULL && phold->weightsfilepath != NULL &&
-            parse_file_success && phold->weights &&
-            num_params_found == ARGC_PEER-1) {
+    int ip_lookup_success = parse_file_success && _phold_initPeerIPs(phold) == 0 ? 1 : 0;
+
+    if (phold->basename != NULL && phold->weightsfilepath != NULL && parse_file_success &&
+        ip_lookup_success && phold->peerWeights && num_params_found == ARGC_PEER - 1) {
         phold->hostname = g_string_new(&myname[0]);
 
         phold_info("successfully parsed options for %s: "
@@ -559,8 +581,11 @@ static void _phold_free(PHold* phold) {
     if(phold->weightsfilepath) {
         g_string_free(phold->weightsfilepath, TRUE);
     }
-    if(phold->weights) {
-        g_free(phold->weights);
+    if (phold->peerWeights) {
+        g_free(phold->peerWeights);
+    }
+    if (phold->peerIPs) {
+        g_free(phold->peerIPs);
     }
 
     phold->magic = 0;
