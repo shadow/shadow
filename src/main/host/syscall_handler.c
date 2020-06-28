@@ -116,21 +116,27 @@ static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
           process_getPluginName(sys->process),
           process_getProcessID(sys->process), number, name,
           _syscallhandler_wasBlocked(sys) ? " (previously BLOCKed)" : "");
+
+    /* Track elapsed time during this syscall by marking the start time. */
+    g_timer_start(sys->perfTimer);
 }
 
 static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
                                          const char* name, SysCallReturn* scr) {
+    /* Add the cumulative elapsed seconds and num syscalls. */
+    gdouble elapsedSeconds = g_timer_elapsed(sys->perfTimer, NULL);
+    sys->perfSeconds += elapsedSeconds;
+    sys->numSyscalls++;
+
     debug("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
-          "code=%d",
-          process_getPluginName(sys->process),
-          process_getProcessID(sys->process), number, name,
+          "code=%d in %f seconds",
+          process_getPluginName(sys->process), process_getProcessID(sys->process), number, name,
           _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "",
           scr->state == SYSCALL_DONE
               ? "DONE"
-              : scr->state == SYSCALL_BLOCK
-                    ? "BLOCK"
-                    : scr->state == SYSCALL_NATIVE ? "NATIVE" : "UNKNOWN",
-          (int)scr->retval.as_i64);
+              : scr->state == SYSCALL_BLOCK ? "BLOCK"
+                                            : scr->state == SYSCALL_NATIVE ? "NATIVE" : "UNKNOWN",
+          (int)scr->retval.as_i64, elapsedSeconds);
 }
 
 ///////////////////////////////////////////////////////////
@@ -153,9 +159,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     MAGIC_ASSERT(sys);
 
     SysCallReturn scr;
-
-    /* Track elapsed time during this syscall by marking the start time. */
-    g_timer_start(sys->perfTimer);
 
     /* Make sure that we either don't have a blocked syscall,
      * or if we blocked a syscall, then that same syscall
@@ -350,10 +353,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         _syscallhandler_setListenTimeout(sys, NULL);
         sys->blockedSyscallNR = -1;
     }
-
-    /* Add the cumulative elapsed seconds and num syscalls. */
-    sys->perfSeconds += g_timer_elapsed(sys->perfTimer, NULL);
-    sys->numSyscalls++;
 
     return scr;
 }
