@@ -110,6 +110,7 @@ option(SHADOW_PROFILE "build with profile settings (default: OFF)" OFF)
 option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_EXPORT "export service libraries and headers (default: OFF)" OFF)
 option(SHADOW_WERROR "turn compiler warnings into errors. (default: OFF)" OFF)
+option(SHADOW_COVERAGE "enable code-coverage instrumentation. (default: OFF)" OFF)
 
 ## display selected user options
 MESSAGE(STATUS)
@@ -141,6 +142,10 @@ endif(SHADOW_DEBUG STREQUAL ON)
 if(SHADOW_WERROR STREQUAL ON)
     add_compile_options(-Werror)
 endif(SHADOW_WERROR STREQUAL ON)
+if(SHADOW_COVERAGE STREQUAL ON)
+    add_compile_options(--coverage)
+    add_ldflags(--coverage)
+endif(SHADOW_COVERAGE STREQUAL ON)
 
 if($ENV{VERBOSE})
     add_definitions(-DVERBOSE)
