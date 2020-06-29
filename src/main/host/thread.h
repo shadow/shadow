@@ -70,6 +70,9 @@ void thread_releaseClonedPtr(Thread* thread, void* p);
 // use-cases.
 //
 // Arguments are treated opaquely. e.g. no pointer-marshalling is done.
+//
+// The return value is the value returned by the syscall *instruction*.
+// You can map to a corresponding errno value with syscall_rawReturnValueToErrno.
 long thread_nativeSyscall(Thread* thread, long n, ...);
 
 // Allocate some memory in the plugin's address space. The returned pointer
