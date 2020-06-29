@@ -97,3 +97,29 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
+
+SysCallReturn syscallhandler_time(SysCallHandler* sys, const SysCallArgs* args) {
+    PluginPtr tlocPtr = args->args[0].as_ptr; // time_t*
+
+    time_t seconds = _syscallhandler_getEmulatedTime() / SIMTIME_ONE_SECOND;
+
+    if (tlocPtr.val) {
+        time_t* tloc = thread_getWriteablePtr(sys->thread, tlocPtr, sizeof(*tloc));
+        *tloc = seconds;
+    }
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_u64 = seconds};
+}
+
+SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, const SysCallArgs* args) {
+    PluginPtr tvPtr = args->args[0].as_ptr; // struct timeval*
+
+    if (tvPtr.val) {
+        EmulatedTime now = _syscallhandler_getEmulatedTime();
+        struct timeval* tv = thread_getWriteablePtr(sys->thread, tvPtr, sizeof(*tv));
+        tv->tv_sec = now / SIMTIME_ONE_SECOND;
+        tv->tv_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
+    }
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+}

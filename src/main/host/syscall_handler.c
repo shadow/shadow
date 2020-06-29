@@ -212,6 +212,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(getpid);
         HANDLE(getsockname);
         HANDLE(getsockopt);
+        HANDLE(gettimeofday);
         HANDLE(ioctl);
         HANDLE(linkat);
         HANDLE(listen);
@@ -252,6 +253,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(symlinkat);
         HANDLE(sync_file_range);
         HANDLE(syncfs);
+        HANDLE(time);
         HANDLE(timerfd_create);
         HANDLE(timerfd_gettime);
         HANDLE(timerfd_settime);
@@ -271,7 +273,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(execve);
         NATIVE(futex);
         NATIVE(getrandom);
-        NATIVE(gettimeofday);
 #ifdef SYS_mmap2
         NATIVE(mmap2);
 #endif
@@ -282,7 +283,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(set_robust_list);
         NATIVE(set_tid_address);
         NATIVE(sysinfo);
-        NATIVE(time);
 
         // operations on pids (shadow overrides pids)
         NATIVE(kill);
