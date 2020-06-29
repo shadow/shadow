@@ -110,6 +110,11 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
                     res.event_data.syscall.syscall_args.number, regs[0].as_u64,
                     regs[1].as_u64, regs[2].as_u64, regs[3].as_u64,
                     regs[4].as_u64, regs[5].as_u64);
+                // Recover the true syscall return value from errno in the case
+                // of an error.
+                if (syscall_rv == -1) {
+                    syscall_rv = -errno;
+                }
                 ShimEvent syscall_complete_event = {
                     .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
                     .event_data.syscall_complete.retval.as_i64 = syscall_rv,
