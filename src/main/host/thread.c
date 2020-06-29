@@ -16,6 +16,7 @@
 
 #include "main/host/syscall_handler.h"
 #include "main/host/thread_protected.h"
+#include "main/utility/syscall.h"
 #include "shim/shim_event.h"
 #include "support/logger/logger.h"
 
@@ -109,25 +110,16 @@ long thread_nativeSyscall(Thread* thread, long n, ...) {
     return rv;
 }
 
-// TODO put this into a common utility library.
-static long _errnoForSyscallRetval(long rv) {
-    // Linux reserves -1 through -4095 for errors. See
-    // https://sourceware.org/git/?p=glibc.git;a=blob;f=sysdeps/unix/sysv/linux/x86_64/sysdep.h;h=24d8b8ec20a55824a4806f8821ecba2622d0fe8e;hb=HEAD#l41
-    if (rv <= -1 && rv >= -4095) {
-        return -rv;
-    }
-    return 0;
-}
-
 PluginPtr thread_mallocPluginPtr(Thread* thread, size_t size) {
     // For now we just implement in terms of thread_nativeSyscall.
     // TODO: We might be able to do something more efficient by delegating to
-    // the specific thread implementation.
+    // the specific thread implementation, and/or keeping a persistent
+    // mmap'd area that we allocate from.
     MAGIC_ASSERT(thread);
     long ptr = thread_nativeSyscall(thread, SYS_mmap, NULL, size,
                                     PROT_READ | PROT_WRITE,
                                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    long err = _errnoForSyscallRetval(ptr);
+    int err = syscall_rawReturnValueToErrno(ptr);
     if (err) {
         error("thread_nativeSyscall(mmap): %s", strerror(err));
         abort();
@@ -141,8 +133,8 @@ PluginPtr thread_mallocPluginPtr(Thread* thread, size_t size) {
 
 void thread_freePluginPtr(Thread* thread, PluginPtr ptr, size_t size) {
     MAGIC_ASSERT(thread);
-    long err = _errnoForSyscallRetval(
-        thread_nativeSyscall(thread, SYS_munmap, ptr.val, size));
+    int err =
+        syscall_rawReturnValueToErrno(thread_nativeSyscall(thread, SYS_munmap, ptr.val, size));
     if (err) {
         error("thread_nativeSyscall(munmap): %s", strerror(err));
         abort();

@@ -15,6 +15,7 @@
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
+#include "main/utility/syscall.h"
 #include "support/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
@@ -111,11 +112,9 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     /* Instruct the plugin to open the file at the path we sent. */
     int result = thread_nativeSyscall(sys->thread, SYS_open, pluginBufPtr.val,
                                       flags, file_getMode(file));
-    if (result < 0) {
-        // TODO: not sure if errno is valid here, i.e., if we got copied it
-        // back from the plugin after the call.
-        debug("Failed to open path '%s' in plugin, error %i: %s.", abspath,
-              errno, strerror(errno));
+    int err = syscall_rawReturnValueToErrno(result);
+    if (err) {
+        debug("Failed to open path '%s' in plugin, error %i: %s.", abspath, err, strerror(err));
     } else {
         debug("Successfully opened path '%s' in plugin, got plugin fd %i.",
               abspath, result);
@@ -130,7 +129,8 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
 static void _syscallhandler_closePluginFile(SysCallHandler* sys, int pluginFD) {
     /* Instruct the plugin to close the file at given fd. */
     int result = thread_nativeSyscall(sys->thread, SYS_close, pluginFD);
-    if (result < 0) {
+    int err = syscall_rawReturnValueToErrno(result);
+    if (err) {
         debug("Failed to close file at fd %i in plugin, error %i: %s.",
               pluginFD, -result, strerror(-result));
     } else {
@@ -180,8 +180,9 @@ SysCallReturn syscallhandler_mmap(SysCallHandler* sys,
         sys->thread, SYS_mmap, addrPtr.val, len, prot, flags, pluginFD, offset);
 
     debug("Plugin-native mmap syscall at plugin addr %p with plugin fd %i for "
-          "%zu bytes returned %p",
-          (void*)addrPtr.val, pluginFD, len, (void*)result);
+          "%zu bytes returned %p (%s)",
+          (void*)addrPtr.val, pluginFD, len, (void*)result,
+          strerror(syscall_rawReturnValueToErrno(result)));
 
     /* Close the file we asked them to open. */
     if (pluginFD >= 0) {
