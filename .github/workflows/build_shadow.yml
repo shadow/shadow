@@ -92,9 +92,15 @@ jobs:
       - name: Install Dependencies (yum-centos-7)
         if: ${{ matrix.package_manager == 'yum-centos-7' }}
         run: |
-          # clang on centos 7 requires gcc and gcc-c++ (libgcc is not sufficient)
+          # Clang on centos 7 requires gcc and gcc-c++ (libgcc is not sufficient).
+          # Must also link cmake to cmake3 as an alternative.
           yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum install -y $CC_PACKAGE $CXX_PACKAGE gcc gcc-c++ cmake make glib2 glib2-devel igraph igraph-devel python3 xz xz-devel yum-utils procps-devel curl findutils
+          yum install -y $CC_PACKAGE $CXX_PACKAGE gcc gcc-c++ cmake3 make glib2 glib2-devel igraph igraph-devel python3 xz xz-devel yum-utils procps-devel curl findutils
+          alternatives --install /usr/local/bin/cmake cmake /usr/bin/cmake3 20 \
+            --slave /usr/local/bin/ctest ctest /usr/bin/ctest3 \
+            --slave /usr/local/bin/cpack cpack /usr/bin/cpack3 \
+            --slave /usr/local/bin/ccmake ccmake /usr/bin/ccmake3 \
+            --family cmake
 
       - name: Install Dependencies (dnf-centos-8)
         if: ${{ matrix.package_manager == 'dnf-centos-8' }}
