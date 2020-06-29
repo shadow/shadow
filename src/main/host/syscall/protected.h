@@ -43,8 +43,11 @@ struct _SysCallHandler {
 
     /* Used to track the time elapsed while handling a syscall. */
     GTimer* perfTimer;
+    /* The cumulative time consumed while handling the current syscall.
+     * This includes the time from previous calls that ended up blocking. */
+    gdouble perfSecondsCurrent;
     /* The total time elapsed while handling all syscalls. */
-    gdouble perfSeconds;
+    gdouble perfSecondsTotal;
     /* The total number of syscalls that we have handled. */
     long numSyscalls;
 

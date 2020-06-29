@@ -72,7 +72,7 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
 static void _syscallhandler_free(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
-    message("handled %li syscalls in %f seconds", sys->numSyscalls, sys->perfSeconds);
+    message("handled %li syscalls in %f seconds", sys->numSyscalls, sys->perfSecondsTotal);
 
     if (sys->host) {
         host_unref(sys->host);
@@ -124,9 +124,7 @@ static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
 static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
                                          const char* name, SysCallReturn* scr) {
     /* Add the cumulative elapsed seconds and num syscalls. */
-    gdouble elapsedSeconds = g_timer_elapsed(sys->perfTimer, NULL);
-    sys->perfSeconds += elapsedSeconds;
-    sys->numSyscalls++;
+    sys->perfSecondsCurrent += g_timer_elapsed(sys->perfTimer, NULL);
 
     debug("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
           "code=%d in %f seconds",
@@ -136,7 +134,14 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
               ? "DONE"
               : scr->state == SYSCALL_BLOCK ? "BLOCK"
                                             : scr->state == SYSCALL_NATIVE ? "NATIVE" : "UNKNOWN",
-          (int)scr->retval.as_i64, elapsedSeconds);
+          (int)scr->retval.as_i64, sys->perfSecondsCurrent);
+
+    if (scr->state != SYSCALL_BLOCK) {
+        /* The syscall completed, count it and the cumulative time to complete it. */
+        sys->numSyscalls++;
+        sys->perfSecondsTotal += sys->perfSecondsCurrent;
+        sys->perfSecondsCurrent = 0;
+    }
 }
 
 ///////////////////////////////////////////////////////////
