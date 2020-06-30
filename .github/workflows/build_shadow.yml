@@ -6,9 +6,6 @@ name: Tests
 on:
   push:
     branches: [dev]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
   pull_request:
     types: [opened, synchronize]
 
