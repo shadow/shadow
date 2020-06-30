@@ -46,7 +46,7 @@ typedef enum {
 
 typedef struct _PendingWrite {
     PluginPtr pluginPtr;
-    void *ptr;
+    void* ptr;
     size_t n;
 } PendingWrite;
 
@@ -301,8 +301,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
             _threadPtraceToThread(thread), (PluginPtr){eip}, 16);
         if (isRdtsc(buf)) {
             debug("emulating rdtsc");
-            Tsc_emulateRdtsc(&thread->tsc,
-                             &regs,
+            Tsc_emulateRdtsc(&thread->tsc, &regs,
                              worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
             if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &regs) < 0) {
                 error("ptrace: %s", g_strerror(errno));
@@ -312,8 +311,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
         }
         if (isRdtscp(buf)) {
             debug("emulating rdtscp");
-            Tsc_emulateRdtscp(&thread->tsc,
-                              &regs,
+            Tsc_emulateRdtscp(&thread->tsc, &regs,
                               worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
             if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &regs) < 0) {
                 error("ptrace: %s", g_strerror(errno));
@@ -336,7 +334,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
 }
 
 static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reason) {
-    switch(reason.type) {
+    switch (reason.type) {
         case STOPREASON_EXITED_SIGNAL:
             debug("child %d terminated by signal %d", thread->base.nativePid,
                   reason.exited_signal.signal);
@@ -740,9 +738,9 @@ const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
 }
 
 int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
-                             const char** out_str, size_t* strlen) {
+                                   const char** out_str, size_t* strlen) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-    char *str = g_new(char, n);
+    char* str = g_new(char, n);
     int err = 0;
 
     clearerr(thread->childMemFile);
@@ -775,7 +773,7 @@ int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
     utility_assert(out_str);
     *out_str = str;
     if (strlen) {
-        *strlen = count-1;
+        *strlen = count - 1;
     }
     return 0;
 }
@@ -875,6 +873,19 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     return regs.rax;
 }
 
+Thread* threadptrace_clone(Thread* thread, const SysCallArgs* args) {
+
+    debug("issuing native call");
+
+    thread_nativeSyscall(thread, args->number, args->args[0], args->args[1],
+                         args->args[2], args->args[3], args->args[4],
+                         args->args[5]);
+
+    debug("done issuing native call");
+
+    return NULL;
+}
+
 Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
     ThreadPtrace* thread = g_new(ThreadPtrace, 1);
 
@@ -893,6 +904,7 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
                                   .getMutablePtr = threadptrace_getMutablePtr,
                                   .flushPtrs = threadptrace_flushPtrs,
                                   .nativeSyscall = threadptrace_nativeSyscall,
+                                  .clone = threadptrace_clone,
                               }),
         // FIXME: This should the emulated CPU's frequency
         .tsc = {.cyclesPerSecond = 2000000000UL},

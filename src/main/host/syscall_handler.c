@@ -20,6 +20,7 @@
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
+#include "main/host/syscall/clone.h"
 #include "main/host/syscall/epoll.h"
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
@@ -196,6 +197,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(bind);
         HANDLE(brk);
         HANDLE(clock_gettime);
+        HANDLE(clone);
         HANDLE(close);
         HANDLE(connect);
         HANDLE(creat);
@@ -291,7 +293,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Not handled (yet):
         // **************************************
         NATIVE(arch_prctl);
-        NATIVE(clone);
         NATIVE(eventfd2);
         NATIVE(futex);
 #ifdef SYS_mmap2

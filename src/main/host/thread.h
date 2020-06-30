@@ -94,4 +94,6 @@ uint32_t thread_getHostId(Thread* thread);
 pid_t thread_getNativePid(Thread* thread);
 pid_t thread_getNativeTid(Thread* thread);
 
+Thread *thread_clone(Thread *thread, const SysCallArgs *args);
+
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */
