@@ -62,6 +62,11 @@ def main():
         action="store_true", dest="do_debug",
         default=False)
 
+    parser_build.add_argument('-C', '--coverage',
+        help="enable profiling data for code coverage reporting",
+        action="store_true", dest="do_coverage",
+        default=False)
+
     parser_build.add_argument('-v', '--verbose',
         help="print verbose output from the compiler",
         action="store_true", dest="do_verbose",
@@ -189,6 +194,18 @@ def build(args, remaining):
     if args.disable_tgen: cmake_cmd += " -DBUILD_TGEN=OFF"
     if args.do_valgrind: cmake_cmd += " -DLOADER_VALGRIND=ON"
     if args.do_werror: cmake_cmd += " -DSHADOW_WERROR=ON"
+
+    if args.do_coverage:
+        if not args.do_debug:
+            logging.warning("You usually want to enable --debug for coverage"
+                    + " builds")
+        cmake_cmd += " -DSHADOW_COVERAGE=ON"
+        # From https://github.com/mozilla/grcov
+        os.putenv("CARGO_INCREMENTAL", "0")
+        os.putenv("RUSTFLAGS", "-Zprofile -Ccodegen-units=1 -Copt-level=0"
+                + " -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests"
+                + " -Cpanic=abort")
+        os.putenv("RUSTDOCFLAGS", "-Cpanic=abort")
 
     # we will run from build directory
     calledDirectory = os.getcwd()
