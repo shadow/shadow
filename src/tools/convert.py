@@ -42,11 +42,23 @@ def convert_yaml_key_to_xml_tag(tag: str) -> str:
 
 def yaml_str_presenter(dumper, data):
     '''
-    Convert a YAML representation to be more human friendly
+    Convert a string YAML representation to be more human friendly
     '''
     if len(data.splitlines()) > 1:  # check for multiline string
         return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
     return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+
+
+def yaml_dict_presenter(dumper, data):
+    '''
+    Allow YAML to conserve the order
+    '''
+    value = []
+    for item_key, item_value in data.items():
+        node_key = dumper.represent_data(item_key)
+        node_value = dumper.represent_data(item_value)
+        value.append((node_key, node_value))
+    return yaml.nodes.MappingNode(u'tag:yaml.org,2002:map', value)
 
 
 def convert_integer(d: Dict[str, Union[str, Any]]) -> Dict[str, Union[str, int, Any]]:
@@ -104,7 +116,8 @@ def save_dict_in_yaml_file(d: Dict, filename: str) -> None:
     '''
     with open(filename, 'w', encoding='utf8') as f:
         yaml.add_representer(str, yaml_str_presenter)
-        _yaml = yaml.dump(d, f, default_flow_style=False, sort_keys=False)
+        yaml.add_representer(dict, yaml_dict_presenter)
+        _yaml = yaml.dump(d, f, default_flow_style=False)
 
 
 def get_output_filename(args: argparse.PARSER, original_extension: str, target_extension: str) -> str:

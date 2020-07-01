@@ -30,11 +30,11 @@ plugins:
 hosts:
 - id: server
   processes:
-  - arguments: tgen.server.graphml.xml
-    plugin: tgen
+  - plugin: tgen
     starttime: 1
+    arguments: tgen.server.graphml.xml
 - id: client
   processes:
-  - arguments: tgen.client.graphml.xml
-    plugin: tgen
+  - plugin: tgen
     starttime: 2
+    arguments: tgen.client.graphml.xml
