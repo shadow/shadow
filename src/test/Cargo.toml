@@ -9,5 +9,9 @@ name = "test_sleep"
 path = "sleep/test_sleep.rs"
 #harness = false
 
+[[bin]]
+name = "test_socket"
+path = "socket/socket/test_socket.rs"
+
 [dependencies]
 libc = "0.2"
