@@ -737,6 +737,12 @@ gint host_createDescriptor(Host* host, DescriptorType type) {
             break;
         }
 
+        case DT_EVENTFD: {
+            gint handle = _host_getNextDescriptorHandle(host);
+            descriptor = (Descriptor*) eventfd_new(handle, 0);
+            break;
+        }
+
         default: {
             warning("unknown descriptor type: %i", (gint)type);
             errno = EINVAL;

@@ -97,6 +97,7 @@ typedef struct _Process Process;
 
 #include "host/descriptor/shd-epoll.h"
 #include "host/descriptor/shd-timer.h"
+#include "host/descriptor/shd-eventfd.h" // added by yonggon at 20200629
 #include "host/descriptor/shd-transport.h"
 #include "host/descriptor/shd-channel.h"
 #include "host/descriptor/shd-socket.h"
