@@ -6770,6 +6770,8 @@ int process_emu_pthread_mutexattr_settype(Process* proc, pthread_mutexattr_t *at
         warning("pthread_mutexattr_settype() is not supported by pth or by shadow");
         ret = ENOSYS;
         _process_setErrno(proc, ENOSYS);
+
+        ret = 0;
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
