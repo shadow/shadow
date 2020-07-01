@@ -2658,7 +2658,10 @@ ssize_t process_emu_read(Process* proc, int fd, void *buff, size_t numbytes) {
             Descriptor* desc = host_lookupDescriptor(proc->host, fd);
             if(descriptor_getType(desc) == DT_TIMER) {
                 ret = timer_read((Timer*) desc, buff, numbytes);
-            } else {
+            } else if (descriptor_getType(desc) == DT_EVENTFD) {
+                ret = shd_eventfd_read((EventFD*) desc, buff, numbytes);
+            }
+            else {
                 ret = _process_emu_recvHelper(proc, fd, buff, numbytes, 0, NULL, 0);
             }
         } else if(host_isRandomHandle(proc->host, fd)) {
@@ -2709,7 +2712,12 @@ ssize_t process_emu_write(Process* proc, int fd, const void *buff, size_t n) {
         }
     } else {
         if(host_isShadowDescriptor(proc->host, fd)){
-            ret = _process_emu_sendHelper(proc, fd, buff, n, 0, NULL, 0);
+            Descriptor* desc = host_lookupDescriptor(proc->host, fd);
+            if(descriptor_getType(desc) == DT_EVENTFD) {
+                ret = shd_eventfd_write((EventFD*) desc, buff, n);
+            }
+            else
+                ret = _process_emu_sendHelper(proc, fd, buff, n, 0, NULL, 0);
         } else {
             gint osfd = host_getOSHandle(proc->host, fd);
             if(osfd >= 0) {
@@ -3361,18 +3369,47 @@ pid_t process_emu_waitpid(Process* proc, pid_t pid, int *status, int options) {
 /* timers */
 
 int process_emu_eventfd(Process* proc, int initval, int flags) {
+    // Implementation changed by Yonggon Kim on 20. 07. 01.
+    // Tests are implemented in BLEEP repository regression test directory (regtest/shadow-syscalls/1_eventfd)
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    gint result = 0;
 
-    gint osfd = eventfd(initval, flags);
-    if(osfd == -1) {
+    gint result = host_createDescriptor(proc->host, DT_EVENTFD);
+
+    if(result > 0) {
+        Descriptor* desc = host_lookupDescriptor(proc->host, result);
+        if(desc) {
+            gint options = descriptor_getFlags(desc);
+            if(flags & EFD_NONBLOCK) {
+                options |= O_NONBLOCK;
+            }
+            if(flags & EFD_CLOEXEC) {
+                options |= O_CLOEXEC;
+            }
+            if(flags & EFD_SEMAPHORE) {
+                warning("EFD_SEMAPHORE option is not implemented for Shadow eventfd");
+            }
+            descriptor_setFlags(desc, options);
+
+            eventfd_setInitVal((EventFD*)desc, initval);
+        }
+    }
+    if(result < 0) {
         _process_setErrno(proc, errno);
     }
 
-    gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
-
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    result = shadowfd;
+
+//    gint result = 0;
+//
+//    gint osfd = eventfd(initval, flags);
+//    if(osfd == -1) {
+//        _process_setErrno(proc, errno);
+//    }
+//
+//    gint shadowfd = osfd >= 3 ? host_createShadowHandle(proc->host, osfd) : osfd;
+//
+//    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+//    result = shadowfd;
     return result;
 }
 
