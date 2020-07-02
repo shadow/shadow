@@ -326,10 +326,12 @@ dlopen_with_context (struct VdlContext *context, const char *filename,
       vdl_list_unicize (g_vdl.preloads);
     }
 
-  struct VdlList *call_init = vdl_sort_call_init (map.newly_mapped);
-  vdl_init_call (call_init);
+  if ( (flags & RTLD_NOINIT) == 0) {
+    struct VdlList *call_init = vdl_sort_call_init (map.newly_mapped);
+    vdl_init_call (call_init);
+    vdl_list_delete (call_init);
+  }
 
-  vdl_list_delete (call_init);
   vdl_list_delete (map.newly_mapped);
 
   return map.requested;

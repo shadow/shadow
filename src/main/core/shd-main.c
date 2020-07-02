@@ -169,11 +169,11 @@ err:
 }
 
 static gulong _main_computeProcessLoadSize(const gchar* pluginPath, const gchar* preloadPath) {
-    return _main_computeLoadSize(LM_ID_NEWLM, pluginPath, preloadPath, RTLD_LAZY|RTLD_LOCAL);
+    return _main_computeLoadSize(LM_ID_NEWLM, pluginPath, preloadPath, RTLD_NOINIT|RTLD_LAZY|RTLD_LOCAL);
 }
 
 static gulong _main_computePreloadLoadSize(const gchar* libraryPath) {
-    return _main_computeLoadSize(LM_ID_BASE, libraryPath, NULL, RTLD_LAZY|RTLD_PRELOAD);
+    return _main_computeLoadSize(LM_ID_BASE, libraryPath, NULL, RTLD_NOINIT|RTLD_LAZY|RTLD_PRELOAD);
 }
 
 typedef struct _TLSCountingState {
