@@ -516,6 +516,7 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                             .nativeSyscall = threadpreload_nativeSyscall,
                             .type_id = THREADPRELOAD_TYPE_ID,
                             .referenceCount = 1};
+    thread_init(&thread->base);
     MAGIC_INIT(&thread->base);
 
     thread->threadID = threadID;
