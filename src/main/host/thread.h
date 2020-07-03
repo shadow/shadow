@@ -89,6 +89,7 @@ PluginPtr thread_mallocPluginPtr(Thread* thread, size_t size);
 // awkwardness and more boilerplate), or keeping an internal map of ptr->size.
 void thread_freePluginPtr(Thread* thread, PluginPtr ptr, size_t size);
 
+void thread_enableOpt(Thread* thread);
 
 gboolean thread_isRunning(Thread* thread);
 

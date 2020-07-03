@@ -8,6 +8,9 @@
  * interface.
  */
 
+#include <glib.h>
+#include <proc/readproc.h>
+
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "shim/shim_event.h"
@@ -34,7 +37,12 @@ struct _Thread {
 
     int referenceCount;
 
+    GHashTable *pluginPtrToPtr;
+    bool optEnabled;
+
     MAGIC_DECLARE;
 };
+
+void thread_init(Thread* thread);
 
 #endif

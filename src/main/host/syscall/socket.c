@@ -1007,6 +1007,7 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
 
 SysCallReturn syscallhandler_recvfrom(SysCallHandler* sys,
                                       const SysCallArgs* args) {
+    thread_enableOpt(sys->thread);
     return _syscallhandler_recvfromHelper(
         sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
         args->args[3].as_i64, args->args[4].as_ptr, args->args[5].as_ptr);

@@ -192,10 +192,12 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
         case 0: {
             // child
             // Disable RDTSC
+            /*
             if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
                 error("prctl: %s", g_strerror(errno));
                 return -1;
             }
+            */
             // Allow parent to trace.
             if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
                 error("ptrace: %s", g_strerror(errno));
@@ -631,6 +633,9 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     // Unimplemented for other states.
+    if (thread->childState != THREAD_PTRACE_CHILD_STATE_SYSCALL) {
+        error("Unexpected state %d", thread->childState);
+    }
     utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL);
     // The last ptrace stop was just before executing a syscall instruction.
     // We'll use that to execute the desired syscall, and then restore the
@@ -649,12 +654,14 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     // Rewind instruction pointer to point to the syscall instruction again.
     regs.rip -= 2; // Size of the syscall instruction.
 
+    /*
 #ifdef DEBUG
     // Verify that rip is now pointing at a syscall instruction.
     const uint8_t* buf =
-        thread_getReadablePtr(_threadPtraceToThread(thread), (PluginPtr){regs.rip}, 2);
+        threadptrace_getReadablePtr(_threadPtraceToThread(thread), (PluginPtr){regs.rip}, 2);
     utility_assert(!memcmp(buf, "\x0f\x05", 2));
 #endif
+*/
 
     if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &regs) <
         0) {
@@ -736,6 +743,7 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
         .threadID = threadID,
         .childState = THREAD_PTRACE_CHILD_STATE_NONE};
 
+    thread_init(&thread->base);
     MAGIC_INIT(&thread->base);
 
     thread->sys =
