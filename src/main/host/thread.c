@@ -111,6 +111,9 @@ static void* mappage(Thread* thread, PluginPtr aligned_plugin_ptr) {
         abort();
     }
 
+    // We don't need the file anymore.
+    _closeFile(thread, fd);
+
     // Copy data into the shmem file
     const void *ptr = thread->getReadablePtr(thread, aligned_plugin_ptr, _pageSize());
     memcpy(mapped_ptr, ptr, _pageSize());
