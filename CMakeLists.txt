@@ -37,6 +37,13 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
 
 message(STATUS "CMAKE_MODULE_PATH = ${CMAKE_MODULE_PATH}")
 
+## Mismatched C and C++ compilers can result in confusing errors at link time.
+## Try to catch it here.
+if(((CMAKE_C_COMPILER MATCHES "[/^]gcc") AND (NOT (CMAKE_CXX_COMPILER MATCHES "[/^]g\\+\\+")))
+   OR ((CMAKE_C_COMPILER MATCHES "[/^]clang") AND (NOT (CMAKE_CXX_COMPILER MATCHES "[/^]clang\\+\\+"))))
+    message(FATAL_ERROR "Mismatched C and C++ compiler ${CMAKE_C_COMPILER} and ${CMAKE_CXX_COMPILER}")
+endif()
+
 ## additional user-defined library directories
 foreach(library ${CMAKE_EXTRA_LIBRARIES})
     link_directories(${library})
@@ -110,6 +117,7 @@ option(SHADOW_PROFILE "build with profile settings (default: OFF)" OFF)
 option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_EXPORT "export service libraries and headers (default: OFF)" OFF)
 option(SHADOW_WERROR "turn compiler warnings into errors. (default: OFF)" OFF)
+option(SHADOW_COVERAGE "enable code-coverage instrumentation. (default: OFF)" OFF)
 
 ## display selected user options
 MESSAGE(STATUS)
@@ -141,6 +149,10 @@ endif(SHADOW_DEBUG STREQUAL ON)
 if(SHADOW_WERROR STREQUAL ON)
     add_compile_options(-Werror)
 endif(SHADOW_WERROR STREQUAL ON)
+if(SHADOW_COVERAGE STREQUAL ON)
+    add_compile_options(--coverage)
+    add_ldflags(--coverage)
+endif(SHADOW_COVERAGE STREQUAL ON)
 
 if($ENV{VERBOSE})
     add_definitions(-DVERBOSE)
