@@ -36,6 +36,11 @@
 #include "main/host/thread.h"
 #include "support/logger/logger.h"
 
+// this is not defined on Ubuntu 16.04
+#ifndef SYS_copy_file_range
+#define SYS_copy_file_range 326
+#endif
+
 SysCallHandler* syscallhandler_new(Host* host, Process* process,
                                    Thread* thread) {
     utility_assert(host);

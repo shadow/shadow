@@ -18,8 +18,7 @@ jobs:
       options: '--shm-size="1g"'
     strategy:
       matrix:
-        # ubuntu:16.04 depends on the issue shadow/shadow#864
-        container: ['ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32', 'centos:7', 'centos:8'] # 'ubuntu:16.04'
+        container: ['ubuntu:16.04', 'ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32', 'centos:7', 'centos:8']
         # clang depends on the issue shadow/shadow#865
         cc: ['gcc'] # 'clang'
         rust: ['stable']
@@ -33,8 +32,8 @@ jobs:
             package_manager: 'apt'
 
           # Per-container details and overrides:
-#          - container: 'ubuntu:16.04'
-#            package_manager: 'apt'
+          - container: 'ubuntu:16.04'
+            package_manager: 'apt'
           - container: 'ubuntu:18.04'
             package_manager: 'apt'
           - container: 'ubuntu:20.04'
