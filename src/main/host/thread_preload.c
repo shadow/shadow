@@ -520,11 +520,13 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                             .type_id = THREADPRELOAD_TYPE_ID,
                             .threadID = threadID,
                             .process = process,
+                            .host = host,
                             .referenceCount = 1};
     thread_init(&thread->base);
     MAGIC_INIT(&thread->base);
 
     process_ref(process);
+    host_ref(host);
 
     thread->sys =
         syscallhandler_new(host, process, _threadPreloadToThread(thread));
