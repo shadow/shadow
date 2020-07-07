@@ -38,6 +38,8 @@ struct _Thread {
     int referenceCount;
 
     GHashTable *pluginPtrToPtr;
+    int pagesFD;
+    char* pagesPath;
     bool optEnabled;
     int threadID;
     Host *host;
