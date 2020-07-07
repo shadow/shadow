@@ -199,7 +199,7 @@ def list_to_xml(xml_root: ET.Element, tag: str, l: List[Dict[str, Union[List, st
                 # Special case
                 # The graphml attribute is not a tag in XML but a text element
                 if 'graphml' == k:
-                    sub.text = f'<![CDATA[{v}]]>'
+                    sub.text = '<![CDATA[{0}]]>'.format(v)
                 else:
                     sub.set(k, str(v))
 
