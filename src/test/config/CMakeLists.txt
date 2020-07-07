@@ -27,14 +27,14 @@ set_tests_properties(config-convert-shadow PROPERTIES DEPENDS "config-convert-ya
 
 # Ensure the format of the convertion is as expected from the XML to YAML convertion
 add_test(
-        NAME config-convert-yaml2xml-format
+        NAME config-convert-xml2yaml-format
         COMMAND diff ${CMAKE_CURRENT_SOURCE_DIR}/xml2yaml.yaml test.shadow.config.yaml
 )
-set_tests_properties(config-convert-yaml2xml-format PROPERTIES DEPENDS "config-convert-xml2yaml")
+set_tests_properties(config-convert-xml2yaml-format PROPERTIES DEPENDS "config-convert-xml2yaml")
 
 # Ensure the format of the convertion is as expected from the YAML to XML convertion
 add_test(
-        NAME config-convert-xml2yaml-format
+        NAME config-convert-yaml2xml-format
         COMMAND diff ${CMAKE_CURRENT_SOURCE_DIR}/yaml2xml.xml test.shadow.config.xml
 )
-set_tests_properties(config-convert-xml2yaml-format PROPERTIES DEPENDS "config-convert-yaml2xml")
+set_tests_properties(config-convert-yaml2xml-format PROPERTIES DEPENDS "config-convert-yaml2xml")
