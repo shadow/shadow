@@ -36,16 +36,11 @@ endif()
 
 include(ExternalProject)
 
-# since CMake 2.8 does not support 'BUILD_ALWAYS 1', we need to manually delete the timestamps
-file(REMOVE_RECURSE ${CMAKE_CURRENT_BINARY_DIR}/cmake-stamp)
-file(REMOVE_RECURSE ${CMAKE_CURRENT_BINARY_DIR}/cmake-tmp)
-
 ## build the rust library
 ExternalProject_Add(
     shadow-rust-project
     PREFIX ${CMAKE_CURRENT_SOURCE_DIR}
-    STAMP_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake-stamp
-    TMP_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake-tmp
+    BUILD_ALWAYS 1
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
@@ -54,8 +49,9 @@ ExternalProject_Add(
     LOG_BUILD OFF
 )
 
-# we can't predict exact executable names until this is fixed: https://github.com/rust-lang/cargo/issues/1924
-add_test(NAME rust-unit-tests COMMAND bash -c "exec \"$(find target/${RUST_BUILD_TYPE}/deps/ -type f -executable -name 'shadow_rs-*' -print | head -n 1)\" --color always")
+## we can't predict exact executable names until this is fixed: https://github.com/rust-lang/cargo/issues/1924
+add_test(NAME rust-unit-tests COMMAND bash -c "exec \"$(find target/${RUST_BUILD_TYPE}/deps/ \
+                                               -type f -executable -name 'shadow_rs-*' -print | head -n 1)\" --color always")
 set_property(TEST rust-unit-tests PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
 
 ## allow shadow to link to the static rust library
