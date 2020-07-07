@@ -518,16 +518,6 @@ void threadptrace_free(Thread* base) {
         syscallhandler_unref(thread->sys);
     }
 
-    if (base->process) {
-        process_unref(base->process);
-    }
-
-    if (base->host) {
-        host_unref(base->host);
-    }
-
-    MAGIC_CLEAR(base);
-    g_free(thread);
     worker_countObject(OBJECT_TYPE_THREAD_PTRACE, COUNTER_TYPE_FREE);
 }
 
@@ -728,37 +718,28 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
     ThreadPtrace* thread = g_new(ThreadPtrace, 1);
 
     *thread = (ThreadPtrace){
-        .base = (Thread){.run = threadptrace_run,
-                         .resume = threadptrace_resume,
-                         .terminate = threadptrace_terminate,
-                         .getReturnCode = threadptrace_getReturnCode,
-                         .isRunning = threadptrace_isRunning,
-                         .free = threadptrace_free,
-                         .newClonedPtr = threadptrace_newClonedPtr,
-                         .releaseClonedPtr = threadptrace_releaseClonedPtr,
-                         .getReadablePtr = threadptrace_getReadablePtr,
-                         .getReadableString = threadptrace_getReadableString,
-                         .getWriteablePtr = threadptrace_getWriteablePtr,
-                         .flushPtrs = threadptrace_flushPtrs,
-                         .nativeSyscall = threadptrace_nativeSyscall,
-
-                         .type_id = THREADPTRACE_TYPE_ID,
-                         .threadID = threadID,
-                         .host = host,
-                         .process = process,
-                         .referenceCount = 1},
+        .base = thread_create(host, process, THREADPTRACE_TYPE_ID,
+                              (ThreadMethods){
+                                  .run = threadptrace_run,
+                                  .resume = threadptrace_resume,
+                                  .terminate = threadptrace_terminate,
+                                  .getReturnCode = threadptrace_getReturnCode,
+                                  .isRunning = threadptrace_isRunning,
+                                  .free = threadptrace_free,
+                                  .newClonedPtr = threadptrace_newClonedPtr,
+                                  .releaseClonedPtr = threadptrace_releaseClonedPtr,
+                                  .getReadablePtr = threadptrace_getReadablePtr,
+                                  .getReadableString = threadptrace_getReadableString,
+                                  .getWriteablePtr = threadptrace_getWriteablePtr,
+                                  .flushPtrs = threadptrace_flushPtrs,
+                                  .nativeSyscall = threadptrace_nativeSyscall,
+                              }),
         // FIXME: This should the emulated CPU's frequency
         .tsc = {.cyclesPerSecond = 2000000000UL},
-        .childState = THREAD_PTRACE_CHILD_STATE_NONE};
+        .childState = THREAD_PTRACE_CHILD_STATE_NONE,
+    };
+    thread->sys = syscallhandler_new(host, process, _threadPtraceToThread(thread));
 
-    process_ref(process);
-    host_ref(host);
-
-    thread_init(&thread->base);
-    MAGIC_INIT(&thread->base);
-
-    thread->sys =
-        syscallhandler_new(host, process, _threadPtraceToThread(thread));
     thread->pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite));
     thread->readPointers = g_array_new(FALSE, FALSE, sizeof(void*));
 

@@ -15,7 +15,7 @@
 #include "main/host/thread.h"
 #include "shim/shim_event.h"
 
-struct _Thread {
+typedef struct _ThreadMethods {
     void (*run)(Thread* thread, gchar** argv, gchar** envv);
     SysCallCondition* (*resume)(Thread* thread);
     void (*terminate)(Thread* thread);
@@ -24,17 +24,19 @@ struct _Thread {
     void (*free)(Thread* thread);
     void* (*newClonedPtr)(Thread* base, PluginPtr plugin_src, size_t n);
     void (*releaseClonedPtr)(Thread* base, void* p);
-    const void* (*getReadablePtr)(Thread* thread, PluginPtr plugin_src,
-                                  size_t n);
-    int (*getReadableString)(Thread* thread, PluginPtr plugin_src, size_t n,
-                             const char** str, size_t* strlen);
+    const void* (*getReadablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
+    int (*getReadableString)(Thread* thread, PluginPtr plugin_src, size_t n, const char** str,
+                             size_t* strlen);
     void* (*getWriteablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
     void (*flushPtrs)(Thread* thread);
     long (*nativeSyscall)(Thread* thread, long n, va_list args);
+} ThreadMethods;
 
+struct _Thread {
     // For safe down-casting. Set and checked by child class.
     int type_id;
 
+    ThreadMethods methods;
     int referenceCount;
 
     GHashTable *pluginPtrToPtr;
@@ -48,6 +50,6 @@ struct _Thread {
     MAGIC_DECLARE;
 };
 
-void thread_init(Thread* thread);
+Thread thread_create(Host* host, Process* process, int type_id, ThreadMethods methods);
 
 #endif
