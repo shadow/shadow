@@ -39,10 +39,13 @@ struct _Thread {
     ThreadMethods methods;
     int referenceCount;
 
+    // State for maintaining mappings. FIXME: this should really be
+    // per-process, not per-thread.
     GHashTable *pluginPtrToPtr;
     int pagesFD;
     char* pagesPath;
     bool optEnabled;
+
     int threadID;
     Host *host;
     Process *process;

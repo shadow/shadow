@@ -180,7 +180,11 @@ void thread_unref(Thread* thread) {
     utility_assert(thread->referenceCount >= 0);
     if(thread->referenceCount == 0) {
         thread->methods.free(thread);
+        if (thread->pagesFD) {
+            close(thread->pagesFD);
+        }
         if (thread->pagesPath) {
+            unlink(thread->pagesPath);
             free(thread->pagesPath);
         }
         if (thread->process) {
