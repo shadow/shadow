@@ -29,7 +29,6 @@ struct _ThreadPreload {
     pid_t childPID;
     int eventFD;
 
-    int threadID;
     int isRunning;
     int returnCode;
 
@@ -109,8 +108,6 @@ void threadpreload_free(Thread* base) {
         g_hash_table_destroy(thread->ptr_to_block);
     }
 
-    MAGIC_CLEAR(base);
-    g_free(thread);
     worker_countObject(OBJECT_TYPE_THREAD_PRELOAD, COUNTER_TYPE_FREE);
 }
 
@@ -354,7 +351,7 @@ int threadpreload_getReturnCode(Thread* base) {
     return thread->returnCode;
 }
 
-gboolean threadpreload_isRunning(Thread* base) {
+bool threadpreload_isRunning(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     // TODO
@@ -499,34 +496,33 @@ long threadpreload_nativeSyscall(Thread* base, long n, va_list args) {
 }
 
 Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
-    ThreadPreload* thread = g_new0(ThreadPreload, 1);
+    ThreadPreload* thread = g_new(ThreadPreload, 1);
 
-    thread->base = (Thread){.run = threadpreload_run,
-                            .resume = threadpreload_resume,
-                            .terminate = threadpreload_terminate,
-                            .getReturnCode = threadpreload_getReturnCode,
-                            .isRunning = threadpreload_isRunning,
-                            .free = threadpreload_free,
-                            .newClonedPtr = threadpreload_newClonedPtr,
-                            .releaseClonedPtr = threadpreload_releaseClonedPtr,
-                            .getReadablePtr = threadpreload_getReadablePtr,
-                            .getReadableString = threadpreload_getReadableString,
-                            .getWriteablePtr = threadpreload_getWriteablePtr,
-                            .flushPtrs = threadpreload_flushPtrs,
-                            .nativeSyscall = threadpreload_nativeSyscall,
-                            .type_id = THREADPRELOAD_TYPE_ID,
-                            .referenceCount = 1};
-    MAGIC_INIT(&thread->base);
-
-    thread->threadID = threadID;
-    thread->sys =
-        syscallhandler_new(host, process, _threadPreloadToThread(thread));
+    *thread = (ThreadPreload){
+        .base = thread_create(host, process, THREADPRELOAD_TYPE_ID,
+                              (ThreadMethods){
+                                  .run = threadpreload_run,
+                                  .resume = threadpreload_resume,
+                                  .terminate = threadpreload_terminate,
+                                  .getReturnCode = threadpreload_getReturnCode,
+                                  .isRunning = threadpreload_isRunning,
+                                  .free = threadpreload_free,
+                                  .newClonedPtr = threadpreload_newClonedPtr,
+                                  .releaseClonedPtr = threadpreload_releaseClonedPtr,
+                                  .getReadablePtr = threadpreload_getReadablePtr,
+                                  .getReadableString = threadpreload_getReadableString,
+                                  .getWriteablePtr = threadpreload_getWriteablePtr,
+                                  .flushPtrs = threadpreload_flushPtrs,
+                                  .nativeSyscall = threadpreload_nativeSyscall,
+                              }),
+        .ptr_to_block = g_hash_table_new(g_int64_hash, g_int64_equal),
+        .read_list = NULL,
+        .write_list = NULL,
+    };
+    thread->sys = syscallhandler_new(host, process, _threadPreloadToThread(thread));
 
     _Static_assert(
         sizeof(void*) == 8, "thread-preload impl assumes 8 byte pointers");
-    thread->ptr_to_block = g_hash_table_new(g_int64_hash, g_int64_equal);
-    thread->read_list = NULL;
-    thread->write_list = NULL;
 
     // thread has access to a global, thread safe shared memory manager
 

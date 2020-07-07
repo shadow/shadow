@@ -20,6 +20,20 @@
 #include "shim/shim_event.h"
 #include "support/logger/logger.h"
 
+Thread thread_create(Host* host, Process* process, int type_id, ThreadMethods methods) {
+    Thread thread = {
+        .type_id = type_id,
+        .methods = methods,
+        .referenceCount = 1,
+        .host = host,
+        .process = process,
+        MAGIC_INITIALIZER
+    };
+    host_ref(host);
+    process_ref(process);
+    return thread;
+}
+
 void thread_ref(Thread* thread) {
     MAGIC_ASSERT(thread);
     (thread->referenceCount)++;
@@ -30,82 +44,90 @@ void thread_unref(Thread* thread) {
     (thread->referenceCount)--;
     utility_assert(thread->referenceCount >= 0);
     if(thread->referenceCount == 0) {
-        thread->free(thread);
+        thread->methods.free(thread);
+        if (thread->process) {
+            process_unref(thread->process);
+        }
+        if (thread->host) {
+            host_unref(thread->host);
+        }
+        MAGIC_CLEAR(thread);
+        g_free(thread);
     }
 }
 
 void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->run);
-    thread->run(thread, argv, envv);
+    utility_assert(thread->methods.run);
+    thread->methods.run(thread, argv, envv);
 }
 
 SysCallCondition* thread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->resume);
-    return thread->resume(thread);
+    utility_assert(thread->methods.resume);
+    return thread->methods.resume(thread);
 }
 
 void thread_terminate(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->terminate);
-    thread->terminate(thread);
+    utility_assert(thread->methods.terminate);
+    thread->methods.terminate(thread);
 }
 int thread_getReturnCode(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->getReturnCode);
-    return thread->getReturnCode(thread);
+    utility_assert(thread->methods.getReturnCode);
+    return thread->methods.getReturnCode(thread);
 }
 
 bool thread_isRunning(Thread* thread) {
     MAGIC_ASSERT(thread);
-    return thread->isRunning(thread);
+    return thread->methods.isRunning(thread);
 }
 
 void* thread_newClonedPtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->newClonedPtr);
-    return thread->newClonedPtr(thread, plugin_src, n);
+    utility_assert(thread->methods.newClonedPtr);
+    return thread->methods.newClonedPtr(thread, plugin_src, n);
 }
 
 void thread_releaseClonedPtr(Thread* thread, void* p) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->releaseClonedPtr);
-    thread->releaseClonedPtr(thread, p);
+    utility_assert(thread->methods.releaseClonedPtr);
+    thread->methods.releaseClonedPtr(thread, p);
 }
 
 const void* thread_getReadablePtr(Thread* thread, PluginPtr plugin_src,
                                   size_t n) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->getReadablePtr);
-    return thread->getReadablePtr(thread, plugin_src, n);
+    utility_assert(thread->methods.getReadablePtr);
+    return thread->methods.getReadablePtr(thread, plugin_src, n);
 }
 
 int thread_getReadableString(Thread* thread, PluginPtr plugin_src, size_t n,
                              const char** str, size_t* strlen) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->getReadableString);
-    return thread->getReadableString(thread, plugin_src, n, str, strlen);
+    utility_assert(thread->methods.getReadableString);
+    return thread->methods.getReadableString(thread, plugin_src, n, str, strlen);
 }
 
 void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->getReadablePtr);
-    return thread->getWriteablePtr(thread, plugin_src, n);
+    utility_assert(thread->methods.getReadablePtr);
+    return thread->methods.getWriteablePtr(thread, plugin_src, n);
 }
 
 void thread_flushPtrs(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->flushPtrs);
-    thread->flushPtrs(thread);
+    utility_assert(thread->methods.flushPtrs);
+    thread->methods.flushPtrs(thread);
 }
 
 long thread_nativeSyscall(Thread* thread, long n, ...) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->nativeSyscall);
+    utility_assert(thread->methods.nativeSyscall);
     va_list(args);
     va_start(args, n);
-    long rv = thread->nativeSyscall(thread, n, args);
+    long rv = thread->methods.nativeSyscall(thread, n, args);
     va_end(args);
     return rv;
 }
