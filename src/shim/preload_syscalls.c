@@ -159,6 +159,16 @@ static long _vshadow_syscall(long n, va_list args) {
 }
 
 long syscall(long n, ...) {
+    // Ensure that subsequent stack frames are on a different page than any
+    // local variables passed through to the syscall. This ensures that even
+    // if any of the syscall arguments are pointers, and those pointers cause
+    // shadow to remap the pages containing those pointers, the shim-side stack
+    // frames doing that work won't get their memory remapped out from under
+    // them.
+    char buf[4096];
+    // Ensure that the compiler doesn't optimize away `buf`.
+    __asm__ __volatile__("" :: "m" (buf));
+
     va_list(args);
     va_start(args, n);
     long rv;
