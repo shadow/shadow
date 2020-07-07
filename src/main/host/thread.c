@@ -90,22 +90,25 @@ static void* mappage(Thread* thread, PluginPtr aligned_plugin_ptr) {
     // Create a shmem file
     static int count = 0;
     char *file;
-    asprintf(&file, "/dev/shm/shadow_page_%d_%d", (int)getpid(), ++count);
-    int fd = open(file, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+    asprintf(&file, "/dev/shm/shadow_pages_%d_%d_%d", (int)getpid(), host_getID(thread->host),
+             process_getProcessID(thread->process));
+    int fd = open(file, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     if (fd < 0) {
         error("shm_open: %s", strerror(errno));
         abort();
     }
 
-    // Set the size
+    // Allocate the space
     debug("ftruncate %d:%s to %zu", fd, file, _pageSize());
-    if (ftruncate(fd, _pageSize()) < 0) {
-        error("ftruncate: %s", strerror(errno));
+    int rv;
+    if ((rv = posix_fallocate(fd, aligned_plugin_ptr.val, _pageSize())) != 0) {
+        error("ftruncate: %s", strerror(rv));
         abort();
     }
  
     // Map the shmem file
-    void *mapped_ptr = mmap(NULL, _pageSize(), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    void* mapped_ptr =
+        mmap(NULL, _pageSize(), PROT_READ | PROT_WRITE, MAP_SHARED, fd, aligned_plugin_ptr.val);
     if (mapped_ptr == MAP_FAILED) {
         error("mmap: %s", strerror(errno));
         abort();
@@ -124,7 +127,8 @@ static void* mappage(Thread* thread, PluginPtr aligned_plugin_ptr) {
         abort();
     }
     long res = thread_nativeSyscall(thread, SYS_mmap, aligned_plugin_ptr.val, _pageSize(),
-                                    PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, plugin_fd, 0);
+                                    PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, plugin_fd,
+                                    aligned_plugin_ptr.val);
     int err = syscall_rawReturnValueToErrno(res);
     if (err) {
         error("thread_nativeSyscall(mmap): %s", strerror(err));

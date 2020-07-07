@@ -29,7 +29,6 @@ struct _ThreadPreload {
     pid_t childPID;
     int eventFD;
 
-    int threadID;
     int isRunning;
     int returnCode;
 
@@ -103,6 +102,10 @@ void threadpreload_free(Thread* base) {
 
     if (thread->sys) {
         syscallhandler_unref(thread->sys);
+    }
+
+    if (base->process) {
+        process_unref(base->process);
     }
 
     if (thread->ptr_to_block) {
@@ -515,11 +518,14 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                             .flushPtrs = threadpreload_flushPtrs,
                             .nativeSyscall = threadpreload_nativeSyscall,
                             .type_id = THREADPRELOAD_TYPE_ID,
+                            .threadID = threadID,
+                            .process = process,
                             .referenceCount = 1};
     thread_init(&thread->base);
     MAGIC_INIT(&thread->base);
 
-    thread->threadID = threadID;
+    process_ref(process);
+
     thread->sys =
         syscallhandler_new(host, process, _threadPreloadToThread(thread));
 

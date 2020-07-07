@@ -145,8 +145,6 @@ typedef struct _ThreadPtrace {
 
     pid_t childPID;
 
-    int threadID;
-
     // Reason for the most recent transfer of control back to Shadow.
     ThreadPtraceChildState childState;
 
@@ -520,6 +518,14 @@ void threadptrace_free(Thread* base) {
         syscallhandler_unref(thread->sys);
     }
 
+    if (base->process) {
+        process_unref(base->process);
+    }
+
+    if (base->host) {
+        host_unref(base->host);
+    }
+
     MAGIC_CLEAR(base);
     g_free(thread);
     worker_countObject(OBJECT_TYPE_THREAD_PTRACE, COUNTER_TYPE_FREE);
@@ -737,11 +743,16 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
                          .nativeSyscall = threadptrace_nativeSyscall,
 
                          .type_id = THREADPTRACE_TYPE_ID,
+                         .threadID = threadID,
+                         .host = host,
+                         .process = process,
                          .referenceCount = 1},
         // FIXME: This should the emulated CPU's frequency
         .tsc = {.cyclesPerSecond = 2000000000UL},
-        .threadID = threadID,
         .childState = THREAD_PTRACE_CHILD_STATE_NONE};
+
+    process_ref(process);
+    host_ref(host);
 
     thread_init(&thread->base);
     MAGIC_INIT(&thread->base);

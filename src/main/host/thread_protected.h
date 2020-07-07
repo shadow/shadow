@@ -39,6 +39,9 @@ struct _Thread {
 
     GHashTable *pluginPtrToPtr;
     bool optEnabled;
+    int threadID;
+    Host *host;
+    Process *process;
 
     MAGIC_DECLARE;
 };
