@@ -45,6 +45,9 @@ jobs:
           . ci/container_scripts/install_extra_deps.sh
           echo "::add-path::$HOME/.cargo/bin"
 
+      - name: Install python dependencies
+        run: pip3 install PyYAML
+
       - name: Build
         run: . ci/container_scripts/build_and_install.sh
 
