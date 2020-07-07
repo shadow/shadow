@@ -214,7 +214,7 @@ def save_xml(xml_root: ET.Element, filename: str):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Convert a XML file into a YAML file.')
+    parser = argparse.ArgumentParser(description='Convert shadow config files between XML and YAML')
     parser.add_argument('operation', choices=['yaml2xml', 'xml2yaml'])
     parser.add_argument('filename', help='Filename to convert')
     parser.add_argument('--output', help='Output filename', default=None, nargs='?')
