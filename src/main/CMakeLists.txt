@@ -45,6 +45,7 @@ ExternalProject_Add(
     CONFIGURE_COMMAND ""
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
     BUILD_COMMAND cargo build ${RUST_BUILD_FLAG} --all-targets --target-dir ${CMAKE_CURRENT_BINARY_DIR}/target
+    BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/target/debug/libshadow_rs.a ${CMAKE_CURRENT_BINARY_DIR}/target/release/libshadow_rs.a
     INSTALL_COMMAND ""
     LOG_BUILD OFF
 )
