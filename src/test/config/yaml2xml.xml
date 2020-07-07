@@ -1,33 +1,30 @@
 <?xml version="1.0" ?>
 <shadow stoptime="3600">
-   <topology><![CDATA[<?xml version="1.0" encoding="utf-8"?><graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
-  <key attr.name="packetloss" attr.type="double" for="edge" id="d6" />
-  <key attr.name="latency" attr.type="double" for="edge" id="d5" />
-  <key attr.name="packetloss" attr.type="double" for="node" id="d4" />
-  <key attr.name="countrycode" attr.type="string" for="node" id="d3" />
-  <key attr.name="bandwidthdown" attr.type="int" for="node" id="d2" />
-  <key attr.name="bandwidthup" attr.type="int" for="node" id="d1" />
-  <key attr.name="ip" attr.type="string" for="node" id="d0" />
+   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
+  <key attr.name="latency" attr.type="double" for="edge" id="d3" />
+  <key attr.name="bandwidthup" attr.type="int" for="node" id="d2" />
+  <key attr.name="bandwidthdown" attr.type="int" for="node" id="d1" />
+  <key attr.name="countrycode" attr.type="string" for="node" id="d0" />
   <graph edgedefault="undirected">
-    <node id="isp">
-      <data key="d0">0.0.0.0</data>
-      <data key="d1">2251</data>
-      <data key="d2">17038</data>
-      <data key="d3">US</data>
-      <data key="d4">0.0</data>
+    <node id="poi-1">
+      <data key="d0">US</data>
+      <data key="d1">10240</data>
+      <data key="d2">10240</data>
     </node>
-    <edge source="isp" target="isp">
-      <data key="d5">50.0</data>
-      <data key="d6">0.01</data>
+    <edge source="poi-1" target="poi-1">
+      <data key="d3">50.0</data>
+      <data key="d4">0.0</data>
     </edge>
   </graph>
 </graphml>
 ]]></topology>
-   <plugin id="tgen" path="~/.shadow/bin/tgen"/>
-   <host id="server">
-      <process arguments="tgen.server.graphml.xml" plugin="tgen" starttime="1"/>
+   <kill time="5"/>
+   <plugin id="testconfig" path="test-config"/>
+   <host id="testclient" quantity="1">
+      <process plugin="testconfig" starttime="1" arguments="client 5678"/>
    </host>
-   <host id="client">
-      <process arguments="tgen.client.graphml.xml" plugin="tgen" starttime="2"/>
+   <host id="testserver" quantity="1">
+      <process plugin="testconfig" starttime="1" arguments="server 5678"/>
    </host>
 </shadow>
