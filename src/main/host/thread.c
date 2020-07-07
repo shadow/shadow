@@ -99,8 +99,9 @@ static void* mappage(Thread* thread, PluginPtr aligned_plugin_ptr) {
 
     if (!thread->pagesFD) {
         // Create a shmem file
-        asprintf(&thread->pagesPath, "/dev/shm/shadow_pages_%d_%d_%d", (int)getpid(),
-                 host_getID(thread->host), process_getProcessID(thread->process));
+        int rv = asprintf(&thread->pagesPath, "/dev/shm/shadow_pages_%d_%d_%d", (int)getpid(),
+                          host_getID(thread->host), process_getProcessID(thread->process));
+        utility_assert(rv > 0);
         thread->pagesFD =
             open(thread->pagesPath, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
         if (thread->pagesFD < 0) {
