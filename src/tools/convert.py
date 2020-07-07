@@ -192,7 +192,7 @@ def list_to_xml(xml_root: ET.Element, tag: str, l: List[Dict[str, Union[List, st
     for element in l:
         _tag = convert_yaml_key_to_xml_tag(tag)
         sub = ET.SubElement(xml_root, _tag)
-        for k, v in element.items():
+        for k, v in sorted(element.items()):
             if isinstance(v, list):
                 list_to_xml(sub, k, v)
             else:
