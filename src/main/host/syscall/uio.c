@@ -35,7 +35,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd,
     /* Validate vector length param. */
     if (iovlen == 0) {
         return 0;
-    } else if (iovlen < 0 || iovlen > UIO_MAXIOV) {
+    } else if (iovlen > UIO_MAXIOV) {
         return -EINVAL;
     }
 
