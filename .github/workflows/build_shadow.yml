@@ -19,8 +19,7 @@ jobs:
     strategy:
       matrix:
         container: ['ubuntu:16.04', 'ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32', 'centos:7', 'centos:8']
-        # clang depends on the issue shadow/shadow#865
-        cc: ['gcc'] # 'clang'
+        cc: ['gcc', 'clang']
         rust: ['stable']
         buildtype: ['debug', 'release']
         include:
@@ -93,8 +92,9 @@ jobs:
       - name: Install Dependencies (yum-centos-7)
         if: ${{ matrix.package_manager == 'yum-centos-7' }}
         run: |
+          # clang on centos 7 requires gcc and gcc-c++ (libgcc is not sufficient)
           yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum install -y $CC_PACKAGE $CXX_PACKAGE cmake make glib2 glib2-devel igraph igraph-devel python3 xz xz-devel yum-utils procps-devel curl findutils
+          yum install -y $CC_PACKAGE $CXX_PACKAGE gcc gcc-c++ cmake make glib2 glib2-devel igraph igraph-devel python3 xz xz-devel yum-utils procps-devel curl findutils
 
       - name: Install Dependencies (dnf-centos-8)
         if: ${{ matrix.package_manager == 'dnf-centos-8' }}
