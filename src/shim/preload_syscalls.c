@@ -165,9 +165,11 @@ long syscall(long n, ...) {
     // shadow to remap the pages containing those pointers, the shim-side stack
     // frames doing that work won't get their memory remapped out from under
     // them.
-    char buf[4096];
-    // Ensure that the compiler doesn't optimize away `buf`.
-    __asm__ __volatile__("" :: "m" (buf));
+    struct { 
+      char p[4096];
+    } padding;
+    // Ensure that the compiler doesn't optimize away `padding`.
+    __asm__ __volatile__("" :: "m" (padding));
 
     va_list(args);
     va_start(args, n);
