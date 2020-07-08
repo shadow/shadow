@@ -25,6 +25,7 @@ jobs:
         container: ['ubuntu:16.04', 'ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32', 'centos:7', 'centos:8']
         cc: ['gcc', 'clang']
         buildtype: ['debug', 'release']
+        python-version: [3.6, 3.7, 3.8]
         include:
           # Add a single coverage configuration
           - container: 'ubuntu:18.04'
