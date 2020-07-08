@@ -13,7 +13,7 @@ message(STATUS "System version: ${CMAKE_SYSTEM_VERSION}")
 message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
 
 ## ensure cmake version
-cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 
 ## building with support for C11 on platforms that default to C99 or C89
 set (CMAKE_C_FLAGS "-std=gnu11 ${CMAKE_C_FLAGS}")

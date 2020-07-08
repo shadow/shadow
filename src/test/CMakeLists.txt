@@ -10,16 +10,11 @@ add_definitions(-fPIC -g3 -DDEBUG -D_GNU_SOURCE)
 
 include(ExternalProject)
 
-# since CMake 2.8 does not support 'BUILD_ALWAYS 1', we need to manually delete the timestamps
-file(REMOVE_RECURSE ${CMAKE_CURRENT_BINARY_DIR}/cmake-stamp)
-file(REMOVE_RECURSE ${CMAKE_CURRENT_BINARY_DIR}/cmake-tmp)
-
 ## always build tests with the debug profile, even when shadow is built in release mode
 ExternalProject_Add(
    shadow-tests
    PREFIX ${CMAKE_CURRENT_SOURCE_DIR}
-   STAMP_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake-stamp
-   TMP_DIR ${CMAKE_CURRENT_BINARY_DIR}/cmake-tmp
+   BUILD_ALWAYS 1
    DOWNLOAD_COMMAND ""
    CONFIGURE_COMMAND ""
    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
