@@ -145,14 +145,16 @@ jobs:
         if: ${{ matrix.buildtype == 'coverage' }}
         run: |
             cargo install grcov
-            grcov ./build -s src/ -t html --llvm --branch --ignore-not-existing -o ./grcov/
+            grcov ./build -s src/ -t lcov --llvm --branch --ignore-not-existing -o ./grcov.lcov.txt
 
-      - name: Upload coverage report
+      - name: Upload coverage report to codecov
         if: ${{ matrix.buildtype == 'coverage' }}
-        uses: actions/upload-artifact@v2
+        uses: codecov/codecov-action@v1
         with:
-          name: coverage
-          path: grcov
+          name: coverage 
+          file: grcov.lcov.txt
+          flags: tests
+          fail_ci_if_error: true
 
       - name: Upload shadow data directories
         uses: actions/upload-artifact@v2
