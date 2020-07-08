@@ -1,7 +1,7 @@
 # Syntax reference:
 # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
 
-name: PythonLint
+name: Lint Checks
 
 on:
   push:
@@ -10,7 +10,8 @@ on:
     types: [opened, synchronize]
 
 jobs:
-  lint_python:
+
+  lint-python:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -22,3 +23,14 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install flake8
       - run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude src/external
+
+  lint-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+          echo "::add-path::$HOME/.cargo/bin"
+      - name: Rustfmt check
+        run: cd src && cargo fmt -- --check
