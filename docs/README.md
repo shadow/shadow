@@ -12,7 +12,9 @@ This wiki contains important information about installing and using the Shadow d
    * [Getting Started Tutorial](2-Getting-Started-Tutorial.md)
    * [Simulation Customization](3-Simulation-Customization.md)
    * [Notes and FAQs](4-Notes-and-FAQs.md)
-   * [Debugging and profiling](5-Developer-Guide.md)
+   * Developer Guides
+     * [Debugging and profiling](5-Developer-Guide.md)
+     * [Continous integration tests](ci.md)
    * Advanced usage
      * [Using a recompiled libc](using-recompiled-libc.md) to get higher libc
        API coverage using preload interposition.
