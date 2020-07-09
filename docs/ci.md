@@ -14,18 +14,22 @@ We also have scripts for running the continuous integration tests locally,
 inside Docker containers. This can be useful for debugging and for quickly
 iterating on a test that's failing in GitHub's test runs.
 
-The [`run_one.sh`](../ci/run_one.sh) script builds a Docker image for a single
-configuration, and then runs the tests inside the Docker image. You must supply
-the `CONTAINER`, `CC`, and `BUILDTYPE` via environment variables. For example:
+The [`run.sh`](../ci/run.sh) script builds a Docker images for all
+supported configurations, and runs our tests in them.
 
 ```{.bash}
-sudo CONTAINER=centos:8 CC=clang BUILDTYPE=debug ci/run_one.sh
+sudo ci/run.sh
 ```
 
-You can also run the tests for *all* supported configurations with the
-[`run_all.sh`](../ci/run_all.sh) script. This typically takes hours; you're
-usually better off pushing your changes into a Pull Request and letting GitHub
-run the tests on its cluster instead.
+Note that running all tests locally typically takes hours. More often,
+you'll want to only run some smaller set of configurations locally.
+To run only the configurations you specify, use the `-o` flag:
+
+```{.bash}
+sudo ci/run.sh -o "ubuntu:18.04;clang;debug fedora:32;gcc;release"
+```
+
+For additional options, run `ci/run.sh -h`.
 
 ### Debugging locally
 
@@ -45,7 +49,7 @@ the same with the last intermediate layer that was built successfully. e.g.
 given the output:
 
 ```{.bash}
-$ sudo CONTAINER=centos:8 CC=clang BUILDTYPE=debug ci/run_one.sh
+$ sudo ci/run.sh -o "centos:8;clang;debug"
 <snip>
 Step 13/13 : RUN . ci/container_scripts/build_and_install.sh
  ---> Running in a11c4a554ef8
