@@ -3,6 +3,10 @@
 
 name: Tests
 
+defaults:
+  run:
+    shell: bash
+
 on:
   push:
     branches: [dev]
@@ -20,132 +24,38 @@ jobs:
       matrix:
         container: ['ubuntu:16.04', 'ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32', 'centos:7', 'centos:8']
         cc: ['gcc', 'clang']
-        rust: ['stable']
         buildtype: ['debug', 'release']
         include:
           # Add a single coverage configuration
           - container: 'ubuntu:18.04'
             cc: 'clang'
-            rust: 'nightly'
             buildtype: 'coverage'
-            package_manager: 'apt'
-
-          # Per-container details and overrides:
-          - container: 'ubuntu:16.04'
-            package_manager: 'apt'
-          - container: 'ubuntu:18.04'
-            package_manager: 'apt'
-          - container: 'ubuntu:20.04'
-            package_manager: 'apt'
-          - container: 'debian:10-slim'
-            package_manager: 'apt'
-          - container: 'fedora:32'
-            package_manager: 'dnf-fedora'
-          - container: 'centos:7'
-            package_manager: 'yum-centos-7'
-          - container: 'centos:8'
-            package_manager: 'dnf-centos-8'
+    env:
+      CC: ${{ matrix.cc }}
+      CONTAINER: ${{ matrix.container }}
+      BUILDTYPE: ${{ matrix.buildtype }}
+        
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Set compiler params
+      - name: Install dependencies
         run: |
-          # See https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions
-          # for how these 'echo' commands work.
-          case "${{ matrix.cc }}" in
-            "gcc")
-              echo '::set-env name=CC::gcc'
-              echo '::set-env name=CC_PACKAGE::gcc'
-              echo '::set-env name=CXX::g++'
-              if [ "${{ matrix.package_manager }}" = "apt" ]
-              then echo '::set-env name=CXX_PACKAGE::g++'
-              else echo '::set-env name=CXX_PACKAGE::gcc-c++'
-              fi
-              ;;
-            "clang")
-              echo '::set-env name=CC::clang'
-              echo '::set-env name=CC_PACKAGE::clang'
-              echo '::set-env name=CXX::clang++'
-              echo '::set-env name=CXX_PACKAGE::clang'
-              ;;
-            *)
-              echo "Unknown cc ${{ matrix.cc }}"
-              exit 1
-              ;;
-            esac
-
-      - name: Install Dependencies (apt)
-        if: ${{ matrix.package_manager == 'apt' }}
-        env:
-          # prevent prompts for user input during package install
-          DEBIAN_FRONTEND: 'noninteractive'
-        run: |
-          apt-get update
-          apt-get install -y $CC_PACKAGE $CXX_PACKAGE cmake make xz-utils python3 libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg libprocps-dev curl findutils
-
-      - name: Install Dependencies (dnf-fedora)
-        if: ${{ matrix.package_manager == 'dnf-fedora' }}
-        run: |
-          dnf install --best -y $CC_PACKAGE $CXX_PACKAGE cmake make glib2 glib2-devel igraph igraph-devel python3 xz xz-devel yum-utils procps-devel curl findutils
-
-      - name: Install Dependencies (yum-centos-7)
-        if: ${{ matrix.package_manager == 'yum-centos-7' }}
-        run: |
-          # Clang on centos 7 requires gcc and gcc-c++ (libgcc is not sufficient).
-          # Must also link cmake to cmake3 as an alternative.
-          yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum install -y $CC_PACKAGE $CXX_PACKAGE gcc gcc-c++ cmake3 make glib2 glib2-devel igraph igraph-devel python3 xz xz-devel yum-utils procps-devel curl findutils
-          alternatives --install /usr/local/bin/cmake cmake /usr/bin/cmake3 20 \
-            --slave /usr/local/bin/ctest ctest /usr/bin/ctest3 \
-            --slave /usr/local/bin/cpack cpack /usr/bin/cpack3 \
-            --slave /usr/local/bin/ccmake ccmake /usr/bin/ccmake3 \
-            --family cmake
-
-      - name: Install Dependencies (dnf-centos-8)
-        if: ${{ matrix.package_manager == 'dnf-centos-8' }}
-        # as centos 8 does not currently support igraph and procps-ng-devel,
-        # install the centos 7 verisons
-        run: |
-          dnf remove -y procps-ng procps-ng-devel
-          dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-3.3.10-26.el7.x86_64.rpm
-          dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-devel-3.3.10-26.el7.x86_64.rpm
-          dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-0.7.1-12.el7.x86_64.rpm
-          dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-devel-0.7.1-12.el7.x86_64.rpm
-          dnf install -y $CC_PACKAGE $CXX_PACKAGE cmake make glib2 glib2-devel python3 xz xz-devel yum-utils curl findutils
-
-      - name: Install Rust
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain ${{ matrix.rust }}
-
-      - name: Add Rust to PATH
-        run: echo "::add-path::$HOME/.cargo/bin"
+          . ci/container_scripts/install_deps.sh
+          . ci/container_scripts/install_extra_deps.sh
+          echo "::add-path::$HOME/.cargo/bin"
 
       - name: Build
-        run: |
-            if [ "${{ matrix.buildtype }}" = "debug" ]; then EXTRA="--debug"
-            elif [ "${{ matrix.buildtype }}" = "coverage" ]; then EXTRA="--debug --coverage"
-            else EXTRA=""
-            fi
-            ./setup build --clean --test --werror $EXTRA
-
-      - name: Install
-        run: ./setup install
+        run: . ci/container_scripts/build_and_install.sh
 
       - name: Test
-        # For now, if the first batch of tests fails, rerun the failing tests
-        # and continue on if they then pass. This is to work around sporadic
-        # and difficult to debug errors such as #798
-        run: |
-            # Preload tests are broken in coverage builds: https://github.com/shadow/shadow/issues/867
-            if [ "${{ matrix.buildtype }}" = "coverage" ]; then EXCLUDE="shadow-preload"; else EXCLUDE=""; fi
-            ./setup test -- -E "$EXCLUDE" || ./setup test --rerun-failed
+        run: . ci/container_scripts/test.sh
 
       - name: Generate coverage report
         if: ${{ matrix.buildtype == 'coverage' }}
         run: |
-            cargo install grcov
-            grcov ./build -s src/ -t lcov --llvm --branch --ignore-not-existing -o ./grcov.lcov.txt
+          cargo install grcov
+          grcov ./build -s src/ -t lcov --llvm --branch --ignore-not-existing -o ./grcov.lcov.txt
 
       - name: Upload coverage report to codecov
         if: ${{ matrix.buildtype == 'coverage' }}
