@@ -16,6 +16,7 @@ APT_PACKAGES="
   libprocps-dev
   make
   python3
+  python3-pip
   xz-utils
   "
 
@@ -30,9 +31,15 @@ RPM_PACKAGES="
   make
   procps-devel
   python3
+  python3-pip
   xz
   xz-devel
   yum-utils
+  diffutils
+  "
+
+PYTHON_PACKAGES="
+  PyYaml
   "
 
 case "$CONTAINER" in
@@ -40,6 +47,17 @@ case "$CONTAINER" in
         sed -i '/deb-src/s/^# //' /etc/apt/sources.list
         DEBIAN_FRONTEND=noninteractive apt-get update
         DEBIAN_FRONTEND=noninteractive apt-get install -y $APT_PACKAGES
+
+        # Handle dict ordering of src/tools/convert.py and allow diff on its tests
+        # Before Python3.6, dict ordering was not predictable
+        if [[ `python3 --version` == *" 3.5"* ]]; then
+          apt-get install -y software-properties-common
+          add-apt-repository -y ppa:deadsnakes/ppa
+          apt-get update
+          apt-get install -y python3.6
+          unlink /usr/bin/python3
+          ln -s /usr/bin/python3.6 /usr/bin/python3
+        fi
         ;;
     fedora:*)
         dnf install --best -y $RPM_PACKAGES
@@ -74,3 +92,5 @@ case "$CONTAINER" in
         ;;
 esac
 
+
+python3 -m pip install $PYTHON_PACKAGES
