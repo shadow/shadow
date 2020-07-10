@@ -200,12 +200,6 @@ def build(args, remaining):
             logging.warning("You usually want to enable --debug for coverage"
                     + " builds")
         cmake_cmd += " -DSHADOW_COVERAGE=ON"
-        # From https://github.com/mozilla/grcov
-        os.putenv("CARGO_INCREMENTAL", "0")
-        os.putenv("RUSTFLAGS", "-Zprofile -Ccodegen-units=1 -Copt-level=0"
-                + " -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests"
-                + " -Cpanic=abort")
-        os.putenv("RUSTDOCFLAGS", "-Cpanic=abort")
 
     # we will run from build directory
     calledDirectory = os.getcwd()
