@@ -135,6 +135,7 @@ set(CMAKE_C_FLAGS_DEBUG "")
 set(CMAKE_C_FLAGS_RELEASE "")
 add_compile_options(-ggdb)
 add_compile_options(-fno-omit-frame-pointer)
+
 if(SHADOW_DEBUG STREQUAL ON)
     message(STATUS "CMAKE_BUILD_TYPE Debug enabled.")
     set(CMAKE_BUILD_TYPE Debug)
@@ -146,12 +147,21 @@ else(SHADOW_DEBUG STREQUAL ON)
     add_definitions(-DNDEBUG)
     add_compile_options(-O3)
 endif(SHADOW_DEBUG STREQUAL ON)
+
 if(SHADOW_WERROR STREQUAL ON)
     add_compile_options(-Werror)
 endif(SHADOW_WERROR STREQUAL ON)
+
 if(SHADOW_COVERAGE STREQUAL ON)
     add_compile_options(--coverage)
     add_ldflags(--coverage)
+    ## from https://github.com/mozilla/grcov
+    set(CARGO_ENV_VARS "CARGO_INCREMENTAL=0 \
+                        RUSTFLAGS=\"-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code \
+                                    -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort\" \
+                        RUSTDOCFLAGS=\"-Cpanic=abort\"")
+else()
+    set(CARGO_ENV_VARS "")
 endif(SHADOW_COVERAGE STREQUAL ON)
 
 if($ENV{VERBOSE})
