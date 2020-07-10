@@ -64,7 +64,7 @@ jobs:
           name: coverage 
           file: grcov.lcov.txt
           flags: tests
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Upload shadow data directories
         uses: actions/upload-artifact@v2
