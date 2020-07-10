@@ -61,3 +61,5 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-mod
 PATH=$HOME/.cargo/bin:$PATH
 # Force cargo to download its package index
 cargo search foo
+
+python3 -m pip install PyYaml
