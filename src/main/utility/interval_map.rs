@@ -57,20 +57,51 @@ impl<V> IntervalMap<V> {
 */
 
 use std::collections::BTreeMap;
-use std::ops::Bound::Included;
+use std::ops::Bound::{Included, Unbounded};
 
 pub struct IntervalMap<V> 
 {
     begin_to_end_and_val: BTreeMap<usize, (usize, V)>,
 }
 
-impl<V> IntervalMap<V> {
+pub struct ClippedEnd {
+    begin : usize,
+    old_end : usize,
+}
+
+pub struct ClippedBegin {
+    old_begin : usize,
+    new_begin : usize,
+}
+
+pub struct Split {
+    begin: usize,
+    old_end: usize,
+    new_begin: usize,
+    new_end: usize,
+}
+
+pub struct Item<V> {
+    begin: usize,
+    end: usize,
+    val: V,
+}
+
+pub struct ClearResult<V>
+{
+    clipped_end : Option<ClippedEnd>,
+    clipped_begin : Option<ClippedBegin>,
+    split : Option<Split>,
+    clobbered : Vec<Item<V>>,
+}
+
+impl<V: Clone> IntervalMap<V> {
     pub fn new() -> IntervalMap<V> {
         IntervalMap {begin_to_end_and_val: BTreeMap::new()}
     }
 
     fn last_interval_starting_before_or_on(&self, i: usize) -> Option<(usize, usize, &V)> {
-        let mut before = self.begin_to_end_and_val.range((Included(0), Included(i)));
+        let mut before = self.begin_to_end_and_val.range((Unbounded, Included(i)));
         match before.next_back() {
             None => None,
             Some ((last_begin, (last_end, v))) => Some((*last_begin, *last_end, v)),
@@ -84,56 +115,42 @@ impl<V> IntervalMap<V> {
         }
     }
 
-    pub fn clear_range(&mut self, begin: usize, end: usize) {
-        let mut begin_of_first_overlap = None;
-        let mut begin_of_last_overlap = None;
-        let mut begins_of_contained_ranges = Vec::new();
+    pub fn clear_range(&mut self, begin: usize, end: usize) -> ClearResult<V> {
+        let mut clear_result = ClearResult{
+            clipped_end: None,
+            clipped_begin: None,
+            split: None,
+            clobbered : Vec::new()};
 
-        for (b, (e, _)) in self.begin_to_end_and_val.range_mut((Included(0), Included(end))).rev() {
+        for (b, (e, v)) in self.begin_to_end_and_val.range((Unbounded, Included(end))).rev() {
             if *e < begin {
                 // Doesn't overlap
                 break;
             }
             if *e > end {
                 // Partial overlap over our end
-                assert!(begin_of_last_overlap.is_none());
-                begin_of_last_overlap = Some(*b);
+                assert!(clear_result.clipped_begin.is_none());
+                let new_begin = end+1;
+                clear_result.clipped_begin = Some(
+                    ClippedBegin{old_begin: *b, new_begin: new_begin});
             } else if b >= &begin {
                 // Entirely contained in range
-                begins_of_contained_ranges.push(*b);
+                clear_result.clobbered.push(Item{begin: *b, end: *e, val: v.clone()});
             } else {
-                assert!(begin_of_first_overlap.is_none());
-                begin_of_first_overlap = Some(*b);
+                assert!(clear_result.clipped_end.is_none());
+                clear_result.clipped_end = Some(
+                    ClippedEnd{begin: *b, old_end: *e});
             }
-        }
-
-        // Adjust end of interval containing `begin`
-        match begin_of_first_overlap {
-            None => (),
-            Some(b) => {
-                let entry = self.begin_to_end_and_val.get_mut(&b).unwrap();
-                //let old_end = entry.0;
-                entry.0 = end - 1;
-            }
-        }
-
-        // Adjust beginning of interval containing `end`
-        match begin_of_last_overlap {
-            None => (),
-            Some(b) => { 
-                // Take the entry out of the map
-                let (e, v) = self.begin_to_end_and_val.remove(&b).unwrap();
-                // Re-insert with a new beginning.
-                self.begin_to_end_and_val.insert(end+1, (e, v));
-            },
         }
 
         // Remove intervals contained entirely in [begin, end]
         // TODO: If there are a lot of these it could be more efficient to split the tree using
         // `split_off` and paste the ends back together with `append`.
-        for b in begins_of_contained_ranges {
-            self.begin_to_end_and_val.remove(&b);
+        for item in &clear_result.clobbered {
+            self.begin_to_end_and_val.remove(&item.begin);
         }
+
+        clear_result
     }
 
     pub fn insert(&mut self, begin: usize, end: usize, v: V) {
