@@ -10,7 +10,7 @@ pub struct Interval {
 impl Interval {
     pub fn new(begin: usize, end: usize) -> Interval {
         assert!(begin <= end);
-        Interval{begin, end}
+        Interval { begin, end }
     }
 
     pub fn begin(&self) -> usize {
@@ -31,8 +31,8 @@ pub enum Mutation<V> {
 }
 
 pub struct IntervalMapIter<'a, V> {
-    map : &'a IntervalMap<V>,
-    i : usize,
+    map: &'a IntervalMap<V>,
+    i: usize,
 }
 
 impl<'a, V> Iterator for IntervalMapIter<'a, V> {
@@ -42,7 +42,7 @@ impl<'a, V> Iterator for IntervalMapIter<'a, V> {
         let i = self.i;
         let m = self.map;
         if i >= m.begins.len() {
-            return None
+            return None;
         }
         let rv = Some((Interval::new(m.begins[i], m.ends[i]), &m.vals[i]));
         self.i += 1;
@@ -51,7 +51,7 @@ impl<'a, V> Iterator for IntervalMapIter<'a, V> {
 }
 
 pub struct IntervalMapCloneIter<'a, V> {
-    it : IntervalMapIter<'a, V>,
+    it: IntervalMapIter<'a, V>,
 }
 
 impl<'a, V: Clone> Iterator for IntervalMapCloneIter<'a, V> {
@@ -81,11 +81,13 @@ impl<V: Clone> IntervalMap<V> {
     }
 
     pub fn iter(&self) -> IntervalMapIter<V> {
-        IntervalMapIter{map: self, i: 0}
+        IntervalMapIter { map: self, i: 0 }
     }
 
     pub fn iter_cloned(&self) -> IntervalMapCloneIter<V> {
-        IntervalMapCloneIter{it: IntervalMapIter{map: self, i: 0}}
+        IntervalMapCloneIter {
+            it: IntervalMapIter { map: self, i: 0 },
+        }
     }
 
     pub fn insert(&mut self, begin: usize, end: usize, val: V) -> Vec<Mutation<V>> {
@@ -108,7 +110,7 @@ impl<V: Clone> IntervalMap<V> {
                 begins_insertions.push(begin);
                 ends_insertions.push(end);
                 vals_insertions.push(v);
-            },
+            }
             None => (),
         };
 
@@ -126,7 +128,7 @@ impl<V: Clone> IntervalMap<V> {
 
         // Check whether there's an interval before the splice point,
         // and if so whether it overlaps.
-        if splice_start > 0 && self.ends[splice_start-1] >= begin {
+        if splice_start > 0 && self.ends[splice_start - 1] >= begin {
             let i = splice_start - 1;
 
             // If it ends after the end of our interval, we need to split it.
@@ -159,9 +161,11 @@ impl<V: Clone> IntervalMap<V> {
         println!("splice_end: {}", splice_end);
 
         // Check whether we need to clip the beginning splice_end's interval.
-        let mut modified_begin : Option<Mutation<V>> = None;
-        if splice_end < self.begins.len() && self.begins[splice_end] <= end
-                                          && self.ends[splice_end] > end {
+        let mut modified_begin: Option<Mutation<V>> = None;
+        if splice_end < self.begins.len()
+            && self.begins[splice_end] <= end
+            && self.ends[splice_end] > end
+        {
             let i = splice_end;
             let old = Interval::new(self.begins[i], self.ends[i]);
             self.begins[i] = end + 1;
@@ -169,15 +173,23 @@ impl<V: Clone> IntervalMap<V> {
         }
 
         // Do the splice
-        let dropped_begins : Vec<_> = self.begins.splice(splice_start..splice_end, begins_insertions).collect();
-        let dropped_ends : Vec<_> = self.ends.splice(splice_start..splice_end, ends_insertions).collect();
+        let dropped_begins: Vec<_> = self
+            .begins
+            .splice(splice_start..splice_end, begins_insertions)
+            .collect();
+        let dropped_ends: Vec<_> = self
+            .ends
+            .splice(splice_start..splice_end, ends_insertions)
+            .collect();
         {
             // We use the dropped_vals iterator directly here to avoid extra copies.
             // This is in a new scope to limit the lifetime of the mutable borrow from self.vals.
             let mut dropped_vals = self.vals.splice(splice_start..splice_end, vals_insertions);
             for i in 0..dropped_begins.len() {
                 mutations.push(Mutation::Removed(
-                        Interval::new(dropped_begins[i], dropped_ends[i]), dropped_vals.next().unwrap()));
+                    Interval::new(dropped_begins[i], dropped_ends[i]),
+                    dropped_vals.next().unwrap(),
+                ));
             }
         }
 
@@ -204,7 +216,7 @@ impl<V: Clone> IntervalMap<V> {
             Err(i) => {
                 if i == 0 {
                     None
-                } else if self.ends[i-1] <= x {
+                } else if self.ends[i - 1] <= x {
                     Some(i)
                 } else {
                     None
@@ -229,56 +241,73 @@ mod tests {
     fn test_insert_over_begin() {
         let mut m = IntervalMap::new();
         assert_eq!(m.insert(20, 30, "first".to_string()), []);
-        assert_eq!(m.insert(10, 20, "second".to_string()), [
-            Mutation::ModifiedBegin(Interval::new(20, 30), 21),
-        ]);
-        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
-            (Interval::new(10, 20), "second".to_string()),
-            (Interval::new(21, 30), "first".to_string()),
-        ]);
+        assert_eq!(
+            m.insert(10, 20, "second".to_string()),
+            [Mutation::ModifiedBegin(Interval::new(20, 30), 21),]
+        );
+        assert_eq!(
+            m.iter_cloned().collect::<Vec<_>>(),
+            [
+                (Interval::new(10, 20), "second".to_string()),
+                (Interval::new(21, 30), "first".to_string()),
+            ]
+        );
     }
 
     #[test]
     fn test_insert_over_end() {
         let mut m = IntervalMap::new();
         assert_eq!(m.insert(20, 30, "first".to_string()), []);
-        assert_eq!(m.insert(30, 31, "second".to_string()), [
-            Mutation::ModifiedEnd(Interval::new(20, 30), 29),
-        ]);
-        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
-            (Interval::new(20, 29), "first".to_string()),
-            (Interval::new(30, 31), "second".to_string()),
-        ]);
+        assert_eq!(
+            m.insert(30, 31, "second".to_string()),
+            [Mutation::ModifiedEnd(Interval::new(20, 30), 29),]
+        );
+        assert_eq!(
+            m.iter_cloned().collect::<Vec<_>>(),
+            [
+                (Interval::new(20, 29), "first".to_string()),
+                (Interval::new(30, 31), "second".to_string()),
+            ]
+        );
     }
 
     #[test]
     fn test_insert_removing() {
         let mut m = IntervalMap::new();
         assert_eq!(m.insert(20, 30, "first".to_string()), []);
-        assert_eq!(m.insert(10, 40, "second".to_string()), [
-            Mutation::Removed(Interval::new(20, 30), "first".to_string()),
-        ]);
-        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
-            (Interval::new(10, 40), "second".to_string()),
-        ]);
+        assert_eq!(
+            m.insert(10, 40, "second".to_string()),
+            [Mutation::Removed(
+                Interval::new(20, 30),
+                "first".to_string()
+            ),]
+        );
+        assert_eq!(
+            m.iter_cloned().collect::<Vec<_>>(),
+            [(Interval::new(10, 40), "second".to_string()),]
+        );
     }
 
     #[test]
     fn test_insert_forcing_split() {
         let mut m = IntervalMap::new();
         assert_eq!(m.insert(20, 30, "first".to_string()), []);
-        assert_eq!(m.insert(24, 25, "second".to_string()), [
-            Mutation::Split(
+        assert_eq!(
+            m.insert(24, 25, "second".to_string()),
+            [Mutation::Split(
                 Interval::new(20, 30),
                 Interval::new(20, 23),
                 Interval::new(26, 30),
-                ),
-        ]);
-        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
-            (Interval::new(20, 23), "first".to_string()),
-            (Interval::new(24, 25), "second".to_string()),
-            (Interval::new(26, 30), "first".to_string()),
-        ]);
+            ),]
+        );
+        assert_eq!(
+            m.iter_cloned().collect::<Vec<_>>(),
+            [
+                (Interval::new(20, 23), "first".to_string()),
+                (Interval::new(24, 25), "second".to_string()),
+                (Interval::new(26, 30), "first".to_string()),
+            ]
+        );
     }
 
     #[test]
@@ -287,69 +316,85 @@ mod tests {
         m.insert(0, 10, "first".to_string());
         m.insert(20, 30, "second".to_string());
         m.insert(40, 50, "third".to_string());
-        assert_eq!(m.insert(10, 40, "clobbering".to_string()), [
-            Mutation::ModifiedEnd(Interval::new(0, 10), 9),
-            Mutation::Removed(Interval::new(20, 30), "second".to_string()),
-            Mutation::ModifiedBegin(Interval::new(40, 50), 41),
-        ]);
-        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
-            (Interval::new(0, 9), "first".to_string()),
-            (Interval::new(10, 40), "clobbering".to_string()),
-            (Interval::new(41, 50), "third".to_string()),
-        ]);
+        assert_eq!(
+            m.insert(10, 40, "clobbering".to_string()),
+            [
+                Mutation::ModifiedEnd(Interval::new(0, 10), 9),
+                Mutation::Removed(Interval::new(20, 30), "second".to_string()),
+                Mutation::ModifiedBegin(Interval::new(40, 50), 41),
+            ]
+        );
+        assert_eq!(
+            m.iter_cloned().collect::<Vec<_>>(),
+            [
+                (Interval::new(0, 9), "first".to_string()),
+                (Interval::new(10, 40), "clobbering".to_string()),
+                (Interval::new(41, 50), "third".to_string()),
+            ]
+        );
     }
-
 
     #[test]
     fn test_clear_over_begin() {
         let mut m = IntervalMap::new();
         assert_eq!(m.insert(20, 30, "first".to_string()), []);
-        assert_eq!(m.clear(10, 20), [
-            Mutation::ModifiedBegin(Interval::new(20, 30), 21),
-        ]);
-        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
-            (Interval::new(21, 30), "first".to_string()),
-        ]);
+        assert_eq!(
+            m.clear(10, 20),
+            [Mutation::ModifiedBegin(Interval::new(20, 30), 21),]
+        );
+        assert_eq!(
+            m.iter_cloned().collect::<Vec<_>>(),
+            [(Interval::new(21, 30), "first".to_string()),]
+        );
     }
 
     #[test]
     fn test_clear_over_end() {
         let mut m = IntervalMap::new();
         assert_eq!(m.insert(20, 30, "first".to_string()), []);
-        assert_eq!(m.clear(30, 31), [
-            Mutation::ModifiedEnd(Interval::new(20, 30), 29),
-        ]);
-        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
-            (Interval::new(20, 29), "first".to_string()),
-        ]);
+        assert_eq!(
+            m.clear(30, 31),
+            [Mutation::ModifiedEnd(Interval::new(20, 30), 29),]
+        );
+        assert_eq!(
+            m.iter_cloned().collect::<Vec<_>>(),
+            [(Interval::new(20, 29), "first".to_string()),]
+        );
     }
 
     #[test]
     fn test_clear_forcing_split() {
         let mut m = IntervalMap::new();
         assert_eq!(m.insert(20, 30, "first".to_string()), []);
-        assert_eq!(m.clear(24, 25), [
-            Mutation::Split(
+        assert_eq!(
+            m.clear(24, 25),
+            [Mutation::Split(
                 Interval::new(20, 30),
                 Interval::new(20, 23),
                 Interval::new(26, 30),
-                ),
-        ]);
-        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
-            (Interval::new(20, 23), "first".to_string()),
-            (Interval::new(26, 30), "first".to_string()),
-        ]);
+            ),]
+        );
+        assert_eq!(
+            m.iter_cloned().collect::<Vec<_>>(),
+            [
+                (Interval::new(20, 23), "first".to_string()),
+                (Interval::new(26, 30), "first".to_string()),
+            ]
+        );
     }
 
     #[test]
     fn test_clear_removing() {
         let mut m = IntervalMap::new();
         assert_eq!(m.insert(20, 30, "first".to_string()), []);
-        assert_eq!(m.clear(10, 40), [
-            Mutation::Removed(Interval::new(20, 30), "first".to_string()),
-        ]);
-        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
-        ]);
+        assert_eq!(
+            m.clear(10, 40),
+            [Mutation::Removed(
+                Interval::new(20, 30),
+                "first".to_string()
+            ),]
+        );
+        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), []);
     }
 }
 
@@ -357,7 +402,7 @@ mod tests {
 use std::collections::BTreeMap;
 use std::ops::Bound::{Included, Unbounded};
 
-pub struct IntervalMap<V> 
+pub struct IntervalMap<V>
 {
     begin_to_end_and_val: BTreeMap<usize, (usize, V)>,
 }
@@ -518,9 +563,6 @@ mod tests {
     }
 }
 */
-
-
-
 
 //type Point = usize;
 //
