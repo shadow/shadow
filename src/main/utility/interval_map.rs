@@ -159,12 +159,13 @@ impl<V: Clone> IntervalMap<V> {
         println!("splice_end: {}", splice_end);
 
         // Check whether we need to clip the beginning splice_end's interval.
+        let mut modified_begin : Option<Mutation<V>> = None;
         if splice_end < self.begins.len() && self.begins[splice_end] <= end
                                           && self.ends[splice_end] > end {
             let i = splice_end;
             let old = Interval::new(self.begins[i], self.ends[i]);
             self.begins[i] = end + 1;
-            mutations.push(Mutation::ModifiedBegin(old, self.begins[i]));
+            modified_begin = Some(Mutation::ModifiedBegin(old, self.begins[i]));
         }
 
         // Do the splice
@@ -178,6 +179,12 @@ impl<V: Clone> IntervalMap<V> {
                 mutations.push(Mutation::Removed(
                         Interval::new(dropped_begins[i], dropped_ends[i]), dropped_vals.next().unwrap()));
             }
+        }
+
+        // Do the modified beginning, if any, last, so that mutations are ordered.
+        match modified_begin {
+            None => (),
+            Some(m) => mutations.push(m),
         }
 
         mutations
@@ -245,6 +252,18 @@ mod tests {
     }
 
     #[test]
+    fn test_insert_removing() {
+        let mut m = IntervalMap::new();
+        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        assert_eq!(m.insert(10, 40, "second".to_string()), [
+            Mutation::Removed(Interval::new(20, 30), "first".to_string()),
+        ]);
+        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
+            (Interval::new(10, 40), "second".to_string()),
+        ]);
+    }
+
+    #[test]
     fn test_insert_forcing_split() {
         let mut m = IntervalMap::new();
         assert_eq!(m.insert(20, 30, "first".to_string()), []);
@@ -263,16 +282,23 @@ mod tests {
     }
 
     #[test]
-    fn test_insert_removing() {
+    fn test_insert_all_mutations() {
         let mut m = IntervalMap::new();
-        assert_eq!(m.insert(20, 30, "first".to_string()), []);
-        assert_eq!(m.insert(10, 40, "second".to_string()), [
-            Mutation::Removed(Interval::new(20, 30), "first".to_string()),
+        m.insert(0, 10, "first".to_string());
+        m.insert(20, 30, "second".to_string());
+        m.insert(40, 50, "third".to_string());
+        assert_eq!(m.insert(10, 40, "clobbering".to_string()), [
+            Mutation::ModifiedEnd(Interval::new(0, 10), 9),
+            Mutation::Removed(Interval::new(20, 30), "second".to_string()),
+            Mutation::ModifiedBegin(Interval::new(40, 50), 41),
         ]);
         assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
-            (Interval::new(10, 40), "second".to_string()),
+            (Interval::new(0, 9), "first".to_string()),
+            (Interval::new(10, 40), "clobbering".to_string()),
+            (Interval::new(41, 50), "third".to_string()),
         ]);
     }
+
 
     #[test]
     fn test_clear_over_begin() {
