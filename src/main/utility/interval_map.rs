@@ -1,41 +1,67 @@
 // FIXME
-
 #![allow(unused)]
 
-pub trait MutationHandler<V> {
-    fn handle_modified(&mut self, old_begin: usize, old_end: usize, new_begin: usize,
-        new_end: usize, v : &mut V);
-    fn handle_removed(&mut self, begin: usize, end: usize, v : V);
-    fn handle_split(&mut self, begin: usize, new_end: usize, v1 : &mut V, new_begin: usize,
-        end: usize, v2 : &mut V);
+#[derive(PartialEq, Eq, Debug)]
+pub struct Interval {
+    begin: usize,
+    end: usize,
 }
 
-#[derive(Clone, PartialEq)]
-pub struct StoreMutationHandler<V> {
-    modifications: Vec<(usize, usize, usize, usize, V)>,
-    removals: Vec<(usize, usize, V)>,
-    splits: Vec<(usize, usize, V, usize, usize, V)>,
-}
+impl Interval {
+    pub fn new(begin: usize, end: usize) -> Interval {
+        assert!(begin <= end);
+        Interval{begin, end}
+    }
 
-impl<V: Clone> StoreMutationHandler<V> {
-    pub fn new() -> StoreMutationHandler<V>{
-        StoreMutationHandler{modifications: Vec::new(), removals: Vec::new(), splits: Vec::new()}
+    pub fn begin(&self) -> usize {
+        self.begin
+    }
+
+    pub fn end(&self) -> usize {
+        self.end
     }
 }
 
-impl<V: Clone> MutationHandler<V> for StoreMutationHandler<V> {
-    fn handle_modified(&mut self, old_begin: usize, old_end: usize, new_begin: usize,
-        new_end: usize, v : &mut V) {
-        self.modifications.push((old_begin, old_end, new_begin, new_end, v.clone()))
-    }
+#[derive(PartialEq, Eq, Debug)]
+pub enum Mutation<V> {
+    ModifiedBegin(Interval, usize),
+    ModifiedEnd(Interval, usize),
+    Split(Interval, Interval, Interval),
+    Removed(Interval, V),
+}
 
-    fn handle_removed(&mut self, begin: usize, end: usize, v : V) {
-        self.removals.push((begin, end, v.clone()))
-    }
+pub struct IntervalMapIter<'a, V> {
+    map : &'a IntervalMap<V>,
+    i : usize,
+}
 
-    fn handle_split(&mut self, begin: usize, new_end: usize, v1 : &mut V, new_begin: usize,
-        end: usize, v2 : &mut V) {
-        self.splits.push((begin, new_end, v1.clone(), new_begin, end, v2.clone()))
+impl<'a, V> Iterator for IntervalMapIter<'a, V> {
+    type Item = (Interval, &'a V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let i = self.i;
+        let m = self.map;
+        if i >= m.begins.len() {
+            return None
+        }
+        let rv = Some((Interval::new(m.begins[i], m.ends[i]), &m.vals[i]));
+        self.i += 1;
+        rv
+    }
+}
+
+pub struct IntervalMapCloneIter<'a, V> {
+    it : IntervalMapIter<'a, V>,
+}
+
+impl<'a, V: Clone> Iterator for IntervalMapCloneIter<'a, V> {
+    type Item = (Interval, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.it.next() {
+            None => None,
+            Some((interval, val)) => Some((interval, val.clone())),
+        }
     }
 }
 
@@ -54,16 +80,26 @@ impl<V: Clone> IntervalMap<V> {
         }
     }
 
-    pub fn insert<M: MutationHandler<V>>(&mut self, begin: usize, end: usize, val: V, m: &mut M) {
-        self.splice(begin, end, Some(val), m)
+    pub fn iter(&self) -> IntervalMapIter<V> {
+        IntervalMapIter{map: self, i: 0}
     }
-    pub fn clear<M: MutationHandler<V>>(&mut self, begin: usize, end: usize, val: V, m: &mut M) {
-        self.splice(begin, end, None, m)
+
+    pub fn iter_cloned(&self) -> IntervalMapCloneIter<V> {
+        IntervalMapCloneIter{it: IntervalMapIter{map: self, i: 0}}
+    }
+
+    pub fn insert(&mut self, begin: usize, end: usize, val: V) -> Vec<Mutation<V>> {
+        self.splice(begin, end, Some(val))
+    }
+
+    pub fn clear(&mut self, begin: usize, end: usize) -> Vec<Mutation<V>> {
+        self.splice(begin, end, None)
     }
 
     // Splice zero or one value into the given interval
-    fn splice<M: MutationHandler<V>>(&mut self, begin: usize, end: usize, val: Option<V>, m: &mut M) {
+    fn splice(&mut self, begin: usize, end: usize, val: Option<V>) -> Vec<Mutation<V>> {
         assert!(begin <= end);
+        let mut mutations = Vec::new();
         let mut begins_insertions = Vec::new();
         let mut ends_insertions = Vec::new();
         let mut vals_insertions = Vec::new();
@@ -82,6 +118,8 @@ impl<V: Clone> IntervalMap<V> {
             Ok(i) | Err(i) => i,
         };
 
+        println!("splice_start: {}", splice_start);
+
         // The eventual splice will be with a non-inclusive end-point. i.e. we start with
         // replacing no items, but will expand this if there are intervals we need to remove.
         let mut splice_end = splice_start;
@@ -93,34 +131,43 @@ impl<V: Clone> IntervalMap<V> {
 
             // If it ends after the end of our interval, we need to split it.
             if self.ends[i] > end {
+                let old = Interval::new(self.begins[i], self.ends[i]);
+                let new1 = Interval::new(self.begins[i], begin - 1);
+                let new2 = Interval::new(end + 1, self.ends[i]);
+
                 // Truncate the existing interval.
-                let i1_old_end = self.ends[i];
-                self.ends[i] = begin - 1;
+                self.ends[i] = new1.end();
 
                 // Create a new interval, starting after the insertion interval.
-                let i2_begin = end + 1;
-                let i2_end = i1_old_end;
-                let mut i2_v = self.vals[i].clone();
-                m.handle_split(
-                    self.begins[i], self.ends[i], &mut self.vals[i],
-                    i2_begin, i2_end, &mut i2_v);
-                begins_insertions.push(i2_begin);
-                ends_insertions.push(i2_end);
-                vals_insertions.push(i2_v);
+                begins_insertions.push(new2.begin());
+                ends_insertions.push(new2.end());
+                vals_insertions.push(self.vals[i].clone());
+                mutations.push(Mutation::Split(old, new1, new2));
             } else {
                 // Otherwise we need to adjust its end to not overlap.
-                let old_end = self.ends[i];
+                let old = Interval::new(self.begins[i], self.ends[i]);
                 self.ends[i] = begin - 1;
-                m.handle_modified(
-                    self.begins[i], old_end,
-                    self.begins[i], self.ends[i], &mut self.vals[i]);
+                mutations.push(Mutation::ModifiedEnd(old, self.ends[i]));
             }
         }
 
-        // Do the splice, consuming any intervals contained entirely inside the insertion interval.
+        // Find the end of the splice interval.
+        // TODO: Maybe do binary search here.
         while splice_end < self.ends.len() && self.ends[splice_end] <= end {
             splice_end += 1
         }
+        println!("splice_end: {}", splice_end);
+
+        // Check whether we need to clip the beginning splice_end's interval.
+        if splice_end < self.begins.len() && self.begins[splice_end] <= end
+                                          && self.ends[splice_end] > end {
+            let i = splice_end;
+            let old = Interval::new(self.begins[i], self.ends[i]);
+            self.begins[i] = end + 1;
+            mutations.push(Mutation::ModifiedBegin(old, self.begins[i]));
+        }
+
+        // Do the splice
         let dropped_begins : Vec<_> = self.begins.splice(splice_start..splice_end, begins_insertions).collect();
         let dropped_ends : Vec<_> = self.ends.splice(splice_start..splice_end, ends_insertions).collect();
         {
@@ -128,20 +175,12 @@ impl<V: Clone> IntervalMap<V> {
             // This is in a new scope to limit the lifetime of the mutable borrow from self.vals.
             let mut dropped_vals = self.vals.splice(splice_start..splice_end, vals_insertions);
             for i in 0..dropped_begins.len() {
-                m.handle_removed(dropped_begins[i], dropped_ends[i], dropped_vals.next().unwrap());
+                mutations.push(Mutation::Removed(
+                        Interval::new(dropped_begins[i], dropped_ends[i]), dropped_vals.next().unwrap()));
             }
         }
 
-        // Check whether we need to clip the beginning splice_end's interval.
-        if splice_end < self.begins.len() && self.begins[splice_end] <= end
-                                          && self.ends[splice_end] > end {
-            let i = splice_end;
-            let old_begin = self.begins[i];
-            self.begins[i] = end + 1;
-            m.handle_modified(
-                old_begin, self.begins[i],
-                self.begins[i], self.ends[i], &mut self.vals[i]);
-        }
+        mutations
     }
 
     fn item_at(&self, i: usize) -> (usize, usize, &V) {
@@ -179,23 +218,112 @@ impl<V: Clone> IntervalMap<V> {
 mod tests {
     use super::*;
 
-    struct TestFixture {
-        map : IntervalMap<String>,
-        mutation_handler : StoreMutationHandler<String>,
-    }
-
-    impl TestFixture {
-        fn new() -> TestFixture {
-            TestFixture{ map: IntervalMap::new(), mutation_handler : StoreMutationHandler::new()}
-        }
+    #[test]
+    fn test_insert_over_begin() {
+        let mut m = IntervalMap::new();
+        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        assert_eq!(m.insert(10, 20, "second".to_string()), [
+            Mutation::ModifiedBegin(Interval::new(20, 30), 21),
+        ]);
+        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
+            (Interval::new(10, 20), "second".to_string()),
+            (Interval::new(21, 30), "first".to_string()),
+        ]);
     }
 
     #[test]
-    fn test_insert() {
-        let mut f = TestFixture::new();
-        f.map.insert(20, 30, "20-30".to_string(), &mut f.mutation_handler);
-        f.map.insert(40, 50, "40-50".to_string(), &mut f.mutation_handler);
-        f.map.insert(45, 46, "40-50".to_string(), &mut f.mutation_handler);
+    fn test_insert_over_end() {
+        let mut m = IntervalMap::new();
+        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        assert_eq!(m.insert(30, 31, "second".to_string()), [
+            Mutation::ModifiedEnd(Interval::new(20, 30), 29),
+        ]);
+        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
+            (Interval::new(20, 29), "first".to_string()),
+            (Interval::new(30, 31), "second".to_string()),
+        ]);
+    }
+
+    #[test]
+    fn test_insert_forcing_split() {
+        let mut m = IntervalMap::new();
+        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        assert_eq!(m.insert(24, 25, "second".to_string()), [
+            Mutation::Split(
+                Interval::new(20, 30),
+                Interval::new(20, 23),
+                Interval::new(26, 30),
+                ),
+        ]);
+        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
+            (Interval::new(20, 23), "first".to_string()),
+            (Interval::new(24, 25), "second".to_string()),
+            (Interval::new(26, 30), "first".to_string()),
+        ]);
+    }
+
+    #[test]
+    fn test_insert_removing() {
+        let mut m = IntervalMap::new();
+        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        assert_eq!(m.insert(10, 40, "second".to_string()), [
+            Mutation::Removed(Interval::new(20, 30), "first".to_string()),
+        ]);
+        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
+            (Interval::new(10, 40), "second".to_string()),
+        ]);
+    }
+
+    #[test]
+    fn test_clear_over_begin() {
+        let mut m = IntervalMap::new();
+        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        assert_eq!(m.clear(10, 20), [
+            Mutation::ModifiedBegin(Interval::new(20, 30), 21),
+        ]);
+        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
+            (Interval::new(21, 30), "first".to_string()),
+        ]);
+    }
+
+    #[test]
+    fn test_clear_over_end() {
+        let mut m = IntervalMap::new();
+        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        assert_eq!(m.clear(30, 31), [
+            Mutation::ModifiedEnd(Interval::new(20, 30), 29),
+        ]);
+        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
+            (Interval::new(20, 29), "first".to_string()),
+        ]);
+    }
+
+    #[test]
+    fn test_clear_forcing_split() {
+        let mut m = IntervalMap::new();
+        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        assert_eq!(m.clear(24, 25), [
+            Mutation::Split(
+                Interval::new(20, 30),
+                Interval::new(20, 23),
+                Interval::new(26, 30),
+                ),
+        ]);
+        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
+            (Interval::new(20, 23), "first".to_string()),
+            (Interval::new(26, 30), "first".to_string()),
+        ]);
+    }
+
+    #[test]
+    fn test_clear_removing() {
+        let mut m = IntervalMap::new();
+        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        assert_eq!(m.clear(10, 40), [
+            Mutation::Removed(Interval::new(20, 30), "first".to_string()),
+        ]);
+        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), [
+        ]);
     }
 }
 
