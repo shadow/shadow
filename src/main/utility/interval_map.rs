@@ -10,6 +10,35 @@ pub trait MutationHandler<V> {
         end: usize, v2 : &mut V);
 }
 
+#[derive(Clone, PartialEq)]
+pub struct StoreMutationHandler<V> {
+    modifications: Vec<(usize, usize, usize, usize, V)>,
+    removals: Vec<(usize, usize, V)>,
+    splits: Vec<(usize, usize, V, usize, usize, V)>,
+}
+
+impl<V: Clone> StoreMutationHandler<V> {
+    pub fn new() -> StoreMutationHandler<V>{
+        StoreMutationHandler{modifications: Vec::new(), removals: Vec::new(), splits: Vec::new()}
+    }
+}
+
+impl<V: Clone> MutationHandler<V> for StoreMutationHandler<V> {
+    fn handle_modified(&mut self, old_begin: usize, old_end: usize, new_begin: usize,
+        new_end: usize, v : &mut V) {
+        self.modifications.push((old_begin, old_end, new_begin, new_end, v.clone()))
+    }
+
+    fn handle_removed(&mut self, begin: usize, end: usize, v : V) {
+        self.removals.push((begin, end, v.clone()))
+    }
+
+    fn handle_split(&mut self, begin: usize, new_end: usize, v1 : &mut V, new_begin: usize,
+        end: usize, v2 : &mut V) {
+        self.splits.push((begin, new_end, v1.clone(), new_begin, end, v2.clone()))
+    }
+}
+
 pub struct IntervalMap<V> {
     begins: Vec<usize>,
     ends: Vec<usize>,
@@ -25,8 +54,16 @@ impl<V: Clone> IntervalMap<V> {
         }
     }
 
+    pub fn insert<M: MutationHandler<V>>(&mut self, begin: usize, end: usize, val: V, m: &mut M) {
+        self.splice(begin, end, Some(val), m)
+    }
+    pub fn clear<M: MutationHandler<V>>(&mut self, begin: usize, end: usize, val: V, m: &mut M) {
+        self.splice(begin, end, None, m)
+    }
+
     // Splice zero or one value into the given interval
     fn splice<M: MutationHandler<V>>(&mut self, begin: usize, end: usize, val: Option<V>, m: &mut M) {
+        assert!(begin <= end);
         let mut begins_insertions = Vec::new();
         let mut ends_insertions = Vec::new();
         let mut vals_insertions = Vec::new();
@@ -66,7 +103,7 @@ impl<V: Clone> IntervalMap<V> {
                 let mut i2_v = self.vals[i].clone();
                 m.handle_split(
                     self.begins[i], self.ends[i], &mut self.vals[i],
-                    self.begins[i+1], self.ends[i+1], &mut i2_v);
+                    i2_begin, i2_end, &mut i2_v);
                 begins_insertions.push(i2_begin);
                 ends_insertions.push(i2_end);
                 vals_insertions.push(i2_v);
@@ -136,9 +173,29 @@ impl<V: Clone> IntervalMap<V> {
             Some(i) => Some(self.item_at(i)),
         }
     }
+}
 
-    pub fn insert(&self, begin: usize, end: usize, val: V) {
-        assert!(begin <= end);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestFixture {
+        map : IntervalMap<String>,
+        mutation_handler : StoreMutationHandler<String>,
+    }
+
+    impl TestFixture {
+        fn new() -> TestFixture {
+            TestFixture{ map: IntervalMap::new(), mutation_handler : StoreMutationHandler::new()}
+        }
+    }
+
+    #[test]
+    fn test_insert() {
+        let mut f = TestFixture::new();
+        f.map.insert(20, 30, "20-30".to_string(), &mut f.mutation_handler);
+        f.map.insert(40, 50, "40-50".to_string(), &mut f.mutation_handler);
+        f.map.insert(45, 46, "40-50".to_string(), &mut f.mutation_handler);
     }
 }
 
