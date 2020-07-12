@@ -1,12 +1,22 @@
+// FIXME
 
-/*
+#![allow(unused)]
+
+pub trait MutationHandler<V> {
+    fn handle_modified(&mut self, old_begin: usize, old_end: usize, new_begin: usize,
+        new_end: usize, v : &mut V);
+    fn handle_removed(&mut self, begin: usize, end: usize, v : V);
+    fn handle_split(&mut self, begin: usize, new_end: usize, v1 : &mut V, new_begin: usize,
+        end: usize, v2 : &mut V);
+}
+
 pub struct IntervalMap<V> {
     begins: Vec<usize>,
     ends: Vec<usize>,
     vals: Vec<V>,
 }
 
-impl<V> IntervalMap<V> {
+impl<V: Clone> IntervalMap<V> {
     pub fn new() -> IntervalMap<V> {
         IntervalMap {
             begins: Vec::new(),
@@ -15,47 +25,124 @@ impl<V> IntervalMap<V> {
         }
     }
 
-    fn idx_of_first_end_gte(&self, x: usize) -> Option<usize> {
-        // TODO: We could do binary search here, but for relatively small maps linear search will
-        // be faster anyway due to better cache performance. Might be interesting to implement a
-        // "binary search until search-window is small, then linear search".
-        for i in 0..self.ends.len() {
-            if self.ends[i] >= x {
-                return if self.begins[i] <= x {
+    // Splice zero or one value into the given interval
+    fn splice<M: MutationHandler<V>>(&mut self, begin: usize, end: usize, val: Option<V>, m: &mut M) {
+        let mut begins_insertions = Vec::new();
+        let mut ends_insertions = Vec::new();
+        let mut vals_insertions = Vec::new();
+        match val {
+            Some(v) => {
+                begins_insertions.push(begin);
+                ends_insertions.push(end);
+                vals_insertions.push(v);
+            },
+            None => (),
+        };
+
+        // We're eventually going to call Vec::splice on our vectors, and
+        // this will be the starting index.
+        let splice_start = match self.begins.binary_search(&begin) {
+            Ok(i) | Err(i) => i,
+        };
+
+        // The eventual splice will be with a non-inclusive end-point. i.e. we start with
+        // replacing no items, but will expand this if there are intervals we need to remove.
+        let mut splice_end = splice_start;
+
+        // Check whether there's an interval before the splice point,
+        // and if so whether it overlaps.
+        if splice_start > 0 && self.ends[splice_start-1] >= begin {
+            let i = splice_start - 1;
+
+            // If it ends after the end of our interval, we need to split it.
+            if self.ends[i] > end {
+                // Truncate the existing interval.
+                let i1_old_end = self.ends[i];
+                self.ends[i] = begin - 1;
+
+                // Create a new interval, starting after the insertion interval.
+                let i2_begin = end + 1;
+                let i2_end = i1_old_end;
+                let mut i2_v = self.vals[i].clone();
+                m.handle_split(
+                    self.begins[i], self.ends[i], &mut self.vals[i],
+                    self.begins[i+1], self.ends[i+1], &mut i2_v);
+                begins_insertions.push(i2_begin);
+                ends_insertions.push(i2_end);
+                vals_insertions.push(i2_v);
+            } else {
+                // Otherwise we need to adjust its end to not overlap.
+                let old_end = self.ends[i];
+                self.ends[i] = begin - 1;
+                m.handle_modified(
+                    self.begins[i], old_end,
+                    self.begins[i], self.ends[i], &mut self.vals[i]);
+            }
+        }
+
+        // Do the splice, consuming any intervals contained entirely inside the insertion interval.
+        while splice_end < self.ends.len() && self.ends[splice_end] <= end {
+            splice_end += 1
+        }
+        let dropped_begins : Vec<_> = self.begins.splice(splice_start..splice_end, begins_insertions).collect();
+        let dropped_ends : Vec<_> = self.ends.splice(splice_start..splice_end, ends_insertions).collect();
+        {
+            // We use the dropped_vals iterator directly here to avoid extra copies.
+            // This is in a new scope to limit the lifetime of the mutable borrow from self.vals.
+            let mut dropped_vals = self.vals.splice(splice_start..splice_end, vals_insertions);
+            for i in 0..dropped_begins.len() {
+                m.handle_removed(dropped_begins[i], dropped_ends[i], dropped_vals.next().unwrap());
+            }
+        }
+
+        // Check whether we need to clip the beginning splice_end's interval.
+        if splice_end < self.begins.len() && self.begins[splice_end] <= end
+                                          && self.ends[splice_end] > end {
+            let i = splice_end;
+            let old_begin = self.begins[i];
+            self.begins[i] = end + 1;
+            m.handle_modified(
+                old_begin, self.begins[i],
+                self.begins[i], self.ends[i], &mut self.vals[i]);
+        }
+    }
+
+    fn item_at(&self, i: usize) -> (usize, usize, &V) {
+        (self.begins[i], self.ends[i], &self.vals[i])
+    }
+
+    fn item_at_mut(&mut self, i: usize) -> (usize, usize, &mut V) {
+        (self.begins[i], self.ends[i], &mut self.vals[i])
+    }
+
+    fn get_index(&self, x: usize) -> Option<usize> {
+        match self.begins.binary_search(&x) {
+            Ok(i) => Some(i),
+            Err(i) => {
+                if i == 0 {
+                    None
+                } else if self.ends[i-1] <= x {
                     Some(i)
                 } else {
                     None
                 }
             }
         }
-        None
     }
 
-    pub fn clear_range(&self, begin: usize, end: usize) {
-    }
-
-    pub fn get(&self, x: usize) -> Option<&V> {
-        // TODO: We could do binary search here, but for relatively small maps linear search will
-        // be faster anyway due to better cache performance. Might be interesting to implement a
-        // "binary search until search-window is small, then linear search".
-        for i in 0..self.begins.len() {
-            if self.ends[i] >= x {
-                return if self.begins[i] <= x {
-                    Some(&self.vals[i])
-                } else {
-                    None
-                }
-            }
+    pub fn get(&self, x: usize) -> Option<(usize, usize, &V)> {
+        match self.get_index(x) {
+            None => None,
+            Some(i) => Some(self.item_at(i)),
         }
-        None
     }
 
     pub fn insert(&self, begin: usize, end: usize, val: V) {
         assert!(begin <= end);
     }
 }
-*/
 
+/*
 use std::collections::BTreeMap;
 use std::ops::Bound::{Included, Unbounded};
 
@@ -219,6 +306,7 @@ mod tests {
         assert!(m.get(51).is_none());
     }
 }
+*/
 
 
 
