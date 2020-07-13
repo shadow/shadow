@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn test_insert_over_begin() {
         let mut m = IntervalMap::new();
-        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        m.insert(20, 30, "first".to_string());
         assert_eq!(
             m.insert(10, 20, "second".to_string()),
             [Mutation::ModifiedBegin(Interval::new(20, 30), 21),]
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn test_insert_over_end() {
         let mut m = IntervalMap::new();
-        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        m.insert(20, 30, "first".to_string());
         assert_eq!(
             m.insert(30, 31, "second".to_string()),
             [Mutation::ModifiedEnd(Interval::new(20, 30), 29),]
@@ -274,7 +274,7 @@ mod tests {
     #[test]
     fn test_insert_removing() {
         let mut m = IntervalMap::new();
-        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        m.insert(20, 30, "first".to_string());
         assert_eq!(
             m.insert(10, 40, "second".to_string()),
             [Mutation::Removed(
@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn test_insert_forcing_split() {
         let mut m = IntervalMap::new();
-        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        m.insert(20, 30, "first".to_string());
         assert_eq!(
             m.insert(24, 25, "second".to_string()),
             [Mutation::Split(
@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn test_clear_over_begin() {
         let mut m = IntervalMap::new();
-        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        m.insert(20, 30, "first".to_string());
         assert_eq!(
             m.clear(10, 20),
             [Mutation::ModifiedBegin(Interval::new(20, 30), 21),]
@@ -351,7 +351,7 @@ mod tests {
     #[test]
     fn test_clear_over_end() {
         let mut m = IntervalMap::new();
-        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        m.insert(20, 30, "first".to_string());
         assert_eq!(
             m.clear(30, 31),
             [Mutation::ModifiedEnd(Interval::new(20, 30), 29),]
@@ -365,7 +365,7 @@ mod tests {
     #[test]
     fn test_clear_forcing_split() {
         let mut m = IntervalMap::new();
-        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        m.insert(20, 30, "first".to_string());
         assert_eq!(
             m.clear(24, 25),
             [Mutation::Split(
@@ -386,7 +386,7 @@ mod tests {
     #[test]
     fn test_clear_removing() {
         let mut m = IntervalMap::new();
-        assert_eq!(m.insert(20, 30, "first".to_string()), []);
+        m.insert(20, 30, "first".to_string());
         assert_eq!(
             m.clear(10, 40),
             [Mutation::Removed(
