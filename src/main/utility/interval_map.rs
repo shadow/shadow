@@ -1,7 +1,7 @@
 // FIXME
 #![allow(unused)]
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub struct Interval {
     begin: usize,
     end: usize,
@@ -30,12 +30,12 @@ pub enum Mutation<V> {
     Removed(Interval, V),
 }
 
-pub struct IntervalMapIter<'a, V> {
+pub struct ItemIter<'a, V> {
     map: &'a IntervalMap<V>,
     i: usize,
 }
 
-impl<'a, V> Iterator for IntervalMapIter<'a, V> {
+impl<'a, V> Iterator for ItemIter<'a, V> {
     type Item = (Interval, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -50,18 +50,23 @@ impl<'a, V> Iterator for IntervalMapIter<'a, V> {
     }
 }
 
-pub struct IntervalMapCloneIter<'a, V> {
-    it: IntervalMapIter<'a, V>,
+pub struct KeyIter<'a, V> {
+    map: &'a IntervalMap<V>,
+    i: usize,
 }
 
-impl<'a, V: Clone> Iterator for IntervalMapCloneIter<'a, V> {
-    type Item = (Interval, V);
+impl<'a, V> Iterator for KeyIter<'a, V> {
+    type Item = Interval;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.it.next() {
-            None => None,
-            Some((interval, val)) => Some((interval, val.clone())),
+        let i = self.i;
+        let m = self.map;
+        if i >= m.begins.len() {
+            return None;
         }
+        let rv = Some(Interval::new(m.begins[i], m.ends[i]));
+        self.i += 1;
+        rv
     }
 }
 
@@ -80,14 +85,12 @@ impl<V: Clone> IntervalMap<V> {
         }
     }
 
-    pub fn iter(&self) -> IntervalMapIter<V> {
-        IntervalMapIter { map: self, i: 0 }
+    pub fn iter(&self) -> ItemIter<V> {
+        ItemIter { map: self, i: 0 }
     }
 
-    pub fn iter_cloned(&self) -> IntervalMapCloneIter<V> {
-        IntervalMapCloneIter {
-            it: IntervalMapIter { map: self, i: 0 },
-        }
+    pub fn keys(&self) -> KeyIter<V> {
+        KeyIter { map: self, i: 0 }
     }
 
     pub fn insert(&mut self, begin: usize, end: usize, val: V) -> Vec<Mutation<V>> {
@@ -234,36 +237,97 @@ impl<V: Clone> IntervalMap<V> {
 mod tests {
     use super::*;
 
+    fn interval_sum<I>(i: I) -> usize
+    where I:Iterator<Item=Interval>,
+    {
+        i.map(|x| x.end() - x.begin() + 1).sum()
+    }
+
+    fn validate_map<V:Clone>(m: &IntervalMap<V>) {
+        // Every interval is valid
+        for i in m.keys() {
+            assert!(i.begin() <= i.end())
+        }
+
+        // Intervals don't overlap
+        for (i1, i2) in m.keys().zip(m.keys().skip(1)) {
+            assert!(i1.end() < i2.begin());
+        }
+    }
+
+    // TODO: fuzz-test with this.
+    fn insert_and_sanity_check(
+        m: &mut IntervalMap<String>,
+        begin: usize, end: usize,
+        val: &str) -> Vec<Mutation<String>>{
+
+        let old_len_sum = interval_sum(m.keys());
+        let old_len = m.keys().count();
+
+        // Do the insert.
+        let mutations = m.insert(begin, end, val.to_string());
+
+        // Validate general properties
+        validate_map(m);
+
+        let new_len_sum = interval_sum(m.keys());
+        let new_len = m.keys().count();
+        assert!(new_len_sum >= old_len_sum);
+        assert!(new_len_sum >= (end-begin+1));
+
+        assert!(new_len >= old_len);
+        assert!(new_len > 0);
+
+        mutations
+    }
+
+    fn insert_and_validate(
+        m: &mut IntervalMap<String>,
+        begin: usize, end: usize,
+        val: &str,
+        expected_mutations: &[Mutation<String>],
+        expected_val: &[(Interval, &str)]) {
+
+        let mutations = insert_and_sanity_check(m, begin, end, val);
+
+        // Validate the expected mutations.
+        assert_eq!(mutations, expected_mutations);
+
+        // Validate the expected new state.
+        assert_eq!(
+            m.iter().map(|(i, s)| (i, s.clone())).collect::<Vec<_>>(),
+            expected_val.iter().map(|(i, s)| (*i, s.to_string())).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_insert_into_empty() {
+        let mut m = IntervalMap::new();
+        insert_and_validate(&mut m, 10, 20, "x",
+            &[],
+            &[(Interval::new(10, 20), "x")]);
+    }
+
     #[test]
     fn test_insert_over_begin() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        assert_eq!(
-            m.insert(10, 20, "second".to_string()),
-            [Mutation::ModifiedBegin(Interval::new(20, 30), 21),]
-        );
-        assert_eq!(
-            m.iter_cloned().collect::<Vec<_>>(),
-            [
-                (Interval::new(10, 20), "second".to_string()),
-                (Interval::new(21, 30), "first".to_string()),
-            ]
-        );
+        insert_and_validate(&mut m, 10, 20, "second",
+            &[Mutation::ModifiedBegin(Interval::new(20, 30), 21)],
+            &[
+                (Interval::new(10, 20), "second"),
+                (Interval::new(21, 30), "first"),
+            ]);
     }
 
     #[test]
     fn test_insert_over_end() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        assert_eq!(
-            m.insert(30, 31, "second".to_string()),
-            [Mutation::ModifiedEnd(Interval::new(20, 30), 29),]
-        );
-        assert_eq!(
-            m.iter_cloned().collect::<Vec<_>>(),
-            [
-                (Interval::new(20, 29), "first".to_string()),
-                (Interval::new(30, 31), "second".to_string()),
+        insert_and_validate(&mut m, 30, 31, "second",
+            &[Mutation::ModifiedEnd(Interval::new(20, 30), 29)],
+            &[
+                (Interval::new(20, 29), "first"),
+                (Interval::new(30, 31), "second"),
             ]
         );
     }
@@ -272,16 +336,12 @@ mod tests {
     fn test_insert_removing() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        assert_eq!(
-            m.insert(10, 40, "second".to_string()),
-            [Mutation::Removed(
+        insert_and_validate(&mut m, 10, 40, "second",
+            &[Mutation::Removed(
                 Interval::new(20, 30),
                 "first".to_string()
-            ),]
-        );
-        assert_eq!(
-            m.iter_cloned().collect::<Vec<_>>(),
-            [(Interval::new(10, 40), "second".to_string()),]
+            ),],
+            &[(Interval::new(10, 40), "second"),]
         );
     }
 
@@ -289,20 +349,16 @@ mod tests {
     fn test_insert_forcing_split() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        assert_eq!(
-            m.insert(24, 25, "second".to_string()),
-            [Mutation::Split(
+        insert_and_validate(&mut m, 24, 25, "second",
+            &[Mutation::Split(
                 Interval::new(20, 30),
                 Interval::new(20, 23),
                 Interval::new(26, 30),
-            ),]
-        );
-        assert_eq!(
-            m.iter_cloned().collect::<Vec<_>>(),
-            [
-                (Interval::new(20, 23), "first".to_string()),
-                (Interval::new(24, 25), "second".to_string()),
-                (Interval::new(26, 30), "first".to_string()),
+            ),],
+            &[
+                (Interval::new(20, 23), "first"),
+                (Interval::new(24, 25), "second"),
+                (Interval::new(26, 30), "first"),
             ]
         );
     }
@@ -313,35 +369,63 @@ mod tests {
         m.insert(0, 10, "first".to_string());
         m.insert(20, 30, "second".to_string());
         m.insert(40, 50, "third".to_string());
-        assert_eq!(
-            m.insert(10, 40, "clobbering".to_string()),
-            [
+        insert_and_validate(
+            &mut m, 10, 40, "clobbering",
+            &[
                 Mutation::ModifiedEnd(Interval::new(0, 10), 9),
                 Mutation::Removed(Interval::new(20, 30), "second".to_string()),
                 Mutation::ModifiedBegin(Interval::new(40, 50), 41),
-            ]
-        );
+            ],
+            &[
+                (Interval::new(0, 9), "first"),
+                (Interval::new(10, 40), "clobbering"),
+                (Interval::new(41, 50), "third"),
+            ]);
+    }
+
+    // TODO: fuzz-test with this.
+    fn clear_and_sanity_check(
+        m: &mut IntervalMap<String>,
+        begin: usize, end: usize) -> Vec<Mutation<String>>{
+
+        let old_len = interval_sum(m.keys());
+
+        // Do the clear
+        let mutations = m.clear(begin, end);
+
+        // Validate general properties
+        validate_map(m);
+
+        let new_len = interval_sum(m.keys());
+        assert!(new_len <= old_len);
+
+        mutations
+    }
+
+    fn clear_and_validate(
+        m: &mut IntervalMap<String>,
+        begin: usize, end: usize,
+        expected_mutations: &[Mutation<String>],
+        expected_val: &[(Interval, &str)]) {
+
+        let mutations = clear_and_sanity_check(m, begin, end);
+
+        // Validate the expected mutations.
+        assert_eq!(mutations, expected_mutations);
+
+        // Validate the expected new state.
         assert_eq!(
-            m.iter_cloned().collect::<Vec<_>>(),
-            [
-                (Interval::new(0, 9), "first".to_string()),
-                (Interval::new(10, 40), "clobbering".to_string()),
-                (Interval::new(41, 50), "third".to_string()),
-            ]
-        );
+            m.iter().map(|(i, s)| (i, s.clone())).collect::<Vec<_>>(),
+            expected_val.iter().map(|(i, s)| (*i, s.to_string())).collect::<Vec<_>>());
     }
 
     #[test]
     fn test_clear_over_begin() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        assert_eq!(
-            m.clear(10, 20),
-            [Mutation::ModifiedBegin(Interval::new(20, 30), 21),]
-        );
-        assert_eq!(
-            m.iter_cloned().collect::<Vec<_>>(),
-            [(Interval::new(21, 30), "first".to_string()),]
+        clear_and_validate(&mut m, 10, 20,
+            &[Mutation::ModifiedBegin(Interval::new(20, 30), 21),],
+            &[(Interval::new(21, 30), "first"),]
         );
     }
 
@@ -349,13 +433,9 @@ mod tests {
     fn test_clear_over_end() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        assert_eq!(
-            m.clear(30, 31),
-            [Mutation::ModifiedEnd(Interval::new(20, 30), 29),]
-        );
-        assert_eq!(
-            m.iter_cloned().collect::<Vec<_>>(),
-            [(Interval::new(20, 29), "first".to_string()),]
+        clear_and_validate(&mut m, 30, 31,
+            &[Mutation::ModifiedEnd(Interval::new(20, 30), 29),],
+            &[(Interval::new(20, 29), "first"),]
         );
     }
 
@@ -363,19 +443,15 @@ mod tests {
     fn test_clear_forcing_split() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        assert_eq!(
-            m.clear(24, 25),
-            [Mutation::Split(
+        clear_and_validate(&mut m, 24, 25,
+            &[Mutation::Split(
                 Interval::new(20, 30),
                 Interval::new(20, 23),
                 Interval::new(26, 30),
-            ),]
-        );
-        assert_eq!(
-            m.iter_cloned().collect::<Vec<_>>(),
-            [
-                (Interval::new(20, 23), "first".to_string()),
-                (Interval::new(26, 30), "first".to_string()),
+            ),],
+            &[
+                (Interval::new(20, 23), "first"),
+                (Interval::new(26, 30), "first"),
             ]
         );
     }
@@ -384,14 +460,11 @@ mod tests {
     fn test_clear_removing() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        assert_eq!(
-            m.clear(10, 40),
-            [Mutation::Removed(
+        clear_and_validate(&mut m, 10, 40,
+            &[Mutation::Removed(
                 Interval::new(20, 30),
                 "first".to_string()
-            ),]
-        );
-        assert_eq!(m.iter_cloned().collect::<Vec<_>>(), []);
+            ),], &[]);
     }
 }
 
@@ -663,14 +736,14 @@ mod tests {
 //
 //use interval::Interval;
 //
-//pub struct IntervalMapIter<'a, V> {
+//pub struct ItemIter<'a, V> {
 //    m: &'a IntervalMap<V>,
 //    i: usize,
 //}
 //
-//impl<'a, V> IntervalMapIter<'a, V> {
-//    fn new(m: &'a IntervalMap<V>, i: usize) -> IntervalMapIter<'a, V> {
-//        IntervalMapIter{m, i}
+//impl<'a, V> ItemIter<'a, V> {
+//    fn new(m: &'a IntervalMap<V>, i: usize) -> ItemIter<'a, V> {
+//        ItemIter{m, i}
 //    }
 //
 //    fn get(&self) -> Option<(Interval, &'a V)> {
@@ -681,7 +754,7 @@ mod tests {
 //    }
 //}
 //
-//impl<'a, V> Iterator for IntervalMapIter<'a, V> {
+//impl<'a, V> Iterator for ItemIter<'a, V> {
 //    type Item = (Interval, &'a V);
 //
 //    fn next(&mut self) -> Option<Self::Item> {
@@ -724,10 +797,10 @@ mod tests {
 //        return None
 //    }
 //
-//    pub fn find_last_interval_before(&self, pt: Point) -> Option<IntervalMapIter<V>> {
+//    pub fn find_last_interval_before(&self, pt: Point) -> Option<ItemIter<V>> {
 //        match self.find_idx_of_last_interval_before(pt) {
 //            None => None,
-//            Some(i) => Some(IntervalMapIter{m: self, i}),
+//            Some(i) => Some(ItemIter{m: self, i}),
 //        }
 //    }
 //
@@ -746,11 +819,11 @@ mod tests {
 //        }
 //    }
 //
-//    pub fn iter(&self) -> IntervalMapIter<V> {
-//        IntervalMapIter::new(self, 0)
+//    pub fn iter(&self) -> ItemIter<V> {
+//        ItemIter::new(self, 0)
 //    }
 //
-//    pub fn find(&self, pt: Point) -> Option<IntervalMapIter<V>> {
+//    pub fn find(&self, pt: Point) -> Option<ItemIter<V>> {
 //        // Get the index of the first interval *not* before pt.
 //        let i =
 //            match self.find_idx_of_last_interval_before(pt) {
@@ -767,7 +840,7 @@ mod tests {
 //        return if int.is_after(pt) {
 //            None
 //        } else {
-//            Some(IntervalMapIter{m: self, i})
+//            Some(ItemIter{m: self, i})
 //        }
 //    }
 //}
