@@ -223,9 +223,7 @@ impl<V: Clone> IntervalMap<V> {
     // Returns the index of the interval containing `x`.
     fn get_index(&self, x: usize) -> Option<usize> {
         match self.begins.binary_search(&x) {
-            Ok(i) => {
-                Some(i)
-            }
+            Ok(i) => Some(i),
             Err(i) => {
                 if i == 0 {
                     None
@@ -252,12 +250,13 @@ mod tests {
     use super::*;
 
     fn interval_sum<I>(i: I) -> usize
-    where I:Iterator<Item=Interval>,
+    where
+        I: Iterator<Item = Interval>,
     {
         i.map(|x| x.end() - x.begin() + 1).sum()
     }
 
-    fn validate_map<V:Clone>(m: &IntervalMap<V>) {
+    fn validate_map<V: Clone>(m: &IntervalMap<V>) {
         // Every interval is valid
         for i in m.keys() {
             assert!(i.begin() <= i.end())
@@ -272,9 +271,10 @@ mod tests {
     // TODO: fuzz-test with this.
     fn insert_and_sanity_check(
         m: &mut IntervalMap<String>,
-        begin: usize, end: usize,
-        val: &str) -> Vec<Mutation<String>>{
-
+        begin: usize,
+        end: usize,
+        val: &str,
+    ) -> Vec<Mutation<String>> {
         let old_len_sum = interval_sum(m.keys());
         let old_len = m.keys().count();
 
@@ -287,7 +287,7 @@ mod tests {
         let new_len_sum = interval_sum(m.keys());
         let new_len = m.keys().count();
         assert!(new_len_sum >= old_len_sum);
-        assert!(new_len_sum >= (end-begin+1));
+        assert!(new_len_sum >= (end - begin + 1));
 
         assert!(new_len >= old_len);
         assert!(new_len > 0);
@@ -297,11 +297,12 @@ mod tests {
 
     fn insert_and_validate(
         m: &mut IntervalMap<String>,
-        begin: usize, end: usize,
+        begin: usize,
+        end: usize,
         val: &str,
         expected_mutations: &[Mutation<String>],
-        expected_val: &[(Interval, &str)]) {
-
+        expected_val: &[(Interval, &str)],
+    ) {
         let mutations = insert_and_sanity_check(m, begin, end, val);
 
         // Validate the expected mutations.
@@ -310,63 +311,78 @@ mod tests {
         // Validate the expected new state.
         assert_eq!(
             m.iter().map(|(i, s)| (i, s.clone())).collect::<Vec<_>>(),
-            expected_val.iter().map(|(i, s)| (*i, s.to_string())).collect::<Vec<_>>());
+            expected_val
+                .iter()
+                .map(|(i, s)| (*i, s.to_string()))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
     fn test_insert_into_empty() {
         let mut m = IntervalMap::new();
-        insert_and_validate(&mut m, 10, 20, "x",
-            &[],
-            &[(Interval::new(10, 20), "x")]);
+        insert_and_validate(&mut m, 10, 20, "x", &[], &[(Interval::new(10, 20), "x")]);
     }
 
     #[test]
     fn test_insert_after() {
         let mut m = IntervalMap::new();
         m.insert(1, 3, "i1".to_string());
-        insert_and_validate(&mut m, 4, 6, "i2",
+        insert_and_validate(
+            &mut m,
+            4,
+            6,
+            "i2",
             &[],
-            &[
-                (Interval::new(1, 3), "i1"),
-                (Interval::new(4, 6), "i2"),
-            ]);
+            &[(Interval::new(1, 3), "i1"), (Interval::new(4, 6), "i2")],
+        );
     }
 
     #[test]
     fn test_insert_before() {
         let mut m = IntervalMap::new();
         m.insert(4, 6, "i1".to_string());
-        insert_and_validate(&mut m, 1, 3, "i2",
+        insert_and_validate(
+            &mut m,
+            1,
+            3,
+            "i2",
             &[],
-            &[
-                (Interval::new(1, 3), "i2"),
-                (Interval::new(4, 6), "i1"),
-            ]);
+            &[(Interval::new(1, 3), "i2"), (Interval::new(4, 6), "i1")],
+        );
     }
 
     #[test]
     fn test_insert_over_begin() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        insert_and_validate(&mut m, 10, 20, "second",
+        insert_and_validate(
+            &mut m,
+            10,
+            20,
+            "second",
             &[Mutation::ModifiedBegin(Interval::new(20, 30), 21)],
             &[
                 (Interval::new(10, 20), "second"),
                 (Interval::new(21, 30), "first"),
-            ]);
+            ],
+        );
     }
 
     #[test]
     fn test_insert_over_end() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        insert_and_validate(&mut m, 30, 31, "second",
+        insert_and_validate(
+            &mut m,
+            30,
+            31,
+            "second",
             &[Mutation::ModifiedEnd(Interval::new(20, 30), 29)],
             &[
                 (Interval::new(20, 29), "first"),
                 (Interval::new(30, 31), "second"),
-            ]
+            ],
         );
     }
 
@@ -374,12 +390,16 @@ mod tests {
     fn test_insert_removing() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        insert_and_validate(&mut m, 10, 40, "second",
+        insert_and_validate(
+            &mut m,
+            10,
+            40,
+            "second",
             &[Mutation::Removed(
                 Interval::new(20, 30),
-                "first".to_string()
-            ),],
-            &[(Interval::new(10, 40), "second"),]
+                "first".to_string(),
+            )],
+            &[(Interval::new(10, 40), "second")],
         );
     }
 
@@ -387,17 +407,21 @@ mod tests {
     fn test_insert_forcing_split() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        insert_and_validate(&mut m, 24, 25, "second",
+        insert_and_validate(
+            &mut m,
+            24,
+            25,
+            "second",
             &[Mutation::Split(
                 Interval::new(20, 30),
                 Interval::new(20, 23),
                 Interval::new(26, 30),
-            ),],
+            )],
             &[
                 (Interval::new(20, 23), "first"),
                 (Interval::new(24, 25), "second"),
                 (Interval::new(26, 30), "first"),
-            ]
+            ],
         );
     }
 
@@ -408,7 +432,10 @@ mod tests {
         m.insert(20, 30, "second".to_string());
         m.insert(40, 50, "third".to_string());
         insert_and_validate(
-            &mut m, 10, 40, "clobbering",
+            &mut m,
+            10,
+            40,
+            "clobbering",
             &[
                 Mutation::ModifiedEnd(Interval::new(0, 10), 9),
                 Mutation::Removed(Interval::new(20, 30), "second".to_string()),
@@ -418,14 +445,16 @@ mod tests {
                 (Interval::new(0, 9), "first"),
                 (Interval::new(10, 40), "clobbering"),
                 (Interval::new(41, 50), "third"),
-            ]);
+            ],
+        );
     }
 
     // TODO: fuzz-test with this.
     fn clear_and_sanity_check(
         m: &mut IntervalMap<String>,
-        begin: usize, end: usize) -> Vec<Mutation<String>>{
-
+        begin: usize,
+        end: usize,
+    ) -> Vec<Mutation<String>> {
         let old_len = interval_sum(m.keys());
 
         // Do the clear
@@ -442,10 +471,11 @@ mod tests {
 
     fn clear_and_validate(
         m: &mut IntervalMap<String>,
-        begin: usize, end: usize,
+        begin: usize,
+        end: usize,
         expected_mutations: &[Mutation<String>],
-        expected_val: &[(Interval, &str)]) {
-
+        expected_val: &[(Interval, &str)],
+    ) {
         let mutations = clear_and_sanity_check(m, begin, end);
 
         // Validate the expected mutations.
@@ -454,16 +484,23 @@ mod tests {
         // Validate the expected new state.
         assert_eq!(
             m.iter().map(|(i, s)| (i, s.clone())).collect::<Vec<_>>(),
-            expected_val.iter().map(|(i, s)| (*i, s.to_string())).collect::<Vec<_>>());
+            expected_val
+                .iter()
+                .map(|(i, s)| (*i, s.to_string()))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
     fn test_clear_over_begin() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        clear_and_validate(&mut m, 10, 20,
-            &[Mutation::ModifiedBegin(Interval::new(20, 30), 21),],
-            &[(Interval::new(21, 30), "first"),]
+        clear_and_validate(
+            &mut m,
+            10,
+            20,
+            &[Mutation::ModifiedBegin(Interval::new(20, 30), 21)],
+            &[(Interval::new(21, 30), "first")],
         );
     }
 
@@ -471,9 +508,12 @@ mod tests {
     fn test_clear_over_end() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        clear_and_validate(&mut m, 30, 31,
-            &[Mutation::ModifiedEnd(Interval::new(20, 30), 29),],
-            &[(Interval::new(20, 29), "first"),]
+        clear_and_validate(
+            &mut m,
+            30,
+            31,
+            &[Mutation::ModifiedEnd(Interval::new(20, 30), 29)],
+            &[(Interval::new(20, 29), "first")],
         );
     }
 
@@ -481,16 +521,19 @@ mod tests {
     fn test_clear_forcing_split() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        clear_and_validate(&mut m, 24, 25,
+        clear_and_validate(
+            &mut m,
+            24,
+            25,
             &[Mutation::Split(
                 Interval::new(20, 30),
                 Interval::new(20, 23),
                 Interval::new(26, 30),
-            ),],
+            )],
             &[
                 (Interval::new(20, 23), "first"),
                 (Interval::new(26, 30), "first"),
-            ]
+            ],
         );
     }
 
@@ -498,11 +541,16 @@ mod tests {
     fn test_clear_removing() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
-        clear_and_validate(&mut m, 10, 40,
+        clear_and_validate(
+            &mut m,
+            10,
+            40,
             &[Mutation::Removed(
                 Interval::new(20, 30),
-                "first".to_string()
-            ),], &[]);
+                "first".to_string(),
+            )],
+            &[],
+        );
     }
 
     #[test]
@@ -516,9 +564,18 @@ mod tests {
         let mut m = IntervalMap::<String>::new();
         m.insert(1, 3, "interval".to_string());
         assert_eq!(m.get(0), None);
-        assert_eq!(m.get(1), Some((Interval::new(1, 3), &"interval".to_string())));
-        assert_eq!(m.get(2), Some((Interval::new(1, 3), &"interval".to_string())));
-        assert_eq!(m.get(3), Some((Interval::new(1, 3), &"interval".to_string())));
+        assert_eq!(
+            m.get(1),
+            Some((Interval::new(1, 3), &"interval".to_string()))
+        );
+        assert_eq!(
+            m.get(2),
+            Some((Interval::new(1, 3), &"interval".to_string()))
+        );
+        assert_eq!(
+            m.get(3),
+            Some((Interval::new(1, 3), &"interval".to_string()))
+        );
         assert_eq!(m.get(4), None);
     }
 
@@ -553,4 +610,3 @@ mod tests {
         assert_eq!(m.get(7), None);
     }
 }
-
