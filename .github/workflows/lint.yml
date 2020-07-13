@@ -34,3 +34,19 @@ jobs:
           echo "::add-path::$HOME/.cargo/bin"
       - name: Rustfmt check
         run: cd src && cargo fmt -- --check
+
+  lint-cbindgen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+          echo "::add-path::$HOME/.cargo/bin"
+      - name: Install Cbindgen
+        run: cargo install --force cbindgen
+      - name: Cbindgen check
+        run: |
+          cd src/main
+          cbindgen --config cbindgen.toml --output /tmp/new-bindings.h
+          diff bindings.h /tmp/new-bindings.h
