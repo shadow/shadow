@@ -1,3 +1,12 @@
+dnl Error if a binary is not provided
+ifdef(`xBIN', `', `Mising xBIN
+m4exit(1)')dnl
+dnl Default to no arguments
+ifdef(`xARGS', `', `define(`xARGS', `')')dnl
+dnl Default to a 5 second timeout
+ifdef(`xTIMEOUT', `', `define(`xTIMEOUT', `5')')dnl
+dnl
+dnl
 <shadow>
   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
@@ -18,10 +27,9 @@
   </graph>
 </graphml>
 ]]></topology>
-  <kill time="5"/>
-  <plugin id="testbind" path="../../target/debug/test_bind"/>
+  <kill time="xTIMEOUT"/>
+  <plugin id="testplugin" path="xBIN"/>
   <node id="testnode" quantity="1">
-    <application plugin="testbind" starttime="1" arguments="--shadow-passing"/>
+    <application plugin="testplugin" starttime="1" arguments="xARGS"/>
   </node>
 </shadow>
-

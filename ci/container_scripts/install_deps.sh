@@ -15,6 +15,7 @@ APT_PACKAGES="
   libigraph0v5
   libprocps-dev
   make
+  m4
   python3
   python3-pip
   xz-utils
@@ -29,6 +30,7 @@ RPM_PACKAGES="
   igraph
   igraph-devel
   make
+  m4
   procps-devel
   python3
   python3-pip
