@@ -25,7 +25,7 @@ fn main() {
 
 fn sleep_and_test(sleep_fns: &[SleepFn], time_fns: &[TimeFn]) {
     let sleep_duration_sec = 1;
-    let tolerance_ms = 10;
+    let tolerance_ms = 30;
 
     for (sleep_fn, sleep_name) in sleep_fns.iter() {
         for (time_fn, time_name) in time_fns.iter() {
