@@ -120,8 +120,6 @@ impl<V: Clone> IntervalMap<V> {
             Ok(i) | Err(i) => i,
         };
 
-        println!("splice_start: {}", splice_start);
-
         // The eventual splice will be with a non-inclusive end-point. i.e. we start with
         // replacing no items, but will expand this if there are intervals we need to remove.
         let mut splice_end = splice_start;
@@ -158,7 +156,6 @@ impl<V: Clone> IntervalMap<V> {
         while splice_end < self.ends.len() && self.ends[splice_end] <= end {
             splice_end += 1
         }
-        println!("splice_end: {}", splice_end);
 
         // Check whether we need to clip the beginning splice_end's interval.
         let mut modified_begin: Option<Mutation<V>> = None;
