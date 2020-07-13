@@ -13,5 +13,9 @@ path = "sleep/test_sleep.rs"
 name = "test_socket"
 path = "socket/socket/test_socket.rs"
 
+[[bin]]
+name = "test_bind"
+path = "socket/bind/test_bind.rs"
+
 [dependencies]
 libc = "0.2"
