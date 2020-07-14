@@ -35,7 +35,6 @@ else()
 endif()
 
 include(ExternalProject)
-
 ## build the rust library
 ExternalProject_Add(
     shadow-rust-project
@@ -185,3 +184,6 @@ set_target_properties(shadow PROPERTIES
     INSTALL_RPATH_USE_LINK_PATH TRUE
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib"
 )
+
+add_subdirectory(cbindings)
+
