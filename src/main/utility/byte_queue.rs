@@ -12,6 +12,7 @@ automatically. As data is read, old chunks are freed automatically.
 */
 
 use std::collections::LinkedList;
+use crate::cbindings;
 
 struct ByteChunk {
     buf: Vec<u8>,
@@ -28,6 +29,7 @@ pub struct ByteQueue {
 
 impl ByteChunk {
     fn new(capacity: usize) -> ByteChunk {
+        let _ = cbindings::SysCallArgs{number: 2, args: [cbindings::SysCallReg{as_i64:0}; 6]};
         ByteChunk {
             buf: vec![0; capacity],
         }

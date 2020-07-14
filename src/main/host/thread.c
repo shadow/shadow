@@ -57,7 +57,7 @@ int thread_getReturnCode(Thread* thread) {
     return thread->getReturnCode(thread);
 }
 
-gboolean thread_isRunning(Thread* thread) {
+bool thread_isRunning(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->isRunning(thread);
 }

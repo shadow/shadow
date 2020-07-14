@@ -8,18 +8,16 @@
 #ifndef SRC_MAIN_HOST_SHD_THREAD_H_
 #define SRC_MAIN_HOST_SHD_THREAD_H_
 
-#include <glib.h>
+#include <stddef.h>
 
 typedef struct _Thread Thread;
 
-#include "main/host/syscall_condition.h"
-#include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 
 void thread_ref(Thread* thread);
 void thread_unref(Thread* thread);
 
-void thread_run(Thread* thread, gchar** argv, gchar** envv);
+void thread_run(Thread* thread, char** argv, char** envv);
 SysCallCondition* thread_resume(Thread* thread);
 void thread_terminate(Thread* thread);
 int thread_getReturnCode(Thread* thread);
@@ -90,6 +88,6 @@ PluginPtr thread_mallocPluginPtr(Thread* thread, size_t size);
 void thread_freePluginPtr(Thread* thread, PluginPtr ptr, size_t size);
 
 
-gboolean thread_isRunning(Thread* thread);
+bool thread_isRunning(Thread* thread);
 
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */
