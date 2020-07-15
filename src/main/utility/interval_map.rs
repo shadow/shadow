@@ -24,13 +24,30 @@ impl Interval {
 /// Describes modifications of an IntervalMap after overwriting an interval.
 #[derive(PartialEq, Eq, Debug)]
 pub enum Mutation<V> {
-    /// (Original interval, new begin)
+    ///       b     e
+    /// from: |---v-|
+    /// to:     |-v-|
+    ///         b'
+    /// Contains: ((b,e), b')
     ModifiedBegin(Interval, usize),
-    /// (Original interval, new end)
+    ///       b     e
+    /// from: |---v-|
+    /// to:   |-v-|
+    ///           e'
+    /// Contains: ((b,e), e')
     ModifiedEnd(Interval, usize),
-    /// (Original interval, new lower interval, new higher interval)
+    ///        b             e
+    /// from:  |-----v-------|
+    /// to:    |-v--|  |--v--|
+    ///        b   e'  b'    e
+    ///
+    /// Contains: ((b,e), (b,e'), (b',e)
     Split(Interval, Interval, Interval),
-    /// (Removed interval, its value)
+    ///       b     e
+    /// from: |---v-|
+    /// to:   
+    ///
+    /// Contains: (b,e), v
     Removed(Interval, V),
 }
 
@@ -119,10 +136,16 @@ impl<V: Clone> IntervalMap<V> {
     // Splices zero or one value into the given interval.
     fn splice(&mut self, begin: usize, end: usize, val: Option<V>) -> Vec<Mutation<V>> {
         assert!(begin <= end);
+
+        // List of mutations we had to perform to do the splice, which we'll ultimately return.
         let mut mutations = Vec::new();
+
+        // Vectors that we'll ultimately splice insto self.{begins,ends,vals}.
         let mut begins_insertions = Vec::new();
         let mut ends_insertions = Vec::new();
         let mut vals_insertions = Vec::new();
+
+        // We'll splice in the provided value, if any.
         if let Some(v) = val {
             begins_insertions.push(begin);
             ends_insertions.push(end);
@@ -135,74 +158,83 @@ impl<V: Clone> IntervalMap<V> {
             Ok(i) | Err(i) => i,
         };
 
-        // The eventual splice will be with a non-inclusive end-point. i.e. we start with
-        // replacing no items, but will expand this if there are intervals we need to remove.
-        let mut splice_end = splice_start;
-
         // Check whether there's an interval before the splice point,
         // and if so whether it overlaps.
         if splice_start > 0 && self.ends[splice_start - 1] >= begin {
-            let i = splice_start - 1;
+            let overlapping_idx = splice_start - 1;
+            let overlapping_int =
+                Interval::new(self.begins[overlapping_idx], self.ends[overlapping_idx]);
 
             // If it ends after the end of our interval, we need to split it.
-            if self.ends[i] > end {
-                let old = Interval::new(self.begins[i], self.ends[i]);
-                let new1 = Interval::new(self.begins[i], begin - 1);
-                let new2 = Interval::new(end + 1, self.ends[i]);
+            if overlapping_int.end() <= end {
+                // overlapping_int :   -----
+                // - (begin, end)  :      -----
+                //           --->  :   ---
+                self.ends[overlapping_idx] = begin - 1;
+                mutations.push(Mutation::ModifiedEnd(
+                    overlapping_int,
+                    self.ends[overlapping_idx],
+                ));
+            } else {
+                // overlapping_int : ----------
+                // - (begin, end)  :    ----
+                //           --->  : ---    ---
+                let new1 = Interval::new(overlapping_int.begin(), begin - 1);
+                let new2 = Interval::new(end + 1, overlapping_int.end());
 
                 // Truncate the existing interval.
-                self.ends[i] = new1.end();
+                self.ends[overlapping_idx] = new1.end();
 
                 // Create a new interval, starting after the insertion interval.
                 begins_insertions.push(new2.begin());
                 ends_insertions.push(new2.end());
-                vals_insertions.push(self.vals[i].clone());
-                mutations.push(Mutation::Split(old, new1, new2));
-            } else {
-                // Otherwise we need to adjust its end to not overlap.
-                let old = Interval::new(self.begins[i], self.ends[i]);
-                self.ends[i] = begin - 1;
-                mutations.push(Mutation::ModifiedEnd(old, self.ends[i]));
+                vals_insertions.push(self.vals[overlapping_idx].clone());
+                mutations.push(Mutation::Split(overlapping_int, new1, new2));
             }
         }
 
-        // Find the end of the splice interval.
-        // TODO: Maybe do binary search here.
-        while splice_end < self.ends.len() && self.ends[splice_end] <= end {
-            splice_end += 1
-        }
+        // Find the end of the splice interval, which is the index of the first interval that ends
+        // after the splice end (after having clipped the end of any existing interval contained in
+        // the range, above).
+        let splice_end = match self.ends.binary_search(&end) {
+            Ok(i) | Err(i) => i,
+        };
 
-        // Check whether we need to clip the beginning splice_end's interval.
+        // Check whether we need to clip the beginning of splice_end's interval.
         let mut modified_begin: Option<Mutation<V>> = None;
         if splice_end < self.begins.len()
             && self.begins[splice_end] <= end
             && self.ends[splice_end] > end
         {
-            let i = splice_end;
-            let old = Interval::new(self.begins[i], self.ends[i]);
-            self.begins[i] = end + 1;
-            modified_begin = Some(Mutation::ModifiedBegin(old, self.begins[i]));
+            let overlapping_idx = splice_end;
+            let overlapping_int =
+                Interval::new(self.begins[overlapping_idx], self.ends[overlapping_idx]);
+            // overlapping_int :   ------
+            // - (begin, end)  : -----
+            //           --->  :      ---
+            self.begins[overlapping_idx] = end + 1;
+            // We don't push this onto `mutations` yet because we want to keep it sorted, and this
+            // will always be the last mutation.
+            modified_begin = Some(Mutation::ModifiedBegin(
+                overlapping_int,
+                self.begins[overlapping_idx],
+            ));
         }
 
-        // Do the splice
-        let dropped_begins: Vec<_> = self
+        // Do the splice into each parallel vector, tracking intervals that are dropped completely.
+        // dropped         :   --- --- --- --- --- ----
+        // - (begin, end)  : ----------------------------
+        //           --->  :
+        let dropped_begins = self
             .begins
-            .splice(splice_start..splice_end, begins_insertions)
-            .collect();
-        let dropped_ends: Vec<_> = self
-            .ends
-            .splice(splice_start..splice_end, ends_insertions)
-            .collect();
-        {
-            // We use the dropped_vals iterator directly here to avoid extra copies.
-            // This is in a new scope to limit the lifetime of the mutable borrow from self.vals.
-            let mut dropped_vals = self.vals.splice(splice_start..splice_end, vals_insertions);
-            for i in 0..dropped_begins.len() {
-                mutations.push(Mutation::Removed(
-                    Interval::new(dropped_begins[i], dropped_ends[i]),
-                    dropped_vals.next().unwrap(),
-                ));
-            }
+            .splice(splice_start..splice_end, begins_insertions);
+        let dropped_ends = self.ends.splice(splice_start..splice_end, ends_insertions);
+        let mut dropped_vals = self.vals.splice(splice_start..splice_end, vals_insertions);
+        for (dropped_begin, dropped_end) in dropped_begins.zip(dropped_ends) {
+            mutations.push(Mutation::Removed(
+                Interval::new(dropped_begin, dropped_end),
+                dropped_vals.next().unwrap(),
+            ));
         }
 
         // Do the modified beginning, if any, last, so that mutations are ordered.
@@ -368,18 +400,52 @@ mod tests {
     }
 
     #[test]
+    fn test_insert_on_begin() {
+        let mut m = IntervalMap::new();
+        m.insert(20, 30, "first".to_string());
+        insert_and_validate(
+            &mut m,
+            20,
+            20,
+            "second",
+            &[Mutation::ModifiedBegin(Interval::new(20, 30), 21)],
+            &[
+                (Interval::new(20, 20), "second"),
+                (Interval::new(21, 30), "first"),
+            ],
+        );
+    }
+
+    #[test]
     fn test_insert_over_end() {
         let mut m = IntervalMap::new();
         m.insert(20, 30, "first".to_string());
         insert_and_validate(
             &mut m,
-            30,
+            29,
             31,
+            "second",
+            &[Mutation::ModifiedEnd(Interval::new(20, 30), 28)],
+            &[
+                (Interval::new(20, 28), "first"),
+                (Interval::new(29, 31), "second"),
+            ],
+        );
+    }
+
+    #[test]
+    fn test_insert_on_end() {
+        let mut m = IntervalMap::new();
+        m.insert(20, 30, "first".to_string());
+        insert_and_validate(
+            &mut m,
+            30,
+            30,
             "second",
             &[Mutation::ModifiedEnd(Interval::new(20, 30), 29)],
             &[
                 (Interval::new(20, 29), "first"),
-                (Interval::new(30, 31), "second"),
+                (Interval::new(30, 30), "second"),
             ],
         );
     }
