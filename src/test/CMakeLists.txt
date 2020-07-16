@@ -11,6 +11,7 @@ add_definitions(-fPIC -g3 -DDEBUG -D_GNU_SOURCE)
 include(ExternalProject)
 
 ## always build tests with the debug profile, even when shadow is built in release mode
+set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")
 ExternalProject_Add(
    shadow-tests
    PREFIX ${CMAKE_CURRENT_SOURCE_DIR}

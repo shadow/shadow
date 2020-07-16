@@ -4,7 +4,7 @@
 separate_arguments(LLVM_FLAGS UNIX_COMMAND "${CMAKE_C_FLAGS}")
 
 # Reconstruct "-I" flags.
-get_directory_property(INCLUDE_DIRECTORIES INCLUDE_DIRECTORIES)
+get_target_property(INCLUDE_DIRECTORIES shadow-c INCLUDE_DIRECTORIES)
 # Add -I prefix to each directory
 foreach(INCLUDE_DIRECTORY IN LISTS INCLUDE_DIRECTORIES)
     list(APPEND LLVM_FLAGS "-I${INCLUDE_DIRECTORY}")

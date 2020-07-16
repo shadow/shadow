@@ -134,14 +134,6 @@ pub const SIG_ATOMIC_WIDTH: u32 = 32;
 pub const SIZE_WIDTH: u32 = 64;
 pub const WCHAR_WIDTH: u32 = 32;
 pub const WINT_WIDTH: u32 = 32;
-pub type size_t = ::std::os::raw::c_ulong;
-pub type wchar_t = ::std::os::raw::c_int;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Thread {
-    _unused: [u8; 0],
-}
-pub type Thread = _Thread;
 pub type __u_char = ::std::os::raw::c_uchar;
 pub type __u_short = ::std::os::raw::c_ushort;
 pub type __u_int = ::std::os::raw::c_uint;
@@ -422,6 +414,14 @@ fn bindgen_test_layout__SysCallReturn() {
     );
 }
 pub type SysCallReturn = _SysCallReturn;
+pub type size_t = ::std::os::raw::c_ulong;
+pub type wchar_t = ::std::os::raw::c_int;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Thread {
+    _unused: [u8; 0],
+}
+pub type Thread = _Thread;
 extern "C" {
     pub fn thread_ref(thread: *mut Thread);
 }
