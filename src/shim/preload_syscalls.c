@@ -22,6 +22,7 @@
 #include "shim/shim_event.h"
 #include "shim/shim_logger.h"
 #include "shim/shim_shmem.h"
+#include "shim/spin.h"
 #include "support/logger/logger.h"
 
 static long shadow_retval_to_errno(long retval) {
@@ -74,13 +75,13 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
     const int fd = shim_thisThreadEventFD();
     debug("sending syscall event %ld on %d",
           syscall_event->event_data.syscall.syscall_args.number, fd);
-    shimevent_sendEvent(fd, syscall_event);
+    shimevent_sendEventToShadow(fd, syscall_event);
     SysCallReg rv = {0};
 
     while (true) {
         debug("waiting for event on %d", fd);
         ShimEvent res = {0};
-        shimevent_recvEvent(fd, &res);
+        shimevent_recvEventFromShadow(fd, &res);
         debug("got response of type %d on %d", res.event_id, fd);
         switch (res.event_id) {
             case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
@@ -119,7 +120,7 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
                     .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
                     .event_data.syscall_complete.retval.as_i64 = syscall_rv,
                 };
-                shimevent_sendEvent(fd, &syscall_complete_event);
+                shimevent_sendEventToShadow(fd, &syscall_complete_event);
                 break;
             }
             case SHD_SHIM_EVENT_CLONE_REQ:

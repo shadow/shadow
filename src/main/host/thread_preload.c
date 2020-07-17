@@ -15,6 +15,7 @@
 #include "main/host/thread_protected.h"
 #include "main/shmem/shmem_allocator.h"
 #include "shim/shim_event.h"
+#include "shim/spin.h"
 #include "support/logger/logger.h"
 
 #define THREADPRELOAD_TYPE_ID 13357
@@ -84,8 +85,8 @@ static void _threadpreload_auxWrite(void* p, void* t) {
     req.event_data.shmem_blk.plugin_ptr = write_blk->plugin_ptr;
     req.event_data.shmem_blk.n = write_blk->n;
 
-    shimevent_sendEvent(thread->eventFD, &req);
-    shimevent_recvEvent(thread->eventFD, &resp);
+    shimevent_sendEventToPlugin(thread->eventFD, &req);
+    shimevent_recvEventFromPlugin(thread->eventFD, &resp);
 
     utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
 }
@@ -180,20 +181,28 @@ static void _threadpreload_cleanup(ThreadPreload* thread, int status) {
 }
 
 void threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
+
+    static size_t ipc_idx = 1;
+
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     /* set the env for the child */
     gchar** myenvv = g_strdupv(envv);
 
     int child_fd = 0;
-    _threadpreload_create_ipc_sockets(thread, &child_fd);
+    thread->eventFD = ipc_idx;
+    child_fd = ipc_idx++;
     utility_assert(thread->eventFD != -1 && child_fd != -1);
+
+    IPCData *data = globalIPCDataCreate();
+    ipcDataInit(&data[thread->eventFD]);
 
     char buf[64];
     snprintf(buf, 64, "%d", child_fd);
 
     /* append to the env */
     myenvv = g_environ_setenv(myenvv, "_SHD_IPC_SOCKET", buf, TRUE);
+    myenvv = g_environ_setenv(myenvv, "_SHD_IPC_NAME", globalIPCDataName(), TRUE);
 
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr(argv);
@@ -222,7 +231,7 @@ void threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
 static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread) {
     MAGIC_ASSERT(_threadPreloadToThread(thread));
     utility_assert(thread->eventFD > 0);
-    shimevent_recvEvent(thread->eventFD, &thread->currentEvent);
+    shimevent_recvEventFromPlugin(thread->eventFD, &thread->currentEvent);
     debug("received shim_event %d", thread->currentEvent.event_id);
 }
 
@@ -250,7 +259,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                       thread->eventFD);
                 thread->currentEvent.event_data.start.simulation_nanos =
                     worker_getEmulatedTime();
-                shimevent_sendEvent(thread->eventFD, &thread->currentEvent);
+                shimevent_sendEventToPlugin(thread->eventFD, &thread->currentEvent);
                 break;
             }
             case SHD_SHIM_EVENT_STOP: {
@@ -281,7 +290,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                     .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
                 };
 
-                shimevent_sendEvent(thread->eventFD, &ipc_complete_ev);
+                shimevent_sendEventToPlugin(thread->eventFD, &ipc_complete_ev);
 
                 ShimEvent shim_result;
                 if (result.state == SYSCALL_DONE) {
@@ -300,11 +309,11 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                         .event_id = SHD_SHIM_EVENT_SYSCALL_DO_NATIVE,
                     };
                 }
-                shimevent_sendEvent(thread->eventFD, &shim_result);
+                shimevent_sendEventToPlugin(thread->eventFD, &shim_result);
                 break;
             }
             case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
-                shimevent_sendEvent(thread->eventFD, &thread->currentEvent);
+                shimevent_sendEventToPlugin(thread->eventFD, &thread->currentEvent);
                 break;
             }
             default: {
@@ -388,8 +397,8 @@ static ShMemBlock* _threadpreload_readPtrImpl(ThreadPreload* thread,
     req.event_data.shmem_blk.plugin_ptr = plugin_src;
     req.event_data.shmem_blk.n = n;
 
-    shimevent_sendEvent(thread->eventFD, &req);
-    shimevent_recvEvent(thread->eventFD, &resp);
+    shimevent_sendEventToPlugin(thread->eventFD, &req);
+    shimevent_recvEventFromPlugin(thread->eventFD, &resp);
 
     utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
 
@@ -490,10 +499,10 @@ long threadpreload_nativeSyscall(Thread* base, long n, va_list args) {
     for (int i=0; i<6; ++i) {
         req.event_data.syscall.syscall_args.args[i].as_i64 = va_arg(args, int64_t);
     }
-    shimevent_sendEvent(thread->eventFD, &req);
+    shimevent_sendEventToPlugin(thread->eventFD, &req);
 
     ShimEvent resp = {0};
-    shimevent_recvEvent(thread->eventFD, &resp);
+    shimevent_recvEventFromPlugin(thread->eventFD, &resp);
     utility_assert(resp.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
     return resp.event_data.syscall_complete.retval.as_i64;
 }

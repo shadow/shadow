@@ -10,8 +10,11 @@
 #include <string.h>
 #include <sys/types.h>
 
+#include <sched.h>
+
 #include "shim/shim_event.h"
 #include "shim/shim_logger.h"
+#include "shim/spin.h"
 #include "support/logger/logger.h"
 
 typedef struct _TIDFDPair {
@@ -78,6 +81,10 @@ __attribute__((constructor(SHIM_CONSTRUCTOR_PRIORITY))) static void
 _shim_load() {
     shim_disableInterposition();
 
+    struct sched_param sparam = {0};
+    sparam.sched_priority = 1;
+    sched_setscheduler(0, SCHED_FIFO, &sparam);
+
     // We ultimately want to log to SHADOW_LOG_FILE, but we must temporarily
     // override the default logger with one that has a recursion-guard before
     // making any syscalls (e.g. to open the log file).
@@ -129,6 +136,12 @@ _shim_load() {
     assert(shd_event_sock_fd);
     int event_sock_fd = atoi(shd_event_sock_fd);
 
+    const char *shd_fn = getenv("_SHD_IPC_NAME");
+    assert(shd_fn);
+    fprintf(stderr, "mapping %s\n", shd_fn);
+
+    globalIPCDataMap(shd_fn);
+
     pthread_mutex_init(&tid_fd_tree_mtx, NULL);
 
     TIDFDPair *tid_fd = calloc(1, sizeof(TIDFDPair));
@@ -156,7 +169,7 @@ static void _shim_unload() {
     ShimEvent shim_event;
     shim_event.event_id = SHD_SHIM_EVENT_STOP;
     debug("sending stop event on %d", event_fd);
-    shimevent_sendEvent(event_fd, &shim_event);
+    shimevent_sendEventToShadow(event_fd, &shim_event);
 
     pthread_mutex_destroy(&tid_fd_tree_mtx);
 
@@ -170,7 +183,7 @@ static void _shim_unload() {
 static void _shim_wait_start(int event_fd) {
     ShimEvent event;
 
-    shimevent_recvEvent(event_fd, &event);
+    shimevent_recvEventFromShadow(event_fd, &event);
     assert(event.event_id == SHD_SHIM_EVENT_START);
     shimlogger_set_simulation_nanos(event.event_data.start.simulation_nanos);
 }

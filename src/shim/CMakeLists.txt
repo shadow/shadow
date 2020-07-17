@@ -17,6 +17,7 @@ add_cflags(-fPIC)
 set(SHIM_HELPER_LIB shadow-shim-helper)
 set(SHIM_HELPER_FILES
   shim_event.c
+  spin.c
 )
 add_library(${SHIM_HELPER_LIB} STATIC ${SHIM_HELPER_FILES})
 # -D_GNU_SOURCE enables some additional features in libc, such at RTLD_NEXT.

@@ -7,6 +7,7 @@
 
 #include "main/shmem/shmem_allocator.h"
 #include "shim/shim_event.h"
+#include "shim/spin.h"
 
 void shim_shmemHandleClone(const ShimEvent* ev) {
     assert(ev && ev->event_id == SHD_SHIM_EVENT_CLONE_REQ);
@@ -43,5 +44,5 @@ void shim_shmemNotifyComplete(int fd) {
     ShimEvent ev = {
         .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
     };
-    shimevent_sendEvent(fd, &ev);
+    shimevent_sendEventToShadow(fd, &ev);
 }
