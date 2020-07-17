@@ -2,7 +2,6 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
-
 mod cbindings;
 pub mod core;
 pub mod host;

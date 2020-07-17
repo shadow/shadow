@@ -150,7 +150,7 @@ foreach(INTERFACE_LINK_LIBRARY IN LISTS INTERFACE_LINK_LIBRARIES)
     if(INTERFACE_LINK_LIBRARY MATCHES "(.*)/lib(.*)\(.so|.a)")
         set(RUSTFLAGS "-L${CMAKE_MATCH_1} -l${CMAKE_MATCH_2} ${RUSTFLAGS}")
     elseif(INTERFACE_LINK_LIBRARY MATCHES "^-l.*")
-        set(RUSTFLAGS "${INTERFACE_LINK_LIBRARY}")
+        set(RUSTFLAGS "${INTERFACE_LINK_LIBRARY} ${RUSTFLAGS}")
     else()
         # Treat as a target
         #
