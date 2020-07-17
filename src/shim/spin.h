@@ -1,29 +1,31 @@
 #ifndef SHD_SPIN_H_
 #define SHD_SPIN_H_
 
-#include <stdatomic.h>
 #include <stddef.h>
-#include <sched.h>
 
 #include "shim_event.h"
 
-typedef struct _IPCData {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-    ShimEvent plugin_to_shadow, shadow_to_plugin;
-    atomic_bool xfer_ctrl_to_plugin, xfer_ctrl_to_shadow;
+struct IPCData;
 
-} IPCData;
+struct IPCData* globalIPCDataCreate();
+struct IPCData* globalIPCDataMap(const char* name);
 
-IPCData *globalIPCDataCreate();
-IPCData *globalIPCDataMap(const char *name);
+const char* globalIPCDataName();
 
-const char *globalIPCDataName();
-
-void ipcDataInit(IPCData *ipc_data);
+void ipcDataInit(struct IPCData* ipc_data);
+void ipcDataInitIdx(size_t idx);
 
 void shimevent_sendEventToShadow(int event_fd, const ShimEvent* e);
 void shimevent_sendEventToPlugin(int event_fd, const ShimEvent* e);
 void shimevent_recvEventFromShadow(int event_fd, ShimEvent* e);
 void shimevent_recvEventFromPlugin(int event_fd, ShimEvent* e);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // SHD_SPIN_H_

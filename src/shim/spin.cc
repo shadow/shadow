@@ -1,21 +1,32 @@
 #include "spin.h"
 
+#include <atomic>
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
 
+#include <sched.h>
+
 #include "main/shmem/shmem_file.h"
 
 #define NBYTES (1ULL << 24)
 
+struct IPCData {
+
+    ShimEvent plugin_to_shadow, shadow_to_plugin;
+    std::atomic<bool> xfer_ctrl_to_plugin, xfer_ctrl_to_shadow;
+
+};
+
 static bool _shmemfile_init = false;
 static ShMemFile _shmemfile = {0};
 
-static inline void _spinwait(atomic_bool *atm) {
+static inline void _spinwait(std::atomic<bool> *atm) {
   bool expected = true;
 
-  while (!atomic_compare_exchange_strong(atm, &expected, false)) {
+  while (!atm->compare_exchange_strong(expected, false)) {
     sched_yield();
     expected = true;
   }
@@ -31,6 +42,8 @@ static inline IPCData *_ipcDataGet(int idx) {
 
     return &base[idx];
 }
+
+extern "C" {
 
 IPCData *globalIPCDataCreate() {
 
@@ -57,23 +70,28 @@ const char *globalIPCDataName() {
     return _shmemfile.name;
 }
 
+void ipcDataInitIdx(size_t idx) {
+    IPCData *data = _ipcDataGet(idx);
+    ipcDataInit(data);
+}
+
 void ipcDataInit(IPCData *ipc_data) {
     memset(ipc_data, 0, sizeof(IPCData));
 
-    atomic_store(&ipc_data->xfer_ctrl_to_plugin, false);
-    atomic_store(&ipc_data->xfer_ctrl_to_shadow, false);
+    ipc_data->xfer_ctrl_to_plugin.store(false);
+    ipc_data->xfer_ctrl_to_shadow.store(false);
 }
 
 void shimevent_sendEventToShadow(int event_fd, const ShimEvent* e) {
     IPCData *data = _ipcDataGet(event_fd);
     data->plugin_to_shadow = *e;
-    atomic_store(&data->xfer_ctrl_to_shadow, true);
+    data->xfer_ctrl_to_shadow.store(true);
 }
 
 void shimevent_sendEventToPlugin(int event_fd, const ShimEvent* e) {
     IPCData *data = _ipcDataGet(event_fd);
     data->shadow_to_plugin = *e;
-    atomic_store(&data->xfer_ctrl_to_plugin, true);
+    data->xfer_ctrl_to_plugin.store(true);
 }
 
 void shimevent_recvEventFromShadow(int event_fd, ShimEvent* e) {
@@ -87,3 +105,5 @@ void shimevent_recvEventFromPlugin(int event_fd, ShimEvent* e) {
     _spinwait(&data->xfer_ctrl_to_shadow);
     *e = data->plugin_to_shadow;
 }
+
+} // extern "C"
