@@ -8,6 +8,7 @@
 #define SHD_UTILITY_H_
 
 #include <glib.h>
+#include <stdio.h>
 #include <netinet/in.h>
 
 #include "main/core/support/definitions.h"
@@ -103,5 +104,8 @@ void utility_handleError(const gchar* file, gint line, const gchar* funtcion, co
 /* Converts millis milliseconds to a timespec with the corresponding number
  * of seconds and nanoseconds. */
 struct timespec utility_timespecFromMillis(int64_t millis);
+
+/* Read the content of a file stream and return it */
+GString* utility_getFileContent(FILE *stream);
 
 #endif /* SHD_UTILITY_H_ */
