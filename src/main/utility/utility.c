@@ -363,8 +363,7 @@ GString* utility_getFileContent(FILE *stream) {
     GString *content = g_string_new(NULL);
 
     memset(buf, 0, sizeof(buf));
-    while (NULL == g_strrstr(content->str, "</shadow>")) {
-        fgets(buf, sizeof(buf), stream);
+    while (NULL != fgets(buf, sizeof(buf), stream)) {
         g_string_append(content, buf);
     }
 
