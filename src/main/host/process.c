@@ -45,6 +45,7 @@
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
+#include "main/host/syscall_condition.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "main/host/thread_preload.h"

@@ -156,11 +156,11 @@ if(SHADOW_COVERAGE STREQUAL ON)
     add_compile_options(--coverage)
     add_ldflags(--coverage)
     ## from https://github.com/mozilla/grcov
-    set(CARGO_ENV_VARS "CARGO_INCREMENTAL=0 \
-                        RUSTFLAGS=\"-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code \
-                                    -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort\" \
-                        RUSTDOCFLAGS=\"-Cpanic=abort\"")
+    set(RUSTFLAGS "-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code \
+                   -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort")
+    set(CARGO_ENV_VARS "CARGO_INCREMENTAL=0 RUSTDOCFLAGS=\"-Cpanic=abort\"")
 else()
+    set(RUSTFLAGS "")
     set(CARGO_ENV_VARS "")
 endif(SHADOW_COVERAGE STREQUAL ON)
 

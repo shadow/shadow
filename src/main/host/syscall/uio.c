@@ -14,6 +14,7 @@
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/socket.h"
+#include "main/host/syscall_condition.h"
 #include "main/host/thread.h"
 #include "support/logger/logger.h"
 
