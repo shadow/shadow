@@ -71,17 +71,11 @@ impl SocketFn {
     }
 }
 
-fn main() {
+fn main() -> Result<(), String> {
     // should we run only tests that shadow supports
-    let run_only_passing_tests = match std::env::args().position(|x| x == "--shadow-passing") {
-        Some(_) => true,
-        None => false,
-    };
+    let run_only_passing_tests = std::env::args().any(|x| x == "--shadow-passing");
     // should we summarize the results rather than exit on a failed test
-    let summarize = match std::env::args().position(|x| x == "--summarize") {
-        Some(_) => true,
-        None => false,
-    };
+    let summarize = std::env::args().any(|x| x == "--summarize");
 
     // for combinations of the possible arguments, are there any that should return an error?
     let error_conditions = [
@@ -244,12 +238,10 @@ fn main() {
         get_all_tests()
     };
 
-    if let Err(_) = run_tests(tests.iter(), &error_conditions, summarize) {
-        println!("Failed.");
-        std::process::exit(1);
-    }
+    run_tests(tests.iter(), &error_conditions, summarize)?;
 
     println!("Success.");
+    Ok(())
 }
 
 fn get_passing_tests() -> Vec<(SocketFn, SocketArguments)> {
@@ -342,7 +334,7 @@ fn run_tests<'a, I>(
     tests: I,
     error_conditions: &[ErrorCondition],
     summarize: bool,
-) -> Result<(), ()>
+) -> Result<(), String>
 where
     I: Iterator<Item = &'a (SocketFn, SocketArguments)>,
 {
@@ -392,7 +384,7 @@ where
                 fd = None;
                 // if not summarizing, should exit immediately
                 if !summarize {
-                    return Err(());
+                    return Err("One of the tests failed.".to_string());
                 }
             }
         }
@@ -409,7 +401,7 @@ where
     if num_passed == num_performed {
         Ok(())
     } else {
-        Err(())
+        Err("One of the tests failed.".to_string())
     }
 }
 

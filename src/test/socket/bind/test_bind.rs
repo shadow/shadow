@@ -19,17 +19,11 @@ struct BindArguments {
 // a boxed function to run as a test
 type TestFn = Box<dyn Fn() -> Result<(), String>>;
 
-fn main() {
+fn main() -> Result<(), String> {
     // should we run only tests that shadow supports
-    let run_only_passing_tests = match std::env::args().position(|x| x == "--shadow-passing") {
-        Some(_) => true,
-        None => false,
-    };
+    let run_only_passing_tests = std::env::args().any(|x| x == "--shadow-passing");
     // should we summarize the results rather than exit on a failed test
-    let summarize = match std::env::args().position(|x| x == "--summarize") {
-        Some(_) => true,
-        None => false,
-    };
+    let summarize = std::env::args().any(|x| x == "--summarize");
 
     let tests = if run_only_passing_tests {
         get_passing_tests()
@@ -37,12 +31,10 @@ fn main() {
         get_all_tests()
     };
 
-    if let Err(_) = run_tests(tests.iter(), summarize) {
-        println!("Failed.");
-        std::process::exit(1);
-    }
+    run_tests(tests.iter(), summarize)?;
 
     println!("Success.");
+    Ok(())
 }
 
 fn get_passing_tests() -> std::collections::BTreeMap<String, TestFn> {
@@ -135,7 +127,7 @@ fn get_all_tests() -> std::collections::BTreeMap<String, TestFn> {
     tests
 }
 
-fn run_tests<'a, I>(tests: I, summarize: bool) -> Result<(), ()>
+fn run_tests<'a, I>(tests: I, summarize: bool) -> Result<(), String>
 where
     I: Iterator<Item = (&'a String, &'a TestFn)>,
 {
@@ -146,7 +138,7 @@ where
             Err(msg) => {
                 println!(" ✗ ({})", msg);
                 if !summarize {
-                    return Err(());
+                    return Err("One of the tests failed.".to_string());
                 }
             }
             Ok(_) => {
