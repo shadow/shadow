@@ -73,15 +73,9 @@ impl SocketFn {
 
 fn main() {
     // should we run only tests that shadow supports
-    let run_only_passing_tests = match std::env::args().position(|x| x == "--shadow-passing") {
-        Some(_) => true,
-        None => false,
-    };
+    let run_only_passing_tests = std::env::args().any(|x| x == "--shadow-passing");
     // should we summarize the results rather than exit on a failed test
-    let summarize = match std::env::args().position(|x| x == "--summarize") {
-        Some(_) => true,
-        None => false,
-    };
+    let summarize = std::env::args().any(|x| x == "--summarize");
 
     // for combinations of the possible arguments, are there any that should return an error?
     let error_conditions = [
