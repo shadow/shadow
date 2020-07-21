@@ -38,7 +38,8 @@ typedef struct _PHold PHold;
 struct _PHold {
     GString* basename;
     guint64 quantity;
-    guint64 load;
+    guint64 msgload;
+    guint64 cpuload;
     guint64 size;
     GString* weightsfilepath;
 
@@ -244,8 +245,8 @@ static void _phold_sendNewMessage(PHold* phold) {
 }
 
 static void _phold_bootstrapMessages(PHold* phold) {
-    phold_info("sending %"G_GUINT64_FORMAT" messages to bootstrap", phold->load);
-    for(guint64 i = 0; i < phold->load; i++) {
+    phold_info("sending %" G_GUINT64_FORMAT " messages to bootstrap", phold->msgload);
+    for (guint64 i = 0; i < phold->msgload; i++) {
         _phold_sendNewMessage(phold);
     }
 }
@@ -317,6 +318,15 @@ static inline void _phold_logHeartbeatMessage(PHold* phold) {
     phold->num_bytes_sent = 0;
 }
 
+static void _phold_generateCPULoad(PHold* phold) {
+    PHOLD_ASSERT(phold);
+    // this is volatile to prevent the compiler from optimizing out the loop
+    double volatile result = 0;
+    for (guint64 i = 0; i < phold->cpuload; i++) {
+        result = sqrt((double)i);
+    }
+}
+
 static void _phold_wait_and_process_events(PHold* phold) {
     PHOLD_ASSERT(phold);
 
@@ -364,7 +374,10 @@ static void _phold_wait_and_process_events(PHold* phold) {
 
             phold_debug("got new message of %lu bytes from peer at %s", (unsigned int) nBytes, netbuf);
 
-            // send another message to maintain configured load
+            // generate configured amount of cpu load
+            _phold_generateCPULoad(phold);
+
+            // send another message to maintain configured msgload
             _phold_sendNewMessage(phold);
         }
     }
@@ -498,15 +511,18 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
     /* loglevel: one of 'debug' or 'info'
      * basename: name of the test nodes in shadow, without the integer suffix
      * quantity: number of test nodes running in the experiment with the same basename as this one
-     * load: number of messages to generate when the simulation starts
-     * weightsfile: path to a file containing $quantity weights according to which messages will be sent to peers */
-    const gchar* usage = "loglevel=STR basename=STR quantity=INT load=INT weights=PATH";
+     * msgload: number of messages to generate when the simulation starts
+     * cpuload: number of iterations of sqrt to run whenever a message is received
+     * weightsfile: path to a file containing $quantity weights according to which messages will be
+     * sent to peers */
+    const gchar* usage =
+        "loglevel=STR basename=STR quantity=INT msgload=INT cpuload=INT weights=PATH";
 
     gchar myname[128];
     g_assert(gethostname(&myname[0], 128) == 0);
 
     int num_params_found = 0;
-#define ARGC_PEER 7
+#define ARGC_PEER 8
 
     if(argc == ARGC_PEER && argv != NULL) {
         /* argv[0] is the program name */
@@ -527,8 +543,11 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
             } else if(!g_ascii_strcasecmp(config[0], "quantity")) {
                 phold->quantity = g_ascii_strtoull(config[1], NULL, 10);
                 num_params_found++;
-            } else if(!g_ascii_strcasecmp(config[0], "load")) {
-                phold->load = g_ascii_strtoull(config[1], NULL, 10);
+            } else if (!g_ascii_strcasecmp(config[0], "msgload")) {
+                phold->msgload = g_ascii_strtoull(config[1], NULL, 10);
+                num_params_found++;
+            } else if (!g_ascii_strcasecmp(config[0], "cpuload")) {
+                phold->cpuload = g_ascii_strtoull(config[1], NULL, 10);
                 num_params_found++;
             } else if (!g_ascii_strcasecmp(config[0], "size")) {
                 phold->size = g_ascii_strtoull(config[1], NULL, 10);
@@ -571,10 +590,10 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
         memset(phold->sendbuf, 666, phold->size);
 
         phold_info("successfully parsed options for %s: "
-                   "basename=%s quantity=%" G_GUINT64_FORMAT " load=%" G_GUINT64_FORMAT
-                   " size=%" G_GUINT64_FORMAT " weightsfilepath=%s",
-                   &myname[0], phold->basename->str, phold->quantity, phold->load, phold->size,
-                   phold->weightsfilepath->str);
+                   "basename=%s quantity=%" G_GUINT64_FORMAT " msgload=%" G_GUINT64_FORMAT
+                   " cpuload=%" G_GUINT64_FORMAT " size=%" G_GUINT64_FORMAT " weightsfilepath=%s",
+                   &myname[0], phold->basename->str, phold->quantity, phold->msgload,
+                   phold->cpuload, phold->size, phold->weightsfilepath->str);
 
         return TRUE;
     } else {
