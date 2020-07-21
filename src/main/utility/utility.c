@@ -356,16 +356,3 @@ struct timespec utility_timespecFromMillis(int64_t millis) {
         .tv_nsec = (millis % 1000) * 1000000, // ms to ns
     };
 }
-
-
-GString* utility_getFileContent(FILE *stream) {
-    char buf[BUFSIZ];
-    GString *content = g_string_new(NULL);
-
-    memset(buf, 0, sizeof(buf));
-    while (NULL != fgets(buf, sizeof(buf), stream)) {
-        g_string_append(content, buf);
-    }
-
-    return content;
-}

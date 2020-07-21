@@ -177,7 +177,7 @@ static gboolean _master_loadConfiguration(Master* master) {
 
         // Read config from file or stdin
         if (0 == g_strcmp0("-", fileName->str)) {
-            file = utility_getFileContent(stdin);
+            file = utility_getFileContents("/dev/stdin");
         } else {
             file = utility_getFileContents(fileName->str);
         }

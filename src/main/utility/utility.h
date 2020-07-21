@@ -105,7 +105,4 @@ void utility_handleError(const gchar* file, gint line, const gchar* funtcion, co
  * of seconds and nanoseconds. */
 struct timespec utility_timespecFromMillis(int64_t millis);
 
-/* Read the content of a file stream and return it */
-GString* utility_getFileContent(FILE *stream);
-
 #endif /* SHD_UTILITY_H_ */
