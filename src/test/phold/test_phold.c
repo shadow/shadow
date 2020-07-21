@@ -321,9 +321,9 @@ static inline void _phold_logHeartbeatMessage(PHold* phold) {
 static void _phold_generateCPULoad(PHold* phold) {
     PHOLD_ASSERT(phold);
     // this is volatile to prevent the compiler from optimizing out the loop
-    double volatile result = 0;
+    guint64 volatile result = 0;
     for (guint64 i = 0; i < phold->cpuload; i++) {
-        result = sqrt((double)i);
+        result = i;
     }
 }
 
@@ -512,7 +512,7 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
      * basename: name of the test nodes in shadow, without the integer suffix
      * quantity: number of test nodes running in the experiment with the same basename as this one
      * msgload: number of messages to generate when the simulation starts
-     * cpuload: number of iterations of sqrt to run whenever a message is received
+     * cpuload: number of iterations of a CPU busy loop to run whenever a message is received
      * weightsfile: path to a file containing $quantity weights according to which messages will be
      * sent to peers */
     const gchar* usage =
