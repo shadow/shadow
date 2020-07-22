@@ -16,6 +16,7 @@ add_cflags(-fPIC)
 
 set(SHIM_HELPER_LIB shadow-shim-helper)
 set(SHIM_HELPER_FILES
+  gate.cc
   shim_event.c
   spin.cc
 )

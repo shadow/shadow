@@ -290,7 +290,13 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                     .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
                 };
 
+                ShimEvent resp = {0};
+
                 shimevent_sendEventToPlugin(thread->eventFD, &ipc_complete_ev);
+
+                shimevent_recvEventFromPlugin(thread->eventFD, &resp);
+
+                utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
 
                 ShimEvent shim_result;
                 if (result.state == SYSCALL_DONE) {

@@ -10,27 +10,19 @@
 #include <sched.h>
 
 #include "main/shmem/shmem_file.h"
+#include "shim/gate.h"
 
 #define NBYTES (1ULL << 24)
 
 struct IPCData {
 
     ShimEvent plugin_to_shadow, shadow_to_plugin;
-    std::atomic<bool> xfer_ctrl_to_plugin, xfer_ctrl_to_shadow;
+    Gate xfer_ctrl_to_plugin, xfer_ctrl_to_shadow;
 
 };
 
 static bool _shmemfile_init = false;
 static ShMemFile _shmemfile = {0};
-
-static inline void _spinwait(std::atomic<bool> *atm) {
-  bool expected = true;
-
-  while (!atm->compare_exchange_strong(expected, false)) {
-    sched_yield();
-    expected = true;
-  }
-}
 
 static inline IPCData *_ipcDataGet(int idx) {
 
@@ -78,31 +70,52 @@ void ipcDataInitIdx(size_t idx) {
 void ipcDataInit(IPCData *ipc_data) {
     memset(ipc_data, 0, sizeof(IPCData));
 
-    ipc_data->xfer_ctrl_to_plugin.store(false);
-    ipc_data->xfer_ctrl_to_shadow.store(false);
+    gate_init(&ipc_data->xfer_ctrl_to_plugin);
+    gate_init(&ipc_data->xfer_ctrl_to_shadow);
 }
 
+static int toggle_ = 1;
+static int x_ = 0;
+
 void shimevent_sendEventToShadow(int event_fd, const ShimEvent* e) {
+
+    x_ += 1;
+    if (toggle_ == 1) {
+        assert(false);
+    }
+    toggle_ = 1;
+
     IPCData *data = _ipcDataGet(event_fd);
     data->plugin_to_shadow = *e;
-    data->xfer_ctrl_to_shadow.store(true);
+
+    gate_open(&data->xfer_ctrl_to_shadow);
 }
+
 
 void shimevent_sendEventToPlugin(int event_fd, const ShimEvent* e) {
     IPCData *data = _ipcDataGet(event_fd);
     data->shadow_to_plugin = *e;
-    data->xfer_ctrl_to_plugin.store(true);
+
+    gate_open(&data->xfer_ctrl_to_plugin);
 }
 
 void shimevent_recvEventFromShadow(int event_fd, ShimEvent* e) {
+    x_ += 1;
+    if (toggle_ == 0) {
+        assert(false);
+    }
+    toggle_ = 0;
+
     IPCData *data = _ipcDataGet(event_fd);
-    _spinwait(&data->xfer_ctrl_to_plugin);
+
+    gate_pass_and_close(&data->xfer_ctrl_to_plugin);
+
     *e = data->shadow_to_plugin;
 }
 
 void shimevent_recvEventFromPlugin(int event_fd, ShimEvent* e) {
     IPCData *data = _ipcDataGet(event_fd);
-    _spinwait(&data->xfer_ctrl_to_shadow);
+    gate_pass_and_close(&data->xfer_ctrl_to_shadow);
     *e = data->plugin_to_shadow;
 }
 
