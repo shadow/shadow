@@ -496,3 +496,9 @@ extern "C" {
 extern "C" {
     pub fn thread_isRunning(thread: *mut Thread) -> bool;
 }
+extern "C" {
+    pub fn thread_getProcessId(thread: *mut Thread) -> u32;
+}
+extern "C" {
+    pub fn thread_getHostId(thread: *mut Thread) -> u32;
+}

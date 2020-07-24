@@ -162,3 +162,13 @@ void thread_freePluginPtr(Thread* thread, PluginPtr ptr, size_t size) {
         abort();
     }
 }
+
+uint32_t thread_getProcessId(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    return process_getProcessID(thread->process);
+}
+
+uint32_t thread_getHostId(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    return host_getID(thread->host);
+}
