@@ -48,7 +48,7 @@ static bool _syscallhandler_readableWhenClosed(SysCallHandler* sys,
 static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
                                                 Socket** sock_desc_out) {
     /* Check that fd is within bounds. */
-    if (sockfd <= 0) {
+    if (sockfd < 0) {
         info("descriptor %i out of bounds", sockfd);
         return -EBADF;
     }
@@ -253,28 +253,23 @@ _syscallhandler_getnameHelper(SysCallHandler* sys,
                               PluginPtr addrlenPtr) {
     if (!addrPtr.val || !addrlenPtr.val) {
         info("Cannot get name with NULL return address info.");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* Get the len via clone, so we can write to addrlenPtr too. */
     size_t sizeAvail = _syscallhandler_getSocklenHelper(sys, addrlenPtr);
 
-    if (sizeAvail <= 0) {
-        info("Unable to store name in %zu bytes.", sizeAvail);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
     /* The result is truncated if they didn't give us enough space. */
     size_t retSize = MIN(sizeAvail, sizeof(*inet_addr));
 
-    /* Return the results */
-    struct sockaddr* addr =
-        thread_getWriteablePtr(sys->thread, addrPtr, retSize);
-    socklen_t* addrlen =
-        thread_getWriteablePtr(sys->thread, addrlenPtr, sizeof(*addrlen));
+    if (retSize > 0) {
+        /* Return the results */
+        struct sockaddr* addr = thread_getWriteablePtr(sys->thread, addrPtr, retSize);
+        memcpy(addr, inet_addr, retSize);
+    }
 
-    memcpy(addr, inet_addr, retSize);
-    *addrlen = (socklen_t)retSize;
+    socklen_t* addrlen = thread_getWriteablePtr(sys->thread, addrlenPtr, sizeof(*addrlen));
+    *addrlen = (socklen_t)sizeof(*inet_addr);
 
     return (SysCallReturn){.state = SYSCALL_DONE};
 }
@@ -886,12 +881,7 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
     struct sockaddr_in inet_addr = {.sin_family = AF_INET};
     gboolean hasName = socket_getSocketName(
         socket_desc, &inet_addr.sin_addr.s_addr, &inet_addr.sin_port);
-    if (!hasName) {
-        /* TODO: check what Linux returns on new, unbound socket. The man
-         * page does not specify; using EINVAL for now. */
-        info("Unbound socket %i has no name.", sockfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
+    /* If !hasName, leave sin_addr and sin_port at their default 0 values. */
 
     /* If we are bound to INADDR_ANY, we should instead return the address used
      * to communicate with the connected peer (if we have one). */
