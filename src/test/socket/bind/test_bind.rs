@@ -13,7 +13,7 @@ enum LibcSockAddr {
 struct BindArguments {
     fd: libc::c_int,
     addr: Option<LibcSockAddr>, // if None, a null pointer should be used
-    addr_len: Option<libc::socklen_t>, // if None, the length should be derived from addr
+    addr_len: libc::socklen_t,
 }
 
 // a boxed function to run as a test
@@ -155,7 +155,7 @@ fn test_invalid_fd() -> Result<(), String> {
     let args = BindArguments {
         fd: -1,
         addr: None,
-        addr_len: Some(5),
+        addr_len: 5,
     };
 
     check_bind_call(&args, Some(libc::EBADF))
@@ -166,7 +166,7 @@ fn test_non_existent_fd() -> Result<(), String> {
     let args = BindArguments {
         fd: 8934,
         addr: None,
-        addr_len: Some(5),
+        addr_len: 5,
     };
 
     check_bind_call(&args, Some(libc::EBADF))
@@ -177,7 +177,7 @@ fn test_non_socket_fd() -> Result<(), String> {
     let args = BindArguments {
         fd: 0, // assume the fd 0 is already open and is not a socket
         addr: None,
-        addr_len: Some(5),
+        addr_len: 5,
     };
 
     check_bind_call(&args, Some(libc::ENOTSOCK))
@@ -191,7 +191,7 @@ fn test_null_addr() -> Result<(), String> {
     let args = BindArguments {
         fd: fd,
         addr: None,
-        addr_len: Some(5),
+        addr_len: 5,
     };
 
     run_and_close_fds(&[fd], || check_bind_call(&args, Some(libc::EFAULT)))
@@ -214,7 +214,7 @@ fn test_short_addr() -> Result<(), String> {
     let args = BindArguments {
         fd: fd,
         addr: Some(LibcSockAddr::In(addr)),
-        addr_len: Some((std::mem::size_of::<libc::sockaddr_in>() - 1) as u32),
+        addr_len: (std::mem::size_of_val(&addr) - 1) as u32,
     };
 
     run_and_close_fds(&[fd], || check_bind_call(&args, Some(libc::EINVAL)))
@@ -237,7 +237,7 @@ fn test_ipv4(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String> {
     let args = BindArguments {
         fd: fd,
         addr: Some(LibcSockAddr::In(addr)),
-        addr_len: None,
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     run_and_close_fds(&[fd], || check_bind_call(&args, None))
@@ -264,7 +264,7 @@ fn test_ipv6(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String> {
     let args = BindArguments {
         fd: fd,
         addr: Some(LibcSockAddr::In6(addr)),
-        addr_len: None,
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     run_and_close_fds(&[fd], || check_bind_call(&args, None))
@@ -287,7 +287,7 @@ fn test_loopback(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String
     let args = BindArguments {
         fd: fd,
         addr: Some(LibcSockAddr::In(addr)),
-        addr_len: None,
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     run_and_close_fds(&[fd], || check_bind_call(&args, None))
@@ -310,7 +310,7 @@ fn test_any_interface(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), S
     let args = BindArguments {
         fd: fd,
         addr: Some(LibcSockAddr::In(addr)),
-        addr_len: None,
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     run_and_close_fds(&[fd], || check_bind_call(&args, None))
@@ -333,7 +333,7 @@ fn test_double_bind_socket(sock_type: libc::c_int, flag: libc::c_int) -> Result<
     let args = BindArguments {
         fd: fd,
         addr: Some(LibcSockAddr::In(addr)),
-        addr_len: None,
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     run_and_close_fds(&[fd], || {
@@ -362,13 +362,13 @@ fn test_double_bind_address(sock_type: libc::c_int, flag: libc::c_int) -> Result
     let args1 = BindArguments {
         fd: fd1,
         addr: Some(LibcSockAddr::In(addr)),
-        addr_len: None,
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     let args2 = BindArguments {
         fd: fd2,
         addr: Some(LibcSockAddr::In(addr)),
-        addr_len: None,
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     run_and_close_fds(&[fd1, fd2], || {
@@ -417,13 +417,13 @@ fn test_double_bind_loopback_and_any(
     let args1 = BindArguments {
         fd: fd1,
         addr: Some(LibcSockAddr::In(addr1)),
-        addr_len: None,
+        addr_len: std::mem::size_of_val(&addr1) as u32,
     };
 
     let args2 = BindArguments {
         fd: fd2,
         addr: Some(LibcSockAddr::In(addr2)),
-        addr_len: None,
+        addr_len: std::mem::size_of_val(&addr2) as u32,
     };
 
     run_and_close_fds(&[fd1, fd2], || {
@@ -450,7 +450,7 @@ fn test_unspecified_port(sock_type: libc::c_int, flag: libc::c_int) -> Result<()
     let args = BindArguments {
         fd: fd,
         addr: Some(LibcSockAddr::In(addr)),
-        addr_len: None,
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     run_and_close_fds(&[fd], || check_bind_call(&args, None))
@@ -507,17 +507,11 @@ fn check_bind_call(
         None => (std::ptr::null(), 0),
     };
 
-    // if we were given a length, use that instead
-    let addr_len = match args.addr_len {
-        Some(len) => len,
-        None => real_addr_len as u32,
-    };
+    // if the pointer is non-null, make sure the provided size is not greater than the actual
+    // data size so that we don't segfault
+    assert!(addr_ptr.is_null() || args.addr_len as usize <= real_addr_len);
 
-    // if the pointer is non-null, make sure the size is not greater than the actual data size so
-    // that we don't segfault
-    assert!(addr_ptr.is_null() || addr_len as usize <= real_addr_len);
-
-    let rv = unsafe { libc::bind(args.fd, addr_ptr, addr_len) };
+    let rv = unsafe { libc::bind(args.fd, addr_ptr, args.addr_len) };
 
     let errno = get_errno();
 
