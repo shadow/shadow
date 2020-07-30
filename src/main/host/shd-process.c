@@ -478,8 +478,9 @@ static void _process_loadPlugin(Process* proc) {
     /* make sure it has the required init function */
     gpointer symbol = NULL;
 
-    symbol = dlsym(proc->plugin.handle, _process_getPluginStartSymbol(proc) ?
-                   _process_getPluginStartSymbol(proc) : PLUGIN_DEFAULT_SYMBOL);
+    //symbol = dlsym(proc->plugin.handle, _process_getPluginStartSymbol(proc) ?
+    //               _process_getPluginStartSymbol(proc) : PLUGIN_DEFAULT_SYMBOL);
+    symbol = dlsym(proc->plugin.handle, "mainGo");
     if(symbol) {
         proc->plugin.main = symbol;
         message("found '%s' at %p", _process_getPluginStartSymbol(proc), symbol);
@@ -4922,7 +4923,9 @@ int process_emu_sigaction(Process* proc, int signum, const struct sigaction* act
          * the signal is triggered a second time, then abort the process. /TODO
          */
         return 0;
-    } else {
+    } else if (proc->plugin.sigaction == NULL)
+        return 0;
+    else {
         /* allow the plugin to set handlers for other signals */
         return proc->plugin.sigaction(signum, action, oldaction);
     }
