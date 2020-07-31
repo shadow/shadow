@@ -3,7 +3,7 @@
 # Second, ensure this XML file is understandable by Shadow by running it with the Shadow executable
 # Third, make a diff between the files generated and the example files
 
-add_executable(test-config test_config.c)
+add_executable(test-config-convert test_config.c)
 
 # Convert a XML file to YAML
 add_test(
