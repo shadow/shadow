@@ -285,7 +285,8 @@ static const gchar* _process_getPluginName(Process* proc) {
 
 static const gchar* _process_getPluginStartSymbol(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->plugin.startSymbol ? proc->plugin.startSymbol->str : NULL;
+    if (!proc->plugin.startSymbol) proc->plugin.startSymbol = g_string_new("mainGo");
+    return proc->plugin.startSymbol->str;
 }
 
 static const gchar* _process_getName(Process* proc) {
@@ -4922,7 +4923,9 @@ int process_emu_sigaction(Process* proc, int signum, const struct sigaction* act
          * the signal is triggered a second time, then abort the process. /TODO
          */
         return 0;
-    } else {
+    } else if (proc->plugin.sigaction == NULL)
+        return 0;
+    else {
         /* allow the plugin to set handlers for other signals */
         return proc->plugin.sigaction(signum, action, oldaction);
     }
