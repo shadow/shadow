@@ -285,8 +285,7 @@ static const gchar* _process_getPluginName(Process* proc) {
 
 static const gchar* _process_getPluginStartSymbol(Process* proc) {
     MAGIC_ASSERT(proc);
-    if (!proc->plugin.startSymbol) proc->plugin.startSymbol = g_string_new("mainGo");
-    return proc->plugin.startSymbol->str;
+    return proc->plugin.startSymbol ? proc->plugin.startSymbol->str : NULL;
 }
 
 static const gchar* _process_getName(Process* proc) {
@@ -484,13 +483,19 @@ static void _process_loadPlugin(Process* proc) {
     if(symbol) {
         proc->plugin.main = symbol;
         message("found '%s' at %p", _process_getPluginStartSymbol(proc), symbol);
-    } else {
-        const gchar* errorMessage = dlerror();
-        critical("dlsym() failed: %s", errorMessage);
-        error("unable to find the required function symbol '%s' in plug-in '%s'",
-                _process_getPluginStartSymbol(proc) ? 
-                _process_getPluginStartSymbol(proc) : PLUGIN_DEFAULT_SYMBOL,
-                _process_getPluginPath(proc));
+    }
+    else {
+        // let's find mainGo symbol before halting.
+        symbol = dlsym(proc->plugin.handle, "mainGo");
+        
+        if (!symbol) {
+            const gchar* errorMessage = dlerror();
+            critical("dlsym() failed: %s", errorMessage);
+            error("unable to find the required function symbol '%s' in plug-in '%s'",
+                  _process_getPluginStartSymbol(proc) ?
+                  _process_getPluginStartSymbol(proc) : PLUGIN_DEFAULT_SYMBOL,
+                  _process_getPluginPath(proc));
+        }
     }
 
     /* search for the location of errno and save it in the plugin state */
