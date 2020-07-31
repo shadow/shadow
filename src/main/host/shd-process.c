@@ -285,7 +285,8 @@ static const gchar* _process_getPluginName(Process* proc) {
 
 static const gchar* _process_getPluginStartSymbol(Process* proc) {
     MAGIC_ASSERT(proc);
-    return proc->plugin.startSymbol ? proc->plugin.startSymbol->str : NULL;
+    if (!proc->plugin.startSymbol) proc->plugin.startSymbol = g_string_new("mainGo");
+    return proc->plugin.startSymbol->str;
 }
 
 static const gchar* _process_getName(Process* proc) {
@@ -478,9 +479,8 @@ static void _process_loadPlugin(Process* proc) {
     /* make sure it has the required init function */
     gpointer symbol = NULL;
 
-    //symbol = dlsym(proc->plugin.handle, _process_getPluginStartSymbol(proc) ?
-    //               _process_getPluginStartSymbol(proc) : PLUGIN_DEFAULT_SYMBOL);
-    symbol = dlsym(proc->plugin.handle, "mainGo");
+    symbol = dlsym(proc->plugin.handle, _process_getPluginStartSymbol(proc) ?
+                   _process_getPluginStartSymbol(proc) : PLUGIN_DEFAULT_SYMBOL);
     if(symbol) {
         proc->plugin.main = symbol;
         message("found '%s' at %p", _process_getPluginStartSymbol(proc), symbol);
