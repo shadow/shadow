@@ -1,1 +1,2 @@
 add_subdirectory(convert)
+add_subdirectory(read_from_stdin)
