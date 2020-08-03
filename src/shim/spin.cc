@@ -7,8 +7,6 @@
 #include <stddef.h>
 #include <string.h>
 
-#include <sched.h>
-
 #include "main/shmem/shmem_file.h"
 #include "shim/gate.h"
 
@@ -27,8 +25,6 @@ static ShMemFile _shmemfile = {0};
 static inline IPCData *_ipcDataGet(int idx) {
 
     assert(_shmemfile.p);
-
-    IPCData *rv = NULL;
 
     IPCData *base = (IPCData*)_shmemfile.p;
 
@@ -78,7 +74,6 @@ static int toggle_ = 1;
 static int x_ = 0;
 
 void shimevent_sendEventToShadow(int event_fd, const ShimEvent* e) {
-
     x_ += 1;
     if (toggle_ == 1) {
         assert(false);

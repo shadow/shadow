@@ -22,7 +22,7 @@ set(SHIM_HELPER_FILES
 )
 add_library(${SHIM_HELPER_LIB} STATIC ${SHIM_HELPER_FILES})
 # -D_GNU_SOURCE enables some additional features in libc, such at RTLD_NEXT.
-target_compile_options(${SHIM_HELPER_LIB} PRIVATE -D_GNU_SOURCE)
+target_compile_options(${SHIM_HELPER_LIB} PRIVATE -D_GNU_SOURCE -fPIC)
 target_link_libraries(${SHIM_HELPER_LIB} PRIVATE shadow-shmem)
 
 set(SHIM_LIB shadow-shim)

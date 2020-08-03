@@ -22,9 +22,9 @@
   </graph>
 </graphml>
 ]]></topology>
-  <plugin id="tgen" path="./sleepy"/>
-  <host id="server" quantity="1">
-    <process plugin="tgen" starttime="1" arguments="tgen.server.graphml.xml"/>
+  <plugin id="sleepy" path="./sleepy"/>
+  <host id="server" quantity="500">
+    <process plugin="sleepy" starttime="1" arguments=""/>
   </host>
 </shadow>
 

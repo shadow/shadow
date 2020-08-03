@@ -83,7 +83,7 @@ _shim_load() {
 
     struct sched_param sparam = {0};
     sparam.sched_priority = 1;
-    //sched_setscheduler(0, SCHED_FIFO, &sparam);
+    // sched_setscheduler(0, SCHED_FIFO, &sparam);
 
     // We ultimately want to log to SHADOW_LOG_FILE, but we must temporarily
     // override the default logger with one that has a recursion-guard before

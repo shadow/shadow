@@ -191,11 +191,12 @@ void threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
 
     int child_fd = 0;
     thread->eventFD = ipc_idx;
-    child_fd = ipc_idx++;
+    child_fd = ipc_idx;
     utility_assert(thread->eventFD != -1 && child_fd != -1);
 
     struct IPCData *data = globalIPCDataCreate();
     ipcDataInitIdx(ipc_idx);
+    ipc_idx += 1;
 
     char buf[64];
     snprintf(buf, 64, "%d", child_fd);
