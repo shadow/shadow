@@ -487,7 +487,8 @@ static void _process_loadPlugin(Process* proc) {
     else {
         // let's find mainGo symbol before halting.
         symbol = dlsym(proc->plugin.handle, "mainGo");
-        
+        proc->plugin.main = symbol;
+
         if (!symbol) {
             const gchar* errorMessage = dlerror();
             critical("dlsym() failed: %s", errorMessage);
