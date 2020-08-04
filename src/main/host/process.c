@@ -346,6 +346,10 @@ void process_stop(Process* proc) {
         proc->plugin.isExecuting = TRUE;
         thread_terminate(proc->mainThread);
         proc->plugin.isExecuting = FALSE;
+
+        /* if the return code was non-zero, increment the number of plugin errors */
+        _process_logReturnCode(proc, thread_getReturnCode(proc->mainThread));
+
         debug("unreffing main thread %p", proc->mainThread);
         thread_unref(proc->mainThread);
         proc->mainThread = NULL;

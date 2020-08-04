@@ -33,6 +33,7 @@ add_executable(shadow-test-launcher-fail test_launcher_fail.c test_launcher_comm
 # FIXME add_subdirectory(dynlink)
 # FIXME add_subdirectory(preload)
 
+add_subdirectory(stoptime)
 add_subdirectory(bind)
 add_subdirectory(config)
 add_subdirectory(cpp)

@@ -499,9 +499,11 @@ void threadptrace_terminate(Thread* base) {
         return;
     }
 
-    if (ptrace(PTRACE_CONT, thread->base.nativePid, 0, SIGTERM) < 0) {
+    if (ptrace(PTRACE_DETACH, thread->base.nativePid, 0, SIGTERM) < 0) {
         warning("ptrace %d: %s", thread->base.nativePid, g_strerror(errno));
     }
+
+    _threadptrace_nextChildState(thread);
 }
 
 int threadptrace_getReturnCode(Thread* base) {

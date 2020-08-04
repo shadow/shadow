@@ -188,6 +188,11 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         return EXIT_FAILURE;
     }
 
+    /* unblock all signals since cmake's ctest blocks SIGTERM (and maybe others) */
+    sigset_t new_sig_set;
+    sigemptyset(&new_sig_set);
+    sigprocmask(SIG_SETMASK, &new_sig_set, NULL);
+
     /* parse the options from the command line */
     gchar* cmds = g_strjoinv(" ", argv);
     gchar** cmdv = g_strsplit(cmds, " ", 0);
