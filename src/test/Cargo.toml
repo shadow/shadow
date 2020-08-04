@@ -25,5 +25,9 @@ path = "socket/listen/test_listen.rs"
 name = "test_getsockname"
 path = "socket/getsockname/test_getsockname.rs"
 
+[[bin]]
+name = "test_accept"
+path = "socket/accept/test_accept.rs"
+
 [dependencies]
 libc = "0.2"
