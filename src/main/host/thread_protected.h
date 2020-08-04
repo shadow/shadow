@@ -38,8 +38,8 @@ struct _Thread {
 
     ThreadMethods methods;
     int threadID;
-    Host *host;
-    Process *process;
+    Host* host;
+    Process* process;
     int referenceCount;
 
     MAGIC_DECLARE;

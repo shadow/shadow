@@ -21,14 +21,12 @@
 #include "support/logger/logger.h"
 
 Thread thread_create(Host* host, Process* process, int type_id, ThreadMethods methods) {
-    Thread thread = {
-        .type_id = type_id,
-        .methods = methods,
-        .referenceCount = 1,
-        .host = host,
-        .process = process,
-        MAGIC_INITIALIZER
-    };
+    Thread thread = {.type_id = type_id,
+                     .methods = methods,
+                     .referenceCount = 1,
+                     .host = host,
+                     .process = process,
+                     MAGIC_INITIALIZER};
     host_ref(host);
     process_ref(process);
     return thread;
