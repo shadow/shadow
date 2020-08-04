@@ -24,7 +24,7 @@ kill:
 - time: 5
 plugins:
 - id: testconfig
-  path: test-config
+  path: test-config-convert
 hosts:
 - id: testclient
   quantity: 1

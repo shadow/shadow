@@ -175,7 +175,13 @@ static gboolean _master_loadConfiguration(Master* master) {
             return FALSE;
         }
 
-        file = utility_getFileContents(fileName->str);
+        // Read config from file or stdin
+        if (0 == g_strcmp0("-", fileName->str)) {
+            file = utility_getFileContents("/dev/stdin");
+        } else {
+            file = utility_getFileContents(fileName->str);
+        }
+
         if(!file) {
             critical("unable to read configuration file contents");
             return FALSE;

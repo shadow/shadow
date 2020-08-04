@@ -19,7 +19,7 @@
 </graphml>
 ]]></topology>
   <kill time="5"/>
-  <plugin id="testconfig" path="test-config"/>
+  <plugin id="testconfig" path="test-config-convert"/>
   <node id="testclient" quantity="1">
     <application plugin="testconfig" starttime="1" arguments="client 5678"/>
   </node>
