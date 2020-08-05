@@ -198,7 +198,7 @@ impl<V: Clone> IntervalMap<V> {
         // after the splice end (after having clipped the end of any existing interval contained in
         // the range, above).
         let splice_end = match self.ends.binary_search(&end) {
-            Ok(i) if self.ends[i] <= end => i + 1,
+            Ok(i) if (self.ends[i] <= end) => i + 1,
             Ok(i) | Err(i) => i,
         };
 
@@ -344,10 +344,10 @@ mod tests {
 
     #[test]
     fn test_insert_random() {
-        use rand::thread_rng;
         use rand::Rng;
+        use rand_core::SeedableRng;
         let dist = rand::distributions::Uniform::new_inclusive(0, 10);
-        let mut rng = thread_rng();
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);
         for i in 0..1000 {
             let mut m = IntervalMap::new();
             for j in 0..10 {
@@ -601,10 +601,10 @@ mod tests {
 
     #[test]
     fn test_clear_random() {
-        use rand::thread_rng;
         use rand::Rng;
+        use rand_core::SeedableRng;
         let dist = rand::distributions::Uniform::new_inclusive(0, 10);
-        let mut rng = thread_rng();
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);
         for i in 0..1000 {
             let mut m = IntervalMap::new();
             for j in 0..10 {
