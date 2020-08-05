@@ -110,6 +110,9 @@ typedef struct _Process Process;
 // BLEEP Related Functions
 #include "host/bleep_related/shd-bleep.h"
 
+// BLEEP IPC
+#include "ipc/ipc.h"
+
 
 #include "core/scheduler/shd-scheduler-policy.h"
 #include "core/scheduler/shd-scheduler.h"

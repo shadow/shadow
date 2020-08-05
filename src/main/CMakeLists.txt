@@ -107,6 +107,9 @@ set(shadow_srcs
     utility/shd-random.c
     utility/shd-utility.c
 
+    ipc/ipc.c
+
+
     main.c
 )
 
@@ -121,7 +124,7 @@ install(TARGETS shadow-remora DESTINATION lib)
 add_executable(shadow ${shadow_srcs})
 add_dependencies(shadow shadow-remora shadow-interpose-helper elf-loader rpth)
 ## 'shadow-interpose-helper' and 'vdl' are cmake targets, the rest are external libs for which '-l' is needed
-target_link_libraries(shadow shadow-interpose-helper vdl -lrpth
+target_link_libraries(shadow shadow-interpose-helper vdl -lrpth -lzmq
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
    ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} shadow-remora)
 install(TARGETS shadow DESTINATION bin)

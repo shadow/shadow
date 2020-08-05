@@ -695,6 +695,9 @@ static gint _main_helper(Options* options) {
 
     message("startup checks passed, we are ready to start simulation");
 
+
+    init_ipc(); // initialize IPC configuration
+
     /* pause for debugger attachment if the option is set */
     if(options_doRunDebug(options)) {
         gint pid = (gint)getpid();

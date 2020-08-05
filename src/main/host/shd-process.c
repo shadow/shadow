@@ -2226,6 +2226,9 @@ int process_emu_connect(Process* proc, int fd, const struct sockaddr* addr, sock
             _process_setErrno(proc, errno);
         }
     } else {
+        if (is_ipc_initialized()) {
+            sendIPC_tcp_connect(fd, addr, len);
+        }
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         ret = _process_emu_addressHelper(proc, fd, addr, &len, SCT_CONNECT);
         _process_changeContext(proc, prevCTX, PCTX_SHADOW);
@@ -2250,6 +2253,14 @@ ssize_t process_emu_send(Process* proc, int fd, const void *buf, size_t n, int f
             _process_setErrno(proc, errno);
         }
     } else {
+        if (is_ipc_initialized()) {
+            Descriptor *desc = host_lookupDescriptor(proc->host, fd);
+            DescriptorType dtype = descriptor_getType(desc);
+            if(dtype == DT_TCPSOCKET) {
+                Socket *socket = (Socket *) desc;
+                sendIPC_tcp_send(socket, fd, buf, n, flags);
+            }
+        }
         ret = _process_emu_sendHelper(proc, fd, buf, n, flags, NULL, 0);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2268,6 +2279,12 @@ ssize_t process_emu_sendto(Process* proc, int fd, const void *buf, size_t n, int
             _process_setErrno(proc, errno);
         }
     } else {
+        Descriptor *desc = host_lookupDescriptor(proc->host, fd);
+        DescriptorType dtype = descriptor_getType(desc);
+        if(dtype == DT_TCPSOCKET) {
+            Socket *socket = (Socket *) desc;
+            sendIPC_tcp_send(socket, fd, buf, n, flags);
+        }
         ret = _process_emu_sendHelper(proc, fd, buf, n, flags, addr, addr_len);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
