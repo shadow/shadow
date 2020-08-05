@@ -91,6 +91,7 @@ impl<'a, V> Iterator for KeyIter<'a, V> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct IntervalMap<V> {
     begins: Vec<usize>,
     ends: Vec<usize>,
@@ -197,6 +198,7 @@ impl<V: Clone> IntervalMap<V> {
         // after the splice end (after having clipped the end of any existing interval contained in
         // the range, above).
         let splice_end = match self.ends.binary_search(&end) {
+            Ok(i) if (self.ends[i] <= end) => i + 1,
             Ok(i) | Err(i) => i,
         };
 
@@ -286,43 +288,89 @@ mod tests {
         i.map(|x| x.end() - x.begin() + 1).sum()
     }
 
-    fn validate_map<V: Clone>(m: &IntervalMap<V>) {
+    fn validate_map<V: Clone>(m: &IntervalMap<V>) -> Result<(), String> {
         // Every interval is valid
         for i in m.keys() {
-            assert!(i.begin() <= i.end())
+            if i.begin() > i.end() {
+                return Err(format!("Invalid interval {:?}", i));
+            }
         }
 
         // Intervals don't overlap
         for (i1, i2) in m.keys().zip(m.keys().skip(1)) {
-            assert!(i1.end() < i2.begin());
+            if i1.end() >= i2.begin() {
+                return Err(format!("Overlapping intervals {:?} and {:?}", i1, i2));
+            }
         }
+
+        Ok(())
     }
 
-    // TODO: fuzz-test with this.
     fn insert_and_sanity_check(
         m: &mut IntervalMap<String>,
         begin: usize,
         end: usize,
         val: &str,
-    ) -> Vec<Mutation<String>> {
+    ) -> Result<Vec<Mutation<String>>, String> {
         let old_len_sum = interval_sum(m.keys());
-        let old_len = m.keys().count();
 
         // Do the insert.
         let mutations = m.insert(begin, end, val.to_string());
 
         // Validate general properties
-        validate_map(m);
+        validate_map(m)?;
 
         let new_len_sum = interval_sum(m.keys());
         let new_len = m.keys().count();
-        assert!(new_len_sum >= old_len_sum);
-        assert!(new_len_sum >= (end - begin + 1));
+        if new_len_sum < old_len_sum {
+            return Err(format!(
+                "length-sum shrunk from {} to {}",
+                old_len_sum, new_len_sum
+            ));
+        }
+        if !(new_len_sum >= (end - begin + 1)) {
+            return Err(format!(
+                "length-sum {} is smaller than inserted interval length {}",
+                new_len_sum,
+                end - begin + 1
+            ));
+        }
+        if new_len == 0 {
+            return Err(format!("new length is zero"));
+        }
 
-        assert!(new_len >= old_len);
-        assert!(new_len > 0);
+        Ok(mutations)
+    }
 
-        mutations
+    #[test]
+    fn test_insert_random() {
+        use rand::Rng;
+        use rand_core::SeedableRng;
+        let dist = rand::distributions::Uniform::new_inclusive(0, 10);
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);
+        for i in 0..1000 {
+            let mut m = IntervalMap::new();
+            for j in 0..10 {
+                let begin = rng.sample(dist);
+                let end = begin + rng.sample(dist);
+                let mut m_clone = m.clone();
+                // Catch panics (failures) so that we can print the failing test case.
+                let res = std::panic::catch_unwind(move || {
+                    insert_and_sanity_check(&mut m_clone, begin, end, &format!("{}.{}", i, j))
+                        .unwrap();
+                    m_clone
+                });
+                if !res.is_ok() {
+                    println!(
+                        "Failed inserting {} -> {} into {:?}",
+                        begin,
+                        end,
+                        m.iter().map(|(i, s)| (i, s.clone())).collect::<Vec<_>>()
+                    );
+                }
+                m = res.unwrap();
+            }
+        }
     }
 
     fn insert_and_validate(
@@ -333,7 +381,7 @@ mod tests {
         expected_mutations: &[Mutation<String>],
         expected_val: &[(Interval, &str)],
     ) {
-        let mutations = insert_and_sanity_check(m, begin, end, val);
+        let mutations = insert_and_sanity_check(m, begin, end, val).unwrap();
 
         // Validate the expected mutations.
         assert_eq!(mutations, expected_mutations);
@@ -490,6 +538,23 @@ mod tests {
     }
 
     #[test]
+    fn test_insert_over_exact() {
+        let mut m = IntervalMap::new();
+        m.insert(1, 1, "old".to_string());
+        insert_and_validate(
+            &mut m,
+            1,
+            1,
+            "new",
+            &[Mutation::Removed(
+                Interval { begin: 1, end: 1 },
+                "old".to_string(),
+            )],
+            &[(Interval::new(1, 1), "new")],
+        );
+    }
+
+    #[test]
     fn test_insert_all_mutations() {
         let mut m = IntervalMap::new();
         m.insert(0, 10, "first".to_string());
@@ -513,24 +578,66 @@ mod tests {
         );
     }
 
-    // TODO: fuzz-test with this.
     fn clear_and_sanity_check(
         m: &mut IntervalMap<String>,
         begin: usize,
         end: usize,
-    ) -> Vec<Mutation<String>> {
+    ) -> Result<Vec<Mutation<String>>, String> {
         let old_len = interval_sum(m.keys());
 
         // Do the clear
         let mutations = m.clear(begin, end);
 
         // Validate general properties
-        validate_map(m);
+        validate_map(m)?;
 
         let new_len = interval_sum(m.keys());
-        assert!(new_len <= old_len);
+        if new_len > old_len {
+            return Err(format!("new_len {} > old_len {}", new_len, old_len));
+        }
 
-        mutations
+        Ok(mutations)
+    }
+
+    #[test]
+    fn test_clear_random() {
+        use rand::Rng;
+        use rand_core::SeedableRng;
+        let dist = rand::distributions::Uniform::new_inclusive(0, 10);
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);
+        for i in 0..1000 {
+            let mut m = IntervalMap::new();
+            for j in 0..10 {
+                let insert_begin = rng.sample(dist);
+                let insert_end = insert_begin + rng.sample(dist);
+                let clear_begin = rng.sample(dist);
+                let clear_end = clear_begin + rng.sample(dist);
+                let mut m_clone = m.clone();
+                // Catch panics (failures) so that we can print the failing test case.
+                let res = std::panic::catch_unwind(move || {
+                    clear_and_sanity_check(&mut m_clone, clear_begin, clear_end).unwrap();
+                    insert_and_sanity_check(
+                        &mut m_clone,
+                        insert_begin,
+                        insert_end,
+                        &format!("{}.{}", i, j),
+                    )
+                    .unwrap();
+                    m_clone
+                });
+                if !res.is_ok() {
+                    println!(
+                        "Failed after inserting {} -> {} and clearing {} -> {} in {:?}",
+                        insert_begin,
+                        insert_end,
+                        clear_begin,
+                        clear_end,
+                        m.iter().map(|(i, s)| (i, s.clone())).collect::<Vec<_>>()
+                    );
+                }
+                m = res.unwrap();
+            }
+        }
     }
 
     fn clear_and_validate(
@@ -540,7 +647,7 @@ mod tests {
         expected_mutations: &[Mutation<String>],
         expected_val: &[(Interval, &str)],
     ) {
-        let mutations = clear_and_sanity_check(m, begin, end);
+        let mutations = clear_and_sanity_check(m, begin, end).unwrap();
 
         // Validate the expected mutations.
         assert_eq!(mutations, expected_mutations);
