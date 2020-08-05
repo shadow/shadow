@@ -145,6 +145,7 @@ target_link_libraries(shadow-c INTERFACE
 # TODO: extract -L and -l flags from the output of
 # `get_target_property(INTERFACE_LINK_LIBRARIES shadow-c
 # INTERFACE_LINK_LIBRARIES)`, and pass those through to cargo.
+set(RUST_DEPENDS "shadow-c")
 get_target_property(INTERFACE_LINK_LIBRARIES shadow-c INTERFACE_LINK_LIBRARIES)
 foreach(INTERFACE_LINK_LIBRARY IN LISTS INTERFACE_LINK_LIBRARIES)
     if(INTERFACE_LINK_LIBRARY MATCHES "(.*)/lib(.*)\(.so|.a)")
@@ -154,20 +155,26 @@ foreach(INTERFACE_LINK_LIBRARY IN LISTS INTERFACE_LINK_LIBRARIES)
     else()
         # Treat as a target
         #
-        # XXX: OUTPUT_DIRECTORY, OUTPUT_NAME, and similar properties seem to
-        # not be set. Instead we manually add flags for library targets after
-        # the loop.
-        #
-        #get_target_property(DIR ${INTERFACE_LINK_LIBRARY} OUTPUT_DIRECTORY)
-        #get_target_property(LIB ${INTERFACE_LINK_LIBRARY} OUTPUT_NAME)
+        # XXX: LIBRARY_OUTPUT_DIRECTORY seems to not be set. We add the
+        # corresponding -L's manually after this loop.
         #get_target_property(LIB logger LIBRARY_OUTPUT_DIRECTORY)
-        #set(RUSTFLAGS "${INTERFACE_LINK_LIBRARY} -L${DIR} -l${LIB} ${RUSTFLAGS}")
+
+        set(RUSTFLAGS "-l${INTERFACE_LINK_LIBRARY} ${RUSTFLAGS}")
+
+        # The DEPENDS clause in ExternalProject_Add doesn't recurse into
+        # INTERFACE dependencies; we need to add them ourselves too.
+        list(APPEND RUST_DEPENDS "${INTERFACE_LINK_LIBRARY}")
     endif()
 endforeach(INTERFACE_LINK_LIBRARY)
-# Manually add flags for target libraries, since there doesn't seem to be a
-# way to extract their directory from the target name.
-set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_CURRENT_BINARY_DIR} -lshadow-c")
-set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/support/logger -llogger")
+# Add shadow-c itself
+set(RUSTFLAGS "${RUSTFLAGS} -lshadow-c")
+# -lstdc++ is needed as a dependency when linking remora. TODO: make it an
+# INTERFACE dependency on remora and make the loop above recursive.
+set(RUSTFLAGS "${RUSTFLAGS} -lstdc++")
+# Manually add search-directories for our custom libraries.
+set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_CURRENT_BINARY_DIR}")
+set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/support/logger")
+set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/shim")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")
 
 include(ExternalProject)
@@ -183,7 +190,7 @@ ExternalProject_Add(
     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/target/debug/libshadow_rs.a ${CMAKE_CURRENT_BINARY_DIR}/target/release/libshadow_rs.a
     INSTALL_COMMAND ""
     LOG_BUILD OFF
-    DEPENDS shadow-c
+    DEPENDS "${RUST_DEPENDS}"
 )
 ## we can't predict exact executable names until this is fixed: https://github.com/rust-lang/cargo/issues/1924
 add_test(NAME rust-unit-tests COMMAND bash -c "exec \"$(find target/${RUST_BUILD_TYPE}/deps/ \

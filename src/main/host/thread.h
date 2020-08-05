@@ -87,7 +87,10 @@ PluginPtr thread_mallocPluginPtr(Thread* thread, size_t size);
 // awkwardness and more boilerplate), or keeping an internal map of ptr->size.
 void thread_freePluginPtr(Thread* thread, PluginPtr ptr, size_t size);
 
-
 bool thread_isRunning(Thread* thread);
+
+uint32_t thread_getProcessId(Thread* thread);
+
+uint32_t thread_getHostId(Thread* thread);
 
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */
