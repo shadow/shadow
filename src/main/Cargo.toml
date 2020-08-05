@@ -9,9 +9,11 @@ path = "lib.rs"
 crate-type = ["staticlib"]
 
 [dependencies]
+lazy_static = "1.4.0"
 libc = "0.2"
 rand = "0.7.3"
 rand_chacha = "0.2.2"
 rand_core = "0.5.1"
+regex = "1"
 
 [build-dependencies]
