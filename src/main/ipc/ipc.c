@@ -91,8 +91,9 @@ void sendIPC_tcp_connect(int fd, const struct sockaddr* addr, socklen_t len) {
 }
 
 void sendIPC_tcp_send(Socket* socket, int fd, const void *buf, size_t n, int flags) {
-    // get interested values for 'connect'
-    const char *TOPIC = "shadow_tcp_datastream";
+    const char *TOPIC = "shadow_tcp_datastream_send";
+
+    // get interested values for 'send'
     const size_t topic_size = strlen(TOPIC);
     uint16_t from_port;
     uint32_t from_addr;
@@ -146,6 +147,64 @@ void sendIPC_tcp_send(Socket* socket, int fd, const void *buf, size_t n, int fla
     memcpy(offset, buf, n);
 
 
+
+    // send an envelope through zmq
+    const size_t rs = zmq_msg_send(&envelope, shadow_ipc_conf.zmq_data_socket, 0);
+    if (rs != envelope_size) {
+        printf("ERROR: ZeroMQ error occurred during zmq_msg_send(): %s\n", zmq_strerror(errno));
+        zmq_msg_close(&envelope);
+        return;
+    }
+    zmq_msg_close(&envelope);
+}
+
+void sendIPC_tcp_recv(Socket* socket, int fd, void *buf, size_t bytes) {
+    const char *TOPIC = "shadow_tcp_datastream_recv";
+
+    // get interested values for 'recv'
+    const size_t topic_size = strlen(TOPIC);
+    uint16_t myport;
+    uint32_t myaddr;
+    myport = (uint16_t)socket->boundPort;
+    myaddr = (uint32_t)socket->boundAddress;
+    if (myaddr == 0) {
+        Host* activeHost = worker_getActiveHost();
+        if(activeHost) {
+            Address* hostAddress = host_getDefaultAddress(activeHost);
+            if(hostAddress) {
+                myaddr = address_toNetworkIP(hostAddress);
+            }
+        }
+    }
+
+    // get current virtual time
+    uint64_t curTime = worker_getCurrentTime();
+
+    // create an envelope
+    zmq_msg_t envelope;
+    const size_t envelope_size = topic_size + 1 + sizeof(uint64_t) + sizeof(int) + sizeof(uint16_t) + sizeof(uint32_t) + bytes;
+
+    const int rmi = zmq_msg_init_size(&envelope, envelope_size);
+    if (rmi != 0)
+    {
+        printf("ERROR: ZeroMQ error occurred during zmq_msg_init_size(): %s\n", zmq_strerror(errno));
+        zmq_msg_close(&envelope);
+        return;
+    }
+
+    memcpy(zmq_msg_data(&envelope), TOPIC, topic_size);
+    void *offset = (void*)((char*)zmq_msg_data(&envelope) + topic_size);
+    memcpy(offset, " ", 1);
+    offset = (void*) ((char*)offset + 1);
+    memcpy(offset, &curTime, sizeof(uint64_t));
+    offset = (void*) ((char*)offset + sizeof(uint64_t));
+    memcpy(offset, &fd, sizeof(int));
+    offset = (void*) ((char*)offset + sizeof(int));
+    memcpy(offset, &myport, sizeof(uint16_t));
+    offset = (void*) ((char*)offset + sizeof(uint16_t));
+    memcpy(offset, &myaddr, sizeof(uint32_t));
+    offset = (void*) ((char*)offset + sizeof(uint32_t));
+    memcpy(offset, buf, bytes);
 
     // send an envelope through zmq
     const size_t rs = zmq_msg_send(&envelope, shadow_ipc_conf.zmq_data_socket, 0);

@@ -1517,6 +1517,14 @@ static gssize _process_emu_recvHelper(Process* proc, gint fd, gpointer buf, size
         return -1;
     }
 
+    if (is_ipc_initialized()) {
+        Descriptor *desc = host_lookupDescriptor(proc->host, fd);
+        DescriptorType dtype = descriptor_getType(desc);
+        if(dtype == DT_TCPSOCKET) {
+            Socket *socket = (Socket *) desc;
+            sendIPC_tcp_recv(socket, fd, buf, bytes);
+        }
+    }
     /* check if they wanted to know where we got the data from */
     if(addr != NULL && len != NULL && *len >= sizeof(struct sockaddr_in)) {
         struct sockaddr_in* si = (struct sockaddr_in*) addr;
