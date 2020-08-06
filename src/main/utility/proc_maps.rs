@@ -1,5 +1,6 @@
 use regex::Regex;
 use std::error::Error;
+use std::fmt::Display;
 use std::str::FromStr;
 
 /// Whether a region of memory is shared.
@@ -85,11 +86,26 @@ pub struct Mapping {
     path: Option<MappingPath>,
 }
 
+// Parses the given field with the given function, decorating errors with the field name and value.
+fn parse_field<T, F, U>(field: &str, field_name: &str, parse_fn: F) -> Result<T, String>
+where
+    F: FnOnce(&str) -> Result<T, U>,
+    U: Display,
+{
+    match parse_fn(field) {
+        Ok(res) => Ok(res),
+        Err(err) => Err(format!("Parsing {} '{}': {}", field_name, field, err)),
+    }
+}
+
 impl FromStr for Mapping {
     type Err = Box<dyn Error>;
     fn from_str(line: &str) -> Result<Self, Self::Err> {
         lazy_static! {
-            static ref RE: Regex = Regex::new(r"^([[:xdigit:]]+)-([[:xdigit:]]+)\s+([r-])([w-])([x-])([sp])\s+([[:xdigit:]]+)\s+([[:xdigit:]]+):([[:xdigit:]]+)\s+(\d+)\s*(\S*)$").unwrap();
+            static ref RE: Regex = Regex::new(
+                r"^(\S+)-(\S+)\s+(\S)(\S)(\S)(\S)\s+(\S+)\s+(\S+):(\S+)\s+(\S+)\s*(\S*)$"
+            )
+            .unwrap();
         }
 
         let caps = RE
@@ -97,34 +113,59 @@ impl FromStr for Mapping {
             .ok_or_else(|| format!("Didn't match regex: {}", line))?;
 
         Ok(Mapping {
-            begin: usize::from_str_radix(caps.get(1).unwrap().as_str(), 16)
-                .or_else(|_| Err(format!("Parsing begin: {}", caps.get(1).unwrap().as_str())))?,
-            end: usize::from_str_radix(caps.get(2).unwrap().as_str(), 16).or_else(|_| {
-                Err(format!(
-                    "Couldn't parse end: {}",
-                    caps.get(2).unwrap().as_str()
-                ))
+            begin: parse_field(caps.get(1).unwrap().as_str(), "begin", |s| {
+                usize::from_str_radix(s, 16)
             })?,
-            read: caps.get(3).unwrap().as_str() == "r",
-            write: caps.get(4).unwrap().as_str() == "w",
-            execute: caps.get(5).unwrap().as_str() == "x",
-            sharing: caps.get(6).unwrap().as_str().parse::<Sharing>()?,
-            offset: usize::from_str_radix(caps.get(7).unwrap().as_str(), 16)
-                .or_else(|_| Err("Couldn't parse offset".to_string()))?,
-            device_major: i32::from_str_radix(caps.get(8).unwrap().as_str(), 16)
-                .or_else(|_| Err("Couldn't parse device_major"))?,
-            device_minor: i32::from_str_radix(caps.get(9).unwrap().as_str(), 16)
-                .or_else(|_| Err("Couldn't parse device_minor"))?,
-            inode: caps
-                .get(10)
-                .unwrap()
-                .as_str()
-                .parse::<i32>()
-                .or_else(|e| Err(format!("inode: {}", e.to_string())))?,
-            path: match caps.get(11).unwrap().as_str() {
-                "" => None,
-                s => Some(s.parse::<MappingPath>()?),
+            end: parse_field(caps.get(2).unwrap().as_str(), "end", |s| {
+                usize::from_str_radix(s, 16)
+            })?,
+            read: {
+                let s = caps.get(3).unwrap().as_str();
+                match s {
+                    "r" => true,
+                    "-" => false,
+                    _ => return Err(format!("Couldn't parse read bit {}", s))?,
+                }
             },
+            write: {
+                let s = caps.get(4).unwrap().as_str();
+                match s {
+                    "w" => true,
+                    "-" => false,
+                    _ => return Err(format!("Couldn't parse write bit {}", s))?,
+                }
+            },
+            execute: {
+                let s = caps.get(5).unwrap().as_str();
+                match s {
+                    "x" => true,
+                    "-" => false,
+                    _ => return Err(format!("Couldn't parse execute bit {}", s))?,
+                }
+            },
+            sharing: caps.get(6).unwrap().as_str().parse::<Sharing>()?,
+            offset: parse_field(caps.get(7).unwrap().as_str(), "offset", |s| {
+                usize::from_str_radix(s, 16)
+            })?,
+            device_major: parse_field(caps.get(8).unwrap().as_str(), "device_major", |s| {
+                i32::from_str_radix(s, 16)
+            })?,
+            device_minor: parse_field(caps.get(9).unwrap().as_str(), "device_minor", |s| {
+                i32::from_str_radix(s, 16)
+            })?,
+            // Undocumented whether this is actually base 10; change to 16 if we find
+            // counter-examples.
+            inode: parse_field(caps.get(10).unwrap().as_str(), "inode", |s| {
+                i32::from_str_radix(s, 10)
+            })?,
+            path: parse_field::<_, _, Box<dyn Error>>(
+                caps.get(11).unwrap().as_str(),
+                "path",
+                |s| match s {
+                    "" => Ok(None),
+                    s => Ok(Some(s.parse::<MappingPath>()?)),
+                },
+            )?,
         })
     }
 }
