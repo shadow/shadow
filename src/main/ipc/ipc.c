@@ -26,7 +26,6 @@ gboolean is_ipc_initialized() {
 }
 
 void sendIPC_tcp_connect(int fd, const struct sockaddr* addr, socklen_t len) {
-    // TODO: how to get virtual time?
     if (addr->sa_family != AF_INET) {
         // not an IPv4 address
         return;
@@ -47,9 +46,12 @@ void sendIPC_tcp_connect(int fd, const struct sockaddr* addr, socklen_t len) {
         }
     }
 
+    // get current virtual time
+    uint64_t curTime = worker_getCurrentTime();
+
     // create an envelope
     zmq_msg_t envelope;
-    const size_t envelope_size = topic_size + 1 + sizeof(int) + sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint32_t);
+    const size_t envelope_size = topic_size + 1 + sizeof(uint64_t) + sizeof(int) + sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint32_t);
 
     const int rmi = zmq_msg_init_size(&envelope, envelope_size);
     if (rmi != 0)
@@ -62,6 +64,8 @@ void sendIPC_tcp_connect(int fd, const struct sockaddr* addr, socklen_t len) {
     void *offset = (void*)((char*)zmq_msg_data(&envelope) + topic_size);
     memcpy(offset, " ", 1);
     offset = (void*) ((char*)offset + 1);
+    memcpy(offset, &curTime, sizeof(uint64_t));
+    offset = (void*) ((char*)offset + sizeof(uint64_t));
     memcpy(offset, &fd, sizeof(int));
     offset = (void*) ((char*)offset + sizeof(int));
     memcpy(offset, &from_addr, sizeof(uint32_t));
@@ -108,9 +112,12 @@ void sendIPC_tcp_send(Socket* socket, int fd, const void *buf, size_t n, int fla
     peer_port = (uint16_t)socket->peerPort;
     peer_addr = (uint32_t)socket->peerIP;
 
+    // get current virtual time
+    uint64_t curTime = worker_getCurrentTime();
+
     // create an envelope
     zmq_msg_t envelope;
-    const size_t envelope_size = topic_size + 1 + sizeof(int) + n + sizeof(uint16_t)*2 + sizeof(uint32_t)*2;
+    const size_t envelope_size = topic_size + 1 + sizeof(uint64_t) + sizeof(int) + n + sizeof(uint16_t)*2 + sizeof(uint32_t)*2;
 
     const int rmi = zmq_msg_init_size(&envelope, envelope_size);
     if (rmi != 0)
@@ -124,6 +131,8 @@ void sendIPC_tcp_send(Socket* socket, int fd, const void *buf, size_t n, int fla
     void *offset = (void*)((char*)zmq_msg_data(&envelope) + topic_size);
     memcpy(offset, " ", 1);
     offset = (void*) ((char*)offset + 1);
+    memcpy(offset, &curTime, sizeof(uint64_t));
+    offset = (void*) ((char*)offset + sizeof(uint64_t));
     memcpy(offset, &fd, sizeof(int));
     offset = (void*) ((char*)offset + sizeof(int));
     memcpy(offset, &from_port, sizeof(uint16_t));
