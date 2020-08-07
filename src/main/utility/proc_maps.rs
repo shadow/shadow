@@ -354,9 +354,10 @@ mod tests {
         // Undocumented '(deleted)' trailer, indicating that the mapped file has been removed from
         // the file system.
         {
-            let mapping = "00400000-00452000 r-xp 00000000 bb:cc 173521      /usr/bin/dbus-daemon (deleted)"
-                .parse::<Mapping>()
-                .unwrap();
+            let mapping =
+                "00400000-00452000 r-xp 00000000 bb:cc 173521      /usr/bin/dbus-daemon (deleted)"
+                    .parse::<Mapping>()
+                    .unwrap();
             assert!(mapping.deleted);
         }
     }
@@ -442,9 +443,11 @@ mod tests {
             .is_err());
 
         // Trailing garbage after (deleted)
-        assert!("7fffb2d48000-7fffb2d49000 ---p 00000000 00:00 0   [vdso] (deleted) z"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d48000-7fffb2d49000 ---p 00000000 00:00 0   [vdso] (deleted) z"
+                .parse::<Mapping>()
+                .is_err()
+        );
     }
 
     #[test]
