@@ -26,7 +26,6 @@ struct _ThreadPreload {
 
     SysCallHandler* sys;
 
-    pid_t childPID;
     int eventFD;
 
     int isRunning;
@@ -131,9 +130,8 @@ static void _threadpreload_create_ipc_sockets(ThreadPreload* thread,
     }
 }
 
-static int _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
-                                    char* const argv[], char* const envp[]) {
-    int rc = 0;
+static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, char* const argv[],
+                                      char* const envp[]) {
     pid_t pid = vfork();
 
     switch (pid) {
@@ -141,8 +139,9 @@ static int _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
             error("fork failed");
             return -1;
             break;
-        case 0: // child
-            execvpe(file, argv, envp);
+        case 0: {
+            // child
+            int rc = execvpe(file, argv, envp);
             if (rc == -1) {
                 error("execvpe() call failed");
                 return -1;
@@ -150,9 +149,9 @@ static int _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
             while (1) {
             } // here for compiler optimization
             break;
+        }
         default: // parent
             info("started process %s with PID %d", file, pid);
-            thread->childPID = pid;
             return pid;
             break;
     }
@@ -162,21 +161,20 @@ static int _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
 static void _threadpreload_cleanup(ThreadPreload* thread, int status) {
     if (WIFEXITED(status)) {
         thread->returnCode = WEXITSTATUS(status);
-        debug("child %d exited with status %d", thread->childPID,
-              thread->returnCode);
+        debug("child %d exited with status %d", thread->base.nativePid, thread->returnCode);
     } else if (WIFSIGNALED(status)) {
         int signum = WTERMSIG(status);
-        debug("child %d terminated by signal %d", thread->childPID, signum);
+        debug("child %d terminated by signal %d", thread->base.nativePid, signum);
         thread->returnCode = -1;
     } else {
-        debug("child %d quit unexpectedly", thread->childPID);
+        debug("child %d quit unexpectedly", thread->base.nativePid);
         thread->returnCode = -1;
     }
 
     thread->isRunning = 0;
 }
 
-void threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
+pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     /* set the env for the child */
@@ -199,7 +197,7 @@ void threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
     g_free(envStr);
     g_free(argStr);
 
-    _threadpreload_fork_exec(thread, argv[0], argv, myenvv);
+    pid_t child_pid = _threadpreload_fork_exec(thread, argv[0], argv, myenvv);
 
     // close the child sock, it is no longer needed
     close(child_fd);
@@ -214,6 +212,8 @@ void threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
 
     /* thread is now active */
     thread->isRunning = 1;
+
+    return child_pid;
 }
 
 static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread) {
@@ -243,7 +243,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
             case SHD_SHIM_EVENT_START: {
                 // send the message to the shim to call main(),
                 // the plugin will run until it makes a blocking call
-                debug("sending start event code to %d on %d", thread->childPID,
+                debug("sending start event code to %d on %d", thread->base.nativePid,
                       thread->eventFD);
                 thread->currentEvent.event_data.start.simulation_nanos =
                     worker_getEmulatedTime();
@@ -254,8 +254,8 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 // the plugin stopped running, clear it and collect the return
                 // code
                 int status;
-                pid_t rc = waitpid(thread->childPID, &status, 0);
-                utility_assert(rc == thread->childPID);
+                pid_t rc = waitpid(thread->base.nativePid, &status, 0);
+                utility_assert(rc == thread->base.nativePid);
                 _threadpreload_cleanup(thread, status);
                 // it will not be sending us any more events
                 return NULL;
@@ -332,15 +332,15 @@ void threadpreload_terminate(Thread* base) {
 
     int status = 0;
 
-    utility_assert(thread->childPID > 0);
+    utility_assert(thread->base.nativePid > 0);
 
-    pid_t rc = waitpid(thread->childPID, &status, WNOHANG);
+    pid_t rc = waitpid(thread->base.nativePid, &status, WNOHANG);
     utility_assert(rc != -1);
 
     if (rc == 0) { // child is running, request a stop
-        debug("sending SIGTERM to %d", thread->childPID);
-        kill(thread->childPID, SIGTERM);
-        rc = waitpid(thread->childPID, &status, 0);
+        debug("sending SIGTERM to %d", thread->base.nativePid);
+        kill(thread->base.nativePid, SIGTERM);
+        rc = waitpid(thread->base.nativePid, &status, 0);
         utility_assert(rc != -1 && rc > 0);
     }
     _threadpreload_cleanup(thread, status);
