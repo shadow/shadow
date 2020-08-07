@@ -1517,7 +1517,7 @@ static gssize _process_emu_recvHelper(Process* proc, gint fd, gpointer buf, size
         return -1;
     }
 
-    if (is_ipc_initialized()) {
+    if (is_ipc_enabled()) {
         Descriptor *desc = host_lookupDescriptor(proc->host, fd);
         DescriptorType dtype = descriptor_getType(desc);
         if(dtype == DT_TCPSOCKET) {
@@ -2234,7 +2234,7 @@ int process_emu_connect(Process* proc, int fd, const struct sockaddr* addr, sock
             _process_setErrno(proc, errno);
         }
     } else {
-        if (is_ipc_initialized()) {
+        if (is_ipc_enabled()) {
             sendIPC_tcp_connect(fd, addr, len);
         }
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2261,7 +2261,7 @@ ssize_t process_emu_send(Process* proc, int fd, const void *buf, size_t n, int f
             _process_setErrno(proc, errno);
         }
     } else {
-        if (is_ipc_initialized()) {
+        if (is_ipc_enabled()) {
             Descriptor *desc = host_lookupDescriptor(proc->host, fd);
             DescriptorType dtype = descriptor_getType(desc);
             if(dtype == DT_TCPSOCKET) {
@@ -2287,7 +2287,7 @@ ssize_t process_emu_sendto(Process* proc, int fd, const void *buf, size_t n, int
             _process_setErrno(proc, errno);
         }
     } else {
-        if (is_ipc_initialized()) {
+        if (is_ipc_enabled()) {
             Descriptor *desc = host_lookupDescriptor(proc->host, fd);
             DescriptorType dtype = descriptor_getType(desc);
             if (dtype == DT_TCPSOCKET) {

@@ -6,7 +6,7 @@
 
 static IPC_Conf shadow_ipc_conf;
 
-void init_ipc() {
+gboolean check_ipc_server() {
     shadow_ipc_conf.zmq_context = zmq_ctx_new();
     gboolean server_exist = FALSE;
 
@@ -26,27 +26,29 @@ void init_ipc() {
                 server_exist = TRUE;
         }
     }
-
-    if (server_exist) {
-        // create an ZMQ socket (for type 'publisher')
-        shadow_ipc_conf.zmq_data_socket = zmq_socket(shadow_ipc_conf.zmq_context, ZMQ_PUB);
-
-        // connect to ZMQ server
-        const int rb = zmq_connect(shadow_ipc_conf.zmq_data_socket, "tcp://127.0.0.1:5555");
-
-        if (rb == 0) {
-            shadow_ipc_conf.initialized = 1;
-        } else {
-            shadow_ipc_conf.initialized = 0;
-        }
-    }
-    else {
-        shadow_ipc_conf.initialized = 0;
-    }
+    return server_exist;
 }
 
-gboolean is_ipc_initialized() {
-    return shadow_ipc_conf.initialized;
+gboolean connect_ipc() {
+    // create an ZMQ socket (for type 'publisher')
+    shadow_ipc_conf.zmq_data_socket = zmq_socket(shadow_ipc_conf.zmq_context, ZMQ_PUB);
+
+    // connect to ZMQ server
+    const int rb = zmq_connect(shadow_ipc_conf.zmq_data_socket, "tcp://127.0.0.1:5555");
+
+    return (rb == 0);
+}
+
+void enable_ipc() {
+    shadow_ipc_conf.IPCenabled = 1;
+}
+
+void disable_ipc() {
+    shadow_ipc_conf.IPCenabled = 0;
+}
+
+gboolean is_ipc_enabled() {
+    return shadow_ipc_conf.IPCenabled;
 }
 
 void sendIPC_tcp_connect(int fd, const struct sockaddr* addr, socklen_t len) {

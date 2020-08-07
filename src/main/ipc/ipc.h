@@ -11,14 +11,17 @@
 typedef struct _IPC_CONF IPC_Conf;
 
 struct _IPC_CONF {
-     gboolean initialized;
+     gboolean IPCenabled;
      void *zmq_context;
      void *zmq_data_socket;
 };
 
-void init_ipc();
+gboolean check_ipc_server();
+gboolean connect_ipc();
+void enable_ipc();
+void disable_ipc();
 
-gboolean is_ipc_initialized();
+gboolean is_ipc_enabled();
 
 void sendIPC_tcp_connect(int fd, const struct sockaddr* addr, socklen_t len);
 void sendIPC_tcp_send(Socket* socket, int fd, const void *buf, size_t n, int flags);
