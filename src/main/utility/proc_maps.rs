@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use regex::Regex;
 use std::error::Error;
 use std::fmt::Display;
@@ -187,7 +188,7 @@ pub fn mappings_for_pid(pid: libc::pid_t) -> Result<Vec<Mapping>, Box<dyn Error>
     let mut file = File::open(format!("/proc/{}/maps", pid))?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
-    Ok(parse_file_contents(&contents)?)
+    parse_file_contents(&contents)
 }
 
 #[cfg(test)]

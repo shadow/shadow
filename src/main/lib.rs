@@ -2,9 +2,6 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
-#[macro_use]
-extern crate lazy_static;
-
 mod cbindings;
 pub mod core;
 pub mod host;
