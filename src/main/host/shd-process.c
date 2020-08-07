@@ -2287,11 +2287,13 @@ ssize_t process_emu_sendto(Process* proc, int fd, const void *buf, size_t n, int
             _process_setErrno(proc, errno);
         }
     } else {
-        Descriptor *desc = host_lookupDescriptor(proc->host, fd);
-        DescriptorType dtype = descriptor_getType(desc);
-        if(dtype == DT_TCPSOCKET) {
-            Socket *socket = (Socket *) desc;
-            sendIPC_tcp_send(socket, fd, buf, n, flags);
+        if (is_ipc_initialized()) {
+            Descriptor *desc = host_lookupDescriptor(proc->host, fd);
+            DescriptorType dtype = descriptor_getType(desc);
+            if (dtype == DT_TCPSOCKET) {
+                Socket *socket = (Socket *) desc;
+                sendIPC_tcp_send(socket, fd, buf, n, flags);
+            }
         }
         ret = _process_emu_sendHelper(proc, fd, buf, n, flags, addr, addr_len);
     }

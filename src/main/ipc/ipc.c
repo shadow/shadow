@@ -8,15 +8,39 @@ static IPC_Conf shadow_ipc_conf;
 
 void init_ipc() {
     shadow_ipc_conf.zmq_context = zmq_ctx_new();
-    // create an ZMQ socket (for type 'publisher')
-    shadow_ipc_conf.zmq_data_socket = zmq_socket(shadow_ipc_conf.zmq_context, ZMQ_PUB);
+    gboolean server_exist = FALSE;
 
-    // connect to ZMQ server
-    const int rb = zmq_connect(shadow_ipc_conf.zmq_data_socket, "tcp://127.0.0.1:5555");
+    // create an REQ socket to test the existence of ZMQ server
+    void* zmq_req_socket = zmq_socket(shadow_ipc_conf.zmq_context, ZMQ_REQ);
+    int ret = zmq_connect(zmq_req_socket, "tcp://127.0.0.1:5556");
+    if (ret == 0) {
+        zmq_send(zmq_req_socket, "ping", 4, 0);
+        int timeout_milli = 1000;
+        zmq_setsockopt(zmq_req_socket, ZMQ_RCVTIMEO, &timeout_milli, sizeof(int));
 
-    if (rb == 0) {
-        shadow_ipc_conf.initialized = 1;
-    } else {
+        char reply[5];
+        memset(reply, 0, 5);
+        ret = zmq_recv(zmq_req_socket, reply, 4, 0);
+        if (ret == 4) {
+            if (strncmp(reply, "pong", 4) == 0)
+                server_exist = TRUE;
+        }
+    }
+
+    if (server_exist) {
+        // create an ZMQ socket (for type 'publisher')
+        shadow_ipc_conf.zmq_data_socket = zmq_socket(shadow_ipc_conf.zmq_context, ZMQ_PUB);
+
+        // connect to ZMQ server
+        const int rb = zmq_connect(shadow_ipc_conf.zmq_data_socket, "tcp://127.0.0.1:5555");
+
+        if (rb == 0) {
+            shadow_ipc_conf.initialized = 1;
+        } else {
+            shadow_ipc_conf.initialized = 0;
+        }
+    }
+    else {
         shadow_ipc_conf.initialized = 0;
     }
 }
