@@ -85,6 +85,7 @@ pub struct Mapping {
     pub device_minor: i32,
     pub inode: i32,
     pub path: Option<MappingPath>,
+    pub deleted: bool,
 }
 
 // Parses the given field with the given function, decorating errors with the field name and value.
@@ -104,7 +105,7 @@ impl FromStr for Mapping {
     fn from_str(line: &str) -> Result<Self, Self::Err> {
         lazy_static! {
             static ref RE: Regex = Regex::new(
-                r"^(\S+)-(\S+)\s+(\S)(\S)(\S)(\S)\s+(\S+)\s+(\S+):(\S+)\s+(\S+)\s*(\S*)$"
+                r"^(\S+)-(\S+)\s+(\S)(\S)(\S)(\S)\s+(\S+)\s+(\S+):(\S+)\s+(\S+)\s*(\S*)\s*(\S*)$"
             )
             .unwrap();
         }
@@ -167,6 +168,14 @@ impl FromStr for Mapping {
                     s => Ok(Some(s.parse::<MappingPath>()?)),
                 },
             )?,
+            deleted: {
+                let s = caps.get(12).unwrap().as_str();
+                match s {
+                    "" => false,
+                    "(deleted)" => true,
+                    _ => return Err(format!("Couldn't parse trailing field '{}'", s))?,
+                }
+            },
         })
     }
 }
@@ -213,7 +222,8 @@ mod tests {
                 device_major: 8,
                 device_minor: 2,
                 inode: 173521,
-                path: Some(MappingPath::Path("/usr/bin/dbus-daemon".to_string()))
+                path: Some(MappingPath::Path("/usr/bin/dbus-daemon".to_string())),
+                deleted: false,
             }
         );
 
@@ -234,6 +244,7 @@ mod tests {
                 device_minor: 0,
                 inode: 0,
                 path: Some(MappingPath::Heap),
+                deleted: false,
             }
         );
 
@@ -254,6 +265,7 @@ mod tests {
                 device_minor: 0,
                 inode: 0,
                 path: None,
+                deleted: false,
             }
         );
 
@@ -274,6 +286,7 @@ mod tests {
                 device_minor: 0,
                 inode: 0,
                 path: Some(MappingPath::ThreadStack(986)),
+                deleted: false,
             }
         );
 
@@ -294,6 +307,7 @@ mod tests {
                 device_minor: 0,
                 inode: 0,
                 path: Some(MappingPath::InitialStack),
+                deleted: false,
             }
         );
 
@@ -314,6 +328,7 @@ mod tests {
                 device_minor: 0,
                 inode: 0,
                 path: Some(MappingPath::Vdso),
+                deleted: false,
             }
         );
 
@@ -334,6 +349,15 @@ mod tests {
                 .unwrap();
             assert_eq!(mapping.device_major, 0xbb);
             assert_eq!(mapping.device_minor, 0xcc);
+        }
+
+        // Undocumented '(deleted)' trailer, indicating that the mapped file has been removed from
+        // the file system.
+        {
+            let mapping = "00400000-00452000 r-xp 00000000 bb:cc 173521      /usr/bin/dbus-daemon (deleted)"
+                .parse::<Mapping>()
+                .unwrap();
+            assert!(mapping.deleted);
         }
     }
 
@@ -412,8 +436,13 @@ mod tests {
             .parse::<Mapping>()
             .is_err());
 
-        // Trailing garbage
+        // Trailing garbage after path
         assert!("7fffb2d48000-7fffb2d49000 ---p 00000000 00:00 0   [vdso] z"
+            .parse::<Mapping>()
+            .is_err());
+
+        // Trailing garbage after (deleted)
+        assert!("7fffb2d48000-7fffb2d49000 ---p 00000000 00:00 0   [vdso] (deleted) z"
             .parse::<Mapping>()
             .is_err());
     }
@@ -438,7 +467,8 @@ mod tests {
                     device_major: 8,
                     device_minor: 2,
                     inode: 173521,
-                    path: Some(MappingPath::Path("/usr/bin/dbus-daemon".to_string()))
+                    path: Some(MappingPath::Path("/usr/bin/dbus-daemon".to_string())),
+                    deleted: false,
                 },
                 Mapping {
                     begin: 0x7fffb2c0d000,
@@ -452,6 +482,7 @@ mod tests {
                     device_minor: 0,
                     inode: 0,
                     path: Some(MappingPath::InitialStack),
+                    deleted: false,
                 }
             ]
         );
