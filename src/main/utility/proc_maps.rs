@@ -74,17 +74,17 @@ impl FromStr for MappingPath {
 /// Represents a single line in /proc/[pid]/maps.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Mapping {
-    begin: usize,
-    end: usize,
-    read: bool,
-    write: bool,
-    execute: bool,
-    sharing: Sharing,
-    offset: usize,
-    device_major: i32,
-    device_minor: i32,
-    inode: i32,
-    path: Option<MappingPath>,
+    pub begin: usize,
+    pub end: usize,
+    pub read: bool,
+    pub write: bool,
+    pub execute: bool,
+    pub sharing: Sharing,
+    pub offset: usize,
+    pub device_major: i32,
+    pub device_minor: i32,
+    pub inode: i32,
+    pub path: Option<MappingPath>,
 }
 
 // Parses the given field with the given function, decorating errors with the field name and value.
