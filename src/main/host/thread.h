@@ -9,6 +9,7 @@
 #define SRC_MAIN_HOST_SHD_THREAD_H_
 
 #include <stddef.h>
+#include <sys/types.h>
 
 typedef struct _Thread Thread;
 
@@ -92,5 +93,7 @@ bool thread_isRunning(Thread* thread);
 uint32_t thread_getProcessId(Thread* thread);
 
 uint32_t thread_getHostId(Thread* thread);
+
+pid_t thread_getNativePid(Thread* thread);
 
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */

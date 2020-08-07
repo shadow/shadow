@@ -57,7 +57,7 @@ void thread_unref(Thread* thread) {
 void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.run);
-    thread->methods.run(thread, argv, envv);
+    thread->nativePid = thread->methods.run(thread, argv, envv);
 }
 
 SysCallCondition* thread_resume(Thread* thread) {
@@ -169,4 +169,9 @@ uint32_t thread_getProcessId(Thread* thread) {
 uint32_t thread_getHostId(Thread* thread) {
     MAGIC_ASSERT(thread);
     return host_getID(thread->host);
+}
+
+pid_t thread_getNativePid(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    return thread->nativePid;
 }

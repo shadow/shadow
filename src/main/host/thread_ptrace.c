@@ -352,12 +352,14 @@ static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     _threadptrace_updateChildState(thread, reason);
 }
 
-void threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
+pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     thread->childPID = _threadptrace_fork_exec(argv[0], argv, envv);
 
     _threadptrace_nextChildState(thread);
+
+    return thread->childPID;
 }
 
 static void _threadptrace_handleSyscall(ThreadPtrace* thread) {

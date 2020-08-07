@@ -131,9 +131,8 @@ static void _threadpreload_create_ipc_sockets(ThreadPreload* thread,
     }
 }
 
-static int _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
+static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
                                     char* const argv[], char* const envp[]) {
-    int rc = 0;
     pid_t pid = vfork();
 
     switch (pid) {
@@ -141,8 +140,9 @@ static int _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
             error("fork failed");
             return -1;
             break;
-        case 0: // child
-            execvpe(file, argv, envp);
+        case 0: {
+                    // child
+            int rc = execvpe(file, argv, envp);
             if (rc == -1) {
                 error("execvpe() call failed");
                 return -1;
@@ -150,6 +150,7 @@ static int _threadpreload_fork_exec(ThreadPreload* thread, const char* file,
             while (1) {
             } // here for compiler optimization
             break;
+                }
         default: // parent
             info("started process %s with PID %d", file, pid);
             thread->childPID = pid;
@@ -176,7 +177,7 @@ static void _threadpreload_cleanup(ThreadPreload* thread, int status) {
     thread->isRunning = 0;
 }
 
-void threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
+pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     /* set the env for the child */
@@ -199,7 +200,7 @@ void threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
     g_free(envStr);
     g_free(argStr);
 
-    _threadpreload_fork_exec(thread, argv[0], argv, myenvv);
+    pid_t child_pid = _threadpreload_fork_exec(thread, argv[0], argv, myenvv);
 
     // close the child sock, it is no longer needed
     close(child_fd);
@@ -214,6 +215,8 @@ void threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
 
     /* thread is now active */
     thread->isRunning = 1;
+
+    return child_pid;
 }
 
 static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread) {
