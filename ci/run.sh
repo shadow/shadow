@@ -4,6 +4,8 @@
 
 set -euo pipefail
 
+BUILD_IMAGES=0
+
 CONTAINERS=(
     ubuntu:16.04
     ubuntu:18.04
@@ -33,12 +35,15 @@ show_help () {
 Usage: $0 ...
   -h
   -?             Show help
+  -i             Build images
   -c CONTAINERS  Set containers used in test matrix
   -C CCS         Set C compilers used in test matrix
   -b BUILDTYPES  Set build-types used in test matrix
   -e EXTRAS      Set extra configurations to run
   -o             Set only configurations to run
   -n             nocache when building Docker images
+
+On the first run, you should use the '-i' flag to build the images.
 
 Run all default configurations:
 
@@ -64,11 +69,13 @@ Set *only* configurations to run:
 EOF
 }
 
-while getopts "h?c:C:b:e:o:n" opt; do
+while getopts "h?ic:C:b:e:o:n" opt; do
     case "$opt" in
     h|\?)
         show_help
         exit 0
+        ;;
+    i)  BUILD_IMAGES=1
         ;;
     c)  read -ra CONTAINERS <<< "$OPTARG"
         ;;
@@ -94,61 +101,80 @@ run_one () {
     BUILDTYPE=$3
 
     TAG="shadow:${CONTAINER/:/-}-$CC-$BUILDTYPE"
-    echo "Running $TAG"
 
-    # Build and tag a Docker image with the given configuration.
-    docker build -t "$TAG" $NOCACHE -f- . <<EOF
-    FROM $CONTAINER
+    if [ "${BUILD_IMAGES}" == "1" ]; then
+        echo "Building $TAG"
 
-    ENV CONTAINER $CONTAINER
-    SHELL ["/bin/bash", "-c"]
+        # Build and tag a Docker image with the given configuration.
+        docker build -t "$TAG" $NOCACHE -f- . <<EOF
+        FROM $CONTAINER
 
-    # Install base dependencies before adding CC or BUILTYPE to
-    # the environment, allowing this layer to be cached and reused
-    # across other images for this CONTAINER.
-    COPY ci/container_scripts/install_deps.sh /root/install_deps.sh
-    RUN /root/install_deps.sh
+        ENV CONTAINER $CONTAINER
+        SHELL ["/bin/bash", "-c"]
 
-    # Now install any CC/BUILDTYPE-specific dependencies.
-    ENV CC=$CC BUILDTYPE=$BUILDTYPE
-    COPY ci/container_scripts/install_extra_deps.sh /root/install_extra_deps.sh
-    RUN /root/install_extra_deps.sh
-    ENV PATH /root/.cargo/bin:\$PATH
+        # Install base dependencies before adding CC or BUILTYPE to
+        # the environment, allowing this layer to be cached and reused
+        # across other images for this CONTAINER.
+        COPY ci/container_scripts/install_deps.sh /root/install_deps.sh
+        RUN /root/install_deps.sh
 
-    # Copy the local source into the container.
-    RUN mkdir /root/shadow
-    COPY . /root/shadow
-    WORKDIR /root/shadow
+        # Now install any CC/BUILDTYPE-specific dependencies.
+        ENV CC=$CC BUILDTYPE=$BUILDTYPE
+        COPY ci/container_scripts/install_extra_deps.sh /root/install_extra_deps.sh
+        RUN /root/install_extra_deps.sh
+        ENV PATH /root/.cargo/bin:\$PATH
 
-    # Build and install. We do this as part of building the Docker image to support
-    # reusing such images for incremental builds (TBD). 
-    RUN ci/container_scripts/build_and_install.sh
+        # Copy the local source into the container.
+        RUN mkdir /root/shadow
+        COPY . /root/shadow
+        WORKDIR /root/shadow
+
+        # Build and install. We do this as part of building the Docker image to support
+        # reusing such images for incremental builds.
+        RUN ci/container_scripts/build_and_install.sh
 EOF
+    fi
+
+    # Run the tests inside the image we just built
     echo "Testing $TAG"
 
-    # Run the tests inside the image we just built.
-    docker run --rm --shm-size=1g $TAG /bin/bash ci/container_scripts/test.sh
+    # Start the container and copy the most recent code
+    CONTAINER_ID="$(docker create --shm-size=1g --cap-add=SYS_PTRACE --mount src=$(realpath .),target=/mnt/shadow,type=bind,readonly "$TAG" /bin/bash -c \
+        "echo '' \
+         && echo 'Changes (see https://stackoverflow.com/a/36851784 for details):' \
+         && rsync --delete --exclude-from=.dockerignore --itemize-changes -a --no-owner --no-group /mnt/shadow/ . \
+         && echo '' \
+         && ci/container_scripts/build_and_install.sh \
+         && ci/container_scripts/test.sh")"
+
+    # Start the container (build, install, and test)
+    RV=0
+    docker start --attach "${CONTAINER_ID}" || RV=$?
+
+    # Remove the container, even if it failed
+    echo -n "Removing container: "
+    docker rm -f "${CONTAINER_ID}"
+
+    if [ "${RV}" != "0" ]; then
+        echo "Exiting due to docker container failure (${TAG})"
+        exit 1
+    fi
 }
 
-for CONTAINER in ${CONTAINERS[*]}; do
-for CC in ${CCS[*]}; do
-for BUILDTYPE in ${BUILDTYPES[*]}; do
+# Array indexing follows the syntax of:
+# https://stackoverflow.com/a/61551944
+# to handle potentially empty arrays
+
+for CONTAINER in ${CONTAINERS[*]+"${CONTAINERS[*]}"}; do
+for CC in ${CCS[*]+"${CCS[*]}"}; do
+for BUILDTYPE in ${BUILDTYPES[*]+"${BUILDTYPES[*]}"}; do
     run_one $CONTAINER $CC $BUILDTYPE
 done
 done
 done
 
-for EXTRA in ${EXTRAS[*]}; do
+for EXTRA in ${EXTRAS[*]+"${EXTRAS[*]}"}; do
     # Split on ';'
     IFS=';' read -ra args <<< $EXTRA
     run_one ${args[0]} ${args[1]} ${args[2]}
 done
-
-# TODO: Add support for running the images created above to do incremental builds.
-# This is a little tricky because when running the docker image, we want to update
-# the source tree already baked into the image, without updating timestamps for
-# unmodified files.
-#
-# I think we'll need to mount the host shadow directory as a (read-only) volume,
-# (e.g. `--mount src=`realpath .`,target=/mnt/shadow,type=bind,readonly`)
-# and then rsync it into the source directory already baked into the image.
