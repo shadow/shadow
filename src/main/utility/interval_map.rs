@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-type Interval = Range<usize>;
+pub type Interval = Range<usize>;
 
 /// Describes modifications of an IntervalMap after overwriting an interval.
 #[derive(PartialEq, Eq, Debug)]
@@ -97,6 +97,17 @@ impl<V: Clone> IntervalMap<V> {
     /// Returns iterator over all intervals keys and their values, in order by interval key.
     pub fn iter(&self) -> ItemIter<V> {
         ItemIter { map: self, i: 0 }
+    }
+
+    /// Returns iterator over all interval keys and their values, starting with the first interval
+    /// containing or after `begin`.
+    pub fn iter_from(&self, begin: usize) -> ItemIter<V> {
+        let idx = match self.starts.binary_search(&begin) {
+            Ok(i) => i,
+            Err(i) if (i > 0 && begin < self.ends[i - 1]) => i - 1,
+            Err(i) => i,
+        };
+        ItemIter { map: self, i: idx }
     }
 
     /// Mutates the map so that the given range maps to nothing, modifying and removing intervals
@@ -713,5 +724,29 @@ mod tests {
         assert_eq!(m.get(4), Some((3..6, &"i2".to_string())));
         assert_eq!(m.get(5), Some((3..6, &"i2".to_string())));
         assert_eq!(m.get(6), None);
+    }
+
+    #[test]
+    fn test_iter_from() {
+        let mut m = IntervalMap::<&str>::new();
+        m.insert(1..3, "i1");
+        m.insert(4..6, "i2");
+        assert_eq!(
+            m.iter_from(0).collect::<Vec<_>>(),
+            vec![(1..3, &"i1"), (4..6, &"i2")]
+        );
+        assert_eq!(
+            m.iter_from(1).collect::<Vec<_>>(),
+            vec![(1..3, &"i1"), (4..6, &"i2")]
+        );
+        assert_eq!(
+            m.iter_from(2).collect::<Vec<_>>(),
+            vec![(1..3, &"i1"), (4..6, &"i2")]
+        );
+        assert_eq!(m.iter_from(3).collect::<Vec<_>>(), vec![(4..6, &"i2")]);
+        assert_eq!(m.iter_from(4).collect::<Vec<_>>(), vec![(4..6, &"i2")]);
+        assert_eq!(m.iter_from(5).collect::<Vec<_>>(), vec![(4..6, &"i2")]);
+        assert_eq!(m.iter_from(6).collect::<Vec<_>>(), vec![]);
+        assert_eq!(m.iter_from(7).collect::<Vec<_>>(), vec![]);
     }
 }
