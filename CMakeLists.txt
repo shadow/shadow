@@ -160,7 +160,7 @@ if(SHADOW_COVERAGE STREQUAL ON)
                    -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort")
     set(CARGO_ENV_VARS "CARGO_INCREMENTAL=0 RUSTDOCFLAGS=\"-Cpanic=abort\"")
 else()
-    set(RUSTFLAGS "")
+    set(RUSTFLAGS "-C force-frame-pointers=y")
     set(CARGO_ENV_VARS "")
 endif(SHADOW_COVERAGE STREQUAL ON)
 
