@@ -13,6 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "main/bindings.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
@@ -54,6 +55,8 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
         .process = process,
         .thread = thread,
         .blockedSyscallNR = -1,
+        // Can't be initialized until we have a thread in the state of making a syscall.
+        .memoryManager = NULL,
         .referenceCount = 1,
         /* Here we create the timer directly and do not register
          * with the process descriptor table because the descriptor
@@ -78,6 +81,10 @@ static void _syscallhandler_free(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
     message("handled %li syscalls in %f seconds", sys->numSyscalls, sys->perfSecondsTotal);
+
+    if (sys->memoryManager) {
+        memorymanager_free(sys->memoryManager);
+    }
 
     if (sys->host) {
         host_unref(sys->host);
@@ -168,6 +175,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args) {
     MAGIC_ASSERT(sys);
 
+    // Lazily initialize memoryManager on the first syscall. It needs a thread
+    // in the syscall state for its initialization.
+    if (!sys->memoryManager) {
+        sys->memoryManager = memorymanager_new(
+            sys->thread, host_getID(sys->host), process_getProcessID(sys->process));
+    }
     SysCallReturn scr;
 
     /* Make sure that we either don't have a blocked syscall,
@@ -183,6 +196,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(accept);
         HANDLE(accept4);
         HANDLE(bind);
+        HANDLE(brk);
         HANDLE(clock_gettime);
         HANDLE(close);
         HANDLE(connect);
@@ -272,7 +286,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Not handled (yet):
         // **************************************
         NATIVE(arch_prctl);
-        NATIVE(brk);
         NATIVE(clone);
         NATIVE(eventfd2);
         NATIVE(execve);
@@ -351,6 +364,10 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             warning("unhandled syscall %ld", args->number);
             scr = (SysCallReturn){.state = SYSCALL_NATIVE};
             break;
+    }
+
+    if (args->number == SYS_execve) {
+        memorymanager_postExecHook(sys->memoryManager, sys->thread);
     }
 
     if (scr.state == SYSCALL_BLOCK) {

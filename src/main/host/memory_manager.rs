@@ -183,8 +183,7 @@ impl ShmFile {
 impl Drop for MemoryManager {
     fn drop(&mut self) {
         let misses_by_path = self.misses_by_path.borrow();
-        println!("MemoryManager misses (consider extending MemoryManager to remap regions with a "
-                  "high miss count)");
+        println!("MemoryManager misses (consider extending MemoryManager to remap regions with a high miss count)");
         for (path, count) in misses_by_path.iter() {
             println!("\t{} in {}", count, path);
         }

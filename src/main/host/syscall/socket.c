@@ -127,11 +127,13 @@ _syscallhandler_getnameHelper(SysCallHandler* sys,
 
     if (retSize > 0) {
         /* Return the results */
-        struct sockaddr* addr = thread_getWriteablePtr(sys->thread, addrPtr, retSize);
+        struct sockaddr* addr =
+            memorymanager_getWriteablePtr(sys->memoryManager, sys->thread, addrPtr, retSize);
         memcpy(addr, inet_addr, retSize);
     }
 
-    socklen_t* addrlen = thread_getWriteablePtr(sys->thread, addrlenPtr, sizeof(*addrlen));
+    socklen_t* addrlen = memorymanager_getWriteablePtr(
+        sys->memoryManager, sys->thread, addrlenPtr, sizeof(*addrlen));
     *addrlen = (socklen_t)sizeof(*inet_addr);
 
     return (SysCallReturn){.state = SYSCALL_DONE};
@@ -283,9 +285,9 @@ static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp,
 
             /* Write the tcp info and its size. */
             struct tcp_info* info =
-                thread_getWriteablePtr(sys->thread, optvalPtr, sizeNeeded);
+                memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, optvalPtr, sizeNeeded);
             tcp_getInfo(tcp, info);
-            socklen_t* infolen = thread_getWriteablePtr(
+            socklen_t* infolen = memorymanager_getWriteablePtr(sys->memoryManager,
                 sys->thread, optlenPtr, sizeof(*infolen));
             *infolen = sizeNeeded;
 
@@ -313,7 +315,7 @@ static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, Socket* sock,
         return -EINVAL;
     }
 
-    int* optval = thread_getWriteablePtr(sys->thread, optvalPtr, sizeof(int));
+    int* optval = memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, optvalPtr, sizeof(int));
 
     switch (optname) {
         case SO_SNDBUF: {
@@ -354,7 +356,7 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
     switch (optname) {
         case SO_SNDBUF: {
             const unsigned int* val =
-                thread_getReadablePtr(sys->thread, optvalPtr, sizeof(int));
+                memorymanager_getReadablePtr(sys->memoryManager,sys->thread, optvalPtr, sizeof(int));
             size_t newsize =
                 (*val) * 2; // Linux kernel doubles this value upon setting
             socket_setOutputBufferSize(sock, newsize);
@@ -365,7 +367,7 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
         }
         case SO_RCVBUF: {
             const unsigned int* val =
-                thread_getReadablePtr(sys->thread, optvalPtr, sizeof(int));
+                memorymanager_getReadablePtr(sys->memoryManager,sys->thread, optvalPtr, sizeof(int));
             size_t newsize =
                 (*val) * 2; // Linux kernel doubles this value upon setting
             socket_setInputBufferSize(sock, newsize);
@@ -446,7 +448,7 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
-    void* buf = thread_getWriteablePtr(sys->thread, bufPtr, sizeNeeded);
+    void* buf = memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, bufPtr, sizeNeeded);
     struct sockaddr_in inet_addr = {.sin_family = AF_INET};
 
     ssize_t retval = transport_receiveUserData(
@@ -512,7 +514,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
 
     if (destAddrPtr.val) {
         const struct sockaddr* dest_addr =
-            thread_getReadablePtr(sys->thread, destAddrPtr, addrlen);
+            memorymanager_getReadablePtr(sys->memoryManager, sys->thread, destAddrPtr, addrlen);
         utility_assert(dest_addr);
 
         /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
@@ -594,7 +596,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
          * available in the descriptor. */
         size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
         const void* buf =
-            thread_getReadablePtr(sys->thread, bufPtr, sizeNeeded);
+            memorymanager_getReadablePtr(sys->memoryManager, sys->thread, bufPtr, sizeNeeded);
 
         retval = transport_sendUserData(
             (Transport*)socket_desc, buf, sizeNeeded, dest_ip, dest_port);
@@ -669,7 +671,7 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
     }
 
     const struct sockaddr* addr =
-        thread_getReadablePtr(sys->thread, addrPtr, addrlen);
+        memorymanager_getReadablePtr(sys->memoryManager, sys->thread, addrPtr, addrlen);
     utility_assert(addr);
 
     /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
@@ -720,7 +722,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     }
 
     const struct sockaddr* addr =
-        thread_getReadablePtr(sys->thread, addrPtr, addrlen);
+        memorymanager_getReadablePtr(sys->memoryManager, sys->thread, addrPtr, addrlen);
     utility_assert(addr);
 
     /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
