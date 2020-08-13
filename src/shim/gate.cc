@@ -5,6 +5,11 @@
 
 #include <sched.h>
 
+// (rwails) The number times we should increment the counter and 
+// check the atomic bool before we fall back to the semaphore.
+// TODO: Move to an environment variable?
+#define SHD_GATE_SPIN_MAX 8096
+
 void gate_init(Gate *gate) {
   std::memset(gate, 0, sizeof(Gate));
   sem_init(&gate->semaphore, 1, 0);
@@ -23,7 +28,7 @@ void gate_open(Gate *gate) {
 void gate_pass_and_close(Gate *gate) {
   bool expected = true;
 
-  while (gate->spin_ctr++ < 8096 &&
+  while (gate->spin_ctr++ < SHD_GATE_SPIN_MAX &&
           !gate->x.compare_exchange_weak(
       expected, false, std::memory_order_acquire)) {
     expected = true;
