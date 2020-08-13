@@ -1,12 +1,10 @@
-#![allow(unused)]
-
 use super::syscall_types::*;
 use super::thread::{CThread, Thread};
 use crate::cbindings as c;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
-use std::cell::{Cell, Ref, RefCell};
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -51,8 +49,6 @@ struct Region {
 pub struct MemoryManager {
     shm_file: RefCell<ShmFile>,
     regions: RefCell<IntervalMap<Region>>,
-    host_id: u32,
-    pid: u32,
     misses_by_path: RefCell<HashMap<String, u32>>,
 
     // We need to reinitialize some state after an exec, but need to wait until the next syscall.
@@ -79,7 +75,10 @@ struct ShmFile {
 
 impl Drop for ShmFile {
     fn drop(&mut self) {
-        std::fs::remove_file(&self.shm_path);
+        match std::fs::remove_file(&self.shm_path) {
+            Ok(_) => (),
+            Err(e) => println!("Warning: removing '{}': {}", self.shm_path, e),
+        }
     }
 }
 
@@ -162,7 +161,7 @@ impl ShmFile {
         let res = unsafe {
             thread.native_mmap(
                 PluginPtr::from(interval.start),
-                (interval.end - interval.start),
+                interval.end - interval.start,
                 prot,
                 libc::MAP_SHARED | libc::MAP_FIXED,
                 self.shm_plugin_fd,
@@ -246,7 +245,6 @@ fn get_heap(
         return start..start;
     }
     let (heap_interval, heap_region) = heap_mapping.unwrap();
-    let heap_size = heap_interval.end - heap_interval.start;
 
     shm_file.alloc(&heap_interval);
     let mut heap_region = heap_region.clone();
@@ -270,7 +268,7 @@ fn map_stack(shm_file: &ShmFile, regions: &mut IntervalMap<Region>) -> usize {
     // Find the current stack region. There should be exactly one.
     let mut iter = regions
         .iter()
-        .filter(|(i, r)| r.original_path == Some(MappingPath::InitialStack));
+        .filter(|(_i, r)| r.original_path == Some(MappingPath::InitialStack));
     // Get the stack region, panicking if none.
     let (interval, region) = iter.next().unwrap();
     // Panic if there's more than one.
@@ -299,7 +297,7 @@ fn map_stack(shm_file: &ShmFile, regions: &mut IntervalMap<Region>) -> usize {
 }
 
 impl MemoryManager {
-    pub fn new(thread: &mut impl Thread, host_id: u32, pid: u32) -> MemoryManager {
+    pub fn new(thread: &mut impl Thread) -> MemoryManager {
         let system_pid = thread.get_system_pid();
 
         let shm_path = format!(
@@ -349,8 +347,6 @@ impl MemoryManager {
         MemoryManager {
             shm_file: RefCell::new(shm_file),
             regions: RefCell::new(regions),
-            host_id,
-            pid,
             misses_by_path: RefCell::new(HashMap::new()),
             need_post_exec_cleanup: Cell::new(false),
             heap: RefCell::new(heap),
@@ -386,7 +382,7 @@ impl MemoryManager {
 
     /// Should be called by shadow's SysCallHandler before allowing the plugin to execute the exec
     /// syscall.
-    pub fn post_exec_hook(&mut self, thread: &impl Thread) {
+    pub fn post_exec_hook(&mut self, _thread: &impl Thread) {
         self.need_post_exec_cleanup.set(true);
     }
 
@@ -409,7 +405,8 @@ impl MemoryManager {
     /// SAFETY
     /// * The pointer must point to readable value of type T.
     /// * Returned ref mustn't be accessed after Thread runs again or flush is called.
-    pub unsafe fn get_ref<T>(&self, thread: &impl Thread, src: PluginPtr) -> Result<&T, i32> {
+    #[allow(dead_code)]
+    pub unsafe fn _get_ref<T>(&self, thread: &impl Thread, src: PluginPtr) -> Result<&T, i32> {
         let raw = self.get_readable_ptr(thread, src, std::mem::size_of::<T>())?;
         Ok(&*(raw as *const T))
     }
@@ -418,6 +415,7 @@ impl MemoryManager {
     /// SAFETY
     /// * The pointer must point to a writeable value of type T.
     /// * Returned ref mustn't be accessed after Thread runs again or flush is called.
+    #[allow(dead_code)]
     pub unsafe fn get_mut_ref<T>(
         &self,
         thread: &impl Thread,
@@ -431,7 +429,8 @@ impl MemoryManager {
     /// SAFETY
     /// * The pointer must point to a readable array of type T and at least size `len`.
     /// * Returned slice mustn't be accessed after Thread runs again or flush is called.
-    unsafe fn get_slice<T>(
+    #[allow(dead_code)]
+    pub unsafe fn get_slice<T>(
         &self,
         thread: &impl Thread,
         src: PluginPtr,
@@ -445,7 +444,8 @@ impl MemoryManager {
     /// SAFETY
     /// * The pointer must point to a writeable array of type T and at least size `len`.
     /// * Returned slice mustn't be accessed after Thread runs again or flush is called.
-    unsafe fn get_mut_slice<T>(
+    #[allow(dead_code)]
+    pub unsafe fn get_mut_slice<T>(
         &self,
         thread: &impl Thread,
         src: PluginPtr,
@@ -505,7 +505,7 @@ impl MemoryManager {
                         .mmap_into_plugin(thread, &new_heap, HEAP_PROT);
                     shadow_base
                 }
-                Some((heap_interval, heap_region)) => {
+                Some((_, heap_region)) => {
                     // Grow heap region.
                     self.shm_file.borrow().alloc(&heap);
                     // mremap in plugin, enforcing that base stays the same.
@@ -549,7 +549,7 @@ impl MemoryManager {
                 unimplemented!();
             }
             // handle shrink
-            let (heap_interval, heap_region) = opt_heap_interval_and_region.unwrap();
+            let (_, heap_region) = opt_heap_interval_and_region.unwrap();
 
             // mremap in plugin, enforcing that base stays the same.
             unsafe {
@@ -586,7 +586,6 @@ impl MemoryManager {
         let mut stack_copied = self.stack_copied.borrow_mut();
 
         let start = page_of(src);
-        let end = stack_copied.end;
         let stack_extension = start..stack_copied.start;
         //println!("jdn extending stack from {:x} to {:x}", stack_copied.start, start);
 
@@ -653,7 +652,7 @@ impl MemoryManager {
     }
 
     // Counts accesses where we had to fall back to the thread's (slow) apis.
-    fn inc_misses(&self, thread: &impl Thread, addr: PluginPtr) {
+    fn inc_misses(&self, addr: PluginPtr) {
         let key = match self.regions.borrow().get(usize::from(addr)) {
             Some((_, original_path)) => format!("{:?}", original_path),
             None => "not found".to_string(),
@@ -674,7 +673,7 @@ impl MemoryManager {
             Ok(p)
         } else {
             // Fall back to reading via the thread.
-            self.inc_misses(thread, plugin_src);
+            self.inc_misses(plugin_src);
             thread.get_readable_ptr(plugin_src, n)
         }
     }
@@ -689,7 +688,7 @@ impl MemoryManager {
         if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
             Ok(p)
         } else {
-            self.inc_misses(thread, plugin_src);
+            self.inc_misses(plugin_src);
             thread.get_writeable_ptr(plugin_src, n)
         }
     }
@@ -699,16 +698,8 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn memorymanager_new(
-        thread: *mut c::Thread,
-        host_id: u32,
-        process_id: u32,
-    ) -> *mut MemoryManager {
-        Box::into_raw(Box::new(MemoryManager::new(
-            &mut CThread::new(thread),
-            host_id,
-            process_id,
-        )))
+    pub extern "C" fn memorymanager_new(thread: *mut c::Thread) -> *mut MemoryManager {
+        Box::into_raw(Box::new(MemoryManager::new(&mut CThread::new(thread))))
     }
 
     #[no_mangle]

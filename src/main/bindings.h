@@ -48,7 +48,7 @@ SysCallReg memorymanager_handleBrk(MemoryManager *memory_manager,
                                    Thread *thread,
                                    PluginPtr plugin_src);
 
-MemoryManager *memorymanager_new(Thread *thread, uint32_t host_id, uint32_t process_id);
+MemoryManager *memorymanager_new(Thread *thread);
 
 // Notifies memorymanager that plugin is about to call execve.
 void memorymanager_postExecHook(MemoryManager *memory_manager, Thread *thread);

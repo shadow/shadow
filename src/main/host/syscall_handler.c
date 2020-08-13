@@ -178,8 +178,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     // Lazily initialize memoryManager on the first syscall. It needs a thread
     // in the syscall state for its initialization.
     if (!sys->memoryManager) {
-        sys->memoryManager = memorymanager_new(
-            sys->thread, host_getID(sys->host), process_getProcessID(sys->process));
+        sys->memoryManager = memorymanager_new(sys->thread);
     }
     SysCallReturn scr;
 
