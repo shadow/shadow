@@ -32,8 +32,7 @@ void gate_pass_and_close(Gate *gate) {
           !gate->x.compare_exchange_weak(
       expected, false, std::memory_order_acquire)) {
     expected = true;
-      // sched_yield();
-    __builtin_ia32_pause();
+    __asm__ ( "pause" ); // (rwails) Not sure if this op is helpful.
   }
 
   sem_wait(&gate->semaphore);
