@@ -14,8 +14,8 @@
 #include "main/host/thread_preload.h"
 #include "main/host/thread_protected.h"
 #include "main/shmem/shmem_allocator.h"
+#include "shim/ipc.h"
 #include "shim/shim_event.h"
-#include "shim/spin.h"
 #include "support/logger/logger.h"
 
 #define THREADPRELOAD_TYPE_ID 13357

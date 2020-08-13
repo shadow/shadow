@@ -1,5 +1,5 @@
-#ifndef SHD_SPIN_H_
-#define SHD_SPIN_H_
+#ifndef SHD_IPC_H_
+#define SHD_IPC_H_
 
 #include <stddef.h>
 
@@ -24,4 +24,4 @@ void shimevent_recvEventFromPlugin(struct IPCData *data, ShimEvent* e);
 }
 #endif
 
-#endif // SHD_SPIN_H_
+#endif // SHD_IPC_H_

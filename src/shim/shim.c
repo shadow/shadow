@@ -12,9 +12,9 @@
 
 #include <sched.h>
 
+#include "shim/ipc.h"
 #include "shim/shim_event.h"
 #include "shim/shim_logger.h"
-#include "shim/spin.h"
 #include "support/logger/logger.h"
 
 typedef struct _TIDBlkPair {

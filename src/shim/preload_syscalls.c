@@ -19,11 +19,11 @@
 
 #include "main/host/syscall/kernel_types.h"
 #include "main/shmem/shmem_allocator.h"
+#include "shim/ipc.h"
 #include "shim/shim.h"
 #include "shim/shim_event.h"
 #include "shim/shim_logger.h"
 #include "shim/shim_shmem.h"
-#include "shim/spin.h"
 #include "support/logger/logger.h"
 
 static long shadow_retval_to_errno(long retval) {

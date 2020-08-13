@@ -1,4 +1,4 @@
-#include "spin.h"
+#include "ipc.h"
 
 #include <assert.h>
 #include <stdbool.h>
