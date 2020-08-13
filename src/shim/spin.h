@@ -11,18 +11,14 @@ extern "C" {
 
 struct IPCData;
 
-struct IPCData* globalIPCDataCreate();
-struct IPCData* globalIPCDataMap(const char* name);
+void ipcData_init(struct IPCData* ipc_data);
 
-const char* globalIPCDataName();
+size_t ipcData_nbytes();
 
-void ipcDataInit(struct IPCData* ipc_data);
-void ipcDataInitIdx(size_t idx);
-
-void shimevent_sendEventToShadow(int event_fd, const ShimEvent* e);
-void shimevent_sendEventToPlugin(int event_fd, const ShimEvent* e);
-void shimevent_recvEventFromShadow(int event_fd, ShimEvent* e);
-void shimevent_recvEventFromPlugin(int event_fd, ShimEvent* e);
+void shimevent_sendEventToShadow(struct IPCData *data, const ShimEvent* e);
+void shimevent_sendEventToPlugin(struct IPCData *data, const ShimEvent* e);
+void shimevent_recvEventFromShadow(struct IPCData *data, ShimEvent* e);
+void shimevent_recvEventFromPlugin(struct IPCData *data, ShimEvent* e);
 
 #ifdef __cplusplus
 }

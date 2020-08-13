@@ -8,6 +8,7 @@
 #include <atomic>
 #include <utility>
 
+#include <pthread.h>
 #include <semaphore.h>
 #include <sched.h>
 
@@ -20,6 +21,7 @@ struct GateImpl {
   std::atomic<bool> x;
   sem_t semaphore;
   std::size_t spin_ctr;
+  pthread_spinlock_t lock;
 };
 
 static_assert(sizeof(Gate) >= sizeof(GateImpl),
@@ -38,13 +40,17 @@ void gate_init(Gate *gate) {
   auto *gate_impl = reinterpret_cast<GateImpl *>(gate);
   gate_impl->magic = MAGIC_CONST;
   sem_init(&gate_impl->semaphore, 1, 0);
+  pthread_spin_init(&gate_impl->lock, PTHREAD_PROCESS_SHARED);
   // std::atomic_init(&gate_impl->x, false);
 }
 
 void gate_open(Gate *gate) {
   auto *gate_impl = gate_to_gate_impl(gate);
+
+  pthread_spin_lock(&gate_impl->lock);
   sem_post(&gate_impl->semaphore);
   gate_impl->x.store(true, std::memory_order_release);
+  pthread_spin_unlock(&gate_impl->lock);
 }
 
 void gate_pass_and_close(Gate *gate) {
@@ -62,6 +68,11 @@ void gate_pass_and_close(Gate *gate) {
 
   sem_wait(&gate_impl->semaphore);
   gate_impl->spin_ctr = 0;
+
+  pthread_spin_lock(&gate_impl->lock);
+  gate_impl->x.store(false, std::memory_order_release);
+  pthread_spin_unlock(&gate_impl->lock);
+
 }
 
 }

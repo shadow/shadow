@@ -3,6 +3,7 @@
 #include "main/shmem/shmem_file.h"
 #include "main/shmem/shmem_util.h"
 
+#include <limits.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -299,7 +300,7 @@ static void shmemallocator_testAlloc() {
 }
 
 static void shmemallocator_implTestSerial(ShMemAllocator* allocator) {
-    ShMemBlock x = shmemallocator_alloc(allocator, 1);
+    ShMemBlock x = shmemallocator_alloc(allocator, 1024);
     ShMemBlockSerialized serial = shmemallocator_blockSerialize(allocator, &x);
     ShMemBlock y = shmemallocator_blockDeserialize(allocator, &serial);
 
@@ -409,6 +410,42 @@ static void shmemserializer_testSerialize() {
 
     shmemserializer_destroy(serializer);
     shmemallocator_destroy(allocator);
+}
+
+static void shmemblockserialized_testString() {
+    ShMemBlockSerialized blk = {1, 2, 3, "blk"};
+
+    char buf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN];
+
+    shmemblockserialized_toString(&blk, buf);
+
+    bool err = false;
+
+    ShMemBlockSerialized blk_2 = shmemblockserialized_fromString(buf, &err);
+
+    g_assert(!err);
+
+    g_assert_cmpmem(&blk,
+                    sizeof(ShMemBlockSerialized),
+                    &blk_2,
+                    sizeof(ShMemBlockSerialized));
+
+    blk.offset = ULLONG_MAX;
+    blk.nbytes = ULLONG_MAX;
+    blk.block_nbytes = ULLONG_MAX;
+    memset(blk.name, 'x', SHD_SHMEM_FILE_NAME_NBYTES);
+    blk.name[SHD_SHMEM_FILE_NAME_NBYTES - 1] = '\0';
+
+    shmemblockserialized_toString(&blk, buf);
+
+    blk_2 = shmemblockserialized_fromString(buf, &err);
+
+    g_assert(!err);
+
+    g_assert_cmpmem(&blk,
+                    sizeof(ShMemBlockSerialized),
+                    &blk_2,
+                    sizeof(ShMemBlockSerialized));
 }
 
 static const char *test_fork_key = "TEST_FORK";
@@ -585,6 +622,13 @@ int main(int argc, char** argv) {
                NULL,
                NULL,
                shmemallocator_testSerial,
+               NULL);
+
+    g_test_add("/shmem/shmemblockserialized_testString",
+               void,
+               NULL,
+               NULL,
+               shmemblockserialized_testString,
                NULL);
 
     g_test_add("/shmem/shmemserializer_testDeserialize",

@@ -23,7 +23,7 @@
 </graphml>
 ]]></topology>
   <plugin id="sleepy" path="./sleepy"/>
-  <host id="server" quantity="500">
+  <host id="server" quantity="2">
     <process plugin="sleepy" starttime="1" arguments=""/>
   </host>
 </shadow>

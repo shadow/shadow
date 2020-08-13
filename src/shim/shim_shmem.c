@@ -40,9 +40,9 @@ void shim_shmemHandleWrite(const ShimEvent* ev) {
            ev->event_data.shmem_blk.n);
 }
 
-void shim_shmemNotifyComplete(int fd) {
+void shim_shmemNotifyComplete(struct IPCData *data) {
     ShimEvent ev = {
         .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
     };
-    shimevent_sendEventToShadow(fd, &ev);
+    shimevent_sendEventToShadow(data, &ev);
 }
