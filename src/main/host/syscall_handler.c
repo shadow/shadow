@@ -26,6 +26,7 @@
 #include "main/host/syscall/fileat.h"
 #include "main/host/syscall/ioctl.h"
 #include "main/host/syscall/mman.h"
+#include "main/host/syscall/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/socket.h"
 #include "main/host/syscall/time.h"
@@ -204,6 +205,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(epoll_create1);
         HANDLE(epoll_ctl);
         HANDLE(epoll_wait);
+        HANDLE(execve);
         HANDLE(faccessat);
         HANDLE(fadvise64);
         HANDLE(fallocate);
@@ -287,7 +289,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(arch_prctl);
         NATIVE(clone);
         NATIVE(eventfd2);
-        NATIVE(execve);
         NATIVE(futex);
         NATIVE(getrandom);
 #ifdef SYS_mmap2
@@ -363,10 +364,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             warning("unhandled syscall %ld", args->number);
             scr = (SysCallReturn){.state = SYSCALL_NATIVE};
             break;
-    }
-
-    if (args->number == SYS_execve) {
-        memorymanager_postExecHook(sys->memoryManager, sys->thread);
     }
 
     if (scr.state == SYSCALL_BLOCK) {

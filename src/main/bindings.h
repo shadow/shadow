@@ -51,6 +51,6 @@ SysCallReg memorymanager_handleBrk(MemoryManager *memory_manager,
 MemoryManager *memorymanager_new(Thread *thread);
 
 // Notifies memorymanager that plugin is about to call execve.
-void memorymanager_postExecHook(MemoryManager *memory_manager, Thread *thread);
+void memorymanager_preExecHook(MemoryManager *memory_manager, Thread *thread);
 
 #endif /* main_bindings_h */

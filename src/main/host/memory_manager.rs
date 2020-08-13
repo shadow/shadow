@@ -382,7 +382,7 @@ impl MemoryManager {
 
     /// Should be called by shadow's SysCallHandler before allowing the plugin to execute the exec
     /// syscall.
-    pub fn post_exec_hook(&mut self, _thread: &impl Thread) {
+    pub fn pre_exec_hook(&mut self, _thread: &impl Thread) {
         self.need_post_exec_cleanup.set(true);
     }
 
@@ -740,13 +740,13 @@ mod export {
 
     /// Notifies memorymanager that plugin is about to call execve.
     #[no_mangle]
-    pub extern "C" fn memorymanager_postExecHook(
+    pub extern "C" fn memorymanager_preExecHook(
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
     ) {
         let memory_manager = unsafe { &mut *memory_manager };
         let thread = CThread::new(thread);
-        memory_manager.post_exec_hook(&thread);
+        memory_manager.pre_exec_hook(&thread);
     }
 
     /// Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
