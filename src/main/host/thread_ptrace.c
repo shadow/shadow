@@ -646,6 +646,12 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     // Rewind instruction pointer to point to the syscall instruction again.
     regs.rip -= 2; // Size of the syscall instruction.
 
+    uint64_t syscall_rip = regs.rip;
+
+    debug("threadptrace_nativeSyscall setting regs: rip=%llx n=%llx arg0=%llx arg1=%llx arg2=%llx "
+          "arg3=%llx arg4=%llx arg5=%llx",
+          regs.rip, regs.rax, regs.rdi, regs.rsi, regs.rdx, regs.r10, regs.r8, regs.r9);
+
 #ifdef DEBUG
     // Verify that rip is now pointing at a syscall instruction.
     const uint8_t* buf =
@@ -658,50 +664,38 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
         abort();
     }
 
-    // Step into the syscall instruction. ptrace first generates a stop without actually executing
-    // the instruction.
-    if (ptrace(PTRACE_SINGLESTEP, thread->base.nativePid, 0, 0) < 0) {
-        error("ptrace %d: %s", thread->base.nativePid, g_strerror(errno));
-        abort();
-    }
-    int wstatus;
-    if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
-        error("waitpid: %s", g_strerror(errno));
-        abort();
-    }
-    StopReason reason = _getStopReason(wstatus);
-    if (reason.type != STOPREASON_SIGNAL || reason.signal.signal != SIGTRAP) {
-        error("Unexpected stop reason type: %d, wstatus: %d", reason.type,
-              wstatus);
-        abort();
-    }
+    // Single-step until the syscall instruction is executed. Sometimes there
+    // are extra stops before doing so, and sometimes not.
+    do {
+        if (ptrace(PTRACE_SINGLESTEP, thread->base.nativePid, 0, 0) < 0) {
+            error("ptrace %d: %s", thread->base.nativePid, g_strerror(errno));
+            abort();
+        }
+        int wstatus;
+        if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
+            error("waitpid: %s", g_strerror(errno));
+            abort();
+        }
+        StopReason reason = _getStopReason(wstatus);
+        if (reason.type != STOPREASON_SIGNAL || reason.signal.signal != SIGTRAP) {
+            // In particular this could be an exec stop if the syscall was execve,
+            // or an exited stop if the syscall was exit.
+            _threadptrace_updateChildState(thread, reason);
+        }
+        if (!threadptrace_isRunning(base)) {
+            // Since the child is no longer running, we have no way of retrieving a
+            // return value, if any. e.g. this happens after the `exit` syscall.
+            return -ECHILD;
+        }
+        if (ptrace(PTRACE_GETREGS, thread->base.nativePid, 0, &regs) < 0) {
+            error("ptrace: %s", g_strerror(errno));
+            abort();
+        }
+        debug("threadptrace_nativeSyscall regs: rip=%llx rax=%llx arg0=%llx arg1=%llx "
+              "arg2=%llx arg3=%llx arg4=%llx arg5=%llx",
+              regs.rip, regs.rax, regs.rdi, regs.rsi, regs.rdx, regs.r10, regs.r8, regs.r9);
+    } while (regs.rip == syscall_rip);
 
-    // Step again. This actually executes the syscall instruction.
-    if (ptrace(PTRACE_SINGLESTEP, thread->base.nativePid, 0, 0) < 0) {
-        error("ptrace %d: %s", thread->base.nativePid, g_strerror(errno));
-        abort();
-    }
-    if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
-        error("waitpid: %s", g_strerror(errno));
-        abort();
-    }
-    reason = _getStopReason(wstatus);
-    if (reason.type != STOPREASON_SIGNAL || reason.signal.signal != SIGTRAP) {
-        // In particular this could be an exec stop if the syscall was execve,
-        // or an exited stop if the syscall was exit.
-        _threadptrace_updateChildState(thread, reason);
-    }
-
-    if (!threadptrace_isRunning(base)) {
-        // Since the child is no longer running, we have no way of retrieving a
-        // return value, if any. e.g. this happens after the `exit` syscall.
-        return -ECHILD;
-    }
-
-    if (ptrace(PTRACE_GETREGS, thread->base.nativePid, 0, &regs) < 0) {
-        error("ptrace: %s", g_strerror(errno));
-        abort();
-    }
     debug("Native syscall result %lld (%s)", regs.rax, strerror(-regs.rax));
 
     return regs.rax;
