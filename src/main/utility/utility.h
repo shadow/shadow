@@ -8,6 +8,7 @@
 #define SHD_UTILITY_H_
 
 #include <glib.h>
+#include <stdio.h>
 #include <netinet/in.h>
 
 #include "main/core/support/definitions.h"

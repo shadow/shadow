@@ -1,5 +1,6 @@
-<shadow stoptime="3">
-  <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+<?xml version="1.0" ?>
+<shadow stoptime="3600">
+   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
   <key attr.name="latency" attr.type="double" for="edge" id="d3" />
   <key attr.name="bandwidthup" attr.type="int" for="node" id="d2" />
@@ -18,9 +19,12 @@
   </graph>
 </graphml>
 ]]></topology>
-  <plugin id="testphold" path="test-phold"/>
-  <host id="peer" quantity="10">
-    <process plugin="testphold" starttime="1" arguments="loglevel=info basename=peer quantity=10 msgload=25 cpuload=100 size=1 weightsfilepath=weights.txt"/>
-  </host>
+   <kill time="5"/>
+   <plugin id="testconfig" path="test-config-convert"/>
+   <host id="testclient" quantity="1">
+      <process arguments="client 5678" plugin="testconfig" starttime="1"/>
+   </host>
+   <host id="testserver" quantity="1">
+      <process arguments="server 5678" plugin="testconfig" starttime="1"/>
+   </host>
 </shadow>
-

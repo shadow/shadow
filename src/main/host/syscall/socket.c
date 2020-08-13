@@ -20,6 +20,7 @@
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
+#include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/thread.h"
 #include "support/logger/logger.h"
@@ -47,7 +48,7 @@ static bool _syscallhandler_readableWhenClosed(SysCallHandler* sys,
 static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
                                                 Socket** sock_desc_out) {
     /* Check that fd is within bounds. */
-    if (sockfd <= 0) {
+    if (sockfd < 0) {
         info("descriptor %i out of bounds", sockfd);
         return -EBADF;
     }
@@ -109,6 +110,33 @@ static size_t _syscallhandler_getSocklenHelper(SysCallHandler* sys,
     return sizeAvail;
 }
 
+static SysCallReturn
+_syscallhandler_getnameHelper(SysCallHandler* sys,
+                              struct sockaddr_in* inet_addr, PluginPtr addrPtr,
+                              PluginPtr addrlenPtr) {
+    if (!addrPtr.val || !addrlenPtr.val) {
+        info("Cannot get name with NULL return address info.");
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
+    /* Get the len via clone, so we can write to addrlenPtr too. */
+    size_t sizeAvail = _syscallhandler_getSocklenHelper(sys, addrlenPtr);
+
+    /* The result is truncated if they didn't give us enough space. */
+    size_t retSize = MIN(sizeAvail, sizeof(*inet_addr));
+
+    if (retSize > 0) {
+        /* Return the results */
+        struct sockaddr* addr = thread_getWriteablePtr(sys->thread, addrPtr, retSize);
+        memcpy(addr, inet_addr, retSize);
+    }
+
+    socklen_t* addrlen = thread_getWriteablePtr(sys->thread, addrlenPtr, sizeof(*addrlen));
+    *addrlen = (socklen_t)sizeof(*inet_addr);
+
+    return (SysCallReturn){.state = SYSCALL_DONE};
+}
+
 static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
                                                   int sockfd, PluginPtr addrPtr,
                                                   PluginPtr addrlenPtr,
@@ -142,14 +170,14 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
     /* Make sure they supplied addrlen if they requested an addr. */
     if (addrPtr.val && !addrlenPtr.val) {
         info("addrlen was NULL when addr was non-NULL");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* OK, now we can check if we have anything to accept. */
-    in_addr_t addr = 0;
-    in_port_t port = 0;
+    struct sockaddr_in inet_addr = {.sin_family = AF_INET};
     int accepted_fd = 0;
-    errcode = tcp_acceptServerPeer(tcp_desc, &addr, &port, &accepted_fd);
+    errcode = tcp_acceptServerPeer(
+        tcp_desc, &inet_addr.sin_addr.s_addr, &inet_addr.sin_port, &accepted_fd);
 
     Descriptor* desc = (Descriptor*)tcp_desc;
     if (errcode == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
@@ -182,18 +210,11 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
         descriptor_addFlags((Descriptor*)accepted_tcp_desc, O_CLOEXEC);
     }
 
-    /* Return the accepted socket data if they passed a non-NULL addr. */
-    if (addrPtr.val && addrlenPtr.val) {
-        struct sockaddr_in* addr_out =
-            thread_getWriteablePtr(sys->thread, addrPtr, sizeof(*addr_out));
-        addr_out->sin_addr.s_addr = addr;
-        addr_out->sin_port = port;
-        addr_out->sin_family = AF_INET;
-
-        socklen_t* addrlen_out = thread_getWriteablePtr(
-            sys->thread, addrlenPtr, sizeof(*addrlen_out));
-        *addrlen_out = sizeof(*addr_out);
+    /* check if they wanted to know where we got the data from */
+    if (addrPtr.val) {
+        _syscallhandler_getnameHelper(sys, &inet_addr, addrPtr, addrlenPtr);
     }
+
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = accepted_fd};
 }
 
@@ -244,38 +265,6 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, Socket* socket_desc,
     host_associateInterface(
         sys->host, socket_desc, addr, port, peerAddr, peerPort);
     return 0;
-}
-
-static SysCallReturn
-_syscallhandler_getnameHelper(SysCallHandler* sys,
-                              struct sockaddr_in* inet_addr, PluginPtr addrPtr,
-                              PluginPtr addrlenPtr) {
-    if (!addrPtr.val || !addrlenPtr.val) {
-        info("Cannot get name with NULL return address info.");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
-    /* Get the len via clone, so we can write to addrlenPtr too. */
-    size_t sizeAvail = _syscallhandler_getSocklenHelper(sys, addrlenPtr);
-
-    if (sizeAvail <= 0) {
-        info("Unable to store name in %zu bytes.", sizeAvail);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
-    /* The result is truncated if they didn't give us enough space. */
-    size_t retSize = MIN(sizeAvail, sizeof(*inet_addr));
-
-    /* Return the results */
-    struct sockaddr* addr =
-        thread_getWriteablePtr(sys->thread, addrPtr, retSize);
-    socklen_t* addrlen =
-        thread_getWriteablePtr(sys->thread, addrlenPtr, sizeof(*addrlen));
-
-    memcpy(addr, inet_addr, retSize);
-    *addrlen = (socklen_t)retSize;
-
-    return (SysCallReturn){.state = SYSCALL_DONE};
 }
 
 static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp,
@@ -885,12 +874,7 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
     struct sockaddr_in inet_addr = {.sin_family = AF_INET};
     gboolean hasName = socket_getSocketName(
         socket_desc, &inet_addr.sin_addr.s_addr, &inet_addr.sin_port);
-    if (!hasName) {
-        /* TODO: check what Linux returns on new, unbound socket. The man
-         * page does not specify; using EINVAL for now. */
-        info("Unbound socket %i has no name.", sockfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
+    /* If !hasName, leave sin_addr and sin_port at their default 0 values. */
 
     /* If we are bound to INADDR_ANY, we should instead return the address used
      * to communicate with the connected peer (if we have one). */

@@ -17,11 +17,22 @@ iterating on a test that's failing in GitHub's test runs.
 The [`run.sh`](../ci/run.sh) script builds a Docker images for all
 supported configurations, and runs our tests in them.
 
+On the first invocation you should tell the `run.sh` script to build the images
+using `-i`:
+
+
+```{.bash}
+sudo ci/run.sh -i
+```
+
+Future invocations can omit the `-i` option to use the existing image and
+build/test only the incremental changes:
+
 ```{.bash}
 sudo ci/run.sh
 ```
 
-Note that running all tests locally typically takes hours. More often,
+Note that building all images locally typically takes hours. More often,
 you'll want to only run some smaller set of configurations locally.
 To run only the configurations you specify, use the `-o` flag:
 

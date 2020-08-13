@@ -17,5 +17,17 @@ path = "socket/socket/test_socket.rs"
 name = "test_bind"
 path = "socket/bind/test_bind.rs"
 
+[[bin]]
+name = "test_listen"
+path = "socket/listen/test_listen.rs"
+
+[[bin]]
+name = "test_getsockname"
+path = "socket/getsockname/test_getsockname.rs"
+
+[[bin]]
+name = "test_accept"
+path = "socket/accept/test_accept.rs"
+
 [dependencies]
 libc = "0.2"

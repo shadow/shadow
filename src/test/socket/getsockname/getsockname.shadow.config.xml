@@ -1,6 +1,5 @@
-<?xml version="1.0" ?>
-<shadow stoptime="3600">
-   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+<shadow>
+  <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
   <key attr.name="latency" attr.type="double" for="edge" id="d3" />
   <key attr.name="bandwidthup" attr.type="int" for="node" id="d2" />
@@ -19,12 +18,10 @@
   </graph>
 </graphml>
 ]]></topology>
-   <kill time="5"/>
-   <plugin id="testconfig" path="test-config"/>
-   <host id="testclient" quantity="1">
-      <process arguments="client 5678" plugin="testconfig" starttime="1"/>
-   </host>
-   <host id="testserver" quantity="1">
-      <process arguments="server 5678" plugin="testconfig" starttime="1"/>
-   </host>
+  <kill time="5"/>
+  <plugin id="testgetsockname" path="../../target/debug/test_getsockname"/>
+  <node id="testnode" quantity="1">
+    <application plugin="testgetsockname" starttime="1" arguments="--shadow-passing"/>
+  </node>
 </shadow>
+

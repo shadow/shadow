@@ -1,2 +1,4 @@
+# this file is also used with rsync --exclude-from
+# in 'ci/run.sh', so avoid globs
 .git
 build

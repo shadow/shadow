@@ -20,6 +20,11 @@ APT_PACKAGES="
   xz-utils
   "
 
+# packages that are only required for our CI environment
+APT_CI_PACKAGES="
+  rsync
+  "
+
 RPM_PACKAGES="
   cmake
   curl
@@ -38,6 +43,11 @@ RPM_PACKAGES="
   diffutils
   "
 
+# packages that are only required for our CI environment
+RPM_CI_PACKAGES="
+  rsync
+  "
+
 PYTHON_PACKAGES="
   PyYaml
   "
@@ -46,7 +56,7 @@ case "$CONTAINER" in
     ubuntu:*|debian:*)
         sed -i '/deb-src/s/^# //' /etc/apt/sources.list
         DEBIAN_FRONTEND=noninteractive apt-get update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y $APT_PACKAGES
+        DEBIAN_FRONTEND=noninteractive apt-get install -y $APT_PACKAGES $APT_CI_PACKAGES
 
         # Handle dict ordering of src/tools/convert.py and allow diff on its tests
         # Before Python3.6, dict ordering was not predictable
@@ -60,12 +70,12 @@ case "$CONTAINER" in
         fi
         ;;
     fedora:*)
-        dnf install --best -y $RPM_PACKAGES
+        dnf install --best -y $RPM_PACKAGES $RPM_CI_PACKAGES
         ;;
     centos:7)
         yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
         RPM_PACKAGES=${RPM_PACKAGES/cmake/cmake3}
-        yum install -y $RPM_PACKAGES
+        yum install -y $RPM_PACKAGES $RPM_CI_PACKAGES
         alternatives --install /usr/local/bin/cmake cmake /usr/bin/cmake3 20 \
             --slave /usr/local/bin/ctest ctest /usr/bin/ctest3 \
             --slave /usr/local/bin/cpack cpack /usr/bin/cpack3 \
@@ -84,7 +94,7 @@ case "$CONTAINER" in
         RPM_PACKAGES=${RPM_PACKAGES/igraph-devel}
         RPM_PACKAGES=${RPM_PACKAGES/igraph}
 
-        dnf install -y ${RPM_PACKAGES}
+        dnf install -y ${RPM_PACKAGES} ${RPM_CI_PACKAGES}
         ;;
     *)
         echo "Unhandled container $CONTAINER"

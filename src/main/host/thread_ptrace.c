@@ -143,8 +143,6 @@ typedef struct _ThreadPtrace {
 
     FILE* childMemFile;
 
-    pid_t childPID;
-
     int threadID;
 
     // Reason for the most recent transfer of control back to Shadow.
@@ -223,15 +221,14 @@ static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
     // PTRACE_O_EXITKILL: Kill child if our process dies.
     // PTRACE_O_TRACESYSGOOD: Handle syscall stops explicitly.
     // PTRACE_O_TRACEEXEC: Handle execve stops explicitly.
-    if (ptrace(PTRACE_SETOPTIONS, thread->childPID, 0,
-               PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXEC) <
-        0) {
+    if (ptrace(PTRACE_SETOPTIONS, thread->base.nativePid, 0,
+               PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXEC) < 0) {
         error("ptrace: %s", strerror(errno));
         return;
     }
     // Get a handle to the child's memory.
     char path[64];
-    snprintf(path, 64, "/proc/%d/mem", thread->childPID);
+    snprintf(path, 64, "/proc/%d/mem", thread->base.nativePid);
     thread->childMemFile = fopen(path, "r+");
     if (thread->childMemFile == NULL) {
         error("fopen %s: %s", path, g_strerror(errno));
@@ -242,7 +239,7 @@ static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
 static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
     // We have to reopen the handle to child's memory.
     char path[64];
-    snprintf(path, 64, "/proc/%d/mem", thread->childPID);
+    snprintf(path, 64, "/proc/%d/mem", thread->base.nativePid);
     thread->childMemFile = freopen(path, "r+", thread->childMemFile);
     if (thread->childMemFile == NULL) {
         error("fopen %s: %s", path, g_strerror(errno));
@@ -252,7 +249,7 @@ static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
 
 static void _threadptrace_enterStateSyscall(ThreadPtrace* thread) {
     struct user_regs_struct* regs = &thread->syscall.regs;
-    if (ptrace(PTRACE_GETREGS, thread->childPID, 0, regs) < 0) {
+    if (ptrace(PTRACE_GETREGS, thread->base.nativePid, 0, regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         return;
     }
@@ -263,7 +260,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
     thread->childState = THREAD_PTRACE_CHILD_STATE_SIGNALLED;
     if (signal == SIGSEGV) {
         struct user_regs_struct regs;
-        if (ptrace(PTRACE_GETREGS, thread->childPID, 0, &regs) < 0) {
+        if (ptrace(PTRACE_GETREGS, thread->base.nativePid, 0, &regs) < 0) {
             error("ptrace: %s", g_strerror(errno));
             return;
         }
@@ -275,7 +272,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
             Tsc_emulateRdtsc(&thread->tsc,
                              &regs,
                              worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
-            if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &regs) < 0) {
+            if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &regs) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 return;
             }
@@ -286,7 +283,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
             Tsc_emulateRdtscp(&thread->tsc,
                               &regs,
                               worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
-            if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &regs) < 0) {
+            if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &regs) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 return;
             }
@@ -309,7 +306,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
 static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reason) {
     switch(reason.type) {
         case STOPREASON_EXITED_SIGNAL:
-            debug("child %d terminated by signal %d", thread->childPID,
+            debug("child %d terminated by signal %d", thread->base.nativePid,
                   reason.exited_signal.signal);
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
             thread->returnCode = -1;
@@ -344,7 +341,7 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
 static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     // Wait for child to stop.
     int wstatus;
-    if (waitpid(thread->childPID, &wstatus, 0) < 0) {
+    if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
         error("waitpid: %s", g_strerror(errno));
         return;
     }
@@ -352,12 +349,14 @@ static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     _threadptrace_updateChildState(thread, reason);
 }
 
-void threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
+pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
-    thread->childPID = _threadptrace_fork_exec(argv[0], argv, envv);
+    thread->base.nativePid = _threadptrace_fork_exec(argv[0], argv, envv);
 
     _threadptrace_nextChildState(thread);
+
+    return thread->base.nativePid;
 }
 
 static void _threadptrace_handleSyscall(ThreadPtrace* thread) {
@@ -431,8 +430,8 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                     case SYSCALL_DONE:
                         // Return the specified result.
                         thread->syscall.regs.rax = thread->syscall.sysCallReturn.retval.as_u64;
-                        if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &thread->syscall.regs) <
-                            0) {
+                        if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0,
+                                   &thread->syscall.regs) < 0) {
                             error("ptrace: %s", g_strerror(errno));
                             return NULL;
                         }
@@ -464,8 +463,8 @@ SysCallCondition* threadptrace_resume(Thread* base) {
         }
         _threadptrace_flushPtrs(thread);
         // Allow child to start executing.
-        if (ptrace(PTRACE_SYSEMU, thread->childPID, 0, thread->signalToDeliver) < 0) {
-            error("ptrace %d: %s", thread->childPID, g_strerror(errno));
+        if (ptrace(PTRACE_SYSEMU, thread->base.nativePid, 0, thread->signalToDeliver) < 0) {
+            error("ptrace %d: %s", thread->base.nativePid, g_strerror(errno));
             return NULL;
         }
         thread->signalToDeliver = 0;
@@ -473,7 +472,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
     }
 }
 
-gboolean threadptrace_isRunning(Thread* base) {
+bool threadptrace_isRunning(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     switch (thread->childState) {
         case THREAD_PTRACE_CHILD_STATE_TRACE_ME:
@@ -500,8 +499,8 @@ void threadptrace_terminate(Thread* base) {
         return;
     }
 
-    if (ptrace(PTRACE_CONT, thread->childPID, 0, SIGTERM) < 0) {
-        warning("ptrace %d: %s", thread->childPID, g_strerror(errno));
+    if (ptrace(PTRACE_CONT, thread->base.nativePid, 0, SIGTERM) < 0) {
+        warning("ptrace %d: %s", thread->base.nativePid, g_strerror(errno));
     }
 }
 
@@ -518,8 +517,6 @@ void threadptrace_free(Thread* base) {
         syscallhandler_unref(thread->sys);
     }
 
-    MAGIC_CLEAR(base);
-    g_free(thread);
     worker_countObject(OBJECT_TYPE_THREAD_PTRACE, COUNTER_TYPE_FREE);
 }
 
@@ -649,6 +646,12 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     // Rewind instruction pointer to point to the syscall instruction again.
     regs.rip -= 2; // Size of the syscall instruction.
 
+    uint64_t syscall_rip = regs.rip;
+
+    debug("threadptrace_nativeSyscall setting regs: rip=%llx n=%llx arg0=%llx arg1=%llx arg2=%llx "
+          "arg3=%llx arg4=%llx arg5=%llx",
+          regs.rip, regs.rax, regs.rdi, regs.rsi, regs.rdx, regs.r10, regs.r8, regs.r9);
+
 #ifdef DEBUG
     // Verify that rip is now pointing at a syscall instruction.
     const uint8_t* buf =
@@ -656,56 +659,43 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     utility_assert(!memcmp(buf, "\x0f\x05", 2));
 #endif
 
-    if (ptrace(PTRACE_SETREGS, thread->childPID, 0, &regs) <
-        0) {
+    if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
 
-    // Step into the syscall instruction. ptrace first generates a stop without actually executing
-    // the instruction.
-    if (ptrace(PTRACE_SINGLESTEP, thread->childPID, 0, 0) < 0) {
-        error("ptrace %d: %s", thread->childPID, g_strerror(errno));
-        abort();
-    }
-    int wstatus;
-    if (waitpid(thread->childPID, &wstatus, 0) < 0) {
-        error("waitpid: %s", g_strerror(errno));
-        abort();
-    }
-    StopReason reason = _getStopReason(wstatus);
-    if (reason.type != STOPREASON_SIGNAL || reason.signal.signal != SIGTRAP) {
-        error("Unexpected stop reason type: %d, wstatus: %d", reason.type,
-              wstatus);
-        abort();
-    }
+    // Single-step until the syscall instruction is executed. Sometimes there
+    // are extra stops before doing so, and sometimes not.
+    do {
+        if (ptrace(PTRACE_SINGLESTEP, thread->base.nativePid, 0, 0) < 0) {
+            error("ptrace %d: %s", thread->base.nativePid, g_strerror(errno));
+            abort();
+        }
+        int wstatus;
+        if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
+            error("waitpid: %s", g_strerror(errno));
+            abort();
+        }
+        StopReason reason = _getStopReason(wstatus);
+        if (reason.type != STOPREASON_SIGNAL || reason.signal.signal != SIGTRAP) {
+            // In particular this could be an exec stop if the syscall was execve,
+            // or an exited stop if the syscall was exit.
+            _threadptrace_updateChildState(thread, reason);
+        }
+        if (!threadptrace_isRunning(base)) {
+            // Since the child is no longer running, we have no way of retrieving a
+            // return value, if any. e.g. this happens after the `exit` syscall.
+            return -ECHILD;
+        }
+        if (ptrace(PTRACE_GETREGS, thread->base.nativePid, 0, &regs) < 0) {
+            error("ptrace: %s", g_strerror(errno));
+            abort();
+        }
+        debug("threadptrace_nativeSyscall regs: rip=%llx rax=%llx arg0=%llx arg1=%llx "
+              "arg2=%llx arg3=%llx arg4=%llx arg5=%llx",
+              regs.rip, regs.rax, regs.rdi, regs.rsi, regs.rdx, regs.r10, regs.r8, regs.r9);
+    } while (regs.rip == syscall_rip);
 
-    // Step again. This actually executes the syscall instruction.
-    if (ptrace(PTRACE_SINGLESTEP, thread->childPID, 0, 0) < 0) {
-        error("ptrace %d: %s", thread->childPID, g_strerror(errno));
-        abort();
-    }
-    if (waitpid(thread->childPID, &wstatus, 0) < 0) {
-        error("waitpid: %s", g_strerror(errno));
-        abort();
-    }
-    reason = _getStopReason(wstatus);
-    if (reason.type != STOPREASON_SIGNAL || reason.signal.signal != SIGTRAP) {
-        // In particular this could be an exec stop if the syscall was execve,
-        // or an exited stop if the syscall was exit.
-        _threadptrace_updateChildState(thread, reason);
-    }
-
-    if (!threadptrace_isRunning(base)) {
-        // Since the child is no longer running, we have no way of retrieving a
-        // return value, if any. e.g. this happens after the `exit` syscall.
-        return -ECHILD;
-    }
-
-    if (ptrace(PTRACE_GETREGS, thread->childPID, 0, &regs) < 0) {
-        error("ptrace: %s", g_strerror(errno));
-        abort();
-    }
     debug("Native syscall result %lld (%s)", regs.rax, strerror(-regs.rax));
 
     return regs.rax;
@@ -715,31 +705,28 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
     ThreadPtrace* thread = g_new(ThreadPtrace, 1);
 
     *thread = (ThreadPtrace){
-        .base = (Thread){.run = threadptrace_run,
-                         .resume = threadptrace_resume,
-                         .terminate = threadptrace_terminate,
-                         .getReturnCode = threadptrace_getReturnCode,
-                         .isRunning = threadptrace_isRunning,
-                         .free = threadptrace_free,
-                         .newClonedPtr = threadptrace_newClonedPtr,
-                         .releaseClonedPtr = threadptrace_releaseClonedPtr,
-                         .getReadablePtr = threadptrace_getReadablePtr,
-                         .getReadableString = threadptrace_getReadableString,
-                         .getWriteablePtr = threadptrace_getWriteablePtr,
-                         .flushPtrs = threadptrace_flushPtrs,
-                         .nativeSyscall = threadptrace_nativeSyscall,
-
-                         .type_id = THREADPTRACE_TYPE_ID,
-                         .referenceCount = 1},
+        .base = thread_create(host, process, THREADPTRACE_TYPE_ID,
+                              (ThreadMethods){
+                                  .run = threadptrace_run,
+                                  .resume = threadptrace_resume,
+                                  .terminate = threadptrace_terminate,
+                                  .getReturnCode = threadptrace_getReturnCode,
+                                  .isRunning = threadptrace_isRunning,
+                                  .free = threadptrace_free,
+                                  .newClonedPtr = threadptrace_newClonedPtr,
+                                  .releaseClonedPtr = threadptrace_releaseClonedPtr,
+                                  .getReadablePtr = threadptrace_getReadablePtr,
+                                  .getReadableString = threadptrace_getReadableString,
+                                  .getWriteablePtr = threadptrace_getWriteablePtr,
+                                  .flushPtrs = threadptrace_flushPtrs,
+                                  .nativeSyscall = threadptrace_nativeSyscall,
+                              }),
         // FIXME: This should the emulated CPU's frequency
         .tsc = {.cyclesPerSecond = 2000000000UL},
-        .threadID = threadID,
-        .childState = THREAD_PTRACE_CHILD_STATE_NONE};
+        .childState = THREAD_PTRACE_CHILD_STATE_NONE,
+    };
+    thread->sys = syscallhandler_new(host, process, _threadPtraceToThread(thread));
 
-    MAGIC_INIT(&thread->base);
-
-    thread->sys =
-        syscallhandler_new(host, process, _threadPtraceToThread(thread));
     thread->pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite));
     thread->readPointers = g_array_new(FALSE, FALSE, sizeof(void*));
 
