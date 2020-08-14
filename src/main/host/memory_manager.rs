@@ -47,6 +47,20 @@ struct Region {
 
 /// Manages the address-space for a plugin process.
 pub struct MemoryManager {
+    // We unfortunately need to make heavy use of internal mutability here, so that methods
+    // returning immutable references (TODO: and later even mutable references) can take a `&self`
+    // rather than a `&mut self`, allowing there to be multiple outstanding references at once.
+    //
+    // Even the methods that return immutable references can require updating a fair bit of our
+    // bookkeeping. For example:
+    // * Our mapping of the program stack is extended lazily on first access to avoid wasting
+    //   memory (and because we can't get any explicit notification from the OS when it extends the
+    //   stack itself).
+    // * On the first access after an `execve` syscall, we reload the mapped regions from `proc`.
+    //   Perhaps we could require the caller to explicitly call another hook on the first syscall
+    //   after the `execve` is done (in addition to the hook it already calls before it's done),
+    //   but this is a bit awkward to do in the SysCallManager. Better to encapsulate that
+    //   complexity here.
     shm_file: RefCell<ShmFile>,
     regions: RefCell<IntervalMap<Region>>,
 
@@ -413,9 +427,10 @@ impl MemoryManager {
     /// SAFETY
     /// * The pointer must point to a writeable value of type T.
     /// * Returned ref mustn't be accessed after Thread runs again or flush is called.
+    /// TODO: Track borrowed ranges so that this can take an immutable &self.
     #[allow(dead_code)]
     pub unsafe fn get_mut_ref<T>(
-        &self,
+        &mut self,
         thread: &impl Thread,
         src: PluginPtr,
     ) -> Result<&mut T, i32> {
@@ -442,9 +457,10 @@ impl MemoryManager {
     /// SAFETY
     /// * The pointer must point to a writeable array of type T and at least size `len`.
     /// * Returned slice mustn't be accessed after Thread runs again or flush is called.
+    /// TODO: Track borrowed ranges so that this can take an immutable &self.
     #[allow(dead_code)]
     pub unsafe fn get_mut_slice<T>(
-        &self,
+        &mut self,
         thread: &impl Thread,
         src: PluginPtr,
         len: usize,
