@@ -78,12 +78,10 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
     SysCallReg rv = {0};
 
     while (true) {
-        // TODO: Re-enable when https://github.com/shadow/shadow/issues/917 is fixed.
-        //debug("waiting for event on %d", fd);
+        debug("waiting for event on %d", fd);
         ShimEvent res = {0};
         shimevent_recvEvent(fd, &res);
-        // TODO: Re-enable when https://github.com/shadow/shadow/issues/917 is fixed.
-        //debug("got response of type %d on %d", res.event_id, fd);
+        debug("got response of type %d on %d", res.event_id, fd);
         switch (res.event_id) {
             case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
                 // Use provided result.
@@ -189,12 +187,11 @@ long syscall(long n, ...) {
 #define REMAP(type, fnname, sysname, params, ...)                                                  \
     type fnname params {                                                                           \
         if (shim_interpositionEnabled()) {                                                         \
-            /* TODO: Re-enable when https://github.com/shadow/shadow/issues/917 is fixed. */       \
-            /*debug("Making interposed syscall " #sysname);*/                                      \
+            debug("Making interposed syscall " #sysname);                                          \
             return (type)syscall(SYS_##sysname, __VA_ARGS__);                                      \
         } else {                                                                                   \
             /* TODO: Re-enable when https://github.com/shadow/shadow/issues/917 is fixed. */       \
-            /*debug("Making real syscall " #sysname);*/                                            \
+            debug("Making real syscall " #sysname);                                                \
             return (type)_real_syscall(SYS_##sysname, __VA_ARGS__);                                \
         }                                                                                          \
     }
