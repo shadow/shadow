@@ -160,6 +160,10 @@ typedef struct _ThreadPtrace {
     // only use this to allow a signal that was already raise (e.g. SIGSEGV) to
     // be delivered.
     intptr_t signalToDeliver;
+
+    // True if we have detached ptrace from the plugin and should attach before
+    // executing another ptrace operation.
+    bool needAttachment;
 } ThreadPtrace;
 
 // Forward declaration.
@@ -217,6 +221,24 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
     }
 }
 
+static void _threadptrace_getChildMemoryHandle(ThreadPtrace* thread) {
+    char path[64];
+    snprintf(path, 64, "/proc/%d/mem", thread->base.nativePid);
+
+    bool reopen = false;
+    if (thread->childMemFile) {
+        thread->childMemFile = freopen(path, "r+", thread->childMemFile);
+        reopen = true;
+    } else {
+        thread->childMemFile = fopen(path, "r+");
+    }
+
+    if (thread->childMemFile == NULL) {
+        error("%s %s: %s", reopen ? "freopen" : "fopen", path, g_strerror(errno));
+        return;
+    }
+}
+
 static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
     // PTRACE_O_EXITKILL: Kill child if our process dies.
     // PTRACE_O_TRACESYSGOOD: Handle syscall stops explicitly.
@@ -226,25 +248,14 @@ static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
         error("ptrace: %s", strerror(errno));
         return;
     }
-    // Get a handle to the child's memory.
-    char path[64];
-    snprintf(path, 64, "/proc/%d/mem", thread->base.nativePid);
-    thread->childMemFile = fopen(path, "r+");
-    if (thread->childMemFile == NULL) {
-        error("fopen %s: %s", path, g_strerror(errno));
-        return;
-    }
+    // Get a new handle to the child's memory.
+    thread->childMemFile = NULL;
+    _threadptrace_getChildMemoryHandle(thread);
 }
 
 static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
     // We have to reopen the handle to child's memory.
-    char path[64];
-    snprintf(path, 64, "/proc/%d/mem", thread->base.nativePid);
-    thread->childMemFile = freopen(path, "r+", thread->childMemFile);
-    if (thread->childMemFile == NULL) {
-        error("fopen %s: %s", path, g_strerror(errno));
-        return;
-    }
+    _threadptrace_getChildMemoryHandle(thread);
 }
 
 static void _threadptrace_enterStateSyscall(ThreadPtrace* thread) {
@@ -406,8 +417,36 @@ static void threadptrace_flushPtrs(Thread* base) {
     _threadptrace_flushPtrs(thread);
 }
 
+static void _threadptrace_doAttach(ThreadPtrace* thread) {
+    debug("thread %i attaching to child %i", thread->base.threadID, (int)thread->base.nativePid);
+    if (ptrace(PTRACE_ATTACH, thread->base.nativePid, 0, 0) < 0) {
+        error("ptrace: %s", g_strerror(errno));
+    } else {
+        _threadptrace_getChildMemoryHandle(thread);
+        thread->needAttachment = false;
+    }
+}
+
+static void _threadptrace_doDetach(ThreadPtrace* thread) {
+    debug("thread %i detaching from child %i", thread->base.threadID, (int)thread->base.nativePid);
+    if (ptrace(PTRACE_DETACH, thread->base.nativePid, 0, SIGSTOP) < 0) {
+        error("ptrace: %s", g_strerror(errno));
+    } else {
+        thread->needAttachment = true;
+    }
+}
+
+void threadptrace_detach(Thread* base) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+    _threadptrace_doDetach(thread);
+}
+
 SysCallCondition* threadptrace_resume(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
+
+    if (thread->needAttachment) {
+        _threadptrace_doAttach(thread);
+    }
 
     while (true) {
         switch (thread->childState) {

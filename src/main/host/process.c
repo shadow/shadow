@@ -400,6 +400,17 @@ void process_schedule(Process* proc, gpointer nothing) {
     }
 }
 
+void process_detachPlugin(gpointer procptr, gpointer nothing) {
+    Process* proc = procptr;
+    MAGIC_ASSERT(proc);
+    if (proc->interposeMethod == INTERPOSE_PTRACE) {
+        // Detach all ptrace attachements
+        if (proc->mainThread) {
+            threadptrace_detach(proc->mainThread);
+        }
+    }
+}
+
 gboolean process_isRunning(Process* proc) {
     MAGIC_ASSERT(proc);
     return (proc->mainThread != NULL && thread_isRunning(proc->mainThread)) ? TRUE : FALSE;

@@ -46,6 +46,7 @@ void process_unref(Process* proc);
 void process_schedule(Process* proc, gpointer nothing);
 void process_continue(Process* proc, Thread* thread);
 void process_stop(Process* proc);
+void process_detachPlugin(gpointer procptr, gpointer nothing);
 
 gboolean process_isRunning(Process* proc);
 
