@@ -1,4 +1,4 @@
-use super::syscall_types::*;
+use super::syscall_types::{PluginPtr, SysCallReg};
 use super::thread::{CThread, Thread};
 use crate::cbindings as c;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
@@ -49,6 +49,7 @@ struct Region {
 pub struct MemoryManager {
     shm_file: RefCell<ShmFile>,
     regions: RefCell<IntervalMap<Region>>,
+
     misses_by_path: RefCell<HashMap<String, u32>>,
 
     // We need to reinitialize some state after an exec, but need to wait until the next syscall.
@@ -120,7 +121,7 @@ impl ShmFile {
                 interval.start as i64,
             )
         };
-        assert!(res as i64 != -1);
+        assert!(res != libc::MAP_FAILED);
         res
     }
 
@@ -176,18 +177,6 @@ impl ShmFile {
         if res != 0 {
             println!("Warning: ftruncate failed");
         }
-    }
-}
-
-impl Drop for MemoryManager {
-    fn drop(&mut self) {
-        let misses_by_path = self.misses_by_path.borrow();
-        println!("MemoryManager misses (consider extending MemoryManager to remap regions with a high miss count)");
-        for (path, count) in misses_by_path.iter() {
-            println!("\t{} in {}", count, path);
-        }
-        drop(misses_by_path);
-        self.reset_and_unmap_all();
     }
 }
 
@@ -296,6 +285,19 @@ fn map_stack(shm_file: &ShmFile, regions: &mut IntervalMap<Region>) -> usize {
     stack_end
 }
 
+impl Drop for MemoryManager {
+    fn drop(&mut self) {
+        {
+            let misses_by_path = self.misses_by_path.borrow();
+            println!("MemoryManager misses (consider extending MemoryManager to remap regions with a high miss count)");
+            for (path, count) in misses_by_path.iter() {
+                println!("\t{} in {}", count, path);
+            }
+        }
+        self.reset_and_unmap_all();
+    }
+}
+
 impl MemoryManager {
     pub fn new(thread: &mut impl Thread) -> MemoryManager {
         let system_pid = thread.get_system_pid();
@@ -363,18 +365,14 @@ impl MemoryManager {
             .borrow_mut()
             .clear(std::usize::MIN..std::usize::MAX);
         for m in mutations {
-            match m {
-                Mutation::Removed(interval, region) => {
-                    if region.shadow_base != std::ptr::null_mut() {
-                        let res = unsafe {
-                            libc::munmap(region.shadow_base, interval.end - interval.start)
-                        };
-                        if res != 0 {
-                            println!("Warning: munmap failed");
-                        }
+            if let Mutation::Removed(interval, region) = m {
+                if region.shadow_base != std::ptr::null_mut() {
+                    let res =
+                        unsafe { libc::munmap(region.shadow_base, interval.end - interval.start) };
+                    if res != 0 {
+                        println!("Warning: munmap failed");
                     }
                 }
-                _ => (),
             }
         }
         self.shm_file.borrow_mut().truncate();
@@ -406,7 +404,7 @@ impl MemoryManager {
     /// * The pointer must point to readable value of type T.
     /// * Returned ref mustn't be accessed after Thread runs again or flush is called.
     #[allow(dead_code)]
-    pub unsafe fn _get_ref<T>(&self, thread: &impl Thread, src: PluginPtr) -> Result<&T, i32> {
+    pub unsafe fn get_ref<T>(&self, thread: &impl Thread, src: PluginPtr) -> Result<&T, i32> {
         let raw = self.get_readable_ptr(thread, src, std::mem::size_of::<T>())?;
         Ok(&*(raw as *const T))
     }
@@ -455,9 +453,9 @@ impl MemoryManager {
         Ok(std::slice::from_raw_parts_mut(raw as *mut T, len))
     }
 
-    /// We take a mutable reference here to ensure there are no outstanding borrowed
-    /// references/pointers, which might otherwise become invalidated if shadow's mapping of the
-    /// heap region gets moved.
+    /// Execute the requested `brk` and update our mappings accordingly. May invalidate outstanding
+    /// pointers. (Rust won't allow mutable methods such as this one to be called with outstanding
+    /// borrowed references).
     pub fn handle_brk(
         &mut self,
         thread: &mut impl Thread,
@@ -580,7 +578,10 @@ impl MemoryManager {
         Ok(PluginPtr::from(requested_brk))
     }
 
-    // Extend the portion of the stack that we've mapped downward to include `src`.
+    // Extend the portion of the stack that we've mapped downward to include `src`.  This is
+    // carefuly designed *not* to invalidate any outstanding borrowed references or pointers, since
+    // otherwise a caller trying to marshall multiple syscall arguments might invalidate the first
+    // argument when marshalling the second.
     fn extend_stack(&self, thread: &impl Thread, src: usize) {
         let regions = self.regions.borrow();
         let mut stack_copied = self.stack_copied.borrow_mut();
@@ -663,33 +664,46 @@ impl MemoryManager {
     }
 
     // Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
+    // Never returns NULL.
     unsafe fn get_readable_ptr(
         &self,
         thread: &impl Thread,
         plugin_src: PluginPtr,
         n: usize,
     ) -> Result<*const c_void, i32> {
-        if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
-            Ok(p)
+        let p = if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
+            p
         } else {
             // Fall back to reading via the thread.
             self.inc_misses(plugin_src);
-            thread.get_readable_ptr(plugin_src, n)
+            thread.get_readable_ptr(plugin_src, n)?
+        };
+        if p == std::ptr::null_mut() {
+            Err(libc::EFAULT)
+        } else {
+            Ok(p)
         }
     }
 
     // Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
+    // Never returns NULL.
     unsafe fn get_writeable_ptr(
         &self,
         thread: &impl Thread,
         plugin_src: PluginPtr,
         n: usize,
     ) -> Result<*mut c_void, i32> {
-        if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
-            Ok(p)
+        let p = if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
+            p
         } else {
+            // Fall back to reading via the thread.
             self.inc_misses(plugin_src);
-            thread.get_writeable_ptr(plugin_src, n)
+            thread.get_writeable_ptr(plugin_src, n)?
+        };
+        if p == std::ptr::null_mut() {
+            Err(libc::EFAULT)
+        } else {
+            Ok(p)
         }
     }
 }

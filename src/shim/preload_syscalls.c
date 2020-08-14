@@ -190,7 +190,6 @@ long syscall(long n, ...) {
             debug("Making interposed syscall " #sysname);                                          \
             return (type)syscall(SYS_##sysname, __VA_ARGS__);                                      \
         } else {                                                                                   \
-            /* TODO: Re-enable when https://github.com/shadow/shadow/issues/917 is fixed. */       \
             debug("Making real syscall " #sysname);                                                \
             return (type)_real_syscall(SYS_##sysname, __VA_ARGS__);                                \
         }                                                                                          \
