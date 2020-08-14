@@ -39,6 +39,7 @@ struct _Thread {
     ThreadMethods methods;
     int threadID;
     pid_t nativePid;
+    pid_t nativeTid;
     Host* host;
     Process* process;
     int referenceCount;

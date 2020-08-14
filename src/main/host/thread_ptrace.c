@@ -5,6 +5,7 @@
 #include <inttypes.h>
 #include <sys/prctl.h>
 #include <sys/ptrace.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/user.h>
 #include <sys/wait.h>
@@ -27,6 +28,10 @@
 #if !defined(PTRACE_O_EXITKILL)
 #define PTRACE_O_EXITKILL (1 << 20)
 #endif
+
+#define THREADPTRACE_PTRACE_OPTIONS (PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXEC)
+
+static char SYSCALL_INSTRUCTION[] = {0x0f, 0x05};
 
 typedef enum {
     // Doesn't exist yet.
@@ -160,6 +165,10 @@ typedef struct _ThreadPtrace {
     // only use this to allow a signal that was already raise (e.g. SIGSEGV) to
     // be delivered.
     intptr_t signalToDeliver;
+
+    // True if we have detached ptrace from the plugin and should attach before
+    // executing another ptrace operation.
+    bool needAttachment;
 } ThreadPtrace;
 
 // Forward declaration.
@@ -217,34 +226,40 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
     }
 }
 
-static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
-    // PTRACE_O_EXITKILL: Kill child if our process dies.
-    // PTRACE_O_TRACESYSGOOD: Handle syscall stops explicitly.
-    // PTRACE_O_TRACEEXEC: Handle execve stops explicitly.
-    if (ptrace(PTRACE_SETOPTIONS, thread->base.nativePid, 0,
-               PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXEC) < 0) {
-        error("ptrace: %s", strerror(errno));
-        return;
-    }
-    // Get a handle to the child's memory.
+static void _threadptrace_getChildMemoryHandle(ThreadPtrace* thread) {
     char path[64];
     snprintf(path, 64, "/proc/%d/mem", thread->base.nativePid);
-    thread->childMemFile = fopen(path, "r+");
+
+    bool reopen = false;
+    if (thread->childMemFile) {
+        thread->childMemFile = freopen(path, "r+", thread->childMemFile);
+        reopen = true;
+    } else {
+        thread->childMemFile = fopen(path, "r+");
+    }
+
     if (thread->childMemFile == NULL) {
-        error("fopen %s: %s", path, g_strerror(errno));
+        error("%s %s: %s", reopen ? "freopen" : "fopen", path, g_strerror(errno));
         return;
     }
 }
 
-static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
-    // We have to reopen the handle to child's memory.
-    char path[64];
-    snprintf(path, 64, "/proc/%d/mem", thread->base.nativePid);
-    thread->childMemFile = freopen(path, "r+", thread->childMemFile);
-    if (thread->childMemFile == NULL) {
-        error("fopen %s: %s", path, g_strerror(errno));
+static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
+    // PTRACE_O_EXITKILL: Kill child if our process dies.
+    // PTRACE_O_TRACESYSGOOD: Handle syscall stops explicitly.
+    // PTRACE_O_TRACEEXEC: Handle execve stops explicitly.
+    if (ptrace(PTRACE_SETOPTIONS, thread->base.nativePid, 0, THREADPTRACE_PTRACE_OPTIONS) < 0) {
+        error("ptrace: %s", strerror(errno));
         return;
     }
+    // Get a new handle to the child's memory.
+    thread->childMemFile = NULL;
+    _threadptrace_getChildMemoryHandle(thread);
+}
+
+static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
+    // We have to reopen the handle to child's memory.
+    _threadptrace_getChildMemoryHandle(thread);
 }
 
 static void _threadptrace_enterStateSyscall(ThreadPtrace* thread) {
@@ -406,8 +421,136 @@ static void threadptrace_flushPtrs(Thread* base) {
     _threadptrace_flushPtrs(thread);
 }
 
+static void _threadptrace_doAttach(ThreadPtrace* thread) {
+    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL);
+
+    debug("thread %i attaching to child %i", thread->base.threadID, (int)thread->base.nativePid);
+    if (ptrace(PTRACE_ATTACH, thread->base.nativePid, 0, 0) < 0) {
+        error("ptrace: %s", g_strerror(errno));
+        abort();
+    }
+    int wstatus;
+    if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
+        error("waitpid: %s", g_strerror(errno));
+        abort();
+    }
+    StopReason reason = _getStopReason(wstatus);
+    utility_assert(reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP);
+
+    if (ptrace(PTRACE_SETOPTIONS, thread->base.nativePid, 0, THREADPTRACE_PTRACE_OPTIONS) < 0) {
+        error("ptrace: %s", strerror(errno));
+        return;
+    }
+
+#if DEBUG
+    // Check that regs are where we left them.
+    struct user_regs_struct regs;
+    if (ptrace(PTRACE_GETREGS, thread->base.nativePid, 0, &regs) < 0) {
+        error("ptrace: %s", g_strerror(errno));
+        abort();
+    }
+    utility_assert(!memcmp(&regs, &thread->syscall.regs, sizeof(regs)));
+#endif
+
+    // Should cause syscall we stopped at to be re-executed, putting us back in syscall state
+    while (reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP) {
+        if (ptrace(PTRACE_SYSEMU, thread->base.nativePid, 0, 0) < 0) {
+            error("ptrace: %s", g_strerror(errno));
+            abort();
+        }
+        if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
+            error("waitpid: %s", g_strerror(errno));
+            abort();
+        }
+        reason = _getStopReason(wstatus);
+    }
+    if (reason.type != STOPREASON_SYSCALL) {
+        error("unexpected stop reason: %d", reason.type);
+        utility_assert(reason.type == STOPREASON_SYSCALL);
+    }
+
+    // Restore our saved instruction pointer to where it was before we detached - just after the
+    // syscall instruction.
+    thread->syscall.regs.rip += sizeof(SYSCALL_INSTRUCTION);
+
+#if DEBUG
+    // Check that rip is where we expect.
+    if (ptrace(PTRACE_GETREGS, thread->base.nativePid, 0, &regs) < 0) {
+        error("ptrace: %s", g_strerror(errno));
+        abort();
+    }
+    utility_assert(regs.rip == thread->syscall.regs.rip);
+#endif
+
+    thread->needAttachment = false;
+}
+
+static void _threadptrace_doDetach(ThreadPtrace* thread) {
+    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL);
+
+    // First rewind the instruction pointer so that the current syscall will be
+    // retried when we resume. This isn't *strictly* necessary, but it's not
+    // super clear from the ptrace documentation exactly how many SIGSTOP stops
+    // to expect when reattaching; experimentally it's 3, but it's unclear
+    // whether we can rely on it to always be three. Conversely if we rewind
+    // the instruction pointer, when reattaching we can just swallow sigstops
+    // until we get a syscall stop.
+    thread->syscall.regs.rip -= sizeof(SYSCALL_INSTRUCTION);
+#ifdef DEBUG
+    // Verify that rip is now pointing at a syscall instruction.
+    const uint8_t* buf =
+        thread_getReadablePtr(_threadPtraceToThread(thread), (PluginPtr){thread->syscall.regs.rip},
+                              sizeof(SYSCALL_INSTRUCTION));
+    utility_assert(!memcmp(buf, SYSCALL_INSTRUCTION, sizeof(SYSCALL_INSTRUCTION)));
+#endif
+    if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &thread->syscall.regs) < 0) {
+        error("ptrace: %s", g_strerror(errno));
+        abort();
+    }
+
+    // Send a SIGSTOP. While experimentally just calling PTRACE_DETACH with a
+    // SIGSTOP works, ptrace(2) says that it *might* not if we're not already
+    // in a signal-delivery-stop.
+    if (syscall(SYS_tgkill, thread->base.nativePid, thread->base.nativeTid, SIGSTOP) < 0) {
+        error("kill: %s", g_strerror(errno));
+        abort();
+    }
+
+    // Continue and wait for the signal delivery stop.
+    debug("thread %i detaching from child %i", thread->base.threadID, (int)thread->base.nativePid);
+    if (ptrace(PTRACE_CONT, thread->base.nativePid, 0, 0) < 0) {
+        error("ptrace: %s", g_strerror(errno));
+        abort();
+    }
+    int wstatus;
+    if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
+        error("waitpid: %s", g_strerror(errno));
+        abort();
+    }
+    StopReason reason = _getStopReason(wstatus);
+    utility_assert(reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP);
+    debug("Stop reason after cont with sigstop: %d", reason.type);
+
+    // Detach, allowing the sigstop to be delivered.
+    if (ptrace(PTRACE_DETACH, thread->base.nativePid, 0, SIGSTOP) < 0) {
+        error("ptrace: %s", g_strerror(errno));
+        abort();
+    }
+
+    thread->needAttachment = true;
+}
+
+void threadptrace_detach(Thread* base) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+    _threadptrace_doDetach(thread);
+}
+
 SysCallCondition* threadptrace_resume(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
+
+    if (thread->needAttachment) {
+        _threadptrace_doAttach(thread);
+    }
 
     while (true) {
         switch (thread->childState) {
@@ -644,7 +787,7 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     regs.r9 = va_arg(args, long);
 
     // Rewind instruction pointer to point to the syscall instruction again.
-    regs.rip -= 2; // Size of the syscall instruction.
+    regs.rip -= sizeof(SYSCALL_INSTRUCTION); // Size of the syscall instruction.
 
     uint64_t syscall_rip = regs.rip;
 
@@ -654,9 +797,9 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
 
 #ifdef DEBUG
     // Verify that rip is now pointing at a syscall instruction.
-    const uint8_t* buf =
-        thread_getReadablePtr(_threadPtraceToThread(thread), (PluginPtr){regs.rip}, 2);
-    utility_assert(!memcmp(buf, "\x0f\x05", 2));
+    const uint8_t* buf = thread_getReadablePtr(
+        _threadPtraceToThread(thread), (PluginPtr){regs.rip}, sizeof(SYSCALL_INSTRUCTION));
+    utility_assert(!memcmp(buf, SYSCALL_INSTRUCTION, sizeof(SYSCALL_INSTRUCTION)));
 #endif
 
     if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &regs) < 0) {
@@ -664,8 +807,8 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
         abort();
     }
 
-    // Single-step until the syscall instruction is executed. Sometimes there
-    // are extra stops before doing so, and sometimes not.
+    // Single-step until the syscall instruction is executed. It's not clear whether we can depend
+    // on stopping the exact same number of times here.
     do {
         if (ptrace(PTRACE_SINGLESTEP, thread->base.nativePid, 0, 0) < 0) {
             error("ptrace %d: %s", thread->base.nativePid, g_strerror(errno));
