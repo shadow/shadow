@@ -9,6 +9,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::os::raw::c_void;
 use std::os::unix::io::AsRawFd;
+use std::path::PathBuf;
 use std::process;
 
 static HEAP_PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
@@ -36,9 +37,7 @@ fn page_of(p: usize) -> usize {
 struct Region {
     // Where the region is mapped into shadow's address space, or NULL if it isn't.
     shadow_base: *mut c_void,
-    read: bool,
-    write: bool,
-    execute: bool,
+    prot: i32,
     sharing: proc_maps::Sharing,
     // The *original* path. Not the path to our mem file.
     original_path: Option<proc_maps::MappingPath>,
@@ -196,13 +195,21 @@ impl ShmFile {
 fn get_regions(pid: libc::pid_t) -> IntervalMap<Region> {
     let mut regions = IntervalMap::new();
     for mapping in proc_maps::mappings_for_pid(pid).unwrap() {
+        let mut prot = 0;
+        if mapping.read {
+            prot = prot | libc::PROT_READ;
+        }
+        if mapping.write {
+            prot = prot | libc::PROT_WRITE;
+        }
+        if mapping.execute {
+            prot = prot | libc::PROT_EXEC;
+        }
         let mutations = regions.insert(
             mapping.begin..mapping.end,
             Region {
                 shadow_base: std::ptr::null_mut(),
-                read: mapping.read,
-                write: mapping.write,
-                execute: mapping.execute,
+                prot,
                 sharing: mapping.sharing,
                 original_path: mapping.path,
             },
@@ -306,6 +313,16 @@ impl Drop for MemoryManager {
                 println!("\t{} in {}", count, path);
             }
         }
+        // Useful for debugging
+        /*
+        println!("MemoryManager regions");
+        let regions = self.regions.borrow();
+        for (interval, mapping) in regions.iter() {
+            println!("{:?} {:?}", interval, mapping);
+        }
+        drop(regions);
+        */
+
         self.reset_and_unmap_all();
     }
 }
@@ -327,11 +344,9 @@ impl MemoryManager {
             .open(&shm_path)
             .unwrap();
 
-        let path_buf_len = page_size();
-        let path_buf_plugin_ptr: PluginPtr = thread.malloc_plugin_ptr(path_buf_len).unwrap();
-
         let shm_plugin_fd = {
             let path_buf_len = shm_path.len() + 1;
+            let path_buf_plugin_ptr: PluginPtr = thread.malloc_plugin_ptr(path_buf_len).unwrap();
             let path_buf_raw: *mut c_void = unsafe {
                 thread.get_writeable_ptr(
                     path_buf_plugin_ptr,
@@ -344,9 +359,15 @@ impl MemoryManager {
             path_buf[..shm_path.len()].copy_from_slice(shm_path.as_bytes());
             path_buf[shm_path.len()] = '\0' as u8;
             thread.flush();
-            thread
+            let shm_plugin_fd = thread
                 .native_open(path_buf_plugin_ptr, libc::O_RDWR, 0)
-                .unwrap()
+                .unwrap();
+            unsafe {
+                thread
+                    .free_plugin_ptr(path_buf_plugin_ptr, path_buf_len)
+                    .unwrap()
+            };
+            shm_plugin_fd
         };
 
         let shm_file = ShmFile {
@@ -385,6 +406,84 @@ impl MemoryManager {
             }
         }
         self.shm_file.truncate();
+    }
+
+    fn handle_mutations(&mut self, mutations: Vec<Mutation<Region>>) {
+        for mutation in mutations {
+            match mutation {
+                Mutation::ModifiedBegin(interval, new_start) => {
+                    let (_, region) = self.regions.get_mut(new_start).unwrap();
+                    if region.shadow_base == std::ptr::null_mut() {
+                        continue;
+                    }
+                    let removed_range = interval.start..new_start;
+                    let removed_size = removed_range.end - removed_range.start;
+
+                    // Deallocate
+                    self.shm_file.dealloc(&removed_range);
+
+                    // Unmap range from Shadow's address space.
+                    unsafe { libc::munmap(region.shadow_base, removed_size) };
+
+                    // Adjust base
+                    region.shadow_base =
+                        ((region.shadow_base as usize) + removed_size) as *mut c_void;
+                }
+                Mutation::ModifiedEnd(interval, new_end) => {
+                    let (_, region) = self.regions.get(interval.start).unwrap();
+                    if region.shadow_base == std::ptr::null_mut() {
+                        continue;
+                    }
+                    let removed_range = new_end..interval.end;
+                    let removed_size = removed_range.end - removed_range.start;
+
+                    // Deallocate
+                    self.shm_file.dealloc(&removed_range);
+
+                    // Unmap range from Shadow's address space.
+                    unsafe { libc::munmap(region.shadow_base, removed_size) };
+                }
+                Mutation::Split(_original, left, right) => {
+                    let (_, left_region) = self.regions.get(left.start).unwrap();
+                    let (_, right_region) = self.regions.get(right.start).unwrap();
+                    debug_assert_eq!(left_region.shadow_base, right_region.shadow_base);
+                    if left_region.shadow_base == std::ptr::null_mut() {
+                        continue;
+                    }
+                    let removed_range = left.end..right.start;
+                    let removed_size = removed_range.end - removed_range.start;
+
+                    // Deallocate
+                    self.shm_file.dealloc(&removed_range);
+
+                    // Unmap range from Shadow's address space.
+                    unsafe {
+                        libc::munmap(
+                            (left_region.shadow_base as usize + left.end) as *mut c_void,
+                            removed_size,
+                        )
+                    };
+
+                    // Adjust start of right region.
+                    drop(left_region);
+                    let (_, right_region) = self.regions.get_mut(right.start).unwrap();
+                    right_region.shadow_base = ((right_region.shadow_base as usize)
+                        + (right.start - left.start))
+                        as *mut c_void;
+                }
+                Mutation::Removed(interval, region) => {
+                    if region.shadow_base == std::ptr::null_mut() {
+                        continue;
+                    }
+
+                    // Deallocate
+                    self.shm_file.dealloc(&interval);
+
+                    // Unmap range from Shadow's address space.
+                    unsafe { libc::munmap(region.shadow_base, interval.end - interval.start) };
+                }
+            }
+        }
     }
 
     /// Should be called by shadow's SysCallHandler before allowing the plugin to execute the exec
@@ -469,6 +568,179 @@ impl MemoryManager {
         Ok(std::slice::from_raw_parts_mut(raw as *mut T, len))
     }
 
+    pub fn handle_mmap(
+        &mut self,
+        thread: &mut impl Thread,
+        addr: PluginPtr,
+        length: usize,
+        prot: i32,
+        flags: i32,
+        fd: i32,
+        offset: i64,
+    ) -> Result<PluginPtr, i32> {
+        let result = unsafe { thread.native_mmap(addr, length, prot, flags, fd, offset) }?;
+        if length == 0 {
+            return Ok(result);
+        }
+        let addr = usize::from(result);
+        let interval = addr..(addr + length);
+        let is_anonymous = flags & libc::MAP_ANONYMOUS != 0;
+        let sharing = if flags & libc::MAP_PRIVATE != 0 {
+            Sharing::Private
+        } else {
+            Sharing::Shared
+        };
+        let original_path = if is_anonymous {
+            None
+        } else {
+            // Get the original path; this is a slightly roundabout way of doing it, but makes more
+            // sense to eventually move the mechanics of opening the child fd into here (in which
+            // case we'll already have it) than to pipe the string through this API.
+            Some(MappingPath::Path(
+                std::fs::read_link(format!("/proc/{}/fd/{}", thread.get_system_pid(), fd))
+                    .unwrap_or_else(|_| PathBuf::from(format!("bad-fd-{}", fd))),
+            ))
+        };
+        let mut region = Region {
+            shadow_base: std::ptr::null_mut(),
+            prot,
+            sharing: sharing,
+            original_path,
+        };
+
+        // Clear out metadata and mappings for anything that was already there.
+        let mutations = self.regions.clear(interval.clone());
+        self.handle_mutations(mutations);
+
+        if is_anonymous && sharing == Sharing::Private {
+            // Overwrite the freshly mapped region with a region from the shared mem file and map
+            // it. In principle we might be able to avoid doing the first mmap above in this case,
+            // but doing so lets the OS decide if it's a legal mapping, and where to put it.
+            self.shm_file.alloc(&interval);
+            region.shadow_base = self.shm_file.mmap_into_shadow(&interval, prot);
+            self.shm_file.mmap_into_plugin(thread, &interval, prot);
+        }
+
+        // TODO: We *could* handle file mappings and some shared mappings as well. Doesn't make
+        // sense to add that complexity until if/when we see a lot of misses in such regions,
+        // though.
+
+        {
+            // There shouldn't be any mutations here; we already cleared a hole above.
+            let mutations = self.regions.insert(interval, region);
+            assert!(mutations.len() == 0);
+        }
+
+        Ok(result)
+    }
+
+    pub fn handle_munmap(
+        &mut self,
+        thread: &mut impl Thread,
+        addr: PluginPtr,
+        length: usize,
+    ) -> Result<(), i32> {
+        unsafe { thread.native_munmap(addr, length) }?;
+        if length == 0 {
+            return Ok(());
+        }
+
+        // Clear out metadata and mappings for anything unmapped.
+        let start = usize::from(addr);
+        let end = start + length;
+        let mutations = self.regions.clear(start..end);
+        self.handle_mutations(mutations);
+
+        Ok(())
+    }
+
+    pub fn handle_mremap(
+        &mut self,
+        thread: &mut impl Thread,
+        old_address: PluginPtr,
+        old_size: usize,
+        new_size: usize,
+        flags: i32,
+        new_address: PluginPtr,
+    ) -> Result<PluginPtr, i32> {
+        let new_address =
+            unsafe { thread.native_mremap(old_address, old_size, new_size, flags, new_address) }?;
+        let old_interval = usize::from(old_address)..(usize::from(old_address) + old_size);
+        let new_interval = usize::from(new_address)..(usize::from(new_address) + new_size);
+
+        // From mremap(2):
+        // If the value of old_size is zero, and old_address refers to a shareable mapping (see
+        // mmap(2) MAP_SHARED), then mremap() will create a new mapping of the same pages.  new_size
+        // will be the size of the new mapping and the location of the new  mapping  may  be
+        // specified with new_address; see the description of MREMAP_FIXED below.  If a new mapping
+        // is requested via this method, then the MREMAP_MAYMOVE flag must also be specified.
+        if (flags & libc::MREMAP_MAYMOVE) != 0 && old_size == 0 {
+            let region = {
+                let (_, region) = self.regions.get(usize::from(old_address)).unwrap();
+                region.clone()
+            };
+            assert_eq!(region.sharing, Sharing::Shared);
+            // This shouldn't be mapped into Shadow, since we don't support remapping shared mappings into Shadow yet.
+            assert_eq!(region.shadow_base, std::ptr::null_mut());
+            let mutations = self.regions.insert(
+                usize::from(new_address)..(usize::from(new_address) + new_size),
+                region,
+            );
+            self.handle_mutations(mutations);
+            return Ok(new_address);
+        }
+
+        // Clear and retrieve the old mapping.
+        // For the remap to have succeeded, it should have corresponded exactly to an old mapping.
+        let mut region = {
+            let mut mutations = self.regions.clear(old_interval.clone());
+            assert_eq!(mutations.len(), 1);
+            if let Some(Mutation::Removed(removed_interval, region)) = mutations.pop() {
+                assert_eq!(removed_interval, old_interval);
+                region
+            } else {
+                panic!(format!("Unexpected mutation {:?}", mutations[0]))
+            }
+        };
+
+        if region.shadow_base != std::ptr::null_mut() {
+            // We currently only map in anonymous mmap'd regions, stack, and heap.  We don't bother
+            // implementing mremap for stack or heap regions for now; that'd be pretty weird.
+            assert_eq!(region.original_path, None);
+
+            // We *could* have a simpler and somewhat-cheaper code-path for the case where the
+            // region only grew or shrunk without moving, but then that'd be another code path to
+            // maintain and test.  Probably only worth bothering with if mremap is somehow in the
+            // hot path of a simulation.
+
+            // Ensure there's space allocated at the new location in the memory file.
+            self.shm_file.alloc(&new_interval);
+            // Map the new location into Shadow.
+            let new_shadow_base = self.shm_file.mmap_into_shadow(&new_interval, region.prot);
+            // Move the data, using memmove to handle possible aliasing / overlap.
+            unsafe {
+                libc::memmove(
+                    new_shadow_base,
+                    region.shadow_base,
+                    std::cmp::min(old_size, new_size),
+                )
+            };
+
+            // Remap the region in the child to the new position in the mem file.
+            self.shm_file
+                .mmap_into_plugin(thread, &new_interval, region.prot);
+
+            // Update the region metadata.
+            region.shadow_base = new_shadow_base;
+        }
+
+        // Insert the new mapping, processing any other regions that get clobbered.
+        let mutations = self.regions.insert(new_interval, region);
+        self.handle_mutations(mutations);
+
+        Ok(PluginPtr::from(new_address))
+    }
+
     /// Execute the requested `brk` and update our mappings accordingly. May invalidate outstanding
     /// pointers. (Rust won't allow mutable methods such as this one to be called with outstanding
     /// borrowed references).
@@ -499,7 +771,6 @@ impl MemoryManager {
         let opt_heap_interval_and_region = self.regions.get(self.heap.start);
         let new_heap = self.heap.start..requested_brk;
 
-        // handle growth
         if requested_brk > self.heap.end {
             // Grow the heap.
             let shadow_base = match opt_heap_interval_and_region {
@@ -542,14 +813,13 @@ impl MemoryManager {
                 new_heap.clone(),
                 Region {
                     shadow_base,
-                    read: true,
-                    write: true,
-                    execute: false,
+                    prot: HEAP_PROT,
                     sharing: Sharing::Private,
                     original_path: Some(MappingPath::Heap),
                 },
             );
         } else {
+            // Shrink the heap
             if new_heap.start == new_heap.end {
                 // Reducing heap to size zero unhandled.
                 unimplemented!();
@@ -625,14 +895,14 @@ impl MemoryManager {
         self.post_exec_cleanup_if_needed(thread);
         if n == 0 {
             // Length zero pointer should never be deref'd. Just return null.
-            // TODO: warn?
+            println!("Warning: returning NULL for zero-length pointer");
             return Some(std::ptr::null_mut());
         }
 
         let src = usize::from(src);
         let opt_interval_and_region = self.regions.get(src.into());
         if opt_interval_and_region.is_none() {
-            // src isn't in any mapped region. TODO: warn?
+            println!("Warning: src {:x} isn't in any mapped region", src);
             return None;
         }
         let (interval, region) = opt_interval_and_region.unwrap();
@@ -781,6 +1051,84 @@ mod export {
         let mut thread = CThread::new(thread);
         c::SysCallReg::from(
             match memory_manager.handle_brk(&mut thread, PluginPtr::from(plugin_src)) {
+                Ok(p) => SysCallReg::from(p),
+                // negative errno
+                Err(e) => SysCallReg::from(-e),
+            },
+        )
+    }
+
+    /// Fully handles the `mmap` syscall
+    #[no_mangle]
+    pub extern "C" fn memorymanager_handleMmap(
+        memory_manager: *mut MemoryManager,
+        thread: *mut c::Thread,
+        addr: c::PluginPtr,
+        len: usize,
+        prot: i32,
+        flags: i32,
+        fd: i32,
+        offset: i64,
+    ) -> c::SysCallReg {
+        let memory_manager = unsafe { &mut *memory_manager };
+        let mut thread = CThread::new(thread);
+        c::SysCallReg::from(
+            match memory_manager.handle_mmap(
+                &mut thread,
+                PluginPtr::from(addr),
+                len,
+                prot,
+                flags,
+                fd,
+                offset,
+            ) {
+                Ok(p) => SysCallReg::from(p),
+                // negative errno
+                Err(e) => SysCallReg::from(-e),
+            },
+        )
+    }
+
+    /// Fully handles the `munmap` syscall
+    #[no_mangle]
+    pub extern "C" fn memorymanager_handleMunmap(
+        memory_manager: *mut MemoryManager,
+        thread: *mut c::Thread,
+        addr: c::PluginPtr,
+        len: usize,
+    ) -> c::SysCallReg {
+        let memory_manager = unsafe { &mut *memory_manager };
+        let mut thread = CThread::new(thread);
+        c::SysCallReg::from(
+            match memory_manager.handle_munmap(&mut thread, PluginPtr::from(addr), len) {
+                Ok(()) => SysCallReg::from(0),
+                // negative errno
+                Err(e) => SysCallReg::from(-e),
+            },
+        )
+    }
+
+    #[no_mangle]
+    pub extern "C" fn memorymanager_handleMremap(
+        memory_manager: *mut MemoryManager,
+        thread: *mut c::Thread,
+        old_addr: c::PluginPtr,
+        old_size: usize,
+        new_size: usize,
+        flags: i32,
+        new_addr: c::PluginPtr,
+    ) -> c::SysCallReg {
+        let memory_manager = unsafe { &mut *memory_manager };
+        let mut thread = CThread::new(thread);
+        c::SysCallReg::from(
+            match memory_manager.handle_mremap(
+                &mut thread,
+                PluginPtr::from(old_addr),
+                old_size,
+                new_size,
+                flags,
+                PluginPtr::from(new_addr),
+            ) {
                 Ok(p) => SysCallReg::from(p),
                 // negative errno
                 Err(e) => SysCallReg::from(-e),

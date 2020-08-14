@@ -242,6 +242,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(mkdirat);
         HANDLE(mknodat);
         HANDLE(mmap);
+        HANDLE(mremap);
+        HANDLE(munmap);
         HANDLE(nanosleep);
         HANDLE(newfstatat);
         HANDLE(open);
@@ -350,8 +352,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(madvise);
         NATIVE(mkdir);
         NATIVE(mprotect);
-        NATIVE(mremap);
-        NATIVE(munmap);
         NATIVE(readlink);
         NATIVE(setrlimit);
         NATIVE(stat);

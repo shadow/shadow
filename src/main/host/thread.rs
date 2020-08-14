@@ -107,6 +107,12 @@ pub trait Thread {
         Ok(i32::from(res?))
     }
 
+    /// Natively execute close(2) on the given thread.
+    fn native_close(&self, fd: i32) -> Result<(), i32> {
+        unsafe { self.native_syscall(libc::SYS_close, &[SysCallReg::from(fd)])? };
+        Ok(())
+    }
+
     /// Natively execute brk(2) on the given thread.
     fn native_brk(&self, addr: PluginPtr) -> Result<PluginPtr, i32> {
         let res = unsafe { self.native_syscall(libc::SYS_brk, &[SysCallReg::from(addr)]) };
