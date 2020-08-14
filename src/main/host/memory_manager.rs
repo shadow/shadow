@@ -4,7 +4,6 @@ use crate::cbindings as c;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
-use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -61,24 +60,24 @@ pub struct MemoryManager {
     //   after the `execve` is done (in addition to the hook it already calls before it's done),
     //   but this is a bit awkward to do in the SysCallManager. Better to encapsulate that
     //   complexity here.
-    shm_file: RefCell<ShmFile>,
-    regions: RefCell<IntervalMap<Region>>,
+    shm_file: ShmFile,
+    regions: IntervalMap<Region>,
 
-    misses_by_path: RefCell<HashMap<String, u32>>,
+    misses_by_path: HashMap<String, u32>,
 
     // We need to reinitialize some state after an exec, but need to wait until the next syscall.
-    need_post_exec_cleanup: Cell<bool>,
+    need_post_exec_cleanup: bool,
 
     // The part of the stack that we've already remapped in the plugin.
     // We initially mmap enough *address space* in Shadow to accomodate a large stack, but we only
     // lazily allocate it. This is both to prevent wasting memory, and to handle that we can't map
     // the current "working area" of the stack in thread-preload.
-    stack_copied: RefCell<Interval>,
+    stack_copied: Interval,
 
     // The bounds of the heap. Note that before the plugin's first `brk` syscall this will be a
     // zero-sized interval (though in the case of thread-preload that'll have already happened
     // before we get control).
-    heap: RefCell<Interval>,
+    heap: Interval,
 }
 
 // Shared memory file into which we relocate parts of the plugin's address space.
@@ -302,9 +301,8 @@ fn map_stack(shm_file: &ShmFile, regions: &mut IntervalMap<Region>) -> usize {
 impl Drop for MemoryManager {
     fn drop(&mut self) {
         {
-            let misses_by_path = self.misses_by_path.borrow();
             println!("MemoryManager misses (consider extending MemoryManager to remap regions with a high miss count)");
-            for (path, count) in misses_by_path.iter() {
+            for (path, count) in self.misses_by_path.iter() {
                 println!("\t{} in {}", count, path);
             }
         }
@@ -361,23 +359,20 @@ impl MemoryManager {
         let stack_end = map_stack(&shm_file, &mut regions);
 
         MemoryManager {
-            shm_file: RefCell::new(shm_file),
-            regions: RefCell::new(regions),
-            misses_by_path: RefCell::new(HashMap::new()),
-            need_post_exec_cleanup: Cell::new(false),
-            heap: RefCell::new(heap),
-            stack_copied: RefCell::new(stack_end..stack_end),
+            shm_file: shm_file,
+            regions: regions,
+            misses_by_path: HashMap::new(),
+            need_post_exec_cleanup: false,
+            heap: heap,
+            stack_copied: stack_end..stack_end,
         }
     }
 
     // Clears all mappings, unmapping them from shadow's address space and recovering space from
     // the memory file. e.g. called after execve and in Drop.
-    fn reset_and_unmap_all(&self) {
+    fn reset_and_unmap_all(&mut self) {
         // Mappings are no longer valid. Clear out our map, and unmap those regions.
-        let mutations = self
-            .regions
-            .borrow_mut()
-            .clear(std::usize::MIN..std::usize::MAX);
+        let mutations = self.regions.clear(std::usize::MIN..std::usize::MAX);
         for m in mutations {
             if let Mutation::Removed(interval, region) = m {
                 if region.shadow_base != std::ptr::null_mut() {
@@ -389,28 +384,27 @@ impl MemoryManager {
                 }
             }
         }
-        self.shm_file.borrow_mut().truncate();
+        self.shm_file.truncate();
     }
 
     /// Should be called by shadow's SysCallHandler before allowing the plugin to execute the exec
     /// syscall.
     pub fn pre_exec_hook(&mut self, _thread: &impl Thread) {
-        self.need_post_exec_cleanup.set(true);
+        self.need_post_exec_cleanup = true;
     }
 
     // Called internally on the next usage *after* execve syscall has executed. Re-initializes as
     // needed.
-    fn post_exec_cleanup_if_needed(&self, thread: &impl Thread) {
-        if !self.need_post_exec_cleanup.get() {
+    fn post_exec_cleanup_if_needed(&mut self, thread: &impl Thread) {
+        if !self.need_post_exec_cleanup {
             return;
         }
         self.reset_and_unmap_all();
-        let shm_file = self.shm_file.borrow();
-        *self.regions.borrow_mut() = get_regions(thread.get_system_pid());
-        *self.heap.borrow_mut() = get_heap(&*shm_file, thread, &mut *self.regions.borrow_mut());
-        let stack_end = map_stack(&*shm_file, &mut *self.regions.borrow_mut());
-        *self.stack_copied.borrow_mut() = stack_end..stack_end;
-        self.need_post_exec_cleanup.set(false);
+        self.regions = get_regions(thread.get_system_pid());
+        self.heap = get_heap(&self.shm_file, thread, &mut self.regions);
+        let stack_end = map_stack(&self.shm_file, &mut self.regions);
+        self.stack_copied = stack_end..stack_end;
+        self.need_post_exec_cleanup = false;
     }
 
     /// Gets a reference to an object in the plugin's memory.
@@ -418,7 +412,7 @@ impl MemoryManager {
     /// * The pointer must point to readable value of type T.
     /// * Returned ref mustn't be accessed after Thread runs again or flush is called.
     #[allow(dead_code)]
-    pub unsafe fn get_ref<T>(&self, thread: &impl Thread, src: PluginPtr) -> Result<&T, i32> {
+    pub unsafe fn get_ref<T>(&mut self, thread: &impl Thread, src: PluginPtr) -> Result<&T, i32> {
         let raw = self.get_readable_ptr(thread, src, std::mem::size_of::<T>())?;
         Ok(&*(raw as *const T))
     }
@@ -447,7 +441,7 @@ impl MemoryManager {
     /// * Returned slice mustn't be accessed after Thread runs again or flush is called.
     #[allow(dead_code)]
     pub unsafe fn get_slice<T>(
-        &self,
+        &mut self,
         thread: &impl Thread,
         src: PluginPtr,
         len: usize,
@@ -484,15 +478,13 @@ impl MemoryManager {
         ptr: PluginPtr,
     ) -> Result<PluginPtr, i32> {
         self.post_exec_cleanup_if_needed(thread);
-        let mut heap = self.heap.borrow_mut();
-        let mut regions = self.regions.borrow_mut();
         let requested_brk = usize::from(ptr);
 
         // On error, brk syscall returns current brk (end of heap). The only errors we specifically
         // handle is trying to set the end of heap before the start. In practice this case is
         // generally triggered with a NULL argument to get the current brk value.
-        if requested_brk < heap.start {
-            return Ok(PluginPtr::from(heap.end));
+        if requested_brk < self.heap.start {
+            return Ok(PluginPtr::from(self.heap.end));
         }
 
         // Unclear how to handle a non-page-size increment. panic for now.
@@ -500,39 +492,33 @@ impl MemoryManager {
 
         // Not aware of this happening in practice, but handle this case specifically so we can
         // assume it's not the case below.
-        if requested_brk == heap.end {
+        if requested_brk == self.heap.end {
             return Ok(ptr);
         }
 
-        let opt_heap_interval_and_region = regions.get(heap.start);
-        let new_heap = heap.start..requested_brk;
+        let opt_heap_interval_and_region = self.regions.get(self.heap.start);
+        let new_heap = self.heap.start..requested_brk;
 
         // handle growth
-        if requested_brk > heap.end {
+        if requested_brk > self.heap.end {
             // Grow the heap.
             let shadow_base = match opt_heap_interval_and_region {
                 None => {
                     // Initialize heap region.
-                    assert_eq!(heap.start, heap.end);
-                    self.shm_file.borrow().alloc(&new_heap);
-                    let shadow_base = self
-                        .shm_file
-                        .borrow()
-                        .mmap_into_shadow(&new_heap, HEAP_PROT);
-                    // No data to copy.
-                    self.shm_file
-                        .borrow()
-                        .mmap_into_plugin(thread, &new_heap, HEAP_PROT);
+                    assert_eq!(self.heap.start, self.heap.end);
+                    self.shm_file.alloc(&new_heap);
+                    let shadow_base = self.shm_file.mmap_into_shadow(&new_heap, HEAP_PROT);
+                    self.shm_file.mmap_into_plugin(thread, &new_heap, HEAP_PROT);
                     shadow_base
                 }
                 Some((_, heap_region)) => {
                     // Grow heap region.
-                    self.shm_file.borrow().alloc(&heap);
+                    self.shm_file.alloc(&self.heap);
                     // mremap in plugin, enforcing that base stays the same.
                     unsafe {
                         let res = thread.native_mremap(
-                            /* old_addr: */ PluginPtr::from(heap.start),
-                            /* old_len: */ heap.end - heap.start,
+                            /* old_addr: */ PluginPtr::from(self.heap.start),
+                            /* old_len: */ self.heap.end - self.heap.start,
                             /* new_len: */ new_heap.end - new_heap.start,
                             /* flags: */ 0,
                             /* new_addr: */ PluginPtr::from(0usize),
@@ -543,7 +529,7 @@ impl MemoryManager {
                     let shadow_base = unsafe {
                         libc::mremap(
                             /* old_addr: */ heap_region.shadow_base,
-                            /* old_len: */ heap.end - heap.start,
+                            /* old_len: */ self.heap.end - self.heap.start,
                             /* new_len: */ new_heap.end - new_heap.start,
                             /* flags: */ libc::MREMAP_MAYMOVE,
                         )
@@ -552,7 +538,7 @@ impl MemoryManager {
                     shadow_base
                 }
             };
-            regions.insert(
+            self.regions.insert(
                 new_heap.clone(),
                 Region {
                     shadow_base,
@@ -574,8 +560,8 @@ impl MemoryManager {
             // mremap in plugin, enforcing that base stays the same.
             unsafe {
                 let res = thread.native_mremap(
-                    /* old_addr: */ PluginPtr::from(heap.start),
-                    /* old_len: */ heap.end - heap.start,
+                    /* old_addr: */ PluginPtr::from(self.heap.start),
+                    /* old_len: */ self.heap.end - self.heap.start,
                     /* new_len: */ new_heap.end - new_heap.start,
                     /* flags: */ 0,
                     /* new_addr: */ PluginPtr::from(0usize),
@@ -586,16 +572,16 @@ impl MemoryManager {
             let shadow_base = unsafe {
                 libc::mremap(
                     /* old_addr: */ heap_region.shadow_base,
-                    /* old_len: */ heap.end - heap.start,
+                    /* old_len: */ self.heap.end - self.heap.start,
                     /* new_len: */ new_heap.end - new_heap.start,
                     /* flags: */ 0,
                 )
             };
             assert_eq!(shadow_base, heap_region.shadow_base);
-            regions.clear(new_heap.end..heap.end);
-            self.shm_file.borrow().dealloc(&(new_heap.end..heap.end));
+            self.regions.clear(new_heap.end..self.heap.end);
+            self.shm_file.dealloc(&(new_heap.end..self.heap.end));
         }
-        *heap = new_heap;
+        self.heap = new_heap;
 
         Ok(PluginPtr::from(requested_brk))
     }
@@ -604,20 +590,17 @@ impl MemoryManager {
     // carefuly designed *not* to invalidate any outstanding borrowed references or pointers, since
     // otherwise a caller trying to marshall multiple syscall arguments might invalidate the first
     // argument when marshalling the second.
-    fn extend_stack(&self, thread: &impl Thread, src: usize) {
-        let regions = self.regions.borrow();
-        let mut stack_copied = self.stack_copied.borrow_mut();
-
+    fn extend_stack(&mut self, thread: &impl Thread, src: usize) {
         let start = page_of(src);
-        let stack_extension = start..stack_copied.start;
+        let stack_extension = start..self.stack_copied.start;
         //println!("jdn extending stack from {:x} to {:x}", stack_copied.start, start);
 
         let (mapped_stack_interval, mapped_stack_region) =
-            regions.get(stack_copied.start - 1).unwrap();
+            self.regions.get(self.stack_copied.start - 1).unwrap();
         assert!(mapped_stack_interval.contains(&src));
 
-        self.shm_file.borrow().alloc(&stack_extension);
-        self.shm_file.borrow().copy_into_file(
+        self.shm_file.alloc(&stack_extension);
+        self.shm_file.copy_into_file(
             thread,
             &mapped_stack_interval,
             &mapped_stack_region,
@@ -625,17 +608,16 @@ impl MemoryManager {
         );
 
         // update stack bounds
-        stack_copied.start = start;
+        self.stack_copied.start = start;
 
         // Map into the Plugin's space, overwriting any previous mapping.
         self.shm_file
-            .borrow()
-            .mmap_into_plugin(thread, &stack_copied, STACK_PROT);
+            .mmap_into_plugin(thread, &self.stack_copied, STACK_PROT);
     }
 
     // Get a raw pointer to the plugin's memory, if we have it mapped (or can do so now).
     fn get_mapped_ptr(
-        &self,
+        &mut self,
         thread: &impl Thread,
         src: PluginPtr,
         n: usize,
@@ -648,8 +630,7 @@ impl MemoryManager {
         }
 
         let src = usize::from(src);
-        let regions = self.regions.borrow();
-        let opt_interval_and_region = regions.get(src.into());
+        let opt_interval_and_region = self.regions.get(src.into());
         if opt_interval_and_region.is_none() {
             // src isn't in any mapped region. TODO: warn?
             return None;
@@ -663,32 +644,36 @@ impl MemoryManager {
             // End isn't in the region.
             return None;
         }
+
+        let offset = src - interval.start;
+        let ptr = (region.shadow_base as usize + offset) as *mut c_void;
+
         if region.original_path == Some(MappingPath::InitialStack)
-            && !self.stack_copied.borrow().contains(&src)
+            && !self.stack_copied.contains(&src)
         {
             // src is in the stack, but in the portion we haven't mapped into shadow yet. Extend
-            // it.
+            // it. Note that `ptr` calculated above will still be correct, since `extend_stack`
+            // never moves shadow's mapping of the stack.
             self.extend_stack(thread, src);
         }
-        let offset = src - interval.start;
-        Some((region.shadow_base as usize + offset) as *mut c_void)
+
+        Some(ptr)
     }
 
     // Counts accesses where we had to fall back to the thread's (slow) apis.
-    fn inc_misses(&self, addr: PluginPtr) {
-        let key = match self.regions.borrow().get(usize::from(addr)) {
+    fn inc_misses(&mut self, addr: PluginPtr) {
+        let key = match self.regions.get(usize::from(addr)) {
             Some((_, original_path)) => format!("{:?}", original_path),
             None => "not found".to_string(),
         };
-        let mut misses_by_path = self.misses_by_path.borrow_mut();
-        let counter = misses_by_path.entry(key).or_insert(0);
+        let counter = self.misses_by_path.entry(key).or_insert(0);
         *counter += 1;
     }
 
     // Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
     // Never returns NULL.
     unsafe fn get_readable_ptr(
-        &self,
+        &mut self,
         thread: &impl Thread,
         plugin_src: PluginPtr,
         n: usize,
@@ -710,7 +695,7 @@ impl MemoryManager {
     // Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
     // Never returns NULL.
     unsafe fn get_writeable_ptr(
-        &self,
+        &mut self,
         thread: &impl Thread,
         plugin_src: PluginPtr,
         n: usize,
@@ -755,7 +740,7 @@ mod export {
         n: usize,
     ) -> *const c_void {
         let thread = CThread::new(thread);
-        let memory_manager = unsafe { &*memory_manager };
+        let memory_manager = unsafe { &mut *memory_manager };
         let plugin_src: PluginPtr = plugin_src.into();
         unsafe { memory_manager.get_readable_ptr(&thread, plugin_src, n) }.unwrap()
     }
@@ -769,7 +754,7 @@ mod export {
         n: usize,
     ) -> *mut c_void {
         let thread = CThread::new(thread);
-        let memory_manager = unsafe { &*memory_manager };
+        let memory_manager = unsafe { &mut *memory_manager };
         let plugin_src: PluginPtr = plugin_src.into();
         unsafe { memory_manager.get_writeable_ptr(&thread, plugin_src, n) }.unwrap()
     }
