@@ -427,7 +427,10 @@ impl MemoryManager {
     /// SAFETY
     /// * The pointer must point to a writeable value of type T.
     /// * Returned ref mustn't be accessed after Thread runs again or flush is called.
-    /// TODO: Track borrowed ranges so that this can take an immutable &self.
+    // TODO: Consider tracking borrowed memory ranges so that we can safely allow mutable borrowed
+    // references, with a run-time check to validate that they don't overlap with other borrows.
+    // OTOH doing so would require mutating another interval map on every borrow and return, so
+    // it could be a performance hit.
     #[allow(dead_code)]
     pub unsafe fn get_mut_ref<T>(
         &mut self,
@@ -457,7 +460,10 @@ impl MemoryManager {
     /// SAFETY
     /// * The pointer must point to a writeable array of type T and at least size `len`.
     /// * Returned slice mustn't be accessed after Thread runs again or flush is called.
-    /// TODO: Track borrowed ranges so that this can take an immutable &self.
+    // TODO: Consider tracking borrowed memory ranges so that we can safely allow mutable borrowed
+    // references, with a run-time check to validate that they don't overlap with other borrows.
+    // OTOH doing so would require mutating another interval map on every borrow and return, so
+    // it could be a performance hit.
     #[allow(dead_code)]
     pub unsafe fn get_mut_slice<T>(
         &mut self,
