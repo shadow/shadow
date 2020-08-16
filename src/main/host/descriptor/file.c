@@ -357,8 +357,7 @@ ssize_t file_preadv(File* file, const struct iovec* iov, int iovcnt, off_t offse
 
     debug("File %i will preadv %d vector items from os-backed file %i at path "
           "'%s'",
-          _file_getFD(file), iovcnt, _file_getOSBackedFD(file),
-          file->osfile.abspath);
+          _file_getFD(file), iovcnt, _file_getOSBackedFD(file), file->osfile.abspath);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -435,8 +434,7 @@ ssize_t file_pwritev(File* file, const struct iovec* iov, int iovcnt, off_t offs
 
     debug("File %i will pwritev %d vector items from os-backed file %i at "
           "path '%s'",
-          _file_getFD(file), iovcnt, _file_getOSBackedFD(file),
-          file->osfile.abspath);
+          _file_getFD(file), iovcnt, _file_getOSBackedFD(file), file->osfile.abspath);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */

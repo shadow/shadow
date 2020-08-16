@@ -56,7 +56,7 @@ void random_nextNBytes(Random* random, void* buffer, gsize nbytes) {
     while(offset < nbytes) {
         guint randUInt = random_nextUInt(random);
         gsize n = MIN((nbytes - offset), sizeof(guint));
-        memmove(buffer+offset, &randUInt, n);
+        memmove(buffer + offset, &randUInt, n);
         offset += n;
     }
 }
