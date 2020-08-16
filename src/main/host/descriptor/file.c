@@ -295,7 +295,7 @@ ssize_t file_read(File* file, void* buf, size_t bufSize) {
     return (result < 0) ? -errno : result;
 }
 
-ssize_t file_preadv(File* file, void* buf, size_t bufSize, off_t offset) {
+ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
     MAGIC_ASSERT(file);
 
     if (!_file_getOSBackedFD(file)) {
@@ -309,6 +309,24 @@ ssize_t file_preadv(File* file, void* buf, size_t bufSize, off_t offset) {
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
     ssize_t result = pread(_file_getOSBackedFD(file), buf, bufSize, offset);
+    return (result < 0) ? -errno : result;
+}
+
+ssize_t file_preadv(File* file, const struct iovec* iov, int iovcnt, off_t offset) {
+    MAGIC_ASSERT(file);
+
+    if (!_file_getOSBackedFD(file)) {
+        return -EBADF;
+    }
+
+    debug("File %i will preadv %d vector items from os-backed file %i at path "
+          "'%s'",
+          _file_getFD(file), iovcnt, _file_getOSBackedFD(file),
+          file->osfile.abspath);
+
+    /* TODO: this may block the shadow thread until we properly handle
+     * os-backed files in non-blocking mode. */
+    ssize_t result = preadv(_file_getOSBackedFD(file), iov, iovcnt, offset);
     return (result < 0) ? -errno : result;
 }
 
@@ -351,7 +369,7 @@ ssize_t file_write(File* file, const void* buf, size_t bufSize) {
     return (result < 0) ? -errno : result;
 }
 
-ssize_t file_pwritev(File* file, const void* buf, size_t bufSize, off_t offset) {
+ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset) {
     MAGIC_ASSERT(file);
 
     if (!_file_getOSBackedFD(file)) {
@@ -365,6 +383,24 @@ ssize_t file_pwritev(File* file, const void* buf, size_t bufSize, off_t offset) 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
     ssize_t result = pwrite(_file_getOSBackedFD(file), buf, bufSize, offset);
+    return (result < 0) ? -errno : result;
+}
+
+ssize_t file_pwritev(File* file, const struct iovec* iov, int iovcnt, off_t offset) {
+    MAGIC_ASSERT(file);
+
+    if (!_file_getOSBackedFD(file)) {
+        return -EBADF;
+    }
+
+    debug("File %i will pwritev %d vector items from os-backed file %i at "
+          "path '%s'",
+          _file_getFD(file), iovcnt, _file_getOSBackedFD(file),
+          file->osfile.abspath);
+
+    /* TODO: this may block the shadow thread until we properly handle
+     * os-backed files in non-blocking mode. */
+    ssize_t result = pwritev(_file_getOSBackedFD(file), iov, iovcnt, offset);
     return (result < 0) ? -errno : result;
 }
 
