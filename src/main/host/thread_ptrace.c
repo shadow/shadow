@@ -189,6 +189,7 @@ static Thread* _threadPtraceToThread(ThreadPtrace* thread) {
 
 static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
                                      char* const envp[]) {
+    pid_t shadow_pid = getpid();
     pid_t pid = fork();
 
     switch (pid) {
@@ -198,6 +199,22 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
         }
         case 0: {
             // child
+ 
+            // Ensure that the child process exits when Shadow does.  Shadow
+            // ought to have already tried to terminate the child via SIGTERM
+            // before shutting down (though see
+            // https://github.com/shadow/shadow/issues/903), so now we jump all
+            // the way to SIGKILL.
+            if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
+                error("prctl: %s", g_strerror(errno));
+                exit(1);
+            }
+            // Validate that Shadow is still alive (didn't die in between forking and calling
+            // prctl).
+            if (getppid() != shadow_pid) {
+                error("parent (shadow) exited");
+                exit(1);
+            }
             // Disable RDTSC
             if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
                 error("prctl: %s", g_strerror(errno));
