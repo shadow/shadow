@@ -76,8 +76,8 @@ size_t logger_elapsed_string(char* dst, size_t size) {
 const char* logger_base_name(const char* filename) {
     const char* rv = filename;
     for (const char* pos = filename; *pos != '\0'; ++pos) {
-        if (*pos == '/' && *(pos+1) != '\0') {
-            rv = pos+1;
+        if (*pos == '/' && *(pos + 1) != '\0') {
+            rv = pos + 1;
         }
     }
     return rv;

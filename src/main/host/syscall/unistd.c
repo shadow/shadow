@@ -246,8 +246,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
         case DT_SOCKETPAIR:
         case DT_EPOLL:
         default:
-            warning("write() not yet implemented for descriptor type %i",
-                    (int)dType);
+            warning("write(%d) not yet implemented for descriptor type %i", fd, (int)dType);
             result = -ENOTSUP;
             break;
     }

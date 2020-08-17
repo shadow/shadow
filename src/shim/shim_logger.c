@@ -31,9 +31,8 @@ static size_t _simulation_nanos_string(char* dst, size_t size) {
         dst, size, "%02d:%02d:%02d.%09" PRIu64, tm.tm_hour, tm.tm_min, tm.tm_sec, nanos);
 }
 
-void shimlogger_log(Logger* base, LogLevel level, const char* fileName,
-                    const char* functionName, const int lineNumber,
-                    const char* format, va_list vargs) {
+void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const char* functionName,
+                    const int lineNumber, const char* format, va_list vargs) {
     static __thread bool in_logger = false;
     // Stack-allocated to avoid dynamic allocation.
     char buf[200];
