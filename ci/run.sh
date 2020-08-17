@@ -96,9 +96,9 @@ while getopts "h?ic:C:b:e:o:n" opt; do
 done
 
 run_one () {
-    CONTAINER=$1
-    CC=$2
-    BUILDTYPE=$3
+    CONTAINER="$1"
+    CC="$2"
+    BUILDTYPE="$3"
 
     TAG="shadow:${CONTAINER/:/-}-$CC-$BUILDTYPE"
 
@@ -109,7 +109,7 @@ run_one () {
         docker build -t "$TAG" $NOCACHE -f- . <<EOF
         FROM $CONTAINER
 
-        ENV CONTAINER $CONTAINER
+        ENV CONTAINER "$CONTAINER"
         SHELL ["/bin/bash", "-c"]
 
         # Install base dependencies before adding CC or BUILTYPE to
@@ -119,7 +119,7 @@ run_one () {
         RUN /root/install_deps.sh
 
         # Now install any CC/BUILDTYPE-specific dependencies.
-        ENV CC=$CC BUILDTYPE=$BUILDTYPE
+        ENV CC="$CC" BUILDTYPE="$BUILDTYPE"
         COPY ci/container_scripts/install_extra_deps.sh /root/install_extra_deps.sh
         RUN /root/install_extra_deps.sh
         ENV PATH /root/.cargo/bin:\$PATH
@@ -165,16 +165,16 @@ EOF
 # https://stackoverflow.com/a/61551944
 # to handle potentially empty arrays
 
-for CONTAINER in ${CONTAINERS[*]+"${CONTAINERS[*]}"}; do
-for CC in ${CCS[*]+"${CCS[*]}"}; do
-for BUILDTYPE in ${BUILDTYPES[*]+"${BUILDTYPES[*]}"}; do
-    run_one $CONTAINER $CC $BUILDTYPE
+for CONTAINER in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do
+for CC in ${CCS[@]+"${CCS[@]}"}; do
+for BUILDTYPE in ${BUILDTYPES[@]+"${BUILDTYPES[@]}"}; do
+    run_one "$CONTAINER" "$CC" "$BUILDTYPE"
 done
 done
 done
 
-for EXTRA in ${EXTRAS[*]+"${EXTRAS[*]}"}; do
+for EXTRA in ${EXTRAS[@]+"${EXTRAS[@]}"}; do
     # Split on ';'
-    IFS=';' read -ra args <<< $EXTRA
-    run_one ${args[0]} ${args[1]} ${args[2]}
+    IFS=';' read -ra args <<< "$EXTRA"
+    run_one "${args[0]}" "${args[1]}" "${args[2]}"
 done
