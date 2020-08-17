@@ -159,6 +159,17 @@ static long _vshadow_syscall(long n, va_list args) {
 }
 
 long syscall(long n, ...) {
+    // Ensure that subsequent stack frames are on a different page than any
+    // local variables passed through to the syscall. This ensures that even
+    // if any of the syscall arguments are pointers, and those pointers cause
+    // shadow to remap the pages containing those pointers, the shim-side stack
+    // frames doing that work won't get their memory remapped out from under
+    // them.
+    void *padding = alloca(sysconf(_SC_PAGE_SIZE));
+
+    // Ensure that the compiler doesn't optimize away `padding`.
+    __asm__ __volatile__("" :: "m" (padding));
+
     va_list(args);
     va_start(args, n);
     long rv;
@@ -173,15 +184,15 @@ long syscall(long n, ...) {
 
 // General-case macro for defining a thin wrapper function `fnname` that invokes
 // the syscall `sysname`.
-#define REMAP(type, fnname, sysname, params, ...)                              \
-    type fnname params {                                                       \
-        if (shim_interpositionEnabled()) {                                     \
-            debug("Making interposed syscall " #sysname);                      \
-            return (type)syscall(SYS_##sysname, __VA_ARGS__);                  \
-        } else {                                                               \
-            debug("Making real syscall " #sysname);                         \
-            return (type)_real_syscall(SYS_##sysname, __VA_ARGS__);            \
-        }                                                                      \
+#define REMAP(type, fnname, sysname, params, ...)                                                  \
+    type fnname params {                                                                           \
+        if (shim_interpositionEnabled()) {                                                         \
+            debug("Making interposed syscall " #sysname);                                          \
+            return (type)syscall(SYS_##sysname, __VA_ARGS__);                                      \
+        } else {                                                                                   \
+            debug("Making real syscall " #sysname);                                                \
+            return (type)_real_syscall(SYS_##sysname, __VA_ARGS__);                                \
+        }                                                                                          \
     }
 
 // Specialization of REMAP for defining a function `fnname` that invokes a

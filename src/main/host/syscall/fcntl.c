@@ -66,7 +66,7 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
                 sys->thread, argReg.as_ptr, sizeof(*flk_in));
             result = file_fcntl(file, command, (void*)flk_in);
 
-            struct flock* flk_out = thread_getWriteablePtr(
+            struct flock* flk_out = memorymanager_getWriteablePtr(sys->memoryManager,
                 sys->thread, argReg.as_ptr, sizeof(*flk_out));
 
             memcpy(flk_out, flk_in, sizeof(*flk_out));
@@ -84,13 +84,13 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
 #endif
         {
             const struct flock* flk =
-                thread_getReadablePtr(sys->thread, argReg.as_ptr, sizeof(*flk));
+                memorymanager_getReadablePtr(sys->memoryManager,sys->thread, argReg.as_ptr, sizeof(*flk));
             result = file_fcntl(file, command, (void*)flk);
             break;
         }
 
         case F_GETOWN_EX: {
-            struct f_owner_ex* foe = thread_getWriteablePtr(
+            struct f_owner_ex* foe = memorymanager_getWriteablePtr(sys->memoryManager,
                 sys->thread, argReg.as_ptr, sizeof(*foe));
             result = file_fcntl(file, command, foe);
             break;
@@ -98,7 +98,7 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
 
         case F_SETOWN_EX: {
             const struct f_owner_ex* foe =
-                thread_getReadablePtr(sys->thread, argReg.as_ptr, sizeof(*foe));
+                memorymanager_getReadablePtr(sys->memoryManager,sys->thread, argReg.as_ptr, sizeof(*foe));
             result = file_fcntl(file, command, (void*)foe);
             break;
         }
@@ -110,7 +110,7 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
         case F_GET_FILE_RW_HINT:
 #endif
         {
-            uint64_t* hint = thread_getWriteablePtr(
+            uint64_t* hint = memorymanager_getWriteablePtr(sys->memoryManager,
                 sys->thread, argReg.as_ptr, sizeof(*hint));
             result = file_fcntl(file, command, hint);
             break;
@@ -123,7 +123,7 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
         case F_SET_FILE_RW_HINT:
 #endif
         {
-            const uint64_t* hint = thread_getReadablePtr(
+            const uint64_t* hint = memorymanager_getReadablePtr(sys->memoryManager,
                 sys->thread, argReg.as_ptr, sizeof(*hint));
             result = file_fcntl(file, command, (void*)hint);
             break;
