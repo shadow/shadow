@@ -79,6 +79,7 @@ void host_addApplication(Host* host, SimulationTime startTime,
                          SimulationTime stopTime, InterposeMethod interposeMethod,
                          const gchar* pluginName, const gchar* pluginPath,
                          const gchar* pluginSymbol, gchar** envv, gchar** argv);
+void host_detachAllPlugins(Host* host);
 void host_freeAllApplications(Host* host);
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);

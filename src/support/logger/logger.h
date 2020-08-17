@@ -58,10 +58,9 @@ Logger* logger_getDefault();
 // diagnostics that it does for `printf`.
 // https://clang.llvm.org/docs/AttributeReference.html#format
 // https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#Common-Function-Attributes
-__attribute__((__format__ (__printf__, 6, 7)))
-void logger_log(Logger* logger, LogLevel level, const char* fileName,
-                const char* functionName, const int lineNumber,
-                const char* format, ...);
+__attribute__((__format__(__printf__, 6, 7))) void
+logger_log(Logger* logger, LogLevel level, const char* fileName, const char* functionName,
+           const int lineNumber, const char* format, ...);
 
 // Returns an agreed-upon start time for logging purposes, as returned by
 // logger_now_micros.

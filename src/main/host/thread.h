@@ -95,5 +95,6 @@ uint32_t thread_getProcessId(Thread* thread);
 uint32_t thread_getHostId(Thread* thread);
 
 pid_t thread_getNativePid(Thread* thread);
+pid_t thread_getNativeTid(Thread* thread);
 
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */

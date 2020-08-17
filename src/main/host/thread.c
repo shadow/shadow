@@ -58,6 +58,8 @@ void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.run);
     thread->nativePid = thread->methods.run(thread, argv, envv);
+    // In Linux, the PID is equal to the TID of its first thread.
+    thread->nativeTid = thread->nativePid;
 }
 
 SysCallCondition* thread_resume(Thread* thread) {
@@ -174,4 +176,9 @@ uint32_t thread_getHostId(Thread* thread) {
 pid_t thread_getNativePid(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->nativePid;
+}
+
+pid_t thread_getNativeTid(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    return thread->nativeTid;
 }

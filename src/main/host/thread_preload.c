@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <glib.h>
 #include <search.h>
+#include <sys/prctl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -132,6 +133,7 @@ static void _threadpreload_create_ipc_sockets(ThreadPreload* thread,
 
 static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, char* const argv[],
                                       char* const envp[]) {
+    pid_t shadow_pid = getpid();
     pid_t pid = vfork();
 
     switch (pid) {
@@ -141,6 +143,22 @@ static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, c
             break;
         case 0: {
             // child
+
+            // Ensure that the child process exits when Shadow does.  Shadow
+            // ought to have already tried to terminate the child via SIGTERM
+            // before shutting down (though see
+            // https://github.com/shadow/shadow/issues/903), so now we jump all
+            // the way to SIGKILL.
+            if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
+                error("prctl: %s", g_strerror(errno));
+                return -1;
+            }
+            // Validate that Shadow is still alive (didn't die in between forking and calling
+            // prctl).
+            if (getppid() != shadow_pid) {
+                error("parent (shadow) exited");
+                return -1;
+            }
             int rc = execvpe(file, argv, envp);
             if (rc == -1) {
                 error("execvpe() call failed");
