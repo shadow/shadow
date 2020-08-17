@@ -4,6 +4,9 @@
 
 include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
 
+## link to the shim (rpath will not contain this path when shadow is installed)
+link_directories(${CMAKE_BINARY_DIR}/src/shim)
+
 ## compile defs and flags
 #add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOURCE
 ## set the igraph version guesses
@@ -210,11 +213,7 @@ target_link_libraries(shadow shadow-c shadow-rs)
 install(TARGETS shadow DESTINATION bin)
 
 ## shadow needs to find libs after install
-set_target_properties(shadow PROPERTIES
-    INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib
-    INSTALL_RPATH_USE_LINK_PATH TRUE
-    LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib"
-)
+set_target_properties(shadow PROPERTIES LINK_FLAGS "-Wl,--no-as-needed")
 
 add_subdirectory(cbindings)
 
