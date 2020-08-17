@@ -1732,3 +1732,6 @@ extern "C" {
 extern "C" {
     pub fn thread_getNativePid(thread: *mut Thread) -> pid_t;
 }
+extern "C" {
+    pub fn thread_getNativeTid(thread: *mut Thread) -> pid_t;
+}
