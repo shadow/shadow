@@ -6,6 +6,7 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 
+#include "test/test_common.h"
 #include "test/test_glib_helpers.h"
 
 // Tests that the results are plausible, but can't really validate that it's our
@@ -82,7 +83,6 @@ static void _test_uname(gconstpointer gp_expected_name) {
 }
 
 int main(int argc, char* argv[]) {
-    bool running_in_shadow = getenv("SHADOW_SPAWNED") != NULL;
     g_test_init(&argc, &argv, NULL);
 
     if (argc < 6) {
@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/unistd/getpid_nodeps", _test_getpid_nodeps);
     // TODO: Support `kill` in shadow (and/or find another way of validating
     // the pid)
-    if (!running_in_shadow) {
+    if (!running_in_shadow()) {
         g_test_add_func("/unistd/getpid_kill", _test_getpid_kill);
     }
 
@@ -108,7 +108,7 @@ int main(int argc, char* argv[]) {
                          _test_gethostname);
 
     // TODO: Implement uname in shadow
-    if (!running_in_shadow) {
+    if (!running_in_shadow()) {
         g_test_add_data_func("/unistd/uname", &expected_name, _test_uname);
     }
 

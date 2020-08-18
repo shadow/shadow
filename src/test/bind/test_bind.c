@@ -17,6 +17,7 @@
 
 #include "support/logger/logger.h"
 #include "test/test_glib_helpers.h"
+#include "test/test_common.h"
 
 static int _do_bind(int fd, in_addr_t address, in_port_t port) {
     struct sockaddr_in bindaddr;
@@ -206,8 +207,7 @@ static void _test_implicit_bind(gconstpointer gp) {
     // on ubuntu, the firewall 'ufw' blocks the remaining tests from succeeding
     // ufw auto-blocks 0.0.0.0 and 127.0.0.1, and can't seem to be made to allow it
     // so we bail out early until we have a fix
-    int running_in_shadow = getenv("SHADOW_SPAWNED") != NULL;
-    if (!running_in_shadow) {
+    if (!running_in_shadow()) {
         close(fd1);
         return;
     }
