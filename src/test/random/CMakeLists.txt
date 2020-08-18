@@ -1,5 +1,5 @@
 ## build the test as a dynamic executable that plugs into shadow
-add_executable(shadow-plugin-test-random test_random.c)
+add_executable(shadow-plugin-test-random test_random.c ../test_common.c)
 
 ## register the tests
 add_test(NAME random COMMAND shadow-plugin-test-random)
