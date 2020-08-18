@@ -109,6 +109,7 @@ set(shadow_srcs
     host/syscall/ioctl.c
     host/syscall/mman.c
     host/syscall/process.c
+    host/syscall/random.c
     host/syscall/socket.c
     host/syscall/time.c
     host/syscall/timerfd.c

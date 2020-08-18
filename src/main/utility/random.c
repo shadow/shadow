@@ -50,13 +50,13 @@ guint random_nextUInt(Random* random) {
     return (guint)randomUint;
 }
 
-void random_nextNBytes(Random* random, guchar* buffer, gsize nbytes) {
+void random_nextNBytes(Random* random, void* buffer, gsize nbytes) {
     utility_assert(random);
     gsize offset = 0;
     while(offset < nbytes) {
         guint randUInt = random_nextUInt(random);
         gsize n = MIN((nbytes - offset), sizeof(guint));
-        memmove(&buffer[offset], &randUInt, n);
+        memmove(buffer + offset, &randUInt, n);
         offset += n;
     }
 }

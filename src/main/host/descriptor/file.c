@@ -25,8 +25,10 @@
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/host.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/routing/dns.h"
+#include "main/utility/random.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
@@ -35,7 +37,7 @@ enum _FileType {
     FILE_TYPE_NOTSET,
     FILE_TYPE_REGULAR,
     FILE_TYPE_TEMP,
-    FILE_TYPE_RANDOM,    // TODO: special handling for /dev/random etc.
+    FILE_TYPE_RANDOM,    // special handling for /dev/random etc.
     FILE_TYPE_HOSTS,     // special handling for /etc/hosts
     FILE_TYPE_LOCALTIME, // TODO: special handling for /etc/localtime
 };
@@ -278,11 +280,38 @@ int file_open(File* file, const char* pathname, int flags, mode_t mode) {
     return file_openat(file, NULL, pathname, flags, mode);
 }
 
+static void _file_readRandomBytes(File* file, void* buf, size_t numBytes) {
+    utility_assert(file->type == FILE_TYPE_RANDOM);
+
+    Host* host = worker_getActiveHost();
+    utility_assert(host != NULL);
+
+    debug("File %i will read %zu bytes from random source for host %s", _file_getFD(file), numBytes,
+          host_getName(host));
+
+    Random* rng = host_getRandom(host);
+    random_nextNBytes(rng, buf, numBytes);
+}
+
+static size_t _file_readvRandomBytes(File* file, const struct iovec* iov, int iovcnt) {
+    size_t total = 0;
+    for (int i = 0; i < iovcnt; i++) {
+        _file_readRandomBytes(file, iov[i].iov_base, iov[i].iov_len);
+        total += iov[i].iov_len;
+    }
+    return total;
+}
+
 ssize_t file_read(File* file, void* buf, size_t bufSize) {
     MAGIC_ASSERT(file);
 
     if (!_file_getOSBackedFD(file)) {
         return -EBADF;
+    }
+
+    if (file->type == FILE_TYPE_RANDOM) {
+        _file_readRandomBytes(file, buf, bufSize);
+        return (ssize_t)bufSize;
     }
 
     debug("File %i will read %zu bytes from os-backed file %i at path '%s'",
@@ -295,11 +324,16 @@ ssize_t file_read(File* file, void* buf, size_t bufSize) {
     return (result < 0) ? -errno : result;
 }
 
-ssize_t file_preadv(File* file, void* buf, size_t bufSize, off_t offset) {
+ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
     MAGIC_ASSERT(file);
 
     if (!_file_getOSBackedFD(file)) {
         return -EBADF;
+    }
+
+    if (file->type == FILE_TYPE_RANDOM) {
+        _file_readRandomBytes(file, buf, bufSize);
+        return (ssize_t)bufSize;
     }
 
     debug("File %i will pread %zu bytes from os-backed file %i at path '%s'",
@@ -312,6 +346,27 @@ ssize_t file_preadv(File* file, void* buf, size_t bufSize, off_t offset) {
     return (result < 0) ? -errno : result;
 }
 
+ssize_t file_preadv(File* file, const struct iovec* iov, int iovcnt, off_t offset) {
+    MAGIC_ASSERT(file);
+
+    if (!_file_getOSBackedFD(file)) {
+        return -EBADF;
+    }
+
+    if (file->type == FILE_TYPE_RANDOM) {
+        return (ssize_t)_file_readvRandomBytes(file, iov, iovcnt);
+    }
+
+    debug("File %i will preadv %d vector items from os-backed file %i at path "
+          "'%s'",
+          _file_getFD(file), iovcnt, _file_getOSBackedFD(file), file->osfile.abspath);
+
+    /* TODO: this may block the shadow thread until we properly handle
+     * os-backed files in non-blocking mode. */
+    ssize_t result = preadv(_file_getOSBackedFD(file), iov, iovcnt, offset);
+    return (result < 0) ? -errno : result;
+}
+
 #ifdef SYS_preadv2
 ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt,
                      off_t offset, int flags) {
@@ -319,6 +374,10 @@ ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt,
 
     if (!_file_getOSBackedFD(file)) {
         return -EBADF;
+    }
+
+    if (file->type == FILE_TYPE_RANDOM) {
+        return (ssize_t)_file_readvRandomBytes(file, iov, iovcnt);
     }
 
     debug("File %i will preadv2 %d vector items from os-backed file %i at path "
@@ -351,7 +410,7 @@ ssize_t file_write(File* file, const void* buf, size_t bufSize) {
     return (result < 0) ? -errno : result;
 }
 
-ssize_t file_pwritev(File* file, const void* buf, size_t bufSize, off_t offset) {
+ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset) {
     MAGIC_ASSERT(file);
 
     if (!_file_getOSBackedFD(file)) {
@@ -365,6 +424,23 @@ ssize_t file_pwritev(File* file, const void* buf, size_t bufSize, off_t offset) 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
     ssize_t result = pwrite(_file_getOSBackedFD(file), buf, bufSize, offset);
+    return (result < 0) ? -errno : result;
+}
+
+ssize_t file_pwritev(File* file, const struct iovec* iov, int iovcnt, off_t offset) {
+    MAGIC_ASSERT(file);
+
+    if (!_file_getOSBackedFD(file)) {
+        return -EBADF;
+    }
+
+    debug("File %i will pwritev %d vector items from os-backed file %i at "
+          "path '%s'",
+          _file_getFD(file), iovcnt, _file_getOSBackedFD(file), file->osfile.abspath);
+
+    /* TODO: this may block the shadow thread until we properly handle
+     * os-backed files in non-blocking mode. */
+    ssize_t result = pwritev(_file_getOSBackedFD(file), iov, iovcnt, offset);
     return (result < 0) ? -errno : result;
 }
 
