@@ -14,10 +14,14 @@
 #include <unistd.h>
 
 // The number of random values to generate with each method.
-#define RGENLEN 100
+#define RGENLEN 200
 // The number of buckets to use when checking random value distribution.
 #define BUCKETLEN 10
 
+// This is just a quick check that the 0<=f<=100 fractions that are generated using
+// the random APIs are "plausibly random"; its primary purpose is to test that the
+// randomness API plumbing is working, but not to test the quality of the underlying
+// RNGs. We just check that each decile of the distribution has at least one entry.
 static int _check_randomness(double* fracs, int len) {
     uint buckets[BUCKETLEN] = {0};
 

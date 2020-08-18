@@ -280,24 +280,24 @@ int file_open(File* file, const char* pathname, int flags, mode_t mode) {
     return file_openat(file, NULL, pathname, flags, mode);
 }
 
-static size_t _file_readRandomBytes(File* file, void* buf, size_t bufSize) {
+static void _file_readRandomBytes(File* file, void* buf, size_t numBytes) {
     utility_assert(file->type == FILE_TYPE_RANDOM);
 
     Host* host = worker_getActiveHost();
     utility_assert(host != NULL);
 
-    debug("File %i will read %zu bytes from random source for host %s", _file_getFD(file), bufSize,
+    debug("File %i will read %zu bytes from random source for host %s", _file_getFD(file), numBytes,
           host_getName(host));
 
     Random* rng = host_getRandom(host);
-    random_nextNBytes(rng, buf, bufSize);
-    return bufSize;
+    random_nextNBytes(rng, buf, numBytes);
 }
 
 static size_t _file_readvRandomBytes(File* file, const struct iovec* iov, int iovcnt) {
     size_t total = 0;
     for (int i = 0; i < iovcnt; i++) {
-        total += _file_readRandomBytes(file, iov[i].iov_base, iov[i].iov_len);
+        _file_readRandomBytes(file, iov[i].iov_base, iov[i].iov_len);
+        total += iov[i].iov_len;
     }
     return total;
 }
@@ -310,7 +310,8 @@ ssize_t file_read(File* file, void* buf, size_t bufSize) {
     }
 
     if (file->type == FILE_TYPE_RANDOM) {
-        return (ssize_t)_file_readRandomBytes(file, buf, bufSize);
+        _file_readRandomBytes(file, buf, bufSize);
+        return (ssize_t)bufSize;
     }
 
     debug("File %i will read %zu bytes from os-backed file %i at path '%s'",
@@ -331,7 +332,8 @@ ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
     }
 
     if (file->type == FILE_TYPE_RANDOM) {
-        return (ssize_t)_file_readRandomBytes(file, buf, bufSize);
+        _file_readRandomBytes(file, buf, bufSize);
+        return (ssize_t)bufSize;
     }
 
     debug("File %i will pread %zu bytes from os-backed file %i at path '%s'",
