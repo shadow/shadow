@@ -3,5 +3,7 @@
 // needed. e.g. consider avoiding including glib.h in these by swapping types
 // like `gboolean` with standard types like `bool`.
 
+// Don't forget to whitelist functions/types/vars in CMakeLists.txt
+
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
