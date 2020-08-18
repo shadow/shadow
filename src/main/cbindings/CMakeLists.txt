@@ -19,7 +19,11 @@ endforeach(COMPILE_DEFINITION)
 
 # Generate wrapper.rs in the source tree.
 add_custom_command(OUTPUT wrapper.rs
-    COMMAND bindgen ${CMAKE_CURRENT_SOURCE_DIR}/wrapper.h -o ${CMAKE_CURRENT_SOURCE_DIR}/wrapper.rs -- ${LLVM_FLAGS}
+    COMMAND bindgen
+        --whitelist-function "thread_.*"
+        --whitelist-type "PluginPtr"
+        --whitelist-type "SysCall.*"
+        ${CMAKE_CURRENT_SOURCE_DIR}/wrapper.h -o ${CMAKE_CURRENT_SOURCE_DIR}/wrapper.rs -- ${LLVM_FLAGS}
     MAIN_DEPENDENCY wrapper.h
     IMPLICIT_DEPENDS C wrapper.h)
 
