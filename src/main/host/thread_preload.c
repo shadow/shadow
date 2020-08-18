@@ -134,7 +134,7 @@ static void _threadpreload_create_ipc_sockets(ThreadPreload* thread,
 static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, char* const argv[],
                                       char* const envp[]) {
     pid_t shadow_pid = getpid();
-    pid_t pid = vfork();
+    pid_t pid = fork();
 
     switch (pid) {
         case -1:
