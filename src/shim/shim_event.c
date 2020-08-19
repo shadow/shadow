@@ -37,13 +37,3 @@ static inline uint32_t shim_recvUint32_t(int sock_fd) {
     shim_determinedRecv(sock_fd, &value, sizeof(uint32_t));
     return ntohl(value);
 }
-
-#if 0
-void shimevent_recvEvent(int event_fd, ShimEvent* e) {
-    shim_determinedRecv(event_fd, e, sizeof(ShimEvent));
-}
-
-void shimevent_sendEvent(int event_fd, const ShimEvent* e) {
-    shim_determinedSend(event_fd, e, sizeof(ShimEvent));
-}
-#endif // 0

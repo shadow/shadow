@@ -28,7 +28,6 @@ struct _ThreadPreload {
 
     SysCallHandler* sys;
 
-    pid_t childPID;
     ShMemBlock ipc_blk;
 
     int isRunning;

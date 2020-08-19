@@ -204,15 +204,8 @@ static void _print(void* pool, size_t pool_nbytes, void* meta) {
 }
 #endif // NDEBUG
 
-static size_t total_alloc_ = 0;
-static size_t total_freed_ = 0;
-
 void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool,
                   uint32_t pool_nbytes) {
-
-    static int ctr_ = 0;
-
-    ctr_ += 1;
 
     if (requested_nbytes == 0) {
         return NULL;
@@ -225,8 +218,6 @@ void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool,
         shmem_util_roundUpPow2(requested_nbytes + sizeof(BuddyControlBlock));
 
     uint32_t k = shmem_util_uintLog2(alloc_nbytes);
-
-    size_t x = 1 << k;
 
     size_t start_idx = k - SHD_BUDDY_PART_MIN_ORDER;
     size_t idx = start_idx;
@@ -242,21 +233,13 @@ void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool,
         return NULL;
     }
 
-    //_print(pool, pool_nbytes, meta);
-
     BuddyControlBlock* ret = *avail;
     _buddy_alloc_split_blocks(*avail, k, idx + SHD_BUDDY_PART_MIN_ORDER, bcbs);
-
-    //_print(pool, pool_nbytes, meta);
 
     // remove the block
     _buddy_listRemove(&bcbs[idx], ret);
     buddycontrolblock_setTag(ret, false);
     buddycontrolblock_setOrder(ret, k);
-
-    //_print(pool, pool_nbytes, meta);
-    //
-    total_alloc_ += alloc_nbytes;
 
     return ((uint8_t*)ret + sizeof(BuddyControlBlock));
 }
@@ -284,8 +267,6 @@ void buddy_free(void* p, void* meta, void* pool, size_t pool_nbytes) {
 
     unsigned bcb_order = buddycontrolblock_order(bcb);
     unsigned max_order = buddy_poolMaxOrder(pool_nbytes);
-
-    total_freed_ += (1 << bcb_order);
 
     BuddyControlBlock* buddy =
         _buddycontrolblock_computeBuddy(bcb, bcb_order, pool);
