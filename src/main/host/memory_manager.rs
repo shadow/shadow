@@ -408,6 +408,18 @@ impl MemoryManager {
         self.shm_file.truncate();
     }
 
+    // Processes the mutations returned by an IntervalMap::insert or IntervalMap::clear operation.
+    // Each mutation describes a mapping that has been partly or completely overwritten (in the
+    // case of an insert) or cleared (in the case of clear).
+    //
+    // Potentially:
+    // * Updates `shadow_base` on affected regions.
+    // * Deallocates space from shm_file.
+    // * Reclaims Shadow's address space via unmap.
+    //
+    // When used on mutations after an insert, if the inserted region is to be mapped into shadow,
+    // be sure to call this *before* doing that mapping; otherwise we'll end up some or all of the
+    // space in that new mapping.
     fn handle_mutations(&mut self, mutations: Vec<Mutation<Region>>) {
         for mutation in mutations {
             match mutation {
