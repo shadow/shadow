@@ -5410,6 +5410,12 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
     }
 
     if(do_syscall) {
+        if (number == SYS_futex) {
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
+            usleep(1);
+            _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
+        }
+
     	result = syscall(number, ap);
     	if(result == EOF) {
 			_process_setErrno(proc, errno);
