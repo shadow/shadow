@@ -13,7 +13,7 @@
  * handlers.
  */
 
-#include "main/bindings.h"
+#include "main/bindings/c/bindings.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"

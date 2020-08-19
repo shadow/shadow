@@ -29,3 +29,11 @@ add_subdirectory(main)
 if(SHADOW_TEST STREQUAL ON)
     add_subdirectory(test)
 endif(SHADOW_TEST STREQUAL ON)
+
+# A fake target that depends on all bindings.
+add_custom_target(bindings)
+add_dependencies(bindings bindings_main)
+
+# Only re-generate bindings when explicititly requested, so that
+# our CI doesn't need to install the heavy bindgen dependency.
+set_property(TARGET bindings PROPERTY EXCLUDE_FROM_ALL true)
