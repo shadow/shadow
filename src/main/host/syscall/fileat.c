@@ -169,7 +169,7 @@ SysCallReturn syscallhandler_newfstatat(SysCallHandler* sys,
 
     /* Get some memory in which to return the result. */
     struct stat* buf =
-        thread_getWriteablePtr(sys->thread, bufPtr, sizeof(*buf));
+        memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, bufPtr, sizeof(*buf));
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
@@ -243,7 +243,7 @@ SysCallReturn syscallhandler_futimesat(SysCallHandler* sys,
     }
 
     const struct timeval* times =
-        thread_getReadablePtr(sys->thread, timesPtr, 2 * sizeof(*times));
+        memorymanager_getReadablePtr(sys->memoryManager,sys->thread, timesPtr, 2 * sizeof(*times));
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
@@ -273,7 +273,7 @@ SysCallReturn syscallhandler_utimensat(SysCallHandler* sys,
     }
 
     const struct timespec* times =
-        thread_getReadablePtr(sys->thread, timesPtr, 2 * sizeof(*times));
+        memorymanager_getReadablePtr(sys->memoryManager,sys->thread, timesPtr, 2 * sizeof(*times));
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
@@ -460,7 +460,7 @@ SysCallReturn syscallhandler_readlinkat(SysCallHandler* sys,
     }
 
     /* Get the path string from the plugin. */
-    char* buf = thread_getWriteablePtr(sys->thread, bufPtr, bufSize);
+    char* buf = memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, bufPtr, bufSize);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
@@ -510,7 +510,7 @@ SysCallReturn syscallhandler_statx(SysCallHandler* sys,
 
     /* Get the path string from the plugin. */
     struct statx* statxbuf =
-        thread_getWriteablePtr(sys->thread, statxbufPtr, sizeof(*statxbuf));
+        memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, statxbufPtr, sizeof(*statxbuf));
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }

@@ -6,5 +6,6 @@
 #include "main/host/thread.h"
 
 Thread* threadptrace_new(Host* host, Process* process, gint threadID);
+void threadptrace_detach(Thread* base);
 
 #endif

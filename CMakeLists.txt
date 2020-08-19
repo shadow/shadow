@@ -50,6 +50,10 @@ endif()
 foreach(library ${CMAKE_EXTRA_LIBRARIES})
     link_directories(${library})
 endforeach(library)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+## use the installed shim path only when shadow is installed
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 
 ## get general includes
 include(CheckIncludeFile)

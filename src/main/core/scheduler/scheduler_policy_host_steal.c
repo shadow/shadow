@@ -10,6 +10,7 @@
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
+#include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
@@ -191,6 +192,8 @@ static void _schedulerpolicyhoststeal_migrateHost(SchedulerPolicy* policy, Host*
         utility_assert(tdata->runningHost != tdataNew->runningHost);
         /* migrate the TLS of all objects associated with this host */
 //        host_migrate(host, &oldThread, &newThread);
+        debug("Migrating host %s from thread %u to thread %u", host_getName(host), tdata->tnumber,
+              tdataNew->tnumber);
     }
     _schedulerpolicyhoststeal_addHost(policy, host, newThread);
 }
@@ -308,6 +311,10 @@ static Event* _schedulerpolicyhoststeal_popFromThread(SchedulerPolicy* policy, H
         if(nextEvent == NULL) {
             /* no more events on the runningHost, mark it as NULL so we get a new one */
             g_queue_push_tail(tdata->processedHosts, host);
+            /* detach all ptrace attachments for this host so it can be stolen next round */
+            worker_setActiveHost(host);
+            host_detachAllPlugins(host);
+            worker_setActiveHost(NULL);
             tdata->runningHost = NULL;
         }
 

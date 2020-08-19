@@ -166,6 +166,17 @@ static long _vshadow_syscall(long n, va_list args) {
 }
 
 long syscall(long n, ...) {
+    // Ensure that subsequent stack frames are on a different page than any
+    // local variables passed through to the syscall. This ensures that even
+    // if any of the syscall arguments are pointers, and those pointers cause
+    // shadow to remap the pages containing those pointers, the shim-side stack
+    // frames doing that work won't get their memory remapped out from under
+    // them.
+    void *padding = alloca(sysconf(_SC_PAGE_SIZE));
+
+    // Ensure that the compiler doesn't optimize away `padding`.
+    __asm__ __volatile__("" :: "m" (padding));
+
     va_list(args);
     va_start(args, n);
     long rv;
@@ -180,15 +191,15 @@ long syscall(long n, ...) {
 
 // General-case macro for defining a thin wrapper function `fnname` that invokes
 // the syscall `sysname`.
-#define REMAP(type, fnname, sysname, params, ...)                              \
-    type fnname params {                                                       \
-        if (shim_interpositionEnabled()) {                                     \
-            debug("Making interposed syscall " #sysname);                      \
-            return (type)syscall(SYS_##sysname, __VA_ARGS__);                  \
-        } else {                                                               \
-            debug("Making real syscall " #sysname);                         \
-            return (type)_real_syscall(SYS_##sysname, __VA_ARGS__);            \
-        }                                                                      \
+#define REMAP(type, fnname, sysname, params, ...)                                                  \
+    type fnname params {                                                                           \
+        if (shim_interpositionEnabled()) {                                                         \
+            debug("Making interposed syscall " #sysname);                                          \
+            return (type)syscall(SYS_##sysname, __VA_ARGS__);                                      \
+        } else {                                                                                   \
+            debug("Making real syscall " #sysname);                                                \
+            return (type)_real_syscall(SYS_##sysname, __VA_ARGS__);                                \
+        }                                                                                          \
     }
 
 // Specialization of REMAP for defining a function `fnname` that invokes a
@@ -233,6 +244,10 @@ NOREMAP(int, futimesat, (int a, const char* b, const struct timeval c[2]), a, b,
 NOREMAP(ssize_t, getdents, (int a, void* b, size_t c), a, b, c);
 NOREMAP(ssize_t, getdents64, (int a, void* b, size_t c), a, b, c);
 NOREMAP(int, getpeername, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
+// TODO the following (getrandom) causes all shadow tests to fail with timeout in centos 8
+// I believe centos 8 contains a version of libc that contains a getrandom wrapper, whereas
+// it was previously only available through the syscall() function.
+//NOREMAP(ssize_t, getrandom, (void* a, size_t b, unsigned int c), a, b, c);
 NOREMAP(int, getsockname, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
 static REMAP(int, ioctl_explicit, ioctl, (int a, unsigned long b, char* c), a,b,c);
 NOREMAP(int, linkat, (int a, const char* b, int c, const char* d, int e), a, b, c, d, e);

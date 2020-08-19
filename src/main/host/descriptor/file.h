@@ -58,13 +58,15 @@ char* file_getAbsolutePath(File* file);
 // ****************************************
 
 ssize_t file_read(File* file, void* buf, size_t bufSize);
-ssize_t file_preadv(File* file, void* buf, size_t bufSize, off_t offset);
+ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset);
+ssize_t file_preadv(File* file, const struct iovec* iov, int iovcnt, off_t offset);
 #ifdef SYS_preadv2
 ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt,
                      off_t offset, int flags);
 #endif
 ssize_t file_write(File* file, const void* buf, size_t bufSize);
-ssize_t file_pwritev(File* file, const void* buf, size_t bufSize, off_t offset);
+ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset);
+ssize_t file_pwritev(File* file, const struct iovec* iov, int iovcnt, off_t offset);
 #ifdef SYS_pwritev2
 ssize_t file_pwritev2(File* file, const struct iovec* iov, int iovcnt,
                       off_t offset, int flags);

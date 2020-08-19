@@ -13,6 +13,7 @@
  * handlers.
  */
 
+#include "main/bindings.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
@@ -28,6 +29,9 @@ struct _SysCallHandler {
     Host* host;
     Process* process;
     Thread* thread;
+
+    /* Owned exclusively by the SysCallHandler. */
+    MemoryManager* memoryManager;
 
     /* Timers are used to support the timerfd syscalls (man timerfd_create);
      * they are types of descriptors on which we can listen for events.

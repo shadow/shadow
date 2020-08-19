@@ -142,6 +142,15 @@ static void _syscallhandler_closePluginFile(SysCallHandler* sys, int pluginFD) {
 // System Calls
 ///////////////////////////////////////////////////////////
 
+SysCallReturn syscallhandler_brk(SysCallHandler* sys,
+                                 const SysCallArgs* args) {
+    PluginPtr newBrk = args->args[0].as_ptr;
+
+    // Delegate to the memoryManager.
+    SysCallReg result = memorymanager_handleBrk(sys->memoryManager, sys->thread, newBrk);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+}
+
 SysCallReturn syscallhandler_mmap(SysCallHandler* sys,
                                   const SysCallArgs* args) {
     PluginPtr addrPtr = args->args[0].as_ptr; // void*

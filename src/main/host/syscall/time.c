@@ -38,7 +38,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
 
     /* Grab the arg from the syscall register. */
     const struct timespec* req =
-        thread_getReadablePtr(sys->thread, args->args[0].as_ptr, sizeof(*req));
+        memorymanager_getReadablePtr(sys->memoryManager,sys->thread, args->args[0].as_ptr, sizeof(*req));
 
     /* Bounds checking. */
     if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
@@ -89,7 +89,7 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    struct timespec* res_timespec = thread_getWriteablePtr(
+    struct timespec* res_timespec = memorymanager_getWriteablePtr(sys->memoryManager,
         sys->thread, args->args[1].as_ptr, sizeof(*res_timespec));
 
     EmulatedTime now = _syscallhandler_getEmulatedTime();
@@ -105,7 +105,7 @@ SysCallReturn syscallhandler_time(SysCallHandler* sys, const SysCallArgs* args) 
     time_t seconds = _syscallhandler_getEmulatedTime() / SIMTIME_ONE_SECOND;
 
     if (tlocPtr.val) {
-        time_t* tloc = thread_getWriteablePtr(sys->thread, tlocPtr, sizeof(*tloc));
+        time_t* tloc = memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, tlocPtr, sizeof(*tloc));
         *tloc = seconds;
     }
 
@@ -117,7 +117,7 @@ SysCallReturn syscallhandler_gettimeofday(SysCallHandler* sys, const SysCallArgs
 
     if (tvPtr.val) {
         EmulatedTime now = _syscallhandler_getEmulatedTime();
-        struct timeval* tv = thread_getWriteablePtr(sys->thread, tvPtr, sizeof(*tv));
+        struct timeval* tv = memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, tvPtr, sizeof(*tv));
         tv->tv_sec = now / SIMTIME_ONE_SECOND;
         tv->tv_usec = (now % SIMTIME_ONE_SECOND) / SIMTIME_ONE_MICROSECOND;
     }

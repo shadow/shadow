@@ -52,7 +52,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd,
 
     /* Get the vector of pointers. */
     const struct iovec* iov =
-        thread_getReadablePtr(sys->thread, iovPtr, iovlen * sizeof(*iov));
+        memorymanager_getReadablePtr(sys->memoryManager,sys->thread, iovPtr, iovlen * sizeof(*iov));
 
     /* Check that all of the buf pointers are valid. */
     for (unsigned long i = 0; i < iovlen; i++) {
@@ -114,7 +114,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             size_t bufSize = iov[i].iov_len;
 
             buffersv[i].iov_base =
-                thread_getWriteablePtr(sys->thread, bufPtr, bufSize);
+                memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, bufPtr, bufSize);
             buffersv[i].iov_len = bufSize;
         }
 
@@ -145,7 +145,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                 }
                 case DT_PIPE: {
                     void* buf =
-                        thread_getWriteablePtr(sys->thread, bufPtr, bufSize);
+                        memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, bufPtr, bufSize);
                     result = transport_receiveUserData(
                         (Transport*)desc, buf, bufSize, NULL, NULL);
                     break;
@@ -234,7 +234,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             size_t bufSize = iov[i].iov_len;
 
             buffersv[i].iov_base =
-                (void*)thread_getReadablePtr(sys->thread, bufPtr, bufSize);
+                (void*)memorymanager_getReadablePtr(sys->memoryManager,sys->thread, bufPtr, bufSize);
             buffersv[i].iov_len = bufSize;
         }
 
@@ -265,7 +265,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                 }
                 case DT_PIPE: {
                     const void* buf =
-                        thread_getReadablePtr(sys->thread, bufPtr, bufSize);
+                        memorymanager_getReadablePtr(sys->memoryManager,sys->thread, bufPtr, bufSize);
                     result = transport_sendUserData(
                         (Transport*)desc, buf, bufSize, 0, 0);
                     break;

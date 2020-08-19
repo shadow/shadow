@@ -63,7 +63,7 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
 
     /* Return the pipe fds to the caller. */
     size_t sizeNeeded = sizeof(int) * 2;
-    gint* pipefd = thread_getWriteablePtr(sys->thread, pipefdPtr, sizeNeeded);
+    gint* pipefd = memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, pipefdPtr, sizeNeeded);
 
     pipefd[0] =
         process_registerDescriptor(sys->process, (Descriptor*)pipeReader);
@@ -123,7 +123,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
-    void* buf = thread_getWriteablePtr(sys->thread, bufPtr, sizeNeeded);
+    void* buf = memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, bufPtr, sizeNeeded);
 
     ssize_t result = 0;
     switch (dType) {
@@ -131,7 +131,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
             if (offset == 0) {
                 result = file_read((File*)desc, buf, sizeNeeded);
             } else {
-                result = file_preadv((File*)desc, buf, sizeNeeded, offset);
+                result = file_pread((File*)desc, buf, sizeNeeded, offset);
             }
             break;
         case DT_TIMER:
@@ -222,7 +222,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
-    const void* buf = thread_getReadablePtr(sys->thread, bufPtr, sizeNeeded);
+    const void* buf = memorymanager_getReadablePtr(sys->memoryManager,sys->thread, bufPtr, sizeNeeded);
 
     ssize_t result = 0;
     switch (dType) {
@@ -230,7 +230,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
             if (offset == 0) {
                 result = file_write((File*)desc, buf, sizeNeeded);
             } else {
-                result = file_pwritev((File*)desc, buf, sizeNeeded, offset);
+                result = file_pwrite((File*)desc, buf, sizeNeeded, offset);
             }
             break;
         case DT_TIMER: result = -EINVAL; break;
@@ -246,8 +246,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
         case DT_SOCKETPAIR:
         case DT_EPOLL:
         default:
-            warning("write() not yet implemented for descriptor type %i",
-                    (int)dType);
+            warning("write(%d) not yet implemented for descriptor type %i", fd, (int)dType);
             result = -ENOTSUP;
             break;
     }
@@ -357,7 +356,7 @@ SysCallReturn syscallhandler_uname(SysCallHandler* sys,
     }
 
     buf =
-        thread_getWriteablePtr(sys->thread, args->args[0].as_ptr, sizeof(*buf));
+        memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, args->args[0].as_ptr, sizeof(*buf));
 
     const gchar* hostname = host_getName(sys->host);
 

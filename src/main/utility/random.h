@@ -49,6 +49,6 @@ guint random_nextUInt(Random* random);
  * @param buffer the buffer to copy the random bytes to
  * @param nbytes number of bytes to copy to the buffer
  */
-void random_nextNBytes(Random* random, guchar* buffer, gsize nbytes);
+void random_nextNBytes(Random* random, void* buffer, gsize nbytes);
 
 #endif /* SHD_RANDOM_H_ */
