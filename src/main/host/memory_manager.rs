@@ -694,10 +694,7 @@ impl MemoryManager {
             assert_eq!(region.sharing, Sharing::Shared);
             // This shouldn't be mapped into Shadow, since we don't support remapping shared mappings into Shadow yet.
             assert_eq!(region.shadow_base, std::ptr::null_mut());
-            let mutations = self.regions.insert(
-                usize::from(new_address)..(usize::from(new_address) + new_size),
-                region,
-            );
+            let mutations = self.regions.insert(new_interval, region);
             self.handle_mutations(mutations);
             return Ok(new_address);
         }
@@ -715,40 +712,78 @@ impl MemoryManager {
             }
         };
 
+        // Clear any mappings that are about to be overwritten by the new mapping. We have to do
+        // this *before* potentially mapping the new region into Shadow, so that we don't end up
+        // freeing space for that new mapping.
+        {
+            let mutations = self.regions.clear(new_interval.clone());
+            self.handle_mutations(mutations);
+        }
+
         if region.shadow_base != std::ptr::null_mut() {
             // We currently only map in anonymous mmap'd regions, stack, and heap.  We don't bother
             // implementing mremap for stack or heap regions for now; that'd be pretty weird.
             assert_eq!(region.original_path, None);
 
-            // We *could* have a simpler and somewhat-cheaper code-path for the case where the
-            // region only grew or shrunk without moving, but then that'd be another code path to
-            // maintain and test.  Probably only worth bothering with if mremap is somehow in the
-            // hot path of a simulation.
+            if new_interval.start != old_interval.start {
+                // region has moved
 
-            // Ensure there's space allocated at the new location in the memory file.
-            self.shm_file.alloc(&new_interval);
-            // Map the new location into Shadow.
-            let new_shadow_base = self.shm_file.mmap_into_shadow(&new_interval, region.prot);
-            // Move the data, using memmove to handle possible aliasing / overlap.
-            unsafe {
-                libc::memmove(
-                    new_shadow_base,
-                    region.shadow_base,
-                    std::cmp::min(old_size, new_size),
-                )
-            };
+                // Note that mremap(2) should have failed if the regions overlap.
+                assert!(!new_interval.contains(&old_interval.start));
+                assert!(!old_interval.contains(&new_interval.start));
 
-            // Remap the region in the child to the new position in the mem file.
-            self.shm_file
-                .mmap_into_plugin(thread, &new_interval, region.prot);
+                // Ensure there's space allocated at the new location in the memory file.
+                self.shm_file.alloc(&new_interval);
 
-            // Update the region metadata.
-            region.shadow_base = new_shadow_base;
+                // Remap the region in the child to the new position in the mem file.
+                self.shm_file
+                    .mmap_into_plugin(thread, &new_interval, region.prot);
+
+                // Map the new location into Shadow.
+                let new_shadow_base = self.shm_file.mmap_into_shadow(&new_interval, region.prot);
+
+                // Copy the data.
+                unsafe {
+                    libc::memcpy(
+                        new_shadow_base,
+                        region.shadow_base,
+                        std::cmp::min(old_size, new_size),
+                    )
+                };
+
+                // Unmap the old location from Shadow.
+                assert_eq!(unsafe { libc::munmap(region.shadow_base, old_size) }, 0);
+
+                // Update the region metadata.
+                region.shadow_base = new_shadow_base;
+
+                // Deallocate the old location.
+                self.shm_file.dealloc(&old_interval);
+            } else if new_size < old_size {
+                // Deallocate the part no longer in use.
+                self.shm_file.dealloc(&(new_interval.end..old_interval.end));
+
+                // Shrink Shadow's mapping.
+                assert_ne!(
+                    unsafe { libc::mremap(region.shadow_base, old_size, new_size, 0) },
+                    libc::MAP_FAILED
+                );
+            } else if new_size > old_size {
+                // Allocate space in the file.
+                self.shm_file.alloc(&new_interval);
+
+                // Grow Shadow's mapping into the memory file, allowing the mapping to move if
+                // needed.
+                region.shadow_base = unsafe {
+                    libc::mremap(region.shadow_base, old_size, new_size, libc::MREMAP_MAYMOVE)
+                };
+                assert_ne!(region.shadow_base, libc::MAP_FAILED);
+            }
         }
-
-        // Insert the new mapping, processing any other regions that get clobbered.
+        // Insert the new mapping. There shouldn't be any mutations since we already cleared
+        // this interval, above.
         let mutations = self.regions.insert(new_interval, region);
-        self.handle_mutations(mutations);
+        assert_eq!(mutations.len(), 0);
 
         Ok(PluginPtr::from(new_address))
     }
@@ -875,7 +910,7 @@ impl MemoryManager {
     fn extend_stack(&mut self, thread: &impl Thread, src: usize) {
         let start = page_of(src);
         let stack_extension = start..self.stack_copied.start;
-        //println!("jdn extending stack from {:x} to {:x}", stack_copied.start, start);
+        //println!("extending stack from {:x} to {:x}", stack_copied.start, start);
 
         let (mapped_stack_interval, mapped_stack_region) =
             self.regions.get(self.stack_copied.start - 1).unwrap();

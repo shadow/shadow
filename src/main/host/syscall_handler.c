@@ -141,14 +141,14 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
     sys->perfSecondsCurrent += g_timer_elapsed(sys->perfTimer, NULL);
 
     debug("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
-          "code=%d in %f seconds",
+          "code=%d(%s) in %f seconds",
           process_getPluginName(sys->process), process_getProcessID(sys->process), number, name,
           _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "",
           scr->state == SYSCALL_DONE
               ? "DONE"
               : scr->state == SYSCALL_BLOCK ? "BLOCK"
                                             : scr->state == SYSCALL_NATIVE ? "NATIVE" : "UNKNOWN",
-          (int)scr->retval.as_i64, sys->perfSecondsCurrent);
+          (int)scr->retval.as_i64, strerror(-scr->retval.as_i64), sys->perfSecondsCurrent);
 
     if (scr->state != SYSCALL_BLOCK) {
         /* The syscall completed, count it and the cumulative time to complete it. */
