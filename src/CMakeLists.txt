@@ -33,6 +33,7 @@ endif(SHADOW_TEST STREQUAL ON)
 # A fake target that depends on all bindings.
 add_custom_target(bindings)
 add_dependencies(bindings bindings_main)
+add_dependencies(bindings bindings_logger)
 
 # Only re-generate bindings when explicititly requested, so that
 # our CI doesn't need to install the heavy bindgen dependency.

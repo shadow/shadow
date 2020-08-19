@@ -57,7 +57,9 @@ jobs:
         run: |
           mv src/main/bindings/rust/wrapper.rs /tmp/main-bindings-rust.rs
           mv src/main/bindings/c/bindings.h /tmp/main-bindings-c.h
+          mv src/support/logger/rust_bindings/src/bindings.rs /tmp/support-logger-rust.h
           mkdir build
           (cd build && cmake --target bindings .. && make bindings)
           diff src/main/bindings/rust/wrapper.rs /tmp/main-bindings-rust.rs
           diff src/main/bindings/c/bindings.h /tmp/main-bindings-c.h
+          diff src/support/logger/rust_bindings/src/bindings.rs /tmp/support-logger-rust.h

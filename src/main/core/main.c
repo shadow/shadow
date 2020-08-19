@@ -23,6 +23,7 @@
 #include "igraph_version.h"
 #include "shd-config.h"
 #include "support/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 
 static Master* shadowMaster;
 
@@ -225,6 +226,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     ShadowLogger* shadowLogger =
         shadow_logger_new(options_getLogLevel(options));
     shadow_logger_setDefault(shadowLogger);
+    rust_logging_init();
 
     /* disable buffering during startup so that we see every message immediately in the terminal */
     shadow_logger_setEnableBuffering(shadowLogger, FALSE);
