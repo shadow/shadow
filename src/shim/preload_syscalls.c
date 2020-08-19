@@ -240,7 +240,7 @@ NOREMAP(int, getpeername, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
 // TODO the following (getrandom) causes all shadow tests to fail with timeout in centos 8
 // I believe centos 8 contains a version of libc that contains a getrandom wrapper, whereas
 // it was previously only available through the syscall() function.
-//NOREMAP(ssize_t, getrandom, (void* a, size_t b, unsigned int c), a, b, c);
+NOREMAP(ssize_t, getrandom, (void* a, size_t b, unsigned int c), a, b, c);
 NOREMAP(int, getsockname, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
 static REMAP(int, ioctl_explicit, ioctl, (int a, unsigned long b, char* c), a,b,c);
 NOREMAP(int, linkat, (int a, const char* b, int c, const char* d, int e), a, b, c, d, e);
