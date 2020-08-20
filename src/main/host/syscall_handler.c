@@ -242,6 +242,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(mkdirat);
         HANDLE(mknodat);
         HANDLE(mmap);
+#ifdef SYS_mmap2
+        HANDLE(mmap2);
+#endif
         HANDLE(mremap);
         HANDLE(munmap);
         HANDLE(nanosleep);

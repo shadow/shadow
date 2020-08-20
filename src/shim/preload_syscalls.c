@@ -247,6 +247,9 @@ NOREMAP(off_t, lseek, (int a, off_t b, int c), a, b, c);
 NOREMAP(int, mkdirat, (int a, const char* b, mode_t c), a, b, c);
 NOREMAP(int, mknodat, (int a, const char* b, mode_t c, dev_t d), a, b, c, d);
 NOREMAP(void*, mmap, (void* a, size_t b, int c, int d, int e, off_t f), a, b, c, d, e, f);
+#ifdef SYS_mmap2
+NOREMAP(void*, mmap2, (void* a, size_t b, int c, int d, int e, off_t f), a, b, c, d, e, f);
+#endif
 static REMAP(void*, mremap_explicit, mremap, (void* a, size_t b, size_t c, int d, void* e), a, b, c, d, e);
 NOREMAP(void*, munmap, (void* a, size_t b), a, b);
 NOREMAP(int, nanosleep, (const struct timespec* a, struct timespec* b), a,b);

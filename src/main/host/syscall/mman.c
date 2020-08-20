@@ -16,6 +16,7 @@
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
+#include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
@@ -138,27 +139,8 @@ static void _syscallhandler_closePluginFile(SysCallHandler* sys, int pluginFD) {
     }
 }
 
-///////////////////////////////////////////////////////////
-// System Calls
-///////////////////////////////////////////////////////////
-
-SysCallReturn syscallhandler_brk(SysCallHandler* sys,
-                                 const SysCallArgs* args) {
-    PluginPtr newBrk = args->args[0].as_ptr;
-
-    // Delegate to the memoryManager.
-    SysCallReg result = memorymanager_handleBrk(sys->memoryManager, sys->thread, newBrk);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
-}
-
-SysCallReturn syscallhandler_mmap(SysCallHandler* sys,
-                                  const SysCallArgs* args) {
-    PluginPtr addrPtr = args->args[0].as_ptr; // void*
-    size_t len = args->args[1].as_u64;
-    int prot = args->args[2].as_i64;
-    int flags = args->args[3].as_i64;
-    int fd = args->args[4].as_i64;
-    off_t offset = args->args[5].as_i64;
+static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr, size_t len,
+                                          int prot, int flags, int fd, int64_t offset) {
     debug("mmap called on fd %d for %zu bytes", fd, len);
 
     /* First check the input args to see if we can avoid doing the less
@@ -198,6 +180,41 @@ SysCallReturn syscallhandler_mmap(SysCallHandler* sys,
 
     /* Done! Return their result back to them. */
     return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+}
+
+///////////////////////////////////////////////////////////
+// System Calls
+///////////////////////////////////////////////////////////
+
+SysCallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
+    PluginPtr newBrk = args->args[0].as_ptr;
+
+    // Delegate to the memoryManager.
+    SysCallReg result = memorymanager_handleBrk(sys->memoryManager, sys->thread, newBrk);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+}
+
+SysCallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) {
+    PluginPtr addrPtr = args->args[0].as_ptr; // void*
+    size_t len = args->args[1].as_u64;
+    int prot = args->args[2].as_i64;
+    int flags = args->args[3].as_i64;
+    int fd = args->args[4].as_i64;
+    int64_t offset = args->args[5].as_i64;
+    return _syscallhandler_mmap(sys, addrPtr, len, prot, flags, fd, offset);
+}
+
+SysCallReturn syscallhandler_mmap2(SysCallHandler* sys, const SysCallArgs* args) {
+    PluginPtr addrPtr = args->args[0].as_ptr; // void*
+    size_t len = args->args[1].as_u64;
+    int prot = args->args[2].as_i64;
+    int flags = args->args[3].as_i64;
+    int fd = args->args[4].as_i64;
+    int64_t pgoffset = args->args[5].as_i64;
+
+    // As long as we're on a system where off_t is 64-bit, we can just remap to mmap.
+    utility_assert(sizeof(off_t) == sizeof(int64_t));
+    return _syscallhandler_mmap(sys, addrPtr, len, prot, flags, fd, 4096 * pgoffset);
 }
 
 SysCallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args) {

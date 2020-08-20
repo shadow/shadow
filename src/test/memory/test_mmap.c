@@ -8,6 +8,7 @@
 #include <glib.h>
 #include <stdio.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
 
 #include "test/test_glib_helpers.h"
 
@@ -38,7 +39,27 @@ static void _validate_shadow_access(unsigned char* buf, size_t size) {
     g_free(file_contents);
 }
 
-static void _test_mmap_file() {
+#ifdef SYS_mmap2
+static void* _mmap_using_mmap2(void* addr, size_t length, int prot, int flags, int fd,
+                               int64_t offset) {
+    return mmap2(addr, length, prot, flags, fd, offset / 4096);
+}
+#endif
+
+// Wrapper for type conversion of offset from int64_t to off_t.
+static void* _mmap_using_mmap(void* addr, size_t length, int prot, int flags, int fd,
+                              int64_t offset) {
+    return mmap(addr, length, prot, flags, fd, offset);
+}
+
+typedef struct {
+    void* (*mmap_fn)(void* addr, size_t length, int prot, int flags, int fd, int64_t offset);
+    off_t offset;
+} TestMmapFileData;
+
+static void _test_mmap_file(gconstpointer test_data_gcp) {
+    const TestMmapFileData* test_data = test_data_gcp;
+
     /* Get a file that we can mmap and write into. */
     FILE* temp = NULL;
     assert_nonnull_errno(temp = tmpfile());
@@ -48,7 +69,7 @@ static void _test_mmap_file() {
 
     /* Make sure there is enough space to write after the mmap. */
     {
-        int rv = posix_fallocate(tempFD, 0, MAPLEN);
+        int rv = posix_fallocate(tempFD, test_data->offset, MAPLEN);
         assert_true_errstring(rv == 0, strerror(rv));
     }
 
@@ -57,16 +78,16 @@ static void _test_mmap_file() {
     assert_nonneg_errno(snprintf(msg, MAPLEN, "Hello world!"));
 
     /* Do the mmap and write the message into the resulting mem location. */
-    void* mapbuf =
-        mmap(NULL, MAPLEN, PROT_READ | PROT_WRITE, MAP_SHARED, tempFD, 0);
-    g_assert_cmpint((long)mapbuf, !=, -1);
+    void* mapbuf = test_data->mmap_fn(
+        NULL, MAPLEN, PROT_READ | PROT_WRITE, MAP_SHARED, tempFD, test_data->offset);
+    g_assert_cmpint((long)mapbuf, !=, (long)MAP_FAILED);
 
     assert_nonneg_errno(snprintf(mapbuf, MAPLEN, "%s", msg));
 
     assert_nonneg_errno(munmap(mapbuf, MAPLEN));
 
     /* Read the file and make sure the same message is there. */
-    assert_nonneg_errno(fseek(temp, 0, SEEK_SET));
+    assert_nonneg_errno(fseek(temp, test_data->offset, SEEK_SET));
 
     char rdbuf[MAPLEN] = {0};
     g_assert_cmpint(fread(rdbuf, 1, MAPLEN, temp), >, 0);
@@ -179,7 +200,32 @@ static void _test_mremap_clobber() {
 
 int main(int argc, char* argv[]) {
     g_test_init(&argc, &argv, NULL);
-    g_test_add_func("/memory/mmap_file", _test_mmap_file);
+    {
+        TestMmapFileData data = {.mmap_fn = _mmap_using_mmap, .offset = 0};
+        g_test_add_data_func("/memory/mmap_file_low", &data, _test_mmap_file);
+    }
+    {
+        TestMmapFileData data = {.mmap_fn = _mmap_using_mmap, .offset = ((off_t)1) << 20};
+        g_test_add_data_func("/memory/mmap_file_high32", &data, _test_mmap_file);
+    }
+    if (sizeof(off_t) == sizeof(int64_t)) {
+        TestMmapFileData data = {
+            .mmap_fn = _mmap_using_mmap,
+            // mmap2(2) says highest supported file size is 2**44. Use an offset a bit smaller than
+            // that. On a 64-bit system, presumably mmap can handle higher than that, but it's
+            // unclear what the limit is. Assume it can handle at least as much as mmap2.
+            .offset = ((off_t)1) << 43};
+        g_test_add_data_func("/memory/mmap_file_high64", &data, _test_mmap_file);
+    }
+#ifdef SYS_mmap2
+    {
+        TestMmapFileData data = {.mmap_fn = _mmap_using_mmap2,
+                                 // mmap2(2) says highest supported file size is 2**44. Use an
+                                 // offset a bit smaller than that.
+                                 .offset = ((off_t)1) << 43};
+        g_test_add_data_func("/memory/mmap2_file_high64", &data, _test_mmap_file);
+    }
+#endif
     g_test_add_func("/memory/mmap_anon", _test_mmap_anon);
     g_test_add_func("/memory/mremap_clobber", _test_mremap_clobber);
     g_test_run();
