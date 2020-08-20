@@ -75,8 +75,7 @@ static TIDBlkPair _shim_tidBlkTreeGet(pthread_t tid) {
     return tid_fd;
 }
 
-__attribute__((constructor(SHIM_CONSTRUCTOR_PRIORITY))) static void
-_shim_load() {
+static void _shim_load() {
     shim_disableInterposition();
 
     // We ultimately want to log to SHADOW_LOG_FILE, but first we redirect to
@@ -149,6 +148,22 @@ _shim_load() {
 
     debug("starting main");
     shim_enableInterposition();
+}
+
+// This function should be called before any wrapped syscall. We also use the
+// constructor attribute to be completely sure that it's called before main.
+__attribute__((constructor)) void shim_ensure_init() {
+    static __thread bool in_init = false;
+    if (in_init) {
+        // Avoid deadlock when _shim_load's syscalls caused this function to be
+        // called recursively.  In the uninitialized state,
+        // `shim_interpositionEnabled` returns false, allowing _shim_load's
+        // syscalls to execute natively.
+        return;
+    }
+    in_init = true;
+    static pthread_once_t _shim_init_once = PTHREAD_ONCE_INIT;
+    pthread_once(&_shim_init_once, _shim_load);
 }
 
 __attribute__((destructor))
