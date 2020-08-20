@@ -50,6 +50,12 @@ int thread_getReadableString(Thread* thread, PluginPtr plugin_src, size_t n,
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n);
 
+// Returns a writeable pointer corresponding to the specified src. Use when
+// the data at the given address needs to be both read and written.
+//
+// The returned pointer is automatically invalidated when the plugin runs again.
+void* thread_getMutablePtr(Thread* thread, PluginPtr plugin_src, size_t n);
+
 // Flushes and invalidates all previously returned readable/writeable plugin
 // pointers, as if returning control to the plugin. This can be useful in
 // conjunction with `thread_nativeSyscall` operations that touch memory.

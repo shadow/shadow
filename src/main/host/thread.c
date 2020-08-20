@@ -116,6 +116,12 @@ void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     return thread->methods.getWriteablePtr(thread, plugin_src, n);
 }
 
+void* thread_getMutablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->methods.getMutablePtr);
+    return thread->methods.getMutablePtr(thread, plugin_src, n);
+}
+
 void thread_flushPtrs(Thread* thread) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.flushPtrs);

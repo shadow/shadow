@@ -723,8 +723,6 @@ void threadptrace_releaseClonedPtr(Thread* base, void* p) { g_free(p); }
 
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                         size_t n) {
-    // TODO: Use mmap instead.
-
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     void* rv = g_new(void, n);
     g_array_append_val(thread->readPointers, rv);
@@ -775,10 +773,17 @@ int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
 
 void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
                                    size_t n) {
-    // TODO: Use mmap instead.
-
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     void* rv = g_new(void, n);
+    PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
+    g_array_append_val(thread->pendingWrites, pendingWrite);
+    return rv;
+}
+
+void* threadptrace_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+    void* rv = g_new(void, n);
+    _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
     PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
     g_array_append_val(thread->pendingWrites, pendingWrite);
     return rv;
@@ -878,6 +883,7 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
                                   .getReadablePtr = threadptrace_getReadablePtr,
                                   .getReadableString = threadptrace_getReadableString,
                                   .getWriteablePtr = threadptrace_getWriteablePtr,
+                                  .getMutablePtr = threadptrace_getMutablePtr,
                                   .flushPtrs = threadptrace_flushPtrs,
                                   .nativeSyscall = threadptrace_nativeSyscall,
                               }),
