@@ -98,18 +98,6 @@ static int _syscallhandler_validateTCPSocketHelper(SysCallHandler* sys,
     return 0;
 }
 
-static size_t _syscallhandler_getSocklenHelper(SysCallHandler* sys,
-                                               PluginPtr lenPtr) {
-    /* Read the len first before writing the results. We use clone here
-     * because reading the len PluginPtr here and then trying to write it
-     * later will cause crashes in the thread backend. */
-    socklen_t* len_cloned =
-        thread_newClonedPtr(sys->thread, lenPtr, sizeof(*len_cloned));
-    size_t sizeAvail = *len_cloned;
-    thread_releaseClonedPtr(sys->thread, len_cloned);
-    return sizeAvail;
-}
-
 static SysCallReturn
 _syscallhandler_getnameHelper(SysCallHandler* sys,
                               struct sockaddr_in* inet_addr, PluginPtr addrPtr,
@@ -119,11 +107,11 @@ _syscallhandler_getnameHelper(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    /* Get the len via clone, so we can write to addrlenPtr too. */
-    size_t sizeAvail = _syscallhandler_getSocklenHelper(sys, addrlenPtr);
+    socklen_t* addrlen = thread_getMutablePtr(sys->thread, addrlenPtr, sizeof(*addrlen));
 
     /* The result is truncated if they didn't give us enough space. */
-    size_t retSize = MIN(sizeAvail, sizeof(*inet_addr));
+    size_t retSize = MIN(*addrlen, sizeof(*inet_addr));
+    *addrlen = (socklen_t)sizeof(*inet_addr);
 
     if (retSize > 0) {
         /* Return the results */
@@ -131,10 +119,6 @@ _syscallhandler_getnameHelper(SysCallHandler* sys,
             memorymanager_getWriteablePtr(sys->memoryManager, sys->thread, addrPtr, retSize);
         memcpy(addr, inet_addr, retSize);
     }
-
-    socklen_t* addrlen = memorymanager_getWriteablePtr(
-        sys->memoryManager, sys->thread, addrlenPtr, sizeof(*addrlen));
-    *addrlen = (socklen_t)sizeof(*inet_addr);
 
     return (SysCallReturn){.state = SYSCALL_DONE};
 }
@@ -275,21 +259,19 @@ static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp,
     switch (optname) {
         case TCP_INFO: {
             /* Get the len via clone, so we can write to optlenPtr too. */
-            size_t sizeAvail = _syscallhandler_getSocklenHelper(sys, optlenPtr);
+            socklen_t* optlen = thread_getMutablePtr(sys->thread, optlenPtr, sizeof(*optlen));
             size_t sizeNeeded = sizeof(struct tcp_info);
 
-            if (sizeAvail < sizeNeeded) {
-                info("Unable to store tcp info in %zu bytes.", sizeAvail);
+            if (*optlen < sizeNeeded) {
+                info("Unable to store tcp info in %zu bytes.", (size_t)*optlen);
                 return -EINVAL;
             }
 
             /* Write the tcp info and its size. */
+            *optlen = sizeNeeded;
             struct tcp_info* info =
                 memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, optvalPtr, sizeNeeded);
             tcp_getInfo(tcp, info);
-            socklen_t* infolen = memorymanager_getWriteablePtr(sys->memoryManager,
-                sys->thread, optlenPtr, sizeof(*infolen));
-            *infolen = sizeNeeded;
 
             return 0;
         }
@@ -306,12 +288,13 @@ static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, Socket* sock,
                                               int optname, PluginPtr optvalPtr,
                                               PluginPtr optlenPtr) {
     /* Get the len via clone, so we can write to optlenPtr too. */
-    size_t sizeAvail = _syscallhandler_getSocklenHelper(sys, optlenPtr);
+    const socklen_t* optlen =
+        memorymanager_getReadablePtr(sys->memoryManager, sys->thread, optlenPtr, sizeof(*optlen));
 
     /* All options we currently support are integers. When adding support for
      * more options, make sure to check length requirements. */
-    if (sizeAvail < sizeof(int)) {
-        info("Unable to store option in %zu bytes.", sizeAvail);
+    if (*optlen < sizeof(int)) {
+        info("Unable to store option in %zu bytes.", (size_t)*optlen);
         return -EINVAL;
     }
 
