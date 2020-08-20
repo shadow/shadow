@@ -107,7 +107,7 @@ _syscallhandler_getnameHelper(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    socklen_t* addrlen = thread_getMutablePtr(sys->thread, addrlenPtr, sizeof(*addrlen));
+    socklen_t* addrlen = memorymanager_getMutablePtr(sys->memoryManager, sys->thread, addrlenPtr, sizeof(*addrlen));
 
     /* The result is truncated if they didn't give us enough space. */
     size_t retSize = MIN(*addrlen, sizeof(*inet_addr));
@@ -259,7 +259,7 @@ static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp,
     switch (optname) {
         case TCP_INFO: {
             /* Get the len via clone, so we can write to optlenPtr too. */
-            socklen_t* optlen = thread_getMutablePtr(sys->thread, optlenPtr, sizeof(*optlen));
+            socklen_t* optlen = memorymanager_getMutablePtr(sys->memoryManager, sys->thread, optlenPtr, sizeof(*optlen));
             size_t sizeNeeded = sizeof(struct tcp_info);
 
             if (*optlen < sizeNeeded) {

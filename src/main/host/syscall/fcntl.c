@@ -62,7 +62,8 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
         case F_OFD_GETLK:
 #endif
         {
-            struct flock* flk = thread_getMutablePtr(sys->thread, argReg.as_ptr, sizeof(*flk));
+            struct flock* flk = memorymanager_getMutablePtr(
+                sys->memoryManager, sys->thread, argReg.as_ptr, sizeof(*flk));
             result = file_fcntl(file, command, (void*)flk);
             break;
         }
