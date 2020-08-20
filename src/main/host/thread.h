@@ -61,15 +61,6 @@ void* thread_getMutablePtr(Thread* thread, PluginPtr plugin_src, size_t n);
 // conjunction with `thread_nativeSyscall` operations that touch memory.
 void thread_flushPtrs(Thread* thread);
 
-// Clone the data at plugin_src into shadow's address space.
-//
-// The caller has sole ownership of the returned pointer. It must be released
-// using thread_releaseClonedPtr.
-void* thread_newClonedPtr(Thread* thread, PluginPtr plugin_src, size_t n);
-
-// Release a pointer returned by thread_clonePluginPtr.
-void thread_releaseClonedPtr(Thread* thread, void* p);
-
 // Make the requested syscall from within the plugin. For now, does *not* flush
 // or invalidate pointers, but we may need to revisit this to support some
 // use-cases.

@@ -712,15 +712,6 @@ static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
     return;
 }
 
-void* threadptrace_newClonedPtr(Thread* base, PluginPtr plugin_src, size_t n) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-    void* rv = g_new(void, n);
-    _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
-    return rv;
-}
-
-void threadptrace_releaseClonedPtr(Thread* base, void* p) { g_free(p); }
-
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                         size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
@@ -878,8 +869,6 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
                                   .getReturnCode = threadptrace_getReturnCode,
                                   .isRunning = threadptrace_isRunning,
                                   .free = threadptrace_free,
-                                  .newClonedPtr = threadptrace_newClonedPtr,
-                                  .releaseClonedPtr = threadptrace_releaseClonedPtr,
                                   .getReadablePtr = threadptrace_getReadablePtr,
                                   .getReadableString = threadptrace_getReadableString,
                                   .getWriteablePtr = threadptrace_getWriteablePtr,

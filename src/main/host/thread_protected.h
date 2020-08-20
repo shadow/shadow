@@ -22,8 +22,6 @@ typedef struct _ThreadMethods {
     int (*getReturnCode)(Thread* thread);
     bool (*isRunning)(Thread* thread);
     void (*free)(Thread* thread);
-    void* (*newClonedPtr)(Thread* base, PluginPtr plugin_src, size_t n);
-    void (*releaseClonedPtr)(Thread* base, void* p);
     const void* (*getReadablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
     int (*getReadableString)(Thread* thread, PluginPtr plugin_src, size_t n, const char** str,
                              size_t* strlen);
