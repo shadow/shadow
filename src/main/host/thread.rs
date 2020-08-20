@@ -29,6 +29,16 @@ pub trait Thread {
         n: usize,
     ) -> Result<*mut ::std::os::raw::c_void, i32>;
 
+    /// Get a mutable pointer to the plugin's memory.
+    /// SAFETY
+    /// * The specified memory region must be valid and writeable.
+    /// * Returned pointer mustn't be accessed after Thread runs again or flush is called.
+    unsafe fn get_mutable_ptr(
+        &self,
+        plugin_src: PluginPtr,
+        n: usize,
+    ) -> Result<*mut ::std::os::raw::c_void, i32>;
+
     fn get_process_id(&self) -> u32;
     fn get_host_id(&self) -> u32;
     fn get_system_pid(&self) -> libc::pid_t;
@@ -204,6 +214,18 @@ impl Thread for CThread {
         n: usize,
     ) -> Result<*mut ::std::os::raw::c_void, i32> {
         Ok(c::thread_getWriteablePtr(
+            self.cthread,
+            plugin_src.into(),
+            n as u64,
+        ))
+    }
+
+    unsafe fn get_mutable_ptr(
+        &self,
+        plugin_src: PluginPtr,
+        n: usize,
+    ) -> Result<*mut ::std::os::raw::c_void, i32> {
+        Ok(c::thread_getMutablePtr(
             self.cthread,
             plugin_src.into(),
             n as u64,

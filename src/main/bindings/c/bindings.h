@@ -33,6 +33,12 @@ void bytequeue_push(ByteQueue *bq, const unsigned char *src, size_t len);
 
 void memorymanager_free(MemoryManager *mm);
 
+// Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
+void *memorymanager_getMutablePtr(MemoryManager *memory_manager,
+                                  Thread *thread,
+                                  PluginPtr plugin_src,
+                                  uintptr_t n);
+
 // Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
 const void *memorymanager_getReadablePtr(MemoryManager *memory_manager,
                                          Thread *thread,
