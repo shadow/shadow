@@ -35,44 +35,30 @@ jobs:
       - name: Rustfmt check
         run: cd src && cargo fmt -- --check
 
-  lint-cbindgen:
+  lint-bindings:
     runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
+    env:
+      CONTAINER: ubuntu:20.04
+      CC: clang
+      CXX: clang++
+      BUILDTYPE: release
     steps:
-      - uses: actions/checkout@master
-      - name: Install Rust
+      - name: Install git
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git
+      - uses: actions/checkout@master
+      - name: Install dependencies
+        run: |
+          ci/container_scripts/install_deps.sh
+          ci/container_scripts/install_extra_deps.sh
           echo "::add-path::$HOME/.cargo/bin"
-      - name: Install Cbindgen
-        run: cargo install --force cbindgen
-      - name: Cbindgen check
+      - name: Install Rust packages
+        run: cargo install --force cbindgen bindgen
+      - name: Check bindings
         run: |
-          cd src/main
-          cbindgen --config cbindgen.toml --output /tmp/new-bindings.h
-          diff bindings.h /tmp/new-bindings.h
-
-  lint-bindgen:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@master
-
-        # We probably don't need *all* of these, but we do need
-        # headers for any libraries that the wrapped headers depend on.
-        # Just install all the libraries we depend on for now.
-      - name: Install deps
-        env:
-          CONTAINER: "ubuntu:18.04"
-          CC: clang
-          BUILDTYPE: RELEASE
-        run: sudo -E ci/container_scripts/install_deps.sh && sudo -E ci/container_scripts/install_extra_deps.sh
-
-      - name: Add Rust to path
-        run: echo "::add-path::$HOME/.cargo/bin"
-      - name: Install bindgen
-        run: cargo install --force bindgen
-      - name: bindgen check
-        run: |
-          cp src/main/cbindings/wrapper.rs orig.rs
           mkdir build
-          (cd build && cmake .. && make bindgen_main)
-          diff orig.rs src/main/cbindings/wrapper.rs
+          (cd build && cmake --target bindings .. && make bindings)
+          git diff --exit-code

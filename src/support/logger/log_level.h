@@ -15,6 +15,7 @@ enum _LogLevel {
     LOGLEVEL_MESSAGE,
     LOGLEVEL_INFO,
     LOGLEVEL_DEBUG,
+    LOGLEVEL_TRACE,
 };
 
 const char* loglevel_toStr(LogLevel level);

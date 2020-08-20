@@ -13,7 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "main/bindings.h"
+#include "main/bindings/c/bindings.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"

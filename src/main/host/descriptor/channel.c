@@ -10,7 +10,7 @@
 #include <netinet/in.h>
 #include <stddef.h>
 
-#include "main/bindings.h"
+#include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"

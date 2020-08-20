@@ -28,8 +28,8 @@ add_custom_command(OUTPUT wrapper.rs
     IMPLICIT_DEPENDS C wrapper.h)
 
 # A fake target that depends on the wrapper.
-add_custom_target(bindgen_main DEPENDS wrapper.rs)
+add_custom_target(bindings_main_rust DEPENDS wrapper.rs)
 
 # Only re-generate bindings when explicititly requested, so that
 # our CI doesn't need to install the heavy bindgen dependency.
-set_property(TARGET bindgen_main PROPERTY EXCLUDE_FROM_ALL true)
+set_property(TARGET bindings_main_rust PROPERTY EXCLUDE_FROM_ALL true)
