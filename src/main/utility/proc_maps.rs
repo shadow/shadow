@@ -2,6 +2,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::error::Error;
 use std::fmt::Display;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 /// Whether a region of memory is shared.
@@ -32,7 +33,7 @@ pub enum MappingPath {
     Vdso,
     Heap,
     OtherSpecial(String),
-    Path(String),
+    Path(PathBuf),
 }
 
 impl FromStr for MappingPath {
@@ -44,7 +45,7 @@ impl FromStr for MappingPath {
         }
 
         if s.starts_with("/") {
-            return Ok(MappingPath::Path(s.to_string()));
+            return Ok(MappingPath::Path(PathBuf::from(s)));
         }
         if let Some(caps) = SPECIAL_RE.captures(s) {
             let s = caps.get(1).unwrap().as_str();
@@ -222,7 +223,7 @@ mod tests {
                 device_major: 8,
                 device_minor: 2,
                 inode: 173521,
-                path: Some(MappingPath::Path("/usr/bin/dbus-daemon".to_string())),
+                path: Some(MappingPath::Path(PathBuf::from("/usr/bin/dbus-daemon"))),
                 deleted: false,
             }
         );
@@ -470,7 +471,7 @@ mod tests {
                     device_major: 8,
                     device_minor: 2,
                     inode: 173521,
-                    path: Some(MappingPath::Path("/usr/bin/dbus-daemon".to_string())),
+                    path: Some(MappingPath::Path(PathBuf::from("/usr/bin/dbus-daemon"))),
                     deleted: false,
                 },
                 Mapping {

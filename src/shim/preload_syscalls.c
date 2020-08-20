@@ -237,9 +237,6 @@ NOREMAP(int, futimesat, (int a, const char* b, const struct timeval c[2]), a, b,
 NOREMAP(ssize_t, getdents, (int a, void* b, size_t c), a, b, c);
 NOREMAP(ssize_t, getdents64, (int a, void* b, size_t c), a, b, c);
 NOREMAP(int, getpeername, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
-// TODO the following (getrandom) causes all shadow tests to fail with timeout in centos 8
-// I believe centos 8 contains a version of libc that contains a getrandom wrapper, whereas
-// it was previously only available through the syscall() function.
 NOREMAP(ssize_t, getrandom, (void* a, size_t b, unsigned int c), a, b, c);
 NOREMAP(int, getsockname, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
 static REMAP(int, ioctl_explicit, ioctl, (int a, unsigned long b, char* c), a,b,c);
@@ -250,6 +247,11 @@ NOREMAP(off_t, lseek, (int a, off_t b, int c), a, b, c);
 NOREMAP(int, mkdirat, (int a, const char* b, mode_t c), a, b, c);
 NOREMAP(int, mknodat, (int a, const char* b, mode_t c, dev_t d), a, b, c, d);
 NOREMAP(void*, mmap, (void* a, size_t b, int c, int d, int e, off_t f), a, b, c, d, e, f);
+#ifdef SYS_mmap2
+NOREMAP(void*, mmap2, (void* a, size_t b, int c, int d, int e, off_t f), a, b, c, d, e, f);
+#endif
+static REMAP(void*, mremap_explicit, mremap, (void* a, size_t b, size_t c, int d, void* e), a, b, c, d, e);
+NOREMAP(void*, munmap, (void* a, size_t b), a, b);
 NOREMAP(int, nanosleep, (const struct timespec* a, struct timespec* b), a,b);
 NOREMAP(int, newfstatat, (int a, const char* b, struct stat* c, int d), a, b, c, d);
 static REMAP(int, openat_explicit, openat, (int a, const char* b, int c, mode_t d), a,b,c,d);
@@ -342,4 +344,12 @@ int fcntl(int fd, int command, ...) {
     char* argp = va_arg(args, char*);
     va_end(args);
     return fcntl_explicit(fd, command, argp);
+}
+
+void* mremap(void* old_address, size_t old_size, size_t new_size, int flags, ...) {
+    va_list args;
+    va_start(args, flags);
+    void* new_address = va_arg(args, void*);
+    va_end(args);
+    return mremap_explicit(old_address, old_size, new_size, flags, new_address);
 }

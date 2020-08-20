@@ -241,11 +241,6 @@ impl<V: Clone> IntervalMap<V> {
         mutations
     }
 
-    // Returns the item at the given index.
-    fn item_at(&self, i: usize) -> (Interval, &V) {
-        (self.starts[i]..self.ends[i], &self.vals[i])
-    }
-
     // Returns the index of the interval containing `x`.
     fn get_index(&self, x: usize) -> Option<usize> {
         match self.starts.binary_search(&x) {
@@ -266,7 +261,15 @@ impl<V: Clone> IntervalMap<V> {
     pub fn get(&self, x: usize) -> Option<(Interval, &V)> {
         match self.get_index(x) {
             None => None,
-            Some(i) => Some(self.item_at(i)),
+            Some(i) => Some((self.starts[i]..self.ends[i], &self.vals[i])),
+        }
+    }
+
+    // Returns the entry of the interval containing `x`.
+    pub fn get_mut(&mut self, x: usize) -> Option<(Interval, &mut V)> {
+        match self.get_index(x) {
+            None => None,
+            Some(i) => Some((self.starts[i]..self.ends[i], &mut self.vals[i])),
         }
     }
 }

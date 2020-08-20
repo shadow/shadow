@@ -2,6 +2,8 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+// clang-format off
+
 
 #ifndef main_bindings_h
 #define main_bindings_h
@@ -47,6 +49,30 @@ void *memorymanager_getWriteablePtr(MemoryManager *memory_manager,
 SysCallReg memorymanager_handleBrk(MemoryManager *memory_manager,
                                    Thread *thread,
                                    PluginPtr plugin_src);
+
+// Fully handles the `mmap` syscall
+SysCallReg memorymanager_handleMmap(MemoryManager *memory_manager,
+                                    Thread *thread,
+                                    PluginPtr addr,
+                                    uintptr_t len,
+                                    int32_t prot,
+                                    int32_t flags,
+                                    int32_t fd,
+                                    int64_t offset);
+
+SysCallReg memorymanager_handleMremap(MemoryManager *memory_manager,
+                                      Thread *thread,
+                                      PluginPtr old_addr,
+                                      uintptr_t old_size,
+                                      uintptr_t new_size,
+                                      int32_t flags,
+                                      PluginPtr new_addr);
+
+// Fully handles the `munmap` syscall
+SysCallReg memorymanager_handleMunmap(MemoryManager *memory_manager,
+                                      Thread *thread,
+                                      PluginPtr addr,
+                                      uintptr_t len);
 
 MemoryManager *memorymanager_new(Thread *thread);
 
