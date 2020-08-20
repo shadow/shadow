@@ -45,8 +45,12 @@ jobs:
       CXX: clang++
       BUILDTYPE: release
     steps:
+      - name: Install git
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git
       - uses: actions/checkout@master
-      - name: Install deps
+      - name: Install dependencies
         run: |
           ci/container_scripts/install_deps.sh
           ci/container_scripts/install_extra_deps.sh
@@ -55,11 +59,6 @@ jobs:
         run: cargo install --force cbindgen bindgen
       - name: Check bindings
         run: |
-          mv src/main/bindings/rust/wrapper.rs /tmp/main-bindings-rust.rs
-          mv src/main/bindings/c/bindings.h /tmp/main-bindings-c.h
-          mv src/support/logger/rust_bindings/src/bindings.rs /tmp/support-logger-rust.h
           mkdir build
           (cd build && cmake --target bindings .. && make bindings)
-          diff src/main/bindings/rust/wrapper.rs /tmp/main-bindings-rust.rs
-          diff src/main/bindings/c/bindings.h /tmp/main-bindings-c.h
-          diff src/support/logger/rust_bindings/src/bindings.rs /tmp/support-logger-rust.h
+          git diff --exit-code
