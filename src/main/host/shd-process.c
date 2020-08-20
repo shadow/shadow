@@ -7806,6 +7806,15 @@ void process_emu_shadow_instrumentation_marker_set(Process* proc, int file_symbo
     return;
 }
 
+void process_emu_hj_interposer_test(Process* proc) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    printf("test\n");
+    message("process_emu_hj_interposer_test called\n");
+    printf("process_emu_hj_interposer start\n");
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return;
+}
+
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
     returntype process_emu_##functionname(Process* proc, ...) { \
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW); \

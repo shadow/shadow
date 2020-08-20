@@ -66,3 +66,4 @@ PRELOADDEF(return, int, shadow_assign_virtual_id, (void));
 
 // Memory Instrumentation Marker Functions
 PRELOADDEF(return, void, shadow_instrumentation_marker_set, (int file_symbol, int line_cnt), file_symbol, line_cnt);
+PRELOADDEF(return, void, hj_interposer_test, (void));

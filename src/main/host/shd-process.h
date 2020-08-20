@@ -449,6 +449,7 @@ int process_emu_shadow_assign_virtual_id(Process* proc);
 
 // Memory Instrumentation Marker Functions
 void process_emu_shadow_instrumentation_marker_set(Process* proc, int file_symbol, int line_cnt);
+void process_emu_hj_interposer_test();
 
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
   returntype process_emu_##functionname(Process* proc, ...);
