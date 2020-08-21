@@ -274,6 +274,12 @@ impl<V: Clone> IntervalMap<V> {
     }
 }
 
+impl<V: Clone> Default for IntervalMap<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -325,7 +331,7 @@ mod tests {
                 old_len_sum, new_len_sum
             ));
         }
-        if !(new_len_sum >= (interval.end - interval.start)) {
+        if new_len_sum < (interval.end - interval.start) {
             return Err(format!(
                 "length-sum {} is smaller than inserted interval length {}",
                 new_len_sum,
@@ -333,7 +339,7 @@ mod tests {
             ));
         }
         if new_len == 0 {
-            return Err(format!("new length is zero"));
+            return Err("new length is zero".to_string());
         }
 
         Ok(mutations)
@@ -357,7 +363,7 @@ mod tests {
                         .unwrap();
                     m_clone
                 });
-                if !res.is_ok() {
+                if res.is_err() {
                     println!(
                         "Failed inserting {} -> {} into {:?}",
                         start,
@@ -594,7 +600,7 @@ mod tests {
                     .unwrap();
                     m_clone
                 });
-                if !res.is_ok() {
+                if res.is_err() {
                     println!(
                         "Failed after inserting {} -> {} and clearing {} -> {} in {:?}",
                         insert_start,

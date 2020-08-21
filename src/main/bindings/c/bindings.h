@@ -31,21 +31,29 @@ size_t bytequeue_pop(ByteQueue *bq, unsigned char *dst, size_t len);
 
 void bytequeue_push(ByteQueue *bq, const unsigned char *src, size_t len);
 
+// # Safety
+// * `mm` must point to a valid object.
 void memorymanager_free(MemoryManager *mm);
 
 // Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
+// # Safety
+// * `mm` and `thread` must point to valid objects.
 void *memorymanager_getMutablePtr(MemoryManager *memory_manager,
                                   Thread *thread,
                                   PluginPtr plugin_src,
                                   uintptr_t n);
 
 // Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
+// # Safety
+// * `mm` and `thread` must point to valid objects.
 const void *memorymanager_getReadablePtr(MemoryManager *memory_manager,
                                          Thread *thread,
                                          PluginPtr plugin_src,
                                          uintptr_t n);
 
 // Get a writeagble pointer to the plugin's memory via mapping, or via the thread APIs.
+// # Safety
+// * `mm` and `thread` must point to valid objects.
 void *memorymanager_getWriteablePtr(MemoryManager *memory_manager,
                                     Thread *thread,
                                     PluginPtr plugin_src,
@@ -80,6 +88,8 @@ SysCallReg memorymanager_handleMunmap(MemoryManager *memory_manager,
                                       PluginPtr addr,
                                       uintptr_t len);
 
+// # Safety
+// * `thread` must point to a valid object.
 MemoryManager *memorymanager_new(Thread *thread);
 
 // Notifies memorymanager that plugin is about to call execve.

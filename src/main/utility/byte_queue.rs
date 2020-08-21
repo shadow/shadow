@@ -41,7 +41,7 @@ impl ByteQueue {
             tail_read_offset: 0,
             head_write_offset: 0,
             length: 0,
-            chunk_capacity: chunk_capacity,
+            chunk_capacity,
         }
     }
 

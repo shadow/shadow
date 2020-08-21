@@ -20,7 +20,7 @@ impl FromStr for Sharing {
         } else if s == "s" {
             Ok(Sharing::Shared)
         } else {
-            Err(format!("Bad sharing specifier {}", s))?
+            Err(format!("Bad sharing specifier {}", s).into())
         }
     }
 }
@@ -44,7 +44,7 @@ impl FromStr for MappingPath {
             static ref THREAD_STACK_RE: Regex = Regex::new(r"^stack:(\d+)$").unwrap();
         }
 
-        if s.starts_with("/") {
+        if s.starts_with('/') {
             return Ok(MappingPath::Path(PathBuf::from(s)));
         }
         if let Some(caps) = SPECIAL_RE.captures(s) {
@@ -68,7 +68,7 @@ impl FromStr for MappingPath {
                 _ => MappingPath::OtherSpecial(s.to_string()),
             });
         }
-        Err(format!("Couldn't parse '{}'", s))?
+        Err(format!("Couldn't parse '{}'", s).into())
     }
 }
 
@@ -127,7 +127,7 @@ impl FromStr for Mapping {
                 match s {
                     "r" => true,
                     "-" => false,
-                    _ => return Err(format!("Couldn't parse read bit {}", s))?,
+                    _ => return Err(format!("Couldn't parse read bit {}", s).into()),
                 }
             },
             write: {
@@ -135,7 +135,7 @@ impl FromStr for Mapping {
                 match s {
                     "w" => true,
                     "-" => false,
-                    _ => return Err(format!("Couldn't parse write bit {}", s))?,
+                    _ => return Err(format!("Couldn't parse write bit {}", s).into()),
                 }
             },
             execute: {
@@ -143,7 +143,7 @@ impl FromStr for Mapping {
                 match s {
                     "x" => true,
                     "-" => false,
-                    _ => return Err(format!("Couldn't parse execute bit {}", s))?,
+                    _ => return Err(format!("Couldn't parse execute bit {}", s).into()),
                 }
             },
             sharing: caps.get(6).unwrap().as_str().parse::<Sharing>()?,
@@ -174,7 +174,7 @@ impl FromStr for Mapping {
                 match s {
                     "" => false,
                     "(deleted)" => true,
-                    _ => return Err(format!("Couldn't parse trailing field '{}'", s))?,
+                    _ => return Err(format!("Couldn't parse trailing field '{}'", s).into()),
                 }
             },
         })
@@ -501,6 +501,6 @@ mod tests {
         // that it parses and is non-empty.
         let pid = unsafe { libc::getpid() };
         let mappings = mappings_for_pid(pid).unwrap();
-        assert!(mappings.len() > 0);
+        assert!(!mappings.is_empty());
     }
 }
