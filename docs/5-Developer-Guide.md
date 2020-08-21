@@ -1,3 +1,18 @@
+## Building the C-Rust bindings
+
+When required, you can rebuild all of the C-Rust bindings by running:
+
+```bash
+cd build && cmake --target bindings .. && make bindings
+```
+
+You may need to install bindgen, cbindgen, and clang:
+
+```bash
+apt install -y clang
+cargo install --force cbindgen bindgen
+```
+
 ## Debugging
 
 ### Debugging Shadow using GDB
@@ -146,4 +161,3 @@ fi
 ```
 
 If you find non-deterministic behavior in your Shadow experiment, please consider helping to diagnose the problem by opening a [new issue](https://github.com/shadow/shadow/issues/new).
-
