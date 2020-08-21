@@ -38,25 +38,23 @@ jobs:
   lint-bindings:
     runs-on: ubuntu-latest
     container:
-      image: ubuntu:20.04
+      image: ubuntu:20.10
     env:
       CONTAINER: ubuntu:20.04
       CC: clang
       CXX: clang++
       BUILDTYPE: release
     steps:
-      - name: Install git
+      - name: Install git, bindgen, and cbindgen
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y git
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git bindgen cbindgen
       - uses: actions/checkout@master
       - name: Install dependencies
         run: |
           ci/container_scripts/install_deps.sh
           ci/container_scripts/install_extra_deps.sh
           echo "::add-path::$HOME/.cargo/bin"
-      - name: Install Rust packages
-        run: cargo install --force cbindgen bindgen
       - name: Check bindings
         run: |
           mkdir build
