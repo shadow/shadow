@@ -197,13 +197,13 @@ fn get_regions(pid: libc::pid_t) -> IntervalMap<Region> {
     for mapping in proc_maps::mappings_for_pid(pid).unwrap() {
         let mut prot = 0;
         if mapping.read {
-            prot = prot | libc::PROT_READ;
+            prot |= libc::PROT_READ;
         }
         if mapping.write {
-            prot = prot | libc::PROT_WRITE;
+            prot |= libc::PROT_WRITE;
         }
         if mapping.execute {
-            prot = prot | libc::PROT_EXEC;
+            prot |= libc::PROT_EXEC;
         }
         let mutations = regions.insert(
             mapping.begin..mapping.end,
@@ -357,7 +357,7 @@ impl MemoryManager {
             let path_buf: &mut [u8] =
                 unsafe { std::slice::from_raw_parts_mut(path_buf_raw as *mut u8, path_buf_len) };
             path_buf[..shm_path.len()].copy_from_slice(shm_path.as_bytes());
-            path_buf[shm_path.len()] = '\0' as u8;
+            path_buf[shm_path.len()] = b'\0';
             thread.flush();
             let shm_plugin_fd = thread
                 .native_open(path_buf_plugin_ptr, libc::O_RDWR, 0)
@@ -639,7 +639,7 @@ impl MemoryManager {
         {
             // There shouldn't be any mutations here; we already cleared a hole above.
             let mutations = self.regions.insert(interval, region);
-            assert!(mutations.len() == 0);
+            assert!(mutations.is_empty());
         }
 
         Ok(result)
@@ -784,7 +784,7 @@ impl MemoryManager {
         let mutations = self.regions.insert(new_interval, region);
         assert_eq!(mutations.len(), 0);
 
-        Ok(PluginPtr::from(new_address))
+        Ok(new_address)
     }
 
     /// Execute the requested `brk` and update our mappings accordingly. May invalidate outstanding
@@ -946,7 +946,7 @@ impl MemoryManager {
         }
 
         let src = usize::from(src);
-        let opt_interval_and_region = self.regions.get(src.into());
+        let opt_interval_and_region = self.regions.get(src);
         if opt_interval_and_region.is_none() {
             println!("Warning: src {:x} isn't in any mapped region", src);
             return None;

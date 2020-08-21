@@ -1,7 +1,7 @@
 use super::syscall_types::{PluginPtr, SysCallReg};
 use crate::cbindings as c;
 use crate::utility::syscall;
-use libc;
+
 
 pub trait Thread {
     /// Have the plugin thread natively execute the given syscall.
