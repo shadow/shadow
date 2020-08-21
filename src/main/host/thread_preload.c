@@ -382,15 +382,11 @@ bool threadpreload_isRunning(Thread* base) {
  * Helper function, issues a clone/read request to the plugin.
  * The returned ShMemBlock is owned by the caller and needs to be freed.
  */
-static ShMemBlock* _threadpreload_readPtrImpl(ThreadPreload* thread,
-                                              PluginPtr plugin_src, size_t n,
-                                              bool is_string) {
-
+static ShMemBlock _threadpreload_readPtrImpl(ThreadPreload* thread, PluginPtr plugin_src, size_t n,
+                                             bool is_string) {
     // Allocate a block for the clone
-    ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
-    *blk = shmemallocator_globalAlloc(n);
-
-    utility_assert(blk->p && blk->nbytes == n);
+    ShMemBlock blk = shmemallocator_globalAlloc(n);
+    utility_assert(blk.p && blk.nbytes == n);
 
     ShimEvent req = {
         .event_id = SHD_SHIM_EVENT_CLONE_REQ,
@@ -399,7 +395,7 @@ static ShMemBlock* _threadpreload_readPtrImpl(ThreadPreload* thread,
     ShimEvent resp = {0};
 
     req.event_id = is_string ? SHD_SHIM_EVENT_CLONE_STRING_REQ : SHD_SHIM_EVENT_CLONE_REQ;
-    req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(blk);
+    req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(&blk);
     req.event_data.shmem_blk.plugin_ptr = plugin_src;
     req.event_data.shmem_blk.n = n;
 
@@ -411,28 +407,12 @@ static ShMemBlock* _threadpreload_readPtrImpl(ThreadPreload* thread,
     return blk;
 }
 
-void* threadpreload_newClonedPtr(Thread* base, PluginPtr plugin_src, size_t n) {
-    ThreadPreload* thread = _threadToThreadPreload(base);
-    ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n, false);
-    g_hash_table_insert(thread->ptr_to_block, &blk->p, blk);
-    return blk->p;
-}
-
-void threadpreload_releaseClonedPtr(Thread* base, void* p) {
-    ThreadPreload* thread = _threadToThreadPreload(base);
-
-    ShMemBlock* blk = g_hash_table_lookup(thread->ptr_to_block, &p);
-    utility_assert(blk != NULL);
-    g_hash_table_remove(thread->ptr_to_block, &p);
-    shmemallocator_globalFree(blk);
-    free(blk);
-}
-
 const void* threadpreload_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                          size_t n) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
-    ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n, false);
+    ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
+    *blk = _threadpreload_readPtrImpl(thread, plugin_src, n, false);
 
     GList* new_head = g_list_append(thread->read_list, blk);
     utility_assert(new_head);
@@ -447,7 +427,8 @@ int threadpreload_getReadableString(Thread* base, PluginPtr plugin_src, size_t n
                              const char** str_out, size_t* strlen_out) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
-    ShMemBlock* blk = _threadpreload_readPtrImpl(thread, plugin_src, n, true);
+    ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
+    *blk = _threadpreload_readPtrImpl(thread, plugin_src, n, true);
 
     const char* str = blk->p;
     size_t strlen = strnlen(str, n);
@@ -478,6 +459,28 @@ void* threadpreload_getWriteablePtr(Thread* base, PluginPtr plugin_src,
     ShMemWriteBlock* write_blk = calloc(1, sizeof(ShMemWriteBlock));
     utility_assert(write_blk);
     write_blk->blk = shmemallocator_globalAlloc(n);
+    write_blk->plugin_ptr = plugin_src;
+    write_blk->n = n;
+
+    utility_assert(write_blk->blk.p && write_blk->blk.nbytes == n);
+
+    GList* new_head = g_list_append(thread->write_list, write_blk);
+    utility_assert(new_head);
+    if (!thread->write_list) {
+        thread->write_list = new_head;
+    }
+
+    return write_blk->blk.p;
+}
+
+void* threadpreload_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
+
+    // Allocate a block for eventual write
+    ShMemWriteBlock* write_blk = calloc(1, sizeof(ShMemWriteBlock));
+    utility_assert(write_blk);
+    // Use a block initialized with the current contents of the memory.
+    write_blk->blk = _threadpreload_readPtrImpl(thread, plugin_src, n, false);
     write_blk->plugin_ptr = plugin_src;
     write_blk->n = n;
 
@@ -525,11 +528,10 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                                   .getReturnCode = threadpreload_getReturnCode,
                                   .isRunning = threadpreload_isRunning,
                                   .free = threadpreload_free,
-                                  .newClonedPtr = threadpreload_newClonedPtr,
-                                  .releaseClonedPtr = threadpreload_releaseClonedPtr,
                                   .getReadablePtr = threadpreload_getReadablePtr,
                                   .getReadableString = threadpreload_getReadableString,
                                   .getWriteablePtr = threadpreload_getWriteablePtr,
+                                  .getMutablePtr = threadpreload_getMutablePtr,
                                   .flushPtrs = threadpreload_flushPtrs,
                                   .nativeSyscall = threadpreload_nativeSyscall,
                               }),

@@ -239,17 +239,14 @@ extern "C" {
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
-    pub fn thread_flushPtrs(thread: *mut Thread);
-}
-extern "C" {
-    pub fn thread_newClonedPtr(
+    pub fn thread_getMutablePtr(
         thread: *mut Thread,
         plugin_src: PluginPtr,
         n: size_t,
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
-    pub fn thread_releaseClonedPtr(thread: *mut Thread, p: *mut ::std::os::raw::c_void);
+    pub fn thread_flushPtrs(thread: *mut Thread);
 }
 extern "C" {
     pub fn thread_nativeSyscall(

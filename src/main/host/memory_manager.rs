@@ -1030,6 +1030,28 @@ impl MemoryManager {
             Ok(p)
         }
     }
+
+    // Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
+    // Never returns NULL.
+    unsafe fn get_mutable_ptr(
+        &mut self,
+        thread: &impl Thread,
+        plugin_src: PluginPtr,
+        n: usize,
+    ) -> Result<*mut c_void, i32> {
+        let p = if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
+            p
+        } else {
+            // Fall back to reading via the thread.
+            self.inc_misses(plugin_src);
+            thread.get_mutable_ptr(plugin_src, n)?
+        };
+        if p == std::ptr::null_mut() {
+            Err(libc::EFAULT)
+        } else {
+            Ok(p)
+        }
+    }
 }
 
 mod export {
@@ -1074,6 +1096,20 @@ mod export {
         let memory_manager = unsafe { &mut *memory_manager };
         let plugin_src: PluginPtr = plugin_src.into();
         unsafe { memory_manager.get_writeable_ptr(&thread, plugin_src, n) }.unwrap()
+    }
+
+    /// Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
+    #[no_mangle]
+    pub extern "C" fn memorymanager_getMutablePtr(
+        memory_manager: *mut MemoryManager,
+        thread: *mut c::Thread,
+        plugin_src: c::PluginPtr,
+        n: usize,
+    ) -> *mut c_void {
+        let thread = CThread::new(thread);
+        let memory_manager = unsafe { &mut *memory_manager };
+        let plugin_src: PluginPtr = plugin_src.into();
+        unsafe { memory_manager.get_mutable_ptr(&thread, plugin_src, n) }.unwrap()
     }
 
     /// Notifies memorymanager that plugin is about to call execve.
