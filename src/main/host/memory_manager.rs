@@ -142,7 +142,7 @@ impl ShmFile {
     // parts of the region as needed.
     fn copy_into_file(
         &self,
-        thread: &impl Thread,
+        thread: &mut impl Thread,
         region_interval: &Interval,
         region: &Region,
         interval: &Interval,
@@ -170,17 +170,15 @@ impl ShmFile {
     }
 
     // Map the given range of the file into the plugin's address space.
-    fn mmap_into_plugin(&self, thread: &impl Thread, interval: &Interval, prot: i32) {
-        let res = unsafe {
-            thread.native_mmap(
-                PluginPtr::from(interval.start),
-                interval.end - interval.start,
-                prot,
-                libc::MAP_SHARED | libc::MAP_FIXED,
-                self.shm_plugin_fd,
-                interval.start as i64,
-            )
-        };
+    fn mmap_into_plugin(&self, thread: &mut impl Thread, interval: &Interval, prot: i32) {
+        let res = thread.native_mmap(
+            PluginPtr::from(interval.start),
+            interval.end - interval.start,
+            prot,
+            libc::MAP_SHARED | libc::MAP_FIXED,
+            self.shm_plugin_fd,
+            interval.start as i64,
+        );
         assert!(res.is_ok());
     }
 
@@ -230,7 +228,7 @@ fn get_regions(pid: libc::pid_t) -> IntervalMap<Region> {
 // Find the heap range, and map it if non-empty.
 fn get_heap(
     shm_file: &ShmFile,
-    thread: &impl Thread,
+    thread: &mut impl Thread,
     regions: &mut IntervalMap<Region>,
 ) -> Interval {
     // If there's already a region labeled heap, we use those bounds.
@@ -347,13 +345,12 @@ impl MemoryManager {
         let shm_plugin_fd = {
             let path_buf_len = shm_path.len() + 1;
             let path_buf_plugin_ptr: PluginPtr = thread.malloc_plugin_ptr(path_buf_len).unwrap();
-            let path_buf_raw: *mut c_void = unsafe {
-                thread.get_writeable_ptr(
+            let path_buf_raw: *mut c_void = thread
+                .get_writeable_ptr(
                     path_buf_plugin_ptr,
                     std::mem::size_of::<u8>() * path_buf_len,
                 )
-            }
-            .unwrap();
+                .unwrap();
             let path_buf: &mut [u8] =
                 unsafe { std::slice::from_raw_parts_mut(path_buf_raw as *mut u8, path_buf_len) };
             path_buf[..shm_path.len()].copy_from_slice(shm_path.as_bytes());
@@ -362,11 +359,9 @@ impl MemoryManager {
             let shm_plugin_fd = thread
                 .native_open(path_buf_plugin_ptr, libc::O_RDWR, 0)
                 .unwrap();
-            unsafe {
-                thread
-                    .free_plugin_ptr(path_buf_plugin_ptr, path_buf_len)
-                    .unwrap()
-            };
+            thread
+                .free_plugin_ptr(path_buf_plugin_ptr, path_buf_len)
+                .unwrap();
             shm_plugin_fd
         };
 
@@ -505,7 +500,7 @@ impl MemoryManager {
 
     // Called internally on the next usage *after* execve syscall has executed. Re-initializes as
     // needed.
-    fn post_exec_cleanup_if_needed(&mut self, thread: &impl Thread) {
+    fn post_exec_cleanup_if_needed(&mut self, thread: &mut impl Thread) {
         if !self.need_post_exec_cleanup {
             return;
         }
@@ -522,7 +517,11 @@ impl MemoryManager {
     /// * The pointer must point to readable value of type T.
     /// * Returned ref mustn't be accessed after Thread runs again or flush is called.
     #[allow(dead_code)]
-    pub unsafe fn get_ref<T>(&mut self, thread: &impl Thread, src: PluginPtr) -> Result<&T, i32> {
+    pub unsafe fn get_ref<T>(
+        &mut self,
+        thread: &mut impl Thread,
+        src: PluginPtr,
+    ) -> Result<&T, i32> {
         let raw = self.get_readable_ptr(thread, src, std::mem::size_of::<T>())?;
         Ok(&*(raw as *const T))
     }
@@ -538,7 +537,7 @@ impl MemoryManager {
     #[allow(dead_code)]
     pub unsafe fn get_mut_ref<T>(
         &mut self,
-        thread: &impl Thread,
+        thread: &mut impl Thread,
         src: PluginPtr,
     ) -> Result<&mut T, i32> {
         let raw = self.get_writeable_ptr(thread, src, std::mem::size_of::<T>())?;
@@ -552,7 +551,7 @@ impl MemoryManager {
     #[allow(dead_code)]
     pub unsafe fn get_slice<T>(
         &mut self,
-        thread: &impl Thread,
+        thread: &mut impl Thread,
         src: PluginPtr,
         len: usize,
     ) -> Result<&[T], i32> {
@@ -571,7 +570,7 @@ impl MemoryManager {
     #[allow(dead_code)]
     pub unsafe fn get_mut_slice<T>(
         &mut self,
-        thread: &impl Thread,
+        thread: &mut impl Thread,
         src: PluginPtr,
         len: usize,
     ) -> Result<&mut [T], i32> {
@@ -590,7 +589,7 @@ impl MemoryManager {
         fd: i32,
         offset: i64,
     ) -> Result<PluginPtr, i32> {
-        let result = unsafe { thread.native_mmap(addr, length, prot, flags, fd, offset) }?;
+        let result = thread.native_mmap(addr, length, prot, flags, fd, offset)?;
         if length == 0 {
             return Ok(result);
         }
@@ -652,7 +651,7 @@ impl MemoryManager {
         addr: PluginPtr,
         length: usize,
     ) -> Result<(), i32> {
-        unsafe { thread.native_munmap(addr, length) }?;
+        thread.native_munmap(addr, length)?;
         if length == 0 {
             return Ok(());
         }
@@ -676,7 +675,7 @@ impl MemoryManager {
         new_address: PluginPtr,
     ) -> Result<PluginPtr, i32> {
         let new_address =
-            unsafe { thread.native_mremap(old_address, old_size, new_size, flags, new_address) }?;
+            thread.native_mremap(old_address, old_size, new_size, flags, new_address)?;
         let old_interval = usize::from(old_address)..(usize::from(old_address) + old_size);
         let new_interval = usize::from(new_address)..(usize::from(new_address) + new_size);
 
@@ -833,16 +832,14 @@ impl MemoryManager {
                     // Grow heap region.
                     self.shm_file.alloc(&self.heap);
                     // mremap in plugin, enforcing that base stays the same.
-                    unsafe {
-                        let res = thread.native_mremap(
-                            /* old_addr: */ PluginPtr::from(self.heap.start),
-                            /* old_len: */ self.heap.end - self.heap.start,
-                            /* new_len: */ new_heap.end - new_heap.start,
-                            /* flags: */ 0,
-                            /* new_addr: */ PluginPtr::from(0usize),
-                        );
-                        assert!(res.is_ok());
-                    };
+                    let res = thread.native_mremap(
+                        /* old_addr: */ PluginPtr::from(self.heap.start),
+                        /* old_len: */ self.heap.end - self.heap.start,
+                        /* new_len: */ new_heap.end - new_heap.start,
+                        /* flags: */ 0,
+                        /* new_addr: */ PluginPtr::from(0usize),
+                    );
+                    assert!(res.is_ok());
                     // mremap in shadow, allowing mapping to move if needed.
                     let shadow_base = unsafe {
                         libc::mremap(
@@ -875,16 +872,14 @@ impl MemoryManager {
             let (_, heap_region) = opt_heap_interval_and_region.unwrap();
 
             // mremap in plugin, enforcing that base stays the same.
-            unsafe {
-                let res = thread.native_mremap(
-                    /* old_addr: */ PluginPtr::from(self.heap.start),
-                    /* old_len: */ self.heap.end - self.heap.start,
-                    /* new_len: */ new_heap.end - new_heap.start,
-                    /* flags: */ 0,
-                    /* new_addr: */ PluginPtr::from(0usize),
-                );
-                assert!(res.is_ok());
-            };
+            let res = thread.native_mremap(
+                /* old_addr: */ PluginPtr::from(self.heap.start),
+                /* old_len: */ self.heap.end - self.heap.start,
+                /* new_len: */ new_heap.end - new_heap.start,
+                /* flags: */ 0,
+                /* new_addr: */ PluginPtr::from(0usize),
+            );
+            assert!(res.is_ok());
             // mremap in shadow, assuming no need to move.
             let shadow_base = unsafe {
                 libc::mremap(
@@ -907,7 +902,7 @@ impl MemoryManager {
     // carefuly designed *not* to invalidate any outstanding borrowed references or pointers, since
     // otherwise a caller trying to marshall multiple syscall arguments might invalidate the first
     // argument when marshalling the second.
-    fn extend_stack(&mut self, thread: &impl Thread, src: usize) {
+    fn extend_stack(&mut self, thread: &mut impl Thread, src: usize) {
         let start = page_of(src);
         let stack_extension = start..self.stack_copied.start;
         //println!("extending stack from {:x} to {:x}", stack_copied.start, start);
@@ -935,7 +930,7 @@ impl MemoryManager {
     // Get a raw pointer to the plugin's memory, if we have it mapped (or can do so now).
     fn get_mapped_ptr(
         &mut self,
-        thread: &impl Thread,
+        thread: &mut impl Thread,
         src: PluginPtr,
         n: usize,
     ) -> Option<*mut c_void> {
@@ -991,7 +986,7 @@ impl MemoryManager {
     // Never returns NULL.
     unsafe fn get_readable_ptr(
         &mut self,
-        thread: &impl Thread,
+        thread: &mut impl Thread,
         plugin_src: PluginPtr,
         n: usize,
     ) -> Result<*const c_void, i32> {
@@ -1013,7 +1008,7 @@ impl MemoryManager {
     // Never returns NULL.
     unsafe fn get_writeable_ptr(
         &mut self,
-        thread: &impl Thread,
+        thread: &mut impl Thread,
         plugin_src: PluginPtr,
         n: usize,
     ) -> Result<*mut c_void, i32> {
@@ -1035,7 +1030,7 @@ impl MemoryManager {
     // Never returns NULL.
     unsafe fn get_mutable_ptr(
         &mut self,
-        thread: &impl Thread,
+        thread: &mut impl Thread,
         plugin_src: PluginPtr,
         n: usize,
     ) -> Result<*mut c_void, i32> {
@@ -1057,80 +1052,96 @@ impl MemoryManager {
 mod export {
     use super::*;
 
+    /// # Safety
+    /// * `thread` must point to a valid object.
     #[no_mangle]
-    pub extern "C" fn memorymanager_new(thread: *mut c::Thread) -> *mut MemoryManager {
+    pub unsafe extern "C" fn memorymanager_new(thread: *mut c::Thread) -> *mut MemoryManager {
         Box::into_raw(Box::new(MemoryManager::new(&mut CThread::new(thread))))
     }
 
+    /// # Safety
+    /// * `mm` must point to a valid object.
     #[no_mangle]
-    pub extern "C" fn memorymanager_free(mm: *mut MemoryManager) {
+    pub unsafe extern "C" fn memorymanager_free(mm: *mut MemoryManager) {
         if mm.is_null() {
             return;
         }
-        unsafe { Box::from_raw(mm) };
+        Box::from_raw(mm);
     }
 
     /// Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
+    /// # Safety
+    /// * `mm` and `thread` must point to valid objects.
     #[no_mangle]
-    pub extern "C" fn memorymanager_getReadablePtr(
+    pub unsafe extern "C" fn memorymanager_getReadablePtr(
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
         plugin_src: c::PluginPtr,
         n: usize,
     ) -> *const c_void {
-        let thread = CThread::new(thread);
-        let memory_manager = unsafe { &mut *memory_manager };
+        let mut thread = CThread::new(thread);
+        let memory_manager = &mut *memory_manager;
         let plugin_src: PluginPtr = plugin_src.into();
-        unsafe { memory_manager.get_readable_ptr(&thread, plugin_src, n) }.unwrap()
+        memory_manager
+            .get_readable_ptr(&mut thread, plugin_src, n)
+            .unwrap()
     }
 
     /// Get a writeagble pointer to the plugin's memory via mapping, or via the thread APIs.
+    /// # Safety
+    /// * `mm` and `thread` must point to valid objects.
     #[no_mangle]
-    pub extern "C" fn memorymanager_getWriteablePtr(
+    pub unsafe extern "C" fn memorymanager_getWriteablePtr(
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
         plugin_src: c::PluginPtr,
         n: usize,
     ) -> *mut c_void {
-        let thread = CThread::new(thread);
-        let memory_manager = unsafe { &mut *memory_manager };
+        let mut thread = CThread::new(thread);
+        let memory_manager = &mut *memory_manager;
         let plugin_src: PluginPtr = plugin_src.into();
-        unsafe { memory_manager.get_writeable_ptr(&thread, plugin_src, n) }.unwrap()
+        memory_manager
+            .get_writeable_ptr(&mut thread, plugin_src, n)
+            .unwrap()
     }
 
     /// Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
+    /// # Safety
+    /// * `mm` and `thread` must point to valid objects.
     #[no_mangle]
-    pub extern "C" fn memorymanager_getMutablePtr(
+    pub unsafe extern "C" fn memorymanager_getMutablePtr(
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
         plugin_src: c::PluginPtr,
         n: usize,
     ) -> *mut c_void {
-        let thread = CThread::new(thread);
-        let memory_manager = unsafe { &mut *memory_manager };
+        let mut thread = CThread::new(thread);
+        let memory_manager = &mut *memory_manager;
         let plugin_src: PluginPtr = plugin_src.into();
-        unsafe { memory_manager.get_mutable_ptr(&thread, plugin_src, n) }.unwrap()
+        memory_manager
+            .get_mutable_ptr(&mut thread, plugin_src, n)
+            .unwrap()
     }
 
     /// Notifies memorymanager that plugin is about to call execve.
     #[no_mangle]
-    pub extern "C" fn memorymanager_preExecHook(
+    pub unsafe extern "C" fn memorymanager_preExecHook(
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
     ) {
-        let memory_manager = unsafe { &mut *memory_manager };
+        let memory_manager = &mut *memory_manager;
         let thread = CThread::new(thread);
         memory_manager.pre_exec_hook(&thread);
     }
 
     /// Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
     #[no_mangle]
-    pub extern "C" fn memorymanager_handleBrk(
+    pub unsafe extern "C" fn memorymanager_handleBrk(
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
         plugin_src: c::PluginPtr,
     ) -> c::SysCallReg {
-        let memory_manager = unsafe { &mut *memory_manager };
+        let memory_manager = &mut *memory_manager;
         let mut thread = CThread::new(thread);
         c::SysCallReg::from(
             match memory_manager.handle_brk(&mut thread, PluginPtr::from(plugin_src)) {
@@ -1143,7 +1154,7 @@ mod export {
 
     /// Fully handles the `mmap` syscall
     #[no_mangle]
-    pub extern "C" fn memorymanager_handleMmap(
+    pub unsafe extern "C" fn memorymanager_handleMmap(
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
         addr: c::PluginPtr,
@@ -1153,7 +1164,7 @@ mod export {
         fd: i32,
         offset: i64,
     ) -> c::SysCallReg {
-        let memory_manager = unsafe { &mut *memory_manager };
+        let memory_manager = &mut *memory_manager;
         let mut thread = CThread::new(thread);
         c::SysCallReg::from(
             match memory_manager.handle_mmap(
@@ -1174,13 +1185,13 @@ mod export {
 
     /// Fully handles the `munmap` syscall
     #[no_mangle]
-    pub extern "C" fn memorymanager_handleMunmap(
+    pub unsafe extern "C" fn memorymanager_handleMunmap(
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
         addr: c::PluginPtr,
         len: usize,
     ) -> c::SysCallReg {
-        let memory_manager = unsafe { &mut *memory_manager };
+        let memory_manager = &mut *memory_manager;
         let mut thread = CThread::new(thread);
         c::SysCallReg::from(
             match memory_manager.handle_munmap(&mut thread, PluginPtr::from(addr), len) {
@@ -1192,7 +1203,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn memorymanager_handleMremap(
+    pub unsafe extern "C" fn memorymanager_handleMremap(
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
         old_addr: c::PluginPtr,
@@ -1201,7 +1212,7 @@ mod export {
         flags: i32,
         new_addr: c::PluginPtr,
     ) -> c::SysCallReg {
-        let memory_manager = unsafe { &mut *memory_manager };
+        let memory_manager = &mut *memory_manager;
         let mut thread = CThread::new(thread);
         c::SysCallReg::from(
             match memory_manager.handle_mremap(
