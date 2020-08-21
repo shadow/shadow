@@ -380,11 +380,11 @@ impl MemoryManager {
         let stack_end = map_stack(&shm_file, &mut regions);
 
         MemoryManager {
-            shm_file: shm_file,
-            regions: regions,
+            shm_file,
+            regions,
             misses_by_path: HashMap::new(),
             need_post_exec_cleanup: false,
-            heap: heap,
+            heap,
             stack_copied: stack_end..stack_end,
         }
     }
@@ -615,7 +615,7 @@ impl MemoryManager {
         let mut region = Region {
             shadow_base: std::ptr::null_mut(),
             prot,
-            sharing: sharing,
+            sharing,
             original_path,
         };
 
