@@ -147,7 +147,7 @@ impl ShmFile {
         region: &Region,
         interval: &Interval,
     ) {
-        assert!(region.shadow_base != std::ptr::null_mut());
+        assert!(!region.shadow_base.is_null());
         assert!(region_interval.contains(&interval.start));
         let size = interval.end - interval.start;
         if size == 0 {
@@ -396,7 +396,7 @@ impl MemoryManager {
         let mutations = self.regions.clear(std::usize::MIN..std::usize::MAX);
         for m in mutations {
             if let Mutation::Removed(interval, region) = m {
-                if region.shadow_base != std::ptr::null_mut() {
+                if !region.shadow_base.is_null() {
                     let res =
                         unsafe { libc::munmap(region.shadow_base, interval.end - interval.start) };
                     if res != 0 {
@@ -425,7 +425,7 @@ impl MemoryManager {
             match mutation {
                 Mutation::ModifiedBegin(interval, new_start) => {
                     let (_, region) = self.regions.get_mut(new_start).unwrap();
-                    if region.shadow_base == std::ptr::null_mut() {
+                    if region.shadow_base.is_null() {
                         continue;
                     }
                     let removed_range = interval.start..new_start;
@@ -443,7 +443,7 @@ impl MemoryManager {
                 }
                 Mutation::ModifiedEnd(interval, new_end) => {
                     let (_, region) = self.regions.get(interval.start).unwrap();
-                    if region.shadow_base == std::ptr::null_mut() {
+                    if region.shadow_base.is_null() {
                         continue;
                     }
                     let removed_range = new_end..interval.end;
@@ -459,7 +459,7 @@ impl MemoryManager {
                     let (_, left_region) = self.regions.get(left.start).unwrap();
                     let (_, right_region) = self.regions.get(right.start).unwrap();
                     debug_assert_eq!(left_region.shadow_base, right_region.shadow_base);
-                    if left_region.shadow_base == std::ptr::null_mut() {
+                    if left_region.shadow_base.is_null() {
                         continue;
                     }
                     let removed_range = left.end..right.start;
@@ -477,14 +477,13 @@ impl MemoryManager {
                     };
 
                     // Adjust start of right region.
-                    drop(left_region);
                     let (_, right_region) = self.regions.get_mut(right.start).unwrap();
                     right_region.shadow_base = ((right_region.shadow_base as usize)
                         + (right.start - left.start))
                         as *mut c_void;
                 }
                 Mutation::Removed(interval, region) => {
-                    if region.shadow_base == std::ptr::null_mut() {
+                    if region.shadow_base.is_null() {
                         continue;
                     }
 
@@ -720,7 +719,7 @@ impl MemoryManager {
             self.handle_mutations(mutations);
         }
 
-        if region.shadow_base != std::ptr::null_mut() {
+        if !region.shadow_base.is_null() {
             // We currently only map in anonymous mmap'd regions, stack, and heap.  We don't bother
             // implementing mremap for stack or heap regions for now; that'd be pretty weird.
             assert_eq!(region.original_path, None);
@@ -953,7 +952,7 @@ impl MemoryManager {
             return None;
         }
         let (interval, region) = opt_interval_and_region.unwrap();
-        if region.shadow_base == std::ptr::null_mut() {
+        if region.shadow_base.is_null() {
             // region isn't mapped into shadow
             return None;
         }
@@ -1002,7 +1001,7 @@ impl MemoryManager {
             self.inc_misses(plugin_src);
             thread.get_readable_ptr(plugin_src, n)?
         };
-        if p == std::ptr::null_mut() {
+        if p.is_null() {
             Err(libc::EFAULT)
         } else {
             Ok(p)
@@ -1024,7 +1023,7 @@ impl MemoryManager {
             self.inc_misses(plugin_src);
             thread.get_writeable_ptr(plugin_src, n)?
         };
-        if p == std::ptr::null_mut() {
+        if p.is_null() {
             Err(libc::EFAULT)
         } else {
             Ok(p)
@@ -1046,7 +1045,7 @@ impl MemoryManager {
             self.inc_misses(plugin_src);
             thread.get_mutable_ptr(plugin_src, n)?
         };
-        if p == std::ptr::null_mut() {
+        if p.is_null() {
             Err(libc::EFAULT)
         } else {
             Ok(p)
