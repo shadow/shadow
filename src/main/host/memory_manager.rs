@@ -579,6 +579,7 @@ impl MemoryManager {
         Ok(std::slice::from_raw_parts_mut(raw as *mut T, len))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn handle_mmap(
         &mut self,
         thread: &mut impl Thread,
