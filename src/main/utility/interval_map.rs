@@ -274,6 +274,12 @@ impl<V: Clone> IntervalMap<V> {
     }
 }
 
+impl<V: Clone> Default for IntervalMap<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
