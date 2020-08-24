@@ -56,7 +56,9 @@ jobs:
           ci/container_scripts/install_extra_deps.sh
           echo "::add-path::$HOME/.cargo/bin"
       - name: Install Rust packages
-        run: cargo install --force cbindgen bindgen
+        run: |
+          cargo install --force --version 0.14.4 cbindgen
+          cargo install --force --version 0.55.0 bindgen
       - name: Check bindings
         run: |
           mkdir build
