@@ -6,7 +6,6 @@ set -euo pipefail
 
 APT_PACKAGES="
   cmake
-  curl
   findutils
   libc-dbg
   libglib2.0-0
@@ -22,12 +21,12 @@ APT_PACKAGES="
 
 # packages that are only required for our CI environment
 APT_CI_PACKAGES="
+  curl
   rsync
   "
 
 RPM_PACKAGES="
   cmake
-  curl
   findutils
   glib2
   glib2-devel
@@ -45,6 +44,7 @@ RPM_PACKAGES="
 
 # packages that are only required for our CI environment
 RPM_CI_PACKAGES="
+  curl
   rsync
   "
 

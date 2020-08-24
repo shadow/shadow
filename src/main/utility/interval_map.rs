@@ -241,11 +241,6 @@ impl<V: Clone> IntervalMap<V> {
         mutations
     }
 
-    // Returns the item at the given index.
-    fn item_at(&self, i: usize) -> (Interval, &V) {
-        (self.starts[i]..self.ends[i], &self.vals[i])
-    }
-
     // Returns the index of the interval containing `x`.
     fn get_index(&self, x: usize) -> Option<usize> {
         match self.starts.binary_search(&x) {
@@ -266,8 +261,22 @@ impl<V: Clone> IntervalMap<V> {
     pub fn get(&self, x: usize) -> Option<(Interval, &V)> {
         match self.get_index(x) {
             None => None,
-            Some(i) => Some(self.item_at(i)),
+            Some(i) => Some((self.starts[i]..self.ends[i], &self.vals[i])),
         }
+    }
+
+    // Returns the entry of the interval containing `x`.
+    pub fn get_mut(&mut self, x: usize) -> Option<(Interval, &mut V)> {
+        match self.get_index(x) {
+            None => None,
+            Some(i) => Some((self.starts[i]..self.ends[i], &mut self.vals[i])),
+        }
+    }
+}
+
+impl<V: Clone> Default for IntervalMap<V> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -322,7 +331,7 @@ mod tests {
                 old_len_sum, new_len_sum
             ));
         }
-        if !(new_len_sum >= (interval.end - interval.start)) {
+        if new_len_sum < (interval.end - interval.start) {
             return Err(format!(
                 "length-sum {} is smaller than inserted interval length {}",
                 new_len_sum,
@@ -330,7 +339,7 @@ mod tests {
             ));
         }
         if new_len == 0 {
-            return Err(format!("new length is zero"));
+            return Err("new length is zero".to_string());
         }
 
         Ok(mutations)
@@ -354,7 +363,7 @@ mod tests {
                         .unwrap();
                     m_clone
                 });
-                if !res.is_ok() {
+                if res.is_err() {
                     println!(
                         "Failed inserting {} -> {} into {:?}",
                         start,
@@ -591,7 +600,7 @@ mod tests {
                     .unwrap();
                     m_clone
                 });
-                if !res.is_ok() {
+                if res.is_err() {
                     println!(
                         "Failed after inserting {} -> {} and clearing {} -> {} in {:?}",
                         insert_start,

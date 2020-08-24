@@ -13,6 +13,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "test/test_common.h"
+
 // The number of random values to generate with each method.
 #define RGENLEN 200
 // The number of buckets to use when checking random value distribution.
@@ -115,25 +117,31 @@ static int _test_getrandom() {
 int main(int argc, char* argv[]) {
     fprintf(stdout, "########## random test starting ##########\n");
 
-    fprintf(stdout, "########## starting _test_dev_random()\n");
-    if (_test_dev_random() == EXIT_FAILURE) {
-        fprintf(stdout, "########## _test_dev_random() failed\n");
-        return EXIT_FAILURE;
-    }
     fprintf(stdout, "########## starting _test_dev_urandom()\n");
     if (_test_dev_urandom() == EXIT_FAILURE) {
         fprintf(stdout, "########## _test_dev_urandom() failed\n");
         return EXIT_FAILURE;
     }
+
     fprintf(stdout, "########## starting _test_rand()\n");
     if (_test_rand() == EXIT_FAILURE) {
         fprintf(stdout, "########## _test_rand() failed\n");
         return EXIT_FAILURE;
     }
+
     fprintf(stdout, "########## starting _test_getrandom()\n");
     if (_test_getrandom() == EXIT_FAILURE) {
         fprintf(stdout, "########## _test_getrandom() failed\n");
         return EXIT_FAILURE;
+    }
+
+    // Outside of Shadow, this test could block indefinitely.
+    if (running_in_shadow()) {
+        fprintf(stdout, "########## starting _test_dev_random()\n");
+        if (_test_dev_random() == EXIT_FAILURE) {
+            fprintf(stdout, "########## _test_dev_random() failed\n");
+            return EXIT_FAILURE;
+        }
     }
 
     fprintf(stdout, "########## random test passed! ##########\n");

@@ -84,18 +84,6 @@ bool thread_isRunning(Thread* thread) {
     return thread->methods.isRunning(thread);
 }
 
-void* thread_newClonedPtr(Thread* thread, PluginPtr plugin_src, size_t n) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.newClonedPtr);
-    return thread->methods.newClonedPtr(thread, plugin_src, n);
-}
-
-void thread_releaseClonedPtr(Thread* thread, void* p) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.releaseClonedPtr);
-    thread->methods.releaseClonedPtr(thread, p);
-}
-
 const void* thread_getReadablePtr(Thread* thread, PluginPtr plugin_src,
                                   size_t n) {
     MAGIC_ASSERT(thread);
@@ -114,6 +102,12 @@ void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.getReadablePtr);
     return thread->methods.getWriteablePtr(thread, plugin_src, n);
+}
+
+void* thread_getMutablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->methods.getMutablePtr);
+    return thread->methods.getMutablePtr(thread, plugin_src, n);
 }
 
 void thread_flushPtrs(Thread* thread) {

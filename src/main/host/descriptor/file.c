@@ -87,6 +87,7 @@ static inline int _file_getOSBackedFD(File* file) {
     MAGIC_ASSERT(file);
     return file->osfile.fd;
 }
+int file_getOSBackedFD(File* file) { return _file_getOSBackedFD(file); }
 
 static void _file_closeHelper(File* file) {
     if (file && file->osfile.fd) {

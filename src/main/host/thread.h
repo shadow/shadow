@@ -50,19 +50,16 @@ int thread_getReadableString(Thread* thread, PluginPtr plugin_src, size_t n,
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n);
 
+// Returns a writeable pointer corresponding to the specified src. Use when
+// the data at the given address needs to be both read and written.
+//
+// The returned pointer is automatically invalidated when the plugin runs again.
+void* thread_getMutablePtr(Thread* thread, PluginPtr plugin_src, size_t n);
+
 // Flushes and invalidates all previously returned readable/writeable plugin
 // pointers, as if returning control to the plugin. This can be useful in
 // conjunction with `thread_nativeSyscall` operations that touch memory.
 void thread_flushPtrs(Thread* thread);
-
-// Clone the data at plugin_src into shadow's address space.
-//
-// The caller has sole ownership of the returned pointer. It must be released
-// using thread_releaseClonedPtr.
-void* thread_newClonedPtr(Thread* thread, PluginPtr plugin_src, size_t n);
-
-// Release a pointer returned by thread_clonePluginPtr.
-void thread_releaseClonedPtr(Thread* thread, void* p);
 
 // Make the requested syscall from within the plugin. For now, does *not* flush
 // or invalidate pointers, but we may need to revisit this to support some

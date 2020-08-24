@@ -25,29 +25,28 @@ using `-i`:
 sudo ci/run.sh -i
 ```
 
-Future invocations can omit the `-i` option to use the existing image and
-build/test only the incremental changes:
-
-```{.bash}
-sudo ci/run.sh
-```
+If you wish to only check whether the tests pass or fail, future invocations
+can omit the `-i` option to use the existing image and build/test only the
+incremental changes. None of the test results will be saved in this case, but
+it is much quicker to build.
 
 Note that building all images locally typically takes hours. More often,
 you'll want to only run some smaller set of configurations locally.
 To run only the configurations you specify, use the `-o` flag:
 
 ```{.bash}
-sudo ci/run.sh -o "ubuntu:18.04;clang;debug fedora:32;gcc;release"
+sudo ci/run.sh -i -o "ubuntu:18.04;clang;debug fedora:32;gcc;release"
 ```
 
 For additional options, run `ci/run.sh -h`.
 
 ### Debugging locally
 
-After a local run fails, you can use Docker to help debug it. If Shadow was
-built successfully and the failure happened at the testing step, then the
-Docker image was built and tagged, and you can run an interactive shell in that
-image.
+After a local run fails, you can use Docker to help debug it. If you previously
+ran the tests without the `-i` option, re-run with the `-i` option to rebuild
+the Docker image(s). If Shadow was built successfully and the failure happened
+at the testing step, then the Docker image was built and tagged, and you can
+run an interactive shell in a container built from that image.
 
 e.g.:
 
@@ -60,7 +59,7 @@ the same with the last intermediate layer that was built successfully. e.g.
 given the output:
 
 ```{.bash}
-$ sudo ci/run.sh -o "centos:8;clang;debug"
+$ sudo ci/run.sh -i -o "centos:8;clang;debug"
 <snip>
 Step 13/13 : RUN . ci/container_scripts/build_and_install.sh
  ---> Running in a11c4a554ef8

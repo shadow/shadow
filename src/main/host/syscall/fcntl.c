@@ -62,15 +62,9 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
         case F_OFD_GETLK:
 #endif
         {
-            struct flock* flk_in = thread_newClonedPtr(
-                sys->thread, argReg.as_ptr, sizeof(*flk_in));
-            result = file_fcntl(file, command, (void*)flk_in);
-
-            struct flock* flk_out = memorymanager_getWriteablePtr(sys->memoryManager,
-                sys->thread, argReg.as_ptr, sizeof(*flk_out));
-
-            memcpy(flk_out, flk_in, sizeof(*flk_out));
-            thread_releaseClonedPtr(sys->thread, flk_in);
+            struct flock* flk = memorymanager_getMutablePtr(
+                sys->memoryManager, sys->thread, argReg.as_ptr, sizeof(*flk));
+            result = file_fcntl(file, command, (void*)flk);
             break;
         }
 

@@ -10,8 +10,6 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include <sched.h>
-
 #include "shim/ipc.h"
 #include "shim/shim_event.h"
 #include "shim/shim_logger.h"
@@ -81,13 +79,8 @@ __attribute__((constructor(SHIM_CONSTRUCTOR_PRIORITY))) static void
 _shim_load() {
     shim_disableInterposition();
 
-    struct sched_param sparam = {0};
-    sparam.sched_priority = 1;
-    // sched_setscheduler(0, SCHED_FIFO, &sparam);
-
-    // We ultimately want to log to SHADOW_LOG_FILE, but we must temporarily
-    // override the default logger with one that has a recursion-guard before
-    // making any syscalls (e.g. to open the log file).
+    // We ultimately want to log to SHADOW_LOG_FILE, but first we redirect to
+    // stderr for any log messages that happen before we can open it.
     logger_setDefault(shimlogger_new(stderr));
 
     // If we're not running under Shadow, return. This can be useful

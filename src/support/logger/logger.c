@@ -85,6 +85,15 @@ const char* logger_base_name(const char* filename) {
 
 static void _logger_default_log(LogLevel level, const char* fileName, const char* functionName,
                                 const int lineNumber, const char* format, va_list vargs) {
+    static __thread bool in_logger = false;
+    if (in_logger) {
+        // Avoid recursing. We do this here rather than in logger_log so that
+        // specialized loggers could potentially do something better than just
+        // dropping the message.
+        return;
+    }
+    in_logger = true;
+
     // Stack-allocated to avoid dynamic allocation.
     char buf[200];
     size_t offset = 0;
@@ -108,6 +117,7 @@ static void _logger_default_log(LogLevel level, const char* fileName, const char
         abort();
     }
 #endif
+    in_logger = false;
 }
 
 void logger_log(Logger* logger, LogLevel level, const gchar* fileName,

@@ -216,5 +216,4 @@ install(TARGETS shadow DESTINATION bin)
 ## shadow needs to find libs after install
 set_target_properties(shadow PROPERTIES LINK_FLAGS "-Wl,--no-as-needed")
 
-add_subdirectory(cbindings)
-
+add_subdirectory(bindings)

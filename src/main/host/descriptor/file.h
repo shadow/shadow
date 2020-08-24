@@ -125,4 +125,6 @@ int file_statx(File* dir, const char* pathname, int flags, unsigned int mask,
                struct statx* statxbuf);
 #endif
 
+int file_getOSBackedFD(File* file);
+
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_FILE_H_ */
