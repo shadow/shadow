@@ -26,7 +26,8 @@ case "$BUILDTYPE" in
         ;;
     coverage)
         OPTIONS="--debug --coverage"
-        rustup default nightly
+        # using an older rust nightly until https://github.com/shadow/shadow/issues/941 is resolved
+        rustup default nightly-2020-08-20
         ;;
     *)
         echo "Unknown BUILDTYPE $BUILDTYPE"
