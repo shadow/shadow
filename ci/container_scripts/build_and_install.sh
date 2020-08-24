@@ -4,10 +4,13 @@ set -euo pipefail
 
 case "$CC" in
 gcc)
-  export CXX=g++
+  export CXX="g++"
   ;;
 clang)
-  export CXX=clang++
+  export CXX="clang++"
+  ;;
+clang-11)
+  export CXX="clang++-11"
   ;;
 *)
   echo "Unknown cc $CC"
@@ -26,8 +29,7 @@ case "$BUILDTYPE" in
         ;;
     coverage)
         OPTIONS="--debug --coverage"
-        # using an older rust nightly until https://github.com/shadow/shadow/issues/941 is resolved
-        rustup default nightly-2020-08-20
+        rustup default nightly
         ;;
     *)
         echo "Unknown BUILDTYPE $BUILDTYPE"

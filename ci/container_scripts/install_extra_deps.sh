@@ -45,6 +45,9 @@ case "$CC" in
         fi
         install_packages clang
         ;;
+    clang-11)
+        install_packages clang-11
+        ;;
     *)
         echo "Unhandled cc $CC"
         exit 1
@@ -53,8 +56,7 @@ esac
 
 if [ "$BUILDTYPE" = coverage ]
 then
-    # using an older rust nightly until https://github.com/shadow/shadow/issues/941 is resolved
-    RUST_TOOLCHAIN=nightly-2020-08-20
+    RUST_TOOLCHAIN=nightly
 else
     RUST_TOOLCHAIN=stable
 fi
