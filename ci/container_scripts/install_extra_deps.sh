@@ -53,11 +53,12 @@ esac
 
 if [ "$BUILDTYPE" = coverage ]
 then
-    RUST_TOOLCHAIN=nightly
+    # using an older rust nightly until https://github.com/shadow/shadow/issues/941 is resolved
+    RUST_TOOLCHAIN=nightly-2020-08-20
 else
     RUST_TOOLCHAIN=stable
 fi
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain $RUST_TOOLCHAIN
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain "$RUST_TOOLCHAIN"
 PATH=$HOME/.cargo/bin:$PATH
 # Force cargo to download its package index
 cargo search foo
