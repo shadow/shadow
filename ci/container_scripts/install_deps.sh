@@ -10,8 +10,7 @@ APT_PACKAGES="
   libc-dbg
   libglib2.0-0
   libglib2.0-dev
-  libigraph0-dev
-  libigraph0v5
+  libigraph-dev
   libprocps-dev
   make
   python3

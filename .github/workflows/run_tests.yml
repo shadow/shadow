@@ -27,8 +27,8 @@ jobs:
         buildtype: ['debug', 'release']
         include:
           # Add a single coverage configuration
-          - container: 'ubuntu:18.04'
-            cc: 'clang'
+          - container: 'ubuntu:20.10'
+            cc: 'clang-11'
             buildtype: 'coverage'
     env:
       CC: ${{ matrix.cc }}
