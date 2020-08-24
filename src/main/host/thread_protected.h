@@ -29,6 +29,7 @@ typedef struct _ThreadMethods {
     void* (*getMutablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
     void (*flushPtrs)(Thread* thread);
     long (*nativeSyscall)(Thread* thread, long n, va_list args);
+    int (*getThreadID)(Thread *thread);
     Thread* (*clone)(Thread *thread, const SysCallArgs *args);
 } ThreadMethods;
 
@@ -36,6 +37,8 @@ struct _Thread {
 
     // For safe down-casting. Set and checked by child class.
     int type_id;
+
+    int tid;
 
     ThreadMethods methods;
     int threadID;

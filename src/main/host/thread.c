@@ -158,6 +158,12 @@ void thread_freePluginPtr(Thread* thread, PluginPtr ptr, size_t size) {
     }
 }
 
+int thread_getID(Thread *thread) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->getThreadID);
+    return thread->getThreadID(thread);
+}
+
 Thread *thread_clone(Thread *thread, const SysCallArgs *args) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->clone);

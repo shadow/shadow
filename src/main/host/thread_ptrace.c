@@ -873,17 +873,18 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     return regs.rax;
 }
 
-Thread* threadptrace_clone(Thread* thread, const SysCallArgs* args) {
+int threadptrace_getThreadID(Thread *thread) {
+    ThreadPtrace* thread_ptrace = _threadToThreadPtrace(thread);
+    return thread_ptrace->threadID;
+}
 
-    debug("issuing native call");
+Thread* threadptrace_clone(Thread* thread, const SysCallArgs* args) {
 
     thread_nativeSyscall(thread, args->number, args->args[0], args->args[1],
                          args->args[2], args->args[3], args->args[4],
                          args->args[5]);
 
-    debug("done issuing native call");
-
-    return NULL;
+    return thread;
 }
 
 Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
@@ -904,6 +905,7 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
                                   .getMutablePtr = threadptrace_getMutablePtr,
                                   .flushPtrs = threadptrace_flushPtrs,
                                   .nativeSyscall = threadptrace_nativeSyscall,
+                         .getThreadID = threadptrace_getThreadID,
                                   .clone = threadptrace_clone,
                               }),
         // FIXME: This should the emulated CPU's frequency
