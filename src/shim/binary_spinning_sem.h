@@ -17,6 +17,7 @@
  */
 class BinarySpinningSem {
   public:
+    BinarySpinningSem() { init(); }
 
     /* 
      * Initialize the semaphore to the zero state.

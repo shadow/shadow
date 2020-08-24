@@ -1,9 +1,6 @@
 #include "ipc.h"
 
-#include <assert.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <string.h>
+#include <new>
 
 #include "shim/binary_spinning_sem.h"
 
@@ -14,34 +11,28 @@ struct IPCData {
 
 extern "C" {
 
-void ipcData_init(IPCData *ipc_data) {
-    memset(ipc_data, 0, sizeof(IPCData));
-
-    ipc_data->xfer_ctrl_to_plugin.init();
-    ipc_data->xfer_ctrl_to_shadow.init();
+void ipcData_init(IPCData* ipc_data) {
+    new (ipc_data) IPCData;
 }
 
-size_t ipcData_nbytes() {
-    return sizeof(IPCData);
-}
+size_t ipcData_nbytes() { return sizeof(IPCData); }
 
-void shimevent_sendEventToShadow(struct IPCData *data, const ShimEvent* e) {
+void shimevent_sendEventToShadow(struct IPCData* data, const ShimEvent* e) {
     data->plugin_to_shadow = *e;
     data->xfer_ctrl_to_shadow.post();
 }
 
-
-void shimevent_sendEventToPlugin(struct IPCData *data, const ShimEvent* e) {
+void shimevent_sendEventToPlugin(struct IPCData* data, const ShimEvent* e) {
     data->shadow_to_plugin = *e;
     data->xfer_ctrl_to_plugin.post();
 }
 
-void shimevent_recvEventFromShadow(struct IPCData *data, ShimEvent* e) {
+void shimevent_recvEventFromShadow(struct IPCData* data, ShimEvent* e) {
     data->xfer_ctrl_to_plugin.wait();
     *e = data->shadow_to_plugin;
 }
 
-void shimevent_recvEventFromPlugin(struct IPCData *data, ShimEvent* e) {
+void shimevent_recvEventFromPlugin(struct IPCData* data, ShimEvent* e) {
     data->xfer_ctrl_to_shadow.wait();
     *e = data->plugin_to_shadow;
 }
