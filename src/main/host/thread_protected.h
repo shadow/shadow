@@ -29,7 +29,7 @@ typedef struct _ThreadMethods {
     void* (*getMutablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
     void (*flushPtrs)(Thread* thread);
     long (*nativeSyscall)(Thread* thread, long n, va_list args);
-    Thread* (*clone)(Thread *thread, const SysCallArgs *args);
+    Thread* (*clone)(Thread* thread, const SysCallArgs* args);
 } ThreadMethods;
 
 struct _Thread {

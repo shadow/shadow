@@ -116,7 +116,6 @@ void thread_flushPtrs(Thread* thread) {
     thread->methods.flushPtrs(thread);
 }
 
-
 long thread_nativeSyscall(Thread* thread, long n, ...) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.nativeSyscall);
@@ -158,12 +157,12 @@ void thread_freePluginPtr(Thread* thread, PluginPtr ptr, size_t size) {
     }
 }
 
-int thread_getID(Thread *thread) {
+int thread_getID(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->tid;
 }
 
-Thread *thread_clone(Thread *thread, const SysCallArgs *args) {
+Thread* thread_clone(Thread* thread, const SysCallArgs* args) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.clone);
     return thread->methods.clone(thread, args);

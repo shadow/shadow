@@ -8,12 +8,10 @@
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
-SysCallReturn syscallhandler_clone(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
+SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args) {
     utility_assert(sys && args);
 
     Thread* thr = thread_clone(sys->thread, args);
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = thread_getID(thr)};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = thread_getID(thr)};
 }

@@ -35,7 +35,7 @@ static void _clone_testCloneStandardFlags() {
     // Heap grows up,
     // Stack grows down,
     // Head, shoulders, knees, and toes...
-    uint8_t *stack_top = stack + CLONE_TEST_STACK_NBYTES;
+    uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
 
     // Some of the standard flags used in a pthread_create() call:
     int flags = 0;
@@ -49,8 +49,8 @@ static void _clone_testCloneStandardFlags() {
     flags |= CLONE_PTRACE;
 
     // Use SIGCHLD to tell the parent process that we've terminated.
-    int child_tid = clone(_clone_testStandardFlagsTarget, stack_top,
-                          flags | SIGCHLD, NULL, NULL, NULL);
+    int child_tid =
+        clone(_clone_testStandardFlagsTarget, stack_top, flags | SIGCHLD, NULL, NULL, NULL);
 
     printf("%d\n", child_tid);
 

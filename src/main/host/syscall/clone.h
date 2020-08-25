@@ -6,5 +6,4 @@
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 
-SysCallReturn syscallhandler_clone(SysCallHandler* sys,
-                                   const SysCallArgs* args);
+SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args);

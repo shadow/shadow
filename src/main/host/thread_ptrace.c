@@ -301,8 +301,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
             _threadPtraceToThread(thread), (PluginPtr){eip}, 16);
         if (isRdtsc(buf)) {
             debug("emulating rdtsc");
-            Tsc_emulateRdtsc(&thread->tsc, &regs,
-                             worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
+            Tsc_emulateRdtsc(&thread->tsc, &regs, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
             if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &regs) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 return;
@@ -311,8 +310,8 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
         }
         if (isRdtscp(buf)) {
             debug("emulating rdtscp");
-            Tsc_emulateRdtscp(&thread->tsc, &regs,
-                              worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
+            Tsc_emulateRdtscp(
+                &thread->tsc, &regs, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
             if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &regs) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 return;
@@ -875,9 +874,8 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
 
 Thread* threadptrace_clone(Thread* thread, const SysCallArgs* args) {
 
-    thread_nativeSyscall(thread, args->number, args->args[0], args->args[1],
-                         args->args[2], args->args[3], args->args[4],
-                         args->args[5]);
+    thread_nativeSyscall(thread, args->number, args->args[0], args->args[1], args->args[2],
+                         args->args[3], args->args[4], args->args[5]);
 
     return thread;
 }
