@@ -441,7 +441,7 @@ static void threadptrace_flushPtrs(Thread* base) {
 static void _threadptrace_doAttach(ThreadPtrace* thread) {
     utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL);
 
-    debug("thread %i attaching to child %i", thread->base.threadID, (int)thread->base.nativePid);
+    debug("thread %i attaching to child %i", thread->base.tid, (int)thread->base.nativePid);
     if (ptrace(PTRACE_ATTACH, thread->base.nativePid, 0, 0) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
@@ -534,7 +534,7 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
     }
 
     // Continue and wait for the signal delivery stop.
-    debug("thread %i detaching from child %i", thread->base.threadID, (int)thread->base.nativePid);
+    debug("thread %i detaching from child %i", thread->base.tid, (int)thread->base.nativePid);
     if (ptrace(PTRACE_CONT, thread->base.nativePid, 0, 0) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
@@ -873,11 +873,6 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     return regs.rax;
 }
 
-int threadptrace_getThreadID(Thread *thread) {
-    ThreadPtrace* thread_ptrace = _threadToThreadPtrace(thread);
-    return thread_ptrace->threadID;
-}
-
 Thread* threadptrace_clone(Thread* thread, const SysCallArgs* args) {
 
     thread_nativeSyscall(thread, args->number, args->args[0], args->args[1],
@@ -905,7 +900,6 @@ Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
                                   .getMutablePtr = threadptrace_getMutablePtr,
                                   .flushPtrs = threadptrace_flushPtrs,
                                   .nativeSyscall = threadptrace_nativeSyscall,
-                         .getThreadID = threadptrace_getThreadID,
                                   .clone = threadptrace_clone,
                               }),
         // FIXME: This should the emulated CPU's frequency

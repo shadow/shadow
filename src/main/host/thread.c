@@ -160,14 +160,13 @@ void thread_freePluginPtr(Thread* thread, PluginPtr ptr, size_t size) {
 
 int thread_getID(Thread *thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->getThreadID);
-    return thread->getThreadID(thread);
+    return thread->tid;
 }
 
 Thread *thread_clone(Thread *thread, const SysCallArgs *args) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->clone);
-    thread->clone(thread, args);
+    utility_assert(thread->methods.clone);
+    return thread->methods.clone(thread, args);
 }
 
 uint32_t thread_getProcessId(Thread* thread) {

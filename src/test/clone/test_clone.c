@@ -7,6 +7,7 @@
 #include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include <sched.h>
