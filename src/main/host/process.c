@@ -59,6 +59,8 @@
 
 #include "main/host/thread_ptrace.h"
 
+static gchar* _process_outputFileName(Process* proc, const char* type);
+
 struct _Process {
     /* Host owning this process */
     Host* host;
@@ -152,7 +154,21 @@ static void _process_logReturnCode(Process* proc, gint code) {
                         ((code == 0) ? "success" : "error"), code,
                         process_getName(proc));
 
-        if(code == 0) {
+        gchar* fileName = _process_outputFileName(proc, "exitcode");
+        FILE *exitcodeFile = fopen(fileName, "we");
+        g_free(fileName);
+
+        if (exitcodeFile != NULL) {
+            fprintf(exitcodeFile, "%d", code);
+            fclose(exitcodeFile);
+        } else {
+            warning("Could not open '%s' for writing: %s", mainResultString->str, strerror(errno));
+        }
+
+        // if there was no error or was intentionally killed
+        // TODO: once we've implemented clean shutdown via SIGTERM,
+        //       treat death by SIGKILL as a plugin error
+        if (code == 0 || code == return_code_for_signal(SIGKILL)) {
             message("%s", mainResultString->str);
         } else {
             warning("%s", mainResultString->str);
@@ -348,6 +364,8 @@ void process_stop(Process* proc) {
         proc->plugin.isExecuting = TRUE;
         thread_terminate(proc->mainThread);
         proc->plugin.isExecuting = FALSE;
+        _process_logReturnCode(proc, thread_getReturnCode(proc->mainThread));
+
         debug("unreffing main thread %p", proc->mainThread);
         thread_unref(proc->mainThread);
         proc->mainThread = NULL;
