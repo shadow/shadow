@@ -29,6 +29,8 @@
 #define PTRACE_O_EXITKILL (1 << 20)
 #endif
 
+// Using PTRACE_O_TRACECLONE causes the `clone` syscall to fail on Ubuntu 18.04.
+// We instead add the CLONE_PTRACE flag to the clone syscall itself.
 #define THREADPTRACE_PTRACE_OPTIONS (PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXEC)
 
 static char SYSCALL_INSTRUCTION[] = {0x0f, 0x05};
@@ -265,7 +267,7 @@ static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
     // PTRACE_O_EXITKILL: Kill child if our process dies.
     // PTRACE_O_TRACESYSGOOD: Handle syscall stops explicitly.
     // PTRACE_O_TRACEEXEC: Handle execve stops explicitly.
-    if (ptrace(PTRACE_SETOPTIONS, thread->base.nativePid, 0, THREADPTRACE_PTRACE_OPTIONS) < 0) {
+    if (ptrace(PTRACE_SETOPTIONS, thread->base.nativeTid, 0, THREADPTRACE_PTRACE_OPTIONS) < 0) {
         error("ptrace: %s", strerror(errno));
         return;
     }
@@ -281,7 +283,7 @@ static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
 
 static void _threadptrace_enterStateSyscall(ThreadPtrace* thread) {
     struct user_regs_struct* regs = &thread->syscall.regs;
-    if (ptrace(PTRACE_GETREGS, thread->base.nativePid, 0, regs) < 0) {
+    if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         return;
     }
@@ -292,7 +294,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
     thread->childState = THREAD_PTRACE_CHILD_STATE_SIGNALLED;
     if (signal == SIGSEGV) {
         struct user_regs_struct regs;
-        if (ptrace(PTRACE_GETREGS, thread->base.nativePid, 0, &regs) < 0) {
+        if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
             error("ptrace: %s", g_strerror(errno));
             return;
         }
@@ -302,7 +304,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
         if (isRdtsc(buf)) {
             debug("emulating rdtsc");
             Tsc_emulateRdtsc(&thread->tsc, &regs, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
-            if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &regs) < 0) {
+            if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &regs) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 return;
             }
@@ -312,7 +314,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
             debug("emulating rdtscp");
             Tsc_emulateRdtscp(
                 &thread->tsc, &regs, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
-            if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &regs) < 0) {
+            if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &regs) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 return;
             }
@@ -335,7 +337,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
 static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reason) {
     switch (reason.type) {
         case STOPREASON_EXITED_SIGNAL:
-            debug("child %d terminated by signal %d", thread->base.nativePid,
+            debug("child %d terminated by signal %d", thread->base.nativeTid,
                   reason.exited_signal.signal);
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
             thread->returnCode = return_code_for_signal(reason.exited_signal.signal);
@@ -371,7 +373,7 @@ static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     // Wait for child to stop.
 
     int wstatus;
-    if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
+    if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
         error("waitpid: %s", g_strerror(errno));
         return;
     }
@@ -383,7 +385,8 @@ static void _threadptrace_nextChildState(ThreadPtrace* thread) {
 pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
-    thread->base.nativePid = _threadptrace_fork_exec(argv[0], argv, envv);
+    thread->base.nativeTid = _threadptrace_fork_exec(argv[0], argv, envv);
+    thread->base.nativePid = thread->base.nativeTid;
 
     _threadptrace_nextChildState(thread);
 
@@ -440,20 +443,20 @@ static void threadptrace_flushPtrs(Thread* base) {
 static void _threadptrace_doAttach(ThreadPtrace* thread) {
     utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL);
 
-    debug("thread %i attaching to child %i", thread->base.tid, (int)thread->base.nativePid);
-    if (ptrace(PTRACE_ATTACH, thread->base.nativePid, 0, 0) < 0) {
+    debug("thread %i attaching to child %i", thread->base.tid, (int)thread->base.nativeTid);
+    if (ptrace(PTRACE_ATTACH, thread->base.nativeTid, 0, 0) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
     int wstatus;
-    if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
+    if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
         error("waitpid: %s", g_strerror(errno));
         abort();
     }
     StopReason reason = _getStopReason(wstatus);
     utility_assert(reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP);
 
-    if (ptrace(PTRACE_SETOPTIONS, thread->base.nativePid, 0, THREADPTRACE_PTRACE_OPTIONS) < 0) {
+    if (ptrace(PTRACE_SETOPTIONS, thread->base.nativeTid, 0, THREADPTRACE_PTRACE_OPTIONS) < 0) {
         error("ptrace: %s", strerror(errno));
         return;
     }
@@ -461,7 +464,7 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
 #if DEBUG
     // Check that regs are where we left them.
     struct user_regs_struct regs;
-    if (ptrace(PTRACE_GETREGS, thread->base.nativePid, 0, &regs) < 0) {
+    if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
@@ -470,11 +473,11 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
 
     // Should cause syscall we stopped at to be re-executed, putting us back in syscall state
     while (reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP) {
-        if (ptrace(PTRACE_SYSEMU, thread->base.nativePid, 0, 0) < 0) {
+        if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, 0) < 0) {
             error("ptrace: %s", g_strerror(errno));
             abort();
         }
-        if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
+        if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
             error("waitpid: %s", g_strerror(errno));
             abort();
         }
@@ -491,7 +494,7 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
 
 #if DEBUG
     // Check that rip is where we expect.
-    if (ptrace(PTRACE_GETREGS, thread->base.nativePid, 0, &regs) < 0) {
+    if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
@@ -519,7 +522,7 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
                               sizeof(SYSCALL_INSTRUCTION));
     utility_assert(!memcmp(buf, SYSCALL_INSTRUCTION, sizeof(SYSCALL_INSTRUCTION)));
 #endif
-    if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &thread->syscall.regs) < 0) {
+    if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &thread->syscall.regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
@@ -534,12 +537,12 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
 
     // Continue and wait for the signal delivery stop.
     debug("thread %i detaching from child %i", thread->base.tid, (int)thread->base.nativePid);
-    if (ptrace(PTRACE_CONT, thread->base.nativePid, 0, 0) < 0) {
+    if (ptrace(PTRACE_CONT, thread->base.nativeTid, 0, 0) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
     int wstatus;
-    if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
+    if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
         error("waitpid: %s", g_strerror(errno));
         abort();
     }
@@ -548,7 +551,7 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
     debug("Stop reason after cont with sigstop: %d", reason.type);
 
     // Detach, allowing the sigstop to be delivered.
-    if (ptrace(PTRACE_DETACH, thread->base.nativePid, 0, SIGSTOP) < 0) {
+    if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, SIGSTOP) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
@@ -572,7 +575,6 @@ SysCallCondition* threadptrace_resume(Thread* base) {
         switch (thread->childState) {
             case THREAD_PTRACE_CHILD_STATE_NONE:
                 debug("THREAD_PTRACE_CHILD_STATE_NONE");
-                utility_assert(false);
                 break;
             case THREAD_PTRACE_CHILD_STATE_TRACE_ME:
                 debug("THREAD_PTRACE_CHILD_STATE_TRACE_ME");
@@ -589,7 +591,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                     case SYSCALL_DONE:
                         // Return the specified result.
                         thread->syscall.regs.rax = thread->syscall.sysCallReturn.retval.as_u64;
-                        if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0,
+                        if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0,
                                    &thread->syscall.regs) < 0) {
                             error("ptrace: %s", g_strerror(errno));
                             return NULL;
@@ -622,8 +624,8 @@ SysCallCondition* threadptrace_resume(Thread* base) {
         }
         _threadptrace_flushPtrs(thread);
         // Allow child to start executing.
-        if (ptrace(PTRACE_SYSEMU, thread->base.nativePid, 0, thread->signalToDeliver) < 0) {
-            error("ptrace %d: %s", thread->base.nativePid, g_strerror(errno));
+        if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, thread->signalToDeliver) < 0) {
+            error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
             return NULL;
         }
         thread->signalToDeliver = 0;
@@ -659,7 +661,7 @@ void threadptrace_terminate(Thread* base) {
     }
 
     // need to kill() and not ptrace() since the process may not be stopped
-    if (kill(thread->base.nativePid, SIGKILL) < 0) {
+    if (kill(thread->base.nativeTid, SIGKILL) < 0) {
         warning("kill %d: %s", thread->base.nativePid, g_strerror(errno));
     }
 
@@ -796,6 +798,7 @@ void* threadptrace_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
 }
 
 long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
+    debug("threadptrace_nativeSyscall %ld", n);
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     // Unimplemented for other states.
@@ -819,8 +822,9 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
 
     uint64_t syscall_rip = regs.rip;
 
-    debug("threadptrace_nativeSyscall setting regs: rip=%llx n=%llx arg0=%llx arg1=%llx arg2=%llx "
-          "arg3=%llx arg4=%llx arg5=%llx",
+    debug("threadptrace_nativeSyscall setting regs: rip=0x%llx n=%lld arg0=0x%llx arg1=0x%llx "
+          "arg2=%llx "
+          "arg3=0x%llx arg4=0x%llx arg5=0x%llx",
           regs.rip, regs.rax, regs.rdi, regs.rsi, regs.rdx, regs.r10, regs.r8, regs.r9);
 
 #ifdef DEBUG
@@ -830,7 +834,7 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     utility_assert(!memcmp(buf, SYSCALL_INSTRUCTION, sizeof(SYSCALL_INSTRUCTION)));
 #endif
 
-    if (ptrace(PTRACE_SETREGS, thread->base.nativePid, 0, &regs) < 0) {
+    if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
@@ -838,12 +842,12 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     // Single-step until the syscall instruction is executed. It's not clear whether we can depend
     // on stopping the exact same number of times here.
     do {
-        if (ptrace(PTRACE_SINGLESTEP, thread->base.nativePid, 0, 0) < 0) {
-            error("ptrace %d: %s", thread->base.nativePid, g_strerror(errno));
+        if (ptrace(PTRACE_SINGLESTEP, thread->base.nativeTid, 0, 0) < 0) {
+            error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
             abort();
         }
         int wstatus;
-        if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
+        if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
             error("waitpid: %s", g_strerror(errno));
             abort();
         }
@@ -858,7 +862,7 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
             // return value, if any. e.g. this happens after the `exit` syscall.
             return -ECHILD;
         }
-        if (ptrace(PTRACE_GETREGS, thread->base.nativePid, 0, &regs) < 0) {
+        if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
             error("ptrace: %s", g_strerror(errno));
             abort();
         }
@@ -872,19 +876,60 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     return regs.rax;
 }
 
-Thread* threadptrace_clone(Thread* thread, const SysCallArgs* args) {
+int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
+                           PluginPtr ctid, unsigned long newtls, Thread **childp) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+    flags |= CLONE_PTRACE;
+    flags &= ~(CLONE_UNTRACED);
+    pid_t childNativeTid =
+        thread_nativeSyscall(base, SYS_clone, flags, child_stack, ptid, ctid, newtls);
+    if (childNativeTid < 0) {
+        debug("native clone failed %d(%s)", childNativeTid, strerror(-childNativeTid));
+        return childNativeTid;
+    }
+    debug("native clone created tid %d", childNativeTid);
 
-    thread_nativeSyscall(thread, args->number, args->args[0], args->args[1], args->args[2],
-                         args->args[3], args->args[4], args->args[5]);
+    // The return value of the clone syscall in the child thread isn't
+    // documented in clone(2), but based on the libc wrapper [is
+    // zero](https://github.com/bminor/glibc/blob/5f72f9800b250410cad3abfeeb09469ef12b2438/sysdeps/unix/sysv/linux/x86_64/clone.S#L80).
+    // We don't have to worry about setting it there - the OS will have already
+    // done so.
 
-    return thread;
+    ThreadPtrace* child = g_new(ThreadPtrace, 1);
+    *childp = _threadPtraceToThread(child);
+    worker_countObject(OBJECT_TYPE_THREAD_PTRACE, COUNTER_TYPE_NEW);
+    *child = (ThreadPtrace){
+        .base = thread_create(base->host, base->process, host_getNewProcessID(base->host),
+                              THREADPTRACE_TYPE_ID, thread->base.methods),
+        .tsc = thread->tsc,
+        .pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite)),
+        .readPointers = g_array_new(FALSE, FALSE, sizeof(void*)),
+        .sys = syscallhandler_new(worker_getActiveHost(), base->process, base),
+    };
+    child->base.nativePid = base->nativePid;
+    child->base.nativeTid = childNativeTid;
+
+    // The child should get a SIGSTOP triggered by the CLONE_PTRACE flag. Wait
+    // for that stop, which puts the child into the
+    // THREAD_PTRACE_CHILD_STATE_TRACE_ME state.
+    int wstatus;
+    if (waitpid(childNativeTid, &wstatus, 0) < 0) {
+        error("waitpid: %s", g_strerror(errno));
+        abort();
+    }
+    StopReason reason = _getStopReason(wstatus);
+    utility_assert(reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP);
+    child->childState = THREAD_PTRACE_CHILD_STATE_TRACE_ME;
+    _threadptrace_enterStateTraceMe(child);
+
+    return childNativeTid;
 }
 
-Thread* threadptrace_new(Host* host, Process* process, gint threadID) {
+Thread* threadptrace_new(Host* host, Process* process, int threadID) {
     ThreadPtrace* thread = g_new(ThreadPtrace, 1);
 
     *thread = (ThreadPtrace){
-        .base = thread_create(host, process, THREADPTRACE_TYPE_ID,
+        .base = thread_create(host, process, threadID, THREADPTRACE_TYPE_ID,
                               (ThreadMethods){
                                   .run = threadptrace_run,
                                   .resume = threadptrace_resume,

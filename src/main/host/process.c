@@ -103,13 +103,8 @@ struct _Process {
     gint returnCode;
     gboolean didLogReturnCode;
 
-    /* the main execution unit for the plugin */
-    Thread* mainThread;
-
-    /* Non-null if the main thread is blocked by a syscall. */
-    SysCallCondition* mainThreadCond;
-
-    gint threadIDCounter;
+    // int thread_id -> Thread*.
+    GHashTable* threads;
 
     // Owned exclusively by the process.
     MemoryManager* memoryManager;
@@ -137,6 +132,37 @@ const gchar* process_getPluginName(Process* proc) {
 guint process_getProcessID(Process* proc) {
     MAGIC_ASSERT(proc);
     return proc->processID;
+}
+
+static void _process_reapThread(Process* process, Thread* thread) {
+    thread_terminate(thread);
+    if (thread_isLeader(thread)) {
+        // If the main thread has exited, grab its return code to be used as
+        // the process return code.  The main thread exiting doesn't
+        // automatically cause other threads and the process to exit, but in
+        // most cases they will exit shortly afterwards.
+        //
+        // We don't *log* the returnCode yet because other conditions could
+        // still change it.  e.g. experimentally in the bash shell, if the
+        // remaining children are killed by a signal, the return code for the
+        // whole process is derived from that signal #, even if the thread
+        // leader had already exited.
+        process->returnCode = thread_getReturnCode(thread);
+    }
+}
+
+static void _process_terminate_threads(Process* proc) {
+    GHashTableIter iter;
+    g_hash_table_iter_init(&iter, proc->threads);
+    gpointer key, value;
+    while (g_hash_table_iter_next(&iter, &key, &value)) {
+        Thread* thread = value;
+        if(thread_isRunning(thread)) {
+            warning("Terminating still-running thread %d", thread_getID(thread));
+        }
+        _process_reapThread(proc, thread);
+        g_hash_table_iter_remove(&iter);
+    }
 }
 
 static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
@@ -181,43 +207,37 @@ static void _process_logReturnCode(Process* proc, gint code) {
     }
 }
 
-static void _process_cleanupSysCallCondition(Process* proc) {
-    MAGIC_ASSERT(proc);
-    if (proc->mainThreadCond) {
-        syscallcondition_cancel(proc->mainThreadCond);
-        syscallcondition_unref(proc->mainThreadCond);
-        proc->mainThreadCond = NULL;
-    }
+static Thread* _process_threadLeader(Process* proc) {
+    // "main" thread is the one where pid==tid.
+    return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(proc->processID));
 }
 
 static void _process_check(Process* proc) {
     MAGIC_ASSERT(proc);
 
-    if(!proc->mainThread) {
+    if (process_isRunning(proc)) {
         return;
     }
 
-    if(thread_isRunning(proc->mainThread)) {
-        info("process '%s' is running, but threads are blocked waiting for "
-             "events",
+    message("process '%s' has completed or is otherwise no longer running",
+            process_getName(proc));
+    _process_logReturnCode(proc, proc->returnCode);
+    message("total runtime for process '%s' was %f seconds",
+            process_getName(proc), proc->totalRunTime);
+}
+
+static void _process_check_thread(Process* proc, Thread* thread) {
+    if (thread_isRunning(thread)) {
+        info("thread %d in process '%s' still running, but blocked", thread_getID(thread),
              process_getName(proc));
-    } else {
-        /* collect return code */
-        int returnCode = thread_getReturnCode(proc->mainThread);
-
-        message("process '%s' has completed or is otherwise no longer running",
-                process_getName(proc));
-        _process_logReturnCode(proc, returnCode);
-
-        thread_terminate(proc->mainThread);
-        thread_unref(proc->mainThread);
-        proc->mainThread = NULL;
-
-        _process_cleanupSysCallCondition(proc);
-
-        message("total runtime for process '%s' was %f seconds",
-                process_getName(proc), proc->totalRunTime);
+        return;
     }
+    int returnCode = thread_getReturnCode(thread);
+    info("thread %d in process ''%s'' exited with code %d", thread_getID(thread),
+         process_getName(proc), returnCode);
+    _process_reapThread(proc, thread);
+    g_hash_table_remove(proc->threads, GUINT_TO_POINTER(thread_getID(thread)));
+    _process_check(proc);
 }
 
 static gchar* _process_outputFileName(Process* proc, const char* type) {
@@ -274,16 +294,17 @@ static void _process_start(Process* proc) {
     // Set up stderr
     _process_openStdIOFileHelper(proc, false);
 
-    utility_assert(proc->mainThread == NULL);
+    // tid of first thread of a process is equal to the pid.
+    int tid = proc->processID;
+    Thread *mainThread = NULL;
     if (proc->interposeMethod == INTERPOSE_PTRACE) {
-        proc->mainThread =
-            threadptrace_new(proc->host, proc, proc->threadIDCounter++);
+        mainThread = threadptrace_new(proc->host, proc, tid);
     } else if (proc->interposeMethod == INTERPOSE_PRELOAD) {
-        proc->mainThread =
-            threadpreload_new(proc->host, proc, proc->threadIDCounter++);
+        mainThread = threadpreload_new(proc->host, proc, tid);
     } else {
         error("Bad interposeMethod %d", proc->interposeMethod);
     }
+    g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
 
     message("starting process '%s'", process_getName(proc));
 
@@ -295,7 +316,7 @@ static void _process_start(Process* proc) {
 
     proc->plugin.isExecuting = TRUE;
     /* exec the process */
-    thread_run(proc->mainThread, proc->argv, proc->envv);
+    thread_run(mainThread, proc->argv, proc->envv);
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
 
@@ -305,21 +326,45 @@ static void _process_start(Process* proc) {
         "process '%s' started in %f seconds", process_getName(proc), elapsed);
 
     /* call main and run until blocked */
-    process_continue(proc, proc->mainThread);
+    process_continue(proc, mainThread);
+}
 
-    _process_check(proc);
+static void _start_thread_task(gpointer callbackObject, gpointer callbackArgument){
+    Process* process = callbackObject;
+    Thread* thread = callbackArgument;
+    process_continue(process, thread);
+}
+
+static void _start_thread_task_free_obj(gpointer data){
+    Process* process = data;
+    process_unref(process);
+}
+
+static void _start_thread_task_free_arg(gpointer data){
+    Thread* thread = data;
+    thread_unref(thread);
+}
+
+void process_addThread(Process* proc, Thread* thread) {
+    g_hash_table_insert(proc->threads, GUINT_TO_POINTER(thread_getID(thread)), thread);
+
+    // Schedule thread to start.
+    thread_ref(thread);
+    process_ref(proc);
+    Task* task = task_new(_start_thread_task, proc, thread,
+            _start_thread_task_free_obj, _start_thread_task_free_arg);
+    worker_scheduleTask(task, 0);
+    task_unref(task);
 }
 
 void process_continue(Process* proc, Thread* thread) {
     MAGIC_ASSERT(proc);
+    debug("Continuing thread %d in process %d", thread_getID(thread), proc->processID);
 
     /* if we are not running, no need to notify anyone */
     if(!process_isRunning(proc)) {
         return;
     }
-
-    /* We will unblock the thread, cleanup any prev condition. */
-    _process_cleanupSysCallCondition(proc);
 
     info("switching to thread controller to continue executing process '%s'",
          process_getName(proc));
@@ -330,7 +375,7 @@ void process_continue(Process* proc, Thread* thread) {
     g_timer_start(proc->cpuDelayTimer);
 
     proc->plugin.isExecuting = TRUE;
-    proc->mainThreadCond = thread_resume(thread ? thread : proc->mainThread);
+    thread_resume(thread);
     proc->plugin.isExecuting = FALSE;
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -340,13 +385,7 @@ void process_continue(Process* proc, Thread* thread) {
 
     info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
 
-    /* If the thread has a new unblocking condition, listen for it. */
-    if (proc->mainThreadCond) {
-        syscallcondition_waitNonblock(
-            proc->mainThreadCond, proc, thread ? thread : proc->mainThread);
-    }
-
-    _process_check(proc);
+    _process_check_thread(proc, thread);
 }
 
 void process_stop(Process* proc) {
@@ -359,23 +398,12 @@ void process_stop(Process* proc) {
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
 
-    if (proc->mainThread) {
-        debug("terminating main thread %p", proc->mainThread);
-        proc->plugin.isExecuting = TRUE;
-        thread_terminate(proc->mainThread);
-        proc->plugin.isExecuting = FALSE;
-        _process_logReturnCode(proc, thread_getReturnCode(proc->mainThread));
-
-        debug("unreffing main thread %p", proc->mainThread);
-        thread_unref(proc->mainThread);
-        proc->mainThread = NULL;
-        debug("main thread cleanup complete");
-    }
+    proc->plugin.isExecuting = TRUE;
+    _process_terminate_threads(proc);
+    proc->plugin.isExecuting = FALSE;
 
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
-
-    _process_cleanupSysCallCondition(proc);
 
     debug("Starting descriptor table shutdown hack");
     descriptortable_shutdownHelper(proc->descTable);
@@ -424,10 +452,13 @@ void process_detachPlugin(gpointer procptr, gpointer nothing) {
     Process* proc = procptr;
     MAGIC_ASSERT(proc);
     if (proc->interposeMethod == INTERPOSE_PTRACE) {
-        // Detach all ptrace attachements
-        if (proc->mainThread) {
+        GHashTableIter iter;
+        g_hash_table_iter_init(&iter, proc->threads);
+        gpointer key, value;
+        while (g_hash_table_iter_next(&iter, &key, &value)) {
+            Thread* thread = value;
             worker_setActiveProcess(proc);
-            threadptrace_detach(proc->mainThread);
+            threadptrace_detach(thread);
             worker_setActiveProcess(NULL);
         }
     }
@@ -435,7 +466,11 @@ void process_detachPlugin(gpointer procptr, gpointer nothing) {
 
 gboolean process_isRunning(Process* proc) {
     MAGIC_ASSERT(proc);
-    return (proc->mainThread != NULL && thread_isRunning(proc->mainThread)) ? TRUE : FALSE;
+    return g_hash_table_size(proc->threads) > 0;
+}
+
+static void _thread_gpointer_unref(gpointer data) {
+    thread_unref(data);
 }
 
 Process* process_new(Host* host, guint processID, SimulationTime startTime,
@@ -483,6 +518,9 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
 
     proc->descTable = descriptortable_new();
 
+    proc->threads =
+        g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
+
     proc->referenceCount = 1;
 
     worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_NEW);
@@ -493,15 +531,11 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
 static void _process_free(Process* proc) {
     MAGIC_ASSERT(proc);
 
-    /* stop and free plugin memory if we are still running */
-    if(proc->mainThread) {
-        if(thread_isRunning(proc->mainThread)) {
-            thread_terminate(proc->mainThread);
-        }
-        thread_unref(proc->mainThread);
-        proc->mainThread = NULL;
+    _process_terminate_threads(proc);
+    if(proc->threads) {
+        g_hash_table_destroy(proc->threads);
+        proc->threads = NULL;
     }
-
     if(proc->plugin.exePath) {
         g_string_free(proc->plugin.exePath, TRUE);
     }

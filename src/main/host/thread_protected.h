@@ -29,7 +29,8 @@ typedef struct _ThreadMethods {
     void* (*getMutablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
     void (*flushPtrs)(Thread* thread);
     long (*nativeSyscall)(Thread* thread, long n, va_list args);
-    Thread* (*clone)(Thread* thread, const SysCallArgs* args);
+    int (*clone)(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
+                 PluginPtr ctid, unsigned long newtls, Thread** child);
 } ThreadMethods;
 
 struct _Thread {
@@ -43,10 +44,16 @@ struct _Thread {
     pid_t nativeTid;
     Host* host;
     Process* process;
+    // If non-null, this address should be cleared and futex-awoken on thread exit.
+    // See set_tid_address(2).
+    PluginPtr tidAddress;
     int referenceCount;
+
+    // Non-null if blocked by a syscall.
+    SysCallCondition* cond;
 
     MAGIC_DECLARE;
 };
 
-Thread thread_create(Host* host, Process* process, int type_id, ThreadMethods methods);
+Thread thread_create(Host* host, Process* process, int type_id, int threadID, ThreadMethods methods);
 #endif

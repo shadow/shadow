@@ -295,16 +295,17 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(arch_prctl);
         NATIVE(eventfd2);
         NATIVE(futex);
-#ifdef SYS_mmap2
-        NATIVE(mmap2);
-#endif
+        NATIVE(gettid);
+        NATIVE(io_getevents);
         NATIVE(prctl);
         NATIVE(prlimit64);
         NATIVE(rt_sigaction);
         NATIVE(rt_sigprocmask);
+        NATIVE(get_robust_list);
         NATIVE(set_robust_list);
         NATIVE(set_tid_address);
         NATIVE(sysinfo);
+        NATIVE(waitid);
 
         // operations on pids (shadow overrides pids)
         NATIVE(kill);
@@ -343,6 +344,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // (because the plugin can natively):
         // ***************************************
         NATIVE(access);
+        NATIVE(exit);
+        NATIVE(exit_group);
         NATIVE(getcwd);
         NATIVE(geteuid);
         NATIVE(getegid);

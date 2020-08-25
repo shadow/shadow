@@ -19,18 +19,17 @@
 
 #define CLONE_TEST_STACK_NBYTES 4096
 
-static int _clone_test_acc = 0;
+static volatile int _clone_test_acc = 0;
 
 // _clone_testCloneStandardFlags calls this upon cloning
-static int _clone_testStandardFlagsTarget(void* args) {
-    _clone_test_acc += 1;
+static int _inc_clone_test_acc(void* args) {
+    ++_clone_test_acc;
     return 0;
 }
 
-static void _clone_testCloneStandardFlags() {
-
-    // stack allocate some memory for the cloned thread.
-    alignas(CLONE_TEST_STACK_NBYTES) uint8_t stack[CLONE_TEST_STACK_NBYTES];
+static void _clone_minimal() {
+    // allocate some memory for the cloned thread.
+    uint8_t* stack = calloc(CLONE_TEST_STACK_NBYTES, 1);
 
     // Heap grows up,
     // Stack grows down,
@@ -46,37 +45,28 @@ static void _clone_testCloneStandardFlags() {
     flags |= CLONE_THREAD;  // Share thread-group
     flags |= CLONE_SYSVSEM; // Share semaphore values
 
-    flags |= CLONE_PTRACE;
+    int child_tid = clone(_inc_clone_test_acc, stack_top, flags, NULL, NULL, NULL);
+    g_assert_cmpint(child_tid, >, 0);
 
-    // Use SIGCHLD to tell the parent process that we've terminated.
-    int child_tid =
-        clone(_clone_testStandardFlagsTarget, stack_top, flags | SIGCHLD, NULL, NULL, NULL);
+    // The conventional way to wait for a child is futex, but we don't want this
+    // test to rely on it.
+    //
+    // We can't use `wait` etc, because the child "thread" process's parent is
+    // *this process's parent*, not this process. We might be able to work around
+    // this by forking first so that we can wait in the parent of the threaded process
+    // (using __WCLONE), but we don't want this test rely on fork, either.
+    while (!_clone_test_acc) {
+        usleep(1);
+    }
+    g_assert_cmpint(_clone_test_acc, ==, 1);
 
-    printf("%d\n", child_tid);
-
-    return;
-
-    g_assert_cmpint(child_tid, !=, -1);
-
-    // Wait for the only child to exit.
-    int wait_pid = waitpid(-1, NULL, 0);
-
-#if 0
-    // FIXME
-    sleep(1); // Running into some memory weirdness without this sleep. Weird,
-              // because wait_pid should catch the issue...
-#endif // 0
-
-    g_assert_cmpint(_clone_test_acc, ==, 2);
+    free(stack);
 }
 
 int main(int argc, char** argv) {
     g_test_init(&argc, &argv, NULL);
 
-    g_test_add("/clone/clone_testCloneStandardFlags", void, NULL, NULL,
-               _clone_testCloneStandardFlags, NULL);
+    g_test_add("/clone/clone_minimal", void, NULL, NULL, _clone_minimal, NULL);
 
     return g_test_run();
-
-    return 0;
 }

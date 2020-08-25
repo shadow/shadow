@@ -19,7 +19,7 @@ void thread_ref(Thread* thread);
 void thread_unref(Thread* thread);
 
 void thread_run(Thread* thread, char** argv, char** envv);
-SysCallCondition* thread_resume(Thread* thread);
+void thread_resume(Thread* thread);
 void thread_terminate(Thread* thread);
 int thread_getReturnCode(Thread* thread);
 
@@ -95,6 +95,11 @@ pid_t thread_getNativePid(Thread* thread);
 pid_t thread_getNativeTid(Thread* thread);
 
 int thread_getID(Thread* thread);
-Thread* thread_clone(Thread* thread, const SysCallArgs* args);
+int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
+                     PluginPtr ctid, unsigned long newtls, Thread** child);
+
+void thread_setTidAddress(Thread* thread, PluginPtr addr);
+
+bool thread_isLeader(Thread* thread);
 
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */
