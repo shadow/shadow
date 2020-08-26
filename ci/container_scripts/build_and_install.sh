@@ -4,10 +4,13 @@ set -euo pipefail
 
 case "$CC" in
 gcc)
-  export CXX=g++
+  export CXX="g++"
   ;;
 clang)
-  export CXX=clang++
+  export CXX="clang++"
+  ;;
+clang-11)
+  export CXX="clang++-11"
   ;;
 *)
   echo "Unknown cc $CC"

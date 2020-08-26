@@ -57,10 +57,10 @@ impl ByteQueue {
 
         // while there are bytes to copy
         while bytes_copied < src_len {
-            let head_space = self.chunks.front().unwrap().buf.len() - self.head_write_offset;
+            let head_space = self.chunk_capacity - self.head_write_offset;
 
             // if we have no space, allocate a new chunk at head
-            if head_space <= 0 {
+            if head_space == 0 {
                 self.create_new_head();
                 continue;
             }
@@ -87,15 +87,7 @@ impl ByteQueue {
         // while there are bytes to copy
         while bytes_copied < dst_len && !self.chunks.is_empty() {
             let tail_avail = self.get_available_bytes_tail();
-
-            /* if we have nothing to read, destroy old tail
-             * this *should* never happen since we destroy tails proactively
-             * but i'm leaving it in for safety
-             */
-            if tail_avail <= 0 {
-                self.destroy_old_tail();
-                continue;
-            }
+            debug_assert_ne!(tail_avail, 0);
 
             // how much we actually read in this iteration
             let dst_remaining = dst_len - bytes_copied;
@@ -111,7 +103,7 @@ impl ByteQueue {
 
             // proactively destroy old tail
             let tail_avail = self.get_available_bytes_tail();
-            if tail_avail <= 0 || self.length == 0 {
+            if tail_avail == 0 || self.length == 0 {
                 self.destroy_old_tail();
             }
         }
@@ -143,7 +135,7 @@ impl ByteQueue {
         match self.chunks.len() {
             0 => 0,
             1 => self.head_write_offset - self.tail_read_offset,
-            _ => self.chunks.back().unwrap().buf.len() - self.tail_read_offset,
+            _ => self.chunk_capacity - self.tail_read_offset,
         }
     }
 
@@ -151,6 +143,8 @@ impl ByteQueue {
     /// slice will not overflow the head.
     fn copy_to_head(&mut self, src: &[u8]) {
         let len = src.len();
+        assert!(self.head_write_offset + len <= self.chunk_capacity);
+
         self.chunks.front_mut().unwrap().buf
             [self.head_write_offset..(self.head_write_offset + len)]
             .copy_from_slice(&src);
@@ -163,6 +157,8 @@ impl ByteQueue {
     /// slice does not require more bytes than exist in the tail.
     fn copy_from_tail(&mut self, dst: &mut [u8]) {
         let len = dst.len();
+        assert!(self.tail_read_offset + len <= self.chunk_capacity);
+
         dst.copy_from_slice(
             &self.chunks.back().unwrap().buf[self.tail_read_offset..(self.tail_read_offset + len)],
         );

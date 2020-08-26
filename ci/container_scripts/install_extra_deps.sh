@@ -45,6 +45,9 @@ case "$CC" in
         fi
         install_packages clang
         ;;
+    clang-11)
+        install_packages clang-11
+        ;;
     *)
         echo "Unhandled cc $CC"
         exit 1
@@ -57,7 +60,7 @@ then
 else
     RUST_TOOLCHAIN=stable
 fi
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain $RUST_TOOLCHAIN
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain "$RUST_TOOLCHAIN"
 PATH=$HOME/.cargo/bin:$PATH
 # Force cargo to download its package index
 cargo search foo
