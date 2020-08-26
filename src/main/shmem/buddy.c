@@ -156,50 +156,6 @@ static void _buddy_alloc_split_blocks(BuddyControlBlock* bcb, uint32_t k,
     }
 }
 
-#ifndef NDEBUG
-static void _print(void* pool, size_t pool_nbytes, void* meta) {
-
-    BuddyControlBlock** bcbs = meta;
-    unsigned max_order = buddy_poolMaxOrder(pool_nbytes);
-
-    for (size_t idx = 0; idx + SHD_BUDDY_PART_MIN_ORDER < max_order + 1;
-         ++idx) {
-
-        printf("[%zu] ", idx + SHD_BUDDY_PART_MIN_ORDER);
-
-        BuddyControlBlock* p = bcbs[idx];
-
-        do {
-
-            if (p != NULL) {
-                const char* format = "(%u <- (A: %d, S: %u, T: %u) -> %u) | ";
-                BuddyControlBlock* prv_block = buddycontrolblock_prvBlock(p);
-                BuddyControlBlock* nxt_block = buddycontrolblock_nxtBlock(p);
-
-                unsigned prv =
-                    prv_block == NULL ? 0 : (uint8_t*)p - (uint8_t*)prv_block;
-                unsigned nxt =
-                    nxt_block == NULL ? 0 : (uint8_t*)nxt_block - (uint8_t*)p;
-
-                unsigned addr = (uint8_t*)p - (uint8_t*)pool;
-
-                unsigned sz = shmem_util_uintPow2k(buddycontrolblock_order(p));
-                bool tag = buddycontrolblock_tag(p);
-
-                printf(format, prv, addr, sz, tag, nxt);
-
-                p = nxt_block;
-            } else {
-                printf("<NIL>");
-            }
-
-        } while (p != NULL);
-
-        printf("\n");
-    }
-}
-#endif // NDEBUG
-
 void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool,
                   uint32_t pool_nbytes) {
 
@@ -233,11 +189,9 @@ void* buddy_alloc(size_t requested_nbytes, void* meta, void* pool,
     _buddy_alloc_split_blocks(*avail, k, idx + SHD_BUDDY_PART_MIN_ORDER, bcbs);
 
     // remove the block
+    _buddy_listRemove(&bcbs[idx], ret);
     buddycontrolblock_setTag(ret, false);
     buddycontrolblock_setOrder(ret, k);
-    _buddy_listRemove(&bcbs[idx], ret);
-
-    // _print(pool, pool_nbytes, meta);
 
     return ((uint8_t*)ret + sizeof(BuddyControlBlock));
 }
@@ -287,5 +241,4 @@ void buddy_free(void* p, void* meta, void* pool, size_t pool_nbytes) {
 
     _buddy_listInsert(&bcbs[idx], bcb);
 
-    //_print(pool, pool_nbytes, meta);
 }

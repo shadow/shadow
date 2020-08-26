@@ -9,7 +9,9 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-int shim_thisThreadEventFD();
+#include "main/shmem/shmem_allocator.h"
+
+ShMemBlock shim_thisThreadEventIPCBlk();
 
 // Disables syscall interposition for the current thread if it's enabled. (And
 // if not, increments a counter). Should be matched with a call to

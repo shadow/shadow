@@ -8,6 +8,8 @@ set(SHADOW_VERSION_FULL 2.0.0-pre)
 ## which is used by tools such as YouCompleteMe and include-what-you-use.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set (CMAKE_CXX_STANDARD 11)
+
 message(STATUS "System name: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "System version: ${CMAKE_SYSTEM_VERSION}")
 message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")

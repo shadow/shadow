@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "main/shmem/shmem_allocator.h"
+#include "shim/ipc.h"
 #include "shim/shim_event.h"
 
 void shim_shmemHandleClone(const ShimEvent* ev) {
@@ -39,9 +40,9 @@ void shim_shmemHandleWrite(const ShimEvent* ev) {
            ev->event_data.shmem_blk.n);
 }
 
-void shim_shmemNotifyComplete(int fd) {
+void shim_shmemNotifyComplete(struct IPCData *data) {
     ShimEvent ev = {
         .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
     };
-    shimevent_sendEvent(fd, &ev);
+    shimevent_sendEventToShadow(data, &ev);
 }

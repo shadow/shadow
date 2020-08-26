@@ -1,6 +1,7 @@
 #include "main/shmem/shmem_allocator.h"
 
 #include <stddef.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +23,8 @@ typedef struct _ShMemFileNode {
     struct _ShMemFileNode *prv, *nxt;
     ShMemFile shmf;
 } ShMemFileNode;
+
+static const char *SHMEM_BLOCK_SERIALIZED_STRFMT = "%zu,%zu,%zu,%s";
 
 static const ShMemFileNode*
 _shmemfilenode_findPtr(const ShMemFileNode* file_nodes, uint8_t* p) {
@@ -534,4 +537,37 @@ shmemserializer_blockDeserialize(ShMemSerializer* serializer,
 
     pthread_mutex_unlock(&serializer->mtx);
     return ret;
+}
+
+
+void shmemblockserialized_toString(const ShMemBlockSerialized *serial,
+                                   char *out)
+{
+    assert(serial && out);
+
+    sprintf(out, SHMEM_BLOCK_SERIALIZED_STRFMT,
+            serial->offset,
+            serial->nbytes,
+            serial->block_nbytes,
+            serial->name);
+}
+
+ShMemBlockSerialized shmemblockserialized_fromString(const char *buf,
+                                                     bool *err)
+{
+    ShMemBlockSerialized rv = {0};
+
+    assert(buf);
+
+    int rc = sscanf(buf, SHMEM_BLOCK_SERIALIZED_STRFMT,
+                    &rv.offset,
+                    &rv.nbytes,
+                    &rv.block_nbytes,
+                    &rv.name);
+
+    if (err) {
+        *err = (rc != 4);
+    }
+
+    return rv;
 }

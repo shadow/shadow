@@ -18,6 +18,8 @@
 #include <unistd.h>
 
 #include "main/host/syscall/kernel_types.h"
+#include "main/shmem/shmem_allocator.h"
+#include "shim/ipc.h"
 #include "shim/shim.h"
 #include "shim/shim_event.h"
 #include "shim/shim_logger.h"
@@ -71,17 +73,20 @@ static long _real_syscall(long n, ...) {
 }
 
 static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
-    const int fd = shim_thisThreadEventFD();
-    debug("sending syscall event %ld on %d",
-          syscall_event->event_data.syscall.syscall_args.number, fd);
-    shimevent_sendEvent(fd, syscall_event);
+
+    ShMemBlock ipc_blk = shim_thisThreadEventIPCBlk();
+
+    debug("sending syscall event %ld on %p",
+          syscall_event->event_data.syscall.syscall_args.number, ipc_blk.p);
+
+    shimevent_sendEventToShadow(ipc_blk.p, syscall_event);
     SysCallReg rv = {0};
 
     while (true) {
-        debug("waiting for event on %d", fd);
+        debug("waiting for event on %p", ipc_blk.p);
         ShimEvent res = {0};
-        shimevent_recvEvent(fd, &res);
-        debug("got response of type %d on %d", res.event_id, fd);
+        shimevent_recvEventFromShadow(ipc_blk.p, &res);
+        debug("got response of type %d on %p", res.event_id, ipc_blk.p);
         switch (res.event_id) {
             case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
                 // Use provided result.
@@ -119,22 +124,24 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
                     .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
                     .event_data.syscall_complete.retval.as_i64 = syscall_rv,
                 };
-                shimevent_sendEvent(fd, &syscall_complete_event);
+                shimevent_sendEventToShadow(ipc_blk.p, &syscall_complete_event);
                 break;
             }
             case SHD_SHIM_EVENT_CLONE_REQ:
                 shim_shmemHandleClone(&res);
-                shim_shmemNotifyComplete(fd);
+                shim_shmemNotifyComplete(ipc_blk.p);
                 break;
             case SHD_SHIM_EVENT_CLONE_STRING_REQ:
                 shim_shmemHandleCloneString(&res);
-                shim_shmemNotifyComplete(fd);
+                shim_shmemNotifyComplete(ipc_blk.p);
                 break;
             case SHD_SHIM_EVENT_WRITE_REQ:
                 shim_shmemHandleWrite(&res);
-                shim_shmemNotifyComplete(fd);
+                shim_shmemNotifyComplete(ipc_blk.p);
                 break;
-            case SHD_SHIM_EVENT_SHMEM_COMPLETE: break;
+            case SHD_SHIM_EVENT_SHMEM_COMPLETE:
+                shim_shmemNotifyComplete(ipc_blk.p);
+                break;
             default: {
                 error("Got unexpected event %d", res.event_id);
                 abort();

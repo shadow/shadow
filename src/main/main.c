@@ -6,6 +6,4 @@
 
 #include "main/core/main.h"
 
-int main (int argc, char* argv[]) {
-    return main_runShadow(argc, argv);
-}
+int main(int argc, char* argv[]) { return main_runShadow(argc, argv); }

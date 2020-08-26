@@ -1,0 +1,70 @@
+#ifndef BINARY_SPINNING_SEM_H_
+#define BINARY_SPINNING_SEM_H_
+
+#include <atomic>
+#include <cstddef>
+
+#include <pthread.h>
+#include <semaphore.h>
+
+// Intended to be private to the ipc module.
+
+/*
+ * Implements a partially-functioning binary semaphore with optimistic
+ * spinning: the wait() caller will spin for a number of cycles --- if post()
+ * is called during the spinning, then the waiting thread will immediately
+ * resume. After thresh_ spins, falls back to a POSIX sem_t semaphore.
+ */
+class BinarySpinningSem {
+  public:
+    BinarySpinningSem() { init(); }
+
+    /* 
+     * Initialize the semaphore to the zero state.
+     *
+     * THREAD SAFETY: not thread-safe.
+     */
+    void init();
+
+    /*
+     * Set the semaphore value to one.
+     *
+     * (rwails) !!IMPORTANT!!
+     * Calling two posts() without a wait() in-between is not implemented
+     * and leads to undefined behavior. The call chain on a particular
+     * semaphore should look like:
+     *
+     * post() -> wait() -> post() -> wait() -> post() ...
+     *
+     * (where post and wait can be occurring in different processes)
+     *
+     * THREAD SAFETY: thread-safe; This operation is thread-safe, but it is
+     * unlikely that this function will be called by two threads in a correct
+     * program.
+     */
+    void post();
+
+    /*
+     * Wait for the semaphore to achieve value one; then, atomically sets the
+     * semaphore value back to zero.
+     *
+     * (rwails) !!IMPORTANT!!
+     * See note in post(). Same call chain restriction applies for wait().
+     *
+     * THREAD SAFETY: thread-safe; This operation is thread-safe, but it is
+     * unlikely that this function will be called by two threads in a correct
+     * program.
+     */
+    void wait();
+
+    BinarySpinningSem(const BinarySpinningSem &rhs) = delete;
+    BinarySpinningSem &operator=(const BinarySpinningSem &rhs) = delete;
+
+  private:
+    std::atomic<bool> _x;
+    sem_t _semaphore;
+    std::size_t _spin_ctr, _thresh;
+    pthread_spinlock_t _lock;
+};
+
+#endif // BINARY_SPINNING_SEM_H_

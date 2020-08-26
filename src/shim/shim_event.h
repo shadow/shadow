@@ -62,7 +62,4 @@ typedef struct _ShimEvent {
 
 } ShimEvent;
 
-void shimevent_recvEvent(int event_fd, ShimEvent* e);
-void shimevent_sendEvent(int event_fd, const ShimEvent* e);
-
 #endif // SHD_SHIM_SHIM_EVENT_H_
