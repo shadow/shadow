@@ -3,6 +3,8 @@
  * See LICENSE for licensing information
  */
 
+use test_utils::AsMutPtr;
+
 struct AcceptArguments {
     fd: libc::c_int,
     addr: Option<libc::sockaddr_in>,
@@ -16,36 +18,6 @@ enum AcceptFn {
     Accept4,
 }
 
-/// AsPtr and AsMutPtr traits inspired by https://stackoverflow.com/q/35885670
-trait AsPtr<T> {
-    fn as_ptr(&self) -> *const T;
-}
-
-impl<T> AsPtr<T> for Option<T> {
-    fn as_ptr(&self) -> *const T {
-        match self {
-            Some(ref v) => v as *const T,
-            None => std::ptr::null(),
-        }
-    }
-}
-
-trait AsMutPtr<T> {
-    fn as_mut_ptr(&mut self) -> *mut T;
-}
-
-impl<T> AsMutPtr<T> for Option<T> {
-    fn as_mut_ptr(&mut self) -> *mut T {
-        match self {
-            Some(ref mut v) => v as *mut T,
-            None => std::ptr::null_mut(),
-        }
-    }
-}
-
-/// A boxed function to run as a test.
-type TestFn = Box<dyn Fn() -> Result<(), String>>;
-
 fn main() -> Result<(), String> {
     // should we run only tests that shadow supports
     let run_only_passing_tests = std::env::args().any(|x| x == "--shadow-passing");
@@ -58,20 +30,20 @@ fn main() -> Result<(), String> {
         get_all_tests()
     };
 
-    run_tests(tests.iter(), summarize)?;
+    test_utils::run_tests(&tests, summarize)?;
 
     println!("Success.");
     Ok(())
 }
 
-fn get_passing_tests() -> std::collections::BTreeMap<String, TestFn> {
-    let mut tests: Vec<(String, TestFn)> = vec![];
+fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
+    let mut tests: Vec<(String, test_utils::TestFn)> = vec![];
 
     for &accept_fn in [AcceptFn::Accept, AcceptFn::Accept4].iter() {
         let append_args = |s| format!("{} <fn={:?}>", s, accept_fn);
 
         #[rustfmt::skip]
-        let more_tests: Vec<(String, TestFn)> = vec![
+        let more_tests: Vec<(String, test_utils::TestFn)> = vec![
             (append_args("test_invalid_fd"),
                 Box::new(move || test_invalid_fd(accept_fn))),
             (append_args("test_non_existent_fd"),
@@ -104,7 +76,7 @@ fn get_passing_tests() -> std::collections::BTreeMap<String, TestFn> {
                 };
 
                 #[rustfmt::skip]
-                let more_tests: Vec<(String, TestFn)> = vec![
+                let more_tests: Vec<(String, test_utils::TestFn)> = vec![
                     (append_args("test_non_listening_fd"),
                         Box::new(move || test_non_listening_fd(accept_fn, sock_flag, accept_flag))),
                     (append_args("test_null_addr"),
@@ -135,14 +107,14 @@ fn get_passing_tests() -> std::collections::BTreeMap<String, TestFn> {
     tests
 }
 
-fn get_all_tests() -> std::collections::BTreeMap<String, TestFn> {
-    let mut tests: Vec<(String, TestFn)> = vec![];
+fn get_all_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
+    let mut tests: Vec<(String, test_utils::TestFn)> = vec![];
 
     for &accept_fn in [AcceptFn::Accept, AcceptFn::Accept4].iter() {
         let append_args = |s| format!("{} <fn={:?}>", s, accept_fn);
 
         #[rustfmt::skip]
-        let more_tests: Vec<(String, TestFn)> = vec![
+        let more_tests: Vec<(String, test_utils::TestFn)> = vec![
             (append_args("test_non_socket_fd"),
                 Box::new(move || test_non_socket_fd(accept_fn))),
             // while running in shadow, you currently need a sleep before calling accept()
@@ -165,29 +137,6 @@ fn get_all_tests() -> std::collections::BTreeMap<String, TestFn> {
     tests.extend(get_passing_tests());
 
     tests
-}
-
-fn run_tests<'a, I>(tests: I, summarize: bool) -> Result<(), String>
-where
-    I: Iterator<Item = (&'a String, &'a TestFn)>,
-{
-    for (test_name, test_fn) in tests {
-        print!("Testing {}...", test_name);
-
-        match test_fn() {
-            Err(msg) => {
-                println!(" ✗ ({})", msg);
-                if !summarize {
-                    return Err("One of the tests failed.".to_string());
-                }
-            }
-            Ok(_) => {
-                println!(" ✓");
-            }
-        }
-    }
-
-    Ok(())
 }
 
 /// Test accept using an argument that cannot be a fd.
@@ -257,7 +206,7 @@ fn test_invalid_sock_type(accept_fn: AcceptFn) -> Result<(), String> {
         flags: 0,
     };
 
-    run_and_close_fds(&[fd], || {
+    test_utils::run_and_close_fds(&[fd], || {
         let fd = check_accept_call(&mut args, accept_fn, Some(libc::EOPNOTSUPP))?;
         if let Some(fd) = fd {
             let rv = unsafe { libc::close(fd) };
@@ -283,7 +232,7 @@ fn test_non_listening_fd(
         flags: accept_flag,
     };
 
-    run_and_close_fds(&[fd], || {
+    test_utils::run_and_close_fds(&[fd], || {
         let fd = check_accept_call(&mut args, accept_fn, Some(libc::EINVAL))?;
         if let Some(fd) = fd {
             let rv = unsafe { libc::close(fd) };
@@ -348,7 +297,7 @@ fn test_null_addr(
             std::mem::size_of_val(&server_addr) as u32,
         )
     };
-    assert!(rv == 0 || (rv == -1 && get_errno() == libc::EINPROGRESS));
+    assert!(rv == 0 || (rv == -1 && test_utils::get_errno() == libc::EINPROGRESS));
 
     // shadow needs to run events, otherwise the accept call won't know it
     // has an incoming connection (SYN packet)
@@ -363,7 +312,7 @@ fn test_null_addr(
         flags: accept_flag,
     };
 
-    run_and_close_fds(&[fd_client, fd_server], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         let fd = check_accept_call(&mut args, accept_fn, None)?;
         if let Some(fd) = fd {
             let rv = unsafe { libc::close(fd) };
@@ -428,8 +377,8 @@ fn test_null_len(
             std::mem::size_of_val(&server_addr) as u32,
         )
     };
-    //assert_eq!(rv, 0, "{}", get_errno_message(get_errno()));
-    assert!(rv == 0 || (rv == -1 && get_errno() == libc::EINPROGRESS));
+    //assert_eq!(rv, 0, "{}", test_utils::get_errno_message(test_utils::get_errno()));
+    assert!(rv == 0 || (rv == -1 && test_utils::get_errno() == libc::EINPROGRESS));
 
     // shadow needs to run events, otherwise the accept call won't know it
     // has an incoming connection (SYN packet)
@@ -454,7 +403,7 @@ fn test_null_len(
         flags: accept_flag,
     };
 
-    run_and_close_fds(&[fd_client, fd_server], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         let fd = check_accept_call(&mut args, accept_fn, Some(libc::EFAULT))?;
         if let Some(fd) = fd {
             let rv = unsafe { libc::close(fd) };
@@ -519,8 +468,8 @@ fn test_short_len(
             std::mem::size_of_val(&server_addr) as u32,
         )
     };
-    //assert_eq!(rv, 0, "{}", get_errno_message(get_errno()));
-    assert!(rv == 0 || (rv == -1 && get_errno() == libc::EINPROGRESS));
+    //assert_eq!(rv, 0, "{}", test_utils::get_errno_message(test_utils::get_errno()));
+    assert!(rv == 0 || (rv == -1 && test_utils::get_errno() == libc::EINPROGRESS));
 
     // shadow needs to run events, otherwise the accept call won't know it
     // has an incoming connection (SYN packet)
@@ -545,7 +494,7 @@ fn test_short_len(
         flags: accept_flag,
     };
 
-    run_and_close_fds(&[fd_client, fd_server], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         let fd = check_accept_call(&mut args, accept_fn, None)?;
         if let Some(fd) = fd {
             let rv = unsafe { libc::close(fd) };
@@ -555,28 +504,28 @@ fn test_short_len(
     })?;
 
     // check that the returned length is expected
-    result_assert_eq(
+    test_utils::result_assert_eq(
         args.addr_len.unwrap() as usize,
         std::mem::size_of_val(&addr),
         "Unexpected addr length",
     )?;
 
     // check that the returned client address is expected
-    result_assert_eq(
+    test_utils::result_assert_eq(
         args.addr.unwrap().sin_family,
         libc::AF_INET as u16,
         "Unexpected family",
     )?;
-    result_assert(
+    test_utils::result_assert(
         args.addr.unwrap().sin_port != 0u16.to_be(),
         "Unexpected port",
     )?;
-    result_assert_eq(
+    test_utils::result_assert_eq(
         args.addr.unwrap().sin_addr.s_addr,
         libc::INADDR_LOOPBACK.to_be(),
         "Unexpected address",
     )?;
-    result_assert_eq(
+    test_utils::result_assert_eq(
         args.addr.unwrap().sin_zero,
         [0, 0, 0, 0, 0, 0, 0, 1],
         "Unexpected padding",
@@ -638,8 +587,8 @@ fn test_zero_len(
             std::mem::size_of_val(&server_addr) as u32,
         )
     };
-    //assert_eq!(rv, 0, "{}", get_errno_message(get_errno()));
-    assert!(rv == 0 || (rv == -1 && get_errno() == libc::EINPROGRESS));
+    //assert_eq!(rv, 0, "{}", test_utils::get_errno_message(test_utils::get_errno()));
+    assert!(rv == 0 || (rv == -1 && test_utils::get_errno() == libc::EINPROGRESS));
 
     // shadow needs to run events, otherwise the accept call won't know it
     // has an incoming connection (SYN packet)
@@ -664,7 +613,7 @@ fn test_zero_len(
         flags: accept_flag,
     };
 
-    run_and_close_fds(&[fd_client, fd_server], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         let fd = check_accept_call(&mut args, accept_fn, None)?;
         if let Some(fd) = fd {
             let rv = unsafe { libc::close(fd) };
@@ -674,25 +623,25 @@ fn test_zero_len(
     })?;
 
     // check that the returned length is expected
-    result_assert_eq(
+    test_utils::result_assert_eq(
         args.addr_len.unwrap() as usize,
         std::mem::size_of_val(&addr),
         "Unexpected addr length",
     )?;
 
     // check that the returned client address is expected
-    result_assert_eq(args.addr.unwrap().sin_family, 123u16, "Unexpected family")?;
-    result_assert_eq(
+    test_utils::result_assert_eq(args.addr.unwrap().sin_family, 123u16, "Unexpected family")?;
+    test_utils::result_assert_eq(
         args.addr.unwrap().sin_port,
         456u16.to_be(),
         "Unexpected port",
     )?;
-    result_assert_eq(
+    test_utils::result_assert_eq(
         args.addr.unwrap().sin_addr.s_addr,
         789u32.to_be(),
         "Unexpected address",
     )?;
-    result_assert_eq(args.addr.unwrap().sin_zero, [1; 8], "Unexpected padding")
+    test_utils::result_assert_eq(args.addr.unwrap().sin_zero, [1; 8], "Unexpected padding")
 }
 
 /// Test accept after closing the socket.
@@ -805,7 +754,7 @@ fn test_correctness(
             std::mem::size_of_val(&server_addr) as u32,
         )
     };
-    assert!(rv == 0 || (rv == -1 && get_errno() == libc::EINPROGRESS));
+    assert!(rv == 0 || (rv == -1 && test_utils::get_errno() == libc::EINPROGRESS));
 
     // shadow needs to run events, otherwise the accept call won't know it
     // has an incoming connection (SYN packet)
@@ -830,7 +779,7 @@ fn test_correctness(
         flags: accept_flag,
     };
 
-    run_and_close_fds(&[fd_client, fd_server], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         let fd = check_accept_call(&mut args, accept_fn, None)?;
         if let Some(fd) = fd {
             let rv = unsafe { libc::close(fd) };
@@ -840,7 +789,7 @@ fn test_correctness(
     })?;
 
     // check that the returned length is expected
-    result_assert_eq(
+    test_utils::result_assert_eq(
         args.addr_len.unwrap() as usize,
         std::mem::size_of_val(&args.addr.unwrap()),
         "Unexpected addr length",
@@ -848,69 +797,21 @@ fn test_correctness(
 
     // check that the returned client address is expected (except the port which is not
     // deterministic)
-    result_assert_eq(
+    test_utils::result_assert_eq(
         args.addr.unwrap().sin_family,
         libc::AF_INET as u16,
         "Unexpected family",
     )?;
-    result_assert(
+    test_utils::result_assert(
         args.addr.unwrap().sin_port != 0u16.to_be(),
         "Unexpected port",
     )?;
-    result_assert_eq(
+    test_utils::result_assert_eq(
         args.addr.unwrap().sin_addr.s_addr,
         libc::INADDR_LOOPBACK.to_be(),
         "Unexpected address",
     )?;
-    result_assert_eq(args.addr.unwrap().sin_zero, [0; 8], "Unexpected padding")
-}
-
-fn result_assert(cond: bool, message: &str) -> Result<(), String> {
-    if !cond {
-        Err(message.to_string())
-    } else {
-        Ok(())
-    }
-}
-
-fn result_assert_eq<T>(a: T, b: T, message: &str) -> Result<(), String>
-where
-    T: std::fmt::Debug + std::cmp::PartialEq,
-{
-    if a != b {
-        Err(format!("{:?} != {:?} -- {}", a, b, message))
-    } else {
-        Ok(())
-    }
-}
-
-/// Run the function and then close any given file descriptors, even if there was an error.
-fn run_and_close_fds<F>(fds: &[libc::c_int], mut f: F) -> Result<(), String>
-where
-    F: FnMut() -> Result<(), String>,
-{
-    let rv = f();
-
-    for fd in fds.iter() {
-        let fd = *fd;
-        let rv_close = unsafe { libc::close(fd) };
-        assert_eq!(rv_close, 0, "Could not close the fd");
-    }
-
-    rv
-}
-
-fn get_errno() -> i32 {
-    std::io::Error::last_os_error().raw_os_error().unwrap()
-}
-
-fn get_errno_message(errno: i32) -> String {
-    let cstr;
-    unsafe {
-        let error_ptr = libc::strerror(errno);
-        cstr = std::ffi::CStr::from_ptr(error_ptr)
-    }
-    cstr.to_string_lossy().into_owned()
+    test_utils::result_assert_eq(args.addr.unwrap().sin_zero, [0; 8], "Unexpected padding")
 }
 
 fn check_accept_call(
@@ -943,7 +844,7 @@ fn check_accept_call(
         },
     };
 
-    let errno = get_errno();
+    let errno = test_utils::get_errno();
     let fd;
 
     match expected_errno {
@@ -956,9 +857,9 @@ fn check_accept_call(
                 return Err(format!(
                     "Expecting errno {} \"{}\", received {} \"{}\"",
                     expected_errno,
-                    get_errno_message(expected_errno),
+                    test_utils::get_errno_message(expected_errno),
                     errno,
-                    get_errno_message(errno)
+                    test_utils::get_errno_message(errno)
                 ));
             }
             fd = None;
@@ -969,7 +870,7 @@ fn check_accept_call(
                 return Err(format!(
                     "Expecting a non-negative return value, received {} \"{}\"",
                     rv,
-                    get_errno_message(errno)
+                    test_utils::get_errno_message(errno)
                 ));
             }
             fd = Some(rv);

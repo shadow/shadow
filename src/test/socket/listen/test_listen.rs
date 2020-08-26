@@ -14,9 +14,6 @@ struct BindAddress {
     port: libc::in_port_t,
 }
 
-/// A boxed function to run as a test.
-type TestFn = Box<dyn Fn() -> Result<(), String>>;
-
 fn main() -> Result<(), String> {
     // should we run only tests that shadow supports
     let run_only_passing_tests = std::env::args().any(|x| x == "--shadow-passing");
@@ -29,15 +26,15 @@ fn main() -> Result<(), String> {
         get_all_tests()
     };
 
-    run_tests(tests.iter(), summarize)?;
+    test_utils::run_tests(&tests, summarize)?;
 
     println!("Success.");
     Ok(())
 }
 
-fn get_passing_tests() -> std::collections::BTreeMap<String, TestFn> {
+fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
     #[rustfmt::skip]
-    let mut tests: Vec<(String, TestFn)> = vec![
+    let mut tests: Vec<(String, test_utils::TestFn)> = vec![
         ("test_invalid_fd".to_string(),
             Box::new(test_invalid_fd)),
         ("test_non_existent_fd".to_string(),
@@ -68,7 +65,7 @@ fn get_passing_tests() -> std::collections::BTreeMap<String, TestFn> {
                     |s| format!("{} <type={},flag={},bind={:?}>", s, sock_type, flag, bind);
 
                 #[rustfmt::skip]
-                let more_tests: Vec<(String, TestFn)> = vec![
+                let more_tests: Vec<(String, test_utils::TestFn)> = vec![
                     (append_args("test_zero_backlog"),
                         Box::new(move || test_zero_backlog(sock_type, flag, bind))),
                     (append_args("test_negative_backlog"),
@@ -93,9 +90,9 @@ fn get_passing_tests() -> std::collections::BTreeMap<String, TestFn> {
     tests
 }
 
-fn get_all_tests() -> std::collections::BTreeMap<String, TestFn> {
+fn get_all_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
     #[rustfmt::skip]
-    let mut tests: Vec<(String, TestFn)> = vec![
+    let mut tests: Vec<(String, test_utils::TestFn)> = vec![
         ("test_non_socket_fd".to_string(),
             Box::new(test_non_socket_fd)),
     ];
@@ -121,7 +118,7 @@ fn get_all_tests() -> std::collections::BTreeMap<String, TestFn> {
                     |s| format!("{} <type={},flag={},bind={:?}>", s, sock_type, flag, bind);
 
                 #[rustfmt::skip]
-                let more_tests: Vec<(String, TestFn)> = vec![
+                let more_tests: Vec<(String, test_utils::TestFn)> = vec![
                     (append_args("test_listen_twice"),
                         Box::new(move || test_listen_twice(sock_type, flag, bind))),
                 ];
@@ -141,29 +138,6 @@ fn get_all_tests() -> std::collections::BTreeMap<String, TestFn> {
     tests.extend(get_passing_tests());
 
     tests
-}
-
-fn run_tests<'a, I>(tests: I, summarize: bool) -> Result<(), String>
-where
-    I: Iterator<Item = (&'a String, &'a TestFn)>,
-{
-    for (test_name, test_fn) in tests {
-        print!("Testing {}...", test_name);
-
-        match test_fn() {
-            Err(msg) => {
-                println!(" ✗ ({})", msg);
-                if !summarize {
-                    return Err("One of the tests failed.".to_string());
-                }
-            }
-            Ok(_) => {
-                println!(" ✓");
-            }
-        }
-    }
-
-    Ok(())
 }
 
 /// Test listen using an argument that cannot be a fd.
@@ -200,7 +174,7 @@ fn test_invalid_sock_type() -> Result<(), String> {
 
     let args = ListenArguments { fd: fd, backlog: 0 };
 
-    run_and_close_fds(&[fd], || check_listen_call(&args, Some(libc::EOPNOTSUPP)))
+    test_utils::run_and_close_fds(&[fd], || check_listen_call(&args, Some(libc::EOPNOTSUPP)))
 }
 
 /// Test listen using a backlog of 0.
@@ -224,7 +198,7 @@ fn test_zero_backlog(
         Some(libc::EOPNOTSUPP)
     };
 
-    run_and_close_fds(&[fd], || check_listen_call(&args, expected_errno))
+    test_utils::run_and_close_fds(&[fd], || check_listen_call(&args, expected_errno))
 }
 
 /// Test listen using a backlog of -1.
@@ -251,7 +225,7 @@ fn test_negative_backlog(
         Some(libc::EOPNOTSUPP)
     };
 
-    run_and_close_fds(&[fd], || check_listen_call(&args, expected_errno))
+    test_utils::run_and_close_fds(&[fd], || check_listen_call(&args, expected_errno))
 }
 
 /// Test listen using a backlog of INT_MAX.
@@ -278,7 +252,7 @@ fn test_large_backlog(
         Some(libc::EOPNOTSUPP)
     };
 
-    run_and_close_fds(&[fd], || check_listen_call(&args, expected_errno))
+    test_utils::run_and_close_fds(&[fd], || check_listen_call(&args, expected_errno))
 }
 
 /// Test calling listen twice for the same socket.
@@ -307,7 +281,7 @@ fn test_listen_twice(
         Some(libc::EOPNOTSUPP)
     };
 
-    run_and_close_fds(&[fd], || {
+    test_utils::run_and_close_fds(&[fd], || {
         check_listen_call(&args1, expected_errno)?;
         check_listen_call(&args2, expected_errno)
     })
@@ -327,7 +301,7 @@ fn test_after_close(
     }
 
     // close the file descriptor
-    run_and_close_fds(&[fd], || Ok(())).unwrap();
+    test_utils::run_and_close_fds(&[fd], || Ok(())).unwrap();
 
     let args = ListenArguments {
         fd: fd,
@@ -357,42 +331,13 @@ fn bind_fd(fd: libc::c_int, bind: BindAddress) {
     assert_eq!(rv, 0);
 }
 
-/// Run the function and then close any given file descriptors, even if there was an error.
-fn run_and_close_fds<F>(fds: &[libc::c_int], f: F) -> Result<(), String>
-where
-    F: Fn() -> Result<(), String>,
-{
-    let rv = f();
-
-    for fd in fds.iter() {
-        let fd = *fd;
-        let rv_close = unsafe { libc::close(fd) };
-        assert_eq!(rv_close, 0, "Could not close the fd");
-    }
-
-    rv
-}
-
-fn get_errno() -> i32 {
-    std::io::Error::last_os_error().raw_os_error().unwrap()
-}
-
-fn get_errno_message(errno: i32) -> String {
-    let cstr;
-    unsafe {
-        let error_ptr = libc::strerror(errno);
-        cstr = std::ffi::CStr::from_ptr(error_ptr)
-    }
-    cstr.to_string_lossy().into_owned()
-}
-
 fn check_listen_call(
     args: &ListenArguments,
     expected_errno: Option<libc::c_int>,
 ) -> Result<(), String> {
     let rv = unsafe { libc::listen(args.fd, args.backlog) };
 
-    let errno = get_errno();
+    let errno = test_utils::get_errno();
 
     match expected_errno {
         // if we expect the socket() call to return an error (rv should be -1)
@@ -404,9 +349,9 @@ fn check_listen_call(
                 return Err(format!(
                     "Expecting errno {} \"{}\", received {} \"{}\"",
                     expected_errno,
-                    get_errno_message(expected_errno),
+                    test_utils::get_errno_message(expected_errno),
                     errno,
-                    get_errno_message(errno)
+                    test_utils::get_errno_message(errno)
                 ));
             }
         }
@@ -416,7 +361,7 @@ fn check_listen_call(
                 return Err(format!(
                     "Expecting a return value of 0, received {} \"{}\"",
                     rv,
-                    get_errno_message(errno)
+                    test_utils::get_errno_message(errno)
                 ));
             }
         }
