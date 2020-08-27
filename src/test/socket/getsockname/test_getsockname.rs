@@ -54,6 +54,8 @@ fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn>
             Box::new(test_after_close)),
         ("test_connected_socket".to_string(),
             Box::new(test_connected_socket)),
+        ("test_implicit_bind".to_string(),
+            Box::new(test_implicit_bind)),
     ];
 
     let num_tests = tests.len();
@@ -551,6 +553,55 @@ fn test_connected_socket() -> Result<(), String> {
 
     // check that the returned server address is expected
     sockaddr_check_equal(&args_server.addr.unwrap(), &server_addr)
+}
+
+/// Test getsockname using a listening socket without binding (an implicit bind).
+fn test_implicit_bind() -> Result<(), String> {
+    let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
+    assert!(fd >= 0);
+
+    let rv = unsafe { libc::listen(fd, 100) };
+    assert_eq!(rv, 0);
+
+    // fill the sockaddr with dummy data
+    let addr = libc::sockaddr_in {
+        sin_family: 123u16,
+        sin_port: 456u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: 789u32.to_be(),
+        },
+        sin_zero: [1; 8],
+    };
+
+    // getsockname() may mutate addr and addr_len
+    let mut args = GetsocknameArguments {
+        fd: fd,
+        addr: Some(addr),
+        addr_len: Some(std::mem::size_of_val(&addr) as u32),
+    };
+
+    test_utils::run_and_close_fds(&[fd], || check_getsockname_call(&mut args, None))?;
+
+    // check that the returned length is expected
+    test_utils::result_assert_eq(
+        args.addr_len.unwrap() as usize,
+        std::mem::size_of_val(&args.addr.unwrap()),
+        "Unexpected addr length",
+    )?;
+
+    // check that the returned client address is expected (except the port which is not
+    // deterministic)
+    test_utils::result_assert_eq(
+        args.addr.unwrap().sin_family,
+        libc::AF_INET as u16,
+        "Unexpected family",
+    )?;
+    test_utils::result_assert_eq(
+        args.addr.unwrap().sin_addr.s_addr,
+        libc::INADDR_ANY.to_be(),
+        "Unexpected address",
+    )?;
+    test_utils::result_assert_eq(args.addr.unwrap().sin_zero, [0; 8], "Unexpected padding")
 }
 
 fn sockaddr_check_equal(a: &libc::sockaddr_in, b: &libc::sockaddr_in) -> Result<(), String> {
