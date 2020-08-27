@@ -405,19 +405,6 @@ where
     }
 }
 
-fn get_errno() -> i32 {
-    std::io::Error::last_os_error().raw_os_error().unwrap()
-}
-
-fn get_errno_message(errno: i32) -> String {
-    let cstr;
-    unsafe {
-        let error_ptr = libc::strerror(errno);
-        cstr = std::ffi::CStr::from_ptr(error_ptr)
-    }
-    cstr.to_string_lossy().into_owned()
-}
-
 fn check_socket_call(
     args: &SocketArguments,
     socket_fn: SocketFn,
@@ -440,7 +427,7 @@ fn check_socket_call(
         .unwrap(),
     };
 
-    let errno = get_errno();
+    let errno = test_utils::get_errno();
     let fd;
 
     // if we expect the socket creation to return an error
@@ -467,9 +454,9 @@ fn check_socket_call(
             return Err(format!(
                 "Expecting errno {} \"{}\", received {} \"{}\"",
                 expected_errno,
-                get_errno_message(expected_errno),
+                test_utils::get_errno_message(expected_errno),
                 errno,
-                get_errno_message(errno)
+                test_utils::get_errno_message(errno)
             ));
         }
     }

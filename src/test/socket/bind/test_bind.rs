@@ -16,9 +16,6 @@ struct BindArguments {
     addr_len: libc::socklen_t,
 }
 
-// a boxed function to run as a test
-type TestFn = Box<dyn Fn() -> Result<(), String>>;
-
 fn main() -> Result<(), String> {
     // should we run only tests that shadow supports
     let run_only_passing_tests = std::env::args().any(|x| x == "--shadow-passing");
@@ -31,15 +28,15 @@ fn main() -> Result<(), String> {
         get_all_tests()
     };
 
-    run_tests(tests.iter(), summarize)?;
+    test_utils::run_tests(&tests, summarize)?;
 
     println!("Success.");
     Ok(())
 }
 
-fn get_passing_tests() -> std::collections::BTreeMap<String, TestFn> {
+fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
     #[rustfmt::skip]
-    let mut tests: Vec<(String, TestFn)> = vec![
+    let mut tests: Vec<(String, test_utils::TestFn)> = vec![
         ("test_invalid_fd".to_string(),
             Box::new(test_invalid_fd)),
         ("test_non_existent_fd".to_string(),
@@ -55,7 +52,7 @@ fn get_passing_tests() -> std::collections::BTreeMap<String, TestFn> {
             let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
 
             #[rustfmt::skip]
-            let more_tests: Vec<(String, TestFn)> = vec![
+            let more_tests: Vec<(String, test_utils::TestFn)> = vec![
                 (append_args("test_ipv4"),
                     Box::new(move || test_ipv4(sock_type, flag))),
                 (append_args("test_loopback"),
@@ -87,9 +84,9 @@ fn get_passing_tests() -> std::collections::BTreeMap<String, TestFn> {
     tests
 }
 
-fn get_all_tests() -> std::collections::BTreeMap<String, TestFn> {
+fn get_all_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
     #[rustfmt::skip]
-    let tests: Vec<(String, TestFn)> = vec![
+    let tests: Vec<(String, test_utils::TestFn)> = vec![
         ("test_non_socket_fd".to_string(),
             Box::new(test_non_socket_fd)),
         ("test_null_addr".to_string(),
@@ -105,7 +102,7 @@ fn get_all_tests() -> std::collections::BTreeMap<String, TestFn> {
             let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
 
             #[rustfmt::skip]
-            let more_tests: Vec<(String, TestFn)> = vec![
+            let more_tests: Vec<(String, test_utils::TestFn)> = vec![
                 (append_args("test_ipv6"),
                     Box::new(move || test_ipv6(sock_type, flag)))
             ];
@@ -125,29 +122,6 @@ fn get_all_tests() -> std::collections::BTreeMap<String, TestFn> {
     tests.extend(get_passing_tests());
 
     tests
-}
-
-fn run_tests<'a, I>(tests: I, summarize: bool) -> Result<(), String>
-where
-    I: Iterator<Item = (&'a String, &'a TestFn)>,
-{
-    for (test_name, test_fn) in tests {
-        print!("Testing {}...", test_name);
-
-        match test_fn() {
-            Err(msg) => {
-                println!(" ✗ ({})", msg);
-                if !summarize {
-                    return Err("One of the tests failed.".to_string());
-                }
-            }
-            Ok(_) => {
-                println!(" ✓");
-            }
-        }
-    }
-
-    Ok(())
 }
 
 // test binding using an argument that cannot be a fd
@@ -194,7 +168,7 @@ fn test_null_addr() -> Result<(), String> {
         addr_len: 5,
     };
 
-    run_and_close_fds(&[fd], || check_bind_call(&args, Some(libc::EFAULT)))
+    test_utils::run_and_close_fds(&[fd], || check_bind_call(&args, Some(libc::EFAULT)))
 }
 
 // test binding a valid fd and address, but an address length that is too low
@@ -217,7 +191,7 @@ fn test_short_addr() -> Result<(), String> {
         addr_len: (std::mem::size_of_val(&addr) - 1) as u32,
     };
 
-    run_and_close_fds(&[fd], || check_bind_call(&args, Some(libc::EINVAL)))
+    test_utils::run_and_close_fds(&[fd], || check_bind_call(&args, Some(libc::EINVAL)))
 }
 
 // test binding an INET socket
@@ -240,7 +214,7 @@ fn test_ipv4(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String> {
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
-    run_and_close_fds(&[fd], || check_bind_call(&args, None))
+    test_utils::run_and_close_fds(&[fd], || check_bind_call(&args, None))
 }
 
 // Docker does not support IPv6, so this test is not run
@@ -267,7 +241,7 @@ fn test_ipv6(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String> {
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
-    run_and_close_fds(&[fd], || check_bind_call(&args, None))
+    test_utils::run_and_close_fds(&[fd], || check_bind_call(&args, None))
 }
 
 // test binding a socket on the loopback interface
@@ -290,7 +264,7 @@ fn test_loopback(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
-    run_and_close_fds(&[fd], || check_bind_call(&args, None))
+    test_utils::run_and_close_fds(&[fd], || check_bind_call(&args, None))
 }
 
 // test binding a socket on all interfaces
@@ -313,7 +287,7 @@ fn test_any_interface(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), S
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
-    run_and_close_fds(&[fd], || check_bind_call(&args, None))
+    test_utils::run_and_close_fds(&[fd], || check_bind_call(&args, None))
 }
 
 // test binding a socket twice to the same address on the loopback interface
@@ -336,7 +310,7 @@ fn test_double_bind_socket(sock_type: libc::c_int, flag: libc::c_int) -> Result<
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
-    run_and_close_fds(&[fd], || {
+    test_utils::run_and_close_fds(&[fd], || {
         check_bind_call(&args, None)?;
         check_bind_call(&args, Some(libc::EINVAL))?;
         Ok(())
@@ -371,7 +345,7 @@ fn test_double_bind_address(sock_type: libc::c_int, flag: libc::c_int) -> Result
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
-    run_and_close_fds(&[fd1, fd2], || {
+    test_utils::run_and_close_fds(&[fd1, fd2], || {
         check_bind_call(&args1, None)?;
         check_bind_call(&args2, Some(libc::EADDRINUSE))?;
         Ok(())
@@ -426,7 +400,7 @@ fn test_double_bind_loopback_and_any(
         addr_len: std::mem::size_of_val(&addr2) as u32,
     };
 
-    run_and_close_fds(&[fd1, fd2], || {
+    test_utils::run_and_close_fds(&[fd1, fd2], || {
         check_bind_call(&args1, None)?;
         check_bind_call(&args2, Some(libc::EADDRINUSE))?;
         Ok(())
@@ -453,36 +427,7 @@ fn test_unspecified_port(sock_type: libc::c_int, flag: libc::c_int) -> Result<()
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
-    run_and_close_fds(&[fd], || check_bind_call(&args, None))
-}
-
-// run the function and then close any given file descriptors, even if there was an error
-fn run_and_close_fds<F>(fds: &[libc::c_int], f: F) -> Result<(), String>
-where
-    F: Fn() -> Result<(), String>,
-{
-    let rv = f();
-
-    for fd in fds.iter() {
-        let fd = *fd;
-        let rv_close = unsafe { libc::close(fd) };
-        assert_eq!(rv_close, 0, "Could not close the fd");
-    }
-
-    rv
-}
-
-fn get_errno() -> i32 {
-    std::io::Error::last_os_error().raw_os_error().unwrap()
-}
-
-fn get_errno_message(errno: i32) -> String {
-    let cstr;
-    unsafe {
-        let error_ptr = libc::strerror(errno);
-        cstr = std::ffi::CStr::from_ptr(error_ptr)
-    }
-    cstr.to_string_lossy().into_owned()
+    test_utils::run_and_close_fds(&[fd], || check_bind_call(&args, None))
 }
 
 fn check_bind_call(
@@ -513,7 +458,7 @@ fn check_bind_call(
 
     let rv = unsafe { libc::bind(args.fd, addr_ptr, args.addr_len) };
 
-    let errno = get_errno();
+    let errno = test_utils::get_errno();
 
     match expected_errno {
         // if we expect the socket() call to return an error (rv should be -1)
@@ -525,9 +470,9 @@ fn check_bind_call(
                 return Err(format!(
                     "Expecting errno {} \"{}\", received {} \"{}\"",
                     expected_errno,
-                    get_errno_message(expected_errno),
+                    test_utils::get_errno_message(expected_errno),
                     errno,
-                    get_errno_message(errno)
+                    test_utils::get_errno_message(errno)
                 ));
             }
         }
@@ -537,7 +482,7 @@ fn check_bind_call(
                 return Err(format!(
                     "Expecting a return value of 0, received {} \"{}\"",
                     rv,
-                    get_errno_message(errno)
+                    test_utils::get_errno_message(errno)
                 ));
             }
         }
