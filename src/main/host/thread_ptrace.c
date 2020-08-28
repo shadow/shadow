@@ -150,8 +150,6 @@ typedef struct _ThreadPtrace {
 
     FILE* childMemFile;
 
-    int threadID;
-
     // Reason for the most recent transfer of control back to Shadow.
     ThreadPtraceChildState childState;
 
