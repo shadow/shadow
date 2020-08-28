@@ -84,7 +84,7 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
             }
         }
 
-        int* lenout = memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, argPtr, sizeof(int));
+        int* lenout = process_getWriteablePtr(sys->process,sys->thread, argPtr, sizeof(int));
         *lenout = (int)buflen;
     } else {
         warning("We do not support ioctl request %lu on descriptor %i", request,

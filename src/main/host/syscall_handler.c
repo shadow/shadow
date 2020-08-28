@@ -57,8 +57,6 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
         .process = process,
         .thread = thread,
         .blockedSyscallNR = -1,
-        // Can't be initialized until we have a thread in the state of making a syscall.
-        .memoryManager = NULL,
         .referenceCount = 1,
         /* Here we create the timer directly and do not register
          * with the process descriptor table because the descriptor
@@ -83,10 +81,6 @@ static void _syscallhandler_free(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
     message("handled %li syscalls in %f seconds", sys->numSyscalls, sys->perfSecondsTotal);
-
-    if (sys->memoryManager) {
-        memorymanager_free(sys->memoryManager);
-    }
 
     if (sys->host) {
         host_unref(sys->host);
@@ -179,8 +173,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
 
     // Lazily initialize memoryManager on the first syscall. It needs a thread
     // in the syscall state for its initialization.
-    if (!sys->memoryManager) {
-        sys->memoryManager = memorymanager_new(sys->thread);
+    if (!process_getMemoryManager(sys->process)) {
+        process_setMemoryManager(sys->process, memorymanager_new(sys->thread));
     }
     SysCallReturn scr;
 

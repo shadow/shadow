@@ -63,7 +63,7 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
 
     /* Return the pipe fds to the caller. */
     size_t sizeNeeded = sizeof(int) * 2;
-    gint* pipefd = memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, pipefdPtr, sizeNeeded);
+    gint* pipefd = process_getWriteablePtr(sys->process,sys->thread, pipefdPtr, sizeNeeded);
 
     pipefd[0] =
         process_registerDescriptor(sys->process, (Descriptor*)pipeReader);
@@ -123,7 +123,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
-    void* buf = memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, bufPtr, sizeNeeded);
+    void* buf = process_getWriteablePtr(sys->process,sys->thread, bufPtr, sizeNeeded);
 
     ssize_t result = 0;
     switch (dType) {
@@ -222,7 +222,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
-    const void* buf = memorymanager_getReadablePtr(sys->memoryManager,sys->thread, bufPtr, sizeNeeded);
+    const void* buf = process_getReadablePtr(sys->process,sys->thread, bufPtr, sizeNeeded);
 
     ssize_t result = 0;
     switch (dType) {
@@ -356,7 +356,7 @@ SysCallReturn syscallhandler_uname(SysCallHandler* sys,
     }
 
     buf =
-        memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, args->args[0].as_ptr, sizeof(*buf));
+        process_getWriteablePtr(sys->process,sys->thread, args->args[0].as_ptr, sizeof(*buf));
 
     const gchar* hostname = host_getName(sys->host);
 

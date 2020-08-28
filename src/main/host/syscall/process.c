@@ -9,7 +9,10 @@
 
 SysCallReturn syscallhandler_execve(SysCallHandler* sys, const SysCallArgs* args) {
     // Notify the memorymanager that exec is about to be called.
-    memorymanager_preExecHook(sys->memoryManager, sys->thread);
+    MemoryManager* mm = process_getMemoryManager(sys->process);
+    if (mm)  {
+        memorymanager_preExecHook(mm, sys->thread);
+    }
 
     // Have the plugin execute it natively.
     return (SysCallReturn){.state = SYSCALL_NATIVE};

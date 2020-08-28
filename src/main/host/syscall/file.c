@@ -128,7 +128,7 @@ SysCallReturn syscallhandler_fstat(SysCallHandler* sys,
 
     /* Get some memory in which to return the result. */
     struct stat* buf =
-        memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, bufPtr, sizeof(*buf));
+        process_getWriteablePtr(sys->process,sys->thread, bufPtr, sizeof(*buf));
 
     return (SysCallReturn){
         .state = SYSCALL_DONE, .retval.as_i64 = file_fstat(file_desc, buf)};
@@ -153,7 +153,7 @@ SysCallReturn syscallhandler_fstatfs(SysCallHandler* sys,
 
     /* Get some memory in which to return the result. */
     struct statfs* buf =
-        memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, bufPtr, sizeof(*buf));
+        process_getWriteablePtr(sys->process,sys->thread, bufPtr, sizeof(*buf));
 
     return (SysCallReturn){
         .state = SYSCALL_DONE, .retval.as_i64 = file_fstatfs(file_desc, buf)};
@@ -316,7 +316,7 @@ SysCallReturn syscallhandler_fsetxattr(SysCallHandler* sys,
     }
 
     const void* value = (valuePtr.val && size > 0)
-                            ? memorymanager_getReadablePtr(sys->memoryManager,sys->thread, valuePtr, size)
+                            ? process_getReadablePtr(sys->process,sys->thread, valuePtr, size)
                             : NULL;
 
     return (SysCallReturn){
@@ -351,7 +351,7 @@ SysCallReturn syscallhandler_fgetxattr(SysCallHandler* sys,
     }
 
     void* value = (valuePtr.val && size > 0)
-                      ? memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, valuePtr, size)
+                      ? process_getWriteablePtr(sys->process,sys->thread, valuePtr, size)
                       : NULL;
 
     return (SysCallReturn){
@@ -373,7 +373,7 @@ SysCallReturn syscallhandler_flistxattr(SysCallHandler* sys,
     }
 
     void* list = (listPtr.val && size > 0)
-                     ? memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, listPtr, size)
+                     ? process_getWriteablePtr(sys->process,sys->thread, listPtr, size)
                      : NULL;
 
     return (SysCallReturn){
@@ -484,7 +484,7 @@ SysCallReturn syscallhandler_getdents(SysCallHandler* sys,
 
     /* Get the path string from the plugin. */
     struct linux_dirent* dirp =
-        memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, dirpPtr, sizeof(*dirp));
+        process_getWriteablePtr(sys->process,sys->thread, dirpPtr, sizeof(*dirp));
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
@@ -514,7 +514,7 @@ SysCallReturn syscallhandler_getdents64(SysCallHandler* sys,
 
     /* Get the path string from the plugin. */
     struct linux_dirent64* dirp =
-        memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, dirpPtr, sizeof(*dirp));
+        process_getWriteablePtr(sys->process,sys->thread, dirpPtr, sizeof(*dirp));
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }

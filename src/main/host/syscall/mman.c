@@ -165,8 +165,11 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
     }
 
     // Delegate execution of the mmap itself to the memorymanager.
-    SysCallReg result = memorymanager_handleMmap(
-        sys->memoryManager, sys->thread, addrPtr, len, prot, flags, pluginFD, offset);
+    MemoryManager* mm = process_getMemoryManager(sys->process);
+    SysCallReg result =
+        mm ? memorymanager_handleMmap(mm, sys->thread, addrPtr, len, prot, flags, pluginFD, offset)
+           : (SysCallReg){.as_i64 = thread_nativeSyscall(
+                              sys->thread, SYS_mmap, addrPtr, len, prot, flags, pluginFD, offset)};
 
     debug("Plugin-native mmap syscall at plugin addr %p with plugin fd %i for "
           "%zu bytes returned %p (%s)",
@@ -190,8 +193,13 @@ SysCallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
     PluginPtr newBrk = args->args[0].as_ptr;
 
     // Delegate to the memoryManager.
-    SysCallReg result = memorymanager_handleBrk(sys->memoryManager, sys->thread, newBrk);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    MemoryManager* mm = process_getMemoryManager(sys->process);
+    if (mm) {
+        SysCallReg result = memorymanager_handleBrk(mm, sys->thread, newBrk);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    } else {
+        return (SysCallReturn){.state = SYSCALL_NATIVE};
+    }
 }
 
 SysCallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) {
@@ -225,9 +233,14 @@ SysCallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args
     PluginPtr new_addr = args->args[4].as_ptr;
 
     // Delegate to the memoryManager.
-    SysCallReg result = memorymanager_handleMremap(
-        sys->memoryManager, sys->thread, old_addr, old_size, new_size, flags, new_addr);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    MemoryManager* mm = process_getMemoryManager(sys->process);
+    if (mm) {
+        SysCallReg result =
+            memorymanager_handleMremap(mm, sys->thread, old_addr, old_size, new_size, flags, new_addr);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    } else {
+        return (SysCallReturn){.state = SYSCALL_NATIVE};
+    }
 }
 
 SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args) {
@@ -235,6 +248,11 @@ SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args
     uint64_t len = args->args[1].as_u64;
 
     // Delegate to the memoryManager.
-    SysCallReg result = memorymanager_handleMunmap(sys->memoryManager, sys->thread, addr, len);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    MemoryManager* mm = process_getMemoryManager(sys->process);
+    if (mm) {
+        SysCallReg result = memorymanager_handleMunmap(mm, sys->thread, addr, len);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    } else {
+        return (SysCallReturn){.state = SYSCALL_NATIVE};
+    }
 }
