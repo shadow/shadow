@@ -8,8 +8,9 @@
 #include "main/host/syscall/protected.h"
 
 SysCallReturn syscallhandler_execve(SysCallHandler* sys, const SysCallArgs* args) {
-    // Notify the memorymanager that exec is about to be called.
-    memorymanager_preExecHook(sys->memoryManager, sys->thread);
+    // The MemoryManager's state is no longer valid after an exec.
+    // Destroy it, to be recreated on the next syscall.
+    process_setMemoryManager(sys->process, NULL);
 
     // Have the plugin execute it natively.
     return (SysCallReturn){.state = SYSCALL_NATIVE};

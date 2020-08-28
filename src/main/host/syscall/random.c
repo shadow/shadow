@@ -31,7 +31,7 @@ SysCallReturn syscallhandler_getrandom(SysCallHandler* sys, const SysCallArgs* a
     }
 
     // Get the buffer where we can copy the random bytes
-    char* buf = memorymanager_getWriteablePtr(sys->memoryManager, sys->thread, bufPtr, count);
+    char* buf = process_getWriteablePtr(sys->process, sys->thread, bufPtr, count);
 
     // Get the source from the host to maintain determinism.
     Random* rng = host_getRandom(sys->host);

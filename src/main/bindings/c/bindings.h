@@ -92,9 +92,6 @@ SysCallReg memorymanager_handleMunmap(MemoryManager *memory_manager,
 // * `thread` must point to a valid object.
 MemoryManager *memorymanager_new(Thread *thread);
 
-// Notifies memorymanager that plugin is about to call execve.
-void memorymanager_preExecHook(MemoryManager *memory_manager, Thread *thread);
-
 void rust_logging_init(void);
 
 #endif /* main_bindings_h */
