@@ -64,18 +64,8 @@ pub struct MemoryManager {
 
 // Shared memory file into which we relocate parts of the plugin's address space.
 struct ShmFile {
-    shm_path: String,
     shm_file: File,
     shm_plugin_fd: i32,
-}
-
-impl Drop for ShmFile {
-    fn drop(&mut self) {
-        match std::fs::remove_file(&self.shm_path) {
-            Ok(_) => (),
-            Err(e) => println!("Warning: removing '{}': {}", self.shm_path, e),
-        }
-    }
 }
 
 impl ShmFile {
@@ -344,16 +334,22 @@ impl MemoryManager {
             path_buf[..shm_path.len()].copy_from_slice(shm_path.as_bytes());
             path_buf[shm_path.len()] = b'\0';
             thread.flush();
-            let shm_plugin_fd =
-                thread.native_open(path_buf_plugin_ptr, libc::O_RDWR | libc::O_CLOEXEC, 0).unwrap();
+            let shm_plugin_fd = thread
+                .native_open(path_buf_plugin_ptr, libc::O_RDWR | libc::O_CLOEXEC, 0)
+                .unwrap();
             thread
                 .free_plugin_ptr(path_buf_plugin_ptr, path_buf_len)
                 .unwrap();
             shm_plugin_fd
         };
 
+        // We don't need the file anymore in the file system.
+        match std::fs::remove_file(&shm_path) {
+            Ok(_) => (),
+            Err(e) => println!("Warning: removing '{}': {}", shm_path, e),
+        }
+
         let shm_file = ShmFile {
-            shm_path,
             shm_file,
             shm_plugin_fd,
         };
