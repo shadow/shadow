@@ -356,3 +356,9 @@ struct timespec utility_timespecFromMillis(int64_t millis) {
         .tv_nsec = (millis % 1000) * 1000000, // ms to ns
     };
 }
+
+int return_code_for_signal(int signal) {
+    // To calculate the return code if the process exited by a signal,
+    // follow the behaviour of bash and add 128 to to the signal.
+    return signal + 128;
+}

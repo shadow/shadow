@@ -164,7 +164,7 @@ static void _threadpreload_cleanup(ThreadPreload* thread, int status) {
     } else if (WIFSIGNALED(status)) {
         int signum = WTERMSIG(status);
         debug("child %d terminated by signal %d", thread->base.nativePid, signum);
-        thread->returnCode = -1;
+        thread->returnCode = return_code_for_signal(signum);
     } else {
         debug("child %d quit unexpectedly", thread->base.nativePid);
         thread->returnCode = -1;
@@ -343,8 +343,8 @@ void threadpreload_terminate(Thread* base) {
     utility_assert(rc != -1);
 
     if (rc == 0) { // child is running, request a stop
-        debug("sending SIGTERM to %d", thread->base.nativePid);
-        kill(thread->base.nativePid, SIGTERM);
+        debug("sending SIGKILL to %d", thread->base.nativePid);
+        kill(thread->base.nativePid, SIGKILL);
         rc = waitpid(thread->base.nativePid, &status, 0);
         utility_assert(rc != -1 && rc > 0);
     }
