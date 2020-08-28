@@ -171,8 +171,11 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args) {
     MAGIC_ASSERT(sys);
 
-    // Lazily initialize memoryManager on the first syscall. It needs a thread
-    // in the syscall state for its initialization.
+    // Initialize the process's MemoryManager if it doesn't exist. In practice
+    // this happens the first time a process makes a syscall, and on the first
+    // syscall after an `exec` (which destroys the MemoryManager). It's done
+    // here because the MemoryManager needs a plugin thread that's ready to
+    // make syscalls in order to perform its initialization.
     if (!process_getMemoryManager(sys->process)) {
         process_setMemoryManager(sys->process, memorymanager_new(sys->thread));
     }

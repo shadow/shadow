@@ -194,12 +194,9 @@ SysCallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
 
     // Delegate to the memoryManager.
     MemoryManager* mm = process_getMemoryManager(sys->process);
-    if (mm) {
-        SysCallReg result = memorymanager_handleBrk(mm, sys->thread, newBrk);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
-    } else {
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
+    utility_assert(mm);
+    SysCallReg result = memorymanager_handleBrk(mm, sys->thread, newBrk);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
 }
 
 SysCallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) {
@@ -234,13 +231,10 @@ SysCallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args
 
     // Delegate to the memoryManager.
     MemoryManager* mm = process_getMemoryManager(sys->process);
-    if (mm) {
-        SysCallReg result =
-            memorymanager_handleMremap(mm, sys->thread, old_addr, old_size, new_size, flags, new_addr);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
-    } else {
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
+    utility_assert(mm);
+    SysCallReg result =
+        memorymanager_handleMremap(mm, sys->thread, old_addr, old_size, new_size, flags, new_addr);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
 }
 
 SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args) {
@@ -249,10 +243,7 @@ SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args
 
     // Delegate to the memoryManager.
     MemoryManager* mm = process_getMemoryManager(sys->process);
-    if (mm) {
-        SysCallReg result = memorymanager_handleMunmap(mm, sys->thread, addr, len);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
-    } else {
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
+    utility_assert(mm);
+    SysCallReg result = memorymanager_handleMunmap(mm, sys->thread, addr, len);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
 }
