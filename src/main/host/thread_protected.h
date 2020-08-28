@@ -55,5 +55,6 @@ struct _Thread {
     MAGIC_DECLARE;
 };
 
-Thread thread_create(Host* host, Process* process, int type_id, int threadID, ThreadMethods methods);
+Thread thread_create(Host* host, Process* process, int type_id, int threadID,
+                     ThreadMethods methods);
 #endif

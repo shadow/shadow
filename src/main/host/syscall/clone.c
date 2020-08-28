@@ -4,8 +4,8 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include "main/core/worker.h"
 #include "main/core/work/task.h"
+#include "main/core/worker.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
 #include "main/utility/utility.h"
@@ -45,15 +45,13 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     flags &= ~required_flags;
     if (flags & CLONE_PARENT_SETTID) {
         flags &= ~CLONE_PARENT_SETTID;
-        pid_t* ptidp =
-            process_getWriteablePtr(sys->process, sys->thread, ctid, sizeof(*ptidp));
+        pid_t* ptidp = process_getWriteablePtr(sys->process, sys->thread, ctid, sizeof(*ptidp));
         *ptidp = thread_getID(child);
     }
 
     if (flags & CLONE_CHILD_SETTID) {
         flags &= ~CLONE_CHILD_SETTID;
-        pid_t* ctidp =
-            process_getWriteablePtr(sys->process, sys->thread, ctid, sizeof(*ctidp));
+        pid_t* ctidp = process_getWriteablePtr(sys->process, sys->thread, ctid, sizeof(*ctidp));
         *ctidp = thread_getID(child);
     }
 

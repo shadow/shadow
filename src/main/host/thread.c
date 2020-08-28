@@ -21,7 +21,8 @@
 #include "shim/shim_event.h"
 #include "support/logger/logger.h"
 
-Thread thread_create(Host* host, Process* process, int threadID, int type_id, ThreadMethods methods) {
+Thread thread_create(Host* host, Process* process, int threadID, int type_id,
+                     ThreadMethods methods) {
     Thread thread = {.type_id = type_id,
                      .methods = methods,
                      .referenceCount = 1,
@@ -180,7 +181,7 @@ int thread_getID(Thread* thread) {
 }
 
 int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
-                     PluginPtr ctid, unsigned long newtls, Thread** child) {
+                 PluginPtr ctid, unsigned long newtls, Thread** child) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.clone);
     return thread->methods.clone(thread, flags, child_stack, ptid, ctid, newtls, child);

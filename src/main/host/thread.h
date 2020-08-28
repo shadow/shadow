@@ -96,7 +96,7 @@ pid_t thread_getNativeTid(Thread* thread);
 
 int thread_getID(Thread* thread);
 int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
-                     PluginPtr ctid, unsigned long newtls, Thread** child);
+                 PluginPtr ctid, unsigned long newtls, Thread** child);
 
 void thread_setTidAddress(Thread* thread, PluginPtr addr);
 

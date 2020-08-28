@@ -157,7 +157,7 @@ static void _process_terminate_threads(Process* proc) {
     gpointer key, value;
     while (g_hash_table_iter_next(&iter, &key, &value)) {
         Thread* thread = value;
-        if(thread_isRunning(thread)) {
+        if (thread_isRunning(thread)) {
             warning("Terminating still-running thread %d", thread_getID(thread));
         }
         _process_reapThread(proc, thread);
@@ -219,11 +219,10 @@ static void _process_check(Process* proc) {
         return;
     }
 
-    message("process '%s' has completed or is otherwise no longer running",
-            process_getName(proc));
+    message("process '%s' has completed or is otherwise no longer running", process_getName(proc));
     _process_logReturnCode(proc, proc->returnCode);
-    message("total runtime for process '%s' was %f seconds",
-            process_getName(proc), proc->totalRunTime);
+    message(
+        "total runtime for process '%s' was %f seconds", process_getName(proc), proc->totalRunTime);
 }
 
 static void _process_check_thread(Process* proc, Thread* thread) {
@@ -296,7 +295,7 @@ static void _process_start(Process* proc) {
 
     // tid of first thread of a process is equal to the pid.
     int tid = proc->processID;
-    Thread *mainThread = NULL;
+    Thread* mainThread = NULL;
     if (proc->interposeMethod == INTERPOSE_PTRACE) {
         mainThread = threadptrace_new(proc->host, proc, tid);
     } else if (proc->interposeMethod == INTERPOSE_PRELOAD) {
@@ -329,18 +328,18 @@ static void _process_start(Process* proc) {
     process_continue(proc, mainThread);
 }
 
-static void _start_thread_task(gpointer callbackObject, gpointer callbackArgument){
+static void _start_thread_task(gpointer callbackObject, gpointer callbackArgument) {
     Process* process = callbackObject;
     Thread* thread = callbackArgument;
     process_continue(process, thread);
 }
 
-static void _start_thread_task_free_obj(gpointer data){
+static void _start_thread_task_free_obj(gpointer data) {
     Process* process = data;
     process_unref(process);
 }
 
-static void _start_thread_task_free_arg(gpointer data){
+static void _start_thread_task_free_arg(gpointer data) {
     Thread* thread = data;
     thread_unref(thread);
 }
@@ -351,8 +350,8 @@ void process_addThread(Process* proc, Thread* thread) {
     // Schedule thread to start.
     thread_ref(thread);
     process_ref(proc);
-    Task* task = task_new(_start_thread_task, proc, thread,
-            _start_thread_task_free_obj, _start_thread_task_free_arg);
+    Task* task = task_new(
+        _start_thread_task, proc, thread, _start_thread_task_free_obj, _start_thread_task_free_arg);
     worker_scheduleTask(task, 0);
     task_unref(task);
 }
@@ -469,9 +468,7 @@ gboolean process_isRunning(Process* proc) {
     return g_hash_table_size(proc->threads) > 0;
 }
 
-static void _thread_gpointer_unref(gpointer data) {
-    thread_unref(data);
-}
+static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
 
 Process* process_new(Host* host, guint processID, SimulationTime startTime,
                      SimulationTime stopTime, InterposeMethod interposeMethod,
@@ -532,7 +529,7 @@ static void _process_free(Process* proc) {
     MAGIC_ASSERT(proc);
 
     _process_terminate_threads(proc);
-    if(proc->threads) {
+    if (proc->threads) {
         g_hash_table_destroy(proc->threads);
         proc->threads = NULL;
     }

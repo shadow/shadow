@@ -111,7 +111,8 @@ int main(int argc, char** argv) {
     // its nanosleep syscall. We probably want to add a handler for the
     // exit_group syscall to wake-up/terminate the other threads in the
     // process.
-    //g_test_add("/clone/clone_child_exits_after_leader", void, NULL, NULL, _clone_child_exits_after_leader, NULL);
+    // g_test_add("/clone/clone_child_exits_after_leader", void, NULL, NULL,
+    // _clone_child_exits_after_leader, NULL);
 
     return g_test_run();
 }
