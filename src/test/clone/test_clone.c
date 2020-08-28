@@ -3,14 +3,14 @@
  * See LICENSE for licensing information
  */
 
+#include <sched.h>
 #include <signal.h>
 #include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#include <sched.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -32,6 +32,9 @@ static volatile int _clone_minimal_acc = 0;
 // _clone_testCloneStandardFlags calls this upon cloning
 static int _clone_minimal_thread(void* args) {
     ++_clone_minimal_acc;
+    // Exit only this thread. On some platforms returning would result in a
+    // SYS_exit_group, which would kill our whole test process.
+    syscall(SYS_exit, 0);
     return 0;
 }
 
@@ -70,6 +73,9 @@ static int _clone_child_exits_after_leader_thread(void* args) {
     // should deterministically ensure that this thread exits after the leader
     // thread.
     usleep(100);
+    // Exit only this thread. On some platforms returning would result in a
+    // SYS_exit_group, which would kill our whole test process.
+    syscall(SYS_exit, 0);
     return 0;
 }
 
