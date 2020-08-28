@@ -119,13 +119,13 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
     }
 
     const struct itimerspec* newValue =
-        process_getReadablePtr(sys->process,sys->thread, newValuePtr, sizeof(*newValue));
+        process_getReadablePtr(sys->process, sys->thread, newValuePtr, sizeof(*newValue));
 
     /* Old value is allowed to be null. */
     struct itimerspec* oldValue = NULL;
     if (oldValuePtr.val) {
         oldValue =
-            process_getWriteablePtr(sys->process,sys->thread, oldValuePtr, sizeof(*oldValue));
+            process_getWriteablePtr(sys->process, sys->thread, oldValuePtr, sizeof(*oldValue));
     }
 
     /* Service the call in the timer module. */
@@ -155,7 +155,7 @@ SysCallReturn syscallhandler_timerfd_gettime(SysCallHandler* sys,
     }
 
     struct itimerspec* currValue =
-        process_getWriteablePtr(sys->process,sys->thread, currValuePtr, sizeof(*currValue));
+        process_getWriteablePtr(sys->process, sys->thread, currValuePtr, sizeof(*currValue));
 
     /* Service the call in the timer module. */
     errcode = timer_getTime(timer, currValue);

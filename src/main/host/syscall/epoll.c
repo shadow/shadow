@@ -105,7 +105,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     const struct epoll_event* event =
-        process_getReadablePtr(sys->process,sys->thread, eventPtr, sizeof(*event));
+        process_getReadablePtr(sys->process, sys->thread, eventPtr, sizeof(*event));
 
     debug("Calling epoll_control on epoll %i with child %i", epfd, fd);
     errorCode = epoll_control(epoll, op, descriptor, event);
@@ -186,7 +186,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     guint numEventsNeeded = MIN((guint)maxevents, numReadyEvents);
     size_t sizeNeeded = sizeof(struct epoll_event) * numEventsNeeded;
     struct epoll_event* events =
-        process_getWriteablePtr(sys->process,sys->thread, eventsPtr, sizeNeeded);
+        process_getWriteablePtr(sys->process, sys->thread, eventsPtr, sizeNeeded);
 
     /* Retrieve the events. */
     gint nEvents = 0;

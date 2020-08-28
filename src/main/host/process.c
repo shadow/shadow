@@ -493,7 +493,7 @@ static void _process_free(Process* proc) {
     if(proc->processName) {
         g_string_free(proc->processName, TRUE);
     }
-    if(proc->memoryManager) {
+    if (proc->memoryManager) {
         memorymanager_free(proc->memoryManager);
     }
 
@@ -555,7 +555,7 @@ MemoryManager* process_getMemoryManager(Process* proc) {
 
 void process_setMemoryManager(Process* proc, MemoryManager* memoryManager) {
     MAGIC_ASSERT(proc);
-    if(proc->memoryManager) {
+    if (proc->memoryManager) {
         memorymanager_free(proc->memoryManager);
     }
     proc->memoryManager = memoryManager;
