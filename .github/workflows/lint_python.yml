@@ -2,15 +2,13 @@
 # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
 
 name: PythonLint
+
 on:
   push:
-    paths:
-      - 'setup'
-      - '**.py'
+    branches: [master]
   pull_request:
-    paths:
-      - 'setup'
-      - '**.py'
+    types: [opened, synchronize]
+
 jobs:
   lint_python:
     runs-on: ubuntu-latest
