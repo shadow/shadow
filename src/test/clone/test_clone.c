@@ -27,15 +27,25 @@
      | CLONE_THREAD   /* Share thread-group */                                                     \
      | CLONE_SYSVSEM) /* Share semaphore values */
 
+_Noreturn static void _exit_thread(int code) {
+    // Exit only this thread. On some platforms returning would result in a
+    // SYS_exit_group, which would kill our whole test process.
+    //
+    // Likewise the libc function `exit` calls the syscall `exit_group`, which exits the whole
+    // process.
+    //
+    // We want the SYS_exit syscall, which exits just the current thread. There is no libc wrapper
+    // for it.
+    syscall(SYS_exit, code);
+    abort();  // Unreachable.
+}
+
 static volatile int _clone_minimal_acc = 0;
 
 // _clone_testCloneStandardFlags calls this upon cloning
 static int _clone_minimal_thread(void* args) {
     ++_clone_minimal_acc;
-    // Exit only this thread. On some platforms returning would result in a
-    // SYS_exit_group, which would kill our whole test process.
-    syscall(SYS_exit, 0);
-    return 0;
+    _exit_thread(0);
 }
 
 static void _clone_minimal() {
@@ -73,10 +83,7 @@ static int _clone_child_exits_after_leader_thread(void* args) {
     // should deterministically ensure that this thread exits after the leader
     // thread.
     usleep(100);
-    // Exit only this thread. On some platforms returning would result in a
-    // SYS_exit_group, which would kill our whole test process.
-    syscall(SYS_exit, 0);
-    return 0;
+    _exit_thread(0);
 }
 
 static void _clone_child_exits_after_leader() {
