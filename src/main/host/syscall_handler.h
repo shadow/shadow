@@ -20,7 +20,6 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
                                    Thread* thread);
 void syscallhandler_ref(SysCallHandler* sys);
 void syscallhandler_unref(SysCallHandler* sys);
-
 SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args);
 

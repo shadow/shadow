@@ -507,7 +507,7 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
     ThreadPreload* thread = g_new(ThreadPreload, 1);
 
     *thread = (ThreadPreload){
-        .base = thread_create(host, process, THREADPRELOAD_TYPE_ID,
+        .base = thread_create(host, process, threadID, THREADPRELOAD_TYPE_ID,
                               (ThreadMethods){
                                   .run = threadpreload_run,
                                   .resume = threadpreload_resume,

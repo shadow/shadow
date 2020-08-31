@@ -20,6 +20,7 @@
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
+#include "main/host/syscall/clone.h"
 #include "main/host/syscall/epoll.h"
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
@@ -196,6 +197,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(bind);
         HANDLE(brk);
         HANDLE(clock_gettime);
+        HANDLE(clone);
         HANDLE(close);
         HANDLE(connect);
         HANDLE(creat);
@@ -291,19 +293,19 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Not handled (yet):
         // **************************************
         NATIVE(arch_prctl);
-        NATIVE(clone);
         NATIVE(eventfd2);
         NATIVE(futex);
-#ifdef SYS_mmap2
-        NATIVE(mmap2);
-#endif
+        NATIVE(gettid);
+        NATIVE(io_getevents);
         NATIVE(prctl);
         NATIVE(prlimit64);
         NATIVE(rt_sigaction);
         NATIVE(rt_sigprocmask);
+        NATIVE(get_robust_list);
         NATIVE(set_robust_list);
         NATIVE(set_tid_address);
         NATIVE(sysinfo);
+        NATIVE(waitid);
 
         // operations on pids (shadow overrides pids)
         NATIVE(kill);
@@ -342,6 +344,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // (because the plugin can natively):
         // ***************************************
         NATIVE(access);
+        NATIVE(exit);
+        NATIVE(exit_group);
         NATIVE(getcwd);
         NATIVE(geteuid);
         NATIVE(getegid);

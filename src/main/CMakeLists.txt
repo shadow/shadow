@@ -102,6 +102,7 @@ set(shadow_srcs
     host/cpu.c
     host/syscall_handler.c
     host/syscall/protected.c
+    host/syscall/clone.c
     host/syscall/epoll.c
     host/syscall/fcntl.c
     host/syscall/file.c

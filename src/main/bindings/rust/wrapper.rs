@@ -207,7 +207,7 @@ extern "C" {
     );
 }
 extern "C" {
-    pub fn thread_resume(thread: *mut Thread) -> *mut SysCallCondition;
+    pub fn thread_resume(thread: *mut Thread);
 }
 extern "C" {
     pub fn thread_terminate(thread: *mut Thread);
@@ -275,4 +275,24 @@ extern "C" {
 }
 extern "C" {
     pub fn thread_getNativeTid(thread: *mut Thread) -> pid_t;
+}
+extern "C" {
+    pub fn thread_getID(thread: *mut Thread) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn thread_clone(
+        thread: *mut Thread,
+        flags: ::std::os::raw::c_ulong,
+        child_stack: PluginPtr,
+        ptid: PluginPtr,
+        ctid: PluginPtr,
+        newtls: ::std::os::raw::c_ulong,
+        child: *mut *mut Thread,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn thread_setTidAddress(thread: *mut Thread, addr: PluginPtr);
+}
+extern "C" {
+    pub fn thread_isLeader(thread: *mut Thread) -> bool;
 }

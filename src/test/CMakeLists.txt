@@ -34,6 +34,7 @@ add_executable(shadow-test-launcher-fail test_launcher_fail.c test_launcher_comm
 # FIXME add_subdirectory(preload)
 
 add_subdirectory(bind)
+add_subdirectory(clone)
 add_subdirectory(config)
 add_subdirectory(cpp)
 # FIXME add_subdirectory(determinism)
@@ -63,8 +64,9 @@ add_test(
 	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 ## FIXME - eventually need all Shadow tests in the DEPENDS list
-#set_tests_properties(shadow-leakcheck-grep PROPERTIES DEPENDS "determinism1-shadow;determinism2-shadow;dynlink-shadow;preload-shadow-dl-run;preload-shadow-dl-env;bind-shadow;cpp-shadow;determinism-shadow-compare;epoll-shadow;epoll-writeable-shadow;epoll-shadow;file-shadow;phold-shadow;phold-threaded-shadow;pthreads-shadow;random-shadow;signal-shadow;sleep-shadow;sockbuf-shadow;tcp-blocking-loopback-shadow;tcp-blocking-lossless-shadow;tcp-blocking-lossy-shadow;tcp-nonblocking-poll-lossy-shadow;tcp-nonblocking-poll-lossless-shadow;tcp-nonblocking-poll-loopback-shadow;tcp-nonblocking-epoll-lossless-shadow;tcp-nonblocking-epoll-loopback-shadow;tcp-nonblocking-epoll-lossy-shadow;tcp-nonblocking-epoll-lossy-shadow;tcp-nonblocking-select-lossless-shadow;tcp-nonblocking-select-lossy-shadow;tcp-nonblocking-select-loopback-shadow;timerfd-shadow;tcp-iov-shadow")
-set_tests_properties(shadow-leakcheck-grep PROPERTIES DEPENDS "bind-shadow-preload;bind-shadow-ptrace;cpp-shadow-preload;cpp-shadow-ptrace;epoll-shadow-ptrace;epoll-writeable-shadow-ptrace;file-shadow-ptrace;mmap-shadow-ptrace;phold-shadow-ptrace;shutdown-shadow-preload;shutdown-shadow-ptrace;sleep-shadow-preload;sleep-shadow-ptrace;udp-shadow-ptrace;udp-uniprocess-shadow-preload;udp-uniprocess-shadow-ptrace;unistd-shadow-preload;unistd-shadow-ptrace")
+# All shadow test targets should be listed as dependencies, so that the leakcheck can grep their output for leaks.
+# Generate with: `(cd build ; ctest -R shadow -E leakcheck -N | head --lines=-2 | tail --lines=+2 | awk '{printf $3 ";"}')`
+set_tests_properties(shadow-leakcheck-grep PROPERTIES DEPENDS "bind-shadow-ptrace;bind-shadow-preload;clone-shadow-ptrace;config-convert-shadow;cpp-shadow-ptrace;cpp-shadow-preload;epoll-shadow-ptrace;epoll-writeable-shadow-ptrace;file-shadow-ptrace;mmap-shadow-ptrace;phold-shadow-ptrace;phold-threaded-shadow-ptrace;random-shadow-ptrace;random-shadow-preload;shutdown-shadow-ptrace;shutdown-shadow-preload;sleep-shadow-ptrace;sleep-shadow-preload;sockbuf-shadow-ptrace;socket-shadow-ptrace;socket-shadow-preload;bind-shadow-ptrace;bind-shadow-preload;listen-shadow-ptrace;listen-shadow-preload;getsockname-shadow-ptrace;getsockname-shadow-preload;accept-shadow-ptrace;accept-shadow-preload;timerfd-shadow-ptrace;udp-uniprocess-shadow-ptrace;udp-uniprocess-shadow-preload;udp-shadow-ptrace;unistd-shadow-ptrace;unistd-shadow-preload")
 
 add_test(
 	NAME shadow-leakcheck-compare
