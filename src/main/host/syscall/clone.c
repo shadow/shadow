@@ -25,7 +25,7 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     unsigned long required_flags =
         CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD | CLONE_SYSVSEM;
     if ((flags & required_flags) != required_flags) {
-        warning("Missing a required clone flag in %ld", flags);
+        warning("Missing a required clone flag in 0x%lx", flags);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTSUP};
     }
 
@@ -42,28 +42,32 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     }
     utility_assert(child);
 
-    flags &= ~required_flags;
+    unsigned long handled_flags = required_flags;
     if (flags & CLONE_PARENT_SETTID) {
-        flags &= ~CLONE_PARENT_SETTID;
+        handled_flags |= CLONE_PARENT_SETTID;
         pid_t* ptidp = process_getWriteablePtr(sys->process, sys->thread, ctid, sizeof(*ptidp));
         *ptidp = thread_getID(child);
     }
 
     if (flags & CLONE_CHILD_SETTID) {
-        flags &= ~CLONE_CHILD_SETTID;
+        handled_flags |= CLONE_CHILD_SETTID;
         pid_t* ctidp = process_getWriteablePtr(sys->process, sys->thread, ctid, sizeof(*ctidp));
         *ctidp = thread_getID(child);
     }
 
     if (flags & CLONE_CHILD_CLEARTID) {
-        flags &= ~CLONE_CHILD_CLEARTID;
+        handled_flags |= ~CLONE_CHILD_CLEARTID;
         thread_setTidAddress(child, ctid);
     }
 
-    if (flags) {
-        warning("Unhandled clone flags %ld", flags);
+    unsigned long unhandled_flags = flags & ~handled_flags;
+    if (unhandled_flags) {
+        warning("Unhandled clone flags 0x%lx", unhandled_flags);
     }
 
+    // Adds thread to the parent process and schedules it to run. Notably we
+    // *don't* want to start running it now, since we're still running the
+    // calling thread.
     process_addThread(sys->process, child);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = thread_getID(child)};

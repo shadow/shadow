@@ -232,7 +232,7 @@ static void _process_check_thread(Process* proc, Thread* thread) {
         return;
     }
     int returnCode = thread_getReturnCode(thread);
-    info("thread %d in process ''%s'' exited with code %d", thread_getID(thread),
+    info("thread %d in process '%s' exited with code %d", thread_getID(thread),
          process_getName(proc), returnCode);
     _process_reapThread(proc, thread);
     g_hash_table_remove(proc->threads, GUINT_TO_POINTER(thread_getID(thread)));
@@ -334,12 +334,12 @@ static void _start_thread_task(gpointer callbackObject, gpointer callbackArgumen
     process_continue(process, thread);
 }
 
-static void _start_thread_task_free_obj(gpointer data) {
+static void _start_thread_task_free_process(gpointer data) {
     Process* process = data;
     process_unref(process);
 }
 
-static void _start_thread_task_free_arg(gpointer data) {
+static void _start_thread_task_free_thread(gpointer data) {
     Thread* thread = data;
     thread_unref(thread);
 }
@@ -350,8 +350,8 @@ void process_addThread(Process* proc, Thread* thread) {
     // Schedule thread to start.
     thread_ref(thread);
     process_ref(proc);
-    Task* task = task_new(
-        _start_thread_task, proc, thread, _start_thread_task_free_obj, _start_thread_task_free_arg);
+    Task* task = task_new(_start_thread_task, proc, thread, _start_thread_task_free_process,
+                          _start_thread_task_free_thread);
     worker_scheduleTask(task, 0);
     task_unref(task);
 }

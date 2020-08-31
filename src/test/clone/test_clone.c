@@ -52,9 +52,7 @@ static void _clone_minimal() {
     // allocate some memory for the cloned thread.
     uint8_t* stack = calloc(CLONE_TEST_STACK_NBYTES, 1);
 
-    // Heap grows up,
-    // Stack grows down,
-    // Head, shoulders, knees, and toes...
+    // clone takes the "starting" address of the stack, which is the *top*.
     uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
 
     int child_tid = clone(_clone_minimal_thread, stack_top, CLONE_FLAGS, NULL, NULL, NULL);
@@ -90,9 +88,7 @@ static void _clone_child_exits_after_leader() {
     // allocate some memory for the cloned thread.
     uint8_t* stack = calloc(CLONE_TEST_STACK_NBYTES, 1);
 
-    // Heap grows up,
-    // Stack grows down,
-    // Head, shoulders, knees, and toes...
+    // clone takes the "starting" address of the stack, which is the *top*.
     uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
 
     int child_tid =
@@ -120,10 +116,9 @@ int main(int argc, char** argv) {
     g_test_add("/clone/clone_minimal", void, NULL, NULL, _clone_minimal, NULL);
     // FIXME: currently hangs under shadow. The exit_group sycall is executed
     // natively from the thread leader, which does cause all threads to exit.
-    // In Shadow, however, the corresponding Shadow thread remains blocked by
-    // its nanosleep syscall. We probably want to add a handler for the
-    // exit_group syscall to wake-up/terminate the other threads in the
-    // process.
+    // However, the corresponding Shadow Thread object remains blocked by its
+    // nanosleep syscall. We need to add a handler for the exit_group syscall
+    // to wake-up/terminate the other threads in the process.
     // g_test_add("/clone/clone_child_exits_after_leader", void, NULL, NULL,
     // _clone_child_exits_after_leader, NULL);
 
