@@ -30,6 +30,7 @@
 #include <unistd.h>
 
 #include "glib/gprintf.h"
+#include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/work/task.h"
@@ -57,6 +58,8 @@
 #include "support/logger/logger.h"
 
 #include "main/host/thread_ptrace.h"
+
+static gchar* _process_outputFileName(Process* proc, const char* type);
 
 struct _Process {
     /* Host owning this process */
@@ -108,7 +111,8 @@ struct _Process {
 
     gint threadIDCounter;
 
-    // TODO add spawned threads
+    // Owned exclusively by the process.
+    MemoryManager* memoryManager;
 
     /* File descriptors to handle plugin out and err streams. */
     File* stdoutFile;
@@ -150,7 +154,21 @@ static void _process_logReturnCode(Process* proc, gint code) {
                         ((code == 0) ? "success" : "error"), code,
                         process_getName(proc));
 
-        if(code == 0) {
+        gchar* fileName = _process_outputFileName(proc, "exitcode");
+        FILE *exitcodeFile = fopen(fileName, "we");
+        g_free(fileName);
+
+        if (exitcodeFile != NULL) {
+            fprintf(exitcodeFile, "%d", code);
+            fclose(exitcodeFile);
+        } else {
+            warning("Could not open '%s' for writing: %s", mainResultString->str, strerror(errno));
+        }
+
+        // if there was no error or was intentionally killed
+        // TODO: once we've implemented clean shutdown via SIGTERM,
+        //       treat death by SIGKILL as a plugin error
+        if (code == 0 || code == return_code_for_signal(SIGKILL)) {
             message("%s", mainResultString->str);
         } else {
             warning("%s", mainResultString->str);
@@ -346,6 +364,8 @@ void process_stop(Process* proc) {
         proc->plugin.isExecuting = TRUE;
         thread_terminate(proc->mainThread);
         proc->plugin.isExecuting = FALSE;
+        _process_logReturnCode(proc, thread_getReturnCode(proc->mainThread));
+
         debug("unreffing main thread %p", proc->mainThread);
         thread_unref(proc->mainThread);
         proc->mainThread = NULL;
@@ -491,6 +511,9 @@ static void _process_free(Process* proc) {
     if(proc->processName) {
         g_string_free(proc->processName, TRUE);
     }
+    if (proc->memoryManager) {
+        memorymanager_free(proc->memoryManager);
+    }
 
     if(proc->argv) {
         g_strfreev(proc->argv);
@@ -541,6 +564,53 @@ void process_unref(Process* proc) {
     if(proc->referenceCount == 0) {
         _process_free(proc);
     }
+}
+
+MemoryManager* process_getMemoryManager(Process* proc) {
+    MAGIC_ASSERT(proc);
+    return proc->memoryManager;
+}
+
+void process_setMemoryManager(Process* proc, MemoryManager* memoryManager) {
+    MAGIC_ASSERT(proc);
+    if (proc->memoryManager) {
+        memorymanager_free(proc->memoryManager);
+    }
+    proc->memoryManager = memoryManager;
+}
+
+const void* process_getReadablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
+    MAGIC_ASSERT(proc);
+    utility_assert(proc->memoryManager);
+    return memorymanager_getReadablePtr(proc->memoryManager, thread, plugin_src, n);
+}
+
+// Returns a writable pointer corresponding to the named region. The initial
+// contents of the returned memory are unspecified.
+//
+// The returned pointer is automatically invalidated when the plugin runs again.
+void* process_getWriteablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
+    MAGIC_ASSERT(proc);
+    utility_assert(proc->memoryManager);
+    return memorymanager_getWriteablePtr(proc->memoryManager, thread, plugin_src, n);
+}
+
+// Returns a writeable pointer corresponding to the specified src. Use when
+// the data at the given address needs to be both read and written.
+//
+// The returned pointer is automatically invalidated when the plugin runs again.
+void* process_getMutablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
+    MAGIC_ASSERT(proc);
+    utility_assert(proc->memoryManager);
+    return memorymanager_getMutablePtr(proc->memoryManager, thread, plugin_src, n);
+}
+
+// Flushes and invalidates all previously returned readable/writeable plugin
+// pointers, as if returning control to the plugin. This can be useful in
+// conjunction with `thread_nativeSyscall` operations that touch memory.
+void process_flushPtrs(Process* proc, Thread* thread) {
+    MAGIC_ASSERT(proc);
+    thread_flushPtrs(thread);
 }
 
 // ******************************************************

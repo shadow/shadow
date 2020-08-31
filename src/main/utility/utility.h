@@ -105,4 +105,7 @@ void utility_handleError(const gchar* file, gint line, const gchar* funtcion, co
  * of seconds and nanoseconds. */
 struct timespec utility_timespecFromMillis(int64_t millis);
 
+/* If a process exited by a signal, use this return code. */
+int return_code_for_signal(int signal);
+
 #endif /* SHD_UTILITY_H_ */

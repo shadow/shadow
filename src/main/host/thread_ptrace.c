@@ -341,7 +341,7 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
             debug("child %d terminated by signal %d", thread->base.nativePid,
                   reason.exited_signal.signal);
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
-            thread->returnCode = -1;
+            thread->returnCode = return_code_for_signal(reason.exited_signal.signal);
             return;
         case STOPREASON_EXITED_NORMAL:
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
@@ -372,11 +372,13 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
 
 static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     // Wait for child to stop.
+
     int wstatus;
     if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
         error("waitpid: %s", g_strerror(errno));
         return;
     }
+
     StopReason reason = _getStopReason(wstatus);
     _threadptrace_updateChildState(thread, reason);
 }
@@ -659,9 +661,25 @@ void threadptrace_terminate(Thread* base) {
         return;
     }
 
-    if (ptrace(PTRACE_CONT, thread->base.nativePid, 0, SIGTERM) < 0) {
-        warning("ptrace %d: %s", thread->base.nativePid, g_strerror(errno));
+    // need to kill() and not ptrace() since the process may not be stopped
+    if (kill(thread->base.nativePid, SIGKILL) < 0) {
+        warning("kill %d: %s", thread->base.nativePid, g_strerror(errno));
     }
+
+    int wstatus;
+    if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
+        error("waitpid: %s", g_strerror(errno));
+        return;
+    }
+
+    StopReason reason = _getStopReason(wstatus);
+
+    if (reason.type != STOPREASON_EXITED_NORMAL && reason.type != STOPREASON_EXITED_SIGNAL) {
+        error("Expected process %d to exit after SIGKILL, instead received status %d",
+              thread->base.nativePid, wstatus);
+    }
+
+    _threadptrace_updateChildState(thread, reason);
 }
 
 int threadptrace_getReturnCode(Thread* base) {

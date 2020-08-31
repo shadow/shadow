@@ -45,27 +45,10 @@ struct Region {
 
 /// Manages the address-space for a plugin process.
 pub struct MemoryManager {
-    // We unfortunately need to make heavy use of internal mutability here, so that methods
-    // returning immutable references (TODO: and later even mutable references) can take a `&self`
-    // rather than a `&mut self`, allowing there to be multiple outstanding references at once.
-    //
-    // Even the methods that return immutable references can require updating a fair bit of our
-    // bookkeeping. For example:
-    // * Our mapping of the program stack is extended lazily on first access to avoid wasting
-    //   memory (and because we can't get any explicit notification from the OS when it extends the
-    //   stack itself).
-    // * On the first access after an `execve` syscall, we reload the mapped regions from `proc`.
-    //   Perhaps we could require the caller to explicitly call another hook on the first syscall
-    //   after the `execve` is done (in addition to the hook it already calls before it's done),
-    //   but this is a bit awkward to do in the SysCallManager. Better to encapsulate that
-    //   complexity here.
     shm_file: ShmFile,
     regions: IntervalMap<Region>,
 
     misses_by_path: HashMap<String, u32>,
-
-    // We need to reinitialize some state after an exec, but need to wait until the next syscall.
-    need_post_exec_cleanup: bool,
 
     // The part of the stack that we've already remapped in the plugin.
     // We initially mmap enough *address space* in Shadow to accomodate a large stack, but we only
@@ -81,18 +64,8 @@ pub struct MemoryManager {
 
 // Shared memory file into which we relocate parts of the plugin's address space.
 struct ShmFile {
-    shm_path: String,
     shm_file: File,
     shm_plugin_fd: i32,
-}
-
-impl Drop for ShmFile {
-    fn drop(&mut self) {
-        match std::fs::remove_file(&self.shm_path) {
-            Ok(_) => (),
-            Err(e) => println!("Warning: removing '{}': {}", self.shm_path, e),
-        }
-    }
 }
 
 impl ShmFile {
@@ -180,13 +153,6 @@ impl ShmFile {
             interval.start as i64,
         );
         assert!(res.is_ok());
-    }
-
-    fn truncate(&mut self) {
-        let res = unsafe { libc::ftruncate(self.shm_file.as_raw_fd(), 0) };
-        if res != 0 {
-            println!("Warning: ftruncate failed");
-        }
     }
 }
 
@@ -321,7 +287,19 @@ impl Drop for MemoryManager {
         drop(regions);
         */
 
-        self.reset_and_unmap_all();
+        // Mappings are no longer valid. Clear out our map, and unmap those regions.
+        let mutations = self.regions.clear(std::usize::MIN..std::usize::MAX);
+        for m in mutations {
+            if let Mutation::Removed(interval, region) = m {
+                if !region.shadow_base.is_null() {
+                    let res =
+                        unsafe { libc::munmap(region.shadow_base, interval.end - interval.start) };
+                    if res != 0 {
+                        println!("Warning: munmap failed");
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -357,7 +335,7 @@ impl MemoryManager {
             path_buf[shm_path.len()] = b'\0';
             thread.flush();
             let shm_plugin_fd = thread
-                .native_open(path_buf_plugin_ptr, libc::O_RDWR, 0)
+                .native_open(path_buf_plugin_ptr, libc::O_RDWR | libc::O_CLOEXEC, 0)
                 .unwrap();
             thread
                 .free_plugin_ptr(path_buf_plugin_ptr, path_buf_len)
@@ -365,8 +343,13 @@ impl MemoryManager {
             shm_plugin_fd
         };
 
+        // We don't need the file anymore in the file system.
+        match std::fs::remove_file(&shm_path) {
+            Ok(_) => (),
+            Err(e) => println!("Warning: removing '{}': {}", shm_path, e),
+        }
+
         let shm_file = ShmFile {
-            shm_path,
             shm_file,
             shm_plugin_fd,
         };
@@ -378,29 +361,9 @@ impl MemoryManager {
             shm_file,
             regions,
             misses_by_path: HashMap::new(),
-            need_post_exec_cleanup: false,
             heap,
             stack_copied: stack_end..stack_end,
         }
-    }
-
-    // Clears all mappings, unmapping them from shadow's address space and recovering space from
-    // the memory file. e.g. called after execve and in Drop.
-    fn reset_and_unmap_all(&mut self) {
-        // Mappings are no longer valid. Clear out our map, and unmap those regions.
-        let mutations = self.regions.clear(std::usize::MIN..std::usize::MAX);
-        for m in mutations {
-            if let Mutation::Removed(interval, region) = m {
-                if !region.shadow_base.is_null() {
-                    let res =
-                        unsafe { libc::munmap(region.shadow_base, interval.end - interval.start) };
-                    if res != 0 {
-                        println!("Warning: munmap failed");
-                    }
-                }
-            }
-        }
-        self.shm_file.truncate();
     }
 
     // Processes the mutations returned by an IntervalMap::insert or IntervalMap::clear operation.
@@ -490,26 +453,6 @@ impl MemoryManager {
                 }
             }
         }
-    }
-
-    /// Should be called by shadow's SysCallHandler before allowing the plugin to execute the exec
-    /// syscall.
-    pub fn pre_exec_hook(&mut self, _thread: &impl Thread) {
-        self.need_post_exec_cleanup = true;
-    }
-
-    // Called internally on the next usage *after* execve syscall has executed. Re-initializes as
-    // needed.
-    fn post_exec_cleanup_if_needed(&mut self, thread: &mut impl Thread) {
-        if !self.need_post_exec_cleanup {
-            return;
-        }
-        self.reset_and_unmap_all();
-        self.regions = get_regions(thread.get_system_pid());
-        self.heap = get_heap(&self.shm_file, thread, &mut self.regions);
-        let stack_end = map_stack(&self.shm_file, &mut self.regions);
-        self.stack_copied = stack_end..stack_end;
-        self.need_post_exec_cleanup = false;
     }
 
     /// Gets a reference to an object in the plugin's memory.
@@ -795,7 +738,6 @@ impl MemoryManager {
         thread: &mut impl Thread,
         ptr: PluginPtr,
     ) -> Result<PluginPtr, i32> {
-        self.post_exec_cleanup_if_needed(thread);
         let requested_brk = usize::from(ptr);
 
         // On error, brk syscall returns current brk (end of heap). The only errors we specifically
@@ -934,7 +876,6 @@ impl MemoryManager {
         src: PluginPtr,
         n: usize,
     ) -> Option<*mut c_void> {
-        self.post_exec_cleanup_if_needed(thread);
         if n == 0 {
             // Length zero pointer should never be deref'd. Just return null.
             println!("Warning: returning NULL for zero-length pointer");
@@ -1121,17 +1062,6 @@ mod export {
         memory_manager
             .get_mutable_ptr(&mut thread, plugin_src, n)
             .unwrap()
-    }
-
-    /// Notifies memorymanager that plugin is about to call execve.
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_preExecHook(
-        memory_manager: *mut MemoryManager,
-        thread: *mut c::Thread,
-    ) {
-        let memory_manager = &mut *memory_manager;
-        let thread = CThread::new(thread);
-        memory_manager.pre_exec_hook(&thread);
     }
 
     /// Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.

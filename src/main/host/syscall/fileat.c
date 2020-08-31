@@ -168,8 +168,7 @@ SysCallReturn syscallhandler_newfstatat(SysCallHandler* sys,
     }
 
     /* Get some memory in which to return the result. */
-    struct stat* buf =
-        memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, bufPtr, sizeof(*buf));
+    struct stat* buf = process_getWriteablePtr(sys->process, sys->thread, bufPtr, sizeof(*buf));
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
@@ -243,7 +242,7 @@ SysCallReturn syscallhandler_futimesat(SysCallHandler* sys,
     }
 
     const struct timeval* times =
-        memorymanager_getReadablePtr(sys->memoryManager,sys->thread, timesPtr, 2 * sizeof(*times));
+        process_getReadablePtr(sys->process, sys->thread, timesPtr, 2 * sizeof(*times));
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
@@ -273,7 +272,7 @@ SysCallReturn syscallhandler_utimensat(SysCallHandler* sys,
     }
 
     const struct timespec* times =
-        memorymanager_getReadablePtr(sys->memoryManager,sys->thread, timesPtr, 2 * sizeof(*times));
+        process_getReadablePtr(sys->process, sys->thread, timesPtr, 2 * sizeof(*times));
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
@@ -460,7 +459,7 @@ SysCallReturn syscallhandler_readlinkat(SysCallHandler* sys,
     }
 
     /* Get the path string from the plugin. */
-    char* buf = memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, bufPtr, bufSize);
+    char* buf = process_getWriteablePtr(sys->process, sys->thread, bufPtr, bufSize);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
@@ -510,7 +509,7 @@ SysCallReturn syscallhandler_statx(SysCallHandler* sys,
 
     /* Get the path string from the plugin. */
     struct statx* statxbuf =
-        memorymanager_getWriteablePtr(sys->memoryManager,sys->thread, statxbufPtr, sizeof(*statxbuf));
+        process_getWriteablePtr(sys->process, sys->thread, statxbufPtr, sizeof(*statxbuf));
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
