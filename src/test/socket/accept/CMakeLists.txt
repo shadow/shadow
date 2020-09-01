@@ -1,5 +1,13 @@
-# runs the shadow tests with only the passing tests, not all tests
 add_test(NAME accept COMMAND ../../target/debug/test_accept)
-add_test(NAME accept-shadow-ptrace COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d accept.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/accept.shadow.config.xml)
-add_test(NAME accept-shadow-preload COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d accept.shadow-preload.data ${CMAKE_CURRENT_SOURCE_DIR}/accept.shadow.config.xml)
-set_property(TEST accept accept-shadow-ptrace accept-shadow-preload PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
+list(APPEND TestNames accept)
+
+foreach(Method ptrace preload)
+    # runs the shadow tests with only the passing tests, not all tests
+    add_test(NAME accept-shadow-${Method} COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=${Method}
+        -l debug -d accept.shadow-${Method}.data ${CMAKE_CURRENT_SOURCE_DIR}/accept.shadow.config.xml)
+    list(APPEND TestNames accept-shadow-${Method})
+endforeach()
+
+set_property(TEST ${TestNames} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
+# need to check the test's return code, not just shadow's (see shadow/shadow#902)
+set_property(TEST ${TestNames} PROPERTY FAIL_REGULAR_EXPRESSION "main error code '.*' for process")
