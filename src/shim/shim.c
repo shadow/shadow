@@ -153,7 +153,7 @@ static void _shim_load() {
 // This function should be called before any wrapped syscall. We also use the
 // constructor attribute to be completely sure that it's called before main.
 __attribute__((constructor)) void shim_ensure_init() {
-    static _Thread_local bool started_init = false;
+    static __thread bool started_init = false;
     if (started_init) {
         // Avoid deadlock when _shim_load's syscalls caused this function to be
         // called recursively.  In the uninitialized state,
