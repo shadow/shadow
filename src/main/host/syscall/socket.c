@@ -692,16 +692,16 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     }
     utility_assert(socket_desc);
 
+    /* Make sure the addr PluginPtr is not NULL. */
+    if (!addrPtr.val) {
+        info("connecting to a NULL address is invalid");
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
     /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
     // size_t unix_len = sizeof(struct sockaddr_un); // if sa_family==AF_UNIX
     size_t inet_len = sizeof(struct sockaddr_in);
     if (addrlen < inet_len) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
-    /* Make sure the addr PluginPtr is not NULL. */
-    if (!addrPtr.val) {
-        info("connecting to a NULL address is invalid");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
