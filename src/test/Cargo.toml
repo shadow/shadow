@@ -33,5 +33,9 @@ path = "socket/getsockname/test_getsockname.rs"
 name = "test_accept"
 path = "socket/accept/test_accept.rs"
 
+[[bin]]
+name = "test_connect"
+path = "socket/connect/test_connect.rs"
+
 [dependencies]
 libc = "0.2"

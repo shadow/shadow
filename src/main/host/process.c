@@ -175,6 +175,7 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
 
 static void _process_logReturnCode(Process* proc, gint code) {
     if(!proc->didLogReturnCode) {
+        // don't change the formatting of this string since some integration tests depend on it
         GString* mainResultString = g_string_new(NULL);
         g_string_printf(mainResultString, "main %s code '%i' for process '%s'",
                         ((code == 0) ? "success" : "error"), code,
