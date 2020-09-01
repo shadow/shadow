@@ -166,6 +166,7 @@ static long _vshadow_syscall(long n, va_list args) {
 }
 
 long syscall(long n, ...) {
+    shim_ensure_init();
     // Ensure that subsequent stack frames are on a different page than any
     // local variables passed through to the syscall. This ensures that even
     // if any of the syscall arguments are pointers, and those pointers cause
@@ -181,8 +182,10 @@ long syscall(long n, ...) {
     va_start(args, n);
     long rv;
     if (shim_interpositionEnabled()) {
+        debug("Making interposed syscall %ld", n);
         rv = _vshadow_syscall(n, args);
     } else {
+        debug("Making real syscall %ld", n);
         rv = _vreal_syscall(n, args);
     }
     va_end(args);
@@ -192,20 +195,10 @@ long syscall(long n, ...) {
 // General-case macro for defining a thin wrapper function `fnname` that invokes
 // the syscall `sysname`.
 #define REMAP(type, fnname, sysname, params, ...)                                                  \
-    type fnname params {                                                                           \
-        if (shim_interpositionEnabled()) {                                                         \
-            debug("Making interposed syscall " #sysname);                                          \
-            return (type)syscall(SYS_##sysname, __VA_ARGS__);                                      \
-        } else {                                                                                   \
-            debug("Making real syscall " #sysname);                                                \
-            return (type)_real_syscall(SYS_##sysname, __VA_ARGS__);                                \
-        }                                                                                          \
-    }
+    type fnname params { return (type)syscall(SYS_##sysname, __VA_ARGS__); }
 
-// Specialization of REMAP for defining a function `fnname` that invokes a
-// syscall of the same name.
-#define NOREMAP(type, fnname, params, ...)                                     \
-    REMAP(type, fnname, fnname, params, __VA_ARGS__)
+// Same as `REMAP`, but the wrapper function is named after the syscall name.
+#define NOREMAP(type, sysname, params, ...) REMAP(type, sysname, sysname, params, __VA_ARGS__)
 
 // Sorted by function name (e.g. using `sort -t',' -k2`).
 // clang-format off

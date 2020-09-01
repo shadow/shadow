@@ -17,7 +17,7 @@
 
 #include <glib.h>
 
-#define CLONE_TEST_STACK_NBYTES 4096
+#define CLONE_TEST_STACK_NBYTES (4*4096)
 
 #define CLONE_FLAGS                                                                                \
     (CLONE_VM         /* Share process memory */                                                   \
