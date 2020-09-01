@@ -1,5 +1,13 @@
-# runs the shadow tests with only the passing tests, not all tests
 add_test(NAME socket COMMAND ../../target/debug/test_socket)
-add_test(NAME socket-shadow-ptrace COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d socket.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/socket.shadow.config.xml)
-add_test(NAME socket-shadow-preload COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d socket.shadow-preload.data ${CMAKE_CURRENT_SOURCE_DIR}/socket.shadow.config.xml)
-set_property(TEST socket socket-shadow-ptrace socket-shadow-preload PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
+list(APPEND TestNames socket)
+
+foreach(Method ptrace preload)
+    # runs the shadow tests with only the passing tests, not all tests
+    add_test(NAME socket-shadow-${Method} COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=${Method}
+        -l debug -d socket.shadow-${Method}.data ${CMAKE_CURRENT_SOURCE_DIR}/socket.shadow.config.xml)
+    list(APPEND TestNames socket-shadow-${Method})
+endforeach()
+
+set_property(TEST ${TestNames} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
+# need to check the test's return code, not just shadow's (see shadow/shadow#902)
+set_property(TEST ${TestNames} PROPERTY FAIL_REGULAR_EXPRESSION "main error code '.*' for process")
