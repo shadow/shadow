@@ -1,3 +1,7 @@
+/*
+ * The Shadow Simulator
+ * See LICENSE for licensing information
+ */
 
 #include "clone.h"
 

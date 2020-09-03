@@ -1,13 +1,12 @@
-#ifndef SRC_MAIN_HOST_SYSCALL_CLONE_H_
-#define SRC_MAIN_HOST_SYSCALL_CLONE_H_
-
 /*
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+
+#ifndef SRC_MAIN_HOST_SYSCALL_CLONE_H_
+#define SRC_MAIN_HOST_SYSCALL_CLONE_H_
+
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall_handler.h"
-#include "main/host/syscall_types.h"
 
 SYSCALL_HANDLER(clone);
 SYSCALL_HANDLER(gettid);
