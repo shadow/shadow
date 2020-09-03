@@ -60,14 +60,12 @@ static void _shim_tidBlkTreeAdd(TIDBlkPair *tid_fd) {
 static TIDBlkPair _shim_tidBlkTreeGet(pthread_t tid) {
     pthread_mutex_lock(&tid_fd_tree_mtx);
 
-    TIDBlkPair tid_fd, needle, **p = NULL;
-    memset(&tid_fd, 0, sizeof(TIDBlkPair));
-    memset(&needle, 0, sizeof(TIDBlkPair));
+    TIDBlkPair tid_fd = {0}, needle = {0}, **p = NULL;
 
     needle.tid = tid;
     p = tfind(&needle, &tid_fd_tree, _shim_tidBlkTreeCompare);
-    if (p != NULL) {
-        tid_fd = *(*p);
+    if (p == NULL) {
+        abort();
     }
 
     pthread_mutex_unlock(&tid_fd_tree_mtx);
