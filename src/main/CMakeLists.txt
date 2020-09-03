@@ -107,6 +107,7 @@ set(shadow_srcs
     host/syscall/fcntl.c
     host/syscall/file.c
     host/syscall/fileat.c
+    host/syscall/futex.c
     host/syscall/ioctl.c
     host/syscall/mman.c
     host/syscall/process.c

@@ -25,6 +25,7 @@
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
+#include "main/host/syscall/futex.h"
 #include "main/host/syscall/ioctl.h"
 #include "main/host/syscall/mman.h"
 #include "main/host/syscall/process.h"
@@ -225,6 +226,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(fstatfs);
         HANDLE(fsync);
         HANDLE(ftruncate);
+        HANDLE(futex);
         HANDLE(futimesat);
         HANDLE(getdents);
         HANDLE(getdents64);
@@ -296,7 +298,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // **************************************
         NATIVE(arch_prctl);
         NATIVE(eventfd2);
-        NATIVE(futex);
         NATIVE(io_getevents);
         NATIVE(prctl);
         NATIVE(prlimit64);
