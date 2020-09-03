@@ -78,7 +78,7 @@
 #define O_DIRECT 040000
 #endif
 
-#define PROC_PTH_STACK_SIZE 128*1024
+#define PROC_PTH_STACK_SIZE 1024*1024
 
 #include "shadow.h"
 
@@ -7808,9 +7808,7 @@ void process_emu_shadow_instrumentation_marker_set(Process* proc, int file_symbo
 
 void process_emu_hj_interposer_test(Process* proc) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    printf("test\n");
-    message("process_emu_hj_interposer_test called\n");
-    printf("process_emu_hj_interposer start\n");
+    message("interposer test is success!");
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return;
 }
