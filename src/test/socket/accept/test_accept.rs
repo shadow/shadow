@@ -24,11 +24,13 @@ fn main() -> Result<(), String> {
     // should we summarize the results rather than exit on a failed test
     let summarize = std::env::args().any(|x| x == "--summarize");
 
-    let tests = if run_only_passing_tests {
-        get_passing_tests()
-    } else {
-        get_all_tests()
-    };
+    let mut tests = get_tests();
+    if run_only_passing_tests {
+        tests = tests
+            .into_iter()
+            .filter(|x| x.shadow_passing() == test_utils::ShadowPassing::Yes)
+            .collect()
+    }
 
     test_utils::run_tests(&tests, summarize)?;
 
@@ -36,20 +38,33 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
-    let mut tests: Vec<(String, test_utils::TestFn)> = vec![];
+fn get_tests() -> Vec<test_utils::ShadowTest<String>> {
+    let mut tests: Vec<test_utils::ShadowTest<_>> = vec![];
 
     for &accept_fn in [AcceptFn::Accept, AcceptFn::Accept4].iter() {
         let append_args = |s| format!("{} <fn={:?}>", s, accept_fn);
 
-        #[rustfmt::skip]
-        let more_tests: Vec<(String, test_utils::TestFn)> = vec![
-            (append_args("test_invalid_fd"),
-                Box::new(move || test_invalid_fd(accept_fn))),
-            (append_args("test_non_existent_fd"),
-                Box::new(move || test_non_existent_fd(accept_fn))),
-            (append_args("test_invalid_sock_type"),
-                Box::new(move || test_invalid_sock_type(accept_fn))),
+        let more_tests: Vec<test_utils::ShadowTest<_>> = vec![
+            test_utils::ShadowTest::new(
+                &append_args("test_invalid_fd"),
+                move || test_invalid_fd(accept_fn),
+                test_utils::ShadowPassing::Yes,
+            ),
+            test_utils::ShadowTest::new(
+                &append_args("test_non_existent_fd"),
+                move || test_non_existent_fd(accept_fn),
+                test_utils::ShadowPassing::Yes,
+            ),
+            test_utils::ShadowTest::new(
+                &append_args("test_non_socket_fd"),
+                move || test_non_socket_fd(accept_fn),
+                test_utils::ShadowPassing::No,
+            ),
+            test_utils::ShadowTest::new(
+                &append_args("test_invalid_sock_type"),
+                move || test_invalid_sock_type(accept_fn),
+                test_utils::ShadowPassing::Yes,
+            ),
         ];
 
         tests.extend(more_tests);
@@ -75,66 +90,70 @@ fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn>
                     )
                 };
 
-                #[rustfmt::skip]
-                let more_tests: Vec<(String, test_utils::TestFn)> = vec![
-                    (append_args("test_non_listening_fd"),
-                        Box::new(move || test_non_listening_fd(accept_fn, sock_flag, accept_flag))),
-                    (append_args("test_null_addr"),
-                        Box::new(move || test_null_addr(accept_fn, sock_flag, accept_flag))),
-                    (append_args("test_null_len"),
-                        Box::new(move || test_null_len(accept_fn, sock_flag, accept_flag))),
-                    (append_args("test_short_len"),
-                        Box::new(move || test_short_len(accept_fn, sock_flag, accept_flag))),
-                    (append_args("test_zero_len"),
-                        Box::new(move || test_zero_len(accept_fn, sock_flag, accept_flag))),
-                    (append_args("test_after_close"),
-                        Box::new(move || test_after_close(accept_fn, sock_flag, accept_flag))),
-                    (append_args("test_correctness <sleep=true>"),
-                        Box::new(move || test_correctness(accept_fn, sock_flag, accept_flag, true))),
+                let more_tests: Vec<test_utils::ShadowTest<_>> = vec![
+                    test_utils::ShadowTest::new(
+                        &append_args("test_non_listening_fd"),
+                        move || test_non_listening_fd(accept_fn, sock_flag, accept_flag),
+                        test_utils::ShadowPassing::Yes,
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_null_addr"),
+                        move || test_null_addr(accept_fn, sock_flag, accept_flag),
+                        test_utils::ShadowPassing::Yes,
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_null_len"),
+                        move || test_null_len(accept_fn, sock_flag, accept_flag),
+                        test_utils::ShadowPassing::Yes,
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_short_len"),
+                        move || test_short_len(accept_fn, sock_flag, accept_flag),
+                        test_utils::ShadowPassing::Yes,
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_zero_len"),
+                        move || test_zero_len(accept_fn, sock_flag, accept_flag),
+                        test_utils::ShadowPassing::Yes,
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_after_close"),
+                        move || test_after_close(accept_fn, sock_flag, accept_flag),
+                        test_utils::ShadowPassing::Yes,
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_correctness <sleep=true>"),
+                        move || {
+                            test_correctness(
+                                accept_fn,
+                                sock_flag,
+                                accept_flag,
+                                /* use_sleep= */ true,
+                            )
+                        },
+                        test_utils::ShadowPassing::Yes,
+                    ),
+                    // while running in shadow, you currently need a sleep before calling accept()
+                    // to allow shadow to process events (specifically the event for the SYN packet
+                    // from connect())
+                    test_utils::ShadowTest::new(
+                        &append_args("test_correctness <sleep=false>"),
+                        move || {
+                            test_correctness(
+                                accept_fn,
+                                sock_flag,
+                                accept_flag,
+                                /* use_sleep= */ false,
+                            )
+                        },
+                        test_utils::ShadowPassing::No,
+                    ),
                 ];
 
                 tests.extend(more_tests);
             }
         }
     }
-
-    let num_tests = tests.len();
-    let tests: std::collections::BTreeMap<_, _> = tests.into_iter().collect();
-
-    // make sure we didn't have any duplicate tests
-    assert_eq!(num_tests, tests.len());
-
-    tests
-}
-
-fn get_all_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
-    let mut tests: Vec<(String, test_utils::TestFn)> = vec![];
-
-    for &accept_fn in [AcceptFn::Accept, AcceptFn::Accept4].iter() {
-        let append_args = |s| format!("{} <fn={:?}>", s, accept_fn);
-
-        #[rustfmt::skip]
-        let more_tests: Vec<(String, test_utils::TestFn)> = vec![
-            (append_args("test_non_socket_fd"),
-                Box::new(move || test_non_socket_fd(accept_fn))),
-            // while running in shadow, you currently need a sleep before calling accept()
-            // to allow shadow to process events (specifically the event for the SYN packet
-            // from connect())
-            (append_args("test_correctness <sleep=false>"),
-                Box::new(move || test_correctness(accept_fn, 0, 0, false))),
-        ];
-
-        tests.extend(more_tests);
-    }
-
-    let num_tests = tests.len();
-    let mut tests: std::collections::BTreeMap<_, _> = tests.into_iter().collect();
-
-    // make sure we didn't have any duplicate tests
-    assert_eq!(num_tests, tests.len());
-
-    // add all of the passing tests
-    tests.extend(get_passing_tests());
 
     tests
 }
@@ -494,7 +513,7 @@ fn test_short_len(
         flags: accept_flag,
     };
 
-    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || -> Result<(), String> {
         let fd = check_accept_call(&mut args, accept_fn, None)?;
         if let Some(fd) = fd {
             let rv = unsafe { libc::close(fd) };
@@ -529,7 +548,9 @@ fn test_short_len(
         args.addr.unwrap().sin_zero,
         [0, 0, 0, 0, 0, 0, 0, 1],
         "Unexpected padding",
-    )
+    )?;
+
+    Ok(())
 }
 
 /// Test accept using an address length of 0.
@@ -613,7 +634,7 @@ fn test_zero_len(
         flags: accept_flag,
     };
 
-    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || -> Result<(), String> {
         let fd = check_accept_call(&mut args, accept_fn, None)?;
         if let Some(fd) = fd {
             let rv = unsafe { libc::close(fd) };
@@ -641,7 +662,9 @@ fn test_zero_len(
         789u32.to_be(),
         "Unexpected address",
     )?;
-    test_utils::result_assert_eq(args.addr.unwrap().sin_zero, [1; 8], "Unexpected padding")
+    test_utils::result_assert_eq(args.addr.unwrap().sin_zero, [1; 8], "Unexpected padding")?;
+
+    Ok(())
 }
 
 /// Test accept after closing the socket.
@@ -779,7 +802,7 @@ fn test_correctness(
         flags: accept_flag,
     };
 
-    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || -> Result<(), String> {
         let fd = check_accept_call(&mut args, accept_fn, None)?;
         if let Some(fd) = fd {
             let rv = unsafe { libc::close(fd) };
@@ -811,7 +834,9 @@ fn test_correctness(
         libc::INADDR_LOOPBACK.to_be(),
         "Unexpected address",
     )?;
-    test_utils::result_assert_eq(args.addr.unwrap().sin_zero, [0; 8], "Unexpected padding")
+    test_utils::result_assert_eq(args.addr.unwrap().sin_zero, [0; 8], "Unexpected padding")?;
+
+    Ok(())
 }
 
 fn check_accept_call(

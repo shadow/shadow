@@ -5,6 +5,80 @@
 
 //! Utilities helpful for writing Rust integration tests.
 
+use std::fmt;
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ShadowPassing {
+    Yes,
+    No,
+}
+
+pub struct ShadowTest<E> {
+    name: String,
+    func: Box<dyn Fn() -> Result<(), E>>,
+    shadow_passing: ShadowPassing,
+}
+
+impl<E> fmt::Debug for ShadowTest<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ShadowTest")
+            .field("name", &self.name)
+            .field("shadow_passing", &self.shadow_passing)
+            .finish()
+    }
+}
+
+impl<E> ShadowTest<E> {
+    pub fn new(
+        name: &str,
+        func: impl Fn() -> Result<(), E> + 'static,
+        shadow_passing: ShadowPassing,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            func: Box::new(func),
+            shadow_passing,
+        }
+    }
+
+    pub fn run(&self) -> Result<(), E> {
+        (self.func)()
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn shadow_passing(&self) -> ShadowPassing {
+        self.shadow_passing
+    }
+}
+
+/// Runs provided tests until failure and outputs results to stdout.
+pub fn run_tests<'a, I, E: 'a>(tests: I, summarize: bool) -> Result<(), E>
+where
+    I: IntoIterator<Item = &'a ShadowTest<E>>,
+    E: std::fmt::Debug + std::fmt::Display,
+{
+    for test in tests {
+        print!("Testing {}...", test.name());
+
+        match test.run() {
+            Err(failure) => {
+                println!(" ✗ ({})", failure);
+                if !summarize {
+                    return Err(failure);
+                }
+            }
+            Ok(_) => {
+                println!(" ✓");
+            }
+        }
+    }
+
+    Ok(())
+}
+
 // AsPtr and AsMutPtr traits inspired by https://stackoverflow.com/q/35885670
 
 /// An object that can be converted to a pointer (possibly null).
@@ -35,33 +109,6 @@ impl<T> AsMutPtr<T> for Option<T> {
     }
 }
 
-/// A boxed function to run as a test.
-pub type TestFn = Box<dyn Fn() -> Result<(), String>>;
-
-/// Runs provided named tests and outputs results to stdout.
-pub fn run_tests<'a, I>(tests: I, summarize: bool) -> Result<(), String>
-where
-    I: IntoIterator<Item = (&'a String, &'a TestFn)>,
-{
-    for (test_name, test_fn) in tests {
-        print!("Testing {}...", test_name);
-
-        match test_fn() {
-            Err(msg) => {
-                println!(" ✗ ({})", msg);
-                if !summarize {
-                    return Err("One of the tests failed.".to_string());
-                }
-            }
-            Ok(_) => {
-                println!(" ✓");
-            }
-        }
-    }
-
-    Ok(())
-}
-
 /// Return the error message if the condition is false.
 pub fn result_assert(cond: bool, message: &str) -> Result<(), String> {
     if cond {
@@ -84,10 +131,10 @@ where
 }
 
 /// Run the function and then close any given file descriptors, even if there was an error.
-pub fn run_and_close_fds<'a, I, F>(fds: I, f: F) -> Result<(), String>
+pub fn run_and_close_fds<'a, I, F, U>(fds: I, f: F) -> U
 where
     I: IntoIterator<Item = &'a libc::c_int>,
-    F: FnOnce() -> Result<(), String>,
+    F: FnOnce() -> U,
 {
     let rv = f();
 
