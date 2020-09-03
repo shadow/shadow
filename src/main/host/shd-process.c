@@ -487,7 +487,8 @@ static void _process_loadPlugin(Process* proc) {
     else {
         // let's find mainGo symbol before halting.
         symbol = dlsym(proc->plugin.handle, "mainGo");
-        
+        proc->plugin.main = symbol;
+
         if (!symbol) {
             const gchar* errorMessage = dlerror();
             critical("dlsym() failed: %s", errorMessage);
@@ -1516,6 +1517,14 @@ static gssize _process_emu_recvHelper(Process* proc, gint fd, gpointer buf, size
         return -1;
     }
 
+    if (is_ipc_enabled()) {
+        Descriptor *desc = host_lookupDescriptor(proc->host, fd);
+        DescriptorType dtype = descriptor_getType(desc);
+        if(dtype == DT_TCPSOCKET) {
+            Socket *socket = (Socket *) desc;
+            sendIPC_tcp_recv(socket, fd, buf, bytes);
+        }
+    }
     /* check if they wanted to know where we got the data from */
     if(addr != NULL && len != NULL && *len >= sizeof(struct sockaddr_in)) {
         struct sockaddr_in* si = (struct sockaddr_in*) addr;
@@ -2225,6 +2234,9 @@ int process_emu_connect(Process* proc, int fd, const struct sockaddr* addr, sock
             _process_setErrno(proc, errno);
         }
     } else {
+        if (is_ipc_enabled()) {
+            sendIPC_tcp_connect(fd, addr, len);
+        }
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         ret = _process_emu_addressHelper(proc, fd, addr, &len, SCT_CONNECT);
         _process_changeContext(proc, prevCTX, PCTX_SHADOW);
@@ -2249,6 +2261,14 @@ ssize_t process_emu_send(Process* proc, int fd, const void *buf, size_t n, int f
             _process_setErrno(proc, errno);
         }
     } else {
+        if (is_ipc_enabled()) {
+            Descriptor *desc = host_lookupDescriptor(proc->host, fd);
+            DescriptorType dtype = descriptor_getType(desc);
+            if(dtype == DT_TCPSOCKET) {
+                Socket *socket = (Socket *) desc;
+                sendIPC_tcp_send(socket, fd, buf, n, flags);
+            }
+        }
         ret = _process_emu_sendHelper(proc, fd, buf, n, flags, NULL, 0);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2267,6 +2287,14 @@ ssize_t process_emu_sendto(Process* proc, int fd, const void *buf, size_t n, int
             _process_setErrno(proc, errno);
         }
     } else {
+        if (is_ipc_enabled()) {
+            Descriptor *desc = host_lookupDescriptor(proc->host, fd);
+            DescriptorType dtype = descriptor_getType(desc);
+            if (dtype == DT_TCPSOCKET) {
+                Socket *socket = (Socket *) desc;
+                sendIPC_tcp_send(socket, fd, buf, n, flags);
+            }
+        }
         ret = _process_emu_sendHelper(proc, fd, buf, n, flags, addr, addr_len);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5382,6 +5410,12 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
     }
 
     if(do_syscall) {
+        if (number == SYS_futex) {
+            _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
+            usleep(1);
+            _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
+        }
+
     	result = syscall(number, ap);
     	if(result == EOF) {
 			_process_setErrno(proc, errno);

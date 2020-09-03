@@ -42,6 +42,10 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
     message(FATAL_ERROR "Shadow requires an out-of-source build. Please create a separate build directory and run 'cmake path/to/shadow [options]' there.")
 endif(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 
+if(${CMAKE_SOURCE_DIR} STREQUAL ${PROJECT_SOURCE_DIR})
+    message(FATAL_ERROR "Shadow(Submodule of BLEEP) only supports a build in root project. Please try a building process in root project directory. ")
+endif(${CMAKE_SOURCE_DIR} STREQUAL ${PROJECT_SOURCE_DIR})
+
 ## additional user-defined include directories
 foreach(include ${CMAKE_EXTRA_INCLUDES})
     include_directories(${include})

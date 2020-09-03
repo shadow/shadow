@@ -695,6 +695,21 @@ static gint _main_helper(Options* options) {
 
     message("startup checks passed, we are ready to start simulation");
 
+    // initialize IPC configuration
+    if (check_ipc_server()) {
+        // Currently, multithread is not support for IPC
+        int nWorker = options_getNWorkerThreads(options);
+        assert(nWorker == 0 && "When there exists IPC server, Shadow should not use multithread. It results in race condition for ZMQ communication.");
+
+        gboolean success = connect_ipc();
+        if (success)
+            enable_ipc();
+        else
+            disable_ipc();
+    } else {
+        disable_ipc();
+    }
+
     /* pause for debugger attachment if the option is set */
     if(options_doRunDebug(options)) {
         gint pid = (gint)getpid();
