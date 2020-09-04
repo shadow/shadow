@@ -137,10 +137,19 @@ fn get_tests() -> Vec<test_utils::ShadowTest<String>> {
 
 /// Test connect() using an argument that cannot be a fd.
 fn test_invalid_fd() -> Result<(), String> {
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: libc::INADDR_LOOPBACK.to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
     let args = ConnectArguments {
         fd: -1,
-        addr: None,
-        addr_len: 5,
+        addr: Some(addr),
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     check_connect_call(&args, Some(libc::EBADF))
@@ -148,10 +157,19 @@ fn test_invalid_fd() -> Result<(), String> {
 
 /// Test connect() using an argument that could be a fd, but is not.
 fn test_non_existent_fd() -> Result<(), String> {
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: libc::INADDR_LOOPBACK.to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
     let args = ConnectArguments {
         fd: 8934,
-        addr: None,
-        addr_len: 5,
+        addr: Some(addr),
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     check_connect_call(&args, Some(libc::EBADF))
@@ -159,10 +177,19 @@ fn test_non_existent_fd() -> Result<(), String> {
 
 /// Test connect() using a valid fd that is not a socket.
 fn test_non_socket_fd() -> Result<(), String> {
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: libc::INADDR_LOOPBACK.to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
     let args = ConnectArguments {
         fd: 0, // assume the fd 0 is already open and is not a socket
-        addr: None,
-        addr_len: 5,
+        addr: Some(addr),
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     check_connect_call(&args, Some(libc::ENOTSOCK))
