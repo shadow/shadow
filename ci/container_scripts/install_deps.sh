@@ -80,7 +80,8 @@ case "$CONTAINER" in
             --slave /usr/local/bin/cpack cpack /usr/bin/cpack3 \
             --slave /usr/local/bin/ccmake ccmake /usr/bin/ccmake3 \
             --family cmake
-
+        # Install interposable libc to work around https://github.com/shadow/shadow/issues/892
+        (mkdir -p /opt && cd /opt && curl -sSfL https://github.com/sporksmith/glibc/releases/download/interpose-centos7-v0.0.1/libc-interpose-centos7-v0.0.1.tar.xz | tar -xJvf -)
         ;;
     centos:8)
         dnf remove -y procps-ng procps-ng-devel

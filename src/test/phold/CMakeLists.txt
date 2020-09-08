@@ -12,7 +12,9 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/weights.txt ${CMAKE_CURRENT_BINARY_DI
 ## register the tests
 ## dont run with debug logging because it causes the test case to take too long
 add_test(NAME phold-shadow-ptrace COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -d phold.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.xml)
-# FIXME add_test(NAME phold-shadow-preload COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -d phold.shadow-preload.data ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.xml)
+# FIXME: Enable in all configurations. See https://github.com/shadow/shadow/issues/892
+add_test(NAME phold-shadow-preload COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -d phold.shadow-preload.data ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.xml CONFIGURATIONS ilibc)
 
 add_test(NAME phold-threaded-shadow-ptrace COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -d phold-threaded.shadow-ptrace.data -w 2 ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.xml)
-# FIXME add_test(NAME phold-threaded-shadow-preload COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -d phold-threaded.shadow-preload.data -w 2 ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.xml)
+# FIXME: Enable in all configurations. See https://github.com/shadow/shadow/issues/892
+add_test(NAME phold-threaded-shadow-preload COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -d phold-threaded.shadow-preload.data -w 2 ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.xml CONFIGURATIONS ilibc)
