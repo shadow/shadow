@@ -105,11 +105,21 @@ fn get_tests() -> Vec<test_utils::ShadowTest<String>> {
 
 /// Test getsockname using an argument that cannot be a fd.
 fn test_invalid_fd() -> Result<(), String> {
+    // fill the sockaddr with dummy data
+    let addr = libc::sockaddr_in {
+        sin_family: 123u16,
+        sin_port: 456u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: 789u32.to_be(),
+        },
+        sin_zero: [1; 8],
+    };
+
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
         fd: -1,
-        addr: None,
-        addr_len: Some(5),
+        addr: Some(addr),
+        addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
     check_getsockname_call(&mut args, Some(libc::EBADF))
@@ -117,11 +127,21 @@ fn test_invalid_fd() -> Result<(), String> {
 
 /// Test getsockname using an argument that could be a fd, but is not.
 fn test_non_existent_fd() -> Result<(), String> {
+    // fill the sockaddr with dummy data
+    let addr = libc::sockaddr_in {
+        sin_family: 123u16,
+        sin_port: 456u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: 789u32.to_be(),
+        },
+        sin_zero: [1; 8],
+    };
+
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
         fd: 8934,
-        addr: None,
-        addr_len: Some(5),
+        addr: Some(addr),
+        addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
     check_getsockname_call(&mut args, Some(libc::EBADF))
@@ -129,11 +149,21 @@ fn test_non_existent_fd() -> Result<(), String> {
 
 /// Test getsockname using a valid fd that is not a socket.
 fn test_non_socket_fd() -> Result<(), String> {
+    // fill the sockaddr with dummy data
+    let addr = libc::sockaddr_in {
+        sin_family: 123u16,
+        sin_port: 456u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: 789u32.to_be(),
+        },
+        sin_zero: [1; 8],
+    };
+
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
         fd: 0, // assume the fd 0 is already open and is not a socket
-        addr: None,
-        addr_len: Some(5),
+        addr: Some(addr),
+        addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
     check_getsockname_call(&mut args, Some(libc::ENOTSOCK))
