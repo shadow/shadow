@@ -133,8 +133,14 @@ def shadow_xml_to_dict(root: ET.Element) -> Dict:
     '''
     Take the Shadow root XML Element and convert it in dict
     '''
+    options = convert_integer(root.attrib)
+
+    if options:
+        return {
+            'options': options,
+            **xml_nodes_to_dict(root.getchildren())
+        }
     return {
-        'options': convert_integer(root.attrib),
         **xml_nodes_to_dict(root.getchildren())
     }
 
