@@ -117,7 +117,7 @@ def save_dict_in_yaml_file(d: Dict, stream) -> None:
     '''
     yaml.add_representer(str, yaml_str_presenter)
     yaml.add_representer(dict, yaml_dict_presenter)
-    _yaml = yaml.dump(d, stream, default_flow_style=False)
+    yaml.dump(d, stream, default_flow_style=False)
 
 
 def get_output_stream(args: argparse.PARSER, original_extension: str, target_extension: str):
