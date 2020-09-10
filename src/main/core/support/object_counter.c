@@ -40,6 +40,7 @@ struct _ObjectCounter {
         ObjectCounts epoll;
         ObjectCounts timer;
         ObjectCounts file;
+        ObjectCounts futex;
     } counters;
 
     GString* stringBuffer;
@@ -209,6 +210,11 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
 
+        case OBJECT_TYPE_FUTEX: {
+            _objectcount_incrementOne(&(counter->counters.futex), ctype);
+            break;
+        }
+
         default:
         case OBJECT_TYPE_NONE: {
             break;
@@ -264,6 +270,8 @@ void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment
             &(increment->counters.timer));
     _objectcount_incrementAll(&(counter->counters.file),
             &(increment->counters.file));
+    _objectcount_incrementAll(&(counter->counters.futex),
+            &(increment->counters.futex));
     // clang-format on
 }
 
@@ -320,7 +328,9 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         "timer_new=%" G_GUINT64_FORMAT " "
         "timer_free=%" G_GUINT64_FORMAT " "
         "file_new=%" G_GUINT64_FORMAT " "
-        "file_free=%" G_GUINT64_FORMAT " ",
+        "file_free=%" G_GUINT64_FORMAT " "
+        "futex_new=%" G_GUINT64_FORMAT " "
+        "futex_free=%" G_GUINT64_FORMAT " ",
         counter->counters.task.new,
         counter->counters.task.free,
         counter->counters.event.new,
@@ -362,7 +372,9 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         counter->counters.timer.new,
         counter->counters.timer.free,
         counter->counters.file.new,
-        counter->counters.file.free);
+        counter->counters.file.free,
+        counter->counters.futex.new,
+        counter->counters.futex.free);
     // clang-format on
 
     return (const gchar*) counter->stringBuffer->str;
@@ -400,7 +412,8 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
         "udp=%" G_GUINT64_FORMAT " "
         "epoll=%" G_GUINT64_FORMAT " "
         "timer=%" G_GUINT64_FORMAT " "
-        "file=%" G_GUINT64_FORMAT " ",
+        "file=%" G_GUINT64_FORMAT " "
+        "futex=%" G_GUINT64_FORMAT " ",
         counter->counters.task.new -
             counter->counters.task.free,
         counter->counters.event.new -
@@ -442,7 +455,9 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
         counter->counters.timer.new -
             counter->counters.timer.free,
         counter->counters.file.new -
-            counter->counters.file.free);
+            counter->counters.file.free,
+        counter->counters.futex.new -
+            counter->counters.futex.free);
     // clang-format on
 
     return (const gchar*) counter->stringBuffer->str;

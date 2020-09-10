@@ -91,6 +91,7 @@ set(shadow_srcs
     host/descriptor/descriptor_table.c
     host/descriptor/epoll.c
     host/descriptor/file.c
+    host/descriptor/futex.c
     host/descriptor/socket.c
     host/descriptor/tcp.c
     host/descriptor/tcp_cong.c
