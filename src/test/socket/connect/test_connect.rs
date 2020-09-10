@@ -31,8 +31,8 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-fn get_tests() -> Vec<test_utils::ShadowTest<String>> {
-    let mut tests: Vec<test_utils::ShadowTest<_>> = vec![
+fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
+    let mut tests: Vec<test_utils::ShadowTest<_, _>> = vec![
         test_utils::ShadowTest::new(
             "test_invalid_fd",
             test_invalid_fd,
@@ -71,7 +71,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<String>> {
             // add details to the test names to avoid duplicates
             let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
 
-            let more_tests: Vec<test_utils::ShadowTest<_>> = vec![
+            let more_tests: Vec<test_utils::ShadowTest<_, _>> = vec![
                 test_utils::ShadowTest::new(
                     &append_args("test_non_existent_server"),
                     move || test_non_existent_server(sock_type, flag),

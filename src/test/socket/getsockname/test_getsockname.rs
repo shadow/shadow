@@ -31,8 +31,8 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-fn get_tests() -> Vec<test_utils::ShadowTest<String>> {
-    let tests: Vec<test_utils::ShadowTest<_>> = vec![
+fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
+    let tests: Vec<test_utils::ShadowTest<_, _>> = vec![
         test_utils::ShadowTest::new(
             "test_invalid_fd",
             test_invalid_fd,
