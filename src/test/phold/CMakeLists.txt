@@ -18,3 +18,7 @@ add_test(NAME phold-shadow-preload COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -
 add_test(NAME phold-threaded-shadow-ptrace COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -d phold-threaded.shadow-ptrace.data -w 2 ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.xml)
 # FIXME: Enable in all configurations. See https://github.com/shadow/shadow/issues/892
 add_test(NAME phold-threaded-shadow-preload COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -d phold-threaded.shadow-preload.data -w 2 ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.xml CONFIGURATIONS ilibc)
+
+# These tests currently run very slowly in the GitHub CI, which only gives them 2 CPUs.
+# Hopefully will be fixed by https://github.com/shadow/shadow/issues/965.
+set_tests_properties(phold-shadow-ptrace phold-shadow-preload phold-threaded-shadow-ptrace phold-threaded-shadow-preload PROPERTIES TIMEOUT 60)
