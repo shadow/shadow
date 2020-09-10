@@ -56,15 +56,17 @@ int64_t logger_elapsed_micros() {
 }
 
 size_t logger_elapsed_string(char* dst, size_t size) {
-    int64_t elapsed_micros = logger_elapsed_micros();
-    struct timeval tv = {
-        .tv_sec = elapsed_micros / G_USEC_PER_SEC,
-        .tv_usec = elapsed_micros % G_USEC_PER_SEC,
-    };
-    struct tm tm;
-    gmtime_r(&tv.tv_sec, &tm);
-    return snprintf(
-        dst, size, "%02d:%02d:%02d.%06ld", tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
+    int64_t unaccounted_micros = logger_elapsed_micros();
+
+    int hours = unaccounted_micros / (3600LL * G_USEC_PER_SEC);
+    unaccounted_micros %= (3600LL * G_USEC_PER_SEC);
+    int minutes = unaccounted_micros / (60 * G_USEC_PER_SEC);
+    unaccounted_micros %= (60 * G_USEC_PER_SEC);
+    int secs = unaccounted_micros / G_USEC_PER_SEC;
+    unaccounted_micros %= G_USEC_PER_SEC;
+    int micros = unaccounted_micros;
+
+    return snprintf(dst, size, "%02d:%02d:%02d.%06d", hours, minutes, secs, micros);
 }
 
 // Returns a pointer into `filename`, after all directories. Doesn't strip a final path separator.
