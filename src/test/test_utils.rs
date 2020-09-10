@@ -13,13 +13,13 @@ pub enum ShadowPassing {
     No,
 }
 
-pub struct ShadowTest<E> {
+pub struct ShadowTest<T, E> {
     name: String,
-    func: Box<dyn Fn() -> Result<(), E>>,
+    func: Box<dyn Fn() -> Result<T, E>>,
     shadow_passing: ShadowPassing,
 }
 
-impl<E> fmt::Debug for ShadowTest<E> {
+impl<T, E> fmt::Debug for ShadowTest<T, E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ShadowTest")
             .field("name", &self.name)
@@ -28,10 +28,10 @@ impl<E> fmt::Debug for ShadowTest<E> {
     }
 }
 
-impl<E> ShadowTest<E> {
+impl<T, E> ShadowTest<T, E> {
     pub fn new(
         name: &str,
-        func: impl Fn() -> Result<(), E> + 'static,
+        func: impl Fn() -> Result<T, E> + 'static,
         shadow_passing: ShadowPassing,
     ) -> Self {
         Self {
@@ -41,7 +41,7 @@ impl<E> ShadowTest<E> {
         }
     }
 
-    pub fn run(&self) -> Result<(), E> {
+    pub fn run(&self) -> Result<T, E> {
         (self.func)()
     }
 
@@ -55,11 +55,13 @@ impl<E> ShadowTest<E> {
 }
 
 /// Runs provided tests until failure and outputs results to stdout.
-pub fn run_tests<'a, I, E: 'a>(tests: I, summarize: bool) -> Result<(), E>
+pub fn run_tests<'a, I, T: 'a, E: 'a>(tests: I, summarize: bool) -> Result<Vec<T>, E>
 where
-    I: IntoIterator<Item = &'a ShadowTest<E>>,
+    I: IntoIterator<Item = &'a ShadowTest<T, E>>,
     E: std::fmt::Debug + std::fmt::Display,
 {
+    let mut results = vec![];
+
     for test in tests {
         print!("Testing {}...", test.name());
 
@@ -70,13 +72,14 @@ where
                     return Err(failure);
                 }
             }
-            Ok(_) => {
+            Ok(result) => {
+                results.push(result);
                 println!(" ✓");
             }
         }
     }
 
-    Ok(())
+    Ok(results)
 }
 
 // AsPtr and AsMutPtr traits inspired by https://stackoverflow.com/q/35885670
