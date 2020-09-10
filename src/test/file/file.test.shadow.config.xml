@@ -1,4 +1,9 @@
-<shadow stoptime="5">
+<!--
+The LD_LIBRARY_PATH here points to where we put the patched libc binaries in
+our CI, to work around https://github.com/shadow/shadow/issues/892.  It should
+have no effect in environments where that directory doesn't exist.
+-->
+<shadow stoptime="5" environment="LD_LIBRARY_PATH=/opt/libc-interpose-centos7">
   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
   <key attr.name="latency" attr.type="double" for="edge" id="d3" />

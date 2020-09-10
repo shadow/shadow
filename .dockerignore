@@ -2,3 +2,4 @@
 # in 'ci/run.sh', so avoid globs
 .git
 build
+src/main/target
