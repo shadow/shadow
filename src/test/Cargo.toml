@@ -37,5 +37,9 @@ path = "socket/accept/test_accept.rs"
 name = "test_connect"
 path = "socket/connect/test_connect.rs"
 
+[[bin]]
+name = "test_getpeername"
+path = "socket/getpeername/test_getpeername.rs"
+
 [dependencies]
 libc = "0.2"

@@ -22,11 +22,13 @@ fn main() -> Result<(), String> {
     // should we summarize the results rather than exit on a failed test
     let summarize = std::env::args().any(|x| x == "--summarize");
 
-    let tests = if run_only_passing_tests {
-        get_passing_tests()
-    } else {
-        get_all_tests()
-    };
+    let mut tests = get_tests();
+    if run_only_passing_tests {
+        tests = tests
+            .into_iter()
+            .filter(|x| x.shadow_passing() == test_utils::ShadowPassing::Yes)
+            .collect()
+    }
 
     test_utils::run_tests(&tests, summarize)?;
 
@@ -34,15 +36,33 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
-    #[rustfmt::skip]
-    let mut tests: Vec<(String, test_utils::TestFn)> = vec![
-        ("test_invalid_fd".to_string(),
-            Box::new(test_invalid_fd)),
-        ("test_non_existent_fd".to_string(),
-            Box::new(test_non_existent_fd)),
-        ("test_short_addr".to_string(),
-            Box::new(test_short_addr)),
+fn get_tests() -> Vec<test_utils::ShadowTest<String>> {
+    let mut tests: Vec<test_utils::ShadowTest<_>> = vec![
+        test_utils::ShadowTest::new(
+            "test_invalid_fd",
+            test_invalid_fd,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_non_existent_fd",
+            test_non_existent_fd,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_non_socket_fd",
+            test_non_socket_fd,
+            test_utils::ShadowPassing::No,
+        ),
+        test_utils::ShadowTest::new(
+            "test_null_addr",
+            test_null_addr,
+            test_utils::ShadowPassing::No,
+        ),
+        test_utils::ShadowTest::new(
+            "test_short_addr",
+            test_short_addr,
+            test_utils::ShadowPassing::Yes,
+        ),
     ];
 
     // tests to repeat for different socket options
@@ -51,85 +71,85 @@ fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn>
             // add details to the test names to avoid duplicates
             let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
 
-            #[rustfmt::skip]
-            let more_tests: Vec<(String, test_utils::TestFn)> = vec![
-                (append_args("test_ipv4"),
-                    Box::new(move || test_ipv4(sock_type, flag))),
-                (append_args("test_loopback"),
-                    Box::new(move || test_loopback(sock_type, flag))),
-                (append_args("test_any_interface"),
-                    Box::new(move || test_any_interface(sock_type, flag))),
-                (append_args("test_double_bind_socket"),
-                    Box::new(move || test_double_bind_socket(sock_type, flag))),
-                (append_args("test_double_bind_address"),
-                    Box::new(move || test_double_bind_address(sock_type, flag))),
-                (append_args("test_double_bind_loopback_and_any"),
-                    Box::new(move || test_double_bind_loopback_and_any(false, sock_type, flag))),
-                (append_args("test_double_bind_loopback_and_any <reversed>"),
-                    Box::new(move || test_double_bind_loopback_and_any(true, sock_type, flag))),
-                (append_args("test_unspecified_port"),
-                    Box::new(move || test_unspecified_port(sock_type, flag))),
+            let more_tests: Vec<test_utils::ShadowTest<_>> = vec![
+                test_utils::ShadowTest::new(
+                    &append_args("test_ipv4"),
+                    move || test_ipv4(sock_type, flag),
+                    test_utils::ShadowPassing::Yes,
+                ),
+                // Docker does not support IPv6, so the following test is disabled for now
+                /*
+                test_utils::ShadowTest::new(
+                    &append_args("test_ipv6"),
+                    move || test_ipv6(sock_type, flag),
+                    test_utils::ShadowPassing::No,
+                ),
+                */
+                test_utils::ShadowTest::new(
+                    &append_args("test_loopback"),
+                    move || test_loopback(sock_type, flag),
+                    test_utils::ShadowPassing::Yes,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_any_interface"),
+                    move || test_any_interface(sock_type, flag),
+                    test_utils::ShadowPassing::Yes,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_double_bind_socket"),
+                    move || test_double_bind_socket(sock_type, flag),
+                    test_utils::ShadowPassing::Yes,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_double_bind_address"),
+                    move || test_double_bind_address(sock_type, flag),
+                    test_utils::ShadowPassing::Yes,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_double_bind_loopback_and_any"),
+                    move || {
+                        test_double_bind_loopback_and_any(
+                            /* reverse= */ false, sock_type, flag,
+                        )
+                    },
+                    test_utils::ShadowPassing::Yes,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_double_bind_loopback_and_any <reversed>"),
+                    move || {
+                        test_double_bind_loopback_and_any(/* reverse= */ true, sock_type, flag)
+                    },
+                    test_utils::ShadowPassing::Yes,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_unspecified_port"),
+                    move || test_unspecified_port(sock_type, flag),
+                    test_utils::ShadowPassing::Yes,
+                ),
             ];
 
             tests.extend(more_tests);
         }
     }
-
-    let num_tests = tests.len();
-    let tests: std::collections::BTreeMap<_, _> = tests.into_iter().collect();
-
-    // make sure we didn't have any duplicate tests
-    assert_eq!(num_tests, tests.len());
-
-    tests
-}
-
-fn get_all_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
-    #[rustfmt::skip]
-    let tests: Vec<(String, test_utils::TestFn)> = vec![
-        ("test_non_socket_fd".to_string(),
-            Box::new(test_non_socket_fd)),
-        ("test_null_addr".to_string(),
-            Box::new(test_null_addr)),
-    ];
-
-    // Docker does not support IPv6, so the following test is disabled for now
-    /*
-    // tests to repeat for different socket options
-    for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM].iter() {
-        for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
-            // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
-
-            #[rustfmt::skip]
-            let more_tests: Vec<(String, test_utils::TestFn)> = vec![
-                (append_args("test_ipv6"),
-                    Box::new(move || test_ipv6(sock_type, flag)))
-            ];
-
-            tests.extend(more_tests);
-        }
-    }
-    */
-
-    let num_tests = tests.len();
-    let mut tests: std::collections::BTreeMap<_, _> = tests.into_iter().collect();
-
-    // make sure we didn't have any duplicate tests
-    assert_eq!(num_tests, tests.len());
-
-    // add all of the passing tests
-    tests.extend(get_passing_tests());
 
     tests
 }
 
 // test binding using an argument that cannot be a fd
 fn test_invalid_fd() -> Result<(), String> {
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: libc::INADDR_LOOPBACK.to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
     let args = BindArguments {
         fd: -1,
-        addr: None,
-        addr_len: 5,
+        addr: Some(LibcSockAddr::In(addr)),
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     check_bind_call(&args, Some(libc::EBADF))
@@ -137,10 +157,19 @@ fn test_invalid_fd() -> Result<(), String> {
 
 // test binding using an argument that could be a fd, but is not
 fn test_non_existent_fd() -> Result<(), String> {
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: libc::INADDR_LOOPBACK.to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
     let args = BindArguments {
         fd: 8934,
-        addr: None,
-        addr_len: 5,
+        addr: Some(LibcSockAddr::In(addr)),
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     check_bind_call(&args, Some(libc::EBADF))
@@ -148,10 +177,19 @@ fn test_non_existent_fd() -> Result<(), String> {
 
 // test binding a valid fd that is not a socket
 fn test_non_socket_fd() -> Result<(), String> {
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: libc::INADDR_LOOPBACK.to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
     let args = BindArguments {
         fd: 0, // assume the fd 0 is already open and is not a socket
-        addr: None,
-        addr_len: 5,
+        addr: Some(LibcSockAddr::In(addr)),
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     check_bind_call(&args, Some(libc::ENOTSOCK))

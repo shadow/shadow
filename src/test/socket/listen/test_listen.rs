@@ -20,11 +20,13 @@ fn main() -> Result<(), String> {
     // should we summarize the results rather than exit on a failed test
     let summarize = std::env::args().any(|x| x == "--summarize");
 
-    let tests = if run_only_passing_tests {
-        get_passing_tests()
-    } else {
-        get_all_tests()
-    };
+    let mut tests = get_tests();
+    if run_only_passing_tests {
+        tests = tests
+            .into_iter()
+            .filter(|x| x.shadow_passing() == test_utils::ShadowPassing::Yes)
+            .collect()
+    }
 
     test_utils::run_tests(&tests, summarize)?;
 
@@ -32,15 +34,28 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
-    #[rustfmt::skip]
-    let mut tests: Vec<(String, test_utils::TestFn)> = vec![
-        ("test_invalid_fd".to_string(),
-            Box::new(test_invalid_fd)),
-        ("test_non_existent_fd".to_string(),
-            Box::new(test_non_existent_fd)),
-        ("test_invalid_sock_type".to_string(),
-            Box::new(test_invalid_sock_type)),
+fn get_tests() -> Vec<test_utils::ShadowTest<String>> {
+    let mut tests: Vec<test_utils::ShadowTest<_>> = vec![
+        test_utils::ShadowTest::new(
+            "test_invalid_fd",
+            test_invalid_fd,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_non_existent_fd",
+            test_non_existent_fd,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_non_socket_fd",
+            test_non_socket_fd,
+            test_utils::ShadowPassing::No,
+        ),
+        test_utils::ShadowTest::new(
+            "test_invalid_sock_type",
+            test_invalid_sock_type,
+            test_utils::ShadowPassing::Yes,
+        ),
     ];
 
     // optionally bind to an address before listening
@@ -64,78 +79,38 @@ fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn>
                 let append_args =
                     |s| format!("{} <type={},flag={},bind={:?}>", s, sock_type, flag, bind);
 
-                #[rustfmt::skip]
-                let more_tests: Vec<(String, test_utils::TestFn)> = vec![
-                    (append_args("test_zero_backlog"),
-                        Box::new(move || test_zero_backlog(sock_type, flag, bind))),
-                    (append_args("test_negative_backlog"),
-                        Box::new(move || test_negative_backlog(sock_type, flag, bind))),
-                    (append_args("test_large_backlog"),
-                        Box::new(move || test_large_backlog(sock_type, flag, bind))),
-                    (append_args("test_after_close"),
-                        Box::new(move || test_after_close(sock_type, flag, bind))),
+                let more_tests: Vec<test_utils::ShadowTest<_>> = vec![
+                    test_utils::ShadowTest::new(
+                        &append_args("test_zero_backlog"),
+                        move || test_zero_backlog(sock_type, flag, bind),
+                        test_utils::ShadowPassing::Yes,
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_negative_backlog"),
+                        move || test_negative_backlog(sock_type, flag, bind),
+                        test_utils::ShadowPassing::Yes,
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_large_backlog"),
+                        move || test_large_backlog(sock_type, flag, bind),
+                        test_utils::ShadowPassing::Yes,
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_listen_twice"),
+                        move || test_listen_twice(sock_type, flag, bind),
+                        test_utils::ShadowPassing::No,
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_after_close"),
+                        move || test_after_close(sock_type, flag, bind),
+                        test_utils::ShadowPassing::Yes,
+                    ),
                 ];
 
                 tests.extend(more_tests);
             }
         }
     }
-
-    let num_tests = tests.len();
-    let tests: std::collections::BTreeMap<_, _> = tests.into_iter().collect();
-
-    // make sure we didn't have any duplicate tests
-    assert_eq!(num_tests, tests.len());
-
-    tests
-}
-
-fn get_all_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
-    #[rustfmt::skip]
-    let mut tests: Vec<(String, test_utils::TestFn)> = vec![
-        ("test_non_socket_fd".to_string(),
-            Box::new(test_non_socket_fd)),
-    ];
-
-    let bind_addresses = [
-        None,
-        Some(BindAddress {
-            address: libc::INADDR_LOOPBACK.to_be(),
-            port: 0u16.to_be(),
-        }),
-        Some(BindAddress {
-            address: libc::INADDR_ANY.to_be(),
-            port: 0u16.to_be(),
-        }),
-    ];
-
-    // tests to repeat for different socket options
-    for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM].iter() {
-        for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
-            for &bind in bind_addresses.iter() {
-                // add details to the test names to avoid duplicates
-                let append_args =
-                    |s| format!("{} <type={},flag={},bind={:?}>", s, sock_type, flag, bind);
-
-                #[rustfmt::skip]
-                let more_tests: Vec<(String, test_utils::TestFn)> = vec![
-                    (append_args("test_listen_twice"),
-                        Box::new(move || test_listen_twice(sock_type, flag, bind))),
-                ];
-
-                tests.extend(more_tests);
-            }
-        }
-    }
-
-    let num_tests = tests.len();
-    let mut tests: std::collections::BTreeMap<_, _> = tests.into_iter().collect();
-
-    // make sure we didn't have any duplicate tests
-    assert_eq!(num_tests, tests.len());
-
-    // add all of the passing tests
-    tests.extend(get_passing_tests());
 
     tests
 }
@@ -301,7 +276,8 @@ fn test_after_close(
     }
 
     // close the file descriptor
-    test_utils::run_and_close_fds(&[fd], || Ok(())).unwrap();
+    let rv = unsafe { libc::close(fd) };
+    assert_eq!(rv, 0);
 
     let args = ListenArguments {
         fd: fd,

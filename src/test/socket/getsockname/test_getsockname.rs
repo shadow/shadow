@@ -17,11 +17,13 @@ fn main() -> Result<(), String> {
     // should we summarize the results rather than exit on a failed test
     let summarize = std::env::args().any(|x| x == "--summarize");
 
-    let tests = if run_only_passing_tests {
-        get_passing_tests()
-    } else {
-        get_all_tests()
-    };
+    let mut tests = get_tests();
+    if run_only_passing_tests {
+        tests = tests
+            .into_iter()
+            .filter(|x| x.shadow_passing() == test_utils::ShadowPassing::Yes)
+            .collect()
+    }
 
     test_utils::run_tests(&tests, summarize)?;
 
@@ -29,70 +31,95 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
-    #[rustfmt::skip]
-    let tests: Vec<(String, test_utils::TestFn)> = vec![
-        ("test_invalid_fd".to_string(),
-            Box::new(test_invalid_fd)),
-        ("test_non_existent_fd".to_string(),
-            Box::new(test_non_existent_fd)),
-        ("test_null_addr".to_string(),
-            Box::new(test_null_addr)),
-        ("test_null_len".to_string(),
-            Box::new(test_null_len)),
-        ("test_short_len".to_string(),
-            Box::new(test_short_len)),
-        ("test_zero_len".to_string(),
-            Box::new(test_zero_len)),
-        ("test_unbound_socket".to_string(),
-            Box::new(test_unbound_socket)),
-        ("test_bound_socket".to_string(),
-            Box::new(test_bound_socket)),
-        ("test_dgram_socket".to_string(),
-            Box::new(test_dgram_socket)),
-        ("test_after_close".to_string(),
-            Box::new(test_after_close)),
-        ("test_connected_socket".to_string(),
-            Box::new(test_connected_socket)),
-        ("test_implicit_bind".to_string(),
-            Box::new(test_implicit_bind)),
+fn get_tests() -> Vec<test_utils::ShadowTest<String>> {
+    let tests: Vec<test_utils::ShadowTest<_>> = vec![
+        test_utils::ShadowTest::new(
+            "test_invalid_fd",
+            test_invalid_fd,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_non_existent_fd",
+            test_non_existent_fd,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_non_socket_fd",
+            test_non_socket_fd,
+            test_utils::ShadowPassing::No,
+        ),
+        test_utils::ShadowTest::new(
+            "test_null_addr",
+            test_null_addr,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_null_len",
+            test_null_len,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_short_len",
+            test_short_len,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_zero_len",
+            test_zero_len,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_unbound_socket",
+            test_unbound_socket,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_bound_socket",
+            test_bound_socket,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_dgram_socket",
+            test_dgram_socket,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_after_close",
+            test_after_close,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_connected_socket",
+            test_connected_socket,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_implicit_bind",
+            test_implicit_bind,
+            test_utils::ShadowPassing::Yes,
+        ),
     ];
-
-    let num_tests = tests.len();
-    let tests: std::collections::BTreeMap<_, _> = tests.into_iter().collect();
-
-    // make sure we didn't have any duplicate tests
-    assert_eq!(num_tests, tests.len());
-
-    tests
-}
-
-fn get_all_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
-    #[rustfmt::skip]
-    let tests: Vec<(String, test_utils::TestFn)> = vec![
-        ("test_non_socket_fd".to_string(),
-            Box::new(test_non_socket_fd)),
-    ];
-
-    let num_tests = tests.len();
-    let mut tests: std::collections::BTreeMap<_, _> = tests.into_iter().collect();
-
-    // make sure we didn't have any duplicate tests
-    assert_eq!(num_tests, tests.len());
-
-    // add all of the passing tests
-    tests.extend(get_passing_tests());
 
     tests
 }
 
 /// Test getsockname using an argument that cannot be a fd.
 fn test_invalid_fd() -> Result<(), String> {
+    // fill the sockaddr with dummy data
+    let addr = libc::sockaddr_in {
+        sin_family: 123u16,
+        sin_port: 456u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: 789u32.to_be(),
+        },
+        sin_zero: [1; 8],
+    };
+
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
         fd: -1,
-        addr: None,
-        addr_len: Some(5),
+        addr: Some(addr),
+        addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
     check_getsockname_call(&mut args, Some(libc::EBADF))
@@ -100,11 +127,21 @@ fn test_invalid_fd() -> Result<(), String> {
 
 /// Test getsockname using an argument that could be a fd, but is not.
 fn test_non_existent_fd() -> Result<(), String> {
+    // fill the sockaddr with dummy data
+    let addr = libc::sockaddr_in {
+        sin_family: 123u16,
+        sin_port: 456u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: 789u32.to_be(),
+        },
+        sin_zero: [1; 8],
+    };
+
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
         fd: 8934,
-        addr: None,
-        addr_len: Some(5),
+        addr: Some(addr),
+        addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
     check_getsockname_call(&mut args, Some(libc::EBADF))
@@ -112,11 +149,21 @@ fn test_non_existent_fd() -> Result<(), String> {
 
 /// Test getsockname using a valid fd that is not a socket.
 fn test_non_socket_fd() -> Result<(), String> {
+    // fill the sockaddr with dummy data
+    let addr = libc::sockaddr_in {
+        sin_family: 123u16,
+        sin_port: 456u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: 789u32.to_be(),
+        },
+        sin_zero: [1; 8],
+    };
+
     // getsockname() may mutate addr and addr_len
     let mut args = GetsocknameArguments {
         fd: 0, // assume the fd 0 is already open and is not a socket
-        addr: None,
-        addr_len: Some(5),
+        addr: Some(addr),
+        addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
     check_getsockname_call(&mut args, Some(libc::ENOTSOCK))
@@ -601,14 +648,17 @@ fn test_implicit_bind() -> Result<(), String> {
         libc::INADDR_ANY.to_be(),
         "Unexpected address",
     )?;
-    test_utils::result_assert_eq(args.addr.unwrap().sin_zero, [0; 8], "Unexpected padding")
+    test_utils::result_assert_eq(args.addr.unwrap().sin_zero, [0; 8], "Unexpected padding")?;
+
+    Ok(())
 }
 
 fn sockaddr_check_equal(a: &libc::sockaddr_in, b: &libc::sockaddr_in) -> Result<(), String> {
     test_utils::result_assert_eq(a.sin_family, b.sin_family, "Unexpected family")?;
     test_utils::result_assert_eq(a.sin_port, b.sin_port, "Unexpected port")?;
     test_utils::result_assert_eq(a.sin_addr.s_addr, b.sin_addr.s_addr, "Unexpected address")?;
-    test_utils::result_assert_eq(a.sin_zero, b.sin_zero, "Unexpected padding")
+    test_utils::result_assert_eq(a.sin_zero, b.sin_zero, "Unexpected padding")?;
+    Ok(())
 }
 
 fn check_getsockname_call(

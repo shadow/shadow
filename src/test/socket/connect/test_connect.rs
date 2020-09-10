@@ -17,11 +17,13 @@ fn main() -> Result<(), String> {
     // should we summarize the results rather than exit on a failed test
     let summarize = std::env::args().any(|x| x == "--summarize");
 
-    let tests = if run_only_passing_tests {
-        get_passing_tests()
-    } else {
-        get_all_tests()
-    };
+    let mut tests = get_tests();
+    if run_only_passing_tests {
+        tests = tests
+            .into_iter()
+            .filter(|x| x.shadow_passing() == test_utils::ShadowPassing::Yes)
+            .collect()
+    }
 
     test_utils::run_tests(&tests, summarize)?;
 
@@ -29,19 +31,38 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
-    #[rustfmt::skip]
-    let mut tests: Vec<(String, test_utils::TestFn)> = vec![
-        ("test_invalid_fd".to_string(),
-            Box::new(test_invalid_fd)),
-        ("test_non_existent_fd".to_string(),
-            Box::new(test_non_existent_fd)),
-        ("test_null_addr".to_string(),
-            Box::new(test_null_addr)),
-        ("test_short_len".to_string(),
-            Box::new(test_short_len)),
-        ("test_zero_len".to_string(),
-            Box::new(test_zero_len)),
+fn get_tests() -> Vec<test_utils::ShadowTest<String>> {
+    let mut tests: Vec<test_utils::ShadowTest<_>> = vec![
+        test_utils::ShadowTest::new(
+            "test_invalid_fd",
+            test_invalid_fd,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_non_existent_fd",
+            test_non_existent_fd,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_non_socket_fd",
+            test_non_socket_fd,
+            test_utils::ShadowPassing::No,
+        ),
+        test_utils::ShadowTest::new(
+            "test_null_addr",
+            test_null_addr,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_short_len",
+            test_short_len,
+            test_utils::ShadowPassing::Yes,
+        ),
+        test_utils::ShadowTest::new(
+            "test_zero_len",
+            test_zero_len,
+            test_utils::ShadowPassing::Yes,
+        ),
     ];
 
     // tests to repeat for different socket options
@@ -50,80 +71,85 @@ fn get_passing_tests() -> std::collections::BTreeMap<String, test_utils::TestFn>
             // add details to the test names to avoid duplicates
             let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
 
-            #[rustfmt::skip]
-            let more_tests: Vec<(String, test_utils::TestFn)> = vec![
-                (append_args("test_after_close"),
-                    Box::new(move || test_after_close(sock_type, flag))),
-                (append_args("test_interface_loopback"),
-                    Box::new(move || test_interface(sock_type, flag, libc::INADDR_LOOPBACK, None))),
-                (append_args("test_interface_loopback_any"),
-                    Box::new(move || test_interface(sock_type, flag, libc::INADDR_LOOPBACK, Some(libc::INADDR_ANY)))),
-                (append_args("test_interface_any"),
-                    Box::new(move || test_interface(sock_type, flag, libc::INADDR_ANY, None))),
-                (append_args("test_interface_any_any"),
-                    Box::new(move || test_interface(sock_type, flag, libc::INADDR_ANY, Some(libc::INADDR_ANY)))),
-                (append_args("test_double_connect_same_addr"),
-                    Box::new(move || test_double_connect(sock_type, flag, /* change_address= */ false))),
-                (append_args("test_double_connect_different_addr"),
-                    Box::new(move || test_double_connect(sock_type, flag, /* change_address= */ true))),
+            let more_tests: Vec<test_utils::ShadowTest<_>> = vec![
+                test_utils::ShadowTest::new(
+                    &append_args("test_non_existent_server"),
+                    move || test_non_existent_server(sock_type, flag),
+                    test_utils::ShadowPassing::No,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_port_zero"),
+                    move || test_port_zero(sock_type, flag),
+                    test_utils::ShadowPassing::No,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_after_close"),
+                    move || test_after_close(sock_type, flag),
+                    test_utils::ShadowPassing::Yes,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_interface_loopback"),
+                    move || test_interface(sock_type, flag, libc::INADDR_LOOPBACK, None),
+                    test_utils::ShadowPassing::Yes,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_interface_loopback_any"),
+                    move || {
+                        test_interface(
+                            sock_type,
+                            flag,
+                            libc::INADDR_LOOPBACK,
+                            Some(libc::INADDR_ANY),
+                        )
+                    },
+                    test_utils::ShadowPassing::Yes,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_interface_any"),
+                    move || test_interface(sock_type, flag, libc::INADDR_ANY, None),
+                    test_utils::ShadowPassing::Yes,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_interface_any_any"),
+                    move || {
+                        test_interface(sock_type, flag, libc::INADDR_ANY, Some(libc::INADDR_ANY))
+                    },
+                    test_utils::ShadowPassing::Yes,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_double_connect_same_addr"),
+                    move || test_double_connect(sock_type, flag, /* change_address= */ false),
+                    test_utils::ShadowPassing::Yes,
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_double_connect_different_addr"),
+                    move || test_double_connect(sock_type, flag, /* change_address= */ true),
+                    test_utils::ShadowPassing::Yes,
+                ),
             ];
 
             tests.extend(more_tests);
         }
     }
-
-    let num_tests = tests.len();
-    let tests: std::collections::BTreeMap<_, _> = tests.into_iter().collect();
-
-    // make sure we didn't have any duplicate tests
-    assert_eq!(num_tests, tests.len());
-
-    tests
-}
-
-fn get_all_tests() -> std::collections::BTreeMap<String, test_utils::TestFn> {
-    #[rustfmt::skip]
-    let mut tests: Vec<(String, test_utils::TestFn)> = vec![
-        ("test_non_socket_fd".to_string(),
-            Box::new(test_non_socket_fd)),
-    ];
-
-    // tests to repeat for different socket options
-    for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM].iter() {
-        for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
-            // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
-
-            #[rustfmt::skip]
-            let more_tests: Vec<(String, test_utils::TestFn)> = vec![
-                (append_args("test_non_existent_server"),
-                    Box::new(move || test_non_existent_server(sock_type, flag))),
-                (append_args("test_port_zero"),
-                    Box::new(move || test_port_zero(sock_type, flag))),
-            ];
-
-            tests.extend(more_tests);
-        }
-    }
-
-    let num_tests = tests.len();
-    let mut tests: std::collections::BTreeMap<_, _> = tests.into_iter().collect();
-
-    // make sure we didn't have any duplicate tests
-    assert_eq!(num_tests, tests.len());
-
-    // add all of the passing tests
-    tests.extend(get_passing_tests());
 
     tests
 }
 
 /// Test connect() using an argument that cannot be a fd.
 fn test_invalid_fd() -> Result<(), String> {
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: libc::INADDR_LOOPBACK.to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
     let args = ConnectArguments {
         fd: -1,
-        addr: None,
-        addr_len: 5,
+        addr: Some(addr),
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     check_connect_call(&args, Some(libc::EBADF))
@@ -131,10 +157,19 @@ fn test_invalid_fd() -> Result<(), String> {
 
 /// Test connect() using an argument that could be a fd, but is not.
 fn test_non_existent_fd() -> Result<(), String> {
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: libc::INADDR_LOOPBACK.to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
     let args = ConnectArguments {
         fd: 8934,
-        addr: None,
-        addr_len: 5,
+        addr: Some(addr),
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     check_connect_call(&args, Some(libc::EBADF))
@@ -142,10 +177,19 @@ fn test_non_existent_fd() -> Result<(), String> {
 
 /// Test connect() using a valid fd that is not a socket.
 fn test_non_socket_fd() -> Result<(), String> {
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: libc::INADDR_LOOPBACK.to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
     let args = ConnectArguments {
         fd: 0, // assume the fd 0 is already open and is not a socket
-        addr: None,
-        addr_len: 5,
+        addr: Some(addr),
+        addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
     check_connect_call(&args, Some(libc::ENOTSOCK))
