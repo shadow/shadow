@@ -69,12 +69,10 @@ fn get_tests() -> Vec<test_utils::ShadowTest<Option<[libc::c_int; 2]>, String>> 
                             move || test_arguments(domain, sock_type, flag, protocol),
                             test_utils::ShadowPassing::Yes,
                         ),
-                        // socketpair() is the only part of shadow's socket API that uses UNIX
-                        // sockets, so getsockname won't work with these sockets
                         test_utils::ShadowTest::new(
                             &append_args("test_sockname_peername"),
                             move || test_sockname_peername(domain, sock_type, flag, protocol),
-                            test_utils::ShadowPassing::No,
+                            test_utils::ShadowPassing::Yes,
                         ),
                     ];
 
