@@ -38,13 +38,13 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-fn get_tests() -> Vec<test_utils::ShadowTest<String>> {
-    let mut tests: Vec<test_utils::ShadowTest<_>> = vec![];
+fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
+    let mut tests: Vec<test_utils::ShadowTest<_, _>> = vec![];
 
     for &accept_fn in [AcceptFn::Accept, AcceptFn::Accept4].iter() {
         let append_args = |s| format!("{} <fn={:?}>", s, accept_fn);
 
-        let more_tests: Vec<test_utils::ShadowTest<_>> = vec![
+        let more_tests: Vec<test_utils::ShadowTest<_, _>> = vec![
             test_utils::ShadowTest::new(
                 &append_args("test_invalid_fd"),
                 move || test_invalid_fd(accept_fn),
@@ -90,7 +90,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<String>> {
                     )
                 };
 
-                let more_tests: Vec<test_utils::ShadowTest<_>> = vec![
+                let more_tests: Vec<test_utils::ShadowTest<_, _>> = vec![
                     test_utils::ShadowTest::new(
                         &append_args("test_non_listening_fd"),
                         move || test_non_listening_fd(accept_fn, sock_flag, accept_flag),
