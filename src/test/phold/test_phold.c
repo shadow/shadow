@@ -454,6 +454,10 @@ static int _phold_parseWeightsFile(PHold* phold) {
         return FALSE;
     }
 
+    // Remove any trailing whitespace (such as newline at EOF inserted
+    // transparently by some editors).
+    g_strchomp(contents);
+
     gchar** lines = g_strsplit(contents, (const gchar*) "\n", -1);
 
     phold->num_peers = 0;
