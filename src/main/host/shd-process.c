@@ -78,7 +78,7 @@
 #define O_DIRECT 040000
 #endif
 
-#define PROC_PTH_STACK_SIZE 128*1024
+#define PROC_PTH_STACK_SIZE 1024*1024
 
 #include "shadow.h"
 
@@ -1517,6 +1517,14 @@ static gssize _process_emu_recvHelper(Process* proc, gint fd, gpointer buf, size
         return -1;
     }
 
+    if (is_ipc_enabled()) {
+        Descriptor *desc = host_lookupDescriptor(proc->host, fd);
+        DescriptorType dtype = descriptor_getType(desc);
+        if(dtype == DT_TCPSOCKET) {
+            Socket *socket = (Socket *) desc;
+            sendIPC_tcp_recv(socket, fd, buf, bytes);
+        }
+    }
     /* check if they wanted to know where we got the data from */
     if(addr != NULL && len != NULL && *len >= sizeof(struct sockaddr_in)) {
         struct sockaddr_in* si = (struct sockaddr_in*) addr;
@@ -2226,6 +2234,9 @@ int process_emu_connect(Process* proc, int fd, const struct sockaddr* addr, sock
             _process_setErrno(proc, errno);
         }
     } else {
+        if (is_ipc_enabled()) {
+            sendIPC_tcp_connect(fd, addr, len);
+        }
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         ret = _process_emu_addressHelper(proc, fd, addr, &len, SCT_CONNECT);
         _process_changeContext(proc, prevCTX, PCTX_SHADOW);
@@ -2250,6 +2261,14 @@ ssize_t process_emu_send(Process* proc, int fd, const void *buf, size_t n, int f
             _process_setErrno(proc, errno);
         }
     } else {
+        if (is_ipc_enabled()) {
+            Descriptor *desc = host_lookupDescriptor(proc->host, fd);
+            DescriptorType dtype = descriptor_getType(desc);
+            if(dtype == DT_TCPSOCKET) {
+                Socket *socket = (Socket *) desc;
+                sendIPC_tcp_send(socket, fd, buf, n, flags);
+            }
+        }
         ret = _process_emu_sendHelper(proc, fd, buf, n, flags, NULL, 0);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2268,6 +2287,14 @@ ssize_t process_emu_sendto(Process* proc, int fd, const void *buf, size_t n, int
             _process_setErrno(proc, errno);
         }
     } else {
+        if (is_ipc_enabled()) {
+            Descriptor *desc = host_lookupDescriptor(proc->host, fd);
+            DescriptorType dtype = descriptor_getType(desc);
+            if (dtype == DT_TCPSOCKET) {
+                Socket *socket = (Socket *) desc;
+                sendIPC_tcp_send(socket, fd, buf, n, flags);
+            }
+        }
         ret = _process_emu_sendHelper(proc, fd, buf, n, flags, addr, addr_len);
     }
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -7809,6 +7836,13 @@ int process_emu_shadow_assign_virtual_id(Process* proc) {
 void process_emu_shadow_instrumentation_marker_set(Process* proc, int file_symbol, int line_cnt) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     shadow_instrumentation_marker_set(file_symbol, line_cnt);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return;
+}
+
+void process_emu_hj_interposer_test(Process* proc) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    message("interposer test is success!");
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return;
 }

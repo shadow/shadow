@@ -531,3 +531,13 @@ void shadow_instrumentation_marker_set(int file_symbol, int line_cnt) {
         return director.next.shadow_instrumentation_marker_set(file_symbol, line_cnt);
     }
 }
+
+void hj_interposer_test() {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_hj_interposer_test(proc);
+    } else {
+        ENSURE(hj_interposer_test);
+        return director.next.hj_interposer_test();
+    }
+}
