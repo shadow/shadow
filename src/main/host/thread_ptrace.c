@@ -504,6 +504,10 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
 
 static void _threadptrace_doDetach(ThreadPtrace* thread) {
     utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL);
+    if (thread->needAttachment) {
+        // We're already detached.
+        return;
+    }
 
     // First rewind the instruction pointer so that the current syscall will be
     // retried when we resume. This isn't *strictly* necessary, but it's not
