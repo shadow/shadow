@@ -266,7 +266,13 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                     &thread->currentEvent.event_data.syscall.syscall_args);
 
                 if (result.state == SYSCALL_BLOCK) {
-                    /* thread is blocked on simulation progress */
+                    // thread is blocked on simulation progress. Tell it to
+                    // stop spinning so that releases its CPU core for the next
+                    // thread to be run.
+                    ShimEvent block_event = {.event_id = SHD_SHIM_EVENT_BLOCK};
+                    shimevent_sendEventToPlugin(thread->ipc_blk.p, &block_event);
+                    shimevent_recvEventFromPlugin(thread->ipc_blk.p, &block_event);
+
                     return result.cond;
                 }
 

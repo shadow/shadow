@@ -26,7 +26,7 @@ size_t ipcData_nbytes();
 
 void shimevent_sendEventToShadow(struct IPCData *data, const ShimEvent* e);
 void shimevent_sendEventToPlugin(struct IPCData *data, const ShimEvent* e);
-void shimevent_recvEventFromShadow(struct IPCData *data, ShimEvent* e);
+void shimevent_recvEventFromShadow(struct IPCData *data, ShimEvent* e, bool spin);
 void shimevent_recvEventFromPlugin(struct IPCData *data, ShimEvent* e);
 
 #ifdef __cplusplus

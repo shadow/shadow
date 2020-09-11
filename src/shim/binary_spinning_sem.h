@@ -48,6 +48,10 @@ class BinarySpinningSem {
      * Wait for the semaphore to achieve value one; then, atomically sets the
      * semaphore value back to zero.
      *
+     * The caller can set `spin` to false to immediately block on the semaphore
+     * instead of spinning.  This is useful when the caller knows other cores
+     * will need to do work before the semaphore will become available.
+     *
      * (rwails) !!IMPORTANT!!
      * See note in post(). Same call chain restriction applies for wait().
      *
@@ -55,7 +59,7 @@ class BinarySpinningSem {
      * unlikely that this function will be called by two threads in a correct
      * program.
      */
-    void wait();
+    void wait(bool spin=true);
 
     BinarySpinningSem(const BinarySpinningSem &rhs) = delete;
     BinarySpinningSem &operator=(const BinarySpinningSem &rhs) = delete;

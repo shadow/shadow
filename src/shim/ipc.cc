@@ -27,8 +27,8 @@ void shimevent_sendEventToPlugin(struct IPCData* data, const ShimEvent* e) {
     data->xfer_ctrl_to_plugin.post();
 }
 
-void shimevent_recvEventFromShadow(struct IPCData* data, ShimEvent* e) {
-    data->xfer_ctrl_to_plugin.wait();
+void shimevent_recvEventFromShadow(struct IPCData* data, ShimEvent* e, bool spin) {
+    data->xfer_ctrl_to_plugin.wait(spin);
     *e = data->shadow_to_plugin;
 }
 
