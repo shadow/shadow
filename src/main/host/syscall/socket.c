@@ -98,6 +98,29 @@ static int _syscallhandler_validateTCPSocketHelper(SysCallHandler* sys,
     return 0;
 }
 
+static int _syscallhandler_validateUDPSocketHelper(SysCallHandler* sys,
+                                                   int sockfd,
+                                                   UDP** udp_desc_out) {
+    Socket* sock_desc = NULL;
+    int errcode = _syscallhandler_validateSocketHelper(sys, sockfd, &sock_desc);
+
+    if (sock_desc && udp_desc_out) {
+        *udp_desc_out = (UDP*)sock_desc;
+    }
+    if (errcode) {
+        return errcode;
+    }
+
+    DescriptorType type = descriptor_getType((Descriptor*)sock_desc);
+    if (type != DT_UDPSOCKET) {
+        info("descriptor %i is not a UDP socket", sockfd);
+        return -EOPNOTSUPP;
+    }
+
+    /* Now we know we have a valid UDP socket. */
+    return 0;
+}
+
 static SysCallReturn
 _syscallhandler_getnameHelper(SysCallHandler* sys,
                               struct sockaddr_in* inet_addr, PluginPtr addrPtr,
@@ -1045,19 +1068,27 @@ SysCallReturn syscallhandler_shutdown(SysCallHandler* sys,
     }
 
     /* Get and validate the socket. */
-    TCP* tcp_desc = NULL;
-    int errcode =
-        _syscallhandler_validateTCPSocketHelper(sys, sockfd, &tcp_desc);
+    int errcode = _syscallhandler_validateSocketHelper(sys, sockfd, NULL);
     if (errcode < 0) {
-        if (errcode == -EOPNOTSUPP) {
-            errcode = -ENOTCONN;
-        }
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    return (SysCallReturn){
-        .state = SYSCALL_DONE,
-        .retval.as_i64 = (int64_t)tcp_shutdown(tcp_desc, how)};
+    TCP* tcp_desc = NULL;
+    errcode = _syscallhandler_validateTCPSocketHelper(sys, sockfd, &tcp_desc);
+    if (errcode >= 0) {
+        return (SysCallReturn){
+            .state = SYSCALL_DONE, .retval.as_i64 = tcp_shutdown(tcp_desc, how)};
+    }
+
+    UDP* udp_desc = NULL;
+    errcode = _syscallhandler_validateUDPSocketHelper(sys, sockfd, &udp_desc);
+    if (errcode >= 0) {
+        return (SysCallReturn){
+            .state = SYSCALL_DONE, .retval.as_i64 = udp_shutdown(udp_desc, how)};
+    }
+
+    warning("socket %d is neither a TCP nor UDP socket", sockfd);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
 }
 
 SysCallReturn syscallhandler_socket(SysCallHandler* sys,
