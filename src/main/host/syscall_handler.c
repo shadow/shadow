@@ -275,6 +275,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(renameat2);
         HANDLE(sendto);
         HANDLE(setsockopt);
+        HANDLE(set_tid_address);
         HANDLE(shutdown);
         HANDLE(socket);
 #ifdef SYS_statx
@@ -305,7 +306,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(rt_sigprocmask);
         NATIVE(get_robust_list);
         NATIVE(set_robust_list);
-        NATIVE(set_tid_address);
         NATIVE(sysinfo);
         NATIVE(waitid);
 

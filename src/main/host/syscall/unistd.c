@@ -346,6 +346,12 @@ SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
         .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)pid};
 }
 
+SysCallReturn syscallhandler_set_tid_address(SysCallHandler* sys, const SysCallArgs* args) {
+    PluginPtr tidptr = args->args[0].as_ptr; // int*
+    thread_setTidAddress(sys->thread, tidptr);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = thread_getID(sys->thread)};
+}
+
 SysCallReturn syscallhandler_uname(SysCallHandler* sys,
                                    const SysCallArgs* args) {
     struct utsname* buf = NULL;
