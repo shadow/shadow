@@ -9,7 +9,7 @@
 
 #include <glib.h>
 
-#include "main/host/descriptor/descriptor_listener.h"
+#include "main/host/status_listener.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/process.h"
 

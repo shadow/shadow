@@ -3,8 +3,8 @@
  * See LICENSE for licensing information
  */
 
-#ifndef SRC_MAIN_HOST_DESCRIPTOR_SHD_DESCRIPTOR_LISTENER_H_
-#define SRC_MAIN_HOST_DESCRIPTOR_SHD_DESCRIPTOR_LISTENER_H_
+#ifndef SRC_MAIN_HOST_STATUS_LISTENER_H_
+#define SRC_MAIN_HOST_STATUS_LISTENER_H_
 
 #include "main/host/descriptor/descriptor_types.h"
 
@@ -60,4 +60,4 @@ void statuslistener_setMonitorStatus(StatusListener* listener,
                                          DescriptorStatus status,
                                          StatusListenerFilter filter);
 
-#endif /* SRC_MAIN_HOST_DESCRIPTOR_SHD_DESCRIPTOR_LISTENER_H_ */
+#endif /* SRC_MAIN_HOST_STATUS_LISTENER_H_ */
