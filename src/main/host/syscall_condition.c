@@ -25,9 +25,9 @@ struct _SysCallCondition {
     // The status that should cause us to signal
     DescriptorStatus status;
     // Non-null if we are listening for status updates on the timeout
-    DescriptorListener* timeoutListener;
+    StatusListener* timeoutListener;
     // Non-null if we are listening for status updates on the desc
-    DescriptorListener* descListener;
+    StatusListener* descListener;
     // The process waiting for the signal
     Process* proc;
     // The thread waiting for the signal
@@ -68,23 +68,23 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
     if (cond->timeout && cond->timeoutListener) {
         descriptor_removeListener(
             (Descriptor*)cond->timeout, cond->timeoutListener);
-        descriptorlistener_setMonitorStatus(
-            cond->timeoutListener, DS_NONE, DLF_NEVER);
+        statuslistener_setMonitorStatus(
+            cond->timeoutListener, DS_NONE, SLF_NEVER);
     }
 
     if (cond->timeoutListener) {
-        descriptorlistener_unref(cond->timeoutListener);
+        statuslistener_unref(cond->timeoutListener);
         cond->timeoutListener = NULL;
     }
 
     if (cond->desc && cond->descListener) {
         descriptor_removeListener(cond->desc, cond->descListener);
-        descriptorlistener_setMonitorStatus(
-            cond->descListener, DS_NONE, DLF_NEVER);
+        statuslistener_setMonitorStatus(
+            cond->descListener, DS_NONE, SLF_NEVER);
     }
 
     if (cond->descListener) {
-        descriptorlistener_unref(cond->descListener);
+        statuslistener_unref(cond->descListener);
         cond->descListener = NULL;
     }
 }
@@ -253,7 +253,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
     /* Now set up the listeners. */
     if (cond->timeout && !cond->timeoutListener) {
         /* The timer is used for timeouts. */
-        cond->timeoutListener = descriptorlistener_new(
+        cond->timeoutListener = statuslistener_new(
             _syscallcondition_notifyTimeoutExpired, cond,
             _syscallcondition_unrefcb, NULL, NULL);
 
@@ -261,8 +261,8 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
         syscallcondition_ref(cond);
 
         /* The timer is readable when it expires */
-        descriptorlistener_setMonitorStatus(
-            cond->timeoutListener, DS_READABLE, DLF_OFF_TO_ON);
+        statuslistener_setMonitorStatus(
+            cond->timeoutListener, DS_READABLE, SLF_OFF_TO_ON);
 
         /* Attach the listener to the timer. */
         descriptor_addListener(
@@ -271,7 +271,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
 
     if (cond->desc && !cond->descListener) {
         /* We listen for status change on the descriptor. */
-        cond->descListener = descriptorlistener_new(
+        cond->descListener = statuslistener_new(
             _syscallcondition_notifyDescStatusChanged, cond,
             _syscallcondition_unrefcb, NULL, NULL);
 
@@ -279,8 +279,8 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
         syscallcondition_ref(cond);
 
         /* Monitor the requested status. */
-        descriptorlistener_setMonitorStatus(
-            cond->descListener, cond->status, DLF_OFF_TO_ON);
+        statuslistener_setMonitorStatus(
+            cond->descListener, cond->status, SLF_OFF_TO_ON);
 
         /* Attach the listener to the descriptor. */
         descriptor_addListener(cond->desc, cond->descListener);

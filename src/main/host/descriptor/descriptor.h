@@ -70,11 +70,11 @@ DescriptorStatus descriptor_getStatus(Descriptor* descriptor);
  * on status transitions (bit flips).
  */
 void descriptor_addListener(Descriptor* descriptor,
-                            DescriptorListener* listener);
+                            StatusListener* listener);
 
 /* Remove the listener for our set of listeners that get notified on status
  * transitions (bit flips). */
 void descriptor_removeListener(Descriptor* descriptor,
-                               DescriptorListener* listener);
+                               StatusListener* listener);
 
 #endif /* SHD_DESCRIPTOR_H_ */

@@ -9,55 +9,55 @@
 #include "main/host/descriptor/descriptor_types.h"
 
 /* Opaque object to store the state needed to implement the module. */
-typedef struct _DescriptorListener DescriptorListener;
+typedef struct _StatusListener StatusListener;
 
 /* Indicates when the listener should trigger a callback, i.e.,
  * when the status bits that we are monitoring flip from off to on,
  * from on to off, always (on any flip), or never. */
-typedef enum _DescriptorListenerFilter DescriptorListenerFilter;
-enum _DescriptorListenerFilter {
-    DLF_NEVER,
-    DLF_OFF_TO_ON,
-    DLF_ON_TO_OFF,
-    DLF_ALWAYS
+typedef enum _StatusListenerFilter StatusListenerFilter;
+enum _StatusListenerFilter {
+    SLF_NEVER,
+    SLF_OFF_TO_ON,
+    SLF_ON_TO_OFF,
+    SLF_ALWAYS
 };
 
 /* Function definitions used by the module. */
-typedef void (*DescriptorStatusCallbackFunc)(void* callbackObject,
+typedef void (*StatusCallbackFunc)(void* callbackObject,
                                              void* callbackArgument);
-typedef void (*DescriptorStatusObjectFreeFunc)(void* data);
-typedef void (*DescriptorStatusArgumentFreeFunc)(void* data);
+typedef void (*StatusObjectFreeFunc)(void* data);
+typedef void (*StatusArgumentFreeFunc)(void* data);
 
-/* Create an object that can be set to listen to a descriptor's status
+/* Create an object that can be set to listen to a status
  * and execute a callback whenever a state transition (bit flips) occurs
  * on one of the status bits that are requested in setMonitorStatus.
  * Note that the callback will never be called unless setMonitorStatus is first
  * used to specify which status bits this listener should monitor. */
-DescriptorListener* descriptorlistener_new(
-    DescriptorStatusCallbackFunc notifyFunc, void* callbackObject,
-    DescriptorStatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
-    DescriptorStatusArgumentFreeFunc argumentFreeFunc);
+StatusListener* statuslistener_new(
+    StatusCallbackFunc notifyFunc, void* callbackObject,
+    StatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
+    StatusArgumentFreeFunc argumentFreeFunc);
 
 /* Increment the reference count for this listener. */
-void descriptorlistener_ref(DescriptorListener* listener);
+void statuslistener_ref(StatusListener* listener);
 /* Decrement the reference count and free the listener if no refs remain. */
-void descriptorlistener_unref(DescriptorListener* listener);
+void statuslistener_unref(StatusListener* listener);
 
-/* Called by the descriptor when a transition (bit flip) occurred on
+/* Called when a transition (bit flip) occurred on
  * at least one of its status bits. (This function should only be called
- * by the descriptor base class.)
+ * by status owners, i.e., the descriptor or futex base classes.)
  * If this listener is monitoring (via setMonitorStatus) any of the status bits
  * that just transitioned, then this function will trigger a notification
  * via the callback supplied to the new func.*/
-void descriptorlistener_onStatusChanged(DescriptorListener* listener,
+void statuslistener_onStatusChanged(StatusListener* listener,
                                         DescriptorStatus currentStatus,
                                         DescriptorStatus transitions);
 
 /* Set the status bits that we should monitor for transitions (flips),
  * and a filter that specifies which flips should cause the callback
  * to be invoked. */
-void descriptorlistener_setMonitorStatus(DescriptorListener* listener,
+void statuslistener_setMonitorStatus(StatusListener* listener,
                                          DescriptorStatus status,
-                                         DescriptorListenerFilter filter);
+                                         StatusListenerFilter filter);
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_SHD_DESCRIPTOR_LISTENER_H_ */

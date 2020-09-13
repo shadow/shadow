@@ -12,35 +12,35 @@
 #include "main/core/worker.h"
 #include "main/utility/utility.h"
 
-struct _DescriptorListener {
+struct _StatusListener {
     /* The descriptor status bits we want to monitor for transitions. */
     DescriptorStatus monitoring;
     /* A filter that specifies when we should trigger a callback. */
-    DescriptorListenerFilter filter;
+    StatusListenerFilter filter;
 
     /* The callback function to trigger. */
-    DescriptorStatusCallbackFunc notifyFunc;
+    StatusCallbackFunc notifyFunc;
     /* The first argument to pass to the callback function. */
     void* callbackObject;
     /* The function we call to free the callback object. */
-    DescriptorStatusObjectFreeFunc objectFreeFunc;
+    StatusObjectFreeFunc objectFreeFunc;
     /* The second argument to pass to the callback function. */
     void* callbackArgument;
     /* The function we call to free the callback argument. */
-    DescriptorStatusArgumentFreeFunc argumentFreeFunc;
+    StatusArgumentFreeFunc argumentFreeFunc;
 
     /* Memory accounting. */
     int referenceCount;
     MAGIC_DECLARE;
 };
 
-DescriptorListener* descriptorlistener_new(
-    DescriptorStatusCallbackFunc notifyFunc, void* callbackObject,
-    DescriptorStatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
-    DescriptorStatusArgumentFreeFunc argumentFreeFunc) {
-    DescriptorListener* listener = malloc(sizeof(DescriptorListener));
+StatusListener* statuslistener_new(
+    StatusCallbackFunc notifyFunc, void* callbackObject,
+    StatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
+    StatusArgumentFreeFunc argumentFreeFunc) {
+    StatusListener* listener = malloc(sizeof(StatusListener));
 
-    *listener = (DescriptorListener){
+    *listener = (StatusListener){
         .notifyFunc = notifyFunc,
         .callbackObject = callbackObject,
         .objectFreeFunc = objectFreeFunc,
@@ -51,11 +51,11 @@ DescriptorListener* descriptorlistener_new(
 
     MAGIC_INIT(listener);
 
-    worker_countObject(OBJECT_TYPE_DESCRIPTOR_LISTENER, COUNTER_TYPE_NEW);
+    worker_countObject(OBJECT_TYPE_STATUS_LISTENER, COUNTER_TYPE_NEW);
     return listener;
 }
 
-static void _descriptorlistener_free(DescriptorListener* listener) {
+static void _statuslistener_free(StatusListener* listener) {
     MAGIC_ASSERT(listener);
 
     if (listener->callbackObject && listener->objectFreeFunc) {
@@ -68,27 +68,27 @@ static void _descriptorlistener_free(DescriptorListener* listener) {
 
     MAGIC_CLEAR(listener);
     free(listener);
-    worker_countObject(OBJECT_TYPE_DESCRIPTOR_LISTENER, COUNTER_TYPE_FREE);
+    worker_countObject(OBJECT_TYPE_STATUS_LISTENER, COUNTER_TYPE_FREE);
 }
 
-void descriptorlistener_ref(DescriptorListener* listener) {
+void statuslistener_ref(StatusListener* listener) {
     MAGIC_ASSERT(listener);
     listener->referenceCount++;
 }
 
-void descriptorlistener_unref(DescriptorListener* listener) {
+void statuslistener_unref(StatusListener* listener) {
     MAGIC_ASSERT(listener);
     listener->referenceCount--;
     utility_assert(listener->referenceCount >= 0);
     if (listener->referenceCount == 0) {
-        _descriptorlistener_free(listener);
+        _statuslistener_free(listener);
     }
 }
 
 /* Return TRUE if a transition (bit flip) occurred on any status bits that we
  * are monitoring.
  */
-static bool _descriptorlistener_shouldNotify(DescriptorListener* listener,
+static bool _statuslistener_shouldNotify(StatusListener* listener,
                                                  DescriptorStatus currentStatus,
                                                  DescriptorStatus transitions) {
     MAGIC_ASSERT(listener);
@@ -97,16 +97,16 @@ static bool _descriptorlistener_shouldNotify(DescriptorListener* listener,
     bool on = listener->monitoring & currentStatus;
 
     switch (listener->filter) {
-        case DLF_OFF_TO_ON: return flipped && on;
-        case DLF_ON_TO_OFF: return flipped && !on;
-        case DLF_ALWAYS: return flipped;
-        case DLF_NEVER:
+        case SLF_OFF_TO_ON: return flipped && on;
+        case SLF_ON_TO_OFF: return flipped && !on;
+        case SLF_ALWAYS: return flipped;
+        case SLF_NEVER:
         default: return 0;
     }
 }
 
 /* Trigger the callback function. */
-static void _descriptorlistener_invokeNotifyFunc(DescriptorListener* listener) {
+static void _statuslistener_invokeNotifyFunc(StatusListener* listener) {
     MAGIC_ASSERT(listener);
 
     if (listener->notifyFunc) {
@@ -115,20 +115,20 @@ static void _descriptorlistener_invokeNotifyFunc(DescriptorListener* listener) {
     }
 }
 
-void descriptorlistener_onStatusChanged(DescriptorListener* listener,
+void statuslistener_onStatusChanged(StatusListener* listener,
                                         DescriptorStatus currentStatus,
                                         DescriptorStatus transitions) {
     MAGIC_ASSERT(listener);
 
-    if (_descriptorlistener_shouldNotify(
+    if (_statuslistener_shouldNotify(
             listener, currentStatus, transitions)) {
-        _descriptorlistener_invokeNotifyFunc(listener);
+        _statuslistener_invokeNotifyFunc(listener);
     }
 }
 
-void descriptorlistener_setMonitorStatus(DescriptorListener* listener,
+void statuslistener_setMonitorStatus(StatusListener* listener,
                                          DescriptorStatus status,
-                                         DescriptorListenerFilter filter) {
+                                         StatusListenerFilter filter) {
     MAGIC_ASSERT(listener);
     listener->monitoring = status;
     listener->filter = filter;

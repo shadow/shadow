@@ -26,7 +26,7 @@ void descriptor_init(Descriptor* descriptor, DescriptorType type,
     descriptor->type = type;
     descriptor->listeners =
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL,
-                              (GDestroyNotify)descriptorlistener_unref);
+                              (GDestroyNotify)statuslistener_unref);
     descriptor->referenceCount = 1;
 
     debug("Descriptor %i has been initialized now", descriptor->handle);
@@ -172,11 +172,11 @@ static void _descriptor_handleStatusChange(Descriptor* descriptor, DescriptorSta
     /* Iterate the listeners. */
     GList* item = g_list_first(listenerList);
     while (statusesChanged && item) {
-        DescriptorListener* listener = item->data;
+        StatusListener* listener = item->data;
 
         /* Call only if the listener is still in the table. */
         if (g_hash_table_contains(descriptor->listeners, listener)) {
-            descriptorlistener_onStatusChanged(
+            statuslistener_onStatusChanged(
                 listener, descriptor->status, statusesChanged);
         }
 
@@ -213,15 +213,15 @@ DescriptorStatus descriptor_getStatus(Descriptor* descriptor) {
 }
 
 void descriptor_addListener(Descriptor* descriptor,
-                            DescriptorListener* listener) {
+                            StatusListener* listener) {
     MAGIC_ASSERT(descriptor);
     /* We are storing a listener instance, so count the ref. */
-    descriptorlistener_ref(listener);
+    statuslistener_ref(listener);
     g_hash_table_insert(descriptor->listeners, listener, listener);
 }
 
 void descriptor_removeListener(Descriptor* descriptor,
-                               DescriptorListener* listener) {
+                               StatusListener* listener) {
     MAGIC_ASSERT(descriptor);
     /* This will automatically call descriptorlistener_unref on the instance. */
     g_hash_table_remove(descriptor->listeners, listener);

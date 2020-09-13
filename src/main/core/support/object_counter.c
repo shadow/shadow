@@ -164,7 +164,7 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
 
-        case OBJECT_TYPE_DESCRIPTOR_LISTENER: {
+        case OBJECT_TYPE_STATUS_LISTENER: {
             _objectcount_incrementOne(
                 &(counter->counters.descriptorlistener), ctype);
             break;
