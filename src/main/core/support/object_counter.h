@@ -33,6 +33,7 @@ enum _ObjectType {
     OBJECT_TYPE_TIMER,
     OBJECT_TYPE_FILE,
     OBJECT_TYPE_FUTEX,
+    OBJECT_TYPE_FUTEX_TABLE,
 };
 
 typedef enum _CounterType CounterType;

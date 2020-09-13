@@ -35,7 +35,6 @@ enum _DescriptorType {
     DT_EPOLL,
     DT_TIMER,
     DT_FILE,
-    DT_FUTEX,
 };
 
 typedef struct _Descriptor Descriptor;
