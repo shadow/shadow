@@ -48,10 +48,10 @@ void descriptor_addFlags(Descriptor* descriptor, gint flags);
  * be adjusted, and the `doSetBits` arg specifies if the bit should be set or
  * unset.
  *
- * For example, a socket's readability is tracked with the DS_READABLE status.
+ * For example, a socket's readability is tracked with the STATUS_DESCRIPTOR_READABLE status.
  * When a socket has data and becomes readable, adjustStatus is called with
- * DS_READABLE as the status and doSetBits as TRUE. Once all data has been read,
- * adjustStatus is called with DS_READABLE as the status and doSetBits as FALSE.
+ * STATUS_DESCRIPTOR_READABLE as the status and doSetBits as TRUE. Once all data has been read,
+ * adjustStatus is called with STATUS_DESCRIPTOR_READABLE as the status and doSetBits as FALSE.
  *
  * Multiple status bits can be set of unset at the same time.
  *
@@ -61,10 +61,10 @@ void descriptor_addFlags(Descriptor* descriptor, gint flags);
  * listener will trigger notifications via callback functions if the listener is
  * configured to monitor a bit that flipped.
  */
-void descriptor_adjustStatus(Descriptor* descriptor, DescriptorStatus status, gboolean doSetBits);
+void descriptor_adjustStatus(Descriptor* descriptor, Status status, gboolean doSetBits);
 
 /* Gets the current status of the descriptor. */
-DescriptorStatus descriptor_getStatus(Descriptor* descriptor);
+Status descriptor_getStatus(Descriptor* descriptor);
 
 /* Adds a listener that will get notified via descriptorlistener_onStatusChanged
  * on status transitions (bit flips).

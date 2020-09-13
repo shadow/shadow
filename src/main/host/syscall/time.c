@@ -58,7 +58,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
         /* tell the thread we blocked it */
         return (SysCallReturn){
             .state = SYSCALL_BLOCK,
-            .cond = syscallcondition_new(sys->timer, NULL, DS_NONE)};
+            .cond = syscallcondition_new(sys->timer, NULL, STATUS_NONE)};
     }
 
     /* If needed, verify that the timer expired correctly. */

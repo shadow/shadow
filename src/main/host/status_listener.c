@@ -14,7 +14,7 @@
 
 struct _StatusListener {
     /* The descriptor status bits we want to monitor for transitions. */
-    DescriptorStatus monitoring;
+    Status monitoring;
     /* A filter that specifies when we should trigger a callback. */
     StatusListenerFilter filter;
 
@@ -89,8 +89,8 @@ void statuslistener_unref(StatusListener* listener) {
  * are monitoring.
  */
 static bool _statuslistener_shouldNotify(StatusListener* listener,
-                                                 DescriptorStatus currentStatus,
-                                                 DescriptorStatus transitions) {
+                                                 Status currentStatus,
+                                                 Status transitions) {
     MAGIC_ASSERT(listener);
 
     bool flipped = listener->monitoring & transitions;
@@ -116,8 +116,8 @@ static void _statuslistener_invokeNotifyFunc(StatusListener* listener) {
 }
 
 void statuslistener_onStatusChanged(StatusListener* listener,
-                                        DescriptorStatus currentStatus,
-                                        DescriptorStatus transitions) {
+                                        Status currentStatus,
+                                        Status transitions) {
     MAGIC_ASSERT(listener);
 
     if (_statuslistener_shouldNotify(
@@ -127,7 +127,7 @@ void statuslistener_onStatusChanged(StatusListener* listener,
 }
 
 void statuslistener_setMonitorStatus(StatusListener* listener,
-                                         DescriptorStatus status,
+                                         Status status,
                                          StatusListenerFilter filter) {
     MAGIC_ASSERT(listener);
     listener->monitoring = status;

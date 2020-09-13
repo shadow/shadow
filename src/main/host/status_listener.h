@@ -50,14 +50,14 @@ void statuslistener_unref(StatusListener* listener);
  * that just transitioned, then this function will trigger a notification
  * via the callback supplied to the new func.*/
 void statuslistener_onStatusChanged(StatusListener* listener,
-                                        DescriptorStatus currentStatus,
-                                        DescriptorStatus transitions);
+                                        Status currentStatus,
+                                        Status transitions);
 
 /* Set the status bits that we should monitor for transitions (flips),
  * and a filter that specifies which flips should cause the callback
  * to be invoked. */
 void statuslistener_setMonitorStatus(StatusListener* listener,
-                                         DescriptorStatus status,
+                                         Status status,
                                          StatusListenerFilter filter);
 
 #endif /* SRC_MAIN_HOST_STATUS_LISTENER_H_ */

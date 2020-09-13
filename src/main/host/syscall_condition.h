@@ -17,7 +17,7 @@
  * reaching the given status or the given timeout expiring.
  * The condition starts with a reference count of 1. */
 SysCallCondition* syscallcondition_new(Timer* timeout, Descriptor* desc,
-                                       DescriptorStatus status);
+                                       Status status);
 
 /* Increment the reference count on the given condition. */
 void syscallcondition_ref(SysCallCondition* cond);

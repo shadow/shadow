@@ -52,7 +52,7 @@ static gboolean _timer_close(Descriptor* descriptor) {
     MAGIC_ASSERT(timer);
     debug("timer fd %i closing now", timer->super.handle);
     timer->isClosed = TRUE;
-    descriptor_adjustStatus(&(timer->super), DS_ACTIVE, FALSE);
+    descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_ACTIVE, FALSE);
     if (timer->super.handle > 0) {
         return TRUE; // deregister from process
     } else {
@@ -77,7 +77,7 @@ Timer* timer_new() {
     MAGIC_INIT(timer);
 
     descriptor_init(&(timer->super), DT_TIMER, &_timerFunctions);
-    descriptor_adjustStatus(&(timer->super), DS_ACTIVE, TRUE);
+    descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
     worker_countObject(OBJECT_TYPE_TIMER, COUNTER_TYPE_NEW);
 
@@ -238,7 +238,7 @@ static void _timer_expire(Timer* timer, gpointer data) {
              * immediately on the next epoll_wait call. this behavior was
              * verified on linux. */
             timer->expireCountSinceLastSet++;
-            descriptor_adjustStatus(&(timer->super), DS_READABLE, TRUE);
+            descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_READABLE, TRUE);
 
             if(timer->expireInterval > 0) {
                 SimulationTime now = worker_getCurrentTime();
@@ -331,7 +331,7 @@ gint timer_setTime(Timer* timer, gint flags,
 
     /* settings were modified, reset expire count and readability */
     timer->expireCountSinceLastSet = 0;
-    descriptor_adjustStatus(&(timer->super), DS_READABLE, FALSE);
+    descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
     return 0;
 }
@@ -352,7 +352,7 @@ ssize_t timer_read(Timer* timer, void *buf, size_t count) {
 
         /* reset the expire count since we reported it */
         timer->expireCountSinceLastSet = 0;
-        descriptor_adjustStatus(&(timer->super), DS_READABLE, FALSE);
+        descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
         return (ssize_t) sizeof(guint64);
     } else {

@@ -345,7 +345,7 @@ gboolean socket_addToInputBuffer(Socket* socket, Packet* packet) {
 
     /* we just added a packet, so we are readable */
     if(socket->inputBufferLength > 0) {
-        descriptor_adjustStatus((Descriptor*)socket, DS_READABLE, TRUE);
+        descriptor_adjustStatus((Descriptor*)socket, STATUS_DESCRIPTOR_READABLE, TRUE);
     }
 
     return TRUE;
@@ -373,7 +373,7 @@ Packet* socket_removeFromInputBuffer(Socket* socket) {
 
         /* we are not readable if we are now empty */
         if(socket->inputBufferLength <= 0) {
-            descriptor_adjustStatus((Descriptor*)socket, DS_READABLE, FALSE);
+            descriptor_adjustStatus((Descriptor*)socket, STATUS_DESCRIPTOR_READABLE, FALSE);
         }
     }
 
@@ -420,7 +420,7 @@ gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
 
     /* we just added a packet, we are no longer writable if full */
     if(_socket_getOutputBufferSpaceIncludingTCP(socket) <= 0) {
-        descriptor_adjustStatus((Descriptor*)socket, DS_WRITABLE, FALSE);
+        descriptor_adjustStatus((Descriptor*)socket, STATUS_DESCRIPTOR_WRITABLE, FALSE);
     }
 
     /* tell the interface to include us when sending out to the network */
@@ -455,7 +455,7 @@ Packet* socket_removeFromOutputBuffer(Socket* socket) {
 
         /* we are writable if we now have space */
         if(_socket_getOutputBufferSpaceIncludingTCP(socket) > 0) {
-            descriptor_adjustStatus((Descriptor*)socket, DS_WRITABLE, TRUE);
+            descriptor_adjustStatus((Descriptor*)socket, STATUS_DESCRIPTOR_WRITABLE, TRUE);
         }
     }
 

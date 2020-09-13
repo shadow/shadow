@@ -178,7 +178,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
             return (SysCallReturn){.state = SYSCALL_BLOCK,
                                    .cond = syscallcondition_new(
                                        (timeout_ms > 0) ? sys->timer : NULL,
-                                       (Descriptor*)epoll, DS_READABLE)};
+                                       (Descriptor*)epoll, STATUS_DESCRIPTOR_READABLE)};
         }
     }
 

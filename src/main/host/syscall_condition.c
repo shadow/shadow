@@ -23,7 +23,7 @@ struct _SysCallCondition {
     // Non-null if the condition will signal when a status is reached
     Descriptor* desc;
     // The status that should cause us to signal
-    DescriptorStatus status;
+    Status status;
     // Non-null if we are listening for status updates on the timeout
     StatusListener* timeoutListener;
     // Non-null if we are listening for status updates on the desc
@@ -40,7 +40,7 @@ struct _SysCallCondition {
 };
 
 SysCallCondition* syscallcondition_new(Timer* timeout, Descriptor* desc,
-                                       DescriptorStatus status) {
+                                       Status status) {
     SysCallCondition* cond = malloc(sizeof(*cond));
 
     *cond = (SysCallCondition){.timeout = timeout,
@@ -69,7 +69,7 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
         descriptor_removeListener(
             (Descriptor*)cond->timeout, cond->timeoutListener);
         statuslistener_setMonitorStatus(
-            cond->timeoutListener, DS_NONE, SLF_NEVER);
+            cond->timeoutListener, STATUS_NONE, SLF_NEVER);
     }
 
     if (cond->timeoutListener) {
@@ -80,7 +80,7 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
     if (cond->desc && cond->descListener) {
         descriptor_removeListener(cond->desc, cond->descListener);
         statuslistener_setMonitorStatus(
-            cond->descListener, DS_NONE, SLF_NEVER);
+            cond->descListener, STATUS_NONE, SLF_NEVER);
     }
 
     if (cond->descListener) {
@@ -262,7 +262,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
 
         /* The timer is readable when it expires */
         statuslistener_setMonitorStatus(
-            cond->timeoutListener, DS_READABLE, SLF_OFF_TO_ON);
+            cond->timeoutListener, STATUS_DESCRIPTOR_READABLE, SLF_OFF_TO_ON);
 
         /* Attach the listener to the timer. */
         descriptor_addListener(
