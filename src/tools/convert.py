@@ -87,10 +87,10 @@ def xml_to_dict(node: ET.Element) -> Dict:
         }
 
     # Iterates over each XML node and transforms those in dict
-    if node.getchildren():
+    if list(node):
         return {
             **convert_integer(node.attrib),
-            **xml_nodes_to_dict(node.getchildren())
+            **xml_nodes_to_dict(node)
         }
 
     # No sub XML nodes included in this node, returns node attributes only
@@ -140,10 +140,10 @@ def shadow_xml_to_dict(root: ET.Element) -> Dict:
     if options:
         return {
             'options': options,
-            **xml_nodes_to_dict(root.getchildren())
+            **xml_nodes_to_dict(root)
         }
     return {
-        **xml_nodes_to_dict(root.getchildren())
+        **xml_nodes_to_dict(root)
     }
 
 
