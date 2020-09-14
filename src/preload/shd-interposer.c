@@ -480,6 +480,17 @@ int shadow_clock_gettime(clockid_t clk_id, struct timespec *tp) {
     return director.next.clock_gettime(clk_id, tp);
 }
 
+// BLEEP attacker support
+int shadow_bind(int fd, const struct sockaddr* addr, socklen_t len) {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_shadow_bind(proc, fd, addr, len);
+    } else {
+        ENSURE(shadow_claim_shared_entry);
+        return director.next.shadow_bind(fd, addr, len);
+    }
+}
+
 /* BLEEP related functions*/
 // BLEEP Shared Entry Functions
 void* shadow_claim_shared_entry(void* ptr, size_t sz, int shared_id) {

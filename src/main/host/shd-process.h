@@ -439,6 +439,9 @@ int process_emu_ppoll(Process* proc, struct pollfd *fds, nfds_t nfds, const stru
 
 
 /* BLEEP related functions*/
+// BLEEP attacker support
+int process_emu_shadow_bind(Process* proc, int fd, const struct sockaddr* addr, socklen_t len);
+
 // BLEEP Shared Entry Functions
 void* process_emu_shadow_claim_shared_entry(Process* proc, void* ptr, size_t sz, int shared_id);
 void process_emu_shadow_gmutex_lock(Process* proc, int shared_id);

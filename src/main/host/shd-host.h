@@ -85,6 +85,11 @@ gint host_closeUser(Host* host, gint handle);
 gint host_shutdownSocket(Host* host, gint handle, gint how);
 Descriptor* host_lookupDescriptor(Host* host, gint handle);
 NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle);
+
+/* added for BLEEP */
+void host_setupInterface(Host* host, Address* addr, NetworkInterface* interface);
+
+
 /* Channel* host_lookupShadowChannel(Host* host); */
 void host_registerShadowChannel(Host* host, gint handle);
 gint host_getShadowChannel(Host* host);

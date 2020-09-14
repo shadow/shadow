@@ -49,13 +49,17 @@ PRELOADDEF(return, int, syscall, (int a, ...), a);
 //INTERPOSE_NORET(void pthread_cleanup_push(void (*a)(void *), void *b), pthread_cleanup_push, a, b);
 //INTERPOSE_NORET(void pthread_cleanup_pop(int a), pthread_cleanup_pop, a, b);
 
+/* BLEEP related functions*/
+// BLEEP library support
 PRELOADDEF(return, int, puts_temp, (const char *a), a);
 PRELOADDEF(return, int, shadow_pipe2, (int a[2], int b), a, b);
 PRELOADDEF(return, int, shadow_push_eventlog, (const char *a), a);
 PRELOADDEF(return, int, shadow_usleep, (unsigned int a), a);
 PRELOADDEF(return, int, shadow_clock_gettime, (clockid_t a, struct timespec *b), a, b);
 
-/* BLEEP related functions*/
+// BLEEP attacker support
+PRELOADDEF(return, int, shadow_bind, (int fd, const struct sockaddr* addr, socklen_t len), fd, addr, len);
+
 // BLEEP Shared Entry Functions
 PRELOADDEF(return, void*, shadow_claim_shared_entry, (void* ptr, size_t sz, int shared_id), ptr, sz, shared_id);
 PRELOADDEF(return, void, shadow_gmutex_lock, (int shared_id), shared_id);

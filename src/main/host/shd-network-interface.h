@@ -29,5 +29,7 @@ void networkinterface_received(NetworkInterface* interface);
 void networkinterface_wantsSend(NetworkInterface* interface, Socket* transport);
 void networkinterface_sent(NetworkInterface* interface);
 
+void networkinterface_setShadow(NetworkInterface* interface, gboolean value);
+gboolean networkinterface_isShadow(NetworkInterface* interface);
 
 #endif /* SHD_NETWORK_INTERFACE_H_ */

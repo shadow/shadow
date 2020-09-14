@@ -488,6 +488,12 @@ NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle) {
     return g_hash_table_lookup(host->interfaces, GUINT_TO_POINTER(handle));
 }
 
+void host_setupInterface(Host* host, Address* addr, NetworkInterface* interface) {
+    MAGIC_ASSERT(host);
+    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(addr)), interface);
+    return;
+}
+
 static void _host_associateInterface(Host* host, Socket* socket,
         in_addr_t bindAddress, in_port_t bindPort, in_addr_t peerAddress, in_port_t peerPort) {
     MAGIC_ASSERT(host);
@@ -505,7 +511,8 @@ static void _host_associateInterface(Host* host, Socket* socket,
 
         while(g_hash_table_iter_next(&iter, &key, &value)) {
             NetworkInterface* interface = value;
-            networkinterface_associate(interface, socket);
+            if (!networkinterface_isShadow(interface))  // ignore shadow interface
+                networkinterface_associate(interface, socket);
         }
     } else {
         NetworkInterface* interface = host_lookupInterface(host, bindAddress);
@@ -1045,6 +1052,10 @@ static gboolean _host_isInterfaceAvailable(Host* host, ProtocolType type,
 
         while(g_hash_table_iter_next(&iter, &key, &value)) {
             NetworkInterface* interface = value;
+
+            if (networkinterface_isShadow(interface)) // ignore shadow network interface from checking
+                continue;
+
             isAvailable = !networkinterface_isAssociated(interface, type, port, peerIP, peerPort);
 
             /* as soon as one is taken, break out to return FALSE */

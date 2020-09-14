@@ -44,6 +44,9 @@ struct _NetworkInterface {
 
     PCapWriter* pcap;
 
+    /* for BLEEP emulation support */
+    gboolean shadowInterface;
+
     MAGIC_DECLARE;
 };
 
@@ -95,6 +98,8 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
     info("bringing up network interface '%s' at '%s', %"G_GUINT64_FORMAT" KiB/s up and %"G_GUINT64_FORMAT" KiB/s down using queuing discipline %s",
             address_toHostName(interface->address), address_toHostIPString(interface->address), bwUpKiBps, bwDownKiBps,
             interface->qdisc == QDISC_MODE_RR ? "rr" : "fifo");
+
+    interface->shadowInterface = FALSE;
 
     return interface;
 }
@@ -587,4 +592,14 @@ void networkinterface_sent(NetworkInterface* interface) {
 
     /* now try to send the next ones */
     _networkinterface_scheduleNextSend(interface);
+}
+
+void networkinterface_setShadow(NetworkInterface* interface, gboolean value) {
+    MAGIC_ASSERT(interface);
+    interface->shadowInterface = value;
+    return;
+}
+gboolean networkinterface_isShadow(NetworkInterface* interface) {
+    MAGIC_ASSERT(interface);
+    return interface->shadowInterface;
 }
