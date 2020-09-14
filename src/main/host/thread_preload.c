@@ -36,6 +36,8 @@ struct _ThreadPreload {
     /* holds the event id for the most recent call from the plugin/shim */
     ShimEvent currentEvent;
 
+    bool experimentalDoExplicitBlock;
+
     GHashTable* ptr_to_block;
     GList *read_list, *write_list;
 };
@@ -266,12 +268,14 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                     &thread->currentEvent.event_data.syscall.syscall_args);
 
                 if (result.state == SYSCALL_BLOCK) {
-                    // thread is blocked on simulation progress. Tell it to
-                    // stop spinning so that releases its CPU core for the next
-                    // thread to be run.
-                    ShimEvent block_event = {.event_id = SHD_SHIM_EVENT_BLOCK};
-                    shimevent_sendEventToPlugin(thread->ipc_blk.p, &block_event);
-                    shimevent_recvEventFromPlugin(thread->ipc_blk.p, &block_event);
+                    if (thread->experimentalDoExplicitBlock) {
+                        // thread is blocked on simulation progress. Tell it to
+                        // stop spinning so that releases its CPU core for the next
+                        // thread to be run.
+                        ShimEvent block_event = {.event_id = SHD_SHIM_EVENT_BLOCK};
+                        shimevent_sendEventToPlugin(thread->ipc_blk.p, &block_event);
+                        shimevent_recvEventFromPlugin(thread->ipc_blk.p, &block_event);
+                    }
 
                     return result.cond;
                 }
@@ -536,6 +540,10 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
 
     _Static_assert(
         sizeof(void*) == 8, "thread-preload impl assumes 8 byte pointers");
+
+    if (getenv("SHADOW_EXPERIMENTAL_EXPLICIT_BLOCK") != NULL) {
+        thread->experimentalDoExplicitBlock = true;
+    }
 
     // thread has access to a global, thread safe shared memory manager
 
