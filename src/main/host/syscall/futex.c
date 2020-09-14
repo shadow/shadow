@@ -6,13 +6,15 @@
 #include "main/host/syscall/futex.h"
 
 #include <errno.h>
+#include <inttypes.h>
 #include <linux/futex.h>
 #include <sys/time.h>
 
-#include "main/host/futex_table.h"
 #include "main/host/futex.h"
+#include "main/host/futex_table.h"
 #include "main/host/host.h"
 #include "main/host/syscall/protected.h"
+#include "main/host/syscall_condition.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
@@ -38,67 +40,107 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
             (void*)uaddrptr.val, futex_op, operation, options, val);
     
     // Futexes are 32 bits on all platforms
-    uint32_t* faddr = (uint32_t*)uaddrptr.val;
+    void* faddr = (uint32_t*)uaddrptr.val;
     uint32_t expectedVal = (uint32_t)val;
 
     // futex addr cannot be NULL
     if(!faddr) {
+        debug("Futex addr cannot be NULL");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
-
-    // Check if we already have a futex here
-    FutexTable* ftable = host_getFutexTable(sys->host);
-    Futex* futex = futextable_get(ftable, faddr);
 
     int result = 0;
 
     switch(operation) {
         case FUTEX_WAIT: {
-//            // TODO: does this load/compare need to be done atomically?
-//            // `man 2 futex`: blocking via a futex is an atomic compare-and-block operation
-//            if(*faddr != expectedVal) {
-//                result = -EAGAIN;
-//            } else {
-//                if(!futex) {
-//                    futex = futex_new(faddr);
-//                    bool success = futextable_add(ftable, futex);
-//                    utility_assert(success);
-//                }
-//
-//                FutexState fstate = futex_checkState(futex, sys->thread);
-//
-//                // We shouldn't have gotten here if we are already waiting
-//                utility_assert(fstate != FUTEX_STATE_WAITING);
-//
-//                if(fstate == FUTEX_STATE_TIMEDOUT) {
-//                    result = -ETIMEDOUT;
-//                } else if(fstate == FUTEX_STATE_WOKEUP) {
-//                    result = 0;
-//                } else { // FUTEX_STATE_NONE
-//                    // Add our thread as a futex waiter
-//                    // TODO: handle timeout option here
-//                    
-//                    const struct timespec* timeout; 
-//                    if(timeoutptr.val) {
-//                        timeout = process_getReadablePtr(sys->process, sys->thread, timeoutptr, sizeof(*timeout));
-//                    } else {
-//                        timeout = NULL;
-//                    }
-//
-//                    futex_wait(futex, sys->thread, timeout);
-//
-//                    return (SysCallReturn){
-//                        .state = SYSCALL_BLOCK,
-//                        .cond = syscallcondition_new(timeout, NULL, 0)
-//                    };
-//                }
-//            }
-//            break;
+            debug("Handling FUTEX_WAIT operation %i", operation);
+
+            // This is a new wait operation on the futex for this thread.
+            // Check if a timeout was given in the syscall args.
+            const struct timespec* timeout;
+            if (timeoutptr.val) {
+                timeout =
+                    process_getReadablePtr(sys->process, sys->thread, timeoutptr, sizeof(*timeout));
+                // Bounds checking
+                if (!(timeout->tv_nsec >= 0 && timeout->tv_nsec <= 999999999)) {
+                    debug("A futex timeout was given, but the nanos value is out of range");
+                    result = -EINVAL;
+                    break;
+                }
+            } else {
+                timeout = NULL;
+            }
+
+            // TODO: does this load/compare need to be done atomically?
+            // `man 2 futex`: blocking via a futex is an atomic compare-and-block operation
+            const uint32_t* futexVal =
+                process_getReadablePtr(sys->process, sys->thread, uaddrptr, sizeof(uint32_t));
+
+            debug("Futex value is %" PRIu32 ", expected value is %" PRIu32, futexVal, expectedVal);
+            if (*futexVal != expectedVal) {
+                debug("Futex values don't match, try again later");
+                result = -EAGAIN;
+                break;
+            }
+
+            // Check if we already have a futex
+            FutexTable* ftable = host_getFutexTable(sys->host);
+            Futex* futex = futextable_get(ftable, faddr);
+
+            if (_syscallhandler_wasBlocked(sys)) {
+                utility_assert(futex != NULL);
+
+                // We already blocked on wait, so this is either a timeout or wakeup
+                if (timeout && _syscallhandler_didListenTimeoutExpire(sys)) {
+                    // Timeout while waiting for a wakeup
+                    debug("Futex %p timeout out while waiting", faddr);
+                    result = -ETIMEDOUT;
+                } else {
+                    // Proper wakeup from another thread
+                    debug("Futex %p has been woke up", faddr);
+                    result = 0;
+                }
+
+                // Dynamically clean up the futex if needed
+                if (futex_getListenerCount(futex) == 0) {
+                    debug("Dynamically freed a futex object for futex addr %p", faddr);
+                    bool success = futextable_remove(ftable, futex);
+                    utility_assert(success);
+                }
+                break;
+            }
+
+            // Dynamically create a futex if one does not yet exist
+            if (!futex) {
+                debug("Dynamically created a new futex object for futex addr %p", faddr);
+                futex = futex_new(faddr);
+                bool success = futextable_add(ftable, futex);
+                utility_assert(success);
+            }
+
+            // Now we need to block until another thread does a wake on the futex.
+            debug("Futex blocking for wakeup %s timeout", timeout ? "with" : "without");
+            Trigger trigger =
+                (Trigger){.type = TRIGGER_FUTEX, .object = futex, .status = STATUS_FUTEX_WAKEUP};
+            return (SysCallReturn){
+                .state = SYSCALL_BLOCK,
+                .cond = syscallcondition_new(trigger, timeout ? sys->timer : NULL)};
         }
 
         case FUTEX_WAKE: {
+            debug("Handling FUTEX_WAKE operation %i", operation);
 
-            //break;
+            FutexTable* ftable = host_getFutexTable(sys->host);
+            Futex* futex = futextable_get(ftable, faddr);
+
+            debug("Found futex %p at futex addr %p", futex, faddr);
+
+            if (futex && val > 0) {
+                debug("Futex waking %i waiters", val);
+                result = futex_wake(futex, (unsigned int)val);
+            }
+
+            break;
         }
 
         case FUTEX_FD:
@@ -117,7 +159,6 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
             break;
         }
     }
-    
-    return (SysCallReturn){.state = SYSCALL_NATIVE};
-    //return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
 }

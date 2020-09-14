@@ -10,24 +10,23 @@
 
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/status_listener.h"
 #include "main/host/descriptor/descriptor_types.h"
+#include "main/host/futex.h"
 #include "main/host/process.h"
+#include "main/host/status_listener.h"
 #include "main/host/thread.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
 struct _SysCallCondition {
+    // Specifies how the condition will signal when a status is reached
+    Trigger trigger;
     // Non-null if the condition will signal upon a timeout firing
     Timer* timeout;
-    // Non-null if the condition will signal when a status is reached
-    Descriptor* desc;
-    // The status that should cause us to signal
-    Status status;
+    // Non-null if we are listening for status updates on a trigger object
+    StatusListener* triggerListener;
     // Non-null if we are listening for status updates on the timeout
     StatusListener* timeoutListener;
-    // Non-null if we are listening for status updates on the desc
-    StatusListener* descListener;
     // The process waiting for the signal
     Process* proc;
     // The thread waiting for the signal
@@ -42,18 +41,29 @@ struct _SysCallCondition {
 SysCallCondition* syscallcondition_new(Trigger trigger, Timer* timeout) {
     SysCallCondition* cond = malloc(sizeof(*cond));
 
-    *cond = (SysCallCondition){.timeout = timeout,
-                               .desc = trigger.object.as_descriptor,
-                               .status = trigger.status,
-                               .referenceCount = 1,
-                               MAGIC_INITIALIZER};
+    *cond = (SysCallCondition){
+        .timeout = timeout, .trigger = trigger, .referenceCount = 1, MAGIC_INITIALIZER};
 
     /* We now hold refs to these objects. */
     if (cond->timeout) {
         descriptor_ref(cond->timeout);
     }
-    if (cond->desc) {
-        descriptor_ref(cond->desc);
+
+    if (cond->trigger.object.as_pointer) {
+        switch (cond->trigger.type) {
+            case TRIGGER_DESCRIPTOR: {
+                descriptor_ref(cond->trigger.object.as_descriptor);
+                break;
+            }
+            case TRIGGER_FUTEX: {
+                futex_ref(cond->trigger.object.as_futex);
+                break;
+            }
+            case TRIGGER_NONE:
+            default: {
+                break;
+            }
+        }
     }
 
     worker_countObject(OBJECT_TYPE_SYSCALL_CONDITION, COUNTER_TYPE_NEW);
@@ -76,15 +86,29 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
         cond->timeoutListener = NULL;
     }
 
-    if (cond->desc && cond->descListener) {
-        descriptor_removeListener(cond->desc, cond->descListener);
-        statuslistener_setMonitorStatus(
-            cond->descListener, STATUS_NONE, SLF_NEVER);
+    if (cond->trigger.object.as_pointer && cond->triggerListener) {
+        switch (cond->trigger.type) {
+            case TRIGGER_DESCRIPTOR: {
+                descriptor_removeListener(
+                    cond->trigger.object.as_descriptor, cond->triggerListener);
+                break;
+            }
+            case TRIGGER_FUTEX: {
+                futex_removeListener(cond->trigger.object.as_futex, cond->triggerListener);
+                break;
+            }
+            case TRIGGER_NONE:
+            default: {
+                break;
+            }
+        }
+
+        statuslistener_setMonitorStatus(cond->triggerListener, STATUS_NONE, SLF_NEVER);
     }
 
-    if (cond->descListener) {
-        statuslistener_unref(cond->descListener);
-        cond->descListener = NULL;
+    if (cond->triggerListener) {
+        statuslistener_unref(cond->triggerListener);
+        cond->triggerListener = NULL;
     }
 }
 
@@ -111,8 +135,21 @@ static void _syscallcondition_free(SysCallCondition* cond) {
     if (cond->timeout) {
         descriptor_unref(cond->timeout);
     }
-    if (cond->desc) {
-        descriptor_unref(cond->desc);
+    if (cond->trigger.object.as_pointer) {
+        switch (cond->trigger.type) {
+            case TRIGGER_DESCRIPTOR: {
+                descriptor_unref(cond->trigger.object.as_descriptor);
+                break;
+            }
+            case TRIGGER_FUTEX: {
+                futex_unref(cond->trigger.object.as_futex);
+                break;
+            }
+            case TRIGGER_NONE:
+            default: {
+                break;
+            }
+        }
     }
 
     MAGIC_CLEAR(cond);
@@ -147,11 +184,27 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
                            process_getName(cond->proc), cond->thread,
                            listenVerb);
 
-    if (cond->desc) {
-        g_string_append_printf(string, "status on descriptor %d%s",
-                               descriptor_getHandle(cond->desc),
-                               cond->timeout ? " and " : "");
+    if (cond->trigger.object.as_pointer) {
+        switch (cond->trigger.type) {
+            case TRIGGER_DESCRIPTOR: {
+                g_string_append_printf(string, "status on descriptor %d%s",
+                                       descriptor_getHandle(cond->trigger.object.as_descriptor),
+                                       cond->timeout ? " and " : "");
+                break;
+            }
+            case TRIGGER_FUTEX: {
+                g_string_append_printf(string, "status on futex %p%s",
+                                       futex_getAddress(cond->trigger.object.as_futex),
+                                       cond->timeout ? " and " : "");
+                break;
+            }
+            case TRIGGER_NONE:
+            default: {
+                break;
+            }
+        }
     }
+
     if (cond->timeout) {
         struct itimerspec value = {0};
         utility_assert(timer_getTime(cond->timeout, &value) == 0);
@@ -166,6 +219,29 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
 }
 #endif
 
+static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
+    MAGIC_ASSERT(cond);
+
+    switch (cond->trigger.type) {
+        case TRIGGER_DESCRIPTOR: {
+            if (descriptor_getStatus(cond->trigger.object.as_descriptor) & cond->trigger.status) {
+                return true;
+            }
+            break;
+        }
+        case TRIGGER_FUTEX: {
+            // Futex status doesn't change
+            return true;
+        }
+        case TRIGGER_NONE:
+        default: {
+            break;
+        }
+    }
+
+    return false;
+}
+
 static void _syscallcondition_signal(void* obj, void* arg) {
     SysCallCondition* cond = obj;
     bool wasTimeout = (bool)arg;
@@ -179,7 +255,7 @@ static void _syscallcondition_signal(void* obj, void* arg) {
 
     // Always deliver the signal if the timeout expired.
     // Otherwise, only deliver the signal if the desc status is still valid.
-    if (wasTimeout || (descriptor_getStatus(cond->desc) & cond->status)) {
+    if (wasTimeout || _syscallcondition_statusIsValid(cond)) {
 #ifdef DEBUG
         _syscallcondition_logListeningState(cond, "stopped");
 #endif
@@ -196,7 +272,7 @@ static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
     /* We deliver the signal via a task, to make sure whatever
      * code triggered our listener finishes its logic first before
      * we tell the process to run the plugin and potentially change
-     * the state of the descriptor again. */
+     * the state of the trigger object again. */
     Task* signalTask =
         task_new(_syscallcondition_signal, cond, (void*)wasTimeout,
                  _syscallcondition_unrefcb, NULL);
@@ -208,7 +284,7 @@ static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
     cond->signalPending = true;
 }
 
-static void _syscallcondition_notifyDescStatusChanged(void* obj, void* arg) {
+static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
     SysCallCondition* cond = obj;
     MAGIC_ASSERT(cond);
 
@@ -268,21 +344,38 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
             (Descriptor*)cond->timeout, cond->timeoutListener);
     }
 
-    if (cond->desc && !cond->descListener) {
-        /* We listen for status change on the descriptor. */
-        cond->descListener = statuslistener_new(
-            _syscallcondition_notifyDescStatusChanged, cond,
-            _syscallcondition_unrefcb, NULL, NULL);
+    if (cond->trigger.object.as_pointer && !cond->triggerListener) {
+        /* We listen for status change on the trigger object. */
+        cond->triggerListener = statuslistener_new(
+            _syscallcondition_notifyStatusChanged, cond, _syscallcondition_unrefcb, NULL, NULL);
 
         /* The listener holds refs to the thread condition. */
         syscallcondition_ref(cond);
 
-        /* Monitor the requested status. */
-        statuslistener_setMonitorStatus(
-            cond->descListener, cond->status, SLF_OFF_TO_ON);
+        switch (cond->trigger.type) {
+            case TRIGGER_DESCRIPTOR: {
+                /* Monitor the requested status when it transitions from off to on. */
+                statuslistener_setMonitorStatus(
+                    cond->triggerListener, cond->trigger.status, SLF_OFF_TO_ON);
 
-        /* Attach the listener to the descriptor. */
-        descriptor_addListener(cond->desc, cond->descListener);
+                /* Attach the listener to the descriptor. */
+                descriptor_addListener(cond->trigger.object.as_descriptor, cond->triggerListener);
+                break;
+            }
+            case TRIGGER_FUTEX: {
+                /* Monitor the requested status an every status change. */
+                statuslistener_setMonitorStatus(
+                    cond->triggerListener, cond->trigger.status, SLF_ALWAYS);
+
+                /* Attach the listener to the descriptor. */
+                futex_addListener(cond->trigger.object.as_futex, cond->triggerListener);
+                break;
+            }
+            case TRIGGER_NONE:
+            default: {
+                break;
+            }
+        }
     }
 
 #ifdef DEBUG

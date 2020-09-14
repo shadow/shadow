@@ -20,6 +20,8 @@ enum _Status {
     STATUS_DESCRIPTOR_WRITABLE = 1 << 2,
     /* user already called close */
     STATUS_DESCRIPTOR_CLOSED = 1 << 3,
+    /* a wakeup operation occurred on a futex */
+    STATUS_FUTEX_WAKEUP = 1 << 4,
 };
 
 #endif // SRC_MAIN_HOST_STATUS_H

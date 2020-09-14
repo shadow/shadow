@@ -8,21 +8,30 @@
 
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/timer.h"
+#include "main/host/futex.h"
 #include "main/host/process.h"
+#include "main/host/status.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
+/* The type of the object that we use to trigger the condition. */
 typedef enum _TriggerType TriggerType;
 enum _TriggerType {
     TRIGGER_NONE,
     TRIGGER_DESCRIPTOR,
+    TRIGGER_FUTEX,
 };
 
+/* Pointer to the object whose status we monitor for changes */
 typedef union _TriggerObject TriggerObject;
 union _TriggerObject {
+    void* as_pointer;
     Descriptor* as_descriptor;
+    Futex* as_futex;
 };
 
+/* The spec of the condition that will cause us to unblock a process/thread waiting for the object
+ * to reach a status. */
 typedef struct _Trigger Trigger;
 struct _Trigger {
     TriggerType type;
