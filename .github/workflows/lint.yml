@@ -33,7 +33,10 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
           echo "::add-path::$HOME/.cargo/bin"
       - name: Rustfmt check
-        run: cd src && cargo fmt -- --check
+        run: |
+          (cd src/main && cargo fmt -- --check)
+          (cd src/test && cargo fmt -- --check)
+          (cd src/support/logger/rust_bindings && cargo fmt -- --check)
 
   lint-bindings:
     runs-on: ubuntu-latest

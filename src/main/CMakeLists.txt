@@ -187,12 +187,12 @@ include(ExternalProject)
 ## build the rust library
 ExternalProject_Add(
     shadow-rust-project
-    PREFIX ${CMAKE_CURRENT_SOURCE_DIR}
+    PREFIX ${CMAKE_CURRENT_BINARY_DIR}
+    BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}
     BUILD_ALWAYS 1
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
-    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build ${RUST_BUILD_FLAG} --all-targets --target-dir ${CMAKE_CURRENT_BINARY_DIR}/target"
+    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build ${RUST_BUILD_FLAG} --all-targets"
     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/target/debug/libshadow_rs.a ${CMAKE_CURRENT_BINARY_DIR}/target/release/libshadow_rs.a
     INSTALL_COMMAND ""
     LOG_BUILD OFF

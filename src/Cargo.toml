@@ -1,2 +1,0 @@
-[workspace]
-members = ["main", "test", "support/logger/rust_bindings"]
