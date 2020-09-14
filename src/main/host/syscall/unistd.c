@@ -165,9 +165,9 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
         }
 
         /* We need to block until the descriptor is ready to read. */
-        return (SysCallReturn){
-            .state = SYSCALL_BLOCK,
-            .cond = syscallcondition_new(NULL, desc, STATUS_DESCRIPTOR_READABLE)};
+        Trigger trigger = (Trigger){
+            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
+        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, NULL)};
     }
 
     return (SysCallReturn){
@@ -261,9 +261,9 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
         }
 
         /* We need to block until the descriptor is ready to write. */
-        return (SysCallReturn){
-            .state = SYSCALL_BLOCK,
-            .cond = syscallcondition_new(NULL, desc, STATUS_DESCRIPTOR_WRITABLE)};
+        Trigger trigger = (Trigger){
+            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_WRITABLE};
+        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, NULL)};
     }
 
     return (SysCallReturn){

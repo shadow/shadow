@@ -6,7 +6,7 @@
 #ifndef SRC_MAIN_HOST_STATUS_LISTENER_H_
 #define SRC_MAIN_HOST_STATUS_LISTENER_H_
 
-#include "main/host/descriptor/descriptor_types.h"
+#include "main/host/status.h"
 
 /* Opaque object to store the state needed to implement the module. */
 typedef struct _StatusListener StatusListener;

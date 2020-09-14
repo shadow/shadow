@@ -173,12 +173,14 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
             }
 
             /* Block on epoll status. An epoll descriptor is readable when it
-             * has events. We either
-             * use our timer as a timeout, or no timeout. */
-            return (SysCallReturn){.state = SYSCALL_BLOCK,
-                                   .cond = syscallcondition_new(
-                                       (timeout_ms > 0) ? sys->timer : NULL,
-                                       (Descriptor*)epoll, STATUS_DESCRIPTOR_READABLE)};
+             * has events. We either use our timer as a timeout, or no timeout. */
+            Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
+                                        .object = (Descriptor*)epoll,
+                                        .status = STATUS_DESCRIPTOR_READABLE};
+
+            return (SysCallReturn){
+                .state = SYSCALL_BLOCK,
+                .cond = syscallcondition_new(trigger, (timeout_ms > 0) ? sys->timer : NULL)};
         }
     }
 

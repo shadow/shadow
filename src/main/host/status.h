@@ -3,6 +3,9 @@
  * See LICENSE for licensing information
  */
 
+#ifndef SRC_MAIN_HOST_STATUS_H_
+#define SRC_MAIN_HOST_STATUS_H_
+
 /* Bitfield representing possible status types and their states.
  * These represent statuses that the StatusListener can wait on. */
 typedef enum _Status Status;
@@ -19,3 +22,4 @@ enum _Status {
     STATUS_DESCRIPTOR_CLOSED = 1 << 3,
 };
 
+#endif // SRC_MAIN_HOST_STATUS_H

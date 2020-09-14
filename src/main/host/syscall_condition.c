@@ -39,22 +39,21 @@ struct _SysCallCondition {
     MAGIC_DECLARE;
 };
 
-SysCallCondition* syscallcondition_new(Timer* timeout, Descriptor* desc,
-                                       Status status) {
+SysCallCondition* syscallcondition_new(Trigger trigger, Timer* timeout) {
     SysCallCondition* cond = malloc(sizeof(*cond));
 
     *cond = (SysCallCondition){.timeout = timeout,
-                               .desc = desc,
-                               .status = status,
+                               .desc = trigger.object.as_descriptor,
+                               .status = trigger.status,
                                .referenceCount = 1,
                                MAGIC_INITIALIZER};
 
     /* We now hold refs to these objects. */
-    if (timeout) {
-        descriptor_ref(timeout);
+    if (cond->timeout) {
+        descriptor_ref(cond->timeout);
     }
-    if (desc) {
-        descriptor_ref(desc);
+    if (cond->desc) {
+        descriptor_ref(cond->desc);
     }
 
     worker_countObject(OBJECT_TYPE_SYSCALL_CONDITION, COUNTER_TYPE_NEW);
