@@ -77,8 +77,7 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
     if (cond->timeout && cond->timeoutListener) {
         descriptor_removeListener(
             (Descriptor*)cond->timeout, cond->timeoutListener);
-        statuslistener_setMonitorStatus(
-            cond->timeoutListener, STATUS_NONE, SLF_NEVER);
+        statuslistener_setMonitorStatus(cond->timeoutListener, STATUS_NONE, SLF_NEVER);
     }
 
     if (cond->timeoutListener) {
@@ -329,8 +328,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
     if (cond->timeout && !cond->timeoutListener) {
         /* The timer is used for timeouts. */
         cond->timeoutListener = statuslistener_new(
-            _syscallcondition_notifyTimeoutExpired, cond,
-            _syscallcondition_unrefcb, NULL, NULL);
+            _syscallcondition_notifyTimeoutExpired, cond, _syscallcondition_unrefcb, NULL, NULL);
 
         /* The listener holds refs to the thread condition. */
         syscallcondition_ref(cond);

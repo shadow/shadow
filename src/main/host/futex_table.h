@@ -24,8 +24,9 @@ void futextable_ref(FutexTable* table);
 /* Decrement the reference count and free the table if no refs remain. */
 void futextable_unref(FutexTable* table);
 
-/* Attempts to store a futex object for later reference at the index corresponding to the unique memory address of the
- * futex. Returns true if the index was available and the futex was successfully stored, or false otherwise.
+/* Attempts to store a futex object for later reference at the index corresponding to the unique
+ * memory address of the futex. Returns true if the index was available and the futex was
+ * successfully stored, or false otherwise.
  *
  * NOTE: that this consumes a reference to the futex, so if you are also storing
  * it outside of this table you will need to ref the futex after calling

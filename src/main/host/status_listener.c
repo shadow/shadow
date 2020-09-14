@@ -34,20 +34,17 @@ struct _StatusListener {
     MAGIC_DECLARE;
 };
 
-StatusListener* statuslistener_new(
-    StatusCallbackFunc notifyFunc, void* callbackObject,
-    StatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
-    StatusArgumentFreeFunc argumentFreeFunc) {
+StatusListener* statuslistener_new(StatusCallbackFunc notifyFunc, void* callbackObject,
+                                   StatusObjectFreeFunc objectFreeFunc, void* callbackArgument,
+                                   StatusArgumentFreeFunc argumentFreeFunc) {
     StatusListener* listener = malloc(sizeof(StatusListener));
 
-    *listener = (StatusListener){
-        .notifyFunc = notifyFunc,
-        .callbackObject = callbackObject,
-        .objectFreeFunc = objectFreeFunc,
-        .callbackArgument = callbackArgument,
-        .argumentFreeFunc = argumentFreeFunc,
-        .referenceCount = 1
-    };
+    *listener = (StatusListener){.notifyFunc = notifyFunc,
+                                 .callbackObject = callbackObject,
+                                 .objectFreeFunc = objectFreeFunc,
+                                 .callbackArgument = callbackArgument,
+                                 .argumentFreeFunc = argumentFreeFunc,
+                                 .referenceCount = 1};
 
     MAGIC_INIT(listener);
 
@@ -88,9 +85,8 @@ void statuslistener_unref(StatusListener* listener) {
 /* Return TRUE if a transition (bit flip) occurred on any status bits that we
  * are monitoring.
  */
-static bool _statuslistener_shouldNotify(StatusListener* listener,
-                                                 Status currentStatus,
-                                                 Status transitions) {
+static bool _statuslistener_shouldNotify(StatusListener* listener, Status currentStatus,
+                                         Status transitions) {
     MAGIC_ASSERT(listener);
 
     bool flipped = listener->monitoring & transitions;
@@ -110,25 +106,21 @@ static void _statuslistener_invokeNotifyFunc(StatusListener* listener) {
     MAGIC_ASSERT(listener);
 
     if (listener->notifyFunc) {
-        listener->notifyFunc(
-            listener->callbackObject, listener->callbackArgument);
+        listener->notifyFunc(listener->callbackObject, listener->callbackArgument);
     }
 }
 
-void statuslistener_onStatusChanged(StatusListener* listener,
-                                        Status currentStatus,
-                                        Status transitions) {
+void statuslistener_onStatusChanged(StatusListener* listener, Status currentStatus,
+                                    Status transitions) {
     MAGIC_ASSERT(listener);
 
-    if (_statuslistener_shouldNotify(
-            listener, currentStatus, transitions)) {
+    if (_statuslistener_shouldNotify(listener, currentStatus, transitions)) {
         _statuslistener_invokeNotifyFunc(listener);
     }
 }
 
-void statuslistener_setMonitorStatus(StatusListener* listener,
-                                         Status status,
-                                         StatusListenerFilter filter) {
+void statuslistener_setMonitorStatus(StatusListener* listener, Status status,
+                                     StatusListenerFilter filter) {
     MAGIC_ASSERT(listener);
     listener->monitoring = status;
     listener->filter = filter;

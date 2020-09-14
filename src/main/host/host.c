@@ -241,7 +241,7 @@ void host_shutdown(Host* host) {
         g_hash_table_destroy(host->unixPathToPortMap);
     }
 
-    if(host->futexTable) {
+    if (host->futexTable) {
         futextable_unref(host->futexTable);
     }
 
@@ -650,7 +650,4 @@ const gchar* host_getDataPath(Host* host) {
     return host->dataDirPath;
 }
 
-FutexTable* host_getFutexTable(Host* host) {
-    return host->futexTable;
-}
-
+FutexTable* host_getFutexTable(Host* host) { return host->futexTable; }

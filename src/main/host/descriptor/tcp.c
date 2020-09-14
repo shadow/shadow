@@ -632,7 +632,8 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
         }
         case TCPS_ESTABLISHED: {
             tcp->flags |= TCPF_WAS_ESTABLISHED;
-            descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE|STATUS_DESCRIPTOR_WRITABLE, TRUE);
+            descriptor_adjustStatus(
+                (Descriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
             break;
         }
         case TCPS_CLOSING: {
@@ -1565,7 +1566,8 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
     tcpChild->child->state = TCPCS_ACCEPTED;
 
     /* update child descriptor status */
-    descriptor_adjustStatus(&(tcpChild->super.super.super), STATUS_DESCRIPTOR_ACTIVE|STATUS_DESCRIPTOR_WRITABLE, TRUE);
+    descriptor_adjustStatus(&(tcpChild->super.super.super),
+                            STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
 
     /* update server descriptor status */
     if(g_queue_get_length(tcp->server->pending) > 0) {
@@ -1675,9 +1677,9 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
             }
         }
 
-        Status s = descriptor_getStatus((Descriptor*) tcp);
+        Status s = descriptor_getStatus((Descriptor*)tcp);
         gboolean waitingUserRead = (s & STATUS_DESCRIPTOR_READABLE) ? TRUE : FALSE;
-        
+
         if((isNextPacket && !waitingUserRead) || (packetFits)) {
             /* make sure its in order */
             _tcp_bufferPacketIn(tcp, packet);
@@ -1946,7 +1948,8 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                     tcp->child->state = TCPCS_PENDING;
                     g_queue_push_tail(tcp->child->parent->server->pending, tcp);
                     /* user should accept new child from parent */
-                    descriptor_adjustStatus(&(tcp->child->parent->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
+                    descriptor_adjustStatus(
+                        &(tcp->child->parent->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
                 }
             }
             break;
@@ -2348,7 +2351,8 @@ static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
             if(totalCopied > 0) {
                 /* we just received bytes, so we can't EOF until the next call.
                  * make sure we stay readable so we DO actually EOF the socket */
-                descriptor_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
+                descriptor_adjustStatus(
+                    &(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
             } else {
                 /* OK, no more data and nothing just received. */
                 if(tcp->flags & TCPF_EOF_RD_SIGNALED) {

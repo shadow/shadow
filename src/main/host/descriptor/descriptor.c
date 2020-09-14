@@ -10,9 +10,9 @@
 
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
-#include "main/host/status_listener.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
+#include "main/host/status_listener.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
@@ -24,9 +24,8 @@ void descriptor_init(Descriptor* descriptor, DescriptorType type,
     MAGIC_INIT(funcTable);
     descriptor->funcTable = funcTable;
     descriptor->type = type;
-    descriptor->listeners =
-        g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL,
-                              (GDestroyNotify)statuslistener_unref);
+    descriptor->listeners = g_hash_table_new_full(
+        g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)statuslistener_unref);
     descriptor->referenceCount = 1;
 
     debug("Descriptor %i has been initialized now", descriptor->handle);
@@ -125,16 +124,16 @@ gint* descriptor_getHandleReference(Descriptor* descriptor) {
 #ifdef DEBUG
 static gchar* _descriptor_statusToString(Status ds) {
     GString* string = g_string_new(NULL);
-    if(ds & STATUS_DESCRIPTOR_ACTIVE) {
+    if (ds & STATUS_DESCRIPTOR_ACTIVE) {
         g_string_append_printf(string, "ACTIVE|");
     }
-    if(ds & STATUS_DESCRIPTOR_READABLE) {
+    if (ds & STATUS_DESCRIPTOR_READABLE) {
         g_string_append_printf(string, "READABLE|");
     }
-    if(ds & STATUS_DESCRIPTOR_WRITABLE) {
+    if (ds & STATUS_DESCRIPTOR_WRITABLE) {
         g_string_append_printf(string, "WRITEABLE|");
     }
-    if(ds & STATUS_DESCRIPTOR_CLOSED) {
+    if (ds & STATUS_DESCRIPTOR_CLOSED) {
         g_string_append_printf(string, "CLOSED|");
     }
     if(string->len == 0) {
@@ -176,8 +175,7 @@ static void _descriptor_handleStatusChange(Descriptor* descriptor, Status oldSta
 
         /* Call only if the listener is still in the table. */
         if (g_hash_table_contains(descriptor->listeners, listener)) {
-            statuslistener_onStatusChanged(
-                listener, descriptor->status, statusesChanged);
+            statuslistener_onStatusChanged(listener, descriptor->status, statusesChanged);
         }
 
         /* The above callback may have changes status again,
@@ -189,7 +187,7 @@ static void _descriptor_handleStatusChange(Descriptor* descriptor, Status oldSta
     g_list_free(listenerList);
 }
 
-void descriptor_adjustStatus(Descriptor* descriptor, Status status, gboolean doSetBits){
+void descriptor_adjustStatus(Descriptor* descriptor, Status status, gboolean doSetBits) {
     MAGIC_ASSERT(descriptor);
 
     Status oldStatus = descriptor->status;
@@ -212,16 +210,14 @@ Status descriptor_getStatus(Descriptor* descriptor) {
     return descriptor->status;
 }
 
-void descriptor_addListener(Descriptor* descriptor,
-                            StatusListener* listener) {
+void descriptor_addListener(Descriptor* descriptor, StatusListener* listener) {
     MAGIC_ASSERT(descriptor);
     /* We are storing a listener instance, so count the ref. */
     statuslistener_ref(listener);
     g_hash_table_insert(descriptor->listeners, listener, listener);
 }
 
-void descriptor_removeListener(Descriptor* descriptor,
-                               StatusListener* listener) {
+void descriptor_removeListener(Descriptor* descriptor, StatusListener* listener) {
     MAGIC_ASSERT(descriptor);
     /* This will automatically call descriptorlistener_unref on the instance. */
     g_hash_table_remove(descriptor->listeners, listener);

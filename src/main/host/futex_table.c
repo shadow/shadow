@@ -28,9 +28,7 @@ struct _FutexTable {
 FutexTable* futextable_new() {
     FutexTable* table = malloc(sizeof(FutexTable));
 
-    *table = (FutexTable){
-        .referenceCount = 1,
-        MAGIC_INITIALIZER};
+    *table = (FutexTable){.referenceCount = 1, MAGIC_INITIALIZER};
 
     worker_countObject(OBJECT_TYPE_FUTEX_TABLE, COUNTER_TYPE_NEW);
     return table;
@@ -67,11 +65,12 @@ bool futextable_add(FutexTable* table, Futex* futex) {
 
     uint32_t* index = futex_getAddress(futex);
 
-    if(!table->futexes) {
-        table->futexes = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, futex_unref_func);
+    if (!table->futexes) {
+        table->futexes =
+            g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, futex_unref_func);
     }
 
-    if(g_hash_table_contains(table->futexes, index)) {
+    if (g_hash_table_contains(table->futexes, index)) {
         return false;
     } else {
         g_hash_table_insert(table->futexes, index, futex);
@@ -94,10 +93,9 @@ bool futextable_remove(FutexTable* table, Futex* futex) {
 
 Futex* futextable_get(FutexTable* table, uint32_t* index) {
     MAGIC_ASSERT(table);
-    if(table->futexes) {
+    if (table->futexes) {
         return g_hash_table_lookup(table->futexes, index);
     } else {
         return NULL;
     }
 }
-

@@ -9,9 +9,9 @@
 
 #include <glib.h>
 
-#include "main/host/status_listener.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/process.h"
+#include "main/host/status_listener.h"
 
 /* Initialize the parent parts of a new descriptor subclass. This call should
  * be paired with a call to clear() before freeing the subclass object. */
@@ -69,12 +69,10 @@ Status descriptor_getStatus(Descriptor* descriptor);
 /* Adds a listener that will get notified via descriptorlistener_onStatusChanged
  * on status transitions (bit flips).
  */
-void descriptor_addListener(Descriptor* descriptor,
-                            StatusListener* listener);
+void descriptor_addListener(Descriptor* descriptor, StatusListener* listener);
 
 /* Remove the listener for our set of listeners that get notified on status
  * transitions (bit flips). */
-void descriptor_removeListener(Descriptor* descriptor,
-                               StatusListener* listener);
+void descriptor_removeListener(Descriptor* descriptor, StatusListener* listener);
 
 #endif /* SHD_DESCRIPTOR_H_ */

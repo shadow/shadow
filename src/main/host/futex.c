@@ -53,14 +53,12 @@ void futex_ref(Futex* futex) {
 void futex_unref(Futex* futex) {
     MAGIC_ASSERT(futex);
     utility_assert(futex->referenceCount > 0);
-    if(--futex->referenceCount == 0) {
+    if (--futex->referenceCount == 0) {
         _futex_free(futex);
     }
 }
 
-void futex_unref_func(void* futex) {
-    futex_unref((Futex*) futex);
-}
+void futex_unref_func(void* futex) { futex_unref((Futex*)futex); }
 
 uint32_t* futex_getAddress(Futex* futex) {
     MAGIC_ASSERT(futex);
