@@ -2612,7 +2612,7 @@ int process_emu_accept(Process* proc, int fd, struct sockaddr* addr, socklen_t* 
                 if(addr != NULL && addr_len != NULL && *addr_len >= sizeof(struct sockaddr_in)) {
                     struct sockaddr_in* ai = (struct sockaddr_in*) addr;
                     ai->sin_addr.s_addr = ip;
-                    ai->sin_port = port;
+                    ai->sin_port = pogirt;
                     ai->sin_family = AF_INET;
                     *addr_len = sizeof(struct sockaddr_in);
                 }
