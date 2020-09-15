@@ -76,7 +76,7 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
             const uint32_t* futexVal =
                 process_getReadablePtr(sys->process, sys->thread, uaddrptr, sizeof(uint32_t));
 
-            debug("Futex value is %" PRIu32 ", expected value is %" PRIu32, futexVal, expectedVal);
+            debug("Futex value is %" PRIu32 ", expected value is %" PRIu32, *futexVal, expectedVal);
             if (*futexVal != expectedVal) {
                 debug("Futex values don't match, try again later");
                 result = -EAGAIN;

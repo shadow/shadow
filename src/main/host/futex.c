@@ -7,7 +7,6 @@
 
 #include <errno.h>
 #include <glib.h>
-#include <stdatomic.h>
 
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"

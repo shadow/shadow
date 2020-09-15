@@ -6,7 +6,6 @@
 #include <errno.h>
 #include <linux/futex.h>
 #include <pthread.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,15 +22,14 @@
 #define NUM_LOOPS 100
 
 // The futex word used to synchronize threads
-int futex_word1 = 0; // initial state is unavailable
-int futex_word2 = 1; // initial state is available
+volatile int futex_word1 = 0; // initial state is unavailable
+volatile int futex_word2 = 1; // initial state is available
 
 // Acquire: wait for the futex pointed to by `word` to become 1, then set to 0
-static int _futex_wait(int* word) {
+static int _futex_wait(volatile int* word) {
     while (1) {
         // Args are: ptr, expected old val, desired new val
-        const int one = 1;
-        bool is_available = atomic_compare_exchange_strong(word, &one, 0) != 0;
+        bool is_available = 1 == __sync_val_compare_and_swap(word, 1, 0);
 
         if (is_available) {
             break;
@@ -50,9 +48,8 @@ static int _futex_wait(int* word) {
 }
 
 // Release: if the futex pointed to by `word` is 0, set to 1 and wake blocked waiters
-static int _futex_post(int* word) {
-    const int zero = 0;
-    bool is_available = atomic_compare_exchange_strong(word, &zero, 1) != 0;
+static int _futex_post(volatile int* word) {
+    bool is_available = 0 == __sync_val_compare_and_swap(word, 0, 1);
 
     if (is_available) {
         int res = syscall(SYS_futex, word, FUTEX_WAKE, 1, NULL, NULL, 0);
@@ -67,7 +64,12 @@ static int _futex_post(int* word) {
     return EXIT_SUCCESS;
 }
 
-static int _run_futex_loop(int* word1, int* word2, int slow) {
+static int _run_futex_loop(volatile int* word1, volatile int* word2, int slow) {
+    int threadID = 0;
+#ifdef SYS_gettid
+    threadID = syscall(SYS_gettid);
+#endif
+
     for (int j = 1; j <= NUM_LOOPS; j++) {
         // Slow down one thread to increase the chance that we'll need a FUTEX_WAIT syscall
         if (slow) {
@@ -78,7 +80,7 @@ static int _run_futex_loop(int* word1, int* word2, int slow) {
             return EXIT_FAILURE;
         }
 
-        printf("thread %i loop %i/%i\n", (int)gettid(), j, NUM_LOOPS);
+        printf("thread %i loop %i/%i\n", threadID, j, NUM_LOOPS);
 
         if (_futex_post(word2) != EXIT_SUCCESS) {
             return EXIT_FAILURE;
