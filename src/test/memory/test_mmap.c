@@ -203,13 +203,13 @@ static void _test_mremap_clobber() {
 //   * using PROT_NONE (and then following up with an mprotect to make it accessible).
 //   * using MAP_STACK.
 static void _test_mmap_prot_none_mprotect() {
-    size_t size = 8 * 1<<20; // 8 MB
-    unsigned char *buf;
+    size_t size = 8 * 1 << 20; // 8 MB
+    unsigned char* buf;
     // Initially mapped with PROT_NONE, making it inaccessible.
     assert_true_errno((buf = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK,
                                   -1, 0)) != MAP_FAILED);
     // Update protections to make it accessible.
-    assert_true_errno(mprotect(buf, size, PROT_READ|PROT_WRITE) == 0);
+    assert_true_errno(mprotect(buf, size, PROT_READ | PROT_WRITE) == 0);
     // Validate that it's accessible both to the plugin and to Shadow.
     init_buf(buf, size);
     _validate_shadow_access(buf, size);
