@@ -125,26 +125,26 @@ static int _test_joinThreads(pthread_t* threads) {
 }
 
 static volatile int _test_makeDetachedThreadFnCounter = 0;
-static void* _test_makeDetachedThreadFn(void *arg) {
+static void* _test_makeDetachedThreadFn(void* arg) {
     ++_test_makeDetachedThreadFnCounter;
     return NULL;
 }
 
 static int _test_makeDetached() {
     pthread_attr_t attr;
-    if(pthread_attr_init(&attr) < 0) {
-        fprintf(stdout,"error: pthread_attr_init failed\n");
+    if (pthread_attr_init(&attr) < 0) {
+        fprintf(stdout, "error: pthread_attr_init failed\n");
         return -1;
     }
-    if(pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) < 0) {
-        fprintf(stdout,"error: pthread_sttr_setdeatchstate failed\n");
+    if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) < 0) {
+        fprintf(stdout, "error: pthread_sttr_setdeatchstate failed\n");
         pthread_attr_destroy(&attr);
         return -1;
     }
 
     pthread_t thread;
     int rv = pthread_create(&thread, &attr, _test_makeDetachedThreadFn, NULL);
-    if(rv != 0) {
+    if (rv != 0) {
         fprintf(stdout, "error: pthread_create failed: %s\n", strerror(rv));
         abort();
     }
@@ -316,7 +316,7 @@ fail1:
 int main(int argc, char* argv[]) {
     fprintf(stdout, "########## pthreads test starting ##########\n");
 
-    if(_test_makeDetached() < 0) {
+    if (_test_makeDetached() < 0) {
         fprintf(stdout, "########## _test_makeDetached (threads) failed\n");
         return -1;
     }
