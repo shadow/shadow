@@ -72,3 +72,8 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = thread_getID(child)};
 }
+
+SysCallReturn syscallhandler_gettid(SysCallHandler* sys, const SysCallArgs* args) {
+    utility_assert(sys && args);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = thread_getID(sys->thread)};
+}

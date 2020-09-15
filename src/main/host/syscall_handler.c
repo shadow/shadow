@@ -230,6 +230,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(getdents64);
         HANDLE(getpeername);
         HANDLE(getpid);
+        HANDLE(gettid);
         HANDLE(getrandom);
         HANDLE(getsockname);
         HANDLE(getsockopt);
@@ -296,7 +297,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(arch_prctl);
         NATIVE(eventfd2);
         NATIVE(futex);
-        NATIVE(gettid);
         NATIVE(io_getevents);
         NATIVE(prctl);
         NATIVE(prlimit64);
