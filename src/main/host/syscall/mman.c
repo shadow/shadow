@@ -246,3 +246,15 @@ SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args
     SysCallReg result = memorymanager_handleMunmap(mm, sys->thread, addr, len);
     return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
 }
+
+SysCallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* args) {
+    PluginPtr addr = args->args[0].as_ptr;
+    size_t len = args->args[1].as_u64;
+    int prot = args->args[2].as_i64;
+
+    // Delegate to the memoryManager.
+    MemoryManager* mm = process_getMemoryManager(sys->process);
+    utility_assert(mm);
+    SysCallReg result = memorymanager_handleMprotect(mm, sys->thread, addr, len, prot);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+}

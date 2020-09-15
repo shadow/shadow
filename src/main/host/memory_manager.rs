@@ -840,6 +840,119 @@ impl MemoryManager {
         Ok(PluginPtr::from(requested_brk))
     }
 
+    pub fn handle_mprotect(
+        &mut self,
+        thread: &mut impl Thread,
+        addr: PluginPtr,
+        size: usize,
+        prot: i32,
+    ) -> Result<(), i32> {
+        thread.native_mprotect(addr, size, prot)?;
+
+        // Update protections. We remove the affected range, and then update and re-insert affected
+        // regions.
+        let mutations = self
+            .regions
+            .clear(usize::from(addr)..(usize::from(addr) + size));
+        for mutation in mutations {
+            match mutation {
+                Mutation::ModifiedBegin(interval, new_start) => {
+                    // Modified prot of beginning of region.
+                    let (_extant_interval, extant_region) =
+                        self.regions.get_mut(new_start).unwrap();
+                    let modified_interval = interval.start..new_start;
+                    let mut modified_region = extant_region.clone();
+                    modified_region.prot = prot;
+                    // Update shadow_base if applicable.
+                    if !extant_region.shadow_base.is_null() {
+                        extant_region.shadow_base = ((extant_region.shadow_base as usize)
+                            + modified_interval.len())
+                            as *mut c_void;
+                        unsafe {
+                            libc::mprotect(
+                                modified_region.shadow_base,
+                                modified_interval.len(),
+                                prot,
+                            )
+                        };
+                    }
+                    // Reinsert region with updated prot.
+                    assert!(self
+                        .regions
+                        .insert(modified_interval, modified_region)
+                        .is_empty());
+                }
+                Mutation::ModifiedEnd(interval, new_end) => {
+                    // Modified prot of end of region.
+                    let (extant_interval, extant_region) =
+                        self.regions.get_mut(new_end - 1).unwrap();
+                    let modified_interval = new_end..interval.end;
+                    let mut modified_region = extant_region.clone();
+                    modified_region.prot = prot;
+                    if !modified_region.shadow_base.is_null() {
+                        modified_region.shadow_base = ((modified_region.shadow_base as usize)
+                            + extant_interval.len())
+                            as *mut c_void;
+                        unsafe {
+                            libc::mprotect(
+                                modified_region.shadow_base,
+                                modified_interval.len(),
+                                prot,
+                            )
+                        };
+                    }
+                    assert!(self
+                        .regions
+                        .insert(modified_interval, modified_region)
+                        .is_empty());
+                }
+                Mutation::Split(_original, left_interval, right_interval) => {
+                    let right_region = self.regions.get_mut(right_interval.start).unwrap().1;
+                    let modified_interval = left_interval.end..right_interval.start;
+                    let mut modified_region = right_region.clone();
+                    modified_region.prot = prot;
+                    if !modified_region.shadow_base.is_null() {
+                        modified_region.shadow_base = ((modified_region.shadow_base as usize)
+                            + left_interval.len())
+                            as *mut c_void;
+                        right_region.shadow_base = ((right_region.shadow_base as usize)
+                            + left_interval.len()
+                            + modified_interval.len())
+                            as *mut c_void;
+                        unsafe {
+                            libc::mprotect(
+                                modified_region.shadow_base,
+                                modified_interval.len(),
+                                prot,
+                            )
+                        };
+                    }
+                    assert!(self
+                        .regions
+                        .insert(modified_interval, modified_region)
+                        .is_empty());
+                }
+                Mutation::Removed(modified_interval, mut modified_region) => {
+                    modified_region.prot = prot;
+                    if !modified_region.shadow_base.is_null() {
+                        unsafe {
+                            libc::mprotect(
+                                modified_region.shadow_base,
+                                modified_interval.len(),
+                                prot,
+                            )
+                        };
+                    }
+                    assert!(self
+                        .regions
+                        .insert(modified_interval, modified_region)
+                        .is_empty());
+                }
+            }
+        }
+        Ok(())
+    }
+
     // Extend the portion of the stack that we've mapped downward to include `src`.  This is
     // carefuly designed *not* to invalidate any outstanding borrowed references or pointers, since
     // otherwise a caller trying to marshall multiple syscall arguments might invalidate the first
@@ -1154,6 +1267,25 @@ mod export {
                 PluginPtr::from(new_addr),
             ) {
                 Ok(p) => SysCallReg::from(p),
+                // negative errno
+                Err(e) => SysCallReg::from(-e),
+            },
+        )
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_handleMprotect(
+        memory_manager: *mut MemoryManager,
+        thread: *mut c::Thread,
+        addr: c::PluginPtr,
+        size: usize,
+        prot: i32,
+    ) -> c::SysCallReg {
+        let memory_manager = &mut *memory_manager;
+        let mut thread = CThread::new(thread);
+        c::SysCallReg::from(
+            match memory_manager.handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot) {
+                Ok(()) => SysCallReg::from(0),
                 // negative errno
                 Err(e) => SysCallReg::from(-e),
             },

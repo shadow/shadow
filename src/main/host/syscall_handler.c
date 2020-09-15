@@ -244,6 +244,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
 #ifdef SYS_mmap2
         HANDLE(mmap2);
 #endif
+        HANDLE(mprotect);
         HANDLE(mremap);
         HANDLE(munmap);
         HANDLE(nanosleep);
@@ -355,7 +356,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(lstat);
         NATIVE(madvise);
         NATIVE(mkdir);
-        NATIVE(mprotect);
         NATIVE(readlink);
         NATIVE(setrlimit);
         NATIVE(stat);

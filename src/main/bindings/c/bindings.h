@@ -74,6 +74,12 @@ SysCallReg memorymanager_handleMmap(MemoryManager *memory_manager,
                                     int32_t fd,
                                     int64_t offset);
 
+SysCallReg memorymanager_handleMprotect(MemoryManager *memory_manager,
+                                        Thread *thread,
+                                        PluginPtr addr,
+                                        uintptr_t size,
+                                        int32_t prot);
+
 SysCallReg memorymanager_handleMremap(MemoryManager *memory_manager,
                                       Thread *thread,
                                       PluginPtr old_addr,
