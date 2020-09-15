@@ -32,10 +32,9 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd,
 #define MAP_SHARED_VALIDATE 0x03
 #endif
     int reqFlags = (MAP_PRIVATE | MAP_SHARED | MAP_SHARED_VALIDATE);
-    int reqProt = (PROT_NONE | PROT_READ | PROT_WRITE | PROT_EXEC);
 
     /* Need non-zero len, and at least one of the above options. */
-    if (len == 0 || !(flags & reqFlags) || !(prot & reqProt)) {
+    if (len == 0 || !(flags & reqFlags)) {
         info("Invalid len (%zu), prot (%i), or flags (%i)", len, prot, flags);
         return -EINVAL;
     }

@@ -198,6 +198,18 @@ static void _test_mremap_clobber() {
     _validate_shadow_access(bigbuf, 3 * page_size());
 }
 
+// Exercises features used by libpthread when allocating a stack.
+// This includes:
+//   * using PROT_NONE (and then following up with an mprotect to make it accessible).
+//   * using MAP_STACK.
+static void _test_mmap_prot_none_mprotect() {
+    size_t size = 8 * 1<<20; // 8 MB
+    unsigned char *buf;
+    assert_true_errno((buf = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK,
+                                  -1, 0)) != MAP_FAILED);
+    //init_buf(buf, size);
+}
+
 int main(int argc, char* argv[]) {
     g_test_init(&argc, &argv, NULL);
     {
@@ -228,6 +240,7 @@ int main(int argc, char* argv[]) {
 #endif
     g_test_add_func("/memory/mmap_anon", _test_mmap_anon);
     g_test_add_func("/memory/mremap_clobber", _test_mremap_clobber);
+    g_test_add_func("/memory/mmap_prot_none_mprotect", _test_mmap_prot_none_mprotect);
     g_test_run();
     return 0;
 }
