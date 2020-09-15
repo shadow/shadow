@@ -4,6 +4,7 @@ use crate::cbindings as c;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
+use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -272,9 +273,9 @@ fn map_stack(shm_file: &ShmFile, regions: &mut IntervalMap<Region>) -> usize {
 impl Drop for MemoryManager {
     fn drop(&mut self) {
         {
-            println!("MemoryManager misses (consider extending MemoryManager to remap regions with a high miss count)");
+            info!("MemoryManager misses (consider extending MemoryManager to remap regions with a high miss count)");
             for (path, count) in self.misses_by_path.iter() {
-                println!("\t{} in {}", count, path);
+                info!("\t{} in {}", count, path);
             }
         }
         // Useful for debugging
@@ -295,7 +296,7 @@ impl Drop for MemoryManager {
                     let res =
                         unsafe { libc::munmap(region.shadow_base, interval.end - interval.start) };
                     if res != 0 {
-                        println!("Warning: munmap failed");
+                        warn!("munmap failed");
                     }
                 }
             }
@@ -346,7 +347,7 @@ impl MemoryManager {
         // We don't need the file anymore in the file system.
         match std::fs::remove_file(&shm_path) {
             Ok(_) => (),
-            Err(e) => println!("Warning: removing '{}': {}", shm_path, e),
+            Err(e) => warn!("removing '{}': {}", shm_path, e),
         }
 
         let shm_file = ShmFile {
@@ -960,7 +961,10 @@ impl MemoryManager {
     fn extend_stack(&mut self, thread: &mut impl Thread, src: usize) {
         let start = page_of(src);
         let stack_extension = start..self.stack_copied.start;
-        //println!("extending stack from {:x} to {:x}", stack_copied.start, start);
+        debug!(
+            "extending stack from {:x} to {:x}",
+            stack_extension.end, stack_extension.start
+        );
 
         let (mapped_stack_interval, mapped_stack_region) =
             self.regions.get(self.stack_copied.start - 1).unwrap();
@@ -991,14 +995,14 @@ impl MemoryManager {
     ) -> Option<*mut c_void> {
         if n == 0 {
             // Length zero pointer should never be deref'd. Just return null.
-            println!("Warning: returning NULL for zero-length pointer");
+            warn!("returning NULL for zero-length pointer");
             return Some(std::ptr::null_mut());
         }
 
         let src = usize::from(src);
         let opt_interval_and_region = self.regions.get(src);
         if opt_interval_and_region.is_none() {
-            println!("Warning: src {:x} isn't in any mapped region", src);
+            warn!("src {:x} isn't in any mapped region", src);
             return None;
         }
         let (interval, region) = opt_interval_and_region.unwrap();
