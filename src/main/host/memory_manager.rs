@@ -139,7 +139,7 @@ impl ShmFile {
             )
         };
         let dst = unsafe {
-            std::slice::from_raw_parts_mut((region.shadow_base as usize + offset) as *mut u8, size)
+            std::slice::from_raw_parts_mut(region.shadow_base.add(offset) as *mut u8, size)
         };
         dst.copy_from_slice(src);
     }
@@ -294,8 +294,7 @@ impl Drop for MemoryManager {
         for m in mutations {
             if let Mutation::Removed(interval, region) = m {
                 if !region.shadow_base.is_null() {
-                    let res =
-                        unsafe { libc::munmap(region.shadow_base, interval.end - interval.start) };
+                    let res = unsafe { libc::munmap(region.shadow_base, interval.len()) };
                     if res != 0 {
                         warn!("munmap failed");
                     }
@@ -398,8 +397,7 @@ impl MemoryManager {
                     unsafe { libc::munmap(region.shadow_base, removed_size) };
 
                     // Adjust base
-                    region.shadow_base =
-                        ((region.shadow_base as usize) + removed_size) as *mut c_void;
+                    region.shadow_base = unsafe { region.shadow_base.add(removed_size) };
                 }
                 Mutation::ModifiedEnd(interval, new_end) => {
                     let (_, region) = self.regions.get(interval.start).unwrap();
@@ -407,13 +405,12 @@ impl MemoryManager {
                         continue;
                     }
                     let removed_range = new_end..interval.end;
-                    let removed_size = removed_range.end - removed_range.start;
 
                     // Deallocate
                     self.shm_file.dealloc(&removed_range);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { libc::munmap(region.shadow_base, removed_size) };
+                    unsafe { libc::munmap(region.shadow_base, removed_range.len()) };
                 }
                 Mutation::Split(_original, left, right) => {
                     let (_, left_region) = self.regions.get(left.start).unwrap();
@@ -423,7 +420,6 @@ impl MemoryManager {
                         continue;
                     }
                     let removed_range = left.end..right.start;
-                    let removed_size = removed_range.end - removed_range.start;
 
                     // Deallocate
                     self.shm_file.dealloc(&removed_range);
@@ -432,15 +428,14 @@ impl MemoryManager {
                     unsafe {
                         libc::munmap(
                             (left_region.shadow_base as usize + left.end) as *mut c_void,
-                            removed_size,
+                            removed_range.len(),
                         )
                     };
 
                     // Adjust start of right region.
                     let (_, right_region) = self.regions.get_mut(right.start).unwrap();
-                    right_region.shadow_base = ((right_region.shadow_base as usize)
-                        + (right.start - left.start))
-                        as *mut c_void;
+                    right_region.shadow_base =
+                        unsafe { right_region.shadow_base.add(right.start - left.start) };
                 }
                 Mutation::Removed(interval, region) => {
                     if region.shadow_base.is_null() {
@@ -451,7 +446,7 @@ impl MemoryManager {
                     self.shm_file.dealloc(&interval);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { libc::munmap(region.shadow_base, interval.end - interval.start) };
+                    unsafe { libc::munmap(region.shadow_base, interval.len()) };
                 }
             }
         }
@@ -868,9 +863,8 @@ impl MemoryManager {
                     modified_region.prot = prot;
                     // Update shadow_base if applicable.
                     if !extant_region.shadow_base.is_null() {
-                        extant_region.shadow_base = ((extant_region.shadow_base as usize)
-                            + modified_interval.len())
-                            as *mut c_void;
+                        extant_region.shadow_base =
+                            unsafe { extant_region.shadow_base.add(modified_interval.len()) };
                         unsafe {
                             mman::mprotect(
                                 modified_region.shadow_base,
@@ -894,9 +888,8 @@ impl MemoryManager {
                     let mut modified_region = extant_region.clone();
                     modified_region.prot = prot;
                     if !modified_region.shadow_base.is_null() {
-                        modified_region.shadow_base = ((modified_region.shadow_base as usize)
-                            + extant_interval.len())
-                            as *mut c_void;
+                        modified_region.shadow_base =
+                            unsafe { modified_region.shadow_base.add(extant_interval.len()) };
                         unsafe {
                             mman::mprotect(
                                 modified_region.shadow_base,
@@ -917,13 +910,13 @@ impl MemoryManager {
                     let mut modified_region = right_region.clone();
                     modified_region.prot = prot;
                     if !modified_region.shadow_base.is_null() {
-                        modified_region.shadow_base = ((modified_region.shadow_base as usize)
-                            + left_interval.len())
-                            as *mut c_void;
-                        right_region.shadow_base = ((right_region.shadow_base as usize)
-                            + left_interval.len()
-                            + modified_interval.len())
-                            as *mut c_void;
+                        modified_region.shadow_base =
+                            unsafe { modified_region.shadow_base.add(left_interval.len()) };
+                        right_region.shadow_base = unsafe {
+                            right_region
+                                .shadow_base
+                                .add(left_interval.len() + modified_interval.len())
+                        };
                         unsafe {
                             mman::mprotect(
                                 modified_region.shadow_base,
