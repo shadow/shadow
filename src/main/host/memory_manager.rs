@@ -5,6 +5,7 @@ use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
 use log::{debug, info, warn};
+use nix::sys::mman;
 use std::collections::HashMap;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -849,6 +850,7 @@ impl MemoryManager {
         prot: i32,
     ) -> Result<(), i32> {
         thread.native_mprotect(addr, size, prot)?;
+        let protflags = mman::ProtFlags::from_bits(prot).unwrap();
 
         // Update protections. We remove the affected range, and then update and re-insert affected
         // regions.
@@ -870,12 +872,13 @@ impl MemoryManager {
                             + modified_interval.len())
                             as *mut c_void;
                         unsafe {
-                            libc::mprotect(
+                            mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                prot,
+                                protflags,
                             )
-                        };
+                        }
+                        .unwrap_or_else(|e| warn!("mprotect: {}", e));
                     }
                     // Reinsert region with updated prot.
                     assert!(self
@@ -895,12 +898,13 @@ impl MemoryManager {
                             + extant_interval.len())
                             as *mut c_void;
                         unsafe {
-                            libc::mprotect(
+                            mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                prot,
+                                protflags,
                             )
-                        };
+                        }
+                        .unwrap_or_else(|e| warn!("mprotect: {}", e));
                     }
                     assert!(self
                         .regions
@@ -921,12 +925,13 @@ impl MemoryManager {
                             + modified_interval.len())
                             as *mut c_void;
                         unsafe {
-                            libc::mprotect(
+                            mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                prot,
+                                protflags,
                             )
-                        };
+                        }
+                        .unwrap_or_else(|e| warn!("mprotect: {}", e));
                     }
                     assert!(self
                         .regions
@@ -937,12 +942,13 @@ impl MemoryManager {
                     modified_region.prot = prot;
                     if !modified_region.shadow_base.is_null() {
                         unsafe {
-                            libc::mprotect(
+                            mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                prot,
+                                protflags,
                             )
-                        };
+                        }
+                        .unwrap_or_else(|e| warn!("mprotect: {}", e));
                     }
                     assert!(self
                         .regions
