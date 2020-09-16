@@ -28,6 +28,9 @@ ExternalProject_Add(
 add_executable(shadow-test-launcher test_launcher.c test_launcher_common.c)
 add_executable(shadow-test-launcher-fail test_launcher_fail.c test_launcher_common.c)
 
+## Wrapper around the yaml2xml tool
+set (yaml2xml "python3 ${CMAKE_SOURCE_DIR}/src/tools/convert.py yaml2xml")
+
 ## add the test directories
 # FIXME uncomment these as we get them working in Phantom.
 # FIXME add_subdirectory(dynlink)
