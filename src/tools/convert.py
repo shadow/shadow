@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-import sys
 import argparse
 from collections import defaultdict
 from typing import Dict, List, Union, Any
@@ -87,7 +86,7 @@ def xml_to_dict(node: ET.Element) -> Dict:
         }
 
     # Iterates over each XML node and transforms those in dict
-    if list(node):
+    if len(node) > 0:
         return {
             **convert_integer(node.attrib),
             **xml_nodes_to_dict(node)
@@ -125,9 +124,8 @@ def get_output_stream(args: argparse.PARSER, original_extension: str, target_ext
     Allow to retrieve the output filename from the arguments
     '''
     if args.output:
-        if '-' == args.output:
-            return sys.stdout
-        return open(args.output, 'w', encoding='utf8')
+        filename = '/dev/stdout' if '-' == args.output else args.output
+        return open(filename, 'w', encoding='utf8')
     return open(args.filename.replace(original_extension, target_extension), 'w', encoding='utf8')
 
 
