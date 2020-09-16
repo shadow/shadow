@@ -1117,10 +1117,7 @@ mod export {
     /// * `mm` must point to a valid object.
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_free(mm: *mut MemoryManager) {
-        if mm.is_null() {
-            return;
-        }
-        Box::from_raw(mm);
+        mm.as_mut().map(|mm| Box::from_raw(mm));
     }
 
     /// Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
@@ -1134,7 +1131,7 @@ mod export {
         n: usize,
     ) -> *const c_void {
         let mut thread = CThread::new(thread);
-        let memory_manager = &mut *memory_manager;
+        let memory_manager = memory_manager.as_mut().unwrap();
         let plugin_src: PluginPtr = plugin_src.into();
         memory_manager
             .get_readable_ptr(&mut thread, plugin_src, n)
@@ -1152,7 +1149,7 @@ mod export {
         n: usize,
     ) -> *mut c_void {
         let mut thread = CThread::new(thread);
-        let memory_manager = &mut *memory_manager;
+        let memory_manager = memory_manager.as_mut().unwrap();
         let plugin_src: PluginPtr = plugin_src.into();
         memory_manager
             .get_writeable_ptr(&mut thread, plugin_src, n)
@@ -1170,7 +1167,7 @@ mod export {
         n: usize,
     ) -> *mut c_void {
         let mut thread = CThread::new(thread);
-        let memory_manager = &mut *memory_manager;
+        let memory_manager = memory_manager.as_mut().unwrap();
         let plugin_src: PluginPtr = plugin_src.into();
         memory_manager
             .get_mutable_ptr(&mut thread, plugin_src, n)
@@ -1184,7 +1181,7 @@ mod export {
         thread: *mut c::Thread,
         plugin_src: c::PluginPtr,
     ) -> c::SysCallReg {
-        let memory_manager = &mut *memory_manager;
+        let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         c::SysCallReg::from(
             match memory_manager.handle_brk(&mut thread, PluginPtr::from(plugin_src)) {
@@ -1207,7 +1204,7 @@ mod export {
         fd: i32,
         offset: i64,
     ) -> c::SysCallReg {
-        let memory_manager = &mut *memory_manager;
+        let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         c::SysCallReg::from(
             match memory_manager.handle_mmap(
@@ -1234,7 +1231,7 @@ mod export {
         addr: c::PluginPtr,
         len: usize,
     ) -> c::SysCallReg {
-        let memory_manager = &mut *memory_manager;
+        let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         c::SysCallReg::from(
             match memory_manager.handle_munmap(&mut thread, PluginPtr::from(addr), len) {
@@ -1255,7 +1252,7 @@ mod export {
         flags: i32,
         new_addr: c::PluginPtr,
     ) -> c::SysCallReg {
-        let memory_manager = &mut *memory_manager;
+        let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         c::SysCallReg::from(
             match memory_manager.handle_mremap(
@@ -1281,7 +1278,7 @@ mod export {
         size: usize,
         prot: i32,
     ) -> c::SysCallReg {
-        let memory_manager = &mut *memory_manager;
+        let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         c::SysCallReg::from(
             match memory_manager.handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot) {

@@ -161,6 +161,7 @@ impl CThread {
     /// # Safety
     /// * `cthread` must point to a valid Thread struct.
     pub unsafe fn new(cthread: *mut c::Thread) -> CThread {
+        assert!(!cthread.is_null());
         c::thread_ref(cthread);
         CThread { cthread }
     }
