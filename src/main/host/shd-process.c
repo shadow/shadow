@@ -7890,6 +7890,37 @@ void process_emu_hj_interposer_test(Process* proc) {
     return;
 }
 
+int process_emu_copy_dat_files(Process* proc, int fileno) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+
+    char *read_path="cp_data/cp_data.dat";
+    FILE *rfp = fopen(read_path, "rb");
+    if(!rfp) {
+        error("file is not open %s file.\n",read_path);
+        return 0;
+    }
+
+    char path[20];
+    sprintf(path,"cp_data/dat_%d.dat",fileno);
+    FILE *wfp = fopen(path, "wb+");
+    if(!wfp) {
+        error("file is not open  %s file.\n",path);
+        return 0;
+    }
+    char buf[1024];
+
+    int readcnt;
+    while(!feof(rfp)) {
+        readcnt = fread(buf, sizeof(char), 1024, rfp);
+        fwrite(buf, sizeof(char), readcnt, wfp);
+    }
+    fclose(rfp);
+    fclose(wfp);
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return 1;
+}
+
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
     returntype process_emu_##functionname(Process* proc, ...) { \
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW); \

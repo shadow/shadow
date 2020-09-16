@@ -552,3 +552,13 @@ void hj_interposer_test() {
         return director.next.hj_interposer_test();
     }
 }
+
+int copy_dat_files(int fileno) {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_copy_dat_files(proc,fileno);
+    } else {
+        ENSURE(copy_dat_files);
+        return director.next.copy_dat_files(fileno);
+    }
+}
