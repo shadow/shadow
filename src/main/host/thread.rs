@@ -93,6 +93,19 @@ pub trait Thread {
             .into())
     }
 
+    /// Natively execute mmap(2) on the given thread.
+    fn native_mprotect(&mut self, addr: PluginPtr, len: usize, prot: i32) -> Result<(), i32> {
+        self.native_syscall(
+            libc::SYS_mprotect,
+            &[
+                SysCallReg::from(addr),
+                SysCallReg::from(len),
+                SysCallReg::from(prot),
+            ],
+        )?;
+        Ok(())
+    }
+
     /// Natively execute open(2) on the given thread.
     fn native_open(&mut self, pathname: PluginPtr, flags: i32, mode: i32) -> Result<i32, i32> {
         let res = self.native_syscall(
@@ -148,6 +161,7 @@ impl CThread {
     /// # Safety
     /// * `cthread` must point to a valid Thread struct.
     pub unsafe fn new(cthread: *mut c::Thread) -> CThread {
+        assert!(!cthread.is_null());
         c::thread_ref(cthread);
         CThread { cthread }
     }

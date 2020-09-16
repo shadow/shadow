@@ -10,5 +10,6 @@
 #include "main/host/syscall_types.h"
 
 SYSCALL_HANDLER(clone);
+SYSCALL_HANDLER(gettid);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_CLONE_H_ */

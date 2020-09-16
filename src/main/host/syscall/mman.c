@@ -32,10 +32,9 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd,
 #define MAP_SHARED_VALIDATE 0x03
 #endif
     int reqFlags = (MAP_PRIVATE | MAP_SHARED | MAP_SHARED_VALIDATE);
-    int reqProt = (PROT_NONE | PROT_READ | PROT_WRITE | PROT_EXEC);
 
     /* Need non-zero len, and at least one of the above options. */
-    if (len == 0 || !(flags & reqFlags) || !(prot & reqProt)) {
+    if (len == 0 || !(flags & reqFlags)) {
         info("Invalid len (%zu), prot (%i), or flags (%i)", len, prot, flags);
         return -EINVAL;
     }
@@ -245,5 +244,17 @@ SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args
     MemoryManager* mm = process_getMemoryManager(sys->process);
     utility_assert(mm);
     SysCallReg result = memorymanager_handleMunmap(mm, sys->thread, addr, len);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+}
+
+SysCallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* args) {
+    PluginPtr addr = args->args[0].as_ptr;
+    size_t len = args->args[1].as_u64;
+    int prot = args->args[2].as_i64;
+
+    // Delegate to the memoryManager.
+    MemoryManager* mm = process_getMemoryManager(sys->process);
+    utility_assert(mm);
+    SysCallReg result = memorymanager_handleMprotect(mm, sys->thread, addr, len, prot);
     return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
 }
