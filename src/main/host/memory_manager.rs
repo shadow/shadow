@@ -4,6 +4,7 @@ use crate::cbindings as c;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
+use crate::utility::syscall;
 use log::{debug, info, warn};
 use nix::{fcntl, sys};
 use std::collections::HashMap;
@@ -142,15 +143,16 @@ impl ShmFile {
 
     // Map the given range of the file into the plugin's address space.
     fn mmap_into_plugin(&self, thread: &mut impl Thread, interval: &Interval, prot: i32) {
-        let res = thread.native_mmap(
-            PluginPtr::from(interval.start),
-            interval.end - interval.start,
-            prot,
-            libc::MAP_SHARED | libc::MAP_FIXED,
-            self.shm_plugin_fd,
-            interval.start as i64,
-        );
-        assert!(res.is_ok());
+        thread
+            .native_mmap(
+                PluginPtr::from(interval.start),
+                interval.len(),
+                prot,
+                libc::MAP_SHARED | libc::MAP_FIXED,
+                self.shm_plugin_fd,
+                interval.start as i64,
+            )
+            .unwrap();
     }
 }
 
@@ -459,7 +461,7 @@ impl MemoryManager {
         &mut self,
         thread: &mut impl Thread,
         src: PluginPtr,
-    ) -> Result<&T, i32> {
+    ) -> nix::Result<&T> {
         let raw = self.get_readable_ptr(thread, src, std::mem::size_of::<T>())?;
         Ok(&*(raw as *const T))
     }
@@ -477,7 +479,7 @@ impl MemoryManager {
         &mut self,
         thread: &mut impl Thread,
         src: PluginPtr,
-    ) -> Result<&mut T, i32> {
+    ) -> nix::Result<&mut T> {
         let raw = self.get_writeable_ptr(thread, src, std::mem::size_of::<T>())?;
         Ok(&mut *(raw as *mut T))
     }
@@ -492,7 +494,7 @@ impl MemoryManager {
         thread: &mut impl Thread,
         src: PluginPtr,
         len: usize,
-    ) -> Result<&[T], i32> {
+    ) -> nix::Result<&[T]> {
         let raw = self.get_readable_ptr(thread, src, std::mem::size_of::<T>() * len)?;
         Ok(std::slice::from_raw_parts(raw as *const T, len))
     }
@@ -511,7 +513,7 @@ impl MemoryManager {
         thread: &mut impl Thread,
         src: PluginPtr,
         len: usize,
-    ) -> Result<&mut [T], i32> {
+    ) -> nix::Result<&mut [T]> {
         let raw = self.get_writeable_ptr(thread, src, std::mem::size_of::<T>() * len)?;
         Ok(std::slice::from_raw_parts_mut(raw as *mut T, len))
     }
@@ -526,7 +528,7 @@ impl MemoryManager {
         flags: i32,
         fd: i32,
         offset: i64,
-    ) -> Result<PluginPtr, i32> {
+    ) -> nix::Result<PluginPtr> {
         let result = thread.native_mmap(addr, length, prot, flags, fd, offset)?;
         if length == 0 {
             return Ok(result);
@@ -588,7 +590,7 @@ impl MemoryManager {
         thread: &mut impl Thread,
         addr: PluginPtr,
         length: usize,
-    ) -> Result<(), i32> {
+    ) -> nix::Result<()> {
         thread.native_munmap(addr, length)?;
         if length == 0 {
             return Ok(());
@@ -611,7 +613,7 @@ impl MemoryManager {
         new_size: usize,
         flags: i32,
         new_address: PluginPtr,
-    ) -> Result<PluginPtr, i32> {
+    ) -> nix::Result<PluginPtr> {
         let new_address =
             thread.native_mremap(old_address, old_size, new_size, flags, new_address)?;
         let old_interval = usize::from(old_address)..(usize::from(old_address) + old_size);
@@ -772,14 +774,15 @@ impl MemoryManager {
                     // Grow heap region.
                     self.shm_file.alloc(&self.heap);
                     // mremap in plugin, enforcing that base stays the same.
-                    let res = thread.native_mremap(
-                        /* old_addr: */ PluginPtr::from(self.heap.start),
-                        /* old_len: */ self.heap.end - self.heap.start,
-                        /* new_len: */ new_heap.end - new_heap.start,
-                        /* flags: */ 0,
-                        /* new_addr: */ PluginPtr::from(0usize),
-                    );
-                    assert!(res.is_ok());
+                    thread
+                        .native_mremap(
+                            /* old_addr: */ PluginPtr::from(self.heap.start),
+                            /* old_len: */ self.heap.end - self.heap.start,
+                            /* new_len: */ new_heap.end - new_heap.start,
+                            /* flags: */ 0,
+                            /* new_addr: */ PluginPtr::from(0usize),
+                        )
+                        .unwrap();
                     // mremap in shadow, allowing mapping to move if needed.
                     // TODO: use nix wrapper once it exists. https://github.com/nix-rust/nix/issues/1295
                     let shadow_base = unsafe {
@@ -813,14 +816,15 @@ impl MemoryManager {
             let (_, heap_region) = opt_heap_interval_and_region.unwrap();
 
             // mremap in plugin, enforcing that base stays the same.
-            let res = thread.native_mremap(
-                /* old_addr: */ PluginPtr::from(self.heap.start),
-                /* old_len: */ self.heap.end - self.heap.start,
-                /* new_len: */ new_heap.end - new_heap.start,
-                /* flags: */ 0,
-                /* new_addr: */ PluginPtr::from(0usize),
-            );
-            assert!(res.is_ok());
+            thread
+                .native_mremap(
+                    /* old_addr: */ PluginPtr::from(self.heap.start),
+                    /* old_len: */ self.heap.end - self.heap.start,
+                    /* new_len: */ new_heap.end - new_heap.start,
+                    /* flags: */ 0,
+                    /* new_addr: */ PluginPtr::from(0usize),
+                )
+                .unwrap();
             // mremap in shadow, assuming no need to move.
             // TODO: use nix wrapper once it exists. https://github.com/nix-rust/nix/issues/1295
             let shadow_base = unsafe {
@@ -846,7 +850,7 @@ impl MemoryManager {
         addr: PluginPtr,
         size: usize,
         prot: i32,
-    ) -> Result<(), i32> {
+    ) -> nix::Result<()> {
         thread.native_mprotect(addr, size, prot)?;
         let protflags = sys::mman::ProtFlags::from_bits(prot).unwrap();
 
@@ -1049,18 +1053,13 @@ impl MemoryManager {
         thread: &mut impl Thread,
         plugin_src: PluginPtr,
         n: usize,
-    ) -> Result<*const c_void, i32> {
-        let p = if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
-            p
+    ) -> nix::Result<*const c_void> {
+        if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
+            Ok(p)
         } else {
             // Fall back to reading via the thread.
             self.inc_misses(plugin_src);
-            thread.get_readable_ptr(plugin_src, n)?
-        };
-        if p.is_null() {
-            Err(libc::EFAULT)
-        } else {
-            Ok(p)
+            thread.get_readable_ptr(plugin_src, n)
         }
     }
 
@@ -1071,18 +1070,13 @@ impl MemoryManager {
         thread: &mut impl Thread,
         plugin_src: PluginPtr,
         n: usize,
-    ) -> Result<*mut c_void, i32> {
-        let p = if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
-            p
+    ) -> nix::Result<*mut c_void> {
+        if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
+            Ok(p)
         } else {
             // Fall back to reading via the thread.
             self.inc_misses(plugin_src);
-            thread.get_writeable_ptr(plugin_src, n)?
-        };
-        if p.is_null() {
-            Err(libc::EFAULT)
-        } else {
-            Ok(p)
+            thread.get_writeable_ptr(plugin_src, n)
         }
     }
 
@@ -1093,18 +1087,13 @@ impl MemoryManager {
         thread: &mut impl Thread,
         plugin_src: PluginPtr,
         n: usize,
-    ) -> Result<*mut c_void, i32> {
-        let p = if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
-            p
+    ) -> nix::Result<*mut c_void> {
+        if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
+            Ok(p)
         } else {
             // Fall back to reading via the thread.
             self.inc_misses(plugin_src);
-            thread.get_mutable_ptr(plugin_src, n)?
-        };
-        if p.is_null() {
-            Err(libc::EFAULT)
-        } else {
-            Ok(p)
+            thread.get_mutable_ptr(plugin_src, n)
         }
     }
 }
@@ -1212,8 +1201,8 @@ mod export {
     ) -> c::SysCallReg {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(
-            match memory_manager.handle_mmap(
+        c::SysCallReg::from(SysCallReg::from(syscall::result_to_raw_return_value(
+            memory_manager.handle_mmap(
                 &mut thread,
                 PluginPtr::from(addr),
                 len,
@@ -1221,12 +1210,8 @@ mod export {
                 flags,
                 fd,
                 offset,
-            ) {
-                Ok(p) => SysCallReg::from(p),
-                // negative errno
-                Err(e) => SysCallReg::from(-e),
-            },
-        )
+            ),
+        )))
     }
 
     /// Fully handles the `munmap` syscall
@@ -1239,13 +1224,9 @@ mod export {
     ) -> c::SysCallReg {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(
-            match memory_manager.handle_munmap(&mut thread, PluginPtr::from(addr), len) {
-                Ok(()) => SysCallReg::from(0),
-                // negative errno
-                Err(e) => SysCallReg::from(-e),
-            },
-        )
+        c::SysCallReg::from(SysCallReg::from(syscall::result_to_raw_return_value(
+            memory_manager.handle_munmap(&mut thread, PluginPtr::from(addr), len),
+        )))
     }
 
     #[no_mangle]
@@ -1260,20 +1241,16 @@ mod export {
     ) -> c::SysCallReg {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(
-            match memory_manager.handle_mremap(
+        c::SysCallReg::from(SysCallReg::from(syscall::result_to_raw_return_value(
+            memory_manager.handle_mremap(
                 &mut thread,
                 PluginPtr::from(old_addr),
                 old_size,
                 new_size,
                 flags,
                 PluginPtr::from(new_addr),
-            ) {
-                Ok(p) => SysCallReg::from(p),
-                // negative errno
-                Err(e) => SysCallReg::from(-e),
-            },
-        )
+            ),
+        )))
     }
 
     #[no_mangle]
@@ -1286,12 +1263,8 @@ mod export {
     ) -> c::SysCallReg {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(
-            match memory_manager.handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot) {
-                Ok(()) => SysCallReg::from(0),
-                // negative errno
-                Err(e) => SysCallReg::from(-e),
-            },
-        )
+        c::SysCallReg::from(SysCallReg::from(syscall::result_to_raw_return_value(
+            memory_manager.handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot),
+        )))
     }
 }
