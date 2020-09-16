@@ -164,3 +164,55 @@ pub fn get_errno_message(errno: i32) -> String {
     }
     cstr.to_string_lossy().into_owned()
 }
+
+/// Calls check_system_call(), but automatically passes the current line number.
+#[macro_export]
+macro_rules! check_system_call {
+    ($f: expr, $expected_errnos: expr $(,)?) => {
+        test_utils::check_system_call($f, $expected_errnos, line!());
+    };
+}
+
+/// Run the given function, check that the errno was expected, and return the function's return value.
+pub fn check_system_call<F>(
+    f: F,
+    expected_errnos: &[libc::c_int],
+    line: u32,
+) -> Result<libc::c_int, String>
+where
+    F: FnOnce() -> libc::c_int,
+{
+    let rv = f();
+    let errno = get_errno();
+
+    if expected_errnos.is_empty() {
+        // if no error is expected (rv should be >= 0)
+        if rv < 0 {
+            return Err(format!(
+                "Expecting a non-negative return value, received {} \"{}\" [line {}]",
+                rv,
+                get_errno_message(errno),
+                line,
+            ));
+        }
+    } else {
+        // if we expect the system call to return an error (rv should be -1)
+        if rv != -1 {
+            return Err(format!(
+                "Expecting a return value of -1, received {} [line {}]",
+                rv, line
+            ));
+        }
+        if !expected_errnos.contains(&errno) {
+            return Err(format!(
+                "Expecting errnos {:?}, received {} \"{}\" [line {}]",
+                expected_errnos,
+                errno,
+                get_errno_message(errno),
+                line,
+            ));
+        }
+    }
+
+    Ok(rv)
+}
