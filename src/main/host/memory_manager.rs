@@ -5,7 +5,7 @@ use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
 use log::{debug, info, warn};
-use nix::sys::mman;
+use nix::{fcntl, sys};
 use std::collections::HashMap;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -73,43 +73,39 @@ struct ShmFile {
 impl ShmFile {
     // Allocate space in the file for the given interval.
     fn alloc(&self, interval: &Interval) {
-        let res = unsafe {
-            libc::posix_fallocate(
-                self.shm_file.as_raw_fd(),
-                interval.start as i64,
-                (interval.end - interval.start) as i64,
-            )
-        };
-        assert!(res == 0);
+        fcntl::posix_fallocate(
+            self.shm_file.as_raw_fd(),
+            interval.start as i64,
+            (interval.end - interval.start) as i64,
+        )
+        .unwrap();
     }
 
     // De-allocate space in the file for the given interval.
     fn dealloc(&self, interval: &Interval) {
-        let res = unsafe {
-            libc::fallocate(
-                self.shm_file.as_raw_fd(),
-                libc::FALLOC_FL_PUNCH_HOLE & libc::FALLOC_FL_KEEP_SIZE,
-                interval.start as i64,
-                (interval.end - interval.start) as i64,
-            )
-        };
-        assert!(res == 0);
+        fcntl::fallocate(
+            self.shm_file.as_raw_fd(),
+            fcntl::FallocateFlags::FALLOC_FL_PUNCH_HOLE
+                & fcntl::FallocateFlags::FALLOC_FL_KEEP_SIZE,
+            interval.start as i64,
+            (interval.end - interval.start) as i64,
+        )
+        .unwrap();
     }
 
     // Map the given interval of the file into shadow's address space.
     fn mmap_into_shadow(&self, interval: &Interval, prot: i32) -> *mut c_void {
-        let res = unsafe {
-            libc::mmap(
+        unsafe {
+            sys::mman::mmap(
                 std::ptr::null_mut(),
                 interval.end - interval.start,
-                prot,
-                libc::MAP_SHARED,
+                sys::mman::ProtFlags::from_bits(prot).unwrap(),
+                sys::mman::MapFlags::MAP_SHARED,
                 self.shm_file.as_raw_fd(),
                 interval.start as i64,
             )
-        };
-        assert!(res != libc::MAP_FAILED);
-        res
+        }
+        .unwrap()
     }
 
     // Copy data from the plugin's address space into the file. `interval` must be contained within
@@ -294,10 +290,8 @@ impl Drop for MemoryManager {
         for m in mutations {
             if let Mutation::Removed(interval, region) = m {
                 if !region.shadow_base.is_null() {
-                    let res = unsafe { libc::munmap(region.shadow_base, interval.len()) };
-                    if res != 0 {
-                        warn!("munmap failed");
-                    }
+                    unsafe { sys::mman::munmap(region.shadow_base, interval.len()) }
+                        .unwrap_or_else(|e| warn!("munmap: {}", e));
                 }
             }
         }
@@ -394,7 +388,8 @@ impl MemoryManager {
                     self.shm_file.dealloc(&removed_range);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { libc::munmap(region.shadow_base, removed_size) };
+                    unsafe { sys::mman::munmap(region.shadow_base, removed_size) }
+                        .unwrap_or_else(|e| warn!("munmap: {}", e));
 
                     // Adjust base
                     region.shadow_base = unsafe { region.shadow_base.add(removed_size) };
@@ -410,7 +405,8 @@ impl MemoryManager {
                     self.shm_file.dealloc(&removed_range);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { libc::munmap(region.shadow_base, removed_range.len()) };
+                    unsafe { sys::mman::munmap(region.shadow_base, removed_range.len()) }
+                        .unwrap_or_else(|e| warn!("munmap: {}", e));
                 }
                 Mutation::Split(_original, left, right) => {
                     let (_, left_region) = self.regions.get(left.start).unwrap();
@@ -426,11 +422,12 @@ impl MemoryManager {
 
                     // Unmap range from Shadow's address space.
                     unsafe {
-                        libc::munmap(
+                        sys::mman::munmap(
                             (left_region.shadow_base as usize + left.end) as *mut c_void,
                             removed_range.len(),
                         )
-                    };
+                    }
+                    .unwrap_or_else(|e| warn!("munmap: {}", e));
 
                     // Adjust start of right region.
                     let (_, right_region) = self.regions.get_mut(right.start).unwrap();
@@ -446,7 +443,8 @@ impl MemoryManager {
                     self.shm_file.dealloc(&interval);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { libc::munmap(region.shadow_base, interval.len()) };
+                    unsafe { sys::mman::munmap(region.shadow_base, interval.len()) }
+                        .unwrap_or_else(|e| warn!("munmap: {}", e));
                 }
             }
         }
@@ -691,7 +689,8 @@ impl MemoryManager {
                 };
 
                 // Unmap the old location from Shadow.
-                assert_eq!(unsafe { libc::munmap(region.shadow_base, old_size) }, 0);
+                unsafe { sys::mman::munmap(region.shadow_base, old_size) }
+                    .unwrap_or_else(|e| warn!("munmap: {}", e));
 
                 // Update the region metadata.
                 region.shadow_base = new_shadow_base;
@@ -703,6 +702,7 @@ impl MemoryManager {
                 self.shm_file.dealloc(&(new_interval.end..old_interval.end));
 
                 // Shrink Shadow's mapping.
+                // TODO: use nix wrapper once it exists. https://github.com/nix-rust/nix/issues/1295
                 assert_ne!(
                     unsafe { libc::mremap(region.shadow_base, old_size, new_size, 0) },
                     libc::MAP_FAILED
@@ -713,6 +713,7 @@ impl MemoryManager {
 
                 // Grow Shadow's mapping into the memory file, allowing the mapping to move if
                 // needed.
+                // TODO: use nix wrapper once it exists. https://github.com/nix-rust/nix/issues/1295
                 region.shadow_base = unsafe {
                     libc::mremap(region.shadow_base, old_size, new_size, libc::MREMAP_MAYMOVE)
                 };
@@ -780,6 +781,7 @@ impl MemoryManager {
                     );
                     assert!(res.is_ok());
                     // mremap in shadow, allowing mapping to move if needed.
+                    // TODO: use nix wrapper once it exists. https://github.com/nix-rust/nix/issues/1295
                     let shadow_base = unsafe {
                         libc::mremap(
                             /* old_addr: */ heap_region.shadow_base,
@@ -820,6 +822,7 @@ impl MemoryManager {
             );
             assert!(res.is_ok());
             // mremap in shadow, assuming no need to move.
+            // TODO: use nix wrapper once it exists. https://github.com/nix-rust/nix/issues/1295
             let shadow_base = unsafe {
                 libc::mremap(
                     /* old_addr: */ heap_region.shadow_base,
@@ -845,7 +848,7 @@ impl MemoryManager {
         prot: i32,
     ) -> Result<(), i32> {
         thread.native_mprotect(addr, size, prot)?;
-        let protflags = mman::ProtFlags::from_bits(prot).unwrap();
+        let protflags = sys::mman::ProtFlags::from_bits(prot).unwrap();
 
         // Update protections. We remove the affected range, and then update and re-insert affected
         // regions.
@@ -866,7 +869,7 @@ impl MemoryManager {
                         extant_region.shadow_base =
                             unsafe { extant_region.shadow_base.add(modified_interval.len()) };
                         unsafe {
-                            mman::mprotect(
+                            sys::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
                                 protflags,
@@ -891,7 +894,7 @@ impl MemoryManager {
                         modified_region.shadow_base =
                             unsafe { modified_region.shadow_base.add(extant_interval.len()) };
                         unsafe {
-                            mman::mprotect(
+                            sys::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
                                 protflags,
@@ -918,7 +921,7 @@ impl MemoryManager {
                                 .add(left_interval.len() + modified_interval.len())
                         };
                         unsafe {
-                            mman::mprotect(
+                            sys::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
                                 protflags,
@@ -935,7 +938,7 @@ impl MemoryManager {
                     modified_region.prot = prot;
                     if !modified_region.shadow_base.is_null() {
                         unsafe {
-                            mman::mprotect(
+                            sys::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
                                 protflags,
