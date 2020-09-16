@@ -3,6 +3,8 @@
 import argparse
 from collections import defaultdict
 from typing import Dict, List, Union, Any
+from contextlib import contextmanager
+
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from xml.sax.saxutils import unescape
@@ -119,14 +121,19 @@ def save_dict_in_yaml_file(d: Dict, stream) -> None:
     yaml.dump(d, stream, default_flow_style=False)
 
 
+@contextmanager
 def get_output_stream(args: argparse.PARSER, original_extension: str, target_extension: str):
     '''
     Allow to retrieve the output filename from the arguments
     '''
+    stream = None
     if args.output:
         filename = '/dev/stdout' if '-' == args.output else args.output
-        return open(filename, 'w', encoding='utf8')
-    return open(args.filename.replace(original_extension, target_extension), 'w', encoding='utf8')
+        stream = open(filename, 'w', encoding='utf8')
+    else:
+        stream = open(args.filename.replace(original_extension, target_extension), 'w', encoding='utf8')
+    yield stream
+    stream.close()
 
 
 def shadow_xml_to_dict(root: ET.Element) -> Dict:
@@ -229,10 +236,10 @@ if __name__ == '__main__':
         yaml_as_dict = get_yaml_from_filename(args.filename)
         xml_root = create_xml_root(yaml_as_dict)
         dict_to_xml(xml_root, yaml_as_dict)
-        stream = get_output_stream(args, 'yaml', 'xml')
-        save_xml(xml_root, stream)
+        with get_output_stream(args, 'yaml', 'xml') as stream:
+            save_xml(xml_root, stream)
     else:
         xml_root = get_xml_root_from_filename(args.filename)
         d = shadow_xml_to_dict(xml_root)
-        stream = get_output_stream(args, 'xml', 'yaml')
-        save_dict_in_yaml_file(d, stream)
+        with get_output_stream(args, 'xml', 'yaml') as stream:
+            save_dict_in_yaml_file(d, stream)
