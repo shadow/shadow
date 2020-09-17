@@ -47,6 +47,20 @@ struct Region {
 }
 
 /// Manages the address-space for a plugin process.
+///
+/// The MemoryManager's primary purpose is to make plugin process's memory directly accessible to
+/// Shadow. It does this by tracking what regions of program memory in the plugin are mapped to
+/// what (analagous to /proc/<pid>/maps), and *remapping* parts of the plugin's address space into
+/// a shared memory-file, which is also mapped into Shadow.
+///
+/// Shadow provides several methods for allowing Shadow to access the plugin's memory, such as
+/// `get_readable_ptr`. If the corresponding region of plugin memory is mapped into the shared
+/// memory file, the corresponding Shadow pointer is returned. If not, then, it'll fall back to
+/// (generally slower) Thread APIs.
+///
+/// For the MemoryManager to maintain consistent state, and to remap regions of memory it knows how
+/// to remap, Shadow must delegate handling of mman-related syscalls (such as `mmap`) to the
+/// MemoryManager via its `handle_*` methods.
 pub struct MemoryManager {
     shm_file: ShmFile,
     regions: IntervalMap<Region>,
@@ -287,7 +301,8 @@ impl Drop for MemoryManager {
         drop(regions);
         */
 
-        // Mappings are no longer valid. Clear out our map, and unmap those regions.
+        // Mappings are no longer valid. Clear out our map, and unmap those regions from Shadow's
+        // address space.
         let mutations = self.regions.clear(std::usize::MIN..std::usize::MAX);
         for m in mutations {
             if let Mutation::Removed(interval, region) = m {
@@ -373,9 +388,9 @@ impl MemoryManager {
     // * Reclaims Shadow's address space via unmap.
     //
     // When used on mutations after an insert, if the inserted region is to be mapped into shadow,
-    // be sure to call this *before* doing that mapping; otherwise we'll end up some or all of the
-    // space in that new mapping.
-    fn handle_mutations(&mut self, mutations: Vec<Mutation<Region>>) {
+    // be sure to call this *before* doing that mapping; otherwise we'll end up deallocating some
+    // or all of the space in that new mapping.
+    fn unmap_mutations(&mut self, mutations: Vec<Mutation<Region>>) {
         for mutation in mutations {
             match mutation {
                 Mutation::ModifiedBegin(interval, new_start) => {
@@ -518,6 +533,13 @@ impl MemoryManager {
         Ok(std::slice::from_raw_parts_mut(raw as *mut T, len))
     }
 
+    /// Shadow should delegate a plugin's call to mmap to this method.  The caller is responsible
+    /// for ensuring that `fd` is open and pointing to the right file in the plugin process.
+    ///
+    /// Executes the actual mmap operation in the plugin, updates the MemoryManager's understanding of
+    /// the plugin's address space, and in some cases remaps the given region into the
+    /// MemoryManager's shared memory file for fast access. Currently only private anonymous
+    /// mappings are remapped.
     #[allow(clippy::too_many_arguments)]
     pub fn handle_mmap(
         &mut self,
@@ -561,7 +583,7 @@ impl MemoryManager {
 
         // Clear out metadata and mappings for anything that was already there.
         let mutations = self.regions.clear(interval.clone());
-        self.handle_mutations(mutations);
+        self.unmap_mutations(mutations);
 
         if is_anonymous && sharing == Sharing::Private {
             // Overwrite the freshly mapped region with a region from the shared mem file and map
@@ -585,6 +607,10 @@ impl MemoryManager {
         Ok(result)
     }
 
+    /// Shadow should delegate a plugin's call to munmap to this method.
+    ///
+    /// Executes the actual mmap operation in the plugin, updates the MemoryManager's understanding of
+    /// the plugin's address space, and unmaps the affected memory from Shadow if it was mapped in.
     pub fn handle_munmap(
         &mut self,
         thread: &mut impl Thread,
@@ -600,11 +626,16 @@ impl MemoryManager {
         let start = usize::from(addr);
         let end = start + length;
         let mutations = self.regions.clear(start..end);
-        self.handle_mutations(mutations);
+        self.unmap_mutations(mutations);
 
         Ok(())
     }
 
+    /// Shadow should delegate a plugin's call to mremap to this method.
+    ///
+    /// Executes the actual mremap operation in the plugin, updates the MemoryManager's
+    /// understanding of the plugin's address space, and updates Shadow's mappings of that region
+    /// if applicable.
     pub fn handle_mremap(
         &mut self,
         thread: &mut impl Thread,
@@ -634,7 +665,7 @@ impl MemoryManager {
             // This shouldn't be mapped into Shadow, since we don't support remapping shared mappings into Shadow yet.
             assert_eq!(region.shadow_base, std::ptr::null_mut());
             let mutations = self.regions.insert(new_interval, region);
-            self.handle_mutations(mutations);
+            self.unmap_mutations(mutations);
             return Ok(new_address);
         }
 
@@ -656,7 +687,7 @@ impl MemoryManager {
         // freeing space for that new mapping.
         {
             let mutations = self.regions.clear(new_interval.clone());
-            self.handle_mutations(mutations);
+            self.unmap_mutations(mutations);
         }
 
         if !region.shadow_base.is_null() {
@@ -844,6 +875,17 @@ impl MemoryManager {
         Ok(PluginPtr::from(requested_brk))
     }
 
+    /// Shadow should delegate a plugin's call to mprotect to this method.
+    ///
+    /// Executes the actual mprotect operation in the plugin, updates the MemoryManager's
+    /// understanding of the plugin's address space, and updates Shadow's mappings of that region
+    /// if applicable.
+    ///
+    /// Alternatively when Shadow maps a region it would always map everything to be both readable
+    /// and writeable by Shadow, in which case we wouldn't need to worry about updating Shadow's
+    /// protections when the plugin calls mprotect. However, mirroring the plugin's protection
+    /// settings can help catch bugs earlier. Shadow should never have reason to access plugin
+    /// memory in a way that the plugin itself can't.
     pub fn handle_mprotect(
         &mut self,
         thread: &mut impl Thread,
@@ -960,10 +1002,12 @@ impl MemoryManager {
         Ok(())
     }
 
-    // Extend the portion of the stack that we've mapped downward to include `src`.  This is
-    // carefuly designed *not* to invalidate any outstanding borrowed references or pointers, since
-    // otherwise a caller trying to marshall multiple syscall arguments might invalidate the first
-    // argument when marshalling the second.
+    // Extend the portion of the stack that we've mapped downward to include `src`.
+    //
+    // This is carefuly designed *not* to invalidate any outstanding borrowed references or
+    // pointers, since otherwise a caller trying to marshall multiple syscall arguments might
+    // invalidate the first argument when marshalling the second. (While the Rust API currently
+    // prevents there from being any outstanding references, the C API does not).
     fn extend_stack(&mut self, thread: &mut impl Thread, src: usize) {
         let start = page_of(src);
         let stack_extension = start..self.stack_copied.start;
@@ -992,7 +1036,8 @@ impl MemoryManager {
             .mmap_into_plugin(thread, &self.stack_copied, STACK_PROT);
     }
 
-    // Get a raw pointer to the plugin's memory, if we have it mapped (or can do so now).
+    // Get a raw pointer to the plugin's memory, if it's been remapped into Shadow (or if we can do
+    // so now, in the case of the stack).
     fn get_mapped_ptr(
         &mut self,
         thread: &mut impl Thread,
@@ -1133,7 +1178,7 @@ mod export {
             .unwrap()
     }
 
-    /// Get a writeagble pointer to the plugin's memory via mapping, or via the thread APIs.
+    /// Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
     /// # Safety
     /// * `mm` and `thread` must point to valid objects.
     #[no_mangle]
