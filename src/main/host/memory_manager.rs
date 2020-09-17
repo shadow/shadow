@@ -4,6 +4,9 @@ use crate::cbindings as c;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
+use crate::utility::syscall;
+use log::{debug, info, warn};
+use nix::{fcntl, sys};
 use std::collections::HashMap;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -44,75 +47,85 @@ struct Region {
 }
 
 /// Manages the address-space for a plugin process.
+///
+/// The MemoryManager's primary purpose is to make plugin process's memory directly accessible to
+/// Shadow. It does this by tracking what regions of program memory in the plugin are mapped to
+/// what (analagous to /proc/<pid>/maps), and *remapping* parts of the plugin's address space into
+/// a shared memory-file, which is also mapped into Shadow.
+///
+/// Shadow provides several methods for allowing Shadow to access the plugin's memory, such as
+/// `get_readable_ptr`. If the corresponding region of plugin memory is mapped into the shared
+/// memory file, the corresponding Shadow pointer is returned. If not, then, it'll fall back to
+/// (generally slower) Thread APIs.
+///
+/// For the MemoryManager to maintain consistent state, and to remap regions of memory it knows how
+/// to remap, Shadow must delegate handling of mman-related syscalls (such as `mmap`) to the
+/// MemoryManager via its `handle_*` methods.
 pub struct MemoryManager {
     shm_file: ShmFile,
     regions: IntervalMap<Region>,
 
     misses_by_path: HashMap<String, u32>,
 
-    // The part of the stack that we've already remapped in the plugin.
-    // We initially mmap enough *address space* in Shadow to accomodate a large stack, but we only
-    // lazily allocate it. This is both to prevent wasting memory, and to handle that we can't map
-    // the current "working area" of the stack in thread-preload.
+    /// The part of the stack that we've already remapped in the plugin.
+    /// We initially mmap enough *address space* in Shadow to accomodate a large stack, but we only
+    /// lazily allocate it. This is both to prevent wasting memory, and to handle that we can't map
+    /// the current "working area" of the stack in thread-preload.
     stack_copied: Interval,
 
-    // The bounds of the heap. Note that before the plugin's first `brk` syscall this will be a
-    // zero-sized interval (though in the case of thread-preload that'll have already happened
-    // before we get control).
+    /// The bounds of the heap. Note that before the plugin's first `brk` syscall this will be a
+    /// zero-sized interval (though in the case of thread-preload that'll have already happened
+    /// before we get control).
     heap: Interval,
 }
 
-// Shared memory file into which we relocate parts of the plugin's address space.
+/// Shared memory file into which we relocate parts of the plugin's address space.
 struct ShmFile {
     shm_file: File,
     shm_plugin_fd: i32,
 }
 
 impl ShmFile {
-    // Allocate space in the file for the given interval.
+    /// Allocate space in the file for the given interval.
     fn alloc(&self, interval: &Interval) {
-        let res = unsafe {
-            libc::posix_fallocate(
-                self.shm_file.as_raw_fd(),
-                interval.start as i64,
-                (interval.end - interval.start) as i64,
-            )
-        };
-        assert!(res == 0);
+        fcntl::posix_fallocate(
+            self.shm_file.as_raw_fd(),
+            interval.start as i64,
+            (interval.end - interval.start) as i64,
+        )
+        .unwrap();
     }
 
-    // De-allocate space in the file for the given interval.
+    /// De-allocate space in the file for the given interval.
     fn dealloc(&self, interval: &Interval) {
-        let res = unsafe {
-            libc::fallocate(
-                self.shm_file.as_raw_fd(),
-                libc::FALLOC_FL_PUNCH_HOLE & libc::FALLOC_FL_KEEP_SIZE,
-                interval.start as i64,
-                (interval.end - interval.start) as i64,
-            )
-        };
-        assert!(res == 0);
+        fcntl::fallocate(
+            self.shm_file.as_raw_fd(),
+            fcntl::FallocateFlags::FALLOC_FL_PUNCH_HOLE
+                & fcntl::FallocateFlags::FALLOC_FL_KEEP_SIZE,
+            interval.start as i64,
+            (interval.end - interval.start) as i64,
+        )
+        .unwrap();
     }
 
-    // Map the given interval of the file into shadow's address space.
+    /// Map the given interval of the file into shadow's address space.
     fn mmap_into_shadow(&self, interval: &Interval, prot: i32) -> *mut c_void {
-        let res = unsafe {
-            libc::mmap(
+        unsafe {
+            sys::mman::mmap(
                 std::ptr::null_mut(),
                 interval.end - interval.start,
-                prot,
-                libc::MAP_SHARED,
+                sys::mman::ProtFlags::from_bits(prot).unwrap(),
+                sys::mman::MapFlags::MAP_SHARED,
                 self.shm_file.as_raw_fd(),
                 interval.start as i64,
             )
-        };
-        assert!(res != libc::MAP_FAILED);
-        res
+        }
+        .unwrap()
     }
 
-    // Copy data from the plugin's address space into the file. `interval` must be contained within
-    // `region_interval`. It can be the whole region, but notably for the stack we only copy in
-    // parts of the region as needed.
+    /// Copy data from the plugin's address space into the file. `interval` must be contained within
+    /// `region_interval`. It can be the whole region, but notably for the stack we only copy in
+    /// parts of the region as needed.
     fn copy_into_file(
         &self,
         thread: &mut impl Thread,
@@ -137,22 +150,23 @@ impl ShmFile {
             )
         };
         let dst = unsafe {
-            std::slice::from_raw_parts_mut((region.shadow_base as usize + offset) as *mut u8, size)
+            std::slice::from_raw_parts_mut(region.shadow_base.add(offset) as *mut u8, size)
         };
         dst.copy_from_slice(src);
     }
 
-    // Map the given range of the file into the plugin's address space.
+    /// Map the given range of the file into the plugin's address space.
     fn mmap_into_plugin(&self, thread: &mut impl Thread, interval: &Interval, prot: i32) {
-        let res = thread.native_mmap(
-            PluginPtr::from(interval.start),
-            interval.end - interval.start,
-            prot,
-            libc::MAP_SHARED | libc::MAP_FIXED,
-            self.shm_plugin_fd,
-            interval.start as i64,
-        );
-        assert!(res.is_ok());
+        thread
+            .native_mmap(
+                PluginPtr::from(interval.start),
+                interval.len(),
+                prot,
+                libc::MAP_SHARED | libc::MAP_FIXED,
+                self.shm_plugin_fd,
+                interval.start as i64,
+            )
+            .unwrap();
     }
 }
 
@@ -191,7 +205,7 @@ fn get_regions(pid: libc::pid_t) -> IntervalMap<Region> {
     regions
 }
 
-// Find the heap range, and map it if non-empty.
+/// Find the heap range, and map it if non-empty.
 fn get_heap(
     shm_file: &ShmFile,
     thread: &mut impl Thread,
@@ -234,9 +248,9 @@ fn get_heap(
     heap_interval
 }
 
-// Finds where the stack is located and reserves space in shadow's address space for the maximum
-// size to which the stack can grow. *Doesn't* reserve space in the shared memory file; this is
-// done on-demand as it grows and is accessed.
+/// Finds where the stack is located and reserves space in shadow's address space for the maximum
+/// size to which the stack can grow. *Doesn't* reserve space in the shared memory file; this is
+/// done on-demand as it grows and is accessed.
 fn map_stack(shm_file: &ShmFile, regions: &mut IntervalMap<Region>) -> usize {
     // Find the current stack region. There should be exactly one.
     let mut iter = regions
@@ -272,9 +286,9 @@ fn map_stack(shm_file: &ShmFile, regions: &mut IntervalMap<Region>) -> usize {
 impl Drop for MemoryManager {
     fn drop(&mut self) {
         {
-            println!("MemoryManager misses (consider extending MemoryManager to remap regions with a high miss count)");
+            info!("MemoryManager misses (consider extending MemoryManager to remap regions with a high miss count)");
             for (path, count) in self.misses_by_path.iter() {
-                println!("\t{} in {}", count, path);
+                info!("\t{} in {}", count, path);
             }
         }
         // Useful for debugging
@@ -287,16 +301,14 @@ impl Drop for MemoryManager {
         drop(regions);
         */
 
-        // Mappings are no longer valid. Clear out our map, and unmap those regions.
+        // Mappings are no longer valid. Clear out our map, and unmap those regions from Shadow's
+        // address space.
         let mutations = self.regions.clear(std::usize::MIN..std::usize::MAX);
         for m in mutations {
             if let Mutation::Removed(interval, region) = m {
                 if !region.shadow_base.is_null() {
-                    let res =
-                        unsafe { libc::munmap(region.shadow_base, interval.end - interval.start) };
-                    if res != 0 {
-                        println!("Warning: munmap failed");
-                    }
+                    unsafe { sys::mman::munmap(region.shadow_base, interval.len()) }
+                        .unwrap_or_else(|e| warn!("munmap: {}", e));
                 }
             }
         }
@@ -346,7 +358,7 @@ impl MemoryManager {
         // We don't need the file anymore in the file system.
         match std::fs::remove_file(&shm_path) {
             Ok(_) => (),
-            Err(e) => println!("Warning: removing '{}': {}", shm_path, e),
+            Err(e) => warn!("removing '{}': {}", shm_path, e),
         }
 
         let shm_file = ShmFile {
@@ -366,19 +378,19 @@ impl MemoryManager {
         }
     }
 
-    // Processes the mutations returned by an IntervalMap::insert or IntervalMap::clear operation.
-    // Each mutation describes a mapping that has been partly or completely overwritten (in the
-    // case of an insert) or cleared (in the case of clear).
-    //
-    // Potentially:
-    // * Updates `shadow_base` on affected regions.
-    // * Deallocates space from shm_file.
-    // * Reclaims Shadow's address space via unmap.
-    //
-    // When used on mutations after an insert, if the inserted region is to be mapped into shadow,
-    // be sure to call this *before* doing that mapping; otherwise we'll end up some or all of the
-    // space in that new mapping.
-    fn handle_mutations(&mut self, mutations: Vec<Mutation<Region>>) {
+    /// Processes the mutations returned by an IntervalMap::insert or IntervalMap::clear operation.
+    /// Each mutation describes a mapping that has been partly or completely overwritten (in the
+    /// case of an insert) or cleared (in the case of clear).
+    ///
+    /// Potentially:
+    /// * Updates `shadow_base` on affected regions.
+    /// * Deallocates space from shm_file.
+    /// * Reclaims Shadow's address space via unmap.
+    ///
+    /// When used on mutations after an insert, if the inserted region is to be mapped into shadow,
+    /// be sure to call this *before* doing that mapping; otherwise we'll end up deallocating some
+    /// or all of the space in that new mapping.
+    fn unmap_mutations(&mut self, mutations: Vec<Mutation<Region>>) {
         for mutation in mutations {
             match mutation {
                 Mutation::ModifiedBegin(interval, new_start) => {
@@ -393,11 +405,11 @@ impl MemoryManager {
                     self.shm_file.dealloc(&removed_range);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { libc::munmap(region.shadow_base, removed_size) };
+                    unsafe { sys::mman::munmap(region.shadow_base, removed_size) }
+                        .unwrap_or_else(|e| warn!("munmap: {}", e));
 
                     // Adjust base
-                    region.shadow_base =
-                        ((region.shadow_base as usize) + removed_size) as *mut c_void;
+                    region.shadow_base = unsafe { region.shadow_base.add(removed_size) };
                 }
                 Mutation::ModifiedEnd(interval, new_end) => {
                     let (_, region) = self.regions.get(interval.start).unwrap();
@@ -405,13 +417,13 @@ impl MemoryManager {
                         continue;
                     }
                     let removed_range = new_end..interval.end;
-                    let removed_size = removed_range.end - removed_range.start;
 
                     // Deallocate
                     self.shm_file.dealloc(&removed_range);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { libc::munmap(region.shadow_base, removed_size) };
+                    unsafe { sys::mman::munmap(region.shadow_base, removed_range.len()) }
+                        .unwrap_or_else(|e| warn!("munmap: {}", e));
                 }
                 Mutation::Split(_original, left, right) => {
                     let (_, left_region) = self.regions.get(left.start).unwrap();
@@ -421,24 +433,23 @@ impl MemoryManager {
                         continue;
                     }
                     let removed_range = left.end..right.start;
-                    let removed_size = removed_range.end - removed_range.start;
 
                     // Deallocate
                     self.shm_file.dealloc(&removed_range);
 
                     // Unmap range from Shadow's address space.
                     unsafe {
-                        libc::munmap(
+                        sys::mman::munmap(
                             (left_region.shadow_base as usize + left.end) as *mut c_void,
-                            removed_size,
+                            removed_range.len(),
                         )
-                    };
+                    }
+                    .unwrap_or_else(|e| warn!("munmap: {}", e));
 
                     // Adjust start of right region.
                     let (_, right_region) = self.regions.get_mut(right.start).unwrap();
-                    right_region.shadow_base = ((right_region.shadow_base as usize)
-                        + (right.start - left.start))
-                        as *mut c_void;
+                    right_region.shadow_base =
+                        unsafe { right_region.shadow_base.add(right.start - left.start) };
                 }
                 Mutation::Removed(interval, region) => {
                     if region.shadow_base.is_null() {
@@ -449,7 +460,8 @@ impl MemoryManager {
                     self.shm_file.dealloc(&interval);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { libc::munmap(region.shadow_base, interval.end - interval.start) };
+                    unsafe { sys::mman::munmap(region.shadow_base, interval.len()) }
+                        .unwrap_or_else(|e| warn!("munmap: {}", e));
                 }
             }
         }
@@ -464,7 +476,7 @@ impl MemoryManager {
         &mut self,
         thread: &mut impl Thread,
         src: PluginPtr,
-    ) -> Result<&T, i32> {
+    ) -> nix::Result<&T> {
         let raw = self.get_readable_ptr(thread, src, std::mem::size_of::<T>())?;
         Ok(&*(raw as *const T))
     }
@@ -482,7 +494,7 @@ impl MemoryManager {
         &mut self,
         thread: &mut impl Thread,
         src: PluginPtr,
-    ) -> Result<&mut T, i32> {
+    ) -> nix::Result<&mut T> {
         let raw = self.get_writeable_ptr(thread, src, std::mem::size_of::<T>())?;
         Ok(&mut *(raw as *mut T))
     }
@@ -497,7 +509,7 @@ impl MemoryManager {
         thread: &mut impl Thread,
         src: PluginPtr,
         len: usize,
-    ) -> Result<&[T], i32> {
+    ) -> nix::Result<&[T]> {
         let raw = self.get_readable_ptr(thread, src, std::mem::size_of::<T>() * len)?;
         Ok(std::slice::from_raw_parts(raw as *const T, len))
     }
@@ -516,11 +528,18 @@ impl MemoryManager {
         thread: &mut impl Thread,
         src: PluginPtr,
         len: usize,
-    ) -> Result<&mut [T], i32> {
+    ) -> nix::Result<&mut [T]> {
         let raw = self.get_writeable_ptr(thread, src, std::mem::size_of::<T>() * len)?;
         Ok(std::slice::from_raw_parts_mut(raw as *mut T, len))
     }
 
+    /// Shadow should delegate a plugin's call to mmap to this method.  The caller is responsible
+    /// for ensuring that `fd` is open and pointing to the right file in the plugin process.
+    ///
+    /// Executes the actual mmap operation in the plugin, updates the MemoryManager's understanding of
+    /// the plugin's address space, and in some cases remaps the given region into the
+    /// MemoryManager's shared memory file for fast access. Currently only private anonymous
+    /// mappings are remapped.
     #[allow(clippy::too_many_arguments)]
     pub fn handle_mmap(
         &mut self,
@@ -531,7 +550,7 @@ impl MemoryManager {
         flags: i32,
         fd: i32,
         offset: i64,
-    ) -> Result<PluginPtr, i32> {
+    ) -> nix::Result<PluginPtr> {
         let result = thread.native_mmap(addr, length, prot, flags, fd, offset)?;
         if length == 0 {
             return Ok(result);
@@ -564,7 +583,7 @@ impl MemoryManager {
 
         // Clear out metadata and mappings for anything that was already there.
         let mutations = self.regions.clear(interval.clone());
-        self.handle_mutations(mutations);
+        self.unmap_mutations(mutations);
 
         if is_anonymous && sharing == Sharing::Private {
             // Overwrite the freshly mapped region with a region from the shared mem file and map
@@ -588,12 +607,16 @@ impl MemoryManager {
         Ok(result)
     }
 
+    /// Shadow should delegate a plugin's call to munmap to this method.
+    ///
+    /// Executes the actual mmap operation in the plugin, updates the MemoryManager's understanding of
+    /// the plugin's address space, and unmaps the affected memory from Shadow if it was mapped in.
     pub fn handle_munmap(
         &mut self,
         thread: &mut impl Thread,
         addr: PluginPtr,
         length: usize,
-    ) -> Result<(), i32> {
+    ) -> nix::Result<()> {
         thread.native_munmap(addr, length)?;
         if length == 0 {
             return Ok(());
@@ -603,11 +626,16 @@ impl MemoryManager {
         let start = usize::from(addr);
         let end = start + length;
         let mutations = self.regions.clear(start..end);
-        self.handle_mutations(mutations);
+        self.unmap_mutations(mutations);
 
         Ok(())
     }
 
+    /// Shadow should delegate a plugin's call to mremap to this method.
+    ///
+    /// Executes the actual mremap operation in the plugin, updates the MemoryManager's
+    /// understanding of the plugin's address space, and updates Shadow's mappings of that region
+    /// if applicable.
     pub fn handle_mremap(
         &mut self,
         thread: &mut impl Thread,
@@ -616,7 +644,7 @@ impl MemoryManager {
         new_size: usize,
         flags: i32,
         new_address: PluginPtr,
-    ) -> Result<PluginPtr, i32> {
+    ) -> nix::Result<PluginPtr> {
         let new_address =
             thread.native_mremap(old_address, old_size, new_size, flags, new_address)?;
         let old_interval = usize::from(old_address)..(usize::from(old_address) + old_size);
@@ -637,7 +665,7 @@ impl MemoryManager {
             // This shouldn't be mapped into Shadow, since we don't support remapping shared mappings into Shadow yet.
             assert_eq!(region.shadow_base, std::ptr::null_mut());
             let mutations = self.regions.insert(new_interval, region);
-            self.handle_mutations(mutations);
+            self.unmap_mutations(mutations);
             return Ok(new_address);
         }
 
@@ -659,7 +687,7 @@ impl MemoryManager {
         // freeing space for that new mapping.
         {
             let mutations = self.regions.clear(new_interval.clone());
-            self.handle_mutations(mutations);
+            self.unmap_mutations(mutations);
         }
 
         if !region.shadow_base.is_null() {
@@ -694,7 +722,8 @@ impl MemoryManager {
                 };
 
                 // Unmap the old location from Shadow.
-                assert_eq!(unsafe { libc::munmap(region.shadow_base, old_size) }, 0);
+                unsafe { sys::mman::munmap(region.shadow_base, old_size) }
+                    .unwrap_or_else(|e| warn!("munmap: {}", e));
 
                 // Update the region metadata.
                 region.shadow_base = new_shadow_base;
@@ -706,6 +735,7 @@ impl MemoryManager {
                 self.shm_file.dealloc(&(new_interval.end..old_interval.end));
 
                 // Shrink Shadow's mapping.
+                // TODO: use nix wrapper once it exists. https://github.com/nix-rust/nix/issues/1295
                 assert_ne!(
                     unsafe { libc::mremap(region.shadow_base, old_size, new_size, 0) },
                     libc::MAP_FAILED
@@ -716,6 +746,7 @@ impl MemoryManager {
 
                 // Grow Shadow's mapping into the memory file, allowing the mapping to move if
                 // needed.
+                // TODO: use nix wrapper once it exists. https://github.com/nix-rust/nix/issues/1295
                 region.shadow_base = unsafe {
                     libc::mremap(region.shadow_base, old_size, new_size, libc::MREMAP_MAYMOVE)
                 };
@@ -774,15 +805,17 @@ impl MemoryManager {
                     // Grow heap region.
                     self.shm_file.alloc(&self.heap);
                     // mremap in plugin, enforcing that base stays the same.
-                    let res = thread.native_mremap(
-                        /* old_addr: */ PluginPtr::from(self.heap.start),
-                        /* old_len: */ self.heap.end - self.heap.start,
-                        /* new_len: */ new_heap.end - new_heap.start,
-                        /* flags: */ 0,
-                        /* new_addr: */ PluginPtr::from(0usize),
-                    );
-                    assert!(res.is_ok());
+                    thread
+                        .native_mremap(
+                            /* old_addr: */ PluginPtr::from(self.heap.start),
+                            /* old_len: */ self.heap.end - self.heap.start,
+                            /* new_len: */ new_heap.end - new_heap.start,
+                            /* flags: */ 0,
+                            /* new_addr: */ PluginPtr::from(0usize),
+                        )
+                        .unwrap();
                     // mremap in shadow, allowing mapping to move if needed.
+                    // TODO: use nix wrapper once it exists. https://github.com/nix-rust/nix/issues/1295
                     let shadow_base = unsafe {
                         libc::mremap(
                             /* old_addr: */ heap_region.shadow_base,
@@ -814,20 +847,22 @@ impl MemoryManager {
             let (_, heap_region) = opt_heap_interval_and_region.unwrap();
 
             // mremap in plugin, enforcing that base stays the same.
-            let res = thread.native_mremap(
-                /* old_addr: */ PluginPtr::from(self.heap.start),
-                /* old_len: */ self.heap.end - self.heap.start,
-                /* new_len: */ new_heap.end - new_heap.start,
-                /* flags: */ 0,
-                /* new_addr: */ PluginPtr::from(0usize),
-            );
-            assert!(res.is_ok());
+            thread
+                .native_mremap(
+                    /* old_addr: */ PluginPtr::from(self.heap.start),
+                    /* old_len: */ self.heap.len(),
+                    /* new_len: */ new_heap.len(),
+                    /* flags: */ 0,
+                    /* new_addr: */ PluginPtr::from(0usize),
+                )
+                .unwrap();
             // mremap in shadow, assuming no need to move.
+            // TODO: use nix wrapper once it exists. https://github.com/nix-rust/nix/issues/1295
             let shadow_base = unsafe {
                 libc::mremap(
                     /* old_addr: */ heap_region.shadow_base,
-                    /* old_len: */ self.heap.end - self.heap.start,
-                    /* new_len: */ new_heap.end - new_heap.start,
+                    /* old_len: */ self.heap.len(),
+                    /* new_len: */ new_heap.len(),
                     /* flags: */ 0,
                 )
             };
@@ -840,14 +875,26 @@ impl MemoryManager {
         Ok(PluginPtr::from(requested_brk))
     }
 
+    /// Shadow should delegate a plugin's call to mprotect to this method.
+    ///
+    /// Executes the actual mprotect operation in the plugin, updates the MemoryManager's
+    /// understanding of the plugin's address space, and updates Shadow's mappings of that region
+    /// if applicable.
+    ///
+    /// Alternatively when Shadow maps a region it would always map everything to be both readable
+    /// and writeable by Shadow, in which case we wouldn't need to worry about updating Shadow's
+    /// protections when the plugin calls mprotect. However, mirroring the plugin's protection
+    /// settings can help catch bugs earlier. Shadow should never have reason to access plugin
+    /// memory in a way that the plugin itself can't.
     pub fn handle_mprotect(
         &mut self,
         thread: &mut impl Thread,
         addr: PluginPtr,
         size: usize,
         prot: i32,
-    ) -> Result<(), i32> {
+    ) -> nix::Result<()> {
         thread.native_mprotect(addr, size, prot)?;
+        let protflags = sys::mman::ProtFlags::from_bits(prot).unwrap();
 
         // Update protections. We remove the affected range, and then update and re-insert affected
         // regions.
@@ -865,16 +912,16 @@ impl MemoryManager {
                     modified_region.prot = prot;
                     // Update shadow_base if applicable.
                     if !extant_region.shadow_base.is_null() {
-                        extant_region.shadow_base = ((extant_region.shadow_base as usize)
-                            + modified_interval.len())
-                            as *mut c_void;
+                        extant_region.shadow_base =
+                            unsafe { extant_region.shadow_base.add(modified_interval.len()) };
                         unsafe {
-                            libc::mprotect(
+                            sys::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                prot,
+                                protflags,
                             )
-                        };
+                        }
+                        .unwrap_or_else(|e| warn!("mprotect: {}", e));
                     }
                     // Reinsert region with updated prot.
                     assert!(self
@@ -890,16 +937,16 @@ impl MemoryManager {
                     let mut modified_region = extant_region.clone();
                     modified_region.prot = prot;
                     if !modified_region.shadow_base.is_null() {
-                        modified_region.shadow_base = ((modified_region.shadow_base as usize)
-                            + extant_interval.len())
-                            as *mut c_void;
+                        modified_region.shadow_base =
+                            unsafe { modified_region.shadow_base.add(extant_interval.len()) };
                         unsafe {
-                            libc::mprotect(
+                            sys::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                prot,
+                                protflags,
                             )
-                        };
+                        }
+                        .unwrap_or_else(|e| warn!("mprotect: {}", e));
                     }
                     assert!(self
                         .regions
@@ -912,20 +959,21 @@ impl MemoryManager {
                     let mut modified_region = right_region.clone();
                     modified_region.prot = prot;
                     if !modified_region.shadow_base.is_null() {
-                        modified_region.shadow_base = ((modified_region.shadow_base as usize)
-                            + left_interval.len())
-                            as *mut c_void;
-                        right_region.shadow_base = ((right_region.shadow_base as usize)
-                            + left_interval.len()
-                            + modified_interval.len())
-                            as *mut c_void;
+                        modified_region.shadow_base =
+                            unsafe { modified_region.shadow_base.add(left_interval.len()) };
+                        right_region.shadow_base = unsafe {
+                            right_region
+                                .shadow_base
+                                .add(left_interval.len() + modified_interval.len())
+                        };
                         unsafe {
-                            libc::mprotect(
+                            sys::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                prot,
+                                protflags,
                             )
-                        };
+                        }
+                        .unwrap_or_else(|e| warn!("mprotect: {}", e));
                     }
                     assert!(self
                         .regions
@@ -936,12 +984,13 @@ impl MemoryManager {
                     modified_region.prot = prot;
                     if !modified_region.shadow_base.is_null() {
                         unsafe {
-                            libc::mprotect(
+                            sys::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                prot,
+                                protflags,
                             )
-                        };
+                        }
+                        .unwrap_or_else(|e| warn!("mprotect: {}", e));
                     }
                     assert!(self
                         .regions
@@ -953,14 +1002,19 @@ impl MemoryManager {
         Ok(())
     }
 
-    // Extend the portion of the stack that we've mapped downward to include `src`.  This is
-    // carefuly designed *not* to invalidate any outstanding borrowed references or pointers, since
-    // otherwise a caller trying to marshall multiple syscall arguments might invalidate the first
-    // argument when marshalling the second.
+    /// Extend the portion of the stack that we've mapped downward to include `src`.
+    ///
+    /// This is carefuly designed *not* to invalidate any outstanding borrowed references or
+    /// pointers, since otherwise a caller trying to marshall multiple syscall arguments might
+    /// invalidate the first argument when marshalling the second. (While the Rust API currently
+    /// prevents there from being any outstanding references, the C API does not).
     fn extend_stack(&mut self, thread: &mut impl Thread, src: usize) {
         let start = page_of(src);
         let stack_extension = start..self.stack_copied.start;
-        //println!("extending stack from {:x} to {:x}", stack_copied.start, start);
+        debug!(
+            "extending stack from {:x} to {:x}",
+            stack_extension.end, stack_extension.start
+        );
 
         let (mapped_stack_interval, mapped_stack_region) =
             self.regions.get(self.stack_copied.start - 1).unwrap();
@@ -982,7 +1036,8 @@ impl MemoryManager {
             .mmap_into_plugin(thread, &self.stack_copied, STACK_PROT);
     }
 
-    // Get a raw pointer to the plugin's memory, if we have it mapped (or can do so now).
+    /// Get a raw pointer to the plugin's memory, if it's been remapped into Shadow (or if we can do
+    /// so now, in the case of the stack).
     fn get_mapped_ptr(
         &mut self,
         thread: &mut impl Thread,
@@ -991,14 +1046,14 @@ impl MemoryManager {
     ) -> Option<*mut c_void> {
         if n == 0 {
             // Length zero pointer should never be deref'd. Just return null.
-            println!("Warning: returning NULL for zero-length pointer");
+            warn!("returning NULL for zero-length pointer");
             return Some(std::ptr::null_mut());
         }
 
         let src = usize::from(src);
         let opt_interval_and_region = self.regions.get(src);
         if opt_interval_and_region.is_none() {
-            println!("Warning: src {:x} isn't in any mapped region", src);
+            warn!("src {:x} isn't in any mapped region", src);
             return None;
         }
         let (interval, region) = opt_interval_and_region.unwrap();
@@ -1026,7 +1081,7 @@ impl MemoryManager {
         Some(ptr)
     }
 
-    // Counts accesses where we had to fall back to the thread's (slow) apis.
+    /// Counts accesses where we had to fall back to the thread's (slow) apis.
     fn inc_misses(&mut self, addr: PluginPtr) {
         let key = match self.regions.get(usize::from(addr)) {
             Some((_, original_path)) => format!("{:?}", original_path),
@@ -1036,69 +1091,54 @@ impl MemoryManager {
         *counter += 1;
     }
 
-    // Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
-    // Never returns NULL.
+    /// Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
+    /// Never returns NULL.
     unsafe fn get_readable_ptr(
         &mut self,
         thread: &mut impl Thread,
         plugin_src: PluginPtr,
         n: usize,
-    ) -> Result<*const c_void, i32> {
-        let p = if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
-            p
+    ) -> nix::Result<*const c_void> {
+        if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
+            Ok(p)
         } else {
             // Fall back to reading via the thread.
             self.inc_misses(plugin_src);
-            thread.get_readable_ptr(plugin_src, n)?
-        };
-        if p.is_null() {
-            Err(libc::EFAULT)
-        } else {
-            Ok(p)
+            thread.get_readable_ptr(plugin_src, n)
         }
     }
 
-    // Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
-    // Never returns NULL.
+    /// Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
+    /// Never returns NULL.
     unsafe fn get_writeable_ptr(
         &mut self,
         thread: &mut impl Thread,
         plugin_src: PluginPtr,
         n: usize,
-    ) -> Result<*mut c_void, i32> {
-        let p = if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
-            p
+    ) -> nix::Result<*mut c_void> {
+        if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
+            Ok(p)
         } else {
             // Fall back to reading via the thread.
             self.inc_misses(plugin_src);
-            thread.get_writeable_ptr(plugin_src, n)?
-        };
-        if p.is_null() {
-            Err(libc::EFAULT)
-        } else {
-            Ok(p)
+            thread.get_writeable_ptr(plugin_src, n)
         }
     }
 
-    // Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
-    // Never returns NULL.
+    /// Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
+    /// Never returns NULL.
     unsafe fn get_mutable_ptr(
         &mut self,
         thread: &mut impl Thread,
         plugin_src: PluginPtr,
         n: usize,
-    ) -> Result<*mut c_void, i32> {
-        let p = if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
-            p
+    ) -> nix::Result<*mut c_void> {
+        if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
+            Ok(p)
         } else {
             // Fall back to reading via the thread.
             self.inc_misses(plugin_src);
-            thread.get_mutable_ptr(plugin_src, n)?
-        };
-        if p.is_null() {
-            Err(libc::EFAULT)
-        } else {
-            Ok(p)
+            thread.get_mutable_ptr(plugin_src, n)
         }
     }
 }
@@ -1138,7 +1178,7 @@ mod export {
             .unwrap()
     }
 
-    /// Get a writeagble pointer to the plugin's memory via mapping, or via the thread APIs.
+    /// Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
     /// # Safety
     /// * `mm` and `thread` must point to valid objects.
     #[no_mangle]
@@ -1206,8 +1246,8 @@ mod export {
     ) -> c::SysCallReg {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(
-            match memory_manager.handle_mmap(
+        c::SysCallReg::from(SysCallReg::from(syscall::result_to_raw_return_value(
+            memory_manager.handle_mmap(
                 &mut thread,
                 PluginPtr::from(addr),
                 len,
@@ -1215,12 +1255,8 @@ mod export {
                 flags,
                 fd,
                 offset,
-            ) {
-                Ok(p) => SysCallReg::from(p),
-                // negative errno
-                Err(e) => SysCallReg::from(-e),
-            },
-        )
+            ),
+        )))
     }
 
     /// Fully handles the `munmap` syscall
@@ -1233,13 +1269,9 @@ mod export {
     ) -> c::SysCallReg {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(
-            match memory_manager.handle_munmap(&mut thread, PluginPtr::from(addr), len) {
-                Ok(()) => SysCallReg::from(0),
-                // negative errno
-                Err(e) => SysCallReg::from(-e),
-            },
-        )
+        c::SysCallReg::from(SysCallReg::from(syscall::result_to_raw_return_value(
+            memory_manager.handle_munmap(&mut thread, PluginPtr::from(addr), len),
+        )))
     }
 
     #[no_mangle]
@@ -1254,20 +1286,16 @@ mod export {
     ) -> c::SysCallReg {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(
-            match memory_manager.handle_mremap(
+        c::SysCallReg::from(SysCallReg::from(syscall::result_to_raw_return_value(
+            memory_manager.handle_mremap(
                 &mut thread,
                 PluginPtr::from(old_addr),
                 old_size,
                 new_size,
                 flags,
                 PluginPtr::from(new_addr),
-            ) {
-                Ok(p) => SysCallReg::from(p),
-                // negative errno
-                Err(e) => SysCallReg::from(-e),
-            },
-        )
+            ),
+        )))
     }
 
     #[no_mangle]
@@ -1280,12 +1308,8 @@ mod export {
     ) -> c::SysCallReg {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(
-            match memory_manager.handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot) {
-                Ok(()) => SysCallReg::from(0),
-                // negative errno
-                Err(e) => SysCallReg::from(-e),
-            },
-        )
+        c::SysCallReg::from(SysCallReg::from(syscall::result_to_raw_return_value(
+            memory_manager.handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot),
+        )))
     }
 }
