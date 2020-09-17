@@ -67,26 +67,26 @@ pub struct MemoryManager {
 
     misses_by_path: HashMap<String, u32>,
 
-    // The part of the stack that we've already remapped in the plugin.
-    // We initially mmap enough *address space* in Shadow to accomodate a large stack, but we only
-    // lazily allocate it. This is both to prevent wasting memory, and to handle that we can't map
-    // the current "working area" of the stack in thread-preload.
+    /// The part of the stack that we've already remapped in the plugin.
+    /// We initially mmap enough *address space* in Shadow to accomodate a large stack, but we only
+    /// lazily allocate it. This is both to prevent wasting memory, and to handle that we can't map
+    /// the current "working area" of the stack in thread-preload.
     stack_copied: Interval,
 
-    // The bounds of the heap. Note that before the plugin's first `brk` syscall this will be a
-    // zero-sized interval (though in the case of thread-preload that'll have already happened
-    // before we get control).
+    /// The bounds of the heap. Note that before the plugin's first `brk` syscall this will be a
+    /// zero-sized interval (though in the case of thread-preload that'll have already happened
+    /// before we get control).
     heap: Interval,
 }
 
-// Shared memory file into which we relocate parts of the plugin's address space.
+/// Shared memory file into which we relocate parts of the plugin's address space.
 struct ShmFile {
     shm_file: File,
     shm_plugin_fd: i32,
 }
 
 impl ShmFile {
-    // Allocate space in the file for the given interval.
+    /// Allocate space in the file for the given interval.
     fn alloc(&self, interval: &Interval) {
         fcntl::posix_fallocate(
             self.shm_file.as_raw_fd(),
@@ -96,7 +96,7 @@ impl ShmFile {
         .unwrap();
     }
 
-    // De-allocate space in the file for the given interval.
+    /// De-allocate space in the file for the given interval.
     fn dealloc(&self, interval: &Interval) {
         fcntl::fallocate(
             self.shm_file.as_raw_fd(),
@@ -108,7 +108,7 @@ impl ShmFile {
         .unwrap();
     }
 
-    // Map the given interval of the file into shadow's address space.
+    /// Map the given interval of the file into shadow's address space.
     fn mmap_into_shadow(&self, interval: &Interval, prot: i32) -> *mut c_void {
         unsafe {
             sys::mman::mmap(
@@ -123,9 +123,9 @@ impl ShmFile {
         .unwrap()
     }
 
-    // Copy data from the plugin's address space into the file. `interval` must be contained within
-    // `region_interval`. It can be the whole region, but notably for the stack we only copy in
-    // parts of the region as needed.
+    /// Copy data from the plugin's address space into the file. `interval` must be contained within
+    /// `region_interval`. It can be the whole region, but notably for the stack we only copy in
+    /// parts of the region as needed.
     fn copy_into_file(
         &self,
         thread: &mut impl Thread,
@@ -155,7 +155,7 @@ impl ShmFile {
         dst.copy_from_slice(src);
     }
 
-    // Map the given range of the file into the plugin's address space.
+    /// Map the given range of the file into the plugin's address space.
     fn mmap_into_plugin(&self, thread: &mut impl Thread, interval: &Interval, prot: i32) {
         thread
             .native_mmap(
@@ -205,7 +205,7 @@ fn get_regions(pid: libc::pid_t) -> IntervalMap<Region> {
     regions
 }
 
-// Find the heap range, and map it if non-empty.
+/// Find the heap range, and map it if non-empty.
 fn get_heap(
     shm_file: &ShmFile,
     thread: &mut impl Thread,
@@ -248,9 +248,9 @@ fn get_heap(
     heap_interval
 }
 
-// Finds where the stack is located and reserves space in shadow's address space for the maximum
-// size to which the stack can grow. *Doesn't* reserve space in the shared memory file; this is
-// done on-demand as it grows and is accessed.
+/// Finds where the stack is located and reserves space in shadow's address space for the maximum
+/// size to which the stack can grow. *Doesn't* reserve space in the shared memory file; this is
+/// done on-demand as it grows and is accessed.
 fn map_stack(shm_file: &ShmFile, regions: &mut IntervalMap<Region>) -> usize {
     // Find the current stack region. There should be exactly one.
     let mut iter = regions
@@ -378,18 +378,18 @@ impl MemoryManager {
         }
     }
 
-    // Processes the mutations returned by an IntervalMap::insert or IntervalMap::clear operation.
-    // Each mutation describes a mapping that has been partly or completely overwritten (in the
-    // case of an insert) or cleared (in the case of clear).
-    //
-    // Potentially:
-    // * Updates `shadow_base` on affected regions.
-    // * Deallocates space from shm_file.
-    // * Reclaims Shadow's address space via unmap.
-    //
-    // When used on mutations after an insert, if the inserted region is to be mapped into shadow,
-    // be sure to call this *before* doing that mapping; otherwise we'll end up deallocating some
-    // or all of the space in that new mapping.
+    /// Processes the mutations returned by an IntervalMap::insert or IntervalMap::clear operation.
+    /// Each mutation describes a mapping that has been partly or completely overwritten (in the
+    /// case of an insert) or cleared (in the case of clear).
+    ///
+    /// Potentially:
+    /// * Updates `shadow_base` on affected regions.
+    /// * Deallocates space from shm_file.
+    /// * Reclaims Shadow's address space via unmap.
+    ///
+    /// When used on mutations after an insert, if the inserted region is to be mapped into shadow,
+    /// be sure to call this *before* doing that mapping; otherwise we'll end up deallocating some
+    /// or all of the space in that new mapping.
     fn unmap_mutations(&mut self, mutations: Vec<Mutation<Region>>) {
         for mutation in mutations {
             match mutation {
@@ -1002,12 +1002,12 @@ impl MemoryManager {
         Ok(())
     }
 
-    // Extend the portion of the stack that we've mapped downward to include `src`.
-    //
-    // This is carefuly designed *not* to invalidate any outstanding borrowed references or
-    // pointers, since otherwise a caller trying to marshall multiple syscall arguments might
-    // invalidate the first argument when marshalling the second. (While the Rust API currently
-    // prevents there from being any outstanding references, the C API does not).
+    /// Extend the portion of the stack that we've mapped downward to include `src`.
+    ///
+    /// This is carefuly designed *not* to invalidate any outstanding borrowed references or
+    /// pointers, since otherwise a caller trying to marshall multiple syscall arguments might
+    /// invalidate the first argument when marshalling the second. (While the Rust API currently
+    /// prevents there from being any outstanding references, the C API does not).
     fn extend_stack(&mut self, thread: &mut impl Thread, src: usize) {
         let start = page_of(src);
         let stack_extension = start..self.stack_copied.start;
@@ -1036,8 +1036,8 @@ impl MemoryManager {
             .mmap_into_plugin(thread, &self.stack_copied, STACK_PROT);
     }
 
-    // Get a raw pointer to the plugin's memory, if it's been remapped into Shadow (or if we can do
-    // so now, in the case of the stack).
+    /// Get a raw pointer to the plugin's memory, if it's been remapped into Shadow (or if we can do
+    /// so now, in the case of the stack).
     fn get_mapped_ptr(
         &mut self,
         thread: &mut impl Thread,
@@ -1081,7 +1081,7 @@ impl MemoryManager {
         Some(ptr)
     }
 
-    // Counts accesses where we had to fall back to the thread's (slow) apis.
+    /// Counts accesses where we had to fall back to the thread's (slow) apis.
     fn inc_misses(&mut self, addr: PluginPtr) {
         let key = match self.regions.get(usize::from(addr)) {
             Some((_, original_path)) => format!("{:?}", original_path),
@@ -1091,8 +1091,8 @@ impl MemoryManager {
         *counter += 1;
     }
 
-    // Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
-    // Never returns NULL.
+    /// Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
+    /// Never returns NULL.
     unsafe fn get_readable_ptr(
         &mut self,
         thread: &mut impl Thread,
@@ -1108,8 +1108,8 @@ impl MemoryManager {
         }
     }
 
-    // Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
-    // Never returns NULL.
+    /// Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
+    /// Never returns NULL.
     unsafe fn get_writeable_ptr(
         &mut self,
         thread: &mut impl Thread,
@@ -1125,8 +1125,8 @@ impl MemoryManager {
         }
     }
 
-    // Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
-    // Never returns NULL.
+    /// Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
+    /// Never returns NULL.
     unsafe fn get_mutable_ptr(
         &mut self,
         thread: &mut impl Thread,
