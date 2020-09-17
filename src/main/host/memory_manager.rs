@@ -850,8 +850,8 @@ impl MemoryManager {
             thread
                 .native_mremap(
                     /* old_addr: */ PluginPtr::from(self.heap.start),
-                    /* old_len: */ self.heap.end - self.heap.start,
-                    /* new_len: */ new_heap.end - new_heap.start,
+                    /* old_len: */ self.heap.len(),
+                    /* new_len: */ new_heap.len(),
                     /* flags: */ 0,
                     /* new_addr: */ PluginPtr::from(0usize),
                 )
@@ -861,8 +861,8 @@ impl MemoryManager {
             let shadow_base = unsafe {
                 libc::mremap(
                     /* old_addr: */ heap_region.shadow_base,
-                    /* old_len: */ self.heap.end - self.heap.start,
-                    /* new_len: */ new_heap.end - new_heap.start,
+                    /* old_len: */ self.heap.len(),
+                    /* new_len: */ new_heap.len(),
                     /* flags: */ 0,
                 )
             };
