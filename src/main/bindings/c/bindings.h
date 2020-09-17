@@ -21,6 +21,20 @@
 typedef struct ByteQueue ByteQueue;
 
 // Manages the address-space for a plugin process.
+//
+// The MemoryManager's primary purpose is to make plugin process's memory directly accessible to
+// Shadow. It does this by tracking what regions of program memory in the plugin are mapped to
+// what (analagous to /proc/<pid>/maps), and *remapping* parts of the plugin's address space into
+// a shared memory-file, which is also mapped into Shadow.
+//
+// Shadow provides several methods for allowing Shadow to access the plugin's memory, such as
+// `get_readable_ptr`. If the corresponding region of plugin memory is mapped into the shared
+// memory file, the corresponding Shadow pointer is returned. If not, then, it'll fall back to
+// (generally slower) Thread APIs.
+//
+// For the MemoryManager to maintain consistent state, and to remap regions of memory it knows how
+// to remap, Shadow must delegate handling of mman-related syscalls (such as `mmap`) to the
+// MemoryManager via its `handle_*` methods.
 typedef struct MemoryManager MemoryManager;
 
 void bytequeue_free(ByteQueue *bq_ptr);
@@ -51,7 +65,7 @@ const void *memorymanager_getReadablePtr(MemoryManager *memory_manager,
                                          PluginPtr plugin_src,
                                          uintptr_t n);
 
-// Get a writeagble pointer to the plugin's memory via mapping, or via the thread APIs.
+// Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
 // # Safety
 // * `mm` and `thread` must point to valid objects.
 void *memorymanager_getWriteablePtr(MemoryManager *memory_manager,
