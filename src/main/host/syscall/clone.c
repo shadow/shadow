@@ -49,7 +49,7 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     unsigned long handled_flags = required_flags;
     if (flags & CLONE_PARENT_SETTID) {
         handled_flags |= CLONE_PARENT_SETTID;
-        pid_t* ptidp = process_getWriteablePtr(sys->process, sys->thread, ctid, sizeof(*ptidp));
+        pid_t* ptidp = process_getWriteablePtr(sys->process, sys->thread, ptid, sizeof(*ptidp));
         *ptidp = thread_getID(child);
     }
 

@@ -925,10 +925,15 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
         .tsc = thread->tsc,
         .pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite)),
         .readPointers = g_array_new(FALSE, FALSE, sizeof(void*)),
-        .sys = syscallhandler_new(worker_getActiveHost(), base->process, base),
     };
+
+    // Create the syscall handler with the new child base
+    child->sys = syscallhandler_new(worker_getActiveHost(), base->process, &child->base),
+
     child->base.nativePid = base->nativePid;
     child->base.nativeTid = childNativeTid;
+
+    debug("cloned a new virtual thread at tid %d", child->base.tid);
 
     // The child should get a SIGSTOP triggered by the CLONE_PTRACE flag. Wait
     // for that stop, which puts the child into the
