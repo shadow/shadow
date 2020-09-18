@@ -12,6 +12,10 @@ target_link_libraries(test_clone ${GLIB_LIBRARIES}
 ## register the tests
 add_test(NAME clone COMMAND test_clone)
 
-add_test(NAME clone-shadow-ptrace COMMAND
-    ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d
-    clone.shadow_ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/clone_test_config.xml)
+add_test(
+	NAME clone-shadow-ptrace
+	COMMAND sh -c "\
+        ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/clone_test_config.yaml --output - \
+	| ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d clone.shadow_ptrace.data - \
+	"
+)
