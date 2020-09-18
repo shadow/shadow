@@ -124,7 +124,7 @@ static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
                                         const char* name) {
     debug("SYSCALL_HANDLER_PRE(%s,pid=%u): handling syscall %ld %s%s",
           process_getPluginName(sys->process),
-          process_getProcessID(sys->process), number, name,
+          thread_getID(sys->thread), number, name,
           _syscallhandler_wasBlocked(sys) ? " (previously BLOCKed)" : "");
 
     /* Track elapsed time during this syscall by marking the start time. */
@@ -138,7 +138,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
 
     debug("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
           "code=%d(%s) in %f seconds",
-          process_getPluginName(sys->process), process_getProcessID(sys->process), number, name,
+          process_getPluginName(sys->process), thread_getID(sys->thread), number, name,
           _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "",
           scr->state == SYSCALL_DONE
               ? "DONE"
