@@ -40,7 +40,7 @@ add_test(
 	NAME phold-threaded-shadow-preload
 	COMMAND sh -c "\
 	${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-	${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -d phold-threaded.shadow-preload.data -w 2 - "
+	| ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -d phold-threaded.shadow-preload.data -w 2 - "
 	CONFIGURATIONS ilibc
 )
 
