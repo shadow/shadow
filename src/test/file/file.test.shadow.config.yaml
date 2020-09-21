@@ -1,5 +1,6 @@
 options:
   stoptime: 5
+  environment: LD_LIBRARY_PATH=/opt/libc-interpose-centos7
 topology:
 - graphml: |
     <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
