@@ -3,6 +3,8 @@
  * See LICENSE for licensing information
  */
 
+use test_utils::TestEnvironment as TestEnv;
+
 struct ListenArguments {
     fd: libc::c_int,
     backlog: libc::c_int,
@@ -15,16 +17,23 @@ struct BindAddress {
 }
 
 fn main() -> Result<(), String> {
-    // should we run only tests that shadow supports
-    let run_only_passing_tests = std::env::args().any(|x| x == "--shadow-passing");
+    // should we restrict the tests we run?
+    let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
+    let filter_libc_passing = std::env::args().any(|x| x == "--libc-passing");
     // should we summarize the results rather than exit on a failed test
     let summarize = std::env::args().any(|x| x == "--summarize");
 
     let mut tests = get_tests();
-    if run_only_passing_tests {
+    if filter_shadow_passing {
         tests = tests
             .into_iter()
-            .filter(|x| x.shadow_passing() == test_utils::ShadowPassing::Yes)
+            .filter(|x| x.passing(TestEnv::Shadow))
+            .collect()
+    }
+    if filter_libc_passing {
+        tests = tests
+            .into_iter()
+            .filter(|x| x.passing(TestEnv::Libc))
             .collect()
     }
 
@@ -39,22 +48,22 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new(
             "test_invalid_fd",
             test_invalid_fd,
-            test_utils::ShadowPassing::Yes,
+            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
         ),
         test_utils::ShadowTest::new(
             "test_non_existent_fd",
             test_non_existent_fd,
-            test_utils::ShadowPassing::Yes,
+            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
         ),
         test_utils::ShadowTest::new(
             "test_non_socket_fd",
             test_non_socket_fd,
-            test_utils::ShadowPassing::No,
+            [TestEnv::Libc].iter().cloned().collect(),
         ),
         test_utils::ShadowTest::new(
             "test_invalid_sock_type",
             test_invalid_sock_type,
-            test_utils::ShadowPassing::Yes,
+            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
         ),
     ];
 
@@ -83,27 +92,27 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     test_utils::ShadowTest::new(
                         &append_args("test_zero_backlog"),
                         move || test_zero_backlog(sock_type, flag, bind),
-                        test_utils::ShadowPassing::Yes,
+                        [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_negative_backlog"),
                         move || test_negative_backlog(sock_type, flag, bind),
-                        test_utils::ShadowPassing::Yes,
+                        [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_large_backlog"),
                         move || test_large_backlog(sock_type, flag, bind),
-                        test_utils::ShadowPassing::Yes,
+                        [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_listen_twice"),
                         move || test_listen_twice(sock_type, flag, bind),
-                        test_utils::ShadowPassing::No,
+                        [TestEnv::Libc].iter().cloned().collect(),
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_after_close"),
                         move || test_after_close(sock_type, flag, bind),
-                        test_utils::ShadowPassing::Yes,
+                        [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
                     ),
                 ];
 

@@ -1,4 +1,4 @@
-add_test(NAME socketpair COMMAND ../../target/debug/test_socketpair)
+add_test(NAME socketpair COMMAND ../../target/debug/test_socketpair --libc-passing)
 list(APPEND TestNames socketpair)
 
 # TODO: once socketpair() is supported, re-enable these tests

@@ -1,4 +1,4 @@
-add_test(NAME bind COMMAND ../../target/debug/test_bind)
+add_test(NAME bind COMMAND ../../target/debug/test_bind --libc-passing)
 list(APPEND TestNames bind)
 
 foreach(Method ptrace preload)

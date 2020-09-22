@@ -1,4 +1,4 @@
-add_test(NAME connect COMMAND ../../target/debug/test_connect)
+add_test(NAME connect COMMAND ../../target/debug/test_connect --libc-passing)
 list(APPEND TestNames connect)
 
 foreach(Method ptrace preload)

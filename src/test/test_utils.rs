@@ -5,25 +5,26 @@
 
 //! Utilities helpful for writing Rust integration tests.
 
+use std::collections::HashSet;
 use std::fmt;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum ShadowPassing {
-    Yes,
-    No,
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum TestEnvironment {
+    Shadow,
+    Libc,
 }
 
 pub struct ShadowTest<T, E> {
     name: String,
     func: Box<dyn Fn() -> Result<T, E>>,
-    shadow_passing: ShadowPassing,
+    passing: HashSet<TestEnvironment>,
 }
 
 impl<T, E> fmt::Debug for ShadowTest<T, E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ShadowTest")
             .field("name", &self.name)
-            .field("shadow_passing", &self.shadow_passing)
+            .field("passing", &self.passing)
             .finish()
     }
 }
@@ -32,12 +33,12 @@ impl<T, E> ShadowTest<T, E> {
     pub fn new(
         name: &str,
         func: impl Fn() -> Result<T, E> + 'static,
-        shadow_passing: ShadowPassing,
+        passing: HashSet<TestEnvironment>,
     ) -> Self {
         Self {
             name: name.to_string(),
             func: Box::new(func),
-            shadow_passing,
+            passing,
         }
     }
 
@@ -49,8 +50,8 @@ impl<T, E> ShadowTest<T, E> {
         &self.name
     }
 
-    pub fn shadow_passing(&self) -> ShadowPassing {
-        self.shadow_passing
+    pub fn passing(&self, environment: TestEnvironment) -> bool {
+        self.passing.contains(&environment)
     }
 }
 

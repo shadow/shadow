@@ -1,4 +1,4 @@
-add_test(NAME getsockname COMMAND ../../target/debug/test_getsockname)
+add_test(NAME getsockname COMMAND ../../target/debug/test_getsockname --libc-passing)
 list(APPEND TestNames getsockname)
 
 foreach(Method ptrace preload)

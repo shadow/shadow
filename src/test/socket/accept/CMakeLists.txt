@@ -1,4 +1,4 @@
-add_test(NAME accept COMMAND ../../target/debug/test_accept)
+add_test(NAME accept COMMAND ../../target/debug/test_accept --libc-passing)
 list(APPEND TestNames accept)
 
 foreach(Method ptrace preload)
