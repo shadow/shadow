@@ -65,7 +65,7 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
                 if (!(timeout->tv_nsec >= 0 && timeout->tv_nsec <= 999999999)) {
                     debug("A futex timeout was given, but the nanos value is out of range");
                     result = -EINVAL;
-                    break;
+                    break; // return SYSCALL_DONE
                 }
             } else {
                 timeout = NULL;
@@ -78,10 +78,10 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
                 process_getReadablePtr(sys->process, sys->thread, uaddrptr, sizeof(uint32_t));
 
             debug("Futex value is %" PRIu32 ", expected value is %" PRIu32, *futexVal, expectedVal);
-            if (*futexVal != expectedVal) {
+            if (!_syscallhandler_wasBlocked(sys) && *futexVal != expectedVal) {
                 debug("Futex values don't match, try again later");
                 result = -EAGAIN;
-                break;
+                break; // return SYSCALL_DONE
             }
 
             // Convert the virtual ptr to a physical ptr that can uniquely identify the futex
@@ -112,7 +112,7 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
                     bool success = futextable_remove(ftable, futex);
                     utility_assert(success);
                 }
-                break;
+                break; // return SYSCALL_DONE
             }
 
             // Dynamically create a futex if one does not yet exist
@@ -150,7 +150,7 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
                 debug("Futex was able to wake %i/%i waiters", result, val);
             }
 
-            break;
+            break; // return SYSCALL_DONE
         }
 
         case FUTEX_FD:
@@ -166,7 +166,7 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
         default: {
             warning("We do not yet handle futex operation %i", operation);
             result = -ENOSYS; // Invalid operation specified in futex_op
-            break;
+            break; // return SYSCALL_DONE
         }
     }
 
