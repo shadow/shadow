@@ -562,3 +562,13 @@ int copy_dat_files(int fileno) {
         return director.next.copy_dat_files(fileno);
     }
 }
+
+int compare_dat_files(int fileno) {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_compare_dat_files(proc,fileno);
+    } else {
+        ENSURE(compare_dat_files);
+        return director.next.compare_dat_files(fileno);
+    }
+}

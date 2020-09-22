@@ -7921,6 +7921,15 @@ int process_emu_copy_dat_files(Process* proc, int fileno) {
     return 1;
 }
 
+int process_emu_compare_dat_files(Process* proc, int fileno) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    message("process_emu_compare_dat_file test is success!");
+    printf("process_emu_compare_dat_file test fileno is %d \n",fileno);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return 0;
+}
+
+
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
     returntype process_emu_##functionname(Process* proc, ...) { \
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW); \

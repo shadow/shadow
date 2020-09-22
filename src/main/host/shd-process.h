@@ -454,6 +454,7 @@ int process_emu_shadow_assign_virtual_id(Process* proc);
 void process_emu_shadow_instrumentation_marker_set(Process* proc, int file_symbol, int line_cnt);
 void process_emu_hj_interposer_test(Process* proc);
 int process_emu_copy_dat_files(Process* proc, int fileno);
+int process_emu_compare_dat_files(Process* proc, int fileno);
 
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
   returntype process_emu_##functionname(Process* proc, ...);

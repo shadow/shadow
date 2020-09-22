@@ -72,3 +72,4 @@ PRELOADDEF(return, int, shadow_assign_virtual_id, (void));
 PRELOADDEF(return, void, shadow_instrumentation_marker_set, (int file_symbol, int line_cnt), file_symbol, line_cnt);
 PRELOADDEF(return, void, hj_interposer_test, (void));
 PRELOADDEF(return, int, copy_dat_files, (int fileno), fileno);
+PRELOADDEF(return, int, compare_dat_files, (int fileno), fileno);
