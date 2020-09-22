@@ -5278,7 +5278,17 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
             break;
         }
 #endif
-
+#if defined SYS_ioctl
+        case SYS_ioctl: {
+            int fd = va_arg(args, int);
+            unsigned long request = va_arg(args, unsigned long);
+            void * argp = va_arg(args, void *);
+            _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+            process_emu_ioctl(proc, fd, request, argp);
+            _process_changeContext(proc, prevCTX, PCTX_SHADOW);
+            break;
+        }
+#endif
 		/* TODO the following are functions that shadow normally intercepts, and we should handle them */
 
 #if defined SYS_accept
@@ -5394,9 +5404,6 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
 #endif
 #if defined SYS_gettimeofday
         case SYS_gettimeofday:
-#endif
-#if defined SYS_ioctl
-        case SYS_ioctl:
 #endif
 #if defined SYS_listen
         case SYS_listen:
