@@ -193,7 +193,7 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
             }
             case TRIGGER_FUTEX: {
                 g_string_append_printf(string, "status on futex %p%s",
-                                       futex_getAddress(cond->trigger.object.as_futex),
+                                       (void*)futex_getAddress(cond->trigger.object.as_futex).val,
                                        cond->timeout ? " and " : "");
                 break;
             }

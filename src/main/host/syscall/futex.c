@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <linux/futex.h>
+#include <stdbool.h>
 #include <sys/time.h>
 
 #include "main/host/futex.h"
@@ -40,11 +41,10 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
           (void*)uaddrptr.val, futex_op, operation, options, val);
 
     // Futexes are 32 bits on all platforms
-    void* faddr = (uint32_t*)uaddrptr.val;
     uint32_t expectedVal = (uint32_t)val;
 
     // futex addr cannot be NULL
-    if (!faddr) {
+    if (!uaddrptr.val) {
         debug("Futex addr cannot be NULL");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
@@ -71,7 +71,8 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
                 timeout = NULL;
             }
 
-            // TODO: does this load/compare need to be done atomically?
+            // Normally, the load/compare is done atomically. Since Shadow does not run multiple
+            // threads from the same plugin at the same time, we do not use atomic ops.
             // `man 2 futex`: blocking via a futex is an atomic compare-and-block operation
             const uint32_t* futexVal =
                 process_getReadablePtr(sys->process, sys->thread, uaddrptr, sizeof(uint32_t));
@@ -83,9 +84,12 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
                 break;
             }
 
+            // Convert the virtual ptr to a physical ptr that can uniquely identify the futex
+            PluginPhysicalPtr futexPPtr = process_getPhysicalAddress(sys->process, uaddrptr);
+
             // Check if we already have a futex
             FutexTable* ftable = host_getFutexTable(sys->host);
-            Futex* futex = futextable_get(ftable, faddr);
+            Futex* futex = futextable_get(ftable, futexPPtr);
 
             if (_syscallhandler_wasBlocked(sys)) {
                 utility_assert(futex != NULL);
@@ -93,17 +97,18 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
                 // We already blocked on wait, so this is either a timeout or wakeup
                 if (timeout && _syscallhandler_didListenTimeoutExpire(sys)) {
                     // Timeout while waiting for a wakeup
-                    debug("Futex %p timeout out while waiting", faddr);
+                    debug("Futex %p timeout out while waiting", (void*)futexPPtr.val);
                     result = -ETIMEDOUT;
                 } else {
                     // Proper wakeup from another thread
-                    debug("Futex %p has been woke up", faddr);
+                    debug("Futex %p has been woke up", (void*)futexPPtr.val);
                     result = 0;
                 }
 
                 // Dynamically clean up the futex if needed
                 if (futex_getListenerCount(futex) == 0) {
-                    debug("Dynamically freed a futex object for futex addr %p", faddr);
+                    debug(
+                        "Dynamically freed a futex object for futex addr %p", (void*)futexPPtr.val);
                     bool success = futextable_remove(ftable, futex);
                     utility_assert(success);
                 }
@@ -112,8 +117,9 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
 
             // Dynamically create a futex if one does not yet exist
             if (!futex) {
-                debug("Dynamically created a new futex object for futex addr %p", faddr);
-                futex = futex_new(faddr);
+                debug("Dynamically created a new futex object for futex addr %p",
+                      (void*)futexPPtr.val);
+                futex = futex_new(futexPPtr);
                 bool success = futextable_add(ftable, futex);
                 utility_assert(success);
             }
@@ -130,14 +136,18 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
         case FUTEX_WAKE: {
             debug("Handling FUTEX_WAKE operation %i", operation);
 
+            // Convert the virtual ptr to a physical ptr that can uniquely identify the futex
+            PluginPhysicalPtr futexPPtr = process_getPhysicalAddress(sys->process, uaddrptr);
+            // Lookup the futex in the futex table
             FutexTable* ftable = host_getFutexTable(sys->host);
-            Futex* futex = futextable_get(ftable, faddr);
+            Futex* futex = futextable_get(ftable, futexPPtr);
 
-            debug("Found futex %p at futex addr %p", futex, faddr);
+            debug("Found futex %p at futex addr %p", futex, (void*)futexPPtr.val);
 
             if (futex && val > 0) {
-                debug("Futex waking %i waiters", val);
+                debug("Futex trying to wake %i waiters", val);
                 result = futex_wake(futex, (unsigned int)val);
+                debug("Futex was able to wake %i/%i waiters", result, val);
             }
 
             break;

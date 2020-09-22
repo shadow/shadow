@@ -12,12 +12,13 @@
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/futex.h"
+#include "main/host/syscall_types.h"
 #include "main/utility/utility.h"
 
 struct _FutexTable {
-    /* All futexes that we are tracking. Each futex has a unique
-     * address associated with it when it is stored in our table,
-     * which we refer to as a table index or table indices. */
+    /* All futexes that we are tracking. Each futex has a unique physical address associated with it
+     * when it is stored in our table, which we refer to as a table index or table indices. Maps
+     * PluginPhysicalPtr to Futex*. */
     GHashTable* futexes;
 
     /* Memory accounting. */
@@ -63,7 +64,8 @@ void futextable_unref(FutexTable* table) {
 bool futextable_add(FutexTable* table, Futex* futex) {
     MAGIC_ASSERT(table);
 
-    uint32_t* index = futex_getAddress(futex);
+    PluginPhysicalPtr ptr = futex_getAddress(futex);
+    gpointer index = GUINT_TO_POINTER(ptr.val);
 
     if (!table->futexes) {
         table->futexes =
@@ -81,7 +83,8 @@ bool futextable_add(FutexTable* table, Futex* futex) {
 bool futextable_remove(FutexTable* table, Futex* futex) {
     MAGIC_ASSERT(table);
 
-    uint32_t* index = futex_getAddress(futex);
+    PluginPhysicalPtr ptr = futex_getAddress(futex);
+    gpointer index = GUINT_TO_POINTER(ptr.val);
 
     if (table->futexes && g_hash_table_contains(table->futexes, index)) {
         g_hash_table_remove(table->futexes, index);
@@ -91,8 +94,11 @@ bool futextable_remove(FutexTable* table, Futex* futex) {
     }
 }
 
-Futex* futextable_get(FutexTable* table, uint32_t* index) {
+Futex* futextable_get(FutexTable* table, PluginPhysicalPtr ptr) {
     MAGIC_ASSERT(table);
+
+    gpointer index = GUINT_TO_POINTER(ptr.val);
+
     if (table->futexes) {
         return g_hash_table_lookup(table->futexes, index);
     } else {

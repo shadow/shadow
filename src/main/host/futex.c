@@ -11,20 +11,22 @@
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
+#include "main/host/syscall_types.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
 struct _Futex {
-    // The unique address that is used to refer to this futex
-    uint32_t* word;
+    // The unique physical address that is used to refer to this futex
+    PluginPhysicalPtr word;
     // Listeners waiting for wakups on this futex
+    // Used as a set, where both keys and values are of type StatusListener*
     GHashTable* listeners;
     // Manage references
     int referenceCount;
     MAGIC_DECLARE;
 };
 
-Futex* futex_new(uint32_t* word) {
+Futex* futex_new(PluginPhysicalPtr word) {
     Futex* futex = malloc(sizeof(*futex));
     *futex = (Futex){.word = word,
                      .listeners = g_hash_table_new_full(
@@ -59,7 +61,7 @@ void futex_unref(Futex* futex) {
 
 void futex_unref_func(void* futex) { futex_unref((Futex*)futex); }
 
-uint32_t* futex_getAddress(Futex* futex) {
+PluginPhysicalPtr futex_getAddress(Futex* futex) {
     MAGIC_ASSERT(futex);
     return futex->word;
 }
