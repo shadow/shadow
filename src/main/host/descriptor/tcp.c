@@ -2199,11 +2199,9 @@ static gssize _tcp_sendUserData(Transport* transport, gconstpointer buffer,
     if(tcp->error & TCPE_SEND_EOF)
     {
         debug("send EOF is set");
-        if(tcp->flags & TCPF_EOF_WR_SIGNALED) {
-            /* we already signaled close, now its an error */
+        if(tcp->state == TCPS_CLOSED) {
             return -ENOTCONN;
         } else {
-            /* we have not signaled close, do that now */
             _tcp_endOfFileSignalled(tcp, TCPF_EOF_WR_SIGNALED);
             return -EPIPE;
         }
@@ -2355,11 +2353,9 @@ static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
                     &(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
             } else {
                 /* OK, no more data and nothing just received. */
-                if(tcp->flags & TCPF_EOF_RD_SIGNALED) {
-                    /* we already signaled close, now its an error */
+                if(tcp->state == TCPS_CLOSED) {
                     return -ENOTCONN;
                 } else {
-                    /* we have not signaled close, do that now and close out the socket */
                     _tcp_endOfFileSignalled(tcp, TCPF_EOF_RD_SIGNALED);
                     return 0;
                 }
