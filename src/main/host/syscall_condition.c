@@ -49,24 +49,28 @@ SysCallCondition* syscallcondition_new(Trigger trigger, Timer* timeout) {
         descriptor_ref(cond->timeout);
     }
 
+    worker_countObject(OBJECT_TYPE_SYSCALL_CONDITION, COUNTER_TYPE_NEW);
+
     if (cond->trigger.object.as_pointer) {
         switch (cond->trigger.type) {
             case TRIGGER_DESCRIPTOR: {
                 descriptor_ref(cond->trigger.object.as_descriptor);
-                break;
+                return cond;
             }
             case TRIGGER_FUTEX: {
                 futex_ref(cond->trigger.object.as_futex);
-                break;
+                return cond;
             }
-            case TRIGGER_NONE:
-            default: {
-                break;
+            case TRIGGER_NONE: {
+                return cond;
             }
+            // No default, forcing a compiler warning if not kept up to date
         }
+
+        // Log error if we get a non-enumerator at run-time.
+        error("Unhandled enumerator %d", cond->trigger.type);
     }
 
-    worker_countObject(OBJECT_TYPE_SYSCALL_CONDITION, COUNTER_TYPE_NEW);
     return cond;
 }
 
@@ -96,8 +100,11 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
                 futex_removeListener(cond->trigger.object.as_futex, cond->triggerListener);
                 break;
             }
-            case TRIGGER_NONE:
+            case TRIGGER_NONE: {
+                break;
+            }
             default: {
+                warning("Unhandled enumerator %d", cond->trigger.type);
                 break;
             }
         }
@@ -144,8 +151,11 @@ static void _syscallcondition_free(SysCallCondition* cond) {
                 futex_unref(cond->trigger.object.as_futex);
                 break;
             }
-            case TRIGGER_NONE:
+            case TRIGGER_NONE: {
+                break;
+            }
             default: {
+                warning("Unhandled enumerator %d", cond->trigger.type);
                 break;
             }
         }
@@ -197,8 +207,11 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
                                        cond->timeout ? " and " : "");
                 break;
             }
-            case TRIGGER_NONE:
+            case TRIGGER_NONE: {
+                break;
+            }
             default: {
+                warning("Unhandled enumerator %d", cond->trigger.type);
                 break;
             }
         }
@@ -232,8 +245,11 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
             // Futex status doesn't change
             return true;
         }
-        case TRIGGER_NONE:
+        case TRIGGER_NONE: {
+            break;
+        }
         default: {
+            warning("Unhandled enumerator %d", cond->trigger.type);
             break;
         }
     }
@@ -369,8 +385,11 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
                 futex_addListener(cond->trigger.object.as_futex, cond->triggerListener);
                 break;
             }
-            case TRIGGER_NONE:
+            case TRIGGER_NONE: {
+                break;
+            }
             default: {
+                warning("Unhandled enumerator %d", cond->trigger.type);
                 break;
             }
         }

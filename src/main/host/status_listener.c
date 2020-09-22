@@ -11,6 +11,7 @@
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 struct _StatusListener {
     /* The descriptor status bits we want to monitor for transitions. */
@@ -97,8 +98,13 @@ static bool _statuslistener_shouldNotify(StatusListener* listener, Status curren
         case SLF_ON_TO_OFF: return flipped && !on;
         case SLF_ALWAYS: return flipped;
         case SLF_NEVER:
-        default: return 0;
+            return false;
+            // no default to force compiler warning on unhandled types
     }
+
+    // error if we didn't handle all possible filters
+    error("Unhandled enumerator %d", listener->filter);
+    return false;
 }
 
 /* Trigger the callback function. */
