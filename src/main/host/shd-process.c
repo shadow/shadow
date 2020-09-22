@@ -7801,9 +7801,12 @@ int process_emu_pthread_cond_signal(Process* proc, pthread_cond_t *cond) {
             if(init_result != 0) {
                 ret = errno;
             } else {
+                pth_t thread = pth_self();
+                swap_tls (proc, &thread, 1);
                 _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
                 init_result = pth_cond_notify(pcn, FALSE);
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+                swap_tls (proc, &thread, 0);
                 if(!init_result) {
                     ret = errno;
                 } else {
@@ -7918,12 +7921,14 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
                 if(init_result != 0) {
                     ret = errno;
                 } else {
+                    pth_t thread = pth_self();
+                    swap_tls (proc, &thread, 1);
                     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
                     pth_time_t t = pth_time(abstime->tv_sec, (abstime->tv_nsec)/1000);
                     ev = pth_event(PTH_EVENT_TIME, t);
                     init_result = pth_cond_await(pcn, pm, ev);
                     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-
+                    swap_tls (proc, &thread, 0);
                     if (!init_result) {
                         ret = errno;
                     } else {
