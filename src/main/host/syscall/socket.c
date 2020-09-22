@@ -503,11 +503,6 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    if (!bufSize) {
-        info("Invalid buf length %zu provided on socket %i", bufSize, sockfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
     /* TODO: when we support AF_UNIX this could be sockaddr_un */
     size_t inet_len = sizeof(struct sockaddr_in);
     if (destAddrPtr.val && addrlen < inet_len) {
@@ -603,6 +598,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
         /* TODO: Dynamically compute size based on how much data is actually
          * available in the descriptor. */
         size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
+
         const void* buf = process_getReadablePtr(sys->process, sys->thread, bufPtr, sizeNeeded);
 
         retval = transport_sendUserData(
@@ -612,10 +608,15 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
     }
 
     if (retval == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
-        /* We need to block until the descriptor is ready to write. */
-        Trigger trigger = (Trigger){
-            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_WRITABLE};
-        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, NULL)};
+        if (bufSize > 0) {
+            /* We need to block until the descriptor is ready to write. */
+            Trigger trigger = (Trigger){
+                .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_WRITABLE};
+            return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, NULL)};
+        } else {
+            /* We attempted to write 0 bytes, so no need to block or return EWOULDBLOCK. */
+            retval = 0;
+        }
     }
 
     return (SysCallReturn){

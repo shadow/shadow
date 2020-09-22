@@ -2244,7 +2244,7 @@ static gssize _tcp_sendUserData(Transport* transport, gconstpointer buffer,
     /* now flush as much as possible out to socket */
     _tcp_flush(tcp);
 
-    return (gssize)(bytesCopied == 0 ? -EWOULDBLOCK : bytesCopied);
+    return (gssize)(bytesCopied == 0 && nBytes != 0 ? -EWOULDBLOCK : bytesCopied);
 }
 
 static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
