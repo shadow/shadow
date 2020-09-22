@@ -20,21 +20,23 @@
 #define PTR_TO_INT(p) ((int)(long)(p))
 #define INT_TO_PTR(i) ((void*)(long)(i))
 #define NUM_LOOPS 100
+#define UNAVAILABLE 0
+#define AVAILABLE 1
 
 // The futex word used to synchronize threads
-volatile int futex_word1 = 0; // initial state is unavailable
-volatile int futex_word2 = 1; // initial state is available
+volatile int futex_word1 = UNAVAILABLE; // initial state is unavailable
+volatile int futex_word2 = AVAILABLE; // initial state is available
 
 // Acquire: wait for the futex pointed to by `word` to become 1, then set to 0
 static int _futex_wait(volatile int* word) {
     while (1) {
         // Args are: ptr, expected old val, desired new val
-        bool is_available = 1 == __sync_val_compare_and_swap(word, 1, 0);
+        bool is_available = AVAILABLE == __sync_val_compare_and_swap(word, AVAILABLE, UNAVAILABLE);
 
         if (is_available) {
             break;
         } else {
-            int res = syscall(SYS_futex, word, FUTEX_WAIT, 0, NULL, NULL, 0);
+            int res = syscall(SYS_futex, word, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0);
             if (res == -1 && errno != EAGAIN) {
                 char errbuf[32] = {0};
                 strerror_r(errno, errbuf, 32);
@@ -49,10 +51,10 @@ static int _futex_wait(volatile int* word) {
 
 // Release: if the futex pointed to by `word` is 0, set to 1 and wake blocked waiters
 static int _futex_post(volatile int* word) {
-    bool is_available = 0 == __sync_val_compare_and_swap(word, 0, 1);
+    bool is_posted = UNAVAILABLE == __sync_val_compare_and_swap(word, UNAVAILABLE, AVAILABLE);
 
-    if (is_available) {
-        int res = syscall(SYS_futex, word, FUTEX_WAKE, 1, NULL, NULL, 0);
+    if (is_posted) {
+        int res = syscall(SYS_futex, word, FUTEX_WAKE, AVAILABLE, NULL, NULL, 0);
         if (res == -1) {
             char errbuf[32] = {0};
             strerror_r(errno, errbuf, 32);
