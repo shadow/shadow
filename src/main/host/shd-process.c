@@ -7921,14 +7921,318 @@ int process_emu_copy_dat_files(Process* proc, int fileno) {
     return 1;
 }
 
+//void hexPrint(unsigned char* data, int size) {
+//    int i=0;
+//    while(i<size) {
+//        if(i%16==0) {
+//            printf("[");
+//        } else if(i%2==0) {
+//            printf(" ");
+//        }
+//        printf("%02x", data[i]);
+//        if(i%16==15) {
+//            printf("]\n");
+//        }
+//        i++;
+//    }
+//}
+//
+
+//해당 위치부터 사이즈 만큼 읽기(뒤집어 진것 똑바로 읽기)
+void Print(unsigned char* data, int start, int size, unsigned char* dest, int print) {
+//    printf("[Print] %d %d / ",start, size );
+    for (int i = 0; i <size; i++){
+        if(print)
+            printf("%02x",data[start+size-i-1]);
+        if (dest)
+            dest[i]= data[start+size-i-1];
+    }
+}
+
+// input: 변환할 hex array, array 길이
+// action: hex값을 그대로 decimal로 전환
+// ouput: 변환된 unsigned int decimal
+#define big_endian 0
+#define little_endian 1
+unsigned int hexToInt(unsigned char* data, int size, int endianness) {
+    int res=0;
+    if(big_endian) {
+        for(int i=0;i<size;i++) {
+            res = (res << 8) + data[i];
+        }
+    } else {
+        for (int i=size-1; i>-1; i--) {
+            res = (res << 8) + data[i];
+        }
+    }
+    return res;
+}
+
+//input :data, variable 의 memory 주소값을 늘릴 주소
+//action: var int 를 계산법에 따라서 계산
+//output: 계산된 unsigned int
+unsigned int calcVarInt(unsigned char * data, int *bytepos) {
+
+    unsigned int varint =0;
+    unsigned char _data;
+    Print(data, 0, 1, &_data,0);
+//    hexPrint(&_data,1);
+    unsigned int data_num = _data;
+    unsigned int fc_num = 0xfc;
+
+    if(data_num <= fc_num){
+        varint=0;
+    }
+    else {
+        varint= data_num-fc_num;
+    }
+
+    unsigned int tx_cnt = 0;
+//    printf("Tx varint : %d \n",varint);
+    if(varint) {
+        int readMoreByte=1;
+        while(varint>0) {
+            readMoreByte *= 2;
+            varint--;
+        }
+        *bytepos += 1;
+        tx_cnt = hexToInt(data, readMoreByte, LITTLE_ENDIAN);
+        *bytepos += readMoreByte;
+    } else {
+        // dat[bytepos] is count itself
+        tx_cnt = *data;
+        *bytepos += 1;
+    }
+
+    return tx_cnt;
+
+}
+
+void datParser(unsigned char* dat, unsigned int size,unsigned char * lastBlockMerkleRoot) {
+
+    int blockNum = 0;
+    int byteIdx = 0;
+
+
+    byteIdx += 4;   //magic byte
+
+    // calcuate size from SIZE: 4 Byte
+    unsigned int blockSetSize = 0;
+    for(int i=3; i>-1; i--) {
+        blockSetSize = (blockSetSize << 8) + dat[byteIdx+i];
+    }
+    byteIdx += 4;//block size
+
+
+    while(size>=blockSetSize+byteIdx) {
+        printf("[block%d Parse Result]\n",blockNum);
+        printf("[1. block Size] %d \n",blockSetSize);
+
+        // block header
+        byteIdx += 4;  //version
+
+        unsigned char prevBlockHash[32];
+        printf("[2. prevBlockHash] ");
+        Print(dat,byteIdx,32,prevBlockHash, 1);
+        printf("\n");
+        byteIdx+=32;// previous block hash
+
+        unsigned char merkleRootHash[32];
+        printf("[3. merkleRootHash] ");
+        Print(dat,byteIdx,32,merkleRootHash,1);
+        printf("\n");
+        byteIdx += 32; //merkelroothash
+        if(lastBlockMerkleRoot){
+            for(int i=0;i<32;i++){
+                lastBlockMerkleRoot[i]=merkleRootHash[i];
+            }
+        }
+
+        byteIdx += 4;   //time
+        byteIdx += 4;   //bits
+        byteIdx += 4; // nonce ------->finish block header
+
+        // tx count: VarInt
+        unsigned int tx_cnt= calcVarInt(&dat[byteIdx],&byteIdx);
+        printf("[4. Tx count ] %d \n",tx_cnt);
+        for(unsigned int i = 0; i < tx_cnt; i++) {
+
+            //check version
+            unsigned int txVersion = hexToInt(&dat[byteIdx], 4, 0);
+            printf("[5. Tx version ] %d \n",txVersion);
+            byteIdx+=4;
+
+            //If transaction version is 1 (only using in genesis block)
+            if ( txVersion == 1 ) {
+
+                //Input
+                unsigned int input_cnt = calcVarInt(&dat[byteIdx],&byteIdx);//input count
+                printf("[6. Input count ] %d \n",input_cnt);
+                for(unsigned int i = 0; i < input_cnt; i++) {
+                    byteIdx+=32;    //txid
+                    byteIdx+=4;     //vout
+                    unsigned int scriptsig_size = calcVarInt(&dat[byteIdx],&byteIdx);
+                    printf("[7. Input script byte size %d ] %d \n",i,scriptsig_size);
+                    byteIdx+=scriptsig_size;    //scriptsig
+                }
+
+                byteIdx+=4;     //sequence
+
+                //output
+                unsigned int output_cnt=calcVarInt(&dat[byteIdx],&byteIdx);//output count
+                printf("[8. Output  count] %d \n",output_cnt);
+                for(unsigned int i=0;i<output_cnt;i++){
+                    byteIdx+=8;    //value
+                    unsigned int scriptsig_size = calcVarInt(&dat[byteIdx],&byteIdx);
+                    printf("[9. Output Script size %d] %d \n",i,scriptsig_size);
+                    byteIdx+=scriptsig_size;    //scriptsig
+                }
+
+                byteIdx+=4;     //locktime
+
+            }
+                //if transaction version is 2 (using Segwit)
+            else if (txVersion == 2) {
+                byteIdx+=1; //makrer
+                byteIdx+=1; //flag
+
+                //Input
+                unsigned int input_cnt= calcVarInt(&dat[byteIdx],&byteIdx);//input count
+                printf("[6. Input count ] %d \n",input_cnt);
+                for(unsigned int i=0;i<input_cnt;i++){
+                    byteIdx+=32;    //txid
+                    byteIdx+=4;     //vout
+                    unsigned int scriptsig_size = calcVarInt(&dat[byteIdx],&byteIdx);
+                    printf("[7. Input script byte size %d ] %d \n",i,scriptsig_size);
+                    byteIdx+=scriptsig_size;    //scriptsig
+
+                }
+                byteIdx+=4;     //sequence
+
+                //output
+                unsigned int output_cnt = calcVarInt(&dat[byteIdx],&byteIdx);//output count
+                printf("[8. Output  count] %d \n",output_cnt);
+                for(unsigned int i = 0 ;i<output_cnt;i++){
+                    byteIdx+=8; // value
+                    unsigned int scriptsig_size = calcVarInt(&dat[byteIdx],&byteIdx);
+                    printf("[9. Output Script size %d] %d \n",i,scriptsig_size);
+                    byteIdx+=scriptsig_size;    //scriptsig
+                }
+                //output script witness & locktime
+                byteIdx+=34;    //script_witness
+                byteIdx+=4;     //locktime
+            }
+        }
+        byteIdx += 4;
+        // calcuate size from SIZE: 4 Byte
+        for(int i=3; i>-1; i--) {
+            blockSetSize = (blockSetSize << 8) + dat[byteIdx+i];
+        }
+        byteIdx += 4;
+        blockNum +=1;
+        printf("\n");
+    }
+}
+
+int CompareDATFiles(int FileNo) {
+    char path[20];
+    sprintf(path,"cp_data/dat_%d.dat",fileno);
+    FILE* file = fopen(path, "rb");
+    if (!file) {
+        printf("COMPARE Result = file %d  is not exist! make the new file!!\n",FileNo);
+        return 0;// file is not exist, so make the file!
+    }
+
+    fseek(file, 0, SEEK_END);
+    unsigned int size = ftell(file);
+    fseek(file,0,SEEK_SET);
+
+    unsigned char merkleroothash[32];
+    unsigned char buf[size];
+    fread(&buf, sizeof(char), size, file);
+    datParser(buf, size, merkleroothash);
+
+    fclose(file);
+
+    //cp_data file open
+    char* path2="cp_data/cp_data.dat";
+    FILE* file2 = fopen(path2, "rb");
+
+    fseek(file2, 0, SEEK_END);
+    unsigned int size2 = ftell(file2);
+    fseek(file2,0,SEEK_SET);
+
+    unsigned char merkleroothash2[32];
+    unsigned char buf2[size2];
+    fread(&buf2, sizeof(char), size2, file2);
+    datParser(buf2, size2, merkleroothash2);
+
+    fclose(file2);
+
+    for(int i=0;i<32;i++){
+        if(merkleroothash2[i]!=merkleroothash[i]) {
+            printf("COMPARE Result = cp_data.dat and cp_data/dat_.dat file is NOT same!!!\n");
+            return 0;
+        }
+    }
+    printf("COMPARE Result = cp_data.dat and cp_data/dat_.dat file is same!!!\n");
+    return 1;
+
+}
+
 int process_emu_compare_dat_files(Process* proc, int fileno) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     message("process_emu_compare_dat_file test is success!");
     printf("process_emu_compare_dat_file test fileno is %d \n",fileno);
-    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return 0;
-}
 
+
+    char path[20];
+    sprintf(path,"cp_data/dat_%d.dat",fileno);
+    FILE* file = fopen(path, "rb");
+    if (!file) {
+        printf("COMPARE Result = file %d  is not exist! make the new file!!\n",fileno);
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+        return 0;// file is not exist, so make the file!
+    }
+
+    fseek(file, 0, SEEK_END);
+    unsigned int size = ftell(file);
+    fseek(file,0,SEEK_SET);
+
+    unsigned char merkleroothash[32];
+    unsigned char buf[size];
+    fread(&buf, sizeof(char), size, file);
+    datParser(buf, size, merkleroothash);
+
+    fclose(file);
+
+    //cp_data file open
+     char* path2="cp_data/cp_data.dat";
+    FILE* file2 = fopen(path2, "rb");
+
+    fseek(file2, 0, SEEK_END);
+    unsigned int size2 = ftell(file2);
+    fseek(file2,0,SEEK_SET);
+
+    unsigned char merkleroothash2[32];
+    unsigned char buf2[size2];
+    fread(&buf2, sizeof(char), size2, file2);
+    datParser(buf2, size2, merkleroothash2);
+
+    fclose(file2);
+
+    for(int i=0;i<32;i++){
+        if(merkleroothash2[i]!=merkleroothash[i]) {
+            printf("COMPARE Result = cp_data.dat and cp_data/dat_.dat file is NOT same!!!\n");
+            _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+            return 0;
+        }
+    }
+    printf("COMPARE Result = cp_data.dat and cp_data/dat_.dat file is same!!!\n");
+
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return 1;
+}
 
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
     returntype process_emu_##functionname(Process* proc, ...) { \
