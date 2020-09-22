@@ -36,7 +36,7 @@
 static bool _syscallhandler_readableWhenClosed(SysCallHandler* sys,
                                                Descriptor* desc) {
     if (desc && descriptor_getType(desc) == DT_TCPSOCKET &&
-        (descriptor_getStatus(desc) & DS_CLOSED)) {
+        (descriptor_getStatus(desc) & STATUS_DESCRIPTOR_CLOSED)) {
         /* Connection error will be -ENOTCONN when reading is done. */
         if (tcp_getConnectionError((TCP*)desc) == -EISCONN) {
             return true;
@@ -172,9 +172,9 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
          * The socket becomes readable when we have a connection to accept.
          * This blocks indefinitely without a timeout. */
         debug("Listening socket %i waiting for acceptable connection.", sockfd);
-        return (SysCallReturn){
-            .state = SYSCALL_BLOCK,
-            .cond = syscallcondition_new(NULL, desc, DS_READABLE)};
+        Trigger trigger = (Trigger){
+            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
+        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, NULL)};
     } else if (errcode < 0) {
         debug("TCP error when accepting connection on socket %i", sockfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -445,9 +445,9 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
     if (retval == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
         debug("recv would block on socket %i", sockfd);
         /* We need to block until the descriptor is ready to read. */
-        return (SysCallReturn){
-            .state = SYSCALL_BLOCK,
-            .cond = syscallcondition_new(NULL, desc, DS_READABLE)};
+        Trigger trigger = (Trigger){
+            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
+        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, NULL)};
     }
 
     /* check if they wanted to know where we got the data from */
@@ -589,10 +589,10 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
     }
 
     if (retval == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
-        /* We need to block until the descriptor is ready to read. */
-        return (SysCallReturn){
-            .state = SYSCALL_BLOCK,
-            .cond = syscallcondition_new(NULL, desc, DS_WRITABLE)};
+        /* We need to block until the descriptor is ready to write. */
+        Trigger trigger = (Trigger){
+            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_WRITABLE};
+        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, NULL)};
     }
 
     return (SysCallReturn){
@@ -774,9 +774,12 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
             /* This is the first time we ever called connect, and so we
              * need to wait for the 3-way handshake to complete.
              * We will wait indefinitely for a success or failure. */
-            return (SysCallReturn){.state = SYSCALL_BLOCK,
-                                   .cond = syscallcondition_new(
-                                       NULL, desc, DS_ACTIVE | DS_WRITABLE)};
+            Trigger trigger =
+                (Trigger){.type = TRIGGER_DESCRIPTOR,
+                          .object = desc,
+                          .status = STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE};
+            return (SysCallReturn){
+                .state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, NULL)};
         } else if (_syscallhandler_wasBlocked(sys) && errcode == -EISCONN) {
             /* It was EINPROGRESS, but is now a successful blocking connect. */
             errcode = 0;

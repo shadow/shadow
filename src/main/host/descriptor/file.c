@@ -106,7 +106,7 @@ static void _file_closeHelper(File* file) {
         }
 
         /* The os-backed file is no longer ready. */
-        descriptor_adjustStatus(&file->super, DS_ACTIVE, FALSE);
+        descriptor_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, FALSE);
     }
 }
 
@@ -272,7 +272,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
           _file_getFD(file), _file_getOSBackedFD(file), file->osfile.abspath);
 
     /* The os-backed file is now ready. */
-    descriptor_adjustStatus(&file->super, DS_ACTIVE, TRUE);
+    descriptor_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
     return _file_getFD(file);
 }

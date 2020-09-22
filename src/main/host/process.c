@@ -611,6 +611,11 @@ void process_setMemoryManager(Process* proc, MemoryManager* memoryManager) {
     proc->memoryManager = memoryManager;
 }
 
+PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr) {
+    // TODO: actually do a conversion that gets us as close as we can to a unique pointer
+    return (PluginPhysicalPtr){.val = vPtr.val};
+}
+
 const void* process_getReadablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
     utility_assert(proc->memoryManager);

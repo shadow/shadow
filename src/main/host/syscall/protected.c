@@ -67,9 +67,9 @@ int _syscallhandler_wasBlocked(const SysCallHandler* sys) {
 int _syscallhandler_validateDescriptor(Descriptor* descriptor,
                                        DescriptorType expectedType) {
     if (descriptor) {
-        DescriptorStatus status = descriptor_getStatus(descriptor);
+        Status status = descriptor_getStatus(descriptor);
 
-        if (status & DS_CLOSED) {
+        if (status & STATUS_DESCRIPTOR_CLOSED) {
             warning("descriptor handle '%i' is closed",
                     descriptor_getHandle(descriptor));
             return -EBADF;

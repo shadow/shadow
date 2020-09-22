@@ -229,7 +229,8 @@ UDP* udp_new(guint receiveBufferSize, guint sendBufferSize) {
                 sendBufferSize);
 
     /* we are immediately active because UDP doesnt wait for accept or connect */
-    descriptor_adjustStatus((Descriptor*) udp, DS_ACTIVE|DS_WRITABLE, TRUE);
+    descriptor_adjustStatus(
+        (Descriptor*)udp, STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
 
     worker_countObject(OBJECT_TYPE_UDP, COUNTER_TYPE_NEW);
 

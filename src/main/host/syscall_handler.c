@@ -25,6 +25,7 @@
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
+#include "main/host/syscall/futex.h"
 #include "main/host/syscall/ioctl.h"
 #include "main/host/syscall/mman.h"
 #include "main/host/syscall/process.h"
@@ -123,7 +124,7 @@ static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
                                         const char* name) {
     debug("SYSCALL_HANDLER_PRE(%s,pid=%u): handling syscall %ld %s%s",
           process_getPluginName(sys->process),
-          process_getProcessID(sys->process), number, name,
+          thread_getID(sys->thread), number, name,
           _syscallhandler_wasBlocked(sys) ? " (previously BLOCKed)" : "");
 
     /* Track elapsed time during this syscall by marking the start time. */
@@ -137,7 +138,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
 
     debug("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
           "code=%d(%s) in %f seconds",
-          process_getPluginName(sys->process), process_getProcessID(sys->process), number, name,
+          process_getPluginName(sys->process), thread_getID(sys->thread), number, name,
           _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "",
           scr->state == SYSCALL_DONE
               ? "DONE"
@@ -225,6 +226,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(fstatfs);
         HANDLE(fsync);
         HANDLE(ftruncate);
+        HANDLE(futex);
         HANDLE(futimesat);
         HANDLE(getdents);
         HANDLE(getdents64);
@@ -273,6 +275,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(renameat2);
         HANDLE(sendto);
         HANDLE(setsockopt);
+        HANDLE(set_tid_address);
         HANDLE(shutdown);
         HANDLE(socket);
 #ifdef SYS_statx
@@ -296,7 +299,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // **************************************
         NATIVE(arch_prctl);
         NATIVE(eventfd2);
-        NATIVE(futex);
         NATIVE(io_getevents);
         NATIVE(prctl);
         NATIVE(prlimit64);
@@ -304,7 +306,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(rt_sigprocmask);
         NATIVE(get_robust_list);
         NATIVE(set_robust_list);
-        NATIVE(set_tid_address);
         NATIVE(sysinfo);
         NATIVE(waitid);
 
