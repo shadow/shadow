@@ -26,6 +26,8 @@
 // The futex word used to synchronize threads
 volatile int futex_word1 = UNAVAILABLE; // initial state is unavailable
 volatile int futex_word2 = AVAILABLE; // initial state is available
+volatile int is_child_finished = 0;
+void* child_result = NULL;
 
 // Acquire: wait for the futex pointed to by `word` to become 1, then set to 0
 static int _futex_wait(volatile int* word) {
@@ -97,7 +99,23 @@ static void* _run_main_thread(void* arg) {
 }
 
 static void* _run_aux_thread(void* arg) {
-    return INT_TO_PTR(_run_futex_loop(&futex_word2, &futex_word1, 1));
+    child_result = INT_TO_PTR(_run_futex_loop(&futex_word2, &futex_word1, 1));
+    is_child_finished = 1;
+    return child_result;
+}
+
+static void* _collect_child_result() {
+    // The conventional way to wait for a child is futex, but we don't want this
+    // test to rely on it. Instead, we busy look on an atomic flag.
+    //
+    // We can't use `wait` etc, because the child "thread" process's parent is
+    // *this process's parent*, not this process. We might be able to work around
+    // this by forking first so that we can wait in the parent of the threaded process
+    // (using __WCLONE), but we don't want this test rely on fork, either.
+    while (!is_child_finished) {
+        usleep(1);
+    }
+    return child_result;
 }
 
 int run() {
@@ -109,12 +127,7 @@ int run() {
     }
 
     void* main_result = _run_main_thread(NULL);
-
-    void* aux_result = NULL;
-    if (pthread_join(aux_thread, &aux_result) < 0) {
-        printf("thread join failed: error %i: %s\n", errno, strerror(errno));
-        return EXIT_FAILURE;
-    }
+    void* aux_result = _collect_child_result();
 
     bool main_success = PTR_TO_INT(main_result) == 0;
     bool aux_success = PTR_TO_INT(aux_result) == 0;
