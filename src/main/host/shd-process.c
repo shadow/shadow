@@ -2146,10 +2146,13 @@ int process_emu_epoll_wait(Process* proc, int epfd, struct epoll_event *events, 
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
+        pth_t thread = pth_self();
+        swap_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_epoll_wait(epfd, events, maxevents, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        swap_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -2164,10 +2167,13 @@ int process_emu_epoll_pwait(Process* proc, int epfd, struct epoll_event *events,
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
+        pth_t thread = pth_self();
+        swap_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_epoll_pwait(epfd, events, maxevents, timeout, ss);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        swap_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -3284,10 +3290,13 @@ unsigned int process_emu_sleep(Process* proc, unsigned int sec) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     unsigned int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
+        pth_t thread = pth_self();
+        swap_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_sleep(sec);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        swap_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -3327,10 +3336,13 @@ int process_emu_nanosleep(Process* proc, const struct timespec *rqtp, struct tim
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
+        pth_t thread = pth_self();
+        swap_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_nanosleep(rqtp, rmtp);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        swap_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -3373,10 +3385,13 @@ int process_emu_pselect(Process* proc, int nfds, fd_set *readfds, fd_set *writef
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
+        pth_t thread = pth_self();
+        swap_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        swap_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -3391,10 +3406,13 @@ int process_emu_poll(Process* proc, struct pollfd *pfd, nfds_t nfd, int timeout)
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
+        pth_t thread = pth_self();
+        swap_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_poll(pfd, nfd, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        swap_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -3412,10 +3430,13 @@ int process_emu_ppoll(Process* proc, struct pollfd *fds, nfds_t nfds, const stru
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
+        pth_t thread = pth_self();
+        swap_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_ppoll(fds, nfds, timeout_ts, sigmask);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+        swap_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
