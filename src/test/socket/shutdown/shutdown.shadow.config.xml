@@ -1,4 +1,4 @@
-<shadow stoptime="60">
+<shadow>
   <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
   <key attr.name="latency" attr.type="double" for="edge" id="d3" />
@@ -18,9 +18,10 @@
   </graph>
 </graphml>
 ]]></topology>
-  <plugin id="testshutdown" path="test-shutdown"/>
+  <kill time="5"/>
+  <plugin id="testshutdown" path="../../target/debug/test_shutdown"/>
   <node id="testnode" quantity="1">
-    <application plugin="testshutdown" starttime="1" arguments=""/>
+    <application plugin="testshutdown" starttime="1" arguments="--shadow-passing"/>
   </node>
 </shadow>
 

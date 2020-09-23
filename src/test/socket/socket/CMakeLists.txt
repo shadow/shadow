@@ -1,4 +1,4 @@
-add_test(NAME socket COMMAND ../../target/debug/test_socket)
+add_test(NAME socket COMMAND ../../target/debug/test_socket --libc-passing)
 list(APPEND TestNames socket)
 
 foreach(Method ptrace preload)

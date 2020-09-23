@@ -213,12 +213,6 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    /* Need a non-zero size. */
-    if (!bufSize) {
-        info("Invalid length %zu provided on descriptor %i", bufSize, fd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);

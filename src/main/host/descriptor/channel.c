@@ -101,7 +101,9 @@ static gssize channel_sendUserData(Transport* transport, gconstpointer buffer,
     gssize result = 0;
 
     if(channel->linkedChannel) {
-        result = channel_linkedWrite(channel->linkedChannel, buffer, nBytes);
+        if (nBytes > 0) {
+            result = channel_linkedWrite(channel->linkedChannel, buffer, nBytes);
+        }
     } else {
         /* the other end closed or doesn't exist */
         result = -EPIPE;

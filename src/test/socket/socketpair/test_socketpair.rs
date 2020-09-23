@@ -3,6 +3,8 @@
  * See LICENSE for licensing information
  */
 
+use test_utils::TestEnvironment as TestEnv;
+
 struct SocketpairArguments {
     domain: libc::c_int,
     sock_type: libc::c_int,
@@ -12,16 +14,23 @@ struct SocketpairArguments {
 }
 
 fn main() -> Result<(), String> {
-    // should we run only tests that shadow supports
-    let run_only_passing_tests = std::env::args().any(|x| x == "--shadow-passing");
+    // should we restrict the tests we run?
+    let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
+    let filter_libc_passing = std::env::args().any(|x| x == "--libc-passing");
     // should we summarize the results rather than exit on a failed test
     let summarize = std::env::args().any(|x| x == "--summarize");
 
     let mut tests = get_tests();
-    if run_only_passing_tests {
+    if filter_shadow_passing {
         tests = tests
             .into_iter()
-            .filter(|x| x.shadow_passing() == test_utils::ShadowPassing::Yes)
+            .filter(|x| x.passing(TestEnv::Shadow))
+            .collect()
+    }
+    if filter_libc_passing {
+        tests = tests
+            .into_iter()
+            .filter(|x| x.passing(TestEnv::Libc))
             .collect()
     }
 
@@ -47,7 +56,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<Option<[libc::c_int; 2]>, String>> 
     let mut tests: Vec<test_utils::ShadowTest<_, _>> = vec![test_utils::ShadowTest::new(
         "test_null_fds",
         test_null_fds,
-        test_utils::ShadowPassing::Yes,
+        [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
     )];
 
     // tests to repeat for different socket options
@@ -67,12 +76,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<Option<[libc::c_int; 2]>, String>> 
                         test_utils::ShadowTest::new(
                             &append_args("test_arguments"),
                             move || test_arguments(domain, sock_type, flag, protocol),
-                            test_utils::ShadowPassing::Yes,
+                            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_sockname_peername"),
                             move || test_sockname_peername(domain, sock_type, flag, protocol),
-                            test_utils::ShadowPassing::Yes,
+                            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
                         ),
                     ];
 

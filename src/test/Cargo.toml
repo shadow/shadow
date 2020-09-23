@@ -45,5 +45,9 @@ path = "socket/getpeername/test_getpeername.rs"
 name = "test_socketpair"
 path = "socket/socketpair/test_socketpair.rs"
 
+[[bin]]
+name = "test_shutdown"
+path = "socket/shutdown/test_shutdown.rs"
+
 [dependencies]
 libc = "0.2"

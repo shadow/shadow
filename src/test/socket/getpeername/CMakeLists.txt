@@ -1,4 +1,4 @@
-add_test(NAME getpeername COMMAND ../../target/debug/test_getpeername)
+add_test(NAME getpeername COMMAND ../../target/debug/test_getpeername --libc-passing)
 list(APPEND TestNames getpeername)
 
 foreach(Method ptrace preload)
