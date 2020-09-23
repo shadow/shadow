@@ -3,6 +3,7 @@
  * See LICENSE for licensing information
  */
 
+use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
 
 struct ShutdownArguments {
@@ -42,22 +43,22 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new(
             "test_invalid_fd",
             test_invalid_fd,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_non_existent_fd",
             test_non_existent_fd,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_non_socket_fd",
             test_non_socket_fd,
-            [TestEnv::Libc].iter().cloned().collect(),
+            set![TestEnv::Libc],
         ),
         test_utils::ShadowTest::new(
             "test_invalid_how",
             test_invalid_how,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
     ];
 
@@ -82,17 +83,17 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         test_utils::ShadowTest::new(
                             &append_args("test_arguments"),
                             move || test_arguments(domain, sock_type, flag, how),
-                            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                            set![TestEnv::Libc, TestEnv::Shadow],
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_twice"),
                             move || test_twice(domain, sock_type, flag, how),
-                            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                            set![TestEnv::Libc, TestEnv::Shadow],
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_after_close"),
                             move || test_after_close(domain, sock_type, flag, how),
-                            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                            set![TestEnv::Libc, TestEnv::Shadow],
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_read_after_client_shutdown <libc>"),
@@ -102,7 +103,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                     /* expect_no_bytes_after_shutrd= */ false,
                                 )
                             },
-                            [TestEnv::Libc].iter().cloned().collect(),
+                            set![TestEnv::Libc],
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_read_after_client_shutdown <shadow>"),
@@ -113,9 +114,9 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                 )
                             },
                             if sock_type == libc::SOCK_STREAM {
-                                [TestEnv::Shadow].iter().cloned().collect()
+                                set![TestEnv::Shadow]
                             } else {
-                                [].iter().cloned().collect()
+                                set![]
                             },
                         ),
                         test_utils::ShadowTest::new(
@@ -123,30 +124,30 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                             move || test_read_after_peer_shutdown(domain, sock_type, flag, how),
                             // shutdown() doesn't seem to do anything in shadow for SOCK_DGRAM
                             if sock_type == libc::SOCK_STREAM {
-                                [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect()
+                                set![TestEnv::Libc, TestEnv::Shadow]
                             } else {
-                                [TestEnv::Libc].iter().cloned().collect()
+                                set![TestEnv::Libc]
                             },
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_conn_reset"),
                             move || test_conn_reset(domain, sock_type, flag, how),
-                            [TestEnv::Libc].iter().cloned().collect(),
+                            set![TestEnv::Libc],
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_write_after_client_shutdown"),
                             move || test_write_after_client_shutdown(domain, sock_type, flag, how),
                             // shutdown() doesn't seem to do anything in shadow for SOCK_DGRAM
                             if sock_type == libc::SOCK_STREAM {
-                                [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect()
+                                set![TestEnv::Libc, TestEnv::Shadow]
                             } else {
-                                [TestEnv::Libc].iter().cloned().collect()
+                                set![TestEnv::Libc]
                             },
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_write_after_peer_shutdown"),
                             move || test_write_after_peer_shutdown(domain, sock_type, flag, how),
-                            [TestEnv::Libc].iter().cloned().collect(),
+                            set![TestEnv::Libc],
                         ),
                     ];
 
@@ -166,7 +167,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 tests.extend(vec![test_utils::ShadowTest::new(
                     &append_args("test_not_connected"),
                     move || test_not_connected(domain, sock_type, flag),
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 )]);
             }
         }
@@ -180,7 +181,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             tests.extend(vec![test_utils::ShadowTest::new(
                 &append_args("test_tcp_fin_correctness"),
                 move || test_tcp_fin_correctness(domain, flag),
-                [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                set![TestEnv::Libc, TestEnv::Shadow],
             )])
         }
     }

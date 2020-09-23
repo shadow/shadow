@@ -3,6 +3,7 @@
  * See LICENSE for licensing information
  */
 
+use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
 
 struct ListenArguments {
@@ -48,22 +49,22 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new(
             "test_invalid_fd",
             test_invalid_fd,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_non_existent_fd",
             test_non_existent_fd,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_non_socket_fd",
             test_non_socket_fd,
-            [TestEnv::Libc].iter().cloned().collect(),
+            set![TestEnv::Libc],
         ),
         test_utils::ShadowTest::new(
             "test_invalid_sock_type",
             test_invalid_sock_type,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
     ];
 
@@ -92,27 +93,27 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     test_utils::ShadowTest::new(
                         &append_args("test_zero_backlog"),
                         move || test_zero_backlog(sock_type, flag, bind),
-                        [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_negative_backlog"),
                         move || test_negative_backlog(sock_type, flag, bind),
-                        [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_large_backlog"),
                         move || test_large_backlog(sock_type, flag, bind),
-                        [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_listen_twice"),
                         move || test_listen_twice(sock_type, flag, bind),
-                        [TestEnv::Libc].iter().cloned().collect(),
+                        set![TestEnv::Libc],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_after_close"),
                         move || test_after_close(sock_type, flag, bind),
-                        [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                 ];
 

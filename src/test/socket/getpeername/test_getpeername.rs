@@ -3,8 +3,8 @@
  * See LICENSE for licensing information
  */
 
-use test_utils::AsMutPtr;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::{set, AsMutPtr};
 
 struct GetpeernameArguments {
     fd: libc::c_int,
@@ -44,87 +44,87 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new(
             "test_invalid_fd",
             test_invalid_fd,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_non_existent_fd",
             test_non_existent_fd,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_non_socket_fd",
             test_non_socket_fd,
-            [TestEnv::Libc].iter().cloned().collect(),
+            set![TestEnv::Libc],
         ),
         test_utils::ShadowTest::new(
             "test_non_connected_fd",
             test_non_connected_fd,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_null_addr",
             test_null_addr,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_null_len",
             test_null_len,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_short_len",
             test_short_len,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_zero_len",
             test_zero_len,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_listening_socket",
             test_listening_socket,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_after_close",
             test_after_close,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_unbound_dgram_socket",
             test_unbound_dgram_socket,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_bound_dgram_socket",
             test_bound_dgram_socket,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_connected_dgram_socket",
             test_connected_dgram_socket,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_connected_before_accepted",
             test_connected_before_accepted,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_connected_socket",
             test_connected_socket,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_accepted_socket",
             test_accepted_socket,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_sockname_peername",
             test_sockname_peername,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
     ];
 

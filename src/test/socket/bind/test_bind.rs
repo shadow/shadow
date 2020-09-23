@@ -3,6 +3,7 @@
  * See LICENSE for licensing information
  */
 
+use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
 
 // Docker does not support IPv6, so IPv6 is not currently used
@@ -50,27 +51,23 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new(
             "test_invalid_fd",
             test_invalid_fd,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_non_existent_fd",
             test_non_existent_fd,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_non_socket_fd",
             test_non_socket_fd,
-            [TestEnv::Libc].iter().cloned().collect(),
+            set![TestEnv::Libc],
         ),
-        test_utils::ShadowTest::new(
-            "test_null_addr",
-            test_null_addr,
-            [TestEnv::Libc].iter().cloned().collect(),
-        ),
+        test_utils::ShadowTest::new("test_null_addr", test_null_addr, set![TestEnv::Libc]),
         test_utils::ShadowTest::new(
             "test_short_addr",
             test_short_addr,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
     ];
 
@@ -84,35 +81,35 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_ipv4"),
                     move || test_ipv4(sock_type, flag),
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 // Docker does not support IPv6, so the following test is disabled for now
                 /*
                 test_utils::ShadowTest::new(
                     &append_args("test_ipv6"),
                     move || test_ipv6(sock_type, flag),
-                    [TestEnv::Libc].iter().cloned().collect(),
+                    set![TestEnv::Libc],
                 ),
                 */
                 test_utils::ShadowTest::new(
                     &append_args("test_loopback"),
                     move || test_loopback(sock_type, flag),
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_any_interface"),
                     move || test_any_interface(sock_type, flag),
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_double_bind_socket"),
                     move || test_double_bind_socket(sock_type, flag),
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_double_bind_address"),
                     move || test_double_bind_address(sock_type, flag),
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_double_bind_loopback_and_any"),
@@ -121,19 +118,19 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                             /* reverse= */ false, sock_type, flag,
                         )
                     },
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_double_bind_loopback_and_any <reversed>"),
                     move || {
                         test_double_bind_loopback_and_any(/* reverse= */ true, sock_type, flag)
                     },
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_unspecified_port"),
                     move || test_unspecified_port(sock_type, flag),
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
             ];
 

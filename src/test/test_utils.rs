@@ -216,3 +216,19 @@ where
 
     Ok(rv)
 }
+
+/// Similar to the `vec!` macro, `set!` will create a `HashSet` with the given elements.
+///
+/// ```
+/// let s = set![1, 2, 3, 1];
+/// assert_eq!(s.len(), 3);
+/// ```
+#[macro_export]
+macro_rules! set {
+    () => (
+        std::collections::HashSet::new()
+    );
+    ($($x:expr),+ $(,)?) => (
+        ([$($x),+]).iter().cloned().collect::<std::collections::HashSet<_>>()
+    );
+}
