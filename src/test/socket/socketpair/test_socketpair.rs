@@ -3,6 +3,7 @@
  * See LICENSE for licensing information
  */
 
+use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
 
 struct SocketpairArguments {
@@ -56,7 +57,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<Option<[libc::c_int; 2]>, String>> 
     let mut tests: Vec<test_utils::ShadowTest<_, _>> = vec![test_utils::ShadowTest::new(
         "test_null_fds",
         test_null_fds,
-        [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+        set![TestEnv::Libc, TestEnv::Shadow],
     )];
 
     // tests to repeat for different socket options
@@ -76,12 +77,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<Option<[libc::c_int; 2]>, String>> 
                         test_utils::ShadowTest::new(
                             &append_args("test_arguments"),
                             move || test_arguments(domain, sock_type, flag, protocol),
-                            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                            set![TestEnv::Libc, TestEnv::Shadow],
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_sockname_peername"),
                             move || test_sockname_peername(domain, sock_type, flag, protocol),
-                            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                            set![TestEnv::Libc, TestEnv::Shadow],
                         ),
                     ];
 

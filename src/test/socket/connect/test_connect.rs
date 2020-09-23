@@ -3,8 +3,8 @@
  * See LICENSE for licensing information
  */
 
-use test_utils::AsPtr;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::{set, AsPtr};
 
 struct ConnectArguments {
     fd: libc::c_int,
@@ -44,32 +44,32 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new(
             "test_invalid_fd",
             test_invalid_fd,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_non_existent_fd",
             test_non_existent_fd,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_non_socket_fd",
             test_non_socket_fd,
-            [TestEnv::Libc].iter().cloned().collect(),
+            set![TestEnv::Libc],
         ),
         test_utils::ShadowTest::new(
             "test_null_addr",
             test_null_addr,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_short_len",
             test_short_len,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_zero_len",
             test_zero_len,
-            [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
     ];
 
@@ -83,22 +83,22 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_non_existent_server"),
                     move || test_non_existent_server(sock_type, flag),
-                    [TestEnv::Libc].iter().cloned().collect(),
+                    set![TestEnv::Libc],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_port_zero"),
                     move || test_port_zero(sock_type, flag),
-                    [TestEnv::Libc].iter().cloned().collect(),
+                    set![TestEnv::Libc],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_after_close"),
                     move || test_after_close(sock_type, flag),
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_interface_loopback"),
                     move || test_interface(sock_type, flag, libc::INADDR_LOOPBACK, None),
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_interface_loopback_any"),
@@ -110,29 +110,29 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                             Some(libc::INADDR_ANY),
                         )
                     },
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_interface_any"),
                     move || test_interface(sock_type, flag, libc::INADDR_ANY, None),
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_interface_any_any"),
                     move || {
                         test_interface(sock_type, flag, libc::INADDR_ANY, Some(libc::INADDR_ANY))
                     },
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_double_connect_same_addr"),
                     move || test_double_connect(sock_type, flag, /* change_address= */ false),
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_double_connect_different_addr"),
                     move || test_double_connect(sock_type, flag, /* change_address= */ true),
-                    [TestEnv::Libc, TestEnv::Shadow].iter().cloned().collect(),
+                    set![TestEnv::Libc, TestEnv::Shadow],
                 ),
             ];
 
