@@ -46,15 +46,15 @@ enum TCPState {
     TCPS_CLOSEWAIT, TCPS_LASTACK,
 };
 
-static const gchar* tcpStateStrings[] = {
+static const gchar* _tcpStateStrings[] = {
     "TCPS_CLOSED", "TCPS_LISTEN",
     "TCPS_SYNSENT", "TCPS_SYNRECEIVED", "TCPS_ESTABLISHED",
     "TCPS_FINWAIT1", "TCPS_FINWAIT2", "TCPS_CLOSING", "TCPS_TIMEWAIT",
     "TCPS_CLOSEWAIT", "TCPS_LASTACK"
 };
 
-static const gchar* tcp_stateToAscii(enum TCPState state) {
-    return tcpStateStrings[state];
+static const gchar* _tcp_stateToAscii(enum TCPState state) {
+    return _tcpStateStrings[state];
 }
 
 enum TCPFlags {
@@ -616,7 +616,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
     tcp->state = state;
 
     debug("%s <-> %s: moved from TCP state '%s' to '%s'", tcp->super.boundString, tcp->super.peerString,
-            tcp_stateToAscii(tcp->stateLast), tcp_stateToAscii(tcp->state));
+            _tcp_stateToAscii(tcp->stateLast), _tcp_stateToAscii(tcp->state));
 
     /* some state transitions require us to update the descriptor status */
     switch (state) {
@@ -1863,7 +1863,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
     TCPProcessFlags flags = TCP_PF_NONE;
     enum ProtocolTCPFlags responseFlags = PTCP_NONE;
 
-    debug("processing packet while in state %s", tcp_stateToAscii(tcp->state));
+    debug("processing packet while in state %s", _tcp_stateToAscii(tcp->state));
 
     switch(tcp->state) {
         case TCPS_LISTEN: {
@@ -1903,7 +1903,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                 tcp = multiplexed;
                 responseFlags = PTCP_SYN|PTCP_ACK;
 
-                debug("new child state %s", tcp_stateToAscii(tcp->state));
+                debug("new child state %s", _tcp_stateToAscii(tcp->state));
             }
             break;
         }
@@ -2052,7 +2052,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
         return;
     }
 
-    debug("state after switch is %s", tcp_stateToAscii(tcp->state));
+    debug("state after switch is %s", _tcp_stateToAscii(tcp->state));
 
     /* if TCPE_RECEIVE_EOF, we are not supposed to receive any more */
     if(packetLength > 0 && !(tcp->error & TCPE_RECEIVE_EOF)) {
@@ -2161,7 +2161,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
     /* clear it so we dont send outdated timestamp echos */
     tcp->receive.lastTimestamp = 0;
 
-    debug("done processing in state %s", tcp_stateToAscii(tcp->state));
+    debug("done processing in state %s", _tcp_stateToAscii(tcp->state));
 }
 
 static void _tcp_dropPacket(Socket* socket, Packet* packet) {

@@ -28,12 +28,12 @@ enum UDPState {
     UDPS_CLOSED, UDPS_ESTABLISHED,
 };
 
-static const gchar* udpStateStrings[] = {
+static const gchar* _udpStateStrings[] = {
     "UDPS_CLOSED", "UDPS_ESTABLISHED",
 };
 
-static const gchar* udp_stateToAscii(enum UDPState state) {
-    return udpStateStrings[state];
+static const gchar* _udp_stateToAscii(enum UDPState state) {
+    return _udpStateStrings[state];
 }
 
 struct _UDP {
@@ -51,7 +51,7 @@ static void _udp_setState(UDP* udp, enum UDPState state) {
     udp->state = state;
 
     debug("%s <-> %s: moved from UDP state '%s' to '%s'", udp->super.boundString, udp->super.peerString,
-            udp_stateToAscii(udp->stateLast), udp_stateToAscii(udp->state));
+            _udp_stateToAscii(udp->stateLast), _udp_stateToAscii(udp->state));
 }
 
 static UDP* _udp_fromDescriptor(Descriptor* descriptor) {
