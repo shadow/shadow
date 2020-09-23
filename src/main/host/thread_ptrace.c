@@ -172,6 +172,9 @@ typedef struct _ThreadPtrace {
     // True if we have detached ptrace from the plugin and should attach before
     // executing another ptrace operation.
     bool needAttachment;
+
+    // Shared memory block for fast communication with plugin process.
+    ShMemBlock ipc_blk;
 } ThreadPtrace;
 
 // Forward declaration.
