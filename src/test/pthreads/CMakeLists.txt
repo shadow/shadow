@@ -12,6 +12,6 @@ add_test(
     NAME pthreads-shadow-ptrace
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/pthreads.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d pthreads.shadow-ptrace.data \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d pthreads.shadow-ptrace.data - \
     "
 )
