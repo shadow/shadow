@@ -8,13 +8,13 @@ add_executable(test-config-convert test_config.c)
 # Convert a XML file to YAML
 ## To a file
 add_test(
-        NAME config-convert-xml2yaml
-        COMMAND python3 ${CMAKE_SOURCE_DIR}/src/tools/convert.py xml2yaml --output test.shadow.config.yaml ${CMAKE_CURRENT_SOURCE_DIR}/shadow.config.xml
+    NAME config-convert-xml2yaml
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/src/tools/convert.py xml2yaml --output test.shadow.config.yaml ${CMAKE_CURRENT_SOURCE_DIR}/shadow.config.xml
 )
 ## To stdout
 add_test(
-        NAME config-convert-xml2yaml-stdout
-        COMMAND sh -c "\
+    NAME config-convert-xml2yaml-stdout
+    COMMAND sh -c "\
 	python3 ${CMAKE_SOURCE_DIR}/src/tools/convert.py xml2yaml --output - ${CMAKE_CURRENT_SOURCE_DIR}/shadow.config.xml \
 	| diff ${CMAKE_CURRENT_SOURCE_DIR}/xml2yaml.yaml - \
 	"
