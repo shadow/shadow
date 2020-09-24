@@ -20,7 +20,8 @@ add_test(
     NAME file-shadow-preload
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/file.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d file.shadow-preload.data - "
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d file.shadow-preload.data - \
+    "
     CONFIGURATIONS ilibc
 )
 
