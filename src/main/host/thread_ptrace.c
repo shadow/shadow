@@ -916,20 +916,8 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
     // We don't have to worry about setting it there - the OS will have already
     // done so.
 
-    ThreadPtrace* child = g_new(ThreadPtrace, 1);
-    *childp = _threadPtraceToThread(child);
-    worker_countObject(OBJECT_TYPE_THREAD_PTRACE, COUNTER_TYPE_NEW);
-    *child = (ThreadPtrace){
-        .base = thread_create(base->host, base->process, host_getNewProcessID(base->host),
-                              THREADPTRACE_TYPE_ID, thread->base.methods),
-        .tsc = thread->tsc,
-        .pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite)),
-        .readPointers = g_array_new(FALSE, FALSE, sizeof(void*)),
-    };
-
-    // Create the syscall handler with the new child base
-    child->sys = syscallhandler_new(worker_getActiveHost(), base->process, &child->base),
-
+    *childp = threadptrace_new(base->host, base->process, host_getNewProcessID(base->host));
+    ThreadPtrace* child = _threadToThreadPtrace(*childp);
     child->base.nativePid = base->nativePid;
     child->base.nativeTid = childNativeTid;
 
