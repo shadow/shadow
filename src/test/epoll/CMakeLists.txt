@@ -22,7 +22,8 @@ add_test(
     NAME epoll-shadow-preload
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/epoll.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d epoll-preload.shadow.data - "
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d epoll-preload.shadow.data - \
+    "
     CONFIGURATIONS ilibc
 )
 
@@ -39,7 +40,8 @@ add_test(
     NAME epoll-writeable-shadow-preload
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/epoll-writeable.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d epoll-writeable-preload.shadow.data - "
+    | ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d epoll-writeable-preload.shadow.data - \
+    "
     CONFIGURATIONS ilibc
 )
 
