@@ -15,9 +15,9 @@ add_test(
 add_test(
     NAME config-convert-xml2yaml-stdout
     COMMAND sh -c "\
-	python3 ${CMAKE_SOURCE_DIR}/src/tools/convert.py xml2yaml --output - ${CMAKE_CURRENT_SOURCE_DIR}/shadow.config.xml \
-	| diff ${CMAKE_CURRENT_SOURCE_DIR}/xml2yaml.yaml - \
-	"
+    python3 ${CMAKE_SOURCE_DIR}/src/tools/convert.py xml2yaml --output - ${CMAKE_CURRENT_SOURCE_DIR}/shadow.config.xml \
+    | diff ${CMAKE_CURRENT_SOURCE_DIR}/xml2yaml.yaml - \
+    "
 )
 
 # Convert the YAML previously generated in XML (we need to wait its creation)
@@ -31,9 +31,9 @@ set_tests_properties(config-convert-yaml2xml PROPERTIES DEPENDS "config-convert-
 add_test(
     NAME config-convert-yaml2xml-stdout
     COMMAND sh -c "\
-	python3 ${CMAKE_SOURCE_DIR}/src/tools/convert.py yaml2xml --output - test.shadow.config.yaml \
-	| diff ${CMAKE_CURRENT_SOURCE_DIR}/yaml2xml.xml - \
-	"
+    python3 ${CMAKE_SOURCE_DIR}/src/tools/convert.py yaml2xml --output - test.shadow.config.yaml \
+    | diff ${CMAKE_CURRENT_SOURCE_DIR}/yaml2xml.xml - \
+    "
 )
 set_tests_properties(config-convert-yaml2xml-stdout PROPERTIES DEPENDS "config-convert-xml2yaml")
 
