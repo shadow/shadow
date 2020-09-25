@@ -3,6 +3,7 @@
  * See LICENSE for licensing information
  */
 
+#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -206,14 +207,27 @@ static int _do_addr(const char* name, struct sockaddr_in* addrout, int message_q
 
         /* attempt to get the correct server ip address */
         struct addrinfo* info;
-        int result = getaddrinfo(name, NULL, NULL, &info);
+        struct addrinfo hints = {0};
+        hints.ai_family = AF_INET;
+
+        int result = getaddrinfo(name, NULL, &hints, &info);
         MYLOG("getaddrinfo() returned %i", result);
         if (result < 0) {
             MYLOG("getaddrinfo() error was: %s", strerror(errno));
             return -1;
         }
 
+        if (info->ai_family != AF_INET) {
+            MYLOG("getaddrinfo() returned the wrong family");
+            return -1;
+        }
+
         addrout->sin_addr.s_addr = ((struct sockaddr_in*) (info->ai_addr))->sin_addr.s_addr;
+
+        char debug_str[INET_ADDRSTRLEN] = {0};
+        inet_ntop(AF_INET, &(addrout->sin_addr), debug_str, sizeof(debug_str));
+        MYLOG("address is %s", debug_str);
+
         freeaddrinfo(info);
     }
 
