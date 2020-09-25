@@ -28,9 +28,9 @@ hosts:
   processes:
   - plugin: testtcp
     time: 1
-    arguments: blocking server
+    arguments: blocking server 0.0.0.0 1234
 - id: lossless.tcpclient.echo
   processes:
   - plugin: testtcp
     time: 2
-    arguments: blocking client lossless.tcpserver.echo
+    arguments: blocking client lossless.tcpserver.echo 1234

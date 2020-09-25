@@ -28,9 +28,9 @@ hosts:
   processes:
   - plugin: testtcp
     time: 1
-    arguments: nonblocking-epoll server
+    arguments: nonblocking-epoll server 0.0.0.0 1234
 - id: lossy.tcpclient.echo
   processes:
   - plugin: testtcp
     time: 2
-    arguments: nonblocking-epoll client lossy.tcpserver.echo
+    arguments: nonblocking-epoll client lossy.tcpserver.echo 1234
