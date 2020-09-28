@@ -3,8 +3,13 @@ list(APPEND TestNames connect)
 
 foreach(Method ptrace preload)
     # runs the shadow tests with only the passing tests, not all tests
-    add_test(NAME connect-shadow-${Method} COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=${Method}
-        -l debug -d connect.shadow-${Method}.data ${CMAKE_CURRENT_SOURCE_DIR}/connect.shadow.config.xml)
+    add_test(
+        NAME connect-shadow-${Method}
+        COMMAND sh -c "\
+        ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/connect.shadow.config.yaml --output - \
+        | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=${Method} -l debug -d connect.shadow-${Method}.data - \
+        "
+   )
     list(APPEND TestNames connect-shadow-${Method})
 endforeach()
 

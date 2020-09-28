@@ -14,21 +14,33 @@ add_test(
 
 add_test(
     NAME tcp-blocking-loopback-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d blocking-loopback.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-loopback.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-loopback.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d blocking-loopback.shadow-ptrace.data - \
+    "
 )
 # FIXME add_test(
 # FIXME     NAME tcp-blocking-loopback-shadow-preload
-# FIXME     COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d blocking-loopback.shadow-preload.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-loopback.test.shadow.config.xml
+# FIXME     COMMAND sh -c "\
+# FIXME     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-loopback.test.shadow.config.yaml --output - \
+# FIXME     | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d blocking-loopback.shadow-preload.data - \
+# FIXME     "
 # FIXME )
 
 add_test(
     NAME tcp-blocking-lossless-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d blocking-lossless.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-lossless.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-lossless.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d blocking-lossless.shadow-ptrace.data - \
+    "
 )
 # FIXME add preload test
 add_test(
     NAME tcp-blocking-lossy-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d blocking-lossy.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-lossy.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-blocking-lossy.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d blocking-lossy.shadow-ptrace.data - \
+    "
 )
 # FIXME add preload test
 
@@ -39,17 +51,26 @@ add_test(
 )
 add_test(
     NAME tcp-nonblocking-poll-loopback-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-poll-loopback.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-loopback.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-loopback.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-poll-loopback.shadow-ptrace.data - \
+    "
 )
 # FIXME add preload test
 add_test(
     NAME tcp-nonblocking-poll-lossless-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-poll-lossless.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-lossless.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-lossless.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-poll-lossless.shadow-ptrace.data - \
+    "
 )
 # FIXME add preload test
 add_test(
     NAME tcp-nonblocking-poll-lossy-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-poll-lossy.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-lossy.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-poll-lossy.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-poll-lossy.shadow-ptrace.data - \
+    "
 )
 # FIXME add preload test
 
@@ -60,17 +81,26 @@ add_test(
 )
 add_test(
     NAME tcp-nonblocking-epoll-loopback-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-epoll-loopback.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-loopback.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-loopback.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-epoll-loopback.shadow-ptrace.data - \
+    "
 )
 # FIXME add preload test
 add_test(
     NAME tcp-nonblocking-epoll-lossless-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-epoll-lossless.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-lossless.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-lossless.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-epoll-lossless.shadow-ptrace.data - \
+    "
 )
 # FIXME add preload test
 add_test(
     NAME tcp-nonblocking-epoll-lossy-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-epoll-lossy.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-lossy.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-epoll-lossy.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-epoll-lossy.shadow-ptrace.data - \
+    "
 )
 # FIXME add preload test
 
@@ -81,17 +111,26 @@ add_test(
 )
 add_test(
     NAME tcp-nonblocking-select-loopback-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-select-loopback.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-loopback.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-loopback.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-select-loopback.shadow-ptrace.data - \
+    "
 )
 # FIXME add preload test
 add_test(
     NAME tcp-nonblocking-select-lossless-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-select-lossless.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossless.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossless.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-select-lossless.shadow-ptrace.data - \
+    "
 )
 # FIXME add preload test
 add_test(
     NAME tcp-nonblocking-select-lossy-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-select-lossy.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossy.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-nonblocking-select-lossy.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d nonblocking-select-lossy.shadow-ptrace.data - \
+    "
 )
 # FIXME add preload test
 
@@ -101,7 +140,10 @@ add_test(
 )
 add_test(
     NAME tcp-iov-shadow-ptrace
-    COMMAND ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d iov.shadow-ptrace.data ${CMAKE_CURRENT_SOURCE_DIR}/tcp-iov.test.shadow.config.xml
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/tcp-iov.test.shadow.config.yaml --output - \
+    | ${CMAKE_SOURCE_DIR}/src/test/tcp/with_q.sh ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d iov.shadow-ptrace.data - \
+    "
 )
 # FIXME add preload test
 

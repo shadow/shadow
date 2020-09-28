@@ -3,6 +3,7 @@
 import argparse
 from collections import defaultdict
 from typing import Dict, List, Union, Any
+
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from xml.sax.saxutils import unescape
@@ -86,10 +87,10 @@ def xml_to_dict(node: ET.Element) -> Dict:
         }
 
     # Iterates over each XML node and transforms those in dict
-    if node.getchildren():
+    if len(node) > 0:
         return {
             **convert_integer(node.attrib),
-            **xml_nodes_to_dict(node.getchildren())
+            **xml_nodes_to_dict(node)
         }
 
     # No sub XML nodes included in this node, returns node attributes only
@@ -110,32 +111,38 @@ def xml_nodes_to_dict(xml_nodes):
     return dict_nodes
 
 
-def save_dict_in_yaml_file(d: Dict, filename: str) -> None:
+def save_dict_in_yaml_file(d: Dict, stream) -> None:
     '''
-    Save a dict in filename as YAML
+    Write a dict as YAML in a stream
     '''
-    with open(filename, 'w', encoding='utf8') as f:
-        yaml.add_representer(str, yaml_str_presenter)
-        yaml.add_representer(dict, yaml_dict_presenter)
-        _yaml = yaml.dump(d, f, default_flow_style=False)
+    yaml.add_representer(str, yaml_str_presenter)
+    yaml.add_representer(dict, yaml_dict_presenter)
+    yaml.dump(d, stream, default_flow_style=False)
 
 
-def get_output_filename(args: argparse.PARSER, original_extension: str, target_extension: str) -> str:
+def get_output_stream(args: argparse.PARSER, original_extension: str, target_extension: str):
     '''
-    Allow to retrieve the output filename from the arguments
+    Return an opened stream in writen mode with the filename provided in argument
     '''
     if args.output:
-        return args.output
-    return args.filename.replace(original_extension, target_extension)
+        filename = '/dev/stdout' if '-' == args.output else args.output
+        return open(filename, 'w', encoding='utf8')
+    return open(args.filename.replace(original_extension, target_extension), 'w', encoding='utf8')
 
 
 def shadow_xml_to_dict(root: ET.Element) -> Dict:
     '''
     Take the Shadow root XML Element and convert it in dict
     '''
+    options = convert_integer(root.attrib)
+
+    if options:
+        return {
+            'options': options,
+            **xml_nodes_to_dict(root)
+        }
     return {
-        'options': convert_integer(root.attrib),
-        **xml_nodes_to_dict(root.getchildren())
+        **xml_nodes_to_dict(root)
     }
 
 
@@ -204,13 +211,12 @@ def list_to_xml(xml_root: ET.Element, tag: str, l: List[Dict[str, Union[List, st
                     sub.set(k, str(v))
 
 
-def save_xml(xml_root: ET.Element, filename: str):
+def save_xml(xml_root: ET.Element, stream) -> None:
     '''
-    Write an XML element in a filename
+    Write an XML element in a stream
     '''
-    xmlstr = minidom.parseString(ET.tostring(xml_root)).toprettyxml(indent="   ")
-    with open(filename, "w", encoding='utf8') as f:
-        f.write(unescape(xmlstr, entities={'&quot;': '"'}))
+    _xmlstr = minidom.parseString(ET.tostring(xml_root)).toprettyxml(indent="   ")
+    stream.write(unescape(_xmlstr, entities={'&quot;': '"'}))
 
 
 if __name__ == '__main__':
@@ -224,10 +230,10 @@ if __name__ == '__main__':
         yaml_as_dict = get_yaml_from_filename(args.filename)
         xml_root = create_xml_root(yaml_as_dict)
         dict_to_xml(xml_root, yaml_as_dict)
-        filename_converted = get_output_filename(args, 'yaml', 'xml')
-        save_xml(xml_root, filename_converted)
+        with get_output_stream(args, 'yaml', 'xml') as stream:
+            save_xml(xml_root, stream)
     else:
         xml_root = get_xml_root_from_filename(args.filename)
         d = shadow_xml_to_dict(xml_root)
-        filename_converted = get_output_filename(args, 'xml', 'yaml')
-        save_dict_in_yaml_file(d, filename_converted)
+        with get_output_stream(args, 'xml', 'yaml') as stream:
+            save_dict_in_yaml_file(d, stream)
