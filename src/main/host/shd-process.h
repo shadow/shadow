@@ -456,6 +456,42 @@ void process_emu_hj_interposer_test(Process* proc);
 int process_emu_copy_dat_files(Process* proc, int fileno);
 int process_emu_compare_dat_files(Process* proc, int fileno);
 
+//hyeojin made for compare dat_files
+#define big_endian 0
+#define little_endian 1
+void Print(unsigned char* data, int start, int size, unsigned char* dest, int print) ;
+unsigned int hexToInt(unsigned char* data, int size, int endianness);
+unsigned int calcVarInt(unsigned char * data, int *bytepos) ;
+void datParser(unsigned char* dat, unsigned int size,unsigned char * lastBlockMerkleRoot);
+
+//hyeojin made for storage hash table
+typedef struct _Hashlist{
+    struct _Hashlist *n, *prev;
+    int fileno;
+    char *actual_path;
+    char *lasBlockHashMerkleRoot;
+    unsigned refCnt;
+
+}Hashlist;
+
+typedef struct _HashTblEntry{
+    Hashlist* list;
+    int listcnt;
+}HashTblEntry;
+
+typedef struct _HashTable{
+    HashTblEntry* ents;
+}HashTable;
+
+HashTable *FileInfotbl;
+void createHashTable();
+void AddHashData(HashTable *hashTable, int key, char* actual_path, char* lastBlockHash);
+char * getLastBlockHash(HashTable *hashTable, int fileno);
+void DeleteHashData(HashTable *hashTable,int key, char* actual_path);
+char * makeActualPath(int fileno, char* nodeid) ;
+Hashlist* FindLastBlockHash(HashTable* hashtable, int key);
+
+
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
   returntype process_emu_##functionname(Process* proc, ...);
 

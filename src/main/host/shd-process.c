@@ -7952,8 +7952,6 @@ void Print(unsigned char* data, int start, int size, unsigned char* dest, int pr
 // input: 변환할 hex array, array 길이
 // action: hex값을 그대로 decimal로 전환
 // ouput: 변환된 unsigned int decimal
-#define big_endian 0
-#define little_endian 1
 unsigned int hexToInt(unsigned char* data, int size, int endianness) {
     int res=0;
     if(big_endian) {
@@ -8042,11 +8040,7 @@ void datParser(unsigned char* dat, unsigned int size,unsigned char * lastBlockMe
         Print(dat,byteIdx,32,merkleRootHash,1);
         printf("\n");
         byteIdx += 32; //merkelroothash
-        if(lastBlockMerkleRoot){
-            for(int i=0;i<32;i++){
-                lastBlockMerkleRoot[i]=merkleRootHash[i];
-            }
-        }
+        lastBlockMerkleRoot=merkleRootHash;
 
         byteIdx += 4;   //time
         byteIdx += 4;   //bits
@@ -8134,25 +8128,13 @@ void datParser(unsigned char* dat, unsigned int size,unsigned char * lastBlockMe
     }
 }
 
-int CompareDATFiles(int FileNo) {
-    char path[20];
-    sprintf(path,"cp_data/dat_%d.dat",fileno);
-    FILE* file = fopen(path, "rb");
-    if (!file) {
-        printf("COMPARE Result = file %d  is not exist! make the new file!!\n",FileNo);
-        return 0;// file is not exist, so make the file!
-    }
+int process_emu_compare_dat_files(Process* proc, int fileno) {
 
-    fseek(file, 0, SEEK_END);
-    unsigned int size = ftell(file);
-    fseek(file,0,SEEK_SET);
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    message("process_emu_compare_dat_file test is success!");
+    printf("process_emu_compare_dat_file test fileno is %d \n",fileno);
 
-    unsigned char merkleroothash[32];
-    unsigned char buf[size];
-    fread(&buf, sizeof(char), size, file);
-    datParser(buf, size, merkleroothash);
 
-    fclose(file);
 
     //cp_data file open
     char* path2="cp_data/cp_data.dat";
@@ -8162,76 +8144,40 @@ int CompareDATFiles(int FileNo) {
     unsigned int size2 = ftell(file2);
     fseek(file2,0,SEEK_SET);
 
-    unsigned char merkleroothash2[32];
+    unsigned char *merkleroothash2;
     unsigned char buf2[size2];
     fread(&buf2, sizeof(char), size2, file2);
     datParser(buf2, size2, merkleroothash2);
 
     fclose(file2);
 
-    for(int i=0;i<32;i++){
-        if(merkleroothash2[i]!=merkleroothash[i]) {
-            printf("COMPARE Result = cp_data.dat and cp_data/dat_.dat file is NOT same!!!\n");
-            return 0;
-        }
+    //파일이 존재 하지 않으면, return 0;
+    if(FileInfotbl==NULL) {
+        createHashTable();
     }
-    printf("COMPARE Result = cp_data.dat and cp_data/dat_.dat file is same!!!\n");
-    return 1;
 
-}
-
-int process_emu_compare_dat_files(Process* proc, int fileno) {
-    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    message("process_emu_compare_dat_file test is success!");
-    printf("process_emu_compare_dat_file test fileno is %d \n",fileno);
-
-
-    char path[20];
-    sprintf(path,"cp_data/dat_%d.dat",fileno);
-    FILE* file = fopen(path, "rb");
-    if (!file) {
+    if(FileInfotbl->ents[fileno].list==NULL) {
         printf("COMPARE Result = file %d  is not exist! make the new file!!\n",fileno);
+
+        //data를 hash table에 추가
+        AddHashData(FileInfotbl,fileno,makeActualPath(fileno,proc->processName),merkleroothash2);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return 0;// file is not exist, so make the file!
     }
 
-    fseek(file, 0, SEEK_END);
-    unsigned int size = ftell(file);
-    fseek(file,0,SEEK_SET);
-
-    unsigned char merkleroothash[32];
-    unsigned char buf[size];
-    fread(&buf, sizeof(char), size, file);
-    datParser(buf, size, merkleroothash);
-
-    fclose(file);
-
-    //cp_data file open
-     char* path2="cp_data/cp_data.dat";
-    FILE* file2 = fopen(path2, "rb");
-
-    fseek(file2, 0, SEEK_END);
-    unsigned int size2 = ftell(file2);
-    fseek(file2,0,SEEK_SET);
-
-    unsigned char merkleroothash2[32];
-    unsigned char buf2[size2];
-    fread(&buf2, sizeof(char), size2, file2);
-    datParser(buf2, size2, merkleroothash2);
-
-    fclose(file2);
-
-    for(int i=0;i<32;i++){
-        if(merkleroothash2[i]!=merkleroothash[i]) {
-            printf("COMPARE Result = cp_data.dat and cp_data/dat_.dat file is NOT same!!!\n");
-            _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-            return 0;
-        }
+    char* uniqueid=getLastBlockHash(FileInfotbl,fileno);
+    if(!strcmp(uniqueid,merkleroothash2)) {
+        printf("COMPARE Result = cp_data.dat and cp_data/dat_.dat file is same!!!\n");
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+        return 1;
     }
-    printf("COMPARE Result = cp_data.dat and cp_data/dat_.dat file is same!!!\n");
+    else {
+        printf("COMPARE Result = cp_data.dat and cp_data/dat_.dat file is NOT same!!!\n");
+        AddHashData(FileInfotbl,fileno,makeActualPath(fileno,proc->processName),merkleroothash2);
+        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+        return 0;
+    }
 
-    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return 1;
 }
 
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
@@ -8247,3 +8193,88 @@ int process_emu_compare_dat_files(Process* proc, int fileno) {
 
 #undef PROCESS_EMU_UNSUPPORTED
 
+//hj add for storage hashtable
+
+void createHashTable() {
+    FileInfotbl = (HashTable*)malloc(sizeof(HashTable));
+    FileInfotbl->ents = (HashTblEntry*)malloc(sizeof(HashTblEntry)*10);
+    // initialize hash table entries
+    for(int i=0; i<10; i++) {
+        FileInfotbl->ents[i].listcnt = 0;
+        FileInfotbl->ents[i].list = NULL;
+    }
+}
+
+
+// AddHashData : [key]에 data 추가 -
+void AddHashData(HashTable *hashtable, int key, char* actual_path, char* lastBlockHash){
+
+    // list entry 생성
+    Hashlist* elem = (Hashlist*)malloc(sizeof(Hashlist));
+    elem->fileno=fileno;
+    elem->actual_path=actual_path;
+    elem->lasBlockHashMerkleRoot=lastBlockHash;
+    elem->refCnt=0;
+
+    // put elem to list header
+    Hashlist* cursor = hashtable->ents[key].list;
+    hashtable->ents[key].list = elem;
+    elem->n = cursor;
+    elem->prev = NULL;
+    if (cursor)
+        cursor->prev = elem;
+
+    hashtable->ents[key].listcnt++;
+}
+
+char* getLastBlockHash(HashTable *hashtable, int key){
+    char* res;
+    res=hashtable->ents[key].list->lasBlockHashMerkleRoot;
+    return res;
+}
+
+void DeleteHashData(HashTable *hashtable, int key, char* actual_path){
+
+    if(hashtable->ents[key].list==NULL) {
+        return;
+    }
+
+    Hashlist* delNode = NULL;
+    if(hashtable->ents[key].list->actual_path==actual_path){
+        delNode=&FileInfotbl->ents[key];
+        hashtable->ents[key].list=hashtable->ents->list->n;
+    }
+    else {
+        Hashlist *node = hashtable->ents[key].list;
+        Hashlist *next = node->n;
+
+        while (next) {
+            if (strcmp(next->actual_path ,actual_path) == 0) {
+                node->n = next->n;
+                delNode = next;
+                break;
+            }
+            node = next;
+            next = node->n;
+        }
+    }
+    free(delNode);
+}
+
+char * makeActualPath(int fileno, char* nodeid) {
+    char *path;
+    path=malloc(30);
+//    sprintf(path,"cp_data/%s/dat_%d.dat",nodeid,fileno);
+    sprintf(path,"cp_data/dat_%d.dat",fileno);
+    return path;
+}
+
+void printHashTable(HashTable *hashtable,int key){
+    Hashlist * node = hashtable->ents[key].list;
+    printf("print hash table : %s \n",node->actual_path);
+    while (node->n) {
+        node = node->n;
+        printf("print hash table : %s \n",node->actual_path);
+
+    }
+}
