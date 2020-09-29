@@ -1,6 +1,8 @@
 #include "binary_spinning_sem.h"
 
+#include <assert.h>
 #include <cstring>
+#include <errno.h>
 #include <unistd.h>
 
 // (rwails) The number times we should increment the counter and
@@ -38,4 +40,19 @@ void BinarySpinningSem::wait() {
     pthread_spin_lock(&_lock);
     _x.store(false, std::memory_order_release);
     pthread_spin_unlock(&_lock);
+}
+
+int BinarySpinningSem::trywait() {
+    int rv = sem_trywait(&_semaphore);
+    if (rv != 0) {
+        assert(rv == -1 && errno == EAGAIN);
+        return rv;
+    }
+
+    _spin_ctr = 0;
+
+    pthread_spin_lock(&_lock);
+    _x.store(false, std::memory_order_release);
+    pthread_spin_unlock(&_lock);
+    return 0;
 }
