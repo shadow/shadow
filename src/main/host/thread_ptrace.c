@@ -887,6 +887,8 @@ static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                         size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
+    // FIXME: not implemented
+    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
     void* rv = g_new(void, n);
     g_array_append_val(thread->readPointers, rv);
     _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
@@ -896,6 +898,8 @@ const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
 int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
                                    const char** out_str, size_t* strlen) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
+    // FIXME: not implemented
+    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
     char* str = g_new(char, n);
     int err = 0;
 
@@ -937,6 +941,8 @@ int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
 void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
                                    size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
+    // FIXME: not implemented
+    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
     void* rv = g_new(void, n);
     PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
     g_array_append_val(thread->pendingWrites, pendingWrite);
@@ -945,6 +951,8 @@ void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
 
 void* threadptrace_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
+    // FIXME: not implemented
+    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
     void* rv = g_new(void, n);
     _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
     PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
@@ -1081,7 +1089,6 @@ static long _threadptrace_ipcNativeSyscall(ThreadPtrace* thread, long n, va_list
         }
     }
 }
-
 
 long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
