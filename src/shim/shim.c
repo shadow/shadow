@@ -1,6 +1,7 @@
 #include "shim/shim.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <pthread.h>
 #include <search.h>
@@ -15,11 +16,20 @@
 #include "shim/shim_logger.h"
 #include "support/logger/logger.h"
 
-// Whether Shadow is using INTERPOSE_PRELOAD
-static bool _using_interpose_preload;
+typedef enum {
+    INTERPOSE_NONE,
+    INTERPOSE_PRELOAD,
+    INTERPOSE_PTRACE,
+} InterposeType;
+
+static InterposeType _interpose_type;
 
 // This thread's IPC block, for communication with Shadow.
 static __thread ShMemBlock _shim_ipc_blk;
+
+// Per-thread state shared with Shadow.
+static __thread ShMemBlock _shim_shared_mem_blk;
+static __thread ShimSharedMem* _shim_shared_mem = NULL;
 
 // We disable syscall interposition when this is > 0.
 static __thread int _shim_disable_interposition = 0;
@@ -27,30 +37,66 @@ static __thread int _shim_disable_interposition = 0;
 static void _shim_wait_start();
 
 void shim_disableInterposition() {
-    ++_shim_disable_interposition;
+    if (++_shim_disable_interposition == 1 && _interpose_type == INTERPOSE_PTRACE) {
+        if (_shim_shared_mem) {
+            debug("enabling native-syscalls via shmem %p %p", &_shim_shared_mem, _shim_shared_mem);
+            _shim_shared_mem->ptrace_allow_native_syscalls = true;
+        } else {
+            debug("enabling native-syscalls via syscall");
+            shadow_set_ptrace_allow_native_syscalls(true);
+        }
+    }
 }
 
 void shim_enableInterposition() {
     assert(_shim_disable_interposition > 0);
-    --_shim_disable_interposition;
+    if (--_shim_disable_interposition == 0 && _interpose_type == INTERPOSE_PTRACE) {
+        if (_shim_shared_mem) {
+            debug("disabling native-syscalls via shmem %p %p", &_shim_shared_mem, _shim_shared_mem);
+            _shim_shared_mem->ptrace_allow_native_syscalls = false;
+        } else {
+            debug("disabling native-syscalls via syscall");
+            shadow_set_ptrace_allow_native_syscalls(false);
+        }
+    }
 }
 
 bool shim_interpositionEnabled() {
-    return _using_interpose_preload && !_shim_disable_interposition;
+    // FIXME: enable for INTERPOSE_PTRACE too.
+    return _interpose_type == INTERPOSE_PRELOAD && !_shim_disable_interposition;
+}
+
+// Figure out what interposition mechanism we're using, based on environment
+// variables.  This is called before disabling interposition, so should be
+// careful not to make syscalls.
+static InterposeType _get_interpose_type() {
+    // If we're not running under Shadow, return. This can be useful
+    // for testing the libc parts of the shim.
+    if (!getenv("SHADOW_SPAWNED")) {
+        return INTERPOSE_NONE;
+    }
+
+    const char* interpose_method = getenv("SHADOW_INTERPOSE_METHOD");
+    if (interpose_method != NULL && !strcmp(interpose_method, "PRELOAD")) {
+        return INTERPOSE_PRELOAD;
+    } else {
+        return INTERPOSE_PTRACE;
+    }
 }
 
 static void _shim_load() {
-    shim_disableInterposition();
-
     // We ultimately want to log to SHADOW_LOG_FILE, but first we redirect to
     // stderr for any log messages that happen before we can open it.
     logger_setDefault(shimlogger_new(stderr));
 
-    // If we're not running under Shadow, return. This can be useful
-    // for testing the libc parts of the shim.
-    if (!getenv("SHADOW_SPAWNED")) {
-        return;
-    }
+    const char *ipc_blk_buf = getenv("_SHD_IPC_BLK");
+    assert(ipc_blk_buf);
+    bool err = false;
+    ShMemBlockSerialized ipc_blk_serialized =
+        shmemblockserialized_fromString(ipc_blk_buf, &err);
+    assert(!err);
+
+    _shim_ipc_blk = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
 
     // Set logger start time from environment variable.
     {
@@ -81,25 +127,7 @@ static void _shim_load() {
         logger_setDefault(shimlogger_new(log_file));
     }
 
-    const char* interpose_method = getenv("SHADOW_INTERPOSE_METHOD");
-    _using_interpose_preload =
-        interpose_method != NULL && !strcmp(interpose_method, "PRELOAD");
-    if (!_using_interpose_preload) {
-        return;
-    }
-
-    const char *ipc_blk_buf = getenv("_SHD_IPC_BLK");
-    assert(ipc_blk_buf);
-    bool err = false;
-    ShMemBlockSerialized ipc_blk_serialized =
-        shmemblockserialized_fromString(ipc_blk_buf, &err);
-    assert(!err);
-
-    _shim_ipc_blk = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
-    _shim_wait_start();
-
-    debug("starting main");
-    shim_enableInterposition();
+    debug("Finished shim global init");
 }
 
 // This function should be called before any wrapped syscall. We also use the
@@ -114,16 +142,32 @@ __attribute__((constructor)) void shim_ensure_init() {
         return;
     }
     started_init = true;
-    // Ensure that initialization only happens once globally, even if an earlier global constructor
-    // created additional threads.
+
+    _interpose_type = _get_interpose_type();
+    if (_interpose_type == INTERPOSE_NONE) {
+        return;
+    }
+
+    shim_disableInterposition();
+
+    // Global initialization, done exactly once.
     static pthread_once_t _shim_init_once = PTHREAD_ONCE_INIT;
     pthread_once(&_shim_init_once, _shim_load);
+
+    // Finally, initialize *this* thread.
+    _shim_wait_start();
+
+    debug("Finished shim thread init");
+    shim_enableInterposition();
 }
 
 __attribute__((destructor))
 static void _shim_unload() {
-    if (!_using_interpose_preload)
+    // No explicit unload needed for ptrace; it'll learn about our exit
+    // via a ptrace-stop.
+    if (_interpose_type != INTERPOSE_PRELOAD)
         return;
+
     shim_disableInterposition();
 
     ShMemBlock ipc_blk = shim_thisThreadEventIPCBlk();
@@ -137,11 +181,33 @@ static void _shim_unload() {
 }
 
 static void _shim_wait_start() {
+    // If we're using ptrace, and we haven't initialized the ipc block yet
+    // (because this isn't the main thread, which is initialized in the global
+    // initialization via an environment variable), do so.
+    if (_interpose_type == INTERPOSE_PTRACE && !_shim_ipc_blk.p) {
+        ShMemBlockSerialized ipc_blk_serialized;
+        int rv = shadow_get_ipc_blk(&ipc_blk_serialized);
+        if (rv != 0) {
+            error("shadow_get_ipc_blk: %s", strerror(errno));
+            abort();
+        }
+        _shim_ipc_blk = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
+        assert(_shim_ipc_blk.p);
+    }
+
     ShimEvent event;
     debug("waiting for start event on %p", _shim_ipc_blk.p);
     shimevent_recvEventFromShadow(_shim_ipc_blk.p, &event);
     assert(event.event_id == SHD_SHIM_EVENT_START);
     shimlogger_set_simulation_nanos(event.event_data.start.simulation_nanos);
+    if (_interpose_type == INTERPOSE_PTRACE) {
+        _shim_shared_mem_blk =
+            shmemserializer_globalBlockDeserialize(&event.event_data.start.shim_shared_mem);
+        _shim_shared_mem = _shim_shared_mem_blk.p;
+        if (!_shim_shared_mem) {
+            abort();
+        }
+    }
 }
 
 ShMemBlock shim_thisThreadEventIPCBlk() { return _shim_ipc_blk; }

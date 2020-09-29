@@ -1,5 +1,15 @@
 #include "shim/shim_event.h"
 
+#include <unistd.h>
+
+int shadow_set_ptrace_allow_native_syscalls(bool val) {
+    return syscall(SYS_shadow_set_ptrace_allow_native_syscalls, val);
+}
+
+int shadow_get_ipc_blk(ShMemBlockSerialized* ipc_blk_serialized) {
+    return syscall(SYS_shadow_get_ipc_blk, ipc_blk_serialized);
+}
+
 static inline void shim_determinedSend(int sock_fd, const void* ptr,
                                        size_t nbytes) {
     const char* buf = (const char*)(ptr);

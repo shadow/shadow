@@ -7,7 +7,6 @@
 struct IPCData {
     ShimEvent plugin_to_shadow, shadow_to_plugin;
     BinarySpinningSem xfer_ctrl_to_plugin, xfer_ctrl_to_shadow;
-    int allow_native_syscalls;
 };
 
 extern "C" {

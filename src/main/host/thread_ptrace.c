@@ -19,6 +19,7 @@
 #include "main/core/worker.h"
 #include "main/host/thread_protected.h"
 #include "main/host/tsc.h"
+#include "shim/ipc.h"
 #include "support/logger/logger.h"
 
 #define THREADPTRACE_TYPE_ID 3024
@@ -174,7 +175,14 @@ typedef struct _ThreadPtrace {
     bool needAttachment;
 
     // Shared memory block for fast communication with plugin process.
-    ShMemBlock ipc_blk;
+    // Intentionally opaque; details are implementation details of ShimEvent.
+    ShMemBlock ipcBlk;
+
+    // Data shared with the shim.
+    ShimSharedMem* shimSharedMem;
+
+    // Shared memory handle for `shimSharedMem`.
+    ShMemBlock shimSharedMemBlock;
 } ThreadPtrace;
 
 // Forward declaration.
@@ -405,8 +413,36 @@ static void _threadptrace_nextChildState(ThreadPtrace* thread) {
 pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
-    thread->base.nativeTid = _threadptrace_fork_exec(argv[0], argv, envv);
+    /* set the env for the child */
+    gchar** myenvv = g_strdupv(envv);
+
+    ShMemBlockSerialized ipcBlkSerial =
+        shmemallocator_globalBlockSerialize(&thread->ipcBlk);
+
+    char ipcBlkBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
+    shmemblockserialized_toString(&ipcBlkSerial, ipcBlkBuf);
+
+    /* append to the env */
+    myenvv = g_environ_setenv(myenvv, "_SHD_IPC_BLK", ipcBlkBuf, TRUE);
+
+    gchar* envStr = utility_strvToNewStr(myenvv);
+    gchar* argStr = utility_strvToNewStr(argv);
+    message("forking new thread with environment '%s' and arguments '%s'",
+            envStr, argStr);
+    g_free(envStr);
+    g_free(argStr);
+
+    thread->base.nativeTid = _threadptrace_fork_exec(argv[0], argv, myenvv);
     thread->base.nativePid = thread->base.nativeTid;
+
+    // Send 'start' event.
+    ShimEvent startEvent = {
+        .event_id = SHD_SHIM_EVENT_START,
+        .event_data.start = {
+            .simulation_nanos = worker_getEmulatedTime(),
+            .shim_shared_mem = shmemallocator_globalBlockSerialize(&thread->shimSharedMemBlock),
+        }};
+    shimevent_sendEventToPlugin(thread->ipcBlk.p, &startEvent);
 
     _threadptrace_nextChildState(thread);
 
@@ -416,12 +452,35 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
 static void _threadptrace_handleSyscall(ThreadPtrace* thread) {
     utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL);
     struct user_regs_struct* regs = &thread->syscall.regs;
-
     SysCallArgs args = {
         .number = regs->orig_rax,
         .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8,
                  regs->r9},
     };
+
+    if(args.number == SYS_shadow_set_ptrace_allow_native_syscalls) {
+        bool val = args.args[0].as_i64;
+        debug("SYS_shadow_set_ptrace_allow_native_syscalls %d", val);
+        thread->shimSharedMem->ptrace_allow_native_syscalls = val;
+        thread->syscall.sysCallReturn = (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return;
+    }
+
+    if(args.number == SYS_shadow_get_ipc_blk) {
+        PluginPtr ipc_blk_pptr = args.args[0].as_ptr;
+        debug("SYS_shadow_get_ipc_blk %p", (void*)ipc_blk_pptr.val);
+        ShMemBlockSerialized* ipc_blk_ptr = process_getWriteablePtr(
+            thread->base.process, &thread->base, ipc_blk_pptr, sizeof(*ipc_blk_ptr));
+        *ipc_blk_ptr = shmemallocator_globalBlockSerialize(&thread->ipcBlk);
+        thread->syscall.sysCallReturn = (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return;
+    }
+
+    if (thread->shimSharedMem->ptrace_allow_native_syscalls) {
+        debug("Ptrace allowing native syscalls");
+        thread->syscall.sysCallReturn = (SysCallReturn){.state = SYSCALL_NATIVE};
+        return;
+    }
 
     thread->syscall.sysCallReturn =
         syscallhandler_make_syscall(thread->sys, &args);
@@ -647,11 +706,13 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 // no default
         }
         _threadptrace_flushPtrs(thread);
+
         // Allow child to start executing.
         if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, thread->signalToDeliver) < 0) {
             error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
             return NULL;
         }
+
         thread->signalToDeliver = 0;
         _threadptrace_nextChildState(thread);
     }
@@ -939,6 +1000,15 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
     child->childState = THREAD_PTRACE_CHILD_STATE_TRACE_ME;
     _threadptrace_enterStateTraceMe(child);
 
+    // Send 'start' event.
+    ShimEvent startEvent = {
+        .event_id = SHD_SHIM_EVENT_START,
+        .event_data.start = {
+            .simulation_nanos = worker_getEmulatedTime(),
+            .shim_shared_mem = shmemallocator_globalBlockSerialize(&child->shimSharedMemBlock),
+        }};
+    shimevent_sendEventToPlugin(child->ipcBlk.p, &startEvent);
+
     return childNativeTid;
 }
 
@@ -965,12 +1035,19 @@ Thread* threadptrace_new(Host* host, Process* process, int threadID) {
         // FIXME: This should the emulated CPU's frequency
         .tsc = {.cyclesPerSecond = 2000000000UL},
         .childState = THREAD_PTRACE_CHILD_STATE_NONE,
+        .ipcBlk = shmemallocator_globalAlloc(ipcData_nbytes()),
+        .shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimSharedMem)),
     };
+    ipcData_init(thread->ipcBlk.p);
+    thread->shimSharedMem = thread->shimSharedMemBlock.p;
+    *thread->shimSharedMem = (ShimSharedMem){.ptrace_allow_native_syscalls = false};
+
     thread->sys = syscallhandler_new(host, process, _threadPtraceToThread(thread));
 
     thread->pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite));
     thread->readPointers = g_array_new(FALSE, FALSE, sizeof(void*));
 
     worker_countObject(OBJECT_TYPE_THREAD_PTRACE, COUNTER_TYPE_NEW);
+
     return _threadPtraceToThread(thread);
 }
