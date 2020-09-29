@@ -1,5 +1,7 @@
 #include "ipc.h"
 
+#include <assert.h>
+#include <errno.h>
 #include <new>
 
 #include "shim/binary_spinning_sem.h"
@@ -36,5 +38,27 @@ void shimevent_recvEventFromPlugin(struct IPCData* data, ShimEvent* e) {
     data->xfer_ctrl_to_shadow.wait();
     *e = data->plugin_to_shadow;
 }
+
+int shimevent_tryRecvEventFromShadow(struct IPCData* data, ShimEvent* e) {
+    int rv = data->xfer_ctrl_to_plugin.trywait();
+    if (rv != 0) {
+        assert(rv == -1 && errno == EAGAIN);
+        return -1;
+    }
+    *e = data->shadow_to_plugin;
+    return 0;
+}
+
+int shimevent_tryRecvEventFromPlugin(struct IPCData* data, ShimEvent* e) {
+    int rv =  data->xfer_ctrl_to_shadow.trywait();
+    if (rv != 0) {
+        assert(rv == -1 && errno == EAGAIN);
+        return -1;
+    }
+
+    *e = data->plugin_to_shadow;
+    return 0;
+}
+
 
 } // extern "C"
