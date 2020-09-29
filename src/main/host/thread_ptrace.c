@@ -952,38 +952,16 @@ void* threadptrace_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
     return rv;
 }
 
-static long _threadptrace_ipcNativeSyscall(ThreadPtrace* thread, long n, va_list args) {
-    debug("threadptrace_ipcNativeSyscall %ld", n);
-    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
-    ShimEvent req = {
-        .event_id = SHD_SHIM_EVENT_SYSCALL,
-        .event_data.syscall.syscall_args.number = n,
-    };
-    // We don't know how many arguments there actually are, but the x86_64 linux
-    // ABI supports at most 6 arguments, and processing more arguments here than
-    // were actually passed doesn't hurt anything. e.g. this is what libc's
-    // syscall(2) function does as well.
-    for (int i=0; i<6; ++i) {
-        req.event_data.syscall.syscall_args.args[i].as_i64 = va_arg(args, int64_t);
-    }
-    shimevent_sendEventToPlugin(thread->ipcBlk.p, &req);
-
-    ShimEvent resp = {0};
-    shimevent_recvEventFromPlugin(thread->ipcBlk.p, &resp);
-    utility_assert(resp.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
-    return resp.event_data.syscall_complete.retval.as_i64;
-    return 0;
-}
-
-static long _threadptrace_ptraceNativeSyscall(ThreadPtrace* thread, long n, va_list args) {
+static long _threadptrace_ptraceVNativeSyscall(ThreadPtrace* thread,
+                                               struct user_regs_struct* orig_regs, long n,
+                                               va_list args) {
     debug("threadptrace_ptraceNativeSyscall %ld", n);
-    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL);
     // The last ptrace stop was just before executing a syscall instruction.
     // We'll use that to execute the desired syscall, and then restore the
     // original state.
 
     // Inject the requested syscall number and arguments.
-    struct user_regs_struct regs = thread->syscall.regs;
+    struct user_regs_struct regs = *orig_regs;
     regs.rax = n;
     regs.rdi = va_arg(args, long);
     regs.rsi = va_arg(args, long);
@@ -1051,10 +1029,64 @@ static long _threadptrace_ptraceNativeSyscall(ThreadPtrace* thread, long n, va_l
     return regs.rax;
 }
 
+static long _threadptrace_ptraceNativeSyscall(ThreadPtrace* thread,
+                                              struct user_regs_struct* orig_regs, long n, ...) {
+    va_list(args);
+    va_start(args, n);
+    long rv = _threadptrace_ptraceNativeSyscall(thread, orig_regs, n, args);
+    va_end(args);
+    return rv;
+}
+
+static long _threadptrace_ipcNativeSyscall(ThreadPtrace* thread, long n, va_list args) {
+    debug("threadptrace_ipcNativeSyscall %ld", n);
+    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
+    ShimEvent req = {
+        .event_id = SHD_SHIM_EVENT_SYSCALL,
+        .event_data.syscall.syscall_args.number = n,
+    };
+    // We don't know how many arguments there actually are, but the x86_64 linux
+    // ABI supports at most 6 arguments, and processing more arguments here than
+    // were actually passed doesn't hurt anything. e.g. this is what libc's
+    // syscall(2) function does as well.
+    for (int i=0; i<6; ++i) {
+        req.event_data.syscall.syscall_args.args[i].as_i64 = va_arg(args, int64_t);
+    }
+    shimevent_sendEventToPlugin(thread->ipcBlk.p, &req);
+
+    while(1) {
+        StopReason reason = _threadptrace_hybridSpin(thread);
+        if (reason.type == STOPREASON_SHIM_EVENT) {
+            utility_assert(reason.shim_event.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
+            return reason.shim_event.event_data.syscall_complete.retval.as_i64;
+        } else if (reason.type == STOPREASON_SYSCALL) {
+            // We got a ptrace syscall-stop. We don't know whether this is the requested
+            // syscall or something else (such as shim-side logging). Allow it
+            // to complete natively.
+            struct user_regs_struct regs;
+            if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
+                error("ptrace: %s", g_strerror(errno));
+                abort();
+            }
+            _threadptrace_ptraceNativeSyscall(thread, &regs, regs.orig_rax, regs.rdi, regs.rsi,
+                                              regs.rdx, regs.r10, regs.r8, regs.r9);
+            if (!threadptrace_isRunning(&thread->base)) {
+                // Since the child is no longer running, we have no way of retrieving a
+                // return value, if any. e.g. this happens after the `exit` syscall.
+                return -ECHILD;
+            }
+        } else {
+            error("Unhandled stop reason %d", reason.type);
+            abort();
+        }
+    }
+}
+
+
 long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     if (thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL) {
-        return _threadptrace_ptraceNativeSyscall(thread, n, args);
+        return _threadptrace_ptraceVNativeSyscall(thread, &thread->syscall.regs, n, args);
     }
     if (thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
         return _threadptrace_ipcNativeSyscall(thread, n, args);
