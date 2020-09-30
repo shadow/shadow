@@ -208,10 +208,10 @@ long syscall(long n, ...) {
 // General-case macro for defining a thin wrapper function `fnname` that invokes
 // the syscall `sysname`.
 #define REMAP(type, fnname, sysname, params, ...)                                                  \
-    type fnname params { return (type)syscall(SYS_##sysname, __VA_ARGS__); }
+    type fnname params { return (type)syscall(SYS_##sysname, ##__VA_ARGS__); }
 
 // Same as `REMAP`, but the wrapper function is named after the syscall name.
-#define NOREMAP(type, sysname, params, ...) REMAP(type, sysname, sysname, params, __VA_ARGS__)
+#define NOREMAP(type, sysname, params, ...) REMAP(type, sysname, sysname, params, ##__VA_ARGS__)
 
 // Sorted by function name (e.g. using `sort -t',' -k2`).
 // clang-format off
@@ -250,6 +250,7 @@ NOREMAP(int, futimesat, (int a, const char* b, const struct timeval c[2]), a, b,
 NOREMAP(ssize_t, getdents, (int a, void* b, size_t c), a, b, c);
 NOREMAP(ssize_t, getdents64, (int a, void* b, size_t c), a, b, c);
 NOREMAP(int, getpeername, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
+NOREMAP(int, getpid, ());
 NOREMAP(ssize_t, getrandom, (void* a, size_t b, unsigned int c), a, b, c);
 NOREMAP(int, getsockname, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
 NOREMAP(int, getsockopt, (int a, int b, int c, void* d, socklen_t* e), a, b, c, d, e);
@@ -311,17 +312,6 @@ NOREMAP(int, utimensat, (int a, const char* b, const struct timespec c[2], int d
 NOREMAP(ssize_t, write, (int a, const void *b, size_t c), a,b,c);
 NOREMAP(ssize_t, writev, (int a, const struct iovec* b, int c), a, b, c);
 // clang-format on
-
-// TODO: The NOREMAP macro doesn't seem to work with no param list
-pid_t getpid() {
-    if (shim_interpositionEnabled()) {
-        debug("Making interposed syscall getpid");
-        return (pid_t)syscall(SYS_getpid);
-    } else {
-        debug("Making real syscall getpid");
-        return (pid_t)_real_syscall(SYS_getpid);
-    }
-}
 
 /*
  * libc uses variadic functions to implement optional parameters. For those
