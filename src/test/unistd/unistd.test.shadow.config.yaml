@@ -22,7 +22,7 @@ kill:
 - time: 5
 plugins:
 - id: test-unistd
-  path: test-unistd
+  path: ../target/debug/test_unistd
 hosts:
 - id: testnode
   quantity: 1
