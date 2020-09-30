@@ -618,8 +618,11 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
 
 const void* process_getReadablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-    utility_assert(proc->memoryManager);
-    return memorymanager_getReadablePtr(proc->memoryManager, thread, plugin_src, n);
+    if (proc->memoryManager) {
+        return memorymanager_getReadablePtr(proc->memoryManager, thread, plugin_src, n);
+    } else {
+        return thread_getReadablePtr(thread, plugin_src, n);
+    }
 }
 
 // Returns a writable pointer corresponding to the named region. The initial
@@ -628,8 +631,11 @@ const void* process_getReadablePtr(Process* proc, Thread* thread, PluginPtr plug
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getWriteablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-    utility_assert(proc->memoryManager);
-    return memorymanager_getWriteablePtr(proc->memoryManager, thread, plugin_src, n);
+    if (proc->memoryManager) {
+        return memorymanager_getWriteablePtr(proc->memoryManager, thread, plugin_src, n);
+    } else {
+        return thread_getWriteablePtr(thread, plugin_src, n);
+    }
 }
 
 // Returns a writeable pointer corresponding to the specified src. Use when
@@ -638,8 +644,11 @@ void* process_getWriteablePtr(Process* proc, Thread* thread, PluginPtr plugin_sr
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getMutablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-    utility_assert(proc->memoryManager);
-    return memorymanager_getMutablePtr(proc->memoryManager, thread, plugin_src, n);
+    if(proc->memoryManager) {
+        return memorymanager_getMutablePtr(proc->memoryManager, thread, plugin_src, n);
+    } else {
+        return thread_getMutablePtr(thread, plugin_src, n);
+    }
 }
 
 // Flushes and invalidates all previously returned readable/writeable plugin

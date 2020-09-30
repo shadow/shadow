@@ -76,7 +76,7 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
 
     ShMemBlock ipc_blk = shim_thisThreadEventIPCBlk();
 
-    debug("sending syscall event %ld on %p",
+    debug("sending syscall %ld event on %p",
           syscall_event->event_data.syscall.syscall_args.number, ipc_blk.p);
 
     shimevent_sendEventToShadow(ipc_blk.p, syscall_event);

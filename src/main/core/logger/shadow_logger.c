@@ -152,7 +152,7 @@ static void _logger_stopHelper(ShadowLogger* logger) {
     /* wait until the thread exits.
      * XXX: calling thread_join may cause deadlocks in the loader, so let's just
      * wait for the thread to indicate that it finished everything instead. */
-    // pthread_join(logger->helper);
+    //pthread_join(logger->helper, NULL);
     countdownlatch_await(logger->helperLatch);
 }
 
@@ -223,6 +223,7 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         _logger_stopHelper(logger);
 
         /* now abort, but get a backtrace */
+        exit(1); // FIXME
         utility_assert(FALSE && "failure due to error-level log message");
     }
 }

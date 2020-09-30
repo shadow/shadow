@@ -178,6 +178,10 @@ typedef struct _ThreadPtrace {
     // use for IPC_SYSCALL
     struct {
         SysCallArgs args;
+        // While handling a syscall via IPC, sometimes we need to stop the
+        // child process to perform ptrace-operations. Tracks whether we've
+        // done so.
+        bool stopped;
     } ipc_syscall;
 
     // Whenever we use ptrace to continue we may raise a signal.  Currently we
@@ -245,10 +249,12 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
                 exit(1);
             }
             // Disable RDTSC
+            /* FIXME
             if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
                 error("prctl: %s", g_strerror(errno));
                 return -1;
             }
+            */
             // Allow parent to trace.
             if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
                 error("ptrace: %s", g_strerror(errno));
@@ -322,6 +328,8 @@ static void _threadptrace_enterStateSyscall(ThreadPtrace* thread) {
 }
 
 static void _threadptrace_enterStateIpcSyscall(ThreadPtrace* thread, ShimEvent* event) {
+    debug("enterStateIpcSyscall");
+    thread->childState = THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL;
     thread->ipc_syscall.args = event->event_data.syscall.syscall_args;
 }
 
@@ -335,8 +343,8 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
             return;
         }
         uint64_t eip = regs.rip;
-        const uint8_t* buf = thread_getReadablePtr(
-            _threadPtraceToThread(thread), (PluginPtr){eip}, 16);
+        const uint8_t* buf = process_getReadablePtr(
+            thread->base.process, _threadPtraceToThread(thread), (PluginPtr){eip}, 16);
         if (isRdtsc(buf)) {
             debug("emulating rdtsc");
             Tsc_emulateRdtsc(&thread->tsc, &regs, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
@@ -409,7 +417,7 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
             error("Unhandled stop reason. stop type: %d", reason.type);
             return;
     }
-    error("Unhandled stop reason. stop type: %d", reason.type);
+    error("Invalid stop reason. stop type: %d", reason.type);
     return;
 }
 
@@ -437,26 +445,24 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
     };
     while (1) {
         int wstatus;
-        pid_t pid = waitpid(pid, &wstatus, WNOHANG);
+        pid_t pid = waitpid(thread->base.nativeTid, &wstatus, WNOHANG);
+        if (pid < 0) {
+            error("waitpid: %s", strerror(pid));
+            abort();
+        }
         if (pid != 0) {
+            debug("Got ptrace stop");
             return _getStopReason(wstatus);
         }
         if (shimevent_tryRecvEventFromPlugin(thread->ipcBlk.p, &event_stop.shim_event) == 0) {
+            debug("Got shim stop");
             return event_stop;
         }
     };
 }
 
 static void _threadptrace_nextChildState(ThreadPtrace* thread) {
-    // Wait for child to stop.
-
-    int wstatus;
-    if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
-        error("waitpid: %s", g_strerror(errno));
-        return;
-    }
-
-    StopReason reason = _getStopReason(wstatus);
+    StopReason reason = _threadptrace_hybridSpin(thread);
     _threadptrace_updateChildState(thread, reason);
 }
 
@@ -522,6 +528,7 @@ static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallAr
         debug("Ptrace allowing native syscalls");
         return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
+    debug("Ptrace not allowing native syscalls");
 
     return syscallhandler_make_syscall(thread->sys, args);
 }
@@ -641,8 +648,8 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
 #ifdef DEBUG
     // Verify that rip is now pointing at a syscall instruction.
     const uint8_t* buf =
-        thread_getReadablePtr(_threadPtraceToThread(thread), (PluginPtr){thread->syscall.regs.rip},
-                              sizeof(SYSCALL_INSTRUCTION));
+        process_getReadablePtr(thread->base.process, _threadPtraceToThread(thread),
+                               (PluginPtr){thread->syscall.regs.rip}, sizeof(SYSCALL_INSTRUCTION));
     utility_assert(!memcmp(buf, SYSCALL_INSTRUCTION, sizeof(SYSCALL_INSTRUCTION)));
 #endif
     if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &thread->syscall.regs) < 0) {
@@ -704,11 +711,13 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 break;
             case THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL: {
                 debug("THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL");
-                SysCallReturn ret = _threadptrace_handleSyscall(thread, &thread->syscall.args);
+                SysCallReturn ret = syscallhandler_make_syscall(thread->sys, &thread->ipc_syscall.args);
                 switch (ret.state) {
                     case SYSCALL_BLOCK:
+                        debug("ipc_syscall blocked");
                         return ret.cond;
                     case SYSCALL_DONE: {
+                        debug("ipc_syscall done");
                         // FIXME: flush shmem memory accesses?
                         ShimEvent shim_result = {
                         .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
@@ -722,11 +731,17 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                         break;
                                        }
                     case SYSCALL_NATIVE: {
+                        debug("ipc_syscall do-native");
                         // FIXME: flush shmem memory accesses?
                         ShimEvent shim_result = (ShimEvent){
                             .event_id = SHD_SHIM_EVENT_SYSCALL_DO_NATIVE,
                         };
                         shimevent_sendEventToPlugin(thread->ipcBlk.p, &shim_result);
+                        if (thread->childState != THREAD_PTRACE_CHILD_STATE_SYSCALL) {
+                            // Executing the syscall changed our state. We need to process it before
+                            // waiting again.
+                            continue;
+                        }
                     }
                 }
                 break;
@@ -888,7 +903,8 @@ const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                         size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     // FIXME: not implemented
-    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
+    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL ||
+                   thread->ipc_syscall.stopped);
     void* rv = g_new(void, n);
     g_array_append_val(thread->readPointers, rv);
     _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
@@ -899,7 +915,7 @@ int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
                                    const char** out_str, size_t* strlen) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     // FIXME: not implemented
-    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
+    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL || thread->ipc_syscall.stopped);
     char* str = g_new(char, n);
     int err = 0;
 
@@ -942,7 +958,8 @@ void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
                                    size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     // FIXME: not implemented
-    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
+    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL ||
+                   thread->ipc_syscall.stopped);
     void* rv = g_new(void, n);
     PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
     g_array_append_val(thread->pendingWrites, pendingWrite);
@@ -952,7 +969,8 @@ void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
 void* threadptrace_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     // FIXME: not implemented
-    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
+    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL ||
+                   thread->ipc_syscall.stopped);
     void* rv = g_new(void, n);
     _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
     PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
@@ -963,7 +981,7 @@ void* threadptrace_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
 static long _threadptrace_ptraceVNativeSyscall(ThreadPtrace* thread,
                                                struct user_regs_struct* orig_regs, long n,
                                                va_list args) {
-    debug("threadptrace_ptraceNativeSyscall %ld", n);
+    debug("threadptrace_ptraceVNativeSyscall %ld", n);
     // The last ptrace stop was just before executing a syscall instruction.
     // We'll use that to execute the desired syscall, and then restore the
     // original state.
@@ -990,8 +1008,8 @@ static long _threadptrace_ptraceVNativeSyscall(ThreadPtrace* thread,
 
 #ifdef DEBUG
     // Verify that rip is now pointing at a syscall instruction.
-    const uint8_t* buf = thread_getReadablePtr(
-        _threadPtraceToThread(thread), (PluginPtr){regs.rip}, sizeof(SYSCALL_INSTRUCTION));
+    const uint8_t* buf = process_getReadablePtr(thread->base.process, _threadPtraceToThread(thread),
+                                                (PluginPtr){regs.rip}, sizeof(SYSCALL_INSTRUCTION));
     utility_assert(!memcmp(buf, SYSCALL_INSTRUCTION, sizeof(SYSCALL_INSTRUCTION)));
 #endif
 
@@ -1041,7 +1059,7 @@ static long _threadptrace_ptraceNativeSyscall(ThreadPtrace* thread,
                                               struct user_regs_struct* orig_regs, long n, ...) {
     va_list(args);
     va_start(args, n);
-    long rv = _threadptrace_ptraceNativeSyscall(thread, orig_regs, n, args);
+    long rv = _threadptrace_ptraceVNativeSyscall(thread, orig_regs, n, args);
     va_end(args);
     return rv;
 }
@@ -1065,9 +1083,14 @@ static long _threadptrace_ipcNativeSyscall(ThreadPtrace* thread, long n, va_list
     while(1) {
         StopReason reason = _threadptrace_hybridSpin(thread);
         if (reason.type == STOPREASON_SHIM_EVENT) {
-            utility_assert(reason.shim_event.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
+            utility_assert(reason.shim_event.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
+            debug("shim native syscall complete with result %ld",
+                  reason.shim_event.event_data.syscall_complete.retval.as_i64);
             return reason.shim_event.event_data.syscall_complete.retval.as_i64;
         } else if (reason.type == STOPREASON_SYSCALL) {
+            utility_assert(thread->shimSharedMem->ptrace_allow_native_syscalls);
+            thread->ipc_syscall.stopped = true;
+            debug("ptrace syscall stop while processing ipc syscall");
             // We got a ptrace syscall-stop. We don't know whether this is the requested
             // syscall or something else (such as shim-side logging). Allow it
             // to complete natively.
@@ -1083,8 +1106,29 @@ static long _threadptrace_ipcNativeSyscall(ThreadPtrace* thread, long n, va_list
                 // return value, if any. e.g. this happens after the `exit` syscall.
                 return -ECHILD;
             }
+            if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, 0) < 0) {
+                error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
+                abort();
+            }
+            thread->ipc_syscall.stopped = false;
+        } else if (reason.type == STOPREASON_SIGNAL) {
+            // Deliver it.
+            warning("Delivering signal %d", reason.signal.signal);
+            if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, reason.signal.signal) < 0) {
+                error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
+                abort();
+            }
+        } else if (reason.type == STOPREASON_EXITED_SIGNAL) {
+            // Deliver it.
+            warning("Exited with signal %d", reason.exited_signal.signal);
+            _threadptrace_updateChildState(thread, reason);
+            return -ECHILD;
+        } else if (reason.type == STOPREASON_EXITED_NORMAL) {
+            warning("Exited with status %d", reason.exited_normal.exit_code);
+            _threadptrace_updateChildState(thread, reason);
+            return -ECHILD;
         } else {
-            error("Unhandled stop reason %d", reason.type);
+            warning("Unhandled stop reason %d", reason.type);
             abort();
         }
     }
@@ -1092,7 +1136,7 @@ static long _threadptrace_ipcNativeSyscall(ThreadPtrace* thread, long n, va_list
 
 long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-    if (thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL) {
+    if (thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL || (thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL && thread->ipc_syscall.stopped)) {
         return _threadptrace_ptraceVNativeSyscall(thread, &thread->syscall.regs, n, args);
     }
     if (thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {

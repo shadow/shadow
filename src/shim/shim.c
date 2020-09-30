@@ -62,8 +62,8 @@ void shim_enableInterposition() {
 }
 
 bool shim_interpositionEnabled() {
-    // FIXME: enable for INTERPOSE_PTRACE too.
-    return _interpose_type == INTERPOSE_PRELOAD && !_shim_disable_interposition;
+    return (_interpose_type == INTERPOSE_PRELOAD || _interpose_type == INTERPOSE_PTRACE) &&
+           !_shim_disable_interposition;
 }
 
 // Figure out what interposition mechanism we're using, based on environment
