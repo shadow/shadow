@@ -35,6 +35,9 @@
 
 static char SYSCALL_INSTRUCTION[] = {0x0f, 0x05};
 
+// Number of times to do a non-blocking wait while waiting for traced thread.
+#define THREADPTRACE_MAX_SPIN 8096
+
 typedef enum {
     // Doesn't exist yet.
     THREAD_PTRACE_CHILD_STATE_NONE = 0,
@@ -367,11 +370,27 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
     }
 }
 
+static pid_t _waitpid_spin(pid_t pid, int *wstatus, int options) {
+    int count = 0;
+    pid_t rv = 0;
+    // First do non-blocking waits.
+    do {
+        rv = waitpid(pid, wstatus, options|WNOHANG);
+    } while (rv == 0 && count++ < THREADPTRACE_MAX_SPIN);
+
+    // If we haven't gotten an answer yet, make a blocking call.
+    if (rv == 0) {
+        rv = waitpid(pid, wstatus, options);
+    }
+
+    return rv;
+}
+
 static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     // Wait for child to stop.
 
     int wstatus;
-    if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
+    if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
         error("waitpid: %s", g_strerror(errno));
         return;
     }
@@ -447,7 +466,7 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
         abort();
     }
     int wstatus;
-    if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
+    if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
         error("waitpid: %s", g_strerror(errno));
         abort();
     }
@@ -475,7 +494,7 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
             error("ptrace: %s", g_strerror(errno));
             abort();
         }
-        if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
+        if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
             error("waitpid: %s", g_strerror(errno));
             abort();
         }
@@ -544,7 +563,7 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
         abort();
     }
     int wstatus;
-    if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
+    if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
         error("waitpid: %s", g_strerror(errno));
         abort();
     }
@@ -668,7 +687,7 @@ void threadptrace_terminate(Thread* base) {
     }
 
     int wstatus;
-    if (waitpid(thread->base.nativePid, &wstatus, 0) < 0) {
+    if (_waitpid_spin(thread->base.nativePid, &wstatus, 0) < 0) {
         error("waitpid: %s", g_strerror(errno));
         return;
     }
@@ -849,7 +868,7 @@ long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
             abort();
         }
         int wstatus;
-        if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
+        if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
             error("waitpid: %s", g_strerror(errno));
             abort();
         }
@@ -906,16 +925,21 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
         .tsc = thread->tsc,
         .pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite)),
         .readPointers = g_array_new(FALSE, FALSE, sizeof(void*)),
-        .sys = syscallhandler_new(worker_getActiveHost(), base->process, base),
     };
+
+    // Create the syscall handler with the new child base
+    child->sys = syscallhandler_new(worker_getActiveHost(), base->process, &child->base),
+
     child->base.nativePid = base->nativePid;
     child->base.nativeTid = childNativeTid;
+
+    debug("cloned a new virtual thread at tid %d", child->base.tid);
 
     // The child should get a SIGSTOP triggered by the CLONE_PTRACE flag. Wait
     // for that stop, which puts the child into the
     // THREAD_PTRACE_CHILD_STATE_TRACE_ME state.
     int wstatus;
-    if (waitpid(childNativeTid, &wstatus, 0) < 0) {
+    if (_waitpid_spin(childNativeTid, &wstatus, 0) < 0) {
         error("waitpid: %s", g_strerror(errno));
         abort();
     }

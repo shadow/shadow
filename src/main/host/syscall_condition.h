@@ -8,16 +8,42 @@
 
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/timer.h"
+#include "main/host/futex.h"
 #include "main/host/process.h"
+#include "main/host/status.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
+/* The type of the object that we use to trigger the condition. */
+typedef enum _TriggerType TriggerType;
+enum _TriggerType {
+    TRIGGER_NONE,
+    TRIGGER_DESCRIPTOR,
+    TRIGGER_FUTEX,
+};
+
+/* Pointer to the object whose status we monitor for changes */
+typedef union _TriggerObject TriggerObject;
+union _TriggerObject {
+    void* as_pointer;
+    Descriptor* as_descriptor;
+    Futex* as_futex;
+};
+
+/* The spec of the condition that will cause us to unblock a process/thread waiting for the object
+ * to reach a status. */
+typedef struct _Trigger Trigger;
+struct _Trigger {
+    TriggerType type;
+    TriggerObject object;
+    Status status;
+};
+
 /* Create a new object that will cause a signal to be delivered to
- * a waiting process and thread, conditional upon the given descriptor
+ * a waiting process and thread, conditional upon the given trigger object
  * reaching the given status or the given timeout expiring.
  * The condition starts with a reference count of 1. */
-SysCallCondition* syscallcondition_new(Timer* timeout, Descriptor* desc,
-                                       DescriptorStatus status);
+SysCallCondition* syscallcondition_new(Trigger trigger, Timer* timeout);
 
 /* Increment the reference count on the given condition. */
 void syscallcondition_ref(SysCallCondition* cond);

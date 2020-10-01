@@ -14,12 +14,12 @@ include(ExternalProject)
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")
 ExternalProject_Add(
    shadow-tests
-   PREFIX ${CMAKE_CURRENT_SOURCE_DIR}
+   PREFIX ${CMAKE_CURRENT_BINARY_DIR}
+   BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}
    BUILD_ALWAYS 1
    DOWNLOAD_COMMAND ""
    CONFIGURE_COMMAND ""
-   SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
-   BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build --target-dir ${CMAKE_CURRENT_BINARY_DIR}/target"
+   BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build"
    INSTALL_COMMAND ""
    LOG_BUILD OFF
 )
@@ -27,6 +27,9 @@ ExternalProject_Add(
 ## a helper program for tests needing multiple processes
 add_executable(shadow-test-launcher test_launcher.c test_launcher_common.c)
 add_executable(shadow-test-launcher-fail test_launcher_fail.c test_launcher_common.c)
+
+## Wrapper around the yaml2xml tool
+set (yaml2xml "python3 ${CMAKE_SOURCE_DIR}/src/tools/convert.py yaml2xml")
 
 ## add the test directories
 # FIXME uncomment these as we get them working in Phantom.
@@ -40,13 +43,13 @@ add_subdirectory(cpp)
 # FIXME add_subdirectory(determinism)
 add_subdirectory(epoll)
 add_subdirectory(file)
+add_subdirectory(futex)
 add_subdirectory(memory)
 add_subdirectory(phold)
 add_subdirectory(poll)
-# FIXME add_subdirectory(pthreads)
+add_subdirectory(pthreads)
 add_subdirectory(random)
 add_subdirectory(resolver)
-add_subdirectory(shutdown)
 # FIXME add_subdirectory(signal)
 add_subdirectory(sleep)
 add_subdirectory(sockbuf)

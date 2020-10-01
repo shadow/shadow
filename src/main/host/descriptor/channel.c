@@ -86,7 +86,7 @@ static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize 
     channel->bufferLength += copyLength;
 
     /* we just got some data in our buffer */
-    descriptor_adjustStatus((Descriptor*)channel, DS_READABLE, TRUE);
+    descriptor_adjustStatus((Descriptor*)channel, STATUS_DESCRIPTOR_READABLE, TRUE);
 
     return copyLength;
 }
@@ -101,7 +101,9 @@ static gssize channel_sendUserData(Transport* transport, gconstpointer buffer,
     gssize result = 0;
 
     if(channel->linkedChannel) {
-        result = channel_linkedWrite(channel->linkedChannel, buffer, nBytes);
+        if (nBytes > 0) {
+            result = channel_linkedWrite(channel->linkedChannel, buffer, nBytes);
+        }
     } else {
         /* the other end closed or doesn't exist */
         result = -EPIPE;
@@ -109,7 +111,7 @@ static gssize channel_sendUserData(Transport* transport, gconstpointer buffer,
 
     /* our end cant write anymore if they returned error */
     if(result <= (gssize)0) {
-        descriptor_adjustStatus((Descriptor*)channel, DS_WRITABLE, FALSE);
+        descriptor_adjustStatus((Descriptor*)channel, STATUS_DESCRIPTOR_WRITABLE, FALSE);
     }
 
     return result;
@@ -142,7 +144,7 @@ static gssize channel_receiveUserData(Transport* transport, gpointer buffer,
 
     /* we are no longer readable if we have nothing left */
     if(channel->bufferLength <= 0) {
-        descriptor_adjustStatus((Descriptor*)channel, DS_READABLE, FALSE);
+        descriptor_adjustStatus((Descriptor*)channel, STATUS_DESCRIPTOR_READABLE, FALSE);
     }
 
     return (gssize)numCopied;
@@ -162,9 +164,9 @@ Channel* channel_new(ChannelType type) {
     channel->buffer = bytequeue_new(8192);
     channel->bufferSize = CONFIG_PIPE_BUFFER_SIZE;
 
-    descriptor_adjustStatus((Descriptor*)channel, DS_ACTIVE, TRUE);
+    descriptor_adjustStatus((Descriptor*)channel, STATUS_DESCRIPTOR_ACTIVE, TRUE);
     if(!(type & CT_READONLY)) {
-        descriptor_adjustStatus((Descriptor*)channel, DS_WRITABLE, TRUE);
+        descriptor_adjustStatus((Descriptor*)channel, STATUS_DESCRIPTOR_WRITABLE, TRUE);
     }
 
     worker_countObject(OBJECT_TYPE_CHANNEL, COUNTER_TYPE_NEW);

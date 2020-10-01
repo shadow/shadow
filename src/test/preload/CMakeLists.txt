@@ -188,10 +188,20 @@ target_link_libraries(shadow-plugin-test-preload test-preload-lib)
 
 ## register the shadow tests
 ## test loading the preloads with the environment variables
-add_test(NAME preload-shadow-dl-env
-         COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d preload-env.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/preload-env.test.shadow.config.xml)
+add_test(
+    NAME preload-shadow-dl-env
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/preload-env.test.shadow.config.yaml --output - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d preload-env.shadow.data - \
+    "
+)
 SET_TESTS_PROPERTIES(preload-shadow-dl-env
     PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_CURRENT_BINARY_DIR}/libtest-preload-interpose.so:${CMAKE_BINARY_DIR}/src/preload/libshadow-interpose.so;LD_STATIC_TLS_EXTRA=10240000")
 ## test loading the preload libs at runtime with elf-loader
-add_test(NAME preload-shadow-dl-run
-         COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d preload-run.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/preload-run.test.shadow.config.xml)
+add_test(
+    NAME preload-shadow-dl-run
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/preload-run.test.shadow.config.yaml --output - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d preload-run.shadow.data - \
+    "
+)

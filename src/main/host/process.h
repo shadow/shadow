@@ -34,6 +34,7 @@
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/syscall_handler.h"
+#include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
 Process* process_new(Host* host, guint processID, SimulationTime startTime,
@@ -73,6 +74,9 @@ guint process_getProcessID(Process* proc);
 int process_registerDescriptor(Process* proc, Descriptor* desc);
 void process_deregisterDescriptor(Process* proc, Descriptor* desc);
 Descriptor* process_getRegisteredDescriptor(Process* proc, int handle);
+
+// Convert a virtual ptr in the plugin address space to a globally unique physical ptr
+PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr);
 
 // Make the data at plugin_src available in shadow's address space.
 //

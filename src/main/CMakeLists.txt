@@ -87,7 +87,7 @@ set(shadow_srcs
 
     host/descriptor/channel.c
     host/descriptor/descriptor.c
-    host/descriptor/descriptor_listener.c
+    host/status_listener.c
     host/descriptor/descriptor_table.c
     host/descriptor/epoll.c
     host/descriptor/file.c
@@ -100,6 +100,8 @@ set(shadow_srcs
     host/descriptor/udp.c
     host/process.c
     host/cpu.c
+    host/futex.c
+    host/futex_table.c
     host/syscall_handler.c
     host/syscall/protected.c
     host/syscall/clone.c
@@ -107,6 +109,7 @@ set(shadow_srcs
     host/syscall/fcntl.c
     host/syscall/file.c
     host/syscall/fileat.c
+    host/syscall/futex.c
     host/syscall/ioctl.c
     host/syscall/mman.c
     host/syscall/process.c
@@ -187,12 +190,12 @@ include(ExternalProject)
 ## build the rust library
 ExternalProject_Add(
     shadow-rust-project
-    PREFIX ${CMAKE_CURRENT_SOURCE_DIR}
+    PREFIX ${CMAKE_CURRENT_BINARY_DIR}
+    BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}
     BUILD_ALWAYS 1
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
-    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build ${RUST_BUILD_FLAG} --all-targets --target-dir ${CMAKE_CURRENT_BINARY_DIR}/target"
+    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build ${RUST_BUILD_FLAG} --all-targets"
     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/target/debug/libshadow_rs.a ${CMAKE_CURRENT_BINARY_DIR}/target/release/libshadow_rs.a
     INSTALL_COMMAND ""
     LOG_BUILD OFF

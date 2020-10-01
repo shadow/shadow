@@ -3,7 +3,8 @@
  * See LICENSE for licensing information
  */
 
-use test_utils::AsMutPtr;
+use test_utils::TestEnvironment as TestEnv;
+use test_utils::{set, AsMutPtr};
 
 struct GetsocknameArguments {
     fd: libc::c_int,
@@ -12,16 +13,23 @@ struct GetsocknameArguments {
 }
 
 fn main() -> Result<(), String> {
-    // should we run only tests that shadow supports
-    let run_only_passing_tests = std::env::args().any(|x| x == "--shadow-passing");
+    // should we restrict the tests we run?
+    let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
+    let filter_libc_passing = std::env::args().any(|x| x == "--libc-passing");
     // should we summarize the results rather than exit on a failed test
     let summarize = std::env::args().any(|x| x == "--summarize");
 
     let mut tests = get_tests();
-    if run_only_passing_tests {
+    if filter_shadow_passing {
         tests = tests
             .into_iter()
-            .filter(|x| x.shadow_passing() == test_utils::ShadowPassing::Yes)
+            .filter(|x| x.passing(TestEnv::Shadow))
+            .collect()
+    }
+    if filter_libc_passing {
+        tests = tests
+            .into_iter()
+            .filter(|x| x.passing(TestEnv::Libc))
             .collect()
     }
 
@@ -36,67 +44,67 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new(
             "test_invalid_fd",
             test_invalid_fd,
-            test_utils::ShadowPassing::Yes,
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_non_existent_fd",
             test_non_existent_fd,
-            test_utils::ShadowPassing::Yes,
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_non_socket_fd",
             test_non_socket_fd,
-            test_utils::ShadowPassing::No,
+            set![TestEnv::Libc],
         ),
         test_utils::ShadowTest::new(
             "test_null_addr",
             test_null_addr,
-            test_utils::ShadowPassing::Yes,
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_null_len",
             test_null_len,
-            test_utils::ShadowPassing::Yes,
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_short_len",
             test_short_len,
-            test_utils::ShadowPassing::Yes,
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_zero_len",
             test_zero_len,
-            test_utils::ShadowPassing::Yes,
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_unbound_socket",
             test_unbound_socket,
-            test_utils::ShadowPassing::Yes,
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_bound_socket",
             test_bound_socket,
-            test_utils::ShadowPassing::Yes,
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_dgram_socket",
             test_dgram_socket,
-            test_utils::ShadowPassing::Yes,
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_after_close",
             test_after_close,
-            test_utils::ShadowPassing::Yes,
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_connected_socket",
             test_connected_socket,
-            test_utils::ShadowPassing::Yes,
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_implicit_bind",
             test_implicit_bind,
-            test_utils::ShadowPassing::Yes,
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
     ];
 

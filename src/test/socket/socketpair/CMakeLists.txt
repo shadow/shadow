@@ -1,4 +1,4 @@
-add_test(NAME socketpair COMMAND ../../target/debug/test_socketpair)
+add_test(NAME socketpair COMMAND ../../target/debug/test_socketpair --libc-passing)
 list(APPEND TestNames socketpair)
 
 # TODO: once socketpair() is supported, re-enable these tests
@@ -6,7 +6,7 @@ list(APPEND TestNames socketpair)
 #foreach(Method ptrace preload)
 #    # runs the shadow tests with only the passing tests, not all tests
 #    add_test(NAME socketpair-shadow-${Method} COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=${Method}
-#        -l debug -d socketpair.shadow-${Method}.data ${CMAKE_CURRENT_SOURCE_DIR}/socketpair.shadow.config.xml)
+#        -l debug -d socketpair.shadow-${Method}.data ${CMAKE_CURRENT_SOURCE_DIR}/socketpair.shadow.config.yaml)
 #    list(APPEND TestNames socketpair-shadow-${Method})
 #endforeach()
 

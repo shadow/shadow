@@ -33,7 +33,10 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
           echo "::add-path::$HOME/.cargo/bin"
       - name: Rustfmt check
-        run: cd src && cargo fmt -- --check
+        run: |
+          (cd src/main && cargo fmt -- --check)
+          (cd src/test && cargo fmt -- --check)
+          (cd src/support/logger/rust_bindings && cargo fmt -- --check)
 
   lint-bindings:
     runs-on: ubuntu-latest
@@ -57,10 +60,13 @@ jobs:
           echo "::add-path::$HOME/.cargo/bin"
       - name: Install Rust packages
         run: |
-          cargo install --force --version 0.14.4 cbindgen
-          cargo install --force --version 0.55.0 bindgen
+          cargo install --force --version 0.14.6 cbindgen
+          cargo install --force --version 0.55.1 bindgen
       - name: Check bindings
         run: |
           mkdir build
+          cbindgen --version
+          bindgen --version
+          echo "If the bindings are different, you may want to check that your local cbindgen/bindgen versions match with the CI, and update the CI version numbers if necessary."
           (cd build && cmake --target bindings .. && make bindings)
           git diff --exit-code
