@@ -223,7 +223,6 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         _logger_stopHelper(logger);
 
         /* now abort, but get a backtrace */
-        exit(1); // FIXME
         utility_assert(FALSE && "failure due to error-level log message");
     }
 }

@@ -210,6 +210,7 @@ static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
                                          size_t n);
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                         size_t n);
+static int _threadptrace_recvEventFromPlugin(ThreadPtrace* thread, ShimEvent* res);
 
 static ThreadPtrace* _threadToThreadPtrace(Thread* thread) {
     utility_assert(thread->type_id == THREADPTRACE_TYPE_ID);
@@ -718,7 +719,6 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                         return ret.cond;
                     case SYSCALL_DONE: {
                         debug("ipc_syscall done");
-                        // FIXME: flush shmem memory accesses?
                         ShimEvent shim_result = {
                         .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
                         .event_data = {
@@ -732,16 +732,18 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                                        }
                     case SYSCALL_NATIVE: {
                         debug("ipc_syscall do-native");
-                        // FIXME: flush shmem memory accesses?
+                        // FIXME: flush memory
                         ShimEvent shim_result = (ShimEvent){
                             .event_id = SHD_SHIM_EVENT_SYSCALL_DO_NATIVE,
                         };
                         shimevent_sendEventToPlugin(thread->ipcBlk.p, &shim_result);
+#if 0
                         if (thread->childState != THREAD_PTRACE_CHILD_STATE_SYSCALL) {
                             // Executing the syscall changed our state. We need to process it before
                             // waiting again.
                             continue;
                         }
+#endif
                     }
                 }
                 break;
@@ -789,15 +791,22 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 break;
                 // no default
         }
-        _threadptrace_flushPtrs(thread);
+        if (!(thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL &&
+              !thread->ipc_syscall.stopped)) {
+            debug("ptrace resuming");
+            // FIXME: need to flush memory (especially writes)
+            _threadptrace_flushPtrs(thread);
 
-        // Allow child to start executing.
-        if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, thread->signalToDeliver) < 0) {
-            error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
-            return NULL;
+            // Allow child to start executing.
+            if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, thread->signalToDeliver) < 0) {
+                error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
+                return NULL;
+            }
+
+            thread->signalToDeliver = 0;
+        } else {
         }
-
-        thread->signalToDeliver = 0;
+        debug("waiting for next state");
         _threadptrace_nextChildState(thread);
     }
 }
@@ -911,11 +920,69 @@ const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
     return rv;
 }
 
+static ShMemBlock _threadptrace_preloadReadPtrImpl(ThreadPtrace* thread, PluginPtr plugin_src,
+                                                   size_t n, bool is_string) {
+    // Allocate a block for the clone
+    ShMemBlock blk = shmemallocator_globalAlloc(n);
+    utility_assert(blk.p && blk.nbytes == n);
+
+    ShimEvent req = {
+        .event_id = SHD_SHIM_EVENT_CLONE_REQ,
+    };
+
+    ShimEvent resp = {0};
+
+    req.event_id = is_string ? SHD_SHIM_EVENT_CLONE_STRING_REQ : SHD_SHIM_EVENT_CLONE_REQ;
+    req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(&blk);
+    req.event_data.shmem_blk.plugin_ptr = plugin_src;
+    req.event_data.shmem_blk.n = n;
+
+    shimevent_sendEventToPlugin(thread->ipcBlk.p, &req);
+    if (_threadptrace_recvEventFromPlugin(thread, &resp) != 0) {
+        abort();
+    }
+
+    utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
+
+    return blk;
+}
+
+static int _threadptrace_preloadGetReadableString(ThreadPtrace* thread, PluginPtr plugin_src, size_t n,
+                                           const char** str_out, size_t* strlen_out) {
+    ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
+    *blk = _threadptrace_preloadReadPtrImpl(thread, plugin_src, n, true);
+
+    const char* str = blk->p;
+    size_t strlen = strnlen(str, n);
+    if (strlen == n) {
+        shmemallocator_globalFree(blk);
+        return -ENAMETOOLONG;
+    }
+    if (strlen_out) {
+        *strlen_out = strlen;
+    }
+
+ // FIXME - leak
+#if 0
+    GList* new_head = g_list_append(thread->read_list, blk);
+    utility_assert(new_head);
+    if (!thread->read_list) {
+        thread->read_list = new_head;
+    }
+#endif
+
+    utility_assert(str_out);
+    *str_out = blk->p;
+    return 0;
+}
+
 int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
                                    const char** out_str, size_t* strlen) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-    // FIXME: not implemented
-    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL || thread->ipc_syscall.stopped);
+    if (thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL &&
+        !thread->ipc_syscall.stopped) {
+        return _threadptrace_preloadGetReadableString(thread, plugin_src, n, out_str, strlen);
+    }
     char* str = g_new(char, n);
     int err = 0;
 
@@ -957,9 +1024,6 @@ int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
 void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
                                    size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-    // FIXME: not implemented
-    utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL ||
-                   thread->ipc_syscall.stopped);
     void* rv = g_new(void, n);
     PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
     g_array_append_val(thread->pendingWrites, pendingWrite);
@@ -1080,6 +1144,7 @@ static long _threadptrace_ipcNativeSyscall(ThreadPtrace* thread, long n, va_list
     }
     shimevent_sendEventToPlugin(thread->ipcBlk.p, &req);
 
+    // FIXME: use recvEventFromPlugin
     while(1) {
         StopReason reason = _threadptrace_hybridSpin(thread);
         if (reason.type == STOPREASON_SHIM_EVENT) {
@@ -1236,3 +1301,59 @@ Thread* threadptrace_new(Host* host, Process* process, int threadID) {
 
     return _threadPtraceToThread(thread);
 }
+
+static int _threadptrace_recvEventFromPlugin(ThreadPtrace* thread, ShimEvent* res) {
+    while(1) {
+        StopReason reason = _threadptrace_hybridSpin(thread);
+        if (reason.type == STOPREASON_SHIM_EVENT) {
+            *res = reason.shim_event;
+            return 0;
+        } else if (reason.type == STOPREASON_SYSCALL) {
+            utility_assert(thread->shimSharedMem->ptrace_allow_native_syscalls);
+            thread->ipc_syscall.stopped = true;
+            debug("ptrace syscall stop while processing ipc syscall");
+            // We got a ptrace syscall-stop. We don't know whether this is the requested
+            // syscall or something else (such as shim-side logging). Allow it
+            // to complete natively.
+            struct user_regs_struct regs;
+            if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
+                error("ptrace: %s", g_strerror(errno));
+                abort();
+            }
+            _threadptrace_ptraceNativeSyscall(thread, &regs, regs.orig_rax, regs.rdi, regs.rsi,
+                                              regs.rdx, regs.r10, regs.r8, regs.r9);
+            if (!threadptrace_isRunning(&thread->base)) {
+                // Since the child is no longer running, we have no way of retrieving a
+                // return value, if any. e.g. this happens after the `exit` syscall.
+                return -ECHILD;
+            }
+            if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, 0) < 0) {
+                error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
+                abort();
+            }
+            thread->ipc_syscall.stopped = false;
+        } else if (reason.type == STOPREASON_SIGNAL) {
+            // Deliver it.
+            warning("Delivering signal %d", reason.signal.signal);
+            if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, reason.signal.signal) < 0) {
+                error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
+                abort();
+            }
+        } else if (reason.type == STOPREASON_EXITED_SIGNAL) {
+            // Deliver it.
+            warning("Exited with signal %d", reason.exited_signal.signal);
+            _threadptrace_updateChildState(thread, reason);
+            return -ECHILD;
+        } else if (reason.type == STOPREASON_EXITED_NORMAL) {
+            warning("Exited with status %d", reason.exited_normal.exit_code);
+            _threadptrace_updateChildState(thread, reason);
+            return -ECHILD;
+        } else {
+            warning("Unhandled stop reason %d", reason.type);
+            abort();
+        }
+    }
+}
+
+
+

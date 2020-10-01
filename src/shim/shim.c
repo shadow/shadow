@@ -39,11 +39,11 @@ static void _shim_wait_start();
 void shim_disableInterposition() {
     if (++_shim_disable_interposition == 1 && _interpose_type == INTERPOSE_PTRACE) {
         if (_shim_shared_mem) {
-            debug("enabling native-syscalls via shmem %p %p", &_shim_shared_mem, _shim_shared_mem);
             _shim_shared_mem->ptrace_allow_native_syscalls = true;
+            debug("enabled native-syscalls via shmem %p %p", &_shim_shared_mem, _shim_shared_mem);
         } else {
-            debug("enabling native-syscalls via syscall");
             shadow_set_ptrace_allow_native_syscalls(true);
+            debug("enabled native-syscalls via syscall");
         }
     }
 }
