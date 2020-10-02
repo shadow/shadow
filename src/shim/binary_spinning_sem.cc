@@ -29,7 +29,7 @@ void BinarySpinningSem::post() {
 void BinarySpinningSem::wait() {
     bool expected = true;
 
-    while (/*_spin_ctr++ < _thresh &&*/
+    while (/* FIXME _spin_ctr++ < _thresh &&*/
            !_x.compare_exchange_weak(expected, false, std::memory_order_acquire)) {
         expected = true;
         __asm__("pause"); // (rwails) Not sure if this op is helpful.
