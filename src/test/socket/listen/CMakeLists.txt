@@ -1,10 +1,15 @@
-add_test(NAME listen COMMAND ../../target/debug/test_listen)
+add_test(NAME listen COMMAND ../../target/debug/test_listen --libc-passing)
 list(APPEND TestNames listen)
 
 foreach(Method ptrace preload)
     # runs the shadow tests with only the passing tests, not all tests
-    add_test(NAME listen-shadow-${Method} COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=${Method}
-        -l debug -d listen.shadow-${Method}.data ${CMAKE_CURRENT_SOURCE_DIR}/listen.shadow.config.xml)
+    add_test(
+        NAME listen-shadow-${Method}
+        COMMAND sh -c "\
+        ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/listen.shadow.config.yaml --output - \
+        | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=${Method} -l debug -d listen.shadow-${Method}.data - \
+        "
+    )
     list(APPEND TestNames listen-shadow-${Method})
 endforeach()
 

@@ -1,10 +1,15 @@
-add_test(NAME getpeername COMMAND ../../target/debug/test_getpeername)
+add_test(NAME getpeername COMMAND ../../target/debug/test_getpeername --libc-passing)
 list(APPEND TestNames getpeername)
 
 foreach(Method ptrace preload)
     # runs the shadow tests with only the passing tests, not all tests
-    add_test(NAME getpeername-shadow-${Method} COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=${Method}
-        -l debug -d getpeername.shadow-${Method}.data ${CMAKE_CURRENT_SOURCE_DIR}/getpeername.shadow.config.xml)
+    add_test(
+        NAME getpeername-shadow-${Method}
+        COMMAND sh -c "\
+        ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/getpeername.shadow.config.yaml --output - \
+        | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=${Method} -l debug -d getpeername.shadow-${Method}.data - \
+        "
+   )
     list(APPEND TestNames getpeername-shadow-${Method})
 endforeach()
 

@@ -3,7 +3,8 @@
  * See LICENSE for licensing information
  */
 
-use test_utils::AsMutPtr;
+use test_utils::TestEnvironment as TestEnv;
+use test_utils::{set, AsMutPtr};
 
 struct AcceptArguments {
     fd: libc::c_int,
@@ -19,16 +20,23 @@ enum AcceptFn {
 }
 
 fn main() -> Result<(), String> {
-    // should we run only tests that shadow supports
-    let run_only_passing_tests = std::env::args().any(|x| x == "--shadow-passing");
+    // should we restrict the tests we run?
+    let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
+    let filter_libc_passing = std::env::args().any(|x| x == "--libc-passing");
     // should we summarize the results rather than exit on a failed test
     let summarize = std::env::args().any(|x| x == "--summarize");
 
     let mut tests = get_tests();
-    if run_only_passing_tests {
+    if filter_shadow_passing {
         tests = tests
             .into_iter()
-            .filter(|x| x.shadow_passing() == test_utils::ShadowPassing::Yes)
+            .filter(|x| x.passing(TestEnv::Shadow))
+            .collect()
+    }
+    if filter_libc_passing {
+        tests = tests
+            .into_iter()
+            .filter(|x| x.passing(TestEnv::Libc))
             .collect()
     }
 
@@ -48,22 +56,22 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             test_utils::ShadowTest::new(
                 &append_args("test_invalid_fd"),
                 move || test_invalid_fd(accept_fn),
-                test_utils::ShadowPassing::Yes,
+                set![TestEnv::Libc, TestEnv::Shadow],
             ),
             test_utils::ShadowTest::new(
                 &append_args("test_non_existent_fd"),
                 move || test_non_existent_fd(accept_fn),
-                test_utils::ShadowPassing::Yes,
+                set![TestEnv::Libc, TestEnv::Shadow],
             ),
             test_utils::ShadowTest::new(
                 &append_args("test_non_socket_fd"),
                 move || test_non_socket_fd(accept_fn),
-                test_utils::ShadowPassing::No,
+                set![TestEnv::Libc],
             ),
             test_utils::ShadowTest::new(
                 &append_args("test_invalid_sock_type"),
                 move || test_invalid_sock_type(accept_fn),
-                test_utils::ShadowPassing::Yes,
+                set![TestEnv::Libc, TestEnv::Shadow],
             ),
         ];
 
@@ -94,32 +102,32 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     test_utils::ShadowTest::new(
                         &append_args("test_non_listening_fd"),
                         move || test_non_listening_fd(accept_fn, sock_flag, accept_flag),
-                        test_utils::ShadowPassing::Yes,
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_null_addr"),
                         move || test_null_addr(accept_fn, sock_flag, accept_flag),
-                        test_utils::ShadowPassing::Yes,
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_null_len"),
                         move || test_null_len(accept_fn, sock_flag, accept_flag),
-                        test_utils::ShadowPassing::Yes,
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_short_len"),
                         move || test_short_len(accept_fn, sock_flag, accept_flag),
-                        test_utils::ShadowPassing::Yes,
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_zero_len"),
                         move || test_zero_len(accept_fn, sock_flag, accept_flag),
-                        test_utils::ShadowPassing::Yes,
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_after_close"),
                         move || test_after_close(accept_fn, sock_flag, accept_flag),
-                        test_utils::ShadowPassing::Yes,
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_correctness <sleep=true>"),
@@ -131,7 +139,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                 /* use_sleep= */ true,
                             )
                         },
-                        test_utils::ShadowPassing::Yes,
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     // while running in shadow, you currently need a sleep before calling accept()
                     // to allow shadow to process events (specifically the event for the SYN packet
@@ -146,7 +154,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                 /* use_sleep= */ false,
                             )
                         },
-                        test_utils::ShadowPassing::No,
+                        set![TestEnv::Libc],
                     ),
                 ];
 

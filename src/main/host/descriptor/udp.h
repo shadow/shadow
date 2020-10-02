@@ -12,5 +12,6 @@
 typedef struct _UDP UDP;
 
 UDP* udp_new(guint receiveBufferSize, guint sendBufferSize);
+gint udp_shutdown(UDP* udp, gint how);
 
 #endif /* SHD_UDP_H_ */

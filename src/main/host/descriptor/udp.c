@@ -24,11 +24,35 @@
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
+enum UDPState {
+    UDPS_CLOSED, UDPS_ESTABLISHED,
+};
+
+static const gchar* _udpStateStrings[] = {
+    "UDPS_CLOSED", "UDPS_ESTABLISHED",
+};
+
+static const gchar* _udp_stateToAscii(enum UDPState state) {
+    return _udpStateStrings[state];
+}
+
 struct _UDP {
     Socket super;
+    enum UDPState state;
+    enum UDPState stateLast;
 
     MAGIC_DECLARE;
 };
+
+static void _udp_setState(UDP* udp, enum UDPState state) {
+    MAGIC_ASSERT(udp);
+
+    udp->stateLast = udp->state;
+    udp->state = state;
+
+    debug("%s <-> %s: moved from UDP state '%s' to '%s'", udp->super.boundString, udp->super.peerString,
+            _udp_stateToAscii(udp->stateLast), _udp_stateToAscii(udp->state));
+}
 
 static UDP* _udp_fromDescriptor(Descriptor* descriptor) {
     utility_assert(descriptor_getType(descriptor) == DT_UDPSOCKET);
@@ -51,9 +75,11 @@ static gint _udp_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port,
     if(family == AF_UNSPEC) {
         /* dissolve our existing defaults */
         socket_setPeerName(&(udp->super), 0, 0);
+        _udp_setState(udp, UDPS_CLOSED);
     } else {
         /* set new defaults */
         socket_setPeerName(&(udp->super), ip, port);
+        _udp_setState(udp, UDPS_ESTABLISHED);
     }
 
     return 0;
@@ -212,7 +238,18 @@ static gboolean _udp_close(Descriptor* descriptor) {
     UDP* udp = _udp_fromDescriptor(descriptor);
     MAGIC_ASSERT(udp);
     /* Deregister us from the process upon return. */
+    _udp_setState(udp, UDPS_CLOSED);
     return TRUE;
+}
+
+gint udp_shutdown(UDP* udp, gint how) {
+    MAGIC_ASSERT(udp);
+
+    if(udp->state == UDPS_CLOSED) {
+        return -ENOTCONN;
+    }
+
+    return 0;
 }
 
 /* we implement the socket interface, this describes our function suite */
@@ -227,6 +264,9 @@ UDP* udp_new(guint receiveBufferSize, guint sendBufferSize) {
 
     socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, receiveBufferSize,
                 sendBufferSize);
+
+    udp->state = UDPS_CLOSED;
+    udp->stateLast = UDPS_CLOSED;
 
     /* we are immediately active because UDP doesnt wait for accept or connect */
     descriptor_adjustStatus(
