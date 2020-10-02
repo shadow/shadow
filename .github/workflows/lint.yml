@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@master
       - name: Install Rust
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile=minimal
           echo "::add-path::$HOME/.cargo/bin"
       - name: Rustfmt check
         run: |
@@ -47,6 +47,7 @@ jobs:
       CC: clang
       CXX: clang++
       BUILDTYPE: release
+      RUSTPROFILE: minimal
     steps:
       - name: Install git
         run: |
@@ -60,6 +61,7 @@ jobs:
           echo "::add-path::$HOME/.cargo/bin"
       - name: Install Rust packages
         run: |
+          rustup component add rustfmt
           cargo install --force --version 0.14.6 cbindgen
           cargo install --force --version 0.55.1 bindgen
       - name: Check bindings
