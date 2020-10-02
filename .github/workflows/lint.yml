@@ -28,10 +28,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
-      - name: Install Rust
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile=minimal
-          echo "::add-path::$HOME/.cargo/bin"
       - name: Rustfmt check
         run: |
           (cd src/main && cargo fmt -- --check)
