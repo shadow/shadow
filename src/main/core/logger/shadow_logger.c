@@ -161,7 +161,9 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
                          const gint lineNumber, const gchar* format,
                          va_list vargs) {
     if (!logger) {
-        vfprintf(stderr, format, vargs);
+        vfprintf(stdout, format, vargs);
+        fprintf(stdout, "\n");
+        fflush(stdout);
         return;
     }
 
@@ -207,6 +209,13 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         g_string_free(hostNameBuffer, TRUE);
     }
 
+    gchar* logRecordStr = logrecord_toString(record);
+    utility_assert(logRecordStr);
+    g_print("%s", logRecordStr);
+    g_free(logRecordStr);
+    logrecord_unref(record);
+    fflush(stdout);
+#if 0
     g_queue_push_tail(threadData->localRecordBundle, record);
 
     if (level == LOGLEVEL_ERROR || !logger->shouldBuffer ||
@@ -216,6 +225,7 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         shadow_logger_syncToDisk(logger);
         logger->lastTimespan = timespan;
     }
+#endif
 
     if (level == LOGLEVEL_ERROR) {
         /* tell the helper to stop, and join to make sure it finished flushing
