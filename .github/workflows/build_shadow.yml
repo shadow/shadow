@@ -27,24 +27,24 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install dependencies
-        run: sudo apt-get install -y ${{ matrix.cc }} g++ cmake make xz-utils python libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg python-pyelftools
+        run: sudo apt-get install -y ${{ matrix.cc }} g++ cmake make xz-utils python3 libglib2.0-0 libglib2.0-dev libigraph0v5 libigraph0-dev libc-dbg python3-pyelftools
 
       - name: Build Debug
         if: ${{ matrix.buildtype == 'debug' }}
-        run: CC=${{ matrix.cc }} python setup build --clean --test --werror --debug
+        run: CC=${{ matrix.cc }} ./setup build --clean --test --werror --debug
 
       - name: Build Release
         if: ${{ matrix.buildtype == 'release' }}
-        run: CC=${{ matrix.cc }} python setup build --clean --test --werror
+        run: CC=${{ matrix.cc }} ./setup build --clean --test --werror
 
       - name: Install
-        run: python setup install
+        run: ./setup install
 
       - name: Test
         # For now, if the first batch of tests fails, rerun the failing tests
         # and continue on if they then pass. This is to work around sporadic
         # and difficult to debug errors such as #798
-        run: python setup test || python setup test --rerun-failed
+        run: ./setup test || ./setup test --rerun-failed
 
       - name: Upload shadow logs
         uses: actions/upload-artifact@v2
@@ -67,6 +67,10 @@ jobs:
     steps:
       - name: Update packages
         run: sudo apt-get update
+
+      - name: Update packages
+        # shadow-plugin-tor v0.0.1's CI test script installs Python 2, but Shadow requires Python 3
+        run: sudo apt-get install -y python3 python3-pyelftools
 
       - name: Checkout shadow
         uses: actions/checkout@v2
