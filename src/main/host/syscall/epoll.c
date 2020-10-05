@@ -66,8 +66,8 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     gint fd = args->args[2].as_i64;
     PluginPtr eventPtr = args->args[3].as_ptr; // const struct epoll_event*
 
-    /* Make sure they didn't pass a NULL pointer. */
-    if (!eventPtr.val) {
+    /* Make sure they didn't pass a NULL pointer if EPOLL_CTL_DEL is not used. */
+    if (!eventPtr.val && op != EPOLL_CTL_DEL) {
         debug("NULL event pointer passed for epoll %i", epfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
@@ -104,8 +104,10 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
             .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
 
-    const struct epoll_event* event =
-        process_getReadablePtr(sys->process, sys->thread, eventPtr, sizeof(*event));
+    const struct epoll_event* event = NULL;
+    if (eventPtr.val) {
+        event = process_getReadablePtr(sys->process, sys->thread, eventPtr, sizeof(*event));
+    }
 
     debug("Calling epoll_control on epoll %i with child %i", epfd, fd);
     errorCode = epoll_control(epoll, op, descriptor, event);

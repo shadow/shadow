@@ -239,6 +239,7 @@ NOREMAP(ssize_t, getdents64, (int a, void* b, size_t c), a, b, c);
 NOREMAP(int, getpeername, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
 NOREMAP(ssize_t, getrandom, (void* a, size_t b, unsigned int c), a, b, c);
 NOREMAP(int, getsockname, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
+NOREMAP(int, getsockopt, (int a, int b, int c, void* d, socklen_t* e), a, b, c, d, e);
 static REMAP(int, ioctl_explicit, ioctl, (int a, unsigned long b, char* c), a,b,c);
 NOREMAP(int, linkat, (int a, const char* b, int c, const char* d, int e), a, b, c, d, e);
 NOREMAP(int, listen, (int a, int b), a, b);
@@ -282,6 +283,7 @@ NOREMAP(int, renameat2, (int a, const char* b, int c, const char* d, unsigned in
 //NOREMAP(ssize_t, sendmsg, (int a, const struct msghdr* b, int c), a,b,c);
 REMAP(ssize_t, send, sendto, (int a, const void* b, size_t c, int d), a,b,c,d,NULL,0);
 NOREMAP(ssize_t, sendto, (int a, const void* b, size_t c, int d, const struct sockaddr* e, socklen_t f), a,b,c,d,e,f);
+NOREMAP(int, setsockopt, (int a, int b, int c, const void *d, socklen_t e), a, b, c, d, e);
 NOREMAP(int, shutdown, (int a, int b), a,b);
 NOREMAP(int, socket, (int a, int b, int c), a,b,c);
 #ifdef SYS_statx

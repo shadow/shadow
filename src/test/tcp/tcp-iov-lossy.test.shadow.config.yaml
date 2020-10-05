@@ -24,13 +24,13 @@ plugins:
 - id: testtcp
   path: test-tcp
 hosts:
-- id: iov.tcpserver
+- id: lossy.tcpserver.echo
   processes:
   - plugin: testtcp
     time: 1
-    arguments: iov server
-- id: iov.tcpclient
+    arguments: iov server 0.0.0.0 1234
+- id: lossy.tcpclient.echo
   processes:
   - plugin: testtcp
     time: 2
-    arguments: iov client iov.tcpserver
+    arguments: iov client lossy.tcpserver.echo 1234

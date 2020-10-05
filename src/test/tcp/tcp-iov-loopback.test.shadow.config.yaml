@@ -19,18 +19,16 @@ topology:
       </graph>
     </graphml>
 kill:
-- time: 300
+- time: 60
 plugins:
 - id: testtcp
   path: test-tcp
 hosts:
-- id: lossless.tcpserver.echo
+- id: tcptestnode
   processes:
   - plugin: testtcp
     time: 1
-    arguments: nonblocking-poll server 0.0.0.0 1234
-- id: lossless.tcpclient.echo
-  processes:
+    arguments: iov server localhost 1234
   - plugin: testtcp
     time: 2
-    arguments: nonblocking-poll client lossless.tcpserver.echo 1234
+    arguments: iov client localhost 1234

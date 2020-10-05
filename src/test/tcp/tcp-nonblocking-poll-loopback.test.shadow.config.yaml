@@ -28,7 +28,7 @@ hosts:
   processes:
   - plugin: testtcp
     time: 1
-    arguments: nonblocking-poll server
+    arguments: nonblocking-poll server localhost 1234
   - plugin: testtcp
     time: 2
-    arguments: nonblocking-poll client 127.0.0.1
+    arguments: nonblocking-poll client localhost 1234
