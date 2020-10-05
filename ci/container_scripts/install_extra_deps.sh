@@ -60,7 +60,13 @@ then
 else
     RUST_TOOLCHAIN=stable
 fi
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain "$RUST_TOOLCHAIN"
+
+if [ -n "${RUSTPROFILE:+x}" ]
+then
+    RUSTPROFILE="--profile=${RUSTPROFILE}"
+fi
+
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain "$RUST_TOOLCHAIN" ${RUSTPROFILE:+"$RUSTPROFILE"}
 PATH=$HOME/.cargo/bin:$PATH
 # Force cargo to download its package index
 cargo search foo
