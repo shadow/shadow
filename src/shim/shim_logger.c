@@ -69,10 +69,16 @@ void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const ch
     // in deadlock if Shadow forcibly stops this thread while that lock is still held.
     // Unfortunately *without* the usual fprintf lock, it's possible for lines to
     // get inter-mingled.
-    // TODO: add a lock in memory shared with shadow that we can take to prevent
-    // being stopped in the middle of fprintf.
-    write(fileno(logger->file), buf, strlen(buf));
-    write(fileno(logger->file), "\n", 1);
+    // FIXME: This is a temporary fix to check whether this fixes CI. There's no guarantee
+    // that the whole buffers will be written, nor that we won't be paused in the middle.
+    // A better solution is to add a lock in memory shared with shadow that we
+    // can take to prevent being stopped in the middle of fprintf.
+    if (write(fileno(logger->file), buf, strlen(buf)) < 0) {
+        abort();
+    }
+    if (write(fileno(logger->file), "\n", 1) < 0) {
+        abort();
+    }
     //fprintf(logger->file, "%s\n", buf);
 
 #ifdef DEBUG
