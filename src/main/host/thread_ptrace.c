@@ -169,21 +169,27 @@ typedef struct _ThreadPtrace {
 
     int returnCode;
 
-    // use for SYSCALL
+    // Pointer to *some* syscall instruction, for when we need to force
+    // the child process to make a syscall. 
+    intptr_t syscall_rip;
+
     struct {
-        struct user_regs_struct regs;
-        SysCallArgs args;
-    } syscall;
+        struct user_regs_struct value;
+        // Whether `value` holds the values that the CPU registers ought to
+        // have before returning control to the plugin.
+        bool valid;
+        // Whether `value` needs to be written back.
+        bool dirty;
+    } regs;
+
+    SysCallArgs syscall_args;
 
     // use for IPC_SYSCALL
     struct {
-        SysCallArgs args;
         // While handling a syscall via IPC, sometimes we need to stop the
         // child process to perform ptrace-operations. Tracks whether we've
         // done so.
         bool stopped;
-        // Regs to restore before resuming (if stopped). Otherwise uninitd.
-        struct user_regs_struct regs;
     } ipc_syscall;
 
     // Whenever we use ptrace to continue we may raise a signal.  Currently we
@@ -318,22 +324,23 @@ static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
 }
 
 static void _threadptrace_enterStateSyscall(ThreadPtrace* thread) {
-    struct user_regs_struct* regs = &thread->syscall.regs;
+    struct user_regs_struct* regs = &thread->regs.value;
     if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         return;
     }
-    thread->syscall.args = (SysCallArgs) {
+    thread->regs.valid = true;
+    thread->syscall_rip = regs->rip - sizeof(SYSCALL_INSTRUCTION);
+    thread->syscall_args = (SysCallArgs){
         .number = regs->orig_rax,
-        .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8,
-                 regs->r9},
+        .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8, regs->r9},
     };
 }
 
 static void _threadptrace_enterStateIpcSyscall(ThreadPtrace* thread, ShimEvent* event) {
     debug("enterStateIpcSyscall");
     thread->childState = THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL;
-    thread->ipc_syscall.args = event->event_data.syscall.syscall_args;
+    thread->syscall_args = event->event_data.syscall.syscall_args;
     thread->ipc_syscall.stopped = false;
 }
 
@@ -575,8 +582,24 @@ static void threadptrace_flushPtrs(Thread* base) {
     _threadptrace_flushPtrs(thread);
 }
 
+static const char* _regs_to_str(const struct user_regs_struct* regs) {
+    static char buf[1000];
+    snprintf(
+        buf, sizeof(buf),
+        "r15:0x%llx r14: 0x%llx r13:0x%llx r12:0x%llx rbp:0x%llx rbx:0x%llx r11:0x%llx "
+        "r10:0x%llx r9:0x%llx r8:0x%llx rax:0x%llx rcx:0x%llx rdx:0x%llx rsi:0x%llx rdi:0x%llx "
+        "orig_rax:0x%llx rip:0x%llx cs:0x%llx eflags:0x%llx rsp:0x%llx ss:0x%llx "
+        "fs_base:0x%llx gs_base:0x%llx ds:0x%llx es:0x%llx fs:0x%llx gs:0x%llx",
+        regs->r15, regs->r14, regs->r13, regs->r12, regs->rbp, regs->rbx, regs->r11, regs->r10,
+        regs->r9, regs->r8, regs->rax, regs->rcx, regs->rdx, regs->rsi, regs->rdi, regs->orig_rax,
+        regs->rip, regs->cs, regs->eflags, regs->rsp, regs->ss, regs->fs_base, regs->gs_base,
+        regs->ds, regs->es, regs->fs, regs->gs);
+    return buf;
+}
+
 static void _threadptrace_doAttach(ThreadPtrace* thread) {
-    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL);
+    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL
+            || thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
 
     debug("thread %i attaching to child %i", thread->base.tid, (int)thread->base.nativeTid);
     if (ptrace(PTRACE_ATTACH, thread->base.nativeTid, 0, 0) < 0) {
@@ -598,12 +621,16 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
 
 #if DEBUG
     // Check that regs are where we left them.
-    struct user_regs_struct regs;
-    if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
+    struct user_regs_struct actual_regs;
+    if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &actual_regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
-    utility_assert(!memcmp(&regs, &thread->syscall.regs, sizeof(regs)));
+    struct user_regs_struct expected_regs = thread->regs.value;
+    expected_regs.rip = thread->syscall_rip;
+    debug("got      %s", _regs_to_str(&actual_regs));
+    debug("expected %s", _regs_to_str(&expected_regs));
+    utility_assert(!memcmp(&actual_regs, &expected_regs, sizeof(actual_regs)));
 #endif
 
     // Should cause syscall we stopped at to be re-executed, putting us back in syscall state
@@ -623,71 +650,72 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
         utility_assert(reason.type == STOPREASON_SYSCALL);
     }
 
-    // Restore our saved instruction pointer to where it was before we detached - just after the
-    // syscall instruction.
-    thread->syscall.regs.rip += sizeof(SYSCALL_INSTRUCTION);
-
-#if DEBUG
-    // Check that rip is where we expect.
-    if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
-        error("ptrace: %s", g_strerror(errno));
-        abort();
-    }
-    utility_assert(regs.rip == thread->syscall.regs.rip);
-#endif
-
     thread->needAttachment = false;
 }
 
 static void _threadptrace_doDetach(ThreadPtrace* thread) {
-    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL);
+    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL ||
+                   thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
     if (thread->needAttachment) {
         // We're already detached.
+        debug("Already detached");
         return;
     }
 
-    // First rewind the instruction pointer so that the current syscall will be
-    // retried when we resume. This isn't *strictly* necessary, but it's not
+    _threadptrace_ensureStopped(thread);
+
+    // First set instruction pointer to point to a syscall, which will result in
+    // a syscall stop when resumed. This isn't *strictly* necessary, but it's not
     // super clear from the ptrace documentation exactly how many SIGSTOP stops
     // to expect when reattaching; experimentally it's 3, but it's unclear
-    // whether we can rely on it to always be three. Conversely if we rewind
-    // the instruction pointer, when reattaching we can just swallow sigstops
+    // whether we can rely on it to always be three. Conversely, by pointing at
+    // a syscall instruction, when reattaching we can just swallow sigstops
     // until we get a syscall stop.
-    thread->syscall.regs.rip -= sizeof(SYSCALL_INSTRUCTION);
+    utility_assert(thread->regs.valid);
+    struct user_regs_struct regs = thread->regs.value;
+    debug("regs currently %s", _regs_to_str(&regs));
+    regs.rip = thread->syscall_rip;
 #ifdef DEBUG
     // Verify that rip is now pointing at a syscall instruction.
     const uint8_t* buf =
         process_getReadablePtr(thread->base.process, _threadPtraceToThread(thread),
-                               (PluginPtr){thread->syscall.regs.rip}, sizeof(SYSCALL_INSTRUCTION));
+                               (PluginPtr){regs.rip}, sizeof(SYSCALL_INSTRUCTION));
     utility_assert(!memcmp(buf, SYSCALL_INSTRUCTION, sizeof(SYSCALL_INSTRUCTION)));
 #endif
-    if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &thread->syscall.regs) < 0) {
+    if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
+    debug("regs set to %s", _regs_to_str(&regs));
+    thread->regs.dirty = true;
 
-    // Send a SIGSTOP. While experimentally just calling PTRACE_DETACH with a
-    // SIGSTOP works, ptrace(2) says that it *might* not if we're not already
-    // in a signal-delivery-stop.
-    if (syscall(SYS_tgkill, thread->base.nativePid, thread->base.nativeTid, SIGSTOP) < 0) {
-        error("kill: %s", g_strerror(errno));
-        abort();
-    }
+    if (thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
+        // Child should already be in a signal-stop.
+    } else if (thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL) {
+        // We need to get into a ptrace signal-stop.
 
-    // Continue and wait for the signal delivery stop.
-    debug("thread %i detaching from child %i", thread->base.tid, (int)thread->base.nativePid);
-    if (ptrace(PTRACE_CONT, thread->base.nativeTid, 0, 0) < 0) {
-        error("ptrace: %s", g_strerror(errno));
-        abort();
+        // Send a SIGSTOP. While experimentally just calling PTRACE_DETACH with a
+        // SIGSTOP works, ptrace(2) says that it *might* not if we're not already
+        // in a signal-delivery-stop.
+        if (syscall(SYS_tgkill, thread->base.nativePid, thread->base.nativeTid, SIGSTOP) < 0) {
+            error("kill: %s", g_strerror(errno));
+            abort();
+        }
+        // Continue and wait for the signal delivery stop.
+        debug("thread %i detaching from child %i", thread->base.tid, (int)thread->base.nativePid);
+        if (ptrace(PTRACE_CONT, thread->base.nativeTid, 0, 0) < 0) {
+            error("ptrace: %s", g_strerror(errno));
+            abort();
+        }
+        int wstatus;
+        if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
+            error("waitpid: %s", g_strerror(errno));
+            abort();
+        }
+        StopReason reason = _getStopReason(wstatus);
+        utility_assert(reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP);
+        debug("Stop reason after cont with sigstop: %d", reason.type);
     }
-    int wstatus;
-    if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
-        error("waitpid: %s", g_strerror(errno));
-        abort();
-    }
-    StopReason reason = _getStopReason(wstatus);
-    utility_assert(reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP);
-    debug("Stop reason after cont with sigstop: %d", reason.type);
 
     // Detach, allowing the sigstop to be delivered.
     if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, SIGSTOP) < 0) {
@@ -720,7 +748,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 break;
             case THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL: {
                 debug("THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL");
-                SysCallReturn ret = syscallhandler_make_syscall(thread->sys, &thread->ipc_syscall.args);
+                SysCallReturn ret = syscallhandler_make_syscall(thread->sys, &thread->syscall_args);
                 switch (ret.state) {
                     case SYSCALL_BLOCK:
                         debug("ipc_syscall blocked");
@@ -742,18 +770,15 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                                        }
                     case SYSCALL_NATIVE: {
                         debug("ipc_syscall do-native");
-                        // FIXME: flush memory
-                        ShimEvent shim_result = (ShimEvent){
-                            .event_id = SHD_SHIM_EVENT_SYSCALL_DO_NATIVE,
-                        };
-                        shimevent_sendEventToPlugin(thread->ipcBlk.p, &shim_result);
-#if 0
+                        SysCallArgs* args = &thread->syscall_args;
+                        thread_nativeSyscall(base, args->number, args->args[0], args->args[1],
+                                             args->args[2], args->args[3], args->args[4],
+                                             args->args[5]);
                         if (thread->childState != THREAD_PTRACE_CHILD_STATE_SYSCALL) {
                             // Executing the syscall changed our state. We need to process it before
                             // waiting again.
                             continue;
                         }
-#endif
                     }
                 }
                 break;
@@ -761,26 +786,31 @@ SysCallCondition* threadptrace_resume(Thread* base) {
             case THREAD_PTRACE_CHILD_STATE_SYSCALL:
                 debug("THREAD_PTRACE_CHILD_STATE_SYSCALL");
 
-                SysCallReturn ret = _threadptrace_handleSyscall(thread, &thread->syscall.args);
+                SysCallReturn ret = _threadptrace_handleSyscall(thread, &thread->syscall_args);
 
                 switch (ret.state) {
                     case SYSCALL_BLOCK:
                         return ret.cond;
                     case SYSCALL_DONE:
                         // Return the specified result.
-                        thread->syscall.regs.rax = ret.retval.as_u64;
-                        if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0,
-                                   &thread->syscall.regs) < 0) {
-                            error("ptrace: %s", g_strerror(errno));
-                            return NULL;
-                        }
+                        utility_assert(thread->regs.valid);
+                        thread->regs.value.rax = ret.retval.as_u64;
+                        thread->regs.dirty = true;
                         break;
                     case SYSCALL_NATIVE: {
                         // Have the plugin execute the original syscall
-                        SysCallArgs* args = &thread->syscall.args;
+                        SysCallArgs* args = &thread->syscall_args;
                         thread_nativeSyscall(base, args->number, args->args[0], args->args[1],
                                              args->args[2], args->args[3], args->args[4],
                                              args->args[5]);
+                        // The syscall should have left us in exactly the state from
+                        // which we want to resume execution. In particular we DON'T want
+                        // to restore the old instruction pointer after executing an execve syscall.
+                        utility_assert(thread->regs.value.rip ==
+                                       (thread->syscall_rip + sizeof(SYSCALL_INSTRUCTION)));
+                        thread->regs.valid = false;
+                        thread->regs.dirty = false;
+
                         if (thread->childState != THREAD_PTRACE_CHILD_STATE_SYSCALL) {
                             // Executing the syscall changed our state. We need to process it before
                             // waiting again.
@@ -804,15 +834,15 @@ SysCallCondition* threadptrace_resume(Thread* base) {
         if (thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL ||
             thread->ipc_syscall.stopped) {
 
-            if (thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL &&
-                thread->ipc_syscall.stopped) {
+            if (thread->regs.dirty) {
                 debug("Restoring registers");
                 // restore registers
                 // TODO: track if dirty, and only restore if so.
-                if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &thread->ipc_syscall.regs) < 0) {
+                if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
                     error("ptrace: %s", g_strerror(errno));
                     abort();
                 }
+                thread->regs.dirty = false;
             }
             _threadptrace_flushPtrs(thread);
 
@@ -822,7 +852,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
                 return NULL;
             }
-
+            thread->regs.valid = false;
             thread->signalToDeliver = 0;
         } else {
         }
@@ -912,7 +942,8 @@ static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
         error("kill: %s", g_strerror(errno));
         abort();
     }
-    thread->ipc_syscall.stopped = true;
+
+    utility_assert(!thread->regs.dirty);
 
     while(1) {
         int wstatus;
@@ -923,16 +954,19 @@ static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
         StopReason reason = _getStopReason(wstatus);
         if (reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP) {
             debug("got sigstop");
-            if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &thread->ipc_syscall.regs) < 0) {
+            if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 abort();
             }
+            thread->regs.valid = true;
+            thread->regs.dirty = false;
+            thread->ipc_syscall.stopped = true;
             return;
         }
         if (reason.type == STOPREASON_SYSCALL) {
             // The shim made a syscall while it was waiting (e.g. for logging).
             // Rather than trying to handle it here, rewind the instruction pointer
-            // so that we can handle it later, and and wait for the signal-stop.
+            // so that we can handle it later, and wait for the signal-stop.
             // TODO: Try to avoid the extra SIGSTOP in this case.
             debug("ptrace syscall stop while waiting for sigstop");
 
@@ -950,6 +984,7 @@ static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
                 error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
                 abort();
             }
+            thread->syscall_rip = regs.rip;
             // loop
         } else {
             error("Unexpected stop");
@@ -1078,14 +1113,9 @@ static long threadptrace_nativeSyscall(Thread* base,
 
     // Inject the requested syscall number and arguments.
 
-    // FIXME: This is using the regs from the last native syscall, even if the
-    // current syscall being process is via IPC. This "works", but has some
-    // caveats. If the very first syscall is via IPC this won't be init'd yet.
-    // It's possible that there's no longer a syscall at this address (e.g. due
-    // to calling exec). It can also be confusing when debugging.  We probably
-    // want to instead overwrite the next instruction with a syscall
-    // instruction, and restore it when we're done.
-    struct user_regs_struct regs = thread->syscall.regs;
+    // Set up arguments to syscall.
+    utility_assert(thread->regs.valid);
+    struct user_regs_struct regs = thread->regs.value;
     regs.rax = n;
     regs.rdi = va_arg(args, long);
     regs.rsi = va_arg(args, long);
@@ -1094,29 +1124,20 @@ static long threadptrace_nativeSyscall(Thread* base,
     regs.r8 = va_arg(args, long);
     regs.r9 = va_arg(args, long);
 
-    // Rewind instruction pointer to point to the syscall instruction again.
-    regs.rip -= sizeof(SYSCALL_INSTRUCTION); // Size of the syscall instruction.
-
-    uint64_t syscall_rip = regs.rip;
+    // Jump to a syscall instruction. Alternatively we could overwrite
+    // the next instruction with a syscall instruction, but this avoids
+    // weirdness associated with mutating code.
+    regs.rip = thread->syscall_rip;
 
     debug("threadptrace_nativeSyscall setting regs: rip=0x%llx n=%lld arg0=0x%llx arg1=0x%llx "
           "arg2=%llx "
           "arg3=0x%llx arg4=0x%llx arg5=0x%llx",
           regs.rip, regs.rax, regs.rdi, regs.rsi, regs.rdx, regs.r10, regs.r8, regs.r9);
-
-    // Verify that rip is now pointing at a syscall instruction.
-    const uint8_t* buf = process_getReadablePtr(thread->base.process, _threadPtraceToThread(thread),
-                                                (PluginPtr){regs.rip}, sizeof(SYSCALL_INSTRUCTION));
-    if(memcmp(buf, SYSCALL_INSTRUCTION, 2/*sizeof(SYSCALL_INSTRUCTION)*/)) {
-        // FIXME: overwrite with syscall insn?
-        error("Unimplemented");
-        abort();
-    }
-
     if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
+    thread->regs.dirty = true;
 
     // Single-step until the syscall instruction is executed. It's not clear whether we can depend
     // on stopping the exact same number of times here.
@@ -1148,7 +1169,7 @@ static long threadptrace_nativeSyscall(Thread* base,
         debug("threadptrace_nativeSyscall regs: rip=%llx rax=%llx arg0=%llx arg1=%llx "
               "arg2=%llx arg3=%llx arg4=%llx arg5=%llx",
               regs.rip, regs.rax, regs.rdi, regs.rsi, regs.rdx, regs.r10, regs.r8, regs.r9);
-    } while (regs.rip == syscall_rip);
+    } while (regs.rip == thread->syscall_rip);
 
     debug("Native syscall result %lld (%s)", regs.rax, strerror(-regs.rax));
 

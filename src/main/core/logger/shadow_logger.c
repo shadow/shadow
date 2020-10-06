@@ -211,10 +211,10 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
 
     gchar* logRecordStr = logrecord_toString(record);
     utility_assert(logRecordStr);
-    g_print("%s", logRecordStr);
+    fprintf(stdout, "%s", logRecordStr);
+    fflush(stdout);
     g_free(logRecordStr);
     logrecord_unref(record);
-    fflush(stdout);
 #if 0
     g_queue_push_tail(threadData->localRecordBundle, record);
 
