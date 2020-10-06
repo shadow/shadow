@@ -459,7 +459,7 @@ int process_emu_compare_dat_files(Process* proc, int fileno);
 //hyeojin made for compare dat_files
 #define big_endian 0
 #define little_endian 1
-void Print(unsigned char* data, int start, int size, unsigned char* dest, int print) ;
+void PrintHex(unsigned char* data, int start, int size, unsigned char* dest) ;
 unsigned int hexToInt(unsigned char* data, int size, int endianness);
 unsigned int calcVarInt(unsigned char * data, int *bytepos) ;
 void datParser(unsigned char* dat, unsigned int size,unsigned char * lastBlockMerkleRoot);
@@ -483,13 +483,36 @@ typedef struct _HashTable{
     HashTblEntry* ents;
 }HashTable;
 
+//structure for hashNodetable
+typedef struct _HashNodelist {
+    struct _HashNodelist *next, *prev;
+    int nodeID;
+    char *actual_path;
+    int fileno;
+}HashNodelist;
+typedef struct _HashNodeTblEntry{
+    HashNodelist* list;
+    int lastFileNo;
+}HashNodeTblEntry;
+
+typedef struct _HashNodeTable{
+    HashNodeTblEntry* ents;
+}HashNodeTable;
+
 HashTable *FileInfotbl;
-void createHashTable();
+HashNodeTable *NodeInfotbl;
+void createHashTables();
 void AddHashData(HashTable *hashTable, int key, char* actual_path, char* lastBlockHash);
 char * getLastBlockHash(HashTable *hashTable, int fileno);
 void DeleteHashData(HashTable *hashTable,int key, char* actual_path);
+void DeleteNodeHashData(HashNodeTable *hashNodeTable,int key);
 char * makeActualPath(int fileno, char* nodeid) ;
 Hashlist* FindLastBlockHash(HashTable* hashtable, int key);
+void printHashTable(HashTable *hashtable,int key);
+
+void AddNodeHashData(HashNodeTable *hashNodeTable,int nodeid,int fileno,char* path);
+void AddDataToHashTable(int fileno, char* path, char * merkleroothash, unsigned int nodeid);
+
 
 
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
