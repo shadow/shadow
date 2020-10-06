@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/param.h>
 #include <sys/time.h>
 #include <time.h>
@@ -64,10 +65,18 @@ void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const ch
     offset += vsnprintf(&buf[offset], sizeof(buf) - offset, format, vargs);
     offset = MIN(offset, sizeof(buf));
 
-    fprintf(logger->file, "%s\n", buf);
+    // We can't use fprintf here since that can take a lock, which can result
+    // in deadlock if Shadow forcibly stops this thread while that lock is still held.
+    // Unfortunately *without* the usual fprintf lock, it's possible for lines to
+    // get inter-mingled.
+    // TODO: add a lock in memory shared with shadow that we can take to prevent
+    // being stopped in the middle of fprintf.
+    write(fileno(logger->file), buf, strlen(buf));
+    write(fileno(logger->file), "\n", 1);
+    //fprintf(logger->file, "%s\n", buf);
 
 #ifdef DEBUG
-    fflush(logger->file);
+    //fflush(logger->file);
 #endif
     shim_enableInterposition();
     in_logger = false;
