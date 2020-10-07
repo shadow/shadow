@@ -29,7 +29,7 @@ void BinarySpinningSem::post() {
 void BinarySpinningSem::wait() {
     // Based loosely on
     // https://probablydance.com/2019/12/30/measuring-mutexes-spinlocks-and-how-bad-the-linux-scheduler-really-is/.
-    while (/* FIXME _spin_ctr++ < _thresh &&*/true) {
+    while (_spin_ctr++ < _thresh) {
         bool was_available = _x.load(std::memory_order_relaxed);
         if (was_available &&
             _x.compare_exchange_weak(was_available, false, std::memory_order_acquire)) {
