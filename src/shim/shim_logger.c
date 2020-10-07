@@ -63,26 +63,20 @@ void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const ch
     offset = MIN(offset, sizeof(buf));
 
     offset += vsnprintf(&buf[offset], sizeof(buf) - offset, format, vargs);
-    offset = MIN(offset, sizeof(buf));
+    offset = MIN(offset, sizeof(buf) - 1); // FIXME: temp hack to leave room for newline.
+    buf[offset++] = '\n';
 
-    // We can't use fprintf here since that can take a lock, which can result
-    // in deadlock if Shadow forcibly stops this thread while that lock is still held.
-    // Unfortunately *without* the usual fprintf lock, it's possible for lines to
-    // get inter-mingled.
-    // FIXME: This is a temporary fix to check whether this fixes CI. There's no guarantee
-    // that the whole buffers will be written, nor that we won't be paused in the middle.
-    // A better solution is to add a lock in memory shared with shadow that we
-    // can take to prevent being stopped in the middle of fprintf.
-    if (write(fileno(logger->file), buf, strlen(buf)) < 0) {
-        abort();
-    }
-    if (write(fileno(logger->file), "\n", 1) < 0) {
-        abort();
-    }
+    // We avoid locked IO here, since it can result in deadlock if Shadow
+    // forcibly stops this thread while that lock is still held.  FIXME:
+    // Without locking here, a multi-threaded plugin may interleave writes
+    // within a log line. A better solution is to add a lock in memory shared
+    // with shadow that we can take to prevent being stopped in the middle of
+    // fprintf.
+    fwrite_unlocked(buf, 1, offset, logger->file);
     //fprintf(logger->file, "%s\n", buf);
 
 #ifdef DEBUG
-    //fflush(logger->file);
+    fflush_unlocked(logger->file);
 #endif
     shim_enableInterposition();
     in_logger = false;
