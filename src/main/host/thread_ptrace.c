@@ -966,14 +966,14 @@ static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
             // Rather than trying to handle it here, rewind the instruction pointer
             // so that we can handle it later, and wait for the signal-stop.
             // TODO: Try to avoid the extra SIGSTOP in this case.
-            debug("ptrace syscall stop while waiting for sigstop");
-
             struct user_regs_struct regs;
             if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 abort();
             }
+            debug("ptrace syscall (%lld) stop while waiting for sigstop", regs.orig_rax);
             regs.rip -= sizeof(SYSCALL_INSTRUCTION);
+            regs.rax = regs.orig_rax;
             if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &regs) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 abort();
