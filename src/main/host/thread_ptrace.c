@@ -258,12 +258,10 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
                 exit(1);
             }
             // Disable RDTSC
-            /* FIXME
             if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
                 error("prctl: %s", g_strerror(errno));
                 return -1;
             }
-            */
             // Allow parent to trace.
             if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
                 error("ptrace: %s", g_strerror(errno));
