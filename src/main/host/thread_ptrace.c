@@ -468,13 +468,17 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
         }
         if (pid != 0) {
             debug("Got ptrace stop");
-            // FIXME: There's a race condition here that the plugin could have finished
-            // sending an event after the last `shimevent_tryRecvEventFromPlugin`,
-            // timed out in its spin loop, and now be making a blocking futex call.
-            // If so, we'll deadlock here.
-            //
-            // We should check again here whether there's an event ready, and if so
-            // return *that* and buffer the ptrace-stop to be handled next.
+            if (shimevent_tryRecvEventFromPlugin(thread->ipcBlk.p, &event_stop.shim_event) == 0) {
+                // FIXME: There's a race condition here that the plugin could have finished
+                // sending an event after the last `shimevent_tryRecvEventFromPlugin`,
+                // timed out in its spin loop, and now be making a blocking futex call.
+                // If so, we'll deadlock here.
+                //
+                // We should check again here whether there's an event ready, and if so
+                // return *that* and buffer the ptrace-stop to be handled next.
+                error("Unhandled race condition: we need to handle the shim event first");
+                abort();
+            }
             return _getStopReason(wstatus);
         }
     };
