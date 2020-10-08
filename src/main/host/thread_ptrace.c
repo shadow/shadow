@@ -553,8 +553,14 @@ static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallAr
     }
 
     if (thread->shimSharedMem->ptrace_allow_native_syscalls) {
-        debug("Ptrace allowing native syscalls");
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
+        if (args->number == SYS_brk) {
+            // brk should *always* be interposed so that the MemoryManager can track it.
+            debug("Interposing brk even though native syscalls are enabled");
+            return syscallhandler_make_syscall(thread->sys, args);
+        } else {
+            debug("Ptrace allowing native syscalls");
+            return (SysCallReturn){.state = SYSCALL_NATIVE};
+        }
     }
     debug("Ptrace not allowing native syscalls");
 
