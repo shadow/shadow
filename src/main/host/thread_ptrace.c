@@ -976,6 +976,7 @@ static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
                 error("ptrace: %s", g_strerror(errno));
                 abort();
             }
+            thread->regs.value.rax = thread->regs.value.orig_rax;
             thread->regs.valid = true;
             thread->regs.dirty = false;
             thread->ipc_syscall.stopped = true;
