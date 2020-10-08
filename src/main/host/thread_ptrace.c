@@ -173,6 +173,9 @@ typedef struct _ThreadPtrace {
     // the child process to make a syscall. 
     intptr_t syscall_rip;
 
+    bool havePendingStop;
+    StopReason pendingStop;
+
     struct {
         struct user_regs_struct value;
         // Whether `value` holds the values that the CPU registers ought to
@@ -339,7 +342,6 @@ static void _threadptrace_enterStateIpcSyscall(ThreadPtrace* thread, ShimEvent* 
     debug("enterStateIpcSyscall");
     thread->childState = THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL;
     thread->syscall_args = event->event_data.syscall.syscall_args;
-    thread->ipc_syscall.stopped = false;
 }
 
 static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
@@ -469,15 +471,18 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
         if (pid != 0) {
             debug("Got ptrace stop");
             if (shimevent_tryRecvEventFromPlugin(thread->ipcBlk.p, &event_stop.shim_event) == 0) {
-                // FIXME: There's a race condition here that the plugin could have finished
-                // sending an event after the last `shimevent_tryRecvEventFromPlugin`,
-                // timed out in its spin loop, and now be making a blocking futex call.
-                // If so, we'll deadlock here.
-                //
-                // We should check again here whether there's an event ready, and if so
-                // return *that* and buffer the ptrace-stop to be handled next.
-                error("Unhandled race condition: we need to handle the shim event first");
-                abort();
+                // The plugin finished sending an event after our previous
+                // attempt to receive it, and then hit a ptrace-stop.  We need
+                // to handle the sent-event first, and buffer the ptrace-stop
+                // to be handled later.  In particular, the ptrace-stop could
+                // be a blocking futex syscall on the shim IPC control
+                // structures; if we try to execute it before responding to the
+                // shim event, we could deadlock.
+                debug("Buffering ptrace-stop whie handling shim event");
+                thread->ipc_syscall.stopped = true;
+                thread->pendingStop = _getStopReason(wstatus);
+                thread->havePendingStop = true;
+                return event_stop;
             }
             return _getStopReason(wstatus);
         }
@@ -792,13 +797,29 @@ SysCallCondition* threadptrace_resume(Thread* base) {
 
                         }};
                         shimevent_sendEventToPlugin(thread->ipcBlk.p, &shim_result);
-                        if (thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
-                            // Executing the syscall changed our state. We need to process it before
-                            // waiting again.
-                            continue;
-                        }
                     }
                 }
+                if (thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
+                    if (thread->havePendingStop) {
+                        // FIXME: I suspect in this case it'd generally be ok
+                        // to process the next state and drop the pending
+                        // ptrace-stop. Need to think through this more,
+                        // though, and don't want to risk difficult-to-debug
+                        // misbehavior in the meantime.
+                        error("Unhandled: have both a pending ptrace-stop and a state-change");
+                        abort();
+                    }
+                    // Executing the syscall changed our state. We need to process it before
+                    // waiting again.
+                    continue;
+                }
+                if (thread->havePendingStop) {
+                    // We hit a ptrace-stop while processing the IPC stop.
+                    // Handle that now.
+                    _threadptrace_updateChildState(thread, thread->pendingStop);
+                    thread->havePendingStop = false;
+                }
+
                 break;
                                                         }
             case THREAD_PTRACE_CHILD_STATE_SYSCALL:
@@ -872,6 +893,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
             }
             thread->regs.valid = false;
             thread->signalToDeliver = 0;
+            thread->ipc_syscall.stopped = false;
         } else {
         }
         debug("waiting for next state");
@@ -976,7 +998,7 @@ static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
                 error("ptrace: %s", g_strerror(errno));
                 abort();
             }
-            thread->regs.value.rax = thread->regs.value.orig_rax;
+            // Do NOT copy orig_rax to rax here; that should only be done in a syscall stop.
             thread->regs.valid = true;
             thread->regs.dirty = false;
             thread->ipc_syscall.stopped = true;
