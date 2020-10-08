@@ -776,10 +776,19 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                     case SYSCALL_NATIVE: {
                         debug("ipc_syscall do-native");
                         SysCallArgs* args = &thread->syscall_args;
-                        thread_nativeSyscall(base, args->number, args->args[0], args->args[1],
-                                             args->args[2], args->args[3], args->args[4],
-                                             args->args[5]);
-                        if (thread->childState != THREAD_PTRACE_CHILD_STATE_SYSCALL) {
+                        long rv = thread_nativeSyscall(
+                            base, args->number, args->args[0], args->args[1], args->args[2],
+                            args->args[3], args->args[4], args->args[5]);
+                        ShimEvent shim_result = {
+                        .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                        .event_data = {
+                            .syscall_complete = {.retval = rv,
+                                                 .simulation_nanos =
+                                                     worker_getEmulatedTime()},
+
+                        }};
+                        shimevent_sendEventToPlugin(thread->ipcBlk.p, &shim_result);
+                        if (thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
                             // Executing the syscall changed our state. We need to process it before
                             // waiting again.
                             continue;
