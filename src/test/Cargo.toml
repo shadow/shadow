@@ -63,3 +63,4 @@ path = "unistd/test_unistd.rs"
 
 [dependencies]
 libc = "0.2"
+gethostname = "0.2"

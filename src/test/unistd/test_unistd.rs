@@ -7,7 +7,21 @@ use std::process;
 
 
 fn main() {
-    test_getpid_nodeps()
+    let argv: Vec<String> = std::env::args().collect();
+    println!("{:?}", argv);
+
+    if argv.len() < 6 {
+        eprintln!("Usage: {} sysname nodename release version machine", argv[0].clone());
+        std::process::exit(1);
+    }
+    let _sysname = argv[1].clone();
+    let nodename = argv[2].clone();
+    let _release = argv[3].clone();
+    let _version = argv[4].clone();
+    let _machine = argv[5].clone();
+
+    test_getpid_nodeps();
+    test_gethostname(nodename);
 }
 
 
@@ -19,3 +33,7 @@ fn test_getpid_nodeps() {
     assert_eq!(pid, process::id());
 }
 
+fn test_gethostname(nodename: String) {
+    let hostname = gethostname::gethostname().into_string().unwrap();
+    assert_eq!(hostname, nodename);
+}

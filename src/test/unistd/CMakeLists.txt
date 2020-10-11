@@ -1,4 +1,9 @@
-add_test(NAME unistd COMMAND ../target/debug/test_unistd --libc-passing)
+add_test(
+    NAME unistd
+    COMMAND sh -c "\
+    ../target/debug/test_unistd \"$(uname -s)\" \"$(uname -n)\" \"$(uname -r)\" \"$(uname -v)\" \"$(uname -m)\" \
+    "
+)
 list(APPEND TestNames unistd)
 
 foreach(Method ptrace preload)
