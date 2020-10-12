@@ -452,7 +452,8 @@ int process_emu_shadow_assign_virtual_id(Process* proc);
 
 // Memory Instrumentation Marker Functions
 void process_emu_shadow_instrumentation_marker_set(Process* proc, int file_symbol, int line_cnt);
-void process_emu_hj_interposer_test(Process* proc);
+char* process_emu_get_dat_file_path(Process* proc,int fileno);
+char* process_emu_get_tmp_file_path(Process* proc);
 int process_emu_copy_dat_files(Process* proc, int fileno);
 int process_emu_compare_dat_files(Process* proc, int fileno);
 
@@ -466,10 +467,10 @@ void datParser(unsigned char* dat, unsigned int size,unsigned char * lastBlockMe
 
 //hyeojin made for storage hash table
 typedef struct _Hashlist{
-    struct _Hashlist *n, *prev;
+    struct _Hashlist *next, *prev;
     int fileno;
-    char *actual_path;
-    char *lasBlockHashMerkleRoot;
+    char* actual_path;
+    char* lastBlockHashMerkleRoot;
     unsigned refCnt;
 
 }Hashlist;
@@ -486,7 +487,7 @@ typedef struct _HashTable{
 //structure for hashNodetable
 typedef struct _HashNodelist {
     struct _HashNodelist *next, *prev;
-    int nodeID;
+    unsigned int nodeID;
     char *actual_path;
     int fileno;
 }HashNodelist;
@@ -502,15 +503,13 @@ typedef struct _HashNodeTable{
 HashTable *FileInfotbl;
 HashNodeTable *NodeInfotbl;
 void createHashTables();
-void AddHashData(HashTable *hashTable, int key, char* actual_path, char* lastBlockHash);
-char * getLastBlockHash(HashTable *hashTable, int fileno);
+void AddHashData(HashTable *hashTable, int fileno, char* actual_path, char* lastBlockHash);
+char* getLastBlockHash(HashTable *hashTable, int fileno);
 void DeleteHashData(HashTable *hashTable,int key, char* actual_path);
 void DeleteNodeHashData(HashNodeTable *hashNodeTable,int key);
-char * makeActualPath(int fileno, char* nodeid) ;
-Hashlist* FindLastBlockHash(HashTable* hashtable, int key);
-void printHashTable(HashTable *hashtable,int key);
+void printHashTable(HashNodeTable *hashtable,int key);
 
-void AddNodeHashData(HashNodeTable *hashNodeTable,int nodeid,int fileno,char* path);
+void AddNodeHashData(HashNodeTable *hashNodeTable,unsigned int nodeid,int fileno,char* path);
 void AddDataToHashTable(int fileno, char* path, char * merkleroothash, unsigned int nodeid);
 
 

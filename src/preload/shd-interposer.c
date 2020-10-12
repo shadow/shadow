@@ -543,13 +543,23 @@ void shadow_instrumentation_marker_set(int file_symbol, int line_cnt) {
     }
 }
 
-void hj_interposer_test() {
+char* get_dat_file_path(int fileno) {
     Process* proc = NULL;
     if((proc = _doEmulate()) != NULL) {
-        return process_emu_hj_interposer_test(proc);
+        return process_emu_get_dat_file_path(proc,fileno);
     } else {
-        ENSURE(hj_interposer_test);
-        return director.next.hj_interposer_test();
+        ENSURE(get_dat_file_path);
+        return director.next.get_dat_file_path(fileno);
+    }
+}
+
+char* get_tmp_file_path() {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_get_tmp_file_path(proc);
+    } else {
+        ENSURE(get_tmp_file_path);
+        return director.next.get_tmp_file_path();
     }
 }
 

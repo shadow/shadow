@@ -7883,17 +7883,28 @@ void process_emu_shadow_instrumentation_marker_set(Process* proc, int file_symbo
     return;
 }
 
-void process_emu_hj_interposer_test(Process* proc) {
+char* process_emu_get_dat_file_path(Process* proc,int fileno) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    message("interposer test is success!");
+    char *path;
+    path=(char*)malloc(sizeof(char)*100);
+    sprintf(path,"cp_data/dat_%d_%s.dat",fileno,proc->processName->str);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-    return;
+    return path;
+}
+
+char* process_emu_get_tmp_file_path(Process* proc){
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    char *path;
+    path=(char*)malloc(sizeof(char)*100);
+    sprintf(path,"cp_data/cp_dat_%s.dat",proc->processName->str);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return path;
 }
 
 int process_emu_copy_dat_files(Process* proc, int fileno) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
-    char *read_path="cp_data/cp_data.dat";
+    char *read_path=process_emu_get_tmp_file_path(proc);
     FILE *rfp = fopen(read_path, "rb");
     if(!rfp) {
         error("file is not open %s file.\n",read_path);
@@ -7922,10 +7933,7 @@ int process_emu_copy_dat_files(Process* proc, int fileno) {
 
 //해당 위치부터 사이즈 만큼 읽기(뒤집어 진것 똑바로 읽기)
 void PrintHex(unsigned char* data, int start, int size, unsigned char* dest) {
-//    printf("[Print] %d %d / ",start, size );
     for (int i = 0; i <size; i++){
-//        if(print)
-//            printf("%02x",data[start+size-i-1]);
         if (dest)
             dest[i]= data[start+size-i-1];
     }
@@ -7974,7 +7982,6 @@ unsigned int calcVarInt(unsigned char * data, int *bytepos) {
     }
 
     unsigned int tx_cnt = 0;
-//    printf("Tx varint : %d \n",varint);
     if(varint) {
         int readMoreByte=1;
         while(varint>0) {
@@ -7994,7 +8001,7 @@ unsigned int calcVarInt(unsigned char * data, int *bytepos) {
 
 }
 
-void datParser(unsigned char* dat, unsigned int size,unsigned char * lastBlockMerkleRoot) {
+void datParser(unsigned char* dat, unsigned int size,unsigned char* lastBlockMerkleRoot) {
 
     int blockNum = 0;
     int byteIdx = 0;
@@ -8008,7 +8015,8 @@ void datParser(unsigned char* dat, unsigned int size,unsigned char * lastBlockMe
     byteIdx += 4;//block size
 
 
-    while(size+8>=blockSetSize+byteIdx) {
+    while(size>=blockSetSize+byteIdx) {
+
 
         // block header
         byteIdx += 4;  //version
@@ -8017,29 +8025,29 @@ void datParser(unsigned char* dat, unsigned int size,unsigned char * lastBlockMe
         PrintHex(dat,byteIdx,32,prevBlockHash);
         byteIdx+=32;// previous block hash
 
-        unsigned char merkleRootHash[32];
-        PrintHex(dat,byteIdx,32,merkleRootHash);
+        PrintHex(dat,byteIdx,32,lastBlockMerkleRoot);
         byteIdx += 32; //merkelroothash
-        lastBlockMerkleRoot=merkleRootHash;
 
         byteIdx += 4;   //time
         byteIdx += 4;   //bits
         byteIdx += 4; // nonce ------->finish block header
 
         //for debug
-        printf("[block%d Parse Result]\n",blockNum);
-        printf("[1. block Size] %d \n",blockSetSize);
-        printf("[2. prevBlockHash] ");
+//        printf("[block%d Parse Result]\n",blockNum);
+//        printf("[1. block Size] %d \n",blockSetSize);
+//        printf("[2. prevBlockHash] ");
+//        PrintArray(prevBlockHash, 32);
+//        printf("\n");
+        printf("[3. merkleRootHash] block %d / ");
         PrintArray(prevBlockHash, 32);
-        printf("\n");
-        printf("[3. merkleRootHash] ");
-        PrintArray(merkleRootHash,32);
+        printf(" / ");
+        PrintArray(lastBlockMerkleRoot,32);
         printf("\n");
 
 
         // tx count: VarInt
         unsigned int tx_cnt= calcVarInt(&dat[byteIdx],&byteIdx);
-        printf("[4. Tx count ] %d \n",tx_cnt);
+//        printf("[4. Tx count ] %d \n",tx_cnt);
         for(unsigned int i = 0; i < tx_cnt; i++) {
             //check version
             unsigned int txVersion = hexToInt(&dat[byteIdx], 4, 0);
@@ -8051,26 +8059,26 @@ void datParser(unsigned char* dat, unsigned int size,unsigned char * lastBlockMe
                 //Input
                 unsigned int input_cnt = calcVarInt(&dat[byteIdx],&byteIdx);//input count
 
-                printf("[5. Tx version ] %d \n",txVersion);
-                printf("[6. Input count ] %d \n",input_cnt);
+//                printf("[5. Tx version ] %d \n",txVersion);
+//                printf("[6. Input count ] %d \n",input_cnt);
                 for(unsigned int i = 0; i < input_cnt; i++) {
                     byteIdx+=32;    //txid
                     byteIdx+=4;     //vout
                     unsigned int scriptsig_size = calcVarInt(&dat[byteIdx],&byteIdx);
                     byteIdx+=scriptsig_size;    //scriptsig
-                    printf("[7. Input script byte size %d ] %d \n",i,scriptsig_size);
+//                    printf("[7. Input script byte size %d ] %d \n",i,scriptsig_size);
                 }
 
                 byteIdx+=4;     //sequence
 
                 //output
                 unsigned int output_cnt=calcVarInt(&dat[byteIdx],&byteIdx);//output count
-                printf("[8. Output  count] %d \n",output_cnt);
+//                printf("[8. Output  count] %d \n",output_cnt);
                 for(unsigned int i=0;i<output_cnt;i++){
                     byteIdx+=8;    //value
                     unsigned int scriptsig_size = calcVarInt(&dat[byteIdx],&byteIdx);
                     byteIdx+=scriptsig_size;    //scriptsig
-                    printf("[9. Output Script size %d] %d \n",i,scriptsig_size);
+//                    printf("[9. Output Script size %d] %d \n",i,scriptsig_size);
                 }
 
                 byteIdx+=4;     //locktime
@@ -8083,25 +8091,25 @@ void datParser(unsigned char* dat, unsigned int size,unsigned char * lastBlockMe
 
                 //Input
                 unsigned int input_cnt= calcVarInt(&dat[byteIdx],&byteIdx);//input count
-                printf("[6. Input count ] %d \n",input_cnt);
+//                printf("[6. Input count ] %d \n",input_cnt);
                 for(unsigned int i=0;i<input_cnt;i++){
                     byteIdx+=32;    //txid
                     byteIdx+=4;     //vout
                     unsigned int scriptsig_size = calcVarInt(&dat[byteIdx],&byteIdx);
                     byteIdx+=scriptsig_size;    //scriptsig
-                    printf("[7. Input script byte size %d ] %d \n",i,scriptsig_size);
+//                    printf("[7. Input script byte size %d ] %d \n",i,scriptsig_size);
 
                 }
                 byteIdx+=4;     //sequence
 
                 //output
                 unsigned int output_cnt = calcVarInt(&dat[byteIdx],&byteIdx);//output count
-                printf("[8. Output  count] %d \n",output_cnt);
+//                printf("[8. Output  count] %d \n",output_cnt);
                 for(unsigned int i = 0 ;i<output_cnt;i++){
                     byteIdx+=8; // value
                     unsigned int scriptsig_size = calcVarInt(&dat[byteIdx],&byteIdx);
                     byteIdx+=scriptsig_size;    //scriptsig
-                    printf("[9. Output Script size %d] %d \n",i,scriptsig_size);
+//                    printf("[9. Output Script size %d] %d \n",i,scriptsig_size);
                 }
                 //output script witness & locktime
                 byteIdx+=34;    //script_witness
@@ -8115,57 +8123,55 @@ void datParser(unsigned char* dat, unsigned int size,unsigned char * lastBlockMe
         }
         byteIdx += 4;
         blockNum +=1;
-        printf("\n");
+//        printf("\n");
     }
 }
 void AddDataToHashTable(int fileno, char* path, char * merkleroothash, unsigned int nodeid){
-    FileInfotbl = (HashTable*)malloc(sizeof(HashTable));
     AddHashData(FileInfotbl,fileno,path,merkleroothash);
     AddNodeHashData(NodeInfotbl,nodeid,fileno,path);
 }
 
 int process_emu_compare_dat_files(Process* proc, int fileno) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    printf("process_emu_compare_dat_file test fileno is %d \n",fileno);
+    printf("process_emu_compare_dat_file test fileno is %d_%s \n",fileno,proc->processName->str);
 
     //cp_data file open
-    char* path2="cp_data/cp_data.dat";
+    char* path2=process_emu_get_tmp_file_path(proc);
     FILE* file2 = fopen(path2, "rb");
 
     fseek(file2, 0, SEEK_END);
     unsigned int size2 = ftell(file2);
     fseek(file2,0,SEEK_SET);
 
-    unsigned char *merkleroothash2;
+    unsigned char merkleroothash[32];
     unsigned char buf2[size2];
     fread(&buf2, sizeof(char), size2, file2);
-    datParser(buf2, size2, merkleroothash2);
-
+    datParser(buf2, size2, &merkleroothash);
     fclose(file2);
 
     //파일이 존재 하지 않으면, return 0;
     if(FileInfotbl==NULL) {
         createHashTables();
     }
-
     if(FileInfotbl->ents[fileno].list==NULL) {
         printf("COMPARE Result = file %d  is not exist! make the new file!!\n",fileno);
 
         //data를 hash table에 추가
-        AddHashData(FileInfotbl,fileno,makeActualPath(fileno,proc->processName->str),merkleroothash2);
+        AddDataToHashTable(fileno,process_emu_get_dat_file_path(proc,fileno),&merkleroothash,proc->processID);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+        printf("finish the compare method \n");
         return 0;// file is not exist, so make the file!
     }
 
-    char* uniqueid=getLastBlockHash(FileInfotbl,fileno);
-    if(!strcmp(uniqueid,merkleroothash2)) {
-        printf("COMPARE Result = cp_data.dat and cp_data/dat_.dat file is same!!!\n");
+    char* uniqueid =getLastBlockHash(FileInfotbl,fileno);
+    if(memcmp(uniqueid, merkleroothash, 32)==0) {
+        printf("COMPARE Result = %s and %s file is same!!!\n",path2,FileInfotbl->ents[fileno].list->actual_path);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return 1;
     }
     else {
-        printf("COMPARE Result = cp_data.dat and cp_data/dat_.dat file is NOT same!!!\n");
-        AddHashData(FileInfotbl,fileno,makeActualPath(fileno,proc->processName->str),merkleroothash2);
+        printf("COMPARE Result = %s and %s file is NOT same!!!\n",path2,FileInfotbl->ents[fileno].list->actual_path);
+        AddDataToHashTable(fileno,process_emu_get_dat_file_path(proc,fileno),merkleroothash,proc->processID);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return 0;
     }
@@ -8186,8 +8192,8 @@ int process_emu_compare_dat_files(Process* proc, int fileno) {
 #undef PROCESS_EMU_UNSUPPORTED
 
 //hj add for storage hashtable
-#define MAX_NODE_CNT 10000
-#define MAX_DATAFILE_CNT 10
+#define MAX_NODE_CNT 2000
+#define MAX_DATAFILE_CNT 100
 
 void createHashTables() {
     FileInfotbl = (HashTable*)malloc(sizeof(HashTable));
@@ -8199,7 +8205,7 @@ void createHashTables() {
     }
 
     NodeInfotbl = (HashNodeTable *)malloc(sizeof(HashNodeTable));
-    NodeInfotbl->ents = (HashTblEntry*)malloc(sizeof(HashNodeTblEntry)*MAX_NODE_CNT);
+    NodeInfotbl->ents = (HashNodeTblEntry*)malloc(sizeof(HashNodeTblEntry)*MAX_NODE_CNT);
     // initialize hash node table entries
     for(int i=0; i<MAX_NODE_CNT; i++) {
         NodeInfotbl->ents[i].lastFileNo = 0;
@@ -8208,27 +8214,28 @@ void createHashTables() {
 }
 
 // AddHashData : [key]에 data 추가 -
-void AddHashData(HashTable *hashtable, int key, char* actual_path, char* lastBlockHash){
+void AddHashData(HashTable *hashtable, int fileno, char* actual_path, char* lastBlockHash){
 
     // list entry 생성
     Hashlist* elem = (Hashlist*)malloc(sizeof(Hashlist));
     elem->fileno=fileno;
     elem->actual_path=actual_path;
-    elem->lasBlockHashMerkleRoot=lastBlockHash;
+    elem->lastBlockHashMerkleRoot = (char*)malloc(sizeof(char)*32);
+    memcpy(elem->lastBlockHashMerkleRoot, lastBlockHash, 32);
     elem->refCnt=0;
 
     // put elem to list header
-    Hashlist* cursor = hashtable->ents[key].list;
-    hashtable->ents[key].list = elem;
-    elem->n = cursor;
+    Hashlist* cursor = hashtable->ents[fileno].list;
+    hashtable->ents[fileno].list = elem;
+    elem->next = cursor;
     elem->prev = NULL;
     if (cursor)
         cursor->prev = elem;
 
-    hashtable->ents[key].listcnt++;
+    hashtable->ents[fileno].listcnt++;
 }
 
-void AddNodeHashData(HashNodeTable *hashNodeTable,int nodeid, int fileno,char* actual_path) {
+void AddNodeHashData(HashNodeTable *hashNodeTable,unsigned int nodeid, int fileno,char* actual_path) {
     // list entry 생성
     HashNodelist* elem = (HashNodelist*)malloc(sizeof(HashNodelist));
     elem->fileno=fileno;
@@ -8244,13 +8251,11 @@ void AddNodeHashData(HashNodeTable *hashNodeTable,int nodeid, int fileno,char* a
         cursor->prev = elem;
 
     hashNodeTable->ents[nodeid].lastFileNo=fileno;
-    printHashTable(hashNodeTable,nodeid);
 }
 
 
 char* getLastBlockHash(HashTable *hashtable, int key){
-    char* res;
-    res=hashtable->ents[key].list->lasBlockHashMerkleRoot;
+    unsigned char* res = FileInfotbl->ents[key].list->lastBlockHashMerkleRoot;
     return res;
 }
 
@@ -8262,23 +8267,24 @@ void DeleteHashData(HashTable *hashtable, int key, char* actual_path){
 
     Hashlist* delNode = NULL;
     if(hashtable->ents[key].list->actual_path==actual_path){
-        delNode=&FileInfotbl->ents[key];
-        hashtable->ents[key].list=hashtable->ents->list->n;
+        delNode=&FileInfotbl->ents[key].list;
+        hashtable->ents[key].list=hashtable->ents->list->next;
     }
     else {
         Hashlist *node = hashtable->ents[key].list;
-        Hashlist *next = node->n;
+        Hashlist *next = node->next;
 
         while (next) {
             if (strcmp(next->actual_path ,actual_path) == 0) {
-                node->n = next->n;
+                node->next = next->next;
                 delNode = next;
                 break;
             }
             node = next;
-            next = node->n;
+            next = node->next;
         }
     }
+    free(delNode->lastBlockHashMerkleRoot);
     free(delNode);
 }
 
@@ -8290,19 +8296,11 @@ void DeleteNodeHashData(HashNodeTable *hashNodeTable,int key){
     free(hashNodeTable->ents[key].list);
 }
 
-char * makeActualPath(int fileno, char* nodeid) {
-    char *path;
-    path=malloc(100);
-    printf(path,"cp_data/dat_%d_%s.dat",fileno,nodeid);
-    return path;
-}
-
-void printHashTable(HashTable *hashtable,int key){
-    Hashlist * node = hashtable->ents[key].list;
+void printHashTable(HashNodeTable *hashtable,int key){
+    HashNodelist * node = hashtable->ents[key].list;
     printf("print hash table : %s \n",node->actual_path);
-    while (node->n) {
-        node = node->n;
+    while (node->next) {
+        node = node->next;
         printf("print hash table : %s \n",node->actual_path);
-
     }
 }
