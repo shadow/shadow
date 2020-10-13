@@ -1,3 +1,7 @@
+/*
+ * The Shadow Simulator
+ * See LICENSE for licensing information
+ */
 
 #include "clone.h"
 
@@ -45,7 +49,7 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     unsigned long handled_flags = required_flags;
     if (flags & CLONE_PARENT_SETTID) {
         handled_flags |= CLONE_PARENT_SETTID;
-        pid_t* ptidp = process_getWriteablePtr(sys->process, sys->thread, ctid, sizeof(*ptidp));
+        pid_t* ptidp = process_getWriteablePtr(sys->process, sys->thread, ptid, sizeof(*ptidp));
         *ptidp = thread_getID(child);
     }
 
@@ -71,4 +75,9 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     process_addThread(sys->process, child);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = thread_getID(child)};
+}
+
+SysCallReturn syscallhandler_gettid(SysCallHandler* sys, const SysCallArgs* args) {
+    utility_assert(sys && args);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = thread_getID(sys->thread)};
 }

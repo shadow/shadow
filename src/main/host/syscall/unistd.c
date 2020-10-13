@@ -165,9 +165,9 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
         }
 
         /* We need to block until the descriptor is ready to read. */
-        return (SysCallReturn){
-            .state = SYSCALL_BLOCK,
-            .cond = syscallcondition_new(NULL, desc, DS_READABLE)};
+        Trigger trigger = (Trigger){
+            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
+        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, NULL)};
     }
 
     return (SysCallReturn){
@@ -213,12 +213,6 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    /* Need a non-zero size. */
-    if (!bufSize) {
-        info("Invalid length %zu provided on descriptor %i", bufSize, fd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
@@ -261,9 +255,9 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
         }
 
         /* We need to block until the descriptor is ready to write. */
-        return (SysCallReturn){
-            .state = SYSCALL_BLOCK,
-            .cond = syscallcondition_new(NULL, desc, DS_WRITABLE)};
+        Trigger trigger = (Trigger){
+            .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_WRITABLE};
+        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, NULL)};
     }
 
     return (SysCallReturn){
@@ -344,6 +338,12 @@ SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
     guint pid = process_getProcessID(sys->process);
     return (SysCallReturn){
         .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)pid};
+}
+
+SysCallReturn syscallhandler_set_tid_address(SysCallHandler* sys, const SysCallArgs* args) {
+    PluginPtr tidptr = args->args[0].as_ptr; // int*
+    thread_setTidAddress(sys->thread, tidptr);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = thread_getID(sys->thread)};
 }
 
 SysCallReturn syscallhandler_uname(SysCallHandler* sys,

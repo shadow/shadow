@@ -1,26 +1,27 @@
 use super::syscall_types::{PluginPtr, SysCallReg};
 use crate::cbindings as c;
 use crate::utility::syscall;
+use nix::errno::Errno;
 
 pub trait Thread {
     /// Have the plugin thread natively execute the given syscall.
-    fn native_syscall(&mut self, n: i64, args: &[SysCallReg]) -> Result<SysCallReg, i32>;
+    fn native_syscall(&mut self, n: i64, args: &[SysCallReg]) -> nix::Result<SysCallReg>;
 
-    /// Get a readable pointer to the plugin's memory.
+    /// Get a readable pointer to the plugin's memory. Never returns NULL.
     fn get_readable_ptr(
         &mut self,
         plugin_src: PluginPtr,
         n: usize,
-    ) -> Result<*const ::std::os::raw::c_void, i32>;
+    ) -> nix::Result<*const ::std::os::raw::c_void>;
 
-    /// Get a writeable pointer to the plugin's memory.
+    /// Get a writeable pointer to the plugin's memory. Never returns NULL.
     fn get_writeable_ptr(
         &mut self,
         plugin_src: PluginPtr,
         n: usize,
-    ) -> Result<*mut ::std::os::raw::c_void, i32>;
+    ) -> nix::Result<*mut ::std::os::raw::c_void>;
 
-    /// Get a mutable pointer to the plugin's memory.
+    /// Get a mutable pointer to the plugin's memory. Never returns NULL.
     /// SAFETY
     /// * The specified memory region must be valid and writeable.
     /// * Returned pointer mustn't be accessed after Thread runs again or flush is called.
@@ -28,7 +29,7 @@ pub trait Thread {
         &mut self,
         plugin_src: PluginPtr,
         n: usize,
-    ) -> Result<*mut ::std::os::raw::c_void, i32>;
+    ) -> nix::Result<*mut ::std::os::raw::c_void>;
 
     fn get_process_id(&self) -> u32;
     fn get_host_id(&self) -> u32;
@@ -39,7 +40,7 @@ pub trait Thread {
     fn flush(&mut self);
 
     /// Natively execute munmap(2) on the given thread.
-    fn native_munmap(&mut self, ptr: PluginPtr, size: usize) -> Result<PluginPtr, i32> {
+    fn native_munmap(&mut self, ptr: PluginPtr, size: usize) -> nix::Result<PluginPtr> {
         Ok(self
             .native_syscall(libc::SYS_munmap, &[ptr.into(), size.into()])?
             .into())
@@ -54,7 +55,7 @@ pub trait Thread {
         flags: i32,
         fd: i32,
         offset: i64,
-    ) -> Result<PluginPtr, i32> {
+    ) -> nix::Result<PluginPtr> {
         Ok(self
             .native_syscall(
                 libc::SYS_mmap,
@@ -78,7 +79,7 @@ pub trait Thread {
         new_len: usize,
         flags: i32,
         new_addr: PluginPtr,
-    ) -> Result<PluginPtr, i32> {
+    ) -> nix::Result<PluginPtr> {
         Ok(self
             .native_syscall(
                 libc::SYS_mremap,
@@ -93,8 +94,21 @@ pub trait Thread {
             .into())
     }
 
+    /// Natively execute mmap(2) on the given thread.
+    fn native_mprotect(&mut self, addr: PluginPtr, len: usize, prot: i32) -> nix::Result<()> {
+        self.native_syscall(
+            libc::SYS_mprotect,
+            &[
+                SysCallReg::from(addr),
+                SysCallReg::from(len),
+                SysCallReg::from(prot),
+            ],
+        )?;
+        Ok(())
+    }
+
     /// Natively execute open(2) on the given thread.
-    fn native_open(&mut self, pathname: PluginPtr, flags: i32, mode: i32) -> Result<i32, i32> {
+    fn native_open(&mut self, pathname: PluginPtr, flags: i32, mode: i32) -> nix::Result<i32> {
         let res = self.native_syscall(
             libc::SYS_open,
             &[
@@ -107,20 +121,20 @@ pub trait Thread {
     }
 
     /// Natively execute close(2) on the given thread.
-    fn native_close(&mut self, fd: i32) -> Result<(), i32> {
+    fn native_close(&mut self, fd: i32) -> nix::Result<()> {
         self.native_syscall(libc::SYS_close, &[SysCallReg::from(fd)])?;
         Ok(())
     }
 
     /// Natively execute brk(2) on the given thread.
-    fn native_brk(&mut self, addr: PluginPtr) -> Result<PluginPtr, i32> {
+    fn native_brk(&mut self, addr: PluginPtr) -> nix::Result<PluginPtr> {
         let res = self.native_syscall(libc::SYS_brk, &[SysCallReg::from(addr)])?;
         Ok(PluginPtr::from(res))
     }
 
     /// Allocates some space in the plugin's memory. Use `get_writeable_ptr` to write to it, and
     /// `flush` to ensure that the write is flushed to the plugin's memory.
-    fn malloc_plugin_ptr(&mut self, size: usize) -> Result<PluginPtr, i32> {
+    fn malloc_plugin_ptr(&mut self, size: usize) -> nix::Result<PluginPtr> {
         // SAFETY: No pointer specified; can't pass a bad one.
         self.native_mmap(
             PluginPtr::from(0usize),
@@ -133,7 +147,7 @@ pub trait Thread {
     }
 
     /// Frees a pointer previously returned by `malloc_plugin_ptr`
-    fn free_plugin_ptr(&mut self, ptr: PluginPtr, size: usize) -> Result<(), i32> {
+    fn free_plugin_ptr(&mut self, ptr: PluginPtr, size: usize) -> nix::Result<()> {
         self.native_munmap(ptr, size)?;
         Ok(())
     }
@@ -148,13 +162,14 @@ impl CThread {
     /// # Safety
     /// * `cthread` must point to a valid Thread struct.
     pub unsafe fn new(cthread: *mut c::Thread) -> CThread {
+        assert!(!cthread.is_null());
         c::thread_ref(cthread);
         CThread { cthread }
     }
 }
 
 impl Thread for CThread {
-    fn native_syscall(&mut self, n: i64, args: &[SysCallReg]) -> Result<SysCallReg, i32> {
+    fn native_syscall(&mut self, n: i64, args: &[SysCallReg]) -> nix::Result<SysCallReg> {
         // We considered using an iterator here rather than having to pass an index everywhere
         // below; we avoided it because argument evaluation order is currently a bit of a murky
         // issue, even though it'll *probably* always be left-to-right.
@@ -185,21 +200,20 @@ impl Thread for CThread {
                 x => panic!("Bad number of syscall args {}", x),
             }
         };
-        syscall::raw_return_value_to_errno(raw_res)
+        syscall::raw_return_value_to_result(raw_res)
     }
 
     fn get_readable_ptr(
         &mut self,
         plugin_src: PluginPtr,
         n: usize,
-    ) -> Result<*const ::std::os::raw::c_void, i32> {
+    ) -> nix::Result<*const ::std::os::raw::c_void> {
         // Safety: self.cthread initialized in CThread::new.
-        unsafe {
-            Ok(c::thread_getReadablePtr(
-                self.cthread,
-                plugin_src.into(),
-                n as u64,
-            ))
+        let p = unsafe { c::thread_getReadablePtr(self.cthread, plugin_src.into(), n as u64) };
+        if p.is_null() {
+            Err(nix::Error::from_errno(Errno::EPERM))
+        } else {
+            Ok(p)
         }
     }
 
@@ -207,14 +221,13 @@ impl Thread for CThread {
         &mut self,
         plugin_src: PluginPtr,
         n: usize,
-    ) -> Result<*mut ::std::os::raw::c_void, i32> {
+    ) -> nix::Result<*mut ::std::os::raw::c_void> {
         // Safety: self.cthread initialized in CThread::new.
-        unsafe {
-            Ok(c::thread_getWriteablePtr(
-                self.cthread,
-                plugin_src.into(),
-                n as u64,
-            ))
+        let p = unsafe { c::thread_getWriteablePtr(self.cthread, plugin_src.into(), n as u64) };
+        if p.is_null() {
+            Err(nix::Error::from_errno(Errno::EPERM))
+        } else {
+            Ok(p)
         }
     }
 
@@ -222,14 +235,13 @@ impl Thread for CThread {
         &mut self,
         plugin_src: PluginPtr,
         n: usize,
-    ) -> Result<*mut ::std::os::raw::c_void, i32> {
+    ) -> nix::Result<*mut ::std::os::raw::c_void> {
         // Safety: self.cthread initialized in CThread::new.
-        unsafe {
-            Ok(c::thread_getMutablePtr(
-                self.cthread,
-                plugin_src.into(),
-                n as u64,
-            ))
+        let p = unsafe { c::thread_getMutablePtr(self.cthread, plugin_src.into(), n as u64) };
+        if p.is_null() {
+            Err(nix::Error::from_errno(Errno::EPERM))
+        } else {
+            Ok(p)
         }
     }
 

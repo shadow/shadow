@@ -15,10 +15,10 @@
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/descriptor/descriptor_listener.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
+#include "main/host/status_listener.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
@@ -60,7 +60,7 @@ struct _EpollWatch {
     /* the shadow descriptor we are watching for events */
     Descriptor* descriptor;
     /* The listener that notifies us when status changes. */
-    DescriptorListener* listener;
+    StatusListener* listener;
     /* holds the actual event info */
     struct epoll_event event;
     /* current status of the underlying shadow descriptor */
@@ -103,9 +103,8 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor,
     /* Create the listener and ref the objects held by the listener.
      * The watch object already holds a ref to the descriptor so we
      * don't ref it again. */
-    watch->listener = descriptorlistener_new(
-        (DescriptorStatusCallbackFunc)_epoll_descriptorStatusChanged, epoll,
-        NULL, descriptor, NULL);
+    watch->listener = statuslistener_new(
+        (StatusCallbackFunc)_epoll_descriptorStatusChanged, epoll, NULL, descriptor, NULL);
 
     return watch;
 }
@@ -113,7 +112,7 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor,
 static void _epollwatch_free(EpollWatch* watch) {
     MAGIC_ASSERT(watch);
 
-    descriptorlistener_unref(watch->listener);
+    statuslistener_unref(watch->listener);
     descriptor_unref(watch->descriptor);
 
     MAGIC_CLEAR(watch);
@@ -164,8 +163,7 @@ void epoll_clearWatchListeners(Epoll* epoll) {
     while(g_hash_table_iter_next(&iter, &key, &value)) {
         EpollWatch* watch = value;
         MAGIC_ASSERT(watch);
-        descriptorlistener_setMonitorStatus(
-            watch->listener, DS_NONE, DLF_NEVER);
+        statuslistener_setMonitorStatus(watch->listener, STATUS_NONE, SLF_NEVER);
         descriptor_removeListener(watch->descriptor, watch->listener);
     }
 }
@@ -191,7 +189,7 @@ Epoll* epoll_new() {
     epoll->ready = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_epollwatch_unref);
 
     /* the epoll descriptor itself is always able to be epolled */
-    descriptor_adjustStatus(&(epoll->super), DS_ACTIVE, TRUE);
+    descriptor_adjustStatus(&(epoll->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
     worker_countObject(OBJECT_TYPE_EPOLL, COUNTER_TYPE_NEW);
 
@@ -214,11 +212,11 @@ static void _epollwatch_updateStatus(EpollWatch* watch) {
     watch->flags = 0;
 
     /* check shadow descriptor status */
-    DescriptorStatus status = descriptor_getStatus(watch->descriptor);
-    watch->flags |= (status & DS_ACTIVE) ? EWF_ACTIVE : EWF_NONE;
-    watch->flags |= (status & DS_READABLE) ? EWF_READABLE : EWF_NONE;
-    watch->flags |= (status & DS_WRITABLE) ? EWF_WRITEABLE : EWF_NONE;
-    watch->flags |= (status & DS_CLOSED) ? EWF_CLOSED : EWF_NONE;
+    Status status = descriptor_getStatus(watch->descriptor);
+    watch->flags |= (status & STATUS_DESCRIPTOR_ACTIVE) ? EWF_ACTIVE : EWF_NONE;
+    watch->flags |= (status & STATUS_DESCRIPTOR_READABLE) ? EWF_READABLE : EWF_NONE;
+    watch->flags |= (status & STATUS_DESCRIPTOR_WRITABLE) ? EWF_WRITEABLE : EWF_NONE;
+    watch->flags |= (status & STATUS_DESCRIPTOR_CLOSED) ? EWF_CLOSED : EWF_NONE;
     watch->flags |= (watch->event.events & EPOLLIN) ? EWF_WAITINGREAD : EWF_NONE;
     watch->flags |= (watch->event.events & EPOLLOUT) ? EWF_WAITINGWRITE : EWF_NONE;
     watch->flags |= (watch->event.events & EPOLLET) ? EWF_EDGETRIGGER : EWF_NONE;
@@ -313,11 +311,13 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 
             /* It's added, so we need to listen for changes. Here we listen for
              * all statuses, because epoll will filter what it needs.
-             * TODO: lean more heavily on descriptorlistener and simplify epoll.
+             * TODO: lean more heavily on statuslistener and simplify epoll.
              */
-            descriptorlistener_setMonitorStatus(
-                watch->listener,
-                DS_ACTIVE | DS_CLOSED | DS_READABLE | DS_WRITABLE, DLF_ALWAYS);
+            statuslistener_setMonitorStatus(watch->listener,
+                                            STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_CLOSED |
+                                                STATUS_DESCRIPTOR_READABLE |
+                                                STATUS_DESCRIPTOR_WRITABLE,
+                                            SLF_ALWAYS);
             descriptor_addListener(watch->descriptor, watch->listener);
 
             /* initiate a callback if the new watched descriptor is ready */
@@ -357,8 +357,7 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
             watch->flags &= ~EWF_WATCHING;
 
             /* its deleted, so stop listening for updates */
-            descriptorlistener_setMonitorStatus(
-                watch->listener, DS_NONE, DLF_NEVER);
+            statuslistener_setMonitorStatus(watch->listener, STATUS_NONE, SLF_NEVER);
             descriptor_removeListener(watch->descriptor, watch->listener);
 
             /* unref gets called on the watch when it is removed from these tables */
@@ -436,7 +435,8 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
 
     /* if we consumed all the events that we had to report,
      * then our parent descriptor can no longer read child epolls */
-    descriptor_adjustStatus(&(epoll->super), DS_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE);
+    descriptor_adjustStatus(
+        &(epoll->super), STATUS_DESCRIPTOR_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE);
 
     return 0;
 }
@@ -469,5 +469,6 @@ static void _epoll_descriptorStatusChanged(Epoll* epoll,
     }
 
     /* check the status on the parent epoll fd and adjust as needed */
-    descriptor_adjustStatus(&(epoll->super), DS_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE);
+    descriptor_adjustStatus(
+        &(epoll->super), STATUS_DESCRIPTOR_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE);
 }

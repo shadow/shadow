@@ -19,6 +19,7 @@
 #include "main/core/support/options.h"
 #include "main/host/cpu.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/futex_table.h"
 #include "main/host/network_interface.h"
 #include "main/host/tracker.h"
 #include "main/routing/address.h"
@@ -118,5 +119,7 @@ void host_disassociateInterface(Host* host, Socket* socket);
 in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
                                  in_addr_t interfaceIP, in_addr_t peerIP,
                                  in_port_t peerPort);
+
+FutexTable* host_getFutexTable(Host* host);
 
 #endif /* SHD_HOST_H_ */

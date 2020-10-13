@@ -30,6 +30,7 @@
 #include "main/host/descriptor/timer.h"
 #include "main/host/descriptor/transport.h"
 #include "main/host/descriptor/udp.h"
+#include "main/host/futex_table.h"
 #include "main/host/host.h"
 #include "main/host/network_interface.h"
 #include "main/host/process.h"
@@ -72,6 +73,9 @@ struct _Host {
 
     /* map path to ports for unix sockets */
     GHashTable* unixPathToPortMap;
+
+    /* map address to futex objects */
+    FutexTable* futexTable;
 
     /* track the order in which the application sent us application data */
     gdouble packetPriorityCounter;
@@ -154,6 +158,9 @@ void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, cons
     host->random = random_new(host->params.nodeSeed);
     host->cpu = cpu_new(host->params.cpuFrequency, (guint64)rawCPUFreq, host->params.cpuThreshold, host->params.cpuPrecision);
 
+    // Table to track futexes used by processes/threads
+    host->futexTable = futextable_new();
+
     /* connect to topology and get the default bandwidth */
     guint64 bwDownKiBps = 0, bwUpKiBps = 0;
     topology_attach(topology, ethernetAddress, host->random,
@@ -232,6 +239,10 @@ void host_shutdown(Host* host) {
 
     if(host->unixPathToPortMap) {
         g_hash_table_destroy(host->unixPathToPortMap);
+    }
+
+    if (host->futexTable) {
+        futextable_unref(host->futexTable);
     }
 
     if(host->cpu) {
@@ -638,3 +649,5 @@ const gchar* host_getDataPath(Host* host) {
     MAGIC_ASSERT(host);
     return host->dataDirPath;
 }
+
+FutexTable* host_getFutexTable(Host* host) { return host->futexTable; }

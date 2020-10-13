@@ -128,3 +128,12 @@ impl From<SysCallReg> for PluginPtr {
         }
     }
 }
+
+// Useful for syscalls whose strongly-typed wrappers return some Result<(), ErrType>
+impl Into<SysCallReg> for () {
+    fn into(self) -> SysCallReg {
+        SysCallReg {
+            reg: c::SysCallReg { as_i64: 0 },
+        }
+    }
+}

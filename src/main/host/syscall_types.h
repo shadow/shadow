@@ -6,9 +6,16 @@
 
 // We use this to get some type safety for pointers in the plugin's address
 // space. In particular we want to avoid dereferencing them directly.
-typedef struct {
+struct _PluginPtr {
     uint64_t val;
-} PluginPtr;
+};
+
+// A virtual address in the plugin's address space
+typedef struct _PluginPtr PluginVirtualPtr;
+// Deprecated; use PluginVirtualPtr instead
+typedef struct _PluginPtr PluginPtr;
+// A phyiscal address that should be unique to the machine
+typedef struct _PluginPtr PluginPhysicalPtr;
 
 // A register used for input/output in a syscall.
 typedef union _SysCallReg {

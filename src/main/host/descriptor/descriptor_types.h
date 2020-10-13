@@ -8,22 +8,8 @@
 
 #include <glib.h>
 
+#include "main/host/status.h"
 #include "main/utility/utility.h"
-
-/* Bitfield representing possible status types and their states. */
-typedef enum _DescriptorStatus DescriptorStatus;
-enum _DescriptorStatus {
-    DS_NONE = 0,
-    /* the descriptor has been initialized and it is now OK to
-     * unblock any plugin waiting on a particular status  */
-    DS_ACTIVE = 1 << 0,
-    /* can be read, i.e. there is data waiting for user */
-    DS_READABLE = 1 << 1,
-    /* can be written, i.e. there is available buffer space */
-    DS_WRITABLE = 1 << 2,
-    /* user already called close */
-    DS_CLOSED = 1 << 3,
-};
 
 typedef enum _DescriptorType DescriptorType;
 enum _DescriptorType {
@@ -63,7 +49,7 @@ struct _Descriptor {
     Process* ownerProcess;
     gint handle;
     DescriptorType type;
-    DescriptorStatus status;
+    Status status;
     GHashTable* listeners;
     gint referenceCount;
     gint flags;

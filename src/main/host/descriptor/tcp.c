@@ -46,15 +46,15 @@ enum TCPState {
     TCPS_CLOSEWAIT, TCPS_LASTACK,
 };
 
-static const gchar* tcpStateStrings[] = {
+static const gchar* _tcpStateStrings[] = {
     "TCPS_CLOSED", "TCPS_LISTEN",
     "TCPS_SYNSENT", "TCPS_SYNRECEIVED", "TCPS_ESTABLISHED",
     "TCPS_FINWAIT1", "TCPS_FINWAIT2", "TCPS_CLOSING", "TCPS_TIMEWAIT",
     "TCPS_CLOSEWAIT", "TCPS_LASTACK"
 };
 
-static const gchar* tcp_stateToAscii(enum TCPState state) {
-    return tcpStateStrings[state];
+static const gchar* _tcp_stateToAscii(enum TCPState state) {
+    return _tcpStateStrings[state];
 }
 
 enum TCPFlags {
@@ -616,12 +616,12 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
     tcp->state = state;
 
     debug("%s <-> %s: moved from TCP state '%s' to '%s'", tcp->super.boundString, tcp->super.peerString,
-            tcp_stateToAscii(tcp->stateLast), tcp_stateToAscii(tcp->state));
+            _tcp_stateToAscii(tcp->stateLast), _tcp_stateToAscii(tcp->state));
 
     /* some state transitions require us to update the descriptor status */
     switch (state) {
         case TCPS_LISTEN: {
-            descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, TRUE);
+            descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE, TRUE);
             break;
         }
         case TCPS_SYNSENT: {
@@ -632,7 +632,8 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
         }
         case TCPS_ESTABLISHED: {
             tcp->flags |= TCPF_WAS_ESTABLISHED;
-            descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE|DS_WRITABLE, TRUE);
+            descriptor_adjustStatus(
+                (Descriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
             break;
         }
         case TCPS_CLOSING: {
@@ -645,7 +646,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
             _tcp_clearRetransmit(tcp, (guint)-1);
 
             /* user can no longer use socket */
-            descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
+            descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE, FALSE);
 
             /*
              * servers have to wait for all children to close.
@@ -746,7 +747,7 @@ static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
         /* the packet takes up more space */
         tcp->throttledOutputLength += packet_getPayloadLength(packet);
         if(_tcp_getBufferSpaceOut(tcp) == 0) {
-            descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+            descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
         }
 
         packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_THROTTLED);
@@ -879,7 +880,7 @@ static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
 
         tcp->retransmit.queueLength += packet_getPayloadLength(packet);
         if(_tcp_getBufferSpaceOut(tcp) == 0) {
-            descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+            descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
         }
     }
 }
@@ -904,7 +905,7 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
     }
 
     if(_tcp_getBufferSpaceOut(tcp) > 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
+        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
     }
 }
 
@@ -927,7 +928,7 @@ static void _tcp_clearRetransmitRange(TCP* tcp, guint begin, guint end) {
     }
 
     if(_tcp_getBufferSpaceOut(tcp) > 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
+        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
     }
 }
 
@@ -1061,7 +1062,7 @@ static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
     packet_addDeliveryStatus(packet, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
 
     if(_tcp_getBufferSpaceOut(tcp) > 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
+        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
     }
 
     /* reset retransmit timer since we are resending it now */
@@ -1274,18 +1275,18 @@ static void _tcp_flush(TCP* tcp) {
         if((tcp->receive.next >= tcp->receive.end) && !(tcp->flags & TCPF_EOF_RD_SIGNALED)) {
             /* user needs to read a 0 so it knows we closed */
             tcp->error |= TCPE_RECEIVE_EOF;
-            descriptor_adjustStatus((Descriptor*)tcp, DS_READABLE, TRUE);
+            descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_READABLE, TRUE);
         }
     }
 
     if((tcp->error & TCPE_CONNECTION_RESET) && (tcp->flags & TCPF_RESET_SIGNALED)) {
-        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
     } else if((tcp->error & TCPE_SEND_EOF) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
-        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
     } else if(_tcp_getBufferSpaceOut(tcp) <= 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, FALSE);
+        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
     } else {
-        descriptor_adjustStatus((Descriptor*)tcp, DS_WRITABLE, TRUE);
+        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
     }
 }
 
@@ -1542,7 +1543,7 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
     if(g_queue_get_length(tcp->server->pending) <= 0) {
         /* listen sockets should have no data, and should not be readable if no pending conns */
         utility_assert(socket_getInputBufferLength(&tcp->super) == 0);
-        descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, FALSE);
+        descriptor_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, FALSE);
         return -EWOULDBLOCK;
     }
 
@@ -1565,13 +1566,14 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
     tcpChild->child->state = TCPCS_ACCEPTED;
 
     /* update child descriptor status */
-    descriptor_adjustStatus(&(tcpChild->super.super.super), DS_ACTIVE|DS_WRITABLE, TRUE);
+    descriptor_adjustStatus(&(tcpChild->super.super.super),
+                            STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
 
     /* update server descriptor status */
     if(g_queue_get_length(tcp->server->pending) > 0) {
-        descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
+        descriptor_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
     } else {
-        descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, FALSE);
+        descriptor_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, FALSE);
     }
 
     *acceptedHandle = tcpChild->super.super.super.handle;
@@ -1675,9 +1677,9 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
             }
         }
 
-        DescriptorStatus s = descriptor_getStatus((Descriptor*) tcp);
-        gboolean waitingUserRead = (s & DS_READABLE) ? TRUE : FALSE;
-        
+        Status s = descriptor_getStatus((Descriptor*)tcp);
+        gboolean waitingUserRead = (s & STATUS_DESCRIPTOR_READABLE) ? TRUE : FALSE;
+
         if((isNextPacket && !waitingUserRead) || (packetFits)) {
             /* make sure its in order */
             _tcp_bufferPacketIn(tcp, packet);
@@ -1861,7 +1863,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
     TCPProcessFlags flags = TCP_PF_NONE;
     enum ProtocolTCPFlags responseFlags = PTCP_NONE;
 
-    debug("processing packet while in state %s", tcp_stateToAscii(tcp->state));
+    debug("processing packet while in state %s", _tcp_stateToAscii(tcp->state));
 
     switch(tcp->state) {
         case TCPS_LISTEN: {
@@ -1901,7 +1903,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                 tcp = multiplexed;
                 responseFlags = PTCP_SYN|PTCP_ACK;
 
-                debug("new child state %s", tcp_stateToAscii(tcp->state));
+                debug("new child state %s", _tcp_stateToAscii(tcp->state));
             }
             break;
         }
@@ -1946,7 +1948,8 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                     tcp->child->state = TCPCS_PENDING;
                     g_queue_push_tail(tcp->child->parent->server->pending, tcp);
                     /* user should accept new child from parent */
-                    descriptor_adjustStatus(&(tcp->child->parent->super.super.super), DS_READABLE, TRUE);
+                    descriptor_adjustStatus(
+                        &(tcp->child->parent->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
                 }
             }
             break;
@@ -2049,7 +2052,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
         return;
     }
 
-    debug("state after switch is %s", tcp_stateToAscii(tcp->state));
+    debug("state after switch is %s", _tcp_stateToAscii(tcp->state));
 
     /* if TCPE_RECEIVE_EOF, we are not supposed to receive any more */
     if(packetLength > 0 && !(tcp->error & TCPE_RECEIVE_EOF)) {
@@ -2158,7 +2161,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
     /* clear it so we dont send outdated timestamp echos */
     tcp->receive.lastTimestamp = 0;
 
-    debug("done processing in state %s", tcp_stateToAscii(tcp->state));
+    debug("done processing in state %s", _tcp_stateToAscii(tcp->state));
 }
 
 static void _tcp_dropPacket(Socket* socket, Packet* packet) {
@@ -2182,8 +2185,8 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
 
     if((tcp->flags & TCPF_EOF_RD_SIGNALED) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
         /* user can no longer access socket */
-        descriptor_adjustStatus(&(tcp->super.super.super), DS_CLOSED, TRUE);
-        descriptor_adjustStatus(&(tcp->super.super.super), DS_ACTIVE, FALSE);
+        descriptor_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_CLOSED, TRUE);
+        descriptor_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_ACTIVE, FALSE);
     }
 }
 
@@ -2196,11 +2199,9 @@ static gssize _tcp_sendUserData(Transport* transport, gconstpointer buffer,
     if(tcp->error & TCPE_SEND_EOF)
     {
         debug("send EOF is set");
-        if(tcp->flags & TCPF_EOF_WR_SIGNALED) {
-            /* we already signaled close, now its an error */
+        if(tcp->state == TCPS_CLOSED) {
             return -ENOTCONN;
         } else {
-            /* we have not signaled close, do that now */
             _tcp_endOfFileSignalled(tcp, TCPF_EOF_WR_SIGNALED);
             return -EPIPE;
         }
@@ -2241,7 +2242,7 @@ static gssize _tcp_sendUserData(Transport* transport, gconstpointer buffer,
     /* now flush as much as possible out to socket */
     _tcp_flush(tcp);
 
-    return (gssize)(bytesCopied == 0 ? -EWOULDBLOCK : bytesCopied);
+    return (gssize)(bytesCopied == 0 && nBytes != 0 ? -EWOULDBLOCK : bytesCopied);
 }
 
 static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
@@ -2340,7 +2341,7 @@ static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
     /* now we update readability of the socket */
     if((socket_getInputBufferLength(&(tcp->super)) > 0) || (tcp->partialUserDataPacket != NULL)) {
         /* we still have readable data */
-        descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
+        descriptor_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
     } else {
         /* all of our ordered user data has been read */
         if((tcp->unorderedInputLength == 0) && (tcp->error & TCPE_RECEIVE_EOF)) {
@@ -2348,21 +2349,20 @@ static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
             if(totalCopied > 0) {
                 /* we just received bytes, so we can't EOF until the next call.
                  * make sure we stay readable so we DO actually EOF the socket */
-                descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, TRUE);
+                descriptor_adjustStatus(
+                    &(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
             } else {
                 /* OK, no more data and nothing just received. */
-                if(tcp->flags & TCPF_EOF_RD_SIGNALED) {
-                    /* we already signaled close, now its an error */
+                if(tcp->state == TCPS_CLOSED) {
                     return -ENOTCONN;
                 } else {
-                    /* we have not signaled close, do that now and close out the socket */
                     _tcp_endOfFileSignalled(tcp, TCPF_EOF_RD_SIGNALED);
                     return 0;
                 }
             }
         } else {
             /* our socket still has unordered data or is still open, but empty for now */
-            descriptor_adjustStatus(&(tcp->super.super.super), DS_READABLE, FALSE);
+            descriptor_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, FALSE);
         }
     }
 
@@ -2444,7 +2444,7 @@ static gboolean _tcp_close(Descriptor* descriptor) {
     tcp->flags |= TCPF_LOCAL_CLOSED_RD;
 
     /* the user closed the connection, so should never interact with the socket again */
-    descriptor_adjustStatus((Descriptor*)tcp, DS_ACTIVE, FALSE);
+    descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE, FALSE);
 
     switch (tcp->state) {
         case TCPS_LISTEN:

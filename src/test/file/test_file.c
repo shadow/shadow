@@ -54,6 +54,9 @@ static void _test_write(){
     assert_nonneg_errno(filed = fileno(file));
     assert_nonneg_errno(write(filed, "test", 4));
 
+    // check that we can write 0 bytes
+    assert_nonneg_errno(write(filed, "asdf", 0));
+
     fclose(file);
 }
 
