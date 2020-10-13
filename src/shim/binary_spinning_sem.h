@@ -59,7 +59,7 @@ class BinarySpinningSem {
      * unlikely that this function will be called by two threads in a correct
      * program.
      */
-    void wait(bool spin=true);
+    void wait(bool spin = true);
 
     BinarySpinningSem(const BinarySpinningSem &rhs) = delete;
     BinarySpinningSem &operator=(const BinarySpinningSem &rhs) = delete;
