@@ -82,12 +82,25 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
     shimevent_sendEventToShadow(ipc_blk.p, syscall_event);
     SysCallReg rv = {0};
 
+    // By default we assume Shadow will return quickly, and so should spin
+    // rather than letting the OS block this thread.
+    bool spin = true;
     while (true) {
         debug("waiting for event on %p", ipc_blk.p);
         ShimEvent res = {0};
-        shimevent_recvEventFromShadow(ipc_blk.p, &res);
+        shimevent_recvEventFromShadow(ipc_blk.p, &res, spin);
         debug("got response of type %d on %p", res.event_id, ipc_blk.p);
+        // Reset spin-flag to true. (May have been set to false by a SHD_SHIM_EVENT_BLOCK in the
+        // previous iteration)
+        spin = true;
         switch (res.event_id) {
+            case SHD_SHIM_EVENT_BLOCK: {
+                // Loop again, this time relinquishing the CPU while waiting for the next message.
+                spin = false;
+                // Ack the message.
+                shimevent_sendEventToShadow(ipc_blk.p, &res);
+                break;
+            }
             case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
                 // Use provided result.
                 SysCallReg rv = res.event_data.syscall_complete.retval;

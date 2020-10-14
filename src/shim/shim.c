@@ -139,7 +139,7 @@ static void _shim_unload() {
 static void _shim_wait_start() {
     ShimEvent event;
     debug("waiting for start event on %p", _shim_ipc_blk.p);
-    shimevent_recvEventFromShadow(_shim_ipc_blk.p, &event);
+    shimevent_recvEventFromShadow(_shim_ipc_blk.p, &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
     shimlogger_set_simulation_nanos(event.event_data.start.simulation_nanos);
 }

@@ -23,16 +23,18 @@ void BinarySpinningSem::post() {
     pthread_spin_unlock(&_lock);
 }
 
-void BinarySpinningSem::wait() {
+void BinarySpinningSem::wait(bool spin) {
     // Based loosely on
     // https://probablydance.com/2019/12/30/measuring-mutexes-spinlocks-and-how-bad-the-linux-scheduler-really-is/.
-    while (_spin_ctr++ < _thresh) {
-        bool was_available = _x.load(std::memory_order_relaxed);
-        if (was_available &&
-            _x.compare_exchange_weak(was_available, false, std::memory_order_acquire)) {
-            break;
+    if (spin) {
+        while (_spin_ctr++ < _thresh) {
+            bool was_available = _x.load(std::memory_order_relaxed);
+            if (was_available &&
+                _x.compare_exchange_weak(was_available, false, std::memory_order_acquire)) {
+                break;
+            }
+            __asm__("pause"); // (rwails) Not sure if this op is helpful.
         }
-        __asm__("pause"); // (rwails) Not sure if this op is helpful.
     }
     sem_wait(&_semaphore);
     _spin_ctr = 0;
