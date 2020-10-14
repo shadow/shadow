@@ -14,6 +14,93 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <glib.h>
+
+#include "support/logger/logger.h"
+#include "test/test_glib_helpers.h"
+
+#define UNAVAILABLE 0
+#define AVAILABLE 1
+
+// Spins until `c` becomes true.
+static void _wait_for_condition(bool* c) {
+    while (!*c) {
+        // Wait a bit.
+        usleep(1000);
+        // Not sure this is necessary.
+        __sync_synchronize();
+    }
+}
+
+// Set `c` to true.
+static void _set_condition(bool *c) {
+    *c = true;
+    __sync_synchronize();
+}
+
+// Get `c`'s value.
+static bool _get_condition(bool *c) {
+    __sync_synchronize();
+    return *c;
+}
+
+typedef struct {
+    bool child_started;
+    int futex;
+    bool child_finished;
+} FutexWaitTestChildArg;
+
+static void* _futex_wait_test_child(void *void_arg) {
+    FutexWaitTestChildArg* arg = void_arg;
+    _set_condition(&arg->child_started);
+    debug("Child about to wait");
+    assert_true_errno(syscall(SYS_futex, &arg->futex, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0) == 0);
+    debug("Child returned from wait");
+    __sync_synchronize();
+    g_assert_cmpint(arg->futex, ==, AVAILABLE);
+    _set_condition(&arg->child_finished);
+    debug("Child finished");
+    return NULL;
+}
+
+static void _futex_wait_test() {
+    FutexWaitTestChildArg arg = {
+        .child_started = false, .futex = UNAVAILABLE, .child_finished = false};
+    pthread_t child = {0};
+    assert_nonneg_errno(pthread_create(&child, NULL, _futex_wait_test_child, &arg));
+
+    // Wait for it to signal it's started.
+    debug("Waiting for child to start");
+    _wait_for_condition(&arg.child_started);
+
+    // Try to wait until child is sleeping on the lock. Not sure if there's a reasonable way to
+    // avoid a race here.
+    usleep(1000);
+
+    // Verify that it *hasn't* woken yet.
+    g_assert_true(!_get_condition(&arg.child_finished));
+
+    // Wake the child.
+    debug("Waking child\n");
+    g_assert_true(__sync_bool_compare_and_swap(&arg.futex, UNAVAILABLE, AVAILABLE));
+    int res = syscall(SYS_futex, &arg.futex, FUTEX_WAKE, 1, NULL, NULL, 0);
+    // Should have woken exactly one sleeping thread.
+    g_assert_cmpint(res, ==, 1);
+
+    // wait for it to signal that it's woken
+    _wait_for_condition(&arg.child_finished);
+}
+
+static void _futex_wait_stale_test() {
+    int futex = AVAILABLE;
+    g_assert_cmpint(syscall(SYS_futex, &futex, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0), ==, -1);
+    assert_errno_is(EAGAIN);
+}
+
+static void _futex_wake_nobody_test() {
+    int futex = AVAILABLE;
+    g_assert_cmpint(syscall(SYS_futex, &futex, FUTEX_WAKE, INT_MAX), ==, 0);
+}
 
 // Note: this test roughly follows the example at the end of `man 2 futex`
 
@@ -141,6 +228,10 @@ int run() {
 
 int main() {
     printf("########## futex test starting ##########\n");
+
+    _futex_wait_test();
+    _futex_wait_stale_test();
+    _futex_wake_nobody_test();
 
     if (run() == EXIT_SUCCESS) {
         printf("########## futex test passed ##########\n");
