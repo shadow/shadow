@@ -102,6 +102,86 @@ static void _futex_wake_nobody_test() {
     g_assert_cmpint(syscall(SYS_futex, &futex, FUTEX_WAKE, INT_MAX), ==, 0);
 }
 
+typedef struct {
+    bool child_started;
+    bool child_finished;
+    int id;
+    int* futex;
+} FutexWaitBitsetTestChildArg;
+
+static void* _futex_wait_bitset_test_child(void *void_arg) {
+    FutexWaitBitsetTestChildArg* arg = void_arg;
+    _set_condition(&arg->child_started);
+    debug("Child %d about to wait", arg->id);
+    assert_true_errno(syscall(SYS_futex, arg->futex, FUTEX_WAIT_BITSET, UNAVAILABLE, NULL, NULL,
+                              1 << arg->id) == 0);
+    debug("Child %d returned from wait", arg->id);
+    __sync_synchronize();
+    g_assert_cmpint(*arg->futex, ==, AVAILABLE);
+    _set_condition(&arg->child_finished);
+    debug("Child finished");
+    return NULL;
+}
+
+static void _futex_wait_bitset_test() {
+    FutexWaitBitsetTestChildArg arg[5];
+    int futex = UNAVAILABLE;
+
+    // Get all 5 children waiting.
+    for(int i=0; i<5; ++i) {
+        arg[i] = (FutexWaitBitsetTestChildArg) {
+            .child_started=false,
+                .child_finished=false,
+                .id=i,
+                .futex = &futex,
+        };
+
+        pthread_t child = {0};
+        assert_nonneg_errno(pthread_create(&child, NULL, _futex_wait_bitset_test_child, &arg[i]));
+        debug("Waiting for child %d to start", i);
+        _wait_for_condition(&arg[i].child_started);
+    }
+
+    // Wait a bit until they're (hopefully) all blocked on the futex.
+    usleep(1000);
+
+    // Release the futex.
+    futex = AVAILABLE;
+    __sync_synchronize();
+
+    // Wake just #2.
+    g_assert_cmpint(
+        syscall(SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, 1 << 2), ==, 1);
+
+    // Wait for #2 to signal that it's done.
+    _wait_for_condition(&arg[2].child_finished);
+
+    // The other children should still be sleeping.
+    g_assert_false(arg[0].child_finished);
+    g_assert_false(arg[1].child_finished);
+    g_assert_false(arg[3].child_finished);
+    g_assert_false(arg[4].child_finished);
+
+    // Wake #1, #2, and #3 (even though #2 should be a no-op).
+    g_assert_cmpint(syscall(SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL,
+                            1 << 1 | 1 << 2 | 1 << 3),
+                    ==, 2);
+
+    // Wait for 1 and 3 to finish.
+    _wait_for_condition(&arg[1].child_finished);
+    _wait_for_condition(&arg[3].child_finished);
+
+    // 0 and 4 should still be asleep.
+    g_assert_false(arg[0].child_finished);
+    g_assert_false(arg[4].child_finished);
+
+    // Wake up the rest, including bits we never used.
+    g_assert_cmpint(
+        syscall(SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, 0xffffffff), ==, 2);
+    _wait_for_condition(&arg[0].child_finished);
+    _wait_for_condition(&arg[4].child_finished);
+}
+
 // Note: this test roughly follows the example at the end of `man 2 futex`
 
 #define PTR_TO_INT(p) ((int)(long)(p))
@@ -232,6 +312,7 @@ int main() {
     _futex_wait_test();
     _futex_wait_stale_test();
     _futex_wake_nobody_test();
+    _futex_wait_bitset_test();
 
     if (run() == EXIT_SUCCESS) {
         printf("########## futex test passed ##########\n");
