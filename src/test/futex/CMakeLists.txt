@@ -1,6 +1,6 @@
 include_directories(${GLIB_INCLUDES})
 
-add_executable(test-futex test_futex.c)
+add_executable(test-futex test_futex.c ../test_common.c)
 target_link_libraries(test-futex ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} logger)
 
 ## register the tests

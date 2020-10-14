@@ -17,6 +17,7 @@
 #include <glib.h>
 
 #include "support/logger/logger.h"
+#include "test/test_common.h"
 #include "test/test_glib_helpers.h"
 
 #define UNAVAILABLE 0
@@ -209,7 +210,7 @@ static int _futex_wait(volatile int* word) {
             if (res == -1 && errno != EAGAIN) {
                 char errbuf[32] = {0};
                 strerror_r(errno, errbuf, 32);
-                printf("FUTEX_WAIT syscall failed: error %i: %s", errno, errbuf);
+                error("FUTEX_WAIT syscall failed: error %i: %s", errno, errbuf);
                 return EXIT_FAILURE;
             }
         }
@@ -227,7 +228,7 @@ static int _futex_post(volatile int* word) {
         if (res == -1) {
             char errbuf[32] = {0};
             strerror_r(errno, errbuf, 32);
-            printf("FUTEX_WAKE syscall failed: error %i: %s", errno, errbuf);
+            error("FUTEX_WAKE syscall failed: error %i: %s", errno, errbuf);
             return EXIT_FAILURE;
         }
     }
@@ -251,7 +252,7 @@ static int _run_futex_loop(volatile int* word1, volatile int* word2, int slow) {
             return EXIT_FAILURE;
         }
 
-        printf("thread %i loop %i/%i\n", threadID, j, NUM_LOOPS);
+        debug("thread %i loop %i/%i\n", threadID, j, NUM_LOOPS);
 
         if (_futex_post(word2) != EXIT_SUCCESS) {
             return EXIT_FAILURE;
@@ -285,40 +286,31 @@ static void* _collect_child_result() {
     return child_result;
 }
 
-int run() {
+static void _futex_stress_test() {
     pthread_t aux_thread = {0};
 
-    if (pthread_create(&aux_thread, NULL, _run_aux_thread, NULL) < 0) {
-        printf("thread creation failed: error %i: %s\n", errno, strerror(errno));
-        return EXIT_FAILURE;
-    }
+    assert_nonneg_errno(pthread_create(&aux_thread, NULL, _run_aux_thread, NULL));
 
     void* main_result = _run_main_thread(NULL);
     void* aux_result = _collect_child_result();
 
-    bool main_success = PTR_TO_INT(main_result) == 0;
-    bool aux_success = PTR_TO_INT(aux_result) == 0;
-
-    if (main_success && aux_success) {
-        return EXIT_SUCCESS;
-    } else {
-        return EXIT_FAILURE;
-    }
+    g_assert_cmpint(PTR_TO_INT(main_result), ==, 0);
+    g_assert_cmpint(PTR_TO_INT(aux_result), ==, 0);
 }
 
-int main() {
-    printf("########## futex test starting ##########\n");
+int main(int argc, char **argv) {
+    g_test_init(&argc, &argv, NULL);
+    g_test_set_nonfatal_assertions();
 
-    _futex_wait_test();
-    _futex_wait_stale_test();
-    _futex_wake_nobody_test();
-    _futex_wait_bitset_test();
+    g_test_add_func("/futex/wait", _futex_wait_test);
+    g_test_add_func("/futex/wait_stale", _futex_wait_stale_test);
+    g_test_add_func("/futex/wake_nobody", _futex_wake_nobody_test);
+    g_test_add_func("/futex/wake_stress", _futex_stress_test);
 
-    if (run() == EXIT_SUCCESS) {
-        printf("########## futex test passed ##########\n");
-        return EXIT_SUCCESS;
-    } else {
-        printf("########## futex test failed ##########\n");
-        return EXIT_FAILURE;
+    if (!running_in_shadow()) {
+        // TODO: implement FUTEX_WAKE_BITSET in Shadow.
+        g_test_add_func("/futex/wait_bitset", _futex_wait_bitset_test);
     }
+
+    g_test_run();
 }
