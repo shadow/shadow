@@ -37,25 +37,15 @@ typedef struct ByteQueue ByteQueue;
 // MemoryManager via its `handle_*` methods.
 typedef struct MemoryManager MemoryManager;
 
-void bytequeue_free(ByteQueue *bq_ptr);
+void rust_logging_init(void);
 
-ByteQueue *bytequeue_new(size_t chunk_size);
-
-size_t bytequeue_pop(ByteQueue *bq, unsigned char *dst, size_t len);
-
-void bytequeue_push(ByteQueue *bq, const unsigned char *src, size_t len);
+// # Safety
+// * `thread` must point to a valid object.
+MemoryManager *memorymanager_new(Thread *thread);
 
 // # Safety
 // * `mm` must point to a valid object.
 void memorymanager_free(MemoryManager *mm);
-
-// Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
-// # Safety
-// * `mm` and `thread` must point to valid objects.
-void *memorymanager_getMutablePtr(MemoryManager *memory_manager,
-                                  Thread *thread,
-                                  PluginPtr plugin_src,
-                                  uintptr_t n);
 
 // Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
 // # Safety
@@ -73,6 +63,14 @@ void *memorymanager_getWriteablePtr(MemoryManager *memory_manager,
                                     PluginPtr plugin_src,
                                     uintptr_t n);
 
+// Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
+// # Safety
+// * `mm` and `thread` must point to valid objects.
+void *memorymanager_getMutablePtr(MemoryManager *memory_manager,
+                                  Thread *thread,
+                                  PluginPtr plugin_src,
+                                  uintptr_t n);
+
 // Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
 SysCallReg memorymanager_handleBrk(MemoryManager *memory_manager,
                                    Thread *thread,
@@ -88,11 +86,11 @@ SysCallReg memorymanager_handleMmap(MemoryManager *memory_manager,
                                     int32_t fd,
                                     int64_t offset);
 
-SysCallReg memorymanager_handleMprotect(MemoryManager *memory_manager,
-                                        Thread *thread,
-                                        PluginPtr addr,
-                                        uintptr_t size,
-                                        int32_t prot);
+// Fully handles the `munmap` syscall
+SysCallReg memorymanager_handleMunmap(MemoryManager *memory_manager,
+                                      Thread *thread,
+                                      PluginPtr addr,
+                                      uintptr_t len);
 
 SysCallReg memorymanager_handleMremap(MemoryManager *memory_manager,
                                       Thread *thread,
@@ -102,16 +100,18 @@ SysCallReg memorymanager_handleMremap(MemoryManager *memory_manager,
                                       int32_t flags,
                                       PluginPtr new_addr);
 
-// Fully handles the `munmap` syscall
-SysCallReg memorymanager_handleMunmap(MemoryManager *memory_manager,
-                                      Thread *thread,
-                                      PluginPtr addr,
-                                      uintptr_t len);
+SysCallReg memorymanager_handleMprotect(MemoryManager *memory_manager,
+                                        Thread *thread,
+                                        PluginPtr addr,
+                                        uintptr_t size,
+                                        int32_t prot);
 
-// # Safety
-// * `thread` must point to a valid object.
-MemoryManager *memorymanager_new(Thread *thread);
+ByteQueue *bytequeue_new(size_t chunk_size);
 
-void rust_logging_init(void);
+void bytequeue_free(ByteQueue *bq_ptr);
+
+void bytequeue_push(ByteQueue *bq, const unsigned char *src, size_t len);
+
+size_t bytequeue_pop(ByteQueue *bq, unsigned char *dst, size_t len);
 
 #endif /* main_bindings_h */
