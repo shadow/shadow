@@ -824,6 +824,13 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                     // Handle that now.
                     _threadptrace_updateChildState(thread, thread->pendingStop);
                     thread->havePendingStop = false;
+                    // FIXME: To allow this we'd need to (wastefully) flush
+                    // here, or audit state entry points to ensure it won't
+                    // overwrite a dirty buffer. We should probably extract
+                    // ptrace + register state into a helper class that can
+                    // encapsulate such buffering.
+                    utility_assert(!thread->regs.dirty);
+                    continue;
                 }
 
                 break;
