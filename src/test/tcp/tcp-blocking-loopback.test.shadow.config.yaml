@@ -28,7 +28,7 @@ hosts:
   processes:
   - plugin: testtcp
     time: 1
-    arguments: blocking server
+    arguments: blocking server localhost 1234
   - plugin: testtcp
     time: 2
-    arguments: blocking client localhost
+    arguments: blocking client localhost 1234

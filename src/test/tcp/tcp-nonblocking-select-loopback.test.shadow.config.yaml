@@ -28,7 +28,7 @@ hosts:
   processes:
   - plugin: testtcp
     time: 1
-    arguments: nonblocking-select server
+    arguments: nonblocking-select server localhost 1234
   - plugin: testtcp
     time: 2
-    arguments: nonblocking-select client 127.0.0.1
+    arguments: nonblocking-select client localhost 1234
