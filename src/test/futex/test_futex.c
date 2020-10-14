@@ -4,6 +4,7 @@
  */
 
 #include <errno.h>
+#include <glib.h>
 #include <linux/futex.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -14,7 +15,6 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <glib.h>
 
 #include "support/logger/logger.h"
 #include "test/test_common.h"
@@ -34,13 +34,13 @@ static void _wait_for_condition(bool* c) {
 }
 
 // Set `c` to true.
-static void _set_condition(bool *c) {
+static void _set_condition(bool* c) {
     *c = true;
     __sync_synchronize();
 }
 
 // Get `c`'s value.
-static bool _get_condition(bool *c) {
+static bool _get_condition(bool* c) {
     __sync_synchronize();
     return *c;
 }
@@ -51,7 +51,7 @@ typedef struct {
     bool child_finished;
 } FutexWaitTestChildArg;
 
-static void* _futex_wait_test_child(void *void_arg) {
+static void* _futex_wait_test_child(void* void_arg) {
     FutexWaitTestChildArg* arg = void_arg;
     _set_condition(&arg->child_started);
     debug("Child about to wait");
@@ -110,7 +110,7 @@ typedef struct {
     int* futex;
 } FutexWaitBitsetTestChildArg;
 
-static void* _futex_wait_bitset_test_child(void *void_arg) {
+static void* _futex_wait_bitset_test_child(void* void_arg) {
     FutexWaitBitsetTestChildArg* arg = void_arg;
     _set_condition(&arg->child_started);
     debug("Child %d about to wait", arg->id);
@@ -129,12 +129,12 @@ static void _futex_wait_bitset_test() {
     int futex = UNAVAILABLE;
 
     // Get all 5 children waiting.
-    for(int i=0; i<5; ++i) {
-        arg[i] = (FutexWaitBitsetTestChildArg) {
-            .child_started=false,
-                .child_finished=false,
-                .id=i,
-                .futex = &futex,
+    for (int i = 0; i < 5; ++i) {
+        arg[i] = (FutexWaitBitsetTestChildArg){
+            .child_started = false,
+            .child_finished = false,
+            .id = i,
+            .futex = &futex,
         };
 
         pthread_t child = {0};
@@ -298,7 +298,7 @@ static void _futex_stress_test() {
     g_assert_cmpint(PTR_TO_INT(aux_result), ==, 0);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
     g_test_init(&argc, &argv, NULL);
     g_test_set_nonfatal_assertions();
 
