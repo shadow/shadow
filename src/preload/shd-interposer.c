@@ -563,6 +563,16 @@ char* get_tmp_file_path() {
     }
 }
 
+char* get_actual_path(int fileno) {
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_get_actual_path(proc,fileno);
+    } else {
+        ENSURE(get_actual_path);
+        return director.next.get_actual_path(fileno);
+    }
+}
+
 int copy_dat_files(int fileno) {
     Process* proc = NULL;
     if((proc = _doEmulate()) != NULL) {

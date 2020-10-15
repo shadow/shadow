@@ -7901,6 +7901,20 @@ char* process_emu_get_tmp_file_path(Process* proc){
     return path;
 }
 
+char* process_emu_get_actual_path(Process* proc,int fileno){
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    HashNodelist * node = NodeInfotbl->ents[fileno].list;
+    while (node) {
+        if(node->fileno==fileno) {
+            _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+            return node->actual_path;
+        }
+        node = node->next;
+    }
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return NULL;
+}
+
 int process_emu_copy_dat_files(Process* proc, int fileno) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
@@ -8038,7 +8052,7 @@ void datParser(unsigned char* dat, unsigned int size,unsigned char* lastBlockMer
 //        printf("[2. prevBlockHash] ");
 //        PrintArray(prevBlockHash, 32);
 //        printf("\n");
-        printf("[3. merkleRootHash] block %d / ");
+        printf("[3. merkleRootHash] block %d / ",blockNum);
         PrintArray(prevBlockHash, 32);
         printf(" / ");
         PrintArray(lastBlockMerkleRoot,32);
@@ -8136,7 +8150,7 @@ int process_emu_compare_dat_files(Process* proc, int fileno) {
     printf("process_emu_compare_dat_file test fileno is %d_%s \n",fileno,proc->processName->str);
 
     //cp_data file open
-    char* path2=process_emu_get_tmp_file_path(proc);
+    char* path2 = process_emu_get_tmp_file_path(proc);
     FILE* file2 = fopen(path2, "rb");
 
     fseek(file2, 0, SEEK_END);
@@ -8150,31 +8164,33 @@ int process_emu_compare_dat_files(Process* proc, int fileno) {
     fclose(file2);
 
     //파일이 존재 하지 않으면, return 0;
-    if(FileInfotbl==NULL) {
+    if(FileInfotbl == NULL) {
         createHashTables();
     }
-    if(FileInfotbl->ents[fileno].list==NULL) {
+    if(FileInfotbl->ents[fileno].list == NULL) {
         printf("COMPARE Result = file %d  is not exist! make the new file!!\n",fileno);
 
         //data를 hash table에 추가
         AddDataToHashTable(fileno,process_emu_get_dat_file_path(proc,fileno),&merkleroothash,proc->processID);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-        printf("finish the compare method \n");
         return 0;// file is not exist, so make the file!
     }
 
-    char* uniqueid =getLastBlockHash(FileInfotbl,fileno);
-    if(memcmp(uniqueid, merkleroothash, 32)==0) {
-        printf("COMPARE Result = %s and %s file is same!!!\n",path2,FileInfotbl->ents[fileno].list->actual_path);
-        _process_changeContext(proc, PCTX_SHADOW, prevCTX);
-        return 1;
+    Hashlist * node = FileInfotbl->ents[fileno].list;
+    while (node) {
+        char* uniqueid = node->lastBlockHashMerkleRoot;
+        if(memcmp(uniqueid, merkleroothash, 32) == 0) {
+            printf("COMPARE Result = %s and %s file is same!!!\n",path2,node->actual_path);
+            AddNodeHashData(NodeInfotbl,proc->processID,fileno,node->actual_path);
+            _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+            return 1;
+        }
+        node = node->next;
     }
-    else {
         printf("COMPARE Result = %s and %s file is NOT same!!!\n",path2,FileInfotbl->ents[fileno].list->actual_path);
         AddDataToHashTable(fileno,process_emu_get_dat_file_path(proc,fileno),merkleroothash,proc->processID);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return 0;
-    }
 
 }
 
@@ -8218,8 +8234,8 @@ void AddHashData(HashTable *hashtable, int fileno, char* actual_path, char* last
 
     // list entry 생성
     Hashlist* elem = (Hashlist*)malloc(sizeof(Hashlist));
-    elem->fileno=fileno;
-    elem->actual_path=actual_path;
+    elem->fileno = fileno;
+    elem->actual_path = actual_path;
     elem->lastBlockHashMerkleRoot = (char*)malloc(sizeof(char)*32);
     memcpy(elem->lastBlockHashMerkleRoot, lastBlockHash, 32);
     elem->refCnt=0;
@@ -8238,9 +8254,9 @@ void AddHashData(HashTable *hashtable, int fileno, char* actual_path, char* last
 void AddNodeHashData(HashNodeTable *hashNodeTable,unsigned int nodeid, int fileno,char* actual_path) {
     // list entry 생성
     HashNodelist* elem = (HashNodelist*)malloc(sizeof(HashNodelist));
-    elem->fileno=fileno;
-    elem->actual_path=actual_path;
-    elem->nodeID=nodeid;
+    elem->fileno = fileno;
+    elem->actual_path = actual_path;
+    elem->nodeID = nodeid;
 
     // put elem to list header
     HashNodelist* cursor = hashNodeTable->ents[nodeid].list;
@@ -8250,7 +8266,7 @@ void AddNodeHashData(HashNodeTable *hashNodeTable,unsigned int nodeid, int filen
     if (cursor)
         cursor->prev = elem;
 
-    hashNodeTable->ents[nodeid].lastFileNo=fileno;
+    hashNodeTable->ents[nodeid].lastFileNo = fileno;
 }
 
 
@@ -8261,14 +8277,14 @@ char* getLastBlockHash(HashTable *hashtable, int key){
 
 void DeleteHashData(HashTable *hashtable, int key, char* actual_path){
 
-    if(hashtable->ents[key].list==NULL) {
+    if(hashtable->ents[key].list == NULL) {
         return;
     }
 
     Hashlist* delNode = NULL;
-    if(hashtable->ents[key].list->actual_path==actual_path){
-        delNode=&FileInfotbl->ents[key].list;
-        hashtable->ents[key].list=hashtable->ents->list->next;
+    if(hashtable->ents[key].list->actual_path == actual_path){
+        delNode = &FileInfotbl->ents[key].list;
+        hashtable->ents[key].list = hashtable->ents->list->next;
     }
     else {
         Hashlist *node = hashtable->ents[key].list;
@@ -8289,7 +8305,7 @@ void DeleteHashData(HashTable *hashtable, int key, char* actual_path){
 }
 
 void DeleteNodeHashData(HashNodeTable *hashNodeTable,int key){
-    if(hashNodeTable->ents[key].list==NULL) {
+    if(hashNodeTable->ents[key].list == NULL) {
         return;
     }
     hashNodeTable->ents[key].lastFileNo=0;
@@ -8297,6 +8313,7 @@ void DeleteNodeHashData(HashNodeTable *hashNodeTable,int key){
 }
 
 void printHashTable(HashNodeTable *hashtable,int key){
+    printf("[hash table : %d]\n",key);
     HashNodelist * node = hashtable->ents[key].list;
     printf("print hash table : %s \n",node->actual_path);
     while (node->next) {

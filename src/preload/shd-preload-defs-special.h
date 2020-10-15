@@ -75,3 +75,4 @@ PRELOADDEF(return, int, compare_dat_files, (int fileno), fileno);
 PRELOADDEF(return, char*, make_actual_path,(int fileno),fileno);
 PRELOADDEF(return, char*, get_dat_file_path, (int fileno),fileno);
 PRELOADDEF(return, char*, get_tmp_file_path,(void));
+PRELOADDEF(return, char*, get_actual_path,(int fileno),fileno);
