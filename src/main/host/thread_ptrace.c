@@ -169,8 +169,9 @@ typedef struct _ThreadPtrace {
 
     int returnCode;
 
-    // Pointer to *some* syscall instruction, for when we need to force
-    // the child process to make a syscall. 
+    // Pointer to *some* syscall instruction, for when we need to force the
+    // child process to make a syscall. In particular this is useful when we
+    // need the plugin to make a syscall, and aren't in a ptrace syscall stop.
     intptr_t syscall_rip;
 
     struct {
@@ -325,6 +326,9 @@ static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
 static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
     // We have to reopen the handle to child's memory.
     _threadptrace_getChildMemoryHandle(thread);
+
+    // Previous cached address is no longer valid.
+    thread->syscall_rip = 0;
 }
 
 static void _threadptrace_enterStateSyscall(ThreadPtrace* thread) {
