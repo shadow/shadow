@@ -158,7 +158,7 @@ ShMemSerializer* shmemserializer_getGlobal() {
         _global_serializer = shmemserializer_create();
 
         if (_global_serializer) { // set up hooks for free on exit
-            // FIXME atexit(_shmemserializer_destroyGlobal);
+            atexit(_shmemserializer_destroyGlobal);
         } else { // something bad happened, and we definitely can't continue
             error("error allocating global shared memory serializer");
             abort();
