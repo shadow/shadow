@@ -173,9 +173,6 @@ typedef struct _ThreadPtrace {
     // the child process to make a syscall. 
     intptr_t syscall_rip;
 
-    bool havePendingStop;
-    StopReason pendingStop;
-
     struct {
         struct user_regs_struct value;
         // Whether `value` holds the values that the CPU registers ought to
@@ -193,6 +190,12 @@ typedef struct _ThreadPtrace {
         // child process to perform ptrace-operations. Tracks whether we've
         // done so.
         bool stopped;
+
+        // When a ptrace-stop that would otherwise change the state of the
+        // child happens while processing an IPC request, we buffer it here to
+        // be processed after the IPC request is completed.
+        bool havePendingStop;
+        StopReason pendingStop;
     } ipc_syscall;
 
     // Whenever we use ptrace to continue we may raise a signal.  Currently we
@@ -501,8 +504,8 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
                 // shim event, we could deadlock.
                 debug("Buffering ptrace-stop whie handling shim event");
                 thread->ipc_syscall.stopped = true;
-                thread->pendingStop = _getStopReason(wstatus);
-                thread->havePendingStop = true;
+                thread->ipc_syscall.pendingStop = _getStopReason(wstatus);
+                thread->ipc_syscall.havePendingStop = true;
                 return event_stop;
             }
             return _getStopReason(wstatus);
@@ -827,7 +830,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                     }
                 }
                 if (thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
-                    if (thread->havePendingStop) {
+                    if (thread->ipc_syscall.havePendingStop) {
                         // FIXME: I suspect in this case it'd generally be ok
                         // to process the next state and drop the pending
                         // ptrace-stop. Need to think through this more,
@@ -840,11 +843,11 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                     // waiting again.
                     continue;
                 }
-                if (thread->havePendingStop) {
+                if (thread->ipc_syscall.havePendingStop) {
                     // We hit a ptrace-stop while processing the IPC stop.
                     // Handle that now.
-                    _threadptrace_updateChildState(thread, thread->pendingStop);
-                    thread->havePendingStop = false;
+                    _threadptrace_updateChildState(thread, thread->ipc_syscall.pendingStop);
+                    thread->ipc_syscall.havePendingStop = false;
                     // FIXME: To allow this we'd need to (wastefully) flush
                     // here, or audit state entry points to ensure it won't
                     // overwrite a dirty buffer. We should probably extract
