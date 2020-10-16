@@ -678,36 +678,14 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
     }
 
 #if DEBUG
-    // Check that regs are where we left them.
+    // Check that rip is where we left it.
     struct user_regs_struct actual_regs;
     if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &actual_regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
-    struct user_regs_struct expected_regs = thread->regs.value;
-    utility_assert(thread->syscall_rip);
-    expected_regs.rip = thread->syscall_rip;
-    debug("got      %s", _regs_to_str(&actual_regs));
-    debug("expected %s", _regs_to_str(&expected_regs));
-    utility_assert(!memcmp(&actual_regs, &expected_regs, sizeof(actual_regs)));
+    utility_assert(thread->regs.value.rip == actual_regs.rip);
 #endif
-
-    // Should cause syscall we stopped at to be re-executed, putting us back in syscall state
-    while (reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP) {
-        if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, 0) < 0) {
-            error("ptrace: %s", g_strerror(errno));
-            abort();
-        }
-        if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
-            error("waitpid: %s", g_strerror(errno));
-            abort();
-        }
-        reason = _getStopReason(wstatus);
-    }
-    if (reason.type != STOPREASON_SYSCALL) {
-        error("unexpected stop reason: %d", reason.type);
-        utility_assert(reason.type == STOPREASON_SYSCALL);
-    }
 
     thread->needAttachment = false;
 }
@@ -722,60 +700,6 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
     }
 
     _threadptrace_ensureStopped(thread);
-
-    // First set instruction pointer to point to a syscall, which will result in
-    // a syscall stop when resumed. This isn't *strictly* necessary, but it's not
-    // super clear from the ptrace documentation exactly how many SIGSTOP stops
-    // to expect when reattaching; experimentally it's 3, but it's unclear
-    // whether we can rely on it to always be three. Conversely, by pointing at
-    // a syscall instruction, when reattaching we can just swallow sigstops
-    // until we get a syscall stop.
-    utility_assert(thread->regs.valid);
-    struct user_regs_struct regs = thread->regs.value;
-    debug("regs currently %s", _regs_to_str(&regs));
-    utility_assert(thread->syscall_rip);
-    regs.rip = thread->syscall_rip;
-#ifdef DEBUG
-    // Verify that rip is now pointing at a syscall instruction.
-    const uint8_t* buf =
-        process_getReadablePtr(thread->base.process, _threadPtraceToThread(thread),
-                               (PluginPtr){regs.rip}, sizeof(SYSCALL_INSTRUCTION));
-    utility_assert(!memcmp(buf, SYSCALL_INSTRUCTION, sizeof(SYSCALL_INSTRUCTION)));
-#endif
-    if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &regs) < 0) {
-        error("ptrace: %s", g_strerror(errno));
-        abort();
-    }
-    debug("regs set to %s", _regs_to_str(&regs));
-    thread->regs.dirty = true;
-
-    if (thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
-        // Child should already be in a signal-stop.
-    } else if (thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL) {
-        // We need to get into a ptrace signal-stop.
-
-        // Send a SIGSTOP. While experimentally just calling PTRACE_DETACH with a
-        // SIGSTOP works, ptrace(2) says that it *might* not if we're not already
-        // in a signal-delivery-stop.
-        if (syscall(SYS_tgkill, thread->base.nativePid, thread->base.nativeTid, SIGSTOP) < 0) {
-            error("kill: %s", g_strerror(errno));
-            abort();
-        }
-        // Continue and wait for the signal delivery stop.
-        debug("thread %i detaching from child %i", thread->base.tid, (int)thread->base.nativePid);
-        if (ptrace(PTRACE_CONT, thread->base.nativeTid, 0, 0) < 0) {
-            error("ptrace: %s", g_strerror(errno));
-            abort();
-        }
-        int wstatus;
-        if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
-            error("waitpid: %s", g_strerror(errno));
-            abort();
-        }
-        StopReason reason = _getStopReason(wstatus);
-        utility_assert(reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP);
-        debug("Stop reason after cont with sigstop: %d", reason.type);
-    }
 
     // Detach, allowing the sigstop to be delivered.
     if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, SIGSTOP) < 0) {
