@@ -333,13 +333,15 @@ static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
 
 static void _threadptrace_enterStateSyscall(ThreadPtrace* thread) {
     struct user_regs_struct* regs = &thread->regs.value;
-    if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, regs) < 0) {
-        error("ptrace: %s", g_strerror(errno));
-        return;
+    if (!thread->regs.valid) {
+        if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, regs) < 0) {
+            error("ptrace: %s", g_strerror(errno));
+            return;
+        }
+        thread->regs.value.rax = thread->regs.value.orig_rax;
+        thread->regs.valid = true;
+        thread->syscall_rip = regs->rip - sizeof(SYSCALL_INSTRUCTION);
     }
-    thread->regs.value.rax = thread->regs.value.orig_rax;
-    thread->regs.valid = true;
-    thread->syscall_rip = regs->rip - sizeof(SYSCALL_INSTRUCTION);
     thread->syscall_args = (SysCallArgs){
         .number = regs->orig_rax,
         .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8, regs->r9},
@@ -394,6 +396,13 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
             eip, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6],
             buf[7]);
         // fall through
+    } else if (signal == SIGSTOP) {
+        debug("Suppressing SIGSTOP");
+        // We send SIGSTOP to the child when we need to stop it or detach from
+        // it, but sometimes it ends up stopping for another reason first (e.g.
+        // a syscall). After resuming the child later, we get a SIGSTOP event,
+        // which we no longer want to deliver to the child.
+        return;
     }
     // Deliver the signal.
     warning("Delivering signal %d", signal);
@@ -853,14 +862,9 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 if (thread->ipc_syscall.havePendingStop) {
                     // We hit a ptrace-stop while processing the IPC stop.
                     // Handle that now.
+                    debug("Processing a pending ptrace stop");
                     _threadptrace_updateChildState(thread, thread->ipc_syscall.pendingStop);
                     thread->ipc_syscall.havePendingStop = false;
-                    // FIXME: To allow this we'd need to (wastefully) flush
-                    // here, or audit state entry points to ensure it won't
-                    // overwrite a dirty buffer. We should probably extract
-                    // ptrace + register state into a helper class that can
-                    // encapsulate such buffering.
-                    utility_assert(!thread->regs.dirty);
                     continue;
                 }
 
@@ -1039,6 +1043,8 @@ static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
         StopReason reason = _getStopReason(wstatus);
         if (reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP) {
             debug("got sigstop");
+            thread->ipc_syscall.stopped = true;
+
             if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 abort();
@@ -1046,32 +1052,26 @@ static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
             // Do NOT copy orig_rax to rax here; that should only be done in a syscall stop.
             thread->regs.valid = true;
             thread->regs.dirty = false;
-            thread->ipc_syscall.stopped = true;
             return;
         }
         if (reason.type == STOPREASON_SYSCALL) {
-            // The shim made a syscall while it was waiting (e.g. for logging).
-            // Rather than trying to handle it here, rewind the instruction pointer
-            // so that we can handle it later, and wait for the signal-stop.
-            // TODO: Try to avoid the extra SIGSTOP in this case.
-            struct user_regs_struct regs;
-            if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
+            debug("got syscall stop");
+            thread->ipc_syscall.stopped = true;
+
+            // Buffer the syscall to be processed later.
+            utility_assert(!thread->ipc_syscall.havePendingStop);
+            thread->ipc_syscall.pendingStop = reason;
+            thread->ipc_syscall.havePendingStop = true;
+
+            if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 abort();
             }
-            debug("ptrace syscall (%lld) stop while waiting for sigstop", regs.orig_rax);
-            regs.rip -= sizeof(SYSCALL_INSTRUCTION);
-            regs.rax = regs.orig_rax;
-            if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &regs) < 0) {
-                error("ptrace: %s", g_strerror(errno));
-                abort();
-            }
-            if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, 0) < 0) {
-                error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
-                abort();
-            }
-            thread->syscall_rip = regs.rip;
-            // loop
+            thread->regs.value.rax = thread->regs.value.orig_rax;
+            thread->syscall_rip = thread->regs.value.rip - sizeof(SYSCALL_INSTRUCTION);
+            thread->regs.valid = true;
+            thread->regs.dirty = false;
+            return;
         } else {
             error("Unexpected stop");
         }
@@ -1217,6 +1217,7 @@ static long threadptrace_nativeSyscall(Thread* base,
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
+    // We're altering the child's actual register state, so we need to restore it from thread->regs later.
     thread->regs.dirty = true;
 
     // Single-step until the syscall instruction is executed. It's not clear whether we can depend
@@ -1232,9 +1233,14 @@ static long threadptrace_nativeSyscall(Thread* base,
             abort();
         }
         StopReason reason = _getStopReason(wstatus);
-        if (reason.type != STOPREASON_SIGNAL || reason.signal.signal != SIGTRAP) {
+        if (reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP) {
+            debug("Ignoring SIGSTOP");
+            continue;
+        }
+        if (!(reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGTRAP)) {
             // In particular this could be an exec stop if the syscall was execve,
             // or an exited stop if the syscall was exit.
+            debug("Executing native syscall changed child state");
             _threadptrace_updateChildState(thread, reason);
         }
         if (!threadptrace_isRunning(&thread->base)) {
