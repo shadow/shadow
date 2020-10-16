@@ -337,6 +337,7 @@ static void _threadptrace_enterStateSyscall(ThreadPtrace* thread) {
         error("ptrace: %s", g_strerror(errno));
         return;
     }
+    thread->regs.value.rax = thread->regs.value.orig_rax;
     thread->regs.valid = true;
     thread->syscall_rip = regs->rip - sizeof(SYSCALL_INSTRUCTION);
     thread->syscall_args = (SysCallArgs){
