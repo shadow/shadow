@@ -152,7 +152,7 @@ static void _logger_stopHelper(ShadowLogger* logger) {
     /* wait until the thread exits.
      * XXX: calling thread_join may cause deadlocks in the loader, so let's just
      * wait for the thread to indicate that it finished everything instead. */
-    //pthread_join(logger->helper, NULL);
+    // pthread_join(logger->helper);
     countdownlatch_await(logger->helperLatch);
 }
 
@@ -161,9 +161,7 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
                          const gint lineNumber, const gchar* format,
                          va_list vargs) {
     if (!logger) {
-        vfprintf(stdout, format, vargs);
-        fprintf(stdout, "\n");
-        fflush(stdout);
+        vfprintf(stderr, format, vargs);
         return;
     }
 
@@ -209,13 +207,6 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         g_string_free(hostNameBuffer, TRUE);
     }
 
-    gchar* logRecordStr = logrecord_toString(record);
-    utility_assert(logRecordStr);
-    fprintf(stdout, "%s", logRecordStr);
-    fflush(stdout);
-    g_free(logRecordStr);
-    logrecord_unref(record);
-#if 0
     g_queue_push_tail(threadData->localRecordBundle, record);
 
     if (level == LOGLEVEL_ERROR || !logger->shouldBuffer ||
@@ -225,7 +216,6 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         shadow_logger_syncToDisk(logger);
         logger->lastTimespan = timespan;
     }
-#endif
 
     if (level == LOGLEVEL_ERROR) {
         /* tell the helper to stop, and join to make sure it finished flushing
