@@ -115,6 +115,14 @@ struct _ShMemSerializer {
 static ShMemAllocator* _global_allocator = NULL;
 static ShMemSerializer* _global_serializer = NULL;
 
+/*
+ * hook used to cleanup at exit.
+ */
+static void _shmemallocator_destroyGlobal() {
+    assert(_global_allocator);
+    shmemallocator_destroy(_global_allocator);
+}
+
 ShMemAllocator* shmemallocator_getGlobal() {
     static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
     pthread_mutex_lock(&mtx);
@@ -126,6 +134,9 @@ ShMemAllocator* shmemallocator_getGlobal() {
             error("error allocating global shared memory allocator");
             abort();
         }
+
+        // Destroy the allocator at exit, freeing the underlying shared memory storage.
+        atexit(_shmemallocator_destroyGlobal);
     }
 
     pthread_mutex_unlock(&mtx);
@@ -143,6 +154,9 @@ ShMemSerializer* shmemserializer_getGlobal() {
             error("error allocating global shared memory serializer");
             abort();
         }
+
+        // No need to arrange for the serializer to be destroyed at exit, since
+        // it doesn't own any system resources.
     }
 
     pthread_mutex_unlock(&mtx);
