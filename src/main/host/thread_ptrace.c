@@ -1009,6 +1009,8 @@ void threadptrace_free(Thread* base) {
     worker_countObject(OBJECT_TYPE_THREAD_PTRACE, COUNTER_TYPE_FREE);
 }
 
+// Ensure that the child is in a ptrace-stop. If it's not (e.g. because is it's
+// spinning in its shim-event-recv loop), we force it into one.
 static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
     if (thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
         debug("Not in ipc_syscall; should already be stopped");
@@ -1078,7 +1080,6 @@ static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
 
 static void _threadptrace_memcpyToShadow(ThreadPtrace* thread, void* shadow_dst,
                                          PluginPtr plugin_src, size_t n) {
-    _threadptrace_ensureStopped(thread);
     clearerr(thread->childMemFile);
     if (fseek(thread->childMemFile, plugin_src.val, SEEK_SET) < 0) {
         error("fseek %p: %s", (void*)plugin_src.val, g_strerror(errno));
@@ -1099,8 +1100,6 @@ static void _threadptrace_memcpyToShadow(ThreadPtrace* thread, void* shadow_dst,
 static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
                                          PluginPtr plugin_dst, void* shadow_src,
                                          size_t n) {
-    _threadptrace_ensureStopped(thread);
-
     if (fseek(thread->childMemFile, plugin_dst.val, SEEK_SET) < 0) {
         error("fseek %p: %s", (void*)plugin_dst.val, g_strerror(errno));
         return;
@@ -1115,7 +1114,6 @@ static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                         size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-    _threadptrace_ensureStopped(thread);
     void* rv = g_new(void, n);
     g_array_append_val(thread->readPointers, rv);
     _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
@@ -1125,7 +1123,6 @@ const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
 int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
                                    const char** out_str, size_t* strlen) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-    _threadptrace_ensureStopped(thread);
     char* str = g_new(char, n);
     int err = 0;
 
@@ -1167,7 +1164,6 @@ int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
 void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
                                    size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-    _threadptrace_ensureStopped(thread);
     void* rv = g_new(void, n);
     PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
     g_array_append_val(thread->pendingWrites, pendingWrite);
@@ -1176,7 +1172,6 @@ void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
 
 void* threadptrace_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-    _threadptrace_ensureStopped(thread);
     void* rv = g_new(void, n);
     _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
     PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
