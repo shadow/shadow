@@ -29,7 +29,7 @@ int shadow_set_ptrace_allow_native_syscalls(bool val);
 int shadow_get_ipc_blk(ShMemBlockSerialized* ipc_blk_serialized);
 
 typedef enum {
-    // Next val: 10
+    // Next val: 11
     SHD_SHIM_EVENT_NULL = 0,
     SHD_SHIM_EVENT_START = 1,
     SHD_SHIM_EVENT_STOP = 2,
@@ -39,7 +39,8 @@ typedef enum {
     SHD_SHIM_EVENT_CLONE_REQ = 5,
     SHD_SHIM_EVENT_CLONE_STRING_REQ = 9,
     SHD_SHIM_EVENT_SHMEM_COMPLETE = 6,
-    SHD_SHIM_EVENT_WRITE_REQ = 7
+    SHD_SHIM_EVENT_WRITE_REQ = 7,
+    SHD_SHIM_EVENT_BLOCK = 10,
 } ShimEventID;
 
 typedef struct _ShimEvent {
