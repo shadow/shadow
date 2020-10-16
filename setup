@@ -260,7 +260,7 @@ def test(args, remaining):
     os.chdir(testdir)
 
     # test, wait for it to finish
-    testcmd = "ctest -j{0} --timeout {1}".format(args.njobs, args.timeout)
+    testcmd = "ctest --output-on-failure -j{0} --timeout {1}".format(args.njobs, args.timeout)
     if args.do_verbose:
         testcmd += " --verbose"
 
