@@ -917,6 +917,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
 
             if (thread->regs.dirty) {
                 debug("Restoring registers");
+                utility_assert(thread->regs.valid);
                 // restore registers
                 // TODO: track if dirty, and only restore if so.
                 if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
