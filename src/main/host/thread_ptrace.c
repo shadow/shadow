@@ -889,8 +889,6 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                         // The syscall should have left us in exactly the state from
                         // which we want to resume execution. In particular we DON'T want
                         // to restore the old instruction pointer after executing an execve syscall.
-                        utility_assert(thread->regs.value.rip ==
-                                       (thread->syscall_rip + sizeof(SYSCALL_INSTRUCTION)));
                         thread->regs.valid = false;
                         thread->regs.dirty = false;
 
