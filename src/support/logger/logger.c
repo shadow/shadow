@@ -34,9 +34,7 @@ static void _init_start_time() {
 }
 
 int64_t logger_now_micros() {
-    // FIXME: g_get_monotonic_time is failing some internal sanity check.
-    // Possibly because time is "frozen"?
-    return 0; // FIXME g_get_monotonic_time();
+    return g_get_monotonic_time();
 }
 
 int64_t logger_get_global_start_time_micros() {
