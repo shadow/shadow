@@ -8,7 +8,6 @@
 // (rwails) The number times we should increment the counter and
 // check the atomic bool before we fall back to the semaphore.
 // TODO: Move to an environment variable?
-// FIXME: in hybrid mode, handle if this ends up blocking 
 #define SHD_GATE_SPIN_MAX 8096
 
 void BinarySpinningSem::init() {
