@@ -123,14 +123,6 @@ static void _shmemallocator_destroyGlobal() {
     shmemallocator_destroy(_global_allocator);
 }
 
-/*
- * hook used to cleanup at exit.
- */
-static void _shmemserializer_destroyGlobal() {
-    assert(_global_serializer);
-    shmemserializer_destroy(_global_serializer);
-}
-
 ShMemAllocator* shmemallocator_getGlobal() {
     static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
     pthread_mutex_lock(&mtx);
@@ -138,12 +130,13 @@ ShMemAllocator* shmemallocator_getGlobal() {
     if (!_global_allocator) { // need to initialize
         _global_allocator = shmemallocator_create();
 
-        if (_global_allocator) { // set up hooks for free on exit
-            atexit(_shmemallocator_destroyGlobal);
-        } else { // something bad happened, and we definitely can't continue
+        if (!_global_allocator) { // something bad happened, and we definitely can't continue
             error("error allocating global shared memory allocator");
             abort();
         }
+
+        // Destroy the allocator at exit, freeing the underlying shared memory storage.
+        atexit(_shmemallocator_destroyGlobal);
     }
 
     pthread_mutex_unlock(&mtx);
@@ -157,12 +150,13 @@ ShMemSerializer* shmemserializer_getGlobal() {
     if (!_global_serializer) { // need to initialize
         _global_serializer = shmemserializer_create();
 
-        if (_global_serializer) { // set up hooks for free on exit
-            atexit(_shmemserializer_destroyGlobal);
-        } else { // something bad happened, and we definitely can't continue
+        if (!_global_serializer) { // something bad happened, and we definitely can't continue
             error("error allocating global shared memory serializer");
             abort();
         }
+
+        // No need to arrange for the serializer to be destroyed at exit, since
+        // it doesn't own any system resources.
     }
 
     pthread_mutex_unlock(&mtx);
