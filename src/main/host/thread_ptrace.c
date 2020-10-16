@@ -451,6 +451,7 @@ static pid_t _waitpid_spin(pid_t pid, int *wstatus, int options) {
     return rv;
 }
 
+// Waits for a ptrace or shim event.
 static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
     // Only used for an shim-event-stop; lifted out of the loop so we don't
     // re-initialize on every iteration.
@@ -462,6 +463,26 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
             debug("Got shim stop");
             return event_stop;
         }
+        // TODO: We lose a bit of efficiency here due to `waitpid` being
+        // substantially slower than `shimevent_tryRecvEventFromPlugin`, even
+        // with `WNOHANG`.  If a shim event comes in while we're executing
+        // `waitpid`, the time spent finishing that call before we check for
+        // the shim event again is wasted.
+        //
+        // Experimentally, putting the shim recv in an inner loop to try it
+        // ~2000 times between each `waitpid` seems to be a bit of an
+        // improvement. This seems like a parameter that could be very
+        // sensitive to the workload and simulation platform, though.
+        //
+        // A better approach might be to use a dedicated thread to wait on all
+        // plugin threads (i.e. pass -1 as the first parameter), and push
+        // events into an in-memory queue. This thread could then spin over two
+        // fast in-memory queues instead of one fast queue and one slow(er)
+        // syscall. Before going down that path we'd need to verify that a
+        // thread other than the direct parent can receive ptrace stops this
+        // way, though. According to wait(2), threads can wait on children of
+        // other threads in the same thread group, but I wouldn't be surprised
+        // if ptrace events are a special case.
         int wstatus;
         pid_t pid = waitpid(thread->base.nativeTid, &wstatus, WNOHANG);
         if (pid < 0) {
