@@ -63,17 +63,19 @@ void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const ch
     offset = MIN(offset, sizeof(buf));
 
     offset += vsnprintf(&buf[offset], sizeof(buf) - offset, format, vargs);
-    offset = MIN(offset, sizeof(buf) - 1); // FIXME: temp hack to leave room for newline.
+    offset = MIN(offset, sizeof(buf) - 1); // Leave room for newline.
     buf[offset++] = '\n';
 
     // We avoid locked IO here, since it can result in deadlock if Shadow
-    // forcibly stops this thread while that lock is still held.  FIXME:
-    // Without locking here, a multi-threaded plugin may interleave writes
-    // within a log line. A better solution is to add a lock in memory shared
-    // with shadow that we can take to prevent being stopped in the middle of
-    // fprintf.
+    // forcibly stops this thread while that lock is still held. Interleaved
+    // writes shouldn't be a problem since Shadow only allows one plugin thread
+    // at a time to execute, and doesn't switch threads on file syscalls.
+    //
+    // This could be reverted to a normal `fwrite` if we end up having Shadow
+    // emulate syscalls inside the shim, since then Shadow would correctly
+    // block a thread on the fwrite-lock (if it's locked) and switch to one
+    // that's runnable.
     fwrite_unlocked(buf, 1, offset, logger->file);
-    //fprintf(logger->file, "%s\n", buf);
 
 #ifdef DEBUG
     fflush_unlocked(logger->file);
