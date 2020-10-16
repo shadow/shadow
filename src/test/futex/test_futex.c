@@ -25,25 +25,18 @@
 
 // Spins until `c` becomes true.
 static void _wait_for_condition(bool* c) {
-    while (!*c) {
+    // Prevent reads from being done
+    while (!__atomic_load_n(c, __ATOMIC_ACQUIRE)) {
         // Wait a bit.
         usleep(1000);
-        // Not sure this is necessary.
-        __sync_synchronize();
     }
 }
 
 // Set `c` to true.
-static void _set_condition(bool* c) {
-    *c = true;
-    __sync_synchronize();
-}
+static void _set_condition(bool* c) { __atomic_store_n(c, true, __ATOMIC_RELEASE); }
 
 // Get `c`'s value.
-static bool _get_condition(bool* c) {
-    __sync_synchronize();
-    return *c;
-}
+static bool _get_condition(bool* c) { return __atomic_load_n(c, __ATOMIC_ACQUIRE); }
 
 typedef struct {
     bool child_started;
@@ -117,8 +110,7 @@ static void* _futex_wait_bitset_test_child(void* void_arg) {
     assert_true_errno(syscall(SYS_futex, arg->futex, FUTEX_WAIT_BITSET, UNAVAILABLE, NULL, NULL,
                               1 << arg->id) == 0);
     debug("Child %d returned from wait", arg->id);
-    __sync_synchronize();
-    g_assert_cmpint(*arg->futex, ==, AVAILABLE);
+    g_assert_cmpint(__atomic_load_n(arg->futex, __ATOMIC_ACQUIRE), ==, AVAILABLE);
     _set_condition(&arg->child_finished);
     debug("Child finished");
     return NULL;
@@ -147,8 +139,7 @@ static void _futex_wait_bitset_test() {
     usleep(1000);
 
     // Release the futex.
-    futex = AVAILABLE;
-    __sync_synchronize();
+    __atomic_store_n(&futex, AVAILABLE, __ATOMIC_RELEASE);
 
     // Wake just #2.
     g_assert_cmpint(
@@ -192,13 +183,13 @@ static void _futex_wait_bitset_test() {
 #define AVAILABLE 1
 
 // The futex word used to synchronize threads
-volatile int futex_word1 = UNAVAILABLE; // initial state is unavailable
-volatile int futex_word2 = AVAILABLE; // initial state is available
-volatile int is_child_finished = 0;
+int futex_word1 = UNAVAILABLE; // initial state is unavailable
+int futex_word2 = AVAILABLE;   // initial state is available
+int is_child_finished = 0;
 void* child_result = NULL;
 
 // Acquire: wait for the futex pointed to by `word` to become 1, then set to 0
-static int _futex_wait(volatile int* word) {
+static int _futex_wait(int* word) {
     while (1) {
         // Args are: ptr, expected old val, desired new val
         bool is_available = AVAILABLE == __sync_val_compare_and_swap(word, AVAILABLE, UNAVAILABLE);
@@ -220,7 +211,7 @@ static int _futex_wait(volatile int* word) {
 }
 
 // Release: if the futex pointed to by `word` is 0, set to 1 and wake blocked waiters
-static int _futex_post(volatile int* word) {
+static int _futex_post(int* word) {
     bool is_posted = UNAVAILABLE == __sync_val_compare_and_swap(word, UNAVAILABLE, AVAILABLE);
 
     if (is_posted) {
@@ -236,7 +227,7 @@ static int _futex_post(volatile int* word) {
     return EXIT_SUCCESS;
 }
 
-static int _run_futex_loop(volatile int* word1, volatile int* word2, int slow) {
+static int _run_futex_loop(int* word1, int* word2, int slow) {
     int threadID = 0;
 #ifdef SYS_gettid
     threadID = syscall(SYS_gettid);
