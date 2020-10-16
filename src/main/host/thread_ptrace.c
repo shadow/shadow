@@ -676,6 +676,7 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
         abort();
     }
     struct user_regs_struct expected_regs = thread->regs.value;
+    utility_assert(thread->syscall_rip);
     expected_regs.rip = thread->syscall_rip;
     debug("got      %s", _regs_to_str(&actual_regs));
     debug("expected %s", _regs_to_str(&expected_regs));
@@ -723,6 +724,7 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
     utility_assert(thread->regs.valid);
     struct user_regs_struct regs = thread->regs.value;
     debug("regs currently %s", _regs_to_str(&regs));
+    utility_assert(thread->syscall_rip);
     regs.rip = thread->syscall_rip;
 #ifdef DEBUG
     // Verify that rip is now pointing at a syscall instruction.
@@ -1210,6 +1212,7 @@ static long threadptrace_nativeSyscall(Thread* base,
     // Jump to a syscall instruction. Alternatively we could overwrite
     // the next instruction with a syscall instruction, but this avoids
     // weirdness associated with mutating code.
+    utility_assert(thread->syscall_rip);
     regs.rip = thread->syscall_rip;
 
     debug("threadptrace_nativeSyscall setting regs: rip=0x%llx n=%lld arg0=0x%llx arg1=0x%llx "
