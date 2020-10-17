@@ -4,9 +4,19 @@
  */
 
 use std::process;
+use std::ffi::CStr;
 
 extern {
     pub fn gethostname(name: *mut libc::c_char, size: libc::size_t) -> libc::c_int;
+}
+
+
+struct ExpectedName {
+    sysname: String,
+    nodename: String,
+    release: String,
+    version: String,
+    machine: String
 }
 
 
@@ -18,14 +28,18 @@ fn main() {
         eprintln!("Usage: {} sysname nodename release version machine", argv[0].clone());
         std::process::exit(1);
     }
-    let _sysname = argv[1].clone();
-    let nodename = argv[2].clone();
-    let _release = argv[3].clone();
-    let _version = argv[4].clone();
-    let _machine = argv[5].clone();
+
+    let expected_name = ExpectedName {
+        sysname: argv[1].clone(),
+        nodename: argv[2].clone(),
+        release: argv[3].clone(),
+        version: argv[4].clone(),
+        machine: argv[5].clone()
+    };
 
     test_getpid_nodeps();
-    test_gethostname(nodename);
+    test_gethostname(&expected_name.nodename);
+    test_uname(&expected_name);
 }
 
 
@@ -38,10 +52,25 @@ fn test_getpid_nodeps() {
 }
 
 
-fn test_gethostname(nodename: String) {
+fn test_gethostname(nodename: &String) {
     let hostname = get_gethostname();
 
-    assert_eq!(hostname, nodename);
+    assert_eq!(hostname, *nodename);
+}
+
+
+fn test_uname(expected_name: &ExpectedName) {
+    unsafe {
+        let mut n = std::mem::zeroed();
+        let r = libc::uname(&mut n);
+
+        assert_eq!(r, 0);
+        assert_eq!(expected_name.sysname, to_cstr(&n.sysname[..]).to_string_lossy().into_owned());
+        assert_eq!(expected_name.nodename, to_cstr(&n.nodename[..]).to_string_lossy().into_owned());
+        assert_eq!(expected_name.machine, to_cstr(&n.machine[..]).to_string_lossy().into_owned());
+        assert_eq!(expected_name.release, to_cstr(&n.release[..]).to_string_lossy().into_owned());
+        assert_eq!(expected_name.version, to_cstr(&n.version[..]).to_string_lossy().into_owned());
+    }
 }
 
 
@@ -59,4 +88,9 @@ fn get_gethostname() -> String {
         Ok(hostname) => hostname,
         _ => panic!("Error on String convertion")
     }
+}
+
+
+fn to_cstr(buf: &[libc::c_char]) -> &CStr {
+    unsafe {CStr::from_ptr(buf.as_ptr())}
 }
