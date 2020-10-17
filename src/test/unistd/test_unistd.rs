@@ -39,7 +39,7 @@ fn main() {
 
     test_getpid_nodeps();
     test_gethostname(&expected_name.nodename);
-    test_uname(&expected_name);
+    //test_uname(&expected_name);
 }
 
 
