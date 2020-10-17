@@ -5,6 +5,10 @@
 
 use std::process;
 
+extern {
+    pub fn gethostname(name: *mut libc::c_char, size: libc::size_t) -> libc::c_int;
+}
+
 
 fn main() {
     let argv: Vec<String> = std::env::args().collect();
@@ -33,7 +37,26 @@ fn test_getpid_nodeps() {
     assert_eq!(pid, process::id());
 }
 
+
 fn test_gethostname(nodename: String) {
-    let hostname = gethostname::gethostname().into_string().unwrap();
+    let hostname = get_gethostname();
+
     assert_eq!(hostname, nodename);
+}
+
+
+fn get_gethostname() -> String {
+    let mut buffer = vec![0 as u8; 1000];
+    let err = unsafe {
+        gethostname (buffer.as_mut_ptr() as *mut libc::c_char, buffer.len())
+    };
+    assert_eq!(err, 0);
+
+    let hostname_len = buffer.iter().position(|&byte| byte == 0).unwrap_or(buffer.len());
+    buffer.resize(hostname_len, 0);
+
+    match String::from_utf8(buffer) {
+        Ok(hostname) => hostname,
+        _ => panic!("Error on String convertion")
+    }
 }
