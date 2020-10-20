@@ -678,13 +678,15 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
     }
 
 #if DEBUG
-    // Check that rip is where we left it.
-    struct user_regs_struct actual_regs;
-    if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &actual_regs) < 0) {
-        error("ptrace: %s", g_strerror(errno));
-        abort();
+    if (thread->regs.valid && !thread->regs.dirty) {
+        // Check that rip is where we left it.
+        struct user_regs_struct actual_regs;
+        if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &actual_regs) < 0) {
+            error("ptrace: %s", g_strerror(errno));
+            abort();
+        }
+        utility_assert(thread->regs.value.rip == actual_regs.rip);
     }
-    utility_assert(thread->regs.value.rip == actual_regs.rip);
 #endif
 
     thread->needAttachment = false;
