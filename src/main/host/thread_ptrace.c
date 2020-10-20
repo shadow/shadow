@@ -791,16 +791,20 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 }
                 if (thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
                     if (thread->ipc_syscall.havePendingStop) {
-                        // FIXME: I suspect in this case it'd generally be ok
-                        // to process the next state and drop the pending
-                        // ptrace-stop. Need to think through this more,
-                        // though, and don't want to risk difficult-to-debug
-                        // misbehavior in the meantime.
-                        error("Unhandled: have both a pending ptrace-stop and a state-change");
-                        abort();
+                        // This can happen, e.g., when processing `exit_group`
+                        // via a shim event. The syscall handler currently
+                        // returns `SYSCALL_NATIVE`, so we ptrace-step through
+                        // the syscall, causing the child to exit. The pending
+                        // stop is no longer relevant (e.g. logging inside the
+                        // shim).
+                        debug("Dropping pending stop because of state change to %d",
+                              thread->ipc_syscall.pendingStop.type);
+                        thread->ipc_syscall.havePendingStop = false;
                     }
                     // Executing the syscall changed our state. We need to process it before
                     // waiting again.
+                    debug("State changed to %d while processing IPC_SYSCALL; continuing",
+                          thread->ipc_syscall.pendingStop.type);
                     continue;
                 }
                 if (thread->ipc_syscall.havePendingStop) {
@@ -1018,6 +1022,7 @@ static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
             return;
         } else {
             error("Unexpected stop");
+            abort();
         }
     }
 }
