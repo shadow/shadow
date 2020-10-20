@@ -508,6 +508,24 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
         }
         if (pid != 0) {
             debug("Got ptrace stop");
+            StopReason ptraceStopReason = _getStopReason(wstatus);
+
+            // Pre-emptively save registers here.  TODO: do this lazily, since
+            // we won't always need them. Doing it here makes it easier to
+            // ensure we get the right value for rax though, since we know what
+            // kind of ptrace stop just happened.
+            if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
+                error("ptrace: %s", g_strerror(errno));
+                abort();
+            }
+            if (ptraceStopReason.type == STOPREASON_SYSCALL) {
+                debug("Saving syscall rip");
+                thread->regs.value.rax = thread->regs.value.orig_rax;
+                thread->syscall_rip = thread->regs.value.rip - sizeof(SYSCALL_INSTRUCTION);
+            }
+            thread->regs.valid = true;
+            thread->regs.dirty = false;
+
             if (shimevent_tryRecvEventFromPlugin(thread->ipcBlk.p, &event_stop.shim_event) == 0) {
                 // The plugin finished sending an event after our previous
                 // attempt to receive it, and then hit a ptrace-stop.  We need
@@ -516,13 +534,13 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
                 // be a blocking futex syscall on the shim IPC control
                 // structures; if we try to execute it before responding to the
                 // shim event, we could deadlock.
-                debug("Buffering ptrace-stop whie handling shim event");
+                debug("Buffering ptrace-stop while handling shim event");
                 thread->ipc_syscall.stopped = true;
-                thread->ipc_syscall.pendingStop = _getStopReason(wstatus);
+                thread->ipc_syscall.pendingStop = ptraceStopReason;
                 thread->ipc_syscall.havePendingStop = true;
                 return event_stop;
             }
-            return _getStopReason(wstatus);
+            return ptraceStopReason;
         }
     };
 }
@@ -1117,7 +1135,6 @@ static long threadptrace_nativeSyscall(Thread* base,
     // original state.
 
     // Inject the requested syscall number and arguments.
-
     // Set up arguments to syscall.
     utility_assert(thread->regs.valid);
     struct user_regs_struct regs = thread->regs.value;
