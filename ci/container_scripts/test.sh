@@ -24,4 +24,4 @@ fi
 # Try rerunning failed tests once.
 # TODO: We should only do this for an allowed-list of known-flaky tests,
 # and there should be issues filed for each such test.
-./setup test -j4 -- -E "$EXCLUDE" -C "$CONFIG" --output-on-failure || ./setup test -j4 -- -E "$EXCLUDE" -C "$CONFIG" --output-on-failure --rerun-failed
+./setup test -j2 -- -E "$EXCLUDE" -C "$CONFIG" --output-on-failure || ./setup test -j2 -- -E "$EXCLUDE" -C "$CONFIG" --output-on-failure --rerun-failed
