@@ -632,8 +632,6 @@ static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallAr
 }
 
 static void _threadptrace_flushPtrs(ThreadPtrace* thread) {
-    _threadptrace_ensureStopped(thread);
-
     // Free any read pointers
     if (thread->readPointers->len > 0) {
         for (int i = 0; i < thread->readPointers->len; ++i) {
