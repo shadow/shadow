@@ -98,6 +98,10 @@ static void _shim_load() {
     // stderr for any log messages that happen before we can open it.
     logger_setDefault(shimlogger_new(stderr));
 
+    if (_interpose_type == INTERPOSE_NONE || _interpose_type == INTERPOSE_PTRACE_NOIPC) {
+        return;
+    }
+
     const char *ipc_blk_buf = getenv("_SHD_IPC_BLK");
     assert(ipc_blk_buf);
     bool err = false;
@@ -142,29 +146,32 @@ static void _shim_load() {
 // This function should be called before any wrapped syscall. We also use the
 // constructor attribute to be completely sure that it's called before main.
 __attribute__((constructor)) void shim_ensure_init() {
-    static __thread bool started_init = false;
-    if (started_init) {
+    static __thread bool started_thread_init = false;
+    if (started_thread_init) {
         // Avoid deadlock when _shim_load's syscalls caused this function to be
         // called recursively.  In the uninitialized state,
         // `shim_interpositionEnabled` returns false, allowing _shim_load's
         // syscalls to execute natively.
         return;
     }
-    started_init = true;
+    started_thread_init = true;
 
+    // We must set the interposition type before calling
+    // shim_disableInterposition.
     _interpose_type = _get_interpose_type();
-    if (_interpose_type == INTERPOSE_NONE) {
-        return;
-    }
 
     shim_disableInterposition();
 
-    // Global initialization, done exactly once.
-    static pthread_once_t _shim_init_once = PTHREAD_ONCE_INIT;
-    pthread_once(&_shim_init_once, _shim_load);
+    static bool did_global_init = false;
+    if (!did_global_init) {
+        _shim_load();
+        did_global_init = true;
+    }
 
-    // Finally, initialize *this* thread.
-    _shim_wait_start();
+    // If we're doing shim IPC, wait for the start event.
+    if (_interpose_type == INTERPOSE_PTRACE || _interpose_type == INTERPOSE_PRELOAD) {
+        _shim_wait_start();
+    }
 
     debug("Finished shim thread init");
     shim_enableInterposition();
