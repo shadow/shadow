@@ -453,7 +453,7 @@ void process_schedule(Process* proc, gpointer nothing) {
 void process_detachPlugin(gpointer procptr, gpointer nothing) {
     Process* proc = procptr;
     MAGIC_ASSERT(proc);
-    if (proc->interposeMethod == INTERPOSE_PTRACE) {
+    if (proc->interposeMethod == INTERPOSE_PTRACE || proc->interposeMethod == INTERPOSE_PTRACE_NOIPC) {
         GHashTableIter iter;
         g_hash_table_iter_init(&iter, proc->threads);
         gpointer key, value;

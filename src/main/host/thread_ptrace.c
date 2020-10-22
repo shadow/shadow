@@ -729,12 +729,13 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
 
     _threadptrace_ensureStopped(thread);
 
-    // Detach, allowing the sigstop to be delivered.
+    // Detach, delivering a sigstop.
     if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, SIGSTOP) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
 
+    debug("detached");
     thread->needAttachment = true;
 }
 
