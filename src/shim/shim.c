@@ -20,6 +20,7 @@ typedef enum {
     INTERPOSE_NONE,
     INTERPOSE_PRELOAD,
     INTERPOSE_PTRACE,
+    INTERPOSE_PTRACE_NOIPC,
 } InterposeType;
 
 static InterposeType _interpose_type;
@@ -77,11 +78,19 @@ static InterposeType _get_interpose_type() {
     }
 
     const char* interpose_method = getenv("SHADOW_INTERPOSE_METHOD");
-    if (interpose_method != NULL && !strcmp(interpose_method, "PRELOAD")) {
+    assert(interpose_method);
+    if (!strcmp(interpose_method, "PRELOAD")) {
         return INTERPOSE_PRELOAD;
-    } else {
+    }
+    if (!strcmp(interpose_method, "PTRACE")) {
         return INTERPOSE_PTRACE;
     }
+    if (!strcmp(interpose_method, "PTRACE_NOIPC")) {
+        // From the shim's point of view, behave as if it's not running under
+        // Shadow, and let all control happen via ptrace.
+        return INTERPOSE_PTRACE_NOIPC;
+    }
+    abort();
 }
 
 static void _shim_load() {

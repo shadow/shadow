@@ -38,9 +38,13 @@ typedef enum _InterposeMethod {
     // Use LD_PRELOAD to load a library that implements the libC interface to
     // route syscalls to Shadow. Uses ThreadShim.
     INTERPOSE_PRELOAD,
-    // Use ptrace to trace child processes, and use ptrace to interpose system
-    // calls.  Uses ThreadPtrace.
+    // Uses same shim as INTERPOSE_PRELOAD to implement fast syscall
+    // interposition, but also ptraces the child to handle syscalls outside of
+    // the shim's wrappers. Uses ThreadPtrace.
     INTERPOSE_PTRACE,
+    // Similar to INTERPOSE_PTRACE, but doesn't use IPC to the shim; all
+    // syscalls are handled via ptrace. Uses ThreadPtrace.
+    INTERPOSE_PTRACE_NOIPC,
 } InterposeMethod;
 
 /**

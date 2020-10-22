@@ -299,6 +299,8 @@ static void _process_start(Process* proc) {
     Thread* mainThread = NULL;
     if (proc->interposeMethod == INTERPOSE_PTRACE) {
         mainThread = threadptrace_new(proc->host, proc, tid);
+    } else if (proc->interposeMethod == INTERPOSE_PTRACE_NOIPC) {
+        mainThread = threadptracenoipc_new(proc->host, proc, tid);
     } else if (proc->interposeMethod == INTERPOSE_PRELOAD) {
         mainThread = threadpreload_new(proc->host, proc, tid);
     } else {

@@ -372,6 +372,9 @@ InterposeMethod options_getInterposeMethod(Options* options) {
     if (!g_ascii_strcasecmp(options->interposeMethod, "ptrace")) {
         return INTERPOSE_PTRACE;
     }
+    if (!g_ascii_strcasecmp(options->interposeMethod, "ptrace-noipc")) {
+        return INTERPOSE_PTRACE_NOIPC;
+    }
     error("Unrecognized interposeMethod %s", options->interposeMethod);
     return INTERPOSE_NONE;
 }

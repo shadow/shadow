@@ -18,6 +18,13 @@ add_test(
     | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -d phold.shadow-ptrace.data - \
     "
 )
+add_test(
+    NAME phold-shadow-ptrace-noipc
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace-noipc -d phold.shadow-ptrace-noipc.data - \
+    "
+)
 # FIXME: Enable in all configurations. See https://github.com/shadow/shadow/issues/892
 add_test(
     NAME phold-shadow-preload
