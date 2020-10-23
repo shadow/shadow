@@ -12,9 +12,7 @@ struct IPCData {
 
 extern "C" {
 
-void ipcData_init(IPCData* ipc_data, ssize_t spin_max) {
-    new (ipc_data) IPCData(spin_max);
-}
+void ipcData_init(IPCData* ipc_data, ssize_t spin_max) { new (ipc_data) IPCData(spin_max); }
 
 size_t ipcData_nbytes() { return sizeof(IPCData); }
 

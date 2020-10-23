@@ -188,9 +188,11 @@ Options* options_new(gint argc, gchar* argv[]) {
     g_option_group_add_entries(options->networkOptionGroup, networkEntries);
     g_option_context_add_group(options->context, options->networkOptionGroup);
 
-    GOptionGroup* experimentalOptionGroup = g_option_group_new("experimental", "Experimental options", "Experimental options", NULL, NULL);
+    GOptionGroup* experimentalOptionGroup = g_option_group_new(
+        "experimental", "Experimental options", "Experimental options", NULL, NULL);
     if (_experimentalOptions) {
-        g_option_group_add_entries(experimentalOptionGroup, (GOptionEntry*)_experimentalOptions->data);
+        g_option_group_add_entries(
+            experimentalOptionGroup, (GOptionEntry*)_experimentalOptions->data);
     }
     g_option_context_add_group(options->context, experimentalOptionGroup);
 

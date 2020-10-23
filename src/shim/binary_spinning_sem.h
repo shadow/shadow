@@ -17,7 +17,7 @@
  */
 class BinarySpinningSem {
   public:
-    /* 
+    /*
      * Initialize the semaphore to the zero state.
      *
      * THREAD SAFETY: not thread-safe.

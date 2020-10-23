@@ -139,7 +139,7 @@ void options_addExperimentalEntry(GOptionEntry entry);
 
 // Used to generate unique symbol names. See
 // https://stackoverflow.com/questions/1597007/creating-c-macro-with-and-line-token-concatenation-with-positioning-macr
-#define OPTIONS_TOKENPASTE(x, y) x ## y
+#define OPTIONS_TOKENPASTE(x, y) x##y
 #define OPTIONS_TOKENPASTE2(x, y) OPTIONS_TOKENPASTE(x, y)
 
 #define OPTION_EXPERIMENTAL_ENTRY(                                                                 \
