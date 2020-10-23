@@ -6,12 +6,15 @@
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <glib.h>
 #include <netdb.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/utsname.h>
@@ -475,5 +478,88 @@ FILE *tmpfile(void) {
   out:
     if (name)
         free(name);
+    return rv;
+}
+
+static void _convert_stat_to_stat64(struct stat* s, struct stat64* s64) {
+    memset(s64, 0, sizeof(*s64));
+
+    #define COPY_X(x) s64->x = s->x
+    COPY_X(st_dev);
+    COPY_X(st_ino);
+    COPY_X(st_nlink);
+    COPY_X(st_mode);
+    COPY_X(st_uid);
+    COPY_X(st_gid);
+    COPY_X(st_rdev);
+    COPY_X(st_size);
+    COPY_X(st_blksize);
+    COPY_X(st_blocks);
+    COPY_X(st_atim);
+    COPY_X(st_mtim);
+    COPY_X(st_ctim);
+    #undef COPY_X
+}
+
+static void _convert_statfs_to_statfs64(struct statfs* s, struct statfs64* s64) {
+    memset(s64, 0, sizeof(*s64));
+
+    #define COPY_X(x) s64->x = s->x
+    COPY_X(f_type);
+    COPY_X(f_bsize);
+    COPY_X(f_blocks);
+    COPY_X(f_bfree);
+    COPY_X(f_bavail);
+    COPY_X(f_files);
+    COPY_X(f_ffree);
+    COPY_X(f_fsid);
+    COPY_X(f_namelen);
+    COPY_X(f_frsize);
+    COPY_X(f_flags);
+    #undef COPY_X
+}
+
+// Some platforms define fstat and fstatfs as macros. We should call 'syscall()' directly since
+// calling for example 'fstat()' will not necessarily call shadow's 'fstat()' wrapper defined in
+// 'preload_syscalls.c'.
+
+int fstat64(int a, struct stat64* b) {
+    struct stat s;
+    int rv = syscall(SYS_fstat, a, &s);
+    _convert_stat_to_stat64(&s, b);
+    return rv;
+}
+
+int fstatfs64(int a, struct statfs64* b) {
+    struct statfs s;
+    int rv = syscall(SYS_fstatfs, a, &s);
+    _convert_statfs_to_statfs64(&s, b);
+    return rv;
+}
+
+int __fxstat(int ver, int a, struct stat* b) {
+    // on x86_64 with a modern kernel, glibc should use the same stat struct as the kernel, so check
+    // that this function was indeed called with the expected stat struct
+    if (ver != 1 /* _STAT_VER_KERNEL for x86_64 */) {
+        error("__fxstat called with unexpected ver of %d", ver);
+        errno = EINVAL;
+        return -1;
+    }
+
+    return syscall(SYS_fstat, a, b);
+}
+
+int __fxstat64(int ver, int a, struct stat64* b) {
+    // on x86_64 with a modern kernel, glibc should use the same stat struct as the kernel, so check
+    // that this function was indeed called with the expected stat struct
+    if (ver != 1 /* _STAT_VER_KERNEL for x86_64 */) {
+        error("__fxstat64 called with unexpected ver of %d", ver);
+        errno = EINVAL;
+        return -1;
+    }
+
+    struct stat s;
+    int rv = syscall(SYS_fstat, a, &s);
+    _convert_stat_to_stat64(&s, b);
     return rv;
 }
