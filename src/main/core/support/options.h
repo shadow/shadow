@@ -135,6 +135,20 @@ const GString* options_getInputXMLFilename(Options* options);
 const gchar* options_getDataOutputPath(Options* options);
 const gchar* options_getDataTemplatePath(Options* options);
 
+void options_addExperimentalEntry(GOptionEntry entry);
+
+// Used to generate unique symbol names. See
+// https://stackoverflow.com/questions/1597007/creating-c-macro-with-and-line-token-concatenation-with-positioning-macr
+#define OPTIONS_TOKENPASTE(x, y) x ## y
+#define OPTIONS_TOKENPASTE2(x, y) OPTIONS_TOKENPASTE(x, y)
+
+#define OPTION_EXPERIMENTAL_ENTRY(                                                                 \
+    long_name, short_name, flags, arg, arg_data, description, arg_description)                     \
+    __attribute__((constructor)) static void OPTIONS_TOKENPASTE2(_add_entry_, __LINE__)() {        \
+        options_addExperimentalEntry((GOptionEntry){                                               \
+            long_name, short_name, flags, arg, arg_data, description, arg_description});           \
+    }
+
 /** @} */
 
 #endif /* SHD_CONFIGURATION_H_ */
