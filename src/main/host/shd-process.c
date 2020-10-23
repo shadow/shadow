@@ -8052,11 +8052,11 @@ void datParser(unsigned char* dat, unsigned int size,unsigned char* lastBlockMer
 //        printf("[2. prevBlockHash] ");
 //        PrintArray(prevBlockHash, 32);
 //        printf("\n");
-        printf("[3. merkleRootHash] block %d / ",blockNum);
-        PrintArray(prevBlockHash, 32);
-        printf(" / ");
-        PrintArray(lastBlockMerkleRoot,32);
-        printf("\n");
+//        printf("[3. merkleRootHash] block %d / ",blockNum);
+//        PrintArray(prevBlockHash, 32);
+//        printf(" / ");
+//        PrintArray(lastBlockMerkleRoot,32);
+//        printf("\n");
 
 
         // tx count: VarInt
@@ -8147,7 +8147,7 @@ void AddDataToHashTable(int fileno, char* path, char * merkleroothash, unsigned 
 
 int process_emu_compare_dat_files(Process* proc, int fileno) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    printf("process_emu_compare_dat_file test fileno is %d_%s \n",fileno,proc->processName->str);
+//    printf("process_emu_compare_dat_file test fileno is %d_%s \n",fileno,proc->processName->str);
 
     //cp_data file open
     char* path2 = process_emu_get_tmp_file_path(proc);
@@ -8209,7 +8209,7 @@ int process_emu_compare_dat_files(Process* proc, int fileno) {
 
 //hj add for storage hashtable
 #define MAX_NODE_CNT 2000
-#define MAX_DATAFILE_CNT 100
+#define MAX_DATAFILE_CNT 200
 
 void createHashTables() {
     FileInfotbl = (HashTable*)malloc(sizeof(HashTable));
