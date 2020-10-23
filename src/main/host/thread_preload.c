@@ -24,10 +24,10 @@
 
 // We use an int here because the option parsing library doesn't provide a way
 // to set a boolean flag to false explicitly.
-static gint _sendExplicitBlockMessage = false;
+static gint _sendExplicitBlockMessage = true;
 OPTION_EXPERIMENTAL_ENTRY(
     "send-explicit-block-message", 0, 0, G_OPTION_ARG_INT, &_sendExplicitBlockMessage,
-    "Send message to plugin telling it to stop spinning when a syscall blocks", NULL)
+    "Send message to plugin telling it to stop spinning when a syscall blocks", "[0|1]")
 
 struct _ThreadPreload {
     Thread base;
