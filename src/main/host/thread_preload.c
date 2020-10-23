@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "main/core/support/object_counter.h"
+#include "main/core/support/options.h"
 #include "main/core/worker.h"
 #include "main/host/thread_preload.h"
 #include "main/host/thread_protected.h"
@@ -20,6 +21,13 @@
 #include "support/logger/logger.h"
 
 #define THREADPRELOAD_TYPE_ID 13357
+
+// We use an int here because the option parsing library doesn't provide a way
+// to set a boolean flag to false explicitly.
+static gint _sendExplicitBlockMessage = false;
+OPTION_EXPERIMENTAL_ENTRY(
+    "send-explicit-block-message", 0, 0, G_OPTION_ARG_INT, &_sendExplicitBlockMessage,
+    "Send message to plugin telling it to stop spinning when a syscall blocks", NULL)
 
 struct _ThreadPreload {
     Thread base;
@@ -35,8 +43,6 @@ struct _ThreadPreload {
 
     /* holds the event id for the most recent call from the plugin/shim */
     ShimEvent currentEvent;
-
-    bool experimentalDoExplicitBlock;
 
     GHashTable* ptr_to_block;
     GList *read_list, *write_list;
@@ -268,7 +274,8 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                     &thread->currentEvent.event_data.syscall.syscall_args);
 
                 if (result.state == SYSCALL_BLOCK) {
-                    if (thread->experimentalDoExplicitBlock) {
+                    if (_sendExplicitBlockMessage) {
+                        debug("Sending block message to plugin");
                         // thread is blocked on simulation progress. Tell it to
                         // stop spinning so that releases its CPU core for the next
                         // thread to be run.
@@ -540,10 +547,6 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
 
     _Static_assert(
         sizeof(void*) == 8, "thread-preload impl assumes 8 byte pointers");
-
-    if (getenv("SHADOW_EXPERIMENTAL_EXPLICIT_BLOCK") != NULL) {
-        thread->experimentalDoExplicitBlock = true;
-    }
 
     // thread has access to a global, thread safe shared memory manager
 
