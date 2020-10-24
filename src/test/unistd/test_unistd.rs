@@ -3,14 +3,14 @@
  * See LICENSE for licensing information
  */
 
-use std::process;
 use std::ffi::CStr;
-use test_utils::running_in_shadow;
+use std::process;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use test_utils::running_in_shadow;
 
 static SIGACTION_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-extern {
+extern "C" {
     pub fn gethostname(name: *mut libc::c_char, size: libc::size_t) -> libc::c_int;
 }
 
@@ -23,7 +23,7 @@ struct ExpectedName {
     nodename: String,
     release: String,
     version: String,
-    machine: String
+    machine: String,
 }
 
 fn main() {
@@ -31,7 +31,10 @@ fn main() {
     println!("{:?}", argv);
 
     if argv.len() < 6 {
-        eprintln!("Usage: {} sysname nodename release version machine", argv[0].clone());
+        eprintln!(
+            "Usage: {} sysname nodename release version machine",
+            argv[0].clone()
+        );
         std::process::exit(1);
     }
 
@@ -40,7 +43,7 @@ fn main() {
         nodename: argv[2].clone(),
         release: argv[3].clone(),
         version: argv[4].clone(),
-        machine: argv[5].clone()
+        machine: argv[5].clone(),
     };
 
     test_getpid_nodeps();
@@ -74,11 +77,26 @@ fn test_uname(expected_name: &ExpectedName) {
         let r = libc::uname(&mut n);
 
         assert_eq!(r, 0);
-        assert_eq!(expected_name.sysname, to_cstr(&n.sysname[..]).to_string_lossy().into_owned());
-        assert_eq!(expected_name.nodename, to_cstr(&n.nodename[..]).to_string_lossy().into_owned());
-        assert_eq!(expected_name.machine, to_cstr(&n.machine[..]).to_string_lossy().into_owned());
-        assert_eq!(expected_name.release, to_cstr(&n.release[..]).to_string_lossy().into_owned());
-        assert_eq!(expected_name.version, to_cstr(&n.version[..]).to_string_lossy().into_owned());
+        assert_eq!(
+            expected_name.sysname,
+            to_cstr(&n.sysname[..]).to_string_lossy().into_owned()
+        );
+        assert_eq!(
+            expected_name.nodename,
+            to_cstr(&n.nodename[..]).to_string_lossy().into_owned()
+        );
+        assert_eq!(
+            expected_name.machine,
+            to_cstr(&n.machine[..]).to_string_lossy().into_owned()
+        );
+        assert_eq!(
+            expected_name.release,
+            to_cstr(&n.release[..]).to_string_lossy().into_owned()
+        );
+        assert_eq!(
+            expected_name.version,
+            to_cstr(&n.version[..]).to_string_lossy().into_owned()
+        );
     }
 }
 
@@ -92,7 +110,13 @@ fn test_getpid_kill() {
         sa_mask: unsafe { std::mem::zeroed() },
         sa_restorer: None,
     };
-    let rv  = unsafe { libc::sigaction(libc::SIGUSR1, &x as *const libc::sigaction, std::ptr::null_mut()) };
+    let rv = unsafe {
+        libc::sigaction(
+            libc::SIGUSR1,
+            &x as *const libc::sigaction,
+            std::ptr::null_mut(),
+        )
+    };
     assert_eq!(rv, 0);
 
     let rv = unsafe { libc::kill(pid as i32, libc::SIGUSR1) };
@@ -102,20 +126,21 @@ fn test_getpid_kill() {
 
 fn get_gethostname() -> String {
     let mut buffer = vec![0 as u8; 1000];
-    let err = unsafe {
-        gethostname (buffer.as_mut_ptr() as *mut libc::c_char, buffer.len())
-    };
+    let err = unsafe { gethostname(buffer.as_mut_ptr() as *mut libc::c_char, buffer.len()) };
     assert_eq!(err, 0);
 
-    let hostname_len = buffer.iter().position(|&byte| byte == 0).unwrap_or(buffer.len());
+    let hostname_len = buffer
+        .iter()
+        .position(|&byte| byte == 0)
+        .unwrap_or(buffer.len());
     buffer.resize(hostname_len, 0);
 
     match String::from_utf8(buffer) {
         Ok(hostname) => hostname,
-        _ => panic!("Error on String convertion")
+        _ => panic!("Error on String convertion"),
     }
 }
 
 fn to_cstr(buf: &[libc::c_char]) -> &CStr {
-    unsafe {CStr::from_ptr(buf.as_ptr())}
+    unsafe { CStr::from_ptr(buf.as_ptr()) }
 }
