@@ -5,11 +5,18 @@
 
 use std::process;
 use std::ffi::CStr;
+use test_utils::running_in_shadow;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static SIGACTION_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 extern {
     pub fn gethostname(name: *mut libc::c_char, size: libc::size_t) -> libc::c_int;
 }
 
+extern "C" fn handler(_: libc::c_int) {
+    SIGACTION_COUNT.fetch_add(1, Ordering::SeqCst);
+}
 
 struct ExpectedName {
     sysname: String,
@@ -18,7 +25,6 @@ struct ExpectedName {
     version: String,
     machine: String
 }
-
 
 fn main() {
     let argv: Vec<String> = std::env::args().collect();
@@ -39,9 +45,14 @@ fn main() {
 
     test_getpid_nodeps();
     test_gethostname(&expected_name.nodename);
-    //test_uname(&expected_name);
-}
 
+    if !running_in_shadow() {
+        // TODO: Implement uname in shadow
+        test_uname(&expected_name);
+        // TODO: Support `kill` in shadow (and/or find another way of validating the pid)
+        test_getpid_kill();
+    }
+}
 
 // Tests that the results are plausible, but can't really validate that it's our
 // pid without depending on other functionality.
@@ -51,13 +62,11 @@ fn test_getpid_nodeps() {
     assert_eq!(pid, process::id());
 }
 
-
 fn test_gethostname(nodename: &String) {
     let hostname = get_gethostname();
 
     assert_eq!(hostname, *nodename);
 }
-
 
 fn test_uname(expected_name: &ExpectedName) {
     unsafe {
@@ -73,6 +82,23 @@ fn test_uname(expected_name: &ExpectedName) {
     }
 }
 
+// Validates that the returned pid is ours by using it to send a signal to ourselves.
+fn test_getpid_kill() {
+    let pid = process::id();
+
+    let x = libc::sigaction {
+        sa_sigaction: handler as *mut libc::c_void as libc::sighandler_t,
+        sa_flags: 0,
+        sa_mask: unsafe { std::mem::zeroed() },
+        sa_restorer: None,
+    };
+    let rv  = unsafe { libc::sigaction(libc::SIGUSR1, &x as *const libc::sigaction, std::ptr::null_mut()) };
+    assert_eq!(rv, 0);
+
+    let rv = unsafe { libc::kill(pid as i32, libc::SIGUSR1) };
+    assert_eq!(rv, 0);
+    assert_eq!(SIGACTION_COUNT.load(Ordering::SeqCst), 1);
+}
 
 fn get_gethostname() -> String {
     let mut buffer = vec![0 as u8; 1000];
@@ -89,7 +115,6 @@ fn get_gethostname() -> String {
         _ => panic!("Error on String convertion")
     }
 }
-
 
 fn to_cstr(buf: &[libc::c_char]) -> &CStr {
     unsafe {CStr::from_ptr(buf.as_ptr())}
