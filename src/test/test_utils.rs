@@ -233,3 +233,12 @@ macro_rules! set {
         ([$($x),+]).iter().cloned().collect::<std::collections::HashSet<_>>()
     );
 }
+
+
+pub fn running_in_shadow() -> bool {
+    // There is the same function in the C tests common code
+    match std::env::var("SHADOW_SPAWNED") {
+        Ok(val) => val != "",
+        _ => false
+    }
+}
