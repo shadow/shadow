@@ -208,19 +208,27 @@ typedef struct _ThreadPtrace {
     // executing another ptrace operation.
     bool needAttachment;
 
-    // Shared memory block for fast communication with plugin process.
-    // Intentionally opaque; details are implementation details of ShimEvent.
+    // Handle for IPC shared memory. Access via `_threadptrace_ipcData`.
     ShMemBlock ipcBlk;
 
-    // Data shared with the shim.
-    ShimSharedMem* shimSharedMem;
-
-    // Shared memory handle for `shimSharedMem`.
+    // Handle for additional shared memory. Access via `_threadptrace_sharedMem`.
     ShMemBlock shimSharedMemBlock;
 
     // Enable syscall handling via IPC.
     bool enableIpc;
 } ThreadPtrace;
+
+static struct IPCData* _threadptrace_ipcData(ThreadPtrace* thread) {
+    utility_assert(thread);
+    utility_assert(thread->ipcBlk.p);
+    return thread->ipcBlk.p;
+}
+
+static ShimSharedMem* _threadptrace_sharedMem(ThreadPtrace* thread) {
+    utility_assert(thread);
+    utility_assert(thread->shimSharedMemBlock.p);
+    return thread->shimSharedMemBlock.p;
+}
 
 // Forward declaration.
 static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
@@ -479,8 +487,8 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
         .type = STOPREASON_SHIM_EVENT,
     };
     while (1) {
-        if (thread->enableIpc &&
-            shimevent_tryRecvEventFromPlugin(thread->ipcBlk.p, &event_stop.shim_event) == 0) {
+        if (thread->enableIpc && shimevent_tryRecvEventFromPlugin(
+                                     _threadptrace_ipcData(thread), &event_stop.shim_event) == 0) {
             debug("Got shim stop");
             return event_stop;
         }
@@ -531,7 +539,8 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
             thread->regs.dirty = false;
 
             if (thread->enableIpc &&
-                shimevent_tryRecvEventFromPlugin(thread->ipcBlk.p, &event_stop.shim_event) == 0) {
+                shimevent_tryRecvEventFromPlugin(
+                    _threadptrace_ipcData(thread), &event_stop.shim_event) == 0) {
                 // The plugin finished sending an event after our previous
                 // attempt to receive it, and then hit a ptrace-stop.  We need
                 // to handle the sent-event first, and buffer the ptrace-stop
@@ -589,7 +598,7 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
                 .simulation_nanos = worker_getEmulatedTime(),
                 .shim_shared_mem = shmemallocator_globalBlockSerialize(&thread->shimSharedMemBlock),
             }};
-        shimevent_sendEventToPlugin(thread->ipcBlk.p, &startEvent);
+        shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &startEvent);
     }
 
     _threadptrace_nextChildState(thread);
@@ -603,7 +612,7 @@ static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallAr
     if(args->number == SYS_shadow_set_ptrace_allow_native_syscalls) {
         bool val = args->args[0].as_i64;
         debug("SYS_shadow_set_ptrace_allow_native_syscalls %d", val);
-        thread->shimSharedMem->ptrace_allow_native_syscalls = val;
+        _threadptrace_sharedMem(thread)->ptrace_allow_native_syscalls = val;
         return (SysCallReturn) {.state = SYSCALL_DONE, .retval.as_i64 = 0};
     }
 
@@ -616,7 +625,7 @@ static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallAr
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
     }
 
-    if (thread->enableIpc && thread->shimSharedMem->ptrace_allow_native_syscalls) {
+    if (thread->enableIpc && _threadptrace_sharedMem(thread)->ptrace_allow_native_syscalls) {
         if (args->number == SYS_brk) {
             // brk should *always* be interposed so that the MemoryManager can track it.
             debug("Interposing brk even though native syscalls are enabled");
@@ -776,7 +785,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                                                      worker_getEmulatedTime()},
 
                         }};
-                        shimevent_sendEventToPlugin(thread->ipcBlk.p, &shim_result);
+                        shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &shim_result);
                         break;
                                        }
                     case SYSCALL_NATIVE: {
@@ -793,7 +802,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                                                      worker_getEmulatedTime()},
 
                         }};
-                        shimevent_sendEventToPlugin(thread->ipcBlk.p, &shim_result);
+                        shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &shim_result);
                     }
                 }
                 if (thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
@@ -1268,7 +1277,7 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
                 .simulation_nanos = worker_getEmulatedTime(),
                 .shim_shared_mem = shmemallocator_globalBlockSerialize(&child->shimSharedMemBlock),
             }};
-        shimevent_sendEventToPlugin(child->ipcBlk.p, &startEvent);
+        shimevent_sendEventToPlugin(_threadptrace_ipcData(child), &startEvent);
     }
 
     return childNativeTid;
@@ -1278,12 +1287,11 @@ Thread* threadptrace_new(Host* host, Process* process, int threadID) {
     ThreadPtrace* thread = (ThreadPtrace*)threadptracenoipc_new(host, process, threadID);
 
     thread->ipcBlk = shmemallocator_globalAlloc(ipcData_nbytes());
-    ipcData_init(thread->ipcBlk.p);
+    ipcData_init(_threadptrace_ipcData(thread));
     
     thread->shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimSharedMem));
-    thread->shimSharedMem = thread->shimSharedMemBlock.p;
 
-    *thread->shimSharedMem = (ShimSharedMem){.ptrace_allow_native_syscalls = false};
+    *_threadptrace_sharedMem(thread) = (ShimSharedMem){.ptrace_allow_native_syscalls = false};
     thread->enableIpc = true;
 
     return _threadPtraceToThread(thread);
