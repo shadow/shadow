@@ -8168,7 +8168,7 @@ int process_emu_compare_dat_files(Process* proc, int fileno) {
         createHashTables();
     }
     if(FileInfotbl->ents[fileno].list == NULL) {
-        printf("COMPARE Result = file %d  is not exist! make the new file!!\n",fileno);
+//        printf("COMPARE Result = file %d  is not exist! make the new file!!\n",fileno);
 
         //data를 hash table에 추가
         AddDataToHashTable(fileno,process_emu_get_dat_file_path(proc,fileno),&merkleroothash,proc->processID);
@@ -8180,14 +8180,14 @@ int process_emu_compare_dat_files(Process* proc, int fileno) {
     while (node) {
         char* uniqueid = node->lastBlockHashMerkleRoot;
         if(memcmp(uniqueid, merkleroothash, 32) == 0) {
-            printf("COMPARE Result = %s and %s file is same!!!\n",path2,node->actual_path);
+//            printf("COMPARE Result = %s and %s file is same!!!\n",path2,node->actual_path);
             AddNodeHashData(NodeInfotbl,proc->processID,fileno,node->actual_path);
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return 1;
         }
         node = node->next;
     }
-        printf("COMPARE Result = %s and %s file is NOT same!!!\n",path2,FileInfotbl->ents[fileno].list->actual_path);
+//        printf("COMPARE Result = %s and %s file is NOT same!!!\n",path2,FileInfotbl->ents[fileno].list->actual_path);
         AddDataToHashTable(fileno,process_emu_get_dat_file_path(proc,fileno),merkleroothash,proc->processID);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return 0;

@@ -599,26 +599,26 @@ void epoll_descriptorStatusChanged(Epoll* epoll, Descriptor* descriptor) {
 }
 
 #ifdef DEBUG
-static gchar* _epoll_getChildrenStatus(Epoll* epoll, GString* message) {
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, epoll->watching);
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
-        EpollWatch* watch = value;
-        MAGIC_ASSERT(watch);
-
-        gboolean isReady = _epollwatch_isReady(watch);
-        if(watch->descriptor) {
-            g_string_append_printf(message, " %i%s", watch->descriptor->handle, isReady ? "!" : "");
-            if(watch->descriptor->type == DT_EPOLL) {
-                g_string_append_printf(message, "{");
-                _epoll_getChildrenStatus((Epoll*)watch->descriptor, message);
-                g_string_append_printf(message, "}");
-            }
-        }
-    }
-    return message->str;
-}
+//static gchar* _epoll_getChildrenStatus(Epoll* epoll, GString* message) {
+//    GHashTableIter iter;
+//    gpointer key, value;
+//    g_hash_table_iter_init(&iter, epoll->watching);
+//    while(g_hash_table_iter_next(&iter, &key, &value)) {
+//        EpollWatch* watch = value;
+//        MAGIC_ASSERT(watch);
+//
+//        gboolean isReady = _epollwatch_isReady(watch);
+//        if(watch->descriptor) {
+//            g_string_append_printf(message, " %i%s", watch->descriptor->handle, isReady ? "!" : "");
+//            if(watch->descriptor->type == DT_EPOLL) {
+//                g_string_append_printf(message, "{");
+//                _epoll_getChildrenStatus((Epoll*)watch->descriptor, message);
+//                g_string_append_printf(message, "}");
+//            }
+//        }
+//    }
+//    return message->str;
+//}
 #endif
 
 static void _epoll_tryNotify(Epoll* epoll, gpointer userData) {
@@ -645,11 +645,11 @@ static void _epoll_tryNotify(Epoll* epoll, gpointer userData) {
         utility_assert(process_wantsNotify(epoll->ownerProcess, epoll->super.handle));
 
 #ifdef DEBUG
-        /* debug message for looking at the epoll tree */
-        GString* childStatusMessage = g_string_new("");
-        gchar* msg = _epoll_getChildrenStatus(epoll, childStatusMessage);
-        debug("epollfd %i BEFORE process_continue: child fd statuses:%s", epoll->super.handle, msg);
-        g_string_free(childStatusMessage, TRUE);
+//        /* debug message for looking at the epoll tree */
+//        GString* childStatusMessage = g_string_new("");
+//        gchar* msg = _epoll_getChildrenStatus(epoll, childStatusMessage);
+//        debug("epollfd %i BEFORE process_continue: child fd statuses:%s", epoll->super.handle, msg);
+//        g_string_free(childStatusMessage, TRUE);
 #endif
 
         /* notify application to collect the reportable events */
@@ -658,11 +658,11 @@ static void _epoll_tryNotify(Epoll* epoll, gpointer userData) {
         epoll->flags &= ~EF_NOTIFYING;
 
 #ifdef DEBUG
-        /* debug message for looking at the epoll tree */
-        childStatusMessage = g_string_new("");
-        msg = _epoll_getChildrenStatus(epoll, childStatusMessage);
-        debug("epollfd %i AFTER process_continue: child fd statuses:%s", epoll->super.handle, msg);
-        g_string_free(childStatusMessage, TRUE);
+//        /* debug message for looking at the epoll tree */
+//        childStatusMessage = g_string_new("");
+//        msg = _epoll_getChildrenStatus(epoll, childStatusMessage);
+//        debug("epollfd %i AFTER process_continue: child fd statuses:%s", epoll->super.handle, msg);
+//        g_string_free(childStatusMessage, TRUE);
 #endif
 
         /* set up another shadow callback event if needed */
