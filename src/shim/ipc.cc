@@ -42,8 +42,7 @@ void shimevent_recvEventFromPlugin(struct IPCData* data, ShimEvent* e) {
 int shimevent_tryRecvEventFromShadow(struct IPCData* data, ShimEvent* e) {
     int rv = data->xfer_ctrl_to_plugin.trywait();
     if (rv != 0) {
-        assert(rv == -1 && errno == EAGAIN);
-        return -1;
+        return rv;
     }
     *e = data->shadow_to_plugin;
     return 0;
@@ -52,8 +51,7 @@ int shimevent_tryRecvEventFromShadow(struct IPCData* data, ShimEvent* e) {
 int shimevent_tryRecvEventFromPlugin(struct IPCData* data, ShimEvent* e) {
     int rv =  data->xfer_ctrl_to_shadow.trywait();
     if (rv != 0) {
-        assert(rv == -1 && errno == EAGAIN);
-        return -1;
+        return rv;
     }
 
     *e = data->plugin_to_shadow;

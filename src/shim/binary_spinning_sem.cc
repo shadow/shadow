@@ -48,7 +48,7 @@ void BinarySpinningSem::wait(bool spin) {
 int BinarySpinningSem::trywait() {
     int rv = sem_trywait(&_semaphore);
     if (rv != 0) {
-        assert(rv == -1 && errno == EAGAIN);
+        assert(rv == -1 && (errno == EAGAIN || errno == EINTR));
         return rv;
     }
 
