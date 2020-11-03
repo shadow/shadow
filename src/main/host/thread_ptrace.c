@@ -247,6 +247,55 @@ static Thread* _threadPtraceToThread(ThreadPtrace* thread) {
     return (Thread*)thread;
 }
 
+static const char* _regs_to_str(const struct user_regs_struct* regs) {
+    static char buf[1000];
+    ssize_t offset = 0;
+#define REG(x) offset += sprintf(&buf[offset], #x ":0x%llx ", regs->x);
+    REG(r15);
+    REG(r14);
+    REG(r15);
+    REG(r14);
+    REG(r13);
+    REG(r12);
+    REG(rbp);
+    REG(rbx);
+    REG(r11);
+    REG(r10);
+    REG(r9);
+    REG(r8);
+    REG(rax);
+    REG(rcx);
+    REG(rdx);
+    REG(rsi);
+    REG(rdi);
+    REG(orig_rax);
+    REG(rip);
+    REG(cs);
+    REG(eflags);
+    REG(rsp);
+    REG(ss);
+    REG(fs_base);
+    REG(gs_base);
+    REG(ds);
+    REG(es);
+    REG(fs);
+    REG(gs);
+#undef REG
+    return buf;
+}
+
+static const char* _syscall_regs_to_str(const struct user_regs_struct* regs) {
+    static char buf[1000];
+    ssize_t offset = 0;
+    sprintf(&buf[offset], "arg0:%lld ", regs->rdi);
+    sprintf(&buf[offset], "arg1:%lld ", regs->rsi);
+    sprintf(&buf[offset], "arg2:%lld ", regs->rdx);
+    sprintf(&buf[offset], "arg3:%lld ", regs->r10);
+    sprintf(&buf[offset], "arg4:%lld ", regs->r8);
+    sprintf(&buf[offset], "arg5:%lld", regs->r9);
+    return buf;
+}
+
 static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
                                      char* const envp[]) {
     pid_t shadow_pid = getpid();
@@ -374,12 +423,10 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
             error("ptrace: %s", g_strerror(errno));
             return;
         }
-        debug("threadptrace_enterStateSignalled regs: rip=%llx rax=%llx arg0=%llx arg1=%llx "
-              "arg2=%llx arg3=%llx arg4=%llx arg5=%llx",
-              regs.rip, regs.rax, regs.rdi, regs.rsi, regs.rdx, regs.r10, regs.r8, regs.r9);
+        debug("threadptrace_enterStateSignalled regs: %s", _regs_to_str(&regs));
         uint64_t eip = regs.rip;
         const uint8_t* buf = process_getReadablePtr(
-            thread->base.process, _threadPtraceToThread(thread), (PluginPtr){eip}, 16);
+            thread->base.process, _threadPtraceToThread(thread), (PluginPtr){eip}, 4);
         if (isRdtsc(buf)) {
             debug("emulating rdtsc");
             Tsc_emulateRdtsc(&thread->tsc, &regs, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
@@ -402,10 +449,8 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
         // Do not use `error` here, since that'll cause us to immediately abort
         // in debug builds. Better to let the SIGSEGV be delivered so that it
         // can generate a core file for debugging.
-        warning(
-            "Unhandled SIGSEGV addr:%016lx contents:%x %x %x %x %x %x %x %x",
-            eip, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6],
-            buf[7]);
+        warning("Unhandled SIGSEGV addr:%016lx contents:%x %x %x %x", eip, buf[0], buf[1], buf[2],
+                buf[3]);
         // fall through
     } else if (signal == SIGSTOP) {
         debug("Suppressing SIGSTOP");
@@ -671,21 +716,6 @@ static void _threadptrace_flushPtrs(ThreadPtrace* thread) {
 static void threadptrace_flushPtrs(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     _threadptrace_flushPtrs(thread);
-}
-
-static const char* _regs_to_str(const struct user_regs_struct* regs) {
-    static char buf[1000];
-    snprintf(
-        buf, sizeof(buf),
-        "r15:0x%llx r14: 0x%llx r13:0x%llx r12:0x%llx rbp:0x%llx rbx:0x%llx r11:0x%llx "
-        "r10:0x%llx r9:0x%llx r8:0x%llx rax:0x%llx rcx:0x%llx rdx:0x%llx rsi:0x%llx rdi:0x%llx "
-        "orig_rax:0x%llx rip:0x%llx cs:0x%llx eflags:0x%llx rsp:0x%llx ss:0x%llx "
-        "fs_base:0x%llx gs_base:0x%llx ds:0x%llx es:0x%llx fs:0x%llx gs:0x%llx",
-        regs->r15, regs->r14, regs->r13, regs->r12, regs->rbp, regs->rbx, regs->r11, regs->r10,
-        regs->r9, regs->r8, regs->rax, regs->rcx, regs->rdx, regs->rsi, regs->rdi, regs->orig_rax,
-        regs->rip, regs->cs, regs->eflags, regs->rsp, regs->ss, regs->fs_base, regs->gs_base,
-        regs->ds, regs->es, regs->fs, regs->gs);
-    return buf;
 }
 
 static void _threadptrace_doAttach(ThreadPtrace* thread) {
@@ -1173,10 +1203,8 @@ static long threadptrace_nativeSyscall(Thread* base,
     utility_assert(thread->syscall_rip);
     regs.rip = thread->syscall_rip;
 
-    debug("threadptrace_nativeSyscall setting regs: rip=0x%llx n=%lld arg0=0x%llx arg1=0x%llx "
-          "arg2=%llx "
-          "arg3=0x%llx arg4=0x%llx arg5=0x%llx",
-          regs.rip, regs.rax, regs.rdi, regs.rsi, regs.rdx, regs.r10, regs.r8, regs.r9);
+    debug("threadptrace_nativeSyscall setting regs: rip=0x%llx n=%lld %s", regs.rip, regs.rax,
+          _syscall_regs_to_str(&regs));
     if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &regs) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
@@ -1216,9 +1244,7 @@ static long threadptrace_nativeSyscall(Thread* base,
             error("ptrace: %s", g_strerror(errno));
             abort();
         }
-        debug("threadptrace_nativeSyscall regs: rip=%llx rax=%llx arg0=%llx arg1=%llx "
-              "arg2=%llx arg3=%llx arg4=%llx arg5=%llx",
-              regs.rip, regs.rax, regs.rdi, regs.rsi, regs.rdx, regs.r10, regs.r8, regs.r9);
+        debug("threadptrace_nativeSyscall %s", _regs_to_str(&regs));
     } while (regs.rip == thread->syscall_rip);
 
     debug("Native syscall result %lld (%s)", regs.rax, strerror(-regs.rax));
