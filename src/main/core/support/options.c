@@ -57,6 +57,14 @@ struct _Options {
     MAGIC_DECLARE;
 };
 
+static GArray* _experimentalOptions = NULL;
+void options_addExperimentalEntry(GOptionEntry entry) {
+    if (!_experimentalOptions) {
+        _experimentalOptions = g_array_new(TRUE, TRUE, sizeof(GOptionEntry));
+    }
+    g_array_append_val(_experimentalOptions, entry);
+}
+
 Options* options_new(gint argc, gchar* argv[]) {
     /* get memory */
     Options* options = g_new0(Options, 1);
@@ -179,6 +187,14 @@ Options* options_new(gint argc, gchar* argv[]) {
 
     g_option_group_add_entries(options->networkOptionGroup, networkEntries);
     g_option_context_add_group(options->context, options->networkOptionGroup);
+
+    GOptionGroup* experimentalOptionGroup = g_option_group_new(
+        "experimental", "Experimental options", "Experimental options", NULL, NULL);
+    if (_experimentalOptions) {
+        g_option_group_add_entries(
+            experimentalOptionGroup, (GOptionEntry*)_experimentalOptions->data);
+    }
+    g_option_context_add_group(options->context, experimentalOptionGroup);
 
     /* parse args */
     GError *error = NULL;
