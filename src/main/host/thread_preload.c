@@ -30,10 +30,10 @@ OPTION_EXPERIMENTAL_ENTRY(
     "Send message to plugin telling it to stop spinning when a syscall blocks", "[0|1]")
 
 static gint _spinMax = 8096;
-OPTION_EXPERIMENTAL_ENTRY(
-    "preload-spin-max", 0, 0, G_OPTION_ARG_INT, &_spinMax,
-    "Max number of iterations to busy-wait on ICP sempahore before blocking. -1 for unlimited.",
-    "[n]")
+OPTION_EXPERIMENTAL_ENTRY("preload-spin-max", 0, 0, G_OPTION_ARG_INT, &_spinMax,
+                          "Max number of iterations to busy-wait on ICP sempahore before blocking. "
+                          "-1 for unlimited. [8096]",
+                          "N")
 
 struct _ThreadPreload {
     Thread base;
