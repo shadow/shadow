@@ -49,5 +49,9 @@ path = "socket/socketpair/test_socketpair.rs"
 name = "test_shutdown"
 path = "socket/shutdown/test_shutdown.rs"
 
+[[bin]]
+name = "test_random"
+path = "random/test_random.rs"
+
 [dependencies]
 libc = "0.2"

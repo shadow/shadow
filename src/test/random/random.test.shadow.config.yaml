@@ -22,11 +22,11 @@ kill:
 - time: 5
 plugins:
 - id: testrandom
-  path: shadow-plugin-test-random
+  path: ../target/debug/test_random
 hosts:
 - id: testnode
   quantity: 1
   processes:
   - plugin: testrandom
     starttime: 1
-    arguments: ''
+    arguments: '--shadow-passing'
