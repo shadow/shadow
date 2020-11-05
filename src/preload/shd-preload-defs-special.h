@@ -76,3 +76,6 @@ PRELOADDEF(return, char*, make_actual_path,(int fileno),fileno);
 PRELOADDEF(return, char*, get_dat_file_path, (int fileno),fileno);
 PRELOADDEF(return, char*, get_tmp_file_path,(void));
 PRELOADDEF(return, char*, get_actual_path,(int fileno),fileno);
+
+PRELOADDEF(return, void, shadow_bitcoin_register_hash,(const char hash[]),hash);
+PRELOADDEF(return, int, shadow_bitcoin_check_hash,(const char hash[]),hash);

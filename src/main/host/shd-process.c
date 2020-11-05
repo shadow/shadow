@@ -8324,3 +8324,16 @@ void printHashTable(HashNodeTable *hashtable,int key){
         printf("print hash table : %s \n",node->actual_path);
     }
 }
+
+// BLEEP ADDON
+void process_emu_shadow_bitcoin_register_hash(Process* proc, const char hash[]) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    shadow_bitcoin_register_hash(hash);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+}
+int process_emu_shadow_bitcoin_check_hash(Process* proc, const char hash[]) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    int ret = shadow_bitcoin_check_hash(hash);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return ret;
+}
