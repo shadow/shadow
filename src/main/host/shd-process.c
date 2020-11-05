@@ -56,6 +56,9 @@
 #include <glib.h>
 #include <glib/gstdio.h>
 
+//Added for C++ bleep addon module on Shadow
+#include "bleep_addon/bleep_addon.h"
+
 #include "dl.h"
 //Modified for BLEEP Response Port Error
 #include "stdlib.h"
