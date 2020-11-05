@@ -781,6 +781,106 @@ void threadptrace_detach(Thread* base) {
     _threadptrace_doDetach(thread);
 }
 
+static SysCallCondition* _threadptrace_resumeIpcSyscall(ThreadPtrace* thread,
+                                                          bool* changedState) {
+    SysCallReturn ret = syscallhandler_make_syscall(thread->sys, &thread->syscall_args);
+    switch (ret.state) {
+        case SYSCALL_BLOCK:
+            debug("ipc_syscall blocked");
+            // Don't leave it spinning.
+            _threadptrace_ensureStopped(thread);
+            return ret.cond;
+        case SYSCALL_DONE: {
+            debug("ipc_syscall done");
+            ShimEvent shim_result = {
+                .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                .event_data = {
+                    .syscall_complete = {.retval = ret.retval,
+                                         .simulation_nanos = worker_getEmulatedTime()},
+
+                }};
+            shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &shim_result);
+            break;
+        }
+        case SYSCALL_NATIVE: {
+            debug("ipc_syscall do-native");
+            SysCallArgs* args = &thread->syscall_args;
+            long rv = thread_nativeSyscall(_threadPtraceToThread(thread), args->number,
+                                           args->args[0], args->args[1], args->args[2],
+                                           args->args[3], args->args[4], args->args[5]);
+            ShimEvent shim_result = {
+                .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                .event_data = {
+                    .syscall_complete = {.retval = rv,
+                                         .simulation_nanos = worker_getEmulatedTime()},
+
+                }};
+            shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &shim_result);
+        }
+    }
+    if (thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
+        if (thread->ipc_syscall.havePendingStop) {
+            // This can happen, e.g., when processing `exit_group`
+            // via a shim event. The syscall handler currently
+            // returns `SYSCALL_NATIVE`, so we ptrace-step through
+            // the syscall, causing the child to exit. The pending
+            // stop is no longer relevant (e.g. logging inside the
+            // shim).
+            debug("Dropping pending stop because of state change to %d",
+                  thread->ipc_syscall.pendingStop.type);
+            thread->ipc_syscall.havePendingStop = false;
+        }
+        // Executing the syscall changed our state. We need to process it before
+        // waiting again.
+        debug("State changed to %d while processing IPC_SYSCALL; continuing",
+              thread->ipc_syscall.pendingStop.type);
+        *changedState = true;
+    }
+    if (thread->ipc_syscall.havePendingStop) {
+        // We hit a ptrace-stop while processing the IPC stop.
+        // Handle that now.
+        debug("Processing a pending ptrace stop");
+        _threadptrace_updateChildState(thread, thread->ipc_syscall.pendingStop);
+        thread->ipc_syscall.havePendingStop = false;
+        *changedState = true;
+    }
+    return NULL;
+}
+
+static SysCallCondition* _threadptrace_resumeSyscall(ThreadPtrace* thread, bool* changedState) {
+    SysCallReturn ret = _threadptrace_handleSyscall(thread, &thread->syscall_args);
+
+    switch (ret.state) {
+        case SYSCALL_BLOCK: return ret.cond;
+        case SYSCALL_DONE:
+            // Return the specified result.
+            utility_assert(thread->regs.valid);
+            thread->regs.value.rax = ret.retval.as_u64;
+            thread->regs.dirty = true;
+            break;
+        case SYSCALL_NATIVE: {
+            // Have the plugin execute the original syscall
+            SysCallArgs* args = &thread->syscall_args;
+            thread_nativeSyscall(_threadPtraceToThread(thread), args->number, args->args[0],
+                                 args->args[1], args->args[2], args->args[3], args->args[4],
+                                 args->args[5]);
+            // The syscall should have left us in exactly the state from
+            // which we want to resume execution. In particular we DON'T want
+            // to restore the old instruction pointer after executing an execve syscall.
+            thread->regs.valid = false;
+            thread->regs.dirty = false;
+
+            if (thread->childState != THREAD_PTRACE_CHILD_STATE_SYSCALL) {
+                // Executing the syscall changed our state. We need to process it before
+                // waiting again.
+                *changedState = true;
+            }
+            break;
+        }
+    }
+    return NULL;
+}
+
 SysCallCondition* threadptrace_resume(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
@@ -789,119 +889,29 @@ SysCallCondition* threadptrace_resume(Thread* base) {
     }
 
     while (true) {
+        bool changedState = false;
         switch (thread->childState) {
-            case THREAD_PTRACE_CHILD_STATE_NONE:
-                debug("THREAD_PTRACE_CHILD_STATE_NONE");
-                break;
+            case THREAD_PTRACE_CHILD_STATE_NONE: debug("THREAD_PTRACE_CHILD_STATE_NONE"); break;
             case THREAD_PTRACE_CHILD_STATE_TRACE_ME:
                 debug("THREAD_PTRACE_CHILD_STATE_TRACE_ME");
                 break;
             case THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL: {
                 debug("THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL");
-                SysCallReturn ret = syscallhandler_make_syscall(thread->sys, &thread->syscall_args);
-                switch (ret.state) {
-                    case SYSCALL_BLOCK:
-                        debug("ipc_syscall blocked");
-                        // Don't leave it spinning.
-                        _threadptrace_ensureStopped(thread);
-                        return ret.cond;
-                    case SYSCALL_DONE: {
-                        debug("ipc_syscall done");
-                        ShimEvent shim_result = {
-                        .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
-                        .event_data = {
-                            .syscall_complete = {.retval = ret.retval,
-                                                 .simulation_nanos =
-                                                     worker_getEmulatedTime()},
-
-                        }};
-                        shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &shim_result);
-                        break;
-                                       }
-                    case SYSCALL_NATIVE: {
-                        debug("ipc_syscall do-native");
-                        SysCallArgs* args = &thread->syscall_args;
-                        long rv = thread_nativeSyscall(
-                            base, args->number, args->args[0], args->args[1], args->args[2],
-                            args->args[3], args->args[4], args->args[5]);
-                        ShimEvent shim_result = {
-                        .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
-                        .event_data = {
-                            .syscall_complete = {.retval = rv,
-                                                 .simulation_nanos =
-                                                     worker_getEmulatedTime()},
-
-                        }};
-                        shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &shim_result);
-                    }
+                SysCallCondition* condition = _threadptrace_resumeIpcSyscall(thread, &changedState);
+                if (condition) {
+                    return condition;
                 }
-                if (thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
-                    if (thread->ipc_syscall.havePendingStop) {
-                        // This can happen, e.g., when processing `exit_group`
-                        // via a shim event. The syscall handler currently
-                        // returns `SYSCALL_NATIVE`, so we ptrace-step through
-                        // the syscall, causing the child to exit. The pending
-                        // stop is no longer relevant (e.g. logging inside the
-                        // shim).
-                        debug("Dropping pending stop because of state change to %d",
-                              thread->ipc_syscall.pendingStop.type);
-                        thread->ipc_syscall.havePendingStop = false;
-                    }
-                    // Executing the syscall changed our state. We need to process it before
-                    // waiting again.
-                    debug("State changed to %d while processing IPC_SYSCALL; continuing",
-                          thread->ipc_syscall.pendingStop.type);
-                    continue;
-                }
-                if (thread->ipc_syscall.havePendingStop) {
-                    // We hit a ptrace-stop while processing the IPC stop.
-                    // Handle that now.
-                    debug("Processing a pending ptrace stop");
-                    _threadptrace_updateChildState(thread, thread->ipc_syscall.pendingStop);
-                    thread->ipc_syscall.havePendingStop = false;
-                    continue;
-                }
-
                 break;
-                                                        }
-            case THREAD_PTRACE_CHILD_STATE_SYSCALL:
+            }
+            case THREAD_PTRACE_CHILD_STATE_SYSCALL: {
                 debug("THREAD_PTRACE_CHILD_STATE_SYSCALL");
-
-                SysCallReturn ret = _threadptrace_handleSyscall(thread, &thread->syscall_args);
-
-                switch (ret.state) {
-                    case SYSCALL_BLOCK:
-                        return ret.cond;
-                    case SYSCALL_DONE:
-                        // Return the specified result.
-                        utility_assert(thread->regs.valid);
-                        thread->regs.value.rax = ret.retval.as_u64;
-                        thread->regs.dirty = true;
-                        break;
-                    case SYSCALL_NATIVE: {
-                        // Have the plugin execute the original syscall
-                        SysCallArgs* args = &thread->syscall_args;
-                        thread_nativeSyscall(base, args->number, args->args[0], args->args[1],
-                                             args->args[2], args->args[3], args->args[4],
-                                             args->args[5]);
-                        // The syscall should have left us in exactly the state from
-                        // which we want to resume execution. In particular we DON'T want
-                        // to restore the old instruction pointer after executing an execve syscall.
-                        thread->regs.valid = false;
-                        thread->regs.dirty = false;
-
-                        if (thread->childState != THREAD_PTRACE_CHILD_STATE_SYSCALL) {
-                            // Executing the syscall changed our state. We need to process it before
-                            // waiting again.
-                            continue;
-                        }
-                        break;
-                    }
+                SysCallCondition* condition = _threadptrace_resumeSyscall(thread, &changedState);
+                if (condition) {
+                    return condition;
                 }
                 break;
-            case THREAD_PTRACE_CHILD_STATE_EXECVE:
-                debug("THREAD_PTRACE_CHILD_STATE_EXECVE");
-                break;
+            }
+            case THREAD_PTRACE_CHILD_STATE_EXECVE: debug("THREAD_PTRACE_CHILD_STATE_EXECVE"); break;
             case THREAD_PTRACE_CHILD_STATE_EXITED:
                 debug("THREAD_PTRACE_CHILD_STATE_EXITED");
                 return NULL;
@@ -909,6 +919,9 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_SIGNALLED");
                 break;
                 // no default
+        }
+        if (changedState) {
+            continue;
         }
         if (thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL ||
             thread->ipc_syscall.stopped) {
@@ -935,7 +948,6 @@ SysCallCondition* threadptrace_resume(Thread* base) {
             thread->regs.valid = false;
             thread->signalToDeliver = 0;
             thread->ipc_syscall.stopped = false;
-        } else {
         }
         debug("waiting for next state");
         _threadptrace_nextChildState(thread);
