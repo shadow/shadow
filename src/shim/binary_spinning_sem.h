@@ -17,7 +17,12 @@
  */
 class BinarySpinningSem {
   public:
-    BinarySpinningSem() { init(); }
+    /*
+     * Initialize the semaphore to the zero state.
+     *
+     * THREAD SAFETY: not thread-safe.
+     */
+    BinarySpinningSem(ssize_t spin_max);
 
     /* 
      * Initialize the semaphore to the zero state.
@@ -66,7 +71,7 @@ class BinarySpinningSem {
 
   private:
     sem_t _semaphore;
-    std::size_t _thresh;
+    ssize_t _thresh;
 };
 
 #endif // BINARY_SPINNING_SEM_H_

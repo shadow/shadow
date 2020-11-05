@@ -20,7 +20,7 @@ extern "C" {
 
 struct IPCData;
 
-void ipcData_init(struct IPCData* ipc_data);
+void ipcData_init(struct IPCData* ipc_data, ssize_t spin_max);
 
 size_t ipcData_nbytes();
 
