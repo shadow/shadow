@@ -208,10 +208,10 @@ long syscall(long n, ...) {
 // General-case macro for defining a thin wrapper function `fnname` that invokes
 // the syscall `sysname`.
 #define REMAP(type, fnname, sysname, params, ...)                                                  \
-    type fnname params { return (type)syscall(SYS_##sysname, __VA_ARGS__); }
+    type fnname params { return (type)syscall(SYS_##sysname, ##__VA_ARGS__); }
 
 // Same as `REMAP`, but the wrapper function is named after the syscall name.
-#define NOREMAP(type, sysname, params, ...) REMAP(type, sysname, sysname, params, __VA_ARGS__)
+#define NOREMAP(type, sysname, params, ...) REMAP(type, sysname, sysname, params, ##__VA_ARGS__)
 
 // Sorted by function name (e.g. using `sort -t',' -k2`).
 // clang-format off
@@ -222,6 +222,7 @@ NOREMAP(int, clock_gettime, (clockid_t a, struct timespec* b), a,b);
 NOREMAP(int, close, (int a), a);
 NOREMAP(int, connect, (int a, const struct sockaddr* b, socklen_t c), a,b,c);
 NOREMAP(int, creat, (const char *a, mode_t b), a,b);
+REMAP(int, creat64, creat, (const char *a, mode_t b), a,b);
 NOREMAP(int, epoll_create, (int a), a);
 NOREMAP(int, epoll_create1, (int a), a);
 NOREMAP(int, epoll_ctl, (int a, int b, int c, struct epoll_event* d), a,b,c,d);
@@ -230,6 +231,7 @@ NOREMAP(int, epoll_wait, (int a, struct epoll_event* b, int c, int d), a,b,c,d);
 NOREMAP(int, faccessat, (int a, const char *b, int c, int d), a, b, c, d);
 NOREMAP(int, fadvise64, (int a, off_t b, off_t c, int d), a, b, c, d);
 NOREMAP(int, fallocate, (int a, int b, off_t c, off_t d), a, b, c, d);
+REMAP(int, fallocate64, fallocate, (int a, int b, off_t c, off_t d), a, b, c, d);
 NOREMAP(int, fchdir, (int a), a);
 NOREMAP(int, fchmod, (int a, mode_t b), a, b);
 NOREMAP(int, fchown, (int a, uid_t b, gid_t c), a, b, c);
@@ -250,6 +252,7 @@ NOREMAP(int, futimesat, (int a, const char* b, const struct timeval c[2]), a, b,
 NOREMAP(ssize_t, getdents, (int a, void* b, size_t c), a, b, c);
 NOREMAP(ssize_t, getdents64, (int a, void* b, size_t c), a, b, c);
 NOREMAP(int, getpeername, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
+NOREMAP(int, getpid, ());
 NOREMAP(ssize_t, getrandom, (void* a, size_t b, unsigned int c), a, b, c);
 NOREMAP(int, getsockname, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
 NOREMAP(int, getsockopt, (int a, int b, int c, void* d, socklen_t* e), a, b, c, d, e);
@@ -261,6 +264,7 @@ NOREMAP(off_t, lseek, (int a, off_t b, int c), a, b, c);
 NOREMAP(int, mkdirat, (int a, const char* b, mode_t c), a, b, c);
 NOREMAP(int, mknodat, (int a, const char* b, mode_t c, dev_t d), a, b, c, d);
 NOREMAP(void*, mmap, (void* a, size_t b, int c, int d, int e, off_t f), a, b, c, d, e, f);
+REMAP(void*, mmap64, mmap, (void* a, size_t b, int c, int d, int e, off_t f), a, b, c, d, e, f);
 #ifdef SYS_mmap2
 NOREMAP(void*, mmap2, (void* a, size_t b, int c, int d, int e, off_t f), a, b, c, d, e, f);
 #endif
@@ -312,17 +316,6 @@ NOREMAP(ssize_t, write, (int a, const void *b, size_t c), a,b,c);
 NOREMAP(ssize_t, writev, (int a, const struct iovec* b, int c), a, b, c);
 // clang-format on
 
-// TODO: The NOREMAP macro doesn't seem to work with no param list
-pid_t getpid() {
-    if (shim_interpositionEnabled()) {
-        debug("Making interposed syscall getpid");
-        return (pid_t)syscall(SYS_getpid);
-    } else {
-        debug("Making real syscall getpid");
-        return (pid_t)_real_syscall(SYS_getpid);
-    }
-}
-
 /*
  * libc uses variadic functions to implement optional parameters. For those
  * cases, internal versions were created above that take all the parameters
@@ -330,6 +323,14 @@ pid_t getpid() {
  */
 
 int open(const char* pathname, int flags, ...) {
+    va_list args;
+    va_start(args, flags);
+    mode_t mode = va_arg(args, mode_t);
+    va_end(args);
+    return open_explicit(pathname, flags, mode);
+}
+
+int open64(const char* pathname, int flags, ...) {
     va_list args;
     va_start(args, flags);
     mode_t mode = va_arg(args, mode_t);
@@ -354,6 +355,22 @@ int ioctl(int fd, unsigned long request, ...) {
 }
 
 int fcntl(int fd, int command, ...) {
+    va_list args;
+    va_start(args, command);
+    char* argp = va_arg(args, char*);
+    va_end(args);
+    return fcntl_explicit(fd, command, argp);
+}
+
+int __fcntl(int fd, int command, ...) {
+    va_list args;
+    va_start(args, command);
+    char* argp = va_arg(args, char*);
+    va_end(args);
+    return fcntl_explicit(fd, command, argp);
+}
+
+int fcntl64(int fd, int command, ...) {
     va_list args;
     va_start(args, command);
     char* argp = va_arg(args, char*);

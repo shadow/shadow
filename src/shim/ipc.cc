@@ -7,15 +7,14 @@
 #include "shim/binary_spinning_sem.h"
 
 struct IPCData {
+    IPCData(ssize_t spin_max) : xfer_ctrl_to_plugin(spin_max), xfer_ctrl_to_shadow(spin_max) {}
     ShimEvent plugin_to_shadow, shadow_to_plugin;
     BinarySpinningSem xfer_ctrl_to_plugin, xfer_ctrl_to_shadow;
 };
 
 extern "C" {
 
-void ipcData_init(IPCData* ipc_data) {
-    new (ipc_data) IPCData;
-}
+void ipcData_init(IPCData* ipc_data, ssize_t spin_max) { new (ipc_data) IPCData(spin_max); }
 
 size_t ipcData_nbytes() { return sizeof(IPCData); }
 

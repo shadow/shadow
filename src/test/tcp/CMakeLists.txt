@@ -14,7 +14,7 @@ foreach(BlockingMode blocking nonblocking-epoll) # nonblocking-poll nonblocking-
 
     foreach(Network loopback lossless lossy)
         # FIXME: enable preload
-        foreach(InterposeMethod ptrace) # preload)
+        foreach(InterposeMethod ptrace preload)
             add_test(
                 NAME tcp-${BlockingMode}-${Network}-shadow-${InterposeMethod}
                 COMMAND sh -c "\
