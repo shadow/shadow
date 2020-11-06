@@ -21,10 +21,10 @@ add_test(
 
 # Run in ptrace mode *without* shim IPC. This is primarily for measurement purposes.
 add_test(
-    NAME phold-shadow-ptrace-noipc
+    NAME phold-shadow-ptrace-only
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace-noipc -d phold.shadow-ptrace-noipc.data - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace-only -d phold.shadow-ptrace-only.data - \
     "
 )
 
@@ -47,10 +47,10 @@ add_test(
 )
 
 add_test(
-    NAME phold-threaded-shadow-ptrace-noipc
+    NAME phold-threaded-shadow-ptrace-only
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace-noipc -d phold-threaded.shadow-ptrace-noipc.data -w 2 - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace-only -d phold-threaded.shadow-ptrace-only.data -w 2 - \
     "
 )
 
@@ -66,4 +66,4 @@ add_test(
 
 # These tests currently run very slowly in the GitHub CI, which only gives them 2 CPUs.
 # Hopefully will be fixed by https://github.com/shadow/shadow/issues/965.
-set_tests_properties(phold-shadow-ptrace phold-shadow-preload phold-threaded-shadow-ptrace phold-threaded-shadow-ptrace-noipc phold-threaded-shadow-preload phold-threaded-shadow-ptrace-noipc PROPERTIES TIMEOUT 60)
+set_tests_properties(phold-shadow-ptrace phold-shadow-preload phold-threaded-shadow-ptrace phold-threaded-shadow-ptrace-only phold-threaded-shadow-preload phold-threaded-shadow-ptrace-only PROPERTIES TIMEOUT 60)

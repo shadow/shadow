@@ -36,15 +36,12 @@ enum _QDiscMode {
 typedef enum _InterposeMethod {
     INTERPOSE_NONE,
     // Use LD_PRELOAD to load a library that implements the libC interface to
-    // route syscalls to Shadow. Uses `ThreadPreload`.
-    INTERPOSE_PRELOAD,
-    // Uses same shim as INTERPOSE_PRELOAD to implement fast syscall
-    // interposition, but also ptraces the child to handle syscalls outside of
-    // the shim's wrappers. Uses `ThreadPtrace`.
-    INTERPOSE_PTRACE,
-    // Similar to INTERPOSE_PTRACE, but doesn't use IPC to the shim; all
-    // syscalls are handled via ptrace. Uses `ThreadPtrace`.
-    INTERPOSE_PTRACE_NOIPC,
+    // route syscalls to Shadow.
+    INTERPOSE_PRELOAD_ONLY,
+    // Attach to child using ptrace, and use that to interpose syscalls etc.
+    INTERPOSE_PTRACE_ONLY,
+    // Use both PRELOAD and PTRACE based interposition.
+    INTERPOSE_PRELOAD_PTRACE,
 } InterposeMethod;
 
 /**

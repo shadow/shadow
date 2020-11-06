@@ -9,7 +9,7 @@
 Thread* threadptrace_new(Host* host, Process* process, gint threadID);
 
 // Create a thread managed via ptrace only.
-Thread* threadptracenoipc_new(Host* host, Process* process, gint threadID);
+Thread* threadptraceonly_new(Host* host, Process* process, gint threadID);
 
 void threadptrace_detach(Thread* base);
 

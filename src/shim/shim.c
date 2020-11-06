@@ -75,16 +75,16 @@ static void _set_interpose_type() {
 
     const char* interpose_method = getenv("SHADOW_INTERPOSE_METHOD");
     assert(interpose_method);
-    if (!strcmp(interpose_method, "PRELOAD")) {
+    if (!strcmp(interpose_method, "PRELOAD_ONLY")) {
         _using_interpose_preload = true;
         return;
     }
-    if (!strcmp(interpose_method, "PTRACE")) {
+    if (!strcmp(interpose_method, "PRELOAD_PTRACE")) {
         _using_interpose_preload = true;
         _using_interpose_ptrace = true;
         return;
     }
-    if (!strcmp(interpose_method, "PTRACE_NOIPC")) {
+    if (!strcmp(interpose_method, "PTRACE_ONLY")) {
         // From the shim's point of view, behave as if it's not running under
         // Shadow, and let all control happen via ptrace.
         _using_interpose_ptrace = true;

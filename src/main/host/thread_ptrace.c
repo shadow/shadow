@@ -1286,7 +1286,7 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
     *childp =
         thread->enableIpc
             ? threadptrace_new(base->host, base->process, host_getNewProcessID(base->host))
-            : threadptracenoipc_new(base->host, base->process, host_getNewProcessID(base->host));
+            : threadptraceonly_new(base->host, base->process, host_getNewProcessID(base->host));
 
     ThreadPtrace* child = _threadToThreadPtrace(*childp);
     child->base.nativePid = base->nativePid;
@@ -1322,7 +1322,7 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
 }
 
 Thread* threadptrace_new(Host* host, Process* process, int threadID) {
-    ThreadPtrace* thread = (ThreadPtrace*)threadptracenoipc_new(host, process, threadID);
+    ThreadPtrace* thread = (ThreadPtrace*)threadptraceonly_new(host, process, threadID);
 
     thread->ipcBlk = shmemallocator_globalAlloc(ipcData_nbytes());
     ipcData_init(_threadptrace_ipcData(thread));
@@ -1335,7 +1335,7 @@ Thread* threadptrace_new(Host* host, Process* process, int threadID) {
     return _threadPtraceToThread(thread);
 }
 
-Thread* threadptracenoipc_new(Host* host, Process* process, int threadID) {
+Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
     ThreadPtrace* thread = g_new(ThreadPtrace, 1);
 
     *thread = (ThreadPtrace){
