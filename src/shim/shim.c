@@ -38,7 +38,7 @@ void shim_disableInterposition() {
     if (++_shim_disable_interposition == 1 && _using_interpose_ptrace && _using_interpose_preload) {
         if (_shim_shared_mem) {
             _shim_shared_mem->ptrace_allow_native_syscalls = true;
-            debug("enabled native-syscalls via shmem %p %p", &_shim_shared_mem, _shim_shared_mem);
+            debug("enabled native-syscalls via shmem %p", _shim_shared_mem);
         } else {
             shadow_set_ptrace_allow_native_syscalls(true);
             debug("enabled native-syscalls via syscall");
@@ -50,7 +50,7 @@ void shim_enableInterposition() {
     assert(_shim_disable_interposition > 0);
     if (--_shim_disable_interposition == 0 && _using_interpose_ptrace && _using_interpose_preload) {
         if (_shim_shared_mem) {
-            debug("disabling native-syscalls via shmem %p %p", &_shim_shared_mem, _shim_shared_mem);
+            debug("disabling native-syscalls via shmem %p", _shim_shared_mem);
             _shim_shared_mem->ptrace_allow_native_syscalls = false;
         } else {
             debug("disabling native-syscalls via syscall");
