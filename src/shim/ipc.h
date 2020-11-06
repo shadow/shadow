@@ -33,8 +33,8 @@ void shimevent_recvEventFromPlugin(struct IPCData *data, ShimEvent* e);
  * If a message is ready, sets *e to it and returns 0. Otherwise returns -1
  * and sets errno to EAGAIN.
  */
-int shimevent_tryRecvEventFromShadow(struct IPCData *data, ShimEvent* e);
-int shimevent_tryRecvEventFromPlugin(struct IPCData *data, ShimEvent* e);
+int shimevent_tryRecvEventFromShadow(struct IPCData* data, ShimEvent* e);
+int shimevent_tryRecvEventFromPlugin(struct IPCData* data, ShimEvent* e);
 
 #ifdef __cplusplus
 }

@@ -15,9 +15,7 @@ OPTION_EXPERIMENTAL_ENTRY(
     "send-explicit-block-message", 0, 0, G_OPTION_ARG_INT, &_sendExplicitBlockMessage,
     "Send message to plugin telling it to stop spinning when a syscall blocks", "[0|1]")
 
-bool shimipc_sendExplicitBlockMessageEnabled() {
-    return _sendExplicitBlockMessage;
-}
+bool shimipc_sendExplicitBlockMessageEnabled() { return _sendExplicitBlockMessage; }
 
 static gint _spinMax = 8096;
 OPTION_EXPERIMENTAL_ENTRY("preload-spin-max", 0, 0, G_OPTION_ARG_INT, &_spinMax,
@@ -25,6 +23,4 @@ OPTION_EXPERIMENTAL_ENTRY("preload-spin-max", 0, 0, G_OPTION_ARG_INT, &_spinMax,
                           "-1 for unlimited. [8096]",
                           "N")
 
-ssize_t shimipc_spinMax() {
-    return _spinMax;
-}
+ssize_t shimipc_spinMax() { return _spinMax; }

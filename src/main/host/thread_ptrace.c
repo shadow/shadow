@@ -237,7 +237,7 @@ static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
                                          size_t n);
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                         size_t n);
-static void _threadptrace_ensureStopped(ThreadPtrace *thread);
+static void _threadptrace_ensureStopped(ThreadPtrace* thread);
 
 static ThreadPtrace* _threadToThreadPtrace(Thread* thread) {
     utility_assert(thread->type_id == THREADPTRACE_TYPE_ID);
@@ -628,8 +628,7 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
 
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr(argv);
-    message("forking new thread with environment '%s' and arguments '%s'",
-            envStr, argStr);
+    message("forking new thread with environment '%s' and arguments '%s'", envStr, argStr);
     g_free(envStr);
     g_free(argStr);
 
@@ -655,14 +654,14 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
 static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallArgs* args) {
     utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL ||
                    thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
-    if(args->number == SYS_shadow_set_ptrace_allow_native_syscalls) {
+    if (args->number == SYS_shadow_set_ptrace_allow_native_syscalls) {
         bool val = args->args[0].as_i64;
         debug("SYS_shadow_set_ptrace_allow_native_syscalls %d", val);
         _threadptrace_sharedMem(thread)->ptrace_allow_native_syscalls = val;
-        return (SysCallReturn) {.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
     }
 
-    if(args->number == SYS_shadow_get_ipc_blk) {
+    if (args->number == SYS_shadow_get_ipc_blk) {
         PluginPtr ipc_blk_pptr = args->args[0].as_ptr;
         debug("SYS_shadow_get_ipc_blk %p", (void*)ipc_blk_pptr.val);
         ShMemBlockSerialized* ipc_blk_ptr = process_getWriteablePtr(
@@ -720,8 +719,8 @@ static void threadptrace_flushPtrs(Thread* base) {
 }
 
 static void _threadptrace_doAttach(ThreadPtrace* thread) {
-    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL
-            || thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
+    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL ||
+                   thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
 
     debug("thread %i attaching to child %i", thread->base.tid, (int)thread->base.nativeTid);
     if (ptrace(PTRACE_ATTACH, thread->base.nativeTid, 0, 0) < 0) {
@@ -782,8 +781,7 @@ void threadptrace_detach(Thread* base) {
     _threadptrace_doDetach(thread);
 }
 
-static SysCallCondition* _threadptrace_resumeIpcSyscall(ThreadPtrace* thread,
-                                                          bool* changedState) {
+static SysCallCondition* _threadptrace_resumeIpcSyscall(ThreadPtrace* thread, bool* changedState) {
     SysCallReturn ret = syscallhandler_make_syscall(thread->sys, &thread->syscall_args);
     switch (ret.state) {
         case SYSCALL_BLOCK:
@@ -1022,7 +1020,7 @@ void threadptrace_free(Thread* base) {
 
 // Ensure that the child is in a ptrace-stop. If it's not (e.g. because is it's
 // spinning in its shim-event-recv loop), we force it into one.
-static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
+static void _threadptrace_ensureStopped(ThreadPtrace* thread) {
     if (thread->childState != THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL) {
         debug("Not in ipc_syscall; should already be stopped");
         return;
@@ -1041,7 +1039,7 @@ static void _threadptrace_ensureStopped(ThreadPtrace *thread) {
 
     utility_assert(!thread->regs.dirty);
 
-    while(1) {
+    while (1) {
         int wstatus;
         if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
             error("waitpid: %s", g_strerror(errno));
@@ -1103,7 +1101,6 @@ static void _threadptrace_memcpyToShadow(ThreadPtrace* thread, void* shadow_dst,
     }
     return;
 }
-
 
 static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
                                          PluginPtr plugin_dst, void* shadow_src,
@@ -1187,9 +1184,7 @@ void* threadptrace_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
     return rv;
 }
 
-static long threadptrace_nativeSyscall(Thread* base,
-                                               long n,
-                                               va_list args) {
+static long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     debug("threadptrace_nativeSyscall %ld", n);
     _threadptrace_ensureStopped(thread);
@@ -1222,7 +1217,8 @@ static long threadptrace_nativeSyscall(Thread* base,
         error("ptrace: %s", g_strerror(errno));
         abort();
     }
-    // We're altering the child's actual register state, so we need to restore it from thread->regs later.
+    // We're altering the child's actual register state, so we need to restore it from thread->regs
+    // later.
     thread->regs.dirty = true;
 
     // Single-step until the syscall instruction is executed. It's not clear whether we can depend
@@ -1327,7 +1323,7 @@ Thread* threadptrace_new(Host* host, Process* process, int threadID) {
 
     thread->ipcBlk = shmemallocator_globalAlloc(ipcData_nbytes());
     ipcData_init(_threadptrace_ipcData(thread), shimipc_spinMax());
-    
+
     thread->shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimSharedMem));
 
     *_threadptrace_sharedMem(thread) = (ShimSharedMem){.ptrace_allow_native_syscalls = false};
@@ -1369,6 +1365,3 @@ Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
 
     return _threadPtraceToThread(thread);
 }
-
-
-

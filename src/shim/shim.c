@@ -102,11 +102,10 @@ static void _shim_load() {
         return;
     }
 
-    const char *ipc_blk_buf = getenv("_SHD_IPC_BLK");
+    const char* ipc_blk_buf = getenv("_SHD_IPC_BLK");
     assert(ipc_blk_buf);
     bool err = false;
-    ShMemBlockSerialized ipc_blk_serialized =
-        shmemblockserialized_fromString(ipc_blk_buf, &err);
+    ShMemBlockSerialized ipc_blk_serialized = shmemblockserialized_fromString(ipc_blk_buf, &err);
     assert(!err);
 
     _shim_ipc_blk = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);

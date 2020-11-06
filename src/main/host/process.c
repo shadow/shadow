@@ -647,7 +647,7 @@ void* process_getWriteablePtr(Process* proc, Thread* thread, PluginPtr plugin_sr
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getMutablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-    if(proc->memoryManager) {
+    if (proc->memoryManager) {
         return memorymanager_getMutablePtr(proc->memoryManager, thread, plugin_src, n);
     } else {
         return thread_getMutablePtr(thread, plugin_src, n);
