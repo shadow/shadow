@@ -122,6 +122,7 @@ install(TARGETS shadow-remora DESTINATION lib)
 
 ## attach BLEEP ADDON library module
 add_library(bleep_addon SHARED bleep_addon/bleep_addon.cpp)
+install(TARGETS bleep_addon DESTINATION lib)
 
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow ${shadow_srcs})
