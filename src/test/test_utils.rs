@@ -165,6 +165,11 @@ pub fn get_errno_message(errno: i32) -> String {
     cstr.to_string_lossy().into_owned()
 }
 
+/// Assert the boolean condition is true, else print the last system error
+pub fn assert_true_else_errno(cond: bool) {
+    assert!(cond, "{}", get_errno_message(get_errno()));
+}
+
 /// Calls check_system_call(), but automatically passes the current line number.
 #[macro_export]
 macro_rules! check_system_call {
