@@ -61,8 +61,6 @@ int BinarySpinningSem::trywait() {
         return rv;
     }
 
-    _spin_ctr = 0;
-
     pthread_spin_lock(&_lock);
     _x.store(false, std::memory_order_release);
     pthread_spin_unlock(&_lock);

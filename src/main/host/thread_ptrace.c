@@ -17,6 +17,7 @@
 
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
+#include "main/host/shimipc.h"
 #include "main/host/thread_protected.h"
 #include "main/host/tsc.h"
 #include "shim/ipc.h"
@@ -1325,7 +1326,7 @@ Thread* threadptrace_new(Host* host, Process* process, int threadID) {
     ThreadPtrace* thread = (ThreadPtrace*)threadptraceonly_new(host, process, threadID);
 
     thread->ipcBlk = shmemallocator_globalAlloc(ipcData_nbytes());
-    ipcData_init(_threadptrace_ipcData(thread));
+    ipcData_init(_threadptrace_ipcData(thread), shimipc_spinMax());
     
     thread->shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimSharedMem));
 
