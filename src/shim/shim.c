@@ -16,14 +16,11 @@
 #include "shim/shim_logger.h"
 #include "support/logger/logger.h"
 
-typedef enum {
-    INTERPOSE_NONE,
-    INTERPOSE_PRELOAD,
-    INTERPOSE_PTRACE,
-    INTERPOSE_PTRACE_NOIPC,
-} InterposeType;
+// Whether Shadow is using preload-based interposition.
+static bool _using_interpose_preload;
 
-static InterposeType _interpose_type;
+// Whether Shadow is using ptrace-based interposition.
+static bool _using_interpose_ptrace;
 
 // This thread's IPC block, for communication with Shadow.
 static __thread ShMemBlock _shim_ipc_blk;
@@ -38,7 +35,7 @@ static __thread int _shim_disable_interposition = 0;
 static void _shim_wait_start();
 
 void shim_disableInterposition() {
-    if (++_shim_disable_interposition == 1 && _interpose_type == INTERPOSE_PTRACE) {
+    if (++_shim_disable_interposition == 1 && _using_interpose_ptrace && _using_interpose_preload) {
         if (_shim_shared_mem) {
             _shim_shared_mem->ptrace_allow_native_syscalls = true;
             debug("enabled native-syscalls via shmem %p %p", &_shim_shared_mem, _shim_shared_mem);
@@ -51,7 +48,7 @@ void shim_disableInterposition() {
 
 void shim_enableInterposition() {
     assert(_shim_disable_interposition > 0);
-    if (--_shim_disable_interposition == 0 && _interpose_type == INTERPOSE_PTRACE) {
+    if (--_shim_disable_interposition == 0 && _using_interpose_ptrace && _using_interpose_preload) {
         if (_shim_shared_mem) {
             debug("disabling native-syscalls via shmem %p %p", &_shim_shared_mem, _shim_shared_mem);
             _shim_shared_mem->ptrace_allow_native_syscalls = false;
@@ -63,32 +60,35 @@ void shim_enableInterposition() {
 }
 
 bool shim_interpositionEnabled() {
-    return (_interpose_type == INTERPOSE_PRELOAD || _interpose_type == INTERPOSE_PTRACE) &&
-           !_shim_disable_interposition;
+    return _using_interpose_preload && !_shim_disable_interposition;
 }
 
 // Figure out what interposition mechanism we're using, based on environment
 // variables.  This is called before disabling interposition, so should be
 // careful not to make syscalls.
-static InterposeType _get_interpose_type() {
+static void _set_interpose_type() {
     // If we're not running under Shadow, return. This can be useful
     // for testing the libc parts of the shim.
     if (!getenv("SHADOW_SPAWNED")) {
-        return INTERPOSE_NONE;
+        return;
     }
 
     const char* interpose_method = getenv("SHADOW_INTERPOSE_METHOD");
     assert(interpose_method);
     if (!strcmp(interpose_method, "PRELOAD")) {
-        return INTERPOSE_PRELOAD;
+        _using_interpose_preload = true;
+        return;
     }
     if (!strcmp(interpose_method, "PTRACE")) {
-        return INTERPOSE_PTRACE;
+        _using_interpose_preload = true;
+        _using_interpose_ptrace = true;
+        return;
     }
     if (!strcmp(interpose_method, "PTRACE_NOIPC")) {
         // From the shim's point of view, behave as if it's not running under
         // Shadow, and let all control happen via ptrace.
-        return INTERPOSE_PTRACE_NOIPC;
+        _using_interpose_ptrace = true;
+        return;
     }
     abort();
 }
@@ -98,7 +98,7 @@ static void _shim_load() {
     // stderr for any log messages that happen before we can open it.
     logger_setDefault(shimlogger_new(stderr));
 
-    if (_interpose_type == INTERPOSE_NONE || _interpose_type == INTERPOSE_PTRACE_NOIPC) {
+    if (!_using_interpose_preload) {
         return;
     }
 
@@ -158,7 +158,7 @@ __attribute__((constructor)) void shim_ensure_init() {
 
     // We must set the interposition type before calling
     // shim_disableInterposition.
-    _interpose_type = _get_interpose_type();
+    _set_interpose_type();
 
     shim_disableInterposition();
 
@@ -169,7 +169,7 @@ __attribute__((constructor)) void shim_ensure_init() {
     }
 
     // If we're doing shim IPC, wait for the start event.
-    if (_interpose_type == INTERPOSE_PTRACE || _interpose_type == INTERPOSE_PRELOAD) {
+    if (_using_interpose_preload) {
         _shim_wait_start();
     }
 
@@ -179,10 +179,15 @@ __attribute__((constructor)) void shim_ensure_init() {
 
 __attribute__((destructor))
 static void _shim_unload() {
-    // No explicit unload needed for ptrace; it'll learn about our exit
-    // via a ptrace-stop.
-    if (_interpose_type != INTERPOSE_PRELOAD)
+    if (!_using_interpose_preload) {
+        // Nothing to tear down.
         return;
+    }
+
+    if (_using_interpose_ptrace) {
+        // No need for explicit teardown; ptrace will detect the process exit.
+        return;
+    }
 
     shim_disableInterposition();
 
@@ -197,10 +202,12 @@ static void _shim_unload() {
 }
 
 static void _shim_wait_start() {
+    assert(_using_interpose_preload);
+
     // If we're using ptrace, and we haven't initialized the ipc block yet
     // (because this isn't the main thread, which is initialized in the global
     // initialization via an environment variable), do so.
-    if (_interpose_type == INTERPOSE_PTRACE && !_shim_ipc_blk.p) {
+    if (_using_interpose_ptrace && !_shim_ipc_blk.p) {
         ShMemBlockSerialized ipc_blk_serialized;
         int rv = shadow_get_ipc_blk(&ipc_blk_serialized);
         if (rv != 0) {
@@ -216,7 +223,7 @@ static void _shim_wait_start() {
     shimevent_recvEventFromShadow(_shim_ipc_blk.p, &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
     shimlogger_set_simulation_nanos(event.event_data.start.simulation_nanos);
-    if (_interpose_type == INTERPOSE_PTRACE) {
+    if (_using_interpose_ptrace) {
         _shim_shared_mem_blk =
             shmemserializer_globalBlockDeserialize(&event.event_data.start.shim_shared_mem);
         _shim_shared_mem = _shim_shared_mem_blk.p;
