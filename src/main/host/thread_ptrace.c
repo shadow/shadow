@@ -623,7 +623,7 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
         shmemblockserialized_toString(&ipcBlkSerial, ipcBlkBuf);
 
         /* append to the env */
-        myenvv = g_environ_setenv(myenvv, "_SHD_IPC_BLK", ipcBlkBuf, TRUE);
+        myenvv = g_environ_setenv(myenvv, "SHADOW_IPC_BLK", ipcBlkBuf, TRUE);
     }
 
     gchar* envStr = utility_strvToNewStr(myenvv);
