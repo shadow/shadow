@@ -10,9 +10,6 @@ use test_utils::running_in_shadow;
 
 static SIGACTION_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-extern "C" {
-    pub fn gethostname(name: *mut libc::c_char, size: libc::size_t) -> libc::c_int;
-}
 
 extern "C" fn handler(_: libc::c_int) {
     SIGACTION_COUNT.fetch_add(1, Ordering::SeqCst);
@@ -126,7 +123,7 @@ fn test_getpid_kill() {
 
 fn get_gethostname() -> String {
     let mut buffer = vec![0 as u8; 1000];
-    let err = unsafe { gethostname(buffer.as_mut_ptr() as *mut libc::c_char, buffer.len()) };
+    let err = unsafe { libc::gethostname(buffer.as_mut_ptr() as *mut libc::c_char, buffer.len()) };
     assert_eq!(err, 0);
 
     let hostname_len = buffer
