@@ -1,8 +1,6 @@
-add_executable(test-poll test_poll.c)
-target_link_libraries(test-poll ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
-
 ## register the tests
-add_test(NAME poll COMMAND test-poll)
+add_test(NAME poll COMMAND ../target/debug/test_poll --libc-passing)
+list(APPEND TestNames poll)
 # FIXME add_test(
 # FIXME     NAME poll-shadow-ptrace
 # FIXME     COMMAND sh -c "\
@@ -17,3 +15,7 @@ add_test(NAME poll COMMAND test-poll)
 # FIXME     | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d poll.shadow-preload.data - \
 # FIXME     "
 # FIXME )
+
+set_property(TEST ${TestNames} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
+# need to check the test's return code, not just shadow's (see shadow/shadow#902)
+set_property(TEST ${TestNames} PROPERTY FAIL_REGULAR_EXPRESSION "main error code '.*' for process")
