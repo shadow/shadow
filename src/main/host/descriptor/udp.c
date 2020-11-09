@@ -220,7 +220,7 @@ static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
 
     debug("user read %u inbound UDP bytes", bytesCopied);
 
-    return bytesCopied > 0 ? (gssize)bytesCopied : EWOULDBLOCK;
+    return bytesCopied > 0 ? (gssize)bytesCopied : -EWOULDBLOCK;
 }
 
 static void _udp_free(Descriptor* descriptor) {
