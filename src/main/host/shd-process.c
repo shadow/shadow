@@ -8166,7 +8166,7 @@ int process_emu_compare_dat_files(Process* proc, int fileno) {
     datParser(buf2, size2, &merkleroothash);
     fclose(file2);
 
-    //파일이 존재 하지 않으면, return 0;
+    //if file is not exist, return 0;
     if(FileInfotbl == NULL) {
         createHashTables();
     }
