@@ -465,7 +465,8 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
 
     debug("recv returned %zd", retval);
 
-    if (retval == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
+    bool nonblocking_mode = descriptor_getFlags(desc) & O_NONBLOCK || flags & MSG_DONTWAIT;
+    if (retval == -EWOULDBLOCK && !nonblocking_mode) {
         debug("recv would block on socket %i", sockfd);
         /* We need to block until the descriptor is ready to read. */
         Trigger trigger = (Trigger){
@@ -607,7 +608,8 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
         debug("send returned %zd", retval);
     }
 
-    if (retval == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
+    bool nonblocking_mode = descriptor_getFlags(desc) & O_NONBLOCK || flags & MSG_DONTWAIT;
+    if (retval == -EWOULDBLOCK && !nonblocking_mode) {
         if (bufSize > 0) {
             /* We need to block until the descriptor is ready to write. */
             Trigger trigger = (Trigger){
