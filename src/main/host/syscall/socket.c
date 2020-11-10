@@ -450,7 +450,7 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
 
     if (srcAddrPtr.val && !addrlenPtr.val) {
         info("Cannot get from address with NULL address length info.");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     if (flags & ~MSG_DONTWAIT) {
