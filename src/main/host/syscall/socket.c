@@ -457,9 +457,18 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
         warning("Unsupported recv flag(s): %d", flags);
     }
 
-    /* TODO: Dynamically compute size based on how much data is actually
-     * available in the descriptor. */
-    size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
+    size_t sizeNeeded = bufSize;
+
+    if (descriptor_getType(desc) == DT_TCPSOCKET) {
+        // we can only truncate the data if it is a TCP connection
+        /* TODO: Dynamically compute size based on how much data is actually
+         * available in the descriptor. */
+        sizeNeeded = MIN(sizeNeeded, SYSCALL_IO_BUFSIZE);
+    } else if (descriptor_getType(desc) == DT_UDPSOCKET) {
+        // allow it to be 1 byte longer than the max datagram size
+        sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
+    }
+
     void* buf = process_getWriteablePtr(sys->process, sys->thread, bufPtr, sizeNeeded);
     struct sockaddr_in inet_addr = {.sin_family = AF_INET};
 
@@ -604,9 +613,17 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
     gssize retval = (gssize)errcode;
 
     if (errcode == 0) {
-        /* TODO: Dynamically compute size based on how much data is actually
-         * available in the descriptor. */
-        size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
+        size_t sizeNeeded = bufSize;
+
+        if (descriptor_getType(desc) == DT_TCPSOCKET) {
+            // we can only truncate the data if it is a TCP connection
+            /* TODO: Dynamically compute size based on how much data is actually
+             * available in the descriptor. */
+            sizeNeeded = MIN(sizeNeeded, SYSCALL_IO_BUFSIZE);
+        } else if (descriptor_getType(desc) == DT_UDPSOCKET) {
+            // allow it to be 1 byte longer than the max so that we can receive EMSGSIZE
+            sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
+        }
 
         const void* buf = process_getReadablePtr(sys->process, sys->thread, bufPtr, sizeNeeded);
 
