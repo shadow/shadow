@@ -85,8 +85,8 @@ static void _networkinterface_refillTokenBucketsCB(NetworkInterface* interface,
                                                    gpointer userData);
 
 static gint _networkinterface_compareSocket(const Socket* sa, const Socket* sb, gpointer userData) {
-    Packet* pa = socket_peekNextPacket(sa);
-    Packet* pb = socket_peekNextPacket(sb);
+    Packet* pa = socket_peekNextOutPacket(sa);
+    Packet* pb = socket_peekNextOutPacket(sb);
     return packet_getPriority(pa) > packet_getPriority(pb) ? +1 : -1;
 }
 
@@ -476,7 +476,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, g
             _networkinterface_updatePacketHeader((Descriptor*)socket, packet);
         }
 
-        if(socket_peekNextPacket(socket)) {
+        if(socket_peekNextOutPacket(socket)) {
             /* socket has more packets, and is still reffed from before */
             g_queue_push_tail(interface->rrQueue, socket);
         } else {
@@ -504,7 +504,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
             _networkinterface_updatePacketHeader((Descriptor*)socket, packet);
         }
 
-        if(socket_peekNextPacket(socket)) {
+        if(socket_peekNextOutPacket(socket)) {
             /* socket has more packets, and is still reffed from before */
             priorityqueue_push(interface->fifoQueue, socket);
         } else {

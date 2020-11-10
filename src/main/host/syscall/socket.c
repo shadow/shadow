@@ -437,17 +437,6 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    /* Need non-NULL buffer. */
-    if (!bufPtr.val) {
-        info("Can't recv into NULL buffer on socket %i", sockfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
-    if (!bufSize) {
-        info("Invalid length %zu provided on socket %i", bufSize, sockfd);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
     if (srcAddrPtr.val && !addrlenPtr.val) {
         info("Cannot get from address with NULL address length info.");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
@@ -457,26 +446,46 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
         warning("Unsupported recv flag(s): %d", flags);
     }
 
-    size_t sizeNeeded = bufSize;
+    ssize_t retval = 0;
 
     if (descriptor_getType(desc) == DT_TCPSOCKET) {
-        // we can only truncate the data if it is a TCP connection
-        /* TODO: Dynamically compute size based on how much data is actually
-         * available in the descriptor. */
-        sizeNeeded = MIN(sizeNeeded, SYSCALL_IO_BUFSIZE);
-    } else if (descriptor_getType(desc) == DT_UDPSOCKET) {
-        // allow it to be 1 byte longer than the max datagram size
-        sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
+        int errcode = tcp_getConnectionError((TCP*)socket_desc);
+
+        if (errcode > 0) {
+            /* connect() was not called yet. */
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
+        } else if (errcode == -EALREADY) {
+            /* Connection in progress. */
+            retval = -EWOULDBLOCK;
+        }
     }
 
-    void* buf = process_getWriteablePtr(sys->process, sys->thread, bufPtr, sizeNeeded);
     struct sockaddr_in inet_addr = {.sin_family = AF_INET};
 
-    ssize_t retval = transport_receiveUserData(
-        (Transport*)socket_desc, buf, sizeNeeded, &inet_addr.sin_addr.s_addr,
-        &inet_addr.sin_port);
+    if (retval == 0) {
+        size_t sizeNeeded = bufSize;
 
-    debug("recv returned %zd", retval);
+        if (descriptor_getType(desc) == DT_TCPSOCKET) {
+            // we can only truncate the data if it is a TCP connection
+            /* TODO: Dynamically compute size based on how much data is actually
+             * available in the descriptor. */
+            sizeNeeded = MIN(sizeNeeded, SYSCALL_IO_BUFSIZE);
+        } else if (descriptor_getType(desc) == DT_UDPSOCKET) {
+            // allow it to be 1 byte longer than the max datagram size
+            sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
+        }
+
+        void* buf = NULL;
+        if (bufPtr.val) {
+            // if sizeNeeded is 0, process_getWriteablePtr() will always return a null pointer
+            buf = process_getWriteablePtr(sys->process, sys->thread, bufPtr, sizeNeeded);
+        }
+
+        retval = transport_receiveUserData((Transport*)socket_desc, buf, sizeNeeded,
+                                               &inet_addr.sin_addr.s_addr, &inet_addr.sin_port);
+
+        debug("recv returned %zd", retval);
+    }
 
     bool nonblocking_mode = descriptor_getFlags(desc) & O_NONBLOCK || flags & MSG_DONTWAIT;
     if (retval == -EWOULDBLOCK && !nonblocking_mode) {

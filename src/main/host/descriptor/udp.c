@@ -89,11 +89,9 @@ static void _udp_processPacket(Socket* socket, Packet* packet) {
     UDP* udp = _udp_fromDescriptor((Descriptor*)socket);
     MAGIC_ASSERT(udp);
 
-    /* UDP packet contains data for user and can be buffered immediately */
-    if(packet_getPayloadLength(packet) > 0) {
-        if(!socket_addToInputBuffer((Socket*)udp, packet)) {
-            packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
-        }
+    /* UDP packet can be buffered immediately */
+    if (!socket_addToInputBuffer((Socket*)udp, packet)) {
+        packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
     }
 }
 
@@ -186,6 +184,14 @@ static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
     UDP* udp = _udp_fromDescriptor((Descriptor*)transport);
     MAGIC_ASSERT(udp);
 
+    if (socket_peekNextInPacket(&(udp->super)) == NULL) {
+        return -EWOULDBLOCK;
+    }
+
+    if (buffer == NULL && nBytes > 0) {
+        return -EFAULT;
+    }
+
     Packet* packet = socket_removeFromInputBuffer((Socket*)udp);
     if(!packet) {
         return -EWOULDBLOCK;
@@ -220,7 +226,7 @@ static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
 
     debug("user read %u inbound UDP bytes", bytesCopied);
 
-    return bytesCopied > 0 ? (gssize)bytesCopied : -EWOULDBLOCK;
+    return bytesCopied;
 }
 
 static void _udp_free(Descriptor* descriptor) {
