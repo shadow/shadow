@@ -453,6 +453,10 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
+    if (flags & ~MSG_DONTWAIT) {
+        warning("Unsupported recv flag(s): %d", flags);
+    }
+
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
@@ -510,6 +514,10 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
         info("Address length %ld is too small on socket %i", (long int)addrlen,
              sockfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    }
+
+    if (flags & ~MSG_DONTWAIT) {
+        warning("Unsupported send flag(s): %d", flags);
     }
 
     /* Get the address info if they specified one. */
