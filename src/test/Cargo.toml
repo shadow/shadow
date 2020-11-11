@@ -50,6 +50,10 @@ name = "test_shutdown"
 path = "socket/shutdown/test_shutdown.rs"
 
 [[bin]]
+name = "test_sendto_recvfrom"
+path = "socket/sendto_recvfrom/test_sendto_recvfrom.rs"
+
+[[bin]]
 name = "test_random"
 path = "random/test_random.rs"
 

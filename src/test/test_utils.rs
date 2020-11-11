@@ -174,20 +174,21 @@ macro_rules! check_system_call {
 }
 
 /// Run the given function, check that the errno was expected, and return the function's return value.
-pub fn check_system_call<F>(
+pub fn check_system_call<F, J>(
     f: F,
     expected_errnos: &[libc::c_int],
     line: u32,
-) -> Result<libc::c_int, String>
+) -> Result<J, String>
 where
-    F: FnOnce() -> libc::c_int,
+    F: FnOnce() -> J,
+    J: std::cmp::Ord + std::convert::From<i8> + Copy + std::fmt::Display,
 {
     let rv = f();
     let errno = get_errno();
 
     if expected_errnos.is_empty() {
         // if no error is expected (rv should be >= 0)
-        if rv < 0 {
+        if rv < 0.into() {
             return Err(format!(
                 "Expecting a non-negative return value, received {} \"{}\" [line {}]",
                 rv,
@@ -197,7 +198,7 @@ where
         }
     } else {
         // if we expect the system call to return an error (rv should be -1)
-        if rv != -1 {
+        if rv != (-1).into() {
             return Err(format!(
                 "Expecting a return value of -1, received {} [line {}]",
                 rv, line
