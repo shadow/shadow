@@ -46,7 +46,7 @@ fn main() {
 
     test_getpid_nodeps();
     test_gethostname(&expected_name.nodename);
-    std::process::exit(0);
+
     if !running_in_shadow() {
         // TODO: Implement uname in shadow
         test_uname(&expected_name);
@@ -131,7 +131,7 @@ fn get_gethostname() -> CString {
         .iter()
         .position(|&byte| byte == 0)
         .unwrap_or(buffer.len());
-    buffer.resize(hostname_len, 0);
+    buffer.resize(hostname_len + 1, 0);
 
     CStr::from_bytes_with_nul(&buffer).unwrap().into()
 }
