@@ -7,10 +7,9 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::process;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use test_utils::{running_in_shadow, get_errno};
+use test_utils::{get_errno, running_in_shadow};
 
 static SIGACTION_COUNT: AtomicUsize = AtomicUsize::new(0);
-
 
 extern "C" fn handler(_: libc::c_int) {
     SIGACTION_COUNT.fetch_add(1, Ordering::SeqCst);
@@ -25,7 +24,9 @@ struct ExpectedName {
 }
 
 fn main() {
-    let argv: Vec<CString> = std::env::args().map(|x| CString::new(x.as_bytes()).unwrap()).collect();
+    let argv: Vec<CString> = std::env::args()
+        .map(|x| CString::new(x.as_bytes()).unwrap())
+        .collect();
     println!("{:?}", argv);
 
     if argv.len() < 6 {
@@ -92,26 +93,11 @@ fn test_uname(expected_name: &ExpectedName) {
     let r = unsafe { libc::uname(&mut n) };
 
     assert_eq!(r, 0);
-    assert_eq!(
-        expected_name.sysname,
-        to_cstr(&n.sysname).into()
-    );
-    assert_eq!(
-        expected_name.nodename,
-        to_cstr(&n.nodename).into()
-    );
-    assert_eq!(
-        expected_name.machine,
-        to_cstr(&n.machine).into()
-    );
-    assert_eq!(
-        expected_name.release,
-        to_cstr(&n.release).into()
-    );
-    assert_eq!(
-        expected_name.version,
-        to_cstr(&n.version).into()
-    );
+    assert_eq!(expected_name.sysname, to_cstr(&n.sysname).into());
+    assert_eq!(expected_name.nodename, to_cstr(&n.nodename).into());
+    assert_eq!(expected_name.machine, to_cstr(&n.machine).into());
+    assert_eq!(expected_name.release, to_cstr(&n.release).into());
+    assert_eq!(expected_name.version, to_cstr(&n.version).into());
 }
 
 /// Validates that the returned pid is ours by using it to send a signal to ourselves.
