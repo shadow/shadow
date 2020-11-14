@@ -7,7 +7,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::process;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use test_utils::running_in_shadow;
+use test_utils::{running_in_shadow, get_errno};
 
 static SIGACTION_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -64,8 +64,10 @@ fn test_getpid_nodeps() {
 }
 
 fn test_gethostname(nodename: &CStr) {
-    let hostname = get_gethostname();
+    let errno = gethostname_with_short_buffer();
+    assert_eq!(errno, libc::ENAMETOOLONG);
 
+    let hostname = get_gethostname();
     assert_eq!(hostname.as_c_str(), nodename);
 }
 
@@ -118,6 +120,14 @@ fn test_getpid_kill() {
     let rv = unsafe { libc::kill(pid as i32, libc::SIGUSR1) };
     assert_eq!(rv, 0);
     assert_eq!(SIGACTION_COUNT.load(Ordering::SeqCst), 1);
+}
+
+fn gethostname_with_short_buffer() -> libc::c_int {
+    let mut buffer = vec![0u8; 1];
+    let err = unsafe { libc::gethostname(buffer.as_mut_ptr() as *mut libc::c_char, buffer.len()) };
+
+    assert_eq!(err, -1);
+    get_errno()
 }
 
 fn get_gethostname() -> CString {
