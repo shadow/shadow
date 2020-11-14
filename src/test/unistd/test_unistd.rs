@@ -60,7 +60,7 @@ fn main() {
 fn test_getpid_nodeps() {
     let pid = unsafe { libc::getpid() };
     assert!(pid > 0);
-    assert_eq!(pid, process::id() as i32);
+    assert_eq!(pid, process::id() as libc::pid_t);
 }
 
 fn test_gethostname(nodename: &CStr) {
@@ -133,7 +133,7 @@ fn test_getpid_kill() {
     };
     assert_eq!(rv, 0);
 
-    let rv = unsafe { libc::kill(pid as i32, libc::SIGUSR1) };
+    let rv = unsafe { libc::kill(pid as libc::pid_t, libc::SIGUSR1) };
     assert_eq!(rv, 0);
     assert_eq!(SIGACTION_COUNT.load(Ordering::SeqCst), 1);
 }
