@@ -58,9 +58,9 @@ fn main() {
 /// Tests that the results are plausible, but can't really validate that it's our
 /// pid without depending on other functionality.
 fn test_getpid_nodeps() {
-    let pid = process::id();
+    let pid = unsafe { libc::getpid() };
     assert!(pid > 0);
-    assert_eq!(pid, process::id());
+    assert_eq!(pid, process::id() as i32);
 }
 
 fn test_gethostname(nodename: &CStr) {
