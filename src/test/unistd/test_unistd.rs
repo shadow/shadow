@@ -70,32 +70,30 @@ fn test_gethostname(nodename: &CStr) {
 }
 
 fn test_uname(expected_name: &ExpectedName) {
-    unsafe {
-        let mut n = std::mem::zeroed();
-        let r = libc::uname(&mut n);
+    let mut n = unsafe { std::mem::zeroed() };
+    let r = unsafe { libc::uname(&mut n) };
 
-        assert_eq!(r, 0);
-        assert_eq!(
-            expected_name.sysname,
-            to_cstr(&n.sysname).into()
-        );
-        assert_eq!(
-            expected_name.nodename,
-            to_cstr(&n.nodename).into()
-        );
-        assert_eq!(
-            expected_name.machine,
-            to_cstr(&n.machine).into()
-        );
-        assert_eq!(
-            expected_name.release,
-            to_cstr(&n.release).into()
-        );
-        assert_eq!(
-            expected_name.version,
-            to_cstr(&n.version).into()
-        );
-    }
+    assert_eq!(r, 0);
+    assert_eq!(
+        expected_name.sysname,
+        to_cstr(&n.sysname).into()
+    );
+    assert_eq!(
+        expected_name.nodename,
+        to_cstr(&n.nodename).into()
+    );
+    assert_eq!(
+        expected_name.machine,
+        to_cstr(&n.machine).into()
+    );
+    assert_eq!(
+        expected_name.release,
+        to_cstr(&n.release).into()
+    );
+    assert_eq!(
+        expected_name.version,
+        to_cstr(&n.version).into()
+    );
 }
 
 /// Validates that the returned pid is ours by using it to send a signal to ourselves.
