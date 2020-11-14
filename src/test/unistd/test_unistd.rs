@@ -64,6 +64,22 @@ fn test_getpid_nodeps() {
 }
 
 fn test_gethostname(nodename: &CStr) {
+    /*
+    Old but still true commentaries from the previous C version of this test
+
+    // Invalid pointer. Documented to return errno=EFAULT in gethostname(2),
+    // but segfaults on Ubuntu 18.
+    //
+    // g_assert_cmpint(gethostname(NULL+1, 100),==,-1);
+    // assert_errno_is(EFAULT);
+
+    // Negative len. Documented to return errno=EINVAL in gethostname(2), but
+    // segfaults on Ubuntu 18.
+    //
+    // g_assert_cmpint(gethostname(buf, -1),==,-1);
+    // assert_errno_is(EINVAL);
+    */
+
     let errno = gethostname_with_short_buffer();
     assert_eq!(errno, libc::ENAMETOOLONG);
 
