@@ -184,3 +184,7 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
 }
+
+SysCallReturn syscallhandler_fcntl64(SysCallHandler* sys, const SysCallArgs* args) {
+    return syscallhandler_fcntl(sys, args);
+}
