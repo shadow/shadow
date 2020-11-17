@@ -9,5 +9,6 @@
 #include "main/host/syscall/protected.h"
 
 SYSCALL_HANDLER(fcntl);
+SYSCALL_HANDLER(fcntl64);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_FCNTL_H_ */

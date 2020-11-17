@@ -68,6 +68,15 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
             break;
         }
 
+#if defined(F_GETLK64) && F_GETLK64 != F_GETLK
+        case F_GETLK64: {
+            struct flock64* flk =
+                process_getMutablePtr(sys->process, sys->thread, argReg.as_ptr, sizeof(*flk));
+            result = file_fcntl(file, command, (void*)flk);
+            break;
+        }
+#endif
+
         case F_SETLK:
 #ifdef F_OFD_SETLK
         case F_OFD_SETLK:
@@ -82,6 +91,21 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, File* file, int fd,
             result = file_fcntl(file, command, (void*)flk);
             break;
         }
+
+#if defined(F_SETLK64) && F_SETLK64 != F_SETLK
+        case F_SETLK64:
+#endif
+#if defined(F_SETLKW64) && F_SETLKW64 != F_SETLKW
+        case F_SETLKW64:
+#endif
+#if (defined(F_SETLK64) && F_SETLK64 != F_SETLK) || (defined(F_SETLKW64) && F_SETLKW64 != F_SETLKW)
+        {
+            const struct flock64* flk =
+                process_getReadablePtr(sys->process, sys->thread, argReg.as_ptr, sizeof(*flk));
+            result = file_fcntl(file, command, (void*)flk);
+            break;
+        }
+#endif
 
         case F_GETOWN_EX: {
             struct f_owner_ex* foe =
@@ -183,4 +207,11 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+}
+
+SysCallReturn syscallhandler_fcntl64(SysCallHandler* sys, const SysCallArgs* args) {
+    // Our fcntl supports the flock64 struct when any of the F_GETLK64, F_SETLK64, and F_SETLKW64
+    // commands are specified, so we can just use our fcntl handler directly.
+    debug("fcntl64 called, forwarding to fcntl handler");
+    return syscallhandler_fcntl(sys, args);
 }
