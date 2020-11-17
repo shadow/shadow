@@ -216,13 +216,13 @@ static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
     /* destroy packet, throwing away any bytes not claimed by the app */
     packet_unref(packet);
 
-    /* update the tracker output buffer stats */
+    /* update the tracker input buffer stats */
     Tracker* tracker = host_getTracker(worker_getActiveHost());
     Socket* socket = (Socket* )udp;
-    gsize outLength = socket_getOutputBufferLength(socket);
-    gsize outSize = socket_getOutputBufferSize(socket);
-    tracker_updateSocketOutputBuffer(
-        tracker, descriptor_getHandle((Descriptor*)udp), outLength, outSize);
+    gsize inLength = socket_getInputBufferLength(socket);
+    gsize inSize = socket_getInputBufferSize(socket);
+    tracker_updateSocketInputBuffer(
+        tracker, descriptor_getHandle((Descriptor*)udp), inLength, inSize);
 
     debug("user read %u inbound UDP bytes", bytesCopied);
 
