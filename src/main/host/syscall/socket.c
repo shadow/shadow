@@ -13,6 +13,7 @@
 #include <sys/types.h>
 
 #include "main/core/worker.h"
+#include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
@@ -1098,7 +1099,7 @@ SysCallReturn syscallhandler_shutdown(SysCallHandler* sys,
     int how = args->args[1].as_i64;
 
     debug("trying to shutdown on socket %i with how %i", sockfd, how);
-
+    
     if (how != SHUT_RD && how != SHUT_WR && how != SHUT_RDWR) {
         info("invalid how %i", how);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
@@ -1198,4 +1199,70 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     debug("socket() returning fd %i", sockfd);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = sockfd};
+}
+
+SysCallReturn syscallhandler_socketpair(SysCallHandler* sys,
+                                    const SysCallArgs* args) {
+    int domain = args->args[0].as_i64;
+    int type = args->args[1].as_i64;
+    int protocol = args->args[2].as_i64;
+    PluginPtr fdsPtr = args->args[3].as_ptr; // int [2]
+
+    debug("trying to create new socketpair");
+
+    /* Null pointer is invalid. */
+    if(!fdsPtr.val) {
+        debug("Null pointer is invalid.");
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
+    /* Only AF_UNIX (i.e., AF_LOCAL) is supported. */
+    if(domain != AF_UNIX) {
+        debug("Domain %d not supported", domain);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EAFNOSUPPORT};
+    }
+
+    /* Remove the two possible flags to get the type. */
+    int type_no_flags = type & ~(SOCK_NONBLOCK | SOCK_CLOEXEC);
+
+    /* The below are warnings so the Shadow user knows that we don't support
+     * everything that Linux supports. */
+    if (type_no_flags != SOCK_STREAM && type_no_flags != SOCK_DGRAM) {
+        warning("unsupported socket type \"%i\", we only support SOCK_STREAM and SOCK_DGRAM", type_no_flags);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
+    } else if (type_no_flags == SOCK_STREAM && protocol != 0 && protocol != IPPROTO_TCP) {
+        warning(
+            "unsupported socket protocol \"%i\", we only support IPPROTO_TCP on sockets of type SOCK_STREAM", protocol);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
+    } else if (type_no_flags == SOCK_DGRAM && protocol != 0 && protocol != IPPROTO_UDP) {
+        warning(
+            "unsupported socket protocol \"%i\", we only support IPPROTO_UDP on sockets of type SOCK_DGRAM", protocol);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
+    }
+
+    /* TODO: should we actually be running TCP/UDP internally (i.e., using already connected TCP/UDP sockets here) instead? */
+    Channel* socketA = channel_new(CT_NONE);
+    Channel* socketB = channel_new(CT_NONE);
+    channel_setLinkedChannel(socketA, socketB);
+    channel_setLinkedChannel(socketB, socketA);
+
+    /* Set any options that were given. */
+    if (type & SOCK_NONBLOCK) {
+        descriptor_addFlags((Descriptor*)socketA, O_NONBLOCK);
+        descriptor_addFlags((Descriptor*)socketB, O_NONBLOCK);
+    }
+    if (type & SOCK_CLOEXEC) {
+        descriptor_addFlags((Descriptor*)socketA, O_CLOEXEC);
+        descriptor_addFlags((Descriptor*)socketB, O_CLOEXEC);
+    }
+
+    /* Return the socket fds to the caller. */
+    int* sockfd = process_getWriteablePtr(sys->process, sys->thread, fdsPtr, 2*sizeof(int));
+
+    sockfd[0] = process_registerDescriptor(sys->process, (Descriptor*)socketA);
+    sockfd[1] = process_registerDescriptor(sys->process, (Descriptor*)socketB);
+
+    debug("Created socketpair with fd %i and fd %i", sockfd[0], sockfd[1]);
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }

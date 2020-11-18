@@ -21,6 +21,7 @@ SYSCALL_HANDLER(sendto);
 SYSCALL_HANDLER(setsockopt);
 SYSCALL_HANDLER(shutdown);
 SYSCALL_HANDLER(socket);
+SYSCALL_HANDLER(socketpair);
 
 /* Protected helper to allow read(sockfd) to redirect here. */
 SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
