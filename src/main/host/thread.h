@@ -107,7 +107,10 @@ int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, Plu
 
 // Sets the `clear_child_tid` attribute as for `set_tid_address(2)`. The thread
 // will perform a futex-wake operation on the given address on termination.
-void thread_setTidAddress(Thread* thread, PluginPtr addr);
+void thread_setTidAddress(Thread* thread, PluginVirtualPtr addr);
+
+// Gets the `clear_child_tid` attribute, as set by `thread_setTidAddress`.
+PluginVirtualPtr thread_getTidAddress(Thread* thread);
 
 // Returns whether the given thread is its thread group (aka process) leader.
 // Typically this is true for the first thread created in a process.

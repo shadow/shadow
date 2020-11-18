@@ -15,3 +15,5 @@ add_test(
     | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d pthreads.shadow-ptrace.data - \
     "
 )
+# need to check the test's return code, not just shadow's (see shadow/shadow#902)
+set_property(TEST pthreads-shadow-ptrace PROPERTY FAIL_REGULAR_EXPRESSION "main error code '.*' for process")

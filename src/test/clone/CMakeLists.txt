@@ -19,3 +19,5 @@ add_test(
     | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d clone.shadow_ptrace.data - \
     "
 )
+# need to check the test's return code, not just shadow's (see shadow/shadow#902)
+set_property(TEST clone-shadow-ptrace PROPERTY FAIL_REGULAR_EXPRESSION "main error code '.*' for process")

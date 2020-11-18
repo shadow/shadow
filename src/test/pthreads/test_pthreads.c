@@ -321,9 +321,6 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    // FIXME: re-enable these.
-    // https://github.com/shadow/shadow/issues/826
-#if 0
     pthread_t threads[NUM_THREADS];
 
     /* actually 3 tests */
@@ -344,5 +341,4 @@ int main(int argc, char* argv[]) {
 
     fprintf(stdout, "########## pthreads test passed! ##########\n");
     return 0;
-#endif
 }
