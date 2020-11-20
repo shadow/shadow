@@ -66,6 +66,13 @@ class BinarySpinningSem {
      */
     void wait(bool spin = true);
 
+    /*
+     * Atomically check if the semaphore is available (has value one). If
+     * so takes the semaphore (sets it back to zero) and returns 0. Otherwise
+     * returns -1 and sets errno to EAGAIN.
+     */
+    int trywait();
+
     BinarySpinningSem(const BinarySpinningSem &rhs) = delete;
     BinarySpinningSem &operator=(const BinarySpinningSem &rhs) = delete;
 

@@ -338,8 +338,12 @@ static gchar** _slave_generateEnvv(Slave* slave, InterposeMethod interposeMethod
         g_free(timestring);
     }
 
-    if (interposeMethod == INTERPOSE_PRELOAD) {
-        envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD", 0);
+    if (interposeMethod == INTERPOSE_PRELOAD_ONLY) {
+        envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD_ONLY", 0);
+    } else if (interposeMethod == INTERPOSE_PTRACE_ONLY) {
+        envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PTRACE_ONLY", 0);
+    } else if (interposeMethod == INTERPOSE_PRELOAD_PTRACE) {
+        envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD_PTRACE", 0);
     }
 
     /* insert also the plugin preload entry if one exists.

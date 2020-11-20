@@ -123,4 +123,7 @@ int common_get_connected_tcp_sockets(int* server_listener_fd_out, int* server_fd
     return EXIT_SUCCESS;
 }
 
-bool running_in_shadow() { return getenv("SHADOW_SPAWNED") != NULL; }
+bool running_in_shadow() {
+    // There is the same function in the Rust tests utils code
+    return getenv("SHADOW_SPAWNED") != NULL;
+}

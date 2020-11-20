@@ -11,8 +11,8 @@
 #include <unistd.h>
 
 #include "main/core/support/object_counter.h"
-#include "main/core/support/options.h"
 #include "main/core/worker.h"
+#include "main/host/shimipc.h"
 #include "main/host/thread_preload.h"
 #include "main/host/thread_protected.h"
 #include "main/shmem/shmem_allocator.h"
@@ -21,19 +21,6 @@
 #include "support/logger/logger.h"
 
 #define THREADPRELOAD_TYPE_ID 13357
-
-// We use an int here because the option parsing library doesn't provide a way
-// to set a boolean flag to false explicitly.
-static gint _sendExplicitBlockMessage = true;
-OPTION_EXPERIMENTAL_ENTRY(
-    "send-explicit-block-message", 0, 0, G_OPTION_ARG_INT, &_sendExplicitBlockMessage,
-    "Send message to plugin telling it to stop spinning when a syscall blocks", "[0|1]")
-
-static gint _spinMax = 8096;
-OPTION_EXPERIMENTAL_ENTRY("preload-spin-max", 0, 0, G_OPTION_ARG_INT, &_spinMax,
-                          "Max number of iterations to busy-wait on ICP sempahore before blocking. "
-                          "-1 for unlimited. [8096]",
-                          "N")
 
 struct _ThreadPreload {
     Thread base;
@@ -195,7 +182,7 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
 
     thread->ipc_blk = shmemallocator_globalAlloc(ipcData_nbytes());
     utility_assert(thread->ipc_blk.p);
-    ipcData_init(thread->ipc_blk.p, _spinMax);
+    ipcData_init(thread->ipc_blk.p, shimipc_spinMax());
 
     ShMemBlockSerialized ipc_blk_serial =
         shmemallocator_globalBlockSerialize(&thread->ipc_blk);
@@ -204,7 +191,7 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
     shmemblockserialized_toString(&ipc_blk_serial, ipc_blk_buf);
 
     /* append to the env */
-    myenvv = g_environ_setenv(myenvv, "_SHD_IPC_BLK", ipc_blk_buf, TRUE);
+    myenvv = g_environ_setenv(myenvv, "SHADOW_IPC_BLK", ipc_blk_buf, TRUE);
 
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr(argv);
@@ -280,7 +267,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                     &thread->currentEvent.event_data.syscall.syscall_args);
 
                 if (result.state == SYSCALL_BLOCK) {
-                    if (_sendExplicitBlockMessage) {
+                    if (shimipc_sendExplicitBlockMessageEnabled()) {
                         debug("Sending block message to plugin");
                         // thread is blocked on simulation progress. Tell it to
                         // stop spinning so that releases its CPU core for the next

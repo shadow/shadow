@@ -212,6 +212,11 @@ SysCallCondition* thread_getSysCallCondition(Thread* thread) {
     return thread->cond;
 }
 
+PluginVirtualPtr thread_getTidAddress(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    return thread->tidAddress;
+}
+
 void thread_setTidAddress(Thread* thread, PluginPtr addr) {
     MAGIC_ASSERT(thread);
     thread->tidAddress = addr;

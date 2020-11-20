@@ -2280,6 +2280,17 @@ static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
     gsize offset = 0;
     gsize copyLength = 0;
 
+    if ((socket_getInputBufferLength(&tcp->super) == 0) && (tcp->partialUserDataPacket == NULL) &&
+        !(tcp->error & TCPE_RECEIVE_EOF)) {
+        // there is no data, and we have not received an EOF
+        return -EWOULDBLOCK;
+    }
+
+    if (buffer == NULL && nBytes > 0) {
+        info("Can't recv >0 bytes into NULL buffer on socket");
+        return -EFAULT;
+    }
+
     /* check if we have a partial packet waiting to get finished */
     if(remaining > 0 && tcp->partialUserDataPacket) {
         guint partialLength = packet_getPayloadLength(tcp->partialUserDataPacket);
@@ -2338,10 +2349,13 @@ static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
         packet_unref(packet);
     }
 
+    bool more_readable_data = false;
+
     /* now we update readability of the socket */
     if((socket_getInputBufferLength(&(tcp->super)) > 0) || (tcp->partialUserDataPacket != NULL)) {
         /* we still have readable data */
         descriptor_adjustStatus(&(tcp->super.super.super), STATUS_DESCRIPTOR_READABLE, TRUE);
+        more_readable_data = true;
     } else {
         /* all of our ordered user data has been read */
         if((tcp->unorderedInputLength == 0) && (tcp->error & TCPE_RECEIVE_EOF)) {
@@ -2391,9 +2405,16 @@ static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
         tcp->receive.windowUpdatePending = TRUE;
     }
 
-    debug("%s <-> %s: receiving %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, totalCopied);
+    debug("%s <-> %s: receiving %" G_GSIZE_FORMAT " user bytes", tcp->super.boundString,
+          tcp->super.peerString, totalCopied);
 
-    return (gssize)(totalCopied == 0 ? -EWOULDBLOCK : totalCopied);
+    // only return EWOULDBLOCK if no bytes were copied, and either we requested bytes or there is no
+    // more data to read
+    if (totalCopied == 0 && (nBytes != 0 || !more_readable_data)) {
+        return -EWOULDBLOCK;
+    }
+
+    return totalCopied;
 }
 
 static void _tcp_free(Descriptor* descriptor) {

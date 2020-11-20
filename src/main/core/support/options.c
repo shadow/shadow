@@ -100,23 +100,19 @@ Options* options_new(gint argc, gchar* argv[]) {
          "Exit after running shared memory cleanup routine.", NULL},
         {"data-directory", 'd', 0, G_OPTION_ARG_STRING, &(options->dataDirPath),
          "PATH to store simulation output ['shadow.data']", "PATH"},
-        {"data-template", 'e', 0, G_OPTION_ARG_STRING,
-         &(options->dataTemplatePath),
+        {"data-template", 'e', 0, G_OPTION_ARG_STRING, &(options->dataTemplatePath),
          "PATH to recursively copy during startup and use as the "
          "data-directory ['shadow.data.template']",
          "PATH"},
         {"gdb", 'g', 0, G_OPTION_ARG_NONE, &(options->debug),
          "Pause at startup for debugger attachment", NULL},
-        {"heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT,
-         &(options->heartbeatInterval),
+        {"heartbeat-frequency", 'h', 0, G_OPTION_ARG_INT, &(options->heartbeatInterval),
          "Log node statistics every N seconds [1]", "N"},
-        {"heartbeat-log-info", 'i', 0, G_OPTION_ARG_STRING,
-         &(options->heartbeatLogInfo),
+        {"heartbeat-log-info", 'i', 0, G_OPTION_ARG_STRING, &(options->heartbeatLogInfo),
          "Comma separated list of information contained in heartbeat "
          "('node','socket','ram') ['node']",
          "LIST"},
-        {"heartbeat-log-level", 'j', 0, G_OPTION_ARG_STRING,
-         &(options->heartbeatLogLevelInput),
+        {"heartbeat-log-level", 'j', 0, G_OPTION_ARG_STRING, &(options->heartbeatLogLevelInput),
          "Log LEVEL at which to print node statistics ['message']", "LEVEL"},
         {"log-level", 'l', 0, G_OPTION_ARG_STRING, &(options->logLevelInput),
          "Log LEVEL above which to filter messages ('error' < 'critical' < "
@@ -132,13 +128,12 @@ Options* options_new(gint argc, gchar* argv[]) {
          "TIME"},
         {"seed", 's', 0, G_OPTION_ARG_INT, &(options->randomSeed),
          "Initialize randomness for each thread using seed N [1]", "N"},
-        {"scheduler-policy", 't', 0, G_OPTION_ARG_STRING,
-         &(options->eventSchedulingPolicy),
+        {"scheduler-policy", 't', 0, G_OPTION_ARG_STRING, &(options->eventSchedulingPolicy),
          "The event scheduler's policy for thread synchronization ('thread', "
          "'host', 'steal', 'threadXthread', 'threadXhost') ['steal']",
          "SPOL"},
         {"interpose-method", 'n', 0, G_OPTION_ARG_STRING, &(options->interposeMethod),
-         "Which interposition method to use ('preload', 'ptrace')", "METHOD"},
+         "Which interposition method to use ('preload-ptrace', 'preload', 'ptrace')", "METHOD"},
         {"workers", 'w', 0, G_OPTION_ARG_INT, &(options->nWorkerThreads),
          "Run concurrently with N worker threads [0]", "N"},
         {"valgrind", 'x', 0, G_OPTION_ARG_NONE, &(options->runValgrind),
@@ -383,10 +378,14 @@ gchar* options_getEventSchedulerPolicy(Options* options) {
 InterposeMethod options_getInterposeMethod(Options* options) {
     MAGIC_ASSERT(options);
     if (!g_ascii_strcasecmp(options->interposeMethod, "preload")) {
-        return INTERPOSE_PRELOAD;
+        return INTERPOSE_PRELOAD_ONLY;
     }
+    // TODO: Change this to "preload-ptrace"
     if (!g_ascii_strcasecmp(options->interposeMethod, "ptrace")) {
-        return INTERPOSE_PTRACE;
+        return INTERPOSE_PRELOAD_PTRACE;
+    }
+    if (!g_ascii_strcasecmp(options->interposeMethod, "ptrace-only")) {
+        return INTERPOSE_PTRACE_ONLY;
     }
     error("Unrecognized interposeMethod %s", options->interposeMethod);
     return INTERPOSE_NONE;

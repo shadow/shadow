@@ -32,6 +32,7 @@ fn bindgen_test_layout__PluginPtr() {
         )
     );
 }
+pub type PluginVirtualPtr = _PluginPtr;
 pub type PluginPtr = _PluginPtr;
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -292,7 +293,10 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn thread_setTidAddress(thread: *mut Thread, addr: PluginPtr);
+    pub fn thread_setTidAddress(thread: *mut Thread, addr: PluginVirtualPtr);
+}
+extern "C" {
+    pub fn thread_getTidAddress(thread: *mut Thread) -> PluginVirtualPtr;
 }
 extern "C" {
     pub fn thread_isLeader(thread: *mut Thread) -> bool;

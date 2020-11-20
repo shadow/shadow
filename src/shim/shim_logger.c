@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/param.h>
 #include <sys/time.h>
 #include <time.h>
@@ -62,12 +63,22 @@ void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const ch
     offset = MIN(offset, sizeof(buf));
 
     offset += vsnprintf(&buf[offset], sizeof(buf) - offset, format, vargs);
-    offset = MIN(offset, sizeof(buf));
+    offset = MIN(offset, sizeof(buf) - 1); // Leave room for newline.
+    buf[offset++] = '\n';
 
-    fprintf(logger->file, "%s\n", buf);
+    // We avoid locked IO here, since it can result in deadlock if Shadow
+    // forcibly stops this thread while that lock is still held. Interleaved
+    // writes shouldn't be a problem since Shadow only allows one plugin thread
+    // at a time to execute, and doesn't switch threads on file syscalls.
+    //
+    // This could be reverted to a normal `fwrite` if we end up having Shadow
+    // emulate syscalls inside the shim, since then Shadow would correctly
+    // block a thread on the fwrite-lock (if it's locked) and switch to one
+    // that's runnable.
+    fwrite_unlocked(buf, 1, offset, logger->file);
 
 #ifdef DEBUG
-    fflush(logger->file);
+    fflush_unlocked(logger->file);
 #endif
     shim_enableInterposition();
     in_logger = false;

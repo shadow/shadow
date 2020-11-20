@@ -3,6 +3,8 @@
  * See LICENSE for licensing information
  */
 
+#include <glib.h>
+#include <linux/futex.h>
 #include <sched.h>
 #include <signal.h>
 #include <stdalign.h>
@@ -15,7 +17,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <glib.h>
+#include "test/test_glib_helpers.h"
 
 #define CLONE_TEST_STACK_NBYTES (4*4096)
 
@@ -73,6 +75,34 @@ static void _clone_minimal() {
     free(stack);
 }
 
+// _clone_testCloneTids calls this upon cloning
+static int _testCloneClearTidThread(void* args) {
+    // Try to give parent a chance to sleep on the tid futex.
+    usleep(1000);
+
+    _exit_thread(0);
+}
+
+static void _testCloneClearTid() {
+    // allocate some memory for the cloned thread.
+    uint8_t* stack = calloc(CLONE_TEST_STACK_NBYTES, 1);
+
+    // clone takes the "starting" address of the stack, which is the *top*.
+    uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
+
+    pid_t ctid = -1;
+    pid_t tid = clone(_testCloneClearTidThread, stack_top, CLONE_FLAGS | CLONE_CHILD_CLEARTID, NULL,
+                      NULL, NULL, &ctid);
+    assert_nonneg_errno(tid);
+
+    // This *could* return -1 with errno=EAGAIN if the child has already exited.
+    // If that happens, we should increase the sleep inside the child thread.
+    assert_nonneg_errno(syscall(SYS_futex, &ctid, FUTEX_WAIT, -1, NULL, NULL, 0));
+    g_assert_cmpint(ctid, ==, 0);
+
+    free(stack);
+}
+
 static volatile int _clone_child_exits_after_leader_acc = 0;
 
 static int _clone_child_exits_after_leader_thread(void* args) {
@@ -114,6 +144,7 @@ int main(int argc, char** argv) {
     g_test_init(&argc, &argv, NULL);
 
     g_test_add("/clone/clone_minimal", void, NULL, NULL, _clone_minimal, NULL);
+    g_test_add("/clone/test_clone_clear_tid", void, NULL, NULL, _testCloneClearTid, NULL);
     // FIXME: currently hangs under shadow. The exit_group sycall is executed
     // natively from the thread leader, which does cause all threads to exit.
     // However, the corresponding Shadow Thread object remains blocked by its

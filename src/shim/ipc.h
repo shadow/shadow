@@ -29,6 +29,13 @@ void shimevent_sendEventToPlugin(struct IPCData *data, const ShimEvent* e);
 void shimevent_recvEventFromShadow(struct IPCData* data, ShimEvent* e, bool spin);
 void shimevent_recvEventFromPlugin(struct IPCData *data, ShimEvent* e);
 
+/*
+ * If a message is ready, sets *e to it and returns 0. Otherwise returns -1
+ * and sets errno to EAGAIN.
+ */
+int shimevent_tryRecvEventFromShadow(struct IPCData* data, ShimEvent* e);
+int shimevent_tryRecvEventFromPlugin(struct IPCData* data, ShimEvent* e);
+
 #ifdef __cplusplus
 }
 #endif

@@ -89,11 +89,9 @@ static void _udp_processPacket(Socket* socket, Packet* packet) {
     UDP* udp = _udp_fromDescriptor((Descriptor*)socket);
     MAGIC_ASSERT(udp);
 
-    /* UDP packet contains data for user and can be buffered immediately */
-    if(packet_getPayloadLength(packet) > 0) {
-        if(!socket_addToInputBuffer((Socket*)udp, packet)) {
-            packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
-        }
+    /* UDP packet can be buffered immediately */
+    if (!socket_addToInputBuffer((Socket*)udp, packet)) {
+        packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
     }
 }
 
@@ -114,70 +112,62 @@ static gssize _udp_sendUserData(Transport* transport, gconstpointer buffer,
     UDP* udp = _udp_fromDescriptor((Descriptor*)transport);
     MAGIC_ASSERT(udp);
 
+    const gsize maxPacketLength = CONFIG_DATAGRAM_MAX_SIZE;
+    if (nBytes > maxPacketLength) {
+        return -EMSGSIZE;
+    }
+
     gsize space = socket_getOutputBufferSpace(&(udp->super));
     if(space < nBytes) {
         /* not enough space to buffer the data */
         return -EWOULDBLOCK;
     }
 
-    /* break data into segments and send each in a packet */
-    gsize maxPacketLength = CONFIG_DATAGRAM_MAX_SIZE;
-    gsize remaining = nBytes;
-    gsize offset = 0;
+    /* use default destination if none was specified */
+    in_addr_t destinationIP = (ip != 0) ? ip : udp->super.peerIP;
+    in_port_t destinationPort = (port != 0) ? port : udp->super.peerPort;
 
-    /* create as many packets as needed */
-    while(remaining > 0) {
-        gsize copyLength = MIN(maxPacketLength, remaining);
+    in_addr_t sourceIP = 0;
+    in_port_t sourcePort = 0;
+    socket_getSocketName(&(udp->super), &sourceIP, &sourcePort);
 
-        /* use default destination if none was specified */
-        in_addr_t destinationIP = (ip != 0) ? ip : udp->super.peerIP;
-        in_port_t destinationPort = (port != 0) ? port : udp->super.peerPort;
-
-        in_addr_t sourceIP = 0;
-        in_port_t sourcePort = 0;
-        socket_getSocketName(&(udp->super), &sourceIP, &sourcePort);
-
-        if(sourceIP == htonl(INADDR_ANY)) {
-            /* source interface depends on destination */
-            if(destinationIP == htonl(INADDR_LOOPBACK)) {
-                sourceIP = htonl(INADDR_LOOPBACK);
-            } else {
-                sourceIP = host_getDefaultIP(worker_getActiveHost());
-            }
-        }
-
-        utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
-
-        /* create the UDP packet */
-        Host* host = worker_getActiveHost();
-        Packet* packet = packet_new(buffer + offset, copyLength, (guint)host_getID(host), host_getNewPacketID(host));
-        packet_setUDP(packet, PUDP_NONE, sourceIP, sourcePort, destinationIP, destinationPort);
-        packet_addDeliveryStatus(packet, PDS_SND_CREATED);
-
-        /* buffer it in the transport layer, to be sent out when possible */
-        gboolean success = socket_addToOutputBuffer((Socket*) udp, packet);
-
-        /* counter maintenance */
-        if(success) {
-            remaining -= copyLength;
-            offset += copyLength;
+    if (sourceIP == htonl(INADDR_ANY)) {
+        /* source interface depends on destination */
+        if (destinationIP == htonl(INADDR_LOOPBACK)) {
+            sourceIP = htonl(INADDR_LOOPBACK);
         } else {
-            warning("unable to send UDP packet");
-            break;
+            sourceIP = host_getDefaultIP(worker_getActiveHost());
         }
     }
 
-    /* update the tracker output buffer stats */
-    Tracker* tracker = host_getTracker(worker_getActiveHost());
-    Socket* socket = (Socket* )udp;
-    gsize outLength = socket_getOutputBufferLength(socket);
-    gsize outSize = socket_getOutputBufferSize(socket);
-    tracker_updateSocketOutputBuffer(
-        tracker, descriptor_getHandle((Descriptor*)udp), outLength, outSize);
+    utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
 
-    debug("buffered %"G_GSIZE_FORMAT" outbound UDP bytes from user", offset);
+    /* create the UDP packet */
+    Host* host = worker_getActiveHost();
+    Packet* packet =
+        packet_new(buffer, nBytes, (guint)host_getID(host), host_getNewPacketID(host));
+    packet_setUDP(packet, PUDP_NONE, sourceIP, sourcePort, destinationIP, destinationPort);
+    packet_addDeliveryStatus(packet, PDS_SND_CREATED);
 
-    return offset > 0 ? (gssize)offset : -EWOULDBLOCK;
+    /* buffer it in the transport layer, to be sent out when possible */
+    gboolean success = socket_addToOutputBuffer((Socket*)udp, packet);
+
+    gsize bytes_sent = 0;
+    /* counter maintenance */
+    if (success) {
+        bytes_sent = nBytes;
+    } else {
+        warning("unable to send UDP packet");
+    }
+
+    debug("buffered %"G_GSIZE_FORMAT" outbound UDP bytes from user", bytes_sent);
+
+    // return EWOULDBLOCK only if no bytes were sent, and we were requested to send >0 bytes
+    if(bytes_sent == 0 && nBytes > 0) {
+        return -EWOULDBLOCK;
+    }
+
+    return bytes_sent;
 }
 
 static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
@@ -185,6 +175,14 @@ static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
                                    in_port_t* port) {
     UDP* udp = _udp_fromDescriptor((Descriptor*)transport);
     MAGIC_ASSERT(udp);
+
+    if (socket_peekNextInPacket(&(udp->super)) == NULL) {
+        return -EWOULDBLOCK;
+    }
+
+    if (buffer == NULL && nBytes > 0) {
+        return -EFAULT;
+    }
 
     Packet* packet = socket_removeFromInputBuffer((Socket*)udp);
     if(!packet) {
@@ -210,17 +208,9 @@ static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
     /* destroy packet, throwing away any bytes not claimed by the app */
     packet_unref(packet);
 
-    /* update the tracker output buffer stats */
-    Tracker* tracker = host_getTracker(worker_getActiveHost());
-    Socket* socket = (Socket* )udp;
-    gsize outLength = socket_getOutputBufferLength(socket);
-    gsize outSize = socket_getOutputBufferSize(socket);
-    tracker_updateSocketOutputBuffer(
-        tracker, descriptor_getHandle((Descriptor*)udp), outLength, outSize);
-
     debug("user read %u inbound UDP bytes", bytesCopied);
 
-    return bytesCopied > 0 ? (gssize)bytesCopied : EWOULDBLOCK;
+    return bytesCopied;
 }
 
 static void _udp_free(Descriptor* descriptor) {
