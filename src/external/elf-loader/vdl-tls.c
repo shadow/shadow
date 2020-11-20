@@ -713,6 +713,43 @@ vdl_tls_swap_file (void **data, void *aux)
   return 0;
 }
 
+static void *
+vdl_tls_copy_file (void **data, void *aux)
+{
+    struct VdlFile *file = *data;
+    struct SwapArgs *args = aux;
+
+    if (!file->has_tls)
+    {
+        return 0;
+    }
+
+    if (file->tls_is_static)
+    {
+        // the TLS is static for this file, so we must swap the contents directly
+        unsigned long tls_size = file->tls_tmpl_size + file->tls_init_zero_size;
+        void *static_tls1 = (void *) args->t1 + file->tls_offset;
+        void *static_tls2 = (void *) args->t2 + file->tls_offset;
+//        unsigned char tmp_tls[tls_size];
+//        vdl_memcpy (tmp_tls, static_tls1, tls_size);
+//        vdl_memcpy (static_tls1, static_tls2, tls_size);
+//        vdl_memcpy (static_tls2, tmp_tls, tls_size);
+        vdl_memcpy (static_tls2, static_tls1, tls_size);
+        return 0;
+    }
+    int module;
+    // make sure we're not trying to swap the gen counter
+    if ((module = file->tls_index) > 0)
+    {
+        dtv_t tmp_dtv = args->dtv1[module];
+        args->dtv1[module] = args->dtv2[module];
+        args->dtv2[module] = tmp_dtv;
+        // we don't need to swap the shadow dtvs because we should only be
+        // swapping after an update, so metadata it stores should be the same
+    }
+    return 0;
+}
+
 void
 vdl_tls_swap_context (struct VdlContext *context, unsigned long t1, unsigned long t2)
 {
@@ -731,4 +768,24 @@ vdl_tls_swap_context (struct VdlContext *context, unsigned long t1, unsigned lon
   args.dtv2 = dtv2;
   vdl_list_search_on (context->loaded, &args, vdl_tls_swap_file);
   write_unlock (g_vdl.tls_lock);
+}
+
+void
+vdl_tls_copy_context (struct VdlContext *context, unsigned long t1, unsigned long t2)
+{
+    write_lock (g_vdl.tls_lock);
+    dtv_t *dtv1 = get_current_dtv (t1);
+    dtv_t *dtv2 = get_current_dtv (t2);
+    // make sure we're not copying from/to uninitialized/unallocated memory
+    vdl_tls_dtv_update_given (t1, dtv1);
+    vdl_tls_dtv_update_given (t2, dtv2);
+    dtv1 = get_current_dtv (t1);
+    dtv2 = get_current_dtv (t2);
+    struct SwapArgs args;
+    args.t1 = t1;
+    args.t2 = t2;
+    args.dtv1 = dtv1;
+    args.dtv2 = dtv2;
+    vdl_list_search_on (context->loaded, &args, vdl_tls_copy_file);
+    write_unlock (g_vdl.tls_lock);
 }

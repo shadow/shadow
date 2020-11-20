@@ -40,7 +40,7 @@ int vdl_dl_lmid_add_symbol_remap (Lmid_t lmid,
                                   const char *dst_ver_name,
                                   const char *dst_ver_filename);
 int vdl_dl_lmid_swap_tls (Lmid_t lmid, pthread_t *t1, pthread_t *t2);
-
+int vdl_dl_lmid_copy_tls (Lmid_t lmid, pthread_t *t1, pthread_t *t2);
 // This function is special: it is not called from ldso: it is
 // used by vdl itself as the target of a redirection from every call to
 // dl_iterate_phdr
