@@ -136,6 +136,40 @@ guint process_getProcessID(Process* proc) {
 
 static void _process_reapThread(Process* process, Thread* thread) {
     thread_terminate(thread);
+
+    // If the `clear_child_tid` attribute on the thread is set, perform a futex
+    // wake on that address. This mechanism is typically used in `pthread_join`
+    // etc.  See `set_tid_address(2)`.
+    PluginVirtualPtr clear_child_tid_pvp = thread_getTidAddress(thread);
+    if (clear_child_tid_pvp.val) {
+        pid_t* clear_child_tid =
+            process_getWriteablePtr(process, thread, clear_child_tid_pvp, sizeof(pid_t*));
+        if (!clear_child_tid) {
+            // We *might* end up getting here (or failing even earlier) if we end up having to use
+            // thread_getWriteablePtr (i.e. because the address isn't shared in the
+            // MemoryManager), since the native thread (and maybe the whole
+            // process) is no longer alive. If so, the most straightforward
+            // fix might be to extend the MemoryManager to include the region
+            // containing the tid pointer in this case.
+            //
+            // Alternatively we could try to use a still-living thread (if any)
+            // to do the memory write, and just skip if there are no more
+            // living threads in the process. Probably better to avoid that
+            // complexity if we can, though.
+            error("Couldn't clear child tid; See code comments.");
+            abort();
+        }
+        *clear_child_tid = 0;
+
+        FutexTable* ftable = host_getFutexTable(process->host);
+        utility_assert(ftable);
+        Futex* futex =
+            futextable_get(ftable, process_getPhysicalAddress(process, clear_child_tid_pvp));
+        if (futex) {
+            futex_wake(futex, 1);
+        }
+    }
+
     if (thread_isLeader(thread)) {
         // If the main thread has exited, grab its return code to be used as
         // the process return code.  The main thread exiting doesn't
