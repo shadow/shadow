@@ -4,18 +4,20 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// We use this to get some type safety for pointers in the plugin's address
-// space. In particular we want to avoid dereferencing them directly.
-struct _PluginPtr {
+// A virtual address in the plugin's address space
+typedef struct _PluginVirtualPtr PluginVirtualPtr;
+// Deprecated; use PluginVirtualPtr instead
+typedef struct _PluginVirtualPtr PluginPtr;
+// A physical address that should be unique to the machine
+typedef struct _PluginPhysicalPtr PluginPhysicalPtr;
+
+struct _PluginVirtualPtr {
     uint64_t val;
 };
 
-// A virtual address in the plugin's address space
-typedef struct _PluginPtr PluginVirtualPtr;
-// Deprecated; use PluginVirtualPtr instead
-typedef struct _PluginPtr PluginPtr;
-// A phyiscal address that should be unique to the machine
-typedef struct _PluginPtr PluginPhysicalPtr;
+struct _PluginPhysicalPtr {
+    uint64_t val;
+};
 
 // A register used for input/output in a syscall.
 typedef union _SysCallReg {
