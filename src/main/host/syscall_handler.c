@@ -216,6 +216,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(fchown);
         HANDLE(fchownat);
         HANDLE(fcntl);
+#ifdef SYS_fcntl64
+        HANDLE(fcntl64);
+#endif
         HANDLE(fdatasync);
         HANDLE(fgetxattr);
         HANDLE(flistxattr);
@@ -320,9 +323,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(dup);
         NATIVE(dup2);
         NATIVE(dup3);
-#ifdef SYS_fcntl64
-        NATIVE(fcntl64);
-#endif
         NATIVE(poll);
         NATIVE(ppoll);
         NATIVE(select);

@@ -165,13 +165,18 @@ Packet* socket_pullOutPacket(Socket* socket) {
     return socket_removeFromOutputBuffer(socket);
 }
 
-Packet* socket_peekNextPacket(const Socket* socket) {
+Packet* socket_peekNextOutPacket(const Socket* socket) {
     MAGIC_ASSERT(socket);
     if(!g_queue_is_empty(socket->outputControlBuffer)) {
         return g_queue_peek_head(socket->outputControlBuffer);
     } else {
         return g_queue_peek_head(socket->outputBuffer);
     }
+}
+
+Packet* socket_peekNextInPacket(const Socket* socket) {
+    MAGIC_ASSERT(socket);
+    return g_queue_peek_head(socket->inputBuffer);
 }
 
 gboolean socket_getPeerName(Socket* socket, in_addr_t* ip, in_port_t* port) {

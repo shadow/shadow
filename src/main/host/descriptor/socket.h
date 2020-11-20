@@ -84,7 +84,8 @@ void socket_init(Socket* socket, SocketFunctionTable* vtable,
 void socket_pushInPacket(Socket* socket, Packet* packet);
 void socket_dropPacket(Socket* socket, Packet* packet);
 Packet* socket_pullOutPacket(Socket* socket);
-Packet* socket_peekNextPacket(const Socket* socket);
+Packet* socket_peekNextOutPacket(const Socket* socket);
+Packet* socket_peekNextInPacket(const Socket* socket);
 
 gsize socket_getInputBufferSize(Socket* socket);
 void socket_setInputBufferSize(Socket* socket, gsize newSize);
