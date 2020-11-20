@@ -331,9 +331,11 @@ static void _process_start(Process* proc) {
     // tid of first thread of a process is equal to the pid.
     int tid = proc->processID;
     Thread* mainThread = NULL;
-    if (proc->interposeMethod == INTERPOSE_PTRACE) {
+    if (proc->interposeMethod == INTERPOSE_PRELOAD_PTRACE) {
         mainThread = threadptrace_new(proc->host, proc, tid);
-    } else if (proc->interposeMethod == INTERPOSE_PRELOAD) {
+    } else if (proc->interposeMethod == INTERPOSE_PTRACE_ONLY) {
+        mainThread = threadptraceonly_new(proc->host, proc, tid);
+    } else if (proc->interposeMethod == INTERPOSE_PRELOAD_ONLY) {
         mainThread = threadpreload_new(proc->host, proc, tid);
     } else {
         error("Bad interposeMethod %d", proc->interposeMethod);
@@ -485,7 +487,8 @@ void process_schedule(Process* proc, gpointer nothing) {
 void process_detachPlugin(gpointer procptr, gpointer nothing) {
     Process* proc = procptr;
     MAGIC_ASSERT(proc);
-    if (proc->interposeMethod == INTERPOSE_PTRACE) {
+    if (proc->interposeMethod == INTERPOSE_PRELOAD_PTRACE ||
+        proc->interposeMethod == INTERPOSE_PTRACE_ONLY) {
         GHashTableIter iter;
         g_hash_table_iter_init(&iter, proc->threads);
         gpointer key, value;
@@ -652,8 +655,11 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
 
 const void* process_getReadablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-    utility_assert(proc->memoryManager);
-    return memorymanager_getReadablePtr(proc->memoryManager, thread, plugin_src, n);
+    if (proc->memoryManager) {
+        return memorymanager_getReadablePtr(proc->memoryManager, thread, plugin_src, n);
+    } else {
+        return thread_getReadablePtr(thread, plugin_src, n);
+    }
 }
 
 // Returns a writable pointer corresponding to the named region. The initial
@@ -662,8 +668,11 @@ const void* process_getReadablePtr(Process* proc, Thread* thread, PluginPtr plug
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getWriteablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-    utility_assert(proc->memoryManager);
-    return memorymanager_getWriteablePtr(proc->memoryManager, thread, plugin_src, n);
+    if (proc->memoryManager) {
+        return memorymanager_getWriteablePtr(proc->memoryManager, thread, plugin_src, n);
+    } else {
+        return thread_getWriteablePtr(thread, plugin_src, n);
+    }
 }
 
 // Returns a writeable pointer corresponding to the specified src. Use when
@@ -672,8 +681,11 @@ void* process_getWriteablePtr(Process* proc, Thread* thread, PluginPtr plugin_sr
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getMutablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-    utility_assert(proc->memoryManager);
-    return memorymanager_getMutablePtr(proc->memoryManager, thread, plugin_src, n);
+    if (proc->memoryManager) {
+        return memorymanager_getMutablePtr(proc->memoryManager, thread, plugin_src, n);
+    } else {
+        return thread_getMutablePtr(thread, plugin_src, n);
+    }
 }
 
 // Flushes and invalidates all previously returned readable/writeable plugin

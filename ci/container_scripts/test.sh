@@ -20,8 +20,24 @@ else
     CONFIG=""
 fi
 
+# Array of flags to be passed on to setup script
+FLAGS=()
 
-# Try rerunning failed tests once.
+# Run as many tests in parallel as we have cores.
+FLAGS+=("-j$(nproc)")
+
+# Following flags passed through to ctest
+FLAGS+=("--")
+
+# We exclude some tests in some configurations.
+FLAGS+=("-E" "$EXCLUDE")
+
+# Pass through an optional config-name, which can enable more tests
+FLAGS+=("-C" "$CONFIG")
+
+FLAGS+=("--output-on-failure")
+
+# Try any that failed once more.
 # TODO: We should only do this for an allowed-list of known-flaky tests,
 # and there should be issues filed for each such test.
-./setup test -j4 -- -E "$EXCLUDE" -C "$CONFIG" --output-on-failure || ./setup test -j4 -- -E "$EXCLUDE" -C "$CONFIG" --output-on-failure --rerun-failed
+./setup test "${FLAGS[@]}" || ./setup test "${FLAGS[@]}" --rerun-failed
