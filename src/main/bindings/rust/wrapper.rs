@@ -4,36 +4,36 @@ pub type __uint32_t = ::std::os::raw::c_uint;
 pub type __int64_t = ::std::os::raw::c_long;
 pub type __uint64_t = ::std::os::raw::c_ulong;
 pub type __pid_t = ::std::os::raw::c_int;
+pub type PluginVirtualPtr = _PluginVirtualPtr;
+pub type PluginPtr = _PluginVirtualPtr;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _PluginPtr {
+pub struct _PluginVirtualPtr {
     pub val: u64,
 }
 #[test]
-fn bindgen_test_layout__PluginPtr() {
+fn bindgen_test_layout__PluginVirtualPtr() {
     assert_eq!(
-        ::std::mem::size_of::<_PluginPtr>(),
+        ::std::mem::size_of::<_PluginVirtualPtr>(),
         8usize,
-        concat!("Size of: ", stringify!(_PluginPtr))
+        concat!("Size of: ", stringify!(_PluginVirtualPtr))
     );
     assert_eq!(
-        ::std::mem::align_of::<_PluginPtr>(),
+        ::std::mem::align_of::<_PluginVirtualPtr>(),
         8usize,
-        concat!("Alignment of ", stringify!(_PluginPtr))
+        concat!("Alignment of ", stringify!(_PluginVirtualPtr))
     );
     assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_PluginPtr>())).val as *const _ as usize },
+        unsafe { &(*(::std::ptr::null::<_PluginVirtualPtr>())).val as *const _ as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(_PluginPtr),
+            stringify!(_PluginVirtualPtr),
             "::",
             stringify!(val)
         )
     );
 }
-pub type PluginVirtualPtr = _PluginPtr;
-pub type PluginPtr = _PluginPtr;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union _SysCallReg {
