@@ -297,16 +297,21 @@ void _buffer_threads_add (Process * proc, pth_t * pth_thread, pthread_t buffer_p
  * If the corresponding pth thread is not already registered, createa corresponding
  * buffer thread and add it to the buffer_threads struct.
  * */
-void swap_tls(Process* proc, pth_t * thread, int flag) {
+void copy_tls(Process* proc, pth_t * thread, int flag) {
     buffer_threads * buf;
     for (buf = proc->buf_threads; buf!=NULL; buf = buf->next) {
-        if (*(buf->pth_thread) == *thread) {
+        if ((buf->pth_thread != NULL) && (*(buf->pth_thread)  == NULL))
+        {
+            buf->pth_thread = NULL;
+            continue;
+        }
+        if ((buf->pth_thread != NULL) && (*(buf->pth_thread) == *thread)) {
             //do_something
             pthread_t pthread = pthread_self();
             if (flag)
-                dl_lmid_swap_tls(proc->lmid, &pthread, &(buf->buffer_pthread));
+                dl_lmid_copy_tls(proc->lmid, &pthread, &(buf->buffer_pthread));
             else
-                dl_lmid_swap_tls(proc->lmid, &(buf->buffer_pthread), &pthread);
+                dl_lmid_copy_tls(proc->lmid, &(buf->buffer_pthread), &pthread);
             return;
         }
     }
@@ -317,7 +322,7 @@ void swap_tls(Process* proc, pth_t * thread, int flag) {
     }
     pthread_setname_np(buf_thread_aux, "aux_thread_helper");
     _buffer_threads_add(proc, thread, buf_thread_aux);
-    swap_tls(proc, thread, flag);
+    copy_tls(proc, thread, flag);
 }
 
 void clean_up_buffer_threads(Process* proc) {
@@ -389,7 +394,7 @@ static void _process_updateErrnoLocation(Process* proc) {
         const gchar* errorMessage = dlerror();
         critical("dlsym() failed: %s", errorMessage);
         error("unable to find the required function symbol '%s' in plug-in '%s'",
-                PLUGIN_ERRNOLOC_SYMBOL, proc->plugin.path->str);
+              PLUGIN_ERRNOLOC_SYMBOL, proc->plugin.path->str);
     }
 }
 
@@ -558,7 +563,7 @@ static void _process_loadPlugin(Process* proc) {
     gpointer symbol = NULL;
 
     symbol = dlsym(proc->plugin.handle, _process_getPluginStartSymbol(proc) ?
-                   _process_getPluginStartSymbol(proc) : PLUGIN_DEFAULT_SYMBOL);
+                                        _process_getPluginStartSymbol(proc) : PLUGIN_DEFAULT_SYMBOL);
     if(symbol) {
         proc->plugin.main = symbol;
         message("found '%s' at %p", _process_getPluginStartSymbol(proc), symbol);
@@ -641,9 +646,9 @@ static void _process_loadPlugin(Process* proc) {
 }
 
 Process* process_new(gpointer host, guint processID,
-        SimulationTime startTime, SimulationTime stopTime, const gchar* pluginName,
-        const gchar* pluginPath, const gchar* pluginSymbol, const gchar* preloadName,
-        const gchar* preloadPath, gchar* arguments) {
+                     SimulationTime startTime, SimulationTime stopTime, const gchar* pluginName,
+                     const gchar* pluginPath, const gchar* pluginSymbol, const gchar* preloadName,
+                     const gchar* preloadPath, gchar* arguments) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -668,7 +673,7 @@ Process* process_new(gpointer host, guint processID,
 
     proc->processName = g_string_new(NULL);
     g_string_printf(proc->processName, "%s.%s.%u",
-            host_getName(proc->host), _process_getPluginName(proc), proc->processID);
+                    host_getName(proc->host), _process_getPluginName(proc), proc->processID);
 
     proc->startTime = startTime;
     proc->stopTime = stopTime;
@@ -771,7 +776,7 @@ static FILE* _process_openFile(Process* proc, const gchar* prefix) {
         }
         GString* stringBuffer = g_string_new(NULL);
         g_string_printf(stringBuffer, "process '%s': unable to open file '%s', error was: %s",
-                _process_getName(proc), pathStr, g_strerror(errno));
+                        _process_getName(proc), pathStr, g_strerror(errno));
         g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
 
 //        warning("process '%s-%u': unable to open file '%s', error was: %s",
@@ -795,7 +800,7 @@ static FILE* _process_getIOFile(Process* proc, gint fd){
                 }
                 GString* stringBuffer = g_string_new(NULL);
                 g_string_printf(stringBuffer, "process '%s': unable to open file for process output, dumping to tty stdout",
-                    _process_getName(proc));
+                                _process_getName(proc));
                 g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
 
                 /* now set shadows stdout */
@@ -813,7 +818,7 @@ static FILE* _process_getIOFile(Process* proc, gint fd){
                 }
                 GString* stringBuffer = g_string_new(NULL);
                 g_string_printf(stringBuffer, "process '%s': unable to open file for process errors, dumping to tty stderr",
-                        _process_getName(proc));
+                                _process_getName(proc));
                 g_queue_push_tail(proc->cachedWarningMessages, g_string_free(stringBuffer, FALSE));
 
                 /* now set shadows stderr */
@@ -1034,8 +1039,8 @@ static void _process_logReturnCode(Process* proc, gint code) {
     if(!proc->returnCodeLogged) {
         GString* mainResultString = g_string_new(NULL);
         g_string_printf(mainResultString, "main %s code '%i' for process '%s'",
-                ((code==0) ? "success" : "error"),
-                code, _process_getName(proc));
+                        ((code==0) ? "success" : "error"),
+                        code, _process_getName(proc));
 
         if(code == 0) {
             message("%s", mainResultString->str);
@@ -1108,7 +1113,7 @@ static void* _process_executeMain(Process* proc) {
 }
 
 gboolean process_addAtExitCallback(Process* proc, gpointer userCallback, gpointer userArgument,
-        gboolean shouldPassArgument) {
+                                   gboolean shouldPassArgument) {
     MAGIC_ASSERT(proc);
     if(!process_isRunning(proc)) {
         return FALSE;
@@ -1167,7 +1172,7 @@ static void _process_start(Process* proc) {
     pthread_setname_np(buf_thread_shadow, "Shadow_main_helper");
     returnVal = pthread_create(&(buf_thread_programMain), NULL, sleep_tls, NULL);
     if(returnVal != 0) {
-       ;// return NULL;
+        ;// return NULL;
     }
     pthread_setname_np(buf_thread_programMain, "programMain_helper");
     /* now we will execute in the pth/plugin context, so we need to load the state */
@@ -1222,12 +1227,15 @@ static void _process_start(Process* proc) {
         proc->plugin.preProcessEnter(proc->plugin.handle);
         _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
     }
+    pth_t thread = pth_self();
+    copy_tls (proc, &thread, 1);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* now give the main program thread a chance to run */
     pth_yield(proc->programMainThread);
 
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    copy_tls (proc, &thread, 0);
     utility_assert(proc->plugin.isExecuting);
     if(proc->plugin.postProcessExit != NULL) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
@@ -1317,6 +1325,8 @@ void process_continue(Process* proc) {
         proc->plugin.preProcessEnter(proc->plugin.handle);
         _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
     }
+    //pth_t thread = pth_self();
+    //copy_tls (proc, &thread, 1);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* make sure pth scheduler updates, and process all program threads until they block */
@@ -1325,6 +1335,7 @@ void process_continue(Process* proc) {
     } while(pth_ctrl(PTH_CTRL_GETTHREADS_READY | PTH_CTRL_GETTHREADS_NEW));
 
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+    //copy_tls (proc, &thread, 0);
     utility_assert(proc->plugin.isExecuting);
     if(proc->plugin.postProcessExit != NULL) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
@@ -1436,7 +1447,7 @@ void process_schedule(Process* proc, gpointer nothing) {
         SimulationTime startDelay = proc->startTime <= now ? 1 : proc->startTime - now;
         process_ref(proc);
         Task* startProcessTask = task_new((TaskCallbackFunc)_process_runStartTask,
-                proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
+                                          proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
         worker_scheduleTask(startProcessTask, startDelay);
         task_unref(startProcessTask);
     }
@@ -1445,7 +1456,7 @@ void process_schedule(Process* proc, gpointer nothing) {
         SimulationTime stopDelay = proc->stopTime <= now ? 1 : proc->stopTime - now;
         process_ref(proc);
         Task* stopProcessTask = task_new((TaskCallbackFunc)_process_runStopTask,
-                proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
+                                         proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
         worker_scheduleTask(stopProcessTask, stopDelay);
         task_unref(stopProcessTask);
     }
@@ -1506,7 +1517,7 @@ void process_migrate(Process* proc, gpointer threads) {
 /* static helper functions */
 
 static gint _process_emu_addressHelper(Process* proc, gint fd, const struct sockaddr* addr, socklen_t* len,
-        enum _SystemCallType type) {
+                                       enum _SystemCallType type) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     gint result = 0;
 
@@ -1536,8 +1547,8 @@ static gint _process_emu_addressHelper(Process* proc, gint fd, const struct sock
             case SCT_GETPEERNAME:
             case SCT_GETSOCKNAME: {
                 result = type == SCT_GETPEERNAME ?
-                        host_getPeerName(proc->host, fd, addr, len) :
-                        host_getSocketName(proc->host, fd, addr, len);
+                         host_getPeerName(proc->host, fd, addr, len) :
+                         host_getSocketName(proc->host, fd, addr, len);
                 break;
             }
 
@@ -1561,7 +1572,7 @@ static gint _process_emu_addressHelper(Process* proc, gint fd, const struct sock
 }
 
 static gssize _process_emu_sendHelper(Process* proc, gint fd, gconstpointer buf, gsize n, gint flags,
-        const struct sockaddr* addr, socklen_t len) {
+                                      const struct sockaddr* addr, socklen_t len) {
     /* this function MUST be called after switching in shadow context */
     utility_assert(proc->activeContext == PCTX_SHADOW);
 
@@ -1593,7 +1604,7 @@ static gssize _process_emu_sendHelper(Process* proc, gint fd, gconstpointer buf,
 }
 
 static gssize _process_emu_recvHelper(Process* proc, gint fd, gpointer buf, size_t n, gint flags,
-        struct sockaddr* addr, socklen_t* len) {
+                                      struct sockaddr* addr, socklen_t* len) {
     /* this function MUST be called after switching in shadow context */
     utility_assert(proc->activeContext == PCTX_SHADOW);
 
@@ -2068,7 +2079,7 @@ void* process_emu_pvalloc(Process* proc, size_t size) {
 
 /* for fd translation */
 void* process_emu_mmap(Process* proc, void *addr, size_t length, int prot, int flags,
-                  int fd, off_t offset) {
+                       int fd, off_t offset) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
     /* anonymous mappings ignore file descriptor */
@@ -2147,12 +2158,12 @@ int process_emu_epoll_wait(Process* proc, int epfd, struct epoll_event *events, 
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
         pth_t thread = pth_self();
-        swap_tls (proc, &thread, 1);
+        copy_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_epoll_wait(epfd, events, maxevents, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-        swap_tls (proc, &thread, 0);
+        copy_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -2168,12 +2179,12 @@ int process_emu_epoll_pwait(Process* proc, int epfd, struct epoll_event *events,
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
         pth_t thread = pth_self();
-        swap_tls (proc, &thread, 1);
+        copy_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_epoll_pwait(epfd, events, maxevents, timeout, ss);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-        swap_tls (proc, &thread, 0);
+        copy_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -2304,7 +2315,7 @@ int process_emu_socketpair(Process* proc, int domain, int type, int protocol, in
 
 int process_emu_bind(Process* proc, int fd, const struct sockaddr* addr, socklen_t len)  {
     if((addr->sa_family == AF_INET && len < sizeof(struct sockaddr_in)) ||
-            (addr->sa_family == AF_UNIX && len < sizeof(struct sockaddr_un))) {
+       (addr->sa_family == AF_UNIX && len < sizeof(struct sockaddr_un))) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
         _process_setErrno(proc, EINVAL);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -2320,7 +2331,7 @@ int process_emu_getsockname(Process* proc, int fd, struct sockaddr* addr, sockle
 
 int process_emu_connect(Process* proc, int fd, const struct sockaddr* addr, socklen_t len)  {
     if((addr->sa_family == AF_INET && len < sizeof(struct sockaddr_in)) ||
-            (addr->sa_family == AF_UNIX && len < sizeof(struct sockaddr_un))) {
+       (addr->sa_family == AF_UNIX && len < sizeof(struct sockaddr_un))) {
         ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
         _process_setErrno(proc, EINVAL);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -3292,12 +3303,12 @@ unsigned int process_emu_sleep(Process* proc, unsigned int sec) {
     unsigned int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
         pth_t thread = pth_self();
-        swap_tls (proc, &thread, 1);
+        copy_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_sleep(sec);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-        swap_tls (proc, &thread, 0);
+        copy_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -3315,12 +3326,12 @@ int process_emu_usleep(Process* proc, unsigned int sec) {
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
         pth_t thread = pth_self();
-        swap_tls (proc, &thread, 1);
+        copy_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_usleep(sec);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);\
-        swap_tls (proc, &thread, 0);
+        copy_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -3338,12 +3349,12 @@ int process_emu_nanosleep(Process* proc, const struct timespec *rqtp, struct tim
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
         pth_t thread = pth_self();
-        swap_tls (proc, &thread, 1);
+        copy_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_nanosleep(rqtp, rmtp);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-        swap_tls (proc, &thread, 0);
+        copy_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -3357,16 +3368,16 @@ int process_emu_nanosleep(Process* proc, const struct timespec *rqtp, struct tim
 }
 
 int process_emu_select(Process* proc, int nfds, fd_set *readfds, fd_set *writefds,
-                    fd_set *exceptfds, struct timeval *timeout) {
+                       fd_set *exceptfds, struct timeval *timeout) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         pth_t thread = pth_self();
-        swap_tls (proc, &thread, 1);
+        copy_tls (proc, &thread, 1);
         ret = pth_select(nfds, readfds, writefds, exceptfds, timeout);
-        swap_tls (proc, &thread, 0);
+        copy_tls (proc, &thread, 0);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
         if(ret == -1) {
             _process_setErrno(proc, errno);
@@ -3382,17 +3393,17 @@ int process_emu_select(Process* proc, int nfds, fd_set *readfds, fd_set *writefd
 }
 
 int process_emu_pselect(Process* proc, int nfds, fd_set *readfds, fd_set *writefds,
-                    fd_set *exceptfds, const struct timespec *timeout, const sigset_t *sigmask) {
+                        fd_set *exceptfds, const struct timespec *timeout, const sigset_t *sigmask) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
         pth_t thread = pth_self();
-        swap_tls (proc, &thread, 1);
+        copy_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-        swap_tls (proc, &thread, 0);
+        copy_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -3408,12 +3419,12 @@ int process_emu_poll(Process* proc, struct pollfd *pfd, nfds_t nfd, int timeout)
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
         pth_t thread = pth_self();
-        swap_tls (proc, &thread, 1);
+        copy_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_poll(pfd, nfd, timeout);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-        swap_tls (proc, &thread, 0);
+        copy_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -3432,12 +3443,12 @@ int process_emu_ppoll(Process* proc, struct pollfd *fds, nfds_t nfds, const stru
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
         pth_t thread = pth_self();
-        swap_tls (proc, &thread, 1);
+        copy_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
         ret = pth_ppoll(fds, nfds, timeout_ts, sigmask);
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-        swap_tls (proc, &thread, 0);
+        copy_tls (proc, &thread, 0);
         if(ret == -1) {
             _process_setErrno(proc, errno);
         }
@@ -3602,8 +3613,8 @@ int process_emu_timerfd_create(Process* proc, int clockid, int flags) {
 }
 
 int process_emu_timerfd_settime(Process* proc, int fd, int flags,
-                           const struct itimerspec *new_value,
-                           struct itimerspec *old_value) {
+                                const struct itimerspec *new_value,
+                                struct itimerspec *old_value) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     gint ret = 0;
 
@@ -4567,7 +4578,7 @@ size_t process_emu_fread(Process* proc, void *ptr, size_t size, size_t nmemb, FI
                  * a FILE stream with it. */
                 if(host_isShadowDescriptor(proc->host, shadowFD)) {
                     error("A file stream with an os fd %i was associated with a "
-                            "shadow descriptor with a shadow fd %i", osfd, shadowFD);
+                          "shadow descriptor with a shadow fd %i", osfd, shadowFD);
                 }
 
                 /* if this is a random file, then we can return bytes here */
@@ -4827,7 +4838,7 @@ int process_emu_gethostname(Process* proc, char* name, size_t len) {
 }
 
 int process_emu_getaddrinfo(Process* proc, const char *name, const char *service,
-        const struct addrinfo *hints, struct addrinfo **res) {
+                            const struct addrinfo *hints, struct addrinfo **res) {
     if(name == NULL && service == NULL) {
         _process_setErrno(proc, EINVAL);
         return EAI_NONAME;
@@ -4933,12 +4944,12 @@ void process_emu_freeaddrinfo(Process* proc, struct addrinfo *res) {
 }
 
 int process_emu_getnameinfo(Process* proc, const struct sockaddr* sa, socklen_t salen,
-        char * host, socklen_t hostlen, char *serv, socklen_t servlen,
+                            char * host, socklen_t hostlen, char *serv, socklen_t servlen,
         /* glibc-headers changed type of the flags, and then changed back */
 #if (__GLIBC__ > 2 || (__GLIBC__ == 2 && (__GLIBC_MINOR__ < 2 || __GLIBC_MINOR__ > 13)))
-        int flags) {
+                            int flags) {
 #else
-        unsigned int flags) {
+    unsigned int flags) {
 #endif
 
     /* FIXME this is not fully implemented */
@@ -4986,7 +4997,7 @@ struct hostent* process_emu_gethostbyname(Process* proc, const gchar* name) {
 }
 
 int process_emu_gethostbyname_r(Process* proc, const gchar *name, struct hostent *ret, gchar *buf,
-        gsize buflen, struct hostent **result, gint *h_errnop) {
+                                gsize buflen, struct hostent **result, gint *h_errnop) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyname_r not yet implemented");
     _process_setErrno(proc, ENOSYS);
@@ -5003,7 +5014,7 @@ struct hostent* process_emu_gethostbyname2(Process* proc, const gchar* name, gin
 }
 
 int process_emu_gethostbyname2_r(Process* proc, const gchar *name, gint af, struct hostent *ret,
-        gchar *buf, gsize buflen, struct hostent **result, gint *h_errnop) {
+                                 gchar *buf, gsize buflen, struct hostent **result, gint *h_errnop) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyname2_r not yet implemented");
     _process_setErrno(proc, ENOSYS);
@@ -5020,8 +5031,8 @@ struct hostent* process_emu_gethostbyaddr(Process* proc, const void* addr, sockl
 }
 
 int process_emu_gethostbyaddr_r(Process* proc, const void *addr, socklen_t len, gint type,
-        struct hostent *ret, char *buf, gsize buflen, struct hostent **result,
-        gint *h_errnop) {
+                                struct hostent *ret, char *buf, gsize buflen, struct hostent **result,
+                                gint *h_errnop) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     warning("gethostbyaddr_r not yet implemented");
     _process_setErrno(proc, ENOSYS);
@@ -5213,8 +5224,8 @@ pid_t process_emu_getppid(Process* proc) {
 /* syscall */
 
 int process_emu_syscall(Process* proc, int number, va_list ap) {
-	va_list args;
-	va_copy(args, ap);
+    va_list args;
+    va_copy(args, ap);
 
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
 
@@ -5224,45 +5235,45 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
 
     switch (number) {
 #if defined SYS_clock_gettime
-		case SYS_clock_gettime: {
-			/* get the args for clock_gettime */
-			clockid_t id = va_arg(args, clockid_t);
-			struct timespec* ts = va_arg(args, struct timespec*);
+        case SYS_clock_gettime: {
+            /* get the args for clock_gettime */
+            clockid_t id = va_arg(args, clockid_t);
+            struct timespec* ts = va_arg(args, struct timespec*);
 
-			/* call our emulation version, which thinks its being called from a non-shadow context */
-			_process_changeContext(proc, PCTX_SHADOW, prevCTX);
-			result = process_emu_clock_gettime(proc, id, ts);
-			_process_changeContext(proc, prevCTX, PCTX_SHADOW);
+            /* call our emulation version, which thinks its being called from a non-shadow context */
+            _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+            result = process_emu_clock_gettime(proc, id, ts);
+            _process_changeContext(proc, prevCTX, PCTX_SHADOW);
 
-			/* result is our actual return value.
-			 * if result is -1, then the process errno was already set */
-			ret = result;
-			break;
-		}
+            /* result is our actual return value.
+             * if result is -1, then the process errno was already set */
+            ret = result;
+            break;
+        }
 #endif
 
 #if defined SYS_getrandom
-		case SYS_getrandom: {
-			uint8_t* out = va_arg(args, uint8_t*);
-			size_t out_len = va_arg(args, size_t);
-			const unsigned int flags = va_arg(args, const unsigned int);
+        case SYS_getrandom: {
+            uint8_t* out = va_arg(args, uint8_t*);
+            size_t out_len = va_arg(args, size_t);
+            const unsigned int flags = va_arg(args, const unsigned int);
 
-			/* get the random bytes internally from Shadow's random source
-			 * for this host to maintain determistic behavior */
-			random_nextNBytes(host_getRandom(proc->host), (guchar*)out, out_len);
+            /* get the random bytes internally from Shadow's random source
+             * for this host to maintain determistic behavior */
+            random_nextNBytes(host_getRandom(proc->host), (guchar*)out, out_len);
 
-			if(out_len > INT_MAX) {
-				ret = INT_MAX;
-			} else {
-				ret = (int)out_len;
-			}
+            if(out_len > INT_MAX) {
+                ret = INT_MAX;
+            } else {
+                ret = (int)out_len;
+            }
 
-			break;
-		}
+            break;
+        }
 #endif
 
 #if defined SYS_gettid
-        /* thread ids need to be unique for every thread, and unique from the pid */
+            /* thread ids need to be unique for every thread, and unique from the pid */
         case SYS_gettid: {
             pth_t thread = pth_self();
             if (thread == proc->shadowThread) {
@@ -5290,7 +5301,7 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
             break;
         }
 #endif
-		/* TODO the following are functions that shadow normally intercepts, and we should handle them */
+            /* TODO the following are functions that shadow normally intercepts, and we should handle them */
 
 #if defined SYS_accept
         case SYS_accept:
@@ -5380,7 +5391,7 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
         case SYS_fstatfs:
 #endif
 #if defined SYS_fstatfs64
-        case SYS_fstatfs64:
+            case SYS_fstatfs64:
 #endif
 #if defined SYS_fsync
         case SYS_fsync:
@@ -5389,10 +5400,10 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
         case SYS_ftruncate:
 #endif
 #if defined SYS_ftruncate64
-        case SYS_ftruncate64:
+            case SYS_ftruncate64:
 #endif
 #if defined SYS_gethostname
-        case SYS_gethostname:
+            case SYS_gethostname:
 #endif
 #if defined SYS_getpeername
         case SYS_getpeername:
@@ -5410,7 +5421,7 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
         case SYS_listen:
 #endif
 #if defined SYS_lock
-        case SYS_lock:
+            case SYS_lock:
 #endif
 #if defined SYS_lseek
         case SYS_lseek:
@@ -5446,7 +5457,7 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
         case SYS_readv:
 #endif
 #if defined SYS_recv
-        case SYS_recv:
+            case SYS_recv:
 #endif
 #if defined SYS_recvfrom
         case SYS_recvfrom:
@@ -5458,7 +5469,7 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
         case SYS_select:
 #endif
 #if defined SYS_send
-        case SYS_send:
+            case SYS_send:
 #endif
 #if defined SYS_sendmsg
         case SYS_sendmsg:
@@ -5473,7 +5484,7 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
         case SYS_shutdown:
 #endif
 #if defined SYS_sigaction
-        case SYS_sigaction:
+            case SYS_sigaction:
 #endif
 #if defined SYS_socket
         case SYS_socket:
@@ -5488,13 +5499,13 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
         case SYS_syncfs:
 #endif
 #if defined SYS_syscall
-        case SYS_syscall:
+            case SYS_syscall:
 #endif
 #if defined SYS_time
         case SYS_time:
 #endif
 #if defined SYS_timerfd
-        case SYS_timerfd:
+            case SYS_timerfd:
 #endif
 #if defined SYS_timerfd_create
         case SYS_timerfd_create:
@@ -5512,7 +5523,7 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
         case SYS_unlinkat:
 #endif
 #if defined SYS_waitpid
-        case SYS_waitpid:
+            case SYS_waitpid:
 #endif
 #if defined SYS_write
         case SYS_write:
@@ -5521,25 +5532,25 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
         case SYS_writev:
 #endif
 
-		{
-			/* Shadow should deal with these, so this is a critical issue that we should address */
-			error("syscall() was called with syscall number '%i'. Shadow handles the libc version of this "
-					"function, but does not yet handle the syscall() version, and therefore "
-					"this function call is unlikely to work correctly because it is not Shadow-aware. "
-					"Please report this error at https://github.com/shadow/shadow/issues.", number);
-			do_syscall = 0;
-			break;
-		}
+        {
+            /* Shadow should deal with these, so this is a critical issue that we should address */
+            error("syscall() was called with syscall number '%i'. Shadow handles the libc version of this "
+                  "function, but does not yet handle the syscall() version, and therefore "
+                  "this function call is unlikely to work correctly because it is not Shadow-aware. "
+                  "Please report this error at https://github.com/shadow/shadow/issues.", number);
+            do_syscall = 0;
+            break;
+        }
 
-		default: {
-			/* We may get by with letting the kernel deal with this since it may not affect Shadow. */
-			info("syscall() was called with number '%i'. Shadow does not yet intercept this function. "
-					"We will forward to the kernel/libc, which is not Shadow-aware and is not guaranteed "
-					"to handle things correctly. "
-					"Please report if you notice strange behavior.", number);
-			do_syscall = 1;
-			break;
-		}
+        default: {
+            /* We may get by with letting the kernel deal with this since it may not affect Shadow. */
+            info("syscall() was called with number '%i'. Shadow does not yet intercept this function. "
+                 "We will forward to the kernel/libc, which is not Shadow-aware and is not guaranteed "
+                 "to handle things correctly. "
+                 "Please report if you notice strange behavior.", number);
+            do_syscall = 1;
+            break;
+        }
     }
 
     if(do_syscall) {
@@ -5549,11 +5560,11 @@ int process_emu_syscall(Process* proc, int number, va_list ap) {
             _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
         }
 
-    	result = syscall(number, ap);
-    	if(result == EOF) {
-			_process_setErrno(proc, errno);
-		}
-    	ret = result;
+        result = syscall(number, ap);
+        if(result == EOF) {
+            _process_setErrno(proc, errno);
+        }
+        ret = result;
     }
 
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -5685,7 +5696,7 @@ int process_emu_pthread_attr_getinheritsched(Process* proc, const pthread_attr_t
 }
 
 int process_emu_pthread_attr_setschedparam(Process* proc, pthread_attr_t *attr,
-        const struct sched_param *schedparam) {
+                                           const struct sched_param *schedparam) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(attr == NULL) {
@@ -5701,7 +5712,7 @@ int process_emu_pthread_attr_setschedparam(Process* proc, pthread_attr_t *attr,
 }
 
 int process_emu_pthread_attr_getschedparam(Process* proc, const pthread_attr_t *attr,
-        struct sched_param *schedparam) {
+                                           struct sched_param *schedparam) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(attr == NULL || schedparam == NULL) {
@@ -6176,7 +6187,7 @@ int process_emu_pthread_attr_getprio_np(Process* proc, const pthread_attr_t *att
 /* pthread threads */
 
 int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_attr_t *attr,
-        void *(*start_routine)(void *), void *arg) {
+                               void *(*start_routine)(void *), void *arg) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
@@ -6214,7 +6225,7 @@ int process_emu_pthread_create(Process* proc, pthread_t *thread, const pthread_a
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
                 GString* programAuxThreadNameBuf = g_string_new(NULL);
                 g_string_printf(programAuxThreadNameBuf, "%s.%s.%u.aux%u", host_getName(proc->host),
-                        _process_getPluginName(proc), proc->processID, threadID);
+                                _process_getPluginName(proc), proc->processID, threadID);
                 _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
                 pth_attr_t defaultAttr = pth_attr_new();
@@ -6331,7 +6342,7 @@ int process_emu_pthread_yield(Process* proc) {
     int ret = 0;
     if(prevCTX == PCTX_PLUGIN) {
         pth_t thread = pth_self();
-        swap_tls (proc, &thread, 1);
+        copy_tls (proc, &thread, 1);
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         utility_assert(proc->tstate == pth_gctx_get());
 
@@ -6339,7 +6350,7 @@ int process_emu_pthread_yield(Process* proc) {
         ret = 0;
 
         _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-        swap_tls (proc, &thread, 0);
+        copy_tls (proc, &thread, 0);
     } else {
         warning("pthread_yield() is handled by pth but not implemented by shadow");
         _process_setErrno(proc, ENOSYS);
@@ -6373,21 +6384,21 @@ int process_emu_pthread_join(Process* proc, pthread_t thread, void **value_ptr) 
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
         } else {
             pth_t _thread = pth_self();
-            swap_tls (proc, &_thread, 1);
+            copy_tls (proc, &_thread, 1);
             _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
             utility_assert(proc->tstate == pth_gctx_get());
 
-                if (!pth_join(pt, value_ptr)) {
-                    ret = errno;
-                } else {
-                    g_hash_table_remove(proc->programAuxThreads, pt);
-                    if (value_ptr != NULL && *value_ptr == PTH_CANCELED) {
-                        *value_ptr = PTHREAD_CANCELED;
-                    }
-                    ret = 0;
+            if (!pth_join(pt, value_ptr)) {
+                ret = errno;
+            } else {
+                g_hash_table_remove(proc->programAuxThreads, pt);
+                if (value_ptr != NULL && *value_ptr == PTH_CANCELED) {
+                    *value_ptr = PTHREAD_CANCELED;
                 }
+                ret = 0;
+            }
             _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-            swap_tls (proc, &_thread, 0);
+            copy_tls (proc, &_thread, 0);
         }
     } else {
         warning("pthread_join() is handled by pth but not implemented by shadow");
@@ -7156,9 +7167,12 @@ int process_emu_pthread_mutex_lock(Process* proc, pthread_mutex_t *mutex) {
             if(init_result != 0) {
                 ret = errno;
             } else {
+                pth_t thread = pth_self();
+                copy_tls (proc, &thread, 1);
                 _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
                 init_result = pth_mutex_acquire(pm, FALSE, NULL);
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+                copy_tls (proc, &thread, 0);
                 if(!init_result) {
                     ret = errno;
                 } else {
@@ -7200,9 +7214,12 @@ int process_emu_pthread_mutex_trylock(Process* proc, pthread_mutex_t *mutex) {
             if(init_result != 0) {
                 ret = errno;
             } else {
+                pth_t thread = pth_self();
+                copy_tls (proc, &thread, 1);
                 _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
                 init_result = pth_mutex_acquire(pm, TRUE, NULL);
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+                copy_tls (proc, &thread, 0);
                 if(!init_result) {
                     ret = errno;
                 } else {
@@ -7764,11 +7781,11 @@ int process_emu_pthread_cond_broadcast(Process* proc, pthread_cond_t *cond) {
             } else {
                 /*comment*/
                 pth_t thread = pth_self();
-                swap_tls (proc, &thread, 1);
+                copy_tls (proc, &thread, 1);
                 _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
                 init_result = pth_cond_notify(pcn, TRUE);
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-                swap_tls (proc, &thread, 0);
+                copy_tls (proc, &thread, 0);
                 if(!init_result) {
                     ret = errno;
                 } else {
@@ -7810,11 +7827,11 @@ int process_emu_pthread_cond_signal(Process* proc, pthread_cond_t *cond) {
                 ret = errno;
             } else {
                 pth_t thread = pth_self();
-                swap_tls (proc, &thread, 1);
+                copy_tls (proc, &thread, 1);
                 _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
                 init_result = pth_cond_notify(pcn, FALSE);
                 _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-                swap_tls (proc, &thread, 0);
+                copy_tls (proc, &thread, 0);
                 if(!init_result) {
                     ret = errno;
                 } else {
@@ -7869,11 +7886,11 @@ int process_emu_pthread_cond_wait(Process* proc, pthread_cond_t *cond, pthread_m
                 } else {
                     /*comment*/
                     pth_t thread = pth_self();
-                    swap_tls (proc, &thread, 1);
+                    copy_tls (proc, &thread, 1);
                     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
                     init_result = pth_cond_await(pcn, pm, NULL);
                     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-                    swap_tls (proc, &thread, 0);
+                    copy_tls (proc, &thread, 0);
                     if(!init_result) {
                         ret = errno;
                     } else {
@@ -7892,7 +7909,7 @@ int process_emu_pthread_cond_wait(Process* proc, pthread_cond_t *cond, pthread_m
 }
 
 int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthread_mutex_t *mutex,
-                           const struct timespec *abstime) {
+                                       const struct timespec *abstime) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
     int ret = 0;
     if (prevCTX == PCTX_PLUGIN) {
@@ -7930,13 +7947,13 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
                     ret = errno;
                 } else {
                     pth_t thread = pth_self();
-                    swap_tls (proc, &thread, 1);
+                    copy_tls (proc, &thread, 1);
                     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
                     pth_time_t t = pth_time(abstime->tv_sec, (abstime->tv_nsec)/1000);
                     ev = pth_event(PTH_EVENT_TIME, t);
                     init_result = pth_cond_await(pcn, pm, ev);
                     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-                    swap_tls (proc, &thread, 0);
+                    copy_tls (proc, &thread, 0);
                     if (!init_result) {
                         ret = errno;
                     } else {
@@ -7991,7 +8008,7 @@ int process_emu_shadow_bind(Process* proc, int fd, const struct sockaddr* addr, 
 
     // 3. register network interface
     NetworkInterface* networkInterface = networkinterface_new(shadow_addr, bwDownKiBps, bwUpKiBps,
-            FALSE, NULL, QDISC_MODE_FIFO, 1024000);
+                                                              FALSE, NULL, QDISC_MODE_FIFO, 1024000);
     networkinterface_setShadow(networkInterface, TRUE);
     host_setupInterface(proc->host, shadow_addr, networkInterface);
 

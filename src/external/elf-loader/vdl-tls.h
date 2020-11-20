@@ -39,7 +39,8 @@ unsigned long vdl_tls_get_addr_fast (unsigned long module, unsigned long offset)
 unsigned long vdl_tls_get_addr_slow (unsigned long module, unsigned long offset);
 void vdl_tls_swap_context (struct VdlContext *context,
                            unsigned long t1, unsigned long t2);
-
+void vdl_tls_copy_context (struct VdlContext *context,
+                           unsigned long t1, unsigned long t2);
 // ensure that the caller dtv is uptodate.
 void vdl_tls_dtv_update (void);
 
