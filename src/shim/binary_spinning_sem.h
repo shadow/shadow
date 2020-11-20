@@ -77,10 +77,8 @@ class BinarySpinningSem {
     BinarySpinningSem &operator=(const BinarySpinningSem &rhs) = delete;
 
   private:
-    std::atomic<bool> _x;
     sem_t _semaphore;
     ssize_t _thresh;
-    pthread_spinlock_t _lock;
 };
 
 #endif // BINARY_SPINNING_SEM_H_
