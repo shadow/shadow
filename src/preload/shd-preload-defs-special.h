@@ -51,7 +51,6 @@ PRELOADDEF(return, int, syscall, (int a, ...), a);
 
 /* BLEEP related functions*/
 // BLEEP library support
-PRELOADDEF(return, int, puts_temp, (const char *a), a);
 PRELOADDEF(return, int, shadow_pipe2, (int a[2], int b), a, b);
 PRELOADDEF(return, int, shadow_push_eventlog, (const char *a), a);
 PRELOADDEF(return, int, shadow_usleep, (unsigned int a), a);
