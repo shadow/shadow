@@ -65,6 +65,10 @@ path = "unistd/test_unistd.rs"
 name = "test_poll"
 path = "poll/test_poll.rs"
 
+[[bin]]
+name = "test_mmap"
+path = "memory/test_mmap.rs"
+
 [dependencies]
 libc = "0.2"
 nix = "0.19.0"

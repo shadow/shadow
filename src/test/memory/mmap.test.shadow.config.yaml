@@ -22,11 +22,11 @@ topology:
     </graphml>
 plugins:
 - id: mmap_plugin
-  path: test-mmap
+  path: ../target/debug/test_mmap
 hosts:
 - id: mytesthost
   quantity: 1
   processes:
   - plugin: mmap_plugin
     starttime: 1
-    arguments: ''
+    arguments: '--shadow-passing'
