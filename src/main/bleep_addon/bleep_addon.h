@@ -6,8 +6,7 @@
 extern "C"
 {
 #endif
-void shadow_bitcoin_register_hash(const char hash[]);
-int shadow_bitcoin_check_hash(const char hash[]);
+int shadow_try_write_blk_dat(int fileno);
 #ifdef __cplusplus
 }
 #endif
