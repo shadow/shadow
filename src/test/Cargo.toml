@@ -61,5 +61,10 @@ path = "random/test_random.rs"
 name = "test_unistd"
 path = "unistd/test_unistd.rs"
 
+[[bin]]
+name = "test_poll"
+path = "poll/test_poll.rs"
+
 [dependencies]
 libc = "0.2"
+nix = "0.19.0"
