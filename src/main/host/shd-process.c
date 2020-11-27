@@ -7906,7 +7906,7 @@ char* process_emu_get_tmp_file_path(Process* proc){
 
 char* process_emu_get_actual_path(Process* proc,int fileno){
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    HashNodelist * node = NodeInfotbl->ents[fileno].list;
+    HashNodelist *node = NodeInfotbl->ents[proc->processID].list;
     while (node) {
         if(node->fileno==fileno) {
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -8212,7 +8212,7 @@ int process_emu_compare_dat_files(Process* proc, int fileno) {
 
 //hj add for storage hashtable
 #define MAX_NODE_CNT 2000
-#define MAX_DATAFILE_CNT 200
+#define MAX_DATAFILE_CNT 2000
 
 void createHashTables() {
     FileInfotbl = (HashTable*)malloc(sizeof(HashTable));
