@@ -163,7 +163,7 @@ enum _SystemCallType {
  */
 typedef struct _buffer_threads buffer_threads;
 struct _buffer_threads {
-    pth_t * pth_thread; /*This is the pth thread emulated by shadow*/
+    pth_t pth_thread; /*This is the pth thread emulated by shadow*/
     pthread_t buffer_pthread; /*The Corresponding buffer thread created to save the TLS of pth_thread*/
     buffer_threads * next;
 };
@@ -281,7 +281,7 @@ void * sleep_tls () {
 /* Adds new buffer_threads structure. */
 void _buffer_threads_add (Process * proc, pth_t * pth_thread, pthread_t buffer_pthread) {
     buffer_threads * buf_threads = malloc (sizeof(buffer_threads));
-    buf_threads->pth_thread = pth_thread;
+    buf_threads->pth_thread = *pth_thread;
     buf_threads->buffer_pthread = buffer_pthread;
     buf_threads->next = NULL;
     buffer_threads * buf;
@@ -299,13 +299,30 @@ void _buffer_threads_add (Process * proc, pth_t * pth_thread, pthread_t buffer_p
  * */
 void copy_tls(Process* proc, pth_t * thread, int flag) {
     buffer_threads * buf;
-    for (buf = proc->buf_threads; buf!=NULL; buf = buf->next) {
-        if ((buf->pth_thread != NULL) && (*(buf->pth_thread)  == NULL))
+    buffer_threads * prev = NULL;
+    for (buf = proc->buf_threads; buf!=NULL;) {
+        if (buf->pth_thread == NULL)
         {
-            buf->pth_thread = NULL;
-            continue;
+            if (prev!=NULL)
+            {
+                if (buf->next) prev->next = buf->next;
+                else prev->next = NULL;
+                pthread_cancel(buf->buffer_pthread);
+                free(buf);
+                buf = prev->next;
+                continue;
+            }
+            else
+            {
+                if (buf->next)  proc->buf_threads = buf->next;
+                else proc->buf_threads = NULL;
+                pthread_cancel(buf->buffer_pthread);
+                free(buf);
+                buf = proc->buf_threads;
+                continue;
+            }
         }
-        if ((buf->pth_thread != NULL) && (*(buf->pth_thread) == *thread)) {
+        else if ((buf->pth_thread != NULL) && ((buf->pth_thread) == *thread)) {
             //do_something
             pthread_t pthread = pthread_self();
             if (flag)
@@ -314,6 +331,11 @@ void copy_tls(Process* proc, pth_t * thread, int flag) {
                 dl_lmid_copy_tls(proc->lmid, &(buf->buffer_pthread), &pthread);
             return;
         }
+        else {
+            prev = buf;
+            buf = buf->next;
+        }
+
     }
     pthread_t buf_thread_aux;
     gint returnVal = pthread_create(&(buf_thread_aux), NULL, sleep_tls, NULL);
@@ -1228,14 +1250,14 @@ static void _process_start(Process* proc) {
         _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
     }
     pth_t thread = pth_self();
-    copy_tls (proc, &thread, 1);
+    //copy_tls (proc, &thread, 1);
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     /* now give the main program thread a chance to run */
     pth_yield(proc->programMainThread);
 
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
-    copy_tls (proc, &thread, 0);
+    //copy_tls (proc, &thread, 0);
     utility_assert(proc->plugin.isExecuting);
     if(proc->plugin.postProcessExit != NULL) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
