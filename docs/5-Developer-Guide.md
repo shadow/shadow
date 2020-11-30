@@ -19,7 +19,7 @@ cargo install --force cbindgen bindgen
 
 When debugging, it will be helpful to use the Shadow option `--cpu-threshold=-1`. It disables the automatic virtual CPU delay measurement feature. This feature may introduce non-deterministic behaviors, even when running the exact same experiment twice, by the re-ordering of events that occurs due to how the kernel schedules the physical CPU of the experiment machine. Disabling the feature with the above option will ensure a deterministic experiment, making debugging easier.
 
-Build Shadow with debugging symbols by using the `-g` flag. See the help menu with `python setup.py build --help`.
+Build Shadow with debugging symbols by using the `-g` flag. See the help menu with `./setup build --help`.
 
 These days, shadow can typically be run directly from gdb:
 ```
