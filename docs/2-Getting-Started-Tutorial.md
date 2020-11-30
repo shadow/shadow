@@ -142,11 +142,11 @@ Shadow includes some python scripts that can parse some important statistics fro
 # start in the base shadow/ directory
 cd ../..
 # parse the shadow output file
-python src/tools/parse-shadow.py --help
-python src/tools/parse-shadow.py --prefix results resource/examples/shadow.log
+python3 src/tools/parse-shadow.py --help
+python3 src/tools/parse-shadow.py --prefix results resource/examples/shadow.log
 # plot the results!
-python src/tools/plot-shadow.py --help
-python src/tools/plot-shadow.py --data results "example-plots"
+python3 src/tools/plot-shadow.py --help
+python3 src/tools/plot-shadow.py --data results "example-plots"
 ```
 
 The `parse-*.py` scripts generate `stats.*.json.xz` files. The (heavily trimmed) contents of `stats.shadow.json` look a little like this.
@@ -194,14 +194,14 @@ mv shadow.data window1000.data
 To parse these log files, we use the following scripts:
 
 ```bash
-python ../../src/tools/parse-shadow.py --prefix=window1.results window1.log
-python ../../src/tools/parse-shadow.py --prefix=window1000.results window1000.log
+python3 ../../src/tools/parse-shadow.py --prefix=window1.results window1.log
+python3 ../../src/tools/parse-shadow.py --prefix=window1000.results window1000.log
 ```
 
 Each of the directories `window1.results/` and `window1000.results/` now contain data statistics files extracted from the log files. We can now combine and visualize these results with the `plot-shadow.py` script:
 
 ```bash
-python ../../src/tools/plot-shadow.py --prefix "window" --data window1.results/ "1 packet" --data window1000.results/ "1000 packets"
+python3 ../../src/tools/plot-shadow.py --prefix "window" --data window1.results/ "1 packet" --data window1000.results/ "1000 packets"
 ```
 
 Then open the PDF file that was created to compare results from the experiments.
