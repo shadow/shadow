@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 '''
 Make cleaner diffs of shadow logfiles by stripping the parts of the logs that
