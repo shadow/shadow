@@ -6,6 +6,10 @@ When required, you can rebuild all of the C-Rust bindings by running:
 cd build && cmake --target bindings .. && make bindings
 ```
 
+To see the specific options/flags provided to bindgen and cbindgen, you can use `make VERBOSE=1 bindings`.
+
+Since the C bindings and Rust bindings rely on each other, you may sometimes need to build the bindings in a specific order. Instead of `make bindings`, you can be more specific using for example `make bindings_main_rust` to make the Rust bindings for `src/main`.
+
 You may need to install bindgen, cbindgen, and clang:
 
 ```bash

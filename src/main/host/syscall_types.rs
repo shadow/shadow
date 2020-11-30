@@ -1,4 +1,4 @@
-use crate::cbindings as c;
+use crate::cshadow as c;
 use std::convert::From;
 
 #[derive(Copy, Clone)]

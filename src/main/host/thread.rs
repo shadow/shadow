@@ -1,5 +1,5 @@
 use super::syscall_types::{PluginPtr, SysCallReg};
-use crate::cbindings as c;
+use crate::cshadow as c;
 use crate::utility::syscall;
 use nix::errno::Errno;
 

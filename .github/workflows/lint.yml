@@ -59,7 +59,7 @@ jobs:
         run: |
           rustup component add rustfmt
           cargo install --force --version 0.15.0 cbindgen
-          cargo install --force --version 0.55.1 bindgen
+          cargo install --force --version 0.56.0 bindgen
       - name: Check bindings
         run: |
           mkdir build

@@ -2,8 +2,9 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
-mod cbindings {
-    // Inline the bindgen-generated bindings, suppressing warnings.
+
+mod cshadow {
+    // Inline the bindgen-generated Rust bindings, suppressing warnings.
     #![allow(unused)]
     #![allow(non_upper_case_globals)]
     #![allow(non_camel_case_types)]
