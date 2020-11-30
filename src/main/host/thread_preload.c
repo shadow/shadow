@@ -16,6 +16,7 @@
 #include "main/host/thread_preload.h"
 #include "main/host/thread_protected.h"
 #include "main/shmem/shmem_allocator.h"
+#include "main/utility/timing.h"
 #include "shim/ipc.h"
 #include "shim/shim_event.h"
 #include "support/logger/logger.h"
@@ -176,7 +177,11 @@ static void _threadpreload_cleanup(ThreadPreload* thread, int status) {
     thread->isRunning = 0;
 }
 
+double FORK_DURATION_ACC = 0.0;
+
 pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
+
+
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     /* set the env for the child */
@@ -203,7 +208,11 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
     g_free(envStr);
     g_free(argStr);
 
+    RECORD_TIME(fork_start);
     pid_t child_pid = _threadpreload_fork_exec(thread, argv[0], argv, myenvv);
+    RECORD_TIME(fork_stop);
+
+    FORK_DURATION_ACC += duration_to_seconds(&fork_start, &fork_stop);
 
     /* cleanup the dupd env*/
     if (myenvv) {

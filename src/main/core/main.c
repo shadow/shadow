@@ -20,6 +20,7 @@
 #include "main/core/support/options.h"
 #include "main/host/affinity.h"
 #include "main/utility/utility.h"
+#include "main/utility/timing.h"
 #include "main/shmem/shmem_cleanup.h"
 #include "igraph_version.h"
 #include "shd-config.h"
@@ -249,6 +250,8 @@ gint main_runShadow(gint argc, gchar* argv[]) {
           return EXIT_FAILURE;
         }
     }
+
+    atexit(print_durations);
 
     gint returnCode = _main_helper(options);
 
