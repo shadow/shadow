@@ -78,3 +78,8 @@ PRELOADDEF(return, char*, get_actual_path,(int fileno),fileno);
 
 PRELOADDEF(return, void, shadow_bitcoin_register_hash,(const char hash[]),hash);
 PRELOADDEF(return, int, shadow_bitcoin_check_hash,(const char hash[]),hash);
+
+//BLEEP TPS interface
+PRELOADDEF(return, void, update_log_map,(const char prevblockhash[], const char blockhash[],const int txcount, const int height),prevblockhash, blockhash, txcount, height);
+PRELOADDEF(return, int, get_tx_total_count,(void));
+PRELOADDEF(return, int, get_tx_count,(const char blockhash[]),blockhash);

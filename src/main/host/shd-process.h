@@ -517,6 +517,11 @@ void AddDataToHashTable(int fileno, char* path, char * merkleroothash, unsigned 
 void process_emu_shadow_bitcoin_register_hash(Process* proc, const char hash[]);
 int process_emu_shadow_bitcoin_check_hash(Process* proc, const char hash[]);
 
+//Hyeoin add for log map
+void process_emu_update_log_map(Process* proc, const char prevblockhash[], const char blockhash[], const int txcount, const int height);
+int process_emu_get_tx_total_count(Process* proc);
+int process_emu_get_tx_count(Process* proc, const char blockhash[]);
+
 #define PROCESS_EMU_UNSUPPORTED(returntype, returnval, functionname) \
   returntype process_emu_##functionname(Process* proc, ...);
 

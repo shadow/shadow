@@ -601,3 +601,33 @@ int shadow_bitcoin_check_hash(const char hash[]) {
         return director.next.shadow_bitcoin_check_hash(hash);
     }
 }
+
+void update_log_map(const char prevblockhash[], const char blockhash[],const int txcount, const int height){
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_update_log_map(proc, prevblockhash, blockhash, txcount,height);
+    } else {
+        ENSURE(update_log_map);
+        return director.next.update_log_map(prevblockhash, blockhash, txcount, height);
+    }
+}
+
+int get_tx_total_count(){
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_get_tx_total_count(proc);
+    } else {
+        ENSURE(get_tx_total_count);
+        return director.next.get_tx_total_count();
+    }
+}
+
+int get_tx_count(const char blockhash[]){
+    Process* proc = NULL;
+    if((proc = _doEmulate()) != NULL) {
+        return process_emu_get_tx_count(proc, blockhash);
+    } else {
+        ENSURE(get_tx_count);
+        return director.next.get_tx_count(blockhash);
+    }
+}

@@ -58,6 +58,7 @@
 
 //Added for C++ bleep addon module on Shadow
 #include "bleep_addon/bleep_addon.h"
+#include "bleep_addon/bitcoin_log_map/log_map.h"
 
 #include "dl.h"
 //Modified for BLEEP Response Port Error
@@ -8336,4 +8337,21 @@ int process_emu_shadow_bitcoin_check_hash(Process* proc, const char hash[]) {
     int ret = shadow_bitcoin_check_hash(hash);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
     return ret;
+}
+
+void process_emu_update_log_map(Process* proc, const char prevblockhash[], const char blockhash[], const int txcount, const int height) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    update_log_map(prevblockhash, blockhash, txcount, height);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+}
+
+int process_emu_get_tx_total_count(Process* proc) {
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    get_tx_total_count();
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+}
+int process_emu_get_tx_count(Process* proc, const char blockhash[]){
+    ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
+    get_tx_count(blockhash);
+    _process_changeContext(proc, PCTX_SHADOW, prevCTX);
 }
