@@ -9,7 +9,6 @@
 std::map<std::string, Node> block_map;
 
 void update_log_map(const char prevblockhash[], const char blockhash[], const int txcount, const int height){
-    std::cout<<prevblockhash<<" / "<< blockhash<<" / "<<txcount<<" / "<<height<<std::endl;
     int result = insertblock(prevblockhash,blockhash,txcount,height);
     if(!result ){
         printf("error!\n");
@@ -19,9 +18,7 @@ void update_log_map(const char prevblockhash[], const char blockhash[], const in
 
 
 int getPrevBlockTxcount(const char* prevblockhash) {
-    printf("getprevblocktxcount\n");
     if(memcmp(prevblockhash,"0000000000000000000000000000000000000000000000000000000000000000",sizeof(char)*32)==0) {
-        printf("genesis block\n");
         return 0;
     }
     int prevblocktxcount = block_map.find(prevblockhash)->second.totalTxCnt;
@@ -52,13 +49,11 @@ int insertblock(const char* prevblockhash, const char* blockhash, int txcount,in
     node= newblock(prevblockhash,blockhash,txcount,height);
     block_map[blockhash]=node;
     it=block_map.find(blockhash);
-    std::cout<<"find : "<<blockhash<< " -> "<<it->second.totalTxCnt<<std::endl;
     return 1;
 }
 
 //transaction total count
 int get_tx_total_count() {
-    std::cout<<"mx_total_count : "<<max_tx_cnt <<std::endl;
     return max_tx_cnt;
 }
 
@@ -66,6 +61,5 @@ int get_tx_total_count() {
 int get_tx_count(const char* blockhash){
     std::map<std::string, Node>::iterator it;
     it=block_map.find(blockhash);
-    std::cout<<"get_tx_count : "<<it->second.totalTxCnt <<std::endl;
     return it->second.totalTxCnt;
 }

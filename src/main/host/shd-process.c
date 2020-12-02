@@ -8347,11 +8347,13 @@ void process_emu_update_log_map(Process* proc, const char prevblockhash[], const
 
 int process_emu_get_tx_total_count(Process* proc) {
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    get_tx_total_count();
+    int res =  get_tx_total_count();
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return res;
 }
 int process_emu_get_tx_count(Process* proc, const char blockhash[]){
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    get_tx_count(blockhash);
+    int res = get_tx_count(blockhash);
     _process_changeContext(proc, PCTX_SHADOW, prevCTX);
+    return res;
 }
