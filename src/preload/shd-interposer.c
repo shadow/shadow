@@ -155,11 +155,12 @@ static void _interposer_globalInitializeHelper() {
 
 static void _interposer_globalInitialize() {
     /* ensure we recursively intercept during initialization */
-//    if(!__sync_fetch_and_add(&isRecursive, 1)){
-    if(!(isRecursive++)){
+    if(!__sync_fetch_and_add(&isRecursive, 1)){
+//    if(!(isRecursive++)){
         _interposer_globalInitializeHelper();
     }
-    (isRecursive--);
+    __sync_fetch_and_sub(&isRecursive, 1);
+//    (isRecursive--);
 }
 
 /* this function is called when the library is loaded,
@@ -184,7 +185,8 @@ static inline Process* _doEmulate() {
     }
     Process* proc = NULL;
     /* recursive calls always go to libc */
-    if(!(isRecursive++)) {
+    if(!__sync_fetch_and_add(&isRecursive, 1)){
+//    if(!(isRecursive++)) {
         proc = director.shadowIsLoaded && (*(&disableCount)) <= 0 && worker_isAlive() ? worker_getActiveProcess() : NULL;
         /* check if the shadow intercept library is loaded yet, but dont fail if its not */
         if(proc) {
@@ -195,7 +197,8 @@ static inline Process* _doEmulate() {
             proc = NULL;
         }
     }
-    (isRecursive--);
+    __sync_fetch_and_sub(&isRecursive, 1);
+//    (isRecursive--);
     return proc;
 }
 

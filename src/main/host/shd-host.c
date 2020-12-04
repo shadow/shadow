@@ -71,7 +71,6 @@ struct _Host {
 };
 
 /* this function is called by slave before the workers exist */
-guint processIDCounter=0;
 Host* host_new(HostParameters* params) {
     utility_assert(params);
 
@@ -115,8 +114,7 @@ Host* host_new(HostParameters* params) {
 
     message("Created host id '%u' name '%s'", (guint)host->params.id, g_quark_to_string(host->params.id));
 
-    host->processIDCounter = processIDCounter;
-    processIDCounter++;
+    host->processIDCounter = 1000;
     host->referenceCount = 1;
 
     /* we go back to the slave setup process here, so stop counting this host execution */

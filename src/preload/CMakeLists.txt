@@ -19,7 +19,6 @@ set_target_properties(shadow-interpose PROPERTIES
     INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib
     INSTALL_RPATH_USE_LINK_PATH TRUE 
     LINK_FLAGS "-Wl,--no-as-needed,-rpath=${CMAKE_INSTALL_PREFIX}/lib"
-    COMPILE_FLAGS "-ftls-model=initial-exec"
 )
 
 target_link_libraries(shadow-interpose ${DL_LIBRARIES})

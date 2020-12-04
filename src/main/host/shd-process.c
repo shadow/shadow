@@ -171,7 +171,8 @@ struct _buffer_threads {
     pthread_t buffer_pthread; /*The Corresponding buffer thread created to save the TLS of pth_thread*/
     buffer_threads * next;
 };
-
+// for BLEEP arbitrary process ID set
+guint bleepProcessIDBase = 0;
 struct _Process {
     /* the parent virtual host that this process is running on */
     Host* host;
@@ -181,6 +182,8 @@ struct _Process {
     GString* processName;
     FILE* stdoutFile;
     FILE* stderrFile;
+// BLEEP arbitrary id
+    guint bleepProcessID;
 
     /* the shadow plugin executable */
     struct {
@@ -684,6 +687,8 @@ Process* process_new(gpointer host, guint processID,
     }
 
     proc->processID = processID;
+// BLEEP arbitrary id set
+    proc->bleepProcessID = bleepProcessIDBase++;
 
     utility_assert(pluginPath);
     utility_assert(pluginName);
@@ -8107,7 +8112,7 @@ char* process_emu_get_tmp_file_path(Process* proc){
 
 char* process_emu_get_actual_path(Process* proc,int fileno){
     ProcessContext prevCTX = _process_changeContext(proc, proc->activeContext, PCTX_SHADOW);
-    HashNodelist *node = NodeInfotbl->ents[proc->processID].list;
+    HashNodelist *node = NodeInfotbl->ents[proc->bleepProcessID].list;
     while (node) {
         if(node->fileno==fileno) {
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
@@ -8375,7 +8380,7 @@ int process_emu_compare_dat_files(Process* proc, int fileno) {
 //        printf("COMPARE Result = file %d  is not exist! make the new file!!\n",fileno);
 
         //data를 hash table에 추가
-        AddDataToHashTable(fileno,process_emu_get_dat_file_path(proc,fileno),&merkleroothash,proc->processID);
+        AddDataToHashTable(fileno,process_emu_get_dat_file_path(proc,fileno),&merkleroothash,proc->bleepProcessID);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return 0;// file is not exist, so make the file!
     }
@@ -8385,14 +8390,14 @@ int process_emu_compare_dat_files(Process* proc, int fileno) {
         char* uniqueid = node->lastBlockHashMerkleRoot;
         if(memcmp(uniqueid, merkleroothash, 32) == 0) {
 //            printf("COMPARE Result = %s and %s file is same!!!\n",path2,node->actual_path);
-            AddNodeHashData(NodeInfotbl,proc->processID,fileno,node->actual_path);
+            AddNodeHashData(NodeInfotbl,proc->bleepProcessID,fileno,node->actual_path);
             _process_changeContext(proc, PCTX_SHADOW, prevCTX);
             return 1;
         }
         node = node->next;
     }
 //        printf("COMPARE Result = %s and %s file is NOT same!!!\n",path2,FileInfotbl->ents[fileno].list->actual_path);
-        AddDataToHashTable(fileno,process_emu_get_dat_file_path(proc,fileno),merkleroothash,proc->processID);
+        AddDataToHashTable(fileno,process_emu_get_dat_file_path(proc,fileno),merkleroothash,proc->bleepProcessID);
         _process_changeContext(proc, PCTX_SHADOW, prevCTX);
         return 0;
 
