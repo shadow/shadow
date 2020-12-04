@@ -36,7 +36,8 @@ EXPORT int vdl_dl_lmid_add_symbol_remap_public (Lmid_t lmid,
                                                 const char *dst_ver_filename);
 EXPORT int vdl_dl_lmid_swap_tls_public (Lmid_t lmid,
                                         pthread_t *t1, pthread_t *t2);
-
+EXPORT int vdl_dl_lmid_copy_tls_public (Lmid_t lmid,
+                                        pthread_t *t1, pthread_t *t2);
 // This function is special: it is not called from ldso: it is
 // used by vdl itself as the target of a redirection from every call to
 // dl_iterate_phdr

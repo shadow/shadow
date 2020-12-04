@@ -6,4 +6,5 @@ global:
 	dl_lmid_add_symbol_remap;
 	dl_lmid_add_callback;
 	dl_lmid_swap_tls;
+	dl_lmid_copy_tls;
 };

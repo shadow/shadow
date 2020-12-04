@@ -1291,6 +1291,9 @@ gint host_connectToPeer(Host* host, gint handle, const struct sockaddr* address)
 
         _host_associateInterface(host, socket, bindAddr, bindPort, peerIP, peerPort);
     }
+    else {
+        socket_setPeerName(socket, peerIP, peerPort);
+    }
 
     return socket_connectToPeer(socket, peerIP, peerPort, family);
 }

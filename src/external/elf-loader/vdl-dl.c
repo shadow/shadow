@@ -946,3 +946,21 @@ error:
   write_unlock (g_vdl.global_lock);
   return -1;
 }
+
+int
+vdl_dl_lmid_copy_tls (Lmid_t lmid, pthread_t *t1, pthread_t *t2)
+{
+    VDL_LOG_FUNCTION ("", 0);
+    write_lock (g_vdl.global_lock);
+    struct VdlContext *context = (struct VdlContext *) lmid;
+    if (search_context (context) == 0)
+    {
+        goto error;
+    }
+    vdl_tls_copy_context (context, (unsigned long) *t1, (unsigned long) *t2);
+    write_unlock (g_vdl.global_lock);
+    return 0;
+    error:
+    write_unlock (g_vdl.global_lock);
+    return -1;
+}
