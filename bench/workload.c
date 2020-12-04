@@ -8,8 +8,8 @@
 
 #include <unistd.h>
 
-#define N_ITR 1000
-#define WORK_ITR 1000
+#define N_ITR 10000
+#define WORK_ITR 100
 
 static volatile float x_ = 0;
 
