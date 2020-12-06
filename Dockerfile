@@ -18,4 +18,4 @@ RUN ci/container_scripts/build_and_install.sh
 
 RUN ci/container_scripts/test.sh
 
-CMD shadow --version
+CMD /root/.shadow/bin/shadow --version
