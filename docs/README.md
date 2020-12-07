@@ -7,8 +7,6 @@ The docs contain important information about installing and using the Shadow dis
    * [Installation and Setup](1-Installation-and-Setup.md)
      * [Shadow](1.1-Shadow.md)
      * [Shadow with Docker](1.2-Shadow-with-Docker.md)
-     * [Shadow with Vagrant](1.3-Shadow-with-Vagrant.md)
-     * [Shadow with EC2](1.4-Shadow-with-EC2.md)
    * [Getting Started Tutorial](2-Getting-Started-Tutorial.md)
    * [Simulation Customization](3-Simulation-Customization.md)
    * [Notes and FAQs](4-Notes-and-FAQs.md)
