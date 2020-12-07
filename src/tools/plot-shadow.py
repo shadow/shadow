@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 # make sure print works in python2.7 (this statement must be at beginning of file)
 from __future__ import print_function
@@ -10,7 +10,7 @@ from itertools import cycle
 from re import search
 
 """
-python parse-shadow.py --help
+python3 parse-shadow.py --help
 """
 
 pylab.rcParams.update({
