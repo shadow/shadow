@@ -585,7 +585,13 @@ void scheduler_awaitStart(Scheduler* scheduler) {
     /* each thread will boot their own hosts */
     _scheduler_startHosts(scheduler);
 
-    /* everyone is waiting for the next round to be ready */
+    if(scheduler->policyType != SP_SERIAL_GLOBAL) {
+        /* when everyone finishes starting the hosts, the main thread can prepare
+         * round 1 */
+        countdownlatch_countDownAwait(scheduler->finishBarrier);
+    }
+
+    /* everyone will wait for the next round to be ready */
     countdownlatch_countDownAwait(scheduler->prepareRoundBarrier);
 }
 
@@ -609,8 +615,13 @@ void scheduler_start(Scheduler* scheduler) {
     g_mutex_unlock(&scheduler->globalLock);
 
     if(scheduler->policyType != SP_SERIAL_GLOBAL) {
-        /* this will cause a worker to execute the locked initialization in awaitStart */
+        /* this will cause all workers to start their hosts in awaitStart */
         countdownlatch_countDownAwait(scheduler->startBarrier);
+        /* we wait for the workers to finish starting hosts before preparing round 1 */
+        countdownlatch_countDownAwait(scheduler->finishBarrier);
+        /* reset the barriers so we can use them later */
+        countdownlatch_reset(scheduler->startBarrier);
+        countdownlatch_reset(scheduler->finishBarrier);
     }
 }
 
