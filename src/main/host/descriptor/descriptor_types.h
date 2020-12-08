@@ -17,7 +17,7 @@ enum _DescriptorType {
     DT_TCPSOCKET,
     DT_UDPSOCKET,
     DT_PIPE,
-    DT_SOCKETPAIR,
+    DT_UNIXSOCKET,
     DT_EPOLL,
     DT_TIMER,
     DT_FILE,

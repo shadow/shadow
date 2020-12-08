@@ -146,7 +146,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
             // We already diverted these to the socket handler above.
             utility_assert(0);
             break;
-        case DT_SOCKETPAIR:
+        case DT_UNIXSOCKET:
         case DT_EPOLL:
         default:
             warning("write() not yet implemented for descriptor type %i",
@@ -237,7 +237,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
             // We already diverted these to the socket handler above.
             utility_assert(0);
             break;
-        case DT_SOCKETPAIR:
+        case DT_UNIXSOCKET:
         case DT_EPOLL:
         default:
             warning("write(%d) not yet implemented for descriptor type %i", fd, (int)dType);

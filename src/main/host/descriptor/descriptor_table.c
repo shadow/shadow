@@ -178,7 +178,7 @@ void descriptortable_shutdownHelper(DescriptorTable* table) {
              * sure they all get freed by removing the refs in one direction */
             tcp_clearAllChildrenIfServer((TCP*)desc);
         } else if (desc &&
-                   (desc->type == DT_SOCKETPAIR || desc->type == DT_PIPE)) {
+                   (desc->type == DT_UNIXSOCKET || desc->type == DT_PIPE)) {
             /* we need to correctly update the linked channel refs */
             channel_setLinkedChannel((Channel*)desc, NULL);
         } else if (desc && desc->type == DT_EPOLL) {

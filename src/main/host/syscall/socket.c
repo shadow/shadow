@@ -67,7 +67,7 @@ static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
     }
 
     DescriptorType type = descriptor_getType(desc);
-    if (type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
+    if (type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_UNIXSOCKET) {
         info("descriptor %i with type %i is not a socket", sockfd, (int)type);
         return -ENOTSOCK;
     }
