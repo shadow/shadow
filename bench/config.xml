@@ -20,7 +20,7 @@
 </graphml>
 ]]></topology>
    <plugin id="workload" path="workload"/>
-   <host id="peer" quantity="200">
+   <host id="peer" quantity="256">
       <process arguments="None" plugin="workload" starttime="1"/>
    </host>
 </shadow>
