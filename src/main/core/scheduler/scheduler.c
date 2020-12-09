@@ -33,6 +33,7 @@ struct _Scheduler {
 
     /* barrier for worker threads to start and stop running */
     CountDownLatch* startBarrier;
+    CountDownLatch* bootBarrier;
     CountDownLatch* finishBarrier;
     /* barrier to wait for worker threads to finish processing this round */
     CountDownLatch* executeEventsBarrier;
@@ -121,6 +122,7 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
     g_mutex_init(&(scheduler->globalLock));
 
     scheduler->startBarrier = countdownlatch_new(nWorkers+1);
+    scheduler->bootBarrier = countdownlatch_new(nWorkers + 1);
     scheduler->finishBarrier = countdownlatch_new(nWorkers+1);
     scheduler->executeEventsBarrier = countdownlatch_new(nWorkers+1);
     scheduler->collectInfoBarrier = countdownlatch_new(nWorkers+1);
@@ -308,6 +310,7 @@ static void _scheduler_free(Scheduler* scheduler) {
     countdownlatch_free(scheduler->collectInfoBarrier);
     countdownlatch_free(scheduler->prepareRoundBarrier);
     countdownlatch_free(scheduler->startBarrier);
+    countdownlatch_free(scheduler->bootBarrier);
     countdownlatch_free(scheduler->finishBarrier);
 
     g_mutex_clear(&(scheduler->globalLock));
@@ -570,6 +573,9 @@ gboolean scheduler_isRunning(Scheduler* scheduler) {
 }
 
 void scheduler_awaitStart(Scheduler* scheduler) {
+    /* Called by worker threads. When we are in single thread mode, all of the barriers have a count
+     * of 1 so the countDownAwait functions always return immediately here. */
+
     /* set up the thread timer map */
     g_mutex_lock(&scheduler->globalLock);
     if(!g_hash_table_lookup(scheduler->threadToWaitTimerMap, GUINT_TO_POINTER(pthread_self()))) {
@@ -585,17 +591,17 @@ void scheduler_awaitStart(Scheduler* scheduler) {
     /* each thread will boot their own hosts */
     _scheduler_startHosts(scheduler);
 
-    if(scheduler->policyType != SP_SERIAL_GLOBAL) {
-        /* when everyone finishes starting the hosts, the main thread can prepare
-         * round 1 */
-        countdownlatch_countDownAwait(scheduler->finishBarrier);
-    }
+    /* when all hosts are started, the main thread can prepare round 1 */
+    countdownlatch_countDownAwait(scheduler->bootBarrier);
 
     /* everyone will wait for the next round to be ready */
     countdownlatch_countDownAwait(scheduler->prepareRoundBarrier);
 }
 
 void scheduler_awaitFinish(Scheduler* scheduler) {
+    /* Called by worker threads. When we are in single thread mode, all of the barriers have a count
+     * of 1 so the countDownAwait functions always return immediately here. */
+
     /* each thread will run cleanup on their own hosts */
     g_mutex_lock(&scheduler->globalLock);
     scheduler->isRunning = FALSE;
@@ -608,6 +614,8 @@ void scheduler_awaitFinish(Scheduler* scheduler) {
 }
 
 void scheduler_start(Scheduler* scheduler) {
+    /* Called by the scheduler thread. */
+
     _scheduler_assignHosts(scheduler);
 
     g_mutex_lock(&scheduler->globalLock);
@@ -617,15 +625,15 @@ void scheduler_start(Scheduler* scheduler) {
     if(scheduler->policyType != SP_SERIAL_GLOBAL) {
         /* this will cause all workers to start their hosts in awaitStart */
         countdownlatch_countDownAwait(scheduler->startBarrier);
-        /* we wait for the workers to finish starting hosts before preparing round 1 */
-        countdownlatch_countDownAwait(scheduler->finishBarrier);
-        /* reset the barriers so we can use them later */
-        countdownlatch_reset(scheduler->startBarrier);
-        countdownlatch_reset(scheduler->finishBarrier);
+        /* we wait for the workers to finish starting hosts before preparing
+         * round 1 */
+        countdownlatch_countDownAwait(scheduler->bootBarrier);
     }
 }
 
 void scheduler_continueNextRound(Scheduler* scheduler, SimulationTime windowStart, SimulationTime windowEnd) {
+    /* Called by the scheduler thread. */
+
     g_mutex_lock(&scheduler->globalLock);
     scheduler->currentRound.endTime = windowEnd;
     scheduler->currentRound.minNextEventTime = SIMTIME_MAX;
@@ -643,7 +651,8 @@ void scheduler_continueNextRound(Scheduler* scheduler, SimulationTime windowStar
 }
 
 SimulationTime scheduler_awaitNextRound(Scheduler* scheduler) {
-    /* this function is called by the slave main thread */
+    /* Called by the scheduler thread. */
+
     if(scheduler->policyType != SP_SERIAL_GLOBAL) {
         /* other workers will also wait at this barrier when they are finished with their events */
         countdownlatch_countDownAwait(scheduler->executeEventsBarrier);
