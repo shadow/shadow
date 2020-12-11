@@ -20,9 +20,6 @@ cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 ## building with support for C11 on platforms that default to C99 or C89
 set (CMAKE_C_FLAGS "-std=gnu11 ${CMAKE_C_FLAGS}")
 
-## building with support for C11 on platforms that default to C99 or C89
-set (CMAKE_C_FLAGS "-std=gnu11 ${CMAKE_C_FLAGS}")
-
 ## ensure unix environment (CMAKE_SYSTEM_NAME == "Linux")
 if((NOT UNIX) OR (NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux")))
     message(FATAL_ERROR "Shadow requires a Unix/Linux environment.")
