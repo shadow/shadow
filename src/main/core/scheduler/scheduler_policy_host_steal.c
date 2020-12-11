@@ -5,6 +5,7 @@
 
 #include <glib.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "main/core/scheduler/scheduler_policy.h"
@@ -43,6 +44,7 @@ struct _HostStealThreadData {
     /* which worker thread this is */
     guint tnumber;
     GMutex lock;
+    bool isStealable;
 };
 
 typedef struct _HostStealPolicyData HostStealPolicyData;
@@ -362,6 +364,9 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
                 g_queue_push_tail(tdata->unprocessedHosts, g_queue_pop_head(tdata->processedHosts));
             }
         }
+
+        /* we are now ready for other threads to steal our workload */
+        __atomic_store_n(&tdata->isStealable, true, __ATOMIC_RELEASE);
     }
     /* attempt to get an event from this thread's queue */
     Event* nextEvent = _schedulerpolicyhoststeal_popFromThread(policy, tdata, tdata->unprocessedHosts, barrier);
@@ -381,6 +386,14 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
         g_rw_lock_reader_lock(&data->lock);
         HostStealThreadData* stolenTdata = g_array_index(data->threadList, HostStealThreadData*, stolenTnumber);
         g_rw_lock_reader_unlock(&data->lock);
+
+        /* Make sure the workload has been updated for this round.
+         * This boolean is preventing race conditions upon the start of each round,
+         * and since we don't expect it to take long for the other threads to run
+         * through the unprocessedHosts reset above, spinning is OK. */
+        while (!__atomic_load_n(&stolenTdata->isStealable, __ATOMIC_ACQUIRE)) {
+        };
+
         /* We don't need a lock here, because we're only reading, and a misread just means either
          * we read as empty when it's not, in which case the assigned thread (or one of the others)
          * will pick it up anyway, or it reads as non-empty when it is empty, in which case we'll
@@ -456,7 +469,11 @@ static SimulationTime _schedulerpolicyhoststeal_getNextTime(SchedulerPolicy* pol
         /* make sure we get all hosts, which are probably held in the processedHosts queue between rounds */
         g_queue_foreach(tdata->unprocessedHosts, (GFunc)_schedulerpolicyhoststeal_findMinTime, &searchState);
         g_queue_foreach(tdata->processedHosts, (GFunc)_schedulerpolicyhoststeal_findMinTime, &searchState);
+
+        /* since we are in-between rounds, reset our stealable flag */
+        __atomic_store_n(&tdata->isStealable, false, __ATOMIC_RELEASE);
     }
+
     info("next event at time %"G_GUINT64_FORMAT, searchState.nextEventTime);
 
     return searchState.nextEventTime;
