@@ -18,7 +18,7 @@ Shadow does the following:
  + natively executes **real applications** like Tor and Bitcoin 
  + provides efficient, accurate, and **controlled** experiments
  + models network topology, latency, and bandwidth
- + runs without root on a single Linux machine, or [in the cloud][wiki-ec2]
+ + runs without root on a single Linux machine
  + simulates multiple virtual hosts in virtual time
  + simulates the network (TCP stack) and CPU processing delays
  + can run private Tor networks with user/traffic models based on [Tor metrics][tormetrics] 
@@ -77,7 +77,6 @@ See [the original Shadow webcast][youtube-shadow-design] for more information ab
 [tor]: https://www.torproject.org/
 [tormetrics]: https://metrics.torproject.org/
 [torsource]: https://gitweb.torproject.org/tor.git
-[wiki-ec2]: https://github.com/shadow/shadow/wiki/1.4-Shadow-with-EC2
 [wiki-scallion]: https://github.com/shadow/shadow-plugin-tor/wiki
 [wiki-custom-plugin]: https://github.com/shadow/shadow/wiki/2-Simulation-Execution-and-Analysis#shadow-plug-ins
 [youtube-shadow-design]: http://youtu.be/Tb7m8OdpD8A
