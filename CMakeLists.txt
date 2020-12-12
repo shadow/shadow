@@ -66,7 +66,6 @@ message(STATUS "SHADOW_VERSION_MAJOR=${SHADOW_VERSION_MAJOR}")
 message(STATUS "SHADOW_VERSION_MINOR=${SHADOW_VERSION_MINOR}")
 message(STATUS "SHADOW_VERSION_PATCH=${SHADOW_VERSION_PATCH}")
 
-set(SHADOW_INFO_STRING_CONF "For more information, visit https://shadow.github.io or https://github.com/shadow")
 set(SHADOW_VERSION_STRING_CONF "Shadow")
 
 if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
@@ -87,12 +86,6 @@ else()
 endif()
 
 message(STATUS "Building ${SHADOW_VERSION_STRING_CONF}")
-
-## current build date
-string(TIMESTAMP BUILDDATE "%Y-%m-%d")
-if(BUILDDATE)
-    set(SHADOW_VERSION_STRING_CONF "${SHADOW_VERSION_STRING_CONF} (built ${BUILDDATE})")
-endif(BUILDDATE)
 
 ## setup shadow options
 option(SHADOW_DEBUG "turn on debugging for verbose program output (default: OFF)" OFF)
@@ -146,10 +139,6 @@ if(SHADOW_EXPORT STREQUAL ON)
     MESSAGE(STATUS "will export Shadow plug-in service libraries and headers")
 endif(SHADOW_EXPORT STREQUAL ON)
 
-## generate config header and make sure its on the include path
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_BINARY_DIR}/src/shd-config.h)
-install(FILES ${CMAKE_BINARY_DIR}/src/shd-config.h DESTINATION include/)
-
 if(POLICY  CMP0026)
     cmake_policy(SET  CMP0026  OLD)
 endif()
@@ -165,10 +154,36 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
 
+## Add more build info that will appear in 'shadow -v' and in the log file
+## This should come after the project tree recursion so we can pick up the
+## compile options for the shadow target
+string(TIMESTAMP BUILDDATE "%Y-%m-%d")
+get_target_property(SHADOW_COMPILE_OPTIONS shadow COMPILE_OPTIONS)
+get_target_property(SHADOW_LINK_OPTIONS shadow LINK_FLAGS)
+set(SHADOW_BUILD_STRING_CONF "Shadow was built")
+if(BUILDDATE)
+    set(SHADOW_BUILD_STRING_CONF "${SHADOW_BUILD_STRING_CONF} on ${BUILDDATE}")
+endif(BUILDDATE)
+if(CMAKE_BUILD_TYPE)
+    set(SHADOW_BUILD_STRING_CONF "${SHADOW_BUILD_STRING_CONF} in ${CMAKE_BUILD_TYPE} mode")
+endif(CMAKE_BUILD_TYPE)
+if(SHADOW_COMPILE_OPTIONS)
+    set(SHADOW_BUILD_STRING_CONF "${SHADOW_BUILD_STRING_CONF} with compile options: ${SHADOW_COMPILE_OPTIONS}")
+endif(SHADOW_COMPILE_OPTIONS)
+if(SHADOW_LINK_OPTIONS)
+    set(SHADOW_BUILD_STRING_CONF "${SHADOW_BUILD_STRING_CONF} and link options: ${SHADOW_LINK_OPTIONS}")
+endif(SHADOW_LINK_OPTIONS)
+## build info
+set(SHADOW_INFO_STRING_CONF "For more information, visit https://shadow.github.io or https://github.com/shadow")
+
+## generate config header and make sure its on the include path
+## this should come after create the version info to make sure it's included
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_BINARY_DIR}/src/shd-config.h)
+install(FILES ${CMAKE_BINARY_DIR}/src/shd-config.h DESTINATION include/)
+
 ## install our 'exported' libs so they can be imported by others
 file(GLOB CMAKE_CUSTOM_MODULES "${CMAKE_SOURCE_DIR}/cmake/*cmake")
 install(FILES ${CMAKE_CUSTOM_MODULES} DESTINATION share/cmake/Modules/)
 if(SHADOW_EXPORT STREQUAL ON)
     install(EXPORT shadow-externals DESTINATION share/)
 endif(SHADOW_EXPORT STREQUAL ON)
-
