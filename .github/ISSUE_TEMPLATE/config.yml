@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+    - name: Questions, ideas, and general discussions
+      url: https://github.com/shadow/shadow/discussions
+      about: Please ask questions and share ideas here.
