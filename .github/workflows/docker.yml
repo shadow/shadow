@@ -18,3 +18,4 @@ jobs:
     - uses: actions/checkout@v2
     - run: |
         docker build . -t shadow --shm-size="1g"
+        docker run --shm-size="1g" --rm shadow /src/ci/container_scripts/test.sh
