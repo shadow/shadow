@@ -77,7 +77,7 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
     endif(DESCRIBE)
     
     ## current git commit short date
-    EXECUTE_PROCESS(COMMAND "git" "log" "--pretty=format:%ad" "--date=short" "-n"  "1" OUTPUT_VARIABLE SHORTDATE)
+    EXECUTE_PROCESS(COMMAND "git" "log" "--pretty=format:%ad" "--date=format:%Y-%m-%d--%H:%M:%S" "-n"  "1" OUTPUT_VARIABLE SHORTDATE)
     if(SHORTDATE)
         set(SHADOW_VERSION_STRING_CONF "${SHADOW_VERSION_STRING_CONF} ${SHORTDATE}")
     endif(SHORTDATE)
@@ -157,7 +157,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
 ## Add more build info that will appear in 'shadow -v' and in the log file
 ## This should come after the project tree recursion so we can pick up the
 ## compile options for the shadow target
-string(TIMESTAMP BUILDDATE "%Y-%m-%d")
+string(TIMESTAMP BUILDDATE "%Y-%m-%d--%H:%M:%S")
 get_target_property(SHADOW_COMPILE_OPTIONS shadow COMPILE_OPTIONS)
 get_target_property(SHADOW_LINK_OPTIONS shadow LINK_FLAGS)
 set(SHADOW_BUILD_STRING_CONF "Shadow was built")
