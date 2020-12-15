@@ -74,6 +74,7 @@ static gint _main_helper(Options* options) {
     }
     g_free(startupStr);
 
+    message(SHADOW_BUILD_STRING);
     message(SHADOW_INFO_STRING);
     message("logging current startup arguments and environment");
 
@@ -205,12 +206,11 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         return EXIT_FAILURE;
     }
 
-
     // If we are just printing the version or running a cleanup+exit,
     // then print the version, cleanup if requested, and exit with success.
     if (options_doRunPrintVersion(options) ||
         options_shouldExitAfterShmCleanup(options)) {
-        g_printerr("%s running GLib v%u.%u.%u and IGraph v%s\n%s\n",
+        g_printerr("%s running GLib v%u.%u.%u and IGraph v%s\n%s\n%s\n",
                 SHADOW_VERSION_STRING,
                 (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
 #if defined(IGRAPH_VERSION)
@@ -218,6 +218,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
 #else
                 "(n/a)",
 #endif
+                SHADOW_BUILD_STRING,
                 SHADOW_INFO_STRING);
 
         if (options_shouldExitAfterShmCleanup(options)) {

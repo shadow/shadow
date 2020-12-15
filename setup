@@ -186,7 +186,7 @@ def build(args, remaining):
     cmake_cmd = "cmake " + rootdir + " -DCMAKE_INSTALL_PREFIX=" + installdir
 
     # other cmake options
-    if args.do_debug: cmake_cmd += " -DSHADOW_DEBUG=ON"
+    if args.do_debug: os.putenv("CMAKE_BUILD_TYPE", "Debug")
     if args.do_verbose: os.putenv("VERBOSE", "1")
     if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
     if args.do_profile: cmake_cmd += " -DSHADOW_PROFILE=ON"

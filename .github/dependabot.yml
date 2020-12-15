@@ -9,7 +9,7 @@ updates:
       interval: 'daily'
     target-branch: 'dev'
     labels:
-      - 'Component: Dependencies'
+      - 'Component: Build'
 
   - package-ecosystem: 'cargo'
     directory: '/src/test'
@@ -17,4 +17,4 @@ updates:
       interval: 'daily'
     target-branch: 'dev'
     labels:
-      - 'Component: Dependencies'
+      - 'Component: Build'
