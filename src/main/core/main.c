@@ -366,6 +366,7 @@ static gint _main_helper(Options* options) {
     }
     g_free(startupStr);
 
+    message(SHADOW_BUILD_STRING);
     message(SHADOW_INFO_STRING);
     message("logging current startup arguments and environment");
 
@@ -767,7 +768,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
 
     /* if they just want the shadow version, print it and exit */
     if(options_doRunPrintVersion(options)) {
-        g_printerr("%s running GLib v%u.%u.%u and IGraph v%s\n%s\n",
+        g_printerr("%s running GLib v%u.%u.%u and IGraph v%s\n%s\n%s\n",
                 SHADOW_VERSION_STRING,
                 (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
 #if defined(IGRAPH_VERSION)
@@ -775,6 +776,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
 #else
                 "(n/a)",
 #endif
+                SHADOW_BUILD_STRING,
                 SHADOW_INFO_STRING);
         options_free(options);
         return EXIT_SUCCESS;
