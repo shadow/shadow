@@ -27,7 +27,7 @@ if(SHADOW_PROFILE STREQUAL ON)
     add_cflags(-pg)
 endif(SHADOW_PROFILE STREQUAL ON)
 
-if(SHADOW_DEBUG STREQUAL ON)
+if(CMAKE_BUILD_TYPE STREQUAL Debug)
     message(STATUS "Building Rust library in debug mode.")
     set(RUST_BUILD_TYPE "debug")
     set(RUST_BUILD_FLAG "")
