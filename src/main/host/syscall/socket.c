@@ -122,10 +122,9 @@ static int _syscallhandler_validateUDPSocketHelper(SysCallHandler* sys,
     return 0;
 }
 
-static SysCallReturn
-_syscallhandler_getnameHelper(SysCallHandler* sys,
-                              struct sockaddr_in* inet_addr, PluginPtr addrPtr,
-                              PluginPtr addrlenPtr) {
+static SysCallReturn _syscallhandler_getnameHelper(SysCallHandler* sys, struct sockaddr* saddr,
+                                                   size_t slen, PluginPtr addrPtr,
+                                                   PluginPtr addrlenPtr) {
     if (!addrPtr.val || !addrlenPtr.val) {
         info("Cannot get name with NULL return address info.");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
@@ -135,14 +134,14 @@ _syscallhandler_getnameHelper(SysCallHandler* sys,
         process_getMutablePtr(sys->process, sys->thread, addrlenPtr, sizeof(*addrlen));
 
     /* The result is truncated if they didn't give us enough space. */
-    size_t retSize = MIN(*addrlen, sizeof(*inet_addr));
-    *addrlen = (socklen_t)sizeof(*inet_addr);
+    size_t retSize = MIN(*addrlen, slen);
+    *addrlen = (socklen_t)slen;
 
     if (retSize > 0) {
         /* Return the results */
         struct sockaddr* addr =
             process_getWriteablePtr(sys->process, sys->thread, addrPtr, retSize);
-        memcpy(addr, inet_addr, retSize);
+        memcpy(addr, saddr, retSize);
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE};
@@ -223,7 +222,8 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
 
     /* check if they wanted to know where we got the data from */
     if (addrPtr.val) {
-        _syscallhandler_getnameHelper(sys, &inet_addr, addrPtr, addrlenPtr);
+        _syscallhandler_getnameHelper(
+            sys, (struct sockaddr*)&inet_addr, sizeof(inet_addr), addrPtr, addrlenPtr);
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = accepted_fd};
@@ -500,7 +500,8 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
     /* check if they wanted to know where we got the data from */
     if (retval > 0 && srcAddrPtr.val) {
         debug("address info is requested in recv on socket %i", sockfd);
-        _syscallhandler_getnameHelper(sys, &inet_addr, srcAddrPtr, addrlenPtr);
+        _syscallhandler_getnameHelper(
+            sys, (struct sockaddr*)&inet_addr, sizeof(inet_addr), srcAddrPtr, addrlenPtr);
     }
 
     return (SysCallReturn){
@@ -890,18 +891,32 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
 
     /* Get the name of the connected peer.
      * TODO: Needs to be updated when we support AF_UNIX. */
-    struct sockaddr_in inet_addr = {.sin_family = AF_INET};
-    gboolean hasName = socket_getPeerName(
-        socket_desc, &inet_addr.sin_addr.s_addr, &inet_addr.sin_port);
-    if (!hasName) {
-        info("Socket %i has no peer name.", sockfd);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
+    struct sockaddr saddr = {0};
+    size_t slen = 0;
+
+    if (descriptor_getType((Descriptor*)socket_desc) == DT_UNIXSOCKET) {
+        // TODO currently handles socketpair, but will need to be extended
+        // in order to support traditional UNIX sockets
+        struct sockaddr_un* unix_addr = (struct sockaddr_un*)&saddr;
+        unix_addr->sun_family = AF_UNIX;
+        slen = sizeof(unix_addr->sun_family);
+    } else {
+        struct sockaddr_in* inet_addr = (struct sockaddr_in*)&saddr;
+        inet_addr->sin_family = AF_INET;
+
+        gboolean hasName =
+            socket_getPeerName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
+        if (!hasName) {
+            info("Socket %i has no peer name.", sockfd);
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
+        }
+
+        slen = sizeof(*inet_addr);
     }
 
     /* Use helper to write out the result. */
     return _syscallhandler_getnameHelper(
-        sys, &inet_addr, args->args[1].as_ptr, args->args[2].as_ptr);
+        sys, &saddr, slen, args->args[1].as_ptr, args->args[2].as_ptr);
 }
 
 SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
@@ -921,24 +936,39 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
 
     /* Get the name of the socket.
      * TODO: Needs to be updated when we support AF_UNIX. */
-    struct sockaddr_in inet_addr = {.sin_family = AF_INET};
-    gboolean hasName = socket_getSocketName(
-        socket_desc, &inet_addr.sin_addr.s_addr, &inet_addr.sin_port);
-    /* If !hasName, leave sin_addr and sin_port at their default 0 values. */
+    struct sockaddr saddr = {0};
+    size_t slen = 0;
 
-    /* If we are bound to INADDR_ANY, we should instead return the address used
-     * to communicate with the connected peer (if we have one). */
-    if (inet_addr.sin_addr.s_addr == htonl(INADDR_ANY)) {
-        in_addr_t peerIP = 0;
-        if (socket_getPeerName(socket_desc, &peerIP, NULL) &&
-            peerIP != htonl(INADDR_LOOPBACK)) {
-            inet_addr.sin_addr.s_addr = host_getDefaultIP(sys->host);
+    if (descriptor_getType((Descriptor*)socket_desc) == DT_UNIXSOCKET) {
+        // TODO currently handles socketpair, but will need to be extended
+        // in order to support traditional UNIX sockets
+        struct sockaddr_un* unix_addr = (struct sockaddr_un*)&saddr;
+        unix_addr->sun_family = AF_UNIX;
+        slen = sizeof(unix_addr->sun_family);
+    } else {
+        struct sockaddr_in* inet_addr = (struct sockaddr_in*)&saddr;
+        inet_addr->sin_family = AF_INET;
+
+        gboolean hasName =
+            socket_getSocketName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
+        /* If !hasName, leave sin_addr and sin_port at their default 0 values. */
+
+        /* If we are bound to INADDR_ANY, we should instead return the address used
+         * to communicate with the connected peer (if we have one). */
+        if (inet_addr->sin_addr.s_addr == htonl(INADDR_ANY)) {
+            in_addr_t peerIP = 0;
+            if (socket_getPeerName(socket_desc, &peerIP, NULL) &&
+                peerIP != htonl(INADDR_LOOPBACK)) {
+                inet_addr->sin_addr.s_addr = host_getDefaultIP(sys->host);
+            }
         }
+
+        slen = sizeof(*inet_addr);
     }
 
     /* Use helper to write out the result. */
     return _syscallhandler_getnameHelper(
-        sys, &inet_addr, args->args[1].as_ptr, args->args[2].as_ptr);
+        sys, &saddr, slen, args->args[1].as_ptr, args->args[2].as_ptr);
 }
 
 SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
@@ -1099,7 +1129,7 @@ SysCallReturn syscallhandler_shutdown(SysCallHandler* sys,
     int how = args->args[1].as_i64;
 
     debug("trying to shutdown on socket %i with how %i", sockfd, how);
-    
+
     if (how != SHUT_RD && how != SHUT_WR && how != SHUT_RDWR) {
         info("invalid how %i", how);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
@@ -1201,8 +1231,7 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = sockfd};
 }
 
-SysCallReturn syscallhandler_socketpair(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SysCallReturn syscallhandler_socketpair(SysCallHandler* sys, const SysCallArgs* args) {
     int domain = args->args[0].as_i64;
     int type = args->args[1].as_i64;
     int protocol = args->args[2].as_i64;
@@ -1211,15 +1240,15 @@ SysCallReturn syscallhandler_socketpair(SysCallHandler* sys,
     debug("trying to create new socketpair");
 
     /* Null pointer is invalid. */
-    if(!fdsPtr.val) {
+    if (!fdsPtr.val) {
         debug("Null pointer is invalid.");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* Only AF_UNIX (i.e., AF_LOCAL) is supported. */
-    if(domain != AF_UNIX) {
+    if (domain != AF_UNIX) {
         debug("Domain %d not supported", domain);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EAFNOSUPPORT};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EOPNOTSUPP};
     }
 
     /* Remove the two possible flags to get the type. */
@@ -1228,21 +1257,18 @@ SysCallReturn syscallhandler_socketpair(SysCallHandler* sys,
     /* The below are warnings so the Shadow user knows that we don't support
      * everything that Linux supports. */
     if (type_no_flags != SOCK_STREAM && type_no_flags != SOCK_DGRAM) {
-        warning("unsupported socket type \"%i\", we only support SOCK_STREAM and SOCK_DGRAM", type_no_flags);
+        warning("unsupported socket type \"%i\", we only support SOCK_STREAM and SOCK_DGRAM",
+                type_no_flags);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
-    } else if (type_no_flags == SOCK_STREAM && protocol != 0 && protocol != IPPROTO_TCP) {
-        warning(
-            "unsupported socket protocol \"%i\", we only support IPPROTO_TCP on sockets of type SOCK_STREAM", protocol);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
-    } else if (type_no_flags == SOCK_DGRAM && protocol != 0 && protocol != IPPROTO_UDP) {
-        warning(
-            "unsupported socket protocol \"%i\", we only support IPPROTO_UDP on sockets of type SOCK_DGRAM", protocol);
+    } else if (protocol != 0) {
+        warning("unsupported socket protocol \"%i\", we only support default protocol 0", protocol);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
     }
 
-    /* TODO: should we actually be running TCP/UDP internally (i.e., using already connected TCP/UDP sockets here) instead? */
-    Channel* socketA = channel_new(CT_NONE);
-    Channel* socketB = channel_new(CT_NONE);
+    /* TODO: should we actually be running TCP/UDP internally (i.e., using already connected TCP/UDP
+     * sockets here) instead? */
+    Channel* socketA = channel_new(CT_NONE, DT_UNIXSOCKET);
+    Channel* socketB = channel_new(CT_NONE, DT_UNIXSOCKET);
     channel_setLinkedChannel(socketA, socketB);
     channel_setLinkedChannel(socketB, socketA);
 
@@ -1257,7 +1283,7 @@ SysCallReturn syscallhandler_socketpair(SysCallHandler* sys,
     }
 
     /* Return the socket fds to the caller. */
-    int* sockfd = process_getWriteablePtr(sys->process, sys->thread, fdsPtr, 2*sizeof(int));
+    int* sockfd = process_getWriteablePtr(sys->process, sys->thread, fdsPtr, 2 * sizeof(int));
 
     sockfd[0] = process_registerDescriptor(sys->process, (Descriptor*)socketA);
     sockfd[1] = process_registerDescriptor(sys->process, (Descriptor*)socketB);

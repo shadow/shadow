@@ -303,6 +303,7 @@ NOREMAP(ssize_t, sendto, (int a, const void* b, size_t c, int d, const struct so
 NOREMAP(int, setsockopt, (int a, int b, int c, const void *d, socklen_t e), a, b, c, d, e);
 NOREMAP(int, shutdown, (int a, int b), a,b);
 NOREMAP(int, socket, (int a, int b, int c), a,b,c);
+NOREMAP(int, socketpair, (int a, int b, int c, int d[2]), a, b, c, d);
 #ifdef SYS_statx
 NOREMAP(int, statx, (int a, const char* b, int c, unsigned int d, struct statx* e), a, b, c, d, e);
 #endif

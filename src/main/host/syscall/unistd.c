@@ -46,8 +46,8 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
 
     /* A pipe descriptor is simulated with our Channel object, where
      * one side is readonly, the other is writeonly. */
-    Channel* pipeReader = channel_new(CT_READONLY);
-    Channel* pipeWriter = channel_new(CT_WRITEONLY);
+    Channel* pipeReader = channel_new(CT_READONLY, DT_PIPE);
+    Channel* pipeWriter = channel_new(CT_WRITEONLY, DT_PIPE);
     channel_setLinkedChannel(pipeReader, pipeWriter);
     channel_setLinkedChannel(pipeWriter, pipeReader);
 
