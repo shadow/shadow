@@ -46,8 +46,8 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
 
     /* A pipe descriptor is simulated with our Channel object, where
      * one side is readonly, the other is writeonly. */
-    Channel* pipeReader = channel_new(CT_READONLY);
-    Channel* pipeWriter = channel_new(CT_WRITEONLY);
+    Channel* pipeReader = channel_new(CT_READONLY, DT_PIPE);
+    Channel* pipeWriter = channel_new(CT_WRITEONLY, DT_PIPE);
     channel_setLinkedChannel(pipeReader, pipeWriter);
     channel_setLinkedChannel(pipeWriter, pipeReader);
 
@@ -146,7 +146,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
             // We already diverted these to the socket handler above.
             utility_assert(0);
             break;
-        case DT_SOCKETPAIR:
+        case DT_UNIXSOCKET:
         case DT_EPOLL:
         default:
             warning("write() not yet implemented for descriptor type %i",
@@ -237,7 +237,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
             // We already diverted these to the socket handler above.
             utility_assert(0);
             break;
-        case DT_SOCKETPAIR:
+        case DT_UNIXSOCKET:
         case DT_EPOLL:
         default:
             warning("write(%d) not yet implemented for descriptor type %i", fd, (int)dType);

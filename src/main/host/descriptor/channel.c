@@ -15,6 +15,7 @@
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/transport.h"
 #include "main/host/host.h"
 #include "main/utility/utility.h"
@@ -33,7 +34,8 @@ struct _Channel {
 };
 
 static Channel* _channel_fromDescriptor(Descriptor* descriptor) {
-    utility_assert(descriptor_getType(descriptor) == DT_PIPE);
+    utility_assert(descriptor_getType(descriptor) == DT_PIPE ||
+                   descriptor_getType(descriptor) == DT_UNIXSOCKET);
     return (Channel*)descriptor;
 }
 
@@ -154,11 +156,11 @@ TransportFunctionTable channel_functions = {
     channel_close, channel_free, channel_sendUserData, channel_receiveUserData,
     MAGIC_VALUE};
 
-Channel* channel_new(ChannelType type) {
+Channel* channel_new(ChannelType type, DescriptorType dtype) {
     Channel* channel = g_new0(Channel, 1);
     MAGIC_INIT(channel);
 
-    transport_init(&(channel->super), &channel_functions, DT_PIPE);
+    transport_init(&(channel->super), &channel_functions, dtype);
 
     channel->type = type;
     channel->buffer = bytequeue_new(8192);
