@@ -95,6 +95,35 @@ static void _set_interpose_type() {
     abort();
 }
 
+/*
+ * If we can parse it from the env, check that Shadow's PID is my parent and
+ * exit otherwise.
+ */
+static void _verify_parent_pid_or_exit() {
+    unsigned long long shadow_pid = 0;
+    bool valid_parse_pid = false;
+    const char* shadow_pid_str = getenv("SHADOW_PID");
+
+    if (shadow_pid_str) {
+        int rc = sscanf(shadow_pid_str, "%llu", &shadow_pid);
+
+        if (rc == 1) {
+            valid_parse_pid = true;
+        } else {
+            error("SHADOW_PID does not contain an unsigned: %s", shadow_pid_str);
+        }
+    }
+
+    if (valid_parse_pid) {
+        if (getppid() == shadow_pid) { // Validate that Shadow is still alive.
+            debug("Plugin verified Shadow is still running as parent.");
+        } else {
+            error("Shadow exited.");
+            exit(-1); // If Shadow's dead, we can just get out(?)
+        }
+    }
+}
+
 static void _shim_load() {
     // We ultimately want to log to SHADOW_LOG_FILE, but first we redirect to
     // stderr for any log messages that happen before we can open it.
@@ -149,24 +178,7 @@ static void _shim_load() {
         warning("prctl: %s", strerror(errno));
     }
 
-    const char* shadow_pid_str = getenv("SHADOW_PID");
-    if (shadow_pid_str) {
-        unsigned long long tmp_pid = 0;
-        pid_t shadow_pid = 0;
-        int rc = sscanf(shadow_pid_str, "%llu", &tmp_pid);
-        if (rc != 1) {
-            error("SHADOW_PID does not contain an unsigned: %s", shadow_pid_str);
-        } else {
-
-            assert((pid_t)tmp_pid == tmp_pid);
-            shadow_pid = (pid_t)tmp_pid;
-
-            if (getppid() != shadow_pid) { // Validate that Shadow is still alive.
-                error("Shadow exited.");
-                exit(-1); // If Shadow's dead, we can just get out(?)
-            }
-        }
-    }
+    _verify_parent_pid_or_exit();
 
     debug("Finished shim global init");
 }
