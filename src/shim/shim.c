@@ -151,11 +151,16 @@ static void _shim_load() {
 
     const char* shadow_pid_str = getenv("SHADOW_PID");
     if (shadow_pid_str) {
+        unsigned long long tmp_pid = 0;
         pid_t shadow_pid = 0;
-        int rc = sscanf(shadow_pid_str, "%llu", &shadow_pid);
+        int rc = sscanf(shadow_pid_str, "%llu", &tmp_pid);
         if (rc != 1) {
             error("SHADOW_PID does not contain an unsigned: %s", shadow_pid_str);
         } else {
+
+            assert((pid_t)tmp_pid == tmp_pid);
+            shadow_pid = (pid_t)tmp_pid;
+
             if (getppid() != shadow_pid) { // Validate that Shadow is still alive.
                 error("Shadow exited.");
                 exit(-1); // If Shadow's dead, we can just get out(?)
