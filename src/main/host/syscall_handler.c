@@ -281,6 +281,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(set_tid_address);
         HANDLE(shutdown);
         HANDLE(socket);
+        HANDLE(socketpair);
 #ifdef SYS_statx
         HANDLE(statx);
 #endif

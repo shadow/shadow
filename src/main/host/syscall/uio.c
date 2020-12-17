@@ -158,7 +158,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                     break;
                 }
                 case DT_TIMER:
-                case DT_SOCKETPAIR:
+                case DT_UNIXSOCKET:
                 case DT_EPOLL:
                 default: {
                     warning(
@@ -277,7 +277,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                     break;
                 }
                 case DT_TIMER:
-                case DT_SOCKETPAIR:
+                case DT_UNIXSOCKET:
                 case DT_EPOLL:
                 default: {
                     warning(
