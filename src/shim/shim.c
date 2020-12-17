@@ -9,7 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/prctl.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #include "shim/ipc.h"
 #include "shim/shim_event.h"
@@ -93,6 +95,35 @@ static void _set_interpose_type() {
     abort();
 }
 
+/*
+ * If we can parse it from the env, check that Shadow's PID is my parent and
+ * exit otherwise.
+ */
+static void _verify_parent_pid_or_exit() {
+    unsigned long long shadow_pid = 0;
+    bool valid_parse_pid = false;
+    const char* shadow_pid_str = getenv("SHADOW_PID");
+
+    if (shadow_pid_str) {
+        int rc = sscanf(shadow_pid_str, "%llu", &shadow_pid);
+
+        if (rc == 1) {
+            valid_parse_pid = true;
+        } else {
+            error("SHADOW_PID does not contain an unsigned: %s", shadow_pid_str);
+        }
+    }
+
+    if (valid_parse_pid) {
+        if (getppid() == shadow_pid) { // Validate that Shadow is still alive.
+            debug("Plugin verified Shadow is still running as parent.");
+        } else {
+            error("Shadow exited.");
+            exit(-1); // If Shadow's dead, we can just get out(?)
+        }
+    }
+}
+
 static void _shim_load() {
     // We ultimately want to log to SHADOW_LOG_FILE, but first we redirect to
     // stderr for any log messages that happen before we can open it.
@@ -115,8 +146,7 @@ static void _shim_load() {
         const char* logger_start_time_string = getenv("SHADOW_LOG_START_TIME");
         assert(logger_start_time_string);
         int64_t logger_start_time;
-        assert(sscanf(logger_start_time_string, "%" PRId64,
-                      &logger_start_time) == 1);
+        assert(sscanf(logger_start_time_string, "%" PRId64, &logger_start_time) == 1);
         logger_set_global_start_time_micros(logger_start_time);
     }
 
@@ -138,6 +168,17 @@ static void _shim_load() {
         }
         logger_setDefault(shimlogger_new(log_file));
     }
+
+    // Ensure that the child process exits when Shadow does.  Shadow
+    // ought to have already tried to terminate the child via SIGTERM
+    // before shutting down (though see
+    // https://github.com/shadow/shadow/issues/903), so now we jump all
+    // the way to SIGKILL.
+    if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
+        warning("prctl: %s", strerror(errno));
+    }
+
+    _verify_parent_pid_or_exit();
 
     debug("Finished shim global init");
 }
@@ -176,8 +217,7 @@ __attribute__((constructor)) void shim_ensure_init() {
     shim_enableInterposition();
 }
 
-__attribute__((destructor))
-static void _shim_unload() {
+__attribute__((destructor)) static void _shim_unload() {
     if (!_using_interpose_preload) {
         // Nothing to tear down.
         return;

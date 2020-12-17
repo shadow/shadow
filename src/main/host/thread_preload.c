@@ -52,9 +52,7 @@ static ThreadPreload* _threadToThreadPreload(Thread* thread) {
     return (ThreadPreload*)thread;
 }
 
-static Thread* _threadPreloadToThread(ThreadPreload* thread) {
-    return (Thread*)thread;
-}
+static Thread* _threadPreloadToThread(ThreadPreload* thread) { return (Thread*)thread; }
 
 static void _threadpreload_auxFree(void* p, void* _) {
     ShMemBlock* blk = (ShMemBlock*)p;
@@ -80,8 +78,7 @@ static void _threadpreload_auxWrite(void* p, void* t) {
 
     ShimEvent resp = {0};
 
-    req.event_data.shmem_blk.serial =
-        shmemallocator_globalBlockSerialize(&write_blk->blk);
+    req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(&write_blk->blk);
     req.event_data.shmem_blk.plugin_ptr = write_blk->plugin_ptr;
     req.event_data.shmem_blk.n = write_blk->n;
 
@@ -113,10 +110,30 @@ void threadpreload_free(Thread* base) {
     worker_countObject(OBJECT_TYPE_THREAD_PRELOAD, COUNTER_TYPE_FREE);
 }
 
+static gchar** _add_shadow_pid_to_env(gchar** envp) {
+
+    enum { BUF_NBYTES = 256 };
+    char strbuf[BUF_NBYTES] = {0};
+
+    pid_t shadow_pid = getpid();
+
+    snprintf(strbuf, BUF_NBYTES, "%llu", (unsigned long long)shadow_pid);
+
+    envp = g_environ_setenv(envp, "SHADOW_PID", strbuf, TRUE);
+
+    return envp;
+}
+
 static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, char* const argv[],
                                       char* const envp[]) {
-    pid_t shadow_pid = getpid();
-    pid_t pid = fork();
+
+    // vfork has superior performance to fork with large workloads.
+    pid_t pid = vfork();
+
+    // Beware! Unless you really know what you're doing, don't add any code
+    // between here and the execvpe below. The forked child process is sharing
+    // memory and control structures with the parent at this point. See
+    // `man 2 vfork`.
 
     switch (pid) {
         case -1:
@@ -126,21 +143,6 @@ static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, c
         case 0: {
             // child
 
-            // Ensure that the child process exits when Shadow does.  Shadow
-            // ought to have already tried to terminate the child via SIGTERM
-            // before shutting down (though see
-            // https://github.com/shadow/shadow/issues/903), so now we jump all
-            // the way to SIGKILL.
-            if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
-                error("prctl: %s", g_strerror(errno));
-                return -1;
-            }
-            // Validate that Shadow is still alive (didn't die in between forking and calling
-            // prctl).
-            if (getppid() != shadow_pid) {
-                error("parent (shadow) exited");
-                return -1;
-            }
             int rc = execvpe(file, argv, envp);
             if (rc == -1) {
                 error("execvpe() call failed");
@@ -184,8 +186,7 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
     utility_assert(thread->ipc_blk.p);
     ipcData_init(thread->ipc_blk.p, shimipc_spinMax());
 
-    ShMemBlockSerialized ipc_blk_serial =
-        shmemallocator_globalBlockSerialize(&thread->ipc_blk);
+    ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&thread->ipc_blk);
 
     char ipc_blk_buf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
     shmemblockserialized_toString(&ipc_blk_serial, ipc_blk_buf);
@@ -193,10 +194,12 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
     /* append to the env */
     myenvv = g_environ_setenv(myenvv, "SHADOW_IPC_BLK", ipc_blk_buf, TRUE);
 
+    // set shadow's PID in the env so the child can run get_ppid
+    myenvv = _add_shadow_pid_to_env(myenvv);
+
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr(argv);
-    message("forking new thread with environment '%s' and arguments '%s'",
-            envStr, argStr);
+    message("forking new thread with environment '%s' and arguments '%s'", envStr, argStr);
     g_free(envStr);
     g_free(argStr);
 
@@ -246,8 +249,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 debug("sending start event code to %d on %p", thread->base.nativePid,
                       thread->ipc_blk.p);
 
-                thread->currentEvent.event_data.start.simulation_nanos =
-                    worker_getEmulatedTime();
+                thread->currentEvent.event_data.start.simulation_nanos = worker_getEmulatedTime();
                 shimevent_sendEventToPlugin(thread->ipc_blk.p, &thread->currentEvent);
                 break;
             }
@@ -263,8 +265,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
             }
             case SHD_SHIM_EVENT_SYSCALL: {
                 SysCallReturn result = syscallhandler_make_syscall(
-                    thread->sys,
-                    &thread->currentEvent.event_data.syscall.syscall_args);
+                    thread->sys, &thread->currentEvent.event_data.syscall.syscall_args);
 
                 if (result.state == SYSCALL_BLOCK) {
                     if (shimipc_sendExplicitBlockMessageEnabled()) {
@@ -302,8 +303,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                         .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
                         .event_data = {
                             .syscall_complete = {.retval = result.retval,
-                                                 .simulation_nanos =
-                                                     worker_getEmulatedTime()},
+                                                 .simulation_nanos = worker_getEmulatedTime()},
 
                         }};
                 } else if (result.state == SYSCALL_NATIVE) {
@@ -404,8 +404,7 @@ static ShMemBlock _threadpreload_readPtrImpl(ThreadPreload* thread, PluginPtr pl
     return blk;
 }
 
-const void* threadpreload_getReadablePtr(Thread* base, PluginPtr plugin_src,
-                                         size_t n) {
+const void* threadpreload_getReadablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
@@ -421,7 +420,7 @@ const void* threadpreload_getReadablePtr(Thread* base, PluginPtr plugin_src,
 }
 
 int threadpreload_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
-                             const char** str_out, size_t* strlen_out) {
+                                    const char** str_out, size_t* strlen_out) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
@@ -448,8 +447,7 @@ int threadpreload_getReadableString(Thread* base, PluginPtr plugin_src, size_t n
     return 0;
 }
 
-void* threadpreload_getWriteablePtr(Thread* base, PluginPtr plugin_src,
-                                    size_t n) {
+void* threadpreload_getWriteablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     // Allocate a block for the clone
@@ -502,7 +500,7 @@ long threadpreload_nativeSyscall(Thread* base, long n, va_list args) {
     // ABI supports at most 6 arguments, and processing more arguments here than
     // were actually passed doesn't hurt anything. e.g. this is what libc's
     // syscall(2) function does as well.
-    for (int i=0; i<6; ++i) {
+    for (int i = 0; i < 6; ++i) {
         req.event_data.syscall.syscall_args.args[i].as_i64 = va_arg(args, int64_t);
     }
     shimevent_sendEventToPlugin(thread->ipc_blk.p, &req);
@@ -538,8 +536,7 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
     };
     thread->sys = syscallhandler_new(host, process, _threadPreloadToThread(thread));
 
-    _Static_assert(
-        sizeof(void*) == 8, "thread-preload impl assumes 8 byte pointers");
+    _Static_assert(sizeof(void*) == 8, "thread-preload impl assumes 8 byte pointers");
 
     // thread has access to a global, thread safe shared memory manager
 
