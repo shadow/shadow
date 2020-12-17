@@ -113,10 +113,24 @@ void threadpreload_free(Thread* base) {
     worker_countObject(OBJECT_TYPE_THREAD_PRELOAD, COUNTER_TYPE_FREE);
 }
 
+static gchar** _add_shadow_pid_to_env(gchar **envp) {
+
+    enum { BUF_NBYTES = 256 };
+    char strbuf[BUF_NBYTES] = {0};
+
+    pid_t shadow_pid = getpid();
+
+    snprintf(strbuf, BUF_NBYTES, "%llu", (unsigned long long)shadow_pid);
+
+    envp = g_environ_setenv(envp, "SHADOW_PID", strbuf, TRUE);
+
+    return envp;
+}
+
 static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, char* const argv[],
                                       char* const envp[]) {
     pid_t shadow_pid = getpid();
-    pid_t pid = fork();
+    pid_t pid = vfork();
 
     switch (pid) {
         case -1:
@@ -126,21 +140,6 @@ static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, c
         case 0: {
             // child
 
-            // Ensure that the child process exits when Shadow does.  Shadow
-            // ought to have already tried to terminate the child via SIGTERM
-            // before shutting down (though see
-            // https://github.com/shadow/shadow/issues/903), so now we jump all
-            // the way to SIGKILL.
-            if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
-                error("prctl: %s", g_strerror(errno));
-                return -1;
-            }
-            // Validate that Shadow is still alive (didn't die in between forking and calling
-            // prctl).
-            if (getppid() != shadow_pid) {
-                error("parent (shadow) exited");
-                return -1;
-            }
             int rc = execvpe(file, argv, envp);
             if (rc == -1) {
                 error("execvpe() call failed");
@@ -192,6 +191,9 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
 
     /* append to the env */
     myenvv = g_environ_setenv(myenvv, "SHADOW_IPC_BLK", ipc_blk_buf, TRUE);
+
+    // set shadow's PID in the env so the child can run get_ppid
+    myenvv = _add_shadow_pid_to_env(myenvv);
 
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr(argv);
