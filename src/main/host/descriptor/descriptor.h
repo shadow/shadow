@@ -15,27 +15,27 @@
 
 /* Initialize the parent parts of a new descriptor subclass. This call should
  * be paired with a call to clear() before freeing the subclass object. */
-void descriptor_init(Descriptor* descriptor, DescriptorType type,
+void descriptor_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
                      DescriptorFunctionTable* funcTable);
 /* Clear the bits that were initialized in init(). Following this call, the
  * descriptor becomes invalid and the subclass should be freed. */
-void descriptor_clear(Descriptor* descriptor);
+void descriptor_clear(LegacyDescriptor* descriptor);
 
 void descriptor_ref(gpointer data);
 void descriptor_unref(gpointer data);
-void descriptor_close(Descriptor* descriptor);
-gint descriptor_compare(const Descriptor* foo, const Descriptor* bar, gpointer user_data);
+void descriptor_close(LegacyDescriptor* descriptor);
+gint descriptor_compare(const LegacyDescriptor* foo, const LegacyDescriptor* bar, gpointer user_data);
 
-void descriptor_setHandle(Descriptor* descriptor, gint handle);
-gint descriptor_getHandle(Descriptor* descriptor);
-void descriptor_setOwnerProcess(Descriptor* descriptor, Process* ownerProcess);
-Process* descriptor_getOwnerProcess(Descriptor* descriptor);
-DescriptorType descriptor_getType(Descriptor* descriptor);
-gint* descriptor_getHandleReference(Descriptor* descriptor);
+void descriptor_setHandle(LegacyDescriptor* descriptor, gint handle);
+gint descriptor_getHandle(LegacyDescriptor* descriptor);
+void descriptor_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProcess);
+Process* descriptor_getOwnerProcess(LegacyDescriptor* descriptor);
+LegacyDescriptorType descriptor_getType(LegacyDescriptor* descriptor);
+gint* descriptor_getHandleReference(LegacyDescriptor* descriptor);
 
-gint descriptor_getFlags(Descriptor* descriptor);
-void descriptor_setFlags(Descriptor* descriptor, gint flags);
-void descriptor_addFlags(Descriptor* descriptor, gint flags);
+gint descriptor_getFlags(LegacyDescriptor* descriptor);
+void descriptor_setFlags(LegacyDescriptor* descriptor, gint flags);
+void descriptor_addFlags(LegacyDescriptor* descriptor, gint flags);
 
 /*
  * One of the main functions of the descriptor is to track its poll status,
@@ -61,18 +61,18 @@ void descriptor_addFlags(Descriptor* descriptor, gint flags);
  * listener will trigger notifications via callback functions if the listener is
  * configured to monitor a bit that flipped.
  */
-void descriptor_adjustStatus(Descriptor* descriptor, Status status, gboolean doSetBits);
+void descriptor_adjustStatus(LegacyDescriptor* descriptor, Status status, gboolean doSetBits);
 
 /* Gets the current status of the descriptor. */
-Status descriptor_getStatus(Descriptor* descriptor);
+Status descriptor_getStatus(LegacyDescriptor* descriptor);
 
 /* Adds a listener that will get notified via descriptorlistener_onStatusChanged
  * on status transitions (bit flips).
  */
-void descriptor_addListener(Descriptor* descriptor, StatusListener* listener);
+void descriptor_addListener(LegacyDescriptor* descriptor, StatusListener* listener);
 
 /* Remove the listener for our set of listeners that get notified on status
  * transitions (bit flips). */
-void descriptor_removeListener(Descriptor* descriptor, StatusListener* listener);
+void descriptor_removeListener(LegacyDescriptor* descriptor, StatusListener* listener);
 
 #endif /* SHD_DESCRIPTOR_H_ */

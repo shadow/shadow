@@ -58,7 +58,7 @@ enum _EpollWatchFlags {
 typedef struct _EpollWatch EpollWatch;
 struct _EpollWatch {
     /* the shadow descriptor we are watching for events */
-    Descriptor* descriptor;
+    LegacyDescriptor* descriptor;
     /* The listener that notifies us when status changes. */
     StatusListener* listener;
     /* holds the actual event info */
@@ -71,7 +71,7 @@ struct _EpollWatch {
 
 struct _Epoll {
     /* epoll itself is also a descriptor */
-    Descriptor super;
+    LegacyDescriptor super;
 
     /* holds the wrappers for the descriptors we are watching for events */
     GHashTable* watching;
@@ -84,9 +84,9 @@ struct _Epoll {
 
 /* forward declaration */
 static void _epoll_descriptorStatusChanged(Epoll* epoll,
-                                           Descriptor* descriptor);
+                                           LegacyDescriptor* descriptor);
 
-static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor,
+static EpollWatch* _epollwatch_new(Epoll* epoll, LegacyDescriptor* descriptor,
                                    const struct epoll_event* event) {
     EpollWatch* watch = g_new0(EpollWatch, 1);
     MAGIC_INIT(watch);
@@ -132,21 +132,21 @@ static void _epollwatch_unref(EpollWatch* watch) {
     }
 }
 
-static Epoll* _epoll_fromDescriptor(Descriptor* descriptor) {
+static Epoll* _epoll_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     utility_assert(descriptor_getType(descriptor) == DT_EPOLL);
     return (Epoll*)descriptor;
 }
 
 /* should only be called from descriptor dereferencing the functionTable */
-static void _epoll_free(Descriptor* descriptor) {
-    Epoll* epoll = _epoll_fromDescriptor(descriptor);
+static void _epoll_free(LegacyDescriptor* descriptor) {
+    Epoll* epoll = _epoll_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(epoll);
 
     /* this unrefs all of the remaining watches */
     g_hash_table_destroy(epoll->watching);
     g_hash_table_destroy(epoll->ready);
 
-    descriptor_clear((Descriptor*)epoll);
+    descriptor_clear((LegacyDescriptor*)epoll);
     MAGIC_CLEAR(epoll);
     g_free(epoll);
 
@@ -168,8 +168,8 @@ void epoll_clearWatchListeners(Epoll* epoll) {
     }
 }
 
-static gboolean _epoll_close(Descriptor* descriptor) {
-    Epoll* epoll = _epoll_fromDescriptor(descriptor);
+static gboolean _epoll_close(LegacyDescriptor* descriptor) {
+    Epoll* epoll = _epoll_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(epoll);
     epoll_clearWatchListeners(epoll);
     return TRUE;
@@ -285,7 +285,7 @@ static const gchar* _epoll_operationToStr(gint op) {
     }
 }
 
-gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
+gint epoll_control(Epoll* epoll, gint operation, LegacyDescriptor* descriptor,
                    const struct epoll_event* event) {
     MAGIC_ASSERT(epoll);
 
@@ -442,7 +442,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
 }
 
 static void _epoll_descriptorStatusChanged(Epoll* epoll,
-                                           Descriptor* descriptor) {
+                                           LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(epoll);
 
     /* make sure we are actually watching the descriptor */

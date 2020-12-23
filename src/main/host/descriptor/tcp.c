@@ -257,7 +257,7 @@ static void _rswlog(const TCP *tcp, const char *format, ...) {
 
 static void _tcp_flush(TCP* tcp);
 
-static TCP* _tcp_fromDescriptor(Descriptor* descriptor) {
+static TCP* _tcp_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     utility_assert(descriptor_getType(descriptor) == DT_TCPSOCKET);
     return (TCP*)descriptor;
 }
@@ -621,7 +621,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
     /* some state transitions require us to update the descriptor status */
     switch (state) {
         case TCPS_LISTEN: {
-            descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE, TRUE);
+            descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE, TRUE);
             break;
         }
         case TCPS_SYNSENT: {
@@ -633,7 +633,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
         case TCPS_ESTABLISHED: {
             tcp->flags |= TCPF_WAS_ESTABLISHED;
             descriptor_adjustStatus(
-                (Descriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
+                (LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
             break;
         }
         case TCPS_CLOSING: {
@@ -646,7 +646,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
             _tcp_clearRetransmit(tcp, (guint)-1);
 
             /* user can no longer use socket */
-            descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE, FALSE);
+            descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE, FALSE);
 
             /*
              * servers have to wait for all children to close.
@@ -664,15 +664,15 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
                     /* if i was the server's last child and its waiting to close, close it */
                     if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
                         /* this will unbind from the network interface and free socket */
-                        Descriptor* parentDesc = (Descriptor*)parent;
-                        process_deregisterDescriptor(
+                        LegacyDescriptor* parentDesc = (LegacyDescriptor*)parent;
+                        process_deregisterLegacyDescriptor(
                             descriptor_getOwnerProcess(parentDesc), parentDesc);
                     }
                 }
 
                 /* this will unbind from the network interface and free socket */
-                Descriptor* desc = (Descriptor*)tcp;
-                process_deregisterDescriptor(
+                LegacyDescriptor* desc = (LegacyDescriptor*)tcp;
+                process_deregisterLegacyDescriptor(
                     descriptor_getOwnerProcess(desc), desc);
             }
             break;
@@ -747,7 +747,7 @@ static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
         /* the packet takes up more space */
         tcp->throttledOutputLength += packet_getPayloadLength(packet);
         if(_tcp_getBufferSpaceOut(tcp) == 0) {
-            descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+            descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
         }
 
         packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_THROTTLED);
@@ -880,7 +880,7 @@ static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
 
         tcp->retransmit.queueLength += packet_getPayloadLength(packet);
         if(_tcp_getBufferSpaceOut(tcp) == 0) {
-            descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+            descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
         }
     }
 }
@@ -905,7 +905,7 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
     }
 
     if(_tcp_getBufferSpaceOut(tcp) > 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
+        descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
     }
 }
 
@@ -928,7 +928,7 @@ static void _tcp_clearRetransmitRange(TCP* tcp, guint begin, guint end) {
     }
 
     if(_tcp_getBufferSpaceOut(tcp) > 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
+        descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
     }
 }
 
@@ -1062,7 +1062,7 @@ static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
     packet_addDeliveryStatus(packet, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
 
     if(_tcp_getBufferSpaceOut(tcp) > 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
+        descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
     }
 
     /* reset retransmit timer since we are resending it now */
@@ -1251,7 +1251,7 @@ static void _tcp_flush(TCP* tcp) {
     /* update the tracker input/output buffer stats */
     Tracker* tracker = host_getTracker(worker_getActiveHost());
     Socket* socket = (Socket* )tcp;
-    Descriptor* descriptor = (Descriptor *)socket;
+    LegacyDescriptor* descriptor = (LegacyDescriptor *)socket;
     gsize inSize = socket_getInputBufferSize(&(tcp->super));
     gsize outSize = socket_getOutputBufferSize(&(tcp->super));
     tracker_updateSocketInputBuffer(tracker, descriptor->handle, inSize - _tcp_getBufferSpaceIn(tcp), inSize);
@@ -1275,18 +1275,18 @@ static void _tcp_flush(TCP* tcp) {
         if((tcp->receive.next >= tcp->receive.end) && !(tcp->flags & TCPF_EOF_RD_SIGNALED)) {
             /* user needs to read a 0 so it knows we closed */
             tcp->error |= TCPE_RECEIVE_EOF;
-            descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_READABLE, TRUE);
+            descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_READABLE, TRUE);
         }
     }
 
     if((tcp->error & TCPE_CONNECTION_RESET) && (tcp->flags & TCPF_RESET_SIGNALED)) {
-        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+        descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
     } else if((tcp->error & TCPE_SEND_EOF) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
-        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+        descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
     } else if(_tcp_getBufferSpaceOut(tcp) <= 0) {
-        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+        descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, FALSE);
     } else {
-        descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
+        descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
     }
 }
 
@@ -1346,7 +1346,7 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
 }
 
 static gboolean _tcp_isFamilySupported(Socket* socket, sa_family_t family) {
-    TCP* tcp = _tcp_fromDescriptor((Descriptor*)socket);
+    TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(tcp);
     return family == AF_INET || family == AF_UNIX ? TRUE : FALSE;
 }
@@ -1493,7 +1493,7 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
 
 static gint _tcp_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port,
                                sa_family_t family) {
-    TCP* tcp = _tcp_fromDescriptor((Descriptor*)socket);
+    TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(tcp);
 
     /* Only try to connect if we haven't already started. */
@@ -1677,7 +1677,7 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
             }
         }
 
-        Status s = descriptor_getStatus((Descriptor*)tcp);
+        Status s = descriptor_getStatus((LegacyDescriptor*)tcp);
         gboolean waitingUserRead = (s & STATUS_DESCRIPTOR_READABLE) ? TRUE : FALSE;
 
         if((isNextPacket && !waitingUserRead) || (packetFits)) {
@@ -1819,7 +1819,7 @@ static void _tcp_sendACKTaskCallback(TCP* tcp, gpointer userData) {
 
 /* return TRUE if the packet should be retransmitted */
 static void _tcp_processPacket(Socket* socket, Packet* packet) {
-    TCP* tcp = _tcp_fromDescriptor((Descriptor*)socket);
+    TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(tcp);
 
     /* fetch the TCP info from the packet */
@@ -1878,9 +1878,9 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                 guint64 sendBufSize = host_getConfiguredSendBufSize(node);
 
                 TCP* multiplexed = tcp_new(recvBufSize, sendBufSize);
-                process_registerDescriptor(
-                    descriptor_getOwnerProcess((Descriptor*)tcp),
-                    (Descriptor*)multiplexed);
+                process_registerLegacyDescriptor(
+                    descriptor_getOwnerProcess((LegacyDescriptor*)tcp),
+                    (LegacyDescriptor*)multiplexed);
 
                 multiplexed->child = _tcpchild_new(multiplexed, tcp, header->sourceIP, header->sourcePort);
                 utility_assert(g_hash_table_lookup(tcp->server->children, &(multiplexed->child->key)) == NULL);
@@ -2165,7 +2165,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
 }
 
 static void _tcp_dropPacket(Socket* socket, Packet* packet) {
-    TCP* tcp = _tcp_fromDescriptor((Descriptor*)socket);
+    TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(tcp);
 
     /* if we run a server, the packet could be for an existing child */
@@ -2192,7 +2192,7 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
 
 static gssize _tcp_sendUserData(Transport* transport, gconstpointer buffer,
                                 gsize nBytes, in_addr_t ip, in_port_t port) {
-    TCP* tcp = _tcp_fromDescriptor((Descriptor*)transport);
+    TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(tcp);
 
     /* return 0 to signal close, if necessary */
@@ -2260,7 +2260,7 @@ static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
 static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
                                    gsize nBytes, in_addr_t* ip,
                                    in_port_t* port) {
-    TCP* tcp = _tcp_fromDescriptor((Descriptor*)transport);
+    TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(tcp);
 
     /*
@@ -2417,8 +2417,8 @@ static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
     return totalCopied;
 }
 
-static void _tcp_free(Descriptor* descriptor) {
-    TCP* tcp = _tcp_fromDescriptor(descriptor);
+static void _tcp_free(LegacyDescriptor* descriptor) {
+    TCP* tcp = _tcp_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(tcp);
 
     priorityqueue_free(tcp->throttledOutput);
@@ -2446,15 +2446,15 @@ static void _tcp_free(Descriptor* descriptor) {
     tcp->cong.hooks->tcp_cong_delete(tcp);
     retransmit_tally_destroy(tcp->retransmit.tally);
 
-    descriptor_clear((Descriptor*)tcp);
+    descriptor_clear((LegacyDescriptor*)tcp);
     MAGIC_CLEAR(tcp);
     g_free(tcp);
 
     worker_countObject(OBJECT_TYPE_TCP, COUNTER_TYPE_FREE);
 }
 
-static gboolean _tcp_close(Descriptor* descriptor) {
-    TCP* tcp = _tcp_fromDescriptor(descriptor);
+static gboolean _tcp_close(LegacyDescriptor* descriptor) {
+    TCP* tcp = _tcp_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(tcp);
 
     /* We always return FALSE because we handle process deregististration
@@ -2465,7 +2465,7 @@ static gboolean _tcp_close(Descriptor* descriptor) {
     tcp->flags |= TCPF_LOCAL_CLOSED_RD;
 
     /* the user closed the connection, so should never interact with the socket again */
-    descriptor_adjustStatus((Descriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE, FALSE);
+    descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_ACTIVE, FALSE);
 
     switch (tcp->state) {
         case TCPS_LISTEN:

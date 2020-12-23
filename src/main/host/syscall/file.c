@@ -31,7 +31,7 @@ static int _syscallhandler_validateFileHelper(SysCallHandler* sys, int filefd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    Descriptor* desc = process_getRegisteredDescriptor(sys->process, filefd);
+    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, filefd);
     if (desc && file_desc_out) {
         *file_desc_out = (File*)desc;
     }
@@ -66,13 +66,13 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
 
     /* Create the new descriptor for this file. */
     File* filed = file_new();
-    int handle = process_registerDescriptor(sys->process, (Descriptor*)filed);
+    int handle = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)filed);
 
     /* Now open the file. */
     errcode = file_open(filed, pathname, flags, mode);
     if (errcode < 0) {
         /* This will remove the descriptor entry and unref/free the File. */
-        descriptor_close((Descriptor*)filed);
+        descriptor_close((LegacyDescriptor*)filed);
     } else {
         utility_assert(errcode == handle);
     }

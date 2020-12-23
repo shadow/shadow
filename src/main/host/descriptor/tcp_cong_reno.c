@@ -41,7 +41,7 @@ static inline void transition_to_cong_avoid(TCP *tcp, CAReno *reno, guint32 n) {
     reno->cong_avoid_nacked = 0;
     reno->state_hooks = cong_avoid_hooks_();
     reno->state_hooks->tcp_cong_new_ack_ev(tcp, n);
-    info("[CONG] fd %i transition_to_cong_avoid", ((Descriptor*)tcp)->handle);
+    info("[CONG] fd %i transition_to_cong_avoid", ((LegacyDescriptor*)tcp)->handle);
 }
 
 /* SLOW START *******************************************************/
@@ -53,7 +53,7 @@ static void ca_reno_slow_start_duplicate_ack_ev_(TCP *tcp) {
     if (reno->duplicate_ack_n == 3) { // transition to fast recovery
 
         debug("[CONG-AVOID] three duplicate acks");
-        info("[CONG] fd %i three duplicate acks transition_to_fast_recovery", ((Descriptor*)tcp)->handle);
+        info("[CONG] fd %i three duplicate acks transition_to_fast_recovery", ((LegacyDescriptor*)tcp)->handle);
 
         ssthresh_halve(tcp, reno);
         tcp_cong(tcp)->cwnd = reno->ssthresh + 3;
@@ -157,7 +157,7 @@ static void tcp_cong_reno_timeout_ev_(TCP *tcp) {
 
     // transition to slow start
     reno->state_hooks = slow_start_hooks_();
-    info("[CONG] fd %i transition_to_slow_start", ((Descriptor*)tcp)->handle);
+    info("[CONG] fd %i transition_to_slow_start", ((LegacyDescriptor*)tcp)->handle);
 }
 
 static guint32 tcp_cong_reno_ssthresh_(TCP *tcp) {

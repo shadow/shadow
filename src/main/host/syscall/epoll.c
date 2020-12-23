@@ -28,10 +28,10 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
     }
 
     Epoll* epolld = epoll_new();
-    int handle = process_registerDescriptor(sys->process, (Descriptor*)epolld);
+    int handle = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)epolld);
 
     if (flags & EPOLL_CLOEXEC) {
-        descriptor_addFlags((Descriptor*)epolld, EPOLL_CLOEXEC);
+        descriptor_addFlags((LegacyDescriptor*)epolld, EPOLL_CLOEXEC);
     }
 
     return handle;
@@ -80,8 +80,8 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     /* Get and check the epoll descriptor. */
-    Descriptor* descriptor =
-        process_getRegisteredDescriptor(sys->process, epfd);
+    LegacyDescriptor* descriptor =
+        process_getRegisteredLegacyDescriptor(sys->process, epfd);
     gint errorCode = _syscallhandler_validateDescriptor(descriptor, DT_EPOLL);
 
     if (errorCode) {
@@ -95,7 +95,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     utility_assert(epoll);
 
     /* Find the child descriptor that the epoll is monitoring. */
-    descriptor = process_getRegisteredDescriptor(sys->process, fd);
+    descriptor = process_getRegisteredLegacyDescriptor(sys->process, fd);
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
     if (errorCode) {
@@ -135,7 +135,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     }
 
     /* Get and check the epoll descriptor. */
-    Descriptor* desc = process_getRegisteredDescriptor(sys->process, epfd);
+    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, epfd);
     gint errorCode = _syscallhandler_validateDescriptor(desc, DT_EPOLL);
 
     if (errorCode) {
@@ -177,7 +177,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
             /* Block on epoll status. An epoll descriptor is readable when it
              * has events. We either use our timer as a timeout, or no timeout. */
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
-                                        .object = (Descriptor*)epoll,
+                                        .object = (LegacyDescriptor*)epoll,
                                         .status = STATUS_DESCRIPTOR_READABLE};
 
             return (SysCallReturn){

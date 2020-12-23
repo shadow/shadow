@@ -292,23 +292,23 @@ static void _process_openStdIOFileHelper(Process* proc, bool isStdOut) {
     if (errcode < 0) {
         error("Opening %s: %s", fileName, strerror(-errcode));
         /* Unref and free the file object. */
-        descriptor_close((Descriptor*)stdfile);
+        descriptor_close((LegacyDescriptor*)stdfile);
     } else {
         debug("Successfully opened %s file at %s",
               isStdOut ? "stdout" : "stderr", fileName);
 
         if (isStdOut) {
             descriptortable_set(
-                proc->descTable, STDOUT_FILENO, (Descriptor*)stdfile);
+                proc->descTable, STDOUT_FILENO, (LegacyDescriptor*)stdfile);
             proc->stdoutFile = stdfile;
         } else {
             descriptortable_set(
-                proc->descTable, STDERR_FILENO, (Descriptor*)stdfile);
+                proc->descTable, STDERR_FILENO, (LegacyDescriptor*)stdfile);
             proc->stderrFile = stdfile;
         }
 
         /* Ref once since both the proc class and the table are storing it. */
-        descriptor_ref((Descriptor*)stdfile);
+        descriptor_ref((LegacyDescriptor*)stdfile);
     }
 
     g_free(fileName);
@@ -597,12 +597,12 @@ static void _process_free(Process* proc) {
      * Closing the descriptors will remove them from the table and the table
      * will release it's ref. We also need to release our proc ref. */
     if (proc->stderrFile) {
-        descriptor_close((Descriptor*)proc->stderrFile);
-        descriptor_unref((Descriptor*)proc->stderrFile);
+        descriptor_close((LegacyDescriptor*)proc->stderrFile);
+        descriptor_unref((LegacyDescriptor*)proc->stderrFile);
     }
     if (proc->stdoutFile) {
-        descriptor_close((Descriptor*)proc->stdoutFile);
-        descriptor_unref((Descriptor*)proc->stdoutFile);
+        descriptor_close((LegacyDescriptor*)proc->stdoutFile);
+        descriptor_unref((LegacyDescriptor*)proc->stdoutFile);
     }
 
     /* Now free all remaining descriptors stored in our table. */
@@ -729,18 +729,18 @@ void process_flushPtrs(Process* proc, Thread* thread) {
 // Handler the descriptors owned by this process
 // ******************************************************
 
-int process_registerDescriptor(Process* proc, Descriptor* desc) {
+int process_registerLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
     MAGIC_ASSERT(proc);
     utility_assert(desc);
     descriptor_setOwnerProcess(desc, proc);
     return descriptortable_add(proc->descTable, desc);
 }
 
-void process_deregisterDescriptor(Process* proc, Descriptor* desc) {
+void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
     MAGIC_ASSERT(proc);
 
     if (desc) {
-        DescriptorType dType = descriptor_getType(desc);
+        LegacyDescriptorType dType = descriptor_getType(desc);
         if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
             host_disassociateInterface(proc->host, (Socket*)desc);
         }
@@ -749,7 +749,7 @@ void process_deregisterDescriptor(Process* proc, Descriptor* desc) {
     }
 }
 
-Descriptor* process_getRegisteredDescriptor(Process* proc, int handle) {
+LegacyDescriptor* process_getRegisteredLegacyDescriptor(Process* proc, int handle) {
     MAGIC_ASSERT(proc);
     return descriptortable_get(proc->descTable, handle);
 }

@@ -51,7 +51,7 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
 
     debug("ioctl called on fd %d for request %ld", fd, request);
 
-    Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
+    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
     int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
@@ -60,7 +60,7 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
     bool isInbufLenRequest = request == SIOCINQ || request == FIONREAD;
     bool isOutbufLenRequest = request == SIOCOUTQ || request == TIOCOUTQ;
 
-    DescriptorType dtype = descriptor_getType(desc);
+    LegacyDescriptorType dtype = descriptor_getType(desc);
 
     int result = 0;
     if (dtype == DT_FILE) {

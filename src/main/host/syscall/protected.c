@@ -64,8 +64,8 @@ int _syscallhandler_wasBlocked(const SysCallHandler* sys) {
     return sys->blockedSyscallNR >= 0;
 }
 
-int _syscallhandler_validateDescriptor(Descriptor* descriptor,
-                                       DescriptorType expectedType) {
+int _syscallhandler_validateDescriptor(LegacyDescriptor* descriptor,
+                                       LegacyDescriptorType expectedType) {
     if (descriptor) {
         Status status = descriptor_getStatus(descriptor);
 
@@ -75,7 +75,7 @@ int _syscallhandler_validateDescriptor(Descriptor* descriptor,
             return -EBADF;
         }
 
-        DescriptorType type = descriptor_getType(descriptor);
+        LegacyDescriptorType type = descriptor_getType(descriptor);
 
         if (expectedType != DT_NONE && type != expectedType) {
             warning("descriptor handle '%i' is of type %i, expected type %i",

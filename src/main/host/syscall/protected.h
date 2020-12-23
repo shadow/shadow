@@ -76,7 +76,7 @@ void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
 int _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
 int _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
 int _syscallhandler_wasBlocked(const SysCallHandler* sys);
-int _syscallhandler_validateDescriptor(Descriptor* descriptor,
-                                       DescriptorType expectedType);
+int _syscallhandler_validateDescriptor(LegacyDescriptor* descriptor,
+                                       LegacyDescriptorType expectedType);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_PROTECTED_H_ */

@@ -80,7 +80,7 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
     /* Destroy the listeners, which will also unref and free cond. */
     if (cond->timeout && cond->timeoutListener) {
         descriptor_removeListener(
-            (Descriptor*)cond->timeout, cond->timeoutListener);
+            (LegacyDescriptor*)cond->timeout, cond->timeoutListener);
         statuslistener_setMonitorStatus(cond->timeoutListener, STATUS_NONE, SLF_NEVER);
     }
 
@@ -355,7 +355,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
 
         /* Attach the listener to the timer. */
         descriptor_addListener(
-            (Descriptor*)cond->timeout, cond->timeoutListener);
+            (LegacyDescriptor*)cond->timeout, cond->timeoutListener);
     }
 
     if (cond->trigger.object.as_pointer && !cond->triggerListener) {

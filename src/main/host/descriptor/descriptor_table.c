@@ -82,7 +82,7 @@ void descriptortable_unref(DescriptorTable* table) {
     }
 }
 
-int descriptortable_add(DescriptorTable* table, Descriptor* descriptor) {
+int descriptortable_add(DescriptorTable* table, LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(table);
 
     int index = 0;
@@ -121,7 +121,7 @@ static void _descriptortable_trimIndicesTail(DescriptorTable* table) {
     }
 }
 
-bool descriptortable_remove(DescriptorTable* table, Descriptor* descriptor) {
+bool descriptortable_remove(DescriptorTable* table, LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(table);
 
     int index = descriptor_getHandle(descriptor);
@@ -140,17 +140,17 @@ bool descriptortable_remove(DescriptorTable* table, Descriptor* descriptor) {
     }
 }
 
-Descriptor* descriptortable_get(DescriptorTable* table, int index) {
+LegacyDescriptor* descriptortable_get(DescriptorTable* table, int index) {
     MAGIC_ASSERT(table);
     return g_hash_table_lookup(table->descriptors, GINT_TO_POINTER(index));
 }
 
 void descriptortable_set(DescriptorTable* table, int index,
-                         Descriptor* descriptor) {
+                         LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(table);
 
     /* We may be replacing a descriptor that is already set at index. */
-    Descriptor* existing = descriptortable_get(table, index);
+    LegacyDescriptor* existing = descriptortable_get(table, index);
     if (existing) {
         descriptor_setHandle(existing, 0);
     }
@@ -172,7 +172,7 @@ void descriptortable_shutdownHelper(DescriptorTable* table) {
     gpointer key, value;
     g_hash_table_iter_init(&iter, table->descriptors);
     while (g_hash_table_iter_next(&iter, &key, &value)) {
-        Descriptor* desc = value;
+        LegacyDescriptor* desc = value;
         if (desc && desc->type == DT_TCPSOCKET) {
             /* tcp servers and their children holds refs to each other. make
              * sure they all get freed by removing the refs in one direction */

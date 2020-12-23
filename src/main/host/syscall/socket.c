@@ -35,7 +35,7 @@
  * must be read from the socket). This function checks if the descriptor is
  * in this corner case and we should be allowed to read from it. */
 static bool _syscallhandler_readableWhenClosed(SysCallHandler* sys,
-                                               Descriptor* desc) {
+                                               LegacyDescriptor* desc) {
     if (desc && descriptor_getType(desc) == DT_TCPSOCKET &&
         (descriptor_getStatus(desc) & STATUS_DESCRIPTOR_CLOSED)) {
         /* Connection error will be -ENOTCONN when reading is done. */
@@ -55,7 +55,7 @@ static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    Descriptor* desc = process_getRegisteredDescriptor(sys->process, sockfd);
+    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, sockfd);
     if (desc && sock_desc_out) {
         *sock_desc_out = (Socket*)desc;
     }
@@ -66,7 +66,7 @@ static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
         return errcode;
     }
 
-    DescriptorType type = descriptor_getType(desc);
+    LegacyDescriptorType type = descriptor_getType(desc);
     if (type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_UNIXSOCKET) {
         info("descriptor %i with type %i is not a socket", sockfd, (int)type);
         return -ENOTSOCK;
@@ -89,7 +89,7 @@ static int _syscallhandler_validateTCPSocketHelper(SysCallHandler* sys,
         return errcode;
     }
 
-    DescriptorType type = descriptor_getType((Descriptor*)sock_desc);
+    LegacyDescriptorType type = descriptor_getType((LegacyDescriptor*)sock_desc);
     if (type != DT_TCPSOCKET) {
         info("descriptor %i is not a TCP socket", sockfd);
         return -EOPNOTSUPP;
@@ -112,7 +112,7 @@ static int _syscallhandler_validateUDPSocketHelper(SysCallHandler* sys,
         return errcode;
     }
 
-    DescriptorType type = descriptor_getType((Descriptor*)sock_desc);
+    LegacyDescriptorType type = descriptor_getType((LegacyDescriptor*)sock_desc);
     if (type != DT_UDPSOCKET) {
         info("descriptor %i is not a UDP socket", sockfd);
         return -EOPNOTSUPP;
@@ -189,7 +189,7 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
     errcode = tcp_acceptServerPeer(
         tcp_desc, &inet_addr.sin_addr.s_addr, &inet_addr.sin_port, &accepted_fd);
 
-    Descriptor* desc = (Descriptor*)tcp_desc;
+    LegacyDescriptor* desc = (LegacyDescriptor*)tcp_desc;
     if (errcode == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
         /* This is a blocking accept, and we don't have a connection yet.
          * The socket becomes readable when we have a connection to accept.
@@ -214,10 +214,10 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
 
     /* Set the flags on the accepted socket if requested. */
     if (flags & SOCK_NONBLOCK) {
-        descriptor_addFlags((Descriptor*)accepted_tcp_desc, O_NONBLOCK);
+        descriptor_addFlags((LegacyDescriptor*)accepted_tcp_desc, O_NONBLOCK);
     }
     if (flags & SOCK_CLOEXEC) {
-        descriptor_addFlags((Descriptor*)accepted_tcp_desc, O_CLOEXEC);
+        descriptor_addFlags((LegacyDescriptor*)accepted_tcp_desc, O_CLOEXEC);
     }
 
     /* check if they wanted to know where we got the data from */
@@ -237,7 +237,7 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, Socket* socket_desc,
     gchar* peerAddrStr = address_ipToNewString(peerAddr);
     debug("trying to bind to inet address %s:%u on socket %i with peer %s:%u",
           bindAddrStr, ntohs(port),
-          descriptor_getHandle((Descriptor*)socket_desc), peerAddrStr,
+          descriptor_getHandle((LegacyDescriptor*)socket_desc), peerAddrStr,
           ntohs(peerPort));
     g_free(bindAddrStr);
     g_free(peerAddrStr);
@@ -337,7 +337,7 @@ static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, Socket* sock,
         }
         case SO_ERROR: {
             *optval = 0;
-            if (descriptor_getType((Descriptor*)sock) == DT_TCPSOCKET) {
+            if (descriptor_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
                 /* Return error for failed connect() attempts. */
                 int connerr = tcp_getConnectionError((TCP*)sock);
                 if (connerr == -ECONNRESET || connerr == -ECONNREFUSED) {
@@ -369,7 +369,7 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
             size_t newsize =
                 (*val) * 2; // Linux kernel doubles this value upon setting
             socket_setOutputBufferSize(sock, newsize);
-            if (descriptor_getType((Descriptor*)sock) == DT_TCPSOCKET) {
+            if (descriptor_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
                 tcp_disableSendBufferAutotuning((TCP*)sock);
             }
             return 0;
@@ -380,7 +380,7 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
             size_t newsize =
                 (*val) * 2; // Linux kernel doubles this value upon setting
             socket_setInputBufferSize(sock, newsize);
-            if (descriptor_getType((Descriptor*)sock) == DT_TCPSOCKET) {
+            if (descriptor_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
                 tcp_disableReceiveBufferAutotuning((TCP*)sock);
             }
             return 0;
@@ -429,7 +429,7 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
     int errcode =
         _syscallhandler_validateSocketHelper(sys, sockfd, &socket_desc);
 
-    Descriptor* desc = (Descriptor*)socket_desc;
+    LegacyDescriptor* desc = (LegacyDescriptor*)socket_desc;
     if (errcode < 0 && _syscallhandler_readableWhenClosed(sys, desc)) {
         errcode = 0;
     }
@@ -561,7 +561,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
         dest_port = ((struct sockaddr_in*)dest_addr)->sin_port;
     }
 
-    Descriptor* desc = (Descriptor*)socket_desc;
+    LegacyDescriptor* desc = (LegacyDescriptor*)socket_desc;
     errcode = 0;
 
     if (descriptor_getType(desc) == DT_UDPSOCKET) {
@@ -828,7 +828,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     /* Now we are ready to connect. */
     errcode = socket_connectToPeer(socket_desc, peerAddr, peerPort, family);
 
-    Descriptor* desc = (Descriptor*)socket_desc;
+    LegacyDescriptor* desc = (LegacyDescriptor*)socket_desc;
     if (descriptor_getType(desc) == DT_TCPSOCKET &&
         !(descriptor_getFlags(desc) & O_NONBLOCK)) {
         /* This is a blocking connect call. */
@@ -882,7 +882,7 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
     // If we can validate that, we can delete this comment.
     //    /* Only a TCP socket can be connected to a peer.
     //     * TODO: Needs to be updated when we support AF_UNIX. */
-    //    DescriptorType type = descriptor_getType((Descriptor*)socket_desc);
+    //    LegacyDescriptorType type = descriptor_getType((LegacyDescriptor*)socket_desc);
     //    if(type != DT_TCPSOCKET) {
     //        info("descriptor %i is not a TCP socket", sockfd);
     //        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 =
@@ -894,7 +894,7 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
     struct sockaddr saddr = {0};
     size_t slen = 0;
 
-    if (descriptor_getType((Descriptor*)socket_desc) == DT_UNIXSOCKET) {
+    if (descriptor_getType((LegacyDescriptor*)socket_desc) == DT_UNIXSOCKET) {
         // TODO currently handles socketpair, but will need to be extended
         // in order to support traditional UNIX sockets
         struct sockaddr_un* unix_addr = (struct sockaddr_un*)&saddr;
@@ -939,7 +939,7 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
     struct sockaddr saddr = {0};
     size_t slen = 0;
 
-    if (descriptor_getType((Descriptor*)socket_desc) == DT_UNIXSOCKET) {
+    if (descriptor_getType((LegacyDescriptor*)socket_desc) == DT_UNIXSOCKET) {
         // TODO currently handles socketpair, but will need to be extended
         // in order to support traditional UNIX sockets
         struct sockaddr_un* unix_addr = (struct sockaddr_un*)&saddr;
@@ -999,7 +999,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
     errcode = 0;
     switch (level) {
         case SOL_TCP: {
-            if (descriptor_getType((Descriptor*)socket_desc) != DT_TCPSOCKET) {
+            if (descriptor_getType((LegacyDescriptor*)socket_desc) != DT_TCPSOCKET) {
                 errcode = -EINVAL;
                 break;
             }
@@ -1210,7 +1210,7 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
 
     /* Now make sure it will be valid when we operate on it. */
     int sockfd =
-        process_registerDescriptor(sys->process, &sock_desc->super.super);
+        process_registerLegacyDescriptor(sys->process, &sock_desc->super.super);
 
     int errcode = _syscallhandler_validateSocketHelper(sys, sockfd, NULL);
     if (errcode != 0) {
@@ -1274,19 +1274,19 @@ SysCallReturn syscallhandler_socketpair(SysCallHandler* sys, const SysCallArgs* 
 
     /* Set any options that were given. */
     if (type & SOCK_NONBLOCK) {
-        descriptor_addFlags((Descriptor*)socketA, O_NONBLOCK);
-        descriptor_addFlags((Descriptor*)socketB, O_NONBLOCK);
+        descriptor_addFlags((LegacyDescriptor*)socketA, O_NONBLOCK);
+        descriptor_addFlags((LegacyDescriptor*)socketB, O_NONBLOCK);
     }
     if (type & SOCK_CLOEXEC) {
-        descriptor_addFlags((Descriptor*)socketA, O_CLOEXEC);
-        descriptor_addFlags((Descriptor*)socketB, O_CLOEXEC);
+        descriptor_addFlags((LegacyDescriptor*)socketA, O_CLOEXEC);
+        descriptor_addFlags((LegacyDescriptor*)socketB, O_CLOEXEC);
     }
 
     /* Return the socket fds to the caller. */
     int* sockfd = process_getWriteablePtr(sys->process, sys->thread, fdsPtr, 2 * sizeof(int));
 
-    sockfd[0] = process_registerDescriptor(sys->process, (Descriptor*)socketA);
-    sockfd[1] = process_registerDescriptor(sys->process, (Descriptor*)socketB);
+    sockfd[0] = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)socketA);
+    sockfd[1] = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)socketB);
 
     debug("Created socketpair with fd %i and fd %i", sockfd[0], sockfd[1]);
 

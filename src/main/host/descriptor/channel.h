@@ -18,7 +18,7 @@ enum _ChannelType {
 
 typedef struct _Channel Channel;
 
-Channel* channel_new(ChannelType type, DescriptorType dtype);
+Channel* channel_new(ChannelType type, LegacyDescriptorType dtype);
 void channel_setLinkedChannel(Channel* channel, Channel* linkedChannel);
 Channel* channel_getLinkedChannel(Channel* channel);
 

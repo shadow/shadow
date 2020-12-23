@@ -176,7 +176,7 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
 
     debug("fcntl called on fd %d for command %lu", fd, command);
 
-    Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
+    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
     int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};

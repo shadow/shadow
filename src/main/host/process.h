@@ -71,9 +71,9 @@ const gchar* process_getPluginName(Process* proc);
 /* Returns the processID that was assigned to us in process_new */
 guint process_getProcessID(Process* proc);
 
-int process_registerDescriptor(Process* proc, Descriptor* desc);
-void process_deregisterDescriptor(Process* proc, Descriptor* desc);
-Descriptor* process_getRegisteredDescriptor(Process* proc, int handle);
+int process_registerLegacyDescriptor(Process* proc, LegacyDescriptor* desc);
+void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc);
+LegacyDescriptor* process_getRegisteredLegacyDescriptor(Process* proc, int handle);
 
 // Convert a virtual ptr in the plugin address space to a globally unique physical ptr
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr);

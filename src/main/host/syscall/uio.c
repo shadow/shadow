@@ -25,10 +25,10 @@
 static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd,
                                              PluginPtr iovPtr,
                                              unsigned long iovlen, off_t offset,
-                                             Descriptor** desc_out,
+                                             LegacyDescriptor** desc_out,
                                              const struct iovec** iov_out) {
     /* Get the descriptor. */
-    Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
+    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
     if (!desc) {
         return -EBADF;
     }
@@ -90,7 +90,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
           "offset %ld, flags %d",
           fd, (void*)iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
 
-    Descriptor* desc = NULL;
+    LegacyDescriptor* desc = NULL;
     const struct iovec* iov;
     int errcode = _syscallhandler_validateVecParams(
         sys, fd, iovPtr, iovlen, offset, &desc, &iov);
@@ -99,7 +99,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     }
 
     /* Some logic depends on the descriptor type. */
-    DescriptorType dType = descriptor_getType(desc);
+    LegacyDescriptorType dType = descriptor_getType(desc);
 
     ssize_t result = 0;
 
@@ -209,7 +209,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
           "offset %ld, flags %d",
           fd, (void*)iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
 
-    Descriptor* desc = NULL;
+    LegacyDescriptor* desc = NULL;
     const struct iovec* iov;
     int errcode = _syscallhandler_validateVecParams(
         sys, fd, iovPtr, iovlen, offset, &desc, &iov);
@@ -218,7 +218,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     }
 
     /* Some logic depends on the descriptor type. */
-    DescriptorType dType = descriptor_getType(desc);
+    LegacyDescriptorType dType = descriptor_getType(desc);
 
     ssize_t result = 0;
 

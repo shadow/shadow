@@ -17,7 +17,7 @@
 #include "support/logger/logger.h"
 
 struct _EventD {
-    Descriptor super;
+    LegacyDescriptor super;
 
     uint64_t counter;
     bool is_closed;
@@ -26,13 +26,13 @@ struct _EventD {
     MAGIC_DECLARE;
 };
 
-static EventD* _eventfd_fromDescriptor(Descriptor* descriptor) {
+static EventD* _eventfd_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     utility_assert(descriptor_getType(descriptor) == DT_EVENTD);
     return (EventD*)descriptor;
 }
 
-static gboolean _eventd_close(Descriptor* descriptor) {
-    EventD* eventd = _eventfd_fromDescriptor(descriptor);
+static gboolean _eventd_close(LegacyDescriptor* descriptor) {
+    EventD* eventd = _eventfd_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(eventd);
 
     debug("event fd %i closing now", eventd->super.handle);
@@ -47,11 +47,11 @@ static gboolean _eventd_close(Descriptor* descriptor) {
     }
 }
 
-static void _eventd_free(Descriptor* descriptor) {
-    EventD* eventd = _eventfd_fromDescriptor(descriptor);
+static void _eventd_free(LegacyDescriptor* descriptor) {
+    EventD* eventd = _eventfd_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(eventd);
 
-    descriptor_clear((Descriptor*)eventd);
+    descriptor_clear((LegacyDescriptor*)eventd);
     MAGIC_CLEAR(eventd);
 
     free(eventd);

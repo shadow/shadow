@@ -29,7 +29,7 @@ static int _syscallhandler_validateEventFDHelper(SysCallHandler* sys, int efd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    Descriptor* desc = process_getRegisteredDescriptor(sys->process, efd);
+    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, efd);
     if (desc && event_desc_out) {
         *event_desc_out = (EventD*)desc;
     }
@@ -56,7 +56,7 @@ static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys, unsigned
 
     /* Create the eventd object and double check that it's valid. */
     EventD* eventd = eventd_new(initval, flags & EFD_SEMAPHORE ? 1 : 0);
-    int efd = process_registerDescriptor(sys->process, (Descriptor*)eventd);
+    int efd = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)eventd);
 
 #ifdef DEBUG
     /* This should always be a valid descriptor. */
@@ -69,10 +69,10 @@ static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys, unsigned
 
     /* Set any options that were given. */
     if (flags & EFD_NONBLOCK) {
-        descriptor_addFlags((Descriptor*)eventd, O_NONBLOCK);
+        descriptor_addFlags((LegacyDescriptor*)eventd, O_NONBLOCK);
     }
     if (flags & EFD_CLOEXEC) {
-        descriptor_addFlags((Descriptor*)eventd, O_CLOEXEC);
+        descriptor_addFlags((LegacyDescriptor*)eventd, O_CLOEXEC);
     }
 
     debug("eventfd() returning fd %i", efd);

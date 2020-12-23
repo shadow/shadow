@@ -78,7 +78,7 @@ struct _Socket {
 };
 
 void socket_init(Socket* socket, SocketFunctionTable* vtable,
-                 DescriptorType type, guint receiveBufferSize,
+                 LegacyDescriptorType type, guint receiveBufferSize,
                  guint sendBufferSize);
 
 void socket_pushInPacket(Socket* socket, Packet* packet);

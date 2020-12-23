@@ -405,7 +405,7 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
     /* if the socket closed, just drop the packet */
     gint socketHandle = -1;
     if(socket) {
-        socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
+        socketHandle = *descriptor_getHandleReference((LegacyDescriptor*)socket);
         socket_pushInPacket(socket, packet);
     } else {
         packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_DROPPED);
@@ -454,8 +454,8 @@ void networkinterface_receivePackets(NetworkInterface* interface) {
     }
 }
 
-static void _networkinterface_updatePacketHeader(Descriptor* descriptor, Packet* packet) {
-    DescriptorType type = descriptor_getType(descriptor);
+static void _networkinterface_updatePacketHeader(LegacyDescriptor* descriptor, Packet* packet) {
+    LegacyDescriptorType type = descriptor_getType(descriptor);
     if(type == DT_TCPSOCKET) {
         TCP* tcp = (TCP*)descriptor;
         tcp_networkInterfaceIsAboutToSendPacket(tcp, packet);
@@ -470,10 +470,10 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, g
         /* do round robin to get the next packet from the next socket */
         Socket* socket = g_queue_pop_head(interface->rrQueue);
         packet = socket_pullOutPacket(socket);
-        *socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
+        *socketHandle = *descriptor_getHandleReference((LegacyDescriptor*)socket);
 
         if(socket && packet) {
-            _networkinterface_updatePacketHeader((Descriptor*)socket, packet);
+            _networkinterface_updatePacketHeader((LegacyDescriptor*)socket, packet);
         }
 
         if(socket_peekNextOutPacket(socket)) {
@@ -481,7 +481,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, g
             g_queue_push_tail(interface->rrQueue, socket);
         } else {
             /* socket has no more packets, unref it from the sendable queue */
-            descriptor_unref((Descriptor*) socket);
+            descriptor_unref((LegacyDescriptor*) socket);
         }
     }
 
@@ -498,10 +498,10 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
         /* do fifo to get the next packet from the next socket */
         Socket* socket = priorityqueue_pop(interface->fifoQueue);
         packet = socket_pullOutPacket(socket);
-        *socketHandle = *descriptor_getHandleReference((Descriptor*)socket);
+        *socketHandle = *descriptor_getHandleReference((LegacyDescriptor*)socket);
 
         if(socket && packet) {
-            _networkinterface_updatePacketHeader((Descriptor*)socket, packet);
+            _networkinterface_updatePacketHeader((LegacyDescriptor*)socket, packet);
         }
 
         if(socket_peekNextOutPacket(socket)) {
@@ -509,7 +509,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
             priorityqueue_push(interface->fifoQueue, socket);
         } else {
             /* socket has no more packets, unref it from the sendable queue */
-            descriptor_unref((Descriptor*) socket);
+            descriptor_unref((LegacyDescriptor*) socket);
         }
     }
 

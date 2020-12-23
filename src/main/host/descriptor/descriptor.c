@@ -16,7 +16,7 @@
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
-void descriptor_init(Descriptor* descriptor, DescriptorType type,
+void descriptor_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
                      DescriptorFunctionTable* funcTable) {
     utility_assert(descriptor && funcTable);
 
@@ -33,7 +33,7 @@ void descriptor_init(Descriptor* descriptor, DescriptorType type,
     worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_NEW);
 }
 
-void descriptor_clear(Descriptor* descriptor) {
+void descriptor_clear(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     if (descriptor->listeners) {
         g_hash_table_destroy(descriptor->listeners);
@@ -41,7 +41,7 @@ void descriptor_clear(Descriptor* descriptor) {
     MAGIC_CLEAR(descriptor);
 }
 
-static void _descriptor_free(Descriptor* descriptor) {
+static void _descriptor_free(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
@@ -52,7 +52,7 @@ static void _descriptor_free(Descriptor* descriptor) {
 }
 
 void descriptor_ref(gpointer data) {
-    Descriptor* descriptor = data;
+    LegacyDescriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
     (descriptor->referenceCount)++;
@@ -61,7 +61,7 @@ void descriptor_ref(gpointer data) {
 }
 
 void descriptor_unref(gpointer data) {
-    Descriptor* descriptor = data;
+    LegacyDescriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
     (descriptor->referenceCount)--;
@@ -75,48 +75,48 @@ void descriptor_unref(gpointer data) {
     }
 }
 
-void descriptor_close(Descriptor* descriptor) {
+void descriptor_close(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
     debug("Descriptor %i calling vtable close now", descriptor->handle);
     descriptor_adjustStatus(descriptor, STATUS_DESCRIPTOR_CLOSED, TRUE);
     if (descriptor->funcTable->close(descriptor) && descriptor->ownerProcess) {
-        process_deregisterDescriptor(descriptor->ownerProcess, descriptor);
+        process_deregisterLegacyDescriptor(descriptor->ownerProcess, descriptor);
     }
 }
 
-gint descriptor_compare(const Descriptor* foo, const Descriptor* bar, gpointer user_data) {
+gint descriptor_compare(const LegacyDescriptor* foo, const LegacyDescriptor* bar, gpointer user_data) {
     MAGIC_ASSERT(foo);
     MAGIC_ASSERT(bar);
     return foo->handle > bar->handle ? +1 : foo->handle == bar->handle ? 0 : -1;
 }
 
-DescriptorType descriptor_getType(Descriptor* descriptor) {
+LegacyDescriptorType descriptor_getType(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->type;
 }
 
-void descriptor_setHandle(Descriptor* descriptor, gint handle) {
+void descriptor_setHandle(LegacyDescriptor* descriptor, gint handle) {
     MAGIC_ASSERT(descriptor);
     descriptor->handle = handle;
 }
 
-gint descriptor_getHandle(Descriptor* descriptor) {
+gint descriptor_getHandle(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->handle;
 }
 
-void descriptor_setOwnerProcess(Descriptor* descriptor, Process* ownerProcess) {
+void descriptor_setOwnerProcess(LegacyDescriptor* descriptor, Process* ownerProcess) {
     MAGIC_ASSERT(descriptor);
     descriptor->ownerProcess = ownerProcess;
 }
 
-Process* descriptor_getOwnerProcess(Descriptor* descriptor) {
+Process* descriptor_getOwnerProcess(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->ownerProcess;
 }
 
-gint* descriptor_getHandleReference(Descriptor* descriptor) {
+gint* descriptor_getHandleReference(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return &(descriptor->handle);
 }
@@ -144,7 +144,7 @@ static gchar* _descriptor_statusToString(Status ds) {
 }
 #endif
 
-static void _descriptor_handleStatusChange(Descriptor* descriptor, Status oldStatus) {
+static void _descriptor_handleStatusChange(LegacyDescriptor* descriptor, Status oldStatus) {
     MAGIC_ASSERT(descriptor);
 
     /* Identify which bits changed, if any. */
@@ -187,7 +187,7 @@ static void _descriptor_handleStatusChange(Descriptor* descriptor, Status oldSta
     g_list_free(listenerList);
 }
 
-void descriptor_adjustStatus(Descriptor* descriptor, Status status, gboolean doSetBits) {
+void descriptor_adjustStatus(LegacyDescriptor* descriptor, Status status, gboolean doSetBits) {
     MAGIC_ASSERT(descriptor);
 
     Status oldStatus = descriptor->status;
@@ -205,35 +205,35 @@ void descriptor_adjustStatus(Descriptor* descriptor, Status status, gboolean doS
     _descriptor_handleStatusChange(descriptor, oldStatus);
 }
 
-Status descriptor_getStatus(Descriptor* descriptor) {
+Status descriptor_getStatus(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->status;
 }
 
-void descriptor_addListener(Descriptor* descriptor, StatusListener* listener) {
+void descriptor_addListener(LegacyDescriptor* descriptor, StatusListener* listener) {
     MAGIC_ASSERT(descriptor);
     /* We are storing a listener instance, so count the ref. */
     statuslistener_ref(listener);
     g_hash_table_insert(descriptor->listeners, listener, listener);
 }
 
-void descriptor_removeListener(Descriptor* descriptor, StatusListener* listener) {
+void descriptor_removeListener(LegacyDescriptor* descriptor, StatusListener* listener) {
     MAGIC_ASSERT(descriptor);
     /* This will automatically call descriptorlistener_unref on the instance. */
     g_hash_table_remove(descriptor->listeners, listener);
 }
 
-gint descriptor_getFlags(Descriptor* descriptor) {
+gint descriptor_getFlags(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->flags;
 }
 
-void descriptor_setFlags(Descriptor* descriptor, gint flags) {
+void descriptor_setFlags(LegacyDescriptor* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
     descriptor->flags = flags;
 }
 
-void descriptor_addFlags(Descriptor* descriptor, gint flags) {
+void descriptor_addFlags(LegacyDescriptor* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
     descriptor->flags |= flags;
 }

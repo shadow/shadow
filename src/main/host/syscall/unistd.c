@@ -54,12 +54,12 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
 
     /* Set any options that were given. */
     if (flags & O_NONBLOCK) {
-        descriptor_addFlags((Descriptor*)pipeReader, O_NONBLOCK);
-        descriptor_addFlags((Descriptor*)pipeWriter, O_NONBLOCK);
+        descriptor_addFlags((LegacyDescriptor*)pipeReader, O_NONBLOCK);
+        descriptor_addFlags((LegacyDescriptor*)pipeWriter, O_NONBLOCK);
     }
     if (flags & O_CLOEXEC) {
-        descriptor_addFlags((Descriptor*)pipeReader, O_CLOEXEC);
-        descriptor_addFlags((Descriptor*)pipeWriter, O_CLOEXEC);
+        descriptor_addFlags((LegacyDescriptor*)pipeReader, O_CLOEXEC);
+        descriptor_addFlags((LegacyDescriptor*)pipeWriter, O_CLOEXEC);
     }
 
     /* Return the pipe fds to the caller. */
@@ -67,9 +67,9 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
     gint* pipefd = process_getWriteablePtr(sys->process, sys->thread, pipefdPtr, sizeNeeded);
 
     pipefd[0] =
-        process_registerDescriptor(sys->process, (Descriptor*)pipeReader);
+        process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)pipeReader);
     pipefd[1] =
-        process_registerDescriptor(sys->process, (Descriptor*)pipeWriter);
+        process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)pipeWriter);
 
     debug("Created pipe reader fd %i and writer fd %i", pipefd[0], pipefd[1]);
 
@@ -83,13 +83,13 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
         "trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
 
     /* Get the descriptor. */
-    Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
+    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
     if (!desc) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
     /* Some logic depends on the descriptor type. */
-    DescriptorType dType = descriptor_getType(desc);
+    LegacyDescriptorType dType = descriptor_getType(desc);
 
     /* We can only seek on files, otherwise its a pipe error. */
     if (dType != DT_FILE && offset != 0) {
@@ -183,13 +183,13 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
           offset);
 
     /* Get the descriptor. */
-    Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
+    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
     if (!desc) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
     /* Some logic depends on the descriptor type. */
-    DescriptorType dType = descriptor_getType(desc);
+    LegacyDescriptorType dType = descriptor_getType(desc);
 
     /* We can only seek on files, otherwise its a pipe error. */
     if (dType != DT_FILE && offset != 0) {
@@ -284,7 +284,7 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    Descriptor* descriptor = process_getRegisteredDescriptor(sys->process, fd);
+    LegacyDescriptor* descriptor = process_getRegisteredLegacyDescriptor(sys->process, fd);
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
     if (descriptor && !errorCode) {
