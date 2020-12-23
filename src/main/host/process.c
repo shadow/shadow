@@ -745,7 +745,7 @@ void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
             host_disassociateInterface(proc->host, (Socket*)desc);
         }
         descriptor_setOwnerProcess(desc, NULL);
-        descriptortable_remove(proc->descTable, desc);
+        descriptortable_remove(proc->descTable, descriptor_getHandle(desc));
     }
 }
 

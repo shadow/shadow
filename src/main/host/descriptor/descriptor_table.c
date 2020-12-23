@@ -121,12 +121,12 @@ static void _descriptortable_trimIndicesTail(DescriptorTable* table) {
     }
 }
 
-bool descriptortable_remove(DescriptorTable* table, LegacyDescriptor* descriptor) {
+bool descriptortable_remove(DescriptorTable* table, int index) {
     MAGIC_ASSERT(table);
 
-    int index = descriptor_getHandle(descriptor);
-
     if (g_hash_table_contains(table->descriptors, GINT_TO_POINTER(index))) {
+        LegacyDescriptor* descriptor = descriptortable_get(table, index);
+
         /* Make sure we do not operate on the descriptor after we remove it,
          * because that could cause it to be freed and invalidate it. */
         descriptor_setHandle(descriptor, 0);

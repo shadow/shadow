@@ -41,7 +41,7 @@ int descriptortable_add(DescriptorTable* table, LegacyDescriptor* descriptor);
  *
  * NOTE: this will unref the descriptor which may cause it to be freed. If you
  * still need access to it, you should ref it before calling this function. */
-bool descriptortable_remove(DescriptorTable* table, LegacyDescriptor* descriptor);
+bool descriptortable_remove(DescriptorTable* table, int index);
 
 /* Returns the descriptor at the given table index, or NULL if we are not
  * storing a descriptor at the given index. */
