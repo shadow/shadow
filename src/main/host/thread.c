@@ -14,6 +14,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "main/core/worker.h"
+#include "main/host/affinity.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/thread_protected.h"
@@ -25,6 +27,7 @@ Thread thread_create(Host* host, Process* process, int threadID, int type_id,
                      ThreadMethods methods) {
     Thread thread = {.type_id = type_id,
                      .methods = methods,
+                     .affinity = AFFINITY_UNINIT,
                      .referenceCount = 1,
                      .host = host,
                      .process = process,
@@ -53,7 +56,7 @@ void thread_unref(Thread* thread) {
     MAGIC_ASSERT(thread);
     (thread->referenceCount)--;
     utility_assert(thread->referenceCount >= 0);
-    if(thread->referenceCount == 0) {
+    if (thread->referenceCount == 0) {
         _thread_cleanupSysCallCondition(thread);
         thread->methods.free(thread);
         if (thread->process) {
@@ -71,8 +74,12 @@ void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.run);
     thread->nativePid = thread->methods.run(thread, argv, envv);
+
     // In Linux, the PID is equal to the TID of its first thread.
     thread->nativeTid = thread->nativePid;
+
+    thread->affinity =
+        affinity_setProcessAffinity(thread->nativeTid, thread->affinity, worker_getAffinity());
 }
 
 void thread_resume(Thread* thread) {
@@ -102,15 +109,14 @@ bool thread_isRunning(Thread* thread) {
     return thread->methods.isRunning(thread);
 }
 
-const void* thread_getReadablePtr(Thread* thread, PluginPtr plugin_src,
-                                  size_t n) {
+const void* thread_getReadablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.getReadablePtr);
     return thread->methods.getReadablePtr(thread, plugin_src, n);
 }
 
-int thread_getReadableString(Thread* thread, PluginPtr plugin_src, size_t n,
-                             const char** str, size_t* strlen) {
+int thread_getReadableString(Thread* thread, PluginPtr plugin_src, size_t n, const char** str,
+                             size_t* strlen) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.getReadableString);
     return thread->methods.getReadableString(thread, plugin_src, n, str, strlen);
@@ -150,9 +156,8 @@ PluginPtr thread_mallocPluginPtr(Thread* thread, size_t size) {
     // the specific thread implementation, and/or keeping a persistent
     // mmap'd area that we allocate from.
     MAGIC_ASSERT(thread);
-    long ptr = thread_nativeSyscall(thread, SYS_mmap, NULL, size,
-                                    PROT_READ | PROT_WRITE,
-                                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    long ptr = thread_nativeSyscall(
+        thread, SYS_mmap, NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     int err = syscall_rawReturnValueToErrno(ptr);
     if (err) {
         error("thread_nativeSyscall(mmap): %s", strerror(err));

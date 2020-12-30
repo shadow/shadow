@@ -10,6 +10,7 @@
 
 #include <stdarg.h>
 
+#include "main/host/affinity.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "main/utility/utility.h"
@@ -42,6 +43,7 @@ struct _Thread {
     ThreadMethods methods;
     pid_t nativePid;
     pid_t nativeTid;
+    int affinity;
     Host* host;
     Process* process;
     // If non-null, this address should be cleared and futex-awoken on thread exit.

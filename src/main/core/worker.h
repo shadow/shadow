@@ -35,6 +35,7 @@ struct _WorkerRunData {
 
 typedef struct _Worker Worker;
 
+int worker_getAffinity();
 DNS* worker_getDNS();
 Topology* worker_getTopology();
 Options* worker_getOptions();
