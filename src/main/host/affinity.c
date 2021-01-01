@@ -31,7 +31,7 @@ int affinity_getGoodWorkerAffinity(guint worker_thread_id) {
     return (int)worker_thread_id % _ncpus; // Uniform distribution of workers over CPUs
 }
 
-int affinity_setProcessAffinity(pid_t pid, int old_cpu_num, int new_cpu_num) {
+int affinity_setProcessAffinity(pid_t pid, int new_cpu_num, int old_cpu_num) {
     assert(_ncpus > 0 && pid >= 0);
 
     // We can short-circuit if there's no work to do.

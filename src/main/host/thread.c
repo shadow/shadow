@@ -70,6 +70,12 @@ void thread_unref(Thread* thread) {
     }
 }
 
+/* Set the thread's affinity to match its worker's */
+static void _thread_setAffinity(Thread* thread) {
+    thread->affinity =
+        affinity_setProcessAffinity(thread->nativeTid, worker_getAffinity(), thread->affinity);
+}
+
 void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.run);
@@ -78,13 +84,13 @@ void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     // In Linux, the PID is equal to the TID of its first thread.
     thread->nativeTid = thread->nativePid;
 
-    thread->affinity =
-        affinity_setProcessAffinity(thread->nativeTid, thread->affinity, worker_getAffinity());
+    _thread_setAffinity(thread);
 }
 
 void thread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.resume);
+    _thread_setAffinity(thread);
     _thread_cleanupSysCallCondition(thread);
     thread->cond = thread->methods.resume(thread);
     if (thread->cond) {
