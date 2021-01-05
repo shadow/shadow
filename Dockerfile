@@ -1,12 +1,12 @@
-FROM ubuntu:18.04 AS build
+FROM ubuntu:20.04
 
 COPY . /src
 
 WORKDIR /src
 
 ENV CC gcc
-ENV CONTAINER ubuntu:18.04
-ENV BUILDTYPE debug
+ENV CONTAINER ubuntu:20.04
+ENV BUILDTYPE release
 ENV RUSTPROFILE minimal
 
 RUN ci/container_scripts/install_deps.sh
