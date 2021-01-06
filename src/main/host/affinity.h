@@ -5,6 +5,12 @@
 #include <sched.h>
 #include <sys/types.h>
 
+/*
+ * Use AFFINITY_UNINIT as a value specifying that the CPU affinity of the
+ * process is not known or not initialized. AFFINITY_UNINIT is a good value to
+ * initalize affinity variables with before the affinity has been set with
+ * affinity_setProcessAffinity().
+ */
 enum { AFFINITY_UNINIT = -1 };
 
 /*

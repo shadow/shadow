@@ -20,9 +20,9 @@ static int _ncpus = -1; // Starts uninitialized.
 
 static gint _affinity_enabled = 0;
 
-OPTION_EXPERIMENTAL_ENTRY(
-    "cpu-pin", 0, 0, G_OPTION_ARG_INT, &_affinity_enabled,
-    "Pin workers to fixed CPU cores, pin plugins to the worker's core", "[0|1]")
+OPTION_EXPERIMENTAL_ENTRY("cpu-pin", 0, 0, G_OPTION_ARG_INT, &_affinity_enabled,
+                          "Pin workers to fixed CPU cores, pin plugins to the worker's core",
+                          "[0|1]")
 
 __attribute__((constructor)) static void _init_ncpus() { _ncpus = get_nprocs(); }
 
@@ -62,7 +62,8 @@ int affinity_setProcessAffinity(pid_t pid, int new_cpu_num, int old_cpu_num) {
     }
 
     if (!set_affinity_suceeded) {
-        warning("Could not set CPU affinity for PID %d to %d", (int)pid, new_cpu_num);
+        critical("cpu-pin was set, but the CPU affinity for PID %d could not be set to %d",
+                 (int)pid, new_cpu_num);
         retval = old_cpu_num;
     }
 
