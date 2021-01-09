@@ -297,13 +297,15 @@ static void _process_openStdIOFileHelper(Process* proc, bool isStdOut) {
         debug("Successfully opened %s file at %s",
               isStdOut ? "stdout" : "stderr", fileName);
 
+        CompatDescriptor* compatDesc = compatdescriptor_fromLegacy((LegacyDescriptor*)stdfile);
+
         if (isStdOut) {
             descriptortable_set(
-                proc->descTable, STDOUT_FILENO, (LegacyDescriptor*)stdfile);
+                proc->descTable, STDOUT_FILENO, compatDesc);
             proc->stdoutFile = stdfile;
         } else {
             descriptortable_set(
-                proc->descTable, STDERR_FILENO, (LegacyDescriptor*)stdfile);
+                proc->descTable, STDERR_FILENO, compatDesc);
             proc->stderrFile = stdfile;
         }
 
@@ -726,14 +728,34 @@ void process_flushPtrs(Process* proc, Thread* thread) {
 }
 
 // ******************************************************
-// Handler the descriptors owned by this process
+// Handle the descriptors owned by this process
 // ******************************************************
+
+int process_registerCompatDescriptor(Process* proc, CompatDescriptor* compatDesc) {
+    MAGIC_ASSERT(proc);
+    utility_assert(compatDesc);
+    return descriptortable_add(proc->descTable, compatDesc);
+}
+
+void process_deregisterCompatDescriptor(Process* proc, int handle) {
+    MAGIC_ASSERT(proc);
+    descriptortable_remove(proc->descTable, handle);
+}
+
+CompatDescriptor* process_getRegisteredCompatDescriptor(Process* proc, int handle) {
+    MAGIC_ASSERT(proc);
+    CompatDescriptor* compatDesc = descriptortable_get(proc->descTable, handle);
+    return compatDesc;
+}
 
 int process_registerLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
     MAGIC_ASSERT(proc);
     utility_assert(desc);
+
     descriptor_setOwnerProcess(desc, proc);
-    return descriptortable_add(proc->descTable, desc);
+    CompatDescriptor* compatDesc = compatdescriptor_fromLegacy(desc);
+
+    return process_registerCompatDescriptor(proc, compatDesc);
 }
 
 void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
@@ -751,6 +773,18 @@ void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
 
 LegacyDescriptor* process_getRegisteredLegacyDescriptor(Process* proc, int handle) {
     MAGIC_ASSERT(proc);
-    return descriptortable_get(proc->descTable, handle);
-}
 
+    CompatDescriptor* compatDesc = process_getRegisteredCompatDescriptor(proc, handle);
+    if (compatDesc == NULL) {
+        return NULL;
+    }
+
+    // will return NULL if the descriptor is valid but is not a legacy descriptor
+    LegacyDescriptor* legacyDesc = compatdescriptor_asLegacy(compatDesc);
+
+    if (legacyDesc == NULL) {
+        warning("Attempted to convert compat descriptor fd=%d to a legacy descriptor", handle);
+    }
+
+    return legacyDesc;
+}

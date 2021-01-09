@@ -15,10 +15,28 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "main/bindings/c/bindings-opaque.h"
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
 void rust_logging_init(void);
+
+// The new compat descriptor takes ownership of the reference to the legacy descriptor and
+// does not increment its ref count, but will decrement the ref count when this compat
+// descriptor is freed/dropped.
+CompatDescriptor *compatdescriptor_fromLegacy(LegacyDescriptor *legacy_descriptor);
+
+// If the compat descriptor is a legacy descriptor, returns a pointer to the legacy
+// descriptor object. Otherwise returns NULL. The legacy descriptor's ref count is not
+// modified, so the pointer must not outlive the lifetime of the compat descriptor.
+LegacyDescriptor *compatdescriptor_asLegacy(const CompatDescriptor *descriptor);
+
+// When the compat descriptor is freed/dropped, it will decrement the legacy descriptor's
+// ref count.
+void compatdescriptor_free(CompatDescriptor *descriptor);
+
+// This is a no-op for non-legacy descriptors.
+void compatdescriptor_setHandle(CompatDescriptor *descriptor, int handle);
 
 // # Safety
 // * `thread` must point to a valid object.

@@ -5,5 +5,6 @@
 
 // Don't forget to whitelist functions/types/vars in CMakeLists.txt
 
+#include "main/host/descriptor/descriptor.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
