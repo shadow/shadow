@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-use nix::sys::eventfd::{EfdFlags, eventfd};
+use nix::sys::eventfd::{eventfd, EfdFlags};
 use nix::unistd::{close, read, write};
 use std::os::unix::io::RawFd;
 use test_utils::set;
@@ -20,9 +20,21 @@ fn main() -> Result<(), String> {
     // TODO test the case where an eventfd is being read and written in separate threads
     // in order to test the cases where the nonblock flag is not used.
     let mut tests: Vec<test_utils::ShadowTest<_, _>> = vec![
-        test_utils::ShadowTest::new("test_eventfd_create", test_eventfd_create, set![TestEnv::Libc, TestEnv::Shadow]),
-        test_utils::ShadowTest::new("test_eventfd_read_write_nonblock", test_eventfd_read_write_nonblock, set![TestEnv::Libc, TestEnv::Shadow]),
-        test_utils::ShadowTest::new("test_eventfd_read_write_semaphore_nonblock", test_eventfd_read_write_semaphore_nonblock, set![TestEnv::Libc, TestEnv::Shadow]),
+        test_utils::ShadowTest::new(
+            "test_eventfd_create",
+            test_eventfd_create,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_eventfd_read_write_nonblock",
+            test_eventfd_read_write_nonblock,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_eventfd_read_write_semaphore_nonblock",
+            test_eventfd_read_write_semaphore_nonblock,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
     ];
 
     if filter_shadow_passing {
@@ -46,14 +58,24 @@ fn main() -> Result<(), String> {
 }
 
 fn test_eventfd_create() -> Result<(), String> {
-    let flags= [EfdFlags::empty(), EfdFlags::EFD_SEMAPHORE, EfdFlags::EFD_NONBLOCK, EfdFlags::EFD_CLOEXEC, EfdFlags::EFD_SEMAPHORE|EfdFlags::EFD_NONBLOCK];
+    let flags = [
+        EfdFlags::empty(),
+        EfdFlags::EFD_SEMAPHORE,
+        EfdFlags::EFD_NONBLOCK,
+        EfdFlags::EFD_CLOEXEC,
+        EfdFlags::EFD_SEMAPHORE | EfdFlags::EFD_NONBLOCK,
+    ];
 
     for &flag in flags.iter() {
         let efd: RawFd = eventfd(0, flag).unwrap();
-        
+
         test_utils::result_assert(
-            efd > 0, 
-            &format!("Unexpected return value {} from eventfd syscall with flag {}", efd, flag.bits()),
+            efd > 0,
+            &format!(
+                "Unexpected return value {} from eventfd syscall with flag {}",
+                efd,
+                flag.bits()
+            ),
         )?;
 
         close(efd).unwrap();
@@ -64,7 +86,7 @@ fn test_eventfd_create() -> Result<(), String> {
 
 fn check_read_success(efd: RawFd, expected_val: u64) -> Result<(), String> {
     let mut bytes: [u8; 8] = [0; 8];
-    
+
     test_utils::result_assert(
         read(efd, &mut bytes).unwrap() == 8,
         &format!("Unable to read 8 bytes from eventfd {}", efd),
@@ -72,7 +94,10 @@ fn check_read_success(efd: RawFd, expected_val: u64) -> Result<(), String> {
 
     test_utils::result_assert(
         u64::from_ne_bytes(bytes) == expected_val,
-        &format!("The value we read from the eventfd {} counter was incorrect", efd),
+        &format!(
+            "The value we read from the eventfd {} counter was incorrect",
+            efd
+        ),
     )?;
 
     Ok(())
@@ -80,15 +105,18 @@ fn check_read_success(efd: RawFd, expected_val: u64) -> Result<(), String> {
 
 fn check_read_eagain(efd: RawFd) -> Result<(), String> {
     let mut bytes: [u8; 8] = [0; 8];
-    
+
     test_utils::result_assert(
         match read(efd, &mut bytes) {
-            Ok(_) => false, 
-            Err(_) => true
+            Ok(_) => false,
+            Err(_) => true,
         } && test_utils::get_errno() == libc::EAGAIN,
-        &format!("Reading empty counter did not block eventfd {} as expected", efd),
+        &format!(
+            "Reading empty counter did not block eventfd {} as expected",
+            efd
+        ),
     )?;
-    
+
     Ok(())
 }
 
@@ -105,28 +133,36 @@ fn check_write_success(efd: RawFd, val: u64) -> Result<(), String> {
 
 fn check_write_einval(efd: RawFd, val: u64) -> Result<(), String> {
     let bytes: [u8; 8] = val.to_ne_bytes();
-    
+
     test_utils::result_assert(
         match write(efd, &bytes) {
-            Ok(_) => false, 
-            Err(_) => true
+            Ok(_) => false,
+            Err(_) => true,
         } && test_utils::get_errno() == libc::EINVAL,
-        &format!("Overflowing counter did not block eventfd {} as expected", efd),
+        &format!(
+            "Overflowing counter did not block eventfd {} as expected",
+            efd
+        ),
     )?;
-    
+
     Ok(())
 }
 
 fn test_eventfd_read_write_nonblock() -> Result<(), String> {
     // Initialize eventfd with initial value of 2
     let init_val = 2;
-    let flag = EfdFlags::EFD_NONBLOCK;    
+    let flag = EfdFlags::EFD_NONBLOCK;
     let efd: RawFd = eventfd(init_val, flag).unwrap();
 
     test_utils::result_assert(
-        efd > 0, &format!("Unexpected retval {} from eventfd with flag {}", efd, flag.bits()),
+        efd > 0,
+        &format!(
+            "Unexpected retval {} from eventfd with flag {}",
+            efd,
+            flag.bits()
+        ),
     )?;
- 
+
     // Make sure the initval of 2 was set correctly
     check_read_success(efd, 2)?;
 
@@ -141,8 +177,8 @@ fn test_eventfd_read_write_nonblock() -> Result<(), String> {
     check_read_eagain(efd)?;
 
     // Writing u64_max-1 is allowed...
-    check_write_success(efd, u64::MAX-1)?;
-    check_read_success(efd, u64::MAX-1)?;
+    check_write_success(efd, u64::MAX - 1)?;
+    check_read_success(efd, u64::MAX - 1)?;
     check_read_eagain(efd)?;
     // ...but u64_max is not
     check_write_einval(efd, u64::MAX)?;
@@ -155,13 +191,18 @@ fn test_eventfd_read_write_nonblock() -> Result<(), String> {
 fn test_eventfd_read_write_semaphore_nonblock() -> Result<(), String> {
     // Initialize eventfd with initial value of 2
     let init_val = 2;
-    let flag = EfdFlags::EFD_NONBLOCK|EfdFlags::EFD_SEMAPHORE;    
+    let flag = EfdFlags::EFD_NONBLOCK | EfdFlags::EFD_SEMAPHORE;
     let efd: RawFd = eventfd(init_val, flag).unwrap();
 
     test_utils::result_assert(
-        efd > 0, &format!("Unexpected retval {} from eventfd with flag {}", efd, flag.bits()),
+        efd > 0,
+        &format!(
+            "Unexpected retval {} from eventfd with flag {}",
+            efd,
+            flag.bits()
+        ),
     )?;
- 
+
     // Make sure the initval of 2 was set correctly
     // Semaphore mode reads 1 at a time
     check_read_success(efd, 1)?;
