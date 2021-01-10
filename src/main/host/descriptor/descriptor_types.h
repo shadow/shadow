@@ -19,6 +19,7 @@ enum _DescriptorType {
     DT_PIPE,
     DT_UNIXSOCKET,
     DT_EPOLL,
+    DT_EVENTD,
     DT_TIMER,
     DT_FILE,
 };

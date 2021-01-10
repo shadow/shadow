@@ -12,6 +12,7 @@
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/file.h"
+#include "main/host/descriptor/eventd.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
@@ -134,6 +135,9 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
                 result = file_pread((File*)desc, buf, sizeNeeded, offset);
             }
             break;
+        case DT_EVENTD:
+            result = eventd_read((EventD*)desc, buf, sizeNeeded);
+            break;
         case DT_TIMER:
             result = timer_read((Timer*)desc, buf, sizeNeeded);
             break;
@@ -226,6 +230,9 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
             } else {
                 result = file_pwrite((File*)desc, buf, sizeNeeded, offset);
             }
+            break;
+        case DT_EVENTD:
+            result = eventd_write((EventD*)desc, buf, sizeNeeded);
             break;
         case DT_TIMER: result = -EINVAL; break;
         case DT_PIPE:

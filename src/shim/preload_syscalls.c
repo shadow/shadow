@@ -228,6 +228,8 @@ NOREMAP(int, epoll_create1, (int a), a);
 NOREMAP(int, epoll_ctl, (int a, int b, int c, struct epoll_event* d), a,b,c,d);
 NOREMAP(int, epoll_wait, (int a, struct epoll_event* b, int c, int d), a,b,c,d);
 //NOREMAP(int, epoll_pwait, (int a, struct epoll_event* b, int c, int d, const sigset_t *e), a,b,c,d,e);
+NOREMAP(int, eventfd, (int a, int b), a,b);
+NOREMAP(int, eventfd2, (int a, int b), a,b);
 NOREMAP(int, faccessat, (int a, const char *b, int c, int d), a, b, c, d);
 NOREMAP(int, fadvise64, (int a, off_t b, off_t c, int d), a, b, c, d);
 NOREMAP(int, fallocate, (int a, int b, off_t c, off_t d), a, b, c, d);
