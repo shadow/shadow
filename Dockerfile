@@ -17,4 +17,4 @@ ENV PATH "/root/.cargo/bin:${PATH}"
 RUN ci/container_scripts/build_and_install.sh
 
 ENV PATH="/root/.shadow/bin:${PATH}"
-ENTRYPOINT shadow
+ENTRYPOINT ["shadow"]
