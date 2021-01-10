@@ -69,6 +69,10 @@ path = "poll/test_poll.rs"
 name = "test_mmap"
 path = "memory/test_mmap.rs"
 
+[[bin]]
+name = "test_eventfd"
+path = "eventfd/test_eventfd.rs"
+
 [dependencies]
 libc = "0.2"
 nix = "0.19.0"
