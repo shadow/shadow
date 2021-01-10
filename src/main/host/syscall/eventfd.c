@@ -21,7 +21,7 @@
 ///////////////////////////////////////////////////////////
 
 static int _syscallhandler_validateEventFDHelper(SysCallHandler* sys, int efd,
-                                               EventD** event_desc_out) {
+                                                 EventD** event_desc_out) {
     /* Check that fd is within bounds. */
     if (efd <= 0) {
         info("descriptor %i out of bounds", efd);
@@ -44,8 +44,8 @@ static int _syscallhandler_validateEventFDHelper(SysCallHandler* sys, int efd,
     return 0;
 }
 
-static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys,
-                                           unsigned int initval, int flags) {
+static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys, unsigned int initval,
+                                                   int flags) {
     debug("eventfd() called with initval %u and flags %i", initval, flags);
 
     /* any of 3 values can be bitwise ORed into flags */
@@ -84,12 +84,10 @@ static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys,
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_eventfd(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SysCallReturn syscallhandler_eventfd(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_eventfdHelper(sys, args->args[0].as_u64, args->args[1].as_i64);
 }
 
-SysCallReturn syscallhandler_eventfd2(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SysCallReturn syscallhandler_eventfd2(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_eventfdHelper(sys, args->args[0].as_u64, args->args[1].as_i64);
 }
