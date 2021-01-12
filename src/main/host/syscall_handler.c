@@ -22,6 +22,7 @@
 #include "main/host/process.h"
 #include "main/host/syscall/clone.h"
 #include "main/host/syscall/epoll.h"
+#include "main/host/syscall/eventfd.h"
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
@@ -206,6 +207,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(epoll_create1);
         HANDLE(epoll_ctl);
         HANDLE(epoll_wait);
+        HANDLE(eventfd);
+        HANDLE(eventfd2);
         HANDLE(execve);
         HANDLE(faccessat);
         HANDLE(fadvise64);
@@ -302,7 +305,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Not handled (yet):
         // **************************************
         NATIVE(arch_prctl);
-        NATIVE(eventfd2);
         NATIVE(io_getevents);
         NATIVE(prctl);
         NATIVE(prlimit64);

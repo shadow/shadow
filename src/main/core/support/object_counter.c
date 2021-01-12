@@ -38,6 +38,7 @@ struct _ObjectCounter {
         ObjectCounts tcp;
         ObjectCounts udp;
         ObjectCounts epoll;
+        ObjectCounts eventd;
         ObjectCounts timer;
         ObjectCounts file;
         ObjectCounts futex;
@@ -201,6 +202,11 @@ void objectcounter_incrementOne(ObjectCounter* counter, ObjectType otype, Counte
             break;
         }
 
+        case OBJECT_TYPE_EVENTD: {
+            _objectcount_incrementOne(&(counter->counters.eventd), ctype);
+            break;
+        }
+
         case OBJECT_TYPE_TIMER: {
             _objectcount_incrementOne(&(counter->counters.timer), ctype);
             break;
@@ -272,6 +278,8 @@ void objectcounter_incrementAll(ObjectCounter* counter, ObjectCounter* increment
             &(increment->counters.udp));
     _objectcount_incrementAll(&(counter->counters.epoll),
             &(increment->counters.epoll));
+    _objectcount_incrementAll(&(counter->counters.eventd),
+            &(increment->counters.eventd));
     _objectcount_incrementAll(&(counter->counters.timer),
             &(increment->counters.timer));
     _objectcount_incrementAll(&(counter->counters.file),
@@ -333,6 +341,8 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         "udp_free=%" G_GUINT64_FORMAT " "
         "epoll_new=%" G_GUINT64_FORMAT " "
         "epoll_free=%" G_GUINT64_FORMAT " "
+        "eventd_new=%" G_GUINT64_FORMAT " "
+        "eventd_free=%" G_GUINT64_FORMAT " "
         "timer_new=%" G_GUINT64_FORMAT " "
         "timer_free=%" G_GUINT64_FORMAT " "
         "file_new=%" G_GUINT64_FORMAT " "
@@ -379,6 +389,8 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter) {
         counter->counters.udp.free,
         counter->counters.epoll.new,
         counter->counters.epoll.free,
+        counter->counters.eventd.new,
+        counter->counters.eventd.free,
         counter->counters.timer.new,
         counter->counters.timer.free,
         counter->counters.file.new,
@@ -423,6 +435,7 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
         "tcp=%" G_GUINT64_FORMAT " "
         "udp=%" G_GUINT64_FORMAT " "
         "epoll=%" G_GUINT64_FORMAT " "
+        "eventd=%" G_GUINT64_FORMAT " "
         "timer=%" G_GUINT64_FORMAT " "
         "file=%" G_GUINT64_FORMAT " "
         "futex=%" G_GUINT64_FORMAT " "
@@ -465,6 +478,8 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
             counter->counters.udp.free,
         counter->counters.epoll.new -
             counter->counters.epoll.free,
+        counter->counters.eventd.new -
+            counter->counters.eventd.free,
         counter->counters.timer.new -
             counter->counters.timer.free,
         counter->counters.file.new -
