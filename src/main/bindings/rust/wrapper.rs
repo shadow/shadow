@@ -8,7 +8,21 @@ pub type __pid_t = ::std::os::raw::c_int;
 pub type pid_t = __pid_t;
 pub type gint = ::std::os::raw::c_int;
 pub type gpointer = *mut ::std::os::raw::c_void;
+pub use self::_Status as Status;
+pub const _Status_STATUS_NONE: _Status = 0;
+pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
+pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
+pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
+pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
+pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
+pub type _Status = i32;
 pub type LegacyDescriptor = [u64; 7usize];
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _StatusListener {
+    _unused: [u8; 0],
+}
+pub type StatusListener = _StatusListener;
 pub type PluginVirtualPtr = _PluginVirtualPtr;
 pub type PluginPtr = _PluginVirtualPtr;
 #[repr(C)]

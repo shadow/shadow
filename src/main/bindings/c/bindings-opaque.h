@@ -32,4 +32,7 @@ typedef struct CompatDescriptor CompatDescriptor;
 // MemoryManager via its `handle_*` methods.
 typedef struct MemoryManager MemoryManager;
 
+// An opaque type used when passing `*const AtomicRefCell<File>` to C.
+typedef struct PosixFileArc PosixFileArc;
+
 #endif /* main_opaque_bindings_h */

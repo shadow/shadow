@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/host/descriptor/descriptor_types.h"
+#include "main/host/status_listener.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
@@ -37,6 +38,32 @@ void compatdescriptor_free(CompatDescriptor *descriptor);
 
 // This is a no-op for non-legacy descriptors.
 void compatdescriptor_setHandle(CompatDescriptor *descriptor, int handle);
+
+// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
+// posix file object. Otherwise returns NULL. The posix file object's ref count is not
+// modified, so the pointer must not outlive the lifetime of the compat descriptor.
+const PosixFileArc *compatdescriptor_borrowPosixFile(CompatDescriptor *descriptor);
+
+// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
+// posix file object. Otherwise returns NULL. The posix file object's ref count is
+// incremented, so the pointer must always later be passed to `posixfile_drop()`, otherwise
+// the memory will leak.
+const PosixFileArc *compatdescriptor_newRefPosixFile(CompatDescriptor *descriptor);
+
+// Decrement the ref count of the posix file object. The pointer must not be used after
+// calling this function.
+void posixfile_drop(const PosixFileArc *file);
+
+// Get the status of the posix file object.
+Status posixfile_getStatus(const PosixFileArc *file);
+
+// Add a status listener to the posix file object. This will increment the status
+// listener's ref count, and will decrement the ref count when this status listener is
+// removed or when the posix file is freed/dropped.
+void posixfile_addListener(const PosixFileArc *file, StatusListener *listener);
+
+// Remove a listener from the posix file object.
+void posixfile_removeListener(const PosixFileArc *file, StatusListener *listener);
 
 // # Safety
 // * `thread` must point to a valid object.

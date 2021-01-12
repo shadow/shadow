@@ -24,6 +24,8 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "descriptor_unref"
         --whitelist-function "descriptor_setHandle"
         --whitelist-type "PluginPtr"
+        --whitelist-type "Status"
+        --whitelist-type "StatusListener"
         --whitelist-type "SysCall.*"
         --whitelist-type "LegacyDescriptor"
         --opaque-type "LegacyDescriptor"
