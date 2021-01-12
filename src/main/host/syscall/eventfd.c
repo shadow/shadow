@@ -23,7 +23,7 @@
 static int _syscallhandler_validateEventFDHelper(SysCallHandler* sys, int efd,
                                                  EventD** event_desc_out) {
     /* Check that fd is within bounds. */
-    if (efd <= 0) {
+    if (efd < 0) {
         info("descriptor %i out of bounds", efd);
         return -EBADF;
     }

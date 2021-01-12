@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-use nix::sys::eventfd::{eventfd, EfdFlags};
+use nix::sys::eventfd::EfdFlags;
 use nix::unistd::{close, read, write};
 use std::os::unix::io::RawFd;
 use test_utils::set;
@@ -57,6 +57,11 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
+fn call_eventfd(init_val: u32, flags: EfdFlags) -> Result<i32, String> {
+    // We use libc here instead of nix to ensure a direct syscall is made without err checking
+    test_utils::check_system_call!(|| unsafe { libc::eventfd(init_val, flags.bits()) }, &[])
+}
+
 fn test_eventfd_create() -> Result<(), String> {
     let flags = [
         EfdFlags::empty(),
@@ -67,7 +72,7 @@ fn test_eventfd_create() -> Result<(), String> {
     ];
 
     for &flag in flags.iter() {
-        let efd: RawFd = eventfd(0, flag).unwrap();
+        let efd = call_eventfd(0, flag)?;
 
         test_utils::result_assert(
             efd > 0,
@@ -78,7 +83,7 @@ fn test_eventfd_create() -> Result<(), String> {
             ),
         )?;
 
-        close(efd).unwrap();
+        close(efd).map_err(|e| e.to_string())?;
     }
 
     Ok(())
@@ -88,7 +93,7 @@ fn check_read_success(efd: RawFd, expected_val: u64) -> Result<(), String> {
     let mut bytes: [u8; 8] = [0; 8];
 
     test_utils::result_assert(
-        read(efd, &mut bytes).unwrap() == 8,
+        read(efd, &mut bytes).map_err(|e| e.to_string())? == 8,
         &format!("Unable to read 8 bytes from eventfd {}", efd),
     )?;
 
@@ -107,10 +112,7 @@ fn check_read_eagain(efd: RawFd) -> Result<(), String> {
     let mut bytes: [u8; 8] = [0; 8];
 
     test_utils::result_assert(
-        match read(efd, &mut bytes) {
-            Ok(_) => false,
-            Err(_) => true,
-        } && test_utils::get_errno() == libc::EAGAIN,
+        read(efd, &mut bytes) == Err(nix::Error::Sys(nix::errno::Errno::EAGAIN)),
         &format!(
             "Reading empty counter did not block eventfd {} as expected",
             efd
@@ -124,7 +126,7 @@ fn check_write_success(efd: RawFd, val: u64) -> Result<(), String> {
     let bytes: [u8; 8] = val.to_ne_bytes();
 
     test_utils::result_assert(
-        write(efd, &bytes).unwrap() == 8,
+        write(efd, &bytes).map_err(|e| e.to_string())? == 8,
         &format!("Unable to write 8 bytes to eventfd {}", efd),
     )?;
 
@@ -135,10 +137,7 @@ fn check_write_einval(efd: RawFd, val: u64) -> Result<(), String> {
     let bytes: [u8; 8] = val.to_ne_bytes();
 
     test_utils::result_assert(
-        match write(efd, &bytes) {
-            Ok(_) => false,
-            Err(_) => true,
-        } && test_utils::get_errno() == libc::EINVAL,
+        write(efd, &bytes) == Err(nix::Error::Sys(nix::errno::Errno::EINVAL)),
         &format!(
             "Overflowing counter did not block eventfd {} as expected",
             efd
@@ -152,7 +151,7 @@ fn test_eventfd_read_write_nonblock() -> Result<(), String> {
     // Initialize eventfd with initial value of 2
     let init_val = 2;
     let flag = EfdFlags::EFD_NONBLOCK;
-    let efd: RawFd = eventfd(init_val, flag).unwrap();
+    let efd: RawFd = call_eventfd(init_val, flag)?;
 
     test_utils::result_assert(
         efd > 0,
@@ -163,36 +162,36 @@ fn test_eventfd_read_write_nonblock() -> Result<(), String> {
         ),
     )?;
 
-    // Make sure the initval of 2 was set correctly
-    check_read_success(efd, 2)?;
+    test_utils::run_and_close_fds(&[efd], || {
+        // Make sure the initval of 2 was set correctly
+        check_read_success(efd, 2)?;
 
-    // Now we should get EAGAIN since the counter was reset
-    check_read_eagain(efd)?;
+        // Now we should get EAGAIN since the counter was reset
+        check_read_eagain(efd)?;
 
-    // Writing values should add them to the counter
-    check_write_success(efd, 2)?;
-    check_write_success(efd, 3)?;
-    check_write_success(efd, 4)?;
-    check_read_success(efd, 9)?;
-    check_read_eagain(efd)?;
+        // Writing values should add them to the counter
+        check_write_success(efd, 2)?;
+        check_write_success(efd, 3)?;
+        check_write_success(efd, 4)?;
+        check_read_success(efd, 9)?;
+        check_read_eagain(efd)?;
 
-    // Writing u64_max-1 is allowed...
-    check_write_success(efd, u64::MAX - 1)?;
-    check_read_success(efd, u64::MAX - 1)?;
-    check_read_eagain(efd)?;
-    // ...but u64_max is not
-    check_write_einval(efd, u64::MAX)?;
+        // Writing u64_max-1 is allowed...
+        check_write_success(efd, u64::MAX - 1)?;
+        check_read_success(efd, u64::MAX - 1)?;
+        check_read_eagain(efd)?;
+        // ...but u64_max is not
+        check_write_einval(efd, u64::MAX)?;
 
-    close(efd).unwrap();
-
-    Ok(())
+        Ok(())
+    })
 }
 
 fn test_eventfd_read_write_semaphore_nonblock() -> Result<(), String> {
     // Initialize eventfd with initial value of 2
     let init_val = 2;
     let flag = EfdFlags::EFD_NONBLOCK | EfdFlags::EFD_SEMAPHORE;
-    let efd: RawFd = eventfd(init_val, flag).unwrap();
+    let efd: RawFd = call_eventfd(init_val, flag)?;
 
     test_utils::result_assert(
         efd > 0,
@@ -203,25 +202,25 @@ fn test_eventfd_read_write_semaphore_nonblock() -> Result<(), String> {
         ),
     )?;
 
-    // Make sure the initval of 2 was set correctly
-    // Semaphore mode reads 1 at a time
-    check_read_success(efd, 1)?;
-    check_read_success(efd, 1)?;
-    check_read_eagain(efd)?;
-
-    // Writing values should add them to the counter
-    check_write_success(efd, 2)?;
-    check_write_success(efd, 3)?;
-    check_write_success(efd, 4)?;
-    for _ in 0..9 {
+    test_utils::run_and_close_fds(&[efd], || {
+        // Make sure the initval of 2 was set correctly
+        // Semaphore mode reads 1 at a time
         check_read_success(efd, 1)?;
-    }
-    check_read_eagain(efd)?;
+        check_read_success(efd, 1)?;
+        check_read_eagain(efd)?;
 
-    // Writing u64_max is still not allowed
-    check_write_einval(efd, u64::MAX)?;
+        // Writing values should add them to the counter
+        check_write_success(efd, 2)?;
+        check_write_success(efd, 3)?;
+        check_write_success(efd, 4)?;
+        for _ in 0..9 {
+            check_read_success(efd, 1)?;
+        }
+        check_read_eagain(efd)?;
 
-    close(efd).unwrap();
+        // Writing u64_max is still not allowed
+        check_write_einval(efd, u64::MAX)?;
 
-    Ok(())
+        Ok(())
+    })
 }
