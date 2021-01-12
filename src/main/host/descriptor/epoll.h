@@ -17,7 +17,7 @@ typedef struct _Epoll Epoll;
 /* free this with descriptor_free() */
 Epoll* epoll_new();
 
-gint epoll_control(Epoll* epoll, gint operation, int fd, LegacyDescriptor* descriptor,
+gint epoll_control(Epoll* epoll, gint operation, int fd, CompatDescriptor* descriptor,
                    const struct epoll_event* event);
 gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
         gint eventArrayLength, gint* nEvents);

@@ -80,9 +80,8 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     /* Get and check the epoll descriptor. */
-    LegacyDescriptor* descriptor =
-        process_getRegisteredLegacyDescriptor(sys->process, epfd);
-    gint errorCode = _syscallhandler_validateDescriptor(descriptor, DT_EPOLL);
+    LegacyDescriptor* epollDescriptor = process_getRegisteredLegacyDescriptor(sys->process, epfd);
+    gint errorCode = _syscallhandler_validateDescriptor(epollDescriptor, DT_EPOLL);
 
     if (errorCode) {
         debug("Error when trying to validate epoll %i", epfd);
@@ -91,17 +90,27 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     /* It's now safe to cast. */
-    Epoll* epoll = (Epoll*)descriptor;
+    Epoll* epoll = (Epoll*)epollDescriptor;
     utility_assert(epoll);
 
     /* Find the child descriptor that the epoll is monitoring. */
-    descriptor = process_getRegisteredLegacyDescriptor(sys->process, fd);
-    errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
+    CompatDescriptor* compatDescriptor = process_getRegisteredCompatDescriptor(sys->process, fd);
 
-    if (errorCode) {
+    if (compatDescriptor == NULL) {
         info("Child %i is not a shadow descriptor", fd);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
+    }
+
+    LegacyDescriptor* legacyDescriptor = compatdescriptor_asLegacy(compatDescriptor);
+
+    /* Validate only if a legacy descriptor */
+    if (legacyDescriptor != NULL) {
+        errorCode = _syscallhandler_validateDescriptor(legacyDescriptor, DT_NONE);
+
+        if (errorCode) {
+            info("Child %i is not a shadow descriptor", fd);
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+        }
     }
 
     const struct epoll_event* event = NULL;
@@ -110,7 +119,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     debug("Calling epoll_control on epoll %i with child %i", epfd, fd);
-    errorCode = epoll_control(epoll, op, fd, descriptor, event);
+    errorCode = epoll_control(epoll, op, fd, compatDescriptor, event);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }
