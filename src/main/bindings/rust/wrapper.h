@@ -8,5 +8,7 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/status.h"
 #include "main/host/status_listener.h"
+#include "main/host/syscall_condition.h"
 #include "main/host/syscall_types.h"
+#include "main/host/syscall/unistd.h"
 #include "main/host/thread.h"

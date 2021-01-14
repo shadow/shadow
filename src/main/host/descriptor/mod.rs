@@ -2,6 +2,9 @@ use atomic_refcell::AtomicRefCell;
 use std::sync::Arc;
 
 use crate::cshadow as c;
+use crate::utility::event_queue::{EventQueue, EventSource, Handle};
+
+pub mod pipe;
 
 /// A trait we can use as a compile-time check to make sure that an object is Send.
 trait IsSend: Send {}
@@ -29,11 +32,196 @@ impl<T> SyncSendPointer<T> {
     }
 }
 
-pub enum PosixFile {}
+#[derive(PartialEq)]
+pub enum SyscallReturn {
+    Success(i32),
+    Error(nix::errno::Errno),
+}
+
+bitflags::bitflags! {
+    // file modes: https://github.com/torvalds/linux/blob/master/include/linux/fs.h#L111
+    pub struct FileMode: u32 {
+        const READ = 0b00000001;
+        const WRITE = 0b00000010;
+    }
+}
+
+#[derive(Clone)]
+pub enum NewStatusListenerFilter {
+    Never,
+    OffToOn,
+    OnToOff,
+    Always,
+}
+
+/// A wrapper for a `*mut c::StatusListener` that increments its ref count when created,
+/// and decrements when dropped.
+struct LegacyStatusListener(SyncSendPointer<c::StatusListener>);
+
+impl LegacyStatusListener {
+    fn new(ptr: *mut c::StatusListener) -> Self {
+        assert!(!ptr.is_null());
+        unsafe { c::statuslistener_ref(ptr) };
+        Self(SyncSendPointer(ptr))
+    }
+
+    fn ptr(&self) -> *mut c::StatusListener {
+        self.0.ptr()
+    }
+}
+
+impl Drop for LegacyStatusListener {
+    fn drop(&mut self) {
+        unsafe { c::statuslistener_unref(self.0.ptr()) };
+    }
+}
+
+/// Stores event listener handles so that `c::StatusListener` objects can subscribe to events.
+struct LegacyListenerHelper {
+    handle_map: std::collections::HashMap<usize, Handle<(c::Status, c::Status)>>,
+}
+
+impl LegacyListenerHelper {
+    fn new() -> Self {
+        Self {
+            handle_map: std::collections::HashMap::new(),
+        }
+    }
+
+    fn add_listener(
+        &mut self,
+        ptr: *mut c::StatusListener,
+        event_source: &mut EventSource<(c::Status, c::Status)>,
+    ) {
+        assert!(!ptr.is_null());
+
+        // if it's already listening, don't add a second time
+        if self.handle_map.contains_key(&(ptr as usize)) {
+            return;
+        }
+
+        // this will ref the pointer and unref it when the closure is dropped
+        let ptr_wrapper = LegacyStatusListener::new(ptr);
+
+        let handle = event_source.add_listener(move |(status, changed), _event_queue| unsafe {
+            c::statuslistener_onStatusChanged(ptr_wrapper.ptr(), status, changed)
+        });
+
+        // use a usize as the key so we don't accidentally deref the pointer
+        self.handle_map.insert(ptr as usize, handle);
+    }
+
+    fn remove_listener(&mut self, ptr: *mut c::StatusListener) {
+        assert!(!ptr.is_null());
+        self.handle_map.remove(&(ptr as usize));
+    }
+}
+
+/// A specified event source that passes a status and the changed bits to the function, but only if
+/// the monitored bits have changed and if the change the filter is satisfied.
+struct StatusEventSource {
+    inner: EventSource<(c::Status, c::Status)>,
+    legacy_helper: LegacyListenerHelper,
+}
+
+impl StatusEventSource {
+    pub fn new() -> Self {
+        Self {
+            inner: EventSource::new(),
+            legacy_helper: LegacyListenerHelper::new(),
+        }
+    }
+
+    pub fn add_listener(
+        &mut self,
+        monitoring: c::Status,
+        filter: NewStatusListenerFilter,
+        notify_fn: impl Fn(c::Status, c::Status, &mut EventQueue) + Send + Sync + 'static,
+    ) -> Handle<(c::Status, c::Status)> {
+        self.inner
+            .add_listener(move |(status, changed), event_queue| {
+                // true if any of the bits we're monitoring have changed
+                let flipped = monitoring & changed != 0;
+
+                // true if any of the bits we're monitoring are set
+                let on = monitoring & status != 0;
+
+                let notify = match filter {
+                    // at least one monitored bit is on, and at least one has changed
+                    NewStatusListenerFilter::OffToOn => flipped && on,
+                    // all monitored bits are off, and at least one has changed
+                    NewStatusListenerFilter::OnToOff => flipped && !on,
+                    // at least one monitored bit has changed
+                    NewStatusListenerFilter::Always => flipped,
+                    NewStatusListenerFilter::Never => false,
+                };
+
+                if !notify {
+                    return;
+                }
+
+                (notify_fn)(status, changed, event_queue)
+            })
+    }
+
+    pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+        self.legacy_helper.add_listener(ptr, &mut self.inner);
+    }
+
+    pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+        self.legacy_helper.remove_listener(ptr);
+    }
+
+    pub fn notify_listeners(
+        &mut self,
+        status: c::Status,
+        changed: c::Status,
+        event_queue: &mut EventQueue,
+    ) {
+        self.inner.notify_listeners((status, changed), event_queue)
+    }
+}
+
+/// Represents a POSIX description, or a Linux "struct file".
+pub enum PosixFile {
+    Pipe(pipe::PipeFile),
+}
 
 // will not compile if `PosixFile` is not Send + Sync
 impl IsSend for PosixFile {}
 impl IsSync for PosixFile {}
+
+impl PosixFile {
+    pub fn read(&mut self, bytes: &mut [u8], event_queue: &mut EventQueue) -> SyscallReturn {
+        match self {
+            Self::Pipe(f) => f.read(bytes, event_queue),
+        }
+    }
+
+    pub fn write(&mut self, bytes: &[u8], event_queue: &mut EventQueue) -> SyscallReturn {
+        match self {
+            Self::Pipe(f) => f.write(bytes, event_queue),
+        }
+    }
+
+    pub fn status(&self) -> c::Status {
+        match self {
+            Self::Pipe(f) => f.status(),
+        }
+    }
+
+    pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+        match self {
+            Self::Pipe(f) => f.add_legacy_listener(ptr),
+        }
+    }
+
+    pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+        match self {
+            Self::Pipe(f) => f.remove_legacy_listener(ptr),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct Descriptor {
@@ -41,7 +229,6 @@ pub struct Descriptor {
     flags: i32,
 }
 
-#[allow(dead_code)]
 impl Descriptor {
     pub fn new(file: Arc<AtomicRefCell<PosixFile>>) -> Self {
         Self { file, flags: 0 }
@@ -65,7 +252,6 @@ impl Descriptor {
 }
 
 // don't implement copy or clone without considering the legacy descriptor's ref count
-#[allow(dead_code)]
 pub enum CompatDescriptor {
     New(Descriptor),
     Legacy(SyncSendPointer<c::LegacyDescriptor>),
@@ -204,13 +390,12 @@ mod export {
         let file = file as *const AtomicRefCell<PosixFile>;
         let file = unsafe { &*file };
 
-        todo!();
+        file.borrow().status()
     }
 
     /// Add a status listener to the posix file object. This will increment the status
     /// listener's ref count, and will decrement the ref count when this status listener is
     /// removed or when the posix file is freed/dropped.
-    #[allow(unused_variables)]
     #[no_mangle]
     pub extern "C" fn posixfile_addListener(
         file: *const PosixFileArc,
@@ -222,11 +407,10 @@ mod export {
         let file = file as *const AtomicRefCell<PosixFile>;
         let file = unsafe { &*file };
 
-        todo!();
+        file.borrow_mut().add_legacy_listener(listener);
     }
 
     /// Remove a listener from the posix file object.
-    #[allow(unused_variables)]
     #[no_mangle]
     pub extern "C" fn posixfile_removeListener(
         file: *const PosixFileArc,
@@ -238,6 +422,6 @@ mod export {
         let file = file as *const AtomicRefCell<PosixFile>;
         let file = unsafe { &*file };
 
-        todo!();
+        file.borrow_mut().remove_legacy_listener(listener);
     }
 }

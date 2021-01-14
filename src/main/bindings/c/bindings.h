@@ -17,6 +17,7 @@
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/status_listener.h"
+#include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
@@ -132,9 +133,21 @@ SysCallReg memorymanager_handleMprotect(MemoryManager *memory_manager,
                                         uintptr_t size,
                                         int32_t prot);
 
+SysCallReturn rustsyscallhandler_close(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_read(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_write(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_pipe(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_pipe2(SysCallHandler *sys, const SysCallArgs *args);
+
 ByteQueue *bytequeue_new(size_t chunk_size);
 
 void bytequeue_free(ByteQueue *bq_ptr);
+
+size_t bytequeue_len(ByteQueue *bq);
 
 void bytequeue_push(ByteQueue *bq, const unsigned char *src, size_t len);
 

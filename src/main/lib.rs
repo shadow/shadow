@@ -9,6 +9,8 @@ mod cshadow {
     #![allow(non_upper_case_globals)]
     #![allow(non_camel_case_types)]
     #![allow(non_snake_case)]
+    // the following is added due to https://github.com/rust-lang/rust/issues/66220
+    #![allow(improper_ctypes)]
     include!("bindings/rust/wrapper.rs");
 }
 

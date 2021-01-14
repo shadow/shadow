@@ -165,6 +165,12 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         scr = syscallhandler_##s(sys, args);                                   \
         _syscallhandler_post_syscall(sys, args->number, #s, &scr);             \
         break
+#define HANDLE_NEW(s)                                                              \
+    case SYS_##s:                                                              \
+        _syscallhandler_pre_syscall(sys, args->number, #s);                    \
+        scr = rustsyscallhandler_##s(sys, args);                               \
+        _syscallhandler_post_syscall(sys, args->number, #s, &scr);             \
+        break
 #define NATIVE(s)                                                              \
     case SYS_##s:                                                              \
         debug("native syscall %ld " #s, args->number);                         \
@@ -200,7 +206,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(brk);
         HANDLE(clock_gettime);
         HANDLE(clone);
-        HANDLE(close);
+        HANDLE_NEW(close);
         HANDLE(connect);
         HANDLE(creat);
         HANDLE(epoll_create);
@@ -260,8 +266,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(newfstatat);
         HANDLE(open);
         HANDLE(openat);
-        HANDLE(pipe);
-        HANDLE(pipe2);
+        HANDLE_NEW(pipe);
+        HANDLE_NEW(pipe2);
         HANDLE(pread64);
         HANDLE(preadv);
 #ifdef SYS_preadv2
@@ -272,7 +278,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
 #ifdef SYS_pwritev2
         HANDLE(pwritev2);
 #endif
-        HANDLE(read);
+        HANDLE_NEW(read);
         HANDLE(readahead);
         HANDLE(readlinkat);
         HANDLE(readv);
@@ -298,7 +304,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(uname);
         HANDLE(unlinkat);
         HANDLE(utimensat);
-        HANDLE(write);
+        HANDLE_NEW(write);
         HANDLE(writev);
 
         // **************************************
