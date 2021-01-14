@@ -73,6 +73,10 @@ path = "memory/test_mmap.rs"
 name = "test_eventfd"
 path = "eventfd/test_eventfd.rs"
 
+[[bin]]
+name = "test_pipe"
+path = "pipe/test_pipe.rs"
+
 [dependencies]
 libc = "0.2"
 nix = "0.19.0"
