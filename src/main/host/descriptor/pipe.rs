@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{
-    FileMode, NewStatusListenerFilter, PosixFile, StatusEventSource, SyscallReturn,
+    FileFlags, FileMode, NewStatusListenerFilter, PosixFile, StatusEventSource, SyscallReturn,
 };
 use crate::utility::byte_queue::ByteQueue;
 use crate::utility::event_queue::{EventQueue, Handle};
@@ -13,22 +13,32 @@ pub struct PipeFile {
     event_source: StatusEventSource,
     status: c::Status,
     mode: FileMode,
+    flags: FileFlags,
     buffer_event_handle: Option<Handle<(c::Status, c::Status)>>,
 }
 
 impl PipeFile {
-    pub fn new(buffer: Arc<AtomicRefCell<SharedBuf>>, mode: FileMode) -> Self {
+    pub fn new(buffer: Arc<AtomicRefCell<SharedBuf>>, mode: FileMode, flags: FileFlags) -> Self {
         let mut rv = Self {
             buffer,
             event_source: StatusEventSource::new(),
             status: c::_Status_STATUS_NONE,
             mode,
+            flags,
             buffer_event_handle: None,
         };
 
         rv.status = rv.filter_status(rv.buffer.borrow_mut().status());
 
         rv
+    }
+
+    pub fn get_flags(&self) -> FileFlags {
+        self.flags
+    }
+
+    pub fn set_flags(&mut self, flags: FileFlags) {
+        self.flags = flags;
     }
 
     pub fn read(&mut self, bytes: &mut [u8], event_queue: &mut EventQueue) -> SyscallReturn {

@@ -1,6 +1,8 @@
 use crate::cshadow as c;
 use crate::host::descriptor::pipe;
-use crate::host::descriptor::{CompatDescriptor, Descriptor, FileMode, PosixFile, SyscallReturn};
+use crate::host::descriptor::{
+    CompatDescriptor, Descriptor, DescriptorFlags, FileFlags, FileMode, PosixFile, SyscallReturn,
+};
 use crate::host::syscall;
 use crate::utility::event_queue::EventQueue;
 
@@ -90,17 +92,20 @@ fn read_helper(
         unsafe { c::process_getWriteablePtr(sys.process, sys.thread, buf_ptr, size_needed as u64) };
     let mut buf = unsafe { std::slice::from_raw_parts_mut(buf_ptr as *mut u8, size_needed) };
 
+    let posix_file = desc.get_file();
+    let file_flags = posix_file.borrow().get_flags();
+
     // call the file's read(), and run any resulting events
     let result = EventQueue::queue_and_run(|event_queue| {
-        desc.get_file().borrow_mut().read(&mut buf, event_queue)
+        posix_file.borrow_mut().read(&mut buf, event_queue)
     });
 
     // if the syscall would block and it's a blocking descriptor
     if result == SyscallReturn::Error(nix::errno::EWOULDBLOCK)
-        && (desc.get_flags() & libc::O_NONBLOCK) == 0
+        && !file_flags.contains(FileFlags::NONBLOCK)
     {
         let trigger =
-            c::Trigger::from_posix_file(desc.get_file(), c::_Status_STATUS_DESCRIPTOR_READABLE);
+            c::Trigger::from_posix_file(posix_file, c::_Status_STATUS_DESCRIPTOR_READABLE);
 
         return c::SysCallReturn {
             state: c::SysCallReturnState_SYSCALL_BLOCK,
@@ -161,17 +166,19 @@ fn write_helper(
         unsafe { c::process_getReadablePtr(sys.process, sys.thread, buf_ptr, size_needed as u64) };
     let buf = unsafe { std::slice::from_raw_parts(buf_ptr as *const u8, size_needed) };
 
+    let posix_file = desc.get_file();
+    let file_flags = posix_file.borrow().get_flags();
+
     // call the file's write(), and run any resulting events
-    let result = EventQueue::queue_and_run(|event_queue| {
-        desc.get_file().borrow_mut().write(&buf, event_queue)
-    });
+    let result =
+        EventQueue::queue_and_run(|event_queue| posix_file.borrow_mut().write(&buf, event_queue));
 
     // if the syscall would block and it's a blocking descriptor
     if result == SyscallReturn::Error(nix::errno::EWOULDBLOCK)
-        && (desc.get_flags() & libc::O_NONBLOCK) == 0
+        && !file_flags.contains(FileFlags::NONBLOCK)
     {
         let trigger =
-            c::Trigger::from_posix_file(desc.get_file(), c::_Status_STATUS_DESCRIPTOR_WRITABLE);
+            c::Trigger::from_posix_file(posix_file, c::_Status_STATUS_DESCRIPTOR_WRITABLE);
 
         return c::SysCallReturn {
             state: c::SysCallReturnState_SYSCALL_BLOCK,
@@ -205,14 +212,26 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: c::PluginPtr, flags: i32) ->
         return c::SysCallReturn::from_errno(nix::errno::Errno::EFAULT);
     }
 
-    // pipe flags that we support
-    let supported_flags = libc::O_NONBLOCK & libc::O_CLOEXEC;
-    let flags_to_set = flags & supported_flags;
+    let mut file_flags = FileFlags::empty();
+    let mut descriptor_flags = DescriptorFlags::empty();
+
+    // keep track of which flags we use
+    let mut remaining_flags = flags;
+
+    if flags & libc::O_NONBLOCK != 0 {
+        file_flags.insert(FileFlags::NONBLOCK);
+        remaining_flags &= !libc::O_NONBLOCK;
+    }
+
+    if flags & libc::O_CLOEXEC != 0 {
+        descriptor_flags.insert(DescriptorFlags::CLOEXEC);
+        remaining_flags &= !libc::O_CLOEXEC;
+    }
 
     // the user requested flags that we don't support
-    if flags != flags_to_set {
+    if remaining_flags != 0 {
         // exit early if the O_DIRECT flag was set
-        if flags & libc::O_DIRECT != 0 {
+        if remaining_flags & libc::O_DIRECT != 0 {
             warn!("We don't currently support pipes in 'O_DIRECT' mode");
             return c::SysCallReturn::from_errno(nix::errno::Errno::EOPNOTSUPP);
         }
@@ -224,11 +243,11 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: c::PluginPtr, flags: i32) ->
     let buffer = Arc::new(AtomicRefCell::new(buffer));
 
     // reference-counted file object for read end of the pipe
-    let reader = pipe::PipeFile::new(Arc::clone(&buffer), FileMode::READ);
+    let reader = pipe::PipeFile::new(Arc::clone(&buffer), FileMode::READ, file_flags);
     let reader = Arc::new(AtomicRefCell::new(PosixFile::Pipe(reader)));
 
     // reference-counted file object for write end of the pipe
-    let writer = pipe::PipeFile::new(Arc::clone(&buffer), FileMode::WRITE);
+    let writer = pipe::PipeFile::new(Arc::clone(&buffer), FileMode::WRITE, file_flags);
     let writer = Arc::new(AtomicRefCell::new(PosixFile::Pipe(writer)));
 
     // set the file objects to listen for events on the buffer
@@ -240,8 +259,8 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: c::PluginPtr, flags: i32) ->
     let mut writer_desc = Descriptor::new(writer);
 
     // set the file descriptor flags
-    reader_desc.set_flags(flags_to_set);
-    writer_desc.set_flags(flags_to_set);
+    reader_desc.set_flags(descriptor_flags);
+    writer_desc.set_flags(descriptor_flags);
 
     // register the file descriptors and return them to the caller
     let num_items = 2;

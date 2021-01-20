@@ -39,7 +39,27 @@ pub enum SyscallReturn {
 }
 
 bitflags::bitflags! {
-    // file modes: https://github.com/torvalds/linux/blob/master/include/linux/fs.h#L111
+    /// These are flags that can potentially be changed from the plugin (analagous to the Linux
+    /// `filp->f_flags` status flags). Not all `O_` flags are valid here. For example file access
+    /// mode flags (ex: `O_RDWR`) are stored elsewhere, and file creation flags (ex: `O_CREAT`)
+    /// are not stored anywhere. Many of these can be represented in different ways, for example:
+    /// `O_NONBLOCK`, `SOCK_NONBLOCK`, `EFD_NONBLOCK`, `GRND_NONBLOCK`, etc, and not all have the
+    /// same value.
+    pub struct FileFlags: libc::c_int {
+        const NONBLOCK = libc::O_NONBLOCK;
+        const APPEND = libc::O_APPEND;
+        const ASYNC = libc::O_ASYNC;
+        const DIRECT = libc::O_DIRECT;
+        const NOATIME = libc::O_NOATIME;
+    }
+}
+
+bitflags::bitflags! {
+    /// These are flags that should generally not change (analagous to the Linux `filp->f_mode`).
+    /// Since the plugin will never see these values and they're not exposed by the kernel, we
+    /// don't match the kernel `FMODE_` values here.
+    ///
+    /// Examples: https://github.com/torvalds/linux/blob/master/include/linux/fs.h#L111
     pub struct FileMode: u32 {
         const READ = 0b00000001;
         const WRITE = 0b00000010;
@@ -210,6 +230,18 @@ impl PosixFile {
         }
     }
 
+    pub fn get_flags(&self) -> FileFlags {
+        match self {
+            Self::Pipe(f) => f.get_flags(),
+        }
+    }
+
+    pub fn set_flags(&mut self, flags: FileFlags) {
+        match self {
+            Self::Pipe(f) => f.set_flags(flags),
+        }
+    }
+
     pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
         match self {
             Self::Pipe(f) => f.add_legacy_listener(ptr),
@@ -223,31 +255,38 @@ impl PosixFile {
     }
 }
 
+bitflags::bitflags! {
+    // Linux only supports a single descriptor flag:
+    // https://www.gnu.org/software/libc/manual/html_node/Descriptor-Flags.html
+    pub struct DescriptorFlags: u32 {
+        const CLOEXEC = libc::FD_CLOEXEC as u32;
+    }
+}
+
 #[derive(Clone)]
 pub struct Descriptor {
     file: Arc<AtomicRefCell<PosixFile>>,
-    flags: i32,
+    flags: DescriptorFlags,
 }
 
 impl Descriptor {
     pub fn new(file: Arc<AtomicRefCell<PosixFile>>) -> Self {
-        Self { file, flags: 0 }
+        Self {
+            file,
+            flags: DescriptorFlags::empty(),
+        }
     }
 
     pub fn get_file(&self) -> &Arc<AtomicRefCell<PosixFile>> {
         &self.file
     }
 
-    pub fn get_flags(&self) -> i32 {
+    pub fn get_flags(&self) -> DescriptorFlags {
         self.flags
     }
 
-    pub fn set_flags(&mut self, flags: i32) {
+    pub fn set_flags(&mut self, flags: DescriptorFlags) {
         self.flags = flags;
-    }
-
-    pub fn add_flags(&mut self, flags: i32) {
-        self.flags |= flags;
     }
 }
 
