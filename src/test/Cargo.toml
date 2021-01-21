@@ -77,6 +77,10 @@ path = "eventfd/test_eventfd.rs"
 name = "test_pipe"
 path = "pipe/test_pipe.rs"
 
+[[bin]]
+name = "test_pthreads"
+path = "pthreads/test_pthreads.rs"
+
 [dependencies]
 libc = "0.2"
 nix = "0.19.0"
