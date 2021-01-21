@@ -2,7 +2,7 @@
 
 ### Clang-format
 
-Our code formatting style is defined in our
+Our C code formatting style is defined in our
 [clang-format](https://clang.llvm.org/docs/ClangFormat.html) [configuration
 file](../.clang-format). We try to avoid mass re-formatting, but generally any
 lines you modify should be reformatted using `clang-format`.
@@ -17,6 +17,19 @@ vmap <C-K> :py3f /usr/share/vim/addons/syntax/clang-format.py<cr>
 Alternatively you can use the
 [git-clang-format](https://github.com/llvm-mirror/clang/blob/master/tools/clang-format/git-clang-format)
 tool on the command-line to modify the lines touched by your commits.
+
+### Rustfmt
+
+To format your Rust code, run `cargo fmt` once in each Rust crate that you
+modify.
+
+Examples:
+
+```bash
+(cd src/main && cargo fmt)
+(cd src/test && cargo fmt)
+(cd src/support/logger/rust_bindings && cargo fmt)
+```
 
 ### Including headers
 
