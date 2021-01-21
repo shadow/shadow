@@ -11,8 +11,8 @@
 #include "main/host/status.h"
 #include "main/utility/utility.h"
 
-typedef enum _DescriptorType DescriptorType;
-enum _DescriptorType {
+typedef enum _LegacyDescriptorType LegacyDescriptorType;
+enum _LegacyDescriptorType {
     DT_NONE,
     DT_TCPSOCKET,
     DT_UDPSOCKET,
@@ -24,7 +24,7 @@ enum _DescriptorType {
     DT_FILE,
 };
 
-typedef struct _Descriptor Descriptor;
+typedef struct _LegacyDescriptor LegacyDescriptor;
 typedef struct _DescriptorFunctionTable DescriptorFunctionTable;
 
 /* required functions */
@@ -32,8 +32,8 @@ typedef struct _DescriptorFunctionTable DescriptorFunctionTable;
 /* Returns TRUE if the descriptor should be deregistered from the owning
  * process upon return from the function, FALSE if the child will handle
  * deregistration on its own. */
-typedef gboolean (*DescriptorCloseFunc)(Descriptor* descriptor);
-typedef void (*DescriptorFreeFunc)(Descriptor* descriptor);
+typedef gboolean (*DescriptorCloseFunc)(LegacyDescriptor* descriptor);
+typedef void (*DescriptorFreeFunc)(LegacyDescriptor* descriptor);
 
 /*
  * Virtual function table for base descriptor, storing pointers to required
@@ -45,11 +45,11 @@ struct _DescriptorFunctionTable {
     MAGIC_DECLARE;
 };
 
-struct _Descriptor {
+struct _LegacyDescriptor {
     DescriptorFunctionTable* funcTable;
     Process* ownerProcess;
     gint handle;
-    DescriptorType type;
+    LegacyDescriptorType type;
     Status status;
     GHashTable* listeners;
     gint referenceCount;

@@ -12,7 +12,7 @@
 #include "main/host/descriptor/transport.h"
 #include "main/utility/utility.h"
 
-static Transport* _transport_fromDescriptor(Descriptor* descriptor) {
+static Transport* _transport_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     utility_assert(descriptor_getType(descriptor) == DT_TCPSOCKET ||
                    descriptor_getType(descriptor) == DT_UDPSOCKET ||
                    descriptor_getType(descriptor) == DT_UNIXSOCKET ||
@@ -20,8 +20,8 @@ static Transport* _transport_fromDescriptor(Descriptor* descriptor) {
     return (Transport*)descriptor;
 }
 
-static void _transport_free(Descriptor* descriptor) {
-    Transport* transport = _transport_fromDescriptor(descriptor);
+static void _transport_free(LegacyDescriptor* descriptor) {
+    Transport* transport = _transport_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
 
@@ -32,8 +32,8 @@ static void _transport_free(Descriptor* descriptor) {
     transport->vtable->free(descriptor);
 }
 
-static gboolean _transport_close(Descriptor* descriptor) {
-    Transport* transport = _transport_fromDescriptor(descriptor);
+static gboolean _transport_close(LegacyDescriptor* descriptor) {
+    Transport* transport = _transport_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
     return transport->vtable->close(descriptor);
@@ -43,7 +43,7 @@ DescriptorFunctionTable transport_functions = {
     _transport_close, _transport_free, MAGIC_VALUE};
 
 void transport_init(Transport* transport, TransportFunctionTable* vtable,
-                    DescriptorType type) {
+                    LegacyDescriptorType type) {
     utility_assert(transport && vtable);
 
     descriptor_init(&(transport->super), type, &transport_functions);

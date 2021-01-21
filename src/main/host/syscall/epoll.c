@@ -28,10 +28,10 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
     }
 
     Epoll* epolld = epoll_new();
-    int handle = process_registerDescriptor(sys->process, (Descriptor*)epolld);
+    int handle = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)epolld);
 
     if (flags & EPOLL_CLOEXEC) {
-        descriptor_addFlags((Descriptor*)epolld, EPOLL_CLOEXEC);
+        descriptor_addFlags((LegacyDescriptor*)epolld, EPOLL_CLOEXEC);
     }
 
     return handle;
@@ -80,9 +80,8 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     /* Get and check the epoll descriptor. */
-    Descriptor* descriptor =
-        process_getRegisteredDescriptor(sys->process, epfd);
-    gint errorCode = _syscallhandler_validateDescriptor(descriptor, DT_EPOLL);
+    LegacyDescriptor* epollDescriptor = process_getRegisteredLegacyDescriptor(sys->process, epfd);
+    gint errorCode = _syscallhandler_validateDescriptor(epollDescriptor, DT_EPOLL);
 
     if (errorCode) {
         debug("Error when trying to validate epoll %i", epfd);
@@ -91,17 +90,27 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     /* It's now safe to cast. */
-    Epoll* epoll = (Epoll*)descriptor;
+    Epoll* epoll = (Epoll*)epollDescriptor;
     utility_assert(epoll);
 
     /* Find the child descriptor that the epoll is monitoring. */
-    descriptor = process_getRegisteredDescriptor(sys->process, fd);
-    errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
+    CompatDescriptor* compatDescriptor = process_getRegisteredCompatDescriptor(sys->process, fd);
 
-    if (errorCode) {
+    if (compatDescriptor == NULL) {
         info("Child %i is not a shadow descriptor", fd);
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
+    }
+
+    LegacyDescriptor* legacyDescriptor = compatdescriptor_asLegacy(compatDescriptor);
+
+    /* Validate only if a legacy descriptor */
+    if (legacyDescriptor != NULL) {
+        errorCode = _syscallhandler_validateDescriptor(legacyDescriptor, DT_NONE);
+
+        if (errorCode) {
+            info("Child %i is not a shadow descriptor", fd);
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
+        }
     }
 
     const struct epoll_event* event = NULL;
@@ -110,7 +119,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     }
 
     debug("Calling epoll_control on epoll %i with child %i", epfd, fd);
-    errorCode = epoll_control(epoll, op, descriptor, event);
+    errorCode = epoll_control(epoll, op, fd, compatDescriptor, event);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }
@@ -135,7 +144,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     }
 
     /* Get and check the epoll descriptor. */
-    Descriptor* desc = process_getRegisteredDescriptor(sys->process, epfd);
+    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, epfd);
     gint errorCode = _syscallhandler_validateDescriptor(desc, DT_EPOLL);
 
     if (errorCode) {
@@ -177,7 +186,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
             /* Block on epoll status. An epoll descriptor is readable when it
              * has events. We either use our timer as a timeout, or no timeout. */
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
-                                        .object = (Descriptor*)epoll,
+                                        .object = (LegacyDescriptor*)epoll,
                                         .status = STATUS_DESCRIPTOR_READABLE};
 
             return (SysCallReturn){

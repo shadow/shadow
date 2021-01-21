@@ -29,7 +29,7 @@ static int _syscallhandler_validateTimerHelper(SysCallHandler* sys, int tfd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    Descriptor* desc = process_getRegisteredDescriptor(sys->process, tfd);
+    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, tfd);
     if (desc && timer_desc_out) {
         *timer_desc_out = (Timer*)desc;
     }
@@ -67,7 +67,7 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
 
     /* Create the timer and double check that it's valid. */
     Timer* timer = timer_new();
-    int tfd = process_registerDescriptor(sys->process, (Descriptor*)timer);
+    int tfd = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)timer);
 
 #ifdef DEBUG
     /* This should always be a valid descriptor. */
@@ -80,10 +80,10 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
 
     /* Set any options that were given. */
     if (flags & TFD_NONBLOCK) {
-        descriptor_addFlags((Descriptor*)timer, O_NONBLOCK);
+        descriptor_addFlags((LegacyDescriptor*)timer, O_NONBLOCK);
     }
     if (flags & TFD_CLOEXEC) {
-        descriptor_addFlags((Descriptor*)timer, O_CLOEXEC);
+        descriptor_addFlags((LegacyDescriptor*)timer, O_CLOEXEC);
     }
 
     debug("timerfd_create() returning fd %i", tfd);

@@ -116,6 +116,7 @@ option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_EXPORT "export service libraries and headers (default: OFF)" OFF)
 option(SHADOW_WERROR "turn compiler warnings into errors. (default: OFF)" OFF)
 option(SHADOW_COVERAGE "enable code-coverage instrumentation. (default: OFF)" OFF)
+option(SHADOW_USE_C_SYSCALLS "use only the C syscall handlers. (default: OFF)" OFF)
 
 ## display selected user options
 MESSAGE(STATUS)
@@ -164,6 +165,10 @@ else()
     set(RUSTFLAGS "-C force-frame-pointers=y")
     set(CARGO_ENV_VARS "")
 endif(SHADOW_COVERAGE STREQUAL ON)
+
+if(SHADOW_USE_C_SYSCALLS STREQUAL ON)
+    add_definitions(-DUSE_C_SYSCALLS)
+endif()
 
 if($ENV{VERBOSE})
     add_definitions(-DVERBOSE)

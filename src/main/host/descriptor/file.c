@@ -44,7 +44,7 @@ enum _FileType {
 
 struct _File {
     /* File is a sub-type of a descriptor. */
-    Descriptor super;
+    LegacyDescriptor super;
     FileType type;
     /* Info related to our OS-backed file. */
     struct {
@@ -71,7 +71,7 @@ char* file_getAbsolutePath(File* file) {
     return file->osfile.abspath;
 }
 
-static inline File* _file_descriptorToFile(Descriptor* desc) {
+static inline File* _file_descriptorToFile(LegacyDescriptor* desc) {
     utility_assert(descriptor_getType(desc) == DT_FILE);
     File* file = (File*)desc;
     MAGIC_ASSERT(file);
@@ -110,7 +110,7 @@ static void _file_closeHelper(File* file) {
     }
 }
 
-static gboolean _file_close(Descriptor* desc) {
+static gboolean _file_close(LegacyDescriptor* desc) {
     File* file = _file_descriptorToFile(desc);
 
     debug("Closing file %i with os-backed file %i", _file_getFD(file),
@@ -124,7 +124,7 @@ static gboolean _file_close(Descriptor* desc) {
     return TRUE;
 }
 
-static void _file_free(Descriptor* desc) {
+static void _file_free(LegacyDescriptor* desc) {
     File* file = _file_descriptorToFile(desc);
 
     debug("Freeing file %i with os-backed file %i", _file_getFD(file),
@@ -136,7 +136,7 @@ static void _file_free(Descriptor* desc) {
         free(file->osfile.abspath);
     }
 
-    descriptor_clear((Descriptor*)file);
+    descriptor_clear((LegacyDescriptor*)file);
     MAGIC_CLEAR(file);
     free(file);
 

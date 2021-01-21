@@ -29,14 +29,14 @@ struct _TransportFunctionTable {
 };
 
 struct _Transport {
-    Descriptor super;
+    LegacyDescriptor super;
     TransportFunctionTable* vtable;
 
     MAGIC_DECLARE;
 };
 
 void transport_init(Transport* transport, TransportFunctionTable* vtable,
-                    DescriptorType type);
+                    LegacyDescriptorType type);
 
 gssize transport_sendUserData(Transport* transport, gconstpointer buffer, gsize nBytes,
         in_addr_t ip, in_port_t port);

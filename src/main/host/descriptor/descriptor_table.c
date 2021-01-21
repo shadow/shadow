@@ -37,12 +37,16 @@ struct _DescriptorTable {
     MAGIC_DECLARE;
 };
 
+static void _descriptortable_value_free(void* data) {
+    compatdescriptor_free(data);
+}
+
 DescriptorTable* descriptortable_new() {
     DescriptorTable* table = malloc(sizeof(DescriptorTable));
 
     *table = (DescriptorTable){
         .descriptors = g_hash_table_new_full(
-            g_direct_hash, g_direct_equal, NULL, descriptor_unref),
+            g_direct_hash, g_direct_equal, NULL, _descriptortable_value_free),
         .availableIndices = g_queue_new(),
         .indexCounter = STDERR_FILENO, // the first allocatable index is 3
         .referenceCount = 1,
@@ -82,7 +86,7 @@ void descriptortable_unref(DescriptorTable* table) {
     }
 }
 
-int descriptortable_add(DescriptorTable* table, Descriptor* descriptor) {
+int descriptortable_add(DescriptorTable* table, CompatDescriptor* descriptor) {
     MAGIC_ASSERT(table);
 
     int index = 0;
@@ -98,7 +102,7 @@ int descriptortable_add(DescriptorTable* table, Descriptor* descriptor) {
 
     g_hash_table_insert(table->descriptors, GINT_TO_POINTER(index), descriptor);
 
-    descriptor_setHandle(descriptor, index);
+    compatdescriptor_setHandle(descriptor, index);
     return index;
 }
 
@@ -121,15 +125,15 @@ static void _descriptortable_trimIndicesTail(DescriptorTable* table) {
     }
 }
 
-bool descriptortable_remove(DescriptorTable* table, Descriptor* descriptor) {
+bool descriptortable_remove(DescriptorTable* table, int index) {
     MAGIC_ASSERT(table);
 
-    int index = descriptor_getHandle(descriptor);
-
     if (g_hash_table_contains(table->descriptors, GINT_TO_POINTER(index))) {
+        CompatDescriptor* descriptor = descriptortable_get(table, index);
+
         /* Make sure we do not operate on the descriptor after we remove it,
          * because that could cause it to be freed and invalidate it. */
-        descriptor_setHandle(descriptor, 0);
+        compatdescriptor_setHandle(descriptor, 0);
         g_hash_table_remove(table->descriptors, GINT_TO_POINTER(index));
         g_queue_insert_sorted(table->availableIndices, GINT_TO_POINTER(index),
                               _descriptortable_compareInts, NULL);
@@ -140,24 +144,24 @@ bool descriptortable_remove(DescriptorTable* table, Descriptor* descriptor) {
     }
 }
 
-Descriptor* descriptortable_get(DescriptorTable* table, int index) {
+CompatDescriptor* descriptortable_get(DescriptorTable* table, int index) {
     MAGIC_ASSERT(table);
     return g_hash_table_lookup(table->descriptors, GINT_TO_POINTER(index));
 }
 
 void descriptortable_set(DescriptorTable* table, int index,
-                         Descriptor* descriptor) {
+                         CompatDescriptor* descriptor) {
     MAGIC_ASSERT(table);
 
     /* We may be replacing a descriptor that is already set at index. */
-    Descriptor* existing = descriptortable_get(table, index);
+    CompatDescriptor* existing = descriptortable_get(table, index);
     if (existing) {
-        descriptor_setHandle(existing, 0);
+        compatdescriptor_setHandle(existing, 0);
     }
 
     /* Store the new descriptor at the index. */
     g_hash_table_insert(table->descriptors, GINT_TO_POINTER(index), descriptor);
-    descriptor_setHandle(descriptor, index);
+    compatdescriptor_setHandle(descriptor, index);
 }
 
 /* TODO: remove this once the TCP layer is better designed. */
@@ -172,16 +176,28 @@ void descriptortable_shutdownHelper(DescriptorTable* table) {
     gpointer key, value;
     g_hash_table_iter_init(&iter, table->descriptors);
     while (g_hash_table_iter_next(&iter, &key, &value)) {
-        Descriptor* desc = value;
-        if (desc && desc->type == DT_TCPSOCKET) {
+        CompatDescriptor* desc = value;
+
+        if (desc == NULL) {
+            continue;
+        }
+
+        LegacyDescriptor* legacyDesc = compatdescriptor_asLegacy(value);
+
+        /* if the descriptor was not a legacy descriptor */
+        if (legacyDesc == NULL) {
+            continue;
+        }
+
+        if (legacyDesc->type == DT_TCPSOCKET) {
             /* tcp servers and their children holds refs to each other. make
              * sure they all get freed by removing the refs in one direction */
-            tcp_clearAllChildrenIfServer((TCP*)desc);
-        } else if (desc && (desc->type == DT_UNIXSOCKET || desc->type == DT_PIPE)) {
+            tcp_clearAllChildrenIfServer((TCP*)legacyDesc);
+        } else if (legacyDesc->type == DT_UNIXSOCKET || legacyDesc->type == DT_PIPE) {
             /* we need to correctly update the linked channel refs */
-            channel_setLinkedChannel((Channel*)desc, NULL);
-        } else if (desc && desc->type == DT_EPOLL) {
-            epoll_clearWatchListeners((Epoll*)desc);
+            channel_setLinkedChannel((Channel*)legacyDesc, NULL);
+        } else if (legacyDesc->type == DT_EPOLL) {
+            epoll_clearWatchListeners((Epoll*)legacyDesc);
         }
     }
 }

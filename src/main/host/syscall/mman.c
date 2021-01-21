@@ -49,7 +49,7 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd,
 
     /* We only need a file if it's not an anonymous mapping. */
     if (!(flags & MAP_ANONYMOUS)) {
-        Descriptor* desc = process_getRegisteredDescriptor(sys->process, fd);
+        LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
         int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
         if (errcode) {
             info("Invalid fd %i", fd);
@@ -73,7 +73,7 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd,
 static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     utility_assert(file);
 
-    int fd = descriptor_getHandle((Descriptor*)file);
+    int fd = descriptor_getHandle((LegacyDescriptor*)file);
 
     debug("Trying to open file %i in the plugin", fd);
 

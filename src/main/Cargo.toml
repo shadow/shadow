@@ -9,6 +9,8 @@ path = "lib.rs"
 crate-type = ["staticlib"]
 
 [dependencies]
+atomic_refcell = "0.1"
+bitflags = "1.2"
 lazy_static = "1.4.0"
 libc = "0.2"
 log = "0.4"

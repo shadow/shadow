@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/epoll.h>
 
+#include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/work/task.h"
@@ -55,11 +56,27 @@ enum _EpollWatchFlags {
     EWF_ONESHOT_REPORTED = 1 << 12,
 };
 
+typedef enum _EpollWatchTypes EpollWatchTypes;
+enum _EpollWatchTypes {
+    EWT_LEGACY_DESCRIPTOR,
+    EWT_POSIX_FILE,
+};
+
+typedef union _EpollWatchObject EpollWatchObject;
+union _EpollWatchObject {
+    LegacyDescriptor* as_descriptor;
+    const PosixFileArc* as_file;
+};
+
 typedef struct _EpollWatch EpollWatch;
 struct _EpollWatch {
-    /* the shadow descriptor we are watching for events */
-    Descriptor* descriptor;
-    /* The listener that notifies us when status changes. */
+    /* the type of object we are watching (for example descriptor or file) */
+    EpollWatchTypes watchType;
+    /* the object we are watching for events */
+    EpollWatchObject watchObject;
+    /* the fd of the object we are watching */
+    int fd;
+    /* the listener that notifies us when status changes */
     StatusListener* listener;
     /* holds the actual event info */
     struct epoll_event event;
@@ -69,9 +86,19 @@ struct _EpollWatch {
     MAGIC_DECLARE;
 };
 
+/* the epoll tables are indexed by the (fd, objectPtr) tuple so you can add the same object
+ * multiple times under different fds, and you can add the same fd multiple times as long as the
+ * object is different */
+typedef struct _EpollKey EpollKey;
+struct _EpollKey {
+    int fd;
+    /* store the pointer as an int so that we never accidentally de-reference it */
+    uintptr_t objectPtr;
+};
+
 struct _Epoll {
     /* epoll itself is also a descriptor */
-    Descriptor super;
+    LegacyDescriptor super;
 
     /* holds the wrappers for the descriptors we are watching for events */
     GHashTable* watching;
@@ -82,29 +109,65 @@ struct _Epoll {
     MAGIC_DECLARE;
 };
 
-/* forward declaration */
-static void _epoll_descriptorStatusChanged(Epoll* epoll,
-                                           Descriptor* descriptor);
+static EpollKey* _epollkey_new(int fd, uintptr_t objectPtr) {
+    EpollKey* key = g_new0(EpollKey, 1);
+    utility_assert(key);
 
-static EpollWatch* _epollwatch_new(Epoll* epoll, Descriptor* descriptor,
-                                   const struct epoll_event* event) {
+    key->fd = fd;
+    key->objectPtr = objectPtr;
+
+    return key;
+}
+
+static guint _epollkey_hash(gconstpointer ptr) {
+    const EpollKey* key = ptr;
+    return g_int_hash(&key->fd) ^ g_int_hash(&key->objectPtr);
+}
+
+static gboolean _epollkey_equal(gconstpointer ptr_1, gconstpointer ptr_2) {
+    const EpollKey* key_1 = ptr_1;
+    const EpollKey* key_2 = ptr_2;
+    return key_1->fd == key_2->fd && key_1->objectPtr == key_2->objectPtr;
+}
+
+/* forward declaration */
+static void _epoll_descriptorStatusChanged(Epoll* epoll, const EpollKey* key);
+
+static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
+                                   EpollWatchObject object, const struct epoll_event* event) {
     EpollWatch* watch = g_new0(EpollWatch, 1);
     MAGIC_INIT(watch);
     utility_assert(event);
 
     /* ref it for the EpollWatch, which also covers the listener reference
      * (which is freed below in _epollwatch_free) */
-    descriptor_ref(descriptor);
+    if (type == EWT_LEGACY_DESCRIPTOR) {
+        descriptor_ref(object.as_descriptor);
+    }
 
-    watch->descriptor = descriptor;
+    watch->watchType = type;
+    watch->watchObject = object;
+    watch->fd = fd;
     watch->event = *event;
     watch->referenceCount = 1;
+
+    uintptr_t objectPtr;
+    if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
+        objectPtr = (uintptr_t)(void*)object.as_descriptor;
+    } else if (watch->watchType == EWT_POSIX_FILE) {
+        objectPtr = (uintptr_t)(void*)object.as_file;
+    } else {
+        warning("Unrecognized epoll watch type: %d", type);
+        objectPtr = (uintptr_t)NULL;
+    }
+
+    EpollKey *key = _epollkey_new(fd, objectPtr);
 
     /* Create the listener and ref the objects held by the listener.
      * The watch object already holds a ref to the descriptor so we
      * don't ref it again. */
     watch->listener = statuslistener_new(
-        (StatusCallbackFunc)_epoll_descriptorStatusChanged, epoll, NULL, descriptor, NULL);
+        (StatusCallbackFunc)_epoll_descriptorStatusChanged, epoll, NULL, key, g_free);
 
     return watch;
 }
@@ -113,7 +176,12 @@ static void _epollwatch_free(EpollWatch* watch) {
     MAGIC_ASSERT(watch);
 
     statuslistener_unref(watch->listener);
-    descriptor_unref(watch->descriptor);
+
+    if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
+        descriptor_unref(watch->watchObject.as_descriptor);
+    } else if (watch->watchType == EWT_POSIX_FILE) {
+        posixfile_drop(watch->watchObject.as_file);
+    }
 
     MAGIC_CLEAR(watch);
     g_free(watch);
@@ -132,21 +200,21 @@ static void _epollwatch_unref(EpollWatch* watch) {
     }
 }
 
-static Epoll* _epoll_fromDescriptor(Descriptor* descriptor) {
+static Epoll* _epoll_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     utility_assert(descriptor_getType(descriptor) == DT_EPOLL);
     return (Epoll*)descriptor;
 }
 
 /* should only be called from descriptor dereferencing the functionTable */
-static void _epoll_free(Descriptor* descriptor) {
-    Epoll* epoll = _epoll_fromDescriptor(descriptor);
+static void _epoll_free(LegacyDescriptor* descriptor) {
+    Epoll* epoll = _epoll_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(epoll);
 
     /* this unrefs all of the remaining watches */
     g_hash_table_destroy(epoll->watching);
     g_hash_table_destroy(epoll->ready);
 
-    descriptor_clear((Descriptor*)epoll);
+    descriptor_clear((LegacyDescriptor*)epoll);
     MAGIC_CLEAR(epoll);
     g_free(epoll);
 
@@ -164,12 +232,17 @@ void epoll_clearWatchListeners(Epoll* epoll) {
         EpollWatch* watch = value;
         MAGIC_ASSERT(watch);
         statuslistener_setMonitorStatus(watch->listener, STATUS_NONE, SLF_NEVER);
-        descriptor_removeListener(watch->descriptor, watch->listener);
+
+        if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
+            descriptor_removeListener(watch->watchObject.as_descriptor, watch->listener);
+        } else if (watch->watchType == EWT_POSIX_FILE) {
+            posixfile_removeListener(watch->watchObject.as_file, watch->listener);
+        }
     }
 }
 
-static gboolean _epoll_close(Descriptor* descriptor) {
-    Epoll* epoll = _epoll_fromDescriptor(descriptor);
+static gboolean _epoll_close(LegacyDescriptor* descriptor) {
+    Epoll* epoll = _epoll_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(epoll);
     epoll_clearWatchListeners(epoll);
     return TRUE;
@@ -185,8 +258,8 @@ Epoll* epoll_new() {
     descriptor_init(&(epoll->super), DT_EPOLL, &epollFunctions);
 
     /* allocate backend needed for managing events for this descriptor */
-    epoll->watching = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_epollwatch_unref);
-    epoll->ready = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_epollwatch_unref);
+    epoll->watching = g_hash_table_new_full(_epollkey_hash, _epollkey_equal, g_free, (GDestroyNotify)_epollwatch_unref);
+    epoll->ready = g_hash_table_new_full(_epollkey_hash, _epollkey_equal, g_free, (GDestroyNotify)_epollwatch_unref);
 
     /* the epoll descriptor itself is always able to be epolled */
     descriptor_adjustStatus(&(epoll->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
@@ -212,7 +285,13 @@ static void _epollwatch_updateStatus(EpollWatch* watch) {
     watch->flags = 0;
 
     /* check shadow descriptor status */
-    Status status = descriptor_getStatus(watch->descriptor);
+    Status status;
+    if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
+        status = descriptor_getStatus(watch->watchObject.as_descriptor);
+    } else if (watch->watchType == EWT_POSIX_FILE) {
+        status = posixfile_getStatus(watch->watchObject.as_file);
+    }
+
     watch->flags |= (status & STATUS_DESCRIPTOR_ACTIVE) ? EWF_ACTIVE : EWF_NONE;
     watch->flags |= (status & STATUS_DESCRIPTOR_READABLE) ? EWF_READABLE : EWF_NONE;
     watch->flags |= (status & STATUS_DESCRIPTOR_WRITABLE) ? EWF_WRITEABLE : EWF_NONE;
@@ -285,16 +364,55 @@ static const gchar* _epoll_operationToStr(gint op) {
     }
 }
 
-gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
+static void _getWatchObject(CompatDescriptor* descriptor, EpollWatchTypes* watchType,
+                          EpollWatchObject* watchObject) {
+    LegacyDescriptor* legacyDescriptor = compatdescriptor_asLegacy(descriptor);
+
+    /* if the compat descriptor is for a legacy descriptor */
+    if (legacyDescriptor != NULL) {
+        *watchType = EWT_LEGACY_DESCRIPTOR;
+        watchObject->as_descriptor = legacyDescriptor;
+    } else {
+        const PosixFileArc* file = compatdescriptor_newRefPosixFile(descriptor);
+        /* if the compat descriptor is for a posix file object */
+        if (file != NULL) {
+            *watchType = EWT_POSIX_FILE;
+            watchObject->as_file = file;
+        } else {
+            error("unrecognized watch object");
+        }
+    }
+}
+
+gint epoll_control(Epoll* epoll, gint operation, int fd, CompatDescriptor* descriptor,
                    const struct epoll_event* event) {
     MAGIC_ASSERT(epoll);
 
-    debug("epoll descriptor %i, operation %s, descriptor %i",
-            epoll->super.handle, _epoll_operationToStr(operation), descriptor->handle);
+    debug("epoll descriptor %i, operation %s, descriptor %i", epoll->super.handle,
+          _epoll_operationToStr(operation), fd);
 
-    gint* watchHandleRef = descriptor_getHandleReference(descriptor);
+    EpollWatchTypes watchType;
+    EpollWatchObject watchObject;
 
-    EpollWatch* watch = g_hash_table_lookup(epoll->watching, watchHandleRef);
+    /* get the watch type and object for the provided descriptor object */
+    _getWatchObject(descriptor, &watchType, &watchObject);
+
+    /* this on-stack key can be used for lookups only, not new entries */
+    EpollKey key;
+    key.fd = fd;
+    switch (watchType) {
+        case EWT_LEGACY_DESCRIPTOR:
+            key.objectPtr = (uintptr_t)(void*)watchObject.as_descriptor;
+            break;
+        case EWT_POSIX_FILE:
+            key.objectPtr = (uintptr_t)(void*)watchObject.as_file;
+            break;
+        default:
+            error("unrecognized watch type");
+            return -ENOENT;
+    }
+
+    EpollWatch* watch = g_hash_table_lookup(epoll->watching, &key);
 
     switch (operation) {
         case EPOLL_CTL_ADD: {
@@ -305,9 +423,10 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
             }
 
             /* start watching for status changes */
-            watch = _epollwatch_new(epoll, descriptor, event);
+            watch = _epollwatch_new(epoll, fd, watchType, watchObject, event);
             watch->flags |= EWF_WATCHING;
-            g_hash_table_replace(epoll->watching, watchHandleRef, watch);
+            gpointer new_key = _epollkey_new(key.fd, key.objectPtr);
+            g_hash_table_replace(epoll->watching, new_key, watch);
 
             /* It's added, so we need to listen for changes. Here we listen for
              * all statuses, because epoll will filter what it needs.
@@ -318,10 +437,14 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
                                                 STATUS_DESCRIPTOR_READABLE |
                                                 STATUS_DESCRIPTOR_WRITABLE,
                                             SLF_ALWAYS);
-            descriptor_addListener(watch->descriptor, watch->listener);
+            if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
+                descriptor_addListener(watch->watchObject.as_descriptor, watch->listener);
+            } else if (watch->watchType == EWT_POSIX_FILE) {
+                posixfile_addListener(watch->watchObject.as_file, watch->listener);
+            }
 
-            /* initiate a callback if the new watched descriptor is ready */
-            _epoll_descriptorStatusChanged(epoll, descriptor);
+            /* initiate a callback if the new watched object is ready */
+            _epoll_descriptorStatusChanged(epoll, &key);
 
             break;
         }
@@ -341,8 +464,8 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
             watch->flags &= ~EWF_EDGETRIGGER_REPORTED;
             watch->flags &= ~EWF_ONESHOT_REPORTED;
 
-            /* initiate a callback if the new event type on the watched descriptor is ready */
-            _epoll_descriptorStatusChanged(epoll, descriptor);
+            /* initiate a callback if the new event type on the watched object is ready */
+            _epoll_descriptorStatusChanged(epoll, &key);
 
             break;
         }
@@ -358,11 +481,15 @@ gint epoll_control(Epoll* epoll, gint operation, Descriptor* descriptor,
 
             /* its deleted, so stop listening for updates */
             statuslistener_setMonitorStatus(watch->listener, STATUS_NONE, SLF_NEVER);
-            descriptor_removeListener(watch->descriptor, watch->listener);
+            if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
+                descriptor_removeListener(watch->watchObject.as_descriptor, watch->listener);
+            } else if (watch->watchType == EWT_POSIX_FILE) {
+                posixfile_removeListener(watch->watchObject.as_file, watch->listener);
+            }
 
             /* unref gets called on the watch when it is removed from these tables */
-            g_hash_table_remove(epoll->ready, watchHandleRef);
-            g_hash_table_remove(epoll->watching, watchHandleRef);
+            g_hash_table_remove(epoll->ready, &key);
+            g_hash_table_remove(epoll->watching, &key);
 
             break;
         }
@@ -441,31 +568,25 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
     return 0;
 }
 
-static void _epoll_descriptorStatusChanged(Epoll* epoll,
-                                           Descriptor* descriptor) {
+static void _epoll_descriptorStatusChanged(Epoll* epoll, const EpollKey* key) {
     MAGIC_ASSERT(epoll);
 
-    /* make sure we are actually watching the descriptor */
-    gint* watchHandleRef = descriptor_getHandleReference(descriptor);
-    EpollWatch* watch = g_hash_table_lookup(epoll->watching, watchHandleRef);
-
-    /* if we are not watching, its an error because we shouldn't be listening */
-    utility_assert(watch && (watch->descriptor == descriptor));
-
-    debug("status changed in epoll %i for descriptor %i", descriptor_getHandle(&epoll->super), descriptor->handle);
+    EpollWatch* watch = g_hash_table_lookup(epoll->watching, key);
+    debug("status changed in epoll %i for descriptor %i", descriptor_getHandle(&epoll->super), watch->fd);
 
     /* update the status for the child watch fd */
     _epollwatch_updateStatus(watch);
 
     /* check if its ready (has an event to report) now */
     if(_epollwatch_isReady(watch)) {
-        if(!g_hash_table_contains(epoll->ready, watchHandleRef)) {
+        if(!g_hash_table_contains(epoll->ready, key)) {
             _epollwatch_ref(watch);
-            g_hash_table_replace(epoll->ready, watchHandleRef, watch);
+            gpointer keyCopy = _epollkey_new(key->fd, key->objectPtr);
+            g_hash_table_replace(epoll->ready, keyCopy, watch);
         }
     } else {
         /* this calls unref on the watch if its in the table */
-        g_hash_table_remove(epoll->ready, watchHandleRef);
+        g_hash_table_remove(epoll->ready, key);
     }
 
     /* check the status on the parent epoll fd and adjust as needed */

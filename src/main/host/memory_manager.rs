@@ -1,6 +1,6 @@
 use super::syscall_types::{PluginPtr, SysCallReg};
 use super::thread::{CThread, Thread};
-use crate::cbindings as c;
+use crate::cshadow as c;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};

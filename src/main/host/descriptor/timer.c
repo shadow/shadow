@@ -22,7 +22,7 @@
 #include "support/logger/logger.h"
 
 struct _Timer {
-    Descriptor super;
+    LegacyDescriptor super;
 
     /* the absolute time the timer will next expire */
     SimulationTime nextExpireTime;
@@ -42,13 +42,13 @@ struct _Timer {
     MAGIC_DECLARE;
 };
 
-static Timer* _timer_fromDescriptor(Descriptor* descriptor) {
+static Timer* _timer_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     utility_assert(descriptor_getType(descriptor) == DT_TIMER);
     return (Timer*)descriptor;
 }
 
-static gboolean _timer_close(Descriptor* descriptor) {
-    Timer* timer = _timer_fromDescriptor(descriptor);
+static gboolean _timer_close(LegacyDescriptor* descriptor) {
+    Timer* timer = _timer_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(timer);
     debug("timer fd %i closing now", timer->super.handle);
     timer->isClosed = TRUE;
@@ -60,10 +60,10 @@ static gboolean _timer_close(Descriptor* descriptor) {
     }
 }
 
-static void _timer_free(Descriptor* descriptor) {
-    Timer* timer = _timer_fromDescriptor(descriptor);
+static void _timer_free(LegacyDescriptor* descriptor) {
+    Timer* timer = _timer_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(timer);
-    descriptor_clear((Descriptor*)timer);
+    descriptor_clear((LegacyDescriptor*)timer);
     MAGIC_CLEAR(timer);
     g_free(timer);
     worker_countObject(OBJECT_TYPE_TIMER, COUNTER_TYPE_FREE);

@@ -14,30 +14,57 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "main/bindings/c/bindings-opaque.h"
+#include "main/host/descriptor/descriptor_types.h"
+#include "main/host/status_listener.h"
+#include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
-// A queue of byte chunks.
-typedef struct ByteQueue ByteQueue;
-
-// Manages the address-space for a plugin process.
-//
-// The MemoryManager's primary purpose is to make plugin process's memory directly accessible to
-// Shadow. It does this by tracking what regions of program memory in the plugin are mapped to
-// what (analagous to /proc/<pid>/maps), and *remapping* parts of the plugin's address space into
-// a shared memory-file, which is also mapped into Shadow.
-//
-// Shadow provides several methods for allowing Shadow to access the plugin's memory, such as
-// `get_readable_ptr`. If the corresponding region of plugin memory is mapped into the shared
-// memory file, the corresponding Shadow pointer is returned. If not, then, it'll fall back to
-// (generally slower) Thread APIs.
-//
-// For the MemoryManager to maintain consistent state, and to remap regions of memory it knows how
-// to remap, Shadow must delegate handling of mman-related syscalls (such as `mmap`) to the
-// MemoryManager via its `handle_*` methods.
-typedef struct MemoryManager MemoryManager;
-
 void rust_logging_init(void);
+
+// The new compat descriptor takes ownership of the reference to the legacy descriptor and
+// does not increment its ref count, but will decrement the ref count when this compat
+// descriptor is freed/dropped.
+CompatDescriptor *compatdescriptor_fromLegacy(LegacyDescriptor *legacy_descriptor);
+
+// If the compat descriptor is a legacy descriptor, returns a pointer to the legacy
+// descriptor object. Otherwise returns NULL. The legacy descriptor's ref count is not
+// modified, so the pointer must not outlive the lifetime of the compat descriptor.
+LegacyDescriptor *compatdescriptor_asLegacy(const CompatDescriptor *descriptor);
+
+// When the compat descriptor is freed/dropped, it will decrement the legacy descriptor's
+// ref count.
+void compatdescriptor_free(CompatDescriptor *descriptor);
+
+// This is a no-op for non-legacy descriptors.
+void compatdescriptor_setHandle(CompatDescriptor *descriptor, int handle);
+
+// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
+// posix file object. Otherwise returns NULL. The posix file object's ref count is not
+// modified, so the pointer must not outlive the lifetime of the compat descriptor.
+const PosixFileArc *compatdescriptor_borrowPosixFile(CompatDescriptor *descriptor);
+
+// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
+// posix file object. Otherwise returns NULL. The posix file object's ref count is
+// incremented, so the pointer must always later be passed to `posixfile_drop()`, otherwise
+// the memory will leak.
+const PosixFileArc *compatdescriptor_newRefPosixFile(CompatDescriptor *descriptor);
+
+// Decrement the ref count of the posix file object. The pointer must not be used after
+// calling this function.
+void posixfile_drop(const PosixFileArc *file);
+
+// Get the status of the posix file object.
+Status posixfile_getStatus(const PosixFileArc *file);
+
+// Add a status listener to the posix file object. This will increment the status
+// listener's ref count, and will decrement the ref count when this status listener is
+// removed or when the posix file is freed/dropped.
+void posixfile_addListener(const PosixFileArc *file, StatusListener *listener);
+
+// Remove a listener from the posix file object.
+void posixfile_removeListener(const PosixFileArc *file, StatusListener *listener);
 
 // # Safety
 // * `thread` must point to a valid object.
@@ -106,9 +133,21 @@ SysCallReg memorymanager_handleMprotect(MemoryManager *memory_manager,
                                         uintptr_t size,
                                         int32_t prot);
 
+SysCallReturn rustsyscallhandler_close(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_read(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_write(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_pipe(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_pipe2(SysCallHandler *sys, const SysCallArgs *args);
+
 ByteQueue *bytequeue_new(size_t chunk_size);
 
 void bytequeue_free(ByteQueue *bq_ptr);
+
+size_t bytequeue_len(ByteQueue *bq);
 
 void bytequeue_push(ByteQueue *bq, const unsigned char *src, size_t len);
 

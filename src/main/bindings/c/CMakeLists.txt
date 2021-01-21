@@ -17,14 +17,20 @@ foreach(COMPILE_DEFINITION IN LISTS COMPILE_DEFINITIONS)
     list(APPEND LLVM_FLAGS "-D${COMPILE_DEFINITION}")
 endforeach(COMPILE_DEFINITION)
 
-# Generate wrapper.rs in the source tree.
+# Generate bindings.h in the source tree.
 add_custom_command(OUTPUT bindings.h
     COMMAND cbindgen ${CMAKE_SOURCE_DIR}/src/main
         --config ${CMAKE_CURRENT_SOURCE_DIR}/cbindgen.toml
         --output ${CMAKE_CURRENT_SOURCE_DIR}/bindings.h)
 
+# Generate bindings-opaque.h in the source tree.
+add_custom_command(OUTPUT bindings-opaque.h
+    COMMAND cbindgen ${CMAKE_SOURCE_DIR}/src/main
+        --config ${CMAKE_CURRENT_SOURCE_DIR}/cbindgen-opaque.toml
+        --output ${CMAKE_CURRENT_SOURCE_DIR}/bindings-opaque.h)
+
 # A fake target that depends on the wrapper.
-add_custom_target(bindings_main_c DEPENDS bindings.h)
+add_custom_target(bindings_main_c DEPENDS bindings.h bindings-opaque.h)
 
 # Only re-generate bindings when explicititly requested, so that
 # our CI doesn't need to install the heavy bindgen dependency.

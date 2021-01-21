@@ -33,14 +33,14 @@ struct _Channel {
     MAGIC_DECLARE;
 };
 
-static Channel* _channel_fromDescriptor(Descriptor* descriptor) {
+static Channel* _channel_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     utility_assert(descriptor_getType(descriptor) == DT_PIPE ||
                    descriptor_getType(descriptor) == DT_UNIXSOCKET);
     return (Channel*)descriptor;
 }
 
-static gboolean channel_close(Descriptor* descriptor) {
-    Channel* channel = _channel_fromDescriptor(descriptor);
+static gboolean channel_close(LegacyDescriptor* descriptor) {
+    Channel* channel = _channel_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(channel);
     /* tell our link that we are done */
     if(channel->linkedChannel) {
@@ -58,13 +58,13 @@ static gboolean channel_close(Descriptor* descriptor) {
     return TRUE;
 }
 
-static void channel_free(Descriptor* descriptor) {
-    Channel* channel = _channel_fromDescriptor(descriptor);
+static void channel_free(LegacyDescriptor* descriptor) {
+    Channel* channel = _channel_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(channel);
 
     bytequeue_free(channel->buffer);
 
-    descriptor_clear((Descriptor*)channel);
+    descriptor_clear((LegacyDescriptor*)channel);
     MAGIC_CLEAR(channel);
     g_free(channel);
 
@@ -88,14 +88,14 @@ static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize 
     channel->bufferLength += copyLength;
 
     /* we just got some data in our buffer */
-    descriptor_adjustStatus((Descriptor*)channel, STATUS_DESCRIPTOR_READABLE, TRUE);
+    descriptor_adjustStatus((LegacyDescriptor*)channel, STATUS_DESCRIPTOR_READABLE, TRUE);
 
     return copyLength;
 }
 
 static gssize channel_sendUserData(Transport* transport, gconstpointer buffer,
                                    gsize nBytes, in_addr_t ip, in_port_t port) {
-    Channel* channel = _channel_fromDescriptor((Descriptor*)transport);
+    Channel* channel = _channel_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(channel);
     /* the read end of a unidirectional pipe can not write! */
     utility_assert(channel->type != CT_READONLY);
@@ -113,7 +113,7 @@ static gssize channel_sendUserData(Transport* transport, gconstpointer buffer,
 
     /* our end cant write anymore if they returned error */
     if(result <= (gssize)0) {
-        descriptor_adjustStatus((Descriptor*)channel, STATUS_DESCRIPTOR_WRITABLE, FALSE);
+        descriptor_adjustStatus((LegacyDescriptor*)channel, STATUS_DESCRIPTOR_WRITABLE, FALSE);
     }
 
     return result;
@@ -122,7 +122,7 @@ static gssize channel_sendUserData(Transport* transport, gconstpointer buffer,
 static gssize channel_receiveUserData(Transport* transport, gpointer buffer,
                                       gsize nBytes, in_addr_t* ip,
                                       in_port_t* port) {
-    Channel* channel = _channel_fromDescriptor((Descriptor*)transport);
+    Channel* channel = _channel_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(channel);
     /* the write end of a unidirectional pipe can not read! */
     utility_assert(channel->type != CT_WRITEONLY);
@@ -146,7 +146,7 @@ static gssize channel_receiveUserData(Transport* transport, gpointer buffer,
 
     /* we are no longer readable if we have nothing left */
     if(channel->bufferLength <= 0) {
-        descriptor_adjustStatus((Descriptor*)channel, STATUS_DESCRIPTOR_READABLE, FALSE);
+        descriptor_adjustStatus((LegacyDescriptor*)channel, STATUS_DESCRIPTOR_READABLE, FALSE);
     }
 
     return (gssize)numCopied;
@@ -156,7 +156,7 @@ TransportFunctionTable channel_functions = {
     channel_close, channel_free, channel_sendUserData, channel_receiveUserData,
     MAGIC_VALUE};
 
-Channel* channel_new(ChannelType type, DescriptorType dtype) {
+Channel* channel_new(ChannelType type, LegacyDescriptorType dtype) {
     Channel* channel = g_new0(Channel, 1);
     MAGIC_INIT(channel);
 
@@ -166,9 +166,9 @@ Channel* channel_new(ChannelType type, DescriptorType dtype) {
     channel->buffer = bytequeue_new(8192);
     channel->bufferSize = CONFIG_PIPE_BUFFER_SIZE;
 
-    descriptor_adjustStatus((Descriptor*)channel, STATUS_DESCRIPTOR_ACTIVE, TRUE);
+    descriptor_adjustStatus((LegacyDescriptor*)channel, STATUS_DESCRIPTOR_ACTIVE, TRUE);
     if(!(type & CT_READONLY)) {
-        descriptor_adjustStatus((Descriptor*)channel, STATUS_DESCRIPTOR_WRITABLE, TRUE);
+        descriptor_adjustStatus((LegacyDescriptor*)channel, STATUS_DESCRIPTOR_WRITABLE, TRUE);
     }
 
     worker_countObject(OBJECT_TYPE_CHANNEL, COUNTER_TYPE_NEW);

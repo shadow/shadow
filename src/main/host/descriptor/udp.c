@@ -54,20 +54,20 @@ static void _udp_setState(UDP* udp, enum UDPState state) {
             _udp_stateToAscii(udp->stateLast), _udp_stateToAscii(udp->state));
 }
 
-static UDP* _udp_fromDescriptor(Descriptor* descriptor) {
+static UDP* _udp_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     utility_assert(descriptor_getType(descriptor) == DT_UDPSOCKET);
     return (UDP*)descriptor;
 }
 
 static gboolean _udp_isFamilySupported(Socket* socket, sa_family_t family) {
-    UDP* udp = _udp_fromDescriptor((Descriptor*)socket);
+    UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(udp);
     return (family == AF_INET || family == AF_UNSPEC || family == AF_UNIX) ? TRUE : FALSE;
 }
 
 static gint _udp_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port,
                                sa_family_t family) {
-    UDP* udp = _udp_fromDescriptor((Descriptor*)socket);
+    UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(udp);
 
 
@@ -86,7 +86,7 @@ static gint _udp_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port,
 }
 
 static void _udp_processPacket(Socket* socket, Packet* packet) {
-    UDP* udp = _udp_fromDescriptor((Descriptor*)socket);
+    UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(udp);
 
     /* UDP packet can be buffered immediately */
@@ -96,7 +96,7 @@ static void _udp_processPacket(Socket* socket, Packet* packet) {
 }
 
 static void _udp_dropPacket(Socket* socket, Packet* packet) {
-    UDP* udp = _udp_fromDescriptor((Descriptor*)socket);
+    UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(udp);
 
     /* do nothing */
@@ -109,7 +109,7 @@ static void _udp_dropPacket(Socket* socket, Packet* packet) {
  */
 static gssize _udp_sendUserData(Transport* transport, gconstpointer buffer,
                                 gsize nBytes, in_addr_t ip, in_port_t port) {
-    UDP* udp = _udp_fromDescriptor((Descriptor*)transport);
+    UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(udp);
 
     const gsize maxPacketLength = CONFIG_DATAGRAM_MAX_SIZE;
@@ -173,7 +173,7 @@ static gssize _udp_sendUserData(Transport* transport, gconstpointer buffer,
 static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
                                    gsize nBytes, in_addr_t* ip,
                                    in_port_t* port) {
-    UDP* udp = _udp_fromDescriptor((Descriptor*)transport);
+    UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(udp);
 
     if (socket_peekNextInPacket(&(udp->super)) == NULL) {
@@ -213,8 +213,8 @@ static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
     return bytesCopied;
 }
 
-static void _udp_free(Descriptor* descriptor) {
-    UDP* udp = _udp_fromDescriptor(descriptor);
+static void _udp_free(LegacyDescriptor* descriptor) {
+    UDP* udp = _udp_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(udp);
 
     descriptor_clear(descriptor);
@@ -224,8 +224,8 @@ static void _udp_free(Descriptor* descriptor) {
     worker_countObject(OBJECT_TYPE_UDP, COUNTER_TYPE_FREE);
 }
 
-static gboolean _udp_close(Descriptor* descriptor) {
-    UDP* udp = _udp_fromDescriptor(descriptor);
+static gboolean _udp_close(LegacyDescriptor* descriptor) {
+    UDP* udp = _udp_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(udp);
     /* Deregister us from the process upon return. */
     _udp_setState(udp, UDPS_CLOSED);
@@ -260,7 +260,7 @@ UDP* udp_new(guint receiveBufferSize, guint sendBufferSize) {
 
     /* we are immediately active because UDP doesnt wait for accept or connect */
     descriptor_adjustStatus(
-        (Descriptor*)udp, STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
+        (LegacyDescriptor*)udp, STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
 
     worker_countObject(OBJECT_TYPE_UDP, COUNTER_TYPE_NEW);
 

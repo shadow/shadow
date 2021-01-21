@@ -45,6 +45,11 @@ impl ByteQueue {
         }
     }
 
+    /// Number of bytes in the queue.
+    pub fn len(&self) -> usize {
+        self.length
+    }
+
     /// Push bytes to the head of the queue.
     pub fn push(&mut self, src: &[u8]) {
         // create new buffer head lazily as opposed to proactively
@@ -185,6 +190,13 @@ mod export {
         unsafe {
             Box::from_raw(bq_ptr);
         }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn bytequeue_len(bq: *mut ByteQueue) -> libc::size_t {
+        assert!(!bq.is_null());
+        let bq = unsafe { &mut *bq };
+        bq.len()
     }
 
     #[no_mangle]
