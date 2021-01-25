@@ -135,6 +135,8 @@ SysCallReg memorymanager_handleMprotect(MemoryManager *memory_manager,
 
 SysCallReturn rustsyscallhandler_close(SysCallHandler *sys, const SysCallArgs *args);
 
+SysCallReturn rustsyscallhandler_dup(SysCallHandler *sys, const SysCallArgs *args);
+
 SysCallReturn rustsyscallhandler_read(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_write(SysCallHandler *sys, const SysCallArgs *args);

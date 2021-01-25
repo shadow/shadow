@@ -679,6 +679,9 @@ extern "C" {
     ) -> SysCallReturn;
 }
 extern "C" {
+    pub fn syscallhandler_dup(sys: *mut SysCallHandler, args: *const SysCallArgs) -> SysCallReturn;
+}
+extern "C" {
     pub fn syscallhandler_getpid(
         sys: *mut SysCallHandler,
         args: *const SysCallArgs,

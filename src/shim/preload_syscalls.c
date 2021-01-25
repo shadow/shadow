@@ -223,6 +223,7 @@ NOREMAP(int, close, (int a), a);
 NOREMAP(int, connect, (int a, const struct sockaddr* b, socklen_t c), a,b,c);
 NOREMAP(int, creat, (const char *a, mode_t b), a,b);
 REMAP(int, creat64, creat, (const char *a, mode_t b), a,b);
+NOREMAP(int, dup, (int a), a);
 NOREMAP(int, epoll_create, (int a), a);
 NOREMAP(int, epoll_create1, (int a), a);
 NOREMAP(int, epoll_ctl, (int a, int b, int c, struct epoll_event* d), a,b,c,d);

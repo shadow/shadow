@@ -215,6 +215,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE_RUST(close);
         HANDLE(connect);
         HANDLE(creat);
+        HANDLE_RUST(dup);
         HANDLE(epoll_create);
         HANDLE(epoll_create1);
         HANDLE(epoll_ctl);
@@ -335,7 +336,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(sched_setaffinity);
 
         // operations on file descriptors
-        NATIVE(dup);
         NATIVE(dup2);
         NATIVE(dup3);
         NATIVE(poll);
