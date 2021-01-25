@@ -22,6 +22,7 @@
 #include "main/core/master.h"
 #include "main/core/support/configuration.h"
 #include "main/core/support/options.h"
+#include "main/host/affinity.h"
 #include "main/utility/utility.h"
 #include "shd-config.h"
 #include "support/logger/logger.h"
@@ -733,6 +734,7 @@ static gint _main_helper(Options* options) {
 }
 
 gint main_runShadow(gint argc, gchar* argv[]) {
+
     /* check the compiled GLib version */
     if (!GLIB_CHECK_VERSION(2, 32, 0)) {
         g_printerr("** GLib version 2.32.0 or above is required but Shadow was compiled against version %u.%u.%u\n",
@@ -789,6 +791,8 @@ gint main_runShadow(gint argc, gchar* argv[]) {
 
     /* disable buffering during startup so that we see every message immediately in the terminal */
     shadow_logger_setEnableBuffering(shadowLogger, FALSE);
+
+    affinity_initPlatformInfo();
 
     gint returnCode = _main_helper(options);
 

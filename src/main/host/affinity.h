@@ -14,11 +14,13 @@
 enum { AFFINITY_UNINIT = -1 };
 
 /*
- * Returns a good CPU number affinity for a worker thread with the given thread id.
+ * Returns a good CPU number affinity.
  *
- * THREAD SAFETY: thread-safe.
+ * THREAD SAFETY: ??
  */
-int affinity_getGoodWorkerAffinity(guint worker_thread_id);
+int affinity_getGoodWorkerAffinity();
+
+int affinity_initPlatformInfo();
 
 /*
  * Try to set the affinity of the process with the given pid to new_cpu_num. Logs a
