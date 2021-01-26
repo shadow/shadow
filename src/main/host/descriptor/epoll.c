@@ -579,14 +579,14 @@ static void _epoll_descriptorStatusChanged(Epoll* epoll, const EpollKey* key) {
         EpollWatch* watch = g_hash_table_lookup(epoll->watching, key);
         if (watch != NULL) {
             debug("status changed in epoll %i on watched descriptor %i",
-                    descriptor_getHandle(&epoll->super), watch->fd);
+                  descriptor_getHandle(&epoll->super), watch->fd);
 
             /* update the status for the child watch fd */
             _epollwatch_updateStatus(watch);
 
             /* check if its ready (has an event to report) now */
-            if(_epollwatch_isReady(watch)) {
-                if(!g_hash_table_contains(epoll->ready, key)) {
+            if (_epollwatch_isReady(watch)) {
+                if (!g_hash_table_contains(epoll->ready, key)) {
                     _epollwatch_ref(watch);
                     gpointer keyCopy = _epollkey_new(key->fd, key->objectPtr);
                     g_hash_table_replace(epoll->ready, keyCopy, watch);
