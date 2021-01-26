@@ -54,7 +54,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new(
             "test_non_socket_fd",
             test_non_socket_fd,
-            set![TestEnv::Libc],
+            set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
             "test_null_addr",

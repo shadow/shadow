@@ -66,7 +66,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             test_utils::ShadowTest::new(
                 &append_args("test_non_socket_fd"),
                 move || test_non_socket_fd(accept_fn),
-                set![TestEnv::Libc],
+                set![TestEnv::Libc, TestEnv::Shadow],
             ),
             test_utils::ShadowTest::new(
                 &append_args("test_invalid_sock_type"),
