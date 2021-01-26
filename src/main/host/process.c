@@ -279,11 +279,9 @@ static gchar* _process_outputFileName(Process* proc, const char* type) {
         "%s/%s.%s", host_getDataPath(proc->host), proc->processName->str, type);
 }
 
-static void _process_openStdIOFileHelper(Process* proc, bool isStdOut) {
+static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName) {
     MAGIC_ASSERT(proc);
-
-    gchar* fileName =
-        _process_outputFileName(proc, isStdOut ? "stdout" : "stderr");
+    utility_assert(fileName != NULL);
 
     File* stdfile = file_new();
     int errcode = file_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
@@ -294,26 +292,13 @@ static void _process_openStdIOFileHelper(Process* proc, bool isStdOut) {
         /* Unref and free the file object. */
         descriptor_close((LegacyDescriptor*)stdfile);
     } else {
-        debug("Successfully opened %s file at %s",
-              isStdOut ? "stdout" : "stderr", fileName);
+        debug("Successfully opened fd %d at %s", fd, fileName);
 
         CompatDescriptor* compatDesc = compatdescriptor_fromLegacy((LegacyDescriptor*)stdfile);
-
-        if (isStdOut) {
-            descriptortable_set(
-                proc->descTable, STDOUT_FILENO, compatDesc);
-            proc->stdoutFile = stdfile;
-        } else {
-            descriptortable_set(
-                proc->descTable, STDERR_FILENO, compatDesc);
-            proc->stderrFile = stdfile;
-        }
-
-        /* Ref once since both the proc class and the table are storing it. */
-        descriptor_ref((LegacyDescriptor*)stdfile);
+        descriptortable_set(proc->descTable, fd, compatDesc);
     }
 
-    g_free(fileName);
+    return stdfile;
 }
 
 static void _process_start(Process* proc) {
@@ -324,11 +309,20 @@ static void _process_start(Process* proc) {
         return;
     }
 
+    // Set up stdin
+    _process_openStdIOFileHelper(proc, STDIN_FILENO, "/dev/null");
+
     // Set up stdout
-    _process_openStdIOFileHelper(proc, true);
+    gchar* stdoutFileName = _process_outputFileName(proc, "stdout");
+    proc->stdoutFile = _process_openStdIOFileHelper(proc, STDOUT_FILENO, stdoutFileName);
+    descriptor_ref((LegacyDescriptor*)proc->stdoutFile);
+    g_free(stdoutFileName);
 
     // Set up stderr
-    _process_openStdIOFileHelper(proc, false);
+    gchar* stderrFileName = _process_outputFileName(proc, "stderr");
+    proc->stderrFile = _process_openStdIOFileHelper(proc, STDERR_FILENO, stderrFileName);
+    descriptor_ref((LegacyDescriptor*)proc->stderrFile);
+    g_free(stderrFileName);
 
     // tid of first thread of a process is equal to the pid.
     int tid = proc->processID;
