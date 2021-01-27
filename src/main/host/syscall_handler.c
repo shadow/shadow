@@ -279,6 +279,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(openat);
         HANDLE_RUST(pipe);
         HANDLE_RUST(pipe2);
+        HANDLE(prctl);
         HANDLE(pread64);
         HANDLE(preadv);
 #ifdef SYS_preadv2
@@ -377,7 +378,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(lstat);
         NATIVE(madvise);
         NATIVE(mkdir);
-        NATIVE(prctl);
         NATIVE(readlink);
         NATIVE(rt_sigaction);
         NATIVE(rt_sigprocmask);
