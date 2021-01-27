@@ -490,6 +490,8 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, CompatDescriptor* descr
             /* unref gets called on the watch when it is removed from these tables */
             g_hash_table_remove(epoll->ready, &key);
             g_hash_table_remove(epoll->watching, &key);
+            /* if that was the last watch, this epoll is not readable to its parents */
+            _epoll_descriptorStatusChanged(epoll, NULL);
 
             break;
         }
@@ -571,22 +573,29 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
 static void _epoll_descriptorStatusChanged(Epoll* epoll, const EpollKey* key) {
     MAGIC_ASSERT(epoll);
 
-    EpollWatch* watch = g_hash_table_lookup(epoll->watching, key);
-    debug("status changed in epoll %i for descriptor %i", descriptor_getHandle(&epoll->super), watch->fd);
+    debug("status changed on epoll %i", descriptor_getHandle(&epoll->super));
 
-    /* update the status for the child watch fd */
-    _epollwatch_updateStatus(watch);
+    if (key != NULL) {
+        EpollWatch* watch = g_hash_table_lookup(epoll->watching, key);
+        if (watch != NULL) {
+            debug("status changed in epoll %i on watched descriptor %i",
+                  descriptor_getHandle(&epoll->super), watch->fd);
 
-    /* check if its ready (has an event to report) now */
-    if(_epollwatch_isReady(watch)) {
-        if(!g_hash_table_contains(epoll->ready, key)) {
-            _epollwatch_ref(watch);
-            gpointer keyCopy = _epollkey_new(key->fd, key->objectPtr);
-            g_hash_table_replace(epoll->ready, keyCopy, watch);
+            /* update the status for the child watch fd */
+            _epollwatch_updateStatus(watch);
+
+            /* check if its ready (has an event to report) now */
+            if (_epollwatch_isReady(watch)) {
+                if (!g_hash_table_contains(epoll->ready, key)) {
+                    _epollwatch_ref(watch);
+                    gpointer keyCopy = _epollkey_new(key->fd, key->objectPtr);
+                    g_hash_table_replace(epoll->ready, keyCopy, watch);
+                }
+            } else {
+                /* this calls unref on the watch if its in the table */
+                g_hash_table_remove(epoll->ready, key);
+            }
         }
-    } else {
-        /* this calls unref on the watch if its in the table */
-        g_hash_table_remove(epoll->ready, key);
     }
 
     /* check the status on the parent epoll fd and adjust as needed */
