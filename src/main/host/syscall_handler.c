@@ -32,6 +32,7 @@
 #include "main/host/syscall/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/random.h"
+#include "main/host/syscall/signal.h"
 #include "main/host/syscall/socket.h"
 #include "main/host/syscall/time.h"
 #include "main/host/syscall/timerfd.h"
@@ -259,6 +260,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(getsockopt);
         HANDLE(gettimeofday);
         HANDLE(ioctl);
+        HANDLE(kill);
         HANDLE(linkat);
         HANDLE(listen);
         HANDLE(lseek);
@@ -313,10 +315,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(symlinkat);
         HANDLE(sync_file_range);
         HANDLE(syncfs);
+        HANDLE(tgkill);
         HANDLE(time);
         HANDLE(timerfd_create);
         HANDLE(timerfd_gettime);
         HANDLE(timerfd_settime);
+        HANDLE(tkill);
         HANDLE(uname);
         HANDLE(unlinkat);
         HANDLE(utimensat);
@@ -331,9 +335,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(waitid);
 
         // operations on pids (shadow overrides pids)
-        NATIVE(kill);
-        NATIVE(tkill);
-        NATIVE(tgkill);
         NATIVE(sched_getaffinity);
         NATIVE(sched_setaffinity);
 

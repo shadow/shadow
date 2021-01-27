@@ -122,4 +122,7 @@ in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
 
 FutexTable* host_getFutexTable(Host* host);
 
+// converts a virtual (shadow) tid into the native tid
+pid_t host_getNativeTID(Host* host, pid_t virtualPID, pid_t virtualTID);
+
 #endif /* SHD_HOST_H_ */
