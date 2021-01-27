@@ -347,6 +347,11 @@ int affinity_initPlatformInfo() {
     rc = _affinity_parseLSCPUOutput(
         lscpu_contents, &_global_platform_info.p_cpus, &_global_platform_info.n_cpus);
 
+    if (rc) {
+        error("Could not run `lscpu`, which is required for CPU pinning.");
+        return -1;
+    }
+
     _global_platform_info_hash_tables_init();
 
     // Derive the max CPU number and fill the queue.
@@ -354,11 +359,6 @@ int affinity_initPlatformInfo() {
         CPUInfo* p_info = &_global_platform_info.p_cpus[idx];
         _global_platform_info.max_cpu_num =
             MAX(_global_platform_info.max_cpu_num, p_info->logical_cpu_num);
-    }
-
-    if (rc) {
-        error("Could not run `lscpu`, which is required for CPU pinning.");
-        return -1;
     }
 
     if (lscpu_contents) {
