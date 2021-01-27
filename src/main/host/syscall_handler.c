@@ -145,7 +145,9 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
               ? "DONE"
               : scr->state == SYSCALL_BLOCK ? "BLOCK"
                                             : scr->state == SYSCALL_NATIVE ? "NATIVE" : "UNKNOWN",
-          (int)scr->retval.as_i64, strerror(-scr->retval.as_i64), sys->perfSecondsCurrent);
+          (int)scr->retval.as_i64, 
+          scr->retval.as_i64 < 0 ? strerror(-scr->retval.as_i64) : "n/a",
+          sys->perfSecondsCurrent);
 
     if (scr->state != SYSCALL_BLOCK) {
         /* The syscall completed, count it and the cumulative time to complete it. */
@@ -279,6 +281,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
 #ifdef SYS_preadv2
         HANDLE(preadv2);
 #endif
+#ifdef SYS_prlimit
+        HANDLE(prlimit);
+#endif
+#ifdef SYS_prlimit64
+        HANDLE(prlimit64);
+#endif
         HANDLE(pwrite64);
         HANDLE(pwritev);
 #ifdef SYS_pwritev2
@@ -316,12 +324,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // **************************************
         // Not handled (yet):
         // **************************************
-        NATIVE(arch_prctl);
         NATIVE(io_getevents);
-        NATIVE(prctl);
-        NATIVE(prlimit64);
-        NATIVE(rt_sigaction);
-        NATIVE(rt_sigprocmask);
         NATIVE(get_robust_list);
         NATIVE(set_robust_list);
         NATIVE(sysinfo);
@@ -361,6 +364,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // (because the plugin can natively):
         // ***************************************
         NATIVE(access);
+        NATIVE(arch_prctl);
         NATIVE(exit);
         NATIVE(exit_group);
         NATIVE(getcwd);
@@ -372,7 +376,10 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(lstat);
         NATIVE(madvise);
         NATIVE(mkdir);
+        NATIVE(prctl);
         NATIVE(readlink);
+        NATIVE(rt_sigaction);
+        NATIVE(rt_sigprocmask);
         NATIVE(setrlimit);
         NATIVE(stat);
 #ifdef SYS_stat64

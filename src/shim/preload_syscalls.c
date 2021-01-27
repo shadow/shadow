@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
+#include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
@@ -284,6 +285,12 @@ NOREMAP(ssize_t, pread64, (int a, void* b, size_t c, off_t d), a, b, c, d);
 NOREMAP(ssize_t, preadv, (int a, const struct iovec* b, int c, off_t d), a, b, c, d);
 #ifdef SYS_preadv2
 NOREMAP(ssize_t, preadv2, (int a, const struct iovec* b, int c, off_t d, int e), a, b, c, d, e);
+#endif
+#ifdef SYS_prlimit
+NOREMAP(int, prlimit, (int a, int b, const struct rlimit* c, struct rlimit* d), a, b, c, d);
+#endif
+#ifdef SYS_prlimit64
+NOREMAP(int, prlimit64, (int a, enum __rlimit_resource b, const struct rlimit64* c, struct rlimit64* d), a, b, c, d);
 #endif
 NOREMAP(ssize_t, pwrite64, (int a, const void* b, size_t c, off_t d), a, b, c, d);
 NOREMAP(ssize_t, pwritev, (int a, const struct iovec* b, int c, off_t d), a, b, c, d);

@@ -9,5 +9,7 @@
 #include "main/host/syscall/protected.h"
 
 SYSCALL_HANDLER(execve);
+SYSCALL_HANDLER(prlimit);
+SYSCALL_HANDLER(prlimit64);
 
 #endif
