@@ -254,6 +254,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(getpid);
         HANDLE(gettid);
         HANDLE(getrandom);
+        HANDLE(get_robust_list);
         HANDLE(getsockname);
         HANDLE(getsockopt);
         HANDLE(gettimeofday);
@@ -301,6 +302,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(renameat2);
         HANDLE(sendto);
         HANDLE(setsockopt);
+        HANDLE(set_robust_list);
         HANDLE(set_tid_address);
         HANDLE(shutdown);
         HANDLE(socket);
@@ -325,8 +327,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Not handled (yet):
         // **************************************
         NATIVE(io_getevents);
-        NATIVE(get_robust_list);
-        NATIVE(set_robust_list);
         NATIVE(sysinfo);
         NATIVE(waitid);
 

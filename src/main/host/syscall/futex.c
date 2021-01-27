@@ -184,3 +184,19 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
 }
+
+SysCallReturn syscallhandler_get_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
+    utility_assert(sys && args);
+
+    warning("get_robust_list was called but we don't yet support it");
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+}
+
+SysCallReturn syscallhandler_set_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
+    utility_assert(sys && args);
+
+    warning("set_robust_list was called but we don't yet support it");
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+}
