@@ -34,6 +34,7 @@
 #include "main/host/syscall/random.h"
 #include "main/host/syscall/signal.h"
 #include "main/host/syscall/socket.h"
+#include "main/host/syscall/sysinfo.h"
 #include "main/host/syscall/time.h"
 #include "main/host/syscall/timerfd.h"
 #include "main/host/syscall/uio.h"
@@ -316,6 +317,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(symlinkat);
         HANDLE(sync_file_range);
         HANDLE(syncfs);
+        HANDLE(sysinfo);
         HANDLE(tgkill);
         HANDLE(time);
         HANDLE(timerfd_create);
@@ -332,7 +334,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // Not handled (yet):
         // **************************************
         NATIVE(io_getevents);
-        NATIVE(sysinfo);
         NATIVE(waitid);
 
         // operations on pids (shadow overrides pids)

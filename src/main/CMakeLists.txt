@@ -119,6 +119,7 @@ set(shadow_srcs
     host/syscall/random.c
     host/syscall/signal.c
     host/syscall/socket.c
+    host/syscall/sysinfo.c
     host/syscall/time.c
     host/syscall/timerfd.c
     host/syscall/unistd.c
