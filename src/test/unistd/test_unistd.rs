@@ -7,7 +7,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::process;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use test_utils::{get_errno, running_in_shadow};
+use test_utils::{get_errno};
 
 static SIGACTION_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -47,13 +47,8 @@ fn main() {
 
     test_getpid_nodeps();
     test_gethostname(&expected_name.nodename);
-
-    if !running_in_shadow() {
-        // TODO: Implement uname in shadow
-        test_uname(&expected_name);
-        // TODO: Support `kill` in shadow (and/or find another way of validating the pid)
-        test_getpid_kill();
-    }
+    test_uname(&expected_name);
+    test_getpid_kill();
 }
 
 /// Tests that the results are plausible, but can't really validate that it's our

@@ -260,6 +260,7 @@ NOREMAP(ssize_t, getrandom, (void* a, size_t b, unsigned int c), a, b, c);
 NOREMAP(int, getsockname, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
 NOREMAP(int, getsockopt, (int a, int b, int c, void* d, socklen_t* e), a, b, c, d, e);
 static REMAP(int, ioctl_explicit, ioctl, (int a, unsigned long b, char* c), a,b,c);
+NOREMAP(int, kill, (pid_t a, int b), a, b);
 NOREMAP(int, linkat, (int a, const char* b, int c, const char* d, int e), a, b, c, d, e);
 NOREMAP(int, listen, (int a, int b), a, b);
 NOREMAP(off_t, lseek, (int a, off_t b, int c), a, b, c);
@@ -319,6 +320,8 @@ NOREMAP(int, statx, (int a, const char* b, int c, unsigned int d, struct statx* 
 NOREMAP(int, symlinkat, (const char* a, int b, const char* c), a, b, c);
 NOREMAP(int, sync_file_range, (int a, off64_t b, off64_t c, unsigned int d), a, b, c, d);
 NOREMAP(int, syncfs, (int a), a);
+NOREMAP(int, tkill, (int a, int b), a, b);
+NOREMAP(int, tgkill, (int a, int b, int c), a, b, c);
 NOREMAP(int, uname, (struct utsname* a), a);
 NOREMAP(int, unlinkat, (int a, const char *b, int c), a, b, c);
 NOREMAP(int, utimensat, (int a, const char* b, const struct timespec c[2], int d), a, b, c, d);
