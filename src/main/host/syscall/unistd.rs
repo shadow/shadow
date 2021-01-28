@@ -40,6 +40,44 @@ pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
     c::SysCallReturn::from_int(0)
 }
 
+pub fn dup(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+    let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
+
+    dup_helper(sys, args, fd)
+}
+
+pub fn dup_helper(
+    sys: &mut c::SysCallHandler,
+    args: &c::SysCallArgs,
+    fd: libc::c_int,
+) -> c::SysCallReturn {
+    // get the descriptor, or return early if it doesn't exist
+    let desc = match syscall::get_descriptor(fd, sys.process) {
+        Ok(d) => unsafe { &mut *d },
+        Err(errno) => return c::SysCallReturn::from_errno(errno),
+    };
+
+    // if it's a legacy descriptor, use the C syscall handler instead
+    let desc = match desc {
+        CompatDescriptor::New(d) => d,
+        CompatDescriptor::Legacy(_) => unsafe {
+            return c::syscallhandler_dup(
+                sys as *mut c::SysCallHandler,
+                args as *const c::SysCallArgs,
+            );
+        },
+    };
+
+    // clone the descriptor and register it
+    let new_desc = CompatDescriptor::New(desc.clone());
+    let new_fd = unsafe {
+        c::process_registerCompatDescriptor(sys.process, Box::into_raw(Box::new(new_desc)))
+    };
+
+    // return the new fd
+    c::SysCallReturn::from_int(new_fd as i64)
+}
+
 pub fn read(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
     let buf_ptr = unsafe { args.args[1].as_ptr };
@@ -297,6 +335,15 @@ mod export {
     ) -> c::SysCallReturn {
         assert!(!sys.is_null() && !args.is_null());
         close(unsafe { &mut *sys }, unsafe { &*args })
+    }
+
+    #[no_mangle]
+    pub extern "C" fn rustsyscallhandler_dup(
+        sys: *mut c::SysCallHandler,
+        args: *const c::SysCallArgs,
+    ) -> c::SysCallReturn {
+        assert!(!sys.is_null() && !args.is_null());
+        dup(unsafe { &mut *sys }, unsafe { &*args })
     }
 
     #[no_mangle]
