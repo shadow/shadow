@@ -520,7 +520,7 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
      * weightsfile: path to a file containing $quantity weights according to which messages will be
      * sent to peers */
     const gchar* usage =
-        "loglevel=STR basename=STR quantity=INT msgload=INT cpuload=INT weights=PATH";
+        "loglevel=STR basename=STR quantity=INT msgload=INT size=INT cpuload=INT weightsfilepath=PATH";
 
     gchar myname[128];
     g_assert(gethostname(&myname[0], 128) == 0);

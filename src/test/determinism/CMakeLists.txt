@@ -1,8 +1,8 @@
 ## TEST 1 (Basic tests)
 
 ## build the test as a dynamic executable that plugs into shadow
-add_shadow_exe(shadow-plugin-test-determinism test_determinism.c)
-target_link_libraries(shadow-plugin-test-determinism ${CMAKE_THREAD_LIBS_INIT})
+add_executable(test-determinism test_determinism.c)
+target_link_libraries(test-determinism ${CMAKE_THREAD_LIBS_INIT})
 
 ## We need to run twice to make sure the 'random' output is the same both times
 add_test(
@@ -16,7 +16,7 @@ add_test(
     NAME determinism1b-shadow
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/determinism1.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow -w 2 -s 1 -d determinism1b.shadow.data \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow -w 2 -s 1 -d determinism1b.shadow.data - \
     "
 )
 
@@ -37,14 +37,14 @@ add_test(
     NAME determinism2a-shadow
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml --output - \
-    ${CMAKE_BINARY_DIR}/src/main/shadow -w 2 -l debug -s 1 -d determinism2a.shadow.data - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow -w 2 -l debug -s 1 -d determinism2a.shadow.data - \
     "
 )
 add_test(
     NAME determinism2b-shadow
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml --output - \
-    ${CMAKE_BINARY_DIR}/src/main/shadow -w 2 -l debug -s 1 -d determinism2b.shadow.data \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow -w 2 -l debug -s 1 -d determinism2b.shadow.data - \
     "
 )
 
@@ -54,4 +54,5 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/weights.txt ${CMAKE_CURRENT_BINARY_DI
 ## now compare the output
 add_test(NAME determinism2-shadow-compare COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/determinism2_compare.cmake)
 ## make sure the tests that produce output finish before we compare the output
-set_tests_properties(determinism2-shadow-compare PROPERTIES DEPENDS "determinism2a-shadow;determinism2b-shadow;phold-shadow")
+## And make sure the test-phold binary was already built, because the test uses it
+set_tests_properties(determinism2-shadow-compare PROPERTIES DEPENDS "determinism2a-shadow;determinism2b-shadow;test-phold")
