@@ -7,7 +7,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::process;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use test_utils::{get_errno};
+use test_utils::get_errno;
 
 static SIGACTION_COUNT: AtomicUsize = AtomicUsize::new(0);
 
