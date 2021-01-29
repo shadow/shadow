@@ -81,6 +81,10 @@ path = "pipe/test_pipe.rs"
 name = "test_pthreads"
 path = "pthreads/test_pthreads.rs"
 
+[[bin]]
+name = "test_ifaddrs"
+path = "ifaddrs/test_ifaddrs.rs"
+
 [dependencies]
 libc = "0.2"
 nix = "0.19.0"
