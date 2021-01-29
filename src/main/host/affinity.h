@@ -21,7 +21,7 @@ enum { AFFINITY_UNINIT = -1 };
 int affinity_getGoodWorkerAffinity();
 
 /*
- * Try to parse
+ * Try to parse platform CPU orientation information from the host machine.
  *
  * THREAD SAFETY: Not thread-safe. Only call this function once per program
  * execution.
