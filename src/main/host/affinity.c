@@ -215,7 +215,7 @@ static int _affinity_readLSCPU(char **contents) {
         char buffer[BUFFER_NBYTES] = {0};
 
         while (fgets(buffer, BUFFER_NBYTES, p_pipe) != NULL) {
-            fprintf(p_sstream, buffer);
+            fprintf(p_sstream, "%s", buffer);
         }
 
         int rc = fflush(p_sstream);
@@ -381,7 +381,7 @@ int affinity_initPlatformInfo() {
 }
 
 int affinity_setProcessAffinity(pid_t pid, int new_cpu_num, int old_cpu_num) {
-    assert(_ncpus > 0 && pid >= 0);
+    assert(pid >= 0);
 
     // We can short-circuit if there's no work to do.
     if (!_affinity_enabled || new_cpu_num == AFFINITY_UNINIT || new_cpu_num == old_cpu_num) {
