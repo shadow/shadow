@@ -334,34 +334,34 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // **************************************
         // Not handled (yet):
         // **************************************
-        NATIVE(io_getevents);
-        NATIVE(waitid);
-        NATIVE(msync);
+        // NATIVE(io_getevents);
+        // NATIVE(waitid);
+        // NATIVE(msync);
 
-        // operations on pids (shadow overrides pids)
-        NATIVE(sched_getaffinity);
-        NATIVE(sched_setaffinity);
+        //// operations on pids (shadow overrides pids)
+        // NATIVE(sched_getaffinity);
+        // NATIVE(sched_setaffinity);
 
-        // operations on file descriptors
-        NATIVE(dup2);
-        NATIVE(dup3);
-        NATIVE(poll);
-        NATIVE(ppoll);
-        NATIVE(select);
-        NATIVE(pselect6);
+        //// operations on file descriptors
+        // NATIVE(dup2);
+        // NATIVE(dup3);
+        // NATIVE(poll);
+        // NATIVE(ppoll);
+        // NATIVE(select);
+        // NATIVE(pselect6);
 
-        // copying data between various types of fds
-        NATIVE(copy_file_range);
-        NATIVE(sendfile);
-        NATIVE(splice);
-        NATIVE(vmsplice);
-        NATIVE(tee);
+        //// copying data between various types of fds
+        // NATIVE(copy_file_range);
+        // NATIVE(sendfile);
+        // NATIVE(splice);
+        // NATIVE(vmsplice);
+        // NATIVE(tee);
 
-        // additional socket io
-        NATIVE(recvmsg);
-        NATIVE(sendmsg);
-        NATIVE(recvmmsg);
-        NATIVE(sendmmsg);
+        //// additional socket io
+        // NATIVE(recvmsg);
+        // NATIVE(sendmsg);
+        // NATIVE(recvmmsg);
+        // NATIVE(sendmmsg);
 
         // ***************************************
         // We think we don't need to handle these
@@ -389,11 +389,18 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(stat64);
 #endif
         NATIVE(statfs);
+        NATIVE(sigaltstack);
         NATIVE(unlink);
 
         default:
-            warning("unhandled syscall %ld", args->number);
-            scr = (SysCallReturn){.state = SYSCALL_NATIVE};
+            warning(
+                "Detected unsupported syscall %ld called from thread %i in process %s on host %s",
+                args->number, thread_getID(sys->thread), process_getName(sys->process),
+                host_getName(sys->host));
+            critical("Returning error %i (ENOSYS) for unsupported syscall %li, which may result in "
+                     "unusual behavior",
+                     ENOSYS, args->number);
+            scr = (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
             break;
     }
 
