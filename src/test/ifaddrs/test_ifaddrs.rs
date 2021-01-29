@@ -15,17 +15,14 @@ fn main() {
 
     let mut ip_vec = vec![];
     for ifaddr in addrs {
-        match ifaddr.address {
-            Some(address) => {
-                let address_str = address.to_str();
-                let ip = address_str.split(":").collect::<Vec<&str>>()[0];
-                println!(
-                    "found ifaddr interface {} address {}",
-                    ifaddr.interface_name, ip
-                );
-                ip_vec.push(String::from(ip));
-            }
-            None => {}
+        if let Some(nix::sys::socket::SockAddr::Inet(address)) = ifaddr.address {
+            let address_str = address.to_str();
+            let ip = address_str.split(":").collect::<Vec<&str>>()[0];
+            println!(
+                "found ifaddr interface {} address {}",
+                ifaddr.interface_name, ip
+            );
+            ip_vec.push(String::from(ip));
         }
     }
 

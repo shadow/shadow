@@ -582,7 +582,7 @@ int getifaddrs(struct ifaddrs** ifap) {
 
     struct in_addr addr_buf;
     if (inet_pton(AF_INET, "127.0.0.1", &addr_buf) == 1) {
-        ((struct sockaddr_in*)i->ifa_addr)->sin_addr.s_addr = addr_buf.s_addr;
+        ((struct sockaddr_in*)i->ifa_addr)->sin_addr = addr_buf;
     } else {
         errno = EADDRNOTAVAIL;
         return -1;
