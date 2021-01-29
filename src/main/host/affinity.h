@@ -14,12 +14,23 @@
 enum { AFFINITY_UNINIT = -1 };
 
 /*
- * Returns a good CPU number affinity.
+ * Returns a good CPU number affinity for the next worker.
  *
- * THREAD SAFETY: ??
+ * THREAD SAFETY: Thread-safe.
  */
 int affinity_getGoodWorkerAffinity();
 
+/*
+ * Try to parse
+ *
+ * THREAD SAFETY: Not thread-safe. Only call this function once per program
+ * execution.
+ *
+ * RETURN VALUE:
+ *
+ * 0 if no errors occurred and platform information was successfully
+ * initialized. Otherwise returns -1 and emits an error message to the log. 
+ */
 int affinity_initPlatformInfo();
 
 /*

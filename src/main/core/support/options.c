@@ -50,6 +50,8 @@ struct _Options {
     gboolean runTGenExample;
     gboolean runTestExample;
 
+    gboolean pinCPUs;
+
     GString* inputXMLFilename;
 
     MAGIC_DECLARE;
@@ -99,6 +101,7 @@ Options* options_new(gint argc, gchar* argv[]) {
       { "workers", 'w', 0, G_OPTION_ARG_INT, &(options->nWorkerThreads), "Run concurrently with N worker threads [0]", "N" },
       { "valgrind", 'x', 0, G_OPTION_ARG_NONE, &(options->runValgrind), "Run through valgrind for debugging", NULL },
       { "version", 'v', 0, G_OPTION_ARG_NONE, &(options->printSoftwareVersion), "Print software version and exit", NULL },
+      { "pin-cpus", 'z', 0, G_OPTION_ARG_NONE, &(options->pinCPUs), "Use experimental CPU pinning", NULL },
       { NULL },
     };
 
@@ -441,3 +444,7 @@ const gchar* options_getDataTemplatePath(Options* options) {
     return options->dataTemplatePath;
 }
 
+gboolean options_getCPUPinning(Options* options) {
+    MAGIC_ASSERT(options);
+    return options->pinCPUs;
+}

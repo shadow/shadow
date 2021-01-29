@@ -792,7 +792,10 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     /* disable buffering during startup so that we see every message immediately in the terminal */
     shadow_logger_setEnableBuffering(shadowLogger, FALSE);
 
-    affinity_initPlatformInfo();
+    if (options_getCPUPinning(options)) {
+        int rc = affinity_initPlatformInfo();
+        if (rc) { abort(); }
+    }
 
     gint returnCode = _main_helper(options);
 
