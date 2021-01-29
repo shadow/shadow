@@ -794,7 +794,9 @@ gint main_runShadow(gint argc, gchar* argv[]) {
 
     if (options_getCPUPinning(options)) {
         int rc = affinity_initPlatformInfo();
-        if (rc) { abort(); }
+        if (rc) {
+            abort();
+        }
     }
 
     gint returnCode = _main_helper(options);

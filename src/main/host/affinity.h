@@ -29,7 +29,7 @@ int affinity_getGoodWorkerAffinity();
  * RETURN VALUE:
  *
  * 0 if no errors occurred and platform information was successfully
- * initialized. Otherwise returns -1 and emits an error message to the log. 
+ * initialized. Otherwise returns -1 and emits an error message to the log.
  */
 int affinity_initPlatformInfo();
 
@@ -55,7 +55,7 @@ int affinity_setProcessAffinity(pid_t pid, int new_cpu_num, int old_cpu_num);
  * affinity of the calling thread/process.
  */
 static inline int affinity_setThisProcessAffinity(int new_cpu_num, int old_cpu_num) {
-  return affinity_setProcessAffinity(0, new_cpu_num, old_cpu_num);
+    return affinity_setProcessAffinity(0, new_cpu_num, old_cpu_num);
 }
 
 #endif // AFFINITY_H_
