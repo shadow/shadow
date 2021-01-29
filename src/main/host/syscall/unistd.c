@@ -296,6 +296,12 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
 }
 
+SysCallReturn syscallhandler_dup(SysCallHandler* sys,
+                                   const SysCallArgs* args) {
+    warning("Cannot dup legacy descriptors");
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EOPNOTSUPP};
+}
+
 SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,
                                    const SysCallArgs* args) {
     return _syscallhandler_pipeHelper(

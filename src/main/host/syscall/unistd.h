@@ -9,6 +9,7 @@
 #include "main/host/syscall/protected.h"
 
 SYSCALL_HANDLER(close);
+SYSCALL_HANDLER(dup);
 SYSCALL_HANDLER(getpid);
 SYSCALL_HANDLER(pipe);
 SYSCALL_HANDLER(pipe2);

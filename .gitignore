@@ -7,4 +7,6 @@
 .settings
 *.swp
 cscope.*
-*.swp
+# ctags index
+/tags
+/src/tags
