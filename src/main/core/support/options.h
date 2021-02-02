@@ -138,6 +138,8 @@ const gchar* options_getDataTemplatePath(Options* options);
 
 void options_addExperimentalEntry(GOptionEntry entry);
 
+gboolean options_getCPUPinning(Options* options);
+
 // Used to generate unique symbol names. See
 // https://stackoverflow.com/questions/1597007/creating-c-macro-with-and-line-token-concatenation-with-positioning-macr
 #define OPTIONS_TOKENPASTE(x, y) x##y
@@ -149,7 +151,6 @@ void options_addExperimentalEntry(GOptionEntry entry);
         options_addExperimentalEntry((GOptionEntry){                                               \
             long_name, short_name, flags, arg, arg_data, description, arg_description});           \
     }
-
 /** @} */
 
 #endif /* SHD_CONFIGURATION_H_ */
