@@ -203,8 +203,9 @@ impl StatusEventSource {
 }
 
 /// Represents a POSIX description, or a Linux "struct file".
+#[derive(Clone)]
 pub enum PosixFile {
-    Pipe(pipe::PipeFile),
+    Pipe(Arc<AtomicRefCell<pipe::PipeFile>>),
 }
 
 // will not compile if `PosixFile` is not Send + Sync
@@ -212,45 +213,51 @@ impl IsSend for PosixFile {}
 impl IsSync for PosixFile {}
 
 impl PosixFile {
-    pub fn read(&mut self, bytes: &mut [u8], event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn read(&self, bytes: &mut [u8], event_queue: &mut EventQueue) -> SyscallReturn {
         match self {
-            Self::Pipe(f) => f.read(bytes, event_queue),
+            Self::Pipe(f) => f.borrow_mut().read(bytes, event_queue),
         }
     }
 
-    pub fn write(&mut self, bytes: &[u8], event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn write(&self, bytes: &[u8], event_queue: &mut EventQueue) -> SyscallReturn {
         match self {
-            Self::Pipe(f) => f.write(bytes, event_queue),
+            Self::Pipe(f) => f.borrow_mut().write(bytes, event_queue),
         }
     }
 
     pub fn status(&self) -> c::Status {
         match self {
-            Self::Pipe(f) => f.status(),
+            Self::Pipe(f) => f.borrow().status(),
         }
     }
 
     pub fn get_flags(&self) -> FileFlags {
         match self {
-            Self::Pipe(f) => f.get_flags(),
+            Self::Pipe(f) => f.borrow().get_flags(),
         }
     }
 
-    pub fn set_flags(&mut self, flags: FileFlags) {
+    pub fn set_flags(&self, flags: FileFlags) {
         match self {
-            Self::Pipe(f) => f.set_flags(flags),
+            Self::Pipe(f) => f.borrow_mut().set_flags(flags),
         }
     }
 
-    pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+    pub fn add_legacy_listener(&self, ptr: *mut c::StatusListener) {
         match self {
-            Self::Pipe(f) => f.add_legacy_listener(ptr),
+            Self::Pipe(f) => f.borrow_mut().add_legacy_listener(ptr),
         }
     }
 
-    pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+    pub fn remove_legacy_listener(&self, ptr: *mut c::StatusListener) {
         match self {
-            Self::Pipe(f) => f.remove_legacy_listener(ptr),
+            Self::Pipe(f) => f.borrow_mut().remove_legacy_listener(ptr),
+        }
+    }
+
+    pub fn canonical_handle(&self) -> usize {
+        match self {
+            Self::Pipe(f) => Arc::as_ptr(f) as usize,
         }
     }
 }
@@ -265,19 +272,19 @@ bitflags::bitflags! {
 
 #[derive(Clone)]
 pub struct Descriptor {
-    file: Arc<AtomicRefCell<PosixFile>>,
+    file: PosixFile,
     flags: DescriptorFlags,
 }
 
 impl Descriptor {
-    pub fn new(file: Arc<AtomicRefCell<PosixFile>>) -> Self {
+    pub fn new(file: PosixFile) -> Self {
         Self {
             file,
             flags: DescriptorFlags::empty(),
         }
     }
 
-    pub fn get_file(&self) -> &Arc<AtomicRefCell<PosixFile>> {
+    pub fn get_file(&self) -> &PosixFile {
         &self.file
     }
 
@@ -311,10 +318,6 @@ impl Drop for CompatDescriptor {
 
 mod export {
     use super::*;
-
-    /// An opaque type used when passing `*const AtomicRefCell<File>` to C.
-    #[no_mangle]
-    pub enum PosixFileArc {}
 
     /// The new compat descriptor takes ownership of the reference to the legacy descriptor and
     /// does not increment its ref count, but will decrement the ref count when this compat
@@ -382,15 +385,15 @@ mod export {
     #[no_mangle]
     pub extern "C" fn compatdescriptor_borrowPosixFile(
         descriptor: *mut CompatDescriptor,
-    ) -> *const PosixFileArc {
+    ) -> *const PosixFile {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &mut *descriptor };
 
-        (match descriptor {
-            CompatDescriptor::Legacy(_) => std::ptr::null_mut(),
-            CompatDescriptor::New(d) => Arc::as_ptr(d.get_file()),
-        }) as *const PosixFileArc
+        match descriptor {
+            CompatDescriptor::Legacy(_) => std::ptr::null(),
+            CompatDescriptor::New(d) => d.get_file(),
+        }
     }
 
     /// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
@@ -400,36 +403,34 @@ mod export {
     #[no_mangle]
     pub extern "C" fn compatdescriptor_newRefPosixFile(
         descriptor: *mut CompatDescriptor,
-    ) -> *const PosixFileArc {
+    ) -> *const PosixFile {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &mut *descriptor };
 
-        (match descriptor {
-            CompatDescriptor::Legacy(_) => std::ptr::null_mut(),
-            CompatDescriptor::New(d) => Arc::into_raw(Arc::clone(&d.get_file())),
-        }) as *const PosixFileArc
+        match descriptor {
+            CompatDescriptor::Legacy(_) => std::ptr::null(),
+            CompatDescriptor::New(d) => Box::into_raw(Box::new(d.get_file().clone())),
+        }
     }
 
     /// Decrement the ref count of the posix file object. The pointer must not be used after
     /// calling this function.
     #[no_mangle]
-    pub extern "C" fn posixfile_drop(file: *const PosixFileArc) {
+    pub extern "C" fn posixfile_drop(file: *const PosixFile) {
         assert!(!file.is_null());
 
-        unsafe { Arc::from_raw(file as *const AtomicRefCell<PosixFile>) };
+        unsafe { Box::from_raw(file as *mut PosixFile) };
     }
 
     /// Get the status of the posix file object.
     #[allow(unused_variables)]
     #[no_mangle]
-    pub extern "C" fn posixfile_getStatus(file: *const PosixFileArc) -> c::Status {
+    pub extern "C" fn posixfile_getStatus(file: *const PosixFile) -> c::Status {
         assert!(!file.is_null());
 
-        let file = file as *const AtomicRefCell<PosixFile>;
         let file = unsafe { &*file };
-
-        file.borrow().status()
+        file.status()
     }
 
     /// Add a status listener to the posix file object. This will increment the status
@@ -437,30 +438,36 @@ mod export {
     /// removed or when the posix file is freed/dropped.
     #[no_mangle]
     pub extern "C" fn posixfile_addListener(
-        file: *const PosixFileArc,
+        file: *const PosixFile,
         listener: *mut c::StatusListener,
     ) {
         assert!(!file.is_null());
         assert!(!listener.is_null());
 
-        let file = file as *const AtomicRefCell<PosixFile>;
         let file = unsafe { &*file };
-
-        file.borrow_mut().add_legacy_listener(listener);
+        file.add_legacy_listener(listener);
     }
 
     /// Remove a listener from the posix file object.
     #[no_mangle]
     pub extern "C" fn posixfile_removeListener(
-        file: *const PosixFileArc,
+        file: *const PosixFile,
         listener: *mut c::StatusListener,
     ) {
         assert!(!file.is_null());
         assert!(!listener.is_null());
 
-        let file = file as *const AtomicRefCell<PosixFile>;
         let file = unsafe { &*file };
+        file.remove_legacy_listener(listener);
+    }
 
-        file.borrow_mut().remove_legacy_listener(listener);
+    /// Get the canonical handle for a posix file object. Two posix file objects refer to the same
+    /// underlying data if their handles are equal.
+    #[no_mangle]
+    pub extern "C" fn posixfile_getCanonicalHandle(file: *const PosixFile) -> libc::uintptr_t {
+        assert!(!file.is_null());
+
+        let file = unsafe { &*file };
+        file.canonical_handle()
     }
 }
