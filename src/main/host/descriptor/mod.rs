@@ -66,6 +66,35 @@ bitflags::bitflags! {
     }
 }
 
+bitflags::bitflags! {
+    pub struct FileStatus: libc::c_int {
+        /// Has been initialized and it is now OK to unblock any plugin waiting
+        /// on a particular status.
+        const ACTIVE = c::_Status_STATUS_DESCRIPTOR_ACTIVE;
+        /// Can be read, i.e. there is data waiting for user.
+        const READABLE = c::_Status_STATUS_DESCRIPTOR_READABLE;
+        /// Can be written, i.e. there is available buffer space.
+        const WRITABLE = c::_Status_STATUS_DESCRIPTOR_WRITABLE;
+        /// User already called close.
+        const CLOSED = c::_Status_STATUS_DESCRIPTOR_CLOSED;
+        /// A wakeup operation occurred on a futex.
+        const FUTEX_WAKEUP = c::_Status_STATUS_FUTEX_WAKEUP;
+    }
+}
+
+impl From<c::Status> for FileStatus {
+    fn from(status: c::Status) -> Self {
+        // if any unexpected bits were present, then it's an error
+        Self::from_bits(status).unwrap()
+    }
+}
+
+impl From<FileStatus> for c::Status {
+    fn from(status: FileStatus) -> Self {
+        status.bits()
+    }
+}
+
 #[derive(Clone)]
 pub enum NewStatusListenerFilter {
     Never,
@@ -98,7 +127,7 @@ impl Drop for LegacyStatusListener {
 
 /// Stores event listener handles so that `c::StatusListener` objects can subscribe to events.
 struct LegacyListenerHelper {
-    handle_map: std::collections::HashMap<usize, Handle<(c::Status, c::Status)>>,
+    handle_map: std::collections::HashMap<usize, Handle<(FileStatus, FileStatus)>>,
 }
 
 impl LegacyListenerHelper {
@@ -111,7 +140,7 @@ impl LegacyListenerHelper {
     fn add_listener(
         &mut self,
         ptr: *mut c::StatusListener,
-        event_source: &mut EventSource<(c::Status, c::Status)>,
+        event_source: &mut EventSource<(FileStatus, FileStatus)>,
     ) {
         assert!(!ptr.is_null());
 
@@ -124,7 +153,7 @@ impl LegacyListenerHelper {
         let ptr_wrapper = LegacyStatusListener::new(ptr);
 
         let handle = event_source.add_listener(move |(status, changed), _event_queue| unsafe {
-            c::statuslistener_onStatusChanged(ptr_wrapper.ptr(), status, changed)
+            c::statuslistener_onStatusChanged(ptr_wrapper.ptr(), status.into(), changed.into())
         });
 
         // use a usize as the key so we don't accidentally deref the pointer
@@ -140,7 +169,7 @@ impl LegacyListenerHelper {
 /// A specified event source that passes a status and the changed bits to the function, but only if
 /// the monitored bits have changed and if the change the filter is satisfied.
 struct StatusEventSource {
-    inner: EventSource<(c::Status, c::Status)>,
+    inner: EventSource<(FileStatus, FileStatus)>,
     legacy_helper: LegacyListenerHelper,
 }
 
@@ -154,17 +183,17 @@ impl StatusEventSource {
 
     pub fn add_listener(
         &mut self,
-        monitoring: c::Status,
+        monitoring: FileStatus,
         filter: NewStatusListenerFilter,
-        notify_fn: impl Fn(c::Status, c::Status, &mut EventQueue) + Send + Sync + 'static,
-    ) -> Handle<(c::Status, c::Status)> {
+        notify_fn: impl Fn(FileStatus, FileStatus, &mut EventQueue) + Send + Sync + 'static,
+    ) -> Handle<(FileStatus, FileStatus)> {
         self.inner
             .add_listener(move |(status, changed), event_queue| {
                 // true if any of the bits we're monitoring have changed
-                let flipped = monitoring & changed != 0;
+                let flipped = monitoring.intersects(changed);
 
                 // true if any of the bits we're monitoring are set
-                let on = monitoring & status != 0;
+                let on = monitoring.intersects(status);
 
                 let notify = match filter {
                     // at least one monitored bit is on, and at least one has changed
@@ -194,8 +223,8 @@ impl StatusEventSource {
 
     pub fn notify_listeners(
         &mut self,
-        status: c::Status,
-        changed: c::Status,
+        status: FileStatus,
+        changed: FileStatus,
         event_queue: &mut EventQueue,
     ) {
         self.inner.notify_listeners((status, changed), event_queue)
@@ -224,7 +253,7 @@ impl PosixFile {
         }
     }
 
-    pub fn status(&self) -> c::Status {
+    pub fn status(&self) -> FileStatus {
         match self {
             Self::Pipe(f) => f.status(),
         }
@@ -429,7 +458,7 @@ mod export {
         let file = file as *const AtomicRefCell<PosixFile>;
         let file = unsafe { &*file };
 
-        file.borrow().status()
+        file.borrow().status().into()
     }
 
     /// Add a status listener to the posix file object. This will increment the status
