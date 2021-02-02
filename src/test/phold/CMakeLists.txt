@@ -66,4 +66,4 @@ add_test(
 
 # These tests currently run very slowly in the GitHub CI, which only gives them 2 CPUs.
 # Hopefully will be fixed by https://github.com/shadow/shadow/issues/965.
-set_tests_properties(phold-shadow-ptrace phold-shadow-preload phold-threaded-shadow-ptrace phold-threaded-shadow-ptrace-only phold-threaded-shadow-preload phold-threaded-shadow-ptrace-only PROPERTIES TIMEOUT 60)
+set_tests_properties(phold-shadow-ptrace phold-shadow-preload phold-threaded-shadow-ptrace phold-threaded-shadow-ptrace-only phold-threaded-shadow-preload phold-threaded-shadow-ptrace-only PROPERTIES TIMEOUT 90)
