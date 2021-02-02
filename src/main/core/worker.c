@@ -20,6 +20,7 @@
 #include "main/core/work/event.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
+#include "main/host/affinity.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/routing/address.h"
@@ -37,6 +38,9 @@ struct _Worker {
     /* our thread and an id that is unique among all threads */
     pthread_t thread;
     guint threadID;
+
+    /* affinity of the worker. */
+    int cpu_num_affinity;
 
     /* pointer to the object that communicates with the master process */
     Slave* slave;
@@ -78,9 +82,7 @@ static Worker* _worker_getPrivate() {
     return worker;
 }
 
-gboolean worker_isAlive() {
-    return g_private_get(&workerKey) != NULL;
-}
+gboolean worker_isAlive() { return g_private_get(&workerKey) != NULL; }
 
 static Worker* _worker_new(Slave* slave, guint threadID) {
     /* make sure this isnt called twice on the same thread! */
@@ -89,6 +91,7 @@ static Worker* _worker_new(Slave* slave, guint threadID) {
     Worker* worker = g_new0(Worker, 1);
     MAGIC_INIT(worker);
 
+    worker->cpu_num_affinity = AFFINITY_UNINIT;
     worker->slave = slave;
     worker->thread = pthread_self();
     worker->threadID = threadID;
@@ -107,7 +110,7 @@ static Worker* _worker_new(Slave* slave, guint threadID) {
 static void _worker_free(Worker* worker) {
     MAGIC_ASSERT(worker);
 
-    if(worker->objectCounts != NULL) {
+    if (worker->objectCounts != NULL) {
         objectcounter_free(worker->objectCounts);
     }
 
@@ -115,6 +118,11 @@ static void _worker_free(Worker* worker) {
 
     MAGIC_CLEAR(worker);
     g_free(worker);
+}
+
+int worker_getAffinity() {
+    Worker* worker = _worker_getPrivate();
+    return worker->cpu_num_affinity;
 }
 
 DNS* worker_getDNS() {
@@ -144,6 +152,13 @@ Options* worker_getOptions() {
     return slave_getOptions(worker->slave);
 }
 
+static void _worker_setAffinity(Worker* worker) {
+    MAGIC_ASSERT(worker);
+    int good_cpu_num = affinity_getGoodWorkerAffinity(worker->threadID);
+    worker->cpu_num_affinity =
+        affinity_setThisProcessAffinity(good_cpu_num, worker->cpu_num_affinity);
+}
+
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
 gpointer worker_run(WorkerRunData* data) {
@@ -152,6 +167,8 @@ gpointer worker_run(WorkerRunData* data) {
     /* create the worker object for this worker thread */
     Worker* worker = _worker_new((Slave*)data->userData, data->threadID);
     utility_assert(worker_isAlive());
+
+    _worker_setAffinity(worker);
 
     worker->scheduler = data->scheduler;
     scheduler_ref(worker->scheduler);
@@ -162,7 +179,7 @@ gpointer worker_run(WorkerRunData* data) {
     /* ask the slave for the next event, blocking until one is available that
      * we are allowed to run. when this returns NULL, we should stop. */
     Event* event = NULL;
-    while((event = scheduler_pop(worker->scheduler)) != NULL) {
+    while ((event = scheduler_pop(worker->scheduler)) != NULL) {
         /* update cache, reset clocks */
         worker->clock.now = event_getTime(event);
 
@@ -181,12 +198,12 @@ gpointer worker_run(WorkerRunData* data) {
     scheduler_unref(worker->scheduler);
 
     /* tell that we are done running */
-    if(data->notifyDoneRunning) {
+    if (data->notifyDoneRunning) {
         countdownlatch_countDown(data->notifyDoneRunning);
     }
 
     /* wait for other cleanup to finish */
-    if(data->notifyReadyToJoin) {
+    if (data->notifyReadyToJoin) {
         countdownlatch_await(data->notifyReadyToJoin);
     }
 
@@ -200,13 +217,13 @@ gpointer worker_run(WorkerRunData* data) {
      * finished with object cleanup when running in global mode.
      * normally, the if statement would not be necessary and we just free
      * the worker in all cases. */
-    if(notifyJoined) {
+    if (notifyJoined) {
         _worker_free(worker);
         g_free(data);
     }
 
     /* now the thread has ended */
-    if(notifyJoined) {
+    if (notifyJoined) {
         countdownlatch_countDown(notifyJoined);
     }
 
@@ -220,7 +237,7 @@ gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
 
     Worker* worker = _worker_getPrivate();
 
-    if(slave_schedulerIsRunning(worker->slave)) {
+    if (slave_schedulerIsRunning(worker->slave)) {
         utility_assert(worker->clock.now != SIMTIME_INVALID);
         utility_assert(worker->active.host != NULL);
 
@@ -245,7 +262,7 @@ void worker_sendPacket(Packet* packet) {
 
     /* get our thread-private worker */
     Worker* worker = _worker_getPrivate();
-    if(!slave_schedulerIsRunning(worker->slave)) {
+    if (!slave_schedulerIsRunning(worker->slave)) {
         /* the simulation is over, don't bother */
         return;
     }
@@ -256,7 +273,7 @@ void worker_sendPacket(Packet* packet) {
     Address* srcAddress = worker_resolveIPToAddress(srcIP);
     Address* dstAddress = worker_resolveIPToAddress(dstIP);
 
-    if(!srcAddress || !dstAddress) {
+    if (!srcAddress || !dstAddress) {
         error("unable to schedule packet because of null addresses");
         return;
     }
@@ -270,10 +287,10 @@ void worker_sendPacket(Packet* packet) {
 
     /* don't drop control packets with length 0, otherwise congestion
      * control has problems responding to packet loss */
-    if(bootstrapping || chance <= reliability || packet_getPayloadLength(packet) == 0) {
+    if (bootstrapping || chance <= reliability || packet_getPayloadLength(packet) == 0) {
         /* the sender's packet will make it through, find latency */
         gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);
-        SimulationTime delay = (SimulationTime) ceil(latency * SIMTIME_ONE_MILLISECOND);
+        SimulationTime delay = (SimulationTime)ceil(latency * SIMTIME_ONE_MILLISECOND);
         SimulationTime deliverTime = worker->clock.now + delay;
 
         topology_incrementPathPacketCounter(worker_getTopology(), srcAddress, dstAddress);
@@ -292,8 +309,8 @@ void worker_sendPacket(Packet* packet) {
          * and unreffed after the task is finished executing. */
         Packet* packetCopy = packet_copy(packet);
 
-        Task* packetTask = task_new((TaskCallbackFunc)_worker_runDeliverPacketTask,
-                packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
+        Task* packetTask = task_new((TaskCallbackFunc)_worker_runDeliverPacketTask, packetCopy,
+                                    NULL, (TaskObjectFreeFunc)packet_unref, NULL);
         Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
         task_unref(packetTask);
 
@@ -346,11 +363,11 @@ Process* worker_getActiveProcess() {
 
 void worker_setActiveProcess(Process* proc) {
     Worker* worker = _worker_getPrivate();
-    if(worker->active.process) {
+    if (worker->active.process) {
         process_unref(worker->active.process);
         worker->active.process = NULL;
     }
-    if(proc) {
+    if (proc) {
         process_ref(proc);
         worker->active.process = proc;
     }
@@ -365,13 +382,13 @@ void worker_setActiveHost(Host* host) {
     Worker* worker = _worker_getPrivate();
 
     /* if we are losing a reference, make sure to update the ref count */
-    if(worker->active.host != NULL) {
+    if (worker->active.host != NULL) {
         host_unref(worker->active.host);
         worker->active.host = NULL;
     }
 
     /* make sure to ref the new host if there is one */
-    if(host != NULL) {
+    if (host != NULL) {
         host_ref(host);
         worker->active.host = host;
     }
@@ -433,7 +450,7 @@ void worker_countObject(ObjectType otype, CounterType ctype) {
      * are created by the worker threads. but the slave thread does
      * not have a worker object. this is only an issue when running
      * with multiple workers. */
-    if(worker_isAlive()) {
+    if (worker_isAlive()) {
         Worker* worker = _worker_getPrivate();
         objectcounter_incrementOne(worker->objectCounts, otype, ctype);
     } else {
@@ -445,7 +462,7 @@ void worker_countObject(ObjectType otype, CounterType ctype) {
 gboolean worker_isBootstrapActive() {
     Worker* worker = _worker_getPrivate();
 
-    if(worker->clock.now < worker->bootstrapEndTime) {
+    if (worker->clock.now < worker->bootstrapEndTime) {
         return TRUE;
     } else {
         return FALSE;

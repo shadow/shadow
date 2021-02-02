@@ -64,6 +64,7 @@ set(shadow_srcs
     host/descriptor/timer.c
     host/descriptor/transport.c
     host/descriptor/udp.c
+    host/affinity.c
     host/process.c
     host/cpu.c
     host/host.c
