@@ -48,10 +48,7 @@ impl PipeFile {
             return SyscallReturn::Error(nix::errno::Errno::EBADF);
         }
 
-        let num_read = {
-            let mut buffer = self.buffer.borrow_mut();
-            buffer.read(bytes, event_queue)
-        };
+        let num_read = self.buffer.borrow_mut().read(bytes, event_queue);
 
         SyscallReturn::Success(num_read as i32)
     }
@@ -62,16 +59,13 @@ impl PipeFile {
             return SyscallReturn::Error(nix::errno::Errno::EBADF);
         }
 
-        let count = {
-            let mut buffer = self.buffer.borrow_mut();
-            buffer.write(bytes, event_queue)
-        };
+        let num_written = self.buffer.borrow_mut().write(bytes, event_queue);
 
         // the write would block if we could not write any bytes, but were asked to
-        if count == 0 && bytes.len() > 0 {
+        if num_written == 0 && bytes.len() > 0 {
             SyscallReturn::Error(nix::errno::EWOULDBLOCK)
         } else {
-            SyscallReturn::Success(count as i32)
+            SyscallReturn::Success(num_written as i32)
         }
     }
 
