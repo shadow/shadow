@@ -14,6 +14,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "main/core/worker.h"
+#include "main/host/affinity.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/thread_protected.h"
@@ -29,6 +31,7 @@ Thread thread_create(Host* host, Process* process, int threadID, int type_id,
                      .host = host,
                      .process = process,
                      .tid = threadID,
+                     .affinity = AFFINITY_UNINIT,
                      MAGIC_INITIALIZER};
     host_ref(host);
     process_ref(process);
@@ -42,6 +45,14 @@ static void _thread_cleanupSysCallCondition(Thread* thread) {
         syscallcondition_unref(thread->cond);
         thread->cond = NULL;
     }
+}
+
+/*
+ * Helper function. Sets the thread's CPU affinity to the worker's affinity.
+ */
+static void _thread_syncAffinityWithWorker(Thread *thread) {
+    thread->affinity =
+        affinity_setProcessAffinity(thread->nativeTid, thread->affinity, worker_getAffinity());
 }
 
 void thread_ref(Thread* thread) {
@@ -70,6 +81,9 @@ void thread_unref(Thread* thread) {
 void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.run);
+
+    _thread_syncAffinityWithWorker(thread);
+
     thread->nativePid = thread->methods.run(thread, argv, envv);
     // In Linux, the PID is equal to the TID of its first thread.
     thread->nativeTid = thread->nativePid;
@@ -78,6 +92,7 @@ void thread_run(Thread* thread, gchar** argv, gchar** envv) {
 void thread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.resume);
+    _thread_syncAffinityWithWorker(thread);
     _thread_cleanupSysCallCondition(thread);
     thread->cond = thread->methods.resume(thread);
     if (thread->cond) {

@@ -52,6 +52,8 @@ struct _Thread {
     // Non-null if blocked by a syscall.
     SysCallCondition* cond;
 
+    int affinity;
+
     MAGIC_DECLARE;
 };
 
