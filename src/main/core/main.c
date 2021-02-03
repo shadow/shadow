@@ -246,7 +246,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     if (options_getCPUPinning(options)) {
         int rc = affinity_initPlatformInfo();
         if (rc) {
-            abort();
+          return EXIT_FAILURE;
         }
     }
 
