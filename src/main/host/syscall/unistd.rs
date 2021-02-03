@@ -1,9 +1,11 @@
 use crate::cshadow as c;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::{
-    CompatDescriptor, Descriptor, DescriptorFlags, FileFlags, FileMode, PosixFile, SyscallReturn,
+    CompatDescriptor, Descriptor, DescriptorFlags, FileFlags, FileMode, FileStatus, PosixFile,
+    SyscallReturn,
 };
 use crate::host::syscall;
+use crate::host::syscall::Trigger;
 use crate::utility::event_queue::EventQueue;
 
 use std::sync::Arc;
@@ -142,13 +144,12 @@ fn read_helper(
     if result == SyscallReturn::Error(nix::errno::EWOULDBLOCK)
         && !file_flags.contains(FileFlags::NONBLOCK)
     {
-        let trigger =
-            c::Trigger::from_posix_file(posix_file, c::_Status_STATUS_DESCRIPTOR_READABLE);
+        let trigger = Trigger::from_posix_file(posix_file, FileStatus::READABLE);
 
         return c::SysCallReturn {
             state: c::SysCallReturnState_SYSCALL_BLOCK,
             retval: c::SysCallReg { as_i64: 0i64 },
-            cond: unsafe { c::syscallcondition_new(trigger, std::ptr::null_mut()) },
+            cond: unsafe { c::syscallcondition_new(trigger.into(), std::ptr::null_mut()) },
         };
     }
 
@@ -215,13 +216,12 @@ fn write_helper(
     if result == SyscallReturn::Error(nix::errno::EWOULDBLOCK)
         && !file_flags.contains(FileFlags::NONBLOCK)
     {
-        let trigger =
-            c::Trigger::from_posix_file(posix_file, c::_Status_STATUS_DESCRIPTOR_WRITABLE);
+        let trigger = Trigger::from_posix_file(posix_file, FileStatus::WRITABLE);
 
         return c::SysCallReturn {
             state: c::SysCallReturnState_SYSCALL_BLOCK,
             retval: c::SysCallReg { as_i64: 0i64 },
-            cond: unsafe { c::syscallcondition_new(trigger, std::ptr::null_mut()) },
+            cond: unsafe { c::syscallcondition_new(trigger.into(), std::ptr::null_mut()) },
         };
     }
 
