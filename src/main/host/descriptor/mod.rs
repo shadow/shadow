@@ -38,6 +38,25 @@ pub enum SyscallReturn {
     Error(nix::errno::Errno),
 }
 
+impl From<SyscallReturn> for c::SysCallReturn {
+    fn from(syscall_return: SyscallReturn) -> Self {
+        match syscall_return {
+            SyscallReturn::Success(x) => Self {
+                state: c::SysCallReturnState_SYSCALL_DONE,
+                retval: c::SysCallReg { as_i64: x as i64 },
+                cond: std::ptr::null_mut(),
+            },
+            SyscallReturn::Error(errno) => Self {
+                state: c::SysCallReturnState_SYSCALL_DONE,
+                retval: c::SysCallReg {
+                    as_i64: -(errno as i64),
+                },
+                cond: std::ptr::null_mut(),
+            },
+        }
+    }
+}
+
 bitflags::bitflags! {
     /// These are flags that can potentially be changed from the plugin (analagous to the Linux
     /// `filp->f_flags` status flags). Not all `O_` flags are valid here. For example file access

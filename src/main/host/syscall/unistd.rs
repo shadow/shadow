@@ -23,7 +23,7 @@ pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
         // get the descriptor, or return early if it doesn't exist
         let desc = match syscall::get_descriptor(fd, sys.process) {
             Ok(d) => unsafe { &mut *d },
-            Err(errno) => return c::SysCallReturn::from_errno(errno),
+            Err(errno) => return SyscallReturn::Error(errno).into(),
         };
 
         // if it's a legacy descriptor, use the C syscall handler instead
@@ -39,7 +39,7 @@ pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
 
     unsafe { c::process_deregisterCompatDescriptor(sys.process, fd) };
 
-    c::SysCallReturn::from_int(0)
+    SyscallReturn::Success(0).into()
 }
 
 pub fn dup(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
@@ -56,7 +56,7 @@ pub fn dup_helper(
     // get the descriptor, or return early if it doesn't exist
     let desc = match syscall::get_descriptor(fd, sys.process) {
         Ok(d) => unsafe { &mut *d },
-        Err(errno) => return c::SysCallReturn::from_errno(errno),
+        Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
     // if it's a legacy descriptor, use the C syscall handler instead
@@ -77,7 +77,7 @@ pub fn dup_helper(
     };
 
     // return the new fd
-    c::SysCallReturn::from_int(new_fd as i64)
+    SyscallReturn::Success(new_fd).into()
 }
 
 pub fn read(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
@@ -100,7 +100,7 @@ fn read_helper(
     // get the descriptor, or return early if it doesn't exist
     let desc = match syscall::get_descriptor(fd, sys.process) {
         Ok(d) => unsafe { &mut *d },
-        Err(errno) => return c::SysCallReturn::from_errno(errno),
+        Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
     // if it's a legacy descriptor, use the C syscall handler instead
@@ -116,13 +116,13 @@ fn read_helper(
 
     // need a non-null buffer
     if buf_ptr.val == 0 {
-        return c::SysCallReturn::from_errno(nix::errno::Errno::EFAULT);
+        return SyscallReturn::Error(nix::errno::Errno::EFAULT).into();
     }
 
     // need a non-zero size
     if buf_size == 0 {
         info!("Invalid length {} provided on descriptor {}", buf_size, fd);
-        return c::SysCallReturn::from_errno(nix::errno::Errno::EINVAL);
+        return SyscallReturn::Error(nix::errno::Errno::EINVAL).into();
     }
 
     // TODO: dynamically compute size based on how much data is actually available in the descriptor
@@ -153,10 +153,7 @@ fn read_helper(
         };
     }
 
-    match result {
-        SyscallReturn::Success(x) => c::SysCallReturn::from_int(x as i64),
-        SyscallReturn::Error(x) => c::SysCallReturn::from_errno(x),
-    }
+    result.into()
 }
 
 pub fn write(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
@@ -179,7 +176,7 @@ fn write_helper(
     // get the descriptor, or return early if it doesn't exist
     let desc = match syscall::get_descriptor(fd, sys.process) {
         Ok(d) => unsafe { &mut *d },
-        Err(errno) => return c::SysCallReturn::from_errno(errno),
+        Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
     // if it's a legacy descriptor, use the C syscall handler instead
@@ -195,7 +192,7 @@ fn write_helper(
 
     // need a non-null buffer
     if buf_ptr.val == 0 {
-        return c::SysCallReturn::from_errno(nix::errno::Errno::EFAULT);
+        return SyscallReturn::Error(nix::errno::Errno::EFAULT).into();
     }
 
     // TODO: dynamically compute size based on how much data is actually available in the descriptor
@@ -225,10 +222,7 @@ fn write_helper(
         };
     }
 
-    match result {
-        SyscallReturn::Success(x) => c::SysCallReturn::from_int(x as i64),
-        SyscallReturn::Error(x) => c::SysCallReturn::from_errno(x),
-    }
+    result.into()
 }
 
 pub fn pipe(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
@@ -247,7 +241,7 @@ pub fn pipe2(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
 fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: c::PluginPtr, flags: i32) -> c::SysCallReturn {
     // make sure they didn't pass a NULL pointer
     if fd_ptr.val == 0 {
-        return c::SysCallReturn::from_errno(nix::errno::Errno::EFAULT);
+        return SyscallReturn::Error(nix::errno::Errno::EFAULT).into();
     }
 
     let mut file_flags = FileFlags::empty();
@@ -271,7 +265,7 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: c::PluginPtr, flags: i32) ->
         // exit early if the O_DIRECT flag was set
         if remaining_flags & libc::O_DIRECT != 0 {
             warn!("We don't currently support pipes in 'O_DIRECT' mode");
-            return c::SysCallReturn::from_errno(nix::errno::Errno::EOPNOTSUPP);
+            return SyscallReturn::Error(nix::errno::Errno::EOPNOTSUPP).into();
         }
         warn!("Ignoring pipe flags");
     }
@@ -322,7 +316,7 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: c::PluginPtr, flags: i32) ->
 
     debug!("Created pipe reader fd {} and writer fd {}", fds[0], fds[1]);
 
-    c::SysCallReturn::from_int(0)
+    SyscallReturn::Success(0).into()
 }
 
 mod export {
