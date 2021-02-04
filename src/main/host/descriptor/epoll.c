@@ -65,7 +65,7 @@ enum _EpollWatchTypes {
 typedef union _EpollWatchObject EpollWatchObject;
 union _EpollWatchObject {
     LegacyDescriptor* as_descriptor;
-    const PosixFileArc* as_file;
+    const PosixFile* as_file;
 };
 
 typedef struct _EpollWatch EpollWatch;
@@ -155,7 +155,7 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
     if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
         objectPtr = (uintptr_t)(void*)object.as_descriptor;
     } else if (watch->watchType == EWT_POSIX_FILE) {
-        objectPtr = (uintptr_t)(void*)object.as_file;
+        objectPtr = posixfile_getCanonicalHandle(object.as_file);
     } else {
         warning("Unrecognized epoll watch type: %d", type);
         objectPtr = (uintptr_t)NULL;
@@ -373,7 +373,7 @@ static void _getWatchObject(CompatDescriptor* descriptor, EpollWatchTypes* watch
         *watchType = EWT_LEGACY_DESCRIPTOR;
         watchObject->as_descriptor = legacyDescriptor;
     } else {
-        const PosixFileArc* file = compatdescriptor_newRefPosixFile(descriptor);
+        const PosixFile* file = compatdescriptor_newRefPosixFile(descriptor);
         /* if the compat descriptor is for a posix file object */
         if (file != NULL) {
             *watchType = EWT_POSIX_FILE;
@@ -405,7 +405,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, CompatDescriptor* descr
             key.objectPtr = (uintptr_t)(void*)watchObject.as_descriptor;
             break;
         case EWT_POSIX_FILE:
-            key.objectPtr = (uintptr_t)(void*)watchObject.as_file;
+            key.objectPtr = posixfile_getCanonicalHandle(watchObject.as_file);
             break;
         default:
             error("unrecognized watch type");

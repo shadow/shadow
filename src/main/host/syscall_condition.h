@@ -28,7 +28,7 @@ typedef union _TriggerObject TriggerObject;
 union _TriggerObject {
     void* as_pointer;
     LegacyDescriptor* as_descriptor;
-    const PosixFileArc* as_file;
+    const PosixFile* as_file;
     Futex* as_futex;
 };
 
