@@ -131,10 +131,12 @@ fn read_helper(
     let mut buf = unsafe { std::slice::from_raw_parts_mut(buf_ptr as *mut u8, size_needed) };
 
     let posix_file = desc.get_file();
-    let file_flags = posix_file.get_flags();
+    let file_flags = posix_file.borrow().get_flags();
 
     // call the file's read(), and run any resulting events
-    let result = EventQueue::queue_and_run(|event_queue| posix_file.read(&mut buf, event_queue));
+    let result = EventQueue::queue_and_run(|event_queue| {
+        posix_file.borrow_mut().read(&mut buf, event_queue)
+    });
 
     // if the syscall would block and it's a blocking descriptor
     if result == SyscallReturn::Error(nix::errno::EWOULDBLOCK)
@@ -203,10 +205,11 @@ fn write_helper(
     let buf = unsafe { std::slice::from_raw_parts(buf_ptr as *const u8, size_needed) };
 
     let posix_file = desc.get_file();
-    let file_flags = posix_file.get_flags();
+    let file_flags = posix_file.borrow().get_flags();
 
     // call the file's write(), and run any resulting events
-    let result = EventQueue::queue_and_run(|event_queue| posix_file.write(&buf, event_queue));
+    let result =
+        EventQueue::queue_and_run(|event_queue| posix_file.borrow_mut().write(&buf, event_queue));
 
     // if the syscall would block and it's a blocking descriptor
     if result == SyscallReturn::Error(nix::errno::EWOULDBLOCK)
