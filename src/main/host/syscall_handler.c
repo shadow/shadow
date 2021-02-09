@@ -147,8 +147,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
               ? "DONE"
               : scr->state == SYSCALL_BLOCK ? "BLOCK"
                                             : scr->state == SYSCALL_NATIVE ? "NATIVE" : "UNKNOWN",
-          (int)scr->retval.as_i64, 
-          scr->retval.as_i64 < 0 ? strerror(-scr->retval.as_i64) : "n/a",
+          (int)scr->retval.as_i64, scr->retval.as_i64 < 0 ? strerror(-scr->retval.as_i64) : "n/a",
           sys->perfSecondsCurrent);
 
     if (scr->state != SYSCALL_BLOCK) {

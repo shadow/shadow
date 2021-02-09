@@ -16,11 +16,14 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SysCallReturn _syscallhandler_prlimitHelper(SysCallHandler* sys, pid_t pid) {
-    if(pid == 0) {
+static SysCallReturn _syscallhandler_prlimitHelper(SysCallHandler* sys, pid_t pid, int resource,
+                                                   PluginPtr newlim, PluginPtr oldlim) {
+    // TODO: for determinism, we may want to enforce static limits for certain resources, like
+    // RLIMIT_NOFILE. Some applications like Tor will change behavior depending on these limits.
+    if (pid == 0) {
         // process is calling prlimit on itself
         return (SysCallReturn){.state = SYSCALL_NATIVE};
-    } else{
+    } else {
         // TODO: we do not currently support adjusting other processes limits.
         // To support it, we just need to find the native pid associated
         // with pid, and call prlimit on the native pid instead.
@@ -47,7 +50,7 @@ SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
         }
 
-        int** out = process_getWriteablePtr(sys->process, sys->thread, outptr, sizeof(out));
+        int** out = process_getWriteablePtr(sys->process, sys->thread, outptr, sizeof(*out));
         if (!out) {
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
         }
@@ -62,15 +65,21 @@ SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
 SysCallReturn syscallhandler_prlimit(SysCallHandler* sys, const SysCallArgs* args) {
     utility_assert(sys && args);
     pid_t pid = args->args[0].as_i64;
-    debug("prlimit called on pid %i", pid);
-    return _syscallhandler_prlimitHelper(sys, pid);
+    int resource = args->args[1].as_i64;
+    PluginPtr newlim = args->args[2].as_ptr; // const struct rlimit*
+    PluginPtr oldlim = args->args[3].as_ptr; // const struct rlimit*
+    debug("prlimit called on pid %i for resource %i", pid, resource);
+    return _syscallhandler_prlimitHelper(sys, pid, resource, newlim, oldlim);
 }
 
 SysCallReturn syscallhandler_prlimit64(SysCallHandler* sys, const SysCallArgs* args) {
     utility_assert(sys && args);
     pid_t pid = args->args[0].as_i64;
-    debug("prlimit64 called on pid %i", pid);
-    return _syscallhandler_prlimitHelper(sys, pid);
+    int resource = args->args[1].as_i64;
+    PluginPtr newlim = args->args[2].as_ptr; // const struct rlimit*
+    PluginPtr oldlim = args->args[3].as_ptr; // const struct rlimit*
+    debug("prlimit called on pid %i for resource %i", pid, resource);
+    return _syscallhandler_prlimitHelper(sys, pid, resource, newlim, oldlim);
 }
 
 SysCallReturn syscallhandler_execve(SysCallHandler* sys, const SysCallArgs* args) {

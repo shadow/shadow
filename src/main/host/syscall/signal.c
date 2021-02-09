@@ -23,8 +23,15 @@ static SysCallReturn _syscallhandler_killHelper(SysCallHandler* sys, pid_t pid, 
                                                 long syscallnum) {
     pid_t my_tid = thread_getNativeTid(sys->thread);
 
-    debug("making syscall %li in native thread %i (pid=%i and tid=%i)", syscallnum, my_tid, pid,
-          tid);
+    // Return error if trying to stop/continue a process so we don't disrupt our ptracer.
+    // NOTE: If we run into signal problems, we could consider only allowing a process to
+    // send signals to itself, i.e., disallow inter-process signaling. See Github PR#1075.
+    if (sig == SIGSTOP || sig == SIGCONT) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+    }
+
+    debug(
+        "making syscall %li in native thread %i (pid=%i and tid=%i)", syscallnum, my_tid, pid, tid);
 
     long result = 0;
 
@@ -94,8 +101,8 @@ SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESRCH};
     }
 
-    debug("translated virtual tgid %i to native tgid %i and virtual tid %i to native tid %i",
-          tgid, native_tgid, tid, native_tid);
+    debug("translated virtual tgid %i to native tgid %i and virtual tid %i to native tid %i", tgid,
+          native_tgid, tid, native_tid);
     return _syscallhandler_killHelper(sys, native_tgid, native_tid, sig, SYS_tgkill);
 }
 

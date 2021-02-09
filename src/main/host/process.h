@@ -72,9 +72,11 @@ const gchar* process_getPluginName(Process* proc);
 guint process_getProcessID(Process* proc);
 
 /* Returns the native tid of the thread with the given virtual PID and TID.
- * If virtualPID is 0, then we only check for matching TIDs.
- * If virtualTID is 0, then we return the TID of the main thread if the virutal PIDs match.
- * If we don't find a matching thread, return 0. */
+ * Although the process knows its own virtualPID already, giving it as a param
+ * here allows us to control which of the PIF and TID get matched:
+ * - If virtualPID is 0, then we only check for matching TIDs.
+ * - If virtualTID is 0, then we return the TID of the main thread if the virutal PIDs match.
+ * - If we don't find a matching thread, return 0. */
 pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID);
 
 /* Handle all of the descriptors owned by this process. */
