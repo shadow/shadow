@@ -335,6 +335,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // **************************************
         NATIVE(io_getevents);
         NATIVE(waitid);
+        NATIVE(msync);
 
         // operations on pids (shadow overrides pids)
         NATIVE(sched_getaffinity);
