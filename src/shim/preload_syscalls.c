@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
+#include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
@@ -260,6 +261,7 @@ NOREMAP(ssize_t, getrandom, (void* a, size_t b, unsigned int c), a, b, c);
 NOREMAP(int, getsockname, (int a, struct sockaddr* b, socklen_t* c), a, b, c);
 NOREMAP(int, getsockopt, (int a, int b, int c, void* d, socklen_t* e), a, b, c, d, e);
 static REMAP(int, ioctl_explicit, ioctl, (int a, unsigned long b, char* c), a,b,c);
+NOREMAP(int, kill, (pid_t a, int b), a, b);
 NOREMAP(int, linkat, (int a, const char* b, int c, const char* d, int e), a, b, c, d, e);
 NOREMAP(int, listen, (int a, int b), a, b);
 NOREMAP(off_t, lseek, (int a, off_t b, int c), a, b, c);
@@ -285,6 +287,12 @@ NOREMAP(ssize_t, pread64, (int a, void* b, size_t c, off_t d), a, b, c, d);
 NOREMAP(ssize_t, preadv, (int a, const struct iovec* b, int c, off_t d), a, b, c, d);
 #ifdef SYS_preadv2
 NOREMAP(ssize_t, preadv2, (int a, const struct iovec* b, int c, off_t d, int e), a, b, c, d, e);
+#endif
+#ifdef SYS_prlimit
+NOREMAP(int, prlimit, (int a, int b, const struct rlimit* c, struct rlimit* d), a, b, c, d);
+#endif
+#ifdef SYS_prlimit64
+NOREMAP(int, prlimit64, (int a, enum __rlimit_resource b, const struct rlimit64* c, struct rlimit64* d), a, b, c, d);
 #endif
 NOREMAP(ssize_t, pwrite64, (int a, const void* b, size_t c, off_t d), a, b, c, d);
 NOREMAP(ssize_t, pwritev, (int a, const struct iovec* b, int c, off_t d), a, b, c, d);
@@ -313,6 +321,8 @@ NOREMAP(int, statx, (int a, const char* b, int c, unsigned int d, struct statx* 
 NOREMAP(int, symlinkat, (const char* a, int b, const char* c), a, b, c);
 NOREMAP(int, sync_file_range, (int a, off64_t b, off64_t c, unsigned int d), a, b, c, d);
 NOREMAP(int, syncfs, (int a), a);
+NOREMAP(int, tkill, (int a, int b), a, b);
+NOREMAP(int, tgkill, (int a, int b, int c), a, b, c);
 NOREMAP(int, uname, (struct utsname* a), a);
 NOREMAP(int, unlinkat, (int a, const char *b, int c), a, b, c);
 NOREMAP(int, utimensat, (int a, const char* b, const struct timespec c[2], int d), a, b, c, d);

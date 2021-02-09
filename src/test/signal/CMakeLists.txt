@@ -10,7 +10,7 @@ add_test(
     NAME signal-shadow-ptrace
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/signal.test.shadow.config.yaml --output - \
-    | shadow-test-launcher-fail ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d signal.shadow-ptrace.data - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d signal.shadow-ptrace.data - \
     "
 )
 # FIXME add_test(NAME signal-shadow-preload COMMAND shadow-test-launcher-fail ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d signal.shadow-preload.data ${CMAKE_CURRENT_SOURCE_DIR}/signal.test.shadow.config.xml)

@@ -32,7 +32,9 @@
 #include "main/host/syscall/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/random.h"
+#include "main/host/syscall/signal.h"
 #include "main/host/syscall/socket.h"
+#include "main/host/syscall/sysinfo.h"
 #include "main/host/syscall/time.h"
 #include "main/host/syscall/timerfd.h"
 #include "main/host/syscall/uio.h"
@@ -145,7 +147,8 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
               ? "DONE"
               : scr->state == SYSCALL_BLOCK ? "BLOCK"
                                             : scr->state == SYSCALL_NATIVE ? "NATIVE" : "UNKNOWN",
-          (int)scr->retval.as_i64, strerror(-scr->retval.as_i64), sys->perfSecondsCurrent);
+          (int)scr->retval.as_i64, scr->retval.as_i64 < 0 ? strerror(-scr->retval.as_i64) : "n/a",
+          sys->perfSecondsCurrent);
 
     if (scr->state != SYSCALL_BLOCK) {
         /* The syscall completed, count it and the cumulative time to complete it. */
@@ -253,10 +256,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(getpid);
         HANDLE(gettid);
         HANDLE(getrandom);
+        HANDLE(get_robust_list);
         HANDLE(getsockname);
         HANDLE(getsockopt);
         HANDLE(gettimeofday);
         HANDLE(ioctl);
+        HANDLE(kill);
         HANDLE(linkat);
         HANDLE(listen);
         HANDLE(lseek);
@@ -275,10 +280,17 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(openat);
         HANDLE_RUST(pipe);
         HANDLE_RUST(pipe2);
+        HANDLE(prctl);
         HANDLE(pread64);
         HANDLE(preadv);
 #ifdef SYS_preadv2
         HANDLE(preadv2);
+#endif
+#ifdef SYS_prlimit
+        HANDLE(prlimit);
+#endif
+#ifdef SYS_prlimit64
+        HANDLE(prlimit64);
 #endif
         HANDLE(pwrite64);
         HANDLE(pwritev);
@@ -294,6 +306,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(renameat2);
         HANDLE(sendto);
         HANDLE(setsockopt);
+        HANDLE(set_robust_list);
         HANDLE(set_tid_address);
         HANDLE(shutdown);
         HANDLE(socket);
@@ -304,10 +317,13 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(symlinkat);
         HANDLE(sync_file_range);
         HANDLE(syncfs);
+        HANDLE(sysinfo);
+        HANDLE(tgkill);
         HANDLE(time);
         HANDLE(timerfd_create);
         HANDLE(timerfd_gettime);
         HANDLE(timerfd_settime);
+        HANDLE(tkill);
         HANDLE(uname);
         HANDLE(unlinkat);
         HANDLE(utimensat);
@@ -317,21 +333,11 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // **************************************
         // Not handled (yet):
         // **************************************
-        NATIVE(arch_prctl);
         NATIVE(io_getevents);
-        NATIVE(prctl);
-        NATIVE(prlimit64);
-        NATIVE(rt_sigaction);
-        NATIVE(rt_sigprocmask);
-        NATIVE(get_robust_list);
-        NATIVE(set_robust_list);
-        NATIVE(sysinfo);
         NATIVE(waitid);
+        NATIVE(msync);
 
         // operations on pids (shadow overrides pids)
-        NATIVE(kill);
-        NATIVE(tkill);
-        NATIVE(tgkill);
         NATIVE(sched_getaffinity);
         NATIVE(sched_setaffinity);
 
@@ -361,6 +367,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // (because the plugin can natively):
         // ***************************************
         NATIVE(access);
+        NATIVE(arch_prctl);
         NATIVE(exit);
         NATIVE(exit_group);
         NATIVE(getcwd);
@@ -373,6 +380,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(madvise);
         NATIVE(mkdir);
         NATIVE(readlink);
+        NATIVE(rt_sigaction);
+        NATIVE(rt_sigprocmask);
         NATIVE(setrlimit);
         NATIVE(stat);
 #ifdef SYS_stat64

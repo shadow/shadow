@@ -651,3 +651,24 @@ const gchar* host_getDataPath(Host* host) {
 }
 
 FutexTable* host_getFutexTable(Host* host) { return host->futexTable; }
+
+pid_t host_getNativeTID(Host* host, pid_t virtualPID, pid_t virtualTID) {
+    MAGIC_ASSERT(host);
+
+    // TODO: once we have a process table, we can do a constant time lookup instead
+    GList* current = g_queue_peek_head_link(host->processes);
+    pid_t nativeTID = 0;
+
+    while (current != NULL) {
+        Process* proc = current->data;
+        nativeTID = process_findNativeTID(proc, virtualPID, virtualTID);
+
+        if (nativeTID > 0) {
+            break;
+        }
+
+        current = current->next;
+    }
+
+    return nativeTID; // 0 if no process/thread has the given virtual PID/TID
+}

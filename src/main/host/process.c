@@ -247,6 +247,33 @@ static Thread* _process_threadLeader(Process* proc) {
     return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(proc->processID));
 }
 
+pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
+    MAGIC_ASSERT(proc);
+
+    Thread* thread = NULL;
+
+    if (virtualPID > 0 && virtualTID > 0) {
+        // Both PID and TID must match
+        if (proc->processID == virtualPID) {
+            thread = g_hash_table_lookup(proc->threads, GINT_TO_POINTER(virtualTID));
+        }
+    } else if (virtualPID > 0) {
+        // Get the TID of the main thread if the PID matches
+        if (proc->processID == virtualPID) {
+            thread = _process_threadLeader(proc);
+        }
+    } else if (virtualTID > 0) {
+        // Get the TID of any thread that matches, ignoring PID
+        thread = g_hash_table_lookup(proc->threads, GINT_TO_POINTER(virtualTID));
+    }
+
+    if (thread != NULL) {
+        return thread_getNativeTid(thread);
+    } else {
+        return 0; // not found
+    }
+}
+
 static void _process_check(Process* proc) {
     MAGIC_ASSERT(proc);
 
