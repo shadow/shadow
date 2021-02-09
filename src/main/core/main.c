@@ -18,6 +18,7 @@
 #include "main/core/master.h"
 #include "main/core/support/configuration.h"
 #include "main/core/support/options.h"
+#include "main/host/affinity.h"
 #include "main/utility/utility.h"
 #include "main/shmem/shmem_cleanup.h"
 #include "igraph_version.h"
@@ -167,6 +168,7 @@ static gint _main_helper(Options* options) {
 }
 
 gint main_runShadow(gint argc, gchar* argv[]) {
+
     /* check the compiled GLib version */
     if (!GLIB_CHECK_VERSION(2, 32, 0)) {
         g_printerr("** GLib version 2.32.0 or above is required but Shadow was compiled against version %u.%u.%u\n",
@@ -240,6 +242,13 @@ gint main_runShadow(gint argc, gchar* argv[]) {
 
     // before we run the simluation, clean up any orphaned shared memory
     shmemcleanup_tryCleanup();
+    
+    if (options_getCPUPinning(options)) {
+        int rc = affinity_initPlatformInfo();
+        if (rc) {
+          return EXIT_FAILURE;
+        }
+    }
 
     gint returnCode = _main_helper(options);
 

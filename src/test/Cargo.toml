@@ -54,6 +54,10 @@ name = "test_sendto_recvfrom"
 path = "socket/sendto_recvfrom/test_sendto_recvfrom.rs"
 
 [[bin]]
+name = "test_sockopt"
+path = "socket/sockopt/test_sockopt.rs"
+
+[[bin]]
 name = "test_random"
 path = "random/test_random.rs"
 
@@ -80,6 +84,10 @@ path = "pipe/test_pipe.rs"
 [[bin]]
 name = "test_pthreads"
 path = "pthreads/test_pthreads.rs"
+
+[[bin]]
+name = "test_ifaddrs"
+path = "ifaddrs/test_ifaddrs.rs"
 
 [dependencies]
 libc = "0.2"

@@ -2,21 +2,35 @@ use atomic_refcell::AtomicRefCell;
 use std::sync::Arc;
 
 use crate::cshadow as c;
-use crate::host::descriptor::{CompatDescriptor, PosixFile};
+use crate::host::descriptor::{CompatDescriptor, FileStatus, PosixFile};
 
 pub mod unistd;
 
-impl c::Trigger {
-    pub fn from_posix_file(file: &Arc<AtomicRefCell<PosixFile>>, status: c::Status) -> Self {
+struct Trigger(c::Trigger);
+
+impl From<c::Trigger> for Trigger {
+    fn from(trigger: c::Trigger) -> Self {
+        Self(trigger)
+    }
+}
+
+impl From<Trigger> for c::Trigger {
+    fn from(trigger: Trigger) -> Self {
+        trigger.0
+    }
+}
+
+impl Trigger {
+    pub fn from_posix_file(file: &Arc<AtomicRefCell<PosixFile>>, status: FileStatus) -> Self {
         let file_ptr = Arc::into_raw(Arc::clone(file));
 
-        Self {
+        Self(c::Trigger {
             type_: c::_TriggerType_TRIGGER_POSIX_FILE,
             object: c::TriggerObject {
                 as_file: file_ptr as *const c::PosixFileArc,
             },
-            status,
-        }
+            status: status.into(),
+        })
     }
 }
 

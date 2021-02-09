@@ -278,26 +278,16 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, Socket* socket_desc,
     return 0;
 }
 
-static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp,
-                                           int optname, PluginPtr optvalPtr,
-                                           PluginPtr optlenPtr) {
+static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp, int optname, void* optval,
+                                           socklen_t* optlen) {
     switch (optname) {
         case TCP_INFO: {
-            /* Get the len via clone, so we can write to optlenPtr too. */
-            socklen_t* optlen =
-                process_getMutablePtr(sys->process, sys->thread, optlenPtr, sizeof(*optlen));
-            size_t sizeNeeded = sizeof(struct tcp_info);
+            struct tcp_info info;
+            tcp_getInfo(tcp, &info);
 
-            if (*optlen < sizeNeeded) {
-                info("Unable to store tcp info in %zu bytes.", (size_t)*optlen);
-                return -EINVAL;
-            }
-
-            /* Write the tcp info and its size. */
-            *optlen = sizeNeeded;
-            struct tcp_info* info =
-                process_getWriteablePtr(sys->process, sys->thread, optvalPtr, sizeNeeded);
-            tcp_getInfo(tcp, info);
+            int num_bytes = MIN(*optlen, sizeof(info));
+            memcpy(optval, &info, num_bytes);
+            *optlen = num_bytes;
 
             return 0;
         }
@@ -310,40 +300,35 @@ static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp,
     }
 }
 
-static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, Socket* sock,
-                                              int optname, PluginPtr optvalPtr,
-                                              PluginPtr optlenPtr) {
-    /* Get the len via clone, so we can write to optlenPtr too. */
-    const socklen_t* optlen =
-        process_getReadablePtr(sys->process, sys->thread, optlenPtr, sizeof(*optlen));
-
-    /* All options we currently support are integers. When adding support for
-     * more options, make sure to check length requirements. */
-    if (*optlen < sizeof(int)) {
-        info("Unable to store option in %zu bytes.", (size_t)*optlen);
-        return -EINVAL;
-    }
-
-    int* optval = process_getWriteablePtr(sys->process, sys->thread, optvalPtr, sizeof(int));
-
+static int _syscallhandler_getSocketOptHelper(SysCallHandler* sys, Socket* sock, int optname,
+                                              void* optval, socklen_t* optlen) {
     switch (optname) {
         case SO_SNDBUF: {
-            *optval = socket_getOutputBufferSize(sock);
+            int sndbuf_size = socket_getOutputBufferSize(sock);
+            int num_bytes = MIN(*optlen, sizeof(sndbuf_size));
+            memcpy(optval, &sndbuf_size, num_bytes);
+            *optlen = num_bytes;
             return 0;
         }
         case SO_RCVBUF: {
-            *optval = socket_getInputBufferSize(sock);
+            int rcvbuf_size = socket_getInputBufferSize(sock);
+            int num_bytes = MIN(*optlen, sizeof(rcvbuf_size));
+            memcpy(optval, &rcvbuf_size, num_bytes);
+            *optlen = num_bytes;
             return 0;
         }
         case SO_ERROR: {
-            *optval = 0;
+            int error = 0;
             if (descriptor_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
                 /* Return error for failed connect() attempts. */
                 int connerr = tcp_getConnectionError((TCP*)sock);
                 if (connerr == -ECONNRESET || connerr == -ECONNREFUSED) {
-                    *optval = -connerr; // result is a positive errcode
+                    error = -connerr; // result is a positive errcode
                 }
             }
+            int num_bytes = MIN(*optlen, sizeof(error));
+            memcpy(optval, &error, num_bytes);
+            *optlen = num_bytes;
             return 0;
         }
         default: {
@@ -366,8 +351,18 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
         case SO_SNDBUF: {
             const unsigned int* val =
                 process_getReadablePtr(sys->process, sys->thread, optvalPtr, sizeof(int));
-            size_t newsize =
-                (*val) * 2; // Linux kernel doubles this value upon setting
+            size_t newsize = (size_t)(*val) * 2; // Linux kernel doubles this value upon setting
+
+            // Linux also has limits SOCK_MIN_SNDBUF (slightly greater than 4096) and the sysctl max
+            // limit. We choose a reasonable lower limit for Shadow. The minimum limit in man 7
+            // socket is incorrect.
+            newsize = MAX(newsize, 4096);
+
+            // This upper limit was added as an arbitrarily high number so that we don't change
+            // Shadow's behaviour, but also prevents an application from setting this to something
+            // unnecessarily large like INT_MAX.
+            newsize = MIN(newsize, 268435456); // 2^28 = 256 MiB
+
             socket_setOutputBufferSize(sock, newsize);
             if (descriptor_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
                 tcp_disableSendBufferAutotuning((TCP*)sock);
@@ -377,8 +372,18 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
         case SO_RCVBUF: {
             const unsigned int* val =
                 process_getReadablePtr(sys->process, sys->thread, optvalPtr, sizeof(int));
-            size_t newsize =
-                (*val) * 2; // Linux kernel doubles this value upon setting
+            size_t newsize = (size_t)(*val) * 2; // Linux kernel doubles this value upon setting
+
+            // Linux also has limits SOCK_MIN_RCVBUF (slightly greater than 2048) and the sysctl max
+            // limit. We choose a reasonable lower limit for Shadow. The minimum limit in man 7
+            // socket is incorrect.
+            newsize = MAX(newsize, 2048);
+
+            // This upper limit was added as an arbitrarily high number so that we don't change
+            // Shadow's behaviour, but also prevents an application from setting this to something
+            // unnecessarily large like INT_MAX.
+            newsize = MIN(newsize, 268435456); // 2^28 = 256 MiB
+
             socket_setInputBufferSize(sock, newsize);
             if (descriptor_getType((LegacyDescriptor*)sock) == DT_TCPSOCKET) {
                 tcp_disableReceiveBufferAutotuning((TCP*)sock);
@@ -991,26 +996,40 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
     }
     utility_assert(socket_desc);
 
-    /* The pointers must be non-null. */
-    if (!optvalPtr.val || !optlenPtr.val) {
+    /* The optlen pointer must be non-null. */
+    if (!optlenPtr.val) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
+
+    socklen_t* optlen =
+        process_getMutablePtr(sys->process, sys->thread, optlenPtr, sizeof(*optlen));
+
+    /* Return early if there are no bytes to store data. */
+    if (*optlen == 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    }
+
+    /* The optval pointer must be non-null since optlen is non-zero. */
+    if (!optvalPtr.val) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
+    void* optval = process_getWriteablePtr(sys->process, sys->thread, optvalPtr, *optlen);
 
     errcode = 0;
     switch (level) {
         case SOL_TCP: {
             if (descriptor_getType((LegacyDescriptor*)socket_desc) != DT_TCPSOCKET) {
-                errcode = -EINVAL;
+                errcode = -EOPNOTSUPP;
                 break;
             }
 
-            errcode = _syscallhandler_getTCPOptHelper(
-                sys, (TCP*)socket_desc, optname, optvalPtr, optlenPtr);
+            errcode =
+                _syscallhandler_getTCPOptHelper(sys, (TCP*)socket_desc, optname, optval, optlen);
             break;
         }
         case SOL_SOCKET: {
-            errcode = _syscallhandler_getSocketOptHelper(
-                sys, socket_desc, optname, optvalPtr, optlenPtr);
+            errcode = _syscallhandler_getSocketOptHelper(sys, socket_desc, optname, optval, optlen);
             break;
         }
         default:
@@ -1103,7 +1122,12 @@ SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
     }
     utility_assert(socket_desc);
 
-    /* The pointers must be non-null. */
+    /* Return early if there is no data. */
+    if (optlen == 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    }
+
+    /* The pointer must be non-null. */
     if (!optvalPtr.val) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }

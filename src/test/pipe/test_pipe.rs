@@ -41,8 +41,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             test_read_write,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
-        // TODO: support dup() in Shadow
-        test_utils::ShadowTest::new("test_dup", test_dup, set![TestEnv::Libc]),
+        test_utils::ShadowTest::new("test_dup", test_dup, set![TestEnv::Libc, TestEnv::Shadow]),
         test_utils::ShadowTest::new(
             "test_write_to_read_end",
             test_write_to_read_end,
