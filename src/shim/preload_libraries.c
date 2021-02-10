@@ -639,3 +639,15 @@ void freeifaddrs(struct ifaddrs* ifa) {
         iter = next;
     }
 }
+
+// man 3 localtime
+struct tm* localtime(const time_t *timep) {
+    // Return time relative to UTC rather than the locale where shadow is being run.
+    return gmtime(timep);
+}
+
+// man 3 localtime_r
+struct tm* localtime_r(const time_t *timep, struct tm *result) {
+    // Return time relative to UTC rather than the locale where shadow is being run.
+    return gmtime_r(timep, result);
+}

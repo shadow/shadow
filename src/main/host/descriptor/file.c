@@ -248,7 +248,15 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
             file->type = FILE_TYPE_REGULAR;
         }
 
-        osfd = open(abspath, flags, mode);
+        if(file->type == FILE_TYPE_LOCALTIME) {
+            // Fail the localtime lookup so the plugin falls back to UTC.
+            // TODO: we could instead return a special file that contains
+            // timezone info in the correct format for UTC.
+            osfd = -1;
+            errno = ENOENT;
+        } else {
+            osfd = open(abspath, flags, mode);
+        }
     }
 
     if (osfd < 0) {
