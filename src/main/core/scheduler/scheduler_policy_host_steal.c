@@ -5,6 +5,7 @@
 
 #include <glib.h>
 #include <pthread.h>
+#include <sched.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -392,6 +393,7 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
          * and since we don't expect it to take long for the other threads to run
          * through the unprocessedHosts reset above, spinning is OK. */
         while (!__atomic_load_n(&stolenTdata->isStealable, __ATOMIC_ACQUIRE)) {
+		sched_yield();
         };
 
         /* We don't need a lock here, because we're only reading, and a misread just means either
