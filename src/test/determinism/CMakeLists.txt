@@ -37,14 +37,14 @@ add_test(
     NAME determinism2a-shadow
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow -w 2 -l debug -s 1 -d determinism2a.shadow.data - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow -w 2 -l debug -s 1 --pin-cpus -d determinism2a.shadow.data - \
     "
 )
 add_test(
     NAME determinism2b-shadow
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow -w 2 -l debug -s 1 -d determinism2b.shadow.data - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow -w 2 -l debug -s 1 --pin-cpus -d determinism2b.shadow.data - \
     "
 )
 
@@ -56,3 +56,5 @@ add_test(NAME determinism2-shadow-compare COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CU
 ## make sure the tests that produce output finish before we compare the output
 ## And make sure the test-phold binary was already built, because the test uses it
 set_tests_properties(determinism2-shadow-compare PROPERTIES DEPENDS "determinism2a-shadow;determinism2b-shadow;test-phold")
+## These take longer than normal to complete since they are running phold.
+set_tests_properties(determinism2a-shadow determinism2b-shadow PROPERTIES TIMEOUT 60)

@@ -15,7 +15,7 @@ topology:
           <data key="d2">10240</data>
         </node>
         <edge source="poi-1" target="poi-1">
-          <data key="d3">50.0</data>
+          <data key="d3">250.0</data>
           <data key="d4">0.0</data>
         </edge>
       </graph>
