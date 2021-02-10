@@ -5,6 +5,7 @@
 
 #include <glib.h>
 #include <pthread.h>
+#include <sched.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -388,10 +389,18 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
         g_rw_lock_reader_unlock(&data->lock);
 
         /* Make sure the workload has been updated for this round.
-         * This boolean is preventing race conditions upon the start of each round,
-         * and since we don't expect it to take long for the other threads to run
-         * through the unprocessedHosts reset above, spinning is OK. */
+         * This boolean is preventing race conditions upon the start of each round.
+         * Since we don't expect it to take long for the other threads to run
+         * through the unprocessed Hosts reset above, we spin rather than
+         * using a lock.
+         *
+         * We later ended up adding a `sched_yield` here to prevent deadlock
+         * when using the realtime scheduler. This doesn't seem to hurt
+         * performance even without the realtime scheduler, despite incurring
+         * the overhead of a syscall.
+         */
         while (!__atomic_load_n(&stolenTdata->isStealable, __ATOMIC_ACQUIRE)) {
+            sched_yield();
         };
 
         /* We don't need a lock here, because we're only reading, and a misread just means either
