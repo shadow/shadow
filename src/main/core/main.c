@@ -255,17 +255,6 @@ gint main_runShadow(gint argc, gchar* argv[]) {
 
     atexit(print_durations);
 
-    struct sched_param param = {0};
-    param.sched_priority = 1;
-    int rc = sched_setscheduler(0, SCHED_FIFO, &param);
-
-    if (rc != 0) {
-      fprintf(stderr, "Could not set SCHED_FIFO!\n");
-      return -1;
-    } else {
-      fprintf(stderr, "In mode SCHED_FIFO.\n");
-    }
-
     gint returnCode = _main_helper(options);
 
     options_free(options);
