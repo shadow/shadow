@@ -214,7 +214,7 @@ static int _phold_sendToNode(PHold* phold, gint64 peerIndex, in_port_t port, voi
         phold->num_bytes_sent += b;
         phold->num_bytes_sent_tot += b;
         phold_debug("host '%s' sent %i byte%s to host '%s%" G_GINT64_FORMAT "'",
-                    phold->hostname->str, (gint)b, b == 1 ? "" : "s", phold->basename,
+                    phold->hostname->str, (gint)b, b == 1 ? "" : "s", phold->basename->str,
                     peerIndex + 1);
         result = TRUE;
     } else if (b < 0) {
