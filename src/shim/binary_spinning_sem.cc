@@ -21,8 +21,6 @@ void BinarySpinningSem::wait(bool spin) {
         for (int i = 0; _thresh < 0 || i < _thresh; ++i) {
             if (sem_trywait(&_semaphore) == 0) {
                 return;
-            } else {
-                // sched_yield();
             }
         }
     }
