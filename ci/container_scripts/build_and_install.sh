@@ -19,15 +19,19 @@ clang-11)
 esac
 
 case "$BUILDTYPE" in
-    release)
+    "release")
         OPTIONS=""
         rustup default stable
         ;;
-    debug)
+    "debug")
         OPTIONS="--debug"
         rustup default stable
         ;;
-    coverage)
+    "use-c-syscalls")
+        OPTIONS="--debug --use-c-syscalls"
+        rustup default stable
+        ;;
+    "coverage")
         OPTIONS="--debug --coverage"
         rustup default nightly
         ;;

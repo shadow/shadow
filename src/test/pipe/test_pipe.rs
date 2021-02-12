@@ -41,16 +41,16 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             test_read_write,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
-        test_utils::ShadowTest::new("test_dup", test_dup, set![TestEnv::Libc, TestEnv::Shadow]),
+        test_utils::ShadowTest::new("test_dup", test_dup, set![TestEnv::Libc]),
         test_utils::ShadowTest::new(
             "test_write_to_read_end",
             test_write_to_read_end,
-            set![TestEnv::Libc, TestEnv::Shadow],
+            set![TestEnv::Libc],
         ),
         test_utils::ShadowTest::new(
             "test_read_from_write_end",
             test_read_from_write_end,
-            set![TestEnv::Libc, TestEnv::Shadow],
+            set![TestEnv::Libc],
         ),
     ];
 
