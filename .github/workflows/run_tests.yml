@@ -33,6 +33,10 @@ jobs:
           - container: 'ubuntu:20.10'
             cc: 'clang-11'
             buildtype: 'coverage'
+          # Add a single configuration for testing the C syscall handlers
+          - container: 'ubuntu:20.04'
+            cc: 'clang'
+            buildtype: 'use-c-syscalls'
     env:
       CC: ${{ matrix.cc }}
       CONTAINER: ${{ matrix.container }}
