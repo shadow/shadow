@@ -94,6 +94,11 @@ static void _logger_default_log(LogLevel level, const char* fileName, const char
         // dropping the message.
         return;
     }
+    // This logger is used only when a logger has not been set yet. In this case, we only log
+    // at a severity level of warning or more severe than warning.
+    if (level > LOGLEVEL_WARNING) {
+        return;
+    }
     in_logger = true;
 
     // Stack-allocated to avoid dynamic allocation.
@@ -111,7 +116,7 @@ static void _logger_default_log(LogLevel level, const char* fileName, const char
     offset += vsnprintf(&buf[offset], sizeof(buf) - offset, format, vargs);
     offset = MIN(offset, sizeof(buf));
 
-    offset += printf("%s\n", buf);
+    offset += fprintf(stderr, "%s\n", buf);
     offset = MIN(offset, sizeof(buf));
 
 #ifdef DEBUG

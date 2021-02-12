@@ -125,10 +125,6 @@ static void _verify_parent_pid_or_exit() {
 }
 
 static void _shim_load() {
-    // We ultimately want to log to SHADOW_LOG_FILE, but first we redirect to
-    // stderr for any log messages that happen before we can open it.
-    logger_setDefault(shimlogger_new(stderr));
-
     if (!_using_interpose_preload) {
         return;
     }
