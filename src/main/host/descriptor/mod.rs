@@ -361,7 +361,6 @@ mod export {
     use super::*;
 
     /// An opaque type used when passing `*const AtomicRefCell<File>` to C.
-    #[no_mangle]
     pub enum PosixFileArc {}
 
     /// The new compat descriptor takes ownership of the reference to the legacy descriptor and
