@@ -1,12 +1,13 @@
+# shadow build dir
 /build
-/Debug
-.autotools
-.project
-.cproject
-.pydevproject
-.settings
-*.swp
+# area for local temp files
+/local
+# ide-specific settings
+.vscode
 cscope.*
 # ctags index
 /tags
 /src/tags
+# other temp files
+*.swp
+*Cargo.lock
