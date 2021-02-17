@@ -349,8 +349,7 @@ SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
         .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)pid};
 }
 
-SysCallReturn syscallhandler_getppid(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
+SysCallReturn syscallhandler_getppid(SysCallHandler* sys, const SysCallArgs* args) {
     // We can't handle this natively in the plugin if we want determinism
     // Just return a constant
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 1};

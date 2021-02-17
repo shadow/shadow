@@ -158,11 +158,11 @@ static long _vshadow_syscall(long n, va_list args) {
     return shadow_retval_to_errno(retval.as_i64);
 }
 
-// Gettimeofday is a frequently requested syscall. Since we cache the current sim time in the shim logger,
-// we fetch that time instead of issuing a more expensive Shadow syscall.
+// Gettimeofday is a frequently requested syscall. Since we cache the current sim time in the shim
+// logger, we fetch that time instead of issuing a more expensive Shadow syscall.
 static long _gettimeofday_cached(va_list args) {
     uint64_t sim_time_nanos = shimlogger_get_simulation_nanos();
-    if(sim_time_nanos != 0) {
+    if (sim_time_nanos != 0) {
         struct timeval* tv = va_arg(args, struct timeval*);
 
         const long nanos_per_sec = 1000000000l;
@@ -171,7 +171,8 @@ static long _gettimeofday_cached(va_list args) {
         tv->tv_sec = sim_time_nanos / nanos_per_sec;
         tv->tv_usec = (sim_time_nanos % nanos_per_sec) / micros_per_nano;
 
-        debug("Using cached time of %ld.%06ld seconds to avoid gettimeofday syscall", tv->tv_sec, tv->tv_usec);
+        debug("Using cached time of %ld.%06ld seconds to avoid gettimeofday syscall", tv->tv_sec,
+              tv->tv_usec);
         return 0;
     } else {
         return -1;
@@ -196,7 +197,7 @@ long syscall(long n, ...) {
     long rv;
     if (shim_interpositionEnabled()) {
         // If the syscall is gettimeofday, try to get the cached time first.
-        if(n != SYS_gettimeofday || _gettimeofday_cached(args) != 0) {
+        if (n != SYS_gettimeofday || _gettimeofday_cached(args) != 0) {
             // Either the syscall is not gettimeofday, or getting the cached time failed.
             debug("Making interposed syscall %ld", n);
             rv = _vshadow_syscall(n, args);

@@ -519,8 +519,8 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
      * cpuload: number of iterations of a CPU busy loop to run whenever a message is received
      * weightsfile: path to a file containing $quantity weights according to which messages will be
      * sent to peers */
-    const gchar* usage =
-        "loglevel=STR basename=STR quantity=INT msgload=INT size=INT cpuload=INT weightsfilepath=PATH";
+    const gchar* usage = "loglevel=STR basename=STR quantity=INT msgload=INT size=INT cpuload=INT "
+                         "weightsfilepath=PATH";
 
     gchar myname[128];
     g_assert(gethostname(&myname[0], 128) == 0);
