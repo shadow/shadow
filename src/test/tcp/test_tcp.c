@@ -239,7 +239,7 @@ static int _do_connect(int fd, struct sockaddr_in* serveraddr, iowait_func iowai
                 return -1;
             }
             continue;
-        } else if(result < 0) {
+        } else if (result < 0) {
             MYLOG("connect() error was %ld: %s", errnum, strerror(errnum));
             return -1;
         } else {
@@ -285,7 +285,7 @@ static int _do_serve(int fd, struct sockaddr_in* bindaddr, iowait_func iowait, i
                 MYLOG("error waiting for accept()");
                 return -1;
             }
-        } else if(result < 0) {
+        } else if (result < 0) {
             MYLOG("accept() error was: %s", strerror(errnum));
             return -1;
         } else {
@@ -309,15 +309,15 @@ static int _do_send(int fd, char* buf, iowait_func iowait) {
         long errnum = errno; // store errno before we make other syscalls that will overwrite it
         MYLOG("send() returned %li", (long)n);
 
-        if(n < 0 && iowait && (errnum == EAGAIN || errnum == EWOULDBLOCK)) {
+        if (n < 0 && iowait && (errnum == EAGAIN || errnum == EWOULDBLOCK)) {
             if(iowait(fd, WAIT_WRITE) < 0) {
                 MYLOG("error waiting for send()");
                 return -1;
             }
-        } else if(n < 0) {
+        } else if (n < 0) {
             MYLOG("send() error was: %s", strerror(errnum));
             return -1;
-        } else if(n > 0) {
+        } else if (n > 0) {
             MYLOG("sent %li more bytes", (long)n);
             offset += (int)n;
         } else {
@@ -345,15 +345,15 @@ static int _do_recv(int fd, char* buf, iowait_func iowait) {
         long errnum = errno; // store errno before we make other syscalls that will overwrite it
         MYLOG("recv() returned %li", (long)n);
 
-        if(n < 0 && iowait && (errnum == EAGAIN || errnum == EWOULDBLOCK)) {
+        if (n < 0 && iowait && (errnum == EAGAIN || errnum == EWOULDBLOCK)) {
             if(iowait(fd, WAIT_READ) < 0) {
                 MYLOG("error waiting for recv()");
                 return -1;
             }
-        } else if(n < 0) {
+        } else if (n < 0) {
             MYLOG("recv() error was: %s", strerror(errnum));
             return -1;
-        } else if(n > 0) {
+        } else if (n > 0) {
             MYLOG("got %li more bytes", (long)n);
             offset += (int)n;
         } else {
