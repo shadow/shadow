@@ -222,15 +222,16 @@ static int _do_connect(int fd, struct sockaddr_in* serveraddr, iowait_func iowai
     /* connect to server, blocking until the connection is ready */
     while(1) {
         int result = connect(fd, (struct sockaddr *) serveraddr, sizeof(struct sockaddr_in));
+        long errnum = errno; // store errno before we make other syscalls that will overwrite it
         MYLOG("connect() returned %i", result);
-        if (result < 0 && iowait && errno == EINPROGRESS) {
+        if (result < 0 && iowait && errnum == EINPROGRESS) {
             if(iowait(fd, WAIT_WRITE) < 0) {
                 MYLOG("error waiting for connect()");
                 return -1;
             }
             continue;
         } else if(result < 0) {
-            MYLOG("connect() error was: %s", strerror(errno));
+            MYLOG("connect() error was %ld: %s", errnum, strerror(errnum));
             return -1;
         } else {
             break;
