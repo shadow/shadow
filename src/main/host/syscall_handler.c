@@ -369,28 +369,59 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // ***************************************
         NATIVE(access);
         NATIVE(arch_prctl);
+        NATIVE(chdir);
+        NATIVE(chmod);
+        NATIVE(chown);
         NATIVE(exit);
         NATIVE(exit_group);
         NATIVE(getcwd);
         NATIVE(geteuid);
         NATIVE(getegid);
         NATIVE(getgid);
+        NATIVE(getresgid);
+        NATIVE(getresuid);
         NATIVE(getrlimit);
         NATIVE(getuid);
+        NATIVE(getxattr);
+        NATIVE(lchown);
+        NATIVE(lgetxattr);
+        NATIVE(link);
+        NATIVE(listxattr);
+        NATIVE(llistxattr);
+        NATIVE(lremovexattr);
+        NATIVE(lsetxattr);
         NATIVE(lstat);
         NATIVE(madvise);
         NATIVE(mkdir);
+        NATIVE(mknod);
         NATIVE(readlink);
+        NATIVE(removexattr);
+        NATIVE(rename);
+        NATIVE(rmdir);
         NATIVE(rt_sigaction);
         NATIVE(rt_sigprocmask);
+        NATIVE(setfsgid);
+        NATIVE(setfsuid);
+        NATIVE(setgid);
+        NATIVE(setregid);
+        NATIVE(setresgid);
+        NATIVE(setresuid);
+        NATIVE(setreuid);
         NATIVE(setrlimit);
+        NATIVE(setuid);
+        NATIVE(setxattr);
         NATIVE(stat);
 #ifdef SYS_stat64
         NATIVE(stat64);
 #endif
         NATIVE(statfs);
         NATIVE(sigaltstack);
+        NATIVE(symlink);
+        NATIVE(truncate);
         NATIVE(unlink);
+        NATIVE(utime);
+        NATIVE(utimes);
+
 
         default:
             warning(
