@@ -79,10 +79,11 @@ static int _wait_poll(int fd, waittype t) {
 
     MYLOG("waiting for io with poll()");
     int result = poll(&p, 1, -1);
+    long errnum = errno; // store errno before we make other syscalls that will overwrite it
     MYLOG("poll() returned %i", result);
 
     if(result < 0) {
-        MYLOG("error in poll(), error was: %s", strerror(errno));
+        MYLOG("error in poll(), error was: %s", strerror(errnum));
         return -1;
     } else if(result == 0) {
         MYLOG("poll() called with infinite timeout, but returned no events");
@@ -95,9 +96,10 @@ static int _wait_poll(int fd, waittype t) {
 
 static int _wait_epoll(int fd, waittype t) {
     int efd = epoll_create(1);
+    long errnum = errno; // store errno before we make other syscalls that will overwrite it
     MYLOG("epoll_create() returned %i", efd);
     if(efd < 0) {
-        MYLOG("error in epoll_create(), error was: %s", strerror(errno));
+        MYLOG("error in epoll_create(), error was: %s", strerror(errnum));
         return -1;
     }
 
@@ -106,9 +108,10 @@ static int _wait_epoll(int fd, waittype t) {
     e.events = (t == WAIT_READ) ? EPOLLIN : EPOLLOUT;
 
     int result = epoll_ctl(efd, EPOLL_CTL_ADD, fd, &e);
+    errnum = errno;
     MYLOG("epoll_ctl() op=EPOLL_CTL_ADD returned %i", result);
     if(result < 0) {
-        MYLOG("error in epoll_ctl() op=EPOLL_CTL_ADD, error was: %s", strerror(errno));
+        MYLOG("error in epoll_ctl() op=EPOLL_CTL_ADD, error was: %s", strerror(errnum));
         return -1;
     }
 
@@ -116,10 +119,11 @@ static int _wait_epoll(int fd, waittype t) {
 
     MYLOG("waiting for io with epoll()");
     result = epoll_wait(efd, &e, 1, -1);
+    errnum = errno;
     MYLOG("epoll_wait() returned %i", result);
 
     if(result < 0) {
-        MYLOG("error in epoll_wait(), error was: %s", strerror(errno));
+        MYLOG("error in epoll_wait(), error was: %s", strerror(errnum));
         return -1;
     } else if(result == 0) {
         MYLOG("epoll_wait() called with infinite timeout, but returned no events");
@@ -127,9 +131,10 @@ static int _wait_epoll(int fd, waittype t) {
     }
 
     result = epoll_ctl(efd, EPOLL_CTL_DEL, fd, NULL);
+    errnum = errno;
     MYLOG("epoll_ctl() op=EPOLL_CTL_DEL returned %i", result);
     if(result < 0) {
-        MYLOG("error in epoll_ctl() op=EPOLL_CTL_DEL, error was: %s", strerror(errno));
+        MYLOG("error in epoll_ctl() op=EPOLL_CTL_DEL, error was: %s", strerror(errnum));
         return -1;
     }
 
@@ -144,10 +149,11 @@ static int _wait_select(int fd, waittype t) {
 
     MYLOG("waiting for io with select()");
     int result = select(fd+1, (t == WAIT_READ) ? &s : NULL, (t == WAIT_WRITE) ? &s : NULL, NULL, NULL);
+    long errnum = errno; // store errno before we make other syscalls that will overwrite it
     MYLOG("select() returned %i", result);
 
     if(result < 0) {
-        MYLOG("error in select(), error was: %s", strerror(errno));
+        MYLOG("error in select(), error was: %s", strerror(errnum));
         return -1;
     } else if(result == 0) {
         MYLOG("select() called with infinite timeout, but returned no events");
@@ -171,9 +177,10 @@ static int _do_addr(const char* name, int port, struct sockaddr_in* addrout) {
         hints.ai_family = AF_INET;
 
         int result = getaddrinfo(name, NULL, &hints, &info);
+        long errnum = errno; // store errno before we make other syscalls that will overwrite it
         MYLOG("getaddrinfo() returned %i", result);
         if (result < 0) {
-            MYLOG("getaddrinfo() error was: %s", strerror(errno));
+            MYLOG("getaddrinfo() error was: %s", strerror(errnum));
             return -1;
         }
 
@@ -197,17 +204,19 @@ static int _do_addr(const char* name, int port, struct sockaddr_in* addrout) {
 static int _do_socket(int type, int* fdout) {
     /* create a socket and get a socket descriptor */
     int sd = socket(AF_INET, type, 0);
+    long errnum = errno; // store errno before we make other syscalls that will overwrite it
     MYLOG("socket() returned %i", sd);
     if (sd < 0) {
-        MYLOG("socket() error was: %s", strerror(errno));
+        MYLOG("socket() error was: %s", strerror(errnum));
         return -1;
     }
 
     int yes = 1;
     int result = setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+    errnum = errno;
     MYLOG("setsockopt() returned %i", result);
     if(result < 0) {
-        MYLOG("setsockopt() error was: %s", strerror(errno));
+        MYLOG("setsockopt() error was: %s", strerror(errnum));
         return -1;
     }
 
@@ -249,32 +258,35 @@ static int _do_serve(int fd, struct sockaddr_in* bindaddr, iowait_func iowait, i
 
     /* bind the socket to the server port */
     result = bind(fd, (struct sockaddr *) bindaddr, sizeof(struct sockaddr_in));
+    long errnum = errno; // store errno before we make other syscalls that will overwrite it
 
     MYLOG("bind() returned %i", result);
     if (result < 0) {
-        MYLOG("bind() error was: %s", strerror(errno));
+        MYLOG("bind() error was: %s", strerror(errnum));
         return -1;
     }
 
     /* set as server socket that will listen for clients */
     result = listen(fd, 100);
+    errnum = errno;
     MYLOG("listen() returned %i", result);
     if (result == -1) {
-        MYLOG("listen() error was: %s", strerror(errno));
+        MYLOG("listen() error was: %s", strerror(errnum));
         return -1;
     }
 
     /* wait for an incoming connection */
     while(1) {
         result = accept(fd, NULL, NULL);
+        errnum = errno;
         MYLOG("accept() returned %i", result);
-        if (result < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        if (result < 0 && iowait && (errnum == EAGAIN || errnum == EWOULDBLOCK)) {
             if(iowait(fd, WAIT_READ) < 0) {
                 MYLOG("error waiting for accept()");
                 return -1;
             }
         } else if(result < 0) {
-            MYLOG("accept() error was: %s", strerror(errno));
+            MYLOG("accept() error was: %s", strerror(errnum));
             return -1;
         } else {
             break;
@@ -294,15 +306,16 @@ static int _do_send(int fd, char* buf, iowait_func iowait) {
     while((amount = BUFFERSIZE - offset) > 0) {
         MYLOG("trying to send %i more bytes", amount);
         ssize_t n = send(fd, &buf[offset], (size_t)amount, 0);
+        long errnum = errno; // store errno before we make other syscalls that will overwrite it
         MYLOG("send() returned %li", (long)n);
 
-        if(n < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        if(n < 0 && iowait && (errnum == EAGAIN || errnum == EWOULDBLOCK)) {
             if(iowait(fd, WAIT_WRITE) < 0) {
                 MYLOG("error waiting for send()");
                 return -1;
             }
         } else if(n < 0) {
-            MYLOG("send() error was: %s", strerror(errno));
+            MYLOG("send() error was: %s", strerror(errnum));
             return -1;
         } else if(n > 0) {
             MYLOG("sent %li more bytes", (long)n);
@@ -329,15 +342,16 @@ static int _do_recv(int fd, char* buf, iowait_func iowait) {
     while((amount = BUFFERSIZE - offset) > 0) {
         MYLOG("expecting %i more bytes, waiting for data", amount);
         ssize_t n = recv(fd, &buf[offset], (size_t)amount, 0);
+        long errnum = errno; // store errno before we make other syscalls that will overwrite it
         MYLOG("recv() returned %li", (long)n);
 
-        if(n < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        if(n < 0 && iowait && (errnum == EAGAIN || errnum == EWOULDBLOCK)) {
             if(iowait(fd, WAIT_READ) < 0) {
                 MYLOG("error waiting for recv()");
                 return -1;
             }
         } else if(n < 0) {
-            MYLOG("recv() error was: %s", strerror(errno));
+            MYLOG("recv() error was: %s", strerror(errnum));
             return -1;
         } else if(n > 0) {
             MYLOG("got %li more bytes", (long)n);
