@@ -429,7 +429,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(utime);
         NATIVE(utimes);
 
-
         default:
             warning(
                 "Detected unsupported syscall %ld called from thread %i in process %s on host %s",
