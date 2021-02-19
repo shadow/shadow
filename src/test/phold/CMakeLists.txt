@@ -15,7 +15,7 @@ add_test(
     NAME phold-shadow-ptrace
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -d phold.shadow-ptrace.data - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace --pin-cpus -d phold.shadow-ptrace.data - \
     "
 )
 
@@ -24,7 +24,7 @@ add_test(
     NAME phold-shadow-ptrace-only
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace-only -d phold.shadow-ptrace-only.data - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace-only --pin-cpus -d phold.shadow-ptrace-only.data - \
     "
 )
 
@@ -33,7 +33,7 @@ add_test(
     NAME phold-shadow-preload
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -d phold.shadow-preload.data -
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload --pin-cpus -d phold.shadow-preload.data -
     "
     CONFIGURATIONS ilibc
 )
@@ -42,7 +42,7 @@ add_test(
     NAME phold-threaded-shadow-ptrace
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -d phold-threaded.shadow-ptrace.data -w 2 - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace --pin-cpus -d phold-threaded.shadow-ptrace.data -w 2 - \
     "
 )
 
@@ -50,7 +50,7 @@ add_test(
     NAME phold-threaded-shadow-ptrace-only
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace-only -d phold-threaded.shadow-ptrace-only.data -w 2 - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace-only --pin-cpus -d phold-threaded.shadow-ptrace-only.data -w 2 - \
     "
 )
 
@@ -59,11 +59,18 @@ add_test(
     NAME phold-threaded-shadow-preload
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -d phold-threaded.shadow-preload.data -w 2 - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload --pin-cpus -d phold-threaded.shadow-preload.data -w 2 - \
     "
     CONFIGURATIONS ilibc
 )
 
 # These tests currently run very slowly in the GitHub CI, which only gives them 2 CPUs.
 # Hopefully will be fixed by https://github.com/shadow/shadow/issues/965.
-set_tests_properties(phold-shadow-ptrace phold-shadow-preload phold-threaded-shadow-ptrace phold-threaded-shadow-ptrace-only phold-threaded-shadow-preload phold-threaded-shadow-ptrace-only PROPERTIES TIMEOUT 90)
+set_tests_properties(
+    phold-shadow-ptrace
+    phold-shadow-ptrace-only
+    phold-shadow-preload
+    phold-threaded-shadow-ptrace
+    phold-threaded-shadow-ptrace-only
+    phold-threaded-shadow-preload
+        PROPERTIES TIMEOUT 60)
