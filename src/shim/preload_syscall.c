@@ -12,6 +12,8 @@
 #include "shim/shim_shmem.h"
 #include "support/logger/logger.h"
 
+// Make sure we don't call any syscalls ourselves after this function is called, otherwise
+// the errno that we set here could get overwritten before we return to the plugin.
 static long shadow_retval_to_errno(long retval) {
     // Linux reserves -1 through -4095 for errors. See
     // https://sourceware.org/git/?p=glibc.git;a=blob;f=sysdeps/unix/sysv/linux/x86_64/sysdep.h;h=24d8b8ec20a55824a4806f8821ecba2622d0fe8e;hb=HEAD#l41
@@ -151,9 +153,9 @@ static long _vshadow_syscall(long n, va_list args) {
     for (int i = 0; i < 6; ++i) {
         regs[i].as_u64 = va_arg(args, uint64_t);
     }
-    long rv = shadow_retval_to_errno(_shadow_syscall_event(&e).as_i64);
+    SysCallReg retval = _shadow_syscall_event(&e);
     shim_enableInterposition();
-    return rv;
+    return shadow_retval_to_errno(retval.as_i64);
 }
 
 long syscall(long n, ...) {
