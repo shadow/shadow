@@ -49,6 +49,18 @@ unsigned int sleep(unsigned int seconds) {
     return rem.tv_sec;
 }
 
+// man send
+ssize_t send(int sockfd, const void* buf, size_t len, int flags) {
+    // An equivalent syscall is available
+    return sendto(sockfd, buf, len, flags, NULL, 0);
+}
+
+// man recv
+ssize_t recv(int sockfd, void* buf, size_t len, int flags) {
+    // An equivalent syscall is available
+    return recvfrom(sockfd, buf, len, flags, NULL, NULL);
+}
+
 // Sets `port` to the port specified by `service`, according to the criteria in
 // getaddrinfo(3). Returns 0 on success or the appropriate getaddrinfo error on
 // failure.
