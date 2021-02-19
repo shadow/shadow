@@ -688,6 +688,12 @@ extern "C" {
     ) -> SysCallReturn;
 }
 extern "C" {
+    pub fn syscallhandler_getppid(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
     pub fn syscallhandler_pipe(sys: *mut SysCallHandler, args: *const SysCallArgs)
         -> SysCallReturn;
 }
