@@ -1,19 +1,7 @@
-#include <assert.h>
-#include <dlfcn.h>
+#include <alloca.h>
 #include <errno.h>
-#include <fcntl.h>
-#include <poll.h>
-#include <stdarg.h>
-#include <stdint.h>
 #include <stdlib.h>
-#include <sys/epoll.h>
-#include <sys/resource.h>
-#include <sys/select.h>
-#include <sys/stat.h>
-#include <sys/statfs.h>
 #include <sys/syscall.h>
-#include <sys/utsname.h>
-#include <unistd.h>
 
 #include "main/host/syscall/kernel_types.h"
 #include "main/shmem/shmem_allocator.h"

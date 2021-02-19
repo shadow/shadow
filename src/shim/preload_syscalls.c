@@ -1,11 +1,12 @@
 // Defines system call wrappers: functions that are documented in man section 2. (See `man man`).
-// This file defines ths symbols that will be included in the preload library,
+// This file defines the symbols that will be included in the preload library,
 // and we redirect to the syscall() function to actually handle them.
 
-// Get the SYS_xxx definitions
+// We include this header to get the SYS_xxx definitions, but we want to avoid including any
+// other headers because they could cause conflicts with our definitions below.
 #include <sys/syscall.h>
 
-// External declarations, to minimize the headers we need to include
+// External declarations, to minimize the headers we need to include.
 long syscall(long n, ...);
 
 // Defines a thin wrapper function `func_name` that invokes the syscall `syscall_name`.
@@ -14,10 +15,10 @@ long syscall(long n, ...);
         return syscall(SYS_##syscall_name, a, b, c, d, e, f);                                      \
     }
 
-// Defines a thin wrapper whose function name 'func_name' is the same as the syscall name
+// Defines a thin wrapper whose function name 'func_name' is the same as the syscall name.
 #define INTERPOSE(func_name) INTERPOSE_REMAP(func_name, func_name)
 
-// Function definitions for the preloaded functions
+// Function definitions for the preloaded functions.
 // Note: send() and recv() are preloaded in preload_libraries.c
 // clang-format off
 INTERPOSE_REMAP(__fcntl, fcntl);
