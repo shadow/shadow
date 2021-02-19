@@ -2,6 +2,7 @@
 /build
 # area for local temp files
 /local
+/install
 # ide-specific settings
 .vscode
 cscope.*
@@ -10,4 +11,4 @@ cscope.*
 /src/tags
 # other temp files
 *.swp
-*Cargo.lock
+/src/support/logger/rust_bindings/Cargo.lock
