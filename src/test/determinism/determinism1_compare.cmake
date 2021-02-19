@@ -4,7 +4,7 @@ macro(EXEC_DIFF_CHECK FILE1 FILE2)
         message(FATAL_ERROR "Error in diff: ${OUTPUT}")
     endif()
 endmacro()
-foreach(LOOPIDX RANGE 1 50)
+foreach(LOOPIDX RANGE 1 10)
 	exec_diff_check(
 		${CMAKE_BINARY_DIR}/determinism1a.shadow.data/hosts/testnode${LOOPIDX}/testnode${LOOPIDX}.testdeterminism.1000.stdout
 		${CMAKE_BINARY_DIR}/determinism1b.shadow.data/hosts/testnode${LOOPIDX}/testnode${LOOPIDX}.testdeterminism.1000.stdout

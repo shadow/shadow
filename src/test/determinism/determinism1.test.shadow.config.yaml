@@ -25,7 +25,7 @@ plugins:
   path: test-determinism
 hosts:
 - id: testnode
-  quantity: 50
+  quantity: 10
   processes:
   - plugin: testdeterminism
     starttime: 1
