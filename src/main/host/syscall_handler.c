@@ -254,6 +254,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(getdents64);
         HANDLE(getpeername);
         HANDLE(getpid);
+        HANDLE(getppid);
         HANDLE(gettid);
         HANDLE(getrandom);
         HANDLE(get_robust_list);

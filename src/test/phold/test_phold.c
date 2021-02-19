@@ -214,7 +214,7 @@ static int _phold_sendToNode(PHold* phold, gint64 peerIndex, in_port_t port, voi
         phold->num_bytes_sent += b;
         phold->num_bytes_sent_tot += b;
         phold_debug("host '%s' sent %i byte%s to host '%s%" G_GINT64_FORMAT "'",
-                    phold->hostname->str, (gint)b, b == 1 ? "" : "s", phold->basename,
+                    phold->hostname->str, (gint)b, b == 1 ? "" : "s", phold->basename->str,
                     peerIndex + 1);
         result = TRUE;
     } else if (b < 0) {
@@ -519,8 +519,8 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
      * cpuload: number of iterations of a CPU busy loop to run whenever a message is received
      * weightsfile: path to a file containing $quantity weights according to which messages will be
      * sent to peers */
-    const gchar* usage =
-        "loglevel=STR basename=STR quantity=INT msgload=INT cpuload=INT weights=PATH";
+    const gchar* usage = "loglevel=STR basename=STR quantity=INT msgload=INT size=INT cpuload=INT "
+                         "weightsfilepath=PATH";
 
     gchar myname[128];
     g_assert(gethostname(&myname[0], 128) == 0);
