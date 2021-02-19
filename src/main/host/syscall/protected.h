@@ -13,6 +13,7 @@
  * handlers.
  */
 
+#include "main/host/descriptor/epoll.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
@@ -34,6 +35,9 @@ struct _SysCallHandler {
      * Here we use it to help us handling blocking syscalls that include a
      * timeout after which we should stop blocking. */
     Timer* timer;
+    /* We use this epoll to service syscalls that need to block on the status
+     * of multiple descriptors, like poll. */
+    Epoll* epoll;
 
     /* If we are currently blocking a specific syscall, i.e., waiting for
      * a socket to be readable/writable or waiting for a timeout, the
@@ -73,6 +77,7 @@ void _syscallhandler_setListenTimeout(SysCallHandler* sys,
                                       const struct timespec* timeout);
 void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
                                             gint timeout_ms);
+void _syscallhandler_setListenTimeoutNanos(SysCallHandler* sys, gint timeout_ns);
 int _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
 int _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
 int _syscallhandler_wasBlocked(const SysCallHandler* sys);

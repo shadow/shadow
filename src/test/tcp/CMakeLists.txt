@@ -4,7 +4,7 @@ link_libraries(${GLIB_LIBRARIES})
 add_executable(test-tcp test_tcp.c)
 
 # FIXME: enable other blocking modes
-foreach(BlockingMode blocking nonblocking-epoll) # nonblocking-poll nonblocking-epoll nonblocking-select iov)
+foreach(BlockingMode blocking nonblocking-poll nonblocking-epoll) # TODO nonblocking-select iov)
     add_test(
         NAME tcp-${BlockingMode}-loopback
         COMMAND ${CMAKE_SOURCE_DIR}/src/test/launch_with_unused_ports.py ../shadow-test-launcher test-tcp ${BlockingMode}
@@ -13,7 +13,6 @@ foreach(BlockingMode blocking nonblocking-epoll) # nonblocking-poll nonblocking-
     list(APPEND TestNames tcp-${BlockingMode}-loopback)
 
     foreach(Network loopback lossless lossy)
-        # FIXME: enable preload
         foreach(InterposeMethod ptrace preload ptrace-only)
             add_test(
                 NAME tcp-${BlockingMode}-${Network}-shadow-${InterposeMethod}

@@ -29,6 +29,7 @@
 #include "main/host/syscall/futex.h"
 #include "main/host/syscall/ioctl.h"
 #include "main/host/syscall/mman.h"
+#include "main/host/syscall/poll.h"
 #include "main/host/syscall/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/random.h"
@@ -68,6 +69,9 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
          * is not being used to service a plugin syscall and it
          * should not be tracked with an fd handle. */
         .timer = timer_new(),
+        // Like the timer above, we use an epoll object for servicing
+        // some syscalls, and so we won't assign it a fd handle.
+        .epoll = epoll_new(),
         // Used to track syscall handler performance
         .perfTimer = g_timer_new(),
     };
@@ -99,6 +103,9 @@ static void _syscallhandler_free(SysCallHandler* sys) {
 
     if (sys->timer) {
         descriptor_unref(sys->timer);
+    }
+    if (sys->epoll) {
+        descriptor_unref(sys->epoll);
     }
     if (sys->perfTimer) {
         g_timer_destroy(sys->perfTimer);
@@ -281,6 +288,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(openat);
         HANDLE_RUST(pipe);
         HANDLE_RUST(pipe2);
+        HANDLE(poll);
+        HANDLE(ppoll);
         HANDLE(prctl);
         HANDLE(pread64);
         HANDLE(preadv);
@@ -345,8 +354,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         //// operations on file descriptors
         // NATIVE(dup2);
         // NATIVE(dup3);
-        // NATIVE(poll);
-        // NATIVE(ppoll);
         // NATIVE(select);
         // NATIVE(pselect6);
 

@@ -93,6 +93,8 @@ INTERPOSE(open);
 INTERPOSE(openat);
 INTERPOSE(pipe);
 INTERPOSE(pipe2);
+INTERPOSE(poll);
+INTERPOSE(ppoll);
 INTERPOSE(prctl);
 INTERPOSE(pread64);
 INTERPOSE(preadv);

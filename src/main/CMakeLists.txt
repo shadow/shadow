@@ -116,6 +116,7 @@ set(shadow_srcs
     host/syscall/futex.c
     host/syscall/ioctl.c
     host/syscall/mman.c
+    host/syscall/poll.c
     host/syscall/process.c
     host/syscall/random.c
     host/syscall/signal.c
