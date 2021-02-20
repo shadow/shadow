@@ -161,9 +161,9 @@ File* file_new() {
     return file;
 }
 
-static char* _file_getConcatStr(const char* prefix, const char* suffix) {
+static char* _file_getConcatStr(const char* prefix, const char sep, const char* suffix) {
     char* path = NULL;
-    if (asprintf(&path, "%s/%s", prefix, suffix) < 0) {
+    if (asprintf(&path, "%s%c%s", prefix, sep, suffix) < 0) {
         error("asprintf could not allocate a buffer, error %i: %s", errno,
               strerror(errno));
         abort();
@@ -183,7 +183,7 @@ static char* _file_getPath(File* file, File* dir, const char* pathname) {
 
     /* The path is relative, try dir prefix first. */
     if (dir && dir->osfile.abspath) {
-        return _file_getConcatStr(dir->osfile.abspath, pathname);
+        return _file_getConcatStr(dir->osfile.abspath, '/', pathname);
     }
 
     /* Use current working directory as prefix. */
@@ -194,7 +194,7 @@ static char* _file_getPath(File* file, File* dir, const char* pathname) {
         abort();
     }
 
-    char* abspath = _file_getConcatStr(cwd, pathname);
+    char* abspath = _file_getConcatStr(cwd, '/', pathname);
     free(cwd);
     return abspath;
 }
@@ -210,6 +210,43 @@ static char* _file_getTempPathTemplate(File* file, const char* pathname) {
     return abspath;
 }
 
+#ifdef DEBUG
+#define CHECK_FLAG(flag)                                                                           \
+    if (flags & flag) {                                                                            \
+        if (!flag_str) {                                                                           \
+            asprintf(&flag_str, #flag);                                                            \
+        } else {                                                                                   \
+            char* str = _file_getConcatStr(flag_str, '|', #flag);                                  \
+            free(flag_str);                                                                        \
+            flag_str = str;                                                                        \
+        }                                                                                          \
+    }
+static void _file_print_flags(int flags) {
+    char *flag_str = NULL;
+    CHECK_FLAG(O_APPEND);
+    CHECK_FLAG(O_ASYNC);
+    CHECK_FLAG(O_CLOEXEC);
+    CHECK_FLAG(O_CREAT);
+    CHECK_FLAG(O_DIRECT);
+    CHECK_FLAG(O_DIRECTORY);
+    CHECK_FLAG(O_DSYNC);
+    CHECK_FLAG(O_EXCL);
+    CHECK_FLAG(O_LARGEFILE);
+    CHECK_FLAG(O_NOATIME);
+    CHECK_FLAG(O_NOCTTY);
+    CHECK_FLAG(O_NOFOLLOW);
+    CHECK_FLAG(O_NONBLOCK);
+    CHECK_FLAG(O_PATH);
+    CHECK_FLAG(O_SYNC);
+    CHECK_FLAG(O_TMPFILE);
+    CHECK_FLAG(O_TRUNC);
+    if(!flag_str) { asprintf(&flag_str, "0"); }
+    debug("Found flags: %s", flag_str);
+    if(flag_str) {free(flag_str);}
+}
+#undef CHECK_FLAG
+#endif
+
 int file_openat(File* file, File* dir, const char* pathname, int flags,
                 mode_t mode) {
     MAGIC_ASSERT(file);
@@ -221,7 +258,12 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
     int osfd = 0;
     char* abspath = NULL;
 
-    debug("Attempting to open file with pathname '%s'", pathname);
+    debug("Attempting to open file with pathname=%s flags=%i mode=%i", pathname, flags, (int)mode);
+#ifdef DEBUG
+    if(flags) {
+        _file_print_flags(flags);
+    }
+#endif
 
     if (flags & O_TMPFILE) {
         /* We need to store a copy of the temp path so we can reopen it. */
