@@ -166,7 +166,7 @@ fn test_poll_args_common(
     exp_error: libc::c_int,
     exp_revents: i16,
 ) -> Result<(), String> {
-    let fd = get_pollable_fd().unwrap();
+    let fd = get_pollable_fd()?;
 
     test_utils::run_and_close_fds(&[fd], || {
         // The main struct for the poll syscall

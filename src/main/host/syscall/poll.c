@@ -120,9 +120,9 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
 
 static SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, PluginPtr fds_ptr, nfds_t nfds,
                                                 const struct timespec* timeout) {
-    // Get the pollfd struct in our memory
+    // Get the pollfd struct in our memory so we can read from and write to it.
     struct pollfd* fds =
-        process_getWriteablePtr(sys->process, sys->thread, fds_ptr, nfds * sizeof(*fds));
+        process_getMutablePtr(sys->process, sys->thread, fds_ptr, nfds * sizeof(*fds));
 
     // Check if any of the fds have events now
     int num_ready = _syscallhandler_getPollEvents(sys, fds, nfds);
@@ -168,7 +168,7 @@ done:
 }
 
 static int _syscallhandler_checkPollArgs(PluginPtr fds_ptr, nfds_t nfds) {
-    if (nfds >= INT_MAX) {
+    if (nfds > INT_MAX) {
         debug("nfds was out of range [0, INT_MAX], returning EINVAL");
         return -EINVAL;
     } else if (!fds_ptr.val) {
