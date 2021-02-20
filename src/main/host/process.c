@@ -804,7 +804,8 @@ LegacyDescriptor* process_getRegisteredLegacyDescriptor(Process* proc, int handl
     LegacyDescriptor* legacyDesc = compatdescriptor_asLegacy(compatDesc);
 
     if (legacyDesc == NULL) {
-        warning("Attempted to convert compat descriptor fd=%d to a legacy descriptor", handle);
+        warning("A descriptor exists for fd=%d, but it is not a legacy descriptor. Returning NULL.",
+                handle);
     }
 
     return legacyDesc;

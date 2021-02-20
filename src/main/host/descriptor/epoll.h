@@ -25,4 +25,8 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray,
 void epoll_clearWatchListeners(Epoll* epoll);
 guint epoll_getNumReadyEvents(Epoll* epoll);
 
+// Removes all ready and watching descriptors and associated listeners
+// After this call, the epoll instance should be "empty" but usable like new
+void epoll_reset(Epoll* epoll);
+
 #endif /* SHD_EPOLL_H_ */

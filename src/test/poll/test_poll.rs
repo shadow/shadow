@@ -6,6 +6,12 @@
 use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum PollFn {
+    Poll,
+    PPoll,
+}
+
 const TEST_STR: &[u8; 4] = b"test";
 
 fn fd_write(fd: i32) -> Result<usize, String> {
@@ -139,6 +145,127 @@ fn test_creat() -> Result<(), String> {
     })
 }
 
+fn get_pollable_fd() -> Result<libc::c_int, String> {
+    // Get an fd we can poll
+    let fd = test_utils::check_system_call!(
+        || { unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) } },
+        &[]
+    )?;
+    test_utils::result_assert(fd > 0, "fd from socket() is not set")?;
+    Ok(fd)
+}
+
+fn test_poll_args_common(
+    poll_fn: PollFn,
+    pfd_null: bool,
+    fd_inval: bool,
+    events: i16,
+    timeout: i32,
+    nfds: u64,
+    exp_result: libc::c_int,
+    exp_error: libc::c_int,
+    exp_revents: i16,
+) -> Result<(), String> {
+    let fd = get_pollable_fd()?;
+
+    test_utils::run_and_close_fds(&[fd], || {
+        // The main struct for the poll syscall
+        let mut pfd = libc::pollfd {
+            fd: fd,
+            events: events,
+            revents: 0,
+        };
+        if fd_inval {
+            pfd.fd = std::i32::MAX;
+        }
+
+        // Get mutable pointer reference so we can pass it as a non-const libc pointer
+        let pfd_ptr = if pfd_null {
+            std::ptr::null_mut()
+        } else {
+            &mut pfd as *mut _
+        };
+
+        // Our expected errno
+        let exp_error_vec = if exp_error != 0 {
+            vec![exp_error]
+        } else {
+            vec![]
+        };
+
+        // Run the poll or ppoll system call while checking the errno
+        let ready = match poll_fn {
+            PollFn::Poll => test_utils::check_system_call!(
+                || { unsafe { libc::poll(pfd_ptr, nfds, timeout) } },
+                &exp_error_vec
+            )?,
+
+            PollFn::PPoll => {
+                // Setup the timespec (mutable not needed because it's a const libc pointer)
+                let timeout_ts = libc::timespec {
+                    tv_sec: 0,
+                    tv_nsec: timeout as i64 * 1000000, // millis to nanos
+                };
+
+                test_utils::check_system_call!(
+                    || { unsafe { libc::ppoll(pfd_ptr, nfds, &timeout_ts, std::ptr::null()) } },
+                    &exp_error_vec
+                )?
+            }
+        };
+
+        let ready_string = format!(
+            "{:?} returned an unexpected result: expected {}, got {}",
+            poll_fn, exp_result, ready
+        );
+        test_utils::result_assert_eq(exp_result, ready, &ready_string)?;
+
+        if ready > 0 {
+            let revents_string = format!(
+                "{:?} returned unexpected revents: expected {}, got {}",
+                poll_fn, exp_revents, pfd.revents
+            );
+            test_utils::result_assert_eq(exp_revents, pfd.revents, &revents_string)?;
+        }
+
+        Ok(())
+    })
+}
+
+fn get_poll_args_test(
+    poll_fn: PollFn,
+    pfd_null: bool,
+    fd_inval: bool,
+    events: i16,
+    timeout: i32,
+    nfds: u64,
+    exp_result: libc::c_int,
+    exp_error: libc::c_int,
+    exp_revents: i16,
+) -> test_utils::ShadowTest<(), String> {
+    let test_name = format!(
+        "test_poll_args\n\t<fn={:?},pfd_null={},fd_inval={},events={},timeout={},nfds={}>\n\t-> <exp_result={},exp_errno={},exp_revents={}>",
+        poll_fn, pfd_null, fd_inval, events, timeout, nfds, exp_result, exp_error, exp_revents
+    );
+    test_utils::ShadowTest::new(
+        &test_name,
+        move || {
+            test_poll_args_common(
+                poll_fn,
+                pfd_null,
+                fd_inval,
+                events,
+                timeout,
+                nfds,
+                exp_result,
+                exp_error,
+                exp_revents,
+            )
+        },
+        set![TestEnv::Libc, TestEnv::Shadow],
+    )
+}
+
 fn main() -> Result<(), String> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -154,6 +281,53 @@ fn main() -> Result<(), String> {
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
     ];
+
+    // For each combination of args, test both poll and ppoll
+    for &poll_fn in [PollFn::Poll, PollFn::PPoll].iter() {
+        for &pfd_null in [true, false].iter() {
+            for &fd_inval in [true, false].iter() {
+                for &events in [0, libc::POLLIN, libc::POLLOUT].iter() {
+                    for &timeout in [0, 1].iter() {
+                        for &nfds in [0, 1, std::u64::MAX].iter() {
+                            // For the expected outcomes
+                            let mut exp_result = 0;
+                            let mut exp_error = 0;
+                            let mut exp_revents = 0;
+
+                            // Encodes the linux failure logic
+                            if pfd_null && nfds == 1 {
+                                exp_result = -1;
+                                exp_error = libc::EFAULT;
+                            } else if nfds == std::u64::MAX {
+                                exp_result = -1;
+                                exp_error = libc::EINVAL;
+                            } else if fd_inval && nfds == 1 {
+                                exp_result = 1;
+                                exp_revents = libc::POLLNVAL;
+                            } else if events == libc::POLLOUT && nfds == 1 {
+                                exp_result = 1;
+                                exp_revents = libc::POLLOUT;
+                            }
+
+                            // Add the test case
+                            tests.push(get_poll_args_test(
+                                poll_fn,
+                                pfd_null,
+                                fd_inval,
+                                events,
+                                timeout,
+                                nfds,
+                                exp_result,
+                                exp_error,
+                                exp_revents,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if filter_shadow_passing {
         tests = tests
             .into_iter()

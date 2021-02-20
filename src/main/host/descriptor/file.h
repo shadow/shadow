@@ -6,6 +6,7 @@
 #ifndef SRC_MAIN_HOST_DESCRIPTOR_FILE_H_
 #define SRC_MAIN_HOST_DESCRIPTOR_FILE_H_
 
+#include <poll.h>
 #include <stddef.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
@@ -95,6 +96,7 @@ int file_getdents64(File* file, struct linux_dirent64* dirp,
                     unsigned int count);
 int file_ioctl(File* file, unsigned long request, void* arg);
 int file_fcntl(File* file, unsigned long command, void* arg);
+int file_poll(File* file, struct pollfd* pfd);
 
 // ******************************************
 // Operations where the dir File* may be null
