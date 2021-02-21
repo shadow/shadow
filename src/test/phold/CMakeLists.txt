@@ -12,19 +12,19 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/weights.txt ${CMAKE_CURRENT_BINARY_DI
 ## register the tests
 ## dont run with debug logging because it causes the test case to take too long
 add_test(
-    NAME phold-shadow-ptrace
+    NAME phold-shadow-hybrid
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace --pin-cpus -d phold.shadow-ptrace.data - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=hybrid --pin-cpus -d phold.shadow-hybrid.data - \
     "
 )
 
 # Run in ptrace mode *without* shim IPC. This is primarily for measurement purposes.
 add_test(
-    NAME phold-shadow-ptrace-only
+    NAME phold-shadow-ptrace
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace-only --pin-cpus -d phold.shadow-ptrace-only.data - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace --pin-cpus -d phold.shadow-ptrace.data - \
     "
 )
 
@@ -39,18 +39,18 @@ add_test(
 )
 
 add_test(
-    NAME phold-threaded-shadow-ptrace
+    NAME phold-threaded-shadow-hybrid
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace --pin-cpus -d phold-threaded.shadow-ptrace.data -w 2 - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=hybrid --pin-cpus -d phold-threaded.shadow-hybrid.data -w 2 - \
     "
 )
 
 add_test(
-    NAME phold-threaded-shadow-ptrace-only
+    NAME phold-threaded-shadow-ptrace
     COMMAND sh -c "\
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace-only --pin-cpus -d phold-threaded.shadow-ptrace-only.data -w 2 - \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace --pin-cpus -d phold-threaded.shadow-ptrace.data -w 2 - \
     "
 )
 
@@ -67,10 +67,10 @@ add_test(
 # These tests currently run very slowly in the GitHub CI, which only gives them 2 CPUs.
 # Hopefully will be fixed by https://github.com/shadow/shadow/issues/965.
 set_tests_properties(
+    phold-shadow-hybrid
     phold-shadow-ptrace
-    phold-shadow-ptrace-only
     phold-shadow-preload
+    phold-threaded-shadow-hybrid
     phold-threaded-shadow-ptrace
-    phold-threaded-shadow-ptrace-only
     phold-threaded-shadow-preload
         PROPERTIES TIMEOUT 60)

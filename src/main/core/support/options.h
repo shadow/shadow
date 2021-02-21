@@ -37,11 +37,11 @@ typedef enum _InterposeMethod {
     INTERPOSE_NONE,
     // Use LD_PRELOAD to load a library that implements the libC interface to
     // route syscalls to Shadow.
-    INTERPOSE_PRELOAD_ONLY,
+    INTERPOSE_PRELOAD,
     // Attach to child using ptrace, and use that to interpose syscalls etc.
-    INTERPOSE_PTRACE_ONLY,
+    INTERPOSE_PTRACE,
     // Use both PRELOAD and PTRACE based interposition.
-    INTERPOSE_PRELOAD_PTRACE,
+    INTERPOSE_HYBRID,
 } InterposeMethod;
 
 /**

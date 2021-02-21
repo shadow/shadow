@@ -134,7 +134,7 @@ Options* options_new(gint argc, gchar* argv[]) {
          "'threadXthread', 'threadXhost') ['steal']",
          "SPOL"},
         {"interpose-method", 'n', 0, G_OPTION_ARG_STRING, &(options->interposeMethod),
-         "Which interposition method to use ('preload-ptrace', 'preload', 'ptrace') ['ptrace']", "METHOD"},
+         "Which interposition method to use ('hybrid', 'preload', 'ptrace') ['hybrid']", "METHOD"},
         {"workers", 'w', 0, G_OPTION_ARG_INT, &(options->nWorkerThreads),
          "Run concurrently with N worker threads [0]", "N"},
         {"valgrind", 'x', 0, G_OPTION_ARG_NONE, &(options->runValgrind),
@@ -253,7 +253,7 @@ Options* options_new(gint argc, gchar* argv[]) {
         options->eventSchedulingPolicy = g_strdup("steal");
     }
     if (options->interposeMethod == NULL) {
-        options->interposeMethod = g_strdup("ptrace");
+        options->interposeMethod = g_strdup("hybrid");
     }
     if(!options->initialSocketReceiveBufferSize) {
         options->initialSocketReceiveBufferSize = CONFIG_RECV_BUFFER_SIZE;
@@ -381,14 +381,13 @@ gchar* options_getEventSchedulerPolicy(Options* options) {
 InterposeMethod options_getInterposeMethod(Options* options) {
     MAGIC_ASSERT(options);
     if (!g_ascii_strcasecmp(options->interposeMethod, "preload")) {
-        return INTERPOSE_PRELOAD_ONLY;
+        return INTERPOSE_PRELOAD;
     }
-    // TODO: Change this to "preload-ptrace"
+    if (!g_ascii_strcasecmp(options->interposeMethod, "hybrid")) {
+        return INTERPOSE_HYBRID;
+    }
     if (!g_ascii_strcasecmp(options->interposeMethod, "ptrace")) {
-        return INTERPOSE_PRELOAD_PTRACE;
-    }
-    if (!g_ascii_strcasecmp(options->interposeMethod, "ptrace-only")) {
-        return INTERPOSE_PTRACE_ONLY;
+        return INTERPOSE_PTRACE;
     }
     error("Unrecognized interposeMethod %s", options->interposeMethod);
     return INTERPOSE_NONE;
