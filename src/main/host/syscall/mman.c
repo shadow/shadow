@@ -105,7 +105,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     /* Flush the buffer to the plugin. */
     thread_flushPtrs(sys->thread);
 
-    /* Get original flags when used to open the file,
+    /* Get original flags that were used to open the file,
        but be careful not to try re-creating or truncating it. */
     int flags = file_getFlags(file) & ~(O_CREAT|O_EXCL|O_TMPFILE|O_TRUNC);
 

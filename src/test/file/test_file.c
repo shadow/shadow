@@ -215,6 +215,50 @@ static void _test_fstat() {
     fclose(file);
 }
 
+static void _test_dir() {
+    g_auto(AutoDeleteFile) adf = _create_auto_dir();
+    DIR* dir;
+    int dirfd;
+    struct dirent *de;
+
+    // Make the new directory and make sure we can open it.
+    assert_nonneg_errno(dirfd = open(adf.name, O_RDONLY));
+    assert_nonneg_errno(close(dirfd));
+
+    // Make sure we can get the contents.
+    assert_nonnull_errno(dir = opendir(adf.name));
+    assert_nonnull_errno(de = readdir(dir));
+    while(de) {
+        g_assert_nonnull(de->d_name);
+        // Get the next, now it's OK if NULL.
+        de = readdir(dir);
+    }
+
+    // Close and remove the directory.
+    assert_nonneg_errno(closedir(dir));
+    assert_nonneg_errno(rmdir(adf.name));
+}
+
+static void _test_tmpfile() {
+    const char wbuf[] = "test file tmpfile";
+    char rbuf[sizeof(wbuf)] = {0};
+    FILE* file;
+    int fd;
+    size_t rv;
+    
+    // Create temporary file and test i/o
+    assert_nonnull_errno(file = tmpfile());
+    assert_nonneg_errno(fd = fileno(file));
+    assert_nonneg_errno(rv = fwrite(wbuf, sizeof(char), sizeof(wbuf)/sizeof(char), file));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+    rewind(file);
+    assert_nonneg_errno(rv = fread(rbuf, sizeof(char), sizeof(wbuf), file));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+    g_assert_cmpstr(rbuf, ==, wbuf);
+
+    assert_nonneg_errno(fclose(file));
+}
+
 static void _test_iov() {
     g_auto(AutoDeleteFile) adf = _create_auto_file();
 
@@ -403,6 +447,9 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/file/fscanf", _test_fscanf);
     g_test_add_func("/file/chmod", _test_fchmod);
     g_test_add_func("/file/fstat", _test_fstat);
+
+    g_test_add_func("/file/dir", _test_dir);
+    g_test_add_func("/file/tmpfile", _test_tmpfile);
 
     //    TODO: debug and fix iov test
     //    g_test_add_func("/file/iov", _test_iov);

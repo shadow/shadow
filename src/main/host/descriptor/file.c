@@ -40,7 +40,7 @@ enum _FileType {
     FILE_TYPE_TEMP,
     FILE_TYPE_RANDOM,    // special handling for /dev/random etc.
     FILE_TYPE_HOSTS,     // special handling for /etc/hosts
-    FILE_TYPE_LOCALTIME, // TODO: special handling for /etc/localtime
+    FILE_TYPE_LOCALTIME, // special handling for /etc/localtime
 };
 
 struct _File {
@@ -199,17 +199,6 @@ static char* _file_getPath(File* file, File* dir, const char* pathname) {
     return abspath;
 }
 
-static char* _file_getTempPathTemplate(File* file, const char* pathname) {
-    char* abspath = NULL;
-    if (asprintf(&abspath, "%s/shadow-%i-tmpfd-%d-XXXXXX", pathname,
-                 (int)getpid(), _file_getFD(file)) < 0) {
-        error("asprintf could not allocate string for temp file, error %i: %s",
-              errno, strerror(errno));
-        abort();
-    }
-    return abspath;
-}
-
 #ifdef DEBUG
 #define CHECK_FLAG(flag)                                                                           \
     if (flags & flag) {                                                                            \
@@ -252,12 +241,6 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
     MAGIC_ASSERT(file);
     utility_assert(file->osfile.fd == 0);
 
-    /* TODO: we should open the os-backed file in non-blocking mode even if a
-     * non-block is not requested, and then properly handle the io by, e.g.,
-     * epolling on all such files with a shadow support thread. */
-    int osfd = 0;
-    char* abspath = NULL;
-
     debug("Attempting to open file with pathname=%s flags=%i mode=%i", pathname, flags, (int)mode);
 #ifdef DEBUG
     if(flags) {
@@ -265,58 +248,61 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
     }
 #endif
 
+    /* The default case is a regular file. We do this first so that we have
+     * an absolute path to compare for special files. */
+    char* abspath = _file_getPath(file, dir, pathname);
+
+    /* TODO: Handle special files. */
     if (flags & O_TMPFILE) {
-        /* We need to store a copy of the temp path so we can reopen it. */
         file->type = FILE_TYPE_TEMP;
-        abspath = _file_getTempPathTemplate(file, pathname);
-        osfd = mkostemp(abspath, flags & ~O_TMPFILE);
+        // When used with O_TMPFILE, O_EXCL will prevent the temporary file from later being linked
+        // into the filesystem. We unset O_EXCL since we may need that functionality, e.g. if the
+        // file is later mmapped into the plugin address space. See `man 2 open`.
+        flags = (flags & ~O_EXCL);
+    } else if (utility_isRandomPath(abspath)) {
+        file->type = FILE_TYPE_RANDOM;
+    } else if (!strcmp("/etc/hosts", abspath)) {
+        file->type = FILE_TYPE_HOSTS;
+        char* hostspath = dns_getHostsFilePath(worker_getDNS());
+        if(hostspath && abspath) {
+            free(abspath);
+            abspath = hostspath;
+        }
+    } else if (!strcmp("/etc/localtime", abspath)) {
+        file->type = FILE_TYPE_LOCALTIME;
     } else {
-        /* The default case is a regular file. We do this first so that we have
-         * an absolute path to compare for special files. */
-        abspath = _file_getPath(file, dir, pathname);
+        file->type = FILE_TYPE_REGULAR;
+    }
 
-        /* TODO: Handle special files. */
-        if (utility_isRandomPath(abspath)) {
-            file->type = FILE_TYPE_RANDOM;
-        } else if (!strcmp("/etc/hosts", abspath)) {
-            file->type = FILE_TYPE_HOSTS;
-            char* hostspath = dns_getHostsFilePath(worker_getDNS());
-            if(hostspath && abspath) {
-                free(abspath);
-                abspath = hostspath;
-            }
-        } else if (!strcmp("/etc/localtime", abspath)) {
-            file->type = FILE_TYPE_LOCALTIME;
-        } else {
-            file->type = FILE_TYPE_REGULAR;
-        }
-
-        if (file->type == FILE_TYPE_LOCALTIME) {
-            // Fail the localtime lookup so the plugin falls back to UTC.
-            // TODO: we could instead return a special file that contains
-            // timezone info in the correct format for UTC.
-            osfd = -1;
-            errno = ENOENT;
-        } else {
-            osfd = open(abspath, flags, mode);
-        }
+    int osfd = 0, errcode = 0;
+    if (file->type == FILE_TYPE_LOCALTIME) {
+        // Fail the localtime lookup so the plugin falls back to UTC.
+        // TODO: we could instead return a special file that contains
+        // timezone info in the correct format for UTC.
+        osfd = -1;
+        errcode = ENOENT;
+    } else {
+        // TODO: we should open the os-backed file in non-blocking mode even if a
+        // non-block is not requested, and then properly handle the io by, e.g.,
+        // epolling on all such files with a shadow support thread.
+        osfd = open(abspath, flags, mode);
+        errcode = errno;
     }
 
     if (osfd < 0) {
         debug("File %i opening path '%s' returned %i: %s", _file_getFD(file),
-              abspath, osfd, strerror(errno));
+              abspath, osfd, strerror(errcode));
         if (abspath) {
             free(abspath);
         }
         file->type = FILE_TYPE_NOTSET;
-        return -errno;
+        return -errcode;
     }
 
-    /* Store the create information so we can open later if needed. */
+    /* Store the create information so we can re-open later if needed (e.g., mmap). */
     file->osfile.fd = osfd;
     file->osfile.abspath = abspath;
-    /* We can't use O_TMPFILE, because if we reopen, we'll get a new file. */
-    file->osfile.flags = (flags & ~O_TMPFILE);
+    file->osfile.flags = flags;
     file->osfile.mode = mode;
 
     debug("File %i opened os-backed file %i at absolute path %s",
