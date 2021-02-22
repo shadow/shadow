@@ -35,10 +35,11 @@ typedef struct _Logger Logger;
 // A custom logger is implemented by defining a struct with a `struct _Logger`
 // as its first member.
 struct _Logger {
-    // Log the given information. This callback is responsible for any necessary
-    // synchronization.
+    // Log the given information. This callback is responsible for any necessary synchronization.
     void (*log)(Logger* logger, LogLevel level, const char* fileName, const char* functionName,
                 const int lineNumber, const char* format, va_list vargs);
+    // Flush all logged output.
+    void (*flush)(Logger* logger);
     void (*destroy)(Logger* logger);
 };
 
@@ -97,4 +98,7 @@ void logger_set_global_start_time_micros(int64_t);
 // /foo/bar  -> bar
 // /foo/bar/ -> bar/
 const char* logger_base_name(const char* filename);
+
+// Flush all logged output.
+void logger_flush(Logger* logger);
 #endif

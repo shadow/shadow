@@ -347,6 +347,11 @@ static void _shadow_logger_log_cb(Logger* logger, LogLevel level,
                         lineNumber, format, vargs);
 }
 
+static void _shadow_logger_flush_cb(Logger* logger) {
+    shadow_logger_flushRecords((ShadowLogger*)logger, pthread_self());
+    shadow_logger_syncToDisk((ShadowLogger*)logger);
+}
+
 static void _shadow_logger_destroy_cb(Logger* logger) {
     shadow_logger_unref((ShadowLogger*)logger);
 }
@@ -357,6 +362,7 @@ ShadowLogger* shadow_logger_new(LogLevel filterLevel) {
         .base =
             {
                 .log = _shadow_logger_log_cb,
+                .flush = _shadow_logger_flush_cb,
                 .destroy = _shadow_logger_destroy_cb,
             },
         .filterLevel = filterLevel,

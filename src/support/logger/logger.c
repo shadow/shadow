@@ -85,6 +85,10 @@ const char* logger_base_name(const char* filename) {
     return rv;
 }
 
+void _logger_default_flush() {
+    fflush(stderr);
+}
+
 static void _logger_default_log(LogLevel level, const char* fileName, const char* functionName,
                                 const int lineNumber, const char* format, va_list vargs) {
     static __thread bool in_logger = false;
@@ -121,7 +125,7 @@ static void _logger_default_log(LogLevel level, const char* fileName, const char
 
 #ifdef DEBUG
     if (level == LOGLEVEL_ERROR) {
-        fflush(stderr);
+        _logger_default_flush();
         abort();
     }
 #endif
@@ -141,4 +145,12 @@ void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
                     vargs);
     }
     va_end(vargs);
+}
+
+void logger_flush(Logger* logger) {
+    if (!logger) {
+        _logger_default_flush();
+    } else {
+        logger->flush(logger);
+    }
 }
