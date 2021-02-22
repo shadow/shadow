@@ -1,3 +1,5 @@
+options:
+  stoptime: 300
 topology:
 - graphml: |
     <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
@@ -14,23 +16,19 @@ topology:
         </node>
         <edge source="poi-1" target="poi-1">
           <data key="d3">50.0</data>
-          <data key="d4">0.25</data>
+          <data key="d4">0.0</data>
         </edge>
       </graph>
     </graphml>
-kill:
-- time: 300
 plugins:
 - id: testtcp
   path: test-tcp
 hosts:
-- id: lossy.tcpserver.echo
+- id: tcptestnode
   processes:
   - plugin: testtcp
     time: 1
-    arguments: blocking server 0.0.0.0 1234
-- id: lossy.tcpclient.echo
-  processes:
+    arguments: blocking server localhost 1234
   - plugin: testtcp
     time: 2
-    arguments: blocking client lossy.tcpserver.echo 1234
+    arguments: blocking client localhost 1234

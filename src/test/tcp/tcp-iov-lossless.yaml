@@ -1,3 +1,5 @@
+options:
+  stoptime: 60
 topology:
 - graphml: |
     <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
@@ -18,17 +20,17 @@ topology:
         </edge>
       </graph>
     </graphml>
-kill:
-- time: 300
 plugins:
 - id: testtcp
   path: test-tcp
 hosts:
-- id: tcptestnode
+- id: lossless.tcpserver.echo
   processes:
   - plugin: testtcp
     time: 1
-    arguments: nonblocking-poll server localhost 1234
+    arguments: iov server 0.0.0.0 1234
+- id: lossless.tcpclient.echo
+  processes:
   - plugin: testtcp
     time: 2
-    arguments: nonblocking-poll client localhost 1234
+    arguments: iov client lossless.tcpserver.echo 1234
