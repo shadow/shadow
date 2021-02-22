@@ -121,7 +121,7 @@ static void _logger_default_log(LogLevel level, const char* fileName, const char
 
 #ifdef DEBUG
     if (level == LOGLEVEL_ERROR) {
-        fflush(stdout);
+        fflush(stderr);
         abort();
     }
 #endif
