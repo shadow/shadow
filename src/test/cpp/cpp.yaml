@@ -1,5 +1,5 @@
 options:
-  stoptime: 3600
+  stoptime: 5
 topology:
 - graphml: |
     <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
@@ -20,21 +20,13 @@ topology:
         </edge>
       </graph>
     </graphml>
-kill:
-- time: 5
 plugins:
-- id: testconfig
-  path: test-config-read-from-stdin
+- id: testcpp
+  path: test-cpp
 hosts:
-- id: testclient
+- id: testnode
   quantity: 1
   processes:
-  - plugin: testconfig
+  - plugin: testcpp
     starttime: 1
-    arguments: client 5678
-- id: testserver
-  quantity: 1
-  processes:
-  - plugin: testconfig
-    starttime: 1
-    arguments: server 5678
+    arguments: ''
