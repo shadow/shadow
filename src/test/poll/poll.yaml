@@ -1,3 +1,5 @@
+options:
+  stoptime: 5
 topology:
 - graphml: |
     <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
@@ -18,15 +20,13 @@ topology:
         </edge>
       </graph>
     </graphml>
-kill:
-- time: 5
 plugins:
-- id: test-unistd
-  path: ../target/debug/test_unistd
+- id: testpoll
+  path: ../target/debug/test_poll
 hosts:
 - id: testnode
   quantity: 1
   processes:
-  - plugin: test-unistd
+  - plugin: testpoll
     starttime: 1
-    arguments: shadowsys testnode shadowrelease shadowversion shadowmachine
+    arguments: '--shadow-passing'

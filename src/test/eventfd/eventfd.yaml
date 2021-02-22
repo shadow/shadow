@@ -1,5 +1,5 @@
 options:
-  stoptime: 5
+  stoptime: 10
 topology:
 - graphml: |
     <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
@@ -21,12 +21,12 @@ topology:
       </graph>
     </graphml>
 plugins:
-- id: mmap_plugin
-  path: ../target/debug/test_mmap
+- id: testeventfd
+  path: ../target/debug/test_eventfd
 hosts:
-- id: mytesthost
+- id: testnode
   quantity: 1
   processes:
-  - plugin: mmap_plugin
+  - plugin: testeventfd
     starttime: 1
     arguments: '--shadow-passing'
