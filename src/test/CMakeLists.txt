@@ -31,39 +31,62 @@ add_executable(shadow-test-launcher-fail test_launcher_fail.c test_launcher_comm
 ## Wrapper around the yaml2xml tool
 set (yaml2xml "python3 ${CMAKE_SOURCE_DIR}/src/tools/convert.py yaml2xml")
 
-## Track all shadow test names to create our leakcheck dependency
-set(AllShadowTestNames "")
-
 ## === Helper macros for consistently defining tests. ===
-
 ## Tests that need more features should use add_test directly.
-macro(add_linux_tests testname)
-   add_test(NAME ${testname}-linux COMMAND ${ARGN})
-   set_property(TEST ${testname}-linux PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
+
+## example: add_linux_tests(BASENAME bind COMMAND test_bind)
+## will create one test named bind-linux
+macro(add_linux_tests)
+   cmake_parse_arguments(LINUX_TEST "" "BASENAME" "COMMAND" ${ARGN})
+   add_test(NAME ${LINUX_TEST_BASENAME}-linux COMMAND ${LINUX_TEST_COMMAND})
+   set_property(TEST ${LINUX_TEST_BASENAME}-linux PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
 endmacro()
 
-## Call with the name of the test, and then the three optional interpose methods.
-## add_shadow_tests(mmap hybrid ptrace) will add the mmap test for those modes.
-macro(add_shadow_tests testname)
-   set(AllShadowTestNames ${AllShadowTestNames} PARENT_SCOPE)
-   foreach(Method ${ARGN}) # ARGN are the args given after the expected 'name' arg
-      add_test(
-         NAME ${testname}-shadow-${Method}
-         COMMAND sh -c "\
-         ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/${testname}-shadow.yaml --output - \
+## example: add_shadow_tests(BASENAME bind METHODS ptrace preload LOGLEVEL debug ARGS --pin-cpus)
+## will create two tests named bind-shadow-ptrace and bind-shadow-preload
+macro(add_shadow_tests)
+   cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL" "METHODS;ARGS;CONFIGURATIONS" ${ARGN})
+
+   if(NOT DEFINED SHADOW_TEST_LOGLEVEL)
+      set(SHADOW_TEST_LOGLEVEL "debug")
+   endif()
+   
+   string(REPLACE ";" " " SHADOW_TEST_ARGS "${SHADOW_TEST_ARGS}")
+
+   foreach(SHADOW_TEST_METHOD ${SHADOW_TEST_METHODS})
+      set(SHADOW_TEST_NAME ${SHADOW_TEST_BASENAME}-shadow-${SHADOW_TEST_METHOD})
+      
+      set(SHADOW_TEST_COMMAND sh -c "\
+         ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/${SHADOW_TEST_BASENAME}.yaml --output - \
          | ${CMAKE_BINARY_DIR}/src/main/shadow \
-            --interpose-method=${Method} \
-            --log-level=debug \
-            --data-directory=${testname}-shadow-${Method}.data \
-            - \
+         --data-directory=${SHADOW_TEST_NAME}.data \
+         --interpose-method=${SHADOW_TEST_METHOD} \
+         --log-level=${SHADOW_TEST_LOGLEVEL} \
+         ${SHADOW_TEST_ARGS} \
+         - \
          "
       )
-      list(APPEND TestNames ${testname}-shadow-${Method})
-      list(APPEND AllShadowTestNames ${testname}-shadow-${Method})
+      
+      if(DEFINED SHADOW_TEST_CONFIGURATIONS)
+         add_test(
+            NAME ${SHADOW_TEST_NAME}
+            COMMAND ${SHADOW_TEST_COMMAND}
+            CONFIGURATIONS ${SHADOW_TEST_CONFIGURATIONS}
+         )
+      else()
+         add_test(
+            NAME ${SHADOW_TEST_NAME}
+            COMMAND ${SHADOW_TEST_COMMAND}
+         )
+      endif()
+
+      # need to check the test's return code, not just shadow's (see shadow/shadow#902)
+      set_property(TEST ${SHADOW_TEST_NAME} PROPERTY FAIL_REGULAR_EXPRESSION "main error code '.*' for process")
+      set_property(TEST ${SHADOW_TEST_NAME} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
+
+      set(ALL_SHADOW_TESTS "${ALL_SHADOW_TESTS}" PARENT_SCOPE)
+      list(APPEND ALL_SHADOW_TESTS ${SHADOW_TEST_NAME})
    endforeach()
-   set_property(TEST ${TestNames} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
-   # need to check the test's return code, not just shadow's (see shadow/shadow#902)
-   set_property(TEST ${TestNames} PROPERTY FAIL_REGULAR_EXPRESSION "main error code '.*' for process")
 endmacro()
 ## === end test helper macros ===
 
@@ -98,7 +121,7 @@ add_subdirectory(timerfd)
 add_subdirectory(udp)
 add_subdirectory(unistd)
 
-message(STATUS "AllShadowTestNames = ${AllShadowTestNames}")
+message(STATUS "ALL_SHADOW_TESTS = ${ALL_SHADOW_TESTS}")
 
 ## grep the LastTest.log.tmp file for the counter diff lines, and make sure
 ## that each such line matches the line in src/test/leakcheck.log
@@ -109,7 +132,7 @@ add_test(
 )
 # List all shadow tests as dependencies, so that the leakcheck can grep their output for leaks.
 ## TODO swap the following lines when all tests have been converted to the macros
-#set_tests_properties(leakcheck-shadow-grep PROPERTIES DEPENDS "${AllShadowTestNames}")
+#set_tests_properties(leakcheck-shadow-grep PROPERTIES DEPENDS "${ALL_SHADOW_TESTS}")
 set_tests_properties(leakcheck-shadow-grep PROPERTIES DEPENDS "bind-shadow-ptrace;bind-shadow-preload;clone-shadow-ptrace;config-convert-shadow;cpp-shadow-ptrace;cpp-shadow-preload;epoll-shadow-ptrace;epoll-writeable-shadow-ptrace;eventfd-shadow-ptrace;eventfd-shadow-preload;file-shadow-ptrace;mmap-shadow-ptrace;phold-shadow-ptrace;phold-threaded-shadow-ptrace;random-shadow-ptrace;random-shadow-preload;shutdown-shadow-ptrace;shutdown-shadow-preload;sleep-shadow-ptrace;sleep-shadow-preload;sockbuf-shadow-ptrace;socket-shadow-ptrace;socket-shadow-preload;bind-shadow-ptrace;bind-shadow-preload;listen-shadow-ptrace;listen-shadow-preload;getsockname-shadow-ptrace;getsockname-shadow-preload;accept-shadow-ptrace;accept-shadow-preload;timerfd-shadow-ptrace;udp-uniprocess-shadow-ptrace;udp-uniprocess-shadow-preload;udp-shadow-ptrace;unistd-shadow-ptrace;unistd-shadow-preload")
 
 add_test(

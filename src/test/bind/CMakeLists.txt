@@ -1,5 +1,5 @@
 include_directories(${GLIB_INCLUDES})
 link_libraries(${GLIB_LIBRARIES} logger)
 add_executable(test-bind test_bind.c ../test_common.c)
-add_linux_tests(bind test-bind)
-add_shadow_tests(bind ptrace ptrace-only preload)
+add_linux_tests(BASENAME bind COMMAND test-bind)
+add_shadow_tests(BASENAME bind METHODS ptrace ptrace-only preload)
