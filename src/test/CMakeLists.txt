@@ -95,7 +95,7 @@ endmacro()
 # FIXME add_subdirectory(dynlink)
 # FIXME add_subdirectory(preload)
 
-add_subdirectory(bind)
+add_subdirectory(bindc)
 add_subdirectory(clone)
 add_subdirectory(config)
 add_subdirectory(cpp)
