@@ -1,3 +1,5 @@
+options:
+  stoptime: 5
 topology:
 - graphml: |
     <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
@@ -18,17 +20,13 @@ topology:
         </edge>
       </graph>
     </graphml>
-kill:
-- time: 300
 plugins:
-- id: testtcp
-  path: test-tcp
+- id: testcpp
+  path: test-cpp
 hosts:
-- id: tcptestnode
+- id: testnode
+  quantity: 1
   processes:
-  - plugin: testtcp
-    time: 1
-    arguments: nonblocking-poll server localhost 1234
-  - plugin: testtcp
-    time: 2
-    arguments: nonblocking-poll client localhost 1234
+  - plugin: testcpp
+    starttime: 1
+    arguments: ''

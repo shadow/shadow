@@ -1,3 +1,5 @@
+options:
+  stoptime: 300
 topology:
 - graphml: |
     <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
@@ -18,15 +20,15 @@ topology:
         </edge>
       </graph>
     </graphml>
-kill:
-- time: 10
 plugins:
-- id: test_clone
-  path: test_clone
+- id: testtcp
+  path: test-tcp
 hosts:
-- id: host
-  quantity: 1
+- id: tcptestnode
   processes:
-  - plugin: test_clone
-    starttime: 1
-    arguments: ''
+  - plugin: testtcp
+    time: 1
+    arguments: nonblocking-select server localhost 1234
+  - plugin: testtcp
+    time: 2
+    arguments: nonblocking-select client localhost 1234
