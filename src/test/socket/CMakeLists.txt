@@ -1,3 +1,5 @@
+## FIXME the following is not propagating changes to ALL_SHADOW_TESTS in subdirs
+set(ALL_SHADOW_TESTS "${ALL_SHADOW_TESTS}" PARENT_SCOPE)
 add_subdirectory(socket)
 add_subdirectory(bind)
 add_subdirectory(listen)

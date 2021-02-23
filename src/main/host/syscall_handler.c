@@ -407,6 +407,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(rmdir);
         NATIVE(rt_sigaction);
         NATIVE(rt_sigprocmask);
+        NATIVE(rt_sigreturn);
         NATIVE(setfsgid);
         NATIVE(setfsuid);
         NATIVE(setgid);
