@@ -27,6 +27,14 @@
 #include "support/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 
+// We use an int here because the option parsing library doesn't provide a way
+// to set a boolean flag to false explicitly.
+static gint _setSchedFifo = false;
+OPTION_EXPERIMENTAL_ENTRY(
+    "set-sched-fifo", 0, 0, G_OPTION_ARG_INT, &_setSchedFifo,
+    "Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7) [0]",
+    "[0|1]")
+
 static Master* shadowMaster;
 
 static void _main_logEnvironment(gchar** argv, gchar** envv) {
@@ -251,16 +259,19 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         }
     }
 
-    struct sched_param param = {0};
-    param.sched_priority = 1;
-    int rc = sched_setscheduler(0, SCHED_FIFO, &param);
+    if (_setSchedFifo) {
+        struct sched_param param = {0};
+        param.sched_priority = 1;
+        int rc = sched_setscheduler(0, SCHED_FIFO, &param);
 
-    if (rc != 0) {
-        fprintf(stderr, "Could not set SCHED_FIFO!\n");
-        return -1;
-    } else {
-        fprintf(stderr, "In mode SCHED_FIFO.\n");
+        if (rc != 0) {
+            fprintf(stderr, "Could not set SCHED_FIFO!\n");
+            return -1;
+        } else {
+            fprintf(stderr, "In mode SCHED_FIFO.\n");
+        }
     }
+
     gint returnCode = _main_helper(options);
 
     options_free(options);
