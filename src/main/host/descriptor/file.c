@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -773,6 +774,23 @@ int file_fcntl(File* file, unsigned long command, void* arg) {
           _file_getOSBackedFD(file));
 
     int result = fcntl(_file_getOSBackedFD(file), command, arg);
+    return (result < 0) ? -errno : result;
+}
+
+int file_poll(File* file, struct pollfd* pfd) {
+    MAGIC_ASSERT(file);
+
+    if (!_file_getOSBackedFD(file)) {
+        return -EBADF;
+    }
+
+    debug("File %i poll os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
+
+    // Don't let the OS block us
+    int oldfd = pfd->fd;
+    pfd->fd = _file_getOSBackedFD(file);
+    int result = poll(pfd, (nfds_t)1, 0);
+    pfd->fd = oldfd;
     return (result < 0) ? -errno : result;
 }
 

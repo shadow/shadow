@@ -28,13 +28,14 @@ pub struct _Logger {
             vargs: *mut __va_list_tag,
         ),
     >,
+    pub flush: ::std::option::Option<unsafe extern "C" fn(logger: *mut Logger)>,
     pub destroy: ::std::option::Option<unsafe extern "C" fn(logger: *mut Logger)>,
 }
 #[test]
 fn bindgen_test_layout__Logger() {
     assert_eq!(
         ::std::mem::size_of::<_Logger>(),
-        16usize,
+        24usize,
         concat!("Size of: ", stringify!(_Logger))
     );
     assert_eq!(
@@ -53,8 +54,18 @@ fn bindgen_test_layout__Logger() {
         )
     );
     assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Logger>())).destroy as *const _ as usize },
+        unsafe { &(*(::std::ptr::null::<_Logger>())).flush as *const _ as usize },
         8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Logger),
+            "::",
+            stringify!(flush)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Logger>())).destroy as *const _ as usize },
+        16usize,
         concat!(
             "Offset of field: ",
             stringify!(_Logger),
@@ -99,6 +110,9 @@ extern "C" {
     pub fn logger_base_name(
         filename: *const ::std::os::raw::c_char,
     ) -> *const ::std::os::raw::c_char;
+}
+extern "C" {
+    pub fn logger_flush(logger: *mut Logger);
 }
 pub type __builtin_va_list = [__va_list_tag; 1usize];
 #[repr(C)]

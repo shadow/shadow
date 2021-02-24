@@ -29,6 +29,7 @@
 #include "main/host/syscall/futex.h"
 #include "main/host/syscall/ioctl.h"
 #include "main/host/syscall/mman.h"
+#include "main/host/syscall/poll.h"
 #include "main/host/syscall/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/random.h"
@@ -68,6 +69,9 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
          * is not being used to service a plugin syscall and it
          * should not be tracked with an fd handle. */
         .timer = timer_new(),
+        // Like the timer above, we use an epoll object for servicing
+        // some syscalls, and so we won't assign it a fd handle.
+        .epoll = epoll_new(),
         // Used to track syscall handler performance
         .perfTimer = g_timer_new(),
     };
@@ -99,6 +103,9 @@ static void _syscallhandler_free(SysCallHandler* sys) {
 
     if (sys->timer) {
         descriptor_unref(sys->timer);
+    }
+    if (sys->epoll) {
+        descriptor_unref(sys->epoll);
     }
     if (sys->perfTimer) {
         g_timer_destroy(sys->perfTimer);
@@ -281,6 +288,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(openat);
         HANDLE_RUST(pipe);
         HANDLE_RUST(pipe2);
+        HANDLE(poll);
+        HANDLE(ppoll);
         HANDLE(prctl);
         HANDLE(pread64);
         HANDLE(preadv);
@@ -334,34 +343,32 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // **************************************
         // Not handled (yet):
         // **************************************
-        NATIVE(io_getevents);
-        NATIVE(waitid);
-        NATIVE(msync);
+        // NATIVE(io_getevents);
+        // NATIVE(waitid);
+        // NATIVE(msync);
 
-        // operations on pids (shadow overrides pids)
-        NATIVE(sched_getaffinity);
-        NATIVE(sched_setaffinity);
+        //// operations on pids (shadow overrides pids)
+        // NATIVE(sched_getaffinity);
+        // NATIVE(sched_setaffinity);
 
-        // operations on file descriptors
-        NATIVE(dup2);
-        NATIVE(dup3);
-        NATIVE(poll);
-        NATIVE(ppoll);
-        NATIVE(select);
-        NATIVE(pselect6);
+        //// operations on file descriptors
+        // NATIVE(dup2);
+        // NATIVE(dup3);
+        // NATIVE(select);
+        // NATIVE(pselect6);
 
-        // copying data between various types of fds
-        NATIVE(copy_file_range);
-        NATIVE(sendfile);
-        NATIVE(splice);
-        NATIVE(vmsplice);
-        NATIVE(tee);
+        //// copying data between various types of fds
+        // NATIVE(copy_file_range);
+        // NATIVE(sendfile);
+        // NATIVE(splice);
+        // NATIVE(vmsplice);
+        // NATIVE(tee);
 
-        // additional socket io
-        NATIVE(recvmsg);
-        NATIVE(sendmsg);
-        NATIVE(recvmmsg);
-        NATIVE(sendmmsg);
+        //// additional socket io
+        // NATIVE(recvmsg);
+        // NATIVE(sendmsg);
+        // NATIVE(recvmmsg);
+        // NATIVE(sendmmsg);
 
         // ***************************************
         // We think we don't need to handle these
@@ -369,31 +376,69 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // ***************************************
         NATIVE(access);
         NATIVE(arch_prctl);
+        NATIVE(chdir);
+        NATIVE(chmod);
+        NATIVE(chown);
         NATIVE(exit);
         NATIVE(exit_group);
         NATIVE(getcwd);
         NATIVE(geteuid);
         NATIVE(getegid);
         NATIVE(getgid);
+        NATIVE(getresgid);
+        NATIVE(getresuid);
         NATIVE(getrlimit);
         NATIVE(getuid);
+        NATIVE(getxattr);
+        NATIVE(lchown);
+        NATIVE(lgetxattr);
+        NATIVE(link);
+        NATIVE(listxattr);
+        NATIVE(llistxattr);
+        NATIVE(lremovexattr);
+        NATIVE(lsetxattr);
         NATIVE(lstat);
         NATIVE(madvise);
         NATIVE(mkdir);
+        NATIVE(mknod);
         NATIVE(readlink);
+        NATIVE(removexattr);
+        NATIVE(rename);
+        NATIVE(rmdir);
         NATIVE(rt_sigaction);
         NATIVE(rt_sigprocmask);
+        NATIVE(rt_sigreturn);
+        NATIVE(setfsgid);
+        NATIVE(setfsuid);
+        NATIVE(setgid);
+        NATIVE(setregid);
+        NATIVE(setresgid);
+        NATIVE(setresuid);
+        NATIVE(setreuid);
         NATIVE(setrlimit);
+        NATIVE(setuid);
+        NATIVE(setxattr);
         NATIVE(stat);
 #ifdef SYS_stat64
         NATIVE(stat64);
 #endif
         NATIVE(statfs);
+        NATIVE(sigaltstack);
+        NATIVE(symlink);
+        NATIVE(truncate);
         NATIVE(unlink);
+        NATIVE(utime);
+        NATIVE(utimes);
 
         default:
-            warning("unhandled syscall %ld", args->number);
-            scr = (SysCallReturn){.state = SYSCALL_NATIVE};
+            warning(
+                "Detected unsupported syscall %ld called from thread %i in process %s on host %s",
+                args->number, thread_getID(sys->thread), process_getName(sys->process),
+                host_getName(sys->host));
+            critical("Returning error %i (ENOSYS) for unsupported syscall %li, which may result in "
+                     "unusual behavior",
+                     ENOSYS, args->number);
+            scr = (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
             break;
     }
 

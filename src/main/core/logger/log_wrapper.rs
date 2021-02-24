@@ -41,7 +41,9 @@ impl Log for ShadowLogger {
         }
     }
 
-    fn flush(&self) {}
+    fn flush(&self) {
+        unsafe { c_log::logger_flush(c_log::logger_getDefault()) };
+    }
 }
 
 /// Initialize a logger which uses Shadow's C logging interface.

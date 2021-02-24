@@ -1,0 +1,32 @@
+options:
+  stoptime: 10
+topology:
+- graphml: |
+    <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+      <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
+      <key attr.name="latency" attr.type="double" for="edge" id="d3" />
+      <key attr.name="bandwidthup" attr.type="int" for="node" id="d2" />
+      <key attr.name="bandwidthdown" attr.type="int" for="node" id="d1" />
+      <key attr.name="countrycode" attr.type="string" for="node" id="d0" />
+      <graph edgedefault="undirected">
+        <node id="poi-1">
+          <data key="d0">US</data>
+          <data key="d1">10240</data>
+          <data key="d2">10240</data>
+        </node>
+        <edge source="poi-1" target="poi-1">
+          <data key="d3">50.0</data>
+          <data key="d4">0.0</data>
+        </edge>
+      </graph>
+    </graphml>
+plugins:
+- id: testeventfd
+  path: ../target/debug/test_eventfd
+hosts:
+- id: testnode
+  quantity: 1
+  processes:
+  - plugin: testeventfd
+    starttime: 1
+    arguments: '--shadow-passing'

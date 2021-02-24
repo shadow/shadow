@@ -35,8 +35,9 @@ CPU* cpu_new(guint64 frequencyKHz, guint64 rawFrequencyKHz, guint64 threshold, g
 
     /* get the raw speed of the experiment machine */
     if(!rawFrequencyKHz) {
-        warning("unable to determine raw CPU frequency, setting %lu KHz as a raw "
-                "estimate, and using delay ratio of 1.0 to the simulator host", cpu->frequencyKHz);
+        info("unable to determine raw CPU frequency, setting %lu KHz as a raw "
+             "estimate, and using delay ratio of 1.0 to the simulator host",
+             cpu->frequencyKHz);
         cpu->rawFrequencyKHz = cpu->frequencyKHz;
         cpu->frequencyRatio = 1.0;
     } else {

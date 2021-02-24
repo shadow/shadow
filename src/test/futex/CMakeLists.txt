@@ -1,15 +1,8 @@
 include_directories(${GLIB_INCLUDES})
-
 add_executable(test-futex test_futex.c ../test_common.c)
 target_link_libraries(test-futex ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} logger)
-
-## register the tests
-add_test(NAME futex COMMAND test-futex)
-add_test(
-    NAME futex-shadow-ptrace
-    COMMAND sh -c "\
-    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/futex.test.shadow.config.yaml --output -\
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d futex.shadow-ptrace.data - \
-    "
-)
-# add_test(NAME futex-shadow-preload COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d futex.shadow-preload.data ${CMAKE_CURRENT_SOURCE_DIR}/futex.test.shadow.config.xml)
+add_linux_tests(BASENAME futex COMMAND test-futex)
+add_shadow_tests(BASENAME futex METHODS hybrid ptrace)
+# FIXME: Enable in all configurations. See https://github.com/shadow/shadow/issues/892
+# FIXME: The interposed libc does not handle this either.
+#add_shadow_tests(BASENAME futex METHODS preload CONFIGURATIONS ilibc)
