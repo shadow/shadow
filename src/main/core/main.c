@@ -262,10 +262,10 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         int rc = sched_setscheduler(0, SCHED_FIFO, &param);
 
         if (rc != 0) {
-            fprintf(stderr, "Could not set SCHED_FIFO!\n");
+            error("Could not set SCHED_FIFO");
             return -1;
         } else {
-            fprintf(stderr, "In mode SCHED_FIFO.\n");
+            message("Successfully set real-time scheduler mode to SCHED_FIFO");
         }
     }
 
