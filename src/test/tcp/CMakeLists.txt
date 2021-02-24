@@ -10,6 +10,6 @@ foreach(BlockingMode blocking nonblocking-poll nonblocking-epoll) # TODO nonbloc
             server localhost @PORT@ : test-tcp ${BlockingMode} client localhost @PORT@
     )
     foreach(Network loopback lossless lossy)
-        add_shadow_tests(BASENAME tcp-${BlockingMode}-${Network} METHODS ptrace-only ptrace preload)
+        add_shadow_tests(BASENAME tcp-${BlockingMode}-${Network} METHODS hybrid ptrace preload)
     endforeach()
 endforeach()
