@@ -9,6 +9,7 @@
 #endif
 #include <dlfcn.h>
 #include <glib.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +26,11 @@
 #include "shd-config.h"
 #include "support/logger/logger.h"
 #include "main/bindings/c/bindings.h"
+
+static bool _setSchedFifo = false;
+OPTION_EXPERIMENTAL_ENTRY(
+    "set-sched-fifo", 0, 0, G_OPTION_ARG_NONE, &_setSchedFifo,
+    "Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7)", NULL)
 
 static Master* shadowMaster;
 
@@ -247,6 +253,19 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         int rc = affinity_initPlatformInfo();
         if (rc) {
           return EXIT_FAILURE;
+        }
+    }
+
+    if (_setSchedFifo) {
+        struct sched_param param = {0};
+        param.sched_priority = 1;
+        int rc = sched_setscheduler(0, SCHED_FIFO, &param);
+
+        if (rc != 0) {
+            error("Could not set SCHED_FIFO");
+            return -1;
+        } else {
+            message("Successfully set real-time scheduler mode to SCHED_FIFO");
         }
     }
 

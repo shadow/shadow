@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <cstring>
 #include <errno.h>
+#include <sched.h>
 #include <unistd.h>
 
 BinarySpinningSem::BinarySpinningSem(ssize_t spin_max) : _thresh(spin_max) {
@@ -11,6 +12,7 @@ BinarySpinningSem::BinarySpinningSem(ssize_t spin_max) : _thresh(spin_max) {
 
 void BinarySpinningSem::post() {
     sem_post(&_semaphore);
+    sched_yield();
 }
 
 void BinarySpinningSem::wait(bool spin) {
@@ -24,6 +26,4 @@ void BinarySpinningSem::wait(bool spin) {
     sem_wait(&_semaphore);
 }
 
-int BinarySpinningSem::trywait() {
-    return sem_trywait(&_semaphore);
-}
+int BinarySpinningSem::trywait() { return sem_trywait(&_semaphore); }
