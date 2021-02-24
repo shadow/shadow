@@ -27,13 +27,10 @@
 #include "support/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 
-// We use an int here because the option parsing library doesn't provide a way
-// to set a boolean flag to false explicitly.
-static gint _setSchedFifo = false;
+static bool _setSchedFifo = false;
 OPTION_EXPERIMENTAL_ENTRY(
-    "set-sched-fifo", 0, 0, G_OPTION_ARG_INT, &_setSchedFifo,
-    "Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7) [0]",
-    "[0|1]")
+    "set-sched-fifo", 0, 0, G_OPTION_ARG_NONE, &_setSchedFifo,
+    "Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7)", NULL)
 
 static Master* shadowMaster;
 
