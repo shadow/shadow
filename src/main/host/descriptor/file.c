@@ -33,11 +33,12 @@
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
+#define OSFILE_INVALID -1
+
 typedef enum _FileType FileType;
 enum _FileType {
     FILE_TYPE_NOTSET,
     FILE_TYPE_REGULAR,
-    FILE_TYPE_TEMP,
     FILE_TYPE_RANDOM,    // special handling for /dev/random etc.
     FILE_TYPE_HOSTS,     // special handling for /etc/hosts
     FILE_TYPE_LOCALTIME, // special handling for /etc/localtime
@@ -67,11 +68,6 @@ mode_t file_getMode(File* file) {
     return file->osfile.mode;
 }
 
-char* file_getAbsolutePath(File* file) {
-    MAGIC_ASSERT(file);
-    return file->osfile.abspath;
-}
-
 static inline File* _file_descriptorToFile(LegacyDescriptor* desc) {
     utility_assert(descriptor_getType(desc) == DT_FILE);
     File* file = (File*)desc;
@@ -91,20 +87,12 @@ static inline int _file_getOSBackedFD(File* file) {
 int file_getOSBackedFD(File* file) { return _file_getOSBackedFD(file); }
 
 static void _file_closeHelper(File* file) {
-    if (file && file->osfile.fd) {
+    if (file && file->osfile.fd != OSFILE_INVALID) {
         debug("On file %i, closing os-backed file %i", _file_getFD(file),
               _file_getOSBackedFD(file));
 
         close(file->osfile.fd);
-        file->osfile.fd = 0;
-
-        if (file->type == FILE_TYPE_TEMP && file->osfile.abspath) {
-            if (unlink(file->osfile.abspath) < 0) {
-                info("unlink unable to remove temporary file at '%s', error "
-                     "%i: %s",
-                     file->osfile.abspath, errno, strerror(errno));
-            }
-        }
+        file->osfile.fd = OSFILE_INVALID;
 
         /* The os-backed file is no longer ready. */
         descriptor_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, FALSE);
@@ -156,6 +144,7 @@ File* file_new() {
 
     descriptor_init(&(file->super), DT_FILE, &_fileFunctions);
     MAGIC_INIT(file);
+    file->osfile.fd = OSFILE_INVALID; // negative means uninitialized (0 is a valid fd)
 
     worker_countObject(OBJECT_TYPE_FILE, COUNTER_TYPE_NEW);
     return file;
@@ -239,7 +228,7 @@ static void _file_print_flags(int flags) {
 int file_openat(File* file, File* dir, const char* pathname, int flags,
                 mode_t mode) {
     MAGIC_ASSERT(file);
-    utility_assert(file->osfile.fd == 0);
+    utility_assert(file->osfile.fd == OSFILE_INVALID);
 
     debug("Attempting to open file with pathname=%s flags=%i mode=%i", pathname, flags, (int)mode);
 #ifdef DEBUG
@@ -252,14 +241,15 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
      * an absolute path to compare for special files. */
     char* abspath = _file_getPath(file, dir, pathname);
 
-    /* TODO: Handle special files. */
+    // When used with O_TMPFILE, O_EXCL will prevent the temporary file from later being linked
+    // into the filesystem. We unset O_EXCL since we may need that functionality, e.g. if the
+    // file is later mmapped into the plugin address space. See `man 2 open`.
     if (flags & O_TMPFILE) {
-        file->type = FILE_TYPE_TEMP;
-        // When used with O_TMPFILE, O_EXCL will prevent the temporary file from later being linked
-        // into the filesystem. We unset O_EXCL since we may need that functionality, e.g. if the
-        // file is later mmapped into the plugin address space. See `man 2 open`.
         flags = (flags & ~O_EXCL);
-    } else if (utility_isRandomPath(abspath)) {
+    }
+
+    /* Handle special files. */
+    if (utility_isRandomPath(abspath)) {
         file->type = FILE_TYPE_RANDOM;
     } else if (!strcmp("/etc/hosts", abspath)) {
         file->type = FILE_TYPE_HOSTS;
@@ -829,7 +819,7 @@ int file_poll(File* file, struct pollfd* pfd) {
 static inline int _file_getOSDirFD(File* dir) {
     if (dir) {
         MAGIC_ASSERT(dir);
-        return dir->osfile.fd > 0 ? dir->osfile.fd : AT_FDCWD;
+        return dir->osfile.fd != OSFILE_INVALID ? dir->osfile.fd : AT_FDCWD;
     } else {
         return AT_FDCWD;
     }
