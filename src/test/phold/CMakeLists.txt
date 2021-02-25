@@ -73,4 +73,10 @@ set_tests_properties(
     phold-threaded-shadow-hybrid
     phold-threaded-shadow-ptrace
     phold-threaded-shadow-preload
-        PROPERTIES TIMEOUT 60)
+        PROPERTIES TIMEOUT 120)
+
+set_tests_properties(
+    phold-threaded-shadow-hybrid
+    phold-threaded-shadow-ptrace
+    phold-threaded-shadow-preload
+        PROPERTIES PROCESSORS 2)
