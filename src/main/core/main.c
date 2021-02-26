@@ -246,6 +246,13 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     /* disable buffering during startup so that we see every message immediately in the terminal */
     shadow_logger_setEnableBuffering(shadowLogger, FALSE);
 
+#ifndef DEBUG
+    if (options_getLogLevel(options) == LOGLEVEL_DEBUG) {
+        warning("Log level set to %s, but Shadow was not built in debug mode",
+                loglevel_toStr(options_getLogLevel(options)));
+    }
+#endif
+
     // before we run the simluation, clean up any orphaned shared memory
     shmemcleanup_tryCleanup();
     
