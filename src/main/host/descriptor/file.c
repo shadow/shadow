@@ -200,7 +200,7 @@ static char* _file_getPath(File* file, File* dir, const char* pathname) {
         }                                                                                          \
     }
 static void _file_print_flags(int flags) {
-    char *flag_str = NULL;
+    char* flag_str = NULL;
     CHECK_FLAG(O_APPEND);
     CHECK_FLAG(O_ASYNC);
     CHECK_FLAG(O_CLOEXEC);
@@ -218,9 +218,13 @@ static void _file_print_flags(int flags) {
     CHECK_FLAG(O_SYNC);
     CHECK_FLAG(O_TMPFILE);
     CHECK_FLAG(O_TRUNC);
-    if(!flag_str) { asprintf(&flag_str, "0"); }
+    if (!flag_str) {
+        asprintf(&flag_str, "0");
+    }
     debug("Found flags: %s", flag_str);
-    if(flag_str) {free(flag_str);}
+    if (flag_str) {
+        free(flag_str);
+    }
 }
 #undef CHECK_FLAG
 #endif
@@ -232,7 +236,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
 
     debug("Attempting to open file with pathname=%s flags=%i mode=%i", pathname, flags, (int)mode);
 #ifdef DEBUG
-    if(flags) {
+    if (flags) {
         _file_print_flags(flags);
     }
 #endif
@@ -254,7 +258,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
     } else if (!strcmp("/etc/hosts", abspath)) {
         file->type = FILE_TYPE_HOSTS;
         char* hostspath = dns_getHostsFilePath(worker_getDNS());
-        if(hostspath && abspath) {
+        if (hostspath && abspath) {
             free(abspath);
             abspath = hostspath;
         }
@@ -280,8 +284,8 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
     }
 
     if (osfd < 0) {
-        debug("File %i opening path '%s' returned %i: %s", _file_getFD(file),
-              abspath, osfd, strerror(errcode));
+        debug("File %i opening path '%s' returned %i: %s", _file_getFD(file), abspath, osfd,
+              strerror(errcode));
         if (abspath) {
             free(abspath);
         }

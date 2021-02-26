@@ -219,7 +219,7 @@ static void _test_dir() {
     g_auto(AutoDeleteFile) adf = _create_auto_dir();
     DIR* dir;
     int dirfd;
-    struct dirent *de;
+    struct dirent* de;
 
     // Make the new directory and make sure we can open it.
     assert_nonneg_errno(dirfd = open(adf.name, O_RDONLY));
@@ -228,7 +228,7 @@ static void _test_dir() {
     // Make sure we can get the contents.
     assert_nonnull_errno(dir = opendir(adf.name));
     assert_nonnull_errno(de = readdir(dir));
-    while(de) {
+    while (de) {
         g_assert_nonnull(de->d_name);
         // Get the next, now it's OK if NULL.
         de = readdir(dir);
@@ -245,11 +245,11 @@ static void _test_tmpfile() {
     FILE* file;
     int fd;
     size_t rv;
-    
+
     // Create temporary file and test i/o
     assert_nonnull_errno(file = tmpfile());
     assert_nonneg_errno(fd = fileno(file));
-    assert_nonneg_errno(rv = fwrite(wbuf, sizeof(char), sizeof(wbuf)/sizeof(char), file));
+    assert_nonneg_errno(rv = fwrite(wbuf, sizeof(char), sizeof(wbuf) / sizeof(char), file));
     g_assert_cmpint(rv, ==, sizeof(wbuf));
     rewind(file);
     assert_nonneg_errno(rv = fread(rbuf, sizeof(char), sizeof(wbuf), file));
