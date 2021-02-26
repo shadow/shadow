@@ -18,6 +18,28 @@ pub struct _GTimer {
     _unused: [u8; 0],
 }
 pub type GTimer = _GTimer;
+pub use self::_LogLevel as LogLevel;
+pub const _LogLevel_LOGLEVEL_UNSET: _LogLevel = 0;
+pub const _LogLevel_LOGLEVEL_ERROR: _LogLevel = 1;
+pub const _LogLevel_LOGLEVEL_CRITICAL: _LogLevel = 2;
+pub const _LogLevel_LOGLEVEL_WARNING: _LogLevel = 3;
+pub const _LogLevel_LOGLEVEL_MESSAGE: _LogLevel = 4;
+pub const _LogLevel_LOGLEVEL_INFO: _LogLevel = 5;
+pub const _LogLevel_LOGLEVEL_DEBUG: _LogLevel = 6;
+pub const _LogLevel_LOGLEVEL_TRACE: _LogLevel = 7;
+pub type _LogLevel = i32;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _ShadowLogger {
+    _unused: [u8; 0],
+}
+pub type ShadowLogger = _ShadowLogger;
+extern "C" {
+    pub fn shadow_logger_getDefault() -> *mut ShadowLogger;
+}
+extern "C" {
+    pub fn shadow_logger_shouldFilter(logger: *mut ShadowLogger, level: LogLevel) -> bool;
+}
 pub use self::_Status as Status;
 pub const _Status_STATUS_NONE: _Status = 0;
 pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;

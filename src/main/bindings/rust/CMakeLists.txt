@@ -25,6 +25,8 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "descriptor_setHandle"
         --whitelist-function "process_.*CompatDescriptor"
         --whitelist-function "process_get.*Ptr"
+        --whitelist-function "shadow_logger_getDefault"
+        --whitelist-function "shadow_logger_shouldFilter"
         --whitelist-function "statuslistener_ref"
         --whitelist-function "statuslistener_unref"
         --whitelist-function "statuslistener_onStatusChanged"
