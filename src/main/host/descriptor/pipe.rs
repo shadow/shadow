@@ -23,13 +23,14 @@ impl PipeFile {
         let mut rv = Self {
             buffer,
             event_source: StatusEventSource::new(),
-            status: FileStatus::empty(),
+            status: FileStatus::ACTIVE,
             mode,
             flags,
             buffer_event_handle: None,
         };
 
-        rv.status = rv.filter_status(rv.buffer.borrow_mut().status());
+        rv.status
+            .insert(rv.filter_status(rv.buffer.borrow_mut().status()));
 
         rv
     }
@@ -71,8 +72,7 @@ impl PipeFile {
 
     pub fn enable_notifications(arc: &Arc<AtomicRefCell<PosixFile>>) {
         // we remove some of these later in this function
-        let monitoring =
-            FileStatus::ACTIVE | FileStatus::CLOSED | FileStatus::READABLE | FileStatus::WRITABLE;
+        let monitoring = FileStatus::CLOSED | FileStatus::READABLE | FileStatus::WRITABLE;
 
         let weak = Arc::downgrade(arc);
         match *arc.borrow_mut() {
@@ -89,7 +89,7 @@ impl PipeFile {
                             let mut file = file.borrow_mut();
                             match *file {
                                 PosixFile::Pipe(ref mut f) => {
-                                    f.adjust_status(status, true, event_queue)
+                                    f.copy_status(monitoring, status, event_queue)
                                 }
                                 #[allow(unreachable_patterns)]
                                 _ => unreachable!(),
@@ -139,19 +139,15 @@ impl PipeFile {
         status
     }
 
-    pub fn adjust_status(
-        &mut self,
-        status: FileStatus,
-        do_set_bits: bool,
-        event_queue: &mut EventQueue,
-    ) {
+    fn copy_status(&mut self, mask: FileStatus, status: FileStatus, event_queue: &mut EventQueue) {
         let old_status = self.status;
 
         // remove any flags that aren't relevant
         let status = self.filter_status(status);
 
-        // add or remove the flags
-        self.status.set(status, do_set_bits);
+        // remove the masked flags, then copy the masked flags
+        self.status.remove(mask);
+        self.status.insert(status & mask);
 
         self.handle_status_change(old_status, event_queue);
     }
@@ -181,7 +177,7 @@ impl SharedBuf {
         Self {
             queue: ByteQueue::new(8192),
             max_len: c::CONFIG_PIPE_BUFFER_SIZE as usize,
-            status: FileStatus::ACTIVE | FileStatus::WRITABLE,
+            status: FileStatus::WRITABLE,
             event_source: StatusEventSource::new(),
         }
     }

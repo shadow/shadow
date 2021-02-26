@@ -169,7 +169,7 @@ impl ByteQueue {
         );
 
         self.tail_read_offset += len;
-        self.length += len;
+        self.length -= len;
     }
 }
 
@@ -249,6 +249,8 @@ mod tests {
             (src1.len() + src2.len() - 1) / chunk_size + 1
         );
 
+        assert_eq!(bq.length, src1.len() + src2.len());
+
         let mut count = 0;
         count += bq.pop(&mut dst1);
         count += bq.pop(&mut dst2);
@@ -256,5 +258,6 @@ mod tests {
         assert_eq!(count, src1.len() + src2.len());
         assert_eq!(dst1, [1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(dst2, [9, 10, 11, 12, 13, 51, 52, 53, 0, 0]);
+        assert_eq!(bq.length, 0);
     }
 }
