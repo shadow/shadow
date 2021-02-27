@@ -8,6 +8,7 @@
 
 #include <glib.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 #include "support/logger/log_level.h"
 
@@ -28,7 +29,7 @@ void shadow_logger_setDefault(ShadowLogger* logger);
 ShadowLogger* shadow_logger_getDefault();
 
 void shadow_logger_setFilterLevel(ShadowLogger* logger, LogLevel level);
-gboolean shadow_logger_shouldFilter(ShadowLogger* logger, LogLevel level);
+bool shadow_logger_shouldFilter(ShadowLogger* logger, LogLevel level);
 
 void shadow_logger_setEnableBuffering(ShadowLogger* logger, gboolean enabled);
 
