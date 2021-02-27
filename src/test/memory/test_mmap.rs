@@ -35,12 +35,17 @@ fn validate_shadow_access(buf: &[u8]) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn test_mmap_file(offset: libc::off_t) -> Result<(), Box<dyn Error>> {
+fn test_mmap_file(offset: libc::off_t, unlink_before_mmap: bool) -> Result<(), Box<dyn Error>> {
     let template = b"test_mmapXXXXXX";
 
     /* Get a file that we can mmap and write into. */
     let (temp_fd, path) = nix::unistd::mkstemp(template.as_ref())?;
     nix::errno::Errno::result(temp_fd)?;
+
+    // We can unlink the path now and temp_fd should still remain valid
+    if unlink_before_mmap {
+        nix::unistd::unlink(&path)?;
+    }
 
     /* Make sure there is enough space to write after the mmap. */
     nix::fcntl::posix_fallocate(temp_fd, offset, MAPLEN as i64)?;
@@ -80,7 +85,10 @@ fn test_mmap_file(offset: libc::off_t) -> Result<(), Box<dyn Error>> {
 
     assert_eq!(msg, &rdbuf);
 
-    nix::unistd::unlink(&path)?;
+    // If we didn't already unlink, do that now
+    if !unlink_before_mmap {
+        nix::unistd::unlink(&path)?;
+    }
     nix::unistd::close(temp_fd)?;
 
     Ok(())
@@ -258,19 +266,19 @@ fn test_mmap_prot_none_mprotect() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn test_mmap_file_low() -> Result<(), Box<dyn Error>> {
-    test_mmap_file(0)
+fn test_mmap_file_low(unlink_before_mmap: bool) -> Result<(), Box<dyn Error>> {
+    test_mmap_file(0, unlink_before_mmap)
 }
 
-fn test_mmap_file_high32() -> Result<(), Box<dyn Error>> {
-    test_mmap_file(1 << 20)
+fn test_mmap_file_high32(unlink_before_mmap: bool) -> Result<(), Box<dyn Error>> {
+    test_mmap_file(1 << 20, unlink_before_mmap)
 }
 
 // mmap2(2) says highest supported file size is 2**44. Use an offset a bit smaller than
 // that. On a 64-bit system, presumably mmap can handle higher than that, but it's
 // unclear what the limit is. Assume it can handle at least as much as mmap2.
-fn test_mmap_file_high64() -> Result<(), Box<dyn Error>> {
-    test_mmap_file(1 << 43)
+fn test_mmap_file_high64(unlink_before_mmap: bool) -> Result<(), Box<dyn Error>> {
+    test_mmap_file(1 << 43, unlink_before_mmap)
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -281,16 +289,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let summarize = std::env::args().any(|x| x == "--summarize");
 
     let mut tests: Vec<test_utils::ShadowTest<_, _>> = vec![
-        test_utils::ShadowTest::new(
-            "test_mmap_file_low",
-            test_mmap_file_low,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_mmap_file_high32",
-            test_mmap_file_high32,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
         test_utils::ShadowTest::new(
             "test_mmap_anon",
             test_mmap_anon,
@@ -306,12 +304,34 @@ fn main() -> Result<(), Box<dyn Error>> {
             test_mmap_prot_none_mprotect,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
-        test_utils::ShadowTest::new(
-            "test_mmap_file_high64",
-            test_mmap_file_high64,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
     ];
+
+    for &unlink_before_mmap in [false, true].iter() {
+        tests.push(test_utils::ShadowTest::new(
+            &format!(
+                "test_mmap_file_low <unlink_before_mmap={}>",
+                unlink_before_mmap
+            ),
+            move || test_mmap_file_low(unlink_before_mmap),
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ));
+        tests.push(test_utils::ShadowTest::new(
+            &format!(
+                "test_mmap_file_high32 <unlink_before_mmap={}>",
+                unlink_before_mmap
+            ),
+            move || test_mmap_file_high32(unlink_before_mmap),
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ));
+        tests.push(test_utils::ShadowTest::new(
+            &format!(
+                "test_mmap_file_high64 <unlink_before_mmap={}>",
+                unlink_before_mmap
+            ),
+            move || test_mmap_file_high64(unlink_before_mmap),
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ));
+    }
 
     if filter_shadow_passing {
         tests = tests

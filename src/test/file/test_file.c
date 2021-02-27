@@ -5,6 +5,7 @@
 
 // TODO: Implement fwrite
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <glib.h>
@@ -18,96 +19,251 @@
 
 #include "test/test_glib_helpers.h"
 
-// For use in conjunction with g_auto for a file that will delete itself on
-// function exit.
+// For use in conjunction with g_auto so that the files/dirs will delete themselves on function
+// exit.
+#define AUTOFILE_NAME_MAXLEN 24
 typedef struct {
-    const char* filename;
-} TmpFile;
+    int fd;
+    char name[AUTOFILE_NAME_MAXLEN];
+} AutoDeleteFile;
 
-// Configure g_auto(TmpFile) to delete the file on function exit.
-void tmpfile_delete(TmpFile* f) { unlink(f->filename); }
-G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(TmpFile, tmpfile_delete);
+// Generate a unique file/dir name to avoid race conditions when we are running
+// this test multiple times in parallel.
+static AutoDeleteFile _create_auto_file() {
+    AutoDeleteFile adf = {0};
+    assert_nonneg_errno(snprintf(adf.name, AUTOFILE_NAME_MAXLEN, "%s", "autodelete-file-XXXXXX"));
+    assert_nonneg_errno(adf.fd = mkstemp(adf.name));
+    return adf;
+}
+static AutoDeleteFile _create_auto_dir() {
+    AutoDeleteFile adf = {0};
+    assert_nonneg_errno(snprintf(adf.name, AUTOFILE_NAME_MAXLEN, "%s", "autodelete-dir-XXXXXX"));
+    assert_nonnull_errno(mkdtemp(adf.name));
+    assert_nonneg_errno(adf.fd = open(adf.name, O_RDONLY | O_DIRECTORY));
+    return adf;
+}
+void _delete_auto(AutoDeleteFile* f) {
+    if (f) {
+        if (f->fd) {
+            close(f->fd);
+        }
+        unlink(f->name);
+        rmdir(f->name);
+    }
+}
+// Configure g_auto to delete the auto files and dirs on function exit.
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(AutoDeleteFile, _delete_auto);
 
-static TmpFile tmpfile_make(const char* filename, const char* contents) {
-    TmpFile tf = {.filename = filename};
-    FILE* f = fopen(filename, "w");
-    g_assert(f);
-    g_assert(fwrite(contents, 1, strlen(contents), f) == strlen(contents));
-    fclose(f);
-    return tf;
+static void _set_contents(AutoDeleteFile* adf, const char* contents, size_t len) {
+    assert_nonneg_errno(write(adf->fd, contents, len));
 }
 
-static void _test_newfile() {
-    FILE* file;
-    assert_nonnull_errno(file = fopen("testfile", "w"));
-    fclose(file);
-    unlink("testfile");
+static void _test_open() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    int fd;
+    assert_nonneg_errno(fd = open(adf.name, O_RDONLY));
+    close(fd); // not testing close yet so don't assert here
 }
 
-static void _test_write(){
-    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
+static void _test_close() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    int fd;
+    assert_nonneg_errno(fd = open(adf.name, O_RDONLY));
+    assert_nonneg_errno(close(fd));
+}
 
-    FILE* file;
-    assert_nonnull_errno(file = fopen("testfile", "r+"));
-
-    int filed;
-    assert_nonneg_errno(filed = fileno(file));
-    assert_nonneg_errno(write(filed, "test", 4));
-
-    // check that we can write 0 bytes
-    assert_nonneg_errno(write(filed, "asdf", 0));
-
-    fclose(file);
+static void _test_write() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    const char wbuf[] = "test file write";
+    int fd, rv;
+    assert_nonneg_errno(fd = open(adf.name, O_WRONLY));
+    assert_nonneg_errno(rv = write(fd, wbuf, sizeof(wbuf)));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+    assert_nonneg_errno(rv = write(fd, "asdf", 0)); // check that 0 bytes is allowed
+    g_assert_cmpint(rv, ==, 0);
+    assert_nonneg_errno(close(fd));
 }
 
 static void _test_read() {
-    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    const char wbuf[] = "test file read";
+    char rbuf[sizeof(wbuf)] = {0};
+    int fd, rv;
+    _set_contents(&adf, wbuf, sizeof(wbuf));
+    assert_nonneg_errno(fd = open(adf.name, O_RDONLY));
+    assert_nonneg_errno(rv = read(fd, rbuf, sizeof(wbuf)));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+    g_assert_cmpstr(rbuf, ==, wbuf);
+    assert_nonneg_errno(close(fd));
+}
 
+static void _test_lseek() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    const char wbuf[] = "test file lseek";
+    char rbuf[sizeof(wbuf)] = {0};
+    int fd, rv;
+    assert_nonneg_errno(fd = open(adf.name, O_RDWR));
+    assert_nonneg_errno(rv = write(fd, wbuf, sizeof(wbuf)));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+    assert_nonneg_errno(lseek(fd, 0, SEEK_SET));
+    assert_nonneg_errno(rv = read(fd, rbuf, sizeof(wbuf)));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+    g_assert_cmpstr(rbuf, ==, wbuf);
+    assert_nonneg_errno(close(fd));
+}
+
+static void _test_fopen() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
     FILE* file;
-    assert_nonnull_errno(file = fopen("testfile", "r"));
+    assert_nonnull_errno(file = fopen(adf.name, "r"));
+    fclose(file); // not testing fclose yet so don't assert here
+}
 
-    int filed;
-    assert_nonneg_errno(filed = fileno(file));
+static void _test_fclose() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    FILE* file;
+    assert_nonnull_errno(file = fopen(adf.name, "r"));
+    assert_nonneg_errno(fclose(file));
+}
 
-    char buf[5] = {0};
-    assert_nonneg_errno(read(filed, buf, 4));
-    g_assert_cmpstr(buf, ==, "test");
-
-    fclose(file);
+static void _test_fileno() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    FILE* file;
+    assert_nonnull_errno(file = fopen(adf.name, "r"));
+    assert_nonneg_errno(fileno(file));
+    assert_nonneg_errno(fclose(file));
 }
 
 static void _test_fwrite() {
-    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
-
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    const char wbuf[] = "test file fwrite";
     FILE* file;
-    assert_nonnull_errno(file = fopen("testfile", "r+"));
-
-    const char msg[] = "test";
-    assert_nonneg_errno(fwrite(msg, sizeof(char), sizeof(msg)/sizeof(char), file));
-
-    fclose(file);
+    size_t rv;
+    assert_nonnull_errno(file = fopen(adf.name, "r+"));
+    assert_nonneg_errno(rv = fwrite(wbuf, sizeof(char), sizeof(wbuf) / sizeof(char), file));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+    assert_nonneg_errno(fclose(file));
 }
 
 static void _test_fread() {
-    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
-
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    const char wbuf[] = "test file fread";
+    char rbuf[sizeof(wbuf)] = {0};
     FILE* file;
-    assert_nonnull_errno(file = fopen("testfile", "r"));
+    size_t rv;
+    _set_contents(&adf, wbuf, sizeof(wbuf));
+    assert_nonnull_errno(file = fopen(adf.name, "r"));
+    assert_nonneg_errno(rv = fread(rbuf, sizeof(char), sizeof(wbuf), file));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+    g_assert_cmpstr(rbuf, ==, wbuf);
+    assert_nonneg_errno(fclose(file));
+}
 
-    char buf[5] = {0};
-    assert_nonneg_errno(fread(buf, sizeof(char), 4, file));
-    g_assert_cmpstr(buf, ==, "test");
+static void _test_fprintf() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    const char wbuf[] = "test file fprintf";
+    FILE* file;
+    int rv;
+    assert_nonnull_errno(file = fopen(adf.name, "r+"));
+    assert_nonneg_errno(rv = fprintf(file, "%s", wbuf));
+    g_assert_cmpint(rv, ==, sizeof(wbuf) - 1); // null byte not included in count
+    assert_nonneg_errno(fclose(file));
+}
 
+static void _test_fscanf() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    const char wbuf[] = "testfilefscanf";
+    char rbuf[sizeof(wbuf)] = {0};
+    FILE* file;
+    size_t rv;
+    _set_contents(&adf, wbuf, sizeof(wbuf));
+    assert_nonnull_errno(file = fopen(adf.name, "r"));
+    assert_true_errno(fscanf(file, "%s", rbuf) != EOF);
+    g_assert_cmpstr(rbuf, ==, "testfilefscanf"); // fails with wbuf, not sure why
+    assert_nonneg_errno(fclose(file));
+}
+
+static void _test_fchmod() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    FILE* file;
+    int fd;
+    assert_nonnull_errno(file = fopen(adf.name, "r+"));
+    assert_nonneg_errno(fd = fileno(file));
+    /* set permissions to owner user/group only */
+    assert_nonneg_errno(fchmod(fd, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
+    assert_nonneg_errno(fclose(file));
+}
+
+static void _test_fstat() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    FILE* file;
+    int fd;
+
+    assert_nonnull_errno(file = fopen(adf.name, "r+"));
+
+    assert_nonneg_errno(fd = fileno(file));
+    assert_nonneg_errno(fchmod(fd, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
+
+    struct stat filestat = {0};
+    assert_nonneg_errno(fstat(fd, &filestat));
+
+    g_assert_cmpint(filestat.st_mode & S_IXOTH, ==, 0);
+    g_assert_cmpint(filestat.st_mode & S_IWOTH, ==, 0);
+    g_assert_cmpint(filestat.st_mode & S_IROTH, ==, 0);
+
+    /* success! */
     fclose(file);
 }
 
-static void _test_iov() {
-    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
+static void _test_dir() {
+    g_auto(AutoDeleteFile) adf = _create_auto_dir();
+    DIR* dir;
+    int dirfd;
+    struct dirent* de;
 
-    const char* fpath = "iov_test_file";
+    // Make the new directory and make sure we can open it.
+    assert_nonneg_errno(dirfd = open(adf.name, O_RDONLY));
+    assert_nonneg_errno(close(dirfd));
+
+    // Make sure we can get the contents.
+    assert_nonnull_errno(dir = opendir(adf.name));
+    assert_nonnull_errno(de = readdir(dir));
+    while (de) {
+        g_assert_nonnull(de->d_name);
+        // Get the next, now it's OK if NULL.
+        de = readdir(dir);
+    }
+
+    // Close and remove the directory.
+    assert_nonneg_errno(closedir(dir));
+    assert_nonneg_errno(rmdir(adf.name));
+}
+
+static void _test_tmpfile() {
+    const char wbuf[] = "test file tmpfile";
+    char rbuf[sizeof(wbuf)] = {0};
+    FILE* file;
+    int fd;
+    size_t rv;
+
+    // Create temporary file and test i/o
+    assert_nonnull_errno(file = tmpfile());
+    assert_nonneg_errno(fd = fileno(file));
+    assert_nonneg_errno(rv = fwrite(wbuf, sizeof(char), sizeof(wbuf) / sizeof(char), file));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+    rewind(file);
+    assert_nonneg_errno(rv = fread(rbuf, sizeof(char), sizeof(wbuf), file));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+    g_assert_cmpstr(rbuf, ==, wbuf);
+
+    assert_nonneg_errno(fclose(file));
+}
+
+static void _test_iov() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
 
     FILE* file;
-    assert_nonnull_errno(file = fopen(fpath, "w+"));
+    assert_nonnull_errno(file = fopen(adf.name, "w+"));
 
     int filed;
     assert_nonneg_errno(filed = fileno(file));
@@ -173,7 +329,7 @@ static void _test_iov() {
     // shadow doesn't implement seek, so we have to close the file
     // and reopen it
     fclose(file);
-    file = fopen(fpath, "r");
+    file = fopen(adf.name, "r");
     filed = fileno(file);
 
     char sharedreadbuf[14] = {[0 ... 13] = 'y'};
@@ -238,7 +394,7 @@ static void _test_iov() {
      ****/
 
     fclose(file);
-    file = fopen(fpath, "r");
+    file = fopen(adf.name, "r");
     filed = fileno(file);
 
     for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
@@ -272,93 +428,32 @@ static void _test_iov() {
     fclose(file);
 }
 
-static void _test_fprintf() {
-    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
-
-    FILE* file;
-    assert_nonnull_errno(file = fopen("testfile", "r+"));
-    assert_nonneg_errno(fprintf(file, "canwrite"));
-
-    fclose(file);
-}
-
-static void _test_fscanf() {
-    g_auto(TmpFile) tf = tmpfile_make("testfile", "canwrite");
-
-    FILE* file;
-    assert_nonnull_errno(file = fopen("testfile", "r"));
-
-    char buf[10] = {0};
-
-    /* read through the file */
-    assert_true_errno(fscanf(file, "%s", buf) != EOF);
-
-    /* check that fscanf read correctly */
-    g_assert_cmpstr(buf, ==, "canwrite");
-
-    /* success! */
-    fclose(file);
-}
-
-static void _test_chmod() {
-    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
-
-    FILE* file;
-    assert_nonnull_errno(file = fopen("testfile", "r+"));
-
-    int filed;
-    assert_nonneg_errno(filed = fileno(file));
-
-    /* set permissions to owner user/group only */
-    assert_nonneg_errno(fchmod(filed, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
-
-    /* success! */
-    fclose(file);
-}
-
-static void _test_fstat() {
-    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
-
-    FILE* file;
-    assert_nonnull_errno(file = fopen("testfile", "r+"));
-
-    int filed;
-    assert_nonneg_errno(filed = fileno(file));
-    assert_nonneg_errno(fchmod(filed, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
-
-    struct stat filestat = {0};
-    assert_nonneg_errno(fstat(filed, &filestat));
-
-    g_assert_cmpint(filestat.st_mode & S_IXOTH, ==, 0);
-    g_assert_cmpint(filestat.st_mode & S_IWOTH, ==, 0);
-    g_assert_cmpint(filestat.st_mode & S_IROTH, ==, 0);
-
-    /* success! */
-    fclose(file);
-}
-
-static void _test_open_close() {
-    g_auto(TmpFile) tf = tmpfile_make("testfile", "test");
-
-    int filed;
-    assert_nonneg_errno(filed = open("testfile", O_RDONLY));
-    assert_nonneg_errno(close(filed));
-}
-
 int main(int argc, char* argv[]) {
     g_test_init(&argc, &argv, NULL);
-    g_test_add_func("/file/newfile", _test_newfile);
-    g_test_add_func("/file/open_close", _test_open_close);
+
+    // These are generally ordered by increasing level of required functionality.
+    // I.e., later tests use some of the functions tested in earlier tests.
+    g_test_add_func("/file/open", _test_open);
+    g_test_add_func("/file/close", _test_close);
     g_test_add_func("/file/write", _test_write);
     g_test_add_func("/file/read", _test_read);
+    g_test_add_func("/file/lseek", _test_lseek);
+    g_test_add_func("/file/fopen", _test_fopen);
+    g_test_add_func("/file/fclose", _test_fclose);
+    g_test_add_func("/file/fileno", _test_fileno);
     g_test_add_func("/file/fwrite", _test_fwrite);
     g_test_add_func("/file/fread", _test_fread);
-    //    TODO: debug and fix iov test
-    //    g_test_add_func("/file/iov", _test_iov);
     g_test_add_func("/file/fprintf", _test_fprintf);
     g_test_add_func("/file/fscanf", _test_fscanf);
-    g_test_add_func("/file/chmod", _test_chmod);
+    g_test_add_func("/file/chmod", _test_fchmod);
     g_test_add_func("/file/fstat", _test_fstat);
+
+    g_test_add_func("/file/dir", _test_dir);
+    g_test_add_func("/file/tmpfile", _test_tmpfile);
+
+    //    TODO: debug and fix iov test
+    //    g_test_add_func("/file/iov", _test_iov);
+
     g_test_run();
 
     return 0;

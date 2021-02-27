@@ -70,6 +70,49 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd,
     return 0;
 }
 
+/* Get a path to a persistent file that can be mmapped in a child process,
+ * where any I/O operations on the map will be linked to the original file.
+ * Returns a new string holding the path, or NULL if we are unable to create an accessible path.
+ * The caller should free the path string when appropriate.  */
+static char* _file_createPersistentMMapPath(int file_fd, int osfile_fd) {
+    // Return a path that is linked to the I/O operations of the file. Our current strategy is to
+    // have the plugin open and map the /proc/<shadow-pid>/fd/<linux-fd> file, which guarantees that
+    // the I/O on the Shadow file object and the new map will be linked to the linux file.
+    // TODO: using procfs in this was may or may not work if trying to mmap a device.
+    //
+    // NOTE: If we need to change this implementation, there are two tricky cases that need to be
+    // considered: files opened with O_TMPFILE (with a directory pathname), and files that were
+    // opened and then immediately unlinked (so only the anonymous fd remains). The procfs solution
+    // above handles both of these issues.
+
+    // Handle the case where the OS file has not been opened yet.
+    if (osfile_fd < 0) {
+        debug("Unable to produce persistent path to an unopened file.");
+        return NULL;
+    }
+
+    // We do not use the original file path here, because that path could have been re-linked to a
+    // different file since this file was opened.
+    char* path = NULL;
+    int rv = asprintf(&path, "/proc/%d/fd/%d", getpid(), osfile_fd);
+
+    if (rv < 0) {
+        error("asprintf could not allocate a buffer to hold a /proc file path, error %i: %s", errno,
+              strerror(errno));
+        return NULL;
+    }
+
+    // Make sure the path is accessible
+    if (path && access(path, F_OK) == 0) {
+        debug("File %d (linux file %d) is persistent in procfs at %s", file_fd, osfile_fd, path);
+        return path;
+    }
+
+    warning(
+        "Unable to produce a persistent mmap path for file %d (linux file %d)", file_fd, osfile_fd);
+    return NULL;
+}
+
 static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     utility_assert(file);
 
@@ -80,18 +123,18 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     /* TODO: make sure we don't open special files like /dev/urandom,
      * /etc/localtime etc. in the plugin via mmap */
 
-    /* file is in the shadow process, and we want to open it in the plugin. */
-    char* abspath = file_getAbsolutePath(file);
-    if (abspath == NULL) {
+    // The file is in the shadow process, and we want to open it in the plugin.
+    char* mmap_path = _file_createPersistentMMapPath(fd, file_getOSBackedFD(file));
+    if (mmap_path == NULL) {
         debug("File %i has a NULL path.", fd);
         return -1;
     }
 
     /* We need enough mem for the string, but no more than PATH_MAX. */
-    size_t maplen = strnlen(abspath, PATH_MAX - 1) + 1; // an extra 1 for null
+    size_t maplen = strnlen(mmap_path, PATH_MAX - 1) + 1; // an extra 1 for null
     utility_assert(maplen > 1);
 
-    debug("Opening path '%s' in plugin.", abspath);
+    debug("Opening path '%s' in plugin.", mmap_path);
 
     /* Get some memory in the plugin to write the path of the file to open. */
     PluginPtr pluginBufPtr = thread_mallocPluginPtr(sys->thread, maplen);
@@ -100,12 +143,12 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     char* pluginBuf = thread_getWriteablePtr(sys->thread, pluginBufPtr, maplen);
 
     /* Copy the path. */
-    snprintf(pluginBuf, maplen, "%s", abspath);
+    snprintf(pluginBuf, maplen, "%s", mmap_path);
 
     /* Flush the buffer to the plugin. */
     thread_flushPtrs(sys->thread);
 
-    /* Get original flags when used to open the file,
+    /* Get original flags that were used to open the file,
        but be careful not to try re-creating or truncating it. */
     int flags = file_getFlags(file) & ~(O_CREAT|O_EXCL|O_TMPFILE|O_TRUNC);
 
@@ -114,14 +157,14 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
                                       flags, file_getMode(file));
     int err = syscall_rawReturnValueToErrno(result);
     if (err) {
-        debug("Failed to open path '%s' in plugin, error %i: %s.", abspath, err, strerror(err));
+        debug("Failed to open path '%s' in plugin, error %i: %s.", mmap_path, err, strerror(err));
     } else {
-        debug("Successfully opened path '%s' in plugin, got plugin fd %i.",
-              abspath, result);
+        debug("Successfully opened path '%s' in plugin, got plugin fd %i.", mmap_path, result);
     }
 
     /* Release the PluginPtr memory. */
     thread_freePluginPtr(sys->thread, pluginBufPtr, maplen);
+    free(mmap_path);
 
     return result;
 }
