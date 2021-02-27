@@ -245,13 +245,6 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
      * an absolute path to compare for special files. */
     char* abspath = _file_getPath(file, dir, pathname);
 
-    // When used with O_TMPFILE, O_EXCL will prevent the temporary file from later being linked
-    // into the filesystem. We unset O_EXCL since we may need that functionality, e.g. if the
-    // file is later mmapped into the plugin address space. See `man 2 open`.
-    if (flags & O_TMPFILE) {
-        flags = (flags & ~O_EXCL);
-    }
-
     /* Handle special files. */
     if (utility_isRandomPath(abspath)) {
         file->type = FILE_TYPE_RANDOM;
@@ -293,7 +286,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
         return -errcode;
     }
 
-    /* Store the create information so we can re-open later if needed (e.g., mmap). */
+    /* Store the create information, which is used if we mmap the file later. */
     file->osfile.fd = osfd;
     file->osfile.abspath = abspath;
     file->osfile.flags = flags;

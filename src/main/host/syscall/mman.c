@@ -75,10 +75,15 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd,
  * Returns a new string holding the path, or NULL if we are unable to create an accessible path.
  * The caller should free the path string when appropriate.  */
 static char* _file_createPersistentMMapPath(int file_fd, int osfile_fd) {
-    // Return a path that is linked to the I/O operations of the file.
-    // We need to handle files opened with O_TMPFILE, where abspath refers to a directory.
-    // Or files that were opened and then immediately unlinked, so only the anonymous fd remains.
-    // TODO: using procfs may or may not work if trying to mmap a device.
+    // Return a path that is linked to the I/O operations of the file. Our current strategy is to
+    // have the plugin open and map the /proc/<shadow-pid>/fd/<linux-fd> file, which guarantees that
+    // the I/O on the Shadow file object and the new map will be linked to the linux file.
+    // TODO: using procfs in this was may or may not work if trying to mmap a device.
+    //
+    // NOTE: If we need to change this implementation, there are two tricky cases that need to be
+    // considered: files opened with O_TMPFILE (with a directory pathname), and files that were
+    // opened and then immediately unlinked (so only the anonymous fd remains). The procfs solution
+    // above handles both of these issues.
 
     // Handle the case where the OS file has not been opened yet.
     if (osfile_fd < 0) {
