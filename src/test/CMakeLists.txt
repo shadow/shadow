@@ -45,7 +45,7 @@ endmacro()
 ## example: add_shadow_tests(BASENAME bind METHODS ptrace preload LOGLEVEL debug ARGS --pin-cpus)
 ## will create two tests named bind-shadow-ptrace and bind-shadow-preload
 macro(add_shadow_tests)
-   cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL" "METHODS;ARGS;CONFIGURATIONS" ${ARGN})
+   cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL" "METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
 
    if(NOT DEFINED SHADOW_TEST_LOGLEVEL)
       set(SHADOW_TEST_LOGLEVEL "debug")
@@ -83,6 +83,10 @@ macro(add_shadow_tests)
       # need to check the test's return code, not just shadow's (see shadow/shadow#902)
       set_property(TEST ${SHADOW_TEST_NAME} PROPERTY FAIL_REGULAR_EXPRESSION "main error code '.*' for process")
       set_property(TEST ${SHADOW_TEST_NAME} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
+
+      if(DEFINED SHADOW_TEST_PROPERTIES)
+         set_tests_properties(${SHADOW_TEST_NAME} PROPERTIES ${SHADOW_TEST_PROPERTIES})
+      endif()
 
       set(ALL_SHADOW_TESTS "${ALL_SHADOW_TESTS}" PARENT_SCOPE)
       list(APPEND ALL_SHADOW_TESTS ${SHADOW_TEST_NAME})

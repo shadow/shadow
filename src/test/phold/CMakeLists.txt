@@ -1,76 +1,38 @@
 include_directories(${GLIB_INCLUDES})
-
-## build the test as a dynamic executable that plugs into shadow
 add_executable(test-phold test_phold.c)
-
-## if the test needs any libraries, link them here
 target_link_libraries(test-phold ${M_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
-
-## copy the file to the build test dir so that the relative path to it is correct
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/weights.txt ${CMAKE_CURRENT_BINARY_DIR}/weights.txt COPYONLY)
 
-## register the tests
-## dont run with debug logging because it causes the test case to take too long
-add_test(
-    NAME phold-shadow-hybrid
-    COMMAND sh -c "\
-    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=hybrid --pin-cpus -d phold.shadow-hybrid.data - \
-    "
-)
+# FIXME: Enable the preload tests in all configurations. See https://github.com/shadow/shadow/issues/892
 
-# Run in ptrace mode *without* shim IPC. This is primarily for measurement purposes.
-add_test(
-    NAME phold-shadow-ptrace
-    COMMAND sh -c "\
-    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace --pin-cpus -d phold.shadow-ptrace.data - \
-    "
-)
+# We should run tests using --pin-cpus in serial, otherwise all such tests will be 
+# pinned to the same exact CPUs.
+add_shadow_tests(
+    BASENAME phold-serial
+    METHODS hybrid ptrace
+    LOGLEVEL info
+    ARGS --pin-cpus
+    PROPERTIES RUN_SERIAL TRUE)
+add_shadow_tests(
+    BASENAME phold-serial
+    METHODS preload
+    LOGLEVEL info
+    ARGS --pin-cpus
+    PROPERTIES RUN_SERIAL TRUE
+    CONFIGURATIONS ilibc)
 
-# FIXME: Enable in all configurations. See https://github.com/shadow/shadow/issues/892
-add_test(
-    NAME phold-shadow-preload
-    COMMAND sh -c "\
-    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload --pin-cpus -d phold.shadow-preload.data -
-    "
-    CONFIGURATIONS ilibc
-)
-
-add_test(
-    NAME phold-threaded-shadow-hybrid
-    COMMAND sh -c "\
-    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=hybrid --pin-cpus -d phold-threaded.shadow-hybrid.data -w 2 - \
-    "
-)
-
-add_test(
-    NAME phold-threaded-shadow-ptrace
-    COMMAND sh -c "\
-    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace --pin-cpus -d phold-threaded.shadow-ptrace.data -w 2 - \
-    "
-)
-
-# FIXME: Enable in all configurations. See https://github.com/shadow/shadow/issues/892
-add_test(
-    NAME phold-threaded-shadow-preload
-    COMMAND sh -c "\
-    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload --pin-cpus -d phold-threaded.shadow-preload.data -w 2 - \
-    "
-    CONFIGURATIONS ilibc
-)
-
-# These tests currently run very slowly in the GitHub CI, which only gives them 2 CPUs.
-# Hopefully will be fixed by https://github.com/shadow/shadow/issues/965.
-set_tests_properties(
-    phold-shadow-hybrid
-    phold-shadow-ptrace
-    phold-shadow-preload
-    phold-threaded-shadow-hybrid
-    phold-threaded-shadow-ptrace
-    phold-threaded-shadow-preload
-        PROPERTIES TIMEOUT 60)
+# Due to --pin-cpus, we run this in serial. Otherwise we should set the "PROCESSORS 2"
+# property since we use 2 workers here.
+add_shadow_tests(
+    BASENAME phold-parallel
+    METHODS hybrid ptrace
+    LOGLEVEL info
+    ARGS --pin-cpus --workers 2
+    PROPERTIES RUN_SERIAL TRUE)
+add_shadow_tests(
+    BASENAME phold-parallel
+    METHODS preload
+    LOGLEVEL info
+    ARGS --pin-cpus --workers 2
+    PROPERTIES RUN_SERIAL TRUE
+    CONFIGURATIONS ilibc)
