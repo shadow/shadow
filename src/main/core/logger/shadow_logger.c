@@ -99,7 +99,7 @@ void shadow_logger_setFilterLevel(ShadowLogger* logger, LogLevel level) {
     logger->filterLevel = level;
 }
 
-gboolean shadow_logger_shouldFilter(ShadowLogger* logger, LogLevel level) {
+bool shadow_logger_shouldFilter(ShadowLogger* logger, LogLevel level) {
     MAGIC_ASSERT(logger);
 
     /* check if the message should be filtered */
