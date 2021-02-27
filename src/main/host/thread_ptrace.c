@@ -514,6 +514,12 @@ static pid_t _waitpid_spin(pid_t pid, int *wstatus, int options) {
     pid_t rv = 0;
     // First do non-blocking waits.
     do {
+        // Give the plugin a chance to run before polling it. This improves
+        // performance substantially when using --set-sched-fifo together with
+        // --pin-cpus. Otherwise the plugin will never get a chance to run
+        // until we spin THREADPTRACE_MAX_SPIN times and make the blocking
+        // `waitpid` call.
+        sched_yield();
         rv = waitpid(pid, wstatus, options|WNOHANG);
     } while (rv == 0 && count++ < THREADPTRACE_MAX_SPIN);
 
@@ -532,12 +538,28 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
     StopReason event_stop = {
         .type = STOPREASON_SHIM_EVENT,
     };
+
+    // There's no obvious way to have a maximum spin threshold here, since we
+    // can't know ahead of time whether to block on waiting for shim IPC or on
+    // waiting for a ptrace event.
+    //
+    // In principle blocking on a ptrace event after some threshold could be
+    // made to work, since the plugin that makes a shim-ipc call will
+    // eventually stop spinning and make a blocking `futex` syscall. This would
+    // be terrible for performance though.
     while (1) {
+        // Give the plugin a chance to run before polling it. This is
+        // especially important when using --set-sched-fifo together with
+        // --pin-cpus, since otherwise the plugin will *never* get a chance to
+        // run.
+        sched_yield();
+
         if (thread->enableIpc && shimevent_tryRecvEventFromPlugin(
                                      _threadptrace_ipcData(thread), &event_stop.shim_event) == 0) {
             debug("Got shim stop");
             return event_stop;
         }
+
         // TODO: We lose a bit of efficiency here due to `waitpid` being
         // substantially slower than `shimevent_tryRecvEventFromPlugin`, even
         // with `WNOHANG`.  If a shim event comes in while we're executing
