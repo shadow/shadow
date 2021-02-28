@@ -125,6 +125,8 @@ add_subdirectory(timerfd)
 add_subdirectory(udp)
 add_subdirectory(unistd)
 
+list(LENGTH ALL_SHADOW_TESTS ALL_SHADOW_TESTS_LENGTH)
+message(STATUS "Configured to build ${ALL_SHADOW_TESTS_LENGTH} Shadow tests.")
 message(STATUS "ALL_SHADOW_TESTS = ${ALL_SHADOW_TESTS}")
 
 ## grep the LastTest.log.tmp file for the counter diff lines, and make sure
@@ -135,9 +137,7 @@ add_test(
 	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 # List all shadow tests as dependencies, so that the leakcheck can grep their output for leaks.
-## TODO swap the following lines when all tests have been converted to the macros
-#set_tests_properties(leakcheck-shadow-grep PROPERTIES DEPENDS "${ALL_SHADOW_TESTS}")
-set_tests_properties(leakcheck-shadow-grep PROPERTIES DEPENDS "bind-shadow-ptrace;bind-shadow-preload;clone-shadow-ptrace;config-convert-shadow;cpp-shadow-ptrace;cpp-shadow-preload;epoll-shadow-ptrace;epoll-writeable-shadow-ptrace;eventfd-shadow-ptrace;eventfd-shadow-preload;file-shadow-ptrace;mmap-shadow-ptrace;phold-shadow-ptrace;phold-threaded-shadow-ptrace;random-shadow-ptrace;random-shadow-preload;shutdown-shadow-ptrace;shutdown-shadow-preload;sleep-shadow-ptrace;sleep-shadow-preload;sockbuf-shadow-ptrace;socket-shadow-ptrace;socket-shadow-preload;bind-shadow-ptrace;bind-shadow-preload;listen-shadow-ptrace;listen-shadow-preload;getsockname-shadow-ptrace;getsockname-shadow-preload;accept-shadow-ptrace;accept-shadow-preload;timerfd-shadow-ptrace;udp-uniprocess-shadow-ptrace;udp-uniprocess-shadow-preload;udp-shadow-ptrace;unistd-shadow-ptrace;unistd-shadow-preload")
+set_tests_properties(leakcheck-shadow-grep PROPERTIES DEPENDS "${ALL_SHADOW_TESTS}")
 
 add_test(
 	NAME leakcheck-shadow-compare
