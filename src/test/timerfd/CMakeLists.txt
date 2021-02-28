@@ -1,14 +1,5 @@
 include_directories(${GLIB_INCLUDES})
 add_executable(test-timerfd test_timerfd.c)
 target_link_libraries(test-timerfd ${GLIB_LIBRARIES})
-
-## register the tests
-add_test(NAME timerfd COMMAND test-timerfd)
-add_test(
-    NAME timerfd-shadow-ptrace
-    COMMAND sh -c "\
-    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/timerfd.test.shadow.config.yaml --output - \
-    | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=ptrace -l debug -d timerfd.shadow-ptrace.data - \
-    "
-)
-# FIXME add_test(NAME timerfd-shadow-preload COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=preload -l debug -d timerfd.shadow-preload.data ${CMAKE_CURRENT_SOURCE_DIR}/timerfd.test.shadow.config.xml)
+add_linux_tests(BASENAME timerfd COMMAND test-timerfd)
+add_shadow_tests(BASENAME timerfd METHODS hybrid ptrace preload)
