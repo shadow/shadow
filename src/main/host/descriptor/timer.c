@@ -217,6 +217,7 @@ static void _timer_scheduleNewExpireEvent(Timer* timer) {
      * or disarmed the timer in the meantime. This prevents queueing the task indefinitely. */
     delay = MIN(delay, SIMTIME_ONE_SECOND);
 
+    debug("Scheduling timer expiration task for %"G_GUINT64_FORMAT" nanoseconds", delay);
     worker_scheduleTask(task, delay);
     task_unref(task);
 
@@ -230,7 +231,7 @@ static void _timer_expire(Timer* timer, gpointer data) {
     /* this is a task callback event */
 
     guint expireID = GPOINTER_TO_UINT(data);
-    debug("timer fd %i expired; isClosed=%i expireID=%u minValidExpireID=%u",
+    debug("timer fd %i expire check; isClosed=%i expireID=%u minValidExpireID=%u",
           timer->super.handle, timer->isClosed, expireID,
           timer->minValidExpireID);
 
@@ -280,10 +281,9 @@ static void _timer_arm(Timer* timer, const struct itimerspec *config, gint flags
     SimulationTime now = worker_getCurrentTime();
     if(timer->nextExpireTime >= now) {
         _timer_scheduleNewExpireEvent(timer);
+        debug("timer fd %i armed to expire in %"G_GUINT64_FORMAT" nanos",
+                timer->super.handle, timer->nextExpireTime - now);
     }
-
-    debug("timer fd %i armed to expire in %"G_GUINT64_FORMAT" nanos",
-            timer->super.handle, timer->nextExpireTime - now);
 }
 
 static gboolean _timer_timeIsValid(const struct timespec* config) {
@@ -327,6 +327,10 @@ gint timer_setTime(Timer* timer, gint flags,
     /* always disarm to invalidate old expire events */
     _timer_disarm(timer);
 
+    /* settings were modified, reset expire count and readability */
+    timer->expireCountSinceLastSet = 0;
+    descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_READABLE, FALSE);
+
     /* now set the new times as requested */
     if(new_value->it_value.tv_sec > 0 || new_value->it_value.tv_nsec > 0) {
         /* the man page does not specify what to do if it_value says
@@ -335,10 +339,6 @@ gint timer_setTime(Timer* timer, gint flags,
          * actually requests that we arm the timer, and ignored otherwise. */
         _timer_arm(timer, new_value, flags);
     }
-
-    /* settings were modified, reset expire count and readability */
-    timer->expireCountSinceLastSet = 0;
-    descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
     return 0;
 }
