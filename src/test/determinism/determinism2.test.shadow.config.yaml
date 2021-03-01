@@ -1,5 +1,5 @@
 options:
-  stoptime: 3
+  stoptime: 10
 topology:
 - graphml: |
     <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
@@ -29,4 +29,4 @@ hosts:
   processes:
   - plugin: testphold
     starttime: 1
-    arguments: loglevel=debug basename=peer quantity=10 msgload=5 size=1 cpuload=5 weightsfilepath=weights.txt
+    arguments: loglevel=debug basename=peer quantity=10 msgload=1 size=1 cpuload=1 weightsfilepath=weights.txt runtime=5

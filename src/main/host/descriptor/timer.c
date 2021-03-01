@@ -149,7 +149,14 @@ static SimulationTime _timer_timespecToSimTime(const struct timespec* config, gb
         /* the time that was passed in represents an emulated time, so we need to adjust */
         EmulatedTime emNanoSecs = (EmulatedTime)(config->tv_sec * SIMTIME_ONE_SECOND);
         emNanoSecs += (EmulatedTime) config->tv_nsec;
-        simNanoSecs = EMULATED_TIME_TO_SIMULATED_TIME(emNanoSecs);
+        /* If the emulated time passed in by the plugin is before the time we use as the
+         * start of the simulation (i.e., EMULATED_TIME_OFFSET), then we use t=0 as 
+         * a proxy for "some time in the past". */
+        if(emNanoSecs >= EMULATED_TIME_OFFSET) {
+            simNanoSecs = EMULATED_TIME_TO_SIMULATED_TIME(emNanoSecs);
+        } else {
+            simNanoSecs = 0;
+        }
     } else {
         /* the config is a relative time, so we just use simtime directly */
         simNanoSecs = (SimulationTime)(config->tv_sec * SIMTIME_ONE_SECOND);
@@ -210,6 +217,7 @@ static void _timer_scheduleNewExpireEvent(Timer* timer) {
      * or disarmed the timer in the meantime. This prevents queueing the task indefinitely. */
     delay = MIN(delay, SIMTIME_ONE_SECOND);
 
+    debug("Scheduling timer expiration task for %"G_GUINT64_FORMAT" nanoseconds", delay);
     worker_scheduleTask(task, delay);
     task_unref(task);
 
@@ -223,7 +231,7 @@ static void _timer_expire(Timer* timer, gpointer data) {
     /* this is a task callback event */
 
     guint expireID = GPOINTER_TO_UINT(data);
-    debug("timer fd %i expired; isClosed=%i expireID=%u minValidExpireID=%u",
+    debug("timer fd %i expire check; isClosed=%i expireID=%u minValidExpireID=%u",
           timer->super.handle, timer->isClosed, expireID,
           timer->minValidExpireID);
 
@@ -273,10 +281,9 @@ static void _timer_arm(Timer* timer, const struct itimerspec *config, gint flags
     SimulationTime now = worker_getCurrentTime();
     if(timer->nextExpireTime >= now) {
         _timer_scheduleNewExpireEvent(timer);
+        debug("timer fd %i armed to expire in %"G_GUINT64_FORMAT" nanos",
+                timer->super.handle, timer->nextExpireTime - now);
     }
-
-    debug("timer fd %i armed to expire in %"G_GUINT64_FORMAT" nanos",
-            timer->super.handle, timer->nextExpireTime - now);
 }
 
 static gboolean _timer_timeIsValid(const struct timespec* config) {
@@ -320,6 +327,10 @@ gint timer_setTime(Timer* timer, gint flags,
     /* always disarm to invalidate old expire events */
     _timer_disarm(timer);
 
+    /* settings were modified, reset expire count and readability */
+    timer->expireCountSinceLastSet = 0;
+    descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_READABLE, FALSE);
+
     /* now set the new times as requested */
     if(new_value->it_value.tv_sec > 0 || new_value->it_value.tv_nsec > 0) {
         /* the man page does not specify what to do if it_value says
@@ -328,10 +339,6 @@ gint timer_setTime(Timer* timer, gint flags,
          * actually requests that we arm the timer, and ignored otherwise. */
         _timer_arm(timer, new_value, flags);
     }
-
-    /* settings were modified, reset expire count and readability */
-    timer->expireCountSinceLastSet = 0;
-    descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
     return 0;
 }
