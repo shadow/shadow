@@ -149,7 +149,14 @@ static SimulationTime _timer_timespecToSimTime(const struct timespec* config, gb
         /* the time that was passed in represents an emulated time, so we need to adjust */
         EmulatedTime emNanoSecs = (EmulatedTime)(config->tv_sec * SIMTIME_ONE_SECOND);
         emNanoSecs += (EmulatedTime) config->tv_nsec;
-        simNanoSecs = EMULATED_TIME_TO_SIMULATED_TIME(emNanoSecs);
+        /* If the emulated time passed in by the plugin is before the time we use as the
+         * start of the simulation (i.e., EMULATED_TIME_OFFSET), then we use t=0 as 
+         * a proxy for "some time in the past". */
+        if(emNanoSecs >= EMULATED_TIME_OFFSET) {
+            simNanoSecs = EMULATED_TIME_TO_SIMULATED_TIME(emNanoSecs);
+        } else {
+            simNanoSecs = 0;
+        }
     } else {
         /* the config is a relative time, so we just use simtime directly */
         simNanoSecs = (SimulationTime)(config->tv_sec * SIMTIME_ONE_SECOND);
