@@ -44,6 +44,7 @@ add_test(
     ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/phold.test.shadow.config.yaml --output - \
     | ${CMAKE_BINARY_DIR}/src/main/shadow --interpose-method=hybrid --pin-cpus -d phold-threaded.shadow-hybrid.data -w 2 - \
     "
+    PROPERTIES RUN_SERIAL true
 )
 
 add_test(
@@ -64,8 +65,6 @@ add_test(
     CONFIGURATIONS ilibc
 )
 
-# These tests currently run very slowly in the GitHub CI, which only gives them 2 CPUs.
-# Hopefully will be fixed by https://github.com/shadow/shadow/issues/965.
 set_tests_properties(
     phold-shadow-hybrid
     phold-shadow-ptrace
@@ -73,4 +72,12 @@ set_tests_properties(
     phold-threaded-shadow-hybrid
     phold-threaded-shadow-ptrace
     phold-threaded-shadow-preload
-        PROPERTIES TIMEOUT 60)
+    PROPERTIES
+    # These tests use cpu-pinning, which means they'll all try to use the same
+    # set of CPUs. i.e. they'll effectively be serialized anyway, but if we
+    # allow cmake to *start* them in parallel, some are likely to time out.
+    RUN_SERIAL TRUE
+    # Even run serially, these tests still need some extra time in the GitHub
+    # CI, especially in coverage builds.
+    TIMEOUT 60
+    )
