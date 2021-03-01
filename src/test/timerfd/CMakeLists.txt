@@ -1,4 +1,6 @@
+include_directories(${GLIB_INCLUDES})
 add_executable(test-timerfd test_timerfd.c)
+target_link_libraries(test-timerfd ${GLIB_LIBRARIES})
 
 ## register the tests
 add_test(NAME timerfd COMMAND test-timerfd)
