@@ -283,19 +283,6 @@ SysCallCondition* threadpreload_resume(Thread* base) {
 
                 _threadpreload_flushPtrs(thread);
 
-                // We've handled the syscall, so we notify that we are done
-                // with shmem IPC
-                ShimEvent ipc_complete_ev = {
-                    .event_id = SHD_SHIM_EVENT_SHMEM_COMPLETE,
-                };
-
-                shimevent_sendEventToPlugin(thread->ipc_blk.p, &ipc_complete_ev);
-
-                ShimEvent resp = {0};
-                shimevent_recvEventFromPlugin(thread->ipc_blk.p, &resp);
-
-                utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
-
                 ShimEvent shim_result;
                 if (result.state == SYSCALL_DONE) {
                     // Now send the result of the syscall
