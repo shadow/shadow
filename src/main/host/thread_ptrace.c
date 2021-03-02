@@ -300,7 +300,14 @@ static const char* _syscall_regs_to_str(const struct user_regs_struct* regs) {
 static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
                                      char* const envp[]) {
     pid_t shadow_pid = getpid();
+
+#ifdef SHADOW_COVERAGE
+    // The instrumentation in coverage mode causes corruption in between vfork
+    // and exec. Use fork instead.
     pid_t pid = fork();
+#else
+    pid_t pid = vfork();
+#endif
 
     switch (pid) {
         case -1: {
@@ -309,6 +316,11 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
         }
         case 0: {
             // child
+
+            // CAUTION: Because we used `vfork`, we still share memory of the
+            // parent process (which will be suspended until we call `exec`).
+            // i.e. be wary of any potential side-effects to global variables
+            // etc.
  
             // Ensure that the child process exits when Shadow does.  Shadow
             // ought to have already tried to terminate the child via SIGTERM
@@ -330,16 +342,14 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
                 error("prctl: %s", g_strerror(errno));
                 return -1;
             }
-            // Allow parent to trace.
+            // Become a tracee of the parent process.
             if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 return -1;
             }
-            // Wait for parent to attach.
-            if (raise(SIGSTOP) < 0) {
-                error("raise: %s", g_strerror(errno));
-                return -1;
-            }
+            // Because we're now being ptraced, execvpe will put this process
+            // in a ptrace-stop.  Luckily, exec will re-awakens the parent
+            // before stopping this one.
             if (execvpe(file, argv, envp) < 0) {
                 error("execvpe: %s", g_strerror(errno));
                 return -1;
@@ -491,9 +501,11 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
             _threadptrace_enterStateIpcSyscall(thread, &reason.shim_event);
             return;
         case STOPREASON_SIGNAL:
-            if (reason.signal.signal == SIGSTOP &&
+            if (reason.signal.signal == SIGTRAP &&
                 thread->childState == THREAD_PTRACE_CHILD_STATE_NONE) {
-                // We caught the "raise(SIGSTOP)" just after forking.
+                // This is the first exec after forking. (Now that we have a
+                // chance to set ptrace options, subsequent exec syscalls will
+                // result in STOPREASON_EXEC)
                 thread->childState = THREAD_PTRACE_CHILD_STATE_TRACE_ME;
                 _threadptrace_enterStateTraceMe(thread);
                 return;

@@ -2,7 +2,7 @@
 # our CI, to work around https://github.com/shadow/shadow/issues/892.  It should
 # have no effect in environments where that directory doesn't exist.
 options:
-  stoptime: 3
+  stoptime: 10
   environment: LD_LIBRARY_PATH=/opt/libc-interpose-centos7
 topology:
 - graphml: |
@@ -33,5 +33,5 @@ hosts:
   processes:
   - plugin: testphold
     starttime: 1
-    arguments: loglevel=info basename=peer quantity=10 msgload=25 cpuload=100 size=1
-      weightsfilepath=weights.txt
+    arguments: loglevel=info basename=peer quantity=10 msgload=1 cpuload=1 size=1
+      weightsfilepath=weights.txt runtime=5

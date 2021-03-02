@@ -8,6 +8,7 @@
 #include <glib.h>
 #include <math.h>
 #include <netdb.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,6 +34,7 @@
 #define phold_debug(...)     _phold_log(G_LOG_LEVEL_DEBUG, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 
 #define PHOLD_LISTEN_PORT 8998
+#define MICROS_PER_SECOND 1000000
 
 typedef struct _PHold PHold;
 struct _PHold {
@@ -42,6 +44,9 @@ struct _PHold {
     guint64 cpuload;
     guint64 size;
     GString* weightsfilepath;
+    guint64 runtime; // seconds
+
+    gint64 starttime; // microseconds
 
     guint64 num_peers;
     in_addr_t* peerIPs;
@@ -327,7 +332,7 @@ static void _phold_generateCPULoad(PHold* phold) {
     }
 }
 
-static void _phold_wait_and_process_events(PHold* phold) {
+static bool _phold_wait_and_process_events(PHold* phold) {
     PHOLD_ASSERT(phold);
 
     guint8* buffer = g_new(guint8, phold->size);
@@ -343,10 +348,22 @@ static void _phold_wait_and_process_events(PHold* phold) {
         gint fd = epevs[i].data.fd;
         if (fd == phold->timerd) {
             _phold_logHeartbeatMessage(phold);
+
             /* Read the timer buf so that its not readable again until the next
              * interval. */
             uint64_t num_expirations = 0;
             read(phold->timerd, &num_expirations, sizeof(num_expirations));
+
+            /* If a runtime is set and we exceeded it, exit now. */
+            if(phold->runtime > 0) {
+                gint64 now = g_get_monotonic_time();
+                gint64 run = (gint64)phold->runtime * MICROS_PER_SECOND;
+                if(now >= (phold->starttime + run)) {
+                    phold_info("Ran successfully for %" G_GINT64_FORMAT " microseconds. Exiting now.", run);
+                    g_free(buffer);
+                    return false;
+                }
+            }
             continue;
         }
 
@@ -383,6 +400,8 @@ static void _phold_wait_and_process_events(PHold* phold) {
     }
 
     g_free(buffer);
+
+    return true;
 }
 
 static gint _phold_addToEpoll(PHold* phold, gint fd) {
@@ -402,6 +421,9 @@ static gint _phold_addToEpoll(PHold* phold, gint fd) {
 
 static int _phold_run(PHold* phold) {
     PHOLD_ASSERT(phold);
+
+    phold->starttime = g_get_monotonic_time();
+    phold_info("phold is starting now at %" G_GINT64_FORMAT, phold->starttime);
 
     /* create an epoll so we can wait for IO events */
     phold->epolld_in = epoll_create(1);
@@ -423,16 +445,9 @@ static int _phold_run(PHold* phold) {
 
     _phold_bootstrapMessages(phold);
 
-    /* main loop - wait for events from the descriptors */
-    struct epoll_event events[100];
-    int nReadyFDs;
+    /* main loop - wait and process events until our runtime is done  */
     phold_info("entering main loop to watch descriptors");
-
-    while (1) {
-        /* wait for some events */
-        _phold_wait_and_process_events(phold);
-    }
-
+    while (_phold_wait_and_process_events(phold)) { continue; };
     phold_info("finished main loop, cleaning up");
 
     return EXIT_SUCCESS;
@@ -518,15 +533,17 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
      * msgload: number of messages to generate when the simulation starts
      * cpuload: number of iterations of a CPU busy loop to run whenever a message is received
      * weightsfile: path to a file containing $quantity weights according to which messages will be
-     * sent to peers */
+     * sent to peers
+     * runtime: number of microseconds after start that we exit
+     */
     const gchar* usage = "loglevel=STR basename=STR quantity=INT msgload=INT size=INT cpuload=INT "
-                         "weightsfilepath=PATH";
+                         "weightsfilepath=PATH runtime=INT";
 
     gchar myname[128];
     g_assert(gethostname(&myname[0], 128) == 0);
 
     int num_params_found = 0;
-#define ARGC_PEER 8
+#define ARGC_PEER 9
 
     if(argc == ARGC_PEER && argv != NULL) {
         /* argv[0] is the program name */
@@ -558,6 +575,9 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
                 num_params_found++;
             } else if (!g_ascii_strcasecmp(config[0], "weightsfilepath")) {
                 phold->weightsfilepath = g_string_new(config[1]);
+                num_params_found++;
+            } else if (!g_ascii_strcasecmp(config[0], "runtime")) {
+                phold->runtime = g_ascii_strtoull(config[1], NULL, 10);
                 num_params_found++;
             } else {
                 phold_warning("skipping unknown config option %s=%s", config[0], config[1]);
@@ -595,9 +615,10 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
 
         phold_info("successfully parsed options for %s: "
                    "basename=%s quantity=%" G_GUINT64_FORMAT " msgload=%" G_GUINT64_FORMAT
-                   " cpuload=%" G_GUINT64_FORMAT " size=%" G_GUINT64_FORMAT " weightsfilepath=%s",
+                   " cpuload=%" G_GUINT64_FORMAT " size=%" G_GUINT64_FORMAT " weightsfilepath=%s"
+                   " runtime=%" G_GUINT64_FORMAT,
                    &myname[0], phold->basename->str, phold->quantity, phold->msgload,
-                   phold->cpuload, phold->size, phold->weightsfilepath->str);
+                   phold->cpuload, phold->size, phold->weightsfilepath->str, phold->runtime);
 
         return TRUE;
     } else {
@@ -611,7 +632,6 @@ static gboolean _phold_parseOptions(PHold* phold, gint argc, gchar* argv[]) {
 static void _phold_free(PHold* phold) {
     PHOLD_ASSERT(phold);
 
-    _phold_logHeartbeatMessage(phold);
     if(phold->listend > 0) {
         close(phold->listend);
     }
@@ -664,7 +684,8 @@ int main(int argc, char *argv[]) {
     gethostname(hostname, 128);
 
     /* default to info level log until we make it configurable */
-    phold_info("Initializing phold test on host %s process id %i", hostname, (gint)getpid());
+    phold_info("Initializing phold test on host %s process id %i",
+        hostname, (gint)getpid());
 
     /* create the new state according to user inputs */
     PHold* phold = phold_new(argc, argv);
