@@ -134,7 +134,6 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
                 shim_shmemHandleWrite(&res);
                 shim_shmemNotifyComplete(ipc_blk.p);
                 break;
-            case SHD_SHIM_EVENT_SHMEM_COMPLETE: shim_shmemNotifyComplete(ipc_blk.p); break;
             default: {
                 error("Got unexpected event %d", res.event_id);
                 abort();
