@@ -158,6 +158,7 @@ endif(SHADOW_WERROR STREQUAL ON)
 
 if(SHADOW_COVERAGE STREQUAL ON)
     add_compile_options(--coverage)
+    add_definitions(-DSHADOW_COVERAGE)
     add_ldflags(--coverage)
     ## from https://github.com/mozilla/grcov
     set(RUSTFLAGS "-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code \
