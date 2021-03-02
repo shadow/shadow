@@ -60,7 +60,7 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
     }
 
     if (flags & CLONE_CHILD_CLEARTID) {
-        handled_flags |= ~CLONE_CHILD_CLEARTID;
+        handled_flags |= CLONE_CHILD_CLEARTID;
         thread_setTidAddress(child, ctid);
     }
 
