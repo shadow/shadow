@@ -300,7 +300,14 @@ static const char* _syscall_regs_to_str(const struct user_regs_struct* regs) {
 static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
                                      char* const envp[]) {
     pid_t shadow_pid = getpid();
+
+#ifdef SHADOW_COVERAGE
+    // The instrumentation in coverage mode causes corruption in between vfork
+    // and exec. Use fork instead.
+    pid_t pid = fork();
+#else
     pid_t pid = vfork();
+#endif
 
     switch (pid) {
         case -1: {
