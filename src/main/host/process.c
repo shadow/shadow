@@ -231,8 +231,10 @@ struct _Process {
      */
     ProcessContext activeContext;
 
+#ifdef USE_PERF_TIMERS
     /* timer for CPU delay measurements */
     GTimer* cpuDelayTimer;
+#endif
 
     /* rlimit of the number of open files, needed by poll */
     gsize fdLimit;
@@ -403,8 +405,10 @@ static void _process_loadPlugin(Process* proc) {
      * ```
      */
 
+#ifdef USE_PERF_TIMERS
     /* set a timer for the loading process */
     GTimer* loadTimer = g_timer_new();
+#endif
 
     /* dlmopen may result in plugin constructors getting called, so make sure
      * we make that call from the plugin context. */
@@ -420,7 +424,10 @@ static void _process_loadPlugin(Process* proc) {
     _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
 
     /* check the load timer */
-    gdouble secondsElapsedDuringLoad = g_timer_elapsed(loadTimer, NULL);
+    gdouble secondsElapsedDuringLoad = 0;
+#ifdef USE_PERF_TIMERS
+    secondsElapsedDuringLoad = g_timer_elapsed(loadTimer, NULL);
+#endif
 
     if(proc->plugin.handle) {
         message("process '%s' successfully loaded plugin '%s' at path '%s' into new namespace '%p' in %f seconds",
@@ -448,8 +455,10 @@ static void _process_loadPlugin(Process* proc) {
     }
     /* do we also need to load in a preload library for this plugin? */
     if(proc->plugin.preloadPath) {
+#ifdef USE_PERF_TIMERS
         /* reset the timer so we can time loading the preload lib */
         g_timer_start(loadTimer);
+#endif
 
         /* dlmopen may result in plugin constructors getting called, so make sure
          * we make that call from the plugin context. */
@@ -465,8 +474,10 @@ static void _process_loadPlugin(Process* proc) {
 
         _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
 
+#ifdef USE_PERF_TIMERS
         /* check the load timer */
         secondsElapsedDuringLoad = g_timer_elapsed(loadTimer, NULL);
+#endif
 
         if(!errorMessage3) {
             message("process '%s' successfully loaded preload '%s' at path '%s' into existing namespace '%p' in %f seconds",
@@ -478,7 +489,9 @@ static void _process_loadPlugin(Process* proc) {
         }
     }
 
+#ifdef USE_PERF_TIMERS
     g_timer_destroy(loadTimer);
+#endif
 
     /* the remaining dlsym lookups should not cause code inside the plugin to get
      * executed, so we should be able to do them from the shadow context. */
@@ -599,7 +612,9 @@ Process* process_new(gpointer host, guint processID,
         proc->arguments = g_string_new(arguments);
     }
 
+#ifdef USE_PERF_TIMERS
     proc->cpuDelayTimer = g_timer_new();
+#endif
     proc->referenceCount = 1;
     proc->activeContext = PCTX_SHADOW;
 
@@ -668,7 +683,9 @@ static void _process_free(Process* proc) {
         g_string_free(proc->processName, TRUE);
     }
 
+#ifdef USE_PERF_TIMERS
     g_timer_destroy(proc->cpuDelayTimer);
+#endif
 
     if(proc->host) {
         host_unref(proc->host);
@@ -747,12 +764,14 @@ static FILE* _process_getIOFile(Process* proc, gint fd){
     }
 }
 
+#ifdef USE_PERF_TIMERS
 static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
     SimulationTime delay = (SimulationTime) (elapsedTimeSec * SIMTIME_ONE_SECOND);
     Host* currentHost = worker_getActiveHost();
     cpu_addDelay(host_getCPU(currentHost), delay);
     tracker_addProcessingTime(host_getTracker(currentHost), delay);
 }
+#endif
 
 static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
     gchar* threadBuffer;
@@ -836,8 +855,10 @@ static void* _process_executeChild(ProcessChildData* data) {
     utility_assert(process_isRunning(proc));
     utility_assert(worker_getActiveProcess() == proc);
 
+#ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
+#endif
 
     /* now we are entering the plugin program via a pth thread */
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
@@ -848,9 +869,11 @@ static void* _process_executeChild(ProcessChildData* data) {
     /* this thread has completed */
     _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
 
+#ifdef USE_PERF_TIMERS
     /* no need to call stop */
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
+#endif
 
     /* when we return, pth will call the exit functions queued for the main thread */
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
@@ -897,8 +920,10 @@ static void _process_executeCleanup(Process* proc) {
     while(proc->atExitFunctions && g_queue_get_length(proc->atExitFunctions) > 0) {
         ProcessExitCallbackData* atexitData = g_queue_pop_head(proc->atExitFunctions);
 
+#ifdef USE_PERF_TIMERS
         /* time the program execution */
         g_timer_start(proc->cpuDelayTimer);
+#endif
 
         /* call the plugin's cleanup callback */
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
@@ -909,9 +934,11 @@ static void _process_executeCleanup(Process* proc) {
         }
         _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
 
+#ifdef USE_PERF_TIMERS
         /* no need to call stop */
         gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
         _process_handleTimerResult(proc, elapsed);
+#endif
 
         g_free(atexitData);
     }
@@ -996,8 +1023,10 @@ static void* _process_executeMain(Process* proc) {
 
     message("calling main() for process '%s'", _process_getName(proc));
 
+#ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
+#endif
 
     /* now we are entering the plugin program via a pth thread */
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
@@ -1018,9 +1047,11 @@ static void* _process_executeMain(Process* proc) {
         fflush(proc->stderrFile);
     }
 
+#ifdef USE_PERF_TIMERS
     /* no need to call stop */
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
+#endif
 
     _process_logReturnCode(proc, proc->returnCode);
 
@@ -1062,8 +1093,10 @@ static void _process_start(Process* proc) {
 
     message("starting process '%s'", _process_getName(proc));
 
+#ifdef USE_PERF_TIMERS
     /* start a timer for initialization tasks */
     GTimer* initTimer = g_timer_new();
+#endif
 
     /* create the thread names while still in shadow context, format is host.process.<id> */
     GString* shadowThreadNameBuf = g_string_new(NULL);
@@ -1112,15 +1145,21 @@ static void _process_start(Process* proc) {
 
     /* now that our pth state is set up, load the plugin */
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
+#ifdef USE_PERF_TIMERS
     gdouble secondsToInitPth = g_timer_elapsed(initTimer, NULL);
     g_timer_start(initTimer);
+#endif
     _process_loadPlugin(proc);
+#ifdef USE_PERF_TIMERS
     gdouble secondsToInitPlugin = g_timer_elapsed(initTimer, NULL);
+#endif
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
 
     _process_changeContext(proc, PCTX_PTH, PCTX_SHADOW);
     utility_assert(proc->plugin.isExecuting);
+#ifdef USE_PERF_TIMERS
     g_timer_start(initTimer);
+#endif
     if(proc->plugin.preProcessEnter != NULL) {
         _process_changeContext(proc, PCTX_SHADOW, PCTX_PLUGIN);
         proc->plugin.preProcessEnter(proc->plugin.handle);
@@ -1139,7 +1178,9 @@ static void _process_start(Process* proc) {
         _process_changeContext(proc, PCTX_PLUGIN, PCTX_SHADOW);
     }
     _process_changeContext(proc, PCTX_SHADOW, PCTX_PTH);
+#ifdef USE_PERF_TIMERS
     gdouble secondsUntilMainBlocked = g_timer_elapsed(initTimer, NULL);
+#endif
 
     /* total number of alive pth threads this scheduler has */
     gint nThreads = pth_ctrl(PTH_CTRL_GETTHREADS_NEW|PTH_CTRL_GETTHREADS_READY|\
@@ -1153,10 +1194,17 @@ static void _process_start(Process* proc) {
     proc->plugin.isExecuting = FALSE;
     worker_setActiveProcess(NULL);
 
+#ifdef USE_PERF_TIMERS
     message("process '%s' initialized the pth threading system in %f seconds, "
             "initialized the plugin namespace in %f seconds, "
             "and ran the pth main thread until it blocked in %f seconds",
             _process_getName(proc), secondsToInitPth, secondsToInitPlugin, secondsUntilMainBlocked);
+#else
+    message("process '%s' initialized the pth threading system, "
+            "initialized the plugin namespace, "
+            "and ran the pth main thread until it blocked",
+            _process_getName(proc));
+#endif
 
     /* the main thread wont exist if it exited immediately before returning control to shadow */
     if(proc->programMainThread) {
@@ -1177,7 +1225,9 @@ static void _process_start(Process* proc) {
         message("process '%s' has completed or is otherwise no longer running", _process_getName(proc));
     }
 
+#ifdef USE_PERF_TIMERS
     g_timer_destroy(initTimer);
+#endif
 
     if(proc->stdoutFile) {
         fflush(proc->stdoutFile);

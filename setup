@@ -62,6 +62,11 @@ def main():
         action="store_true", dest="do_debug",
         default=False)
 
+    parser_build.add_argument('--use-perf-timers',
+        help="compile in timers for tracking the run time of various internal operations",
+        action="store_true", dest="do_use_perf_timers",
+        default=False)
+
     parser_build.add_argument('-v', '--verbose',
         help="print verbose output from the compiler",
         action="store_true", dest="do_verbose",
@@ -179,6 +184,7 @@ def build(args):
     if args.disable_tgen: cmake_cmd += " -DBUILD_TGEN=OFF"
     if args.do_valgrind: cmake_cmd += " -DLOADER_VALGRIND=ON"
     if args.do_werror: cmake_cmd += " -DSHADOW_WERROR=ON"
+    if args.do_use_perf_timers: cmake_cmd += " -DSHADOW_USE_PERF_TIMERS=ON"
 
     # we will run from build directory
     calledDirectory = os.getcwd()
