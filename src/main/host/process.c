@@ -87,9 +87,11 @@ struct _Process {
         gboolean isExecuting;
     } plugin;
 
+#ifdef USE_PERF_TIMERS
     /* timer that tracks the amount of CPU time we spend on plugin execution and processing */
     GTimer* cpuDelayTimer;
     gdouble totalRunTime;
+#endif
 
     /* process boot and shutdown variables */
     SimulationTime startTime;
@@ -199,6 +201,7 @@ static void _process_terminate_threads(Process* proc) {
     }
 }
 
+#ifdef USE_PERF_TIMERS
 static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
     SimulationTime delay = (SimulationTime) (elapsedTimeSec * SIMTIME_ONE_SECOND);
     Host* currentHost = worker_getActiveHost();
@@ -206,6 +209,7 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
     tracker_addProcessingTime(host_getTracker(currentHost), delay);
     proc->totalRunTime += elapsedTimeSec;
 }
+#endif
 
 static void _process_logReturnCode(Process* proc, gint code) {
     if(!proc->didLogReturnCode) {
@@ -283,8 +287,10 @@ static void _process_check(Process* proc) {
 
     message("process '%s' has completed or is otherwise no longer running", process_getName(proc));
     _process_logReturnCode(proc, proc->returnCode);
+#ifdef USE_PERF_TIMERS
     message(
         "total runtime for process '%s' was %f seconds", process_getName(proc), proc->totalRunTime);
+#endif
 }
 
 static void _process_check_thread(Process* proc, Thread* thread) {
@@ -370,19 +376,27 @@ static void _process_start(Process* proc) {
     /* now we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
 
+#ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
+#endif
 
     proc->plugin.isExecuting = TRUE;
     /* exec the process */
     thread_run(mainThread, proc->argv, proc->envv);
+#ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
+#endif
 
     worker_setActiveProcess(NULL);
 
+#ifdef USE_PERF_TIMERS
     message(
         "process '%s' started in %f seconds", process_getName(proc), elapsed);
+#else
+    message("process '%s' started", process_getName(proc));
+#endif
 
     /* call main and run until blocked */
     process_continue(proc, mainThread);
@@ -430,19 +444,27 @@ void process_continue(Process* proc, Thread* thread) {
 
     worker_setActiveProcess(proc);
 
+#ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
+#endif
 
     proc->plugin.isExecuting = TRUE;
     thread_resume(thread);
     proc->plugin.isExecuting = FALSE;
 
+#ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
+#endif
 
     worker_setActiveProcess(NULL);
 
+#ifdef USE_PERF_TIMERS
     info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
+#else
+    info("process '%s' done continuing", process_getName(proc));
+#endif
 
     _process_check_thread(proc, thread);
 }
@@ -454,23 +476,31 @@ void process_stop(Process* proc) {
 
     worker_setActiveProcess(proc);
 
+#ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
+#endif
 
     proc->plugin.isExecuting = TRUE;
     _process_terminate_threads(proc);
     proc->plugin.isExecuting = FALSE;
 
+#ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
+#endif
 
     debug("Starting descriptor table shutdown hack");
     descriptortable_shutdownHelper(proc->descTable);
 
     worker_setActiveProcess(NULL);
 
+#ifdef USE_PERF_TIMERS
     message(
         "process '%s' stopped in %f seconds", process_getName(proc), elapsed);
+#else
+    message("process '%s' stopped", process_getName(proc));
+#endif
 
     _process_check(proc);
 }
@@ -556,7 +586,9 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
             proc->plugin.exeName ? proc->plugin.exeName->str : "NULL",
             proc->processID);
 
+#ifdef USE_PERF_TIMERS
     proc->cpuDelayTimer = g_timer_new();
+#endif
 
     proc->startTime = startTime;
     proc->stopTime = stopTime;
@@ -614,7 +646,9 @@ static void _process_free(Process* proc) {
         g_strfreev(proc->envv);
     }
 
+#ifdef USE_PERF_TIMERS
     g_timer_destroy(proc->cpuDelayTimer);
+#endif
 
     /* Free the stdio files before the descriptor table.
      * Closing the descriptors will remove them from the table and the table

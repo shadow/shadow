@@ -40,8 +40,10 @@ struct _HostStealThreadData {
     /* the host this worker is running; belongs to neither unprocessedHosts nor processedHosts */
     Host* runningHost;
     SimulationTime currentBarrier;
+#ifdef USE_PERF_TIMERS
     GTimer* pushIdleTime;
     GTimer* popIdleTime;
+#endif
     /* which worker thread this is */
     guint tnumber;
     GMutex lock;
@@ -71,6 +73,7 @@ static HostStealThreadData* _hoststealthreaddata_new() {
     tdata->unprocessedHosts = g_queue_new();
     tdata->processedHosts = g_queue_new();
 
+#ifdef USE_PERF_TIMERS
     /* Create new timers to track thread idle times. The timers start in a 'started' state,
      * so we want to stop them immediately so we can continue/stop later around blocking code
      * to collect total elapsed idle time in the scheduling process throughout the entire
@@ -79,6 +82,7 @@ static HostStealThreadData* _hoststealthreaddata_new() {
     g_timer_stop(tdata->pushIdleTime);
     tdata->popIdleTime = g_timer_new();
     g_timer_stop(tdata->popIdleTime);
+#endif
     g_mutex_init(&(tdata->lock));
     tdata->runningHost = NULL;
     return tdata;
@@ -96,6 +100,7 @@ static void _hoststealthreaddata_free(HostStealThreadData* tdata) {
             g_queue_free(tdata->processedHosts);
         }
 
+#ifdef USE_PERF_TIMERS
         gdouble totalPushWaitTime = 0.0;
         if(tdata->pushIdleTime) {
             totalPushWaitTime = g_timer_elapsed(tdata->pushIdleTime, NULL);
@@ -107,9 +112,10 @@ static void _hoststealthreaddata_free(HostStealThreadData* tdata) {
             g_timer_destroy(tdata->popIdleTime);
         }
 
-        g_free(tdata);
         message("scheduler thread data destroyed, total push wait time was %f seconds, "
                 "total pop wait time was %f seconds", totalPushWaitTime, totalPopWaitTime);
+#endif        
+        g_free(tdata);
     }
 }
 
@@ -258,13 +264,17 @@ static void _schedulerpolicyhoststeal_push(SchedulerPolicy* policy, Event* event
 
     /* tracking idle time spent waiting for the destination queue lock */
     if(tdata) {
+#ifdef USE_PERF_TIMERS
         g_timer_continue(tdata->pushIdleTime);
+#endif
         g_mutex_lock(&(tdata->lock));
     }
     g_mutex_lock(&(qdata->lock));
+#ifdef USE_PERF_TIMERS
     if(tdata) {
         g_timer_stop(tdata->pushIdleTime);
     }
+#endif
 
     /* 'deliver' the event to the destination queue */
     priorityqueue_push(qdata->pq, event);
@@ -348,9 +358,13 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
     }
 
     /* we only need to lock this thread's lock, since it's our own queue */
+#ifdef USE_PERF_TIMERS
     g_timer_continue(tdata->popIdleTime);
+#endif
     g_mutex_lock(&(tdata->lock));
+#ifdef USE_PERF_TIMERS
     g_timer_stop(tdata->popIdleTime);
+#endif
 
     if(barrier > tdata->currentBarrier) {
         tdata->currentBarrier = barrier;
@@ -416,7 +430,9 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
          * what we just stole. But we also need to do this in a well-ordered manner, to
          * prevent deadlocks. To do this, we always lock the lock with the smaller thread
          * number first. */
+#ifdef USE_PERF_TIMERS
         g_timer_continue(tdata->popIdleTime);
+#endif
         if(tdata->tnumber < stolenTnumber) {
             g_mutex_lock(&(tdata->lock));
             g_mutex_lock(&(stolenTdata->lock));
@@ -424,7 +440,9 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
             g_mutex_lock(&(stolenTdata->lock));
             g_mutex_lock(&(tdata->lock));
         }
+#ifdef USE_PERF_TIMERS
         g_timer_stop(tdata->popIdleTime);
+#endif
 
         /* attempt to get event from the other thread's queue, likely moving a host from its
          * unprocessedHosts into this threads runningHost (and eventually processedHosts) */

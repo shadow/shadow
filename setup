@@ -72,6 +72,11 @@ def main():
         action="store_true", dest="do_use_c_syscalls",
         default=False)
 
+    parser_build.add_argument('--use-perf-timers',
+        help="compile in timers for tracking the run time of various internal operations",
+        action="store_true", dest="do_use_perf_timers",
+        default=False)
+
     parser_build.add_argument('-v', '--verbose',
         help="print verbose output from the compiler",
         action="store_true", dest="do_verbose",
@@ -201,6 +206,7 @@ def build(args, remaining):
     if args.do_valgrind: cmake_cmd += " -DLOADER_VALGRIND=ON"
     if args.do_werror: cmake_cmd += " -DSHADOW_WERROR=ON"
     if args.do_use_c_syscalls: cmake_cmd += " -DSHADOW_USE_C_SYSCALLS=ON"
+    if args.do_use_perf_timers: cmake_cmd += " -DSHADOW_USE_PERF_TIMERS=ON"
 
     if args.do_coverage:
         if not args.do_debug:

@@ -117,6 +117,7 @@ option(SHADOW_EXPORT "export service libraries and headers (default: OFF)" OFF)
 option(SHADOW_WERROR "turn compiler warnings into errors. (default: OFF)" OFF)
 option(SHADOW_COVERAGE "enable code-coverage instrumentation. (default: OFF)" OFF)
 option(SHADOW_USE_C_SYSCALLS "use only the C syscall handlers. (default: OFF)" OFF)
+option(SHADOW_USE_PERF_TIMERS "compile in timers for tracking the run time of various internal operations. (default: OFF)" OFF)
 
 ## display selected user options
 MESSAGE(STATUS)
@@ -128,6 +129,7 @@ MESSAGE(STATUS "SHADOW_EXPORT=${SHADOW_EXPORT}")
 MESSAGE(STATUS "SHADOW_WERROR=${SHADOW_WERROR}")
 MESSAGE(STATUS "SHADOW_COVERAGE=${SHADOW_COVERAGE}")
 MESSAGE(STATUS "SHADOW_USE_C_SYSCALLS=${SHADOW_USE_C_SYSCALLS}")
+MESSAGE(STATUS "SHADOW_USE_PERF_TIMERS=${SHADOW_USE_PERF_TIMERS}")
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
 MESSAGE(STATUS)
 
@@ -170,7 +172,13 @@ else()
 endif(SHADOW_COVERAGE STREQUAL ON)
 
 if(SHADOW_USE_C_SYSCALLS STREQUAL ON)
+    message(STATUS "C syscalls enabled")
     add_definitions(-DUSE_C_SYSCALLS)
+endif()
+
+if(SHADOW_USE_PERF_TIMERS STREQUAL ON)
+    message(STATUS "Perf timers enabled")
+    add_definitions(-DUSE_PERF_TIMERS)
 endif()
 
 if($ENV{VERBOSE})
