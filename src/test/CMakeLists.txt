@@ -84,6 +84,9 @@ macro(add_shadow_tests)
       set_property(TEST ${SHADOW_TEST_NAME} PROPERTY FAIL_REGULAR_EXPRESSION "main error code '.*' for process")
       set_property(TEST ${SHADOW_TEST_NAME} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
 
+      # check that we didn't leak any reference-counted objects
+      set_property(TEST ${SHADOW_TEST_NAME} PROPERTY PASS_REGULAR_EXPRESSION "ObjectCounter: counter diffs: task=0 event=0 packet=0 payload=0 router=0 host=0 netiface=0 process=0 threadpreload=0 threadptrace=0 syscallcondition=0 syscallhandler=0 descriptorlistener=0 descriptortable=0 descriptor=0 channel=0 tcp=0 udp=0 epoll=0 eventd=0 timer=0 file=0 futex=0 futextable=0")
+
       if(DEFINED SHADOW_TEST_PROPERTIES)
          set_tests_properties(${SHADOW_TEST_NAME} PROPERTIES ${SHADOW_TEST_PROPERTIES})
       endif()
@@ -128,21 +131,3 @@ add_subdirectory(unistd)
 list(LENGTH ALL_SHADOW_TESTS ALL_SHADOW_TESTS_LENGTH)
 message(STATUS "Configured to build ${ALL_SHADOW_TESTS_LENGTH} Shadow tests.")
 message(STATUS "ALL_SHADOW_TESTS = ${ALL_SHADOW_TESTS}")
-
-## grep the LastTest.log.tmp file for the counter diff lines, and make sure
-## that each such line matches the line in src/test/leakcheck.log
-add_test(
-	NAME leakcheck-shadow-grep
-	COMMAND /usr/bin/env bash ${CMAKE_SOURCE_DIR}/src/test/leakcheck-grep.sh
-	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
-# List all shadow tests as dependencies, so that the leakcheck can grep their output for leaks.
-set_tests_properties(leakcheck-shadow-grep PROPERTIES DEPENDS "${ALL_SHADOW_TESTS}")
-
-add_test(
-	NAME leakcheck-shadow-compare
-	COMMAND /usr/bin/env bash ${CMAKE_SOURCE_DIR}/src/test/leakcheck-compare.sh
-        ${CMAKE_CURRENT_BINARY_DIR}/leakcheck.log
-		${CMAKE_SOURCE_DIR}/src/test/leakcheck.log
-)
-set_tests_properties(leakcheck-shadow-compare PROPERTIES DEPENDS "leakcheck-shadow-grep")
