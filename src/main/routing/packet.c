@@ -310,7 +310,7 @@ guint packet_getPayloadLength(Packet* packet) {
     }
 }
 
-gdouble packet_getPriority(Packet* packet) {
+gdouble packet_getPriority(const Packet* packet) {
     MAGIC_ASSERT(packet);
     return packet->priority;
 }

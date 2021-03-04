@@ -19,6 +19,7 @@
 #include "main/core/support/options.h"
 #include "main/host/cpu.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/compat_socket.h"
 #include "main/host/futex_table.h"
 #include "main/host/network_interface.h"
 #include "main/host/tracker.h"
@@ -117,8 +118,8 @@ gboolean host_doesInterfaceExist(Host* host, in_addr_t interfaceIP);
 gboolean host_isInterfaceAvailable(Host* host, ProtocolType type,
                                    in_addr_t interfaceIP, in_port_t port,
                                    in_addr_t peerIP, in_port_t peerPort);
-void host_associateInterface(Host* host, Socket* socket, in_addr_t bindAddress);
-void host_disassociateInterface(Host* host, Socket* socket);
+void host_associateInterface(Host* host, const CompatSocket* socket, in_addr_t bindAddress);
+void host_disassociateInterface(Host* host, const CompatSocket* socket);
 in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
                                  in_addr_t interfaceIP, in_addr_t peerIP,
                                  in_port_t peerPort);

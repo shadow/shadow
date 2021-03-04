@@ -78,7 +78,7 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACK
         guint window, SimulationTime timestampValue, SimulationTime timestampEcho);
 
 guint packet_getPayloadLength(Packet* packet);
-gdouble packet_getPriority(Packet* packet);
+gdouble packet_getPriority(const Packet* packet);
 guint packet_getHeaderSize(Packet* packet);
 
 in_addr_t packet_getDestinationIP(Packet* packet);
