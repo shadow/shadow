@@ -260,6 +260,12 @@ impl IsSend for PosixFile {}
 impl IsSync for PosixFile {}
 
 impl PosixFile {
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallReturn {
+        match self {
+            Self::Pipe(f) => f.close(event_queue),
+        }
+    }
+
     pub fn read(&mut self, bytes: &mut [u8], event_queue: &mut EventQueue) -> SyscallReturn {
         match self {
             Self::Pipe(f) => f.read(bytes, event_queue),
@@ -329,6 +335,7 @@ bitflags::bitflags! {
 pub struct Descriptor {
     file: Arc<AtomicRefCell<PosixFile>>,
     flags: DescriptorFlags,
+    count: Arc<()>,
 }
 
 impl Descriptor {
@@ -336,6 +343,7 @@ impl Descriptor {
         Self {
             file,
             flags: DescriptorFlags::empty(),
+            count: Arc::new(()),
         }
     }
 
@@ -349,6 +357,10 @@ impl Descriptor {
 
     pub fn set_flags(&mut self, flags: DescriptorFlags) {
         self.flags = flags;
+    }
+
+    pub fn get_fd_count(&self) -> usize {
+        Arc::<()>::strong_count(&self.count)
     }
 }
 

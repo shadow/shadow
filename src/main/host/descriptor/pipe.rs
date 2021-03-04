@@ -43,6 +43,16 @@ impl PipeFile {
         self.flags = flags;
     }
 
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallReturn {
+        // set the closed flag and remove the active flag
+        self.copy_status(
+            FileStatus::CLOSED | FileStatus::ACTIVE,
+            FileStatus::CLOSED,
+            event_queue,
+        );
+        SyscallReturn::Success(0)
+    }
+
     pub fn read(&mut self, bytes: &mut [u8], event_queue: &mut EventQueue) -> SyscallReturn {
         // if the file is not open for reading, return EBADF
         if !self.mode.contains(FileMode::READ) {
@@ -72,7 +82,7 @@ impl PipeFile {
 
     pub fn enable_notifications(arc: &Arc<AtomicRefCell<PosixFile>>) {
         // we remove some of these later in this function
-        let monitoring = FileStatus::CLOSED | FileStatus::READABLE | FileStatus::WRITABLE;
+        let monitoring = FileStatus::READABLE | FileStatus::WRITABLE;
 
         let weak = Arc::downgrade(arc);
         match *arc.borrow_mut() {
