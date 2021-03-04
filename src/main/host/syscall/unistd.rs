@@ -45,14 +45,6 @@ pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
 pub fn dup(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
 
-    dup_helper(sys, args, fd)
-}
-
-pub fn dup_helper(
-    sys: &mut c::SysCallHandler,
-    args: &c::SysCallArgs,
-    fd: libc::c_int,
-) -> c::SysCallReturn {
     // get the descriptor, or return early if it doesn't exist
     let desc = match syscall::get_descriptor(fd, sys.process) {
         Ok(d) => unsafe { &mut *d },
@@ -70,6 +62,14 @@ pub fn dup_helper(
         },
     };
 
+    dup_helper(sys, fd, desc)
+}
+
+pub fn dup_helper(
+    sys: &mut c::SysCallHandler,
+    fd: libc::c_int,
+    desc: &Descriptor,
+) -> c::SysCallReturn {
     // clone the descriptor and register it
     let new_desc = CompatDescriptor::New(desc.clone());
     let new_fd = unsafe {
@@ -86,17 +86,6 @@ pub fn read(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRet
     let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
     let offset = 0 as libc::off_t;
 
-    read_helper(sys, args, fd, buf_ptr, buf_size, offset)
-}
-
-fn read_helper(
-    sys: &mut c::SysCallHandler,
-    args: &c::SysCallArgs,
-    fd: libc::c_int,
-    buf_ptr: c::PluginPtr,
-    buf_size: libc::size_t,
-    _offset: libc::off_t,
-) -> c::SysCallReturn {
     // get the descriptor, or return early if it doesn't exist
     let desc = match syscall::get_descriptor(fd, sys.process) {
         Ok(d) => unsafe { &mut *d },
@@ -114,9 +103,25 @@ fn read_helper(
         },
     };
 
+    read_helper(sys, fd, desc, buf_ptr, buf_size, offset)
+}
+
+fn read_helper(
+    sys: &mut c::SysCallHandler,
+    fd: libc::c_int,
+    desc: &Descriptor,
+    buf_ptr: c::PluginPtr,
+    buf_size: libc::size_t,
+    offset: libc::off_t,
+) -> c::SysCallReturn {
     // need a non-null buffer
     if buf_ptr.val == 0 {
         return SyscallReturn::Error(nix::errno::Errno::EFAULT).into();
+    }
+
+    // we can only seek on files, otherwise its a pipe error
+    if offset != 0 {
+        return SyscallReturn::Error(nix::errno::Errno::ESPIPE).into();
     }
 
     // need a non-zero size
@@ -162,17 +167,6 @@ pub fn write(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
     let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
     let offset = 0 as libc::off_t;
 
-    write_helper(sys, args, fd, buf_ptr, buf_size, offset)
-}
-
-fn write_helper(
-    sys: &mut c::SysCallHandler,
-    args: &c::SysCallArgs,
-    fd: libc::c_int,
-    buf_ptr: c::PluginPtr,
-    buf_size: libc::size_t,
-    _offset: libc::off_t,
-) -> c::SysCallReturn {
     // get the descriptor, or return early if it doesn't exist
     let desc = match syscall::get_descriptor(fd, sys.process) {
         Ok(d) => unsafe { &mut *d },
@@ -190,9 +184,25 @@ fn write_helper(
         },
     };
 
+    write_helper(sys, fd, desc, buf_ptr, buf_size, offset)
+}
+
+fn write_helper(
+    sys: &mut c::SysCallHandler,
+    _fd: libc::c_int,
+    desc: &Descriptor,
+    buf_ptr: c::PluginPtr,
+    buf_size: libc::size_t,
+    offset: libc::off_t,
+) -> c::SysCallReturn {
     // need a non-null buffer
     if buf_ptr.val == 0 {
         return SyscallReturn::Error(nix::errno::Errno::EFAULT).into();
+    }
+
+    // we can only seek on files, otherwise its a pipe error
+    if offset != 0 {
+        return SyscallReturn::Error(nix::errno::Errno::ESPIPE).into();
     }
 
     // TODO: dynamically compute size based on how much data is actually available in the descriptor
