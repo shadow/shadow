@@ -315,7 +315,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(poll);
         HANDLE(ppoll);
         HANDLE(prctl);
-        HANDLE(pread64);
+        HANDLE_RUST(pread64);
         HANDLE(preadv);
 #ifdef SYS_preadv2
         HANDLE(preadv2);
@@ -326,7 +326,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
 #ifdef SYS_prlimit64
         HANDLE(prlimit64);
 #endif
-        HANDLE(pwrite64);
+        HANDLE_RUST(pwrite64);
         HANDLE(pwritev);
 #ifdef SYS_pwritev2
         HANDLE(pwritev2);

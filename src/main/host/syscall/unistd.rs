@@ -106,6 +106,32 @@ pub fn read(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRet
     read_helper(sys, fd, desc, buf_ptr, buf_size, offset)
 }
 
+pub fn pread64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+    let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
+    let buf_ptr = unsafe { args.args[1].as_ptr };
+    let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
+    let offset = unsafe { args.args[3].as_i64 } as libc::off_t;
+
+    // get the descriptor, or return early if it doesn't exist
+    let desc = match syscall::get_descriptor(fd, sys.process) {
+        Ok(d) => unsafe { &mut *d },
+        Err(errno) => return SyscallReturn::Error(errno).into(),
+    };
+
+    // if it's a legacy descriptor, use the C syscall handler instead
+    let desc = match desc {
+        CompatDescriptor::New(d) => d,
+        CompatDescriptor::Legacy(_) => unsafe {
+            return c::syscallhandler_pread64(
+                sys as *mut c::SysCallHandler,
+                args as *const c::SysCallArgs,
+            );
+        },
+    };
+
+    read_helper(sys, fd, desc, buf_ptr, buf_size, offset)
+}
+
 fn read_helper(
     sys: &mut c::SysCallHandler,
     fd: libc::c_int,
@@ -178,6 +204,32 @@ pub fn write(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
         CompatDescriptor::New(d) => d,
         CompatDescriptor::Legacy(_) => unsafe {
             return c::syscallhandler_write(
+                sys as *mut c::SysCallHandler,
+                args as *const c::SysCallArgs,
+            );
+        },
+    };
+
+    write_helper(sys, fd, desc, buf_ptr, buf_size, offset)
+}
+
+pub fn pwrite64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+    let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
+    let buf_ptr = unsafe { args.args[1].as_ptr };
+    let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
+    let offset = unsafe { args.args[3].as_i64 } as libc::off_t;
+
+    // get the descriptor, or return early if it doesn't exist
+    let desc = match syscall::get_descriptor(fd, sys.process) {
+        Ok(d) => unsafe { &mut *d },
+        Err(errno) => return SyscallReturn::Error(errno).into(),
+    };
+
+    // if it's a legacy descriptor, use the C syscall handler instead
+    let desc = match desc {
+        CompatDescriptor::New(d) => d,
+        CompatDescriptor::Legacy(_) => unsafe {
+            return c::syscallhandler_pwrite64(
                 sys as *mut c::SysCallHandler,
                 args as *const c::SysCallArgs,
             );
@@ -360,12 +412,30 @@ mod export {
     }
 
     #[no_mangle]
+    pub extern "C" fn rustsyscallhandler_pread64(
+        sys: *mut c::SysCallHandler,
+        args: *const c::SysCallArgs,
+    ) -> c::SysCallReturn {
+        assert!(!sys.is_null() && !args.is_null());
+        pread64(unsafe { &mut *sys }, unsafe { &*args })
+    }
+
+    #[no_mangle]
     pub extern "C" fn rustsyscallhandler_write(
         sys: *mut c::SysCallHandler,
         args: *const c::SysCallArgs,
     ) -> c::SysCallReturn {
         assert!(!sys.is_null() && !args.is_null());
         write(unsafe { &mut *sys }, unsafe { &*args })
+    }
+
+    #[no_mangle]
+    pub extern "C" fn rustsyscallhandler_pwrite64(
+        sys: *mut c::SysCallHandler,
+        args: *const c::SysCallArgs,
+    ) -> c::SysCallReturn {
+        assert!(!sys.is_null() && !args.is_null());
+        pwrite64(unsafe { &mut *sys }, unsafe { &*args })
     }
 
     #[no_mangle]
