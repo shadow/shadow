@@ -70,6 +70,8 @@ pub fn dup_helper(
     fd: libc::c_int,
     desc: &Descriptor,
 ) -> c::SysCallReturn {
+    debug!("Duping fd {} ({:?})", fd, desc);
+
     // clone the descriptor and register it
     let new_desc = CompatDescriptor::New(desc.clone());
     let new_fd = unsafe {

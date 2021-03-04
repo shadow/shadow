@@ -114,7 +114,7 @@ impl From<FileStatus> for c::Status {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum NewStatusListenerFilter {
     Never,
     OffToOn,
@@ -303,6 +303,20 @@ impl PosixFile {
     }
 }
 
+impl std::fmt::Debug for PosixFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pipe(_) => write!(f, "Pipe")?,
+        }
+        write!(
+            f,
+            "(status: {:?}, flags: {:?})",
+            self.status(),
+            self.get_flags()
+        )
+    }
+}
+
 bitflags::bitflags! {
     // Linux only supports a single descriptor flag:
     // https://www.gnu.org/software/libc/manual/html_node/Descriptor-Flags.html
@@ -311,7 +325,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Descriptor {
     file: Arc<AtomicRefCell<PosixFile>>,
     flags: DescriptorFlags,
