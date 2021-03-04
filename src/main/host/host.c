@@ -471,16 +471,10 @@ Router* host_getUpstreamRouter(Host* host, in_addr_t handle) {
     return networkinterface_getRouter(interface);
 }
 
-void host_associateInterface(Host* host, Socket* socket, in_addr_t bindAddress,
-                             in_port_t bindPort, in_addr_t peerAddress,
-                             in_port_t peerPort) {
+void host_associateInterface(Host* host, Socket* socket, in_addr_t bindAddress) {
     MAGIC_ASSERT(host);
 
-    /* connect up socket layer */
-    socket_setPeerName(socket, peerAddress, peerPort);
-    socket_setSocketName(socket, bindAddress, bindPort);
-
-    /* now associate the interfaces corresponding to bindAddress with socket */
+    /* associate the interfaces corresponding to bindAddress with socket */
     if(bindAddress == htonl(INADDR_ANY)) {
         /* need to associate all interfaces */
         GHashTableIter iter;
