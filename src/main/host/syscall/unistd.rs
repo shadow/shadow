@@ -71,18 +71,13 @@ pub fn dup(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRetu
         Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
-    // if it's a legacy descriptor, use the C syscall handler instead
-    let desc = match desc {
-        CompatDescriptor::New(d) => d,
+    match desc {
+        CompatDescriptor::New(desc) => dup_helper(sys, fd, desc),
+        // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
-            return c::syscallhandler_dup(
-                sys as *mut c::SysCallHandler,
-                args as *const c::SysCallArgs,
-            );
+            c::syscallhandler_dup(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
         },
-    };
-
-    dup_helper(sys, fd, desc)
+    }
 }
 
 pub fn dup_helper(
@@ -114,18 +109,13 @@ pub fn read(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRet
         Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
-    // if it's a legacy descriptor, use the C syscall handler instead
-    let desc = match desc {
-        CompatDescriptor::New(d) => d,
+    match desc {
+        CompatDescriptor::New(desc) => read_helper(sys, fd, desc, buf_ptr, buf_size, offset),
+        // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
-            return c::syscallhandler_read(
-                sys as *mut c::SysCallHandler,
-                args as *const c::SysCallArgs,
-            );
+            c::syscallhandler_read(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
         },
-    };
-
-    read_helper(sys, fd, desc, buf_ptr, buf_size, offset)
+    }
 }
 
 pub fn pread64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
@@ -140,18 +130,13 @@ pub fn pread64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCall
         Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
-    // if it's a legacy descriptor, use the C syscall handler instead
-    let desc = match desc {
-        CompatDescriptor::New(d) => d,
+    match desc {
+        CompatDescriptor::New(desc) => read_helper(sys, fd, desc, buf_ptr, buf_size, offset),
+        // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
-            return c::syscallhandler_pread64(
-                sys as *mut c::SysCallHandler,
-                args as *const c::SysCallArgs,
-            );
+            c::syscallhandler_pread64(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
         },
-    };
-
-    read_helper(sys, fd, desc, buf_ptr, buf_size, offset)
+    }
 }
 
 fn read_helper(
@@ -221,18 +206,13 @@ pub fn write(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
         Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
-    // if it's a legacy descriptor, use the C syscall handler instead
-    let desc = match desc {
-        CompatDescriptor::New(d) => d,
+    match desc {
+        CompatDescriptor::New(desc) => write_helper(sys, fd, desc, buf_ptr, buf_size, offset),
+        // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
-            return c::syscallhandler_write(
-                sys as *mut c::SysCallHandler,
-                args as *const c::SysCallArgs,
-            );
+            c::syscallhandler_write(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
         },
-    };
-
-    write_helper(sys, fd, desc, buf_ptr, buf_size, offset)
+    }
 }
 
 pub fn pwrite64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
@@ -247,18 +227,13 @@ pub fn pwrite64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCal
         Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
-    // if it's a legacy descriptor, use the C syscall handler instead
-    let desc = match desc {
-        CompatDescriptor::New(d) => d,
+    match desc {
+        CompatDescriptor::New(desc) => write_helper(sys, fd, desc, buf_ptr, buf_size, offset),
+        // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
-            return c::syscallhandler_pwrite64(
-                sys as *mut c::SysCallHandler,
-                args as *const c::SysCallArgs,
-            );
+            c::syscallhandler_pwrite64(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
         },
-    };
-
-    write_helper(sys, fd, desc, buf_ptr, buf_size, offset)
+    }
 }
 
 fn write_helper(
