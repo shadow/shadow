@@ -266,15 +266,25 @@ impl PosixFile {
         }
     }
 
-    pub fn read(&mut self, bytes: &mut [u8], event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn read(
+        &mut self,
+        bytes: &mut [u8],
+        offset: libc::off_t,
+        event_queue: &mut EventQueue,
+    ) -> SyscallReturn {
         match self {
-            Self::Pipe(f) => f.read(bytes, event_queue),
+            Self::Pipe(f) => f.read(bytes, offset, event_queue),
         }
     }
 
-    pub fn write(&mut self, bytes: &[u8], event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn write(
+        &mut self,
+        bytes: &[u8],
+        offset: libc::off_t,
+        event_queue: &mut EventQueue,
+    ) -> SyscallReturn {
         match self {
-            Self::Pipe(f) => f.write(bytes, event_queue),
+            Self::Pipe(f) => f.write(bytes, offset, event_queue),
         }
     }
 

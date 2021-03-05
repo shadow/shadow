@@ -152,11 +152,6 @@ fn read_helper(
         return SyscallReturn::Error(nix::errno::Errno::EFAULT).into();
     }
 
-    // we can only seek on files, otherwise its a pipe error
-    if offset != 0 {
-        return SyscallReturn::Error(nix::errno::Errno::ESPIPE).into();
-    }
-
     // need a non-zero size
     if buf_size == 0 {
         info!("Invalid length {} provided on descriptor {}", buf_size, fd);
@@ -175,7 +170,7 @@ fn read_helper(
 
     // call the file's read(), and run any resulting events
     let result = EventQueue::queue_and_run(|event_queue| {
-        posix_file.borrow_mut().read(&mut buf, event_queue)
+        posix_file.borrow_mut().read(&mut buf, offset, event_queue)
     });
 
     // if the syscall would block and it's a blocking descriptor
@@ -249,11 +244,6 @@ fn write_helper(
         return SyscallReturn::Error(nix::errno::Errno::EFAULT).into();
     }
 
-    // we can only seek on files, otherwise its a pipe error
-    if offset != 0 {
-        return SyscallReturn::Error(nix::errno::Errno::ESPIPE).into();
-    }
-
     // TODO: dynamically compute size based on how much data is actually available in the descriptor
     let size_needed = std::cmp::min(buf_size, c::SYSCALL_IO_BUFSIZE as usize);
 
@@ -265,8 +255,9 @@ fn write_helper(
     let file_flags = posix_file.borrow().get_flags();
 
     // call the file's write(), and run any resulting events
-    let result =
-        EventQueue::queue_and_run(|event_queue| posix_file.borrow_mut().write(&buf, event_queue));
+    let result = EventQueue::queue_and_run(|event_queue| {
+        posix_file.borrow_mut().write(&buf, offset, event_queue)
+    });
 
     // if the syscall would block and it's a blocking descriptor
     if result == SyscallReturn::Error(nix::errno::EWOULDBLOCK)

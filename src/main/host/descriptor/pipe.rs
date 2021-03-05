@@ -53,7 +53,17 @@ impl PipeFile {
         SyscallReturn::Success(0)
     }
 
-    pub fn read(&mut self, bytes: &mut [u8], event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn read(
+        &mut self,
+        bytes: &mut [u8],
+        offset: libc::off_t,
+        event_queue: &mut EventQueue,
+    ) -> SyscallReturn {
+        // pipes don't support seeking
+        if offset != 0 {
+            return SyscallReturn::Error(nix::errno::Errno::ESPIPE);
+        }
+
         // if the file is not open for reading, return EBADF
         if !self.mode.contains(FileMode::READ) {
             return SyscallReturn::Error(nix::errno::Errno::EBADF);
@@ -64,7 +74,17 @@ impl PipeFile {
         SyscallReturn::Success(num_read as i32)
     }
 
-    pub fn write(&mut self, bytes: &[u8], event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn write(
+        &mut self,
+        bytes: &[u8],
+        offset: libc::off_t,
+        event_queue: &mut EventQueue,
+    ) -> SyscallReturn {
+        // pipes don't support seeking
+        if offset != 0 {
+            return SyscallReturn::Error(nix::errno::Errno::ESPIPE);
+        }
+
         // if the file is not open for writing, return EBADF
         if !self.mode.contains(FileMode::WRITE) {
             return SyscallReturn::Error(nix::errno::Errno::EBADF);
