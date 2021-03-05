@@ -56,7 +56,8 @@ esac
 
 if [ "$BUILDTYPE" = coverage ]
 then
-    RUST_TOOLCHAIN=nightly
+    # using an older rust nightly until we update coverage tests to use clang-12
+    RUST_TOOLCHAIN=nightly-2021-03-01
 else
     RUST_TOOLCHAIN=stable
 fi
