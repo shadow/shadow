@@ -74,11 +74,6 @@ static void _logger_default_log(LogLevel level, const gchar* fileName,
     g_free(message);
     g_free(timeString);
     g_free(baseName);
-#ifdef DEBUG
-    if (level == LOGLEVEL_ERROR) {
-        abort();
-    }
-#endif
 }
 
 void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
@@ -94,4 +89,13 @@ void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
                     vargs);
     }
     va_end(vargs);
+    if (level == LOGLEVEL_ERROR) {
+#ifdef DEBUG
+        // Dumps a core file (if the system is configured to do so), but may not
+        // clean up properly. e.g. `atexit` handlers won't be run.
+        abort();
+#else
+        exit(1);
+#endif
+    }
 }
