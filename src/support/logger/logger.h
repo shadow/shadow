@@ -51,6 +51,9 @@ Logger* logger_getDefault();
 // Thread safe. `logger` may be NULL, in which case glib's logging
 // functionality will be used.
 //
+// Never returns after logging a LOGLEVEL_ERROR. After logging, calls `abort()`
+// if DEBUG is defined, or `exit(1)` otherwise.
+//
 // The `__format__` attribute tells the compiler to apply the same format-string
 // diagnostics that it does for `printf`.
 // https://clang.llvm.org/docs/AttributeReference.html#format
