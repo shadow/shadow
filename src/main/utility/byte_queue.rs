@@ -50,6 +50,10 @@ impl ByteQueue {
         self.length
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Push bytes to the head of the queue.
     pub fn push(&mut self, src: &[u8]) {
         // create new buffer head lazily as opposed to proactively
@@ -197,6 +201,13 @@ mod export {
         assert!(!bq.is_null());
         let bq = unsafe { &mut *bq };
         bq.len()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn bytequeue_isEmpty(bq: *mut ByteQueue) -> bool {
+        assert!(!bq.is_null());
+        let bq = unsafe { &mut *bq };
+        bq.is_empty()
     }
 
     #[no_mangle]

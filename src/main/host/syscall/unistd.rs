@@ -106,7 +106,7 @@ pub fn read(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRet
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
     let buf_ptr = unsafe { args.args[1].as_ptr };
     let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
-    let offset = 0 as libc::off_t;
+    let offset = 0;
 
     // get the descriptor, or return early if it doesn't exist
     let desc = match syscall::get_descriptor(fd, sys.process) {
@@ -213,7 +213,7 @@ pub fn write(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
     let buf_ptr = unsafe { args.args[1].as_ptr };
     let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
-    let offset = 0 as libc::off_t;
+    let offset = 0;
 
     // get the descriptor, or return early if it doesn't exist
     let desc = match syscall::get_descriptor(fd, sys.process) {

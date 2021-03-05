@@ -73,7 +73,7 @@ impl PipeFile {
         let num_written = self.buffer.borrow_mut().write(bytes, event_queue);
 
         // the write would block if we could not write any bytes, but were asked to
-        if num_written == 0 && bytes.len() > 0 {
+        if num_written == 0 && !bytes.is_empty() {
             SyscallReturn::Error(nix::errno::EWOULDBLOCK)
         } else {
             SyscallReturn::Success(num_written as i32)

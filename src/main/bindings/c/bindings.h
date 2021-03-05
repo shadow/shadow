@@ -155,6 +155,8 @@ void bytequeue_free(ByteQueue *bq_ptr);
 
 size_t bytequeue_len(ByteQueue *bq);
 
+bool bytequeue_isEmpty(ByteQueue *bq);
+
 void bytequeue_push(ByteQueue *bq, const unsigned char *src, size_t len);
 
 size_t bytequeue_pop(ByteQueue *bq, unsigned char *dst, size_t len);
