@@ -123,12 +123,7 @@ static void _logger_default_log(LogLevel level, const char* fileName, const char
     offset += fprintf(stderr, "%s\n", buf);
     offset = MIN(offset, sizeof(buf));
 
-#ifdef DEBUG
-    if (level == LOGLEVEL_ERROR) {
         _logger_default_flush();
-        abort();
-    }
-#endif
     in_logger = false;
 }
 
@@ -145,6 +140,15 @@ void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
                     vargs);
     }
     va_end(vargs);
+    if (level == LOGLEVEL_ERROR) {
+#ifdef DEBUG
+        // Dumps a core file (if the system is configured to do so), but may not
+        // clean up properly. e.g. `atexit` handlers won't be run.
+        abort();
+#else
+        exit(1);
+#endif
+    }
 }
 
 void logger_flush(Logger* logger) {
