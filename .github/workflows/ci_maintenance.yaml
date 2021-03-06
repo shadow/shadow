@@ -1,0 +1,32 @@
+name: CI Maintenance
+
+on:
+  schedule:
+    # once every 4 months (Feb, June, Oct)
+    - cron: '0 0 1 2,6,10 *'
+  # run manually from the GitHub Actions webpage
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/github-script@v3
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: 'Update versions of tools used in CI',
+            labels: ['Component: Testing', 'Priority: Low', 'Type: Maintenance'],
+            body:
+          `The Shadow CI environment has hard-coded versions of some tools. These versions should be periodically updated, and any compatibility issues fixed.
+
+          - rust nightly version for coverage builds (\`ci/container_scripts/install_extra_deps.sh\` — \`RUST_TOOLCHAIN\`)
+          - bindgen and cbindgen versions for the bindings lint (\`.github/workflows/lint.yml\`)
+          - python version for the python lint (\`.github/workflows/lint.yml\`)
+
+          *This issue is automatically generated every 4 months by the workflow "${{ github.workflow }}".*
+          `
+          })
