@@ -116,9 +116,9 @@ static SysCallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, Plugin
 
     int numWoken = 0;
     if (futex && numWakeups > 0) {
-        debug("Futex trying to wake %i waiters", numWakeups);
+        debug("Futex trying to perform %i wakeups", numWakeups);
         numWoken = futex_wake(futex, (unsigned int)numWakeups);
-        debug("Futex was able to wake %i/%i waiters", numWoken, numWakeups);
+        debug("Futex was able to perform %i/%i wakeups", numWoken, numWakeups);
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = numWoken};
