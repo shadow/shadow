@@ -83,8 +83,10 @@ struct _Host {
     /* random stream */
     Random* random;
 
+#ifdef USE_PERF_TIMERS
     /* track the time spent executing this host */
     GTimer* executionTimer;
+#endif
 
     gchar* dataDirPath;
 
@@ -99,9 +101,11 @@ Host* host_new(HostParameters* params) {
     Host* host = g_new0(Host, 1);
     MAGIC_INIT(host);
 
+#ifdef USE_PERF_TIMERS
     /* start tracking execution time for this host.
      * creating the timer automatically starts it. */
     host->executionTimer = g_timer_new();
+#endif
 
     /* first copy the entire struct of params */
     host->params = *params;
@@ -132,8 +136,10 @@ Host* host_new(HostParameters* params) {
     host->processIDCounter = 1000;
     host->referenceCount = 1;
 
+#ifdef USE_PERF_TIMERS
     /* we go back to the slave setup process here, so stop counting this host execution */
     g_timer_stop(host->executionTimer);
+#endif
 
     worker_countObject(OBJECT_TYPE_HOST, COUNTER_TYPE_NEW);
 
@@ -216,7 +222,9 @@ static void _host_free(Host* host) {
  * process that actually hold references to the host. if you just called host_unref instead
  * of this function, then host_free would never actually get called. */
 void host_shutdown(Host* host) {
+#ifdef USE_PERF_TIMERS
     g_timer_continue(host->executionTimer);
+#endif
 
     info("shutting down host %s", host->params.hostname);
 
@@ -269,14 +277,17 @@ void host_shutdown(Host* host) {
         g_free(host->dataDirPath);
     }
 
+#ifdef USE_PERF_TIMERS
     gdouble totalExecutionTime = g_timer_elapsed(host->executionTimer, NULL);
-
+    g_timer_destroy(host->executionTimer);
     message("host '%s' has been shut down, total execution time was %f seconds",
             host->params.hostname, totalExecutionTime);
+#else
+    message("host '%s' has been shut down", host->params.hostname);
+#endif
 
     if(host->defaultAddress) address_unref(host->defaultAddress);
     if(host->params.hostname) g_free(host->params.hostname);
-    g_timer_destroy(host->executionTimer);
 }
 
 void host_ref(Host* host) {
@@ -303,6 +314,7 @@ void host_unlock(Host* host) {
     g_mutex_unlock(&(host->lock));
 }
 
+#ifdef USE_PERF_TIMERS
 /* resumes the execution timer for this host */
 void host_continueExecutionTimer(Host* host) {
     MAGIC_ASSERT(host);
@@ -314,12 +326,7 @@ void host_stopExecutionTimer(Host* host) {
     MAGIC_ASSERT(host);
     g_timer_stop(host->executionTimer);
 }
-
-/* returns the fractional number of seconds that have been spent executing this host */
-gdouble host_getElapsedExecutionTime(Host* host) {
-    MAGIC_ASSERT(host);
-    return g_timer_elapsed(host->executionTimer, NULL);
-}
+#endif
 
 GQuark host_getID(Host* host) {
     MAGIC_ASSERT(host);

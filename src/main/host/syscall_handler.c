@@ -72,8 +72,10 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
         // Like the timer above, we use an epoll object for servicing
         // some syscalls, and so we won't assign it a fd handle.
         .epoll = epoll_new(),
+#ifdef USE_PERF_TIMERS
         // Used to track syscall handler performance
         .perfTimer = g_timer_new(),
+#endif
     };
 
     MAGIC_INIT(sys);
@@ -89,7 +91,11 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
 static void _syscallhandler_free(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
+#ifdef USE_PERF_TIMERS
     message("handled %li syscalls in %f seconds", sys->numSyscalls, sys->perfSecondsTotal);
+#else
+    message("handled %li syscalls", sys->numSyscalls);
+#endif
 
     if (sys->host) {
         host_unref(sys->host);
@@ -107,9 +113,11 @@ static void _syscallhandler_free(SysCallHandler* sys) {
     if (sys->epoll) {
         descriptor_unref(sys->epoll);
     }
+#ifdef USE_PERF_TIMERS
     if (sys->perfTimer) {
         g_timer_destroy(sys->perfTimer);
     }
+#endif
 
     MAGIC_CLEAR(sys);
     free(sys);
@@ -137,31 +145,40 @@ static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
           thread_getID(sys->thread), number, name,
           _syscallhandler_wasBlocked(sys) ? " (previously BLOCKed)" : "");
 
+#ifdef USE_PERF_TIMERS
     /* Track elapsed time during this syscall by marking the start time. */
     g_timer_start(sys->perfTimer);
+#endif
 }
 
 static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
                                          const char* name, SysCallReturn* scr) {
+#ifdef USE_PERF_TIMERS
     /* Add the cumulative elapsed seconds and num syscalls. */
     sys->perfSecondsCurrent += g_timer_elapsed(sys->perfTimer, NULL);
+#endif
 
     debug("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
-          "code=%d(%s) in %f seconds",
+          "code=%d(%s)",
           process_getPluginName(sys->process), thread_getID(sys->thread), number, name,
           _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "",
           scr->state == SYSCALL_DONE
               ? "DONE"
               : scr->state == SYSCALL_BLOCK ? "BLOCK"
                                             : scr->state == SYSCALL_NATIVE ? "NATIVE" : "UNKNOWN",
-          (int)scr->retval.as_i64, scr->retval.as_i64 < 0 ? strerror(-scr->retval.as_i64) : "n/a",
-          sys->perfSecondsCurrent);
+          (int)scr->retval.as_i64, scr->retval.as_i64 < 0 ? strerror(-scr->retval.as_i64) : "n/a");
+
+#ifdef USE_PERF_TIMERS
+    debug("handling syscall %ld %s took %f seconds", number, name, sys->perfSecondsCurrent);
+#endif
 
     if (scr->state != SYSCALL_BLOCK) {
         /* The syscall completed, count it and the cumulative time to complete it. */
         sys->numSyscalls++;
+#ifdef USE_PERF_TIMERS
         sys->perfSecondsTotal += sys->perfSecondsCurrent;
         sys->perfSecondsCurrent = 0;
+#endif
     }
 }
 
