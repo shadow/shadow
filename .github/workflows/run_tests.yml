@@ -29,12 +29,10 @@ jobs:
         cc: ['gcc', 'clang']
         buildtype: ['debug', 'release']
         include:
-          # TODO: re-enable coverage tests once we figure out why they're failing
-          #       (https://github.com/shadow/shadow/issues/1152)
           # Add a single coverage configuration
-          #- container: 'ubuntu:20.10'
-          #  cc: 'clang-11'
-          #  buildtype: 'coverage'
+          - container: 'ubuntu:20.10'
+            cc: 'clang-11'
+            buildtype: 'coverage'
           # Add a single configuration for testing the C syscall handlers
           - container: 'ubuntu:20.04'
             cc: 'clang'

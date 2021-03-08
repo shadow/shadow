@@ -56,7 +56,7 @@ esac
 
 if [ "$BUILDTYPE" = coverage ]
 then
-    RUST_TOOLCHAIN=nightly
+    RUST_TOOLCHAIN=nightly-2021-03-01
 else
     RUST_TOOLCHAIN=stable
 fi
@@ -67,6 +67,8 @@ then
 fi
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain "$RUST_TOOLCHAIN" ${RUSTPROFILE:+"$RUSTPROFILE"}
-PATH=$HOME/.cargo/bin:$PATH
+PATH="$HOME/.cargo/bin:$PATH"
+rustup default "${RUST_TOOLCHAIN}"
+
 # Force cargo to download its package index
 cargo search foo

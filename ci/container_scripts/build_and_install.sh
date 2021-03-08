@@ -21,19 +21,15 @@ esac
 case "$BUILDTYPE" in
     "release")
         OPTIONS=""
-        rustup default stable
         ;;
     "debug")
         OPTIONS="--debug"
-        rustup default stable
         ;;
     "use-c-syscalls")
         OPTIONS="--debug --use-c-syscalls"
-        rustup default stable
         ;;
     "coverage")
         OPTIONS="--debug --coverage"
-        rustup default nightly
         ;;
     *)
         echo "Unknown BUILDTYPE $BUILDTYPE"
