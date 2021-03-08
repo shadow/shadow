@@ -126,7 +126,8 @@ def main():
         help="number of tests to run simultaneously during testing",
         metavar="N", type=int,
         action="store", dest="njobs",
-        default=4)#multiprocessing.cpu_count())
+        # use a minimum of 4 jobs by default
+        default=max(4, multiprocessing.cpu_count()))
 
     parser_test.add_argument('-r', '--rerun-failed',
         help="Run only the tests that failed previously",
