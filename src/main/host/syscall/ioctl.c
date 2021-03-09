@@ -13,6 +13,7 @@
 #include "main/host/descriptor/file.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
+#include "main/host/descriptor/udp.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
@@ -22,11 +23,13 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static int _syscallhandler_ioctlHelper(SysCallHandler* sys, File* file, int fd,
+static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, File* file, int fd,
                                        unsigned long request,
                                        PluginPtr argPtr) {
     int result = 0;
 
+    // TODO: we should call file_ioctl() here, but depending on the request we may need to 
+    // copy in the request params first before passing them.
     switch (request) {
         default: {
             result = -EINVAL;
@@ -34,6 +37,82 @@ static int _syscallhandler_ioctlHelper(SysCallHandler* sys, File* file, int fd,
                     request, fd);
             break;
         }
+    }
+
+    return result;
+}
+
+static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
+                                       unsigned long request,
+                                       PluginPtr argPtr) {
+    int result = -EINVAL;
+    size_t buflen = 0;
+    
+    switch (request) {
+        case SIOCINQ: { // equivalent to FIONREAD
+            buflen = tcp_getInputBufferLength(tcp);
+            result = 0;
+            break;
+        }
+
+        case SIOCOUTQ: { // equivalent to TIOCOUTQ
+            buflen = tcp_getOutputBufferLength(tcp);
+            result = 0;
+            break;
+        }
+
+        case SIOCOUTQNSD: {
+            buflen = tcp_getNotSentBytes(tcp);
+            result = 0;
+            break;
+        }
+
+        default: {
+            result = -EINVAL;
+            warning("We do not yet handle ioctl request %lu on tcp socket %i",
+                    request, fd);
+            break;
+        }
+    }
+
+    if(result == 0) {
+        int* lenout = process_getWriteablePtr(sys->process, sys->thread, argPtr, sizeof(int));
+        *lenout = (int)buflen;
+    }
+
+    return result;
+}
+
+static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
+                                       unsigned long request,
+                                       PluginPtr argPtr) {
+    int result = -EINVAL;
+    size_t buflen = 0;
+    
+    switch (request) {
+        case SIOCINQ: { // equivalent to FIONREAD
+            buflen = socket_getInputBufferLength((Socket*)udp);
+            result = 0;
+            break;
+        }
+
+        case SIOCOUTQ: { // equivalent to TIOCOUTQ
+            buflen = socket_getInputBufferLength((Socket*)udp);
+            result = 0;
+            break;
+        }
+
+        default: {
+            result = -EINVAL;
+            warning("We do not yet handle ioctl request %lu on udp socket %i",
+                    request, fd);
+            break;
+        }
+    }
+
+    if(result == 0) {
+        int* lenout = process_getWriteablePtr(sys->process, sys->thread, argPtr, sizeof(int));
+        *lenout = (int)buflen;
     }
 
     return result;
@@ -57,38 +136,20 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    bool isInbufLenRequest = request == SIOCINQ || request == FIONREAD;
-    bool isOutbufLenRequest = request == SIOCOUTQ || request == TIOCOUTQ;
-
     LegacyDescriptorType dtype = descriptor_getType(desc);
 
     int result = 0;
     if (dtype == DT_FILE) {
         result =
-            _syscallhandler_ioctlHelper(sys, (File*)desc, fd, request, argPtr);
-    } else if ((dtype == DT_TCPSOCKET || dtype == DT_UDPSOCKET) &&
-               (isInbufLenRequest || isOutbufLenRequest)) {
-        size_t buflen = 0;
-
-        if (dtype == DT_TCPSOCKET) {
-            if (isInbufLenRequest) {
-                buflen = tcp_getInputBufferLength((TCP*)desc);
-            } else {
-                buflen = tcp_getOutputBufferLength((TCP*)desc);
-            }
-        } else {
-            if (isInbufLenRequest) {
-                buflen = socket_getInputBufferLength((Socket*)desc);
-            } else {
-                buflen = socket_getOutputBufferLength((Socket*)desc);
-            }
-        }
-
-        int* lenout = process_getWriteablePtr(sys->process, sys->thread, argPtr, sizeof(int));
-        *lenout = (int)buflen;
+            _syscallhandler_ioctlFileHelper(sys, (File*)desc, fd, request, argPtr);
+    } else if (dtype == DT_TCPSOCKET) {
+        result =
+            _syscallhandler_ioctlTCPHelper(sys, (TCP*)desc, fd, request, argPtr);
+    } else if (dtype == DT_UDPSOCKET) {
+        result =
+            _syscallhandler_ioctlUDPHelper(sys, (UDP*)desc, fd, request, argPtr);
     } else {
-        warning("We do not support ioctl request %lu on descriptor %i", request,
-                fd);
+        warning("We do not support ioctl request %lu on descriptor %i", request, fd);
         result = -ENOTTY;
     }
 
