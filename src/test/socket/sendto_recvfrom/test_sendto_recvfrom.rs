@@ -3,6 +3,11 @@
  * See LICENSE for licensing information
  */
 
+use std::hash::Hasher;
+
+use rand::RngCore;
+use rand::SeedableRng;
+
 use test_utils::TestEnvironment as TestEnv;
 use test_utils::{set, AsMutPtr, AsPtr};
 
@@ -420,12 +425,19 @@ fn test_nonblocking_tcp() -> Result<(), String> {
         // try to read 10 bytes; an EAGAIN error expected
         simple_recvfrom_helper(fd_accepted, &mut vec![0u8; 10], &[libc::EAGAIN], false)?;
 
-        let send_buf = vec![1u8; 1_000_000];
+        let mut send_hash = std::collections::hash_map::DefaultHasher::new();
+        let mut recv_hash = std::collections::hash_map::DefaultHasher::new();
+
+        let mut send_rng = rand::rngs::SmallRng::seed_from_u64(0);
+
+        let mut send_buf = vec![0u8; 1_000_000];
         let mut recv_buf = vec![0u8; 1_000_000];
 
         // send bytes until an EAGAIN error
         let mut bytes_sent = 0;
         loop {
+            send_rng.fill_bytes(&mut send_buf);
+
             let rv = unsafe {
                 libc::sendto(
                     fd_client,
@@ -446,10 +458,12 @@ fn test_nonblocking_tcp() -> Result<(), String> {
                 break;
             }
 
+            send_hash.write(&send_buf[..(rv as usize)]);
+
             bytes_sent += rv;
 
             // shadow needs to run events
-            assert_eq!(unsafe { libc::usleep(100) }, 0);
+            assert_eq!(unsafe { libc::usleep(1000) }, 0);
         }
 
         // read bytes until an EAGAIN error
@@ -475,13 +489,24 @@ fn test_nonblocking_tcp() -> Result<(), String> {
                 break;
             }
 
+            recv_hash.write(&recv_buf[..(rv as usize)]);
+
             bytes_read += rv;
 
             // shadow needs to run events
-            assert_eq!(unsafe { libc::usleep(100) }, 0);
+            assert_eq!(unsafe { libc::usleep(1000) }, 0);
         }
 
-        test_utils::result_assert_eq(bytes_sent, bytes_read, "Sent and read bytes don't match")?;
+        test_utils::result_assert_eq(
+            bytes_sent,
+            bytes_read,
+            "Number of sent and read bytes don't match",
+        )?;
+        test_utils::result_assert_eq(
+            send_hash.finish(),
+            recv_hash.finish(),
+            "Hash of sent and read bytes don't match",
+        )?;
 
         Ok(())
     })
