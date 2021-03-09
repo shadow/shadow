@@ -14,21 +14,29 @@ enum PollFn {
 
 const TEST_STR: &[u8; 4] = b"test";
 
-fn fd_write(fd: i32) -> Result<usize, String> {
-    nix::unistd::write(fd, TEST_STR).map_err(|e| e.to_string())
+fn fd_write(fd: i32) -> Result<(), String> {
+    let num = nix::unistd::write(fd, TEST_STR).map_err(|e| e.to_string())?;
+    if num != TEST_STR.len() {
+        return Err(format!(
+            "wrote {} bytes, but expected to write {}",
+            num,
+            TEST_STR.len()
+        ));
+    }
+    Ok(())
 }
 
 fn fd_read_cmp(fd: i32) -> Result<(), String> {
     let mut buf = [0_u8; 4];
-    nix::unistd::read(fd, &mut buf).map_err(|e| e.to_string())?;
-    if &buf != TEST_STR {
+    let num = nix::unistd::read(fd, &mut buf).map_err(|e| e.to_string())?;
+    if num != TEST_STR.len() || &buf != TEST_STR {
         return Err(format!(
-            "error: read bytes: {:?} instead of {:?} from pipe.",
-            buf, TEST_STR
+            "read bytes {:?} instead of {:?}",
+            &buf[..num],
+            TEST_STR
         ));
-    } else {
-        return Ok(());
     }
+    Ok(())
 }
 
 fn test_pipe() -> Result<(), String> {
