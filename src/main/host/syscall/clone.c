@@ -64,7 +64,10 @@ SysCallReturn syscallhandler_clone(SysCallHandler* sys, const SysCallArgs* args)
         thread_setTidAddress(child, ctid);
     }
 
-    unsigned long unhandled_flags = flags & ~handled_flags;
+    // Flags that are OK to have handled in the native clone call
+    unsigned long native_handled_flags = CLONE_SETTLS;
+
+    unsigned long unhandled_flags = flags & ~(handled_flags | native_handled_flags);
     if (unhandled_flags) {
         warning("Unhandled clone flags 0x%lx", unhandled_flags);
     }
