@@ -92,3 +92,4 @@ path = "ifaddrs/test_ifaddrs.rs"
 [dependencies]
 libc = "0.2"
 nix = "0.20.0"
+rand = { version="0.8.0", features=["small_rng"] }
