@@ -350,7 +350,7 @@ pub struct Descriptor {
     /// A count of how many open descriptors there are with reference to this file. Since a
     /// reference to the file can be held by other objects like an epoll file, it should
     /// be true that `Arc::strong_count(&self.count)` <= `Arc::strong_count(&self.file)`.
-    count: Arc<()>,
+    open_count: Arc<()>,
 }
 
 impl Descriptor {
@@ -358,7 +358,7 @@ impl Descriptor {
         Self {
             file,
             flags: DescriptorFlags::empty(),
-            count: Arc::new(()),
+            open_count: Arc::new(()),
         }
     }
 
@@ -374,8 +374,8 @@ impl Descriptor {
         self.flags = flags;
     }
 
-    pub fn get_fd_count(&self) -> usize {
-        Arc::<()>::strong_count(&self.count)
+    pub fn get_open_count(&self) -> usize {
+        Arc::<()>::strong_count(&self.open_count)
     }
 }
 

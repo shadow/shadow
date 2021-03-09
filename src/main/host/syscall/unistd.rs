@@ -40,7 +40,7 @@ pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
         };
 
         // if this is the last remaining descriptor
-        if desc.get_fd_count() == 1 {
+        if desc.get_open_count() == 1 {
             let posix_file = desc.get_file();
 
             result = Some(EventQueue::queue_and_run(|event_queue| {
