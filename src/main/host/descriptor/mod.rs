@@ -343,8 +343,13 @@ bitflags::bitflags! {
 
 #[derive(Clone, Debug)]
 pub struct Descriptor {
+    /// The PosixFile that this descriptor points to.
     file: Arc<AtomicRefCell<PosixFile>>,
+    /// Descriptor flags.
     flags: DescriptorFlags,
+    /// A count of how many open descriptors there are with reference to this file. Since a
+    /// reference to the file can be held by other objects like an epoll file, it should
+    /// be true that `Arc::strong_count(&self.count)` <= `Arc::strong_count(&self.file)`.
     count: Arc<()>,
 }
 
