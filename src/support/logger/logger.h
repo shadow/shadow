@@ -13,12 +13,16 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "support/logger/log_level.h"
 
 /* convenience macros for logging messages at various levels */
 // clang-format off
-#define error(...)      logger_log(logger_getDefault(), LOGLEVEL_ERROR, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
+
+// logger_log() should already exit/abort at error level, but we include it here explicitly
+// so that the compiler knows it will not return
+#define error(...)    { logger_log(logger_getDefault(), LOGLEVEL_ERROR, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__); abort(); }
 #define critical(...)   logger_log(logger_getDefault(), LOGLEVEL_CRITICAL, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define warning(...)    logger_log(logger_getDefault(), LOGLEVEL_WARNING, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define message(...)    logger_log(logger_getDefault(), LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
@@ -28,6 +32,7 @@
 #else
 #define debug(...)
 #endif
+
 // clang-format on
 
 typedef struct _Logger Logger;
