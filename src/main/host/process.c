@@ -139,11 +139,12 @@ guint process_getProcessID(Process* proc) {
 static void _process_reapThread(Process* process, Thread* thread) {
     thread_terminate(thread);
 
-    // If the `clear_child_tid` attribute on the thread is set, perform a futex
-    // wake on that address. This mechanism is typically used in `pthread_join`
-    // etc.  See `set_tid_address(2)`.
+    // If the `clear_child_tid` attribute on the thread is set, and there are
+    // any other threads left alive in the process, perform a futex wake on
+    // that address. This mechanism is typically used in `pthread_join` etc.
+    // See `set_tid_address(2)`.
     PluginVirtualPtr clear_child_tid_pvp = thread_getTidAddress(thread);
-    if (clear_child_tid_pvp.val) {
+    if (clear_child_tid_pvp.val && g_hash_table_size(process->threads) > 1) {
         pid_t* clear_child_tid =
             process_getWriteablePtr(process, thread, clear_child_tid_pvp, sizeof(pid_t*));
         if (!clear_child_tid) {
@@ -162,6 +163,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
             abort();
         }
         *clear_child_tid = 0;
+        process_flushPtrs(process, thread);
 
         FutexTable* ftable = host_getFutexTable(process->host);
         utility_assert(ftable);
