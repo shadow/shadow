@@ -25,7 +25,7 @@ void rrsocketqueue_destroy(RrSocketQueue* self, void (*fn_processItem)(const Com
 
     if (fn_processItem != NULL) {
         while (!rrsocketqueue_isEmpty(self)) {
-            CompatSocket socket;
+            CompatSocket socket = {0};
             bool found = rrsocketqueue_pop(self, &socket);
 
             utility_assert(found);
@@ -63,6 +63,7 @@ bool rrsocketqueue_pop(RrSocketQueue* self, CompatSocket* socket) {
 void rrsocketqueue_push(RrSocketQueue* self, const CompatSocket* socket) {
     utility_assert(self != NULL);
     utility_assert(self->queue != NULL);
+    utility_assert(socket->type != CST_NONE);
     g_queue_push_tail(self->queue, (void*)compatsocket_toTagged(socket));
 }
 
@@ -109,7 +110,7 @@ void fifosocketqueue_destroy(FifoSocketQueue* self, void (*fn_processItem)(const
 
     if (fn_processItem != NULL) {
         while (!fifosocketqueue_isEmpty(self)) {
-            CompatSocket socket;
+            CompatSocket socket = {0};
             bool found = fifosocketqueue_pop(self, &socket);
 
             utility_assert(found);
@@ -147,6 +148,7 @@ bool fifosocketqueue_pop(FifoSocketQueue* self, CompatSocket* socket) {
 void fifosocketqueue_push(FifoSocketQueue* self, const CompatSocket* socket) {
     utility_assert(self != NULL);
     utility_assert(self->queue != NULL);
+    utility_assert(socket->type != CST_NONE);
     priorityqueue_push(self->queue, (void*)compatsocket_toTagged(socket));
 }
 

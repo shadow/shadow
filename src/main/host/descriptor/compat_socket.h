@@ -15,6 +15,7 @@ typedef struct _CompatSocket CompatSocket;
 #include "main/utility/tagged_ptr.h"
 
 enum _CompatSocketTypes {
+    CST_NONE,
     CST_LEGACY_SOCKET,
 };
 

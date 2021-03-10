@@ -382,15 +382,16 @@ static void _networkinterface_capturePacket(NetworkInterface* interface, Packet*
     g_free(pcapPacket);
 }
 
-static bool _boundsockets_lookup(GHashTable* table, gchar* key, CompatSocket* socket) {
+static CompatSocket _boundsockets_lookup(GHashTable* table, gchar* key) {
     void* ptr = g_hash_table_lookup(table, key);
 
     if (ptr == NULL) {
-        return false;
+        CompatSocket compatSocket = {0};
+        compatSocket.type = CST_NONE;
+        return compatSocket;
     }
 
-    *socket = compatsocket_fromTagged((uintptr_t)ptr);
-    return true;
+    return compatsocket_fromTagged((uintptr_t)ptr);
 }
 
 static void _networkinterface_receivePacket(NetworkInterface* interface, Packet* packet) {
@@ -410,31 +411,31 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
     gchar* key = _networkinterface_getAssociationKey(interface, ptype, bindPort, 0, 0);
     debug("looking for socket associated with general key %s", key);
 
-    CompatSocket socket;
-    bool found = _boundsockets_lookup(interface->boundSockets, key, &socket);
+    CompatSocket socket = _boundsockets_lookup(interface->boundSockets, key);
     g_free(key);
 
-    if (!found) {
+    if (socket.type == CST_NONE) {
         /* now check the destination-specific key */
         in_addr_t peerIP = packet_getSourceIP(packet);
         in_port_t peerPort = packet_getSourcePort(packet);
 
         key = _networkinterface_getAssociationKey(interface, ptype, bindPort, peerIP, peerPort);
         debug("looking for socket associated with specific key %s", key);
-        found = _boundsockets_lookup(interface->boundSockets, key, &socket);
+        socket = _boundsockets_lookup(interface->boundSockets, key);
         g_free(key);
     }
 
     /* if the socket closed, just drop the packet */
-    gint socketHandle = -1;
-    if (found) {
-        if (socket.type == CST_LEGACY_SOCKET) {
-            socketHandle =
-                *descriptor_getHandleReference((LegacyDescriptor*)socket.object.as_legacy_socket);
-        }
+    if (socket.type != CST_NONE) {
         compatsocket_pushInPacket(&socket, packet);
     } else {
         packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_DROPPED);
+    }
+
+    gint socketHandle = -1;
+    if (socket.type == CST_LEGACY_SOCKET) {
+        socketHandle =
+            *descriptor_getHandleReference((LegacyDescriptor*)socket.object.as_legacy_socket);
     }
 
     /* count our bandwidth usage by interface, and by socket handle if possible */
@@ -498,7 +499,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, g
 
     while (!packet && !rrsocketqueue_isEmpty(&interface->rrQueue)) {
         /* do round robin to get the next packet from the next socket */
-        CompatSocket socket;
+        CompatSocket socket = {0};
         bool found = rrsocketqueue_pop(&interface->rrQueue, &socket);
 
         if (!found) {
@@ -536,7 +537,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
 
     while (!packet && !fifosocketqueue_isEmpty(&interface->fifoQueue)) {
         /* do fifo to get the next packet from the next socket */
-        CompatSocket socket;
+        CompatSocket socket = {0};
         bool found = fifosocketqueue_pop(&interface->fifoQueue, &socket);
 
         if (!found) {
