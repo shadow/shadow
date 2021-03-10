@@ -482,7 +482,7 @@ SysCallReturn syscallhandler_getdents(SysCallHandler* sys,
 
     /* Get the path string from the plugin. */
     struct linux_dirent* dirp =
-        process_getWriteablePtr(sys->process, sys->thread, dirpPtr, sizeof(*dirp));
+        process_getWriteablePtr(sys->process, sys->thread, dirpPtr, count);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
@@ -512,7 +512,7 @@ SysCallReturn syscallhandler_getdents64(SysCallHandler* sys,
 
     /* Get the path string from the plugin. */
     struct linux_dirent64* dirp =
-        process_getWriteablePtr(sys->process, sys->thread, dirpPtr, sizeof(*dirp));
+        process_getWriteablePtr(sys->process, sys->thread, dirpPtr, count);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
