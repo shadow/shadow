@@ -24,11 +24,10 @@
 ///////////////////////////////////////////////////////////
 
 static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, File* file, int fd,
-                                       unsigned long request,
-                                       PluginPtr argPtr) {
+                                           unsigned long request, PluginPtr argPtr) {
     int result = 0;
 
-    // TODO: we should call file_ioctl() here, but depending on the request we may need to 
+    // TODO: we should call file_ioctl() here, but depending on the request we may need to
     // copy in the request params first before passing them.
     switch (request) {
         default: {
@@ -43,11 +42,10 @@ static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, File* file, int 
 }
 
 static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
-                                       unsigned long request,
-                                       PluginPtr argPtr) {
+                                          unsigned long request, PluginPtr argPtr) {
     int result = -EINVAL;
     size_t buflen = 0;
-    
+
     switch (request) {
         case SIOCINQ: { // equivalent to FIONREAD
             buflen = tcp_getInputBufferLength(tcp);
@@ -69,13 +67,12 @@ static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
 
         default: {
             result = -EINVAL;
-            warning("We do not yet handle ioctl request %lu on tcp socket %i",
-                    request, fd);
+            warning("We do not yet handle ioctl request %lu on tcp socket %i", request, fd);
             break;
         }
     }
 
-    if(result == 0) {
+    if (result == 0) {
         int* lenout = process_getWriteablePtr(sys->process, sys->thread, argPtr, sizeof(int));
         *lenout = (int)buflen;
     }
@@ -84,11 +81,10 @@ static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
 }
 
 static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
-                                       unsigned long request,
-                                       PluginPtr argPtr) {
+                                          unsigned long request, PluginPtr argPtr) {
     int result = -EINVAL;
     size_t buflen = 0;
-    
+
     switch (request) {
         case SIOCINQ: { // equivalent to FIONREAD
             buflen = socket_getInputBufferLength((Socket*)udp);
@@ -104,13 +100,12 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
 
         default: {
             result = -EINVAL;
-            warning("We do not yet handle ioctl request %lu on udp socket %i",
-                    request, fd);
+            warning("We do not yet handle ioctl request %lu on udp socket %i", request, fd);
             break;
         }
     }
 
-    if(result == 0) {
+    if (result == 0) {
         int* lenout = process_getWriteablePtr(sys->process, sys->thread, argPtr, sizeof(int));
         *lenout = (int)buflen;
     }
@@ -140,14 +135,11 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
 
     int result = 0;
     if (dtype == DT_FILE) {
-        result =
-            _syscallhandler_ioctlFileHelper(sys, (File*)desc, fd, request, argPtr);
+        result = _syscallhandler_ioctlFileHelper(sys, (File*)desc, fd, request, argPtr);
     } else if (dtype == DT_TCPSOCKET) {
-        result =
-            _syscallhandler_ioctlTCPHelper(sys, (TCP*)desc, fd, request, argPtr);
+        result = _syscallhandler_ioctlTCPHelper(sys, (TCP*)desc, fd, request, argPtr);
     } else if (dtype == DT_UDPSOCKET) {
-        result =
-            _syscallhandler_ioctlUDPHelper(sys, (UDP*)desc, fd, request, argPtr);
+        result = _syscallhandler_ioctlUDPHelper(sys, (UDP*)desc, fd, request, argPtr);
     } else {
         warning("We do not support ioctl request %lu on descriptor %i", request, fd);
         result = -ENOTTY;

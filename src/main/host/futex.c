@@ -85,8 +85,9 @@ unsigned int futex_wake(Futex* futex, unsigned int numWakeups) {
         // Only call if the listener is still valid
         if (g_hash_table_contains(futex->listeners, listener)) {
             // If this listener was already woken up, skip it this time
-            bool did_wakeup = (bool)GPOINTER_TO_UINT(g_hash_table_lookup(futex->listeners, listener));
-            if(!did_wakeup) {
+            bool did_wakeup =
+                (bool)GPOINTER_TO_UINT(g_hash_table_lookup(futex->listeners, listener));
+            if (!did_wakeup) {
                 // Tell the status listener to unblock the thread waiting on the futex
                 statuslistener_onStatusChanged(listener, STATUS_FUTEX_WAKEUP, STATUS_FUTEX_WAKEUP);
 
