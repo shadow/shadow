@@ -50,6 +50,13 @@
 #define SYS_copy_file_range 326
 #endif
 
+static bool _useMM = true;
+OPTION_EXPERIMENTAL_ENTRY("disable-memory-manager", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE,
+                          &_useMM,
+                          "Disable the MemoryManager. This can be useful for debugging, but will "
+                          "hurt performance in most cases.",
+                          NULL)
+
 SysCallHandler* syscallhandler_new(Host* host, Process* process,
                                    Thread* thread) {
     utility_assert(host);
@@ -218,7 +225,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     // syscall after an `exec` (which destroys the MemoryManager). It's done
     // here because the MemoryManager needs a plugin thread that's ready to
     // make syscalls in order to perform its initialization.
-    if (!process_getMemoryManager(sys->process)) {
+    if (_useMM && !process_getMemoryManager(sys->process)) {
         process_setMemoryManager(sys->process, memorymanager_new(sys->thread));
     }
     SysCallReturn scr;

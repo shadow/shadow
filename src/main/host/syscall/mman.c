@@ -236,9 +236,9 @@ SysCallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
 
     // Delegate to the memoryManager.
     MemoryManager* mm = process_getMemoryManager(sys->process);
-    utility_assert(mm);
-    SysCallReg result = memorymanager_handleBrk(mm, sys->thread, newBrk);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    return mm ? (SysCallReturn){.state = SYSCALL_DONE,
+                                .retval = memorymanager_handleBrk(mm, sys->thread, newBrk)}
+              : (SysCallReturn){.state = SYSCALL_NATIVE};
 }
 
 SysCallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) {
@@ -273,10 +273,10 @@ SysCallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args
 
     // Delegate to the memoryManager.
     MemoryManager* mm = process_getMemoryManager(sys->process);
-    utility_assert(mm);
-    SysCallReg result =
-        memorymanager_handleMremap(mm, sys->thread, old_addr, old_size, new_size, flags, new_addr);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    return mm ? (SysCallReturn){.state = SYSCALL_DONE,
+                                .retval = memorymanager_handleMremap(
+                                    mm, sys->thread, old_addr, old_size, new_size, flags, new_addr)}
+              : (SysCallReturn){.state = SYSCALL_NATIVE};
 }
 
 SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args) {
@@ -285,9 +285,9 @@ SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args
 
     // Delegate to the memoryManager.
     MemoryManager* mm = process_getMemoryManager(sys->process);
-    utility_assert(mm);
-    SysCallReg result = memorymanager_handleMunmap(mm, sys->thread, addr, len);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    return mm ? (SysCallReturn){.state = SYSCALL_DONE,
+                                .retval = memorymanager_handleMunmap(mm, sys->thread, addr, len)}
+              : (SysCallReturn){.state = SYSCALL_NATIVE};
 }
 
 SysCallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* args) {
@@ -297,7 +297,8 @@ SysCallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* ar
 
     // Delegate to the memoryManager.
     MemoryManager* mm = process_getMemoryManager(sys->process);
-    utility_assert(mm);
-    SysCallReg result = memorymanager_handleMprotect(mm, sys->thread, addr, len, prot);
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    return mm ? (SysCallReturn){.state = SYSCALL_DONE,
+                                .retval =
+                                    memorymanager_handleMprotect(mm, sys->thread, addr, len, prot)}
+              : (SysCallReturn){.state = SYSCALL_NATIVE};
 }
