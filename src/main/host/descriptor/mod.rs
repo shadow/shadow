@@ -114,7 +114,7 @@ impl From<FileStatus> for c::Status {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum NewStatusListenerFilter {
     Never,
     OffToOn,
@@ -260,15 +260,31 @@ impl IsSend for PosixFile {}
 impl IsSync for PosixFile {}
 
 impl PosixFile {
-    pub fn read(&mut self, bytes: &mut [u8], event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallReturn {
         match self {
-            Self::Pipe(f) => f.read(bytes, event_queue),
+            Self::Pipe(f) => f.close(event_queue),
         }
     }
 
-    pub fn write(&mut self, bytes: &[u8], event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn read(
+        &mut self,
+        bytes: &mut [u8],
+        offset: libc::off_t,
+        event_queue: &mut EventQueue,
+    ) -> SyscallReturn {
         match self {
-            Self::Pipe(f) => f.write(bytes, event_queue),
+            Self::Pipe(f) => f.read(bytes, offset, event_queue),
+        }
+    }
+
+    pub fn write(
+        &mut self,
+        bytes: &[u8],
+        offset: libc::off_t,
+        event_queue: &mut EventQueue,
+    ) -> SyscallReturn {
+        match self {
+            Self::Pipe(f) => f.write(bytes, offset, event_queue),
         }
     }
 
@@ -303,6 +319,20 @@ impl PosixFile {
     }
 }
 
+impl std::fmt::Debug for PosixFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pipe(_) => write!(f, "Pipe")?,
+        }
+        write!(
+            f,
+            "(status: {:?}, flags: {:?})",
+            self.status(),
+            self.get_flags()
+        )
+    }
+}
+
 bitflags::bitflags! {
     // Linux only supports a single descriptor flag:
     // https://www.gnu.org/software/libc/manual/html_node/Descriptor-Flags.html
@@ -311,10 +341,16 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Descriptor {
+    /// The PosixFile that this descriptor points to.
     file: Arc<AtomicRefCell<PosixFile>>,
+    /// Descriptor flags.
     flags: DescriptorFlags,
+    /// A count of how many open descriptors there are with reference to this file. Since a
+    /// reference to the file can be held by other objects like an epoll file, it should
+    /// be true that `Arc::strong_count(&self.count)` <= `Arc::strong_count(&self.file)`.
+    open_count: Arc<()>,
 }
 
 impl Descriptor {
@@ -322,6 +358,7 @@ impl Descriptor {
         Self {
             file,
             flags: DescriptorFlags::empty(),
+            open_count: Arc::new(()),
         }
     }
 
@@ -335,6 +372,10 @@ impl Descriptor {
 
     pub fn set_flags(&mut self, flags: DescriptorFlags) {
         self.flags = flags;
+    }
+
+    pub fn get_open_count(&self) -> usize {
+        Arc::<()>::strong_count(&self.open_count)
     }
 }
 

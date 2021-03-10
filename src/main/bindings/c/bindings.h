@@ -139,7 +139,11 @@ SysCallReturn rustsyscallhandler_dup(SysCallHandler *sys, const SysCallArgs *arg
 
 SysCallReturn rustsyscallhandler_read(SysCallHandler *sys, const SysCallArgs *args);
 
+SysCallReturn rustsyscallhandler_pread64(SysCallHandler *sys, const SysCallArgs *args);
+
 SysCallReturn rustsyscallhandler_write(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_pwrite64(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_pipe(SysCallHandler *sys, const SysCallArgs *args);
 
@@ -150,6 +154,8 @@ ByteQueue *bytequeue_new(size_t chunk_size);
 void bytequeue_free(ByteQueue *bq_ptr);
 
 size_t bytequeue_len(ByteQueue *bq);
+
+bool bytequeue_isEmpty(ByteQueue *bq);
 
 void bytequeue_push(ByteQueue *bq, const unsigned char *src, size_t len);
 

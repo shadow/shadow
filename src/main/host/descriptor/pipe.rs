@@ -43,7 +43,27 @@ impl PipeFile {
         self.flags = flags;
     }
 
-    pub fn read(&mut self, bytes: &mut [u8], event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallReturn {
+        // set the closed flag and remove the active flag
+        self.copy_status(
+            FileStatus::CLOSED | FileStatus::ACTIVE,
+            FileStatus::CLOSED,
+            event_queue,
+        );
+        SyscallReturn::Success(0)
+    }
+
+    pub fn read(
+        &mut self,
+        bytes: &mut [u8],
+        offset: libc::off_t,
+        event_queue: &mut EventQueue,
+    ) -> SyscallReturn {
+        // pipes don't support seeking
+        if offset != 0 {
+            return SyscallReturn::Error(nix::errno::Errno::ESPIPE);
+        }
+
         // if the file is not open for reading, return EBADF
         if !self.mode.contains(FileMode::READ) {
             return SyscallReturn::Error(nix::errno::Errno::EBADF);
@@ -54,7 +74,17 @@ impl PipeFile {
         SyscallReturn::Success(num_read as i32)
     }
 
-    pub fn write(&mut self, bytes: &[u8], event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn write(
+        &mut self,
+        bytes: &[u8],
+        offset: libc::off_t,
+        event_queue: &mut EventQueue,
+    ) -> SyscallReturn {
+        // pipes don't support seeking
+        if offset != 0 {
+            return SyscallReturn::Error(nix::errno::Errno::ESPIPE);
+        }
+
         // if the file is not open for writing, return EBADF
         if !self.mode.contains(FileMode::WRITE) {
             return SyscallReturn::Error(nix::errno::Errno::EBADF);
@@ -63,7 +93,7 @@ impl PipeFile {
         let num_written = self.buffer.borrow_mut().write(bytes, event_queue);
 
         // the write would block if we could not write any bytes, but were asked to
-        if num_written == 0 && bytes.len() > 0 {
+        if num_written == 0 && !bytes.is_empty() {
             SyscallReturn::Error(nix::errno::EWOULDBLOCK)
         } else {
             SyscallReturn::Success(num_written as i32)
@@ -72,7 +102,7 @@ impl PipeFile {
 
     pub fn enable_notifications(arc: &Arc<AtomicRefCell<PosixFile>>) {
         // we remove some of these later in this function
-        let monitoring = FileStatus::CLOSED | FileStatus::READABLE | FileStatus::WRITABLE;
+        let monitoring = FileStatus::READABLE | FileStatus::WRITABLE;
 
         let weak = Arc::downgrade(arc);
         match *arc.borrow_mut() {

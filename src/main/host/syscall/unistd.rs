@@ -18,6 +18,8 @@ pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
 
     debug!("Trying to close fd {}", fd);
 
+    let result;
+
     // scope used to make sure that desc cannot be used after deregistering it
     {
         // get the descriptor, or return early if it doesn't exist
@@ -27,48 +29,63 @@ pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
         };
 
         // if it's a legacy descriptor, use the C syscall handler instead
-        if let CompatDescriptor::Legacy(_) = desc {
-            return unsafe {
-                c::syscallhandler_close(
+        let desc = match desc {
+            CompatDescriptor::New(d) => d,
+            CompatDescriptor::Legacy(_) => unsafe {
+                return c::syscallhandler_close(
                     sys as *mut c::SysCallHandler,
                     args as *const c::SysCallArgs,
-                )
-            };
+                );
+            },
+        };
+
+        // if this is the last remaining descriptor
+        if desc.get_open_count() == 1 {
+            let posix_file = desc.get_file();
+
+            result = Some(EventQueue::queue_and_run(|event_queue| {
+                posix_file.borrow_mut().close(event_queue)
+            }));
+        } else {
+            result = None;
         }
     }
 
+    // according to "man 2 close", in Linux any errors that may occur will happen after the fd is
+    // released, so we should always deregister the descriptor
     unsafe { c::process_deregisterCompatDescriptor(sys.process, fd) };
 
-    SyscallReturn::Success(0).into()
+    if let Some(result) = result {
+        result.into()
+    } else {
+        SyscallReturn::Success(0).into()
+    }
 }
 
 pub fn dup(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
 
-    dup_helper(sys, args, fd)
-}
-
-pub fn dup_helper(
-    sys: &mut c::SysCallHandler,
-    args: &c::SysCallArgs,
-    fd: libc::c_int,
-) -> c::SysCallReturn {
     // get the descriptor, or return early if it doesn't exist
     let desc = match syscall::get_descriptor(fd, sys.process) {
         Ok(d) => unsafe { &mut *d },
         Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
-    // if it's a legacy descriptor, use the C syscall handler instead
-    let desc = match desc {
-        CompatDescriptor::New(d) => d,
+    match desc {
+        CompatDescriptor::New(desc) => dup_helper(sys, fd, desc),
+        // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
-            return c::syscallhandler_dup(
-                sys as *mut c::SysCallHandler,
-                args as *const c::SysCallArgs,
-            );
+            c::syscallhandler_dup(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
         },
-    };
+    }
+}
+
+pub fn dup_helper(
+    sys: &mut c::SysCallHandler,
+    fd: libc::c_int,
+    desc: &Descriptor,
+) -> c::SysCallReturn {
+    debug!("Duping fd {} ({:?})", fd, desc);
 
     // clone the descriptor and register it
     let new_desc = CompatDescriptor::New(desc.clone());
@@ -84,36 +101,52 @@ pub fn read(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRet
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
     let buf_ptr = unsafe { args.args[1].as_ptr };
     let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
-    let offset = 0 as libc::off_t;
+    let offset = 0;
 
-    read_helper(sys, args, fd, buf_ptr, buf_size, offset)
-}
-
-fn read_helper(
-    sys: &mut c::SysCallHandler,
-    args: &c::SysCallArgs,
-    fd: libc::c_int,
-    buf_ptr: c::PluginPtr,
-    buf_size: libc::size_t,
-    _offset: libc::off_t,
-) -> c::SysCallReturn {
     // get the descriptor, or return early if it doesn't exist
     let desc = match syscall::get_descriptor(fd, sys.process) {
         Ok(d) => unsafe { &mut *d },
         Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
-    // if it's a legacy descriptor, use the C syscall handler instead
-    let desc = match desc {
-        CompatDescriptor::New(d) => d,
+    match desc {
+        CompatDescriptor::New(desc) => read_helper(sys, fd, desc, buf_ptr, buf_size, offset),
+        // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
-            return c::syscallhandler_read(
-                sys as *mut c::SysCallHandler,
-                args as *const c::SysCallArgs,
-            );
+            c::syscallhandler_read(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
         },
+    }
+}
+
+pub fn pread64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+    let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
+    let buf_ptr = unsafe { args.args[1].as_ptr };
+    let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
+    let offset = unsafe { args.args[3].as_i64 } as libc::off_t;
+
+    // get the descriptor, or return early if it doesn't exist
+    let desc = match syscall::get_descriptor(fd, sys.process) {
+        Ok(d) => unsafe { &mut *d },
+        Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
+    match desc {
+        CompatDescriptor::New(desc) => read_helper(sys, fd, desc, buf_ptr, buf_size, offset),
+        // if it's a legacy descriptor, use the C syscall handler instead
+        CompatDescriptor::Legacy(_) => unsafe {
+            c::syscallhandler_pread64(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
+        },
+    }
+}
+
+fn read_helper(
+    sys: &mut c::SysCallHandler,
+    fd: libc::c_int,
+    desc: &Descriptor,
+    buf_ptr: c::PluginPtr,
+    buf_size: libc::size_t,
+    offset: libc::off_t,
+) -> c::SysCallReturn {
     // need a non-null buffer
     if buf_ptr.val == 0 {
         return SyscallReturn::Error(nix::errno::Errno::EFAULT).into();
@@ -137,7 +170,7 @@ fn read_helper(
 
     // call the file's read(), and run any resulting events
     let result = EventQueue::queue_and_run(|event_queue| {
-        posix_file.borrow_mut().read(&mut buf, event_queue)
+        posix_file.borrow_mut().read(&mut buf, offset, event_queue)
     });
 
     // if the syscall would block and it's a blocking descriptor
@@ -160,36 +193,52 @@ pub fn write(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
     let buf_ptr = unsafe { args.args[1].as_ptr };
     let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
-    let offset = 0 as libc::off_t;
+    let offset = 0;
 
-    write_helper(sys, args, fd, buf_ptr, buf_size, offset)
-}
-
-fn write_helper(
-    sys: &mut c::SysCallHandler,
-    args: &c::SysCallArgs,
-    fd: libc::c_int,
-    buf_ptr: c::PluginPtr,
-    buf_size: libc::size_t,
-    _offset: libc::off_t,
-) -> c::SysCallReturn {
     // get the descriptor, or return early if it doesn't exist
     let desc = match syscall::get_descriptor(fd, sys.process) {
         Ok(d) => unsafe { &mut *d },
         Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
-    // if it's a legacy descriptor, use the C syscall handler instead
-    let desc = match desc {
-        CompatDescriptor::New(d) => d,
+    match desc {
+        CompatDescriptor::New(desc) => write_helper(sys, fd, desc, buf_ptr, buf_size, offset),
+        // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
-            return c::syscallhandler_write(
-                sys as *mut c::SysCallHandler,
-                args as *const c::SysCallArgs,
-            );
+            c::syscallhandler_write(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
         },
+    }
+}
+
+pub fn pwrite64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+    let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
+    let buf_ptr = unsafe { args.args[1].as_ptr };
+    let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
+    let offset = unsafe { args.args[3].as_i64 } as libc::off_t;
+
+    // get the descriptor, or return early if it doesn't exist
+    let desc = match syscall::get_descriptor(fd, sys.process) {
+        Ok(d) => unsafe { &mut *d },
+        Err(errno) => return SyscallReturn::Error(errno).into(),
     };
 
+    match desc {
+        CompatDescriptor::New(desc) => write_helper(sys, fd, desc, buf_ptr, buf_size, offset),
+        // if it's a legacy descriptor, use the C syscall handler instead
+        CompatDescriptor::Legacy(_) => unsafe {
+            c::syscallhandler_pwrite64(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
+        },
+    }
+}
+
+fn write_helper(
+    sys: &mut c::SysCallHandler,
+    _fd: libc::c_int,
+    desc: &Descriptor,
+    buf_ptr: c::PluginPtr,
+    buf_size: libc::size_t,
+    offset: libc::off_t,
+) -> c::SysCallReturn {
     // need a non-null buffer
     if buf_ptr.val == 0 {
         return SyscallReturn::Error(nix::errno::Errno::EFAULT).into();
@@ -206,8 +255,9 @@ fn write_helper(
     let file_flags = posix_file.borrow().get_flags();
 
     // call the file's write(), and run any resulting events
-    let result =
-        EventQueue::queue_and_run(|event_queue| posix_file.borrow_mut().write(&buf, event_queue));
+    let result = EventQueue::queue_and_run(|event_queue| {
+        posix_file.borrow_mut().write(&buf, offset, event_queue)
+    });
 
     // if the syscall would block and it's a blocking descriptor
     if result == SyscallReturn::Error(nix::errno::EWOULDBLOCK)
@@ -350,12 +400,30 @@ mod export {
     }
 
     #[no_mangle]
+    pub extern "C" fn rustsyscallhandler_pread64(
+        sys: *mut c::SysCallHandler,
+        args: *const c::SysCallArgs,
+    ) -> c::SysCallReturn {
+        assert!(!sys.is_null() && !args.is_null());
+        pread64(unsafe { &mut *sys }, unsafe { &*args })
+    }
+
+    #[no_mangle]
     pub extern "C" fn rustsyscallhandler_write(
         sys: *mut c::SysCallHandler,
         args: *const c::SysCallArgs,
     ) -> c::SysCallReturn {
         assert!(!sys.is_null() && !args.is_null());
         write(unsafe { &mut *sys }, unsafe { &*args })
+    }
+
+    #[no_mangle]
+    pub extern "C" fn rustsyscallhandler_pwrite64(
+        sys: *mut c::SysCallHandler,
+        args: *const c::SysCallArgs,
+    ) -> c::SysCallReturn {
+        assert!(!sys.is_null() && !args.is_null());
+        pwrite64(unsafe { &mut *sys }, unsafe { &*args })
     }
 
     #[no_mangle]
