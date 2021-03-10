@@ -498,13 +498,8 @@ void host_disassociateInterface(Host* host, const CompatSocket* socket) {
     }
 
     in_addr_t bindAddress;
-    if (socket->type == CST_LEGACY_SOCKET) {
-        if (!socket_isBound(socket->object.as_legacy_socket)) {
-            return;
-        }
-        socket_getSocketName(socket->object.as_legacy_socket, &bindAddress, NULL);
-    } else {
-        error("Unexpected CompatSocket type");
+    if (!compatsocket_getSocketName(socket, &bindAddress, NULL)) {
+        return;
     }
 
     if (bindAddress == htonl(INADDR_ANY)) {
