@@ -138,6 +138,8 @@ set(CMAKE_C_FLAGS_DEBUG "")
 set(CMAKE_C_FLAGS_RELEASE "")
 add_compile_options(-ggdb)
 add_compile_options(-fno-omit-frame-pointer)
+add_compile_options(-Wreturn-type)
+add_compile_options(-Wswitch)
 
 message(STATUS "Found CMAKE_BUILD_TYPE='$ENV{CMAKE_BUILD_TYPE}'")
 if("$ENV{CMAKE_BUILD_TYPE}" STREQUAL "Debug")
