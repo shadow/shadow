@@ -1,5 +1,9 @@
+# The LD_LIBRARY_PATH here points to where we put the patched libc binaries in
+# our CI, to work around https://github.com/shadow/shadow/issues/892.  It should
+# have no effect in environments where that directory doesn't exist.
 options:
   stoptime: 5
+  environment: LD_LIBRARY_PATH=/opt/libc-interpose-centos7
 topology:
 - graphml: |
     <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">

@@ -86,17 +86,8 @@ fn test_pipe() -> Result<(), String> {
     })
 }
 
-fn test_creat() -> Result<(), String> {
-    let test_file = b"testpoll.txt";
-    let test_file = std::ffi::CString::new(*test_file).unwrap();
-    let fd = unsafe {
-        libc::creat(
-            test_file.as_bytes_with_nul() as *const _ as *const libc::c_char,
-            0o644,
-        )
-    };
-
-    nix::errno::Errno::result(fd).map_err(|e| e.to_string())?;
+fn test_regular_file() -> Result<(), String> {
+    let (fd, path) = nix::unistd::mkstemp(&b"testpoll_XXXXXX"[..]).map_err(|e| e.to_string())?;
 
     test_utils::run_and_close_fds(&[fd], || {
         /* poll will check when testpoll has info to read */
@@ -123,11 +114,13 @@ fn test_creat() -> Result<(), String> {
 
     /* Check again, should be something to read */
     let fd = nix::fcntl::open(
-        test_file.as_ref(),
+        &path,
         nix::fcntl::OFlag::O_RDONLY,
         nix::sys::stat::Mode::empty(),
     )
     .map_err(|e| e.to_string())?;
+
+    nix::unistd::unlink(&path).map_err(|e| e.to_string())?;
 
     test_utils::run_and_close_fds(&[fd], || {
         /* poll will check when testpoll has info to read */
@@ -284,8 +277,8 @@ fn main() -> Result<(), String> {
     let mut tests: Vec<test_utils::ShadowTest<_, _>> = vec![
         test_utils::ShadowTest::new("test_pipe", test_pipe, set![TestEnv::Libc, TestEnv::Shadow]),
         test_utils::ShadowTest::new(
-            "test_creat",
-            test_creat,
+            "test_regular_file",
+            test_regular_file,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
     ];
