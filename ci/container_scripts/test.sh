@@ -4,8 +4,12 @@ set -euo pipefail
 
 if [ "$BUILDTYPE" = "coverage" ]
 then
-    # Preload tests are broken in coverage builds: https://github.com/shadow/shadow/issues/867
-    EXCLUDE="shadow-preload"
+    # Preload tests are broken in coverage builds:
+    # https://github.com/shadow/shadow/issues/867
+    #
+    # Hybrid mode is currently very slow, leading to timeouts in coverage builds.
+    # https://github.com/shadow/shadow/issues/1168
+    EXCLUDE="shadow-preload|shadow-hybrid"
 else
     EXCLUDE=""
 fi
