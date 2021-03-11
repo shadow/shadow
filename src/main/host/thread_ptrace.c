@@ -52,6 +52,14 @@ OPTION_EXPERIMENTAL_ENTRY("disable-o-n-waitpid-workarounds", 0, G_OPTION_FLAG_RE
                           "otherwise result in excessive detaching and reattaching",
                           NULL)
 
+// Because of <https://github.com/shadow/shadow/issues/1134> we also always use __WNOTHREAD when
+// calling waitpid. Otherwise if the target task isn't waitable yet, the kernel will move onto
+// checking its siblings children.
+//
+// We can use this unconditionally, since there's no down-side as long as the target pid is the
+// current thread's tracee.
+#define WAITPID_COMMON_OPTIONS __WNOTHREAD
+
 static char SYSCALL_INSTRUCTION[] = {0x0f, 0x05};
 
 // Number of times to do a non-blocking wait while waiting for traced thread.
@@ -368,7 +376,7 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char*
     // could just immediately detach here, but it appears to be an error to
     // do so without waiting on the pending ptrace-stop first.
     int wstatus;
-    if (waitpid(pid, &wstatus, 0) < 0) {
+    if (waitpid(pid, &wstatus, WAITPID_COMMON_OPTIONS) < 0) {
         error("waitpid: %s", g_strerror(errno));
     }
     StopReason reason = _getStopReason(wstatus);
@@ -559,12 +567,12 @@ static pid_t _waitpid_spin(pid_t pid, int *wstatus, int options) {
         // until we spin THREADPTRACE_MAX_SPIN times and make the blocking
         // `waitpid` call.
         sched_yield();
-        rv = waitpid(pid, wstatus, options|WNOHANG);
+        rv = waitpid(pid, wstatus, options|WNOHANG|WAITPID_COMMON_OPTIONS);
     } while (rv == 0 && count++ < THREADPTRACE_MAX_SPIN);
 
     // If we haven't gotten an answer yet, make a blocking call.
     if (rv == 0) {
-        rv = waitpid(pid, wstatus, options);
+        rv = waitpid(pid, wstatus, options|WAITPID_COMMON_OPTIONS);
     }
 
     return rv;
@@ -620,7 +628,7 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
         // other threads in the same thread group, but I wouldn't be surprised
         // if ptrace events are a special case.
         int wstatus;
-        pid_t pid = waitpid(thread->base.nativeTid, &wstatus, WNOHANG);
+        pid_t pid = waitpid(thread->base.nativeTid, &wstatus, WNOHANG|WAITPID_COMMON_OPTIONS);
         if (pid < 0) {
             error("waitpid: %s", strerror(pid));
             abort();
