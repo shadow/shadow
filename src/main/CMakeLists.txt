@@ -147,6 +147,7 @@ set(shadow_srcs
 
     utility/async_priority_queue.c
     utility/count_down_latch.c
+    utility/fork_proxy.c
     utility/pcap_writer.c
     utility/priority_queue.c
     utility/random.c

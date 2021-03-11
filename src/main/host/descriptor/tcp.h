@@ -70,6 +70,7 @@ void tcp_clearAllChildrenIfServer(TCP* tcp);
 
 gsize tcp_getOutputBufferLength(TCP* tcp);
 gsize tcp_getInputBufferLength(TCP* tcp);
+gsize tcp_getNotSentBytes(TCP* tcp);
 
 void tcp_disableSendBufferAutotuning(TCP* tcp);
 void tcp_disableReceiveBufferAutotuning(TCP* tcp);

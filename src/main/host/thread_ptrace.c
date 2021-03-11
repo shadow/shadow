@@ -20,6 +20,7 @@
 #include "main/host/shimipc.h"
 #include "main/host/thread_protected.h"
 #include "main/host/tsc.h"
+#include "main/utility/fork_proxy.h"
 #include "shim/ipc.h"
 #include "support/logger/logger.h"
 
@@ -34,6 +35,22 @@
 // Using PTRACE_O_TRACECLONE causes the `clone` syscall to fail on Ubuntu 18.04.
 // We instead add the CLONE_PTRACE flag to the clone syscall itself.
 #define THREADPTRACE_PTRACE_OPTIONS (PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXEC)
+
+// `waitpid` is O(n) in the # of child threads and tracees
+// <https://github.com/shadow/shadow/issues/1134>. We work around it by
+// spawning processes on a ForkProxy thread, keeping them off the worker
+// thread's child list, and by detaching inactive plugins to keep them off the
+// worker thread's tracee list.
+//
+// Each worker thread gets its own proxy thread so that forking simulated
+// processes can be parallelized.
+static bool _useONWaitpidWorkarounds = true;
+OPTION_EXPERIMENTAL_ENTRY("disable-o-n-waitpid-workarounds", 0, G_OPTION_FLAG_REVERSE,
+                          G_OPTION_ARG_NONE, &_useONWaitpidWorkarounds,
+                          "Disable performance workarounds for waitpid being O(n). Beneficial to "
+                          "disable if waitpid is patched to be O(1) or in some cases where it'd "
+                          "otherwise result in excessive detaching and reattaching",
+                          NULL)
 
 static char SYSCALL_INSTRUCTION[] = {0x0f, 0x05};
 
@@ -238,6 +255,7 @@ static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                         size_t n);
 static void _threadptrace_ensureStopped(ThreadPtrace* thread);
+static void _threadptrace_doAttach(ThreadPtrace* thread);
 
 static ThreadPtrace* _threadToThreadPtrace(Thread* thread) {
     utility_assert(thread->type_id == THREADPTRACE_TYPE_ID);
@@ -297,10 +315,10 @@ static const char* _syscall_regs_to_str(const struct user_regs_struct* regs) {
     return buf;
 }
 
-static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
-                                     char* const envp[]) {
+static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char* const envp[]) {
     pid_t shadow_pid = getpid();
 
+    // fork requested process.
 #ifdef SHADOW_COVERAGE
     // The instrumentation in coverage mode causes corruption in between vfork
     // and exec. Use fork instead.
@@ -312,16 +330,9 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
     switch (pid) {
         case -1: {
             error("fork: %s", g_strerror(errno));
-            return -1;
+            abort(); // Unreachable
         }
         case 0: {
-            // child
-
-            // CAUTION: Because we used `vfork`, we still share memory of the
-            // parent process (which will be suspended until we call `exec`).
-            // i.e. be wary of any potential side-effects to global variables
-            // etc.
- 
             // Ensure that the child process exits when Shadow does.  Shadow
             // ought to have already tried to terminate the child via SIGTERM
             // before shutting down (though see
@@ -329,38 +340,54 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
             // the way to SIGKILL.
             if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
                 error("prctl: %s", g_strerror(errno));
-                exit(1);
             }
             // Validate that Shadow is still alive (didn't die in between forking and calling
             // prctl).
             if (getppid() != shadow_pid) {
                 error("parent (shadow) exited");
-                exit(1);
             }
             // Disable RDTSC
             if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
                 error("prctl: %s", g_strerror(errno));
-                return -1;
             }
             // Become a tracee of the parent process.
             if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
                 error("ptrace: %s", g_strerror(errno));
-                return -1;
             }
-            // Because we're now being ptraced, execvpe will put this process
-            // in a ptrace-stop.  Luckily, exec will re-awakens the parent
-            // before stopping this one.
             if (execvpe(file, argv, envp) < 0) {
                 error("execvpe: %s", g_strerror(errno));
-                return -1;
             }
-        }
-        default: {
-            // parent
-            info("started process %s with PID %d", file, pid);
-            return pid;
+            abort(); // Unreachable
         }
     }
+    info("started process %s with PID %d", file, pid);
+
+    // Because we use vfork (in non-coverage mode), the parent is
+    // guaranteed not to execute again until the child has called
+    // `execvpe`, which means we're already tracing it. It'd be nice if we
+    // could just immediately detach here, but it appears to be an error to
+    // do so without waiting on the pending ptrace-stop first.
+    int wstatus;
+    if (waitpid(pid, &wstatus, 0) < 0) {
+        error("waitpid: %s", g_strerror(errno));
+    }
+    StopReason reason = _getStopReason(wstatus);
+    if (reason.type != STOPREASON_SIGNAL) {
+        error("Unexpected stop reason: %d", reason.type);
+    }
+    if (reason.signal.signal != SIGTRAP) {
+        error("Unexpected signal: %d", reason.signal.signal);
+    }
+
+    if (_useONWaitpidWorkarounds) {
+        // Stop and detach the child, allowing the shadow worker thread to
+        // attach it when it's run.
+        if (ptrace(PTRACE_DETACH, pid, 0, SIGSTOP) < 0) {
+            error("ptrace: %s", g_strerror(errno));
+        }
+    }
+
+    return pid;
 }
 
 static void _threadptrace_getChildMemoryHandle(ThreadPtrace* thread) {
@@ -666,8 +693,29 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
     g_free(envStr);
     g_free(argStr);
 
-    thread->base.nativeTid = _threadptrace_fork_exec(argv[0], argv, myenvv);
+    if (_useONWaitpidWorkarounds) {
+        // Each worker thread gets its own proxy thread so that forking simulated
+        // processes can be parallelized.
+        static __thread ForkProxy* forkproxy = NULL;
+        if (forkproxy == NULL) {
+            forkproxy = forkproxy_new(_threadptrace_fork_exec);
+        }
+
+        // Fork plugin from a proxy thread to keep it off of worker thread's
+        // children list.
+        thread->base.nativeTid = forkproxy_forkExec(forkproxy, argv[0], argv, myenvv);
+        thread->needAttachment = true;
+    } else {
+        thread->base.nativeTid = _threadptrace_fork_exec(argv[0], argv, myenvv);
+        thread->needAttachment = false;
+        if (ptrace(PTRACE_SETOPTIONS, thread->base.nativeTid, 0, THREADPTRACE_PTRACE_OPTIONS) < 0) {
+            error("ptrace: %s", strerror(errno));
+        }
+    }
+
     thread->base.nativePid = thread->base.nativeTid;
+    thread->childMemFile = NULL;
+    _threadptrace_getChildMemoryHandle(thread);
 
     if (thread->enableIpc) {
         // Send 'start' event.
@@ -679,8 +727,6 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
             }};
         shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &startEvent);
     }
-
-    _threadptrace_nextChildState(thread);
 
     return thread->base.nativePid;
 }
@@ -753,9 +799,6 @@ static void threadptrace_flushPtrs(Thread* base) {
 }
 
 static void _threadptrace_doAttach(ThreadPtrace* thread) {
-    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL ||
-                   thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
-
     debug("thread %i attaching to child %i", thread->base.tid, (int)thread->base.nativeTid);
     if (ptrace(PTRACE_ATTACH, thread->base.nativeTid, 0, 0) < 0) {
         error("ptrace: %s", g_strerror(errno));
@@ -801,6 +844,22 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
     _threadptrace_ensureStopped(thread);
 
     // Detach, delivering a sigstop.
+    //
+    // XXX: Technically the specified signal (here SIGSTOP) isn't guaranteed to
+    // be delivered if we're not specifically in a *signal* ptrace stop. It
+    // seems to be delivered in practice, though. Meaningwhile doing it the
+    // "right" way would be fiddly and slow. From ptrace(2):
+    //
+    // If the tracee is running when the tracer wants to detach it, the usual
+    // solution is to send SIGSTOP (using tgkill(2), to make sure it goes  to
+    // the  correct  thread), wait for the tracee to stop in
+    // signal-delivery-stop for SIGSTOP and then detach it (suppressing SIGSTOP
+    // injection).  A design bug is that this can race with  concur‐ rent
+    // SIGSTOPs.   Another  complication is that the tracee may enter other
+    // ptrace- stops and needs to be restarted and waited for again, until
+    // SIGSTOP is seen.   Yet another  complication is to be sure that the
+    // tracee is not already ptrace-stopped, because no signal delivery happens
+    // while it is—not even SIGSTOP.
     if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, SIGSTOP) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
@@ -932,6 +991,11 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeIpcSyscall(thread, &changedState);
                 if (condition) {
+                    if (_useONWaitpidWorkarounds) {
+                        // Keep inactive plugins off worker thread's tracee
+                        // list.
+                        _threadptrace_doDetach(thread);
+                    }
                     return condition;
                 }
                 break;
@@ -940,6 +1004,11 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeSyscall(thread, &changedState);
                 if (condition) {
+                    if (_useONWaitpidWorkarounds) {
+                        // Keep inactive plugins off worker thread's tracee
+                        // list.
+                        _threadptrace_doDetach(thread);
+                    }
                     return condition;
                 }
                 break;
@@ -1020,6 +1089,9 @@ void threadptrace_terminate(Thread* base) {
         warning("kill %d: %s", thread->base.nativePid, g_strerror(errno));
     }
 
+    // Wait for the exit ptrace-stop. Because the shadow process is the natural
+    // parent of the child (even if spawned from a task/thread other than this
+    // one), this also reaps the child.
     int wstatus;
     if (_waitpid_spin(thread->base.nativePid, &wstatus, 0) < 0) {
         error("waitpid: %s", g_strerror(errno));
