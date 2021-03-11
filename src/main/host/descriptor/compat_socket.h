@@ -31,8 +31,8 @@ struct _CompatSocket {
 CompatSocket compatsocket_fromLegacySocket(Socket* socket);
 
 /* reference counting */
-CompatSocket compatsocket_cloneRef(const CompatSocket* socket);
-void compatsocket_drop(const CompatSocket* socket);
+CompatSocket compatsocket_refAs(const CompatSocket* socket);
+void compatsocket_unref(const CompatSocket* socket);
 
 /* converting between a CompatSocket and a tagged pointer */
 uintptr_t compatsocket_toTagged(const CompatSocket* socket);

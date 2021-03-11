@@ -20,7 +20,7 @@ CompatSocket compatsocket_fromLegacySocket(Socket* socket) {
     return new_socket;
 }
 
-CompatSocket compatsocket_cloneRef(const CompatSocket* socket) {
+CompatSocket compatsocket_refAs(const CompatSocket* socket) {
     CompatSocket new_socket = {
         .type = socket->type,
         .object = socket->object,
@@ -35,7 +35,7 @@ CompatSocket compatsocket_cloneRef(const CompatSocket* socket) {
     return new_socket;
 }
 
-void compatsocket_drop(const CompatSocket* socket) {
+void compatsocket_unref(const CompatSocket* socket) {
     if (socket->type == CST_LEGACY_SOCKET) {
         descriptor_unref(socket->object.as_legacy_socket);
     } else {

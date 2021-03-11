@@ -87,7 +87,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface);
 static void _networkinterface_refillTokenBucketsCB(NetworkInterface* interface,
                                                    gpointer userData);
 
-static void _compatsocket_dropTaggedVoid(void* taggedSocketPtr) {
+static void _compatsocket_unrefTaggedVoid(void* taggedSocketPtr) {
     utility_assert(taggedSocketPtr != NULL);
     if (taggedSocketPtr == NULL) {
         return;
@@ -95,7 +95,7 @@ static void _compatsocket_dropTaggedVoid(void* taggedSocketPtr) {
 
     uintptr_t taggedSocket = (uintptr_t)taggedSocketPtr;
     CompatSocket socket = compatsocket_fromTagged(taggedSocket);
-    compatsocket_drop(&socket);
+    compatsocket_unref(&socket);
 }
 
 static inline SimulationTime _networkinterface_getRefillInterval() {
@@ -324,10 +324,10 @@ void networkinterface_associate(NetworkInterface* interface, const CompatSocket*
     utility_assert(!g_hash_table_contains(interface->boundSockets, key));
 
     /* need to store our own reference to the socket object */
-    CompatSocket cloned = compatsocket_cloneRef(socket);
+    CompatSocket newSocketRef = compatsocket_refAs(socket);
 
     /* insert to our storage, key is now owned by table */
-    g_hash_table_replace(interface->boundSockets, key, (void*)compatsocket_toTagged(&cloned));
+    g_hash_table_replace(interface->boundSockets, key, (void*)compatsocket_toTagged(&newSocketRef));
 
     debug("associated socket key %s", key);
 }
@@ -521,7 +521,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, g
             rrsocketqueue_push(&interface->rrQueue, &socket);
         } else {
             /* socket has no more packets, unref it from the sendable queue */
-            compatsocket_drop(&socket);
+            compatsocket_unref(&socket);
         }
     }
 
@@ -559,7 +559,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
             fifosocketqueue_push(&interface->fifoQueue, &socket);
         } else {
             /* socket has no more packets, unref it from the sendable queue */
-            compatsocket_drop(&socket);
+            compatsocket_unref(&socket);
         }
     }
 
@@ -640,16 +640,16 @@ void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket*
     switch (interface->qdisc) {
         case QDISC_MODE_RR: {
             if (!rrsocketqueue_find(&interface->rrQueue, socket)) {
-                CompatSocket clonedSocket = compatsocket_cloneRef(socket);
-                rrsocketqueue_push(&interface->rrQueue, &clonedSocket);
+                CompatSocket newSocketRef = compatsocket_refAs(socket);
+                rrsocketqueue_push(&interface->rrQueue, &newSocketRef);
             }
             break;
         }
         case QDISC_MODE_FIFO:
         default: {
             if (!fifosocketqueue_find(&interface->fifoQueue, socket)) {
-                CompatSocket clonedSocket = compatsocket_cloneRef(socket);
-                fifosocketqueue_push(&interface->fifoQueue, &clonedSocket);
+                CompatSocket newSocketRef = compatsocket_refAs(socket);
+                fifosocketqueue_push(&interface->fifoQueue, &newSocketRef);
             }
             break;
         }
@@ -685,7 +685,7 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
 
     /* incoming packets get passed along to sockets */
     interface->boundSockets =
-        g_hash_table_new_full(g_str_hash, g_str_equal, g_free, _compatsocket_dropTaggedVoid);
+        g_hash_table_new_full(g_str_hash, g_str_equal, g_free, _compatsocket_unrefTaggedVoid);
 
     /* sockets tell us when they want to start sending */
     rrsocketqueue_init(&interface->rrQueue);
@@ -718,8 +718,8 @@ void networkinterface_free(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
 
     /* unref all sockets wanting to send */
-    rrsocketqueue_destroy(&interface->rrQueue, compatsocket_drop);
-    fifosocketqueue_destroy(&interface->fifoQueue, compatsocket_drop);
+    rrsocketqueue_destroy(&interface->rrQueue, compatsocket_unref);
+    fifosocketqueue_destroy(&interface->fifoQueue, compatsocket_unref);
 
     g_hash_table_destroy(interface->boundSockets);
 
