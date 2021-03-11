@@ -103,12 +103,17 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
 
     LegacyDescriptor* legacyDescriptor = compatdescriptor_asLegacy(compatDescriptor);
 
-    /* Validate only if a legacy descriptor */
-    if (legacyDescriptor != NULL) {
+    // Make sure the child is not closed only if it's a legacy descriptor
+    // FIXME: for now we allow child fds to be closed on EPOLL_CTL_DEL operations,
+    // because libevent frequently closes before issuing the EPOLL_CTL_DEL op.
+    // Once #1101 is fixed, and we correctly clean up closed watch fds, then we can
+    // error out here on EPOLL_CTL_DEL ops too.
+    // See: https://github.com/shadow/shadow/issues/1101
+    if (legacyDescriptor != NULL && op != EPOLL_CTL_DEL) {
         errorCode = _syscallhandler_validateDescriptor(legacyDescriptor, DT_NONE);
 
         if (errorCode) {
-            info("Child %i is not a shadow descriptor", fd);
+            info("Child %i of epoll %i is closed", fd, epfd);
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
         }
     }

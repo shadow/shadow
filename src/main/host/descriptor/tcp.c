@@ -721,6 +721,12 @@ gsize tcp_getInputBufferLength(TCP* tcp) {
     return socket_getInputBufferLength(&(tcp->super)) + tcp->unorderedInputLength;
 }
 
+/* returns the total number of bytes that we have not yet sent out into the network */
+gsize tcp_getNotSentBytes(TCP* tcp) {
+    MAGIC_ASSERT(tcp);
+    return tcp->throttledOutputLength;
+}
+
 static gsize _tcp_getBufferSpaceOut(TCP* tcp) {
     MAGIC_ASSERT(tcp);
     /* account for throttled and retransmission buffer */

@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <glib.h>
+#include <stdbool.h>
 
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
@@ -19,7 +20,8 @@ struct _Futex {
     // The unique physical address that is used to refer to this futex
     PluginPhysicalPtr word;
     // Listeners waiting for wakups on this futex
-    // Used as a set, where both keys and values are of type StatusListener*
+    // The key is a listener of type StatusListener*, the value is a boolean that indicates
+    // whether or not a wakeup has already been performed on the listener.
     GHashTable* listeners;
     // Manage references
     int referenceCount;
@@ -30,7 +32,7 @@ Futex* futex_new(PluginPhysicalPtr word) {
     Futex* futex = malloc(sizeof(*futex));
     *futex = (Futex){.word = word,
                      .listeners = g_hash_table_new_full(
-                         g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)statuslistener_unref),
+                         g_direct_hash, g_direct_equal, (GDestroyNotify)statuslistener_unref, NULL),
                      .referenceCount = 1,
                      MAGIC_INITIALIZER};
 
@@ -73,15 +75,29 @@ unsigned int futex_wake(Futex* futex, unsigned int numWakeups) {
     // in the status changed callback.
     GList* listenerList = g_hash_table_get_keys(futex->listeners);
 
-    // Iterate the listeners.
+    // Iterate the listeners and perform the requested number of wakeups if we can.
     GList* item = g_list_first(listenerList);
-    unsigned int numWoken;
-    for (numWoken = 0; item && numWoken < numWakeups; numWoken++) {
+    unsigned int numWoken = 0;
+
+    while (item && (numWoken < numWakeups)) {
         StatusListener* listener = item->data;
 
         // Only call if the listener is still valid
         if (g_hash_table_contains(futex->listeners, listener)) {
-            statuslistener_onStatusChanged(listener, STATUS_FUTEX_WAKEUP, STATUS_FUTEX_WAKEUP);
+            // If this listener was already woken up, skip it this time
+            bool did_wakeup =
+                (bool)GPOINTER_TO_UINT(g_hash_table_lookup(futex->listeners, listener));
+            if (!did_wakeup) {
+                // Tell the status listener to unblock the thread waiting on the futex
+                statuslistener_onStatusChanged(listener, STATUS_FUTEX_WAKEUP, STATUS_FUTEX_WAKEUP);
+
+                // Track that we did a wakeup on this listener without destroying the listener
+                g_hash_table_steal(futex->listeners, listener);
+                g_hash_table_insert(futex->listeners, listener, GUINT_TO_POINTER(true));
+
+                // Count the wake-up
+                numWoken++;
+            }
         }
 
         item = g_list_next(item);
@@ -95,7 +111,7 @@ void futex_addListener(Futex* futex, StatusListener* listener) {
     MAGIC_ASSERT(futex);
     utility_assert(listener);
     statuslistener_ref(listener);
-    g_hash_table_insert(futex->listeners, listener, listener);
+    g_hash_table_insert(futex->listeners, listener, GUINT_TO_POINTER(false));
 }
 
 void futex_removeListener(Futex* futex, StatusListener* listener) {

@@ -2,7 +2,7 @@
 use crate::host::descriptor::CompatDescriptor;
 
 pub const CONFIG_PIPE_BUFFER_SIZE: u32 = 65536;
-pub const SYSCALL_IO_BUFSIZE: u32 = 16384;
+pub const SYSCALL_IO_BUFSIZE: u32 = 10485760;
 pub type size_t = ::std::os::raw::c_ulong;
 pub type __uint32_t = ::std::os::raw::c_uint;
 pub type __int64_t = ::std::os::raw::c_long;
