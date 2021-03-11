@@ -5,17 +5,21 @@
  */
 
 #include "main/utility/tagged_ptr.h"
-#include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
-// two low-order bits
-const uintptr_t TAG_MASK = (1 << 2) - 1;
+// three low-order bits
+const uintptr_t TAG_MASK = (1 << 3) - 1;
 
 // store a tag in the unused low-order bits of a pointer
 uintptr_t tagPtr(const void* ptr, uintptr_t tag) {
     uintptr_t ptrInt = (uintptr_t)ptr;
 
-    utility_assert((ptrInt & TAG_MASK) == 0);
-    utility_assert((tag & ~TAG_MASK) == 0);
+    if ((ptrInt & TAG_MASK) != 0) {
+        error("Low-order bits of pointer are in use");
+    }
+    if ((tag & ~TAG_MASK) != 0) {
+        error("Tag has high-order bits set");
+    }
 
     return ptrInt | tag;
 }
