@@ -4,8 +4,8 @@
  * See LICENSE for licensing information
  */
 
-#ifndef SHD_ENGINE_H_
-#define SHD_ENGINE_H_
+#ifndef SHD_CONTROLLER_H_
+#define SHD_CONTROLLER_H_
 
 #include <glib.h>
 
@@ -15,20 +15,20 @@
 #include "main/routing/dns.h"
 #include "main/routing/topology.h"
 
-typedef struct _Master Master;
+typedef struct _Controller Controller;
 
-Master* master_new(Options*);
-void master_free(Master*);
-gint master_run(Master*);
+Controller* controller_new(Options*);
+void controller_free(Controller*);
+gint controller_run(Controller*);
 
-void master_updateMinTimeJump(Master*, gdouble);
-gdouble master_getRunTimeElapsed(Master*);
+void controller_updateMinTimeJump(Controller*, gdouble);
+gdouble controller_getRunTimeElapsed(Controller*);
 
-gboolean master_managerFinishedCurrentRound(Master*, SimulationTime, SimulationTime*, SimulationTime*);
-gdouble master_getLatency(Master* master, Address* srcAddress, Address* dstAddress);
+gboolean controller_managerFinishedCurrentRound(Controller*, SimulationTime, SimulationTime*, SimulationTime*);
+gdouble controller_getLatency(Controller* controller, Address* srcAddress, Address* dstAddress);
 
 // TODO remove these eventually since they cant be shared accross remote managers
-DNS* master_getDNS(Master* master);
-Topology* master_getTopology(Master* master);
+DNS* controller_getDNS(Controller* controller);
+Topology* controller_getTopology(Controller* controller);
 
-#endif /* SHD_ENGINE_H_ */
+#endif /* SHD_CONTROLLER_H_ */
