@@ -11,7 +11,7 @@
 #include <sys/resource.h>
 
 #include "main/core/logger/shadow_logger.h"
-#include "main/core/master.h"
+#include "main/core/controller.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/manager.h"

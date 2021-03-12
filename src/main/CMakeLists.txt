@@ -50,7 +50,7 @@ set(shadow_srcs
     core/work/message.c
     core/work/task.c
     core/main.c
-    core/master.c
+    core/controller.c
     core/manager.c
     core/worker.c
 
