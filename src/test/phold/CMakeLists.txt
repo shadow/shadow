@@ -36,3 +36,21 @@ add_shadow_tests(
     ARGS --pin-cpus --workers 2
     PROPERTIES RUN_SERIAL TRUE
     CONFIGURATIONS ilibc)
+
+# Run tests with the round-robin queueing discipline (the current default is fifo).
+# Ideally we'd want to test the different queueing displinces on a test that has a lot of
+# congestion and hosts sending data on mulitple sockets at once, but phold is currently the closest
+# test that we have to that configuration.
+add_shadow_tests(
+    BASENAME phold-rr-qdisc
+    METHODS hybrid ptrace
+    LOGLEVEL info
+    ARGS --pin-cpus --interface-qdisc=RR
+    PROPERTIES RUN_SERIAL TRUE)
+add_shadow_tests(
+    BASENAME phold-rr-qdisc
+    METHODS preload
+    LOGLEVEL info
+    ARGS --pin-cpus --interface-qdisc=RR
+    PROPERTIES RUN_SERIAL TRUE
+    CONFIGURATIONS ilibc)
