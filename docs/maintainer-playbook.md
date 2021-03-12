@@ -9,7 +9,7 @@ The following commands can be used to tag a new version of Shadow, after which a
 archive will be available on github's [releases page](https://github.com/shadow/shadow/releases).
 
 ```bash
-git checkout master
+git checkout main
 
 # Bump the patch, minor, or major version number, commit the change, and tag
 # that commit.
@@ -22,5 +22,5 @@ VERSION=`awk -F "=" '/current_version/ {print $2}' .bumpversion.cfg | tr -d ' '`
 git push origin v$VERSION
 ```
 
-Our releases will then be tagged off of the master branch.
+Our releases will then be tagged off of the main branch.
 

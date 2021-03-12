@@ -25,7 +25,7 @@ We also maintain a [traffic generator plug-in called TGen](https://github.com/sh
 
 Make sure you have TGen installed as described on [the Shadow setup page](https://github.com/shadow/shadow/wiki/1.1-Shadow#tgen-setup) as we will use it for this tutorial.
 
-See the [TGen documentation](https://github.com/shadow/tgen/tree/master/doc) for more information about customizing TGen behaviors.
+See the [TGen documentation](https://github.com/shadow/tgen/tree/main/doc) for more information about customizing TGen behaviors.
 
 #### Other plugins
 
@@ -176,7 +176,7 @@ The `parse-*.py` scripts generate `stats.*.json.xz` files. The (heavily trimmed)
 
 The `plot-*.py` scripts generate graphs. Open the PDF file that was created to see the graphed results.
 
-You can also parse and plot the TGen output using the `tgentools` program from the TGen repo. [This page describes how to get started](https://github.com/shadow/tgen/blob/master/doc/Tools-Setup.md).
+You can also parse and plot the TGen output using the `tgentools` program from the TGen repo. [This page describes how to get started](https://github.com/shadow/tgen/blob/main/doc/Tools-Setup.md).
 
 ## Example experiment
 
