@@ -61,8 +61,8 @@ jobs:
       - name: Install Rust packages
         run: |
           rustup component add rustfmt
-          cargo install --force --version 0.15.0 cbindgen
-          cargo install --force --version 0.56.0 bindgen
+          cargo install --force --version 0.18.0 cbindgen
+          cargo install --force --version 0.57.0 bindgen
       - name: Check bindings
         run: |
           mkdir build

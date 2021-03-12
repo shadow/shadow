@@ -26,58 +26,58 @@ void rust_logging_init(void);
 // The new compat descriptor takes ownership of the reference to the legacy descriptor and
 // does not increment its ref count, but will decrement the ref count when this compat
 // descriptor is freed/dropped.
-CompatDescriptor *compatdescriptor_fromLegacy(LegacyDescriptor *legacy_descriptor);
+struct CompatDescriptor *compatdescriptor_fromLegacy(LegacyDescriptor *legacy_descriptor);
 
 // If the compat descriptor is a legacy descriptor, returns a pointer to the legacy
 // descriptor object. Otherwise returns NULL. The legacy descriptor's ref count is not
 // modified, so the pointer must not outlive the lifetime of the compat descriptor.
-LegacyDescriptor *compatdescriptor_asLegacy(const CompatDescriptor *descriptor);
+LegacyDescriptor *compatdescriptor_asLegacy(const struct CompatDescriptor *descriptor);
 
 // When the compat descriptor is freed/dropped, it will decrement the legacy descriptor's
 // ref count.
-void compatdescriptor_free(CompatDescriptor *descriptor);
+void compatdescriptor_free(struct CompatDescriptor *descriptor);
 
 // This is a no-op for non-legacy descriptors.
-void compatdescriptor_setHandle(CompatDescriptor *descriptor, int handle);
+void compatdescriptor_setHandle(struct CompatDescriptor *descriptor, int handle);
 
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
 // posix file object. Otherwise returns NULL. The posix file object's ref count is not
 // modified, so the pointer must not outlive the lifetime of the compat descriptor.
-const PosixFileArc *compatdescriptor_borrowPosixFile(CompatDescriptor *descriptor);
+const struct PosixFileArc *compatdescriptor_borrowPosixFile(struct CompatDescriptor *descriptor);
 
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
 // posix file object. Otherwise returns NULL. The posix file object's ref count is
 // incremented, so the pointer must always later be passed to `posixfile_drop()`, otherwise
 // the memory will leak.
-const PosixFileArc *compatdescriptor_newRefPosixFile(CompatDescriptor *descriptor);
+const struct PosixFileArc *compatdescriptor_newRefPosixFile(struct CompatDescriptor *descriptor);
 
 // Decrement the ref count of the posix file object. The pointer must not be used after
 // calling this function.
-void posixfile_drop(const PosixFileArc *file);
+void posixfile_drop(const struct PosixFileArc *file);
 
 // Get the status of the posix file object.
-Status posixfile_getStatus(const PosixFileArc *file);
+Status posixfile_getStatus(const struct PosixFileArc *file);
 
 // Add a status listener to the posix file object. This will increment the status
 // listener's ref count, and will decrement the ref count when this status listener is
 // removed or when the posix file is freed/dropped.
-void posixfile_addListener(const PosixFileArc *file, StatusListener *listener);
+void posixfile_addListener(const struct PosixFileArc *file, StatusListener *listener);
 
 // Remove a listener from the posix file object.
-void posixfile_removeListener(const PosixFileArc *file, StatusListener *listener);
+void posixfile_removeListener(const struct PosixFileArc *file, StatusListener *listener);
 
 // # Safety
 // * `thread` must point to a valid object.
-MemoryManager *memorymanager_new(Thread *thread);
+struct MemoryManager *memorymanager_new(Thread *thread);
 
 // # Safety
 // * `mm` must point to a valid object.
-void memorymanager_free(MemoryManager *mm);
+void memorymanager_free(struct MemoryManager *mm);
 
 // Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
 // # Safety
 // * `mm` and `thread` must point to valid objects.
-const void *memorymanager_getReadablePtr(MemoryManager *memory_manager,
+const void *memorymanager_getReadablePtr(struct MemoryManager *memory_manager,
                                          Thread *thread,
                                          PluginPtr plugin_src,
                                          uintptr_t n);
@@ -85,7 +85,7 @@ const void *memorymanager_getReadablePtr(MemoryManager *memory_manager,
 // Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
 // # Safety
 // * `mm` and `thread` must point to valid objects.
-void *memorymanager_getWriteablePtr(MemoryManager *memory_manager,
+void *memorymanager_getWriteablePtr(struct MemoryManager *memory_manager,
                                     Thread *thread,
                                     PluginPtr plugin_src,
                                     uintptr_t n);
@@ -93,18 +93,18 @@ void *memorymanager_getWriteablePtr(MemoryManager *memory_manager,
 // Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
 // # Safety
 // * `mm` and `thread` must point to valid objects.
-void *memorymanager_getMutablePtr(MemoryManager *memory_manager,
+void *memorymanager_getMutablePtr(struct MemoryManager *memory_manager,
                                   Thread *thread,
                                   PluginPtr plugin_src,
                                   uintptr_t n);
 
 // Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
-SysCallReg memorymanager_handleBrk(MemoryManager *memory_manager,
+SysCallReg memorymanager_handleBrk(struct MemoryManager *memory_manager,
                                    Thread *thread,
                                    PluginPtr plugin_src);
 
 // Fully handles the `mmap` syscall
-SysCallReg memorymanager_handleMmap(MemoryManager *memory_manager,
+SysCallReg memorymanager_handleMmap(struct MemoryManager *memory_manager,
                                     Thread *thread,
                                     PluginPtr addr,
                                     uintptr_t len,
@@ -114,12 +114,12 @@ SysCallReg memorymanager_handleMmap(MemoryManager *memory_manager,
                                     int64_t offset);
 
 // Fully handles the `munmap` syscall
-SysCallReg memorymanager_handleMunmap(MemoryManager *memory_manager,
+SysCallReg memorymanager_handleMunmap(struct MemoryManager *memory_manager,
                                       Thread *thread,
                                       PluginPtr addr,
                                       uintptr_t len);
 
-SysCallReg memorymanager_handleMremap(MemoryManager *memory_manager,
+SysCallReg memorymanager_handleMremap(struct MemoryManager *memory_manager,
                                       Thread *thread,
                                       PluginPtr old_addr,
                                       uintptr_t old_size,
@@ -127,7 +127,7 @@ SysCallReg memorymanager_handleMremap(MemoryManager *memory_manager,
                                       int32_t flags,
                                       PluginPtr new_addr);
 
-SysCallReg memorymanager_handleMprotect(MemoryManager *memory_manager,
+SysCallReg memorymanager_handleMprotect(struct MemoryManager *memory_manager,
                                         Thread *thread,
                                         PluginPtr addr,
                                         uintptr_t size,
@@ -149,16 +149,16 @@ SysCallReturn rustsyscallhandler_pipe(SysCallHandler *sys, const SysCallArgs *ar
 
 SysCallReturn rustsyscallhandler_pipe2(SysCallHandler *sys, const SysCallArgs *args);
 
-ByteQueue *bytequeue_new(size_t chunk_size);
+struct ByteQueue *bytequeue_new(size_t chunk_size);
 
-void bytequeue_free(ByteQueue *bq_ptr);
+void bytequeue_free(struct ByteQueue *bq_ptr);
 
-size_t bytequeue_len(ByteQueue *bq);
+size_t bytequeue_len(struct ByteQueue *bq);
 
-bool bytequeue_isEmpty(ByteQueue *bq);
+bool bytequeue_isEmpty(struct ByteQueue *bq);
 
-void bytequeue_push(ByteQueue *bq, const unsigned char *src, size_t len);
+void bytequeue_push(struct ByteQueue *bq, const unsigned char *src, size_t len);
 
-size_t bytequeue_pop(ByteQueue *bq, unsigned char *dst, size_t len);
+size_t bytequeue_pop(struct ByteQueue *bq, unsigned char *dst, size_t len);
 
 #endif /* main_bindings_h */
