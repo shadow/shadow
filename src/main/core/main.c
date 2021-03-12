@@ -27,7 +27,7 @@
 #include "shd-config.h"
 #include "support/logger/logger.h"
 
-static Master* shadowMaster;
+static Controller* shadowcontroller;
 
 #define INTERPOSELIBSTR "libshadow-interpose.so"
 
@@ -718,15 +718,15 @@ static gint _main_helper(Options* options) {
 
     /* allocate and initialize our main simulation driver */
     gint returnCode = 0;
-    shadowMaster = master_new(options);
+    shadowcontroller = controller_new(options);
 
-    if(shadowMaster) {
+    if(shadowcontroller) {
         /* run the simulation */
-        returnCode = master_run(shadowMaster);
+        returnCode = controller_run(shadowcontroller);
 
         /* cleanup */
-        master_free(shadowMaster);
-        shadowMaster = NULL;
+        controller_free(shadowcontroller);
+        shadowcontroller = NULL;
     }
 
     message("%s simulation was shut down cleanly, returning code %i", SHADOW_VERSION_STRING, returnCode);
