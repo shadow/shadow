@@ -25,7 +25,7 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "main/core/master.h"
+#include "main/core/controller.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
