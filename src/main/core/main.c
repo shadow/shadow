@@ -16,7 +16,7 @@
 #include <unistd.h>
 
 #include "main/core/logger/shadow_logger.h"
-#include "main/core/master.h"
+#include "main/core/controller.h"
 #include "main/core/support/configuration.h"
 #include "main/core/support/options.h"
 #include "main/host/affinity.h"
