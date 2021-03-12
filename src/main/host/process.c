@@ -37,6 +37,7 @@
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
 #include "main/host/descriptor/channel.h"
+#include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_table.h"
 #include "main/host/descriptor/descriptor_types.h"
@@ -821,7 +822,8 @@ void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
     if (desc) {
         LegacyDescriptorType dType = descriptor_getType(desc);
         if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
-            host_disassociateInterface(proc->host, (Socket*)desc);
+            CompatSocket compat_socket = compatsocket_fromLegacySocket((Socket*)desc);
+            host_disassociateInterface(proc->host, &compat_socket);
         }
         descriptor_setOwnerProcess(desc, NULL);
         descriptortable_remove(proc->descTable, descriptor_getHandle(desc));

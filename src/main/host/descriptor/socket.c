@@ -10,6 +10,7 @@
 
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
+#include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
@@ -431,7 +432,8 @@ gboolean socket_addToOutputBuffer(Socket* socket, Packet* packet) {
     /* tell the interface to include us when sending out to the network */
     in_addr_t ip = packet_getSourceIP(packet);
     NetworkInterface* interface = host_lookupInterface(worker_getActiveHost(), ip);
-    networkinterface_wantsSend(interface, socket);
+    CompatSocket compat_socket = compatsocket_fromLegacySocket(socket);
+    networkinterface_wantsSend(interface, &compat_socket);
 
     return TRUE;
 }
