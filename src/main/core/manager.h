@@ -36,7 +36,7 @@
 typedef struct _Manager Manager;
 
 
-Manager* manager_new(Master* master, Options* options, SimulationTime endTime, SimulationTime bootstrapEndTime,
+Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime, SimulationTime bootstrapEndTime,
         guint randomSeed, const gchar* preloadShimPath, const gchar* environment);
 gint manager_free(Manager* manager);
 
@@ -58,7 +58,7 @@ void manager_updateMinTimeJump(Manager* manager, gdouble minPathLatency);
 void manager_run(Manager*);
 gboolean manager_schedulerIsRunning(Manager* manager);
 
-/* info received from master to set up the simulation */
+/* info received from controller to set up the simulation */
 void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path, const gchar* startSymbol);
 void manager_addNewVirtualHost(Manager* manager, HostParameters* params);
 void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* pluginName, gchar* preloadName,

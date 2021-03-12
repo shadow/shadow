@@ -42,7 +42,7 @@ struct _Worker {
     /* affinity of the worker. */
     int cpu_num_affinity;
 
-    /* pointer to the object that communicates with the master process */
+    /* pointer to the object that communicates with the controller process */
     Manager* manager;
     /* pointer to the per-manager parallel scheduler object that feeds events to all workers */
     Scheduler* scheduler;

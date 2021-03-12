@@ -43,7 +43,7 @@ typedef struct {
 } _ProgramMeta;
 
 struct _Manager {
-    Master* master;
+    Controller* controller;
 
     /* the worker object associated with the main thread of execution */
 //    Worker* mainWorker;
@@ -52,7 +52,7 @@ struct _Manager {
     Options* options;
     SimulationTime bootstrapEndTime;
 
-    /* manager random source, init from master random, used to init host randoms */
+    /* manager random source, init from controller random, used to init host randoms */
     Random* random;
     guint rawFrequencyKHz;
 
@@ -165,7 +165,7 @@ static guint _manager_nextRandomUInt(Manager* manager) {
     return r;
 }
 
-Manager* manager_new(Master* master, Options* options, SimulationTime endTime, SimulationTime unlimBWEndTime,
+Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime, SimulationTime unlimBWEndTime,
         guint randomSeed, const gchar* preloadShimPath, const gchar* environment) {
     if(globalmanager != NULL) {
         return NULL;
@@ -178,7 +178,7 @@ Manager* manager_new(Master* master, Options* options, SimulationTime endTime, S
     g_mutex_init(&(manager->lock));
     g_mutex_init(&(manager->pluginInitLock));
 
-    manager->master = master;
+    manager->controller = controller;
     manager->options = options;
     manager->random = random_new(randomSeed);
     manager->objectCounts = objectcounter_new();
@@ -338,12 +338,12 @@ void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* plug
 
 DNS* manager_getDNS(Manager* manager) {
     MAGIC_ASSERT(manager);
-    return master_getDNS(manager->master);
+    return controller_getDNS(manager->controller);
 }
 
 Topology* manager_getTopology(Manager* manager) {
     MAGIC_ASSERT(manager);
-    return master_getTopology(manager->master);
+    return controller_getTopology(manager->controller);
 }
 
 guint32 manager_getNodeBandwidthUp(Manager* manager, GQuark nodeID, in_addr_t ip) {
@@ -366,7 +366,7 @@ gdouble manager_getLatency(Manager* manager, GQuark sourceNodeID, GQuark destina
     Host* destinationNode = _manager_getHost(manager, destinationNodeID);
     Address* sourceAddress = host_getDefaultAddress(sourceNode);
     Address* destinationAddress = host_getDefaultAddress(destinationNode);
-    return master_getLatency(manager->master, sourceAddress, destinationAddress);
+    return controller_getLatency(manager->controller, sourceAddress, destinationAddress);
 }
 
 Options* manager_getOptions(Manager* manager) {
@@ -384,7 +384,7 @@ void manager_updateMinTimeJump(Manager* manager, gdouble minPathLatency) {
     _manager_lock(manager);
     /* this update will get applied at the next round update, so all threads
      * running now still have a valid round window */
-    master_updateMinTimeJump(manager->master, minPathLatency);
+    controller_updateMinTimeJump(manager->controller, minPathLatency);
     _manager_unlock(manager);
 }
 
@@ -457,9 +457,9 @@ void manager_run(Manager* manager) {
             info("finished execution window [%"G_GUINT64_FORMAT"--%"G_GUINT64_FORMAT"] next event at %"G_GUINT64_FORMAT,
                     windowStart, windowEnd, minNextEventTime);
 
-            /* notify master that we finished this round, and the time of our next event
+            /* notify controller that we finished this round, and the time of our next event
              * in order to fast-forward our execute window if possible */
-            keepRunning = master_managerFinishedCurrentRound(manager->master, minNextEventTime, &windowStart, &windowEnd);
+            keepRunning = controller_managerFinishedCurrentRound(manager->controller, minNextEventTime, &windowStart, &windowEnd);
         }
 
         scheduler_finish(manager->scheduler);
