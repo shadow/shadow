@@ -24,7 +24,8 @@ gint controller_run(Controller*);
 void controller_updateMinTimeJump(Controller*, gdouble);
 gdouble controller_getRunTimeElapsed(Controller*);
 
-gboolean controller_managerFinishedCurrentRound(Controller*, SimulationTime, SimulationTime*, SimulationTime*);
+gboolean controller_managerFinishedCurrentRound(Controller*, SimulationTime, SimulationTime*,
+                                                SimulationTime*);
 gdouble controller_getLatency(Controller* controller, Address* srcAddress, Address* dstAddress);
 
 // TODO remove these eventually since they cant be shared accross remote managers

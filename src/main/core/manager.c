@@ -11,11 +11,11 @@
 #include <stddef.h>
 #include <sys/resource.h>
 
-#include "main/core/logger/shadow_logger.h"
 #include "main/core/controller.h"
+#include "main/core/logger/shadow_logger.h"
+#include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
-#include "main/core/manager.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
@@ -31,23 +31,23 @@
 
 typedef struct {
 
-  /* the program name. */
-  gchar* name;
+    /* the program name. */
+    gchar* name;
 
-  /* the path to the executable */
-  gchar* path;
+    /* the path to the executable */
+    gchar* path;
 
-  /* the start symbol for the program */
-  gchar* startSymbol;
-  
-  MAGIC_DECLARE;
+    /* the start symbol for the program */
+    gchar* startSymbol;
+
+    MAGIC_DECLARE;
 } _ProgramMeta;
 
 struct _Manager {
     Controller* controller;
 
     /* the worker object associated with the main thread of execution */
-//    Worker* mainWorker;
+    //    Worker* mainWorker;
 
     /* simulation cli options */
     Options* options;
@@ -118,13 +118,15 @@ static SchedulerPolicyType _manager_getEventSchedulerPolicy(Manager* manager) {
     } else if (g_ascii_strcasecmp(policyStr, "threadXhost") == 0) {
         return SP_PARALLEL_THREAD_PERHOST;
     } else {
-        error("unknown event scheduler policy '%s'; valid values are 'thread', 'host', 'threadXthread', or 'threadXhost'", policyStr);
+        error("unknown event scheduler policy '%s'; valid values are 'thread', 'host', "
+              "'threadXthread', or 'threadXhost'",
+              policyStr);
         return SP_SERIAL_GLOBAL;
     }
 }
 
 _ProgramMeta* _program_meta_new(const gchar* name, const gchar* path, const gchar* startSymbol) {
-    if((name == NULL) || (path == NULL)) {
+    if ((name == NULL) || (path == NULL)) {
         error("attempting to register a program with a null name and/or path");
     }
 
@@ -134,7 +136,7 @@ _ProgramMeta* _program_meta_new(const gchar* name, const gchar* path, const gcha
     meta->name = g_strdup(name);
     meta->path = g_strdup(path);
 
-    if(startSymbol != NULL) {
+    if (startSymbol != NULL) {
         meta->startSymbol = g_strdup(startSymbol);
     }
 
@@ -145,15 +147,15 @@ void _program_meta_free(gpointer data) {
     _ProgramMeta* meta = (_ProgramMeta*)data;
     MAGIC_ASSERT(meta);
 
-    if(meta->name) {
+    if (meta->name) {
         g_free(meta->name);
     }
 
-    if(meta->path) {
+    if (meta->path) {
         g_free(meta->path);
     }
 
-    if(meta->startSymbol) {
+    if (meta->startSymbol) {
         g_free(meta->startSymbol);
     }
 
@@ -169,9 +171,10 @@ static guint _manager_nextRandomUInt(Manager* manager) {
     return r;
 }
 
-Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime, SimulationTime unlimBWEndTime,
-        guint randomSeed, const gchar* preloadShimPath, const gchar* environment) {
-    if(globalmanager != NULL) {
+Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime,
+                     SimulationTime unlimBWEndTime, guint randomSeed, const gchar* preloadShimPath,
+                     const gchar* environment) {
+    if (globalmanager != NULL) {
         return NULL;
     }
 
@@ -191,12 +194,13 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
     manager->environment = g_strdup(environment);
 
     manager->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
-    if(manager->rawFrequencyKHz == 0) {
+    if (manager->rawFrequencyKHz == 0) {
         info("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
     }
 
     /* we will store the plug-in program meta data */
-    manager->programMeta = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, _program_meta_free);
+    manager->programMeta =
+        g_hash_table_new_full(g_str_hash, g_str_equal, g_free, _program_meta_free);
 
     /* the main scheduler may utilize multiple threads */
 
@@ -206,16 +210,18 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
     manager->scheduler = scheduler_new(policy, nWorkers, manager, schedulerSeed, endTime);
 
     manager->cwdPath = g_get_current_dir();
-    manager->dataPath = g_build_filename(manager->cwdPath, options_getDataOutputPath(options), NULL);
+    manager->dataPath =
+        g_build_filename(manager->cwdPath, options_getDataOutputPath(options), NULL);
     manager->hostsPath = g_build_filename(manager->dataPath, "hosts", NULL);
 
-    if(g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
+    if (g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
         gboolean success = utility_removeAll(manager->dataPath);
         utility_assert(success);
     }
 
-    gchar* templateDataPath = g_build_filename(manager->cwdPath, options_getDataTemplatePath(options), NULL);
-    if(g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
+    gchar* templateDataPath =
+        g_build_filename(manager->cwdPath, options_getDataTemplatePath(options), NULL);
+    if (g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
         gboolean success = utility_copyAll(templateDataPath, manager->dataPath);
         utility_assert(success);
     }
@@ -234,14 +240,14 @@ gint manager_free(Manager* manager) {
     /* we will never execute inside the plugin again */
     manager->forceShadowContext = TRUE;
 
-    if(manager->scheduler) {
+    if (manager->scheduler) {
         /* stop all of the threads and release host resources first */
         scheduler_shutdown(manager->scheduler);
         /* now we are the last one holding a ref, free the sched */
         scheduler_unref(manager->scheduler);
     }
 
-    if(manager->objectCounts != NULL) {
+    if (manager->objectCounts != NULL) {
         message("%s", objectcounter_valuesToString(manager->objectCounts));
         message("%s", objectcounter_diffsToString(manager->objectCounts));
         objectcounter_free(manager->objectCounts);
@@ -261,13 +267,13 @@ gint manager_free(Manager* manager) {
     if (manager->hostsPath) {
         g_free(manager->hostsPath);
     }
-    if(manager->random) {
+    if (manager->random) {
         random_free(manager->random);
     }
-    if(manager->preloadShimPath) {
+    if (manager->preloadShimPath) {
         g_free(manager->preloadShimPath);
     }
-    if(manager->environment) {
+    if (manager->environment) {
         g_free(manager->environment);
     }
 
@@ -291,13 +297,14 @@ guint manager_getRawCPUFrequency(Manager* manager) {
     return freq;
 }
 
-void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path, const gchar* startSymbol) {
+void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path,
+                           const gchar* startSymbol) {
     MAGIC_ASSERT(manager);
 
     /* store the path to the plugin and maybe the start symbol with the given
      * name so that we can retrieve the path later when hosts' processes want
      * to load it */
-    if(g_hash_table_lookup(manager->programMeta, name) != NULL) {
+    if (g_hash_table_lookup(manager->programMeta, name) != NULL) {
         error("attempting to regiser 2 plugins with the same path."
               "this should have been caught by the configuration parser.");
     } else {
@@ -315,14 +322,13 @@ void manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
 
     Host* host = host_new(params);
     host_setup(host, manager_getDNS(manager), manager_getTopology(manager),
-            manager_getRawCPUFrequency(manager), manager_getHostsRootPath(manager));
+               manager_getRawCPUFrequency(manager), manager_getHostsRootPath(manager));
     scheduler_addHost(manager->scheduler, host);
 }
 
 static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interposeMethod,
-                                   const gchar* preloadShimPath,
-                                   const gchar* environment,
-                                   const gchar* pluginPreloadPath) {
+                                     const gchar* preloadShimPath, const gchar* environment,
+                                     const gchar* pluginPreloadPath) {
     MAGIC_ASSERT(manager);
 
     /* start with an empty environment */
@@ -331,10 +337,8 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
     {
         // Pass the (real) start time to the plugin, so that shim-side logging
         // can log real time from the correct offset.
-        char* timestring =
-            g_strdup_printf("%" PRId64, logger_get_global_start_time_micros());
-        envv =
-            g_environ_setenv(envv, "SHADOW_LOG_START_TIME", timestring, TRUE);
+        char* timestring = g_strdup_printf("%" PRId64, logger_get_global_start_time_micros());
+        envv = g_environ_setenv(envv, "SHADOW_LOG_START_TIME", timestring, TRUE);
         g_free(timestring);
     }
 
@@ -350,9 +354,10 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
      * precendence here is:
      *   - preload attribute in the process element
      *   - preload attribute in the shadow element
-     *   - preload values from LD_PRELOAD entries in the environment attribute of the shadow element*/
+     *   - preload values from LD_PRELOAD entries in the environment attribute of the shadow
+     * element*/
     GPtrArray* ldPreloadArray = g_ptr_array_new();
-    if(pluginPreloadPath) {
+    if (pluginPreloadPath) {
         info("adding preload path %s", pluginPreloadPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(pluginPreloadPath));
     }
@@ -361,20 +366,20 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
 
     /* now we also have to scan the other env variables that were given in the shadow conf file */
 
-    if(environment) {
+    if (environment) {
         /* entries are split by ';' */
         gchar** envTokens = g_strsplit(environment, ";", 0);
 
-        for(gint i = 0; envTokens[i] != NULL; i++) {
+        for (gint i = 0; envTokens[i] != NULL; i++) {
             /* each env entry is key=value, get 2 tokens max */
             gchar** items = g_strsplit(envTokens[i], "=", 2);
 
             gchar* key = items[0];
             gchar* value = items[1];
 
-            if(key != NULL && value != NULL) {
+            if (key != NULL && value != NULL) {
                 /* check if the key is LD_PRELOAD */
-                if(!g_ascii_strncasecmp(key, "LD_PRELOAD", 10)) {
+                if (!g_ascii_strncasecmp(key, "LD_PRELOAD", 10)) {
                     /* append all LD_PRELOAD entries */
                     info("adding key path %s", value);
                     g_ptr_array_add(ldPreloadArray, g_strdup(value));
@@ -412,7 +417,7 @@ static gchar** _manager_getArgv(Manager* manager, gchar* exepath, gchar* argumen
     GString* command = g_string_new(exepath);
 
     /* if the user specified additional arguments, append those */
-    if(arguments && (g_ascii_strncasecmp(arguments, "\0", (gsize) 1) != 0)) {
+    if (arguments && (g_ascii_strncasecmp(arguments, "\0", (gsize)1) != 0)) {
         g_string_append_printf(command, " %s", arguments);
     }
 
@@ -425,41 +430,42 @@ static gchar** _manager_getArgv(Manager* manager, gchar* exepath, gchar* argumen
     return argv;
 }
 
-void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* pluginName, gchar* preloadName,
-        SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
+void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* pluginName,
+                                  gchar* preloadName, SimulationTime startTime,
+                                  SimulationTime stopTime, gchar* arguments) {
     MAGIC_ASSERT(manager);
 
     /* quarks are unique per process, so do the conversion here */
     GQuark hostID = g_quark_from_string(hostName);
 
     _ProgramMeta* plugin = g_hash_table_lookup(manager->programMeta, pluginName);
-    if(plugin == NULL) {
+    if (plugin == NULL) {
         error("plugin not found for name '%s'. this should be verified in the "
-              "config parser.", pluginName);
+              "config parser.",
+              pluginName);
     }
 
     InterposeMethod interposeMethod = options_getInterposeMethod(manager->options);
 
     _ProgramMeta* preload = NULL;
-    if(preloadName != NULL) {
+    if (preloadName != NULL) {
         preload = g_hash_table_lookup(manager->programMeta, preloadName);
-        if(preload == NULL) {
-            error("preload plugin not found for name '%s'. this should be verified in the config parser", preloadName);
+        if (preload == NULL) {
+            error("preload plugin not found for name '%s'. this should be verified in the config "
+                  "parser",
+                  preloadName);
         }
     }
 
     /* ownership is passed to the host/process below, so we don't free these */
-    gchar** envv = _manager_generateEnvv(manager,
-                                       interposeMethod,
-                                       manager->preloadShimPath,
-                                       manager->environment,
-                                       preload ? preload->path : NULL);
+    gchar** envv = _manager_generateEnvv(manager, interposeMethod, manager->preloadShimPath,
+                                         manager->environment, preload ? preload->path : NULL);
     gchar** argv = _manager_getArgv(manager, plugin->path, arguments);
 
     Host* host = scheduler_getHost(manager->scheduler, hostID);
     host_continueExecutionTimer(host);
-    host_addApplication(host, startTime, stopTime, interposeMethod, plugin->name,
-                        plugin->path, plugin->startSymbol, envv, argv);
+    host_addApplication(host, startTime, stopTime, interposeMethod, plugin->name, plugin->path,
+                        plugin->startSymbol, envv, argv);
     host_stopExecutionTimer(host);
 }
 
@@ -518,29 +524,34 @@ void manager_updateMinTimeJump(Manager* manager, gdouble minPathLatency) {
 static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
     MAGIC_ASSERT(manager);
 
-    if(simClockNow > (manager->simClockLastHeartbeat + options_getHeartbeatInterval(manager->options))) {
+    if (simClockNow >
+        (manager->simClockLastHeartbeat + options_getHeartbeatInterval(manager->options))) {
         manager->simClockLastHeartbeat = simClockNow;
 
         struct rusage resources;
-        if(!getrusage(RUSAGE_SELF, &resources)) {
+        if (!getrusage(RUSAGE_SELF, &resources)) {
             /* success, convert the values */
-            gdouble maxMemory = ((gdouble)resources.ru_maxrss)/((gdouble)1048576.0f); // Kib->GiB
-            gdouble userTimeMinutes = ((gdouble)resources.ru_utime.tv_sec)/((gdouble)60.0f);
-            gdouble systemTimeMinutes = ((gdouble)resources.ru_stime.tv_sec)/((gdouble)60.0f);
+            gdouble maxMemory = ((gdouble)resources.ru_maxrss) / ((gdouble)1048576.0f); // Kib->GiB
+            gdouble userTimeMinutes = ((gdouble)resources.ru_utime.tv_sec) / ((gdouble)60.0f);
+            gdouble systemTimeMinutes = ((gdouble)resources.ru_stime.tv_sec) / ((gdouble)60.0f);
 
             /* log the usage results */
-            message("process resource usage at simtime %"G_GUINT64_FORMAT" reported by getrusage(): "
-                    "ru_maxrss=%03f GiB, ru_utime=%03f minutes, ru_stime=%03f minutes, ru_nvcsw=%li, ru_nivcsw=%li",
-                    simClockNow, maxMemory, userTimeMinutes, systemTimeMinutes, resources.ru_nvcsw, resources.ru_nivcsw);
+            message("process resource usage at simtime %" G_GUINT64_FORMAT
+                    " reported by getrusage(): "
+                    "ru_maxrss=%03f GiB, ru_utime=%03f minutes, ru_stime=%03f minutes, "
+                    "ru_nvcsw=%li, ru_nivcsw=%li",
+                    simClockNow, maxMemory, userTimeMinutes, systemTimeMinutes, resources.ru_nvcsw,
+                    resources.ru_nivcsw);
         } else {
-            warning("unable to print process resources usage: error %i in getrusage: %s", errno, g_strerror(errno));
+            warning("unable to print process resources usage: error %i in getrusage: %s", errno,
+                    g_strerror(errno));
         }
     }
 }
 
 void manager_run(Manager* manager) {
     MAGIC_ASSERT(manager);
-    if(scheduler_getPolicy(manager->scheduler) == SP_SERIAL_GLOBAL) {
+    if (scheduler_getPolicy(manager->scheduler) == SP_SERIAL_GLOBAL) {
         scheduler_start(manager->scheduler);
 
         /* the main manager thread becomes the only worker and runs everything */
@@ -555,14 +566,15 @@ void manager_run(Manager* manager) {
 
         scheduler_finish(manager->scheduler);
     } else {
-        /* we are the main thread, we manage the execution window updates while the workers run events */
+        /* we are the main thread, we manage the execution window updates while the workers run
+         * events */
         SimulationTime windowStart = 0, windowEnd = 1;
         SimulationTime minNextEventTime = SIMTIME_INVALID;
         gboolean keepRunning = TRUE;
 
         scheduler_start(manager->scheduler);
 
-        while(keepRunning) {
+        while (keepRunning) {
             /* release the workers and run next round */
             scheduler_continueNextRound(manager->scheduler, windowStart, windowEnd);
 
@@ -571,22 +583,24 @@ void manager_run(Manager* manager) {
             _manager_heartbeat(manager, windowStart);
 
             /* flush manager threads messages */
-            shadow_logger_flushRecords(shadow_logger_getDefault(),
-                                       pthread_self());
+            shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
 
             /* let the logger know it can flush everything prior to this round */
             shadow_logger_syncToDisk(shadow_logger_getDefault());
 
-            /* wait for the workers to finish processing nodes before we update the execution window */
+            /* wait for the workers to finish processing nodes before we update the execution window
+             */
             minNextEventTime = scheduler_awaitNextRound(manager->scheduler);
 
             /* we are in control now, the workers are waiting for the next round */
-            info("finished execution window [%"G_GUINT64_FORMAT"--%"G_GUINT64_FORMAT"] next event at %"G_GUINT64_FORMAT,
-                    windowStart, windowEnd, minNextEventTime);
+            info("finished execution window [%" G_GUINT64_FORMAT "--%" G_GUINT64_FORMAT
+                 "] next event at %" G_GUINT64_FORMAT,
+                 windowStart, windowEnd, minNextEventTime);
 
             /* notify controller that we finished this round, and the time of our next event
              * in order to fast-forward our execute window if possible */
-            keepRunning = controller_managerFinishedCurrentRound(manager->controller, minNextEventTime, &windowStart, &windowEnd);
+            keepRunning = controller_managerFinishedCurrentRound(
+                manager->controller, minNextEventTime, &windowStart, &windowEnd);
         }
 
         scheduler_finish(manager->scheduler);
@@ -608,17 +622,17 @@ const gchar* manager_getHostsRootPath(Manager* manager) {
 void manager_storeCounts(Manager* manager, ObjectCounter* objectCounter) {
     MAGIC_ASSERT(manager);
     _manager_lock(manager);
-    if(manager->objectCounts) {
+    if (manager->objectCounts) {
         objectcounter_incrementAll(globalmanager->objectCounts, objectCounter);
     }
     _manager_unlock(manager);
 }
 
 void manager_countObject(ObjectType otype, CounterType ctype) {
-    if(globalmanager) {
+    if (globalmanager) {
         MAGIC_ASSERT(globalmanager);
         _manager_lock(globalmanager);
-        if(globalmanager->objectCounts) {
+        if (globalmanager->objectCounts) {
             objectcounter_incrementOne(globalmanager->objectCounts, otype, ctype);
         }
         _manager_unlock(globalmanager);

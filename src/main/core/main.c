@@ -15,17 +15,17 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "main/core/logger/shadow_logger.h"
+#include "igraph_version.h"
+#include "main/bindings/c/bindings.h"
 #include "main/core/controller.h"
+#include "main/core/logger/shadow_logger.h"
 #include "main/core/support/configuration.h"
 #include "main/core/support/options.h"
 #include "main/host/affinity.h"
-#include "main/utility/utility.h"
 #include "main/shmem/shmem_cleanup.h"
-#include "igraph_version.h"
+#include "main/utility/utility.h"
 #include "shd-config.h"
 #include "support/logger/logger.h"
-#include "main/bindings/c/bindings.h"
 
 static bool _setSchedFifo = false;
 OPTION_EXPERIMENTAL_ENTRY(
@@ -160,7 +160,7 @@ static gint _main_helper(Options* options) {
     gint returnCode = 0;
     shadowcontroller = controller_new(options);
 
-    if(shadowcontroller) {
+    if (shadowcontroller) {
         /* run the simulation */
         returnCode = controller_run(shadowcontroller);
 

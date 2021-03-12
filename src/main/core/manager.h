@@ -35,9 +35,9 @@
 
 typedef struct _Manager Manager;
 
-
-Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime, SimulationTime bootstrapEndTime,
-        guint randomSeed, const gchar* preloadShimPath, const gchar* environment);
+Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime,
+                     SimulationTime bootstrapEndTime, guint randomSeed,
+                     const gchar* preloadShimPath, const gchar* environment);
 gint manager_free(Manager* manager);
 
 gboolean manager_isForced(Manager* manager);
@@ -59,10 +59,12 @@ void manager_run(Manager*);
 gboolean manager_schedulerIsRunning(Manager* manager);
 
 /* info received from controller to set up the simulation */
-void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path, const gchar* startSymbol);
+void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path,
+                           const gchar* startSymbol);
 void manager_addNewVirtualHost(Manager* manager, HostParameters* params);
-void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* pluginName, gchar* preloadName,
-        SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
+void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* pluginName,
+                                  gchar* preloadName, SimulationTime startTime,
+                                  SimulationTime stopTime, gchar* arguments);
 
 void manager_storeCounts(Manager* manager, ObjectCounter* objectCounter);
 void manager_countObject(ObjectType otype, CounterType ctype);
