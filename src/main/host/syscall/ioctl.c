@@ -93,7 +93,7 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
         }
 
         case SIOCOUTQ: { // equivalent to TIOCOUTQ
-            buflen = socket_getInputBufferLength((Socket*)udp);
+            buflen = socket_getOutputBufferLength((Socket*)udp);
             result = 0;
             break;
         }
