@@ -19,7 +19,7 @@
 
 #include "main/core/logger/shadow_logger.h"
 #include "main/core/master.h"
-#include "main/core/slave.h"
+#include "main/core/manager.h"
 #include "main/core/support/configuration.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/examples.h"

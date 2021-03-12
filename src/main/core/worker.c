@@ -13,7 +13,7 @@
 
 #include "main/core/logger/shadow_logger.h"
 #include "main/core/scheduler/scheduler.h"
-#include "main/core/slave.h"
+#include "main/core/manager.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"

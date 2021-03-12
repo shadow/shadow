@@ -82,7 +82,7 @@ set(shadow_srcs
     core/work/task.c
     core/main.c
     core/master.c
-    core/slave.c
+    core/manager.c
     core/worker.c
 
     host/descriptor/channel.c
