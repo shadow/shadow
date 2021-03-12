@@ -102,7 +102,7 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
         }
 
         CompatDescriptor* cdesc = process_getRegisteredCompatDescriptor(sys->process, pfd->fd);
-        utility_assert(cdesc); // we would have returned POLLNVAL in getPollEvents
+        debug_assert(cdesc); // we would have returned POLLNVAL in getPollEvents
 
         struct epoll_event epev = {0};
         if (pfd->events & POLLIN) {

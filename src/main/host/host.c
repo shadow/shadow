@@ -97,7 +97,7 @@ struct _Host {
 
 /* this function is called by manager before the workers exist */
 Host* host_new(HostParameters* params) {
-    utility_assert(params);
+    debug_assert(params);
 
     Host* host = g_new0(Host, 1);
     MAGIC_INIT(host);
@@ -299,7 +299,7 @@ void host_ref(Host* host) {
 void host_unref(Host* host) {
     MAGIC_ASSERT(host);
     (host->referenceCount)--;
-    utility_assert(host->referenceCount >= 0);
+    debug_assert(host->referenceCount >= 0);
     if(host->referenceCount == 0) {
         _host_free(host);
     }
@@ -468,7 +468,7 @@ NetworkInterface* host_lookupInterface(Host* host, in_addr_t handle) {
 Router* host_getUpstreamRouter(Host* host, in_addr_t handle) {
     MAGIC_ASSERT(host);
     NetworkInterface* interface = g_hash_table_lookup(host->interfaces, GUINT_TO_POINTER(handle));
-    utility_assert(interface != NULL);
+    debug_assert(interface != NULL);
     return networkinterface_getRouter(interface);
 }
 
@@ -588,7 +588,7 @@ static in_port_t _host_getRandomPort(Host* host) {
     /* make sure we don't assign any low privileged ports */
     randomHostPort += (in_port_t)MIN_RANDOM_PORT;
 
-    utility_assert(randomHostPort >= MIN_RANDOM_PORT);
+    debug_assert(randomHostPort >= MIN_RANDOM_PORT);
     return htons(randomHostPort);
 }
 

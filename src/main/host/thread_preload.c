@@ -48,7 +48,7 @@ typedef struct _ShMemWriteBlock {
 } ShMemWriteBlock;
 
 static ThreadPreload* _threadToThreadPreload(Thread* thread) {
-    utility_assert(thread->type_id == THREADPRELOAD_TYPE_ID);
+    debug_assert(thread->type_id == THREADPRELOAD_TYPE_ID);
     return (ThreadPreload*)thread;
 }
 
@@ -85,7 +85,7 @@ static void _threadpreload_auxWrite(void* p, void* t) {
     shimevent_sendEventToPlugin(thread->ipc_blk.p, &req);
     shimevent_recvEventFromPlugin(thread->ipc_blk.p, &resp);
 
-    utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
+    debug_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
 }
 
 static void _threadpreload_flushWrites(ThreadPreload* thread) {
@@ -183,7 +183,7 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
     gchar** myenvv = g_strdupv(envv);
 
     thread->ipc_blk = shmemallocator_globalAlloc(ipcData_nbytes());
-    utility_assert(thread->ipc_blk.p);
+    debug_assert(thread->ipc_blk.p);
     ipcData_init(thread->ipc_blk.p, shimipc_spinMax());
 
     ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&thread->ipc_blk);
@@ -221,7 +221,7 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
 
 static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread) {
     MAGIC_ASSERT(_threadPreloadToThread(thread));
-    utility_assert(thread->ipc_blk.p > 0);
+    debug_assert(thread->ipc_blk.p > 0);
     shimevent_recvEventFromPlugin(thread->ipc_blk.p, &thread->currentEvent);
     debug("received shim_event %d", thread->currentEvent.event_id);
 }
@@ -239,7 +239,7 @@ void threadpreload_flushPtrs(Thread* base) {
 SysCallCondition* threadpreload_resume(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
-    utility_assert(thread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
+    debug_assert(thread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
 
     while (true) {
         switch (thread->currentEvent.event_id) {
@@ -258,7 +258,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 // code
                 int status;
                 pid_t rc = waitpid(thread->base.nativePid, &status, 0);
-                utility_assert(rc == thread->base.nativePid);
+                debug_assert(rc == thread->base.nativePid);
                 _threadpreload_cleanup(thread, status);
                 // it will not be sending us any more events
                 return NULL;
@@ -334,16 +334,16 @@ void threadpreload_terminate(Thread* base) {
 
     int status = 0;
 
-    utility_assert(thread->base.nativePid > 0);
+    debug_assert(thread->base.nativePid > 0);
 
     pid_t rc = waitpid(thread->base.nativePid, &status, WNOHANG);
-    utility_assert(rc != -1);
+    debug_assert(rc != -1);
 
     if (rc == 0) { // child is running, request a stop
         debug("sending SIGKILL to %d", thread->base.nativePid);
         kill(thread->base.nativePid, SIGKILL);
         rc = waitpid(thread->base.nativePid, &status, 0);
-        utility_assert(rc != -1 && rc > 0);
+        debug_assert(rc != -1 && rc > 0);
     }
     _threadpreload_cleanup(thread, status);
 }
@@ -370,7 +370,7 @@ static ShMemBlock _threadpreload_readPtrImpl(ThreadPreload* thread, PluginPtr pl
                                              bool is_string) {
     // Allocate a block for the clone
     ShMemBlock blk = shmemallocator_globalAlloc(n);
-    utility_assert(blk.p && blk.nbytes == n);
+    debug_assert(blk.p && blk.nbytes == n);
 
     ShimEvent req = {
         .event_id = SHD_SHIM_EVENT_CLONE_REQ,
@@ -386,7 +386,7 @@ static ShMemBlock _threadpreload_readPtrImpl(ThreadPreload* thread, PluginPtr pl
     shimevent_sendEventToPlugin(thread->ipc_blk.p, &req);
     shimevent_recvEventFromPlugin(thread->ipc_blk.p, &resp);
 
-    utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
+    debug_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
 
     return blk;
 }
@@ -398,7 +398,7 @@ const void* threadpreload_getReadablePtr(Thread* base, PluginPtr plugin_src, siz
     *blk = _threadpreload_readPtrImpl(thread, plugin_src, n, false);
 
     GList* new_head = g_list_append(thread->read_list, blk);
-    utility_assert(new_head);
+    debug_assert(new_head);
     if (!thread->read_list) {
         thread->read_list = new_head;
     }
@@ -424,12 +424,12 @@ int threadpreload_getReadableString(Thread* base, PluginPtr plugin_src, size_t n
     }
 
     GList* new_head = g_list_append(thread->read_list, blk);
-    utility_assert(new_head);
+    debug_assert(new_head);
     if (!thread->read_list) {
         thread->read_list = new_head;
     }
 
-    utility_assert(str_out);
+    debug_assert(str_out);
     *str_out = blk->p;
     return 0;
 }
@@ -439,15 +439,15 @@ void* threadpreload_getWriteablePtr(Thread* base, PluginPtr plugin_src, size_t n
 
     // Allocate a block for the clone
     ShMemWriteBlock* write_blk = calloc(1, sizeof(ShMemWriteBlock));
-    utility_assert(write_blk);
+    debug_assert(write_blk);
     write_blk->blk = shmemallocator_globalAlloc(n);
     write_blk->plugin_ptr = plugin_src;
     write_blk->n = n;
 
-    utility_assert(write_blk->blk.p && write_blk->blk.nbytes == n);
+    debug_assert(write_blk->blk.p && write_blk->blk.nbytes == n);
 
     GList* new_head = g_list_append(thread->write_list, write_blk);
-    utility_assert(new_head);
+    debug_assert(new_head);
     if (!thread->write_list) {
         thread->write_list = new_head;
     }
@@ -460,16 +460,16 @@ void* threadpreload_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) 
 
     // Allocate a block for eventual write
     ShMemWriteBlock* write_blk = calloc(1, sizeof(ShMemWriteBlock));
-    utility_assert(write_blk);
+    debug_assert(write_blk);
     // Use a block initialized with the current contents of the memory.
     write_blk->blk = _threadpreload_readPtrImpl(thread, plugin_src, n, false);
     write_blk->plugin_ptr = plugin_src;
     write_blk->n = n;
 
-    utility_assert(write_blk->blk.p && write_blk->blk.nbytes == n);
+    debug_assert(write_blk->blk.p && write_blk->blk.nbytes == n);
 
     GList* new_head = g_list_append(thread->write_list, write_blk);
-    utility_assert(new_head);
+    debug_assert(new_head);
     if (!thread->write_list) {
         thread->write_list = new_head;
     }
@@ -494,7 +494,7 @@ long threadpreload_nativeSyscall(Thread* base, long n, va_list args) {
 
     ShimEvent resp = {0};
     shimevent_recvEventFromPlugin(thread->ipc_blk.p, &resp);
-    utility_assert(resp.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
+    debug_assert(resp.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
     return resp.event_data.syscall_complete.retval.as_i64;
 }
 

@@ -15,7 +15,7 @@
 #include "support/logger/logger.h"
 
 SysCallReturn syscallhandler_sysinfo(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    debug_assert(sys && args);
     PluginPtr info_ptr = args->args[0].as_ptr; // struct sysinfo*
 
     debug("sysinfo called");

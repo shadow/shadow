@@ -36,7 +36,7 @@ static SysCallReturn _syscallhandler_prlimitHelper(SysCallHandler* sys, pid_t pi
 ///////////////////////////////////////////////////////////
 
 SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    debug_assert(sys && args);
 
     int option = args->args[0].as_i64;
     debug("prctl called with option %i", option);
@@ -63,7 +63,7 @@ SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
 }
 
 SysCallReturn syscallhandler_prlimit(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    debug_assert(sys && args);
     pid_t pid = args->args[0].as_i64;
     int resource = args->args[1].as_i64;
     PluginPtr newlim = args->args[2].as_ptr; // const struct rlimit*
@@ -73,7 +73,7 @@ SysCallReturn syscallhandler_prlimit(SysCallHandler* sys, const SysCallArgs* arg
 }
 
 SysCallReturn syscallhandler_prlimit64(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    debug_assert(sys && args);
     pid_t pid = args->args[0].as_i64;
     int resource = args->args[1].as_i64;
     PluginPtr newlim = args->args[2].as_ptr; // const struct rlimit*

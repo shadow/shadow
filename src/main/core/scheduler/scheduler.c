@@ -178,7 +178,7 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
             break;
         }
     }
-    utility_assert(scheduler->policy);
+    debug_assert(scheduler->policy);
 
     /* make sure our ref count is set before starting the threads */
     scheduler->referenceCount = 1;
@@ -214,7 +214,7 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
         if(returnVal != 0) {
             warning("unable to set name of worker thread to '%s'", name->str);
         }
-        utility_assert(item->thread);
+        debug_assert(item->thread);
 
         g_queue_push_tail(scheduler->threadItems, item);
         shadow_logger_register(shadow_logger_getDefault(), item->thread);
@@ -360,8 +360,8 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
 
     /* parties involved. sender may be NULL, receiver may not!
      * we MAY NOT OWN the receiver, so do not write to it! */
-    utility_assert(receiver);
-    utility_assert(receiver == event_getHost(event));
+    debug_assert(receiver);
+    debug_assert(receiver == event_getHost(event));
 
     /* push to a queue based on the policy */
     scheduler->policy->push(scheduler->policy, event, sender, receiver, scheduler->currentRound.endTime);
@@ -465,7 +465,7 @@ static void _scheduler_shuffleQueue(Scheduler* scheduler, GQueue* queue) {
     }
 
     /* we now should have moved all elements from the queue to the array */
-    utility_assert(g_queue_is_empty(queue));
+    debug_assert(g_queue_is_empty(queue));
 
     /* shuffle array - Fisher-Yates shuffle */
     for(guint i = 0; i < length-1; i++) {
@@ -490,13 +490,13 @@ static void _scheduler_shuffleQueue(Scheduler* scheduler, GQueue* queue) {
 
 static void _scheduler_assignHostsToThread(Scheduler* scheduler, GQueue* hosts, pthread_t thread, uint maxAssignments) {
     MAGIC_ASSERT(scheduler);
-    utility_assert(hosts);
-    utility_assert(thread);
+    debug_assert(hosts);
+    debug_assert(thread);
 
     guint numAssignments = 0;
     while((maxAssignments == 0 || numAssignments < maxAssignments) && !g_queue_is_empty(hosts)) {
         Host* host = (Host*) g_queue_pop_head(hosts);
-        utility_assert(host);
+        debug_assert(host);
         scheduler->policy->addHost(scheduler->policy, host, thread);
         numAssignments++;
     }
@@ -525,7 +525,7 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
 
         /* assign *all* of the hosts to the chosen thread */
         _scheduler_assignHostsToThread(scheduler, hosts, chosen, 0);
-        utility_assert(g_queue_is_empty(hosts));
+        debug_assert(g_queue_is_empty(hosts));
     } else {
         /* we need to shuffle the list of hosts to make sure they are randomly assigned */
         _scheduler_shuffleQueue(scheduler, hosts);

@@ -33,7 +33,7 @@ void _syscallhandler_setListenTimeout(SysCallHandler* sys,
         error("syscallhandler failed to set timeout to %lu.%09lu seconds",
               (long unsigned int)value.it_value.tv_sec,
               (long unsigned int)value.it_value.tv_nsec);
-        utility_assert(result == 0);
+        debug_assert(result == 0);
     }
 }
 
@@ -49,7 +49,7 @@ int _syscallhandler_isListenTimeoutPending(SysCallHandler* sys) {
     struct itimerspec value = {0};
 
     gint result = timer_getTime(sys->timer, &value);
-    utility_assert(result == 0);
+    debug_assert(result == 0);
 
     return value.it_value.tv_sec > 0 || value.it_value.tv_nsec > 0;
 }

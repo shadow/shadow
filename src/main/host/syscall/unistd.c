@@ -108,7 +108,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
-    utility_assert(desc);
+    debug_assert(desc);
 
     /* Need a non-null buffer. */
     if (!bufPtr.val) {
@@ -146,7 +146,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:
             // We already diverted these to the socket handler above.
-            utility_assert(0);
+            debug_assert(0);
             break;
         case DT_UNIXSOCKET:
         case DT_EPOLL:
@@ -208,7 +208,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
-    utility_assert(desc);
+    debug_assert(desc);
 
     /* Need a non-null buffer. */
     if (!bufPtr.val) {
@@ -238,7 +238,7 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:
             // We already diverted these to the socket handler above.
-            utility_assert(0);
+            debug_assert(0);
             break;
         case DT_UNIXSOCKET:
         case DT_EPOLL:

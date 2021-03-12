@@ -69,7 +69,7 @@ mode_t file_getMode(File* file) {
 }
 
 static inline File* _file_descriptorToFile(LegacyDescriptor* desc) {
-    utility_assert(descriptor_getType(desc) == DT_FILE);
+    debug_assert(descriptor_getType(desc) == DT_FILE);
     File* file = (File*)desc;
     MAGIC_ASSERT(file);
     return file;
@@ -162,7 +162,7 @@ static char* _file_getConcatStr(const char* prefix, const char sep, const char* 
 
 static char* _file_getPath(File* file, File* dir, const char* pathname) {
     MAGIC_ASSERT(file);
-    utility_assert(pathname);
+    debug_assert(pathname);
 
     /* Compute the absolute path, which will allow us to reopen later. */
     if (pathname[0] == '/') {
@@ -232,7 +232,7 @@ static void _file_print_flags(int flags) {
 int file_openat(File* file, File* dir, const char* pathname, int flags,
                 mode_t mode) {
     MAGIC_ASSERT(file);
-    utility_assert(file->osfile.fd == OSFILE_INVALID);
+    debug_assert(file->osfile.fd == OSFILE_INVALID);
 
     debug("Attempting to open file with pathname=%s flags=%i mode=%i", pathname, flags, (int)mode);
 #ifdef DEBUG
@@ -306,10 +306,10 @@ int file_open(File* file, const char* pathname, int flags, mode_t mode) {
 }
 
 static void _file_readRandomBytes(File* file, void* buf, size_t numBytes) {
-    utility_assert(file->type == FILE_TYPE_RANDOM);
+    debug_assert(file->type == FILE_TYPE_RANDOM);
 
     Host* host = worker_getActiveHost();
-    utility_assert(host != NULL);
+    debug_assert(host != NULL);
 
     debug("File %i will read %zu bytes from random source for host %s", _file_getFD(file), numBytes,
           host_getName(host));

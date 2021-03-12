@@ -55,7 +55,7 @@ void futex_ref(Futex* futex) {
 
 void futex_unref(Futex* futex) {
     MAGIC_ASSERT(futex);
-    utility_assert(futex->referenceCount > 0);
+    debug_assert(futex->referenceCount > 0);
     if (--futex->referenceCount == 0) {
         _futex_free(futex);
     }
@@ -109,7 +109,7 @@ unsigned int futex_wake(Futex* futex, unsigned int numWakeups) {
 
 void futex_addListener(Futex* futex, StatusListener* listener) {
     MAGIC_ASSERT(futex);
-    utility_assert(listener);
+    debug_assert(listener);
     statuslistener_ref(listener);
     g_hash_table_insert(futex->listeners, listener, GUINT_TO_POINTER(false));
 }

@@ -91,7 +91,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
 
     /* It's now safe to cast. */
     Epoll* epoll = (Epoll*)epollDescriptor;
-    utility_assert(epoll);
+    debug_assert(epoll);
 
     /* Find the child descriptor that the epoll is monitoring. */
     CompatDescriptor* compatDescriptor = process_getRegisteredCompatDescriptor(sys->process, fd);
@@ -157,11 +157,11 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = errorCode};
     }
-    utility_assert(desc);
+    debug_assert(desc);
 
     /* It's now safe to cast. */
     Epoll* epoll = (Epoll*)desc;
-    utility_assert(epoll);
+    debug_assert(epoll);
 
     /* figure out how many events we actually have so we can request
      * less memory than maxevents if possible. */
@@ -209,7 +209,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     /* Retrieve the events. */
     gint nEvents = 0;
     gint result = epoll_getEvents(epoll, events, numEventsNeeded, &nEvents);
-    utility_assert(result == 0);
+    debug_assert(result == 0);
 
     debug("Found %i ready events on epoll %i.", nEvents, epfd);
 

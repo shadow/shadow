@@ -139,7 +139,7 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
         /* This will remove the descriptor entry and unref/free the File. */
         descriptor_close((LegacyDescriptor*)file_desc);
     } else {
-        utility_assert(errcode == handle);
+        debug_assert(errcode == handle);
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};

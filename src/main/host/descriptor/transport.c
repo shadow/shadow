@@ -13,7 +13,7 @@
 #include "main/utility/utility.h"
 
 static Transport* _transport_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(descriptor_getType(descriptor) == DT_TCPSOCKET ||
+    debug_assert(descriptor_getType(descriptor) == DT_TCPSOCKET ||
                    descriptor_getType(descriptor) == DT_UDPSOCKET ||
                    descriptor_getType(descriptor) == DT_UNIXSOCKET ||
                    descriptor_getType(descriptor) == DT_PIPE);
@@ -44,7 +44,7 @@ DescriptorFunctionTable transport_functions = {
 
 void transport_init(Transport* transport, TransportFunctionTable* vtable,
                     LegacyDescriptorType type) {
-    utility_assert(transport && vtable);
+    debug_assert(transport && vtable);
 
     descriptor_init(&(transport->super), type, &transport_functions);
 

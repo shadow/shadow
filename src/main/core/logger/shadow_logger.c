@@ -223,7 +223,7 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         _logger_stopHelper(logger);
 
         /* now abort, but get a backtrace */
-        utility_assert(FALSE && "failure due to error-level log message");
+        debug_assert(FALSE && "failure due to error-level log message");
     }
 }
 
@@ -415,7 +415,7 @@ static void _logger_free(ShadowLogger* logger) {
     _logger_stopHelper(logger);
 
     /* all commands should have been handled and we can free the queue */
-    utility_assert(g_async_queue_length_unlocked(logger->helperCommands) == 0);
+    debug_assert(g_async_queue_length_unlocked(logger->helperCommands) == 0);
     g_async_queue_unref(logger->helperCommands);
     countdownlatch_free(logger->helperLatch);
 

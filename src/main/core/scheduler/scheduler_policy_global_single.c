@@ -57,7 +57,7 @@ static Event* _schedulerpolicyglobalsingle_pop(SchedulerPolicy* policy, Simulati
         return NULL;
     }
 
-    utility_assert(eventTime >= data->lastEventTime);
+    debug_assert(eventTime >= data->lastEventTime);
     data->lastEventTime = eventTime;
 
     return priorityqueue_pop(data->pq);

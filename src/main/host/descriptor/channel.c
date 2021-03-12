@@ -34,7 +34,7 @@ struct _Channel {
 };
 
 static Channel* _channel_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(descriptor_getType(descriptor) == DT_PIPE ||
+    debug_assert(descriptor_getType(descriptor) == DT_PIPE ||
                    descriptor_getType(descriptor) == DT_UNIXSOCKET);
     return (Channel*)descriptor;
 }
@@ -74,7 +74,7 @@ static void channel_free(LegacyDescriptor* descriptor) {
 static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize nBytes) {
     MAGIC_ASSERT(channel);
     /* our linked channel is trying to send us data, make sure we can read it */
-    utility_assert(!(channel->type & CT_WRITEONLY));
+    debug_assert(!(channel->type & CT_WRITEONLY));
 
     gsize available = channel->bufferSize - channel->bufferLength;
     if(available == 0) {
@@ -98,7 +98,7 @@ static gssize channel_sendUserData(Transport* transport, gconstpointer buffer,
     Channel* channel = _channel_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(channel);
     /* the read end of a unidirectional pipe can not write! */
-    utility_assert(channel->type != CT_READONLY);
+    debug_assert(channel->type != CT_READONLY);
 
     gssize result = 0;
 
@@ -125,7 +125,7 @@ static gssize channel_receiveUserData(Transport* transport, gpointer buffer,
     Channel* channel = _channel_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(channel);
     /* the write end of a unidirectional pipe can not read! */
-    utility_assert(channel->type != CT_WRITEONLY);
+    debug_assert(channel->type != CT_WRITEONLY);
 
     gsize available = channel->bufferLength;
     if(available == 0) {

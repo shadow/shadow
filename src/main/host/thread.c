@@ -63,7 +63,7 @@ void thread_ref(Thread* thread) {
 void thread_unref(Thread* thread) {
     MAGIC_ASSERT(thread);
     (thread->referenceCount)--;
-    utility_assert(thread->referenceCount >= 0);
+    debug_assert(thread->referenceCount >= 0);
     if(thread->referenceCount == 0) {
         _thread_cleanupSysCallCondition(thread);
         thread->methods.free(thread);
@@ -80,7 +80,7 @@ void thread_unref(Thread* thread) {
 
 void thread_run(Thread* thread, gchar** argv, gchar** envv) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.run);
+    debug_assert(thread->methods.run);
 
     _thread_syncAffinityWithWorker(thread);
 
@@ -91,7 +91,7 @@ void thread_run(Thread* thread, gchar** argv, gchar** envv) {
 
 void thread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.resume);
+    debug_assert(thread->methods.resume);
     _thread_syncAffinityWithWorker(thread);
     _thread_cleanupSysCallCondition(thread);
     thread->cond = thread->methods.resume(thread);
@@ -103,12 +103,12 @@ void thread_resume(Thread* thread) {
 void thread_terminate(Thread* thread) {
     MAGIC_ASSERT(thread);
     _thread_cleanupSysCallCondition(thread);
-    utility_assert(thread->methods.terminate);
+    debug_assert(thread->methods.terminate);
     thread->methods.terminate(thread);
 }
 int thread_getReturnCode(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getReturnCode);
+    debug_assert(thread->methods.getReturnCode);
     return thread->methods.getReturnCode(thread);
 }
 
@@ -120,38 +120,38 @@ bool thread_isRunning(Thread* thread) {
 const void* thread_getReadablePtr(Thread* thread, PluginPtr plugin_src,
                                   size_t n) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getReadablePtr);
+    debug_assert(thread->methods.getReadablePtr);
     return thread->methods.getReadablePtr(thread, plugin_src, n);
 }
 
 int thread_getReadableString(Thread* thread, PluginPtr plugin_src, size_t n,
                              const char** str, size_t* strlen) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getReadableString);
+    debug_assert(thread->methods.getReadableString);
     return thread->methods.getReadableString(thread, plugin_src, n, str, strlen);
 }
 
 void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getReadablePtr);
+    debug_assert(thread->methods.getReadablePtr);
     return thread->methods.getWriteablePtr(thread, plugin_src, n);
 }
 
 void* thread_getMutablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getMutablePtr);
+    debug_assert(thread->methods.getMutablePtr);
     return thread->methods.getMutablePtr(thread, plugin_src, n);
 }
 
 void thread_flushPtrs(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.flushPtrs);
+    debug_assert(thread->methods.flushPtrs);
     thread->methods.flushPtrs(thread);
 }
 
 long thread_nativeSyscall(Thread* thread, long n, ...) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.nativeSyscall);
+    debug_assert(thread->methods.nativeSyscall);
     va_list(args);
     va_start(args, n);
     long rv = thread->methods.nativeSyscall(thread, n, args);
@@ -175,7 +175,7 @@ PluginPtr thread_mallocPluginPtr(Thread* thread, size_t size) {
     }
 
     // Should be page-aligned.
-    utility_assert((ptr % sysconf(_SC_PAGE_SIZE)) == 0);
+    debug_assert((ptr % sysconf(_SC_PAGE_SIZE)) == 0);
 
     return (PluginPtr){.val = ptr};
 }
@@ -198,7 +198,7 @@ int thread_getID(Thread* thread) {
 int thread_clone(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
                  PluginPtr ctid, unsigned long newtls, Thread** child) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.clone);
+    debug_assert(thread->methods.clone);
     return thread->methods.clone(thread, flags, child_stack, ptid, ctid, newtls, child);
 }
 

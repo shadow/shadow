@@ -216,14 +216,14 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
 
     if (g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
         gboolean success = utility_removeAll(manager->dataPath);
-        utility_assert(success);
+        debug_assert(success);
     }
 
     gchar* templateDataPath =
         g_build_filename(manager->cwdPath, options_getDataTemplatePath(options), NULL);
     if (g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
         gboolean success = utility_copyAll(templateDataPath, manager->dataPath);
-        utility_assert(success);
+        debug_assert(success);
     }
     g_free(templateDataPath);
 

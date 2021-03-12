@@ -23,7 +23,7 @@ struct _Task {
 
 Task* task_new(TaskCallbackFunc callback, gpointer callbackObject, gpointer callbackArgument,
         TaskObjectFreeFunc objectFree, TaskArgumentFreeFunc argumentFree) {
-    utility_assert(callback != NULL);
+    debug_assert(callback != NULL);
 
     Task* task = g_new0(Task, 1);
 

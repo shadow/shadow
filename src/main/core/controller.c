@@ -81,7 +81,7 @@ struct _Controller {
 //}
 
 Controller* controller_new(Options* options) {
-    utility_assert(options);
+    debug_assert(options);
 
     /* Don't do anything in this function that will cause a log message. The
      * global engine is still NULL since we are creating it now, and logging
@@ -149,7 +149,7 @@ static SimulationTime _controller_getMinTimeJump(Controller* controller) {
 void controller_updateMinTimeJump(Controller* controller, gdouble minPathLatency) {
     MAGIC_ASSERT(controller);
     if (controller->nextMinJumpTime == 0 || minPathLatency < controller->nextMinJumpTime) {
-        utility_assert(minPathLatency > 0.0f);
+        debug_assert(minPathLatency > 0.0f);
         SimulationTime oldJumpMS = controller->nextMinJumpTime;
         controller->nextMinJumpTime = ((SimulationTime)minPathLatency) * SIMTIME_ONE_MILLISECOND;
         info("updated topology minimum time jump from %" G_GUINT64_FORMAT " to %" G_GUINT64_FORMAT
@@ -232,7 +232,7 @@ static gboolean _controller_loadTopology(Controller* controller) {
                     temporaryFilename);
         }
     } else {
-        utility_assert(e->cdata.isSet);
+        debug_assert(e->cdata.isSet);
         GError* error = NULL;
 
         /* copy the cdata to the new temporary filename */
@@ -295,9 +295,9 @@ static void _controller_initializeTimeWindows(Controller* controller) {
 
 static void _controller_registerPluginCallback(ConfigurationPluginElement* pe,
                                                Controller* controller) {
-    utility_assert(pe);
+    debug_assert(pe);
     MAGIC_ASSERT(controller);
-    utility_assert(pe->id.isSet && pe->id.string);
+    debug_assert(pe->id.isSet && pe->id.string);
     manager_addNewProgram(controller->manager, pe->id.string->str, pe->path.string->str,
                           pe->startsymbol.isSet ? pe->startsymbol.string->str : NULL);
 }
@@ -316,10 +316,10 @@ typedef struct _ProcessCallbackArgs {
 
 static void _controller_registerProcessCallback(ConfigurationProcessElement* pe,
                                                 ProcessCallbackArgs* args) {
-    utility_assert(pe && args);
+    debug_assert(pe && args);
     MAGIC_ASSERT(args->controller);
-    utility_assert(pe->plugin.isSet && pe->plugin.string);
-    utility_assert(pe->arguments.isSet && pe->arguments.string);
+    debug_assert(pe->plugin.isSet && pe->plugin.string);
+    debug_assert(pe->arguments.isSet && pe->arguments.string);
 
     manager_addNewVirtualProcess(args->controller->manager, args->hostParams->hostname,
                                  pe->plugin.string->str,
@@ -331,8 +331,8 @@ static void _controller_registerProcessCallback(ConfigurationProcessElement* pe,
 
 static void _controller_registerHostCallback(ConfigurationHostElement* he, Controller* controller) {
     MAGIC_ASSERT(controller);
-    utility_assert(he);
-    utility_assert(he->id.isSet && he->id.string);
+    debug_assert(he);
+    debug_assert(he->id.isSet && he->id.string);
 
     guint64 quantity = he->quantity.isSet ? he->quantity.integer : 1;
 
@@ -500,7 +500,7 @@ gboolean controller_managerFinishedCurrentRound(Controller* controller,
                                                 SimulationTime* executeWindowStart,
                                                 SimulationTime* executeWindowEnd) {
     MAGIC_ASSERT(controller);
-    utility_assert(executeWindowStart && executeWindowEnd);
+    debug_assert(executeWindowStart && executeWindowEnd);
 
     /* TODO: once we get multiple managers, we have to block them here
      * until they have all notified us that they are finished */

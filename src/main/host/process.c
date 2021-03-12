@@ -122,13 +122,13 @@ struct _Process {
 
 const gchar* process_getName(Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_assert(proc->processName->str);
+    debug_assert(proc->processName->str);
     return proc->processName->str;
 }
 
 const gchar* process_getPluginName(Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_assert(proc->plugin.exeName->str);
+    debug_assert(proc->plugin.exeName->str);
     return proc->plugin.exeName->str;
 }
 
@@ -167,7 +167,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
         process_flushPtrs(process, thread);
 
         FutexTable* ftable = host_getFutexTable(process->host);
-        utility_assert(ftable);
+        debug_assert(ftable);
         Futex* futex =
             futextable_get(ftable, process_getPhysicalAddress(process, clear_child_tid_pvp));
         if (futex) {
@@ -317,7 +317,7 @@ static gchar* _process_outputFileName(Process* proc, const char* type) {
 
 static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName) {
     MAGIC_ASSERT(proc);
-    utility_assert(fileName != NULL);
+    debug_assert(fileName != NULL);
 
     File* stdfile = file_new();
     int errcode = file_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
@@ -578,8 +578,8 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
     proc->processID = processID;
 
     /* plugin name and path are required so we know what to execute */
-    utility_assert(pluginName);
-    utility_assert(pluginPath);
+    debug_assert(pluginName);
+    debug_assert(pluginPath);
     proc->plugin.exeName = g_string_new(pluginName);
     proc->plugin.exePath = g_string_new(pluginPath);
 
@@ -689,7 +689,7 @@ void process_ref(Process* proc) {
 void process_unref(Process* proc) {
     MAGIC_ASSERT(proc);
     (proc->referenceCount)--;
-    utility_assert(proc->referenceCount >= 0);
+    debug_assert(proc->referenceCount >= 0);
     if(proc->referenceCount == 0) {
         _process_free(proc);
     }
@@ -734,10 +734,10 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
     guint pid = process_getProcessID(proc);
     const int pid_shift = 64 - pid_bits;
     uint64_t high = (uint64_t)pid << pid_shift;
-    utility_assert(high >> pid_shift == pid);
+    debug_assert(high >> pid_shift == pid);
 
     uint64_t low = vPtr.val;
-    utility_assert(low >> pid_shift == 0);
+    debug_assert(low >> pid_shift == 0);
 
     return (PluginPhysicalPtr){.val = low | high};
 }
@@ -791,7 +791,7 @@ void process_flushPtrs(Process* proc, Thread* thread) {
 
 int process_registerCompatDescriptor(Process* proc, CompatDescriptor* compatDesc) {
     MAGIC_ASSERT(proc);
-    utility_assert(compatDesc);
+    debug_assert(compatDesc);
     return descriptortable_add(proc->descTable, compatDesc);
 }
 
@@ -808,7 +808,7 @@ CompatDescriptor* process_getRegisteredCompatDescriptor(Process* proc, int handl
 
 int process_registerLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
     MAGIC_ASSERT(proc);
-    utility_assert(desc);
+    debug_assert(desc);
 
     descriptor_setOwnerProcess(desc, proc);
     CompatDescriptor* compatDesc = compatdescriptor_fromLegacy(desc);

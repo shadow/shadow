@@ -14,7 +14,7 @@
 #include "main/core/support/definitions.h"
 
 #ifdef DEBUG
-#define utility_assert(expr) \
+#define debug_assert(expr) \
 do { \
     if G_LIKELY (expr) { \
         ; \
@@ -23,7 +23,7 @@ do { \
     } \
 } while (0)
 #else
-#define utility_assert(expr)
+#define debug_assert(expr)
 #endif
 
 #ifdef DEBUG
@@ -65,7 +65,7 @@ do { \
  * Assert that a struct declared with MAGIC_DECLARE and initialized with
  * MAGIC_INIT still holds the value MAGIC_VALUE.
  */
-#define MAGIC_ASSERT(object) utility_assert(object && (object->magic == MAGIC_VALUE))
+#define MAGIC_ASSERT(object) debug_assert(object && (object->magic == MAGIC_VALUE))
 
 /**
  * CLear a magic value. Future assertions with MAGIC_ASSERT will fail.

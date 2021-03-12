@@ -25,14 +25,14 @@ AsyncPriorityQueue* asyncpriorityqueue_new(GCompareDataFunc compareFunc,
 }
 
 void asyncpriorityqueue_clear(AsyncPriorityQueue *q) {
-    utility_assert(q);
+    debug_assert(q);
     g_mutex_lock(&(q->lock));
     priorityqueue_clear(q->pq);
     g_mutex_unlock(&(q->lock));
 }
 
 void asyncpriorityqueue_free(AsyncPriorityQueue *q) {
-    utility_assert(q);
+    debug_assert(q);
     g_mutex_lock(&(q->lock));
     priorityqueue_free(q->pq);
     q->pq = NULL;
@@ -42,7 +42,7 @@ void asyncpriorityqueue_free(AsyncPriorityQueue *q) {
 }
 
 gsize asyncpriorityqueue_getLength(AsyncPriorityQueue *q) {
-    utility_assert(q);
+    debug_assert(q);
     g_mutex_lock(&(q->lock));
     gsize returnVal = priorityqueue_getLength(q->pq);
     g_mutex_unlock(&(q->lock));
@@ -50,7 +50,7 @@ gsize asyncpriorityqueue_getLength(AsyncPriorityQueue *q) {
 }
 
 gboolean asyncpriorityqueue_isEmpty(AsyncPriorityQueue *q) {
-    utility_assert(q);
+    debug_assert(q);
     g_mutex_lock(&(q->lock));
     gboolean returnVal = priorityqueue_isEmpty(q->pq);
     g_mutex_unlock(&(q->lock));
@@ -58,7 +58,7 @@ gboolean asyncpriorityqueue_isEmpty(AsyncPriorityQueue *q) {
 }
 
 gboolean asyncpriorityqueue_push(AsyncPriorityQueue *q, gpointer data) {
-    utility_assert(q);
+    debug_assert(q);
     g_mutex_lock(&(q->lock));
     gboolean returnVal = priorityqueue_push(q->pq, data);
     g_mutex_unlock(&(q->lock));
@@ -66,7 +66,7 @@ gboolean asyncpriorityqueue_push(AsyncPriorityQueue *q, gpointer data) {
 }
 
 gpointer asyncpriorityqueue_peek(AsyncPriorityQueue *q) {
-    utility_assert(q);
+    debug_assert(q);
     g_mutex_lock(&(q->lock));
     gpointer returnData = priorityqueue_peek(q->pq);
     g_mutex_unlock(&(q->lock));
@@ -74,7 +74,7 @@ gpointer asyncpriorityqueue_peek(AsyncPriorityQueue *q) {
 }
 
 gpointer asyncpriorityqueue_find(AsyncPriorityQueue *q, gpointer data) {
-    utility_assert(q);
+    debug_assert(q);
     g_mutex_lock(&(q->lock));
     gpointer returnData = priorityqueue_find(q->pq, data);
     g_mutex_unlock(&(q->lock));
@@ -82,7 +82,7 @@ gpointer asyncpriorityqueue_find(AsyncPriorityQueue *q, gpointer data) {
 }
 
 gpointer asyncpriorityqueue_pop(AsyncPriorityQueue *q) {
-    utility_assert(q);
+    debug_assert(q);
     g_mutex_lock(&(q->lock));
     gpointer returnData = priorityqueue_pop(q->pq);
     g_mutex_unlock(&(q->lock));

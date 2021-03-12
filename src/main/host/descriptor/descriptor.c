@@ -18,7 +18,7 @@
 
 void descriptor_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
                      DescriptorFunctionTable* funcTable) {
-    utility_assert(descriptor && funcTable);
+    debug_assert(descriptor && funcTable);
 
     MAGIC_INIT(descriptor);
     MAGIC_INIT(funcTable);
@@ -68,7 +68,7 @@ void descriptor_unref(gpointer data) {
     debug("Descriptor %i ref-- to %i", descriptor->handle,
           descriptor->referenceCount);
 
-    utility_assert(descriptor->referenceCount >= 0);
+    debug_assert(descriptor->referenceCount >= 0);
     if(descriptor->referenceCount == 0) {
         gint handle = descriptor->handle;
         _descriptor_free(descriptor);

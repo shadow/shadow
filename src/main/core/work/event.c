@@ -26,7 +26,7 @@ struct _Event {
 };
 
 Event* event_new_(Task* task, SimulationTime time, gpointer srcHost, gpointer dstHost) {
-    utility_assert(task != NULL);
+    debug_assert(task != NULL);
     Event* event = g_new0(Event, 1);
     MAGIC_INIT(event);
 

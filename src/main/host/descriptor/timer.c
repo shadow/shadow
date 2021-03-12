@@ -43,7 +43,7 @@ struct _Timer {
 };
 
 static Timer* _timer_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(descriptor_getType(descriptor) == DT_TIMER);
+    debug_assert(descriptor_getType(descriptor) == DT_TIMER);
     return (Timer*)descriptor;
 }
 
@@ -86,7 +86,7 @@ Timer* timer_new() {
 
 static void _timer_getCurrentTime(Timer* timer, struct timespec* out) {
     MAGIC_ASSERT(timer);
-    utility_assert(out);
+    debug_assert(out);
 
     if(timer->nextExpireTime == 0) {
         /* timer is disarmed */
@@ -95,7 +95,7 @@ static void _timer_getCurrentTime(Timer* timer, struct timespec* out) {
     } else {
         /* timer is armed */
         SimulationTime currentTime = worker_getCurrentTime();
-        utility_assert(currentTime <= timer->nextExpireTime);
+        debug_assert(currentTime <= timer->nextExpireTime);
 
         /* always return relative value */
         SimulationTime diff = timer->nextExpireTime - currentTime;
@@ -106,7 +106,7 @@ static void _timer_getCurrentTime(Timer* timer, struct timespec* out) {
 
 static void _timer_getCurrentInterval(Timer* timer, struct timespec* out) {
     MAGIC_ASSERT(timer);
-    utility_assert(out);
+    debug_assert(out);
 
     if(timer->expireInterval == 0) {
         /* timer is set to expire just once */
@@ -141,7 +141,7 @@ static void _timer_disarm(Timer* timer) {
 }
 
 static SimulationTime _timer_timespecToSimTime(const struct timespec* config, gboolean configTimeIsEmulatedTime) {
-    utility_assert(config);
+    debug_assert(config);
 
     SimulationTime simNanoSecs = 0;
 
@@ -168,7 +168,7 @@ static SimulationTime _timer_timespecToSimTime(const struct timespec* config, gb
 
 static void _timer_setCurrentTime(Timer* timer, const struct timespec* config, gint flags) {
     MAGIC_ASSERT(timer);
-    utility_assert(config);
+    debug_assert(config);
 
     SimulationTime now = worker_getCurrentTime();
 
@@ -192,7 +192,7 @@ static void _timer_setCurrentTime(Timer* timer, const struct timespec* config, g
 
 static void _timer_setCurrentInterval(Timer* timer, const struct timespec* config) {
     MAGIC_ASSERT(timer);
-    utility_assert(config);
+    debug_assert(config);
 
     /* config time for intervals is always just a raw number of seconds and nanos */
     timer->expireInterval = _timer_timespecToSimTime(config, FALSE);
@@ -270,7 +270,7 @@ static void _timer_expire(Timer* timer, gpointer data) {
 
 static void _timer_arm(Timer* timer, const struct itimerspec *config, gint flags) {
     MAGIC_ASSERT(timer);
-    utility_assert(config);
+    debug_assert(config);
 
     _timer_setCurrentTime(timer, &(config->it_value), flags);
 
@@ -287,7 +287,7 @@ static void _timer_arm(Timer* timer, const struct itimerspec *config, gint flags
 }
 
 static gboolean _timer_timeIsValid(const struct timespec* config) {
-    utility_assert(config);
+    debug_assert(config);
     return (config->tv_nsec < 0 || config->tv_nsec >= SIMTIME_ONE_SECOND) ? FALSE : TRUE;
 }
 

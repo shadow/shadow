@@ -59,9 +59,9 @@ OPTION_EXPERIMENTAL_ENTRY("disable-memory-manager", 0, G_OPTION_FLAG_REVERSE, G_
 
 SysCallHandler* syscallhandler_new(Host* host, Process* process,
                                    Thread* thread) {
-    utility_assert(host);
-    utility_assert(process);
-    utility_assert(thread);
+    debug_assert(host);
+    debug_assert(process);
+    debug_assert(thread);
 
     SysCallHandler* sys = malloc(sizeof(SysCallHandler));
 
@@ -139,7 +139,7 @@ void syscallhandler_ref(SysCallHandler* sys) {
 void syscallhandler_unref(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
     (sys->referenceCount)--;
-    utility_assert(sys->referenceCount >= 0);
+    debug_assert(sys->referenceCount >= 0);
     if(sys->referenceCount == 0) {
         _syscallhandler_free(sys);
     }

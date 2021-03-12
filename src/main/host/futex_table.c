@@ -55,7 +55,7 @@ void futextable_ref(FutexTable* table) {
 void futextable_unref(FutexTable* table) {
     MAGIC_ASSERT(table);
     table->referenceCount--;
-    utility_assert(table->referenceCount >= 0);
+    debug_assert(table->referenceCount >= 0);
     if (table->referenceCount == 0) {
         _futextable_free(table);
     }

@@ -90,12 +90,12 @@ gpointer loggerhelper_runHelperThread(LoggerHelperRunData* data) {
                 while(!priorityqueue_isEmpty(sortedRecords)) {
                     LogRecord* record = priorityqueue_pop(sortedRecords);
                     gchar* logRecordStr = logrecord_toString(record);
-                    utility_assert(logRecordStr);
+                    debug_assert(logRecordStr);
                     g_print("%s", logRecordStr);
                     g_free(logRecordStr);
                     logrecord_unref(record);
                 }
-                utility_assert(priorityqueue_isEmpty(sortedRecords));
+                debug_assert(priorityqueue_isEmpty(sortedRecords));
                 break;
             }
 

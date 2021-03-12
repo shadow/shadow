@@ -140,7 +140,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             switch (dType) {
                 case DT_FILE: {
                     /* Handled above. */
-                    utility_assert(0);
+                    debug_assert(0);
                     break;
                 }
                 case DT_PIPE: {
@@ -259,7 +259,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             switch (dType) {
                 case DT_FILE: {
                     /* Handled above. */
-                    utility_assert(0);
+                    debug_assert(0);
                     break;
                 }
                 case DT_PIPE: {

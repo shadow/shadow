@@ -198,7 +198,7 @@ static void _schedulerpolicyhoststeal_migrateHost(SchedulerPolicy* policy, Host*
          * and should catch most bugs (since it's presumably the thread we're stealing from
          * that would be running it).
          */
-        utility_assert(tdata->runningHost != tdataNew->runningHost);
+        debug_assert(tdata->runningHost != tdataNew->runningHost);
         /* migrate the TLS of all objects associated with this host */
 //        host_migrate(host, &oldThread, &newThread);
         debug("Migrating host %s from thread %u to thread %u", host_getName(host), tdata->tnumber,
@@ -260,7 +260,7 @@ static void _schedulerpolicyhoststeal_push(SchedulerPolicy* policy, Event* event
     /* get the queue for the destination */
     HostStealQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, dstHost);
     g_rw_lock_reader_unlock(&data->lock);
-    utility_assert(qdata);
+    debug_assert(qdata);
 
     /* tracking idle time spent waiting for the destination queue lock */
     if(tdata) {
@@ -304,14 +304,14 @@ static Event* _schedulerpolicyhoststeal_popFromThread(SchedulerPolicy* policy, H
         g_rw_lock_reader_lock(&data->lock);
         HostStealQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, host);
         g_rw_lock_reader_unlock(&data->lock);
-        utility_assert(qdata);
+        debug_assert(qdata);
 
         g_mutex_lock(&(qdata->lock));
         Event* nextEvent = priorityqueue_peek(qdata->pq);
         SimulationTime eventTime = (nextEvent != NULL) ? event_getTime(nextEvent) : SIMTIME_INVALID;
 
         if(nextEvent != NULL && eventTime < barrier) {
-            utility_assert(eventTime >= qdata->lastEventTime);
+            debug_assert(eventTime >= qdata->lastEventTime);
             qdata->lastEventTime = eventTime;
             nextEvent = priorityqueue_pop(qdata->pq);
             qdata->nPopped++;
@@ -468,7 +468,7 @@ static void _schedulerpolicyhoststeal_findMinTime(Host* host, HostStealSearchSta
     g_rw_lock_reader_lock(&state->data->lock);
     HostStealQueueData* qdata = g_hash_table_lookup(state->data->hostToQueueDataMap, host);
     g_rw_lock_reader_unlock(&state->data->lock);
-    utility_assert(qdata);
+    debug_assert(qdata);
 
     g_mutex_lock(&(qdata->lock));
     Event* event = priorityqueue_peek(qdata->pq);

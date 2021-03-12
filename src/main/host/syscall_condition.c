@@ -188,7 +188,7 @@ void syscallcondition_ref(SysCallCondition* cond) {
 void syscallcondition_unref(SysCallCondition* cond) {
     MAGIC_ASSERT(cond);
     cond->referenceCount--;
-    utility_assert(cond->referenceCount >= 0);
+    debug_assert(cond->referenceCount >= 0);
     if (cond->referenceCount == 0) {
         _syscallcondition_free(cond);
     }
@@ -239,7 +239,7 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
 
     if (cond->timeout) {
         struct itimerspec value = {0};
-        utility_assert(timer_getTime(cond->timeout, &value) == 0);
+        debug_assert(timer_getTime(cond->timeout, &value) == 0);
         g_string_append_printf(string, "a timeout of %lu.%09lu seconds",
                                (unsigned long)value.it_value.tv_sec,
                                (unsigned long)value.it_value.tv_nsec);
@@ -356,8 +356,8 @@ static void _syscallcondition_notifyTimeoutExpired(void* obj, void* arg) {
 void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
                                    Thread* thread) {
     MAGIC_ASSERT(cond);
-    utility_assert(proc);
-    utility_assert(thread);
+    debug_assert(proc);
+    debug_assert(thread);
 
     /* Update the reference counts. */
     syscallcondition_cancel(cond);

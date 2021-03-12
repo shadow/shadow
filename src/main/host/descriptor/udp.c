@@ -55,7 +55,7 @@ static void _udp_setState(UDP* udp, enum UDPState state) {
 }
 
 static UDP* _udp_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(descriptor_getType(descriptor) == DT_UDPSOCKET);
+    debug_assert(descriptor_getType(descriptor) == DT_UDPSOCKET);
     return (UDP*)descriptor;
 }
 
@@ -140,7 +140,7 @@ static gssize _udp_sendUserData(Transport* transport, gconstpointer buffer,
         }
     }
 
-    utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
+    debug_assert(sourceIP && sourcePort && destinationIP && destinationPort);
 
     /* create the UDP packet */
     Host* host = worker_getActiveHost();
@@ -194,7 +194,7 @@ static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
     gsize copyLength = MIN(nBytes, packetLength);
     guint bytesCopied = packet_copyPayload(packet, 0, buffer, copyLength);
 
-    utility_assert(bytesCopied == copyLength);
+    debug_assert(bytesCopied == copyLength);
     packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DELIVERED);
 
     /* fill in address info */

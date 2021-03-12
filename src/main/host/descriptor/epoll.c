@@ -111,7 +111,7 @@ struct _Epoll {
 
 static EpollKey* _epollkey_new(int fd, uintptr_t objectPtr) {
     EpollKey* key = g_new0(EpollKey, 1);
-    utility_assert(key);
+    debug_assert(key);
 
     key->fd = fd;
     key->objectPtr = objectPtr;
@@ -137,7 +137,7 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
                                    EpollWatchObject object, const struct epoll_event* event) {
     EpollWatch* watch = g_new0(EpollWatch, 1);
     MAGIC_INIT(watch);
-    utility_assert(event);
+    debug_assert(event);
 
     /* ref it for the EpollWatch, which also covers the listener reference
      * (which is freed below in _epollwatch_free) */
@@ -201,7 +201,7 @@ static void _epollwatch_unref(EpollWatch* watch) {
 }
 
 static Epoll* _epoll_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(descriptor_getType(descriptor) == DT_EPOLL);
+    debug_assert(descriptor_getType(descriptor) == DT_EPOLL);
     return (Epoll*)descriptor;
 }
 
@@ -464,7 +464,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, CompatDescriptor* descr
             }
 
             MAGIC_ASSERT(watch);
-            utility_assert(event && (watch->flags & EWF_WATCHING));
+            debug_assert(event && (watch->flags & EWF_WATCHING));
 
             /* the user set new events */
             watch->event = *event;
@@ -520,7 +520,7 @@ guint epoll_getNumReadyEvents(Epoll* epoll) {
 
 gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArrayLength, gint* nEvents) {
     MAGIC_ASSERT(epoll);
-    utility_assert(nEvents);
+    debug_assert(nEvents);
 
     /* return the available events in the eventArray, making sure not to
      * overflow. the number of actual events is returned in nEvents. */
@@ -553,7 +553,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
             watch->flags &= ~EWF_WRITECHANGED;
 
             eventIndex++;
-            utility_assert(eventIndex <= eventArrayLength);
+            debug_assert(eventIndex <= eventArrayLength);
 
             if(watch->flags & EWF_EDGETRIGGER) {
                 /* tag that an event was collected in ET mode */

@@ -60,7 +60,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     Futex* futex = futextable_get(ftable, futexPPtr);
 
     if (_syscallhandler_wasBlocked(sys)) {
-        utility_assert(futex != NULL);
+        debug_assert(futex != NULL);
         int result = 0;
 
         // We already blocked on wait, so this is either a timeout or wakeup
@@ -78,7 +78,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
         if (futex_getListenerCount(futex) == 0) {
             debug("Dynamically freed a futex object for futex addr %p", (void*)futexPPtr.val);
             bool success = futextable_remove(ftable, futex);
-            utility_assert(success);
+            debug_assert(success);
         }
 
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
@@ -89,7 +89,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
         debug("Dynamically created a new futex object for futex addr %p", (void*)futexPPtr.val);
         futex = futex_new(futexPPtr);
         bool success = futextable_add(ftable, futex);
-        utility_assert(success);
+        debug_assert(success);
     }
 
     // Now we need to block until another thread does a wake on the futex.
@@ -133,7 +133,7 @@ static SysCallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, Plugin
 // hardware address (i.e., page table and offset). This is needed, e.g., when using
 // futexes across process boundaries.
 SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    debug_assert(sys && args);
 
     PluginPtr uaddrptr = args->args[0].as_ptr; // int*
     int futex_op = args->args[1].as_i64;
@@ -189,7 +189,7 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
 }
 
 SysCallReturn syscallhandler_get_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    debug_assert(sys && args);
 
     info("get_robust_list was called but we don't yet support it");
 
@@ -197,7 +197,7 @@ SysCallReturn syscallhandler_get_robust_list(SysCallHandler* sys, const SysCallA
 }
 
 SysCallReturn syscallhandler_set_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    debug_assert(sys && args);
 
     info("set_robust_list was called but we don't yet support it");
 

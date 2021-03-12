@@ -171,7 +171,7 @@ static gchar* _logrecord_getNewWallTimeStr(LogRecord* record) {
 
 gchar* logrecord_toString(LogRecord* record) {
     MAGIC_ASSERT(record);
-    utility_assert(record->callInfo);
+    debug_assert(record->callInfo);
 
     gchar* wallTimeStr = _logrecord_getNewWallTimeStr(record);
     gchar* simTimeStr = (record->simElapsedNanos != SIMTIME_INVALID) ? _logrecord_getNewSimTimeStr(record) : NULL;

@@ -24,7 +24,7 @@
 #include "main/utility/utility.h"
 
 static Socket* _socket_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(descriptor_getType(descriptor) == DT_TCPSOCKET ||
+    debug_assert(descriptor_getType(descriptor) == DT_TCPSOCKET ||
                    descriptor_getType(descriptor) == DT_UDPSOCKET);
     return (Socket*)descriptor;
 }
@@ -102,7 +102,7 @@ TransportFunctionTable socket_functions = {
 void socket_init(Socket* socket, SocketFunctionTable* vtable,
                  LegacyDescriptorType type, guint receiveBufferSize,
                  guint sendBufferSize) {
-    utility_assert(socket && vtable);
+    debug_assert(socket && vtable);
 
     transport_init(&(socket->super), &socket_functions, type);
 
@@ -265,7 +265,7 @@ gboolean socket_isBound(Socket* socket) {
 
 gsize socket_getInputBufferSpace(Socket* socket) {
     MAGIC_ASSERT(socket);
-    utility_assert(socket->inputBufferSize >= socket->inputBufferLength);
+    debug_assert(socket->inputBufferSize >= socket->inputBufferLength);
     gsize bufferSize = socket_getInputBufferSize(socket);
     if(bufferSize < socket->inputBufferLength) {
         return 0;
@@ -276,7 +276,7 @@ gsize socket_getInputBufferSpace(Socket* socket) {
 
 gsize socket_getOutputBufferSpace(Socket* socket) {
     MAGIC_ASSERT(socket);
-    utility_assert(socket->outputBufferSize >= socket->outputBufferLength);
+    debug_assert(socket->outputBufferSize >= socket->outputBufferLength);
     gsize bufferSize = socket_getOutputBufferSize(socket);
     if(bufferSize < socket->outputBufferLength) {
         return 0;

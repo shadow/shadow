@@ -98,7 +98,7 @@ static void _schedulerpolicythreadsingle_push(SchedulerPolicy* policy, Event* ev
 
     /* get the queue for the destination */
     ThreadSingleThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(dstThread));
-    utility_assert(tdata);
+    debug_assert(tdata);
 
     /* 'deliver' the event there */
     g_mutex_lock(&(tdata->lock));
@@ -125,7 +125,7 @@ static Event* _schedulerpolicythreadsingle_pop(SchedulerPolicy* policy, Simulati
     SimulationTime eventTime = (nextEvent != NULL) ? event_getTime(nextEvent) : SIMTIME_INVALID;
 
     if(nextEvent && eventTime < barrier) {
-        utility_assert(eventTime >= tdata->lastEventTime);
+        debug_assert(eventTime >= tdata->lastEventTime);
         tdata->lastEventTime = eventTime;
         nextEvent = priorityqueue_pop(tdata->pq);
         tdata->nPopped++;

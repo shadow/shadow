@@ -32,7 +32,7 @@ Payload* payload_new(gconstpointer data, gsize dataLength) {
     if(data && dataLength > 0) {
         payload->data = g_malloc0(dataLength);
         memmove(payload->data, data, dataLength);
-        utility_assert(payload->data != NULL);
+        debug_assert(payload->data != NULL);
         payload->length = dataLength;
     }
 
@@ -97,7 +97,7 @@ gsize payload_getData(Payload* payload, gsize offset, gpointer destBuffer, gsize
 
     _payload_lock(payload);
 
-    utility_assert(offset <= payload->length);
+    debug_assert(offset <= payload->length);
 
     gsize targetLength = payload->length - offset;
     gsize copyLength = MIN(targetLength, destBufferLength);

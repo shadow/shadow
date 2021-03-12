@@ -80,7 +80,7 @@ void descriptortable_ref(DescriptorTable* table) {
 void descriptortable_unref(DescriptorTable* table) {
     MAGIC_ASSERT(table);
     table->referenceCount--;
-    utility_assert(table->referenceCount >= 0);
+    debug_assert(table->referenceCount >= 0);
     if (table->referenceCount == 0) {
         _descriptortable_free(table);
     }
@@ -97,7 +97,7 @@ int descriptortable_add(DescriptorTable* table, CompatDescriptor* descriptor) {
         index = ++table->indexCounter;
     }
 
-    utility_assert(
+    debug_assert(
         !g_hash_table_contains(table->descriptors, GINT_TO_POINTER(index)));
 
     g_hash_table_insert(table->descriptors, GINT_TO_POINTER(index), descriptor);

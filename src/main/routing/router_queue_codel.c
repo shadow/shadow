@@ -88,7 +88,7 @@ static QueueManagerCoDel* _routerqueuecodel_new() {
 }
 
 static void _routerqueuecodel_free(QueueManagerCoDel* queueManager) {
-    utility_assert(queueManager);
+    debug_assert(queueManager);
 
     if(queueManager->entries) {
         while(!g_queue_is_empty(queueManager->entries)) {
@@ -111,8 +111,8 @@ static inline guint64 _routerqueuecodel_getPacketLength(Packet* packet) {
 }
 
 static gboolean _routerqueuecodel_enqueue(QueueManagerCoDel* queueManager, Packet* packet) {
-    utility_assert(queueManager);
-    utility_assert(packet);
+    debug_assert(queueManager);
+    debug_assert(packet);
 
     if(g_queue_get_length(queueManager->entries) < CODEL_PARAM_QUEUE_SIZE_LIMIT) {
         /* we will store the packet */
@@ -166,10 +166,10 @@ static Packet* _routerqueuecodel_dequeueHelper(QueueManagerCoDel* queueManager,
     }
 
     guint64 length = _routerqueuecodel_getPacketLength(packet);
-    utility_assert(length <= queueManager->totalSize);
+    debug_assert(length <= queueManager->totalSize);
     queueManager->totalSize -= length;
 
-    utility_assert(now >= ts);
+    debug_assert(now >= ts);
     SimulationTime sojournTime = now - ts;
 
     if(sojournTime < CODEL_PARAM_TARGET_DELAY_SIMTIME || queueManager->totalSize < CONFIG_MTU) {
@@ -205,7 +205,7 @@ static SimulationTime _routerqueuecodel_controlLaw(guint count, SimulationTime t
 }
 
 static Packet* _routerqueuecodel_dequeue(QueueManagerCoDel* queueManager) {
-    utility_assert(queueManager);
+    debug_assert(queueManager);
 
     SimulationTime now = worker_getCurrentTime();
 
@@ -267,7 +267,7 @@ static Packet* _routerqueuecodel_dequeue(QueueManagerCoDel* queueManager) {
 }
 
 static Packet* _routerqueuecodel_peek(QueueManagerCoDel* queueManager) {
-    utility_assert(queueManager);
+    debug_assert(queueManager);
 
     CoDelEntry* entry = g_queue_peek_head(queueManager->entries);
 

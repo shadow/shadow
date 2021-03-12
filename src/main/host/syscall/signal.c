@@ -56,7 +56,7 @@ static SysCallReturn _syscallhandler_killHelper(SysCallHandler* sys, pid_t pid, 
 ///////////////////////////////////////////////////////////
 
 SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    debug_assert(sys && args);
     pid_t pid = args->args[0].as_i64;
     int sig = args->args[1].as_i64;
 
@@ -84,7 +84,7 @@ SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) 
 }
 
 SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    debug_assert(sys && args);
 
     pid_t tgid = args->args[0].as_i64;
     pid_t tid = args->args[1].as_i64;
@@ -107,7 +107,7 @@ SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args
 }
 
 SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+    debug_assert(sys && args);
     pid_t tid = args->args[0].as_i64;
     int sig = args->args[1].as_i64;
 

@@ -26,7 +26,7 @@ struct _PriorityQueue {
 
 PriorityQueue* priorityqueue_new(GCompareDataFunc compareFunc,
         gpointer compareData, GDestroyNotify freeFunc) {
-    utility_assert(compareFunc);
+    debug_assert(compareFunc);
     PriorityQueue *q = g_slice_new(PriorityQueue);
     q->heap = g_new(gpointer, INITIAL_SIZE);
     q->map = g_hash_table_new(NULL, NULL);
@@ -39,7 +39,7 @@ PriorityQueue* priorityqueue_new(GCompareDataFunc compareFunc,
 }
 
 void priorityqueue_clear(PriorityQueue *q) {
-    utility_assert(q);
+    debug_assert(q);
     if(q->freeFunc) {
         for (guint i = 0; i < q->size; i++) {
             q->freeFunc(q->heap[i]);
@@ -51,7 +51,7 @@ void priorityqueue_clear(PriorityQueue *q) {
 }
 
 void priorityqueue_free(PriorityQueue *q) {
-    utility_assert(q);
+    debug_assert(q);
     priorityqueue_clear(q);
     g_hash_table_destroy(q->map);
     g_free(q->heap);
@@ -59,12 +59,12 @@ void priorityqueue_free(PriorityQueue *q) {
 }
 
 gsize priorityqueue_getLength(PriorityQueue *q) {
-    utility_assert(q);
+    debug_assert(q);
     return q->size;
 }
 
 gboolean priorityqueue_isEmpty(PriorityQueue *q) {
-    utility_assert(q);
+    debug_assert(q);
     return q->size == 0;
 }
 
@@ -113,7 +113,7 @@ static guint _priorityqueue_heapify_down(PriorityQueue *q, guint index) {
 }
 
 gboolean priorityqueue_push(PriorityQueue *q, gpointer data) {
-    utility_assert(q);
+    debug_assert(q);
     if (q->size >= q->heapSize) {
         q->heapSize *= 2;
         gpointer *oldheap = q->heap;
@@ -140,7 +140,7 @@ gboolean priorityqueue_push(PriorityQueue *q, gpointer data) {
 }
 
 gpointer priorityqueue_peek(PriorityQueue *q) {
-    utility_assert(q);
+    debug_assert(q);
     if (q->size > 0) {
         return q->heap[0];
     }
@@ -148,13 +148,13 @@ gpointer priorityqueue_peek(PriorityQueue *q) {
 }
 
 gpointer priorityqueue_find(PriorityQueue *q, gpointer data) {
-    utility_assert(q);
+    debug_assert(q);
     gpointer *entry = g_hash_table_lookup(q->map, data);
     return (entry == NULL) ? NULL : *entry;
 }
 
 gpointer priorityqueue_pop(PriorityQueue *q) {
-    utility_assert(q);
+    debug_assert(q);
     if (q->size > 0) {
         gpointer data = q->heap[0];
         _priorityqueue_swap_entries(q, 0, q->size - 1);

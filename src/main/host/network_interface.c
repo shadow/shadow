@@ -88,7 +88,7 @@ static void _networkinterface_refillTokenBucketsCB(NetworkInterface* interface,
                                                    gpointer userData);
 
 static void _compatsocket_unrefTaggedVoid(void* taggedSocketPtr) {
-    utility_assert(taggedSocketPtr != NULL);
+    debug_assert(taggedSocketPtr != NULL);
     if (taggedSocketPtr == NULL) {
         return;
     }
@@ -321,7 +321,7 @@ void networkinterface_associate(NetworkInterface* interface, const CompatSocket*
     gchar* key = _networkinterface_socketToAssociationKey(interface, socket);
 
     /* make sure there is no collision */
-    utility_assert(!g_hash_table_contains(interface->boundSockets, key));
+    debug_assert(!g_hash_table_contains(interface->boundSockets, key));
 
     /* need to store our own reference to the socket object */
     CompatSocket newSocketRef = compatsocket_refAs(socket);
@@ -398,7 +398,7 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
     MAGIC_ASSERT(interface);
 
     /* get the next packet */
-    utility_assert(packet);
+    debug_assert(packet);
 
     /* successfully received */
     packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_RECEIVED);
@@ -606,7 +606,7 @@ static void _networkinterface_sendPackets(NetworkInterface* interface) {
         } else {
             /* let the upstream router send to remote with appropriate delays.
              * if we get here we are not loopback and should have been assigned a router. */
-            utility_assert(interface->router);
+            debug_assert(interface->router);
             router_forward(interface->router, packet);
         }
 

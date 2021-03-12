@@ -194,7 +194,7 @@ static void _schedulerpolicyhostsingle_push(SchedulerPolicy* policy, Event* even
 
     /* get the queue for the destination */
     HostSingleQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, dstHost);
-    utility_assert(qdata);
+    debug_assert(qdata);
 
 #ifdef USE_PERF_TIMERS
     /* tracking idle time spent waiting for the destination queue lock */
@@ -247,7 +247,7 @@ static Event* _schedulerpolicyhostsingle_pop(SchedulerPolicy* policy, Simulation
     while(!g_queue_is_empty(tdata->unprocessedHosts)) {
         Host* host = g_queue_peek_head(tdata->unprocessedHosts);
         HostSingleQueueData* qdata = g_hash_table_lookup(data->hostToQueueDataMap, host);
-        utility_assert(qdata);
+        debug_assert(qdata);
 
 #ifdef USE_PERF_TIMERS
         /* tracking idle time spent waiting for the host queue lock */
@@ -262,7 +262,7 @@ static Event* _schedulerpolicyhostsingle_pop(SchedulerPolicy* policy, Simulation
         SimulationTime eventTime = (nextEvent != NULL) ? event_getTime(nextEvent) : SIMTIME_INVALID;
 
         if(nextEvent != NULL && eventTime < barrier) {
-            utility_assert(eventTime >= qdata->lastEventTime);
+            debug_assert(eventTime >= qdata->lastEventTime);
             qdata->lastEventTime = eventTime;
             nextEvent = priorityqueue_pop(qdata->pq);
             qdata->nPopped++;
@@ -286,7 +286,7 @@ static Event* _schedulerpolicyhostsingle_pop(SchedulerPolicy* policy, Simulation
 
 static void _schedulerpolicyhostsingle_findMinTime(Host* host, HostSingleSearchState* state) {
     HostSingleQueueData* qdata = g_hash_table_lookup(state->data->hostToQueueDataMap, host);
-    utility_assert(qdata);
+    debug_assert(qdata);
 
     g_mutex_lock(&(qdata->lock));
     Event* event = priorityqueue_peek(qdata->pq);

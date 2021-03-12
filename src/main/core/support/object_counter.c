@@ -69,7 +69,7 @@ void objectcounter_free(ObjectCounter* counter) {
 }
 
 static void _objectcount_incrementOne(ObjectCounts* counts, CounterType ctype) {
-    utility_assert(counts != NULL);
+    debug_assert(counts != NULL);
 
     switch(ctype) {
         case COUNTER_TYPE_NEW: {
@@ -90,8 +90,8 @@ static void _objectcount_incrementOne(ObjectCounts* counts, CounterType ctype) {
 }
 
 static void _objectcount_incrementAll(ObjectCounts* counts, ObjectCounts* increments) {
-    utility_assert(counts != NULL);
-    utility_assert(increments != NULL);
+    debug_assert(counts != NULL);
+    debug_assert(increments != NULL);
 
     counts->new += increments->new;
     counts->free += increments->free;

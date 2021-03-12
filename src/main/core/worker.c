@@ -86,7 +86,7 @@ gboolean worker_isAlive() { return g_private_get(&workerKey) != NULL; }
 
 static Worker* _worker_new(Manager* manager, guint threadID) {
     /* make sure this isnt called twice on the same thread! */
-    utility_assert(!worker_isAlive());
+    debug_assert(!worker_isAlive());
 
     Worker* worker = g_new0(Worker, 1);
     MAGIC_INIT(worker);
@@ -162,11 +162,11 @@ static void _worker_setAffinity(Worker* worker) {
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
 gpointer worker_run(WorkerRunData* data) {
-    utility_assert(data && data->userData && data->scheduler);
+    debug_assert(data && data->userData && data->scheduler);
 
     /* create the worker object for this worker thread */
     Worker* worker = _worker_new((Manager*)data->userData, data->threadID);
-    utility_assert(worker_isAlive());
+    debug_assert(worker_isAlive());
 
     _worker_setAffinity(worker);
 
@@ -233,13 +233,13 @@ gpointer worker_run(WorkerRunData* data) {
 }
 
 gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
-    utility_assert(task);
+    debug_assert(task);
 
     Worker* worker = _worker_getPrivate();
 
     if (manager_schedulerIsRunning(worker->manager)) {
-        utility_assert(worker->clock.now != SIMTIME_INVALID);
-        utility_assert(worker->active.host != NULL);
+        debug_assert(worker->clock.now != SIMTIME_INVALID);
+        debug_assert(worker->active.host != NULL);
 
         Host* srcHost = worker->active.host;
         Host* dstHost = srcHost;
@@ -253,12 +253,12 @@ gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
 static void _worker_runDeliverPacketTask(Packet* packet, gpointer userData) {
     in_addr_t ip = packet_getDestinationIP(packet);
     Router* router = host_getUpstreamRouter(_worker_getPrivate()->active.host, ip);
-    utility_assert(router != NULL);
+    debug_assert(router != NULL);
     router_enqueue(router, packet);
 }
 
 void worker_sendPacket(Packet* packet) {
-    utility_assert(packet != NULL);
+    debug_assert(packet != NULL);
 
     /* get our thread-private worker */
     Worker* worker = _worker_getPrivate();
@@ -301,7 +301,7 @@ void worker_sendPacket(Packet* packet) {
         Host* srcHost = worker->active.host;
         GQuark dstID = (GQuark)address_getID(dstAddress);
         Host* dstHost = scheduler_getHost(worker->scheduler, dstID);
-        utility_assert(dstHost);
+        debug_assert(dstHost);
 
         packet_addDeliveryStatus(packet, PDS_INET_SENT);
 

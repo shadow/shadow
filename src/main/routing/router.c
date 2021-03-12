@@ -37,7 +37,7 @@ struct _Router {
 };
 
 Router* router_new(QueueManagerMode queueMode, void* interface) {
-    utility_assert(interface);
+    debug_assert(interface);
 
     Router* router = g_new0(Router, 1);
     MAGIC_INIT(router);
@@ -57,11 +57,11 @@ Router* router_new(QueueManagerMode queueMode, void* interface) {
         error("Queue manager mode %i is undefined", (int)queueMode);
     }
 
-    utility_assert(router->queueHooks->new);
-    utility_assert(router->queueHooks->free);
-    utility_assert(router->queueHooks->enqueue);
-    utility_assert(router->queueHooks->dequeue);
-    utility_assert(router->queueHooks->peek);
+    debug_assert(router->queueHooks->new);
+    debug_assert(router->queueHooks->free);
+    debug_assert(router->queueHooks->enqueue);
+    debug_assert(router->queueHooks->dequeue);
+    debug_assert(router->queueHooks->peek);
 
     router->queueManager = router->queueHooks->new();
 
@@ -87,7 +87,7 @@ void router_ref(Router* router) {
 void router_unref(Router* router) {
     MAGIC_ASSERT(router);
     (router->referenceCount)--;
-    utility_assert(router->referenceCount >= 0);
+    debug_assert(router->referenceCount >= 0);
     if(router->referenceCount == 0) {
         _router_free(router);
     }
@@ -103,7 +103,7 @@ void router_forward(Router* router, Packet* packet) {
 
 void router_enqueue(Router* router, Packet* packet) {
     MAGIC_ASSERT(router);
-    utility_assert(packet);
+    debug_assert(packet);
 
     Packet* bufferedPacket = router->queueHooks->peek(router->queueManager);
 

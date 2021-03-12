@@ -35,7 +35,7 @@ SysCallReturn syscallhandler_getrandom(SysCallHandler* sys, const SysCallArgs* a
 
     // Get the source from the host to maintain determinism.
     Random* rng = host_getRandom(sys->host);
-    utility_assert(rng != NULL);
+    debug_assert(rng != NULL);
 
     // We always get the number of bytes we requested.
     random_nextNBytes(rng, buf, count);

@@ -429,13 +429,13 @@ static gint _topology_getEdgeHelper(Topology* top,
     if(edgeLatencyOut) {
         gdouble edgeLatency;
         gdouble found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
-        utility_assert(found);
+        debug_assert(found);
         *edgeLatencyOut = edgeLatency;
     }
     if(edgeReliabilityOut) {
         gdouble edgePacketLoss;
         gdouble found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_PACKETLOSS, &edgePacketLoss);
-        utility_assert(found);
+        debug_assert(found);
         *edgeReliabilityOut = (1.0f - edgePacketLoss);
     }
     if(edgeIndexOut) {
@@ -981,7 +981,7 @@ static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_int
 
 static igraph_integer_t _topology_iterateAllVertices(Topology* top, VertexNotifyFunc hook, gpointer userData) {
     MAGIC_ASSERT(top);
-    utility_assert(hook);
+    debug_assert(hook);
 
     gboolean isSuccess = TRUE;
 
@@ -1055,9 +1055,9 @@ static gboolean _topology_checkGraphEdgesHelperHook(Topology* top, igraph_intege
     const gchar* toIDStr;
 
     found = _topology_findVertexAttributeString(top, fromVertexIndex, VERTEX_ATTR_ID, &fromIDStr);
-    utility_assert(found);
+    debug_assert(found);
     found = _topology_findVertexAttributeString(top, toVertexIndex, VERTEX_ATTR_ID, &toIDStr);
-    utility_assert(found);
+    debug_assert(found);
 
     gboolean isSuccess = TRUE;
 
@@ -1127,7 +1127,7 @@ static gboolean _topology_checkGraphEdgesHelperHook(Topology* top, igraph_intege
 
 static igraph_integer_t _topology_iterateAllEdges(Topology* top, EdgeNotifyFunc hook, gpointer userData) {
     MAGIC_ASSERT(top);
-    utility_assert(hook);
+    debug_assert(hook);
 
     gboolean isSuccess = TRUE;
 
@@ -1442,7 +1442,7 @@ static gboolean _topology_computePathProperties(Topology* top, igraph_integer_t 
     const gchar* srcIDStr = NULL;
 
     glong nVertices = igraph_vector_size(resultPathVertices);
-    utility_assert(nVertices > 0);
+    debug_assert(nVertices > 0);
 
     _topology_lockGraph(top);
 
@@ -1453,13 +1453,13 @@ static gboolean _topology_computePathProperties(Topology* top, igraph_integer_t 
     }
 
     gboolean found = _topology_findVertexAttributeString(top, srcVertexIndex, VERTEX_ATTR_ID, &srcIDStr);
-    utility_assert(found);
+    debug_assert(found);
     g_string_printf(pathStringBuffer, "%s", srcIDStr);
 
     /* get destination properties */
     targetVertexIndex = (igraph_integer_t) igraph_vector_tail(resultPathVertices);
     found = _topology_findVertexAttributeString(top, targetVertexIndex, VERTEX_ATTR_ID, &dstIDStr);
-    utility_assert(found);
+    debug_assert(found);
 
     /* only include dst loss if there is no path between src and dst vertices */
     if((srcVertexIndex != targetVertexIndex) || (srcVertexIndex == targetVertexIndex && nVertices > 2)) {
@@ -1471,7 +1471,7 @@ static gboolean _topology_computePathProperties(Topology* top, igraph_integer_t 
 
     /* the source is in the first position only if we have more than one vertex */
     if(nVertices > 1) {
-        utility_assert(srcVertexIndex == igraph_vector_e(resultPathVertices, 0));
+        debug_assert(srcVertexIndex == igraph_vector_e(resultPathVertices, 0));
     }
 
     /* if we have only one vertex, its the destination at position 0; otherwise, the source is
@@ -1488,7 +1488,7 @@ static gboolean _topology_computePathProperties(Topology* top, igraph_integer_t 
 
         const gchar* toIDStr;
         gboolean found = _topology_findVertexAttributeString(top, toVertexIndex, VERTEX_ATTR_ID, &toIDStr);
-        utility_assert(found);
+        debug_assert(found);
 
         igraph_real_t edgeLatency = 0, edgeReliability = 0;
         igraph_integer_t edgeIndex = 0;
@@ -1597,13 +1597,13 @@ static gboolean _topology_computeShortestPathToSelf(Topology* top, igraph_intege
 
         /* latency and packet loss are required attributes on edges */
         found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
-        utility_assert(found);
+        debug_assert(found);
 
         if(minLatency == 0 || edgeLatency < minLatency) {
             minLatency = edgeLatency;
 
             found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_PACKETLOSS, &edgePacketLoss);
-            utility_assert(found);
+            debug_assert(found);
             reliabilityOfMinLatencyEdge = 1.0f - edgePacketLoss;
 
             indexOfMinLatencyEdge = edgeIndex;
@@ -1646,7 +1646,7 @@ static gboolean _topology_computeShortestPathToSelf(Topology* top, igraph_intege
     igraph_integer_t targetIndex = (fromVertexIndex == vertexIndex) ? toVertexIndex : fromVertexIndex;
     const gchar* targetIDStr;
     found = _topology_findVertexAttributeString(top, targetIndex, VERTEX_ATTR_ID, &targetIDStr);
-    utility_assert(found);
+    debug_assert(found);
 
     _topology_unlockGraph(top);
 
@@ -1669,17 +1669,17 @@ static gboolean _topology_computeShortestPathToSelf(Topology* top, igraph_intege
 static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t srcVertexIndex,
         igraph_integer_t dstVertexIndex) {
     MAGIC_ASSERT(top);
-    utility_assert(srcVertexIndex >= 0);
-    utility_assert(dstVertexIndex >= 0);
+    debug_assert(srcVertexIndex >= 0);
+    debug_assert(dstVertexIndex >= 0);
 
     gboolean found;
     _topology_lockGraph(top);
     const gchar* srcIDStr;
     found = _topology_findVertexAttributeString(top, srcVertexIndex, VERTEX_ATTR_ID, &srcIDStr);
-    utility_assert(found);
+    debug_assert(found);
     const gchar* dstIDStr;
     found = _topology_findVertexAttributeString(top, dstVertexIndex, VERTEX_ATTR_ID, &dstIDStr);
-    utility_assert(found);
+    debug_assert(found);
     _topology_unlockGraph(top);
 
     info("requested path between source vertex %li (%s) and destination vertex %li (%s)",
@@ -1719,12 +1719,12 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
     gint dstVertexIndexPosition = -1;
     for(gint position = 0; position < numTargets; position++) {
         gpointer vertexIndexPointer = g_queue_pop_head(attachedTargets);
-        utility_assert(vertexIndexPointer != NULL);
+        debug_assert(vertexIndexPointer != NULL);
 
         /* set each vertex index as a destination for dijkstra */
         igraph_integer_t vertexIndex = (igraph_integer_t) GPOINTER_TO_INT(vertexIndexPointer);
         igraph_vector_set(&dstVertexIndexSet, position, (igraph_real_t) vertexIndex);
-        utility_assert(vertexIndex == igraph_vector_e(&dstVertexIndexSet, position));
+        debug_assert(vertexIndex == igraph_vector_e(&dstVertexIndexSet, position));
 
         if(vertexIndex == dstVertexIndex) {
             foundDstVertexIndex = TRUE;
@@ -1743,7 +1743,7 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 
         /* assign our element to the result vector */
         igraph_vector_ptr_set(&resultPaths, position, resultPathVertices);
-        utility_assert(resultPathVertices == igraph_vector_ptr_e(&resultPaths, position));
+        debug_assert(resultPathVertices == igraph_vector_ptr_e(&resultPaths, position));
     }
 
     if(attachedTargets) {
@@ -1751,9 +1751,9 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
         attachedTargets = NULL;
     }
 
-    utility_assert(numTargets == igraph_vector_size(&dstVertexIndexSet));
-    utility_assert(numTargets == igraph_vector_ptr_size(&resultPaths));
-    utility_assert(foundDstVertexIndex == TRUE);
+    debug_assert(numTargets == igraph_vector_size(&dstVertexIndexSet));
+    debug_assert(numTargets == igraph_vector_ptr_size(&resultPaths));
+    debug_assert(foundDstVertexIndex == TRUE);
 
     info("computing shortest paths from source vertex %li (%s) to all %u vertices with connected hosts",
             (glong)srcVertexIndex, srcIDStr, numTargets);
@@ -1815,8 +1815,8 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
     }
 
     /* sanity checks */
-    utility_assert(numTargets == igraph_vector_size(&dstVertexIndexSet));
-    utility_assert(numTargets == igraph_vector_ptr_size(&resultPaths));
+    debug_assert(numTargets == igraph_vector_size(&dstVertexIndexSet));
+    debug_assert(numTargets == igraph_vector_ptr_size(&resultPaths));
 
     /* process the results */
     gboolean isAllSuccess = TRUE;
@@ -1845,7 +1845,7 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
                 const gchar* targetIDStr;
                 _topology_lockGraph(top);
                 found = _topology_findVertexAttributeString(top, pathTargetIndex, VERTEX_ATTR_ID, &targetIDStr);
-                utility_assert(found);
+                debug_assert(found);
                 _topology_unlockGraph(top);
 
                 GString* logMessage = g_string_new(NULL);
@@ -1858,7 +1858,7 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
                 /* make sure at least one of the targets is the destination.
                  * the case where src and dest are the same are handled in _topology_computePathToSelf */
                 if(dstVertexIndexPosition == position) {
-                    utility_assert(dstVertexIndex == pathTargetIndex);
+                    debug_assert(dstVertexIndex == pathTargetIndex);
                     foundDstPosition = TRUE;
                     info("%s", logMessage->str);
                 } else {
@@ -1885,7 +1885,7 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
         g_free(resultPathVertices);
     }
 
-    utility_assert(foundDstPosition == TRUE);
+    debug_assert(foundDstPosition == TRUE);
 
     /* clean up */
     igraph_vector_ptr_destroy(&resultPaths);
@@ -1915,9 +1915,9 @@ static gboolean _topology_lookupDirectPath(Topology* top, igraph_integer_t srcVe
     _topology_lockGraph(top);
 
     found = _topology_findVertexAttributeString(top, srcVertexIndex, VERTEX_ATTR_ID, &srcIDStr);
-    utility_assert(found);
+    debug_assert(found);
     found = _topology_findVertexAttributeString(top, dstVertexIndex, VERTEX_ATTR_ID, &dstIDStr);
-    utility_assert(found);
+    debug_assert(found);
 
     gdouble sourcePacketLoss;
     if(_topology_findVertexAttributeDouble(top, srcVertexIndex, VERTEX_ATTR_PACKETLOSS, &sourcePacketLoss)) {
@@ -1962,9 +1962,9 @@ static void _topology_logAllCachedPathsHelper2(gpointer dstIndexKey, Path* path,
 
         _topology_lockGraph(top);
         found = _topology_findVertexAttributeString(top, srcVertexIndex, VERTEX_ATTR_ID, &srcIDStr);
-        utility_assert(found);
+        debug_assert(found);
         found = _topology_findVertexAttributeString(top, dstVertexIndex, VERTEX_ATTR_ID, &dstIDStr);
-        utility_assert(found);
+        debug_assert(found);
         _topology_unlockGraph(top);
 
         /* log this at info level so we don't spam the message level logs */
@@ -2022,9 +2022,9 @@ static Path* _topology_getPathEntry(Topology* top, Address* srcAddress, Address*
 
         _topology_lockGraph(top);
         found = _topology_findVertexAttributeString(top, srcVertexIndex, VERTEX_ATTR_ID, &srcIDStr);
-        utility_assert(found);
+        debug_assert(found);
         found = _topology_findVertexAttributeString(top, dstVertexIndex, VERTEX_ATTR_ID, &dstIDStr);
-        utility_assert(found);
+        debug_assert(found);
         _topology_unlockGraph(top);
 
         gboolean verticesAreAdjacent = _topology_verticesAreAdjacent(top, srcVertexIndex, dstVertexIndex);
@@ -2115,14 +2115,14 @@ gboolean topology_isRoutable(Topology* top, Address* srcAddress, Address* dstAdd
 
 static gboolean _topology_findAttachmentVertexHelperHook(Topology* top, igraph_integer_t vertexIndex, AttachHelper* ah) {
     MAGIC_ASSERT(top);
-    utility_assert(ah);
+    debug_assert(ah);
 
     /* @warning: make sure we hold the graph lock when iterating with this helper
      * @todo: this could be made much more efficient */
 
     const gchar* idStr;
     gboolean idFound = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_ID, &idStr);
-    utility_assert(idFound);
+    debug_assert(idFound);
 
     const gchar* ipStr = NULL;
     const gchar* citycodeStr = NULL;
@@ -2240,7 +2240,7 @@ static gboolean _topology_findAttachmentVertexHelperHook(Topology* top, igraph_i
 
 static igraph_integer_t* _topology_getLongestPrefixMatch(Topology* top, GQueue* vertexSet, in_addr_t ip) {
     MAGIC_ASSERT(top);
-    utility_assert(vertexSet);
+    debug_assert(vertexSet);
 
     /* @warning: this empties the candidate queue */
 
@@ -2339,7 +2339,7 @@ static igraph_integer_t _topology_findAttachmentVertex(Topology* top, Random* ra
     }
 
     guint numCandidates = g_queue_get_length(candidates);
-    utility_assert(numCandidates > 0);
+    debug_assert(numCandidates > 0);
 
     /* if our candidate list has vertices with non-zero IPs, use longest prefix matching
      * to select the closest one to the requested IP; otherwise, grab a random candidate */
@@ -2356,9 +2356,9 @@ static igraph_integer_t _topology_findAttachmentVertex(Topology* top, Random* ra
     }
 
     /* make sure the vertex we found is legitimate */
-    utility_assert(vertexIndexPtr != GINT_TO_POINTER(-1));
+    debug_assert(vertexIndexPtr != GINT_TO_POINTER(-1));
     vertexIndex = (igraph_integer_t) GPOINTER_TO_INT(vertexIndexPtr);
-    utility_assert(vertexIndex > (igraph_integer_t) -1);
+    debug_assert(vertexIndex > (igraph_integer_t) -1);
 
     /* clean up */
     if(ah->candidatesCityAndType) {
@@ -2394,7 +2394,7 @@ void topology_attach(Topology* top, Address* address, Random* randomSourcePool,
         gchar* ipHint, gchar* citycodeHint, gchar* countrycodeHint, gchar* geocodeHint, gchar* typeHint,
         guint64* bwDownOut, guint64* bwUpOut) {
     MAGIC_ASSERT(top);
-    utility_assert(address);
+    debug_assert(address);
 
     in_addr_t nodeIP = address_toNetworkIP(address);
     igraph_integer_t vertexIndex = _topology_findAttachmentVertex(top, randomSourcePool, nodeIP,
@@ -2420,18 +2420,18 @@ void topology_attach(Topology* top, Address* address, Random* randomSourcePool,
     if(bwUpOut) {
         gdouble bandwidthUp;
         found = _topology_findVertexAttributeDouble(top, vertexIndex, VERTEX_ATTR_BANDWIDTHUP, &bandwidthUp);
-        utility_assert(found);
+        debug_assert(found);
         *bwUpOut = (guint64) bandwidthUp;
     }
     if(bwDownOut) {
         gdouble bandwidthDown;
         found = _topology_findVertexAttributeDouble(top, vertexIndex, VERTEX_ATTR_BANDWIDTHDOWN, &bandwidthDown);
-        utility_assert(found);
+        debug_assert(found);
         *bwDownOut = (guint64) bandwidthDown;
     }
 
     found = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_ID, &idStr);
-    utility_assert(found);
+    debug_assert(found);
 
     /* these may fail and not set the string value if the vertex does not have the attribute.
      * that's ok though, glib will print null in its place in the format string below. */
@@ -2506,7 +2506,7 @@ void topology_free(Topology* top) {
 }
 
 Topology* topology_new(const gchar* graphPath) {
-    utility_assert(graphPath);
+    debug_assert(graphPath);
     Topology* top = g_new0(Topology, 1);
     MAGIC_INIT(top);
 

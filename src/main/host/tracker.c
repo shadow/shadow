@@ -295,7 +295,7 @@ void tracker_removeAllocatedBytes(Tracker* tracker, gpointer location) {
         gboolean exists = g_hash_table_lookup_extended(tracker->allocatedLocations, location, NULL, &value);
         if(exists) {
             gboolean b = g_hash_table_remove(tracker->allocatedLocations, location);
-            utility_assert(b);
+            debug_assert(b);
             gsize allocatedBytes = GPOINTER_TO_SIZE(value);
             tracker->allocatedBytesTotal -= allocatedBytes;
             tracker->deallocatedBytesLastInterval += allocatedBytes;
@@ -382,7 +382,7 @@ void tracker_removeSocket(Tracker* tracker, gint handle) {
 }
 
 static gsize _tracker_sumBytes(ByteCounter* bytes) {
-    utility_assert(bytes);
+    debug_assert(bytes);
     return bytes->controlHeader + bytes->controlHeaderRetransmit +
             bytes->dataHeader + bytes->dataHeaderRetransmit +
             bytes->dataPayload + bytes->dataPayloadRetransmit;
@@ -397,7 +397,7 @@ static const gchar* _tracker_getCounterHeaderString() {
 }
 
 static gchar* _tracker_getCounterString(Counters* c) {
-    utility_assert(c);
+    debug_assert(c);
 
     gsize totalPackets = c->packets.control + c->packets.controlRetransmit +
             c->packets.data + c->packets.dataRetransmit;

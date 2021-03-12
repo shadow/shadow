@@ -126,7 +126,7 @@ static void _schedulerpolicythreadperthread_push(SchedulerPolicy* policy, Event*
 
     /* get the queue for the destination */
     ThreadPerThreadThreadData* tdata = g_hash_table_lookup(data->threadToThreadDataMap, GUINT_TO_POINTER(dstThread));
-    utility_assert(tdata);
+    debug_assert(tdata);
 
     pthread_t self = pthread_self();
     if(pthread_equal(dstThread, self)) {
@@ -170,7 +170,7 @@ static Event* _schedulerpolicythreadperthread_pop(SchedulerPolicy* policy, Simul
     SimulationTime eventTime = (nextEvent != NULL) ? event_getTime(nextEvent) : SIMTIME_INVALID;
 
     if(nextEvent && eventTime < barrier) {
-        utility_assert(eventTime >= tdata->qdata->lastEventTime);
+        debug_assert(eventTime >= tdata->qdata->lastEventTime);
         tdata->qdata->lastEventTime = eventTime;
         nextEvent = priorityqueue_pop(tdata->qdata->pq);
         tdata->qdata->nPopped++;

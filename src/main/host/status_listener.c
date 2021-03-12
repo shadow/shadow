@@ -77,7 +77,7 @@ void statuslistener_ref(StatusListener* listener) {
 void statuslistener_unref(StatusListener* listener) {
     MAGIC_ASSERT(listener);
     listener->referenceCount--;
-    utility_assert(listener->referenceCount >= 0);
+    debug_assert(listener->referenceCount >= 0);
     if (listener->referenceCount == 0) {
         _statuslistener_free(listener);
     }

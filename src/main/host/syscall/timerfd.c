@@ -75,7 +75,7 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
     if (errcode != 0) {
         error("Unable to find timer %i that we just created.", tfd);
     }
-    utility_assert(errcode == 0);
+    debug_assert(errcode == 0);
 #endif
 
     /* Set any options that were given. */

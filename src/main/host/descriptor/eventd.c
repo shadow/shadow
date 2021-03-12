@@ -27,7 +27,7 @@ struct _EventD {
 };
 
 static EventD* _eventfd_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
-    utility_assert(descriptor_getType(descriptor) == DT_EVENTD);
+    debug_assert(descriptor_getType(descriptor) == DT_EVENTD);
     return (EventD*)descriptor;
 }
 

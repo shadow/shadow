@@ -23,7 +23,7 @@ static QueueManagerSingle* _routerqueuesingle_new() {
 }
 
 static void _routerqueuesingle_free(QueueManagerSingle* queueManager) {
-    utility_assert(queueManager);
+    debug_assert(queueManager);
     if(queueManager->currentPacket) {
         packet_unref(queueManager->currentPacket);
     }
@@ -31,7 +31,7 @@ static void _routerqueuesingle_free(QueueManagerSingle* queueManager) {
 }
 
 static gboolean _routerqueuesingle_enqueue(QueueManagerSingle* queueManager, Packet* packet) {
-    utility_assert(queueManager);
+    debug_assert(queueManager);
 
     if(!queueManager->currentPacket) {
         /* we will queue the packet */
@@ -45,7 +45,7 @@ static gboolean _routerqueuesingle_enqueue(QueueManagerSingle* queueManager, Pac
 }
 
 static Packet* _routerqueuesingle_dequeue(QueueManagerSingle* queueManager) {
-    utility_assert(queueManager);
+    debug_assert(queueManager);
     /* this call transfers the reference that we were holding to the caller */
     Packet* packet = queueManager->currentPacket;
     queueManager->currentPacket = NULL;
@@ -53,7 +53,7 @@ static Packet* _routerqueuesingle_dequeue(QueueManagerSingle* queueManager) {
 }
 
 static Packet* _routerqueuesingle_peek(QueueManagerSingle* queueManager) {
-    utility_assert(queueManager);
+    debug_assert(queueManager);
     return queueManager->currentPacket;
 }
 

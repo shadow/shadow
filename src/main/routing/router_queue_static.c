@@ -28,7 +28,7 @@ static QueueManagerStatic* _routerqueuestatic_new() {
 }
 
 static void _routerqueuestatic_free(QueueManagerStatic* queueManager) {
-    utility_assert(queueManager);
+    debug_assert(queueManager);
 
     if(queueManager->packets) {
         g_queue_free_full(queueManager->packets, (GDestroyNotify)packet_unref);
@@ -42,8 +42,8 @@ static inline guint64 _routerqueuestatic_getPacketLength(Packet* packet) {
 }
 
 static gboolean _routerqueuestatic_enqueue(QueueManagerStatic* queueManager, Packet* packet) {
-    utility_assert(queueManager);
-    utility_assert(packet);
+    debug_assert(queueManager);
+    debug_assert(packet);
 
     guint64 length = _routerqueuestatic_getPacketLength(packet);
 
@@ -60,14 +60,14 @@ static gboolean _routerqueuestatic_enqueue(QueueManagerStatic* queueManager, Pac
 }
 
 static Packet* _routerqueuestatic_dequeue(QueueManagerStatic* queueManager) {
-    utility_assert(queueManager);
+    debug_assert(queueManager);
 
     /* this call transfers the reference that we were holding to the caller */
     Packet* packet = g_queue_pop_head(queueManager->packets);
 
     if(packet) {
         guint64 length = _routerqueuestatic_getPacketLength(packet);
-        utility_assert(length <= queueManager->totalSize);
+        debug_assert(length <= queueManager->totalSize);
         queueManager->totalSize -= length;
     }
 
@@ -75,7 +75,7 @@ static Packet* _routerqueuestatic_dequeue(QueueManagerStatic* queueManager) {
 }
 
 static Packet* _routerqueuestatic_peek(QueueManagerStatic* queueManager) {
-    utility_assert(queueManager);
+    debug_assert(queueManager);
     return g_queue_peek_head(queueManager->packets);
 }
 

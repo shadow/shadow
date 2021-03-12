@@ -126,7 +126,7 @@ static GString* _parser_findPathToFile(const gchar* relativeFilePathSuffix, cons
 }
 
 static GString* _parser_expandUserPath(GString* string) {
-    utility_assert(string);
+    debug_assert(string);
 
     if(g_strstr_len(string->str, (gssize)1, "~")) {
         string = g_string_erase(string, (gssize)0, (gssize) 1);
@@ -137,7 +137,7 @@ static GString* _parser_expandUserPath(GString* string) {
 }
 
 static GError* _parser_checkPath(ConfigurationStringAttribute* path) {
-    utility_assert(path->string != NULL);
+    debug_assert(path->string != NULL);
 
     GError* error = NULL;
 
@@ -185,14 +185,14 @@ struct _Configuration {
 };
 
 static void _parser_freeTopologyElement(ConfigurationTopologyElement* topology) {
-    utility_assert(topology != NULL);
+    debug_assert(topology != NULL);
 
     if(topology->path.isSet) {
-        utility_assert(topology->path.string != NULL);
+        debug_assert(topology->path.string != NULL);
         g_string_free(topology->path.string, TRUE);
     }
     if(topology->cdata.isSet) {
-        utility_assert(topology->cdata.string != NULL);
+        debug_assert(topology->cdata.string != NULL);
         g_string_free(topology->cdata.string, TRUE);
     }
 
@@ -200,18 +200,18 @@ static void _parser_freeTopologyElement(ConfigurationTopologyElement* topology) 
 }
 
 static void _parser_freePluginElement(ConfigurationPluginElement* plugin) {
-    utility_assert(plugin != NULL);
+    debug_assert(plugin != NULL);
 
     if(plugin->path.isSet) {
-        utility_assert(plugin->path.string != NULL);
+        debug_assert(plugin->path.string != NULL);
         g_string_free(plugin->path.string, TRUE);
     }
     if(plugin->id.isSet) {
-        utility_assert(plugin->id.string != NULL);
+        debug_assert(plugin->id.string != NULL);
         g_string_free(plugin->id.string, TRUE);
     }
     if(plugin->startsymbol.isSet) {
-        utility_assert(plugin->startsymbol.string != NULL);
+        debug_assert(plugin->startsymbol.string != NULL);
         g_string_free(plugin->startsymbol.string, TRUE);
     }
 
@@ -219,18 +219,18 @@ static void _parser_freePluginElement(ConfigurationPluginElement* plugin) {
 }
 
 static void _parser_freeProcessElement(ConfigurationProcessElement* process) {
-    utility_assert(process != NULL);
+    debug_assert(process != NULL);
 
     if(process->plugin.isSet) {
-        utility_assert(process->plugin.string != NULL);
+        debug_assert(process->plugin.string != NULL);
         g_string_free(process->plugin.string, TRUE);
     }
     if(process->preload.isSet) {
-        utility_assert(process->preload.string != NULL);
+        debug_assert(process->preload.string != NULL);
         g_string_free(process->preload.string, TRUE);
     }
     if(process->arguments.isSet) {
-        utility_assert(process->arguments.string != NULL);
+        debug_assert(process->arguments.string != NULL);
         g_string_free(process->arguments.string, TRUE);
     }
 
@@ -238,50 +238,50 @@ static void _parser_freeProcessElement(ConfigurationProcessElement* process) {
 }
 
 static void _parser_freeHostElement(ConfigurationHostElement* host) {
-    utility_assert(host != NULL);
+    debug_assert(host != NULL);
 
     if(host->id.isSet) {
-        utility_assert(host->id.string != NULL);
+        debug_assert(host->id.string != NULL);
         g_string_free(host->id.string, TRUE);
     }
     if(host->ipHint.isSet) {
-        utility_assert(host->ipHint.string != NULL);
+        debug_assert(host->ipHint.string != NULL);
         g_string_free(host->ipHint.string, TRUE);
     }
     if(host->citycodeHint.isSet) {
-        utility_assert(host->citycodeHint.string != NULL);
+        debug_assert(host->citycodeHint.string != NULL);
         g_string_free(host->citycodeHint.string, TRUE);
     }
     if(host->countrycodeHint.isSet) {
-        utility_assert(host->countrycodeHint.string != NULL);
+        debug_assert(host->countrycodeHint.string != NULL);
         g_string_free(host->countrycodeHint.string, TRUE);
     }
     if(host->geocodeHint.isSet) {
-        utility_assert(host->geocodeHint.string != NULL);
+        debug_assert(host->geocodeHint.string != NULL);
         g_string_free(host->geocodeHint.string, TRUE);
     }
     if(host->typeHint.isSet) {
-        utility_assert(host->typeHint.string != NULL);
+        debug_assert(host->typeHint.string != NULL);
         g_string_free(host->typeHint.string, TRUE);
     }
     if(host->loglevel.isSet) {
-        utility_assert(host->loglevel.string != NULL);
+        debug_assert(host->loglevel.string != NULL);
         g_string_free(host->loglevel.string, TRUE);
     }
     if(host->heartbeatloglevel.isSet) {
-        utility_assert(host->heartbeatloglevel.string != NULL);
+        debug_assert(host->heartbeatloglevel.string != NULL);
         g_string_free(host->heartbeatloglevel.string, TRUE);
     }
     if(host->heartbeatloginfo.isSet) {
-        utility_assert(host->heartbeatloginfo.string != NULL);
+        debug_assert(host->heartbeatloginfo.string != NULL);
         g_string_free(host->heartbeatloginfo.string, TRUE);
     }
     if(host->logpcap.isSet) {
-        utility_assert(host->logpcap.string != NULL);
+        debug_assert(host->logpcap.string != NULL);
         g_string_free(host->logpcap.string, TRUE);
     }
     if(host->pcapdir.isSet) {
-        utility_assert(host->pcapdir.string != NULL);
+        debug_assert(host->pcapdir.string != NULL);
         g_string_free(host->pcapdir.string, TRUE);
     }
     if(host->processes) {
@@ -292,15 +292,15 @@ static void _parser_freeHostElement(ConfigurationHostElement* host) {
 }
 
 static void _parser_freeShadowElement(ConfigurationShadowElement* shadow) {
-    utility_assert(shadow != NULL);
+    debug_assert(shadow != NULL);
 
     if(shadow->preloadPath.isSet) {
-        utility_assert(shadow->preloadPath.string != NULL);
+        debug_assert(shadow->preloadPath.string != NULL);
         g_string_free(shadow->preloadPath.string, TRUE);
     }
 
     if(shadow->environment.isSet) {
-        utility_assert(shadow->environment.string != NULL);
+        debug_assert(shadow->environment.string != NULL);
         g_string_free(shadow->environment.string, TRUE);
     }
 
@@ -351,8 +351,8 @@ static GError* _parser_handleTopologyAttributes(Parser* parser, const gchar** at
     }
 
     if(!error && topology->path.isSet) {
-        utility_assert(topology->path.string != NULL);
-        utility_assert(parser->topology == NULL);
+        debug_assert(topology->path.string != NULL);
+        debug_assert(parser->topology == NULL);
         parser->topology = topology;
     } else {
         _parser_freeTopologyElement(topology);
@@ -394,8 +394,8 @@ static void _parser_handleTopologyText(GMarkupParseContext *context,
     }
 
     if(topology->cdata.isSet) {
-        utility_assert(topology->cdata.string != NULL);
-        utility_assert(parser->topology == NULL);
+        debug_assert(topology->cdata.string != NULL);
+        debug_assert(parser->topology == NULL);
         parser->topology = topology;
     } else {
         _parser_freeTopologyElement(topology);
@@ -669,7 +669,7 @@ static GError* _parser_handleProcessAttributes(Parser* parser, const gchar** att
     } else {
         /* no error, process configs get added to the most recent host */
         ConfigurationHostElement* host = g_queue_peek_tail(parser->hosts);
-        utility_assert(host != NULL);
+        debug_assert(host != NULL);
 
         g_queue_push_tail(host->processes, process);
 
@@ -694,7 +694,7 @@ static void _parser_handleHostChildStartElement(GMarkupParseContext* context,
         const gchar** attributeValues, gpointer userData, GError** error) {
     Parser* parser = (Parser*) userData;
     MAGIC_ASSERT(parser);
-    utility_assert(context && error);
+    debug_assert(context && error);
 
     debug("found 'host' child starting element '%s'", elementName);
 
@@ -711,7 +711,7 @@ static void _parser_handleHostChildEndElement(GMarkupParseContext* context,
         const gchar* elementName, gpointer userData, GError** error) {
     Parser* parser = (Parser*) userData;
     MAGIC_ASSERT(parser);
-    utility_assert(context && error);
+    debug_assert(context && error);
 
     debug("found 'host' child ending element '%s'", elementName);
 
@@ -791,7 +791,7 @@ static GError* _parser_handleShadowAttributes(Parser* parser, const gchar** attr
         _parser_freeShadowElement(shadow);
     } else {
         /* no error, store the config */
-        utility_assert(parser->shadow == NULL);
+        debug_assert(parser->shadow == NULL);
         parser->shadow = shadow;
     }
 
@@ -805,7 +805,7 @@ static void _parser_handleRootStartElement(GMarkupParseContext* context,
         const gchar** attributeValues, gpointer userData, GError** error) {
     Parser* parser = (Parser*) userData;
     MAGIC_ASSERT(parser);
-    utility_assert(context && error);
+    debug_assert(context && error);
 
     debug("found start element '%s'", elementName);
 
@@ -836,7 +836,7 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
         const gchar* elementName, gpointer userData, GError** error) {
     Parser* parser = (Parser*) userData;
     MAGIC_ASSERT(parser);
-    utility_assert(context && error);
+    debug_assert(context && error);
 
     debug("found end element '%s'", elementName);
 
@@ -844,7 +844,7 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
     if (!g_ascii_strcasecmp(elementName, "host") || !g_ascii_strcasecmp(elementName, "node")) {
         /* validate children */
         ConfigurationHostElement* host = g_queue_peek_tail(parser->hosts);
-        utility_assert(host != NULL);
+        debug_assert(host != NULL);
         if (g_queue_get_length(host->processes) <= 0) {
             *error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_EMPTY,
                     "element 'host' requires at least 1 child 'process'");
@@ -876,7 +876,7 @@ static void _parser_handleRootEndElement(GMarkupParseContext* context,
 
 static gboolean _parser_verifyPluginIDsExist(Parser* parser, GError** error) {
     MAGIC_ASSERT(parser);
-    utility_assert(error);
+    debug_assert(error);
 
     GHashTableIter iter;
     gpointer key, value;
@@ -939,7 +939,7 @@ static gboolean _parser_parseContents(Parser* parser, gchar* contents, gsize len
         return TRUE;
     } else {
         /* some kind of error occurred, check the parser */
-        utility_assert(error);
+        debug_assert(error);
         error("g_markup_parse_context_parse: Shadow XML parsing error %i: %s",
                 error->code, error->message);
         g_error_free(error);
@@ -973,7 +973,7 @@ static void _parser_free(Parser* parser) {
 }
 
 Configuration* configuration_new(Options* options, const GString* file) {
-    utility_assert(options && file);
+    debug_assert(options && file);
 
     Parser* parser = _parser_new();
     gboolean success = _parser_parseContents(parser, file->str, file->len);
@@ -1007,30 +1007,30 @@ void configuration_free(Configuration* config) {
 
 ConfigurationShadowElement* configuration_getShadowElement(Configuration* config) {
     MAGIC_ASSERT(config);
-    utility_assert(config->parser && config->parser->shadow);
+    debug_assert(config->parser && config->parser->shadow);
     return config->parser->shadow;
 }
 
 ConfigurationTopologyElement* configuration_getTopologyElement(Configuration* config) {
     MAGIC_ASSERT(config);
-    utility_assert(config->parser && config->parser->topology);
+    debug_assert(config->parser && config->parser->topology);
     return config->parser->topology;
 }
 
 ConfigurationPluginElement* configuration_getPluginElementByID(Configuration* config, const gchar* pluginID) {
     MAGIC_ASSERT(config);
-    utility_assert(config->parser && config->parser->pluginMap);
+    debug_assert(config->parser && config->parser->pluginMap);
     return g_hash_table_lookup(config->parser->pluginMap, pluginID);
 }
 
 GQueue* configuration_getPluginElements(Configuration* config) {
     MAGIC_ASSERT(config);
-    utility_assert(config->parser && config->parser->plugins);
+    debug_assert(config->parser && config->parser->plugins);
     return config->parser->plugins;
 }
 
 GQueue* configuration_getHostElements(Configuration* config) {
     MAGIC_ASSERT(config);
-    utility_assert(config->parser && config->parser->hosts);
+    debug_assert(config->parser && config->parser->hosts);
     return config->parser->hosts;
 }
