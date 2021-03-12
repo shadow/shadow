@@ -13,7 +13,7 @@ typedef void (*TaskObjectFreeFunc)(gpointer data);
 typedef void (*TaskArgumentFreeFunc)(gpointer data);
 
 /* An event for the currently active host, i.e.,
- * the same host as the event initiator and running on the same slave machine.
+ * the same host as the event initiator and running on the same manager machine.
  * (These are non-packet events for localhost.) */
 typedef struct _Task Task;
 

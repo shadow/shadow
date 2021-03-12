@@ -19,8 +19,8 @@
  * RESULTING FROM THE USE OF THIS SOFTWARE.
  */
 
-#ifndef SHD_SLAVE_H_
-#define SHD_SLAVE_H_
+#ifndef SHD_MANAGER_H_
+#define SHD_MANAGER_H_
 
 #include <glib.h>
 #include <netinet/in.h>
@@ -33,37 +33,38 @@
 #include "main/routing/dns.h"
 #include "main/routing/topology.h"
 
-typedef struct _Slave Slave;
+typedef struct _Manager Manager;
 
 
-Slave* slave_new(Master* master, Options* options, SimulationTime endTime, SimulationTime bootstrapEndTime, guint randomSeed);
-gint slave_free(Slave* slave);
+Manager* manager_new(Master* master, Options* options, SimulationTime endTime, SimulationTime bootstrapEndTime,
+        guint randomSeed, const gchar* preloadShimPath, const gchar* environment);
+gint manager_free(Manager* manager);
 
-gboolean slave_isForced(Slave* slave);
-guint slave_getRawCPUFrequency(Slave* slave);
-DNS* slave_getDNS(Slave* slave);
-Topology* slave_getTopology(Slave* slave);
-guint32 slave_getNodeBandwidthUp(Slave* slave, GQuark nodeID, in_addr_t ip);
-guint32 slave_getNodeBandwidthDown(Slave* slave, GQuark nodeID, in_addr_t ip);
-gdouble slave_getLatency(Slave* slave, GQuark sourceNodeID, GQuark destinationNodeID);
-Options* slave_getOptions(Slave* slave);
-SimulationTime slave_getBootstrapEndTime(Slave* slave);
+gboolean manager_isForced(Manager* manager);
+guint manager_getRawCPUFrequency(Manager* manager);
+DNS* manager_getDNS(Manager* manager);
+Topology* manager_getTopology(Manager* manager);
+guint32 manager_getNodeBandwidthUp(Manager* manager, GQuark nodeID, in_addr_t ip);
+guint32 manager_getNodeBandwidthDown(Manager* manager, GQuark nodeID, in_addr_t ip);
+gdouble manager_getLatency(Manager* manager, GQuark sourceNodeID, GQuark destinationNodeID);
+Options* manager_getOptions(Manager* manager);
+SimulationTime manager_getBootstrapEndTime(Manager* manager);
 
-void slave_incrementPluginError(Slave* slave);
-const gchar* slave_getHostsRootPath(Slave* slave);
+void manager_incrementPluginError(Manager* manager);
+const gchar* manager_getHostsRootPath(Manager* manager);
 
-void slave_updateMinTimeJump(Slave* slave, gdouble minPathLatency);
+void manager_updateMinTimeJump(Manager* manager, gdouble minPathLatency);
 
-void slave_run(Slave*);
-gboolean slave_schedulerIsRunning(Slave* slave);
+void manager_run(Manager*);
+gboolean manager_schedulerIsRunning(Manager* manager);
 
 /* info received from master to set up the simulation */
-void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path, const gchar* startSymbol);
-void slave_addNewVirtualHost(Slave* slave, HostParameters* params);
-void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName, gchar* preloadName,
+void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path, const gchar* startSymbol);
+void manager_addNewVirtualHost(Manager* manager, HostParameters* params);
+void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* pluginName, gchar* preloadName,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments);
 
-void slave_storeCounts(Slave* slave, ObjectCounter* objectCounter);
-void slave_countObject(ObjectType otype, CounterType ctype);
+void manager_storeCounts(Manager* manager, ObjectCounter* objectCounter);
+void manager_countObject(ObjectType otype, CounterType ctype);
 
-#endif /* SHD_SLAVE_H_ */
+#endif /* SHD_MANAGER_H_ */

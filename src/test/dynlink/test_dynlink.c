@@ -393,21 +393,21 @@ int test_dynlink_run() {
 //}
 //
 //int start_thread() {
-//    pthread_t slave_tid;
-//    pthread_attr_t slave_attr;
+//    pthread_t manager_tid;
+//    pthread_attr_t manager_attr;
 //    size_t stack_size;
 //    void *stack_addr;
 //
-//    pthread_attr_init(&slave_attr);
+//    pthread_attr_init(&manager_attr);
 //    // Stack size is 128M bytes
 //    stack_size = 128 * 1024 * 1024;
 //    posix_memalign(&stack_addr, sysconf(_SC_PAGESIZE), stack_size);
-//    pthread_attr_setstack(&slave_attr, stack_addr, stack_size);
+//    pthread_attr_setstack(&manager_attr, stack_addr, stack_size);
 //
-//    pthread_create(&slave_tid, &slave_attr, test_dynlink_run, NULL);
-//    pthread_attr_destroy(&slave_attr);
+//    pthread_create(&manager_tid, &manager_attr, test_dynlink_run, NULL);
+//    pthread_attr_destroy(&manager_attr);
 //
-//    pthread_join(slave_tid, NULL);
+//    pthread_join(manager_tid, NULL);
 //    return 0;
 //}
 //
