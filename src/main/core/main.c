@@ -15,24 +15,24 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "igraph_version.h"
+#include "main/bindings/c/bindings.h"
+#include "main/core/controller.h"
 #include "main/core/logger/shadow_logger.h"
-#include "main/core/master.h"
 #include "main/core/support/configuration.h"
 #include "main/core/support/options.h"
 #include "main/host/affinity.h"
-#include "main/utility/utility.h"
 #include "main/shmem/shmem_cleanup.h"
-#include "igraph_version.h"
+#include "main/utility/utility.h"
 #include "shd-config.h"
 #include "support/logger/logger.h"
-#include "main/bindings/c/bindings.h"
 
 static bool _setSchedFifo = false;
 OPTION_EXPERIMENTAL_ENTRY(
     "set-sched-fifo", 0, 0, G_OPTION_ARG_NONE, &_setSchedFifo,
     "Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7)", NULL)
 
-static Master* shadowMaster;
+static Controller* shadowcontroller;
 
 static void _main_logEnvironment(gchar** argv, gchar** envv) {
     /* log all args */
@@ -158,15 +158,15 @@ static gint _main_helper(Options* options) {
 
     /* allocate and initialize our main simulation driver */
     gint returnCode = 0;
-    shadowMaster = master_new(options);
+    shadowcontroller = controller_new(options);
 
-    if(shadowMaster) {
+    if (shadowcontroller) {
         /* run the simulation */
-        returnCode = master_run(shadowMaster);
+        returnCode = controller_run(shadowcontroller);
 
         /* cleanup */
-        master_free(shadowMaster);
-        shadowMaster = NULL;
+        controller_free(shadowcontroller);
+        shadowcontroller = NULL;
     }
 
     message("%s simulation was shut down cleanly, returning code %i", SHADOW_VERSION_STRING, returnCode);

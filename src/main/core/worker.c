@@ -12,8 +12,8 @@
 #include <stddef.h>
 
 #include "main/core/logger/shadow_logger.h"
+#include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
-#include "main/core/slave.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
@@ -42,9 +42,9 @@ struct _Worker {
     /* affinity of the worker. */
     int cpu_num_affinity;
 
-    /* pointer to the object that communicates with the master process */
-    Slave* slave;
-    /* pointer to the per-slave parallel scheduler object that feeds events to all workers */
+    /* pointer to the object that communicates with the controller process */
+    Manager* manager;
+    /* pointer to the per-manager parallel scheduler object that feeds events to all workers */
     Scheduler* scheduler;
 
     /* timing information tracked by this worker */
@@ -68,7 +68,7 @@ struct _Worker {
     MAGIC_DECLARE;
 };
 
-static Worker* _worker_new(Slave*, guint);
+static Worker* _worker_new(Manager*, guint);
 static void _worker_free(Worker*);
 
 /* holds a thread-private key that each thread references to get a private
@@ -84,7 +84,7 @@ static Worker* _worker_getPrivate() {
 
 gboolean worker_isAlive() { return g_private_get(&workerKey) != NULL; }
 
-static Worker* _worker_new(Slave* slave, guint threadID) {
+static Worker* _worker_new(Manager* manager, guint threadID) {
     /* make sure this isnt called twice on the same thread! */
     utility_assert(!worker_isAlive());
 
@@ -92,7 +92,7 @@ static Worker* _worker_new(Slave* slave, guint threadID) {
     MAGIC_INIT(worker);
 
     worker->cpu_num_affinity = AFFINITY_UNINIT;
-    worker->slave = slave;
+    worker->manager = manager;
     worker->thread = pthread_self();
     worker->threadID = threadID;
     worker->clock.now = SIMTIME_INVALID;
@@ -100,7 +100,7 @@ static Worker* _worker_new(Slave* slave, guint threadID) {
     worker->clock.barrier = SIMTIME_INVALID;
     worker->objectCounts = objectcounter_new();
 
-    worker->bootstrapEndTime = slave_getBootstrapEndTime(worker->slave);
+    worker->bootstrapEndTime = manager_getBootstrapEndTime(worker->manager);
 
     g_private_replace(&workerKey, worker);
 
@@ -127,29 +127,29 @@ int worker_getAffinity() {
 
 DNS* worker_getDNS() {
     Worker* worker = _worker_getPrivate();
-    return slave_getDNS(worker->slave);
+    return manager_getDNS(worker->manager);
 }
 
 Address* worker_resolveIPToAddress(in_addr_t ip) {
     Worker* worker = _worker_getPrivate();
-    DNS* dns = slave_getDNS(worker->slave);
+    DNS* dns = manager_getDNS(worker->manager);
     return dns_resolveIPToAddress(dns, ip);
 }
 
 Address* worker_resolveNameToAddress(const gchar* name) {
     Worker* worker = _worker_getPrivate();
-    DNS* dns = slave_getDNS(worker->slave);
+    DNS* dns = manager_getDNS(worker->manager);
     return dns_resolveNameToAddress(dns, name);
 }
 
 Topology* worker_getTopology() {
     Worker* worker = _worker_getPrivate();
-    return slave_getTopology(worker->slave);
+    return manager_getTopology(worker->manager);
 }
 
 Options* worker_getOptions() {
     Worker* worker = _worker_getPrivate();
-    return slave_getOptions(worker->slave);
+    return manager_getOptions(worker->manager);
 }
 
 static void _worker_setAffinity(Worker* worker) {
@@ -165,7 +165,7 @@ gpointer worker_run(WorkerRunData* data) {
     utility_assert(data && data->userData && data->scheduler);
 
     /* create the worker object for this worker thread */
-    Worker* worker = _worker_new((Slave*)data->userData, data->threadID);
+    Worker* worker = _worker_new((Manager*)data->userData, data->threadID);
     utility_assert(worker_isAlive());
 
     _worker_setAffinity(worker);
@@ -173,10 +173,10 @@ gpointer worker_run(WorkerRunData* data) {
     worker->scheduler = data->scheduler;
     scheduler_ref(worker->scheduler);
 
-    /* wait until the slave is done with initialization */
+    /* wait until the manager is done with initialization */
     scheduler_awaitStart(worker->scheduler);
 
-    /* ask the slave for the next event, blocking until one is available that
+    /* ask the manager for the next event, blocking until one is available that
      * we are allowed to run. when this returns NULL, we should stop. */
     Event* event = NULL;
     while ((event = scheduler_pop(worker->scheduler)) != NULL) {
@@ -207,8 +207,8 @@ gpointer worker_run(WorkerRunData* data) {
         countdownlatch_await(data->notifyReadyToJoin);
     }
 
-    /* cleanup is all done, send object counts to slave */
-    slave_storeCounts(worker->slave, worker->objectCounts);
+    /* cleanup is all done, send object counts to manager */
+    manager_storeCounts(worker->manager, worker->objectCounts);
 
     /* synchronize thread join */
     CountDownLatch* notifyJoined = data->notifyJoined;
@@ -237,7 +237,7 @@ gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
 
     Worker* worker = _worker_getPrivate();
 
-    if (slave_schedulerIsRunning(worker->slave)) {
+    if (manager_schedulerIsRunning(worker->manager)) {
         utility_assert(worker->clock.now != SIMTIME_INVALID);
         utility_assert(worker->active.host != NULL);
 
@@ -262,7 +262,7 @@ void worker_sendPacket(Packet* packet) {
 
     /* get our thread-private worker */
     Worker* worker = _worker_getPrivate();
-    if (!slave_schedulerIsRunning(worker->slave)) {
+    if (!manager_schedulerIsRunning(worker->manager)) {
         /* the simulation is over, don't bother */
         return;
     }
@@ -295,7 +295,7 @@ void worker_sendPacket(Packet* packet) {
 
         topology_incrementPathPacketCounter(worker_getTopology(), srcAddress, dstAddress);
 
-        /* TODO this should change for sending to remote slave (on a different machine)
+        /* TODO this should change for sending to remote manager (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
 
         Host* srcHost = worker->active.host;
@@ -408,17 +408,17 @@ EmulatedTime worker_getEmulatedTime() {
 
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip) {
     Worker* worker = _worker_getPrivate();
-    return slave_getNodeBandwidthUp(worker->slave, nodeID, ip);
+    return manager_getNodeBandwidthUp(worker->manager, nodeID, ip);
 }
 
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip) {
     Worker* worker = _worker_getPrivate();
-    return slave_getNodeBandwidthDown(worker->slave, nodeID, ip);
+    return manager_getNodeBandwidthDown(worker->manager, nodeID, ip);
 }
 
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID) {
     Worker* worker = _worker_getPrivate();
-    return slave_getLatency(worker->slave, sourceNodeID, destinationNodeID);
+    return manager_getLatency(worker->manager, sourceNodeID, destinationNodeID);
 }
 
 gint worker_getThreadID() {
@@ -428,7 +428,7 @@ gint worker_getThreadID() {
 
 void worker_updateMinTimeJump(gdouble minPathLatency) {
     Worker* worker = _worker_getPrivate();
-    slave_updateMinTimeJump(worker->slave, minPathLatency);
+    manager_updateMinTimeJump(worker->manager, minPathLatency);
 }
 
 void worker_setCurrentTime(SimulationTime time) {
@@ -442,12 +442,12 @@ gboolean worker_isFiltered(LogLevel level) {
 
 void worker_incrementPluginError() {
     Worker* worker = _worker_getPrivate();
-    slave_incrementPluginError(worker->slave);
+    manager_incrementPluginError(worker->manager);
 }
 
 void worker_countObject(ObjectType otype, CounterType ctype) {
-    /* the issue is that the slave thread frees some objects that
-     * are created by the worker threads. but the slave thread does
+    /* the issue is that the manager thread frees some objects that
+     * are created by the worker threads. but the manager thread does
      * not have a worker object. this is only an issue when running
      * with multiple workers. */
     if (worker_isAlive()) {
@@ -455,7 +455,7 @@ void worker_countObject(ObjectType otype, CounterType ctype) {
         objectcounter_incrementOne(worker->objectCounts, otype, ctype);
     } else {
         /* has a global lock, so don't do it unless there is no worker object */
-        slave_countObject(otype, ctype);
+        manager_countObject(otype, ctype);
     }
 }
 

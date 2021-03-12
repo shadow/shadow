@@ -146,7 +146,7 @@ def process_shadow_lines(passed_args):
     max_mem, max_seconds = 0, 0
     d = {'ticks':{}, 'nodes':{}}
 
-    if re.search("slave_heartbeat", line) is not None:
+    if re.search("manager_heartbeat", line) is not None:
         parts = line.strip().split()
         if len(parts) < 14: return None
 

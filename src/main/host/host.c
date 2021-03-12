@@ -94,7 +94,7 @@ struct _Host {
     MAGIC_DECLARE;
 };
 
-/* this function is called by slave before the workers exist */
+/* this function is called by manager before the workers exist */
 Host* host_new(HostParameters* params) {
     utility_assert(params);
 
@@ -137,7 +137,7 @@ Host* host_new(HostParameters* params) {
     host->referenceCount = 1;
 
 #ifdef USE_PERF_TIMERS
-    /* we go back to the slave setup process here, so stop counting this host execution */
+    /* we go back to the manager setup process here, so stop counting this host execution */
     g_timer_stop(host->executionTimer);
 #endif
 
@@ -146,7 +146,7 @@ Host* host_new(HostParameters* params) {
     return host;
 }
 
-/* this function is called by slave before the workers exist */
+/* this function is called by manager before the workers exist */
 void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, const gchar* hostRootPath) {
     MAGIC_ASSERT(host);
 

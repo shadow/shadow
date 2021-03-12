@@ -7,7 +7,7 @@ When merging pull requests, we currently allow only the
 merge](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-request-merges#rebase-and-merge-your-pull-request-commits)
 strategy. Using this strategy, we maintain a linear history. Each
 individual commit of a pull request ends up in the linear history of
-the master branch.
+the main branch.
 
 ### Structuring commits
 
