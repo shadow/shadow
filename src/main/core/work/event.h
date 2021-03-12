@@ -12,7 +12,7 @@
 #include "main/core/work/task.h"
 
 /* An event for a local virtual host, i.e.,
- * a host running on the same slave machine as the event initiator.
+ * a host running on the same manager machine as the event initiator.
  * (These are packets sent between hosts on the same machine.) */
 typedef struct _Event Event;
 

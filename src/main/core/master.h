@@ -24,10 +24,10 @@ gint master_run(Master*);
 void master_updateMinTimeJump(Master*, gdouble);
 gdouble master_getRunTimeElapsed(Master*);
 
-gboolean master_slaveFinishedCurrentRound(Master*, SimulationTime, SimulationTime*, SimulationTime*);
+gboolean master_managerFinishedCurrentRound(Master*, SimulationTime, SimulationTime*, SimulationTime*);
 gdouble master_getLatency(Master* master, Address* srcAddress, Address* dstAddress);
 
-// TODO remove these eventually since they cant be shared accross remote slaves
+// TODO remove these eventually since they cant be shared accross remote managers
 DNS* master_getDNS(Master* master);
 Topology* master_getTopology(Master* master);
 

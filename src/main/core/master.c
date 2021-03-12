@@ -63,7 +63,7 @@ struct _Master {
     /* if we run in unlimited bandwidth mode, this is when we go back to bw enforcement */
     SimulationTime bootstrapEndTime;
 
-    Slave* slave;
+    Manager* manager;
 
     MAGIC_DECLARE;
 };
@@ -292,7 +292,7 @@ static void _master_registerPluginCallback(ConfigurationPluginElement* pe, Maste
     utility_assert(pe);
     MAGIC_ASSERT(master);
     utility_assert(pe->id.isSet && pe->id.string);
-    slave_addNewProgram(master->slave, pe->id.string->str, pe->path.string->str,
+    manager_addNewProgram(master->manager, pe->id.string->str, pe->path.string->str,
                         pe->startsymbol.isSet ? pe->startsymbol.string->str : NULL);
 }
 
@@ -314,7 +314,7 @@ static void _master_registerProcessCallback(ConfigurationProcessElement* pe, Pro
     utility_assert(pe->plugin.isSet && pe->plugin.string);
     utility_assert(pe->arguments.isSet && pe->arguments.string);
 
-    slave_addNewVirtualProcess(args->master->slave, args->hostParams->hostname, pe->plugin.string->str,
+    manager_addNewVirtualProcess(args->master->manager, args->hostParams->hostname, pe->plugin.string->str,
                         pe->preload.isSet ? pe->preload.string->str : NULL,
                         SIMTIME_ONE_SECOND * pe->starttime.integer,
                         pe->stoptime.isSet ? SIMTIME_ONE_SECOND * pe->stoptime.integer : 0,
@@ -340,12 +340,12 @@ static void _master_registerHostCallback(ConfigurationHostElement* he, Master* m
         }
         params->hostname = hostnameBuffer->str;
 
-        /* cpu params - if they didnt specify a CPU frequency, use the slave machine frequency */
-        gint slaveCPUFreq = slave_getRawCPUFrequency(master->slave);
-        params->cpuFrequency = he->cpufrequency.isSet ? he->cpufrequency.integer : (slaveCPUFreq > 0) ? (guint64)slaveCPUFreq : 0;
+        /* cpu params - if they didnt specify a CPU frequency, use the manager machine frequency */
+        gint managerCPUFreq = manager_getRawCPUFrequency(master->manager);
+        params->cpuFrequency = he->cpufrequency.isSet ? he->cpufrequency.integer : (managerCPUFreq > 0) ? (guint64)managerCPUFreq : 0;
         if(params->cpuFrequency == 0) {
             params->cpuFrequency = 2500000; // 2.5 GHz
-            debug("both configured and raw slave cpu frequencies unavailable, using 2500000 KHz");
+            debug("both configured and raw manager cpu frequencies unavailable, using 2500000 KHz");
         }
 
         gint defaultCPUThreshold = options_getCPUThreshold(master->options);
@@ -396,7 +396,7 @@ static void _master_registerHostCallback(ConfigurationHostElement* he, Master* m
         params->requestedBWDownKiBps = he->bandwidthdown.isSet ? he->bandwidthdown.integer : 0;
         params->requestedBWUpKiBps = he->bandwidthup.isSet ? he->bandwidthup.integer : 0;
 
-        slave_addNewVirtualHost(master->slave, params);
+        manager_addNewVirtualHost(master->manager, params);
 
         ProcessCallbackArgs processArgs;
         processArgs.master = master;
@@ -438,18 +438,18 @@ gint master_run(Master* master) {
     ConfigurationShadowElement* element = configuration_getShadowElement(master->config);
     g_assert(element && element->preloadPath.isSet);
 
-    /* the master will be responsible for distributing the actions to the slaves so that
+    /* the master will be responsible for distributing the actions to the managers so that
      * they all have a consistent view of the simulation, topology, etc.
-     * For now we only have one slave so send it everything. */
-    guint slaveSeed = random_nextUInt(master->random);
-    master->slave = slave_new(master, master->options, master->endTime, master->bootstrapEndTime,
-            slaveSeed, element->preloadPath.string->str,
+     * For now we only have one manager so send it everything. */
+    guint managerSeed = random_nextUInt(master->random);
+    master->manager = manager_new(master, master->options, master->endTime, master->bootstrapEndTime,
+            managerSeed, element->preloadPath.string->str,
             element->environment.isSet ? element->environment.string->str : NULL);
 
     message("registering plugins and hosts");
 
-    /* register the components needed by each slave.
-     * this must be done after slaves are available so we can send them messages */
+    /* register the components needed by each manager.
+     * this must be done after managers are available so we can send them messages */
     _master_registerPlugins(master);
     _master_registerHosts(master);
 
@@ -461,8 +461,8 @@ gint master_run(Master* master) {
         shadow_logger_setEnableBuffering(shadow_logger_getDefault(), TRUE);
     }
 
-    /* start running each slave */
-    slave_run(master->slave);
+    /* start running each manager */
+    manager_run(master->manager);
 
     /* only need to disable buffering if it was enabled, otherwise
      * don't log the message as it may confuse the user. */
@@ -473,15 +473,15 @@ gint master_run(Master* master) {
 
     message("simulation finished, cleaning up now");
 
-    return slave_free(master->slave);
+    return manager_free(master->manager);
 }
 
-gboolean master_slaveFinishedCurrentRound(Master* master, SimulationTime minNextEventTime,
+gboolean master_managerFinishedCurrentRound(Master* master, SimulationTime minNextEventTime,
         SimulationTime* executeWindowStart, SimulationTime* executeWindowEnd) {
     MAGIC_ASSERT(master);
     utility_assert(executeWindowStart && executeWindowEnd);
 
-    /* TODO: once we get multiple slaves, we have to block them here
+    /* TODO: once we get multiple managers, we have to block them here
      * until they have all notified us that they are finished */
 
     /* update our detected min jump time */
