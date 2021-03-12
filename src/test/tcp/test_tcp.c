@@ -496,7 +496,7 @@ static int _test_iov_client(int serverfd)
         iov[i].iov_len = 0;
     }
 
-    const char block_3_data[] = "make america great again! ;)";
+    const char block_3_data[] = "The quick brown fox jumps over the lazy dog";
     iov[1023].iov_base = (void*)block_3_data;
     iov[1023].iov_len = strlen(block_3_data);
 
@@ -615,31 +615,31 @@ static int _test_iov_server(int clientfd)
     /****
      **** read into two bases
      ****/
-    const char block_3_data[] = "make america great again! ;)";
+    const char block_3_data[] = "The quick brown fox jumps over the lazy dog";
 
     for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
         iov[i].iov_base = sharedreadbuf;
         iov[i].iov_len = 0;
     }
 
-    size_t readbuf1_size = 21;
+    size_t readbuf1_size = 29;
     void* readbuf1 = calloc(1, readbuf1_size);
     for(int j = 0; j < (readbuf1_size); j++) {
         ((char*)readbuf1)[j] = 'M';
     }
     iov[441].iov_base = readbuf1;
-    iov[441].iov_len = 12;
+    iov[441].iov_len = 19;
 
     // to contain data read by readv(). "- 1" to discount the
     // nul-terminator
     const size_t num_real_bytes2 = (sizeof block_3_data - 1);
-    size_t readbuf2_size = (num_real_bytes2 - 12) + 5;
+    size_t readbuf2_size = (num_real_bytes2 - 19) + 5;
     void* readbuf2 = calloc(1, readbuf2_size);
     for(int j = 0; j < (readbuf2_size); j++) {
         ((char*)readbuf2)[j] = 'N';
     }
     iov[820].iov_base = readbuf2;
-    iov[820].iov_len = 16;
+    iov[820].iov_len = 24;
 
     MYLOG("start readv()ing... ");
     rv = readv(clientfd, iov, ARRAY_LENGTH(iov));
@@ -656,7 +656,7 @@ static int _test_iov_server(int clientfd)
     for (int i = 0; i < ARRAY_LENGTH(iov); ++i) {
         if (i == 441 || i == 820) {
             // readv should not have touched the iov_len
-            const size_t expected_len = (i == 441) ? 12 : 16;
+            const size_t expected_len = (i == 441) ? 19 : 24;
             if (iov[i].iov_len != expected_len) {
                 LOG_ERROR_AND_RETURN(
                     "readv produces wrong iov_len: %zu, expected: %zu",
@@ -669,16 +669,16 @@ static int _test_iov_server(int clientfd)
         }
     }
 
-    if (memcmp(readbuf1, "make america", 12)) {
+    if (memcmp(readbuf1, "The quick brown fox", 19)) {
         LOG_ERROR_AND_RETURN("read data has incorrect bytes");
     }
-    if (memcmp(readbuf1 + 12, "MMMMMMMMM", 9)) {
+    if (memcmp(readbuf1 + 19, "MMMMMMMMM", 9)) {
         LOG_ERROR_AND_RETURN("readv() touched more memory than it should have");
     }
-    if (memcmp(readbuf2, " great again! ;)", 16)) {
+    if (memcmp(readbuf2, " jumps over the lazy dog", 24)) {
         LOG_ERROR_AND_RETURN("read data has incorrect bytes");
     }
-    if (memcmp(readbuf2 + 16, "NNNNN", 5)) {
+    if (memcmp(readbuf2 + 24, "NNNNN", 5)) {
         LOG_ERROR_AND_RETURN("readv() touched more memory than it should have");
     }
 
