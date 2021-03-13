@@ -206,7 +206,7 @@ static void _process_terminate_threads(Process* proc) {
     g_hash_table_iter_init(&iter, proc->threads);
     while (g_hash_table_iter_next(&iter, &key, &value)) {
         Thread* thread = value;
-        if(thread_isLeader(thread)) {
+        if (thread_isLeader(thread)) {
             leader = thread;
             thread_ref(leader);
         } else {
@@ -215,7 +215,7 @@ static void _process_terminate_threads(Process* proc) {
         g_hash_table_iter_remove(&iter);
     }
 
-    if(leader) {
+    if (leader) {
         _process_terminate_thread(proc, leader);
         thread_unref(leader);
     }
