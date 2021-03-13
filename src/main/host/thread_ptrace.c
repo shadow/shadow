@@ -1088,36 +1088,40 @@ static void _threadptrace_terminateHelper(ThreadPtrace* thread) {
     // First let's make sure that the thread is detached
     if (!thread->needAttachment) {
         // Still attached, detach before killing
-        info("Detaching attached native thread %d from pgroup %d now", thread->base.nativeTid, thread->base.nativePid);
+        info("Detaching attached native thread %d from pgroup %d now", thread->base.nativeTid,
+             thread->base.nativePid);
         if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, SIGSTOP) < 0) {
-            error("ptrace(DETACH) error %d while detaching from thread %d: %s", errno, thread->base.nativeTid, g_strerror(errno));
+            error("ptrace(DETACH) error %d while detaching from thread %d: %s", errno,
+                  thread->base.nativeTid, g_strerror(errno));
         }
         thread->needAttachment = true;
     }
 
     // Already detached, kill the thread after making sure that it still exists
     if (kill(thread->base.nativeTid, 0) == 0) {
-        info("Killing detached native thread %d from pgroup %d now", thread->base.nativeTid, thread->base.nativePid);
-        if(syscall(SYS_tgkill, thread->base.nativePid, thread->base.nativeTid, SIGKILL) < 0) {
-            warning("tgkill(pid=%d,tid=%d) error %d: %s", thread->base.nativePid, thread->base.nativeTid, errno, g_strerror(errno));
+        info("Killing detached native thread %d from pgroup %d now", thread->base.nativeTid,
+             thread->base.nativePid);
+        if (syscall(SYS_tgkill, thread->base.nativePid, thread->base.nativeTid, SIGKILL) < 0) {
+            warning("tgkill(pid=%d,tid=%d) error %d: %s", thread->base.nativePid,
+                    thread->base.nativeTid, errno, g_strerror(errno));
         }
-    } 
+    }
 
     // Reap the process, but only once the other threads have been killed.
     // There is an assumption here that terminate is called on the main thread last.
-    if(thread_isLeader(&thread->base)) {
+    if (thread_isLeader(&thread->base)) {
         info("Reaping pgroup %d now", thread->base.nativePid);
         int wstatus = 0;
-        if(waitpid(thread->base.nativePid, &wstatus, __WALL) < 0) {
+        if (waitpid(thread->base.nativePid, &wstatus, __WALL) < 0) {
             error("waitpid error %d: %s", errno, g_strerror(errno));
         }
 
         StopReason reason = _getStopReason(wstatus);
         if (reason.type != STOPREASON_EXITED_NORMAL && reason.type != STOPREASON_EXITED_SIGNAL) {
             warning("Expected process %d to exit after SIGKILL, instead received status %d",
-                thread->base.nativePid, wstatus);
+                    thread->base.nativePid, wstatus);
         }
-         _threadptrace_updateChildState(thread, reason);
+        _threadptrace_updateChildState(thread, reason);
     } else {
         thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
         thread->returnCode = return_code_for_signal(SIGTERM);
