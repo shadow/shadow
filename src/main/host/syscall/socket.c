@@ -611,7 +611,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             CompatSocket compat_socket = compatsocket_fromLegacySocket(socket_desc);
             host_associateInterface(sys->host, &compat_socket, bindAddr);
         }
-    } else { // DT_TCPSOCKET
+    } else if (descriptor_getType(desc) == DT_TCPSOCKET) {
         errcode = tcp_getConnectionError((TCP*)socket_desc);
 
         debug("connection error state is currently %i", errcode);

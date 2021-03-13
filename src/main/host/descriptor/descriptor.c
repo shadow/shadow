@@ -237,3 +237,8 @@ void descriptor_addFlags(LegacyDescriptor* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
     descriptor->flags |= flags;
 }
+
+void descriptor_removeFlags(LegacyDescriptor* descriptor, gint flags) {
+    MAGIC_ASSERT(descriptor);
+    descriptor->flags &= ~flags;
+}
