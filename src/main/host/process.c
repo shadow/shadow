@@ -190,17 +190,34 @@ static void _process_reapThread(Process* process, Thread* thread) {
     }
 }
 
+static void _process_terminate_thread(Process* proc, Thread* thread) {
+    if (thread_isRunning(thread)) {
+        warning("Terminating still-running thread %d", thread_getID(thread));
+    }
+    _process_reapThread(proc, thread);
+}
+
 static void _process_terminate_threads(Process* proc) {
+    // Terminate the main thread last
+    Thread* leader = NULL;
     GHashTableIter iter;
-    g_hash_table_iter_init(&iter, proc->threads);
     gpointer key, value;
+
+    g_hash_table_iter_init(&iter, proc->threads);
     while (g_hash_table_iter_next(&iter, &key, &value)) {
         Thread* thread = value;
-        if (thread_isRunning(thread)) {
-            warning("Terminating still-running thread %d", thread_getID(thread));
+        if(thread_isLeader(thread)) {
+            leader = thread;
+            thread_ref(leader);
+        } else {
+            _process_terminate_thread(proc, thread);
         }
-        _process_reapThread(proc, thread);
         g_hash_table_iter_remove(&iter);
+    }
+
+    if(leader) {
+        _process_terminate_thread(proc, leader);
+        thread_unref(leader);
     }
 }
 

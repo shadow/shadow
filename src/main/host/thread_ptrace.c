@@ -1079,41 +1079,59 @@ bool threadptrace_isRunning(Thread* base) {
     return false;
 }
 
+static void _threadptrace_terminateHelper(ThreadPtrace* thread) {
+    // Nothing to do if we already exited
+    if (!threadptrace_isRunning(&thread->base)) {
+        return;
+    }
+
+    // First let's make sure that the thread is detached
+    if (!thread->needAttachment) {
+        // Still attached, detach before killing
+        info("Detaching attached native thread %d from pgroup %d now", thread->base.nativeTid, thread->base.nativePid);
+        if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, SIGSTOP) < 0) {
+            error("ptrace(DETACH) error %d while detaching from thread %d: %s", errno, thread->base.nativeTid, g_strerror(errno));
+        }
+        thread->needAttachment = true;
+    }
+
+    // Already detached, kill the thread after making sure that it still exists
+    if (kill(thread->base.nativeTid, 0) == 0) {
+        info("Killing detached native thread %d from pgroup %d now", thread->base.nativeTid, thread->base.nativePid);
+        if(syscall(SYS_tgkill, thread->base.nativePid, thread->base.nativeTid, SIGKILL) < 0) {
+            warning("tgkill(pid=%d,tid=%d) error %d: %s", thread->base.nativePid, thread->base.nativeTid, errno, g_strerror(errno));
+        }
+    } 
+
+    // Reap the process, but only once the other threads have been killed.
+    // There is an assumption here that terminate is called on the main thread last.
+    if(thread_isLeader(&thread->base)) {
+        info("Reaping pgroup %d now", thread->base.nativePid);
+        int wstatus = 0;
+        if(waitpid(thread->base.nativePid, &wstatus, __WALL) < 0) {
+            error("waitpid error %d: %s", errno, g_strerror(errno));
+        }
+
+        StopReason reason = _getStopReason(wstatus);
+        if (reason.type != STOPREASON_EXITED_NORMAL && reason.type != STOPREASON_EXITED_SIGNAL) {
+            warning("Expected process %d to exit after SIGKILL, instead received status %d",
+                thread->base.nativePid, wstatus);
+        }
+         _threadptrace_updateChildState(thread, reason);
+    } else {
+        thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
+        thread->returnCode = return_code_for_signal(SIGTERM);
+    }
+}
+
 void threadptrace_terminate(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-
+    _threadptrace_terminateHelper(thread);
     /* make sure we cleanup circular refs */
     if (thread->sys) {
         syscallhandler_unref(thread->sys);
         thread->sys = NULL;
     }
-
-    if (!threadptrace_isRunning(base)) {
-        return;
-    }
-
-    // need to kill() and not ptrace() since the process may not be stopped
-    if (kill(thread->base.nativeTid, SIGKILL) < 0) {
-        warning("kill %d: %s", thread->base.nativePid, g_strerror(errno));
-    }
-
-    // Wait for the exit ptrace-stop. Because the shadow process is the natural
-    // parent of the child (even if spawned from a task/thread other than this
-    // one), this also reaps the child.
-    int wstatus;
-    if (_waitpid_spin(thread->base.nativePid, &wstatus, 0) < 0) {
-        error("waitpid: %s", g_strerror(errno));
-        return;
-    }
-
-    StopReason reason = _getStopReason(wstatus);
-
-    if (reason.type != STOPREASON_EXITED_NORMAL && reason.type != STOPREASON_EXITED_SIGNAL) {
-        error("Expected process %d to exit after SIGKILL, instead received status %d",
-              thread->base.nativePid, wstatus);
-    }
-
-    _threadptrace_updateChildState(thread, reason);
 }
 
 int threadptrace_getReturnCode(Thread* base) {
