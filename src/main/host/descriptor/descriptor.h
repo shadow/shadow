@@ -36,6 +36,7 @@ gint* descriptor_getHandleReference(LegacyDescriptor* descriptor);
 gint descriptor_getFlags(LegacyDescriptor* descriptor);
 void descriptor_setFlags(LegacyDescriptor* descriptor, gint flags);
 void descriptor_addFlags(LegacyDescriptor* descriptor, gint flags);
+void descriptor_removeFlags(LegacyDescriptor* descriptor, gint flags);
 
 /*
  * One of the main functions of the descriptor is to track its poll status,
