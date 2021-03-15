@@ -125,7 +125,7 @@ static void _descriptortable_trimIndicesTail(DescriptorTable* table) {
     }
 }
 
-bool descriptortable_remove(DescriptorTable* table, int index) {
+CompatDescriptor* descriptortable_remove(DescriptorTable* table, int index) {
     MAGIC_ASSERT(table);
 
     if (g_hash_table_contains(table->descriptors, GINT_TO_POINTER(index))) {
@@ -134,13 +134,14 @@ bool descriptortable_remove(DescriptorTable* table, int index) {
         /* Make sure we do not operate on the descriptor after we remove it,
          * because that could cause it to be freed and invalidate it. */
         compatdescriptor_setHandle(descriptor, 0);
-        g_hash_table_remove(table->descriptors, GINT_TO_POINTER(index));
+        g_hash_table_steal(table->descriptors, GINT_TO_POINTER(index));
+
         g_queue_insert_sorted(table->availableIndices, GINT_TO_POINTER(index),
                               _descriptortable_compareInts, NULL);
         _descriptortable_trimIndicesTail(table);
-        return true;
+        return descriptor;
     } else {
-        return false;
+        return NULL;
     }
 }
 

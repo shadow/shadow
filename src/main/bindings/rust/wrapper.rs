@@ -400,7 +400,10 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn process_deregisterCompatDescriptor(proc_: *mut Process, handle: ::std::os::raw::c_int);
+    pub fn process_deregisterCompatDescriptor(
+        proc_: *mut Process,
+        handle: ::std::os::raw::c_int,
+    ) -> *mut CompatDescriptor;
 }
 extern "C" {
     pub fn process_getRegisteredCompatDescriptor(

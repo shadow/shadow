@@ -374,27 +374,63 @@ impl Descriptor {
         self.flags = flags;
     }
 
-    pub fn get_open_count(&self) -> usize {
-        Arc::<()>::strong_count(&self.open_count)
+    /// Close the descriptor, and if this is the last descriptor pointing to its file, close
+    /// the file as well.
+    pub fn close(self, event_queue: &mut EventQueue) -> Option<SyscallReturn> {
+        // this isn't subject to race conditions since we should never access descriptors
+        // from multiple threads at the same time
+        if Arc::<()>::strong_count(&self.open_count) == 1 {
+            Some(self.file.borrow_mut().close(event_queue))
+        } else {
+            None
+        }
+    }
+}
+
+/// Represents an owned reference to a legacy descriptor. Will decrement the descriptor's ref
+/// count when dropped.
+pub struct OwnedLegacyDescriptor(SyncSendPointer<c::LegacyDescriptor>);
+
+impl OwnedLegacyDescriptor {
+    /// Does not increment the legacy descriptor's ref count, but will decrement the ref count
+    /// when dropped.
+    pub fn new(ptr: *mut c::LegacyDescriptor) -> Self {
+        Self(SyncSendPointer(ptr))
+    }
+
+    pub fn ptr(&self) -> *mut c::LegacyDescriptor {
+        self.0.ptr()
+    }
+}
+
+impl Drop for OwnedLegacyDescriptor {
+    fn drop(&mut self) {
+        // unref the legacy descriptor object
+        unsafe { c::descriptor_unref(self.0.ptr() as *mut core::ffi::c_void) };
     }
 }
 
 // don't implement copy or clone without considering the legacy descriptor's ref count
 pub enum CompatDescriptor {
     New(Descriptor),
-    Legacy(SyncSendPointer<c::LegacyDescriptor>),
+    Legacy(OwnedLegacyDescriptor),
 }
 
 // will not compile if `CompatDescriptor` is not Send + Sync
 impl IsSend for CompatDescriptor {}
 impl IsSync for CompatDescriptor {}
 
-impl Drop for CompatDescriptor {
-    fn drop(&mut self) {
-        if let CompatDescriptor::Legacy(d) = self {
-            // unref the legacy descriptor object
-            unsafe { c::descriptor_unref(d.ptr() as *mut core::ffi::c_void) };
+impl CompatDescriptor {
+    pub fn into_raw(descriptor: Box<Self>) -> *mut Self {
+        Box::into_raw(descriptor)
+    }
+
+    pub fn from_raw(descriptor: *mut Self) -> Option<Box<Self>> {
+        if descriptor.is_null() {
+            return None;
         }
+
+        unsafe { Some(Box::from_raw(descriptor)) }
     }
 }
 
@@ -413,8 +449,8 @@ mod export {
     ) -> *mut CompatDescriptor {
         assert!(!legacy_descriptor.is_null());
 
-        let descriptor = CompatDescriptor::Legacy(SyncSendPointer(legacy_descriptor));
-        Box::into_raw(Box::new(descriptor))
+        let descriptor = CompatDescriptor::Legacy(OwnedLegacyDescriptor::new(legacy_descriptor));
+        CompatDescriptor::into_raw(Box::new(descriptor))
     }
 
     /// If the compat descriptor is a legacy descriptor, returns a pointer to the legacy
@@ -439,12 +475,7 @@ mod export {
     /// ref count.
     #[no_mangle]
     pub extern "C" fn compatdescriptor_free(descriptor: *mut CompatDescriptor) {
-        if descriptor.is_null() {
-            return;
-        }
-
-        let descriptor = unsafe { &mut *descriptor };
-        unsafe { Box::from_raw(descriptor) };
+        CompatDescriptor::from_raw(descriptor);
     }
 
     /// This is a no-op for non-legacy descriptors.

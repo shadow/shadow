@@ -37,12 +37,11 @@ int descriptortable_add(DescriptorTable* table, CompatDescriptor* descriptor);
 /* Stop storing the descriptor so that it can no longer be referenced. The table
  * index that was used to store the descriptor is cleared from the descriptor
  * and may be assigned to new descriptors that are later added to the table.
- * Returns true if the descriptor was found in the table and removed, and false
- * otherwise.
+ * Returns an owned pointer to the CompatDescriptor if the descriptor was found
+ * in the table and removed, and NULL otherwise.
  *
- * NOTE: this will unref the descriptor which may cause it to be freed. If you
- * still need access to it, you should ref it before calling this function. */
-bool descriptortable_remove(DescriptorTable* table, int index);
+ * NOTE: this will not unref the descriptor and you should do so manually. */
+CompatDescriptor* descriptortable_remove(DescriptorTable* table, int index);
 
 /* Returns the descriptor at the given table index, or NULL if we are not
  * storing a descriptor at the given index. */
