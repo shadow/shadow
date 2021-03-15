@@ -398,6 +398,20 @@ impl Drop for CompatDescriptor {
     }
 }
 
+impl CompatDescriptor {
+    pub fn into_raw(descriptor: Box<Self>) -> *mut Self {
+        Box::into_raw(descriptor)
+    }
+
+    pub fn from_raw(descriptor: *mut Self) -> Option<Box<Self>> {
+        if descriptor.is_null() {
+            return None;
+        }
+
+        unsafe { Some(Box::from_raw(descriptor)) }
+    }
+}
+
 mod export {
     use super::*;
 
@@ -414,7 +428,7 @@ mod export {
         assert!(!legacy_descriptor.is_null());
 
         let descriptor = CompatDescriptor::Legacy(SyncSendPointer(legacy_descriptor));
-        Box::into_raw(Box::new(descriptor))
+        CompatDescriptor::into_raw(Box::new(descriptor))
     }
 
     /// If the compat descriptor is a legacy descriptor, returns a pointer to the legacy
@@ -439,12 +453,7 @@ mod export {
     /// ref count.
     #[no_mangle]
     pub extern "C" fn compatdescriptor_free(descriptor: *mut CompatDescriptor) {
-        if descriptor.is_null() {
-            return;
-        }
-
-        let descriptor = unsafe { &mut *descriptor };
-        unsafe { Box::from_raw(descriptor) };
+        CompatDescriptor::from_raw(descriptor);
     }
 
     /// This is a no-op for non-legacy descriptors.

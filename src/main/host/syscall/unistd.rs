@@ -90,7 +90,10 @@ pub fn dup_helper(
     // clone the descriptor and register it
     let new_desc = CompatDescriptor::New(desc.clone());
     let new_fd = unsafe {
-        c::process_registerCompatDescriptor(sys.process, Box::into_raw(Box::new(new_desc)))
+        c::process_registerCompatDescriptor(
+            sys.process,
+            CompatDescriptor::into_raw(Box::new(new_desc)),
+        )
     };
 
     // return the new fd
@@ -354,13 +357,13 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: c::PluginPtr, flags: i32) ->
     fds[0] = unsafe {
         c::process_registerCompatDescriptor(
             sys.process,
-            Box::into_raw(Box::new(CompatDescriptor::New(reader_desc))),
+            CompatDescriptor::into_raw(Box::new(CompatDescriptor::New(reader_desc))),
         )
     };
     fds[1] = unsafe {
         c::process_registerCompatDescriptor(
             sys.process,
-            Box::into_raw(Box::new(CompatDescriptor::New(writer_desc))),
+            CompatDescriptor::into_raw(Box::new(CompatDescriptor::New(writer_desc))),
         )
     };
 
