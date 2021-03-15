@@ -795,9 +795,9 @@ int process_registerCompatDescriptor(Process* proc, CompatDescriptor* compatDesc
     return descriptortable_add(proc->descTable, compatDesc);
 }
 
-void process_deregisterCompatDescriptor(Process* proc, int handle) {
+CompatDescriptor* process_deregisterCompatDescriptor(Process* proc, int handle) {
     MAGIC_ASSERT(proc);
-    descriptortable_remove(proc->descTable, handle);
+    return descriptortable_remove(proc->descTable, handle);
 }
 
 CompatDescriptor* process_getRegisteredCompatDescriptor(Process* proc, int handle) {
@@ -826,7 +826,9 @@ void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
             host_disassociateInterface(proc->host, &compat_socket);
         }
         descriptor_setOwnerProcess(desc, NULL);
-        descriptortable_remove(proc->descTable, descriptor_getHandle(desc));
+        CompatDescriptor* compatDesc =
+            descriptortable_remove(proc->descTable, descriptor_getHandle(desc));
+        compatdescriptor_free(compatDesc);
     }
 }
 

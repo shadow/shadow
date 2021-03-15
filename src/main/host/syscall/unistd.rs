@@ -18,8 +18,6 @@ pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
 
     debug!("Trying to close fd {}", fd);
 
-    let result;
-
     // scope used to make sure that desc cannot be used after deregistering it
     {
         // get the descriptor, or return early if it doesn't exist
@@ -29,31 +27,26 @@ pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
         };
 
         // if it's a legacy descriptor, use the C syscall handler instead
-        let desc = match desc {
-            CompatDescriptor::New(d) => d,
-            CompatDescriptor::Legacy(_) => unsafe {
-                return c::syscallhandler_close(
+        if let CompatDescriptor::Legacy(_) = desc {
+            return unsafe {
+                c::syscallhandler_close(
                     sys as *mut c::SysCallHandler,
                     args as *const c::SysCallArgs,
-                );
-            },
-        };
-
-        // if this is the last remaining descriptor
-        if desc.get_open_count() == 1 {
-            let posix_file = desc.get_file();
-
-            result = Some(EventQueue::queue_and_run(|event_queue| {
-                posix_file.borrow_mut().close(event_queue)
-            }));
-        } else {
-            result = None;
+                )
+            };
         }
     }
 
     // according to "man 2 close", in Linux any errors that may occur will happen after the fd is
     // released, so we should always deregister the descriptor
-    unsafe { c::process_deregisterCompatDescriptor(sys.process, fd) };
+    let desc = unsafe { c::process_deregisterCompatDescriptor(sys.process, fd) };
+    let desc = CompatDescriptor::from_raw(desc).unwrap();
+    let desc = match *desc {
+        CompatDescriptor::New(d) => d,
+        _ => unreachable!(),
+    };
+
+    let result = EventQueue::queue_and_run(|event_queue| desc.close(event_queue));
 
     if let Some(result) = result {
         result.into()

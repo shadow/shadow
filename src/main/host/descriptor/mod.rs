@@ -374,8 +374,16 @@ impl Descriptor {
         self.flags = flags;
     }
 
-    pub fn get_open_count(&self) -> usize {
-        Arc::<()>::strong_count(&self.open_count)
+    /// Close the descriptor, and if this is the last descriptor pointing to its file, close
+    /// the file as well.
+    pub fn close(self, event_queue: &mut EventQueue) -> Option<SyscallReturn> {
+        // this isn't subject to race conditions since we should never access descriptors
+        // from multiple threads at the same time
+        if Arc::<()>::strong_count(&self.open_count) == 1 {
+            Some(self.file.borrow_mut().close(event_queue))
+        } else {
+            None
+        }
     }
 }
 
