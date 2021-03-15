@@ -379,24 +379,38 @@ impl Descriptor {
     }
 }
 
+/// Represents an owned reference to a legacy descriptor. Will decrement the descriptor's ref
+/// count when dropped.
+pub struct OwnedLegacyDescriptor(SyncSendPointer<c::LegacyDescriptor>);
+
+impl OwnedLegacyDescriptor {
+    /// Does not increment the legacy descriptor's ref count, but will decrement the ref count
+    /// when dropped.
+    pub fn new(ptr: *mut c::LegacyDescriptor) -> Self {
+        Self(SyncSendPointer(ptr))
+    }
+
+    pub fn ptr(&self) -> *mut c::LegacyDescriptor {
+        self.0.ptr()
+    }
+}
+
+impl Drop for OwnedLegacyDescriptor {
+    fn drop(&mut self) {
+        // unref the legacy descriptor object
+        unsafe { c::descriptor_unref(self.0.ptr() as *mut core::ffi::c_void) };
+    }
+}
+
 // don't implement copy or clone without considering the legacy descriptor's ref count
 pub enum CompatDescriptor {
     New(Descriptor),
-    Legacy(SyncSendPointer<c::LegacyDescriptor>),
+    Legacy(OwnedLegacyDescriptor),
 }
 
 // will not compile if `CompatDescriptor` is not Send + Sync
 impl IsSend for CompatDescriptor {}
 impl IsSync for CompatDescriptor {}
-
-impl Drop for CompatDescriptor {
-    fn drop(&mut self) {
-        if let CompatDescriptor::Legacy(d) = self {
-            // unref the legacy descriptor object
-            unsafe { c::descriptor_unref(d.ptr() as *mut core::ffi::c_void) };
-        }
-    }
-}
 
 impl CompatDescriptor {
     pub fn into_raw(descriptor: Box<Self>) -> *mut Self {
@@ -427,7 +441,7 @@ mod export {
     ) -> *mut CompatDescriptor {
         assert!(!legacy_descriptor.is_null());
 
-        let descriptor = CompatDescriptor::Legacy(SyncSendPointer(legacy_descriptor));
+        let descriptor = CompatDescriptor::Legacy(OwnedLegacyDescriptor::new(legacy_descriptor));
         CompatDescriptor::into_raw(Box::new(descriptor))
     }
 
