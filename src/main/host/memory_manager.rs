@@ -121,7 +121,7 @@ impl ShmFile {
         fcntl::fallocate(
             self.shm_file.as_raw_fd(),
             fcntl::FallocateFlags::FALLOC_FL_PUNCH_HOLE
-                & fcntl::FallocateFlags::FALLOC_FL_KEEP_SIZE,
+                | fcntl::FallocateFlags::FALLOC_FL_KEEP_SIZE,
             interval.start as i64,
             interval.len() as i64,
         )
@@ -450,7 +450,7 @@ impl MemoryManager {
                     // Unmap range from Shadow's address space.
                     unsafe {
                         sys::mman::munmap(
-                            (left_region.shadow_base as usize + left.end) as *mut c_void,
+                            (left_region.shadow_base.add(left.len())) as *mut c_void,
                             removed_range.len(),
                         )
                     }
