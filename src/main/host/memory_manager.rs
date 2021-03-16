@@ -18,6 +18,15 @@ use std::process;
 static HEAP_PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
 static STACK_PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
 
+#[cfg(test)]
+#[test]
+/// We assume throughout that we can do arithmetic on void pointers as if the size of "void" was 1.
+/// While this seems like a reasonable assumption, it doesn't seem to be documented or guaranteed
+/// anywhere, so we validate it:
+fn test_validate_void_size() {
+    assert_eq!(std::mem::size_of::<c_void>(), 1);
+}
+
 fn page_size() -> usize {
     unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize }
 }
@@ -904,7 +913,7 @@ impl MemoryManager {
         size: usize,
         prot: i32,
     ) -> nix::Result<()> {
-        debug!("mprotect({:?}, {}, {:?}", addr, size, prot);
+        debug!("mprotect({:?}, {}, {:?})", addr, size, prot);
         thread.native_mprotect(addr, size, prot)?;
         let protflags = sys::mman::ProtFlags::from_bits(prot).unwrap();
 

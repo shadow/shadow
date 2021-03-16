@@ -187,6 +187,8 @@ fn test_mmap_anon() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Exercise the MemoryManager logic for unmapping the front of a mapped region, validating that
+/// the still-mapped part of the region is still accessible.  Regression test for #1188.
 fn test_munmap_front() -> Result<(), Box<dyn Error>> {
     let buf_ptr = mmap_and_init_buf(3 * page_size());
     let rv = unsafe { libc::munmap(buf_ptr, page_size()) };
@@ -200,6 +202,8 @@ fn test_munmap_front() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Exercise the MemoryManager logic for unmapping the back of a mapped region, validating that the
+/// still-mapped part of the region is still accessible.  Regression test for #1188.
 fn test_munmap_back() -> Result<(), Box<dyn Error>> {
     let buf_ptr = mmap_and_init_buf(3 * page_size());
     let rv = unsafe { libc::munmap(buf_ptr.add(page_size() * 2), page_size()) };
@@ -213,6 +217,8 @@ fn test_munmap_back() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Exercise the MemoryManager logic for unmapping the middle of a mapped region, validating that
+/// the still-mapped parts of the region is still accessible.  Regression test for #1188.
 fn test_munmap_middle() -> Result<(), Box<dyn Error>> {
     let buf_ptr = mmap_and_init_buf(3 * page_size());
     let rv = unsafe { libc::munmap(buf_ptr.add(page_size()), page_size()) };
