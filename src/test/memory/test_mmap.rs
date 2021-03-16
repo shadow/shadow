@@ -120,6 +120,12 @@ fn mmap_and_init_buf(size: usize) -> *mut libc::c_void {
     test_utils::assert_true_else_errno(buf_ptr != libc::MAP_FAILED);
 
     let mut buf = unsafe { std::slice::from_raw_parts_mut::<u8>(buf_ptr as *mut u8, size) };
+
+    // mmap'd private anonymous pages should always be zero'd
+    for x in buf.iter() {
+        assert_eq!(*x, 0u8);
+    }
+
     init_buf(&mut buf);
 
     buf_ptr
@@ -176,6 +182,54 @@ fn test_mmap_anon() -> Result<(), Box<dyn Error>> {
 
     // Unmap allocated memory
     let rv = unsafe { libc::munmap(buf_ptr, shrunk_size) };
+    nix::errno::Errno::result(rv)?;
+
+    Ok(())
+}
+
+/// Exercise the MemoryManager logic for unmapping the front of a mapped region, validating that
+/// the still-mapped part of the region is still accessible.  Regression test for #1188.
+fn test_munmap_front() -> Result<(), Box<dyn Error>> {
+    let buf_ptr = mmap_and_init_buf(3 * page_size());
+    let rv = unsafe { libc::munmap(buf_ptr, page_size()) };
+    nix::errno::Errno::result(rv)?;
+    validate_shadow_access(&unsafe {
+        std::slice::from_raw_parts::<u8>(buf_ptr.add(page_size()) as *const u8, 2 * page_size())
+    })?;
+    let rv = unsafe { libc::munmap(buf_ptr, 3 * page_size()) };
+    nix::errno::Errno::result(rv)?;
+
+    Ok(())
+}
+
+/// Exercise the MemoryManager logic for unmapping the back of a mapped region, validating that the
+/// still-mapped part of the region is still accessible.  Regression test for #1188.
+fn test_munmap_back() -> Result<(), Box<dyn Error>> {
+    let buf_ptr = mmap_and_init_buf(3 * page_size());
+    let rv = unsafe { libc::munmap(buf_ptr.add(page_size() * 2), page_size()) };
+    nix::errno::Errno::result(rv)?;
+    validate_shadow_access(&unsafe {
+        std::slice::from_raw_parts::<u8>(buf_ptr as *const u8, 2 * page_size())
+    })?;
+    let rv = unsafe { libc::munmap(buf_ptr, 3 * page_size()) };
+    nix::errno::Errno::result(rv)?;
+
+    Ok(())
+}
+
+/// Exercise the MemoryManager logic for unmapping the middle of a mapped region, validating that
+/// the still-mapped parts of the region is still accessible.  Regression test for #1188.
+fn test_munmap_middle() -> Result<(), Box<dyn Error>> {
+    let buf_ptr = mmap_and_init_buf(3 * page_size());
+    let rv = unsafe { libc::munmap(buf_ptr.add(page_size()), page_size()) };
+    nix::errno::Errno::result(rv)?;
+    validate_shadow_access(&unsafe {
+        std::slice::from_raw_parts::<u8>(buf_ptr as *const u8, page_size())
+    })?;
+    validate_shadow_access(&unsafe {
+        std::slice::from_raw_parts::<u8>(buf_ptr.add(2 * page_size()) as *const u8, page_size())
+    })?;
+    let rv = unsafe { libc::munmap(buf_ptr, 3 * page_size()) };
     nix::errno::Errno::result(rv)?;
 
     Ok(())
@@ -292,6 +346,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         test_utils::ShadowTest::new(
             "test_mmap_anon",
             test_mmap_anon,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_munmap_front",
+            test_munmap_front,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_munmap_middle",
+            test_munmap_middle,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_munmap_back",
+            test_munmap_back,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(

@@ -1,7 +1,7 @@
 use crate::cshadow as c;
 use std::convert::From;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct PluginPtr {
     ptr: c::PluginPtr,
 }
