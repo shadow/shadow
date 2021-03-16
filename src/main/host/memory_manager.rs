@@ -5,7 +5,7 @@ use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
 use crate::utility::syscall;
-use log::{debug, info, warn};
+use log::{debug, info, log, warn};
 use nix::{fcntl, sys};
 use std::collections::HashMap;
 use std::fs::File;
@@ -44,6 +44,25 @@ struct Region {
     sharing: proc_maps::Sharing,
     // The *original* path. Not the path to our mem file.
     original_path: Option<proc_maps::MappingPath>,
+}
+
+#[allow(dead_code)]
+fn log_regions<It: Iterator<Item = (Interval, Region)>>(level: log::Level, regions: It) {
+    if log::log_enabled!(level) {
+        log!(level, "MemoryManager regions:");
+        for (interval, mapping) in regions {
+            // Invoking the logger multiple times may cause these to be interleaved with other
+            // log statements, but loggers may truncate the result if we instead formatted this
+            // into one giant string.
+            log!(
+                level,
+                "{:x}-{:x} {:?}",
+                interval.start,
+                interval.end,
+                mapping
+            );
+        }
+    }
 }
 
 /// Manages the address-space for a plugin process.
@@ -91,19 +110,20 @@ impl ShmFile {
         fcntl::posix_fallocate(
             self.shm_file.as_raw_fd(),
             interval.start as i64,
-            (interval.end - interval.start) as i64,
+            interval.len() as i64,
         )
         .unwrap();
     }
 
     /// De-allocate space in the file for the given interval.
     fn dealloc(&self, interval: &Interval) {
+        debug!("dealloc {:?}", interval);
         fcntl::fallocate(
             self.shm_file.as_raw_fd(),
             fcntl::FallocateFlags::FALLOC_FL_PUNCH_HOLE
                 & fcntl::FallocateFlags::FALLOC_FL_KEEP_SIZE,
             interval.start as i64,
-            (interval.end - interval.start) as i64,
+            interval.len() as i64,
         )
         .unwrap();
     }
@@ -113,7 +133,7 @@ impl ShmFile {
         unsafe {
             sys::mman::mmap(
                 std::ptr::null_mut(),
-                interval.end - interval.start,
+                interval.len(),
                 sys::mman::ProtFlags::from_bits(prot).unwrap(),
                 sys::mman::MapFlags::MAP_SHARED,
                 self.shm_file.as_raw_fd(),
@@ -195,13 +215,6 @@ fn get_regions(pid: libc::pid_t) -> IntervalMap<Region> {
         // Regions shouldn't overlap.
         assert_eq!(mutations.len(), 0);
     }
-    // Useful for debugging.
-    /*
-    println!("regions");
-    for (interval, mapping) in regions.iter() {
-        println!("{:?} {:?}", interval, mapping);
-    }
-    */
     regions
 }
 
@@ -285,21 +298,14 @@ fn map_stack(shm_file: &ShmFile, regions: &mut IntervalMap<Region>) -> usize {
 
 impl Drop for MemoryManager {
     fn drop(&mut self) {
-        {
-            info!("MemoryManager misses (consider extending MemoryManager to remap regions with a high miss count)");
+        if self.misses_by_path.is_empty() {
+            info!("MemoryManager misses: None");
+        } else {
+            info!("MemoryManager misses: (consider extending MemoryManager to remap regions with a high miss count)");
             for (path, count) in self.misses_by_path.iter() {
                 info!("\t{} in {}", count, path);
             }
         }
-        // Useful for debugging
-        /*
-        println!("MemoryManager regions");
-        let regions = self.regions.borrow();
-        for (interval, mapping) in regions.iter() {
-            println!("{:?} {:?}", interval, mapping);
-        }
-        drop(regions);
-        */
 
         // Mappings are no longer valid. Clear out our map, and unmap those regions from Shadow's
         // address space.
@@ -399,17 +405,16 @@ impl MemoryManager {
                         continue;
                     }
                     let removed_range = interval.start..new_start;
-                    let removed_size = removed_range.end - removed_range.start;
 
                     // Deallocate
                     self.shm_file.dealloc(&removed_range);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { sys::mman::munmap(region.shadow_base, removed_size) }
+                    unsafe { sys::mman::munmap(region.shadow_base, removed_range.len()) }
                         .unwrap_or_else(|e| warn!("munmap: {}", e));
 
                     // Adjust base
-                    region.shadow_base = unsafe { region.shadow_base.add(removed_size) };
+                    region.shadow_base = unsafe { region.shadow_base.add(removed_range.len()) };
                 }
                 Mutation::ModifiedEnd(interval, new_end) => {
                     let (_, region) = self.regions.get(interval.start).unwrap();
@@ -422,8 +427,13 @@ impl MemoryManager {
                     self.shm_file.dealloc(&removed_range);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { sys::mman::munmap(region.shadow_base, removed_range.len()) }
-                        .unwrap_or_else(|e| warn!("munmap: {}", e));
+                    unsafe {
+                        sys::mman::munmap(
+                            region.shadow_base.add((interval.start..new_end).len()),
+                            removed_range.len(),
+                        )
+                    }
+                    .unwrap_or_else(|e| warn!("munmap: {}", e));
                 }
                 Mutation::Split(_original, left, right) => {
                     let (_, left_region) = self.regions.get(left.start).unwrap();
@@ -617,6 +627,7 @@ impl MemoryManager {
         addr: PluginPtr,
         length: usize,
     ) -> nix::Result<()> {
+        debug!("handle_munmap({:?}, {})", addr, length);
         thread.native_munmap(addr, length)?;
         if length == 0 {
             return Ok(());
@@ -893,6 +904,7 @@ impl MemoryManager {
         size: usize,
         prot: i32,
     ) -> nix::Result<()> {
+        debug!("mprotect({:?}, {}, {:?}", addr, size, prot);
         thread.native_mprotect(addr, size, prot)?;
         let protflags = sys::mman::ProtFlags::from_bits(prot).unwrap();
 
@@ -921,7 +933,15 @@ impl MemoryManager {
                                 protflags,
                             )
                         }
-                        .unwrap_or_else(|e| warn!("mprotect: {}", e));
+                        .unwrap_or_else(|e| {
+                            warn!(
+                                "mprotect({:?}, {:?}, {:?}): {}",
+                                modified_region.shadow_base,
+                                modified_interval.len(),
+                                protflags,
+                                e
+                            );
+                        });
                     }
                     // Reinsert region with updated prot.
                     assert!(self
