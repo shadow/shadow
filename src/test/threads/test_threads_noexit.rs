@@ -5,6 +5,7 @@
 
 use std::error::Error;
 
+// Should be > the stoptime from the test config for this test to be meaningful
 const NUM_SECONDS: u64 = 3;
 
 fn main() -> Result<(), Box<dyn Error>> {

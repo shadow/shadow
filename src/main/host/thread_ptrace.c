@@ -1079,59 +1079,60 @@ bool threadptrace_isRunning(Thread* base) {
     return false;
 }
 
-static void _threadptrace_terminateHelper(ThreadPtrace* thread) {
-    // Nothing to do if we already exited
-    if (!threadptrace_isRunning(&thread->base)) {
-        return;
+static void _threadptrace_killProcess(ThreadPtrace* thread) {
+    info("Killing process %d now", thread->base.nativePid);
+
+    if (kill(thread->base.nativePid, SIGKILL) < 0 && errno != ESRCH) {
+        warning("kill(pid=%d) error %d: %s", thread->base.nativePid, errno, g_strerror(errno));
+    }
+}
+
+static void _threadptrace_reapProcess(ThreadPtrace* thread) {
+    info("Reaping process %d now", thread->base.nativePid);
+
+    int wstatus = 0;
+    if (waitpid(thread->base.nativePid, &wstatus, __WALL) < 0) {
+        error("waitpid(%d) error %d: %s", thread->base.nativePid, errno, g_strerror(errno));
     }
 
+    StopReason reason = _getStopReason(wstatus);
+    if (reason.type != STOPREASON_EXITED_NORMAL && reason.type != STOPREASON_EXITED_SIGNAL) {
+        warning("Expected process %d to have exited, instead received status %d",
+                thread->base.nativePid, wstatus);
+    }
+
+    _threadptrace_updateChildState(thread, reason);
+}
+
+static void _threadptrace_doTerminate(ThreadPtrace* thread) {
     // First let's make sure that the thread is detached
     if (!thread->needAttachment) {
         // Still attached, detach before killing
-        info("Detaching attached native thread %d from pgroup %d now", thread->base.nativeTid,
-             thread->base.nativePid);
-        if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, SIGSTOP) < 0) {
-            error("ptrace(DETACH) error %d while detaching from thread %d: %s", errno,
-                  thread->base.nativeTid, g_strerror(errno));
-        }
-        thread->needAttachment = true;
+        _threadptrace_doDetach(thread);
     }
 
-    // Already detached, kill the thread after making sure that it still exists
-    if (kill(thread->base.nativeTid, 0) == 0) {
-        info("Killing detached native thread %d from pgroup %d now", thread->base.nativeTid,
-             thread->base.nativePid);
-        if (syscall(SYS_tgkill, thread->base.nativePid, thread->base.nativeTid, SIGKILL) < 0) {
-            warning("tgkill(pid=%d,tid=%d) error %d: %s", thread->base.nativePid,
-                    thread->base.nativeTid, errno, g_strerror(errno));
-        }
-    }
+    // Kill the process, and its OK if it no longer exists because it was already killed
+    _threadptrace_killProcess(thread);
 
     // Reap the process, but only once the other threads have been killed.
     // There is an assumption here that terminate is called on the main thread last.
     if (thread_isLeader(&thread->base)) {
-        info("Reaping pgroup %d now", thread->base.nativePid);
-        int wstatus = 0;
-        if (waitpid(thread->base.nativePid, &wstatus, __WALL) < 0) {
-            error("waitpid error %d: %s", errno, g_strerror(errno));
-        }
-
-        StopReason reason = _getStopReason(wstatus);
-        if (reason.type != STOPREASON_EXITED_NORMAL && reason.type != STOPREASON_EXITED_SIGNAL) {
-            warning("Expected process %d to exit after SIGKILL, instead received status %d",
-                    thread->base.nativePid, wstatus);
-        }
-        _threadptrace_updateChildState(thread, reason);
+        _threadptrace_reapProcess(thread);
     } else {
-        thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
-        thread->returnCode = return_code_for_signal(SIGTERM);
+        StopReason reason = {.type = STOPREASON_EXITED_SIGNAL, .exited_signal.signal = SIGTERM};
+        _threadptrace_updateChildState(thread, reason);
     }
 }
 
 void threadptrace_terminate(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-    _threadptrace_terminateHelper(thread);
-    /* make sure we cleanup circular refs */
+
+    // Nothing to do if we already exited
+    if (threadptrace_isRunning(&thread->base)) {
+        _threadptrace_doTerminate(thread);
+    }
+
+    // Ensure that we cleanup circular refs, even if the thread is not running
     if (thread->sys) {
         syscallhandler_unref(thread->sys);
         thread->sys = NULL;
