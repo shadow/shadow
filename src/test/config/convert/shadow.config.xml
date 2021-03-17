@@ -16,8 +16,7 @@
       <data key="d4">0.0</data>
     </edge>
   </graph>
-</graphml>
-]]></topology>
+</graphml>]]></topology>
   <kill time="5"/>
   <plugin id="testconfig" path="test-config-convert"/>
   <node id="testclient" quantity="1">

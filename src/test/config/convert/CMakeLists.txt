@@ -3,6 +3,9 @@
 # Second, ensure this XML file is understandable by Shadow by running it with the Shadow executable
 # Third, make a diff between the files generated and the example files
 
+# Converting between XML and YAML, and then back again, will not always produce *identical* results
+# if the elements contain leading or trailing whitespace, so this characteristic should not be relied on.
+
 add_executable(test-config-convert test_config.c)
 
 # Convert a XML file to YAML
