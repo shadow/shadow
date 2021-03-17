@@ -145,13 +145,11 @@ int main(int argc, char** argv) {
 
     g_test_add("/clone/clone_minimal", void, NULL, NULL, _clone_minimal, NULL);
     g_test_add("/clone/test_clone_clear_tid", void, NULL, NULL, _testCloneClearTid, NULL);
-    // FIXME: currently hangs under shadow. The exit_group sycall is executed
-    // natively from the thread leader, which does cause all threads to exit.
-    // However, the corresponding Shadow Thread object remains blocked by its
-    // nanosleep syscall. We need to add a handler for the exit_group syscall
-    // to wake-up/terminate the other threads in the process.
-    // g_test_add("/clone/clone_child_exits_after_leader", void, NULL, NULL,
-    // _clone_child_exits_after_leader, NULL);
+
+    // This test should be last; otherwise the thread group leader (this
+    // thread) may exit before the clone-child under test.
+    g_test_add("/clone/clone_child_exits_after_leader", void, NULL, NULL,
+               _clone_child_exits_after_leader, NULL);
 
     return g_test_run();
 }
