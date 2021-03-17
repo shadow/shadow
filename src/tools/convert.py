@@ -46,6 +46,8 @@ def yaml_str_presenter(dumper, data):
     Convert a string YAML representation to be more human friendly
     '''
     if len(data.splitlines()) > 1:  # check for multiline string
+        # note: pyyaml will use quoted style instead of the literal block style if the string
+        # contains trailing whitespace: https://github.com/yaml/pyyaml/issues/121
         return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
     return dumper.represent_scalar('tag:yaml.org,2002:str', data)
 
@@ -83,7 +85,12 @@ def xml_to_dict(node: ET.Element) -> Dict:
     # Special case, contains network graph as text
     if node.tag == 'topology':
         return {
-            'graphml': node.text
+            # Python's xml library doesn't allow us to differentiate between whitespace in the
+            # xml or in the cdata, so we should just strip all whitespace since we are technically
+            # already losing information anyways. Otherwise indented topology text (even if the
+            # indentation is outside of the cdata) will not be valid xml since the first line
+            # of the topology cannot begin with whitespace.
+            'graphml': node.text.strip()
         }
 
     # Iterates over each XML node and transforms those in dict
