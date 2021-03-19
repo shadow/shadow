@@ -342,7 +342,8 @@ SysCallReturn syscallhandler_pwrite64(SysCallHandler* sys,
 }
 
 SysCallReturn syscallhandler_exit_group(SysCallHandler* sys, const SysCallArgs* args) {
-    process_markAsExiting(sys->process, args->args[0].as_i64);
+    debug("Exit group with exit code %ld", args->args[0].as_i64);
+    process_markAsExiting(sys->process);
     return (SysCallReturn){.state = SYSCALL_NATIVE};
 }
 

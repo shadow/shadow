@@ -122,6 +122,9 @@ struct _Process {
     /* When true, threads are no longer runnable and should just be cleaned up. */
     bool isExiting;
 
+    /* Native pid of the process */
+    pid_t nativePid;
+
     gint referenceCount;
     MAGIC_DECLARE;
 };
@@ -129,12 +132,6 @@ struct _Process {
 static Thread* _process_threadLeader(Process* proc) {
     // "main" thread is the one where pid==tid.
     return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(proc->processID));
-}
-
-static pid_t _process_getNativePid(Process* proc) {
-    Thread* leader = _process_threadLeader(proc);
-    utility_assert(leader);
-    return thread_getNativePid(leader);
 }
 
 const gchar* process_getName(Process* proc) {
@@ -191,12 +188,6 @@ static void _process_reapThread(Process* process, Thread* thread) {
             futex_wake(futex, 1);
         }
     }
-
-    if (thread_isLeader(thread) && !process->isExiting) {
-        // Thread leader's exit code is the process exit code, unless we've
-        // already handled a whole-process exit.
-        process->returnCode = thread_getReturnCode(thread);
-    }
 }
 
 static void _process_handleProcessExit(Process* proc) {
@@ -219,11 +210,10 @@ static void _process_handleProcessExit(Process* proc) {
 static void _process_terminate_threads(Process* proc) {
     debug("Terminating threads");
     if (process_isRunning(proc)) {
-        pid_t pid = _process_getNativePid(proc);
-        if (kill(pid, SIGKILL)) {
-            warning("kill(pid=%d) error %d: %s", pid, errno, g_strerror(errno));
+        if (kill(proc->nativePid, SIGKILL)) {
+            warning("kill(pid=%d) error %d: %s", proc->nativePid, errno, g_strerror(errno));
         }
-        process_markAsExiting(proc, return_code_for_signal(SIGKILL));
+        process_markAsExiting(proc);
     }
 
     _process_handleProcessExit(proc);
@@ -239,12 +229,33 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
 }
 #endif
 
-static void _process_logReturnCode(Process* proc, gint code) {
+static void _process_getAndLogReturnCode(Process* proc) {
     if(!proc->didLogReturnCode) {
+        // Return an error if we can't get real exit code.
+        proc->returnCode = EXIT_FAILURE;
+
+        int wstatus = 0;
+        int rv = waitpid(proc->nativePid, &wstatus, __WALL);
+        if (rv < 0) {
+            // Getting here is a bug, but since the process is exiting anyway
+            // not serious enough to merit `error`ing out.
+            warning("waitpid: %s", g_strerror(errno));
+        } else if (rv != proc->nativePid) {
+            warning("waitpid returned %d instead of the requested %d", rv, proc->nativePid);
+        } else {
+            if (WIFEXITED(wstatus)) {
+                proc->returnCode = WEXITSTATUS(wstatus);
+            } else if (WIFSIGNALED(wstatus)) {
+                proc->returnCode = return_code_for_signal(WTERMSIG(wstatus));
+            } else {
+                warning("Couldn't get exit status");
+            }
+        }
+
         // don't change the formatting of this string since some integration tests depend on it
         GString* mainResultString = g_string_new(NULL);
         g_string_printf(mainResultString, "main %s code '%i' for process '%s'",
-                        ((code == 0) ? "success" : "error"), code,
+                        ((proc->returnCode == 0) ? "success" : "error"), proc->returnCode,
                         process_getName(proc));
 
         gchar* fileName = _process_outputFileName(proc, "exitcode");
@@ -252,7 +263,7 @@ static void _process_logReturnCode(Process* proc, gint code) {
         g_free(fileName);
 
         if (exitcodeFile != NULL) {
-            fprintf(exitcodeFile, "%d", code);
+            fprintf(exitcodeFile, "%d", proc->returnCode);
             fclose(exitcodeFile);
         } else {
             warning("Could not open '%s' for writing: %s", mainResultString->str, strerror(errno));
@@ -261,7 +272,7 @@ static void _process_logReturnCode(Process* proc, gint code) {
         // if there was no error or was intentionally killed
         // TODO: once we've implemented clean shutdown via SIGTERM,
         //       treat death by SIGKILL as a plugin error
-        if (code == 0 || code == return_code_for_signal(SIGKILL)) {
+        if (proc->returnCode == 0 || proc->returnCode == return_code_for_signal(SIGKILL)) {
             message("%s", mainResultString->str);
         } else {
             warning("%s", mainResultString->str);
@@ -309,7 +320,7 @@ static void _process_check(Process* proc) {
     }
 
     message("process '%s' has completed or is otherwise no longer running", process_getName(proc));
-    _process_logReturnCode(proc, proc->returnCode);
+    _process_getAndLogReturnCode(proc);
 #ifdef USE_PERF_TIMERS
     message(
         "total runtime for process '%s' was %f seconds", process_getName(proc), proc->totalRunTime);
@@ -407,6 +418,7 @@ static void _process_start(Process* proc) {
     proc->plugin.isExecuting = TRUE;
     /* exec the process */
     thread_run(mainThread, proc->argv, proc->envv);
+    proc->nativePid = thread_getNativePid(mainThread);
 #ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
@@ -454,10 +466,9 @@ void process_addThread(Process* proc, Thread* thread) {
     task_unref(task);
 }
 
-void process_markAsExiting(Process* proc, gint returnCode) {
+void process_markAsExiting(Process* proc) {
     MAGIC_ASSERT(proc);
-    debug("Process %d marked as exiting with %d", proc->processID, proc->returnCode);
-    proc->returnCode = returnCode;
+    debug("Process %d marked as exiting", proc->processID);
     proc->isExiting = true;
 }
 

@@ -59,7 +59,7 @@ void process_addThread(Process* proc, Thread* thread);
 // without trying to run them again, since otherwise the OS may kill the other
 // thread tasks while we're in the middle of trying to execute them, which can
 // be difficult to recover from cleanly.
-void process_markAsExiting(Process* proc, gint returnCode);
+void process_markAsExiting(Process* proc);
 
 gboolean process_isRunning(Process* proc);
 
