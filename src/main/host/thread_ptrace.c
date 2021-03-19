@@ -98,6 +98,7 @@ typedef enum {
     STOPREASON_EXIT_EVENT,
     STOPREASON_EXITED_NORMAL,
     STOPREASON_EXITED_SIGNAL,
+    STOPREASON_EXITED_PROCESS,
     STOPREASON_SIGNAL,
     STOPREASON_SYSCALL,
     STOPREASON_SHIM_EVENT,
@@ -522,6 +523,15 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
     thread->signalToDeliver = signal;
 }
 
+static void _threadptrace_enterStateExited(ThreadPtrace* thread) {
+    debug("enterStateExited");
+    // Remove circular ref so that thread can be destroyed.
+    if (thread->sys) {
+        syscallhandler_unref(thread->sys);
+        thread->sys = NULL;
+    }
+}
+
 static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reason) {
     switch (reason.type) {
         case STOPREASON_EXITED_SIGNAL:
@@ -529,6 +539,10 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
                   reason.exited_signal.signal);
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
             thread->returnCode = return_code_for_signal(reason.exited_signal.signal);
+            // Signal death kills the whole process
+            process_markAsExiting(
+                thread->base.process, return_code_for_signal(reason.exited_signal.signal));
+            _threadptrace_enterStateExited(thread);
             return;
         case STOPREASON_EXIT_EVENT: {
             unsigned long exit_code;
@@ -537,10 +551,27 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
             }
             thread->returnCode = exit_code;
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
+            _threadptrace_enterStateExited(thread);
+            return;
         }
         case STOPREASON_EXITED_NORMAL: {
             thread->returnCode = reason.exited_normal.exit_code;
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
+            _threadptrace_enterStateExited(thread);
+            return;
+        }
+        case STOPREASON_EXITED_PROCESS: {
+            thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
+
+            // Ensure thread is detached.
+            if (!thread->needAttachment) {
+                if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, 0) < 0) {
+                    // Thread may have already disappeared out from under us.
+                    warning("PTRACE_DETACH: %s", g_strerror(errno));
+                }
+            }
+
+            _threadptrace_enterStateExited(thread);
             return;
         }
         case STOPREASON_EXEC:
@@ -1083,64 +1114,10 @@ bool threadptrace_isRunning(Thread* base) {
     return false;
 }
 
-static void _threadptrace_killProcess(ThreadPtrace* thread) {
-    info("Killing process %d now", thread->base.nativePid);
-
-    if (kill(thread->base.nativePid, SIGKILL) < 0 && errno != ESRCH) {
-        warning("kill(pid=%d) error %d: %s", thread->base.nativePid, errno, g_strerror(errno));
-    }
-}
-
-static void _threadptrace_reapProcess(ThreadPtrace* thread) {
-    info("Reaping process %d now", thread->base.nativePid);
-
-    int wstatus = 0;
-    if (waitpid(thread->base.nativePid, &wstatus, __WALL) < 0) {
-        error("waitpid(%d) error %d: %s", thread->base.nativePid, errno, g_strerror(errno));
-    }
-
-    StopReason reason = _getStopReason(wstatus);
-    _threadptrace_updateChildState(thread, reason);
-
-    if (threadptrace_isRunning(&thread->base)) {
-        warning("Process %d to have exited, instead received status %d", thread->base.nativePid,
-                wstatus);
-    }
-}
-
-static void _threadptrace_doTerminate(ThreadPtrace* thread) {
-    // First let's make sure that the thread is detached
-    if (!thread->needAttachment) {
-        // Still attached, detach before killing
-        _threadptrace_doDetach(thread);
-    }
-
-    // Kill the process, and its OK if it no longer exists because it was already killed
-    _threadptrace_killProcess(thread);
-
-    // Reap the process, but only once the other threads have been killed.
-    // There is an assumption here that terminate is called on the main thread last.
-    if (thread_isLeader(&thread->base)) {
-        _threadptrace_reapProcess(thread);
-    } else {
-        StopReason reason = {.type = STOPREASON_EXITED_SIGNAL, .exited_signal.signal = SIGTERM};
-        _threadptrace_updateChildState(thread, reason);
-    }
-}
-
-void threadptrace_terminate(Thread* base) {
+void threadptrace_handleProcessExit(Thread* base) {
+    debug("threadptrace_handleProcessExit");
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-
-    // Nothing to do if we already exited
-    if (threadptrace_isRunning(&thread->base)) {
-        _threadptrace_doTerminate(thread);
-    }
-
-    // Ensure that we cleanup circular refs, even if the thread is not running
-    if (thread->sys) {
-        syscallhandler_unref(thread->sys);
-        thread->sys = NULL;
-    }
+    _threadptrace_updateChildState(thread, (StopReason){.type = STOPREASON_EXITED_PROCESS});
 }
 
 int threadptrace_getReturnCode(Thread* base) {
@@ -1150,6 +1127,7 @@ int threadptrace_getReturnCode(Thread* base) {
 }
 
 void threadptrace_free(Thread* base) {
+    debug("threadptrace_free");
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     if (thread->sys) {
@@ -1481,7 +1459,7 @@ Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
                               (ThreadMethods){
                                   .run = threadptrace_run,
                                   .resume = threadptrace_resume,
-                                  .terminate = threadptrace_terminate,
+                                  .handleProcessExit = threadptrace_handleProcessExit,
                                   .getReturnCode = threadptrace_getReturnCode,
                                   .isRunning = threadptrace_isRunning,
                                   .free = threadptrace_free,

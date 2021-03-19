@@ -18,7 +18,7 @@
 typedef struct _ThreadMethods {
     pid_t (*run)(Thread* thread, char** argv, char** envv);
     SysCallCondition* (*resume)(Thread* thread);
-    void (*terminate)(Thread* thread);
+    void (*handleProcessExit)(Thread* thread);
     int (*getReturnCode)(Thread* thread);
     bool (*isRunning)(Thread* thread);
     void (*free)(Thread* thread);

@@ -174,6 +174,11 @@ static void _threadpreload_cleanup(ThreadPreload* thread, int status) {
     }
 
     thread->isRunning = 0;
+
+    if (thread->sys) {
+        syscallhandler_unref(thread->sys);
+        thread->sys = NULL;
+    }
 }
 
 pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
@@ -317,7 +322,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
     }
 }
 
-void threadpreload_terminate(Thread* base) {
+void threadpreload_handleProcessExit(Thread* base) {
     MAGIC_ASSERT(base);
     ThreadPreload* thread = _threadToThreadPreload(base);
     // TODO [rwails]: come back and make this logic more solid
@@ -336,15 +341,10 @@ void threadpreload_terminate(Thread* base) {
 
     utility_assert(thread->base.nativePid > 0);
 
-    pid_t rc = waitpid(thread->base.nativePid, &status, WNOHANG);
+    // Process should already be dead; reap the pid
+    pid_t rc = waitpid(thread->base.nativePid, &status, 0);
     utility_assert(rc != -1);
 
-    if (rc == 0) { // child is running, request a stop
-        debug("sending SIGKILL to %d", thread->base.nativePid);
-        kill(thread->base.nativePid, SIGKILL);
-        rc = waitpid(thread->base.nativePid, &status, 0);
-        utility_assert(rc != -1 && rc > 0);
-    }
     _threadpreload_cleanup(thread, status);
 }
 
@@ -506,7 +506,7 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                               (ThreadMethods){
                                   .run = threadpreload_run,
                                   .resume = threadpreload_resume,
-                                  .terminate = threadpreload_terminate,
+                                  .handleProcessExit = threadpreload_handleProcessExit,
                                   .getReturnCode = threadpreload_getReturnCode,
                                   .isRunning = threadpreload_isRunning,
                                   .free = threadpreload_free,

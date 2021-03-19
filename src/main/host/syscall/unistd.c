@@ -341,6 +341,11 @@ SysCallReturn syscallhandler_pwrite64(SysCallHandler* sys,
         args->args[3].as_i64);
 }
 
+SysCallReturn syscallhandler_exit_group(SysCallHandler* sys, const SysCallArgs* args) {
+    process_markAsExiting(sys->process, args->args[0].as_i64);
+    return (SysCallReturn){.state = SYSCALL_NATIVE};
+}
+
 SysCallReturn syscallhandler_getpid(SysCallHandler* sys,
                                     const SysCallArgs* args) {
     // We can't handle this natively in the plugin if we want determinism

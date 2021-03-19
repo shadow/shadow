@@ -257,6 +257,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(eventfd);
         HANDLE(eventfd2);
         HANDLE(execve);
+        HANDLE(exit_group);
         HANDLE(faccessat);
         HANDLE(fadvise64);
         HANDLE(fallocate);
@@ -404,7 +405,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(chmod);
         NATIVE(chown);
         NATIVE(exit);
-        NATIVE(exit_group);
         NATIVE(getcwd);
         NATIVE(geteuid);
         NATIVE(getegid);

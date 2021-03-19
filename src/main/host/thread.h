@@ -20,7 +20,7 @@ void thread_unref(Thread* thread);
 
 void thread_run(Thread* thread, char** argv, char** envv);
 void thread_resume(Thread* thread);
-void thread_terminate(Thread* thread);
+void thread_handleProcessExit(Thread* thread);
 int thread_getReturnCode(Thread* thread);
 
 // Make the data at plugin_src available in shadow's address space.

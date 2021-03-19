@@ -298,7 +298,7 @@ extern "C" {
     pub fn thread_resume(thread: *mut Thread);
 }
 extern "C" {
-    pub fn thread_terminate(thread: *mut Thread);
+    pub fn thread_handleProcessExit(thread: *mut Thread);
 }
 extern "C" {
     pub fn thread_getReturnCode(thread: *mut Thread) -> ::std::os::raw::c_int;
@@ -722,6 +722,12 @@ extern "C" {
 }
 extern "C" {
     pub fn syscallhandler_dup(sys: *mut SysCallHandler, args: *const SysCallArgs) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_exit_group(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
 }
 extern "C" {
     pub fn syscallhandler_getpid(
