@@ -100,11 +100,11 @@ void thread_resume(Thread* thread) {
     }
 }
 
-void thread_terminate(Thread* thread) {
+void thread_handleProcessExit(Thread* thread) {
     MAGIC_ASSERT(thread);
     _thread_cleanupSysCallCondition(thread);
-    utility_assert(thread->methods.terminate);
-    thread->methods.terminate(thread);
+    utility_assert(thread->methods.handleProcessExit);
+    thread->methods.handleProcessExit(thread);
 }
 int thread_getReturnCode(Thread* thread) {
     MAGIC_ASSERT(thread);

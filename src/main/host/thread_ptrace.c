@@ -34,7 +34,11 @@
 
 // Using PTRACE_O_TRACECLONE causes the `clone` syscall to fail on Ubuntu 18.04.
 // We instead add the CLONE_PTRACE flag to the clone syscall itself.
-#define THREADPTRACE_PTRACE_OPTIONS (PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXEC)
+//
+// We use PTRACE_O_TRACEEXIT because the PTRACE_EVENT_EXIT stops it enables are
+// received earlier and more reliably than WIFEXITED.
+#define THREADPTRACE_PTRACE_OPTIONS                                                                \
+    (PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXEC | PTRACE_O_TRACEEXIT)
 
 // `waitpid` is O(n) in the # of child threads and tracees
 // <https://github.com/shadow/shadow/issues/1134>. We work around it by
@@ -91,8 +95,10 @@ typedef struct _PendingWrite {
 } PendingWrite;
 
 typedef enum {
+    STOPREASON_EXIT_EVENT,
     STOPREASON_EXITED_NORMAL,
     STOPREASON_EXITED_SIGNAL,
+    STOPREASON_EXITED_PROCESS,
     STOPREASON_SIGNAL,
     STOPREASON_SYSCALL,
     STOPREASON_SHIM_EVENT,
@@ -125,6 +131,12 @@ static StopReason _getStopReason(int wstatus) {
             .exited_signal.signal = WTERMSIG(wstatus),
         };
         debug("STOPREASON_EXITED_SIGNAL: %d", rv.exited_signal.signal);
+        return rv;
+    } else if (wstatus >> 8 == (SIGTRAP | (PTRACE_EVENT_EXIT << 8))) {
+        rv = (StopReason){
+            .type = STOPREASON_EXIT_EVENT,
+        };
+        debug("STOPREASON_EXIT_EVENT");
         return rv;
     } else if (WIFEXITED(wstatus)) {
         rv = (StopReason){
@@ -511,6 +523,15 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
     thread->signalToDeliver = signal;
 }
 
+static void _threadptrace_enterStateExited(ThreadPtrace* thread) {
+    debug("enterStateExited");
+    // Remove circular ref so that thread can be destroyed.
+    if (thread->sys) {
+        syscallhandler_unref(thread->sys);
+        thread->sys = NULL;
+    }
+}
+
 static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reason) {
     switch (reason.type) {
         case STOPREASON_EXITED_SIGNAL:
@@ -518,11 +539,41 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
                   reason.exited_signal.signal);
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
             thread->returnCode = return_code_for_signal(reason.exited_signal.signal);
+            // Signal death kills the whole process
+            process_markAsExiting(
+                thread->base.process, return_code_for_signal(reason.exited_signal.signal));
+            _threadptrace_enterStateExited(thread);
             return;
-        case STOPREASON_EXITED_NORMAL:
+        case STOPREASON_EXIT_EVENT: {
+            unsigned long exit_code;
+            if (ptrace(PTRACE_GETEVENTMSG, thread->base.nativeTid, NULL, &exit_code) < 0) {
+                error("ptrace: %s", g_strerror(errno));
+            }
+            thread->returnCode = exit_code;
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
-            thread->returnCode = reason.exited_normal.exit_code;
+            _threadptrace_enterStateExited(thread);
             return;
+        }
+        case STOPREASON_EXITED_NORMAL: {
+            thread->returnCode = reason.exited_normal.exit_code;
+            thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
+            _threadptrace_enterStateExited(thread);
+            return;
+        }
+        case STOPREASON_EXITED_PROCESS: {
+            thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
+
+            // Ensure thread is detached.
+            if (!thread->needAttachment) {
+                if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, 0) < 0) {
+                    // Thread may have already disappeared out from under us.
+                    warning("PTRACE_DETACH: %s", g_strerror(errno));
+                }
+            }
+
+            _threadptrace_enterStateExited(thread);
+            return;
+        }
         case STOPREASON_EXEC:
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXECVE;
             _threadptrace_enterStateExecve(thread);
@@ -636,22 +687,6 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
         if (pid != 0) {
             debug("Got ptrace stop");
             StopReason ptraceStopReason = _getStopReason(wstatus);
-
-            // Pre-emptively save registers here.  TODO: do this lazily, since
-            // we won't always need them. Doing it here makes it easier to
-            // ensure we get the right value for rax though, since we know what
-            // kind of ptrace stop just happened.
-            if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
-                error("ptrace: %s", g_strerror(errno));
-                abort();
-            }
-            if (ptraceStopReason.type == STOPREASON_SYSCALL) {
-                debug("Saving syscall rip");
-                thread->regs.value.rax = thread->regs.value.orig_rax;
-                thread->syscall_rip = thread->regs.value.rip - sizeof(SYSCALL_INSTRUCTION);
-            }
-            thread->regs.valid = true;
-            thread->regs.dirty = false;
 
             if (thread->enableIpc &&
                 shimevent_tryRecvEventFromPlugin(
@@ -1079,41 +1114,10 @@ bool threadptrace_isRunning(Thread* base) {
     return false;
 }
 
-void threadptrace_terminate(Thread* base) {
+void threadptrace_handleProcessExit(Thread* base) {
+    debug("threadptrace_handleProcessExit");
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-
-    /* make sure we cleanup circular refs */
-    if (thread->sys) {
-        syscallhandler_unref(thread->sys);
-        thread->sys = NULL;
-    }
-
-    if (!threadptrace_isRunning(base)) {
-        return;
-    }
-
-    // need to kill() and not ptrace() since the process may not be stopped
-    if (kill(thread->base.nativeTid, SIGKILL) < 0) {
-        warning("kill %d: %s", thread->base.nativePid, g_strerror(errno));
-    }
-
-    // Wait for the exit ptrace-stop. Because the shadow process is the natural
-    // parent of the child (even if spawned from a task/thread other than this
-    // one), this also reaps the child.
-    int wstatus;
-    if (_waitpid_spin(thread->base.nativePid, &wstatus, 0) < 0) {
-        error("waitpid: %s", g_strerror(errno));
-        return;
-    }
-
-    StopReason reason = _getStopReason(wstatus);
-
-    if (reason.type != STOPREASON_EXITED_NORMAL && reason.type != STOPREASON_EXITED_SIGNAL) {
-        error("Expected process %d to exit after SIGKILL, instead received status %d",
-              thread->base.nativePid, wstatus);
-    }
-
-    _threadptrace_updateChildState(thread, reason);
+    _threadptrace_updateChildState(thread, (StopReason){.type = STOPREASON_EXITED_PROCESS});
 }
 
 int threadptrace_getReturnCode(Thread* base) {
@@ -1123,6 +1127,7 @@ int threadptrace_getReturnCode(Thread* base) {
 }
 
 void threadptrace_free(Thread* base) {
+    debug("threadptrace_free");
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     if (thread->sys) {
@@ -1454,7 +1459,7 @@ Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
                               (ThreadMethods){
                                   .run = threadptrace_run,
                                   .resume = threadptrace_resume,
-                                  .terminate = threadptrace_terminate,
+                                  .handleProcessExit = threadptrace_handleProcessExit,
                                   .getReturnCode = threadptrace_getReturnCode,
                                   .isRunning = threadptrace_isRunning,
                                   .free = threadptrace_free,

@@ -24,7 +24,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <sys/file.h>
+#include <sys/types.h>
 #include <sys/un.h>
+#include <sys/wait.h>
 #include <syscall.h>
 #include <time.h>
 #include <unistd.h>
@@ -61,6 +63,7 @@
 #include "main/host/thread_ptrace.h"
 
 static gchar* _process_outputFileName(Process* proc, const char* type);
+static void _process_check(Process* proc);
 
 struct _Process {
     /* Host owning this process */
@@ -116,9 +119,23 @@ struct _Process {
     File* stdoutFile;
     File* stderrFile;
 
+    /* When true, threads are no longer runnable and should just be cleaned up. */
+    bool isExiting;
+
     gint referenceCount;
     MAGIC_DECLARE;
 };
+
+static Thread* _process_threadLeader(Process* proc) {
+    // "main" thread is the one where pid==tid.
+    return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(proc->processID));
+}
+
+static pid_t _process_getNativePid(Process* proc) {
+    Thread* leader = _process_threadLeader(proc);
+    utility_assert(leader);
+    return thread_getNativePid(leader);
+}
 
 const gchar* process_getName(Process* proc) {
     MAGIC_ASSERT(proc);
@@ -138,14 +155,14 @@ guint process_getProcessID(Process* proc) {
 }
 
 static void _process_reapThread(Process* process, Thread* thread) {
-    thread_terminate(thread);
+    utility_assert(!thread_isRunning(thread));
 
     // If the `clear_child_tid` attribute on the thread is set, and there are
     // any other threads left alive in the process, perform a futex wake on
     // that address. This mechanism is typically used in `pthread_join` etc.
     // See `set_tid_address(2)`.
     PluginVirtualPtr clear_child_tid_pvp = thread_getTidAddress(thread);
-    if (clear_child_tid_pvp.val && g_hash_table_size(process->threads) > 1) {
+    if (clear_child_tid_pvp.val && g_hash_table_size(process->threads) > 1 && !process->isExiting) {
         pid_t* clear_child_tid =
             process_getWriteablePtr(process, thread, clear_child_tid_pvp, sizeof(pid_t*));
         if (!clear_child_tid) {
@@ -175,33 +192,41 @@ static void _process_reapThread(Process* process, Thread* thread) {
         }
     }
 
-    if (thread_isLeader(thread)) {
-        // If the main thread has exited, grab its return code to be used as
-        // the process return code.  The main thread exiting doesn't
-        // automatically cause other threads and the process to exit, but in
-        // most cases they will exit shortly afterwards.
-        //
-        // We don't *log* the returnCode yet because other conditions could
-        // still change it.  e.g. experimentally in the bash shell, if the
-        // remaining children are killed by a signal, the return code for the
-        // whole process is derived from that signal #, even if the thread
-        // leader had already exited.
+    if (thread_isLeader(thread) && !process->isExiting) {
+        // Thread leader's exit code is the process exit code, unless we've
+        // already handled a whole-process exit.
         process->returnCode = thread_getReturnCode(thread);
     }
 }
 
-static void _process_terminate_threads(Process* proc) {
+static void _process_handleProcessExit(Process* proc) {
+    debug("handleProcessExit");
+    utility_assert(!process_isRunning(proc));
+
     GHashTableIter iter;
-    g_hash_table_iter_init(&iter, proc->threads);
     gpointer key, value;
+    g_hash_table_iter_init(&iter, proc->threads);
     while (g_hash_table_iter_next(&iter, &key, &value)) {
         Thread* thread = value;
-        if (thread_isRunning(thread)) {
-            warning("Terminating still-running thread %d", thread_getID(thread));
-        }
+        thread_handleProcessExit(thread);
         _process_reapThread(proc, thread);
         g_hash_table_iter_remove(&iter);
     }
+
+    _process_check(proc);
+}
+
+static void _process_terminate_threads(Process* proc) {
+    debug("Terminating threads");
+    if (process_isRunning(proc)) {
+        pid_t pid = _process_getNativePid(proc);
+        if (kill(pid, SIGKILL)) {
+            warning("kill(pid=%d) error %d: %s", pid, errno, g_strerror(errno));
+        }
+        process_markAsExiting(proc, return_code_for_signal(SIGKILL));
+    }
+
+    _process_handleProcessExit(proc);
 }
 
 #ifdef USE_PERF_TIMERS
@@ -247,11 +272,6 @@ static void _process_logReturnCode(Process* proc, gint code) {
 
         proc->didLogReturnCode = TRUE;
     }
-}
-
-static Thread* _process_threadLeader(Process* proc) {
-    // "main" thread is the one where pid==tid.
-    return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(proc->processID));
 }
 
 pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
@@ -422,6 +442,7 @@ static void _start_thread_task_free_thread(gpointer data) {
 }
 
 void process_addThread(Process* proc, Thread* thread) {
+    MAGIC_ASSERT(proc);
     g_hash_table_insert(proc->threads, GUINT_TO_POINTER(thread_getID(thread)), thread);
 
     // Schedule thread to start.
@@ -431,6 +452,13 @@ void process_addThread(Process* proc, Thread* thread) {
                           _start_thread_task_free_thread);
     worker_scheduleTask(task, 0);
     task_unref(task);
+}
+
+void process_markAsExiting(Process* proc, gint returnCode) {
+    MAGIC_ASSERT(proc);
+    debug("Process %d marked as exiting with %d", proc->processID, proc->returnCode);
+    proc->returnCode = returnCode;
+    proc->isExiting = true;
 }
 
 void process_continue(Process* proc, Thread* thread) {
@@ -469,7 +497,13 @@ void process_continue(Process* proc, Thread* thread) {
     info("process '%s' done continuing", process_getName(proc));
 #endif
 
-    _process_check_thread(proc, thread);
+    if (proc->isExiting) {
+        // If the whole process is already exiting, skip to cleaning up the
+        // whole process exit; normal thread cleanup would likely fail.
+        _process_handleProcessExit(proc);
+    } else {
+        _process_check_thread(proc, thread);
+    }
 }
 
 void process_stop(Process* proc) {
@@ -559,7 +593,7 @@ void process_detachPlugin(gpointer procptr, gpointer nothing) {
 
 gboolean process_isRunning(Process* proc) {
     MAGIC_ASSERT(proc);
-    return g_hash_table_size(proc->threads) > 0;
+    return !proc->isExiting && g_hash_table_size(proc->threads) > 0;
 }
 
 static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
@@ -615,6 +649,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
         g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, _thread_gpointer_unref);
 
     proc->referenceCount = 1;
+    proc->isExiting = false;
 
     worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_NEW);
 

@@ -83,7 +83,15 @@ path = "pipe/test_pipe.rs"
 
 [[bin]]
 name = "test_pthreads"
-path = "pthreads/test_pthreads.rs"
+path = "threads/test_pthreads.rs"
+
+[[bin]]
+name = "test_threads_noexit"
+path = "threads/test_threads_noexit.rs"
+
+[[bin]]
+name = "test_threads_group_leader_exits"
+path = "threads/test_threads_group_leader_exits.rs"
 
 [[bin]]
 name = "test_ifaddrs"
