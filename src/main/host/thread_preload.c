@@ -262,7 +262,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 // the plugin stopped running, clear it and collect the return
                 // code
                 int status;
-                pid_t rc = waitpid(thread->base.nativePid, &status, 0);
+                pid_t rc = waitpid(thread->base.nativePid, &status, __WALL);
                 utility_assert(rc == thread->base.nativePid);
                 _threadpreload_cleanup(thread, status);
                 // it will not be sending us any more events
@@ -342,7 +342,7 @@ void threadpreload_handleProcessExit(Thread* base) {
     utility_assert(thread->base.nativePid > 0);
 
     // Process should already be dead; reap the pid
-    pid_t rc = waitpid(thread->base.nativePid, &status, 0);
+    pid_t rc = waitpid(thread->base.nativePid, &status, __WALL);
     utility_assert(rc != -1);
 
     _threadpreload_cleanup(thread, status);
