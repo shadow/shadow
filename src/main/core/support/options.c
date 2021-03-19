@@ -134,7 +134,7 @@ Options* options_new(gint argc, gchar* argv[]) {
          "'threadXthread', 'threadXhost') ['steal']",
          "SPOL"},
         {"interpose-method", 'n', 0, G_OPTION_ARG_STRING, &(options->interposeMethod),
-         "Which interposition method to use ('hybrid', 'preload', 'ptrace') ['hybrid']", "METHOD"},
+         "Which interposition method to use ('hybrid', 'preload', 'ptrace') ['ptrace']", "METHOD"},
         {"workers", 'w', 0, G_OPTION_ARG_INT, &(options->nWorkerThreads),
          "Run concurrently with N worker threads [0]", "N"},
         {"valgrind", 'x', 0, G_OPTION_ARG_NONE, &(options->runValgrind),
@@ -253,7 +253,7 @@ Options* options_new(gint argc, gchar* argv[]) {
         options->eventSchedulingPolicy = g_strdup("steal");
     }
     if (options->interposeMethod == NULL) {
-        options->interposeMethod = g_strdup("hybrid");
+        options->interposeMethod = g_strdup("ptrace");
     }
     if(!options->initialSocketReceiveBufferSize) {
         options->initialSocketReceiveBufferSize = CONFIG_RECV_BUFFER_SIZE;
