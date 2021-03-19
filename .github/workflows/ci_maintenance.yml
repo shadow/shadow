@@ -26,6 +26,7 @@ jobs:
           - rust nightly version for coverage builds (\`ci/container_scripts/install_extra_deps.sh\` — \`RUST_TOOLCHAIN\`)
           - bindgen and cbindgen versions for the bindings lint (\`.github/workflows/lint.yml\`)
           - python version for the python lint (\`.github/workflows/lint.yml\`)
+          - tor and tgen versions for the tor tests (\`.github/workflows/run_tor.yml\`)
 
           *This issue is automatically generated every 4 months by the workflow "${{ github.workflow }}".*
           `

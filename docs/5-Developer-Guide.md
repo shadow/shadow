@@ -17,6 +17,16 @@ apt install -y clang
 cargo install --force cbindgen bindgen
 ```
 
+## Tor tests
+
+Shadow includes tests that use Tor and TGen. These are not run by default. To run them, first make sure that both tor and tgen are located at `~/.shadow/bin/{tor,tgen}`. These can be symlinks to tor and tgen binaries elsewhere in the filesystem. It is recommended to build Shadow in release mode, otherwise the tests may take much longer to complete.
+
+```bash
+./setup test -- -C tor -L tor
+```
+
+If you change the tor version by updating the version at `~/.shadow/bin/tor`, make sure to re-run `./setup build --test`.
+
 ## Debugging
 
 ### Debugging Shadow using GDB
