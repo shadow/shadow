@@ -45,10 +45,14 @@ endmacro()
 ## example: add_shadow_tests(BASENAME bind METHODS ptrace preload LOGLEVEL debug ARGS --pin-cpus)
 ## will create two tests named bind-shadow-ptrace and bind-shadow-preload
 macro(add_shadow_tests)
-   cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL" "METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
+    cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG" "METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
 
    if(NOT DEFINED SHADOW_TEST_LOGLEVEL)
       set(SHADOW_TEST_LOGLEVEL "debug")
+   endif()
+
+   if(NOT DEFINED SHADOW_TEST_SHADOW_CONFIG)
+       set(SHADOW_TEST_SHADOW_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/${SHADOW_TEST_BASENAME}.yaml")
    endif()
    
    string(REPLACE ";" " " SHADOW_TEST_ARGS "${SHADOW_TEST_ARGS}")
@@ -57,7 +61,7 @@ macro(add_shadow_tests)
       set(SHADOW_TEST_NAME ${SHADOW_TEST_BASENAME}-shadow-${SHADOW_TEST_METHOD})
       
       set(SHADOW_TEST_COMMAND sh -c "\
-         ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/${SHADOW_TEST_BASENAME}.yaml --output - \
+         ${yaml2xml} ${SHADOW_TEST_SHADOW_CONFIG} --output - \
          | ${CMAKE_BINARY_DIR}/src/main/shadow \
          --data-directory=${SHADOW_TEST_NAME}.data \
          --interpose-method=${SHADOW_TEST_METHOD} \
