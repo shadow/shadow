@@ -4,8 +4,7 @@ use crate::host::descriptor::{
     CompatDescriptor, Descriptor, DescriptorFlags, FileFlags, FileMode, FileStatus, PosixFile,
     SyscallReturn,
 };
-use crate::host::syscall;
-use crate::host::syscall::Trigger;
+use crate::host::syscall::{self, PluginPtrError, Trigger};
 use crate::utility::event_queue::EventQueue;
 
 use std::sync::Arc;
@@ -137,36 +136,38 @@ pub fn pread64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCall
 
 fn read_helper(
     sys: &mut c::SysCallHandler,
-    fd: libc::c_int,
+    _fd: libc::c_int,
     desc: &Descriptor,
     buf_ptr: c::PluginPtr,
     buf_size: libc::size_t,
     offset: libc::off_t,
 ) -> c::SysCallReturn {
-    // need a non-null buffer
-    if buf_ptr.val == 0 {
-        return SyscallReturn::Error(nix::errno::Errno::EFAULT).into();
-    }
-
-    // need a non-zero size
-    if buf_size == 0 {
-        info!("Invalid length {} provided on descriptor {}", buf_size, fd);
-        return SyscallReturn::Error(nix::errno::Errno::EINVAL).into();
-    }
-
     // TODO: dynamically compute size based on how much data is actually available in the descriptor
     let size_needed = std::cmp::min(buf_size, c::SYSCALL_IO_BUFSIZE as usize);
 
-    let buf_ptr =
-        unsafe { c::process_getWriteablePtr(sys.process, sys.thread, buf_ptr, size_needed as u64) };
-    let mut buf = unsafe { std::slice::from_raw_parts_mut(buf_ptr as *mut u8, size_needed) };
+    let buf = match syscall::get_writable_ptr::<u8>(sys.process, sys.thread, buf_ptr, size_needed) {
+        Ok(ptr) => unsafe { Some(std::slice::from_raw_parts_mut(ptr, size_needed)) },
+        Err(PluginPtrError::Null) | Err(PluginPtrError::ZeroLen) => {
+            match (buf_ptr.val == 0, buf_size) {
+                // non-null and zero len
+                (false, 0) => Some(&mut [][..]),
+                // null and zero len
+                (true, 0) => return SyscallReturn::Success(0).into(),
+                // null and non-zero len
+                (true, _) => None,
+                // non-null and non-zero len
+                (false, _) => unreachable!(),
+            }
+        }
+        Err(PluginPtrError::LenTooSmall) => unreachable!(),
+    };
 
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
     // call the file's read(), and run any resulting events
     let result = EventQueue::queue_and_run(|event_queue| {
-        posix_file.borrow_mut().read(&mut buf, offset, event_queue)
+        posix_file.borrow_mut().read(buf, offset, event_queue)
     });
 
     // if the syscall would block and it's a blocking descriptor
@@ -235,24 +236,32 @@ fn write_helper(
     buf_size: libc::size_t,
     offset: libc::off_t,
 ) -> c::SysCallReturn {
-    // need a non-null buffer
-    if buf_ptr.val == 0 {
-        return SyscallReturn::Error(nix::errno::Errno::EFAULT).into();
-    }
-
     // TODO: dynamically compute size based on how much data is actually available in the descriptor
     let size_needed = std::cmp::min(buf_size, c::SYSCALL_IO_BUFSIZE as usize);
 
-    let buf_ptr =
-        unsafe { c::process_getReadablePtr(sys.process, sys.thread, buf_ptr, size_needed as u64) };
-    let buf = unsafe { std::slice::from_raw_parts(buf_ptr as *const u8, size_needed) };
+    let buf = match syscall::get_readable_ptr::<u8>(sys.process, sys.thread, buf_ptr, size_needed) {
+        Ok(ptr) => unsafe { Some(std::slice::from_raw_parts(ptr, size_needed)) },
+        Err(PluginPtrError::Null) | Err(PluginPtrError::ZeroLen) => {
+            match (buf_ptr.val == 0, buf_size) {
+                // non-null and zero len
+                (false, 0) => Some(&[][..]),
+                // null and zero len
+                (true, 0) => return SyscallReturn::Success(0).into(),
+                // null and non-zero len
+                (true, _) => None,
+                // non-null and non-zero len
+                (false, _) => unreachable!(),
+            }
+        }
+        Err(PluginPtrError::LenTooSmall) => unreachable!(),
+    };
 
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
     // call the file's write(), and run any resulting events
     let result = EventQueue::queue_and_run(|event_queue| {
-        posix_file.borrow_mut().write(&buf, offset, event_queue)
+        posix_file.borrow_mut().write(buf, offset, event_queue)
     });
 
     // if the syscall would block and it's a blocking descriptor
@@ -343,9 +352,17 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: c::PluginPtr, flags: i32) ->
     // register the file descriptors and return them to the caller
     let num_items = 2;
     let size_needed = num_items * std::mem::size_of::<libc::c_int>();
-    let fd_ptr =
-        unsafe { c::process_getWriteablePtr(sys.process, sys.thread, fd_ptr, size_needed as u64) };
-    let fds = unsafe { std::slice::from_raw_parts_mut(fd_ptr as *mut libc::c_int, num_items) };
+
+    let fds = match syscall::get_writable_ptr::<libc::c_int>(
+        sys.process,
+        sys.thread,
+        fd_ptr,
+        size_needed,
+    ) {
+        Ok(ptr) => unsafe { std::slice::from_raw_parts_mut(ptr, num_items) },
+        // we checked for a NULL pointer earlier, and we set the length ourselves
+        _ => panic!(),
+    };
 
     fds[0] = unsafe {
         c::process_registerCompatDescriptor(

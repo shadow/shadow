@@ -55,7 +55,7 @@ impl PipeFile {
 
     pub fn read(
         &mut self,
-        bytes: &mut [u8],
+        bytes: Option<&mut [u8]>,
         offset: libc::off_t,
         event_queue: &mut EventQueue,
     ) -> SyscallReturn {
@@ -69,6 +69,11 @@ impl PipeFile {
             return SyscallReturn::Error(nix::errno::Errno::EBADF);
         }
 
+        let bytes = match bytes {
+            Some(b) => b,
+            None => return SyscallReturn::Error(nix::errno::Errno::EFAULT),
+        };
+
         let num_read = self.buffer.borrow_mut().read(bytes, event_queue);
 
         SyscallReturn::Success(num_read as i32)
@@ -76,7 +81,7 @@ impl PipeFile {
 
     pub fn write(
         &mut self,
-        bytes: &[u8],
+        bytes: Option<&[u8]>,
         offset: libc::off_t,
         event_queue: &mut EventQueue,
     ) -> SyscallReturn {
@@ -89,6 +94,11 @@ impl PipeFile {
         if !self.mode.contains(FileMode::WRITE) {
             return SyscallReturn::Error(nix::errno::Errno::EBADF);
         }
+
+        let bytes = match bytes {
+            Some(b) => b,
+            None => return SyscallReturn::Error(nix::errno::Errno::EFAULT),
+        };
 
         let num_written = self.buffer.borrow_mut().write(bytes, event_queue);
 
