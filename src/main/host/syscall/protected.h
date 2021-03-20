@@ -59,6 +59,8 @@ struct _SysCallHandler {
     //#endif
     /* The total number of syscalls that we have handled. */
     long numSyscalls;
+    // A counter for individual syscalls
+    Counter* syscall_counter;
 
     int referenceCount;
 
