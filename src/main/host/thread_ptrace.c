@@ -276,6 +276,7 @@ const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                         size_t n);
 static void _threadptrace_ensureStopped(ThreadPtrace* thread);
 static void _threadptrace_doAttach(ThreadPtrace* thread);
+static void _threadptrace_doDetach(ThreadPtrace* thread);
 
 static ThreadPtrace* _threadToThreadPtrace(Thread* thread) {
     utility_assert(thread->type_id == THREADPTRACE_TYPE_ID);
@@ -525,6 +526,19 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
 
 static void _threadptrace_enterStateExited(ThreadPtrace* thread) {
     debug("enterStateExited");
+
+    // Ensure thread is detached.
+    if (!thread->needAttachment) {
+        if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, 0) < 0) {
+            // Getting here is a bug, but since the thread is exiting anyway
+            // not serious enough to merit `error`ing out.
+            warning("PTRACE_DETACH: %s", g_strerror(errno));
+        }
+
+        // Ensure we don't try to detach again later.
+        thread->needAttachment = true;
+    }
+
     // Remove circular ref so that thread can be destroyed.
     if (thread->sys) {
         syscallhandler_unref(thread->sys);
@@ -535,13 +549,11 @@ static void _threadptrace_enterStateExited(ThreadPtrace* thread) {
 static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reason) {
     switch (reason.type) {
         case STOPREASON_EXITED_SIGNAL:
-            debug("child %d terminated by signal %d", thread->base.nativeTid,
-                  reason.exited_signal.signal);
+            warning("Got signal exit; should have detached after EXIT_EVENT");
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
             thread->returnCode = return_code_for_signal(reason.exited_signal.signal);
             // Signal death kills the whole process
-            process_markAsExiting(
-                thread->base.process, return_code_for_signal(reason.exited_signal.signal));
+            process_markAsExiting(thread->base.process);
             _threadptrace_enterStateExited(thread);
             return;
         case STOPREASON_EXIT_EVENT: {
@@ -555,6 +567,7 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
             return;
         }
         case STOPREASON_EXITED_NORMAL: {
+            warning("Got final exit; should have detached after EXIT_EVENT");
             thread->returnCode = reason.exited_normal.exit_code;
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
             _threadptrace_enterStateExited(thread);
@@ -562,15 +575,6 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
         }
         case STOPREASON_EXITED_PROCESS: {
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
-
-            // Ensure thread is detached.
-            if (!thread->needAttachment) {
-                if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, 0) < 0) {
-                    // Thread may have already disappeared out from under us.
-                    warning("PTRACE_DETACH: %s", g_strerror(errno));
-                }
-            }
-
             _threadptrace_enterStateExited(thread);
             return;
         }

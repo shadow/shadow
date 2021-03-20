@@ -159,20 +159,8 @@ static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, c
     }
 }
 
-// status should have been set by caller using waitpid.
-static void _threadpreload_cleanup(ThreadPreload* thread, int status) {
-    if (WIFEXITED(status)) {
-        thread->returnCode = WEXITSTATUS(status);
-        debug("child %d exited with status %d", thread->base.nativePid, thread->returnCode);
-    } else if (WIFSIGNALED(status)) {
-        int signum = WTERMSIG(status);
-        debug("child %d terminated by signal %d", thread->base.nativePid, signum);
-        thread->returnCode = return_code_for_signal(signum);
-    } else {
-        debug("child %d quit unexpectedly", thread->base.nativePid);
-        thread->returnCode = -1;
-    }
-
+static void _threadpreload_cleanup(ThreadPreload* thread) {
+    debug("child %d exited", thread->base.nativePid);
     thread->isRunning = 0;
 
     if (thread->sys) {
@@ -259,12 +247,8 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 break;
             }
             case SHD_SHIM_EVENT_STOP: {
-                // the plugin stopped running, clear it and collect the return
-                // code
-                int status;
-                pid_t rc = waitpid(thread->base.nativePid, &status, __WALL);
-                utility_assert(rc == thread->base.nativePid);
-                _threadpreload_cleanup(thread, status);
+                // the plugin stopped running
+                _threadpreload_cleanup(thread);
                 // it will not be sending us any more events
                 return NULL;
             }
@@ -341,11 +325,7 @@ void threadpreload_handleProcessExit(Thread* base) {
 
     utility_assert(thread->base.nativePid > 0);
 
-    // Process should already be dead; reap the pid
-    pid_t rc = waitpid(thread->base.nativePid, &status, __WALL);
-    utility_assert(rc != -1);
-
-    _threadpreload_cleanup(thread, status);
+    _threadpreload_cleanup(thread);
 }
 
 int threadpreload_getReturnCode(Thread* base) {
