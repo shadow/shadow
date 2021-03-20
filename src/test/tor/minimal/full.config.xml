@@ -1,0 +1,89 @@
+<!-- stoptime is the length of our experiment in seconds -->
+<shadow stoptime="1800" environment="OPENSSL_ia32cap=~0x200000200000000;EVENT_NOSELECT=1;EVENT_NOPOLL=1;EVENT_NOKQUEUE=1;EVENT_NODEVPOLL=1;EVENT_NOEVPORT=1;EVENT_NOWIN32=1">
+    <!-- our network -->
+    <topology>
+    <![CDATA[<?xml version="1.0" encoding="utf-8"?><graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+      <key attr.name="packetloss" attr.type="double" for="edge" id="d9" />
+      <key attr.name="jitter" attr.type="double" for="edge" id="d8" />
+      <key attr.name="latency" attr.type="double" for="edge" id="d7" />
+      <key attr.name="type" attr.type="string" for="node" id="d5" />
+      <key attr.name="bandwidthup" attr.type="int" for="node" id="d4" />
+      <key attr.name="bandwidthdown" attr.type="int" for="node" id="d3" />
+      <key attr.name="countrycode" attr.type="string" for="node" id="d2" />
+      <key attr.name="ip" attr.type="string" for="node" id="d1" />
+      <key attr.name="packetloss" attr.type="double" for="node" id="d0" />
+      <graph edgedefault="undirected">
+        <node id="poi-1">
+          <data key="d0">0.0</data>
+          <data key="d1">0.0.0.0</data>
+          <data key="d2">US</data>
+          <data key="d3">10240</data>
+          <data key="d4">10240</data>
+          <data key="d5">net</data>
+        </node>
+        <edge source="poi-1" target="poi-1">
+          <data key="d7">50.0</data>
+          <data key="d8">0.0</data>
+          <data key="d9">0.0</data>
+        </edge>
+      </graph>
+    </graphml>]]>
+    </topology>
+
+    <!-- the plug-ins we will be using -->
+    <plugin id="tgen" path="~/.shadow/bin/tgen" />
+    <plugin id="tor" path="~/.shadow/bin/tor" />
+    <plugin id="tor-preload" path="~/.shadow/lib/libshadow-preload-tor.so" />
+
+    <!-- our services -->
+    <host id="fileserver" bandwidthdown="102400" bandwidthup="102400" >
+        <process plugin="tgen" starttime="1" arguments="conf/tgen.server.graphml.xml" />
+    </host>
+
+    <host id="hiddenserver" bandwidthdown="102400" bandwidthup="102400" >
+        <process plugin="tgen" starttime="1" arguments="conf/tgen.hiddenserver.graphml.xml" />
+        <process plugin="tor" preload="tor-preload" starttime="900" arguments="--Address hiddenserver --Nickname hiddenserver --DataDirectory shadow.data/hosts/hiddenserver --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f conf/tor.hiddenserver.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000" />
+    </host>
+
+    <!-- our Tor network infrastructure -->
+    <host id="4uthority" bandwidthdown="10240" bandwidthup="10240" iphint="100.0.0.1" >
+        <process plugin="tor" preload="tor-preload" starttime="1" arguments="--Address 4uthority --Nickname 4uthority --DataDirectory shadow.data/hosts/4uthority --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f conf/tor.authority.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000" />
+    </host>
+
+    <host id="exit1" quantity="1" bandwidthdown="10240" bandwidthup="10240">
+        <process plugin="tor" preload="tor-preload" starttime="60" arguments="--Address exit1 --Nickname exit1 --DataDirectory shadow.data/hosts/exit1 --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f conf/tor.exit.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000" />
+    </host>
+
+    <host id="exit2" quantity="1" bandwidthdown="10240" bandwidthup="10240">
+        <process plugin="tor" preload="tor-preload" starttime="60" arguments="--Address exit2 --Nickname exit2 --DataDirectory shadow.data/hosts/exit2 --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f conf/tor.exit.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000" />
+    </host>
+
+    <host id="relay1" quantity="1" bandwidthdown="10240" bandwidthup="10240">
+        <process plugin="tor" preload="tor-preload" starttime="60" arguments="--Address relay1 --Nickname relay1 --DataDirectory shadow.data/hosts/relay1 --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f conf/tor.relay.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000" />
+    </host>
+
+    <host id="relay2" quantity="1" bandwidthdown="10240" bandwidthup="10240">
+        <process plugin="tor" preload="tor-preload" starttime="60" arguments="--Address relay2 --Nickname relay2 --DataDirectory shadow.data/hosts/relay2 --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f conf/tor.relay.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000" />
+    </host>
+
+    <!-- our clients: each downloads a 1MiB file 10 times -->
+    <host id="client" >
+        <process plugin="tgen" starttime="600" arguments="conf/tgen.client.graphml.xml" />
+    </host>
+
+    <host id="torclient" >
+        <process plugin="tor" preload="tor-preload" starttime="900" arguments="--Address torclient --Nickname torclient --DataDirectory shadow.data/hosts/torclient --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f conf/tor.client.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000" />
+        <process plugin="tgen" starttime="1500" arguments="conf/tgen.torclient.graphml.xml" />
+    </host>
+
+    <host id="torbridgeclient" >
+        <process plugin="tor" preload="tor-preload" starttime="900" arguments="--Address torbridgeclient --Nickname torbridgeclient --DataDirectory shadow.data/hosts/torbridgeclient --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f conf/tor.client.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000 --UseBridges 1 --Bridge 100.0.0.1:9111" />
+        <process plugin="tgen" starttime="1500" arguments="conf/tgen.torclient.graphml.xml" />
+    </host>
+
+    <host id="torhiddenclient" >
+        <process plugin="tor" preload="tor-preload" starttime="900" arguments="--Address torhiddenclient --Nickname torhiddenclient --DataDirectory shadow.data/hosts/torhiddenclient --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f conf/tor.client.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000" />
+        <process plugin="tgen" starttime="1500" arguments="conf/tgen.torhiddenclient.graphml.xml" />
+    </host>
+
+</shadow>
