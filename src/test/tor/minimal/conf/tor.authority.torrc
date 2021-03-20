@@ -1,6 +1,6 @@
 AuthoritativeDirectory 1
 V3AuthoritativeDirectory 1
-V3BandwidthsFile shadow.data/hosts/torflowauthority/v3bw
+V3BandwidthsFile tor-minimal-shadow-ptrace.data/hosts/torflowauthority/v3bw
 ORPort 9111 IPv4Only
 DirPort 9112
 SocksPort 0

@@ -135,6 +135,7 @@ add_subdirectory(socket)
 add_subdirectory(tcp)
 add_subdirectory(threads)
 add_subdirectory(timerfd)
+add_subdirectory(tor)
 add_subdirectory(udp)
 add_subdirectory(unistd)
 

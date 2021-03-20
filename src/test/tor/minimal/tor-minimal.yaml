@@ -1,6 +1,7 @@
 options:
   stoptime: 1800
-  environment: OPENSSL_ia32cap=~0x200000200000000;EVENT_NOSELECT=1;EVENT_NOPOLL=1;EVENT_NOKQUEUE=1;EVENT_NODEVPOLL=1;EVENT_NOEVPORT=1;EVENT_NOWIN32=1
+  # if using 'preload: libshadow-preload-tor.so', set 'OPENSSL_ia32cap=~0x200000200000000'
+  environment: EVENT_NOSELECT=1;EVENT_NOPOLL=1;EVENT_NOKQUEUE=1;EVENT_NODEVPOLL=1;EVENT_NOEVPORT=1;EVENT_NOWIN32=1
 topology:
 - graphml: |-
     <?xml version="1.0" encoding="utf-8"?><graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
@@ -34,8 +35,6 @@ plugins:
   path: ~/.shadow/bin/tgen
 - id: tor
   path: ~/.shadow/bin/tor
-- id: tor-preload
-  path: ~/.shadow/lib/libshadow-preload-tor.so
 hosts:
 - id: fileserver
   bandwidthdown: 102400
@@ -52,9 +51,8 @@ hosts:
     starttime: 1
     arguments: conf/tgen.hiddenserver.graphml.xml
   - plugin: tor
-    preload: tor-preload
     starttime: 900
-    arguments: --Address hiddenserver --Nickname hiddenserver --DataDirectory shadow.data/hosts/hiddenserver
+    arguments: --Address hiddenserver --Nickname hiddenserver --DataDirectory tor-minimal-shadow-ptrace.data/hosts/hiddenserver
       --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f
       conf/tor.hiddenserver.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
 - id: 4uthority
@@ -63,9 +61,8 @@ hosts:
   iphint: 100.0.0.1
   processes:
   - plugin: tor
-    preload: tor-preload
     starttime: 1
-    arguments: --Address 4uthority --Nickname 4uthority --DataDirectory shadow.data/hosts/4uthority
+    arguments: --Address 4uthority --Nickname 4uthority --DataDirectory tor-minimal-shadow-ptrace.data/hosts/4uthority
       --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f
       conf/tor.authority.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
 - id: exit1
@@ -74,9 +71,8 @@ hosts:
   bandwidthup: 10240
   processes:
   - plugin: tor
-    preload: tor-preload
     starttime: 60
-    arguments: --Address exit1 --Nickname exit1 --DataDirectory shadow.data/hosts/exit1
+    arguments: --Address exit1 --Nickname exit1 --DataDirectory tor-minimal-shadow-ptrace.data/hosts/exit1
       --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f
       conf/tor.exit.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
 - id: exit2
@@ -85,9 +81,8 @@ hosts:
   bandwidthup: 10240
   processes:
   - plugin: tor
-    preload: tor-preload
     starttime: 60
-    arguments: --Address exit2 --Nickname exit2 --DataDirectory shadow.data/hosts/exit2
+    arguments: --Address exit2 --Nickname exit2 --DataDirectory tor-minimal-shadow-ptrace.data/hosts/exit2
       --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f
       conf/tor.exit.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
 - id: relay1
@@ -96,9 +91,8 @@ hosts:
   bandwidthup: 10240
   processes:
   - plugin: tor
-    preload: tor-preload
     starttime: 60
-    arguments: --Address relay1 --Nickname relay1 --DataDirectory shadow.data/hosts/relay1
+    arguments: --Address relay1 --Nickname relay1 --DataDirectory tor-minimal-shadow-ptrace.data/hosts/relay1
       --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f
       conf/tor.relay.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
 - id: relay2
@@ -107,9 +101,8 @@ hosts:
   bandwidthup: 10240
   processes:
   - plugin: tor
-    preload: tor-preload
     starttime: 60
-    arguments: --Address relay2 --Nickname relay2 --DataDirectory shadow.data/hosts/relay2
+    arguments: --Address relay2 --Nickname relay2 --DataDirectory tor-minimal-shadow-ptrace.data/hosts/relay2
       --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f
       conf/tor.relay.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
 - id: client
@@ -120,9 +113,8 @@ hosts:
 - id: torclient
   processes:
   - plugin: tor
-    preload: tor-preload
     starttime: 900
-    arguments: --Address torclient --Nickname torclient --DataDirectory shadow.data/hosts/torclient
+    arguments: --Address torclient --Nickname torclient --DataDirectory tor-minimal-shadow-ptrace.data/hosts/torclient
       --GeoIPFile ~/.shadow/share/geoip --defaults-torrc conf/tor.common.torrc -f
       conf/tor.client.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
   - plugin: tgen
@@ -131,10 +123,9 @@ hosts:
 - id: torbridgeclient
   processes:
   - plugin: tor
-    preload: tor-preload
     starttime: 900
     arguments: --Address torbridgeclient --Nickname torbridgeclient --DataDirectory
-      shadow.data/hosts/torbridgeclient --GeoIPFile ~/.shadow/share/geoip --defaults-torrc
+      tor-minimal-shadow-ptrace.data/hosts/torbridgeclient --GeoIPFile ~/.shadow/share/geoip --defaults-torrc
       conf/tor.common.torrc -f conf/tor.client.torrc --BandwidthRate 1024000 --BandwidthBurst
       1024000 --UseBridges 1 --Bridge 100.0.0.1:9111
   - plugin: tgen
@@ -143,10 +134,9 @@ hosts:
 - id: torhiddenclient
   processes:
   - plugin: tor
-    preload: tor-preload
     starttime: 900
     arguments: --Address torhiddenclient --Nickname torhiddenclient --DataDirectory
-      shadow.data/hosts/torhiddenclient --GeoIPFile ~/.shadow/share/geoip --defaults-torrc
+      tor-minimal-shadow-ptrace.data/hosts/torhiddenclient --GeoIPFile ~/.shadow/share/geoip --defaults-torrc
       conf/tor.common.torrc -f conf/tor.client.torrc --BandwidthRate 1024000 --BandwidthBurst
       1024000
   - plugin: tgen
