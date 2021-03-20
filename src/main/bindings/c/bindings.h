@@ -161,4 +161,14 @@ void bytequeue_push(struct ByteQueue *bq, const unsigned char *src, size_t len);
 
 size_t bytequeue_pop(struct ByteQueue *bq, unsigned char *dst, size_t len);
 
+struct Counter *counter_new(void);
+
+void counter_free(struct Counter *counter_ptr);
+
+uint64_t counter_add_one(struct Counter *counter, const char *id);
+
+char *counter_alloc_string(struct Counter *counter);
+
+void counter_free_string(struct Counter *counter, char *ptr);
+
 #endif /* main_bindings_h */
