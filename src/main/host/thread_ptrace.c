@@ -706,6 +706,17 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
                 thread->ipc_syscall.stopped = true;
                 thread->ipc_syscall.pendingStop = ptraceStopReason;
                 thread->ipc_syscall.havePendingStop = true;
+
+                // Get registers in case we need them to service the IPC stop
+                if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
+                    error("ptrace: %s", g_strerror(errno));
+                }
+                if (ptraceStopReason.type == STOPREASON_SYSCALL) {
+                    thread->regs.value.rax = thread->regs.value.orig_rax;
+                }
+                thread->regs.valid = true;
+                thread->regs.dirty = false;
+
                 return event_stop;
             }
             return ptraceStopReason;
