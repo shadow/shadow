@@ -450,17 +450,28 @@ static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
     thread->syscall_rip = 0;
 }
 
-static void _threadptrace_enterStateSyscall(ThreadPtrace* thread) {
-    struct user_regs_struct* regs = &thread->regs.value;
-    if (!thread->regs.valid) {
-        if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, regs) < 0) {
-            error("ptrace: %s", g_strerror(errno));
-            return;
-        }
-        thread->regs.value.rax = thread->regs.value.orig_rax;
-        thread->regs.valid = true;
-        thread->syscall_rip = regs->rip - sizeof(SYSCALL_INSTRUCTION);
+static void _threadptrace_getregs(ThreadPtrace* thread) {
+    if (thread->regs.valid) {
+        debug("Already have regs");
+        return;
     }
+    if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
+        error("ptrace: %s", g_strerror(errno));
+    }
+    if (thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL ||
+        (thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL &&
+         thread->ipc_syscall.pendingStop.type == STOPREASON_SYSCALL)) {
+        thread->regs.value.rax = thread->regs.value.orig_rax;
+    }
+    thread->regs.valid = true;
+    thread->regs.dirty = false;
+}
+
+static void _threadptrace_enterStateSyscall(ThreadPtrace* thread) {
+    _threadptrace_getregs(thread);
+
+    struct user_regs_struct* regs = &thread->regs.value;
+    thread->syscall_rip = regs->rip - sizeof(SYSCALL_INSTRUCTION);
     thread->syscall_args = (SysCallArgs){
         .number = regs->orig_rax,
         .args = {regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8, regs->r9},
@@ -477,32 +488,22 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
                                               int signal) {
     thread->childState = THREAD_PTRACE_CHILD_STATE_SIGNALLED;
     if (signal == SIGSEGV) {
-        struct user_regs_struct regs;
-        if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
-            error("ptrace: %s", g_strerror(errno));
-            return;
-        }
-        debug("threadptrace_enterStateSignalled regs: %s", _regs_to_str(&regs));
-        uint64_t eip = regs.rip;
+        _threadptrace_getregs(thread);
+        debug("threadptrace_enterStateSignalled regs: %s", _regs_to_str(&thread->regs.value));
+        uint64_t eip = thread->regs.value.rip;
         const uint8_t* buf = process_getReadablePtr(
             thread->base.process, _threadPtraceToThread(thread), (PluginPtr){eip}, 4);
         if (isRdtsc(buf)) {
             debug("emulating rdtsc");
-            Tsc_emulateRdtsc(&thread->tsc, &regs, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
-            if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &regs) < 0) {
-                error("ptrace: %s", g_strerror(errno));
-                return;
-            }
+            Tsc_emulateRdtsc(&thread->tsc, &thread->regs.value, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
+            thread->regs.dirty = true;
             return;
         }
         if (isRdtscp(buf)) {
             debug("emulating rdtscp");
             Tsc_emulateRdtscp(
-                &thread->tsc, &regs, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
-            if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &regs) < 0) {
-                error("ptrace: %s", g_strerror(errno));
-                return;
-            }
+                &thread->tsc, &thread->regs.value, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
+            thread->regs.dirty = true;
             return;
         }
         // Do not use `error` here, since that'll cause us to immediately abort
@@ -706,16 +707,6 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
                 thread->ipc_syscall.stopped = true;
                 thread->ipc_syscall.pendingStop = ptraceStopReason;
                 thread->ipc_syscall.havePendingStop = true;
-
-                // Get registers in case we need them to service the IPC stop
-                if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
-                    error("ptrace: %s", g_strerror(errno));
-                }
-                if (ptraceStopReason.type == STOPREASON_SYSCALL) {
-                    thread->regs.value.rax = thread->regs.value.orig_rax;
-                }
-                thread->regs.valid = true;
-                thread->regs.dirty = false;
 
                 return event_stop;
             }
@@ -1183,14 +1174,6 @@ static void _threadptrace_ensureStopped(ThreadPtrace* thread) {
         if (reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP) {
             debug("got sigstop");
             thread->ipc_syscall.stopped = true;
-
-            if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
-                error("ptrace: %s", g_strerror(errno));
-                abort();
-            }
-            // Do NOT copy orig_rax to rax here; that should only be done in a syscall stop.
-            thread->regs.valid = true;
-            thread->regs.dirty = false;
             return;
         }
         if (reason.type == STOPREASON_SYSCALL) {
@@ -1202,14 +1185,6 @@ static void _threadptrace_ensureStopped(ThreadPtrace* thread) {
             thread->ipc_syscall.pendingStop = reason;
             thread->ipc_syscall.havePendingStop = true;
 
-            if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
-                error("ptrace: %s", g_strerror(errno));
-                abort();
-            }
-            thread->regs.value.rax = thread->regs.value.orig_rax;
-            thread->syscall_rip = thread->regs.value.rip - sizeof(SYSCALL_INSTRUCTION);
-            thread->regs.valid = true;
-            thread->regs.dirty = false;
             return;
         } else {
             error("Unexpected stop");
@@ -1329,7 +1304,7 @@ static long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
 
     // Inject the requested syscall number and arguments.
     // Set up arguments to syscall.
-    utility_assert(thread->regs.valid);
+    _threadptrace_getregs(thread);
     struct user_regs_struct regs = thread->regs.value;
     regs.rax = n;
     regs.rdi = va_arg(args, long);
@@ -1383,6 +1358,8 @@ static long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
             // return value, if any. e.g. this happens after the `exit` syscall.
             return -ECHILD;
         }
+        // Don't use _threadptrace_getregs here, since that'd overwrite our
+        // saved registers we need to restore later.
         if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
             error("ptrace: %s", g_strerror(errno));
             abort();
