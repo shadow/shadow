@@ -492,3 +492,32 @@ const gchar* objectcounter_diffsToString(ObjectCounter* counter) {
 
     return (const gchar*) counter->stringBuffer->str;
 }
+
+bool objectcounter_leakDetected(ObjectCounter* counter) {
+    MAGIC_ASSERT(counter);
+
+    return 0 != ((counter->counters.task.new - counter->counters.task.free) &
+           (counter->counters.event.new - counter->counters.event.free) &
+           (counter->counters.packet.new - counter->counters.packet.free) &
+           (counter->counters.payload.new - counter->counters.payload.free) &
+           (counter->counters.router.new - counter->counters.router.free) &
+           (counter->counters.host.new - counter->counters.host.free) &
+           (counter->counters.netiface.new - counter->counters.netiface.free) &
+           (counter->counters.process.new - counter->counters.process.free) &
+           (counter->counters.threadpreload.new - counter->counters.threadpreload.free) &
+           (counter->counters.threadptrace.new - counter->counters.threadptrace.free) &
+           (counter->counters.syscallcondition.new - counter->counters.syscallcondition.free) &
+           (counter->counters.syscallhandler.new - counter->counters.syscallhandler.free) &
+           (counter->counters.descriptorlistener.new - counter->counters.descriptorlistener.free) &
+           (counter->counters.descriptortable.new - counter->counters.descriptortable.free) &
+           (counter->counters.descriptor.new - counter->counters.descriptor.free) &
+           (counter->counters.channel.new - counter->counters.channel.free) &
+           (counter->counters.tcp.new - counter->counters.tcp.free) &
+           (counter->counters.udp.new - counter->counters.udp.free) &
+           (counter->counters.epoll.new - counter->counters.epoll.free) &
+           (counter->counters.eventd.new - counter->counters.eventd.free) &
+           (counter->counters.timer.new - counter->counters.timer.free) &
+           (counter->counters.file.new - counter->counters.file.free) &
+           (counter->counters.futex.new - counter->counters.futex.free) &
+           (counter->counters.futextable.new - counter->counters.futextable.free));
+}

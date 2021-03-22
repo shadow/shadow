@@ -95,7 +95,7 @@ macro(add_shadow_tests)
       set_property(TEST ${SHADOW_TEST_NAME} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
 
       # check that we didn't leak any reference-counted objects
-      set_property(TEST ${SHADOW_TEST_NAME} PROPERTY PASS_REGULAR_EXPRESSION "ObjectCounter: counter diffs: task=0 event=0 packet=0 payload=0 router=0 host=0 netiface=0 process=0 threadpreload=0 threadptrace=0 syscallcondition=0 syscallhandler=0 descriptorlistener=0 descriptortable=0 descriptor=0 channel=0 tcp=0 udp=0 epoll=0 eventd=0 timer=0 file=0 futex=0 futextable=0")
+      set_property(TEST ${SHADOW_TEST_NAME} PROPERTY FAIL_REGULAR_EXPRESSION "Memory leak detected")
 
       if(DEFINED SHADOW_TEST_PROPERTIES)
          set_tests_properties(${SHADOW_TEST_NAME} PROPERTIES ${SHADOW_TEST_PROPERTIES})

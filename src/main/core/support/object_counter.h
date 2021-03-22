@@ -7,6 +7,7 @@
 #define SRC_MAIN_CORE_SUPPORT_SHD_OBJECT_COUNTER_H_
 
 #include <glib.h>
+#include <stdbool.h>
 
 typedef enum _ObjectType ObjectType;
 enum _ObjectType {
@@ -62,5 +63,8 @@ const gchar* objectcounter_valuesToString(ObjectCounter* counter);
 /* prints the differences between new and free counters as a string that can be logged.
  * the string is owned by the object counter, and should not be freed by the caller. */
 const gchar* objectcounter_diffsToString(ObjectCounter* counter);
+
+/* returns true if any of the new and free counters aren't equal */
+bool objectcounter_leakDetected(ObjectCounter* counter);
 
 #endif /* SRC_MAIN_CORE_SUPPORT_SHD_OBJECT_COUNTER_H_ */
