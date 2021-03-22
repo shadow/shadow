@@ -222,6 +222,9 @@ gpointer worker_run(WorkerRunData* data) {
         g_free(data);
     }
 
+    // Flushes any remaining message buffered for this thread.
+    shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
+
     /* now the thread has ended */
     if (notifyJoined) {
         countdownlatch_countDown(notifyJoined);

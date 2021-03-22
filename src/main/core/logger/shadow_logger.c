@@ -270,6 +270,24 @@ void shadow_logger_flushRecords(ShadowLogger* logger, pthread_t callerThread) {
     }
 }
 
+static void _shadow_logger_flush_all(ShadowLogger* logger) {
+    MAGIC_ASSERT(logger);
+
+    GList* keys = g_hash_table_get_keys(logger->threadToDataMap);
+    GList* iter = keys ? g_list_first(keys) : NULL;
+
+    while (iter) {
+        if (iter->data) {
+            shadow_logger_flushRecords(logger, (pthread_t)iter->data);
+        }
+        iter = g_list_next(iter);
+    }
+
+    if (keys) {
+        g_list_free(keys);
+    }
+}
+
 static gchar* _logger_getNewLocalTimeStr(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
 
@@ -402,6 +420,9 @@ ShadowLogger* shadow_logger_new(LogLevel filterLevel) {
 
 static void _logger_free(ShadowLogger* logger) {
     MAGIC_ASSERT(logger);
+
+    // Flush all remaining buffered log message for all threads
+    _shadow_logger_flush_all(logger);
 
     /* print the final log message that we are shutting down
      * this will be the last message printed by our logger */
