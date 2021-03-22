@@ -2,28 +2,44 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+
+/*!
+A counter that can be used to count frequencies of a set of objects. The counter starts
+with no keys. When an unknown key is incremented, the counter adds a new key to an
+internal map and sets the count for that key to 1. When a known key is incremented, the
+count for that key increases. The state of the counter can be extracted by converting it
+to a string, which lists the counts for all keys sorted with the heaviest hitters first.
+Currently, only String types are supported, but we may eventually support counting
+generic types.
+*/
+
 use std::collections::HashMap;
 use std::iter::FromIterator;
 
+/// The main counter object that maps individual keys to count values.
 pub struct Counter {
+    // TODO: convert this so we could count generic types instead of Strings
     items: HashMap<String, u64>,
 }
 
 impl Counter {
+    /// Initializes a new counter map that starts with no keys.
     pub fn new() -> Counter {
         Counter {
             items: HashMap::new(),
         }
     }
 
+    /// Increment the counter value for the key given by id.
+    /// Returns the value of the counter after it was incremented.
     pub fn add_one(&mut self, id: &str) -> u64 {
         let count = self.items.entry(id.to_string()).or_insert(0);
         *count = *count + 1;
         *count
     }
 
-    // Used for unit test
-    #[allow(dead_code)]
+    /// Returns the counter value for the key given by id, or 0 if the key has not
+    /// previously been incremented.
     pub fn get_value(&mut self, id: &str) -> u64 {
         match self.items.get(&id.to_string()) {
             Some(val) => *val,
@@ -31,6 +47,9 @@ impl Counter {
         }
     }
 
+    /// Returns a string representation of the counter. The string starts with "Counts:"
+    /// and then lists known keys and values as a space-separated list of "key=value"
+    /// pairs sorted by value with the largest value first.
     fn to_string(&mut self) -> String {
         // Sort the counts with the heaviest hitters first
         let mut item_vec = Vec::from_iter(&self.items);
@@ -77,6 +96,8 @@ mod export {
         counter.add_one(id.to_str().unwrap())
     }
 
+    /// Creates a new string representation of the counter, e.g., for logging.
+    /// The returned string must be free'd by passing it to counter_free_string.
     #[no_mangle]
     pub extern "C" fn counter_alloc_string(counter: *mut Counter) -> *mut c_char {
         assert!(!counter.is_null());
@@ -88,6 +109,7 @@ mod export {
         CString::new(string).unwrap().into_raw()
     }
 
+    /// Frees a string previously returned from counter_alloc_string.
     #[no_mangle]
     pub extern "C" fn counter_free_string(counter: *mut Counter, ptr: *mut c_char) {
         assert!(!counter.is_null());
