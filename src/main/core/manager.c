@@ -250,6 +250,10 @@ gint manager_free(Manager* manager) {
     if (manager->objectCounts != NULL) {
         message("%s", objectcounter_valuesToString(manager->objectCounts));
         message("%s", objectcounter_diffsToString(manager->objectCounts));
+        if (objectcounter_leakDetected(manager->objectCounts)) {
+            /* don't change the formatting of this line as we search for it in test cases */
+            warning("Memory leak detected");
+        }
         objectcounter_free(manager->objectCounts);
     }
 

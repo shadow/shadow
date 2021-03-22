@@ -1,14 +1,127 @@
+# Syntax reference:
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
+
 name: Tor Tests
 
-# this is a placeholder workflow so that we can run 'workflow_dispatch'
-# events on other branches
+defaults:
+  run:
+    shell: bash
 
 on:
+  push:
+    branches: [dev]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Full git ref (for example 'd7a71b83...' or 'pull/1234/head')"
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   testing:
     runs-on: ubuntu-latest
+
+    container:
+      image: ${{ matrix.container }}
+      # the default for ubuntu:18.04, but with the size increased from 65536k
+      options: '--shm-size="1g"'
+
+    strategy:
+      matrix:
+        container: ['ubuntu:20.04']
+        # supported tor releases are here:
+        # https://gitlab.torproject.org/legacy/trac/-/wikis/org/teams/NetworkTeam/CoreTorReleases
+        tor: ['tor-0.3.5.14', 'tor-0.4.4.8', 'tor-0.4.5.7']
+
+    env:
+      CC: 'clang'
+      CONTAINER: ${{ matrix.container }}
+      BUILDTYPE: 'release'
+      RUSTPROFILE: minimal
+
     steps:
-      - name: Always Error
-        run: exit 1
+      - name: Checkout shadow
+        uses: actions/checkout@v2
+        with:
+          path: shadow
+
+      - name: Checkout shadow input ref
+        if: github.event.inputs.ref
+        run: |
+          git fetch origin '${{ github.event.inputs.ref }}'
+          git checkout FETCH_HEAD
+          git rev-parse HEAD
+
+      - name: Checkout tor
+        uses: actions/checkout@v2
+        with:
+          path: tor
+          # this is not the official tor repo, but it's managed by the Tor Project
+          # and allows us to simplify our CI script
+          repository: torproject/tor
+          ref: ${{ matrix.tor }}
+
+      - name: Checkout tgen
+        uses: actions/checkout@v2
+        with:
+          path: tgen
+          repository: shadow/tgen
+          ref: 47d5eb385195
+
+      - name: Install dependencies
+        run: |
+          cd shadow
+          . ci/container_scripts/install_deps.sh
+          . ci/container_scripts/install_extra_deps.sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          # dependencies for tor
+          DEBIAN_FRONTEND=noninteractive apt-get install -y automake libevent-dev libssl-dev zlib1g-dev
+          mkdir -p ~/.shadow/bin
+
+      - name: Build tor
+        run: |
+          cd tor
+          ./autogen.sh
+          ./configure --disable-asciidoc --disable-unittests
+          make -j$(nproc)
+          ln -s $(pwd)/src/app/tor ~/.shadow/bin/tor
+
+      - name: Build tgen
+        run: |
+          cd tgen
+          mkdir build && cd build
+          cmake ..
+          make -j$(nproc)
+          cd ..
+          ln -s $(pwd)/build/src/tgen ~/.shadow/bin/tgen
+
+      - name: Build shadow
+        run: |
+          cd shadow
+          . ci/container_scripts/build_and_install.sh
+
+      - name: Test
+        run: |
+          cd shadow
+          ./setup test -- --build-config tor --label-regex tor
+
+      - name: Last 200 log lines
+        if: failure()
+        run: |
+          tail -n 200 shadow/build/Testing/Temporary/LastTest.log
+
+      - name: Upload shadow data directory
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: shadow-data-dir
+          path: shadow/build/src/test/tor/**/*.data/*
+
+      - name: Upload shadow log file
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: shadow-log-file
+          path: shadow/build/Testing/Temporary/LastTest.log

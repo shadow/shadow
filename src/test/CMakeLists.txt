@@ -45,7 +45,7 @@ endmacro()
 ## example: add_shadow_tests(BASENAME bind METHODS ptrace preload LOGLEVEL debug ARGS --pin-cpus)
 ## will create two tests named bind-shadow-ptrace and bind-shadow-preload
 macro(add_shadow_tests)
-    cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG;CHECK_RETVAL" "METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
+   cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG;CHECK_RETVAL;POST_CMD" "METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
 
    if(NOT DEFINED SHADOW_TEST_LOGLEVEL)
       set(SHADOW_TEST_LOGLEVEL "debug")
@@ -57,6 +57,10 @@ macro(add_shadow_tests)
 
    if(NOT DEFINED SHADOW_TEST_CHECK_RETVAL)
       set(SHADOW_TEST_CHECK_RETVAL TRUE)
+   endif()
+
+   if(NOT DEFINED SHADOW_TEST_POST_CMD)
+      set(SHADOW_TEST_POST_CMD "true")
    endif()
    
    string(REPLACE ";" " " SHADOW_TEST_ARGS "${SHADOW_TEST_ARGS}")
@@ -72,6 +76,7 @@ macro(add_shadow_tests)
          --log-level=${SHADOW_TEST_LOGLEVEL} \
          ${SHADOW_TEST_ARGS} \
          - \
+         && (${SHADOW_TEST_POST_CMD}) \
          "
       )
       
@@ -95,7 +100,7 @@ macro(add_shadow_tests)
       set_property(TEST ${SHADOW_TEST_NAME} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
 
       # check that we didn't leak any reference-counted objects
-      set_property(TEST ${SHADOW_TEST_NAME} PROPERTY PASS_REGULAR_EXPRESSION "ObjectCounter: counter diffs: task=0 event=0 packet=0 payload=0 router=0 host=0 netiface=0 process=0 threadpreload=0 threadptrace=0 syscallcondition=0 syscallhandler=0 descriptorlistener=0 descriptortable=0 descriptor=0 channel=0 tcp=0 udp=0 epoll=0 eventd=0 timer=0 file=0 futex=0 futextable=0")
+      set_property(TEST ${SHADOW_TEST_NAME} PROPERTY FAIL_REGULAR_EXPRESSION "Memory leak detected")
 
       if(DEFINED SHADOW_TEST_PROPERTIES)
          set_tests_properties(${SHADOW_TEST_NAME} PROPERTIES ${SHADOW_TEST_PROPERTIES})
@@ -135,6 +140,7 @@ add_subdirectory(socket)
 add_subdirectory(tcp)
 add_subdirectory(threads)
 add_subdirectory(timerfd)
+add_subdirectory(tor)
 add_subdirectory(udp)
 add_subdirectory(unistd)
 
