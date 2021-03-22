@@ -45,7 +45,7 @@ endmacro()
 ## example: add_shadow_tests(BASENAME bind METHODS ptrace preload LOGLEVEL debug ARGS --pin-cpus)
 ## will create two tests named bind-shadow-ptrace and bind-shadow-preload
 macro(add_shadow_tests)
-    cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG;CHECK_RETVAL" "METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
+   cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG;CHECK_RETVAL;POST_CMD" "METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
 
    if(NOT DEFINED SHADOW_TEST_LOGLEVEL)
       set(SHADOW_TEST_LOGLEVEL "debug")
@@ -57,6 +57,10 @@ macro(add_shadow_tests)
 
    if(NOT DEFINED SHADOW_TEST_CHECK_RETVAL)
       set(SHADOW_TEST_CHECK_RETVAL TRUE)
+   endif()
+
+   if(NOT DEFINED SHADOW_TEST_POST_CMD)
+      set(SHADOW_TEST_POST_CMD "true")
    endif()
    
    string(REPLACE ";" " " SHADOW_TEST_ARGS "${SHADOW_TEST_ARGS}")
@@ -72,6 +76,7 @@ macro(add_shadow_tests)
          --log-level=${SHADOW_TEST_LOGLEVEL} \
          ${SHADOW_TEST_ARGS} \
          - \
+         && (${SHADOW_TEST_POST_CMD}) \
          "
       )
       
