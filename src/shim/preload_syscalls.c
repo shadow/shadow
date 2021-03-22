@@ -45,7 +45,6 @@ INTERPOSE(eventfd2);
 INTERPOSE(faccessat);
 INTERPOSE(fadvise64);
 INTERPOSE(fallocate);
-INTERPOSE(fchdir);
 INTERPOSE(fchmod);
 INTERPOSE(fchmodat);
 INTERPOSE(fchown);

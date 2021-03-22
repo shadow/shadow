@@ -205,21 +205,6 @@ SysCallReturn syscallhandler_fchmod(SysCallHandler* sys,
         .retval.as_i64 = file_fchmod(file_desc, args->args[1].as_u64)};
 }
 
-SysCallReturn syscallhandler_fchdir(SysCallHandler* sys,
-                                    const SysCallArgs* args) {
-    int fd = args->args[0].as_i64;
-
-    /* Get and validate the file descriptor. */
-    File* file_desc = NULL;
-    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
-    if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
-    }
-
-    return (SysCallReturn){
-        .state = SYSCALL_DONE, .retval.as_i64 = file_fchdir(file_desc)};
-}
-
 SysCallReturn syscallhandler_fallocate(SysCallHandler* sys,
                                        const SysCallArgs* args) {
     int fd = args->args[0].as_i64;

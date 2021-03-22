@@ -561,20 +561,6 @@ int file_fchmod(File* file, mode_t mode) {
     return (result < 0) ? -errno : result;
 }
 
-int file_fchdir(File* file) {
-    MAGIC_ASSERT(file);
-
-    if (!_file_getOSBackedFD(file)) {
-        return -EBADF;
-    }
-
-    debug("File %i fchdir os-backed file %i", _file_getFD(file),
-          _file_getOSBackedFD(file));
-
-    int result = fchdir(_file_getOSBackedFD(file));
-    return (result < 0) ? -errno : result;
-}
-
 int file_ftruncate(File* file, off_t length) {
     MAGIC_ASSERT(file);
 

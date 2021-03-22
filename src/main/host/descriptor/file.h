@@ -79,7 +79,6 @@ int file_fstatfs(File* file, struct statfs* statbuf);
 int file_fsync(File* file);
 int file_fchown(File* file, uid_t owner, gid_t group);
 int file_fchmod(File* file, mode_t mode);
-int file_fchdir(File* file);
 int file_ftruncate(File* file, off_t length);
 int file_fallocate(File* file, int mode, off_t offset, off_t length);
 int file_fadvise(File* file, off_t offset, off_t len, int advice);

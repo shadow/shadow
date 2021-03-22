@@ -284,7 +284,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(faccessat);
         HANDLE(fadvise64);
         HANDLE(fallocate);
-        HANDLE(fchdir);
         HANDLE(fchmod);
         HANDLE(fchmodat);
         HANDLE(fchown);
@@ -391,6 +390,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // **************************************
         // Not handled (yet):
         // **************************************
+        // NATIVE(chdir);
+        // NATIVE(fchdir);
         // NATIVE(io_getevents);
         // NATIVE(waitid);
         // NATIVE(msync);
@@ -424,7 +425,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         // ***************************************
         NATIVE(access);
         NATIVE(arch_prctl);
-        NATIVE(chdir);
         NATIVE(chmod);
         NATIVE(chown);
         NATIVE(exit);
