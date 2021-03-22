@@ -34,4 +34,4 @@ hosts:
   - plugin: testphold
     starttime: 1
     arguments: loglevel=info basename=peer quantity=10 msgload=1 cpuload=1 size=1
-      weightsfilepath=weights.txt runtime=5
+      weightsfilepath=../../../weights.txt runtime=5

@@ -20,9 +20,6 @@ add_custom_target(tor-minimal-shadow-data-template ALL
                     0700
                     ${CMAKE_CURRENT_BINARY_DIR}/shadow.data.template/hosts/hiddenserver/hs)
 
-# we cannot add other methods since the Shadow config file requires the data
-# directory to be hard-coded as 'tor-minimal-shadow-ptrace.data'
-
 add_shadow_tests(BASENAME tor-minimal
                  METHODS ptrace
                  LOGLEVEL info

@@ -658,10 +658,11 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
 
     proc->interposeMethod = interposeMethod;
 
-    proc->workingDir = getcwd(NULL, 0);
+    proc->workingDir = realpath(host_getDataPath(host), NULL);
 
     if (proc->workingDir == NULL) {
-        error("Could not get shadow's working directory");
+        error("Could not allocate memory for the process' working directory, or directory did not "
+              "exist");
     }
 
     /* add log file to env */
