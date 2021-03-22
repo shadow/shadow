@@ -1,0 +1,14 @@
+name: Tor Tests
+
+# this is a placeholder workflow so that we can run 'workflow_dispatch'
+# events on other branches
+
+on:
+  workflow_dispatch:
+
+jobs:
+  testing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Always Error
+        run: exit 1
