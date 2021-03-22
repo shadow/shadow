@@ -69,7 +69,7 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
     int handle = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)filed);
 
     /* Now open the file. */
-    errcode = file_open(filed, pathname, flags, mode);
+    errcode = file_open(filed, pathname, flags, mode, process_getWorkingDir(sys->process));
     if (errcode < 0) {
         /* This will remove the descriptor entry and unref/free the File. */
         descriptor_close((LegacyDescriptor*)filed);

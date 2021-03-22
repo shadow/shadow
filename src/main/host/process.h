@@ -50,6 +50,8 @@ void process_continue(Process* proc, Thread* thread);
 void process_stop(Process* proc);
 void process_detachPlugin(gpointer procptr, gpointer nothing);
 
+const char* process_getWorkingDir(Process* proc);
+
 // Adds a new thread to the process and schedules it to run.
 // Intended for use by `clone`.
 void process_addThread(Process* proc, Thread* thread);

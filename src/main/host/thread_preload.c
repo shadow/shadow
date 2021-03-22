@@ -125,8 +125,7 @@ static gchar** _add_shadow_pid_to_env(gchar** envp) {
 }
 
 static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, char* const argv[],
-                                      char* const envp[]) {
-
+                                      char* const envp[], const char* workingDir) {
     // vfork has superior performance to fork with large workloads.
     pid_t pid = vfork();
 
@@ -142,6 +141,12 @@ static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, c
             break;
         case 0: {
             // child
+
+            // Set the working directory
+            utility_assert(workingDir != NULL);
+            if (chdir(workingDir) < 0) {
+                error("chdir(%s): %s", workingDir, g_strerror(errno));
+            }
 
             int rc = execvpe(file, argv, envp);
             if (rc == -1) {
@@ -169,7 +174,7 @@ static void _threadpreload_cleanup(ThreadPreload* thread) {
     }
 }
 
-pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
+pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv, const char* workingDir) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     /* set the env for the child */
@@ -192,11 +197,12 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv) {
 
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr(argv);
-    message("forking new thread with environment '%s' and arguments '%s'", envStr, argStr);
+    message("forking new thread with environment '%s', arguments '%s', and working directory '%s'",
+            envStr, argStr, workingDir);
     g_free(envStr);
     g_free(argStr);
 
-    pid_t child_pid = _threadpreload_fork_exec(thread, argv[0], argv, myenvv);
+    pid_t child_pid = _threadpreload_fork_exec(thread, argv[0], argv, myenvv, workingDir);
 
     /* cleanup the dupd env*/
     if (myenvv) {
