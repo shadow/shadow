@@ -41,7 +41,4 @@ FLAGS+=("-C" "$CONFIG")
 
 FLAGS+=("--output-on-failure")
 
-# Try any that failed once more.
-# TODO: We should only do this for an allowed-list of known-flaky tests,
-# and there should be issues filed for each such test.
-./setup test "${FLAGS[@]}" || ./setup test "${FLAGS[@]}" --rerun-failed
+./setup test "${FLAGS[@]}"
