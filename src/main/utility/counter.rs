@@ -13,21 +13,21 @@ Currently, only String types are supported, but we may eventually support counti
 generic types.
 */
 
-use std::collections::btree_map::BTreeMap;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result};
 use std::iter::FromIterator;
 
 /// The main counter object that maps individual keys to count values.
 pub struct Counter {
     // TODO: convert this so we could count generic types instead of Strings
-    items: BTreeMap<String, u64>,
+    items: HashMap<String, u64>,
 }
 
 impl Counter {
     /// Initializes a new counter map that starts with no keys.
     pub fn new() -> Counter {
         Counter {
-            items: BTreeMap::new(),
+            items: HashMap::new(),
         }
     }
 
