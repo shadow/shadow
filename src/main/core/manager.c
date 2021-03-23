@@ -222,13 +222,15 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
         utility_assert(success);
     }
 
-    gchar* templateDataPath =
-        g_build_filename(manager->cwdPath, options_getDataTemplatePath(options), NULL);
-    if (g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
-        gboolean success = utility_copyAll(templateDataPath, manager->dataPath);
-        utility_assert(success);
+    gchar* templateDataPath = options_getDataTemplatePath(options);
+    if (templateDataPath != NULL) {
+        templateDataPath = g_build_filename(manager->cwdPath, templateDataPath, NULL);
+        if (g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
+            gboolean success = utility_copyAll(templateDataPath, manager->dataPath);
+            utility_assert(success);
+        }
+        g_free(templateDataPath);
     }
-    g_free(templateDataPath);
 
     /* now make sure the hosts path exists, as it may not have been in the template */
     g_mkdir_with_parents(manager->hostsPath, 0775);
