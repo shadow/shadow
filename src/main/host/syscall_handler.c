@@ -115,7 +115,7 @@ static void _syscallhandler_free(SysCallHandler* sys) {
 
     if (sys->syscall_counter) {
         char* str = counter_alloc_string(sys->syscall_counter);
-        message("%s", str);
+        message("Syscall counts: %s", str);
         counter_free_string(sys->syscall_counter, str);
         counter_free(sys->syscall_counter);
     }

@@ -14,6 +14,7 @@ generic types.
 */
 
 use std::collections::btree_map::BTreeMap;
+use std::fmt::{Display, Formatter, Result};
 use std::iter::FromIterator;
 
 /// The main counter object that maps individual keys to count values.
@@ -55,21 +56,27 @@ impl Counter {
             None => 0,
         }
     }
+}
 
-    /// Returns a string representation of the counter. The string starts with "Counts:"
-    /// and then lists known keys and values as a space-separated list of "key=value"
-    /// pairs sorted by value with the largest value first.
-    fn to_string(&mut self) -> String {
+impl Display for Counter {
+    /// Returns a string representation of the counter in the form
+    ///   `{key1:value1, key2:value2, ..., keyN:valueN}`
+    /// for known keys and values, where the list is sorted by value with the
+    /// largest value first.
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         // Sort the counts with the heaviest hitters first
         let mut item_vec = Vec::from_iter(&self.items);
         item_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
 
-        // Create a string representation of the counts
-        let mut string = String::from("Counts:");
-        for item in item_vec.iter() {
-            string.push_str(format!(" {}={}", item.0, item.1).as_str());
+        // Create a string representation of the counts by iterating over the items.
+        write!(f, "{{")?;
+        for i in 0..item_vec.len() {
+            write!(f, "{}:{}", item_vec[i].0, item_vec[i].1)?;
+            if i < (item_vec.len() - 1) {
+                write!(f, ", ")?;
+            }
         }
-        string
+        write!(f, "}}")
     }
 }
 
@@ -170,7 +177,7 @@ mod tests {
         // Make sure the keys are sorted with the largest count first
         assert_eq!(
             counter.to_string(),
-            String::from("Counts: write=3 read=2 close=1")
+            String::from("{write:3, read:2, close:1}")
         );
 
         counter.add_one("read");
@@ -179,7 +186,7 @@ mod tests {
         // The order should have changed with read first now
         assert_eq!(
             counter.to_string(),
-            String::from("Counts: read=4 write=3 close=1")
+            String::from("{read:4, write:3, close:1}")
         );
     }
 }
