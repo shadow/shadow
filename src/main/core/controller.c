@@ -465,6 +465,10 @@ gint controller_run(Controller* controller) {
                     controller->bootstrapEndTime, managerSeed, element->preloadPath.string->str,
                     element->environment.isSet ? element->environment.string->str : NULL);
 
+    if (controller->manager == NULL) {
+        error("unable to create manager");
+    }
+
     message("registering plugins and hosts");
 
     /* register the components needed by each manager.

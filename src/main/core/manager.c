@@ -218,8 +218,7 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
     manager->hostsPath = g_build_filename(manager->dataPath, "hosts", NULL);
 
     if (g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
-        gboolean success = utility_removeAll(manager->dataPath);
-        utility_assert(success);
+        error("data directory '%s' already exists", manager->dataPath);
     }
 
     gchar* templateDataPath = options_getDataTemplatePath(options);
