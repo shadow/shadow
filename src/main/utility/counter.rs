@@ -33,9 +33,18 @@ impl Counter {
     /// Increment the counter value for the key given by id.
     /// Returns the value of the counter after it was incremented.
     pub fn add_one(&mut self, id: &str) -> u64 {
-        let count = self.items.entry(id.to_string()).or_insert(0);
-        *count = *count + 1;
-        *count
+        match self.items.get_mut(id) {
+            Some(val) => {
+                // Increment and return the existing value without allocating new key
+                *val = *val + 1;
+                *val
+            }
+            None => {
+                // Allocate new key and insert it with initial count of 1
+                assert_eq!(self.items.insert(id.to_string(), 1), None);
+                1
+            }
+        }
     }
 
     /// Returns the counter value for the key given by id, or 0 if the key has not
