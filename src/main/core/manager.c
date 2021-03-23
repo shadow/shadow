@@ -221,14 +221,28 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
         error("data directory '%s' already exists", manager->dataPath);
     }
 
-    gchar* templateDataPath = options_getDataTemplatePath(options);
+    const gchar* templateDataPath = options_getDataTemplatePath(options);
     if (templateDataPath != NULL) {
-        templateDataPath = g_build_filename(manager->cwdPath, templateDataPath, NULL);
-        if (g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
-            gboolean success = utility_copyAll(templateDataPath, manager->dataPath);
-            utility_assert(success);
+        gchar* absTemplatePath = g_build_filename(manager->cwdPath, templateDataPath, NULL);
+
+        if (!g_file_test(absTemplatePath, G_FILE_TEST_EXISTS)) {
+            error("data template directory '%s' does not exist", absTemplatePath);
         }
-        g_free(templateDataPath);
+
+        if (!utility_copyAll(absTemplatePath, manager->dataPath)) {
+            error("could not copy the data template directory '%s'", absTemplatePath);
+        }
+
+        g_free(absTemplatePath);
+    } else {
+        /* provide a warning for backwards compatibility; can remove this sometime in the future */
+        gchar* compatTemplatePath =
+            g_build_filename(manager->cwdPath, "shadow.data.template", NULL);
+        if (g_file_test(compatTemplatePath, G_FILE_TEST_EXISTS)) {
+            warning("The directory 'shadow.data.template' exists, but '--data-template' was not "
+                    "set. Ignore this warning if this was intentional.");
+        }
+        g_free(compatTemplatePath);
     }
 
     /* now make sure the hosts path exists, as it may not have been in the template */
