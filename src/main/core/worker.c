@@ -195,6 +195,9 @@ gpointer worker_run(WorkerRunData* data) {
     /* this will free the host data that we have been managing */
     scheduler_awaitFinish(worker->scheduler);
 
+    // Flushes any remaining message buffered for this thread.
+    shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
+
     scheduler_unref(worker->scheduler);
 
     /* tell that we are done running */
