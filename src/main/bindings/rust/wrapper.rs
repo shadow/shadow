@@ -63,6 +63,11 @@ pub type Host = _Host;
 pub type LegacyDescriptor = [u64; 6usize];
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct Counter {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct PosixFileArc {
     _unused: [u8; 0],
 }
@@ -583,13 +588,14 @@ pub struct _SysCallHandler {
     pub perfSecondsCurrent: gdouble,
     pub perfSecondsTotal: gdouble,
     pub numSyscalls: ::std::os::raw::c_long,
+    pub syscall_counter: *mut Counter,
     pub referenceCount: ::std::os::raw::c_int,
 }
 #[test]
 fn bindgen_test_layout__SysCallHandler() {
     assert_eq!(
         ::std::mem::size_of::<_SysCallHandler>(),
-        88usize,
+        96usize,
         concat!("Size of: ", stringify!(_SysCallHandler))
     );
     assert_eq!(
@@ -704,8 +710,18 @@ fn bindgen_test_layout__SysCallHandler() {
         )
     );
     assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).referenceCount as *const _ as usize },
+        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).syscall_counter as *const _ as usize },
         80usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_SysCallHandler),
+            "::",
+            stringify!(syscall_counter)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).referenceCount as *const _ as usize },
+        88usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),

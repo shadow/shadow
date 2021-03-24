@@ -15,6 +15,9 @@ typedef struct ByteQueue ByteQueue;
 
 typedef struct CompatDescriptor CompatDescriptor;
 
+// The main counter object that maps individual keys to count values.
+typedef struct Counter Counter;
+
 // Manages the address-space for a plugin process.
 //
 // The MemoryManager's primary purpose is to make plugin process's memory directly accessible to
