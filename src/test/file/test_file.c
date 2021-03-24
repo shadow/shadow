@@ -39,6 +39,7 @@ static AutoDeleteFile _create_auto_dir() {
     AutoDeleteFile adf = {0};
     assert_nonneg_errno(snprintf(adf.name, AUTOFILE_NAME_MAXLEN, "%s", "autodelete-dir-XXXXXX"));
     assert_nonnull_errno(mkdtemp(adf.name));
+    printf("Created temp directory %s", adf.name);
     assert_nonneg_errno(adf.fd = open(adf.name, O_RDONLY | O_DIRECTORY));
     return adf;
 }
