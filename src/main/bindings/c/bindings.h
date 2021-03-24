@@ -161,4 +161,17 @@ void bytequeue_push(struct ByteQueue *bq, const unsigned char *src, size_t len);
 
 size_t bytequeue_pop(struct ByteQueue *bq, unsigned char *dst, size_t len);
 
+struct Counter *counter_new(void);
+
+void counter_free(struct Counter *counter_ptr);
+
+uint64_t counter_add_one(struct Counter *counter, const char *id);
+
+// Creates a new string representation of the counter, e.g., for logging.
+// The returned string must be free'd by passing it to counter_free_string.
+char *counter_alloc_string(struct Counter *counter);
+
+// Frees a string previously returned from counter_alloc_string.
+void counter_free_string(struct Counter *counter, char *ptr);
+
 #endif /* main_bindings_h */
