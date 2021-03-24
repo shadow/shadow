@@ -21,7 +21,7 @@
 
 // For use in conjunction with g_auto so that the files/dirs will delete themselves on function
 // exit.
-#define AUTOFILE_NAME_MAXLEN 24
+#define AUTOFILE_NAME_MAXLEN 240
 typedef struct {
     int fd;
     char name[AUTOFILE_NAME_MAXLEN];
