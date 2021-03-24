@@ -52,7 +52,7 @@ static void _thread_cleanupSysCallCondition(Thread* thread) {
  */
 static void _thread_syncAffinityWithWorker(Thread *thread) {
     thread->affinity =
-        affinity_setProcessAffinity(thread->nativeTid, thread->affinity, worker_getAffinity());
+        affinity_setProcessAffinity(thread->nativeTid, worker_getAffinity(), thread->affinity);
 }
 
 void thread_ref(Thread* thread) {
