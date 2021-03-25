@@ -101,6 +101,9 @@ struct _Process {
     SimulationTime startTime;
     SimulationTime stopTime;
 
+    /* absolute path to the process's working directory */
+    char* workingDir;
+
     /* vector of argument strings passed to exec */
     gchar** argv;
     /* vector of environment variables passed to exec */
@@ -144,6 +147,11 @@ const gchar* process_getPluginName(Process* proc) {
     MAGIC_ASSERT(proc);
     utility_assert(proc->plugin.exeName->str);
     return proc->plugin.exeName->str;
+}
+
+const char* process_getWorkingDir(Process* proc) {
+    MAGIC_ASSERT(proc);
+    return proc->workingDir;
 }
 
 guint process_getProcessID(Process* proc) {
@@ -351,8 +359,15 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
     utility_assert(fileName != NULL);
 
     File* stdfile = file_new();
+
+    char* cwd = getcwd(NULL, 0);
+    if (!cwd) {
+        error("getcwd unable to allocate string buffer, error %i: %s", errno, strerror(errno));
+    }
+
     int errcode = file_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
-                            S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+                            S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, cwd);
+    free(cwd);
 
     if (errcode < 0) {
         error("Opening %s: %s", fileName, strerror(-errcode));
@@ -417,7 +432,7 @@ static void _process_start(Process* proc) {
 
     proc->plugin.isExecuting = TRUE;
     /* exec the process */
-    thread_run(mainThread, proc->argv, proc->envv);
+    thread_run(mainThread, proc->argv, proc->envv, proc->workingDir);
     proc->nativePid = thread_getNativePid(mainThread);
 #ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
@@ -643,6 +658,13 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
 
     proc->interposeMethod = interposeMethod;
 
+    proc->workingDir = realpath(host_getDataPath(host), NULL);
+
+    if (proc->workingDir == NULL) {
+        error("Could not allocate memory for the process' working directory, or directory did not "
+              "exist");
+    }
+
     /* add log file to env */
     {
         gchar* logFileName = _process_outputFileName(proc, "shimlog");
@@ -686,6 +708,10 @@ static void _process_free(Process* proc) {
     }
     if (proc->memoryManager) {
         memorymanager_free(proc->memoryManager);
+    }
+
+    if (proc->workingDir) {
+        free(proc->workingDir);
     }
 
     if(proc->argv) {

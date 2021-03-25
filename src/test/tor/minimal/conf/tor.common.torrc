@@ -1,6 +1,6 @@
 DirServer 4uthority bridge v3ident=BA3FDA7CE3B41FBF9BB3615BE6ACD28D883E694B orport=9111 100.0.0.1:9112 A52C A5B5 6C64 D864 F6AE 43E5 6F29 ACBD 5706 DDA1
 TestingTorNetwork 1
-ServerDNSResolvConfFile conf/shadowresolv.conf
+ServerDNSResolvConfFile ../../../conf/shadowresolv.conf
 ServerDNSTestAddresses 4uthority
 ServerDNSAllowBrokenConfig 1
 ServerDNSDetectHijacking 0

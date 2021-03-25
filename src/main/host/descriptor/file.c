@@ -160,9 +160,11 @@ static char* _file_getConcatStr(const char* prefix, const char sep, const char* 
     return path;
 }
 
-static char* _file_getPath(File* file, File* dir, const char* pathname) {
+static char* _file_getPath(File* file, File* dir, const char* pathname, const char* workingDir) {
     MAGIC_ASSERT(file);
     utility_assert(pathname);
+    utility_assert(workingDir);
+    utility_assert(workingDir[0] == '/');
 
     /* Compute the absolute path, which will allow us to reopen later. */
     if (pathname[0] == '/') {
@@ -176,15 +178,7 @@ static char* _file_getPath(File* file, File* dir, const char* pathname) {
     }
 
     /* Use current working directory as prefix. */
-    char* cwd = getcwd(NULL, 0);
-    if (!cwd) {
-        error("getcwd unable to allocate string buffer, error %i: %s", errno,
-              strerror(errno));
-        abort();
-    }
-
-    char* abspath = _file_getConcatStr(cwd, '/', pathname);
-    free(cwd);
+    char* abspath = _file_getConcatStr(workingDir, '/', pathname);
     return abspath;
 }
 
@@ -229,12 +223,13 @@ static void _file_print_flags(int flags) {
 #undef CHECK_FLAG
 #endif
 
-int file_openat(File* file, File* dir, const char* pathname, int flags,
-                mode_t mode) {
+int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t mode,
+                const char* workingDir) {
     MAGIC_ASSERT(file);
     utility_assert(file->osfile.fd == OSFILE_INVALID);
 
-    debug("Attempting to open file with pathname=%s flags=%i mode=%i", pathname, flags, (int)mode);
+    debug("Attempting to open file with pathname=%s flags=%i mode=%i workingdir=%s", pathname,
+          flags, (int)mode, workingDir);
 #ifdef DEBUG
     if (flags) {
         _file_print_flags(flags);
@@ -243,7 +238,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
 
     /* The default case is a regular file. We do this first so that we have
      * an absolute path to compare for special files. */
-    char* abspath = _file_getPath(file, dir, pathname);
+    char* abspath = _file_getPath(file, dir, pathname, workingDir);
 
     /* Handle special files. */
     if (utility_isRandomPath(abspath)) {
@@ -301,8 +296,8 @@ int file_openat(File* file, File* dir, const char* pathname, int flags,
     return _file_getFD(file);
 }
 
-int file_open(File* file, const char* pathname, int flags, mode_t mode) {
-    return file_openat(file, NULL, pathname, flags, mode);
+int file_open(File* file, const char* pathname, int flags, mode_t mode, const char* workingDir) {
+    return file_openat(file, NULL, pathname, flags, mode, workingDir);
 }
 
 static void _file_readRandomBytes(File* file, void* buf, size_t numBytes) {
@@ -558,20 +553,6 @@ int file_fchmod(File* file, mode_t mode) {
           _file_getOSBackedFD(file));
 
     int result = fchmod(_file_getOSBackedFD(file), mode);
-    return (result < 0) ? -errno : result;
-}
-
-int file_fchdir(File* file) {
-    MAGIC_ASSERT(file);
-
-    if (!_file_getOSBackedFD(file)) {
-        return -EBADF;
-    }
-
-    debug("File %i fchdir os-backed file %i", _file_getFD(file),
-          _file_getOSBackedFD(file));
-
-    int result = fchdir(_file_getOSBackedFD(file));
     return (result < 0) ? -errno : result;
 }
 

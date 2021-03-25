@@ -16,7 +16,7 @@
 #include "shim/shim_event.h"
 
 typedef struct _ThreadMethods {
-    pid_t (*run)(Thread* thread, char** argv, char** envv);
+    pid_t (*run)(Thread* thread, char** argv, char** envv, const char* workingDir);
     SysCallCondition* (*resume)(Thread* thread);
     void (*handleProcessExit)(Thread* thread);
     int (*getReturnCode)(Thread* thread);

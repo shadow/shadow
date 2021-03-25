@@ -297,6 +297,7 @@ extern "C" {
         thread: *mut Thread,
         argv: *mut *mut ::std::os::raw::c_char,
         envv: *mut *mut ::std::os::raw::c_char,
+        workingDir: *const ::std::os::raw::c_char,
     );
 }
 extern "C" {

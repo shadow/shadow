@@ -78,13 +78,13 @@ void thread_unref(Thread* thread) {
     }
 }
 
-void thread_run(Thread* thread, gchar** argv, gchar** envv) {
+void thread_run(Thread* thread, gchar** argv, gchar** envv, const char* workingDir) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.run);
 
     _thread_syncAffinityWithWorker(thread);
 
-    thread->nativePid = thread->methods.run(thread, argv, envv);
+    thread->nativePid = thread->methods.run(thread, argv, envv, workingDir);
     // In Linux, the PID is equal to the TID of its first thread.
     thread->nativeTid = thread->nativePid;
 }

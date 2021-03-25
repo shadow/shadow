@@ -12,7 +12,8 @@
 #include "support/logger/logger.h"
 
 struct _ForkProxy {
-    pid_t (*do_fork_exec)(const char* file, char* const argv[], char* const envp[]);
+    pid_t (*do_fork_exec)(const char* file, char* const argv[], char* const envp[],
+                          const char* working_dir);
 
     // Thread that will fork the requested processes.
     pthread_t pthread;
@@ -26,6 +27,7 @@ struct _ForkProxy {
     const char* file;
     char* const* argv;
     char* const* envp;
+    const char* working_dir;
 
     // Request result.
     pid_t child_pid;
@@ -50,8 +52,8 @@ void* forkproxy_fn(void* void_forkproxy) {
             error("sem_wait: %s", g_strerror(errno));
         }
 
-        forkproxy->child_pid =
-            forkproxy->do_fork_exec(forkproxy->file, forkproxy->argv, forkproxy->envp);
+        forkproxy->child_pid = forkproxy->do_fork_exec(
+            forkproxy->file, forkproxy->argv, forkproxy->envp, forkproxy->working_dir);
 
         // Signal calling thread that we're done.
         sem_post(&forkproxy->sem_done);
@@ -59,7 +61,7 @@ void* forkproxy_fn(void* void_forkproxy) {
 }
 
 ForkProxy* forkproxy_new(pid_t (*do_fork_exec)(const char* file, char* const argv[],
-                                               char* const envp[])) {
+                                               char* const envp[], const char* working_dir)) {
     ForkProxy* forkproxy = malloc(sizeof(*forkproxy));
     *forkproxy = (ForkProxy){
         .do_fork_exec = do_fork_exec,
@@ -83,10 +85,11 @@ ForkProxy* forkproxy_new(pid_t (*do_fork_exec)(const char* file, char* const arg
 }
 
 pid_t forkproxy_forkExec(ForkProxy* forkproxy, const char* file, char* const argv[],
-                         char* const envp[]) {
+                         char* const envp[], const char* working_dir) {
     forkproxy->file = file;
     forkproxy->argv = argv;
     forkproxy->envp = envp;
+    forkproxy->working_dir = working_dir;
     if (sem_post(&forkproxy->sem_begin) != 0) {
         error("sem_post: %s", g_strerror(errno));
     }

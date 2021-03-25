@@ -336,7 +336,8 @@ static const char* _syscall_regs_to_str(const struct user_regs_struct* regs) {
     return buf;
 }
 
-static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char* const envp[]) {
+static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char* const envp[],
+                                     const char* workingDir) {
     pid_t shadow_pid = getpid();
 
     // fork requested process.
@@ -370,6 +371,11 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char*
             // Disable RDTSC
             if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
                 error("prctl: %s", g_strerror(errno));
+            }
+            // Set the working directory
+            utility_assert(workingDir != NULL);
+            if (chdir(workingDir) < 0) {
+                error("chdir(%s): %s", workingDir, g_strerror(errno));
             }
             // Become a tracee of the parent process.
             if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
@@ -720,7 +726,7 @@ static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     _threadptrace_updateChildState(thread, reason);
 }
 
-pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
+pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv, const char* workingDir) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     /* set the env for the child */
@@ -738,7 +744,8 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
 
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr(argv);
-    message("forking new thread with environment '%s' and arguments '%s'", envStr, argStr);
+    message("forking new thread with environment '%s', arguments '%s', and working directory '%s'",
+            envStr, argStr, workingDir);
     g_free(envStr);
     g_free(argStr);
 
@@ -752,10 +759,10 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
 
         // Fork plugin from a proxy thread to keep it off of worker thread's
         // children list.
-        thread->base.nativeTid = forkproxy_forkExec(forkproxy, argv[0], argv, myenvv);
+        thread->base.nativeTid = forkproxy_forkExec(forkproxy, argv[0], argv, myenvv, workingDir);
         thread->needAttachment = true;
     } else {
-        thread->base.nativeTid = _threadptrace_fork_exec(argv[0], argv, myenvv);
+        thread->base.nativeTid = _threadptrace_fork_exec(argv[0], argv, myenvv, workingDir);
         thread->needAttachment = false;
         if (ptrace(PTRACE_SETOPTIONS, thread->base.nativeTid, 0, THREADPTRACE_PTRACE_OPTIONS) < 0) {
             error("ptrace: %s", strerror(errno));
