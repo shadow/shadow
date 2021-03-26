@@ -41,6 +41,7 @@ static void* _worker_run(void* voidWorker);
 static void _worker_free(Worker* worker);
 static void _worker_freeHostProcesses(Host* host, Worker* worker);
 static void _worker_shutdownHost(Host* host, Worker* worker);
+static void _workerpool_setConcurrencyIdx(WorkerPool* workerpool, Worker* worker, int cpuId);
 
 struct _Worker {
     WorkerPool* workerPool;
@@ -49,8 +50,8 @@ struct _Worker {
     pthread_t thread;
     int threadID;
 
-    /* affinity of the worker. */
-    int cpu_num_affinity;
+    // Index into concurrency arrays in WorkerPool.
+    int concurrencyIdx;
 
     /* timing information tracked by this worker */
     struct {
@@ -95,6 +96,12 @@ struct _WorkerPool {
 
     bool joined;
 
+    // Array of size `nConcurrent`
+    int *cpuIds;
+    GQueue **cpuQs;
+    GQueue **doneCpuQs;
+    GMutex qMutex;
+
     MAGIC_DECLARE;
 };
 
@@ -102,6 +109,14 @@ static Worker* _worker_new(WorkerPool*, int);
 static void _worker_free(Worker*);
 
 WorkerPool* workerpool_new(Manager* manager, Scheduler* scheduler, int nWorkers, int nConcurrent) {
+    if (nWorkers == 0 || nConcurrent == 0) {
+        // Never use a 0 concurrency.
+        nConcurrent = 1;
+    } else if (nConcurrent < 0 || nConcurrent > nWorkers) {
+        // Maximum concurrency that makes sense is nWorkers
+        nConcurrent = nWorkers;
+    }
+
     WorkerPool* pool = g_new(WorkerPool, 1);
     *pool = (WorkerPool) {
         .manager = manager,
@@ -113,16 +128,34 @@ WorkerPool* workerpool_new(Manager* manager, Scheduler* scheduler, int nWorkers,
         MAGIC_INITIALIZER
     };
 
+    pool->cpuQs = g_new(GQueue*, nConcurrent);
+    pool->doneCpuQs = g_new(GQueue*, nConcurrent);
+    pool->cpuIds = g_new(int, nConcurrent);
+    for (int i = 0; i < nConcurrent; ++i) {
+        pool->cpuQs[i] = g_queue_new();
+        pool->doneCpuQs[i] = g_queue_new();
+        pool->cpuIds[i] = affinity_getGoodWorkerAffinity();
+    }
+
+    g_mutex_init(&pool->qMutex);
     if (nWorkers == 0) {
         // Create singleton worker object, which will run on this thread.
         pool->workers = g_new(Worker*, 1);
-        pool->workers[0] = _worker_new(pool, -1);
-    } else {
-        pool->workers = g_new(Worker*, nWorkers);
-        for (int i = 0; i < nWorkers; ++i) {
-            pool->workers[i] = _worker_new(pool, i);
-        }
+        Worker* worker = _worker_new(pool, -1);
+        pool->workers[0] = worker;
+        _workerpool_setConcurrencyIdx(pool, worker, 0);
+        return pool;
     }
+
+    pool->workers = g_new(Worker*, nWorkers);
+    for (int i = 0; i < nWorkers; ++i) {
+        Worker* worker = _worker_new(pool, i);
+        int concurrencyI = i % nConcurrent;
+        _workerpool_setConcurrencyIdx(pool, worker, concurrencyI);
+        g_queue_push_head(pool->cpuQs[concurrencyI], worker);
+        pool->workers[i] = worker;
+    }
+
     return pool;
 }
 
@@ -143,12 +176,16 @@ void _workerpool_startTaskFn(WorkerPool* pool, WorkerPoolTaskFn taskFn, void* da
 
     pool->taskFn = taskFn;
     pool->taskData = data;
-    // FIXME: only start pool->nConcurrent
-    for (int i = 0; i < pool->nWorkers; ++i) {
-        if (sem_post(&pool->workers[i]->beginSem) != 0) {
+
+    g_mutex_lock(&pool->qMutex);
+    for (int i = 0; i < pool->nConcurrent; ++i) {
+        Worker* worker = g_queue_pop_head(pool->cpuQs[i]);
+        MAGIC_ASSERT(worker);
+        if (sem_post(&worker->beginSem) != 0) {
             error("sem_post: %s", g_strerror(errno));
         }
     }
+    g_mutex_unlock(&pool->qMutex);
 }
 
 void workerpool_joinAll(WorkerPool* pool) {
@@ -190,6 +227,15 @@ void workerpool_free(WorkerPool* pool) {
     g_clear_pointer(&pool->workers, g_free);
     g_clear_pointer(&pool->finishLatch, countdownlatch_free);
 
+    for (int i = 0; i < pool->nConcurrent; ++i) {
+        g_clear_pointer(&pool->cpuQs[i], g_queue_free);
+        g_clear_pointer(&pool->doneCpuQs[i], g_queue_free);
+    }
+    g_clear_pointer(&pool->cpuQs, g_free);
+    g_clear_pointer(&pool->doneCpuQs, g_free);
+    g_clear_pointer(&pool->cpuIds, g_free);
+    g_mutex_clear(&pool->qMutex);
+
     MAGIC_CLEAR(pool);
 }
 
@@ -209,6 +255,32 @@ void workerpool_awaitTaskFn(WorkerPool* pool) {
     countdownlatch_reset(pool->finishLatch);
     pool->taskFn = NULL;
     pool->taskData = NULL;
+
+    // Swap queues
+    GQueue** tmp = pool->cpuQs;
+    pool->cpuQs = pool->doneCpuQs;
+    pool->doneCpuQs = tmp;
+
+    // Ensure no queues are empty.
+    for (int i = 0; i < pool->nConcurrent; ++i) {
+        if (g_queue_peek_head(pool->cpuQs[i])) {
+            continue;
+        }
+        Worker* popped = NULL;
+        for (int j = 0; j < pool->nConcurrent; ++j) {
+            int idx = (i+j+1) % pool->nConcurrent;
+            // Only steal from a q that has at least 2 workers
+            if (g_queue_peek_nth(pool->cpuQs[idx], 1) == NULL) {
+                continue;
+            }
+            popped = g_queue_pop_head(pool->cpuQs[idx]);
+            utility_assert(popped);
+            _workerpool_setConcurrencyIdx(pool, popped, i);
+            g_queue_push_head(pool->cpuQs[i], popped);
+            break;
+        }
+        utility_assert(popped);
+    }
 }
 
 pthread_t workerpool_getThread(WorkerPool* pool, int threadId) {
@@ -220,6 +292,25 @@ pthread_t workerpool_getThread(WorkerPool* pool, int threadId) {
 int workerpool_getNWorkers(WorkerPool* pool) {
     MAGIC_ASSERT(pool);
     return pool->nWorkers;
+}
+
+static void _workerpool_setConcurrencyIdx(WorkerPool* workerPool, Worker* worker, int concurrencyIdx) {
+    MAGIC_ASSERT(workerPool);
+    MAGIC_ASSERT(worker);
+    utility_assert(concurrencyIdx < workerPool->nConcurrent);
+
+    int oldCpuId =
+        worker->concurrencyIdx >= 0 ? workerPool->cpuIds[worker->concurrencyIdx] : AFFINITY_UNINIT;
+    worker->concurrencyIdx = concurrencyIdx;
+    int newCpuId = workerPool->cpuIds[concurrencyIdx];
+
+    if (workerPool->nWorkers > 0) {
+        affinity_setPthreadAffinity(
+            worker->thread, /*new_cpu_num=*/newCpuId, /*old_cpu_num=*/oldCpuId);
+    } else {
+        // No pthreads exist; set via pid instead.
+        affinity_setThisProcessAffinity(/*new_cpu_num=*/newCpuId, /*old_cpu_num=*/oldCpuId);
+    }
 }
 
 static __thread Worker* _threadWorker = NULL;
@@ -235,13 +326,13 @@ static Worker* _worker_new(WorkerPool* workerPool, int threadID) {
     Worker* worker = g_new0(Worker, 1);
     MAGIC_INIT(worker);
 
-    worker->cpu_num_affinity = AFFINITY_UNINIT;
     worker->workerPool = workerPool;
     worker->threadID = threadID;
     worker->clock.now = SIMTIME_INVALID;
     worker->clock.last = SIMTIME_INVALID;
     worker->clock.barrier = SIMTIME_INVALID;
     worker->objectCounts = objectcounter_new();
+    worker->concurrencyIdx = -1;
 
     worker->bootstrapEndTime = manager_getBootstrapEndTime(workerPool->manager);
 
@@ -285,7 +376,7 @@ static void _worker_free(Worker* worker) {
 
 int worker_getAffinity() {
     Worker* worker = _worker_getPrivate();
-    return worker->cpu_num_affinity;
+    return worker->workerPool->cpuIds[worker->concurrencyIdx];
 }
 
 DNS* worker_getDNS() {
@@ -315,42 +406,51 @@ Options* worker_getOptions() {
     return manager_getOptions(worker->workerPool->manager);
 }
 
-static void _worker_setAffinity(Worker* worker) {
-    MAGIC_ASSERT(worker);
-    int good_cpu_num = affinity_getGoodWorkerAffinity(worker->threadID);
-    worker->cpu_num_affinity =
-        affinity_setThisProcessAffinity(good_cpu_num, worker->cpu_num_affinity);
-}
-
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
 void* _worker_run(void* voidWorker) {
     shadow_logger_register(shadow_logger_getDefault(), pthread_self());
 
     Worker* worker = voidWorker;
+    WorkerPool* workerPool = worker->workerPool;
     MAGIC_ASSERT(worker);
 
     _threadWorker = worker;
 
-    _worker_setAffinity(worker);
-
-    while(true) {
+    WorkerPoolTaskFn taskFn = NULL;
+    do {
         if (sem_wait(&worker->beginSem) != 0) {
             error("sem_wait: %s", g_strerror(errno));
         }
 
-        WorkerPoolTaskFn taskFn = worker->workerPool->taskFn;
-        if (taskFn == NULL) {
-            break;
+        taskFn = workerPool->taskFn;
+        if (taskFn != NULL) {
+            taskFn(workerPool->taskData);
         }
-        taskFn(worker->workerPool->taskData);
 
-        // FIXME: Wake up next worker
+        Worker* nextWorker = NULL;
 
-        countdownlatch_countDown(worker->workerPool->finishLatch);
-    }
+        g_mutex_lock(&workerPool->qMutex);
+        for(int i = 0; i < workerPool->nConcurrent; ++i) {
+            int idx = (worker->concurrencyIdx + i) % workerPool->nConcurrent;
+            nextWorker = g_queue_pop_head(workerPool->cpuQs[idx]);
+            if (nextWorker) {
+                break;
+            }
+        }
+        g_queue_push_head(workerPool->doneCpuQs[worker->concurrencyIdx], worker);
+        g_mutex_unlock(&workerPool->qMutex);
+
+        if (nextWorker) {
+            _workerpool_setConcurrencyIdx(workerPool, nextWorker, worker->concurrencyIdx);
+            if (sem_post(&nextWorker->beginSem) != 0) {
+                error("sem_post: %s", g_strerror(errno));
+            }
+        }
+
+        countdownlatch_countDown(workerPool->finishLatch);
+    } while (taskFn != NULL);
     debug("Worker finished");
-    countdownlatch_countDown(worker->workerPool->finishLatch);
     return NULL;
 }
 
