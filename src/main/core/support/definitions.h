@@ -81,7 +81,7 @@ typedef guint64 EmulatedTime;
 /**
  * Conversion from emulated time to simulated time.
  */
-#define EMULATED_TIME_TO_SIMULATED_TIME(emtime) ((SimulationTime)(emtime-EMULATED_TIME_OFFSET))
+#define EMULATED_TIME_TO_SIMULATED_TIME(emtime) ((SimulationTime)((emtime)-EMULATED_TIME_OFFSET))
 
 /**
  * The start of our random port range in host order, used if application doesn't
@@ -117,14 +117,14 @@ typedef guint64 EmulatedTime;
  */
 #define NET_TCP_HZ 1000
 #define CONFIG_TCP_RTO_INIT NET_TCP_HZ
-#define CONFIG_TCP_RTO_MIN NET_TCP_HZ/5
-#define CONFIG_TCP_RTO_MAX NET_TCP_HZ*120
+#define CONFIG_TCP_RTO_MIN (NET_TCP_HZ/5)
+#define CONFIG_TCP_RTO_MAX (NET_TCP_HZ*120)
 
 /**
  * Default delay ack times, from net/tcp.h
  */
-#define CONFIG_TCP_DELACK_MIN NET_TCP_HZ/25
-#define CONFIG_TCP_DELACK_MAX NET_TCP_HZ/5
+#define CONFIG_TCP_DELACK_MIN (NET_TCP_HZ/25)
+#define CONFIG_TCP_DELACK_MAX (NET_TCP_HZ/5)
 
 /**
  * Minimum size of the send buffer per socket when TCP-autotuning is used.

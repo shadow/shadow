@@ -1,4 +1,5 @@
 /*
+
  * The Shadow Simulator
  * Copyright (c) 2010-2011, Rob Jansen
  * See LICENSE for licensing information
@@ -6,10 +7,12 @@
 
 /* thread-level storage structure */
 #include <glib.h>
+#include <errno.h>
 #include <math.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stddef.h>
+#include <semaphore.h>
 
 #include "main/core/logger/shadow_logger.h"
 #include "main/core/manager.h"
@@ -34,18 +37,20 @@
 #include "support/logger/log_level.h"
 #include "support/logger/logger.h"
 
+static void* _worker_run(void* voidWorker);
+static void _worker_free(Worker* worker);
+static void _worker_freeHostProcesses(Host* host, Worker* worker);
+static void _worker_shutdownHost(Host* host, Worker* worker);
+
 struct _Worker {
+    WorkerPool* workerPool;
+
     /* our thread and an id that is unique among all threads */
     pthread_t thread;
-    guint threadID;
+    int threadID;
 
     /* affinity of the worker. */
     int cpu_num_affinity;
-
-    /* pointer to the object that communicates with the controller process */
-    Manager* manager;
-    /* pointer to the per-manager parallel scheduler object that feeds events to all workers */
-    Scheduler* scheduler;
 
     /* timing information tracked by this worker */
     struct {
@@ -65,56 +70,214 @@ struct _Worker {
 
     ObjectCounter* objectCounts;
 
+    sem_t beginSem;
+
     MAGIC_DECLARE;
 };
 
-static Worker* _worker_new(Manager*, guint);
+struct _WorkerPool {
+    /* Unowned pointer to the object that communicates with the controller process */
+    Manager* manager;
+
+    /* Unowned pointer to the per-manager parallel scheduler object that feeds events to all workers */
+    Scheduler* scheduler;
+
+    int nConcurrent;
+
+    int nWorkers;
+    // Array of size `nWorkers`.
+    Worker** workers;
+
+    CountDownLatch* finishLatch;
+
+    WorkerPoolTaskFn taskFn;
+    void* taskData;
+
+    bool joined;
+
+    MAGIC_DECLARE;
+};
+
+static Worker* _worker_new(WorkerPool*, int);
 static void _worker_free(Worker*);
 
-/* holds a thread-private key that each thread references to get a private
- * instance of a worker object */
-static GPrivate workerKey = G_PRIVATE_INIT((GDestroyNotify)_worker_free);
+WorkerPool* workerpool_new(Manager* manager, Scheduler* scheduler, int nWorkers, int nConcurrent) {
+    WorkerPool* pool = g_new(WorkerPool, 1);
+    *pool = (WorkerPool) {
+        .manager = manager,
+        .scheduler = scheduler,
+        .nWorkers = nWorkers,
+        .nConcurrent = nConcurrent,
+        .finishLatch = countdownlatch_new(nWorkers),
+        .joined = false,
+        MAGIC_INITIALIZER
+    };
 
-static Worker* _worker_getPrivate() {
-    /* get current thread's private worker object */
-    Worker* worker = g_private_get(&workerKey);
-    MAGIC_ASSERT(worker);
-    return worker;
+    if (nWorkers == 0) {
+        // Create singleton worker object, which will run on this thread.
+        pool->workers = g_new(Worker*, 1);
+        pool->workers[0] = _worker_new(pool, -1);
+    } else {
+        pool->workers = g_new(Worker*, nWorkers);
+        for (int i = 0; i < nWorkers; ++i) {
+            pool->workers[i] = _worker_new(pool, i);
+        }
+    }
+    return pool;
 }
 
-gboolean worker_isAlive() { return g_private_get(&workerKey) != NULL; }
+// Internal runner. *Does* support NULL `taskFn`, which is used to signal
+// cancellation.
+void _workerpool_startTaskFn(WorkerPool* pool, WorkerPoolTaskFn taskFn, void* data) {
+    MAGIC_ASSERT(pool);
 
-static Worker* _worker_new(Manager* manager, guint threadID) {
-    /* make sure this isnt called twice on the same thread! */
-    utility_assert(!worker_isAlive());
+    if (pool->nWorkers == 0) {
+        if (taskFn) {
+            taskFn(data);
+        }
+        return;
+    }
 
+    // Only supports one task at a time.
+    utility_assert(pool->taskFn == NULL);
+
+    pool->taskFn = taskFn;
+    pool->taskData = data;
+    // FIXME: only start pool->nConcurrent
+    for (int i = 0; i < pool->nWorkers; ++i) {
+        if (sem_post(&pool->workers[i]->beginSem) != 0) {
+            error("sem_post: %s", g_strerror(errno));
+        }
+    }
+}
+
+void workerpool_joinAll(WorkerPool* pool) {
+    MAGIC_ASSERT(pool);
+    utility_assert(!pool->joined);
+
+    // Signal threads to exit.
+    _workerpool_startTaskFn(pool, NULL, NULL);
+    
+    // XXX Not strictly necessary, but could help clarity/debugging.
+    workerpool_awaitTaskFn(pool);
+
+    // Join each pthread.
+    // XXX: alternatively use pthread_detach on startup
+    for(int i = 0; i < pool->nWorkers; ++i) {
+        void *threadRetval;
+        int rv = pthread_join(pool->workers[i]->thread, &threadRetval);
+        if (rv != 0) {
+            error("pthread_join: %s", g_strerror(rv));
+        }
+        utility_assert(threadRetval == NULL);
+    }
+
+    pool->joined = true;
+}
+
+void workerpool_free(WorkerPool* pool) {
+    MAGIC_ASSERT(pool);
+    utility_assert(pool->joined);
+
+    // When there are 0 worker threads, we still have a single worker object.
+    int workersToFree = MAX(pool->nWorkers, 1);
+
+    // Free threads.
+    for (int i = 0; i < workersToFree; ++i) {
+        _worker_free(pool->workers[i]);
+        pool->workers[i] = NULL;
+    }
+    g_clear_pointer(&pool->workers, g_free);
+    g_clear_pointer(&pool->finishLatch, countdownlatch_free);
+
+    MAGIC_CLEAR(pool);
+}
+
+void workerpool_startTaskFn(WorkerPool* pool, WorkerPoolTaskFn taskFn, void* taskData) {
+    MAGIC_ASSERT(pool);
+    // Public interface doesn't support NULL taskFn
+    utility_assert(taskFn);
+    _workerpool_startTaskFn(pool, taskFn, taskData);
+}
+
+void workerpool_awaitTaskFn(WorkerPool* pool) {
+    MAGIC_ASSERT(pool);
+    if (pool->nWorkers == 0) {
+        return;
+    }
+    countdownlatch_await(pool->finishLatch);
+    countdownlatch_reset(pool->finishLatch);
+    pool->taskFn = NULL;
+    pool->taskData = NULL;
+}
+
+pthread_t workerpool_getThread(WorkerPool* pool, int threadId) {
+    MAGIC_ASSERT(pool);
+    utility_assert(threadId < pool->nWorkers);
+    return pool->workers[threadId]->thread;
+}
+
+int workerpool_getNWorkers(WorkerPool* pool) {
+    MAGIC_ASSERT(pool);
+    return pool->nWorkers;
+}
+
+static __thread Worker* _threadWorker = NULL;
+
+static Worker* _worker_getPrivate() {
+    MAGIC_ASSERT(_threadWorker);
+    return _threadWorker;
+}
+
+gboolean worker_isAlive() { return _threadWorker != NULL; }
+
+static Worker* _worker_new(WorkerPool* workerPool, int threadID) {
     Worker* worker = g_new0(Worker, 1);
     MAGIC_INIT(worker);
 
     worker->cpu_num_affinity = AFFINITY_UNINIT;
-    worker->manager = manager;
-    worker->thread = pthread_self();
+    worker->workerPool = workerPool;
     worker->threadID = threadID;
     worker->clock.now = SIMTIME_INVALID;
     worker->clock.last = SIMTIME_INVALID;
     worker->clock.barrier = SIMTIME_INVALID;
     worker->objectCounts = objectcounter_new();
 
-    worker->bootstrapEndTime = manager_getBootstrapEndTime(worker->manager);
+    worker->bootstrapEndTime = manager_getBootstrapEndTime(workerPool->manager);
 
-    g_private_replace(&workerKey, worker);
+    // Calling thread is the sole worker thread
+    if (threadID < 0) {
+        _threadWorker = worker;
+        return worker;
+    }
+
+    sem_init(&worker->beginSem, 0, 0);
+
+    int rv = pthread_create(&worker->thread, NULL, _worker_run, worker);
+    if (rv != 0) {
+        error("pthread_create: %s", g_strerror(rv));
+    }
+
+    GString* name = g_string_new(NULL);
+    g_string_printf(name, "worker-%i", threadID);
+    rv = pthread_setname_np(worker->thread, name->str);
+    if(rv != 0) {
+        warning("unable to set name of worker thread to '%s': %s", name->str, g_strerror(rv));
+    }
+    g_string_free(name, TRUE);
 
     return worker;
 }
 
 static void _worker_free(Worker* worker) {
     MAGIC_ASSERT(worker);
+    utility_assert(!worker->active.host);
+    utility_assert(!worker->active.process);
+    utility_assert(worker->objectCounts);
 
-    if (worker->objectCounts != NULL) {
-        objectcounter_free(worker->objectCounts);
-    }
+    objectcounter_free(worker->objectCounts);
 
-    g_private_set(&workerKey, NULL);
+    _threadWorker = NULL;
 
     MAGIC_CLEAR(worker);
     g_free(worker);
@@ -127,29 +290,29 @@ int worker_getAffinity() {
 
 DNS* worker_getDNS() {
     Worker* worker = _worker_getPrivate();
-    return manager_getDNS(worker->manager);
+    return manager_getDNS(worker->workerPool->manager);
 }
 
 Address* worker_resolveIPToAddress(in_addr_t ip) {
     Worker* worker = _worker_getPrivate();
-    DNS* dns = manager_getDNS(worker->manager);
+    DNS* dns = manager_getDNS(worker->workerPool->manager);
     return dns_resolveIPToAddress(dns, ip);
 }
 
 Address* worker_resolveNameToAddress(const gchar* name) {
     Worker* worker = _worker_getPrivate();
-    DNS* dns = manager_getDNS(worker->manager);
+    DNS* dns = manager_getDNS(worker->workerPool->manager);
     return dns_resolveNameToAddress(dns, name);
 }
 
 Topology* worker_getTopology() {
     Worker* worker = _worker_getPrivate();
-    return manager_getTopology(worker->manager);
+    return manager_getTopology(worker->workerPool->manager);
 }
 
 Options* worker_getOptions() {
     Worker* worker = _worker_getPrivate();
-    return manager_getOptions(worker->manager);
+    return manager_getOptions(worker->workerPool->manager);
 }
 
 static void _worker_setAffinity(Worker* worker) {
@@ -161,18 +324,53 @@ static void _worker_setAffinity(Worker* worker) {
 
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
-gpointer worker_run(WorkerRunData* data) {
-    utility_assert(data && data->userData && data->scheduler);
+void* _worker_run(void* voidWorker) {
+    shadow_logger_register(shadow_logger_getDefault(), pthread_self());
 
-    /* create the worker object for this worker thread */
-    Worker* worker = _worker_new((Manager*)data->userData, data->threadID);
-    utility_assert(worker_isAlive());
+    Worker* worker = voidWorker;
+    MAGIC_ASSERT(worker);
+
+    _threadWorker = worker;
 
     _worker_setAffinity(worker);
 
-    worker->scheduler = data->scheduler;
-    scheduler_ref(worker->scheduler);
+    while(true) {
+        if (sem_wait(&worker->beginSem) != 0) {
+            error("sem_wait: %s", g_strerror(errno));
+        }
 
+        WorkerPoolTaskFn taskFn = worker->workerPool->taskFn;
+        if (taskFn == NULL) {
+            break;
+        }
+        taskFn(worker->workerPool->taskData);
+
+        // FIXME: Wake up next worker
+
+        countdownlatch_countDown(worker->workerPool->finishLatch);
+    }
+    debug("Worker finished");
+    countdownlatch_countDown(worker->workerPool->finishLatch);
+    return NULL;
+}
+
+void worker_runEvent(Event* event) {
+    Worker* worker = _worker_getPrivate();
+
+    /* update cache, reset clocks */
+    worker->clock.now = event_getTime(event);
+
+    /* process the local event */
+    event_execute(event);
+    event_unref(event);
+
+    /* update times */
+    worker->clock.last = worker->clock.now;
+    worker->clock.now = SIMTIME_INVALID;
+}
+
+// FIXME: Move out to tasks
+#if 0
     /* wait until the manager is done with initialization */
     scheduler_awaitStart(worker->scheduler);
 
@@ -191,14 +389,11 @@ gpointer worker_run(WorkerRunData* data) {
         worker->clock.last = worker->clock.now;
         worker->clock.now = SIMTIME_INVALID;
     }
-
     /* this will free the host data that we have been managing */
     scheduler_awaitFinish(worker->scheduler);
 
     // Flushes any remaining message buffered for this thread.
     shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
-
-    scheduler_unref(worker->scheduler);
 
     /* tell that we are done running */
     if (data->notifyDoneRunning) {
@@ -234,20 +429,39 @@ gpointer worker_run(WorkerRunData* data) {
      * returning NULL means we don't have to worry about calling pthread_exit on the main thread */
     return NULL;
 }
+#endif
+
+void worker_finish(GQueue* hosts) {
+    Worker* worker = _worker_getPrivate();
+
+    if (hosts) {
+        guint nHosts = g_queue_get_length(hosts);
+        message("starting to shut down %u hosts", nHosts);
+        g_queue_foreach(hosts, (GFunc)_worker_freeHostProcesses, worker);
+        g_queue_foreach(hosts, (GFunc)_worker_shutdownHost, worker);
+        message("%u hosts are shut down", nHosts);
+    }
+
+    // Flushes any remaining message buffered for this thread.
+    shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
+
+    /* cleanup is all done, send object counts to manager */
+    manager_storeCounts(worker->workerPool->manager, worker->objectCounts);
+}
 
 gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
     utility_assert(task);
 
     Worker* worker = _worker_getPrivate();
 
-    if (manager_schedulerIsRunning(worker->manager)) {
+    if (manager_schedulerIsRunning(worker->workerPool->manager)) {
         utility_assert(worker->clock.now != SIMTIME_INVALID);
         utility_assert(worker->active.host != NULL);
 
         Host* srcHost = worker->active.host;
         Host* dstHost = srcHost;
         Event* event = event_new_(task, worker->clock.now + nanoDelay, srcHost, dstHost);
-        return scheduler_push(worker->scheduler, event, srcHost, dstHost);
+        return scheduler_push(worker->workerPool->scheduler, event, srcHost, dstHost);
     } else {
         return FALSE;
     }
@@ -265,7 +479,7 @@ void worker_sendPacket(Packet* packet) {
 
     /* get our thread-private worker */
     Worker* worker = _worker_getPrivate();
-    if (!manager_schedulerIsRunning(worker->manager)) {
+    if (!manager_schedulerIsRunning(worker->workerPool->manager)) {
         /* the simulation is over, don't bother */
         return;
     }
@@ -303,7 +517,7 @@ void worker_sendPacket(Packet* packet) {
 
         Host* srcHost = worker->active.host;
         GQuark dstID = (GQuark)address_getID(dstAddress);
-        Host* dstHost = scheduler_getHost(worker->scheduler, dstID);
+        Host* dstHost = scheduler_getHost(worker->workerPool->scheduler, dstID);
         utility_assert(dstHost);
 
         packet_addDeliveryStatus(packet, PDS_INET_SENT);
@@ -317,7 +531,7 @@ void worker_sendPacket(Packet* packet) {
         Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
         task_unref(packetTask);
 
-        scheduler_push(worker->scheduler, packetEvent, srcHost, dstHost);
+        scheduler_push(worker->workerPool->scheduler, packetEvent, srcHost, dstHost);
     } else {
         packet_addDeliveryStatus(packet, PDS_INET_DROPPED);
     }
@@ -338,6 +552,7 @@ void worker_bootHosts(GQueue* hosts) {
     g_queue_foreach(hosts, (GFunc)_worker_bootHost, worker);
 }
 
+
 static void _worker_freeHostProcesses(Host* host, Worker* worker) {
     worker_setActiveHost(host);
     host_continueExecutionTimer(host);
@@ -351,12 +566,6 @@ static void _worker_shutdownHost(Host* host, Worker* worker) {
     host_shutdown(host);
     worker_setActiveHost(NULL);
     host_unref(host);
-}
-
-void worker_freeHosts(GQueue* hosts) {
-    Worker* worker = _worker_getPrivate();
-    g_queue_foreach(hosts, (GFunc)_worker_freeHostProcesses, worker);
-    g_queue_foreach(hosts, (GFunc)_worker_shutdownHost, worker);
 }
 
 Process* worker_getActiveProcess() {
@@ -411,17 +620,17 @@ EmulatedTime worker_getEmulatedTime() {
 
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip) {
     Worker* worker = _worker_getPrivate();
-    return manager_getNodeBandwidthUp(worker->manager, nodeID, ip);
+    return manager_getNodeBandwidthUp(worker->workerPool->manager, nodeID, ip);
 }
 
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip) {
     Worker* worker = _worker_getPrivate();
-    return manager_getNodeBandwidthDown(worker->manager, nodeID, ip);
+    return manager_getNodeBandwidthDown(worker->workerPool->manager, nodeID, ip);
 }
 
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID) {
     Worker* worker = _worker_getPrivate();
-    return manager_getLatency(worker->manager, sourceNodeID, destinationNodeID);
+    return manager_getLatency(worker->workerPool->manager, sourceNodeID, destinationNodeID);
 }
 
 gint worker_getThreadID() {
@@ -431,7 +640,7 @@ gint worker_getThreadID() {
 
 void worker_updateMinTimeJump(gdouble minPathLatency) {
     Worker* worker = _worker_getPrivate();
-    manager_updateMinTimeJump(worker->manager, minPathLatency);
+    manager_updateMinTimeJump(worker->workerPool->manager, minPathLatency);
 }
 
 void worker_setCurrentTime(SimulationTime time) {
@@ -445,7 +654,7 @@ gboolean worker_isFiltered(LogLevel level) {
 
 void worker_incrementPluginError() {
     Worker* worker = _worker_getPrivate();
-    manager_incrementPluginError(worker->manager);
+    manager_incrementPluginError(worker->workerPool->manager);
 }
 
 void worker_countObject(ObjectType otype, CounterType ctype) {
