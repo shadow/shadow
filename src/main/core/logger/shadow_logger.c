@@ -51,6 +51,7 @@ struct _ShadowLogger {
     /* store map of other threads that will call logging functions to
      * thread-specific data */
     GHashTable* threadToDataMap;
+    GRWLock threadToDataMapLock;
 
     /* for memory management */
     gint referenceCount;
@@ -64,6 +65,15 @@ static LoggerThreadData* _loggerthreaddata_new() {
     threadData->localRecordBundle = g_queue_new();
     threadData->remoteLogHelperMailbox = g_async_queue_new();
 
+    return threadData;
+}
+
+static LoggerThreadData* _getLoggerThreadData(ShadowLogger* logger, pthread_t thread) {
+    MAGIC_ASSERT(logger);
+    g_rw_lock_reader_lock(&logger->threadToDataMapLock);
+    LoggerThreadData* threadData =
+        g_hash_table_lookup(logger->threadToDataMap, GUINT_TO_POINTER(thread));
+    g_rw_lock_reader_unlock(&logger->threadToDataMapLock);
     return threadData;
 }
 
@@ -171,8 +181,7 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         return;
     }
 
-    LoggerThreadData* threadData = g_hash_table_lookup(
-        logger->threadToDataMap, GUINT_TO_POINTER(pthread_self()));
+    LoggerThreadData* threadData = _getLoggerThreadData(logger, pthread_self());
     MAGIC_ASSERT(threadData);
 
     gdouble timespan = (double)logger_elapsed_micros() / G_USEC_PER_SEC;
@@ -240,16 +249,13 @@ void shadow_logger_log(ShadowLogger* logger, LogLevel level,
 void shadow_logger_register(ShadowLogger* logger, pthread_t callerThread) {
     MAGIC_ASSERT(logger);
 
-    /* this must be called by main thread before the workers start accessing the
-     * logger! */
-
-    if (g_hash_table_lookup(logger->threadToDataMap,
-                            GUINT_TO_POINTER(callerThread)) == NULL) {
+    g_rw_lock_writer_lock(&logger->threadToDataMapLock);
+    if (g_hash_table_lookup(logger->threadToDataMap, GUINT_TO_POINTER(callerThread)) == NULL) {
         LoggerThreadData* threadData = _loggerthreaddata_new();
-        g_hash_table_replace(logger->threadToDataMap,
-                             GUINT_TO_POINTER(callerThread), threadData);
+        g_hash_table_replace(logger->threadToDataMap, GUINT_TO_POINTER(callerThread), threadData);
         _logger_sendRegisterCommandToHelper(logger, threadData);
     }
+    g_rw_lock_writer_unlock(&logger->threadToDataMapLock);
 }
 
 void shadow_logger_syncToDisk(ShadowLogger* logger) {
@@ -259,8 +265,7 @@ void shadow_logger_syncToDisk(ShadowLogger* logger) {
 
 void shadow_logger_flushRecords(ShadowLogger* logger, pthread_t callerThread) {
     MAGIC_ASSERT(logger);
-    LoggerThreadData* threadData = g_hash_table_lookup(
-        logger->threadToDataMap, GUINT_TO_POINTER(callerThread));
+    LoggerThreadData* threadData = _getLoggerThreadData(logger, callerThread);
     MAGIC_ASSERT(threadData);
     /* send log messages from this thread to the helper */
     if (!g_queue_is_empty(threadData->localRecordBundle)) {
@@ -377,6 +382,8 @@ ShadowLogger* shadow_logger_new(LogLevel filterLevel) {
     };
     MAGIC_INIT(logger);
 
+    g_rw_lock_init(&logger->threadToDataMapLock);
+
     /* we need to pass some args to the helper thread */
     LoggerHelperRunData* runArgs = g_new0(LoggerHelperRunData, 1);
     runArgs->commands = logger->helperCommands;
@@ -419,7 +426,11 @@ static void _logger_free(ShadowLogger* logger) {
     g_async_queue_unref(logger->helperCommands);
     countdownlatch_free(logger->helperLatch);
 
+    g_rw_lock_writer_lock(&logger->threadToDataMapLock);
     g_hash_table_destroy(logger->threadToDataMap);
+    g_rw_lock_writer_unlock(&logger->threadToDataMapLock);
+
+    g_rw_lock_clear(&logger->threadToDataMapLock);
 
     MAGIC_CLEAR(logger);
     g_free(logger);
