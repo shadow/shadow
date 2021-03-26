@@ -51,6 +51,11 @@ int affinity_initPlatformInfo();
 int affinity_setProcessAffinity(pid_t pid, int new_cpu_num, int old_cpu_num);
 
 /*
+ * As `affinity_setProcessAffinity`, but takes a pthread.
+ */
+int affinity_setPthreadAffinity(pthread_t thread, int new_cpu_num, int old_cpu_num);
+
+/*
  * Helper function. Same semantics as affinity_setProcessAffinity but sets the
  * affinity of the calling thread/process.
  */

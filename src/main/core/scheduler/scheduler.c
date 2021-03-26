@@ -24,6 +24,12 @@
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
+static int _maxConcurrency = -1;
+OPTION_EXPERIMENTAL_ENTRY("max-concurrency", 0, 0,
+                          G_OPTION_ARG_INT, &_maxConcurrency,
+                          "Maximum number of workers to allow to run at once. Set to -1 for no limit. [-1]",
+                          "N")
+
 struct _Scheduler {
     /* all worker threads used by the scheduler */
     //GQueue* threadItems;
@@ -148,7 +154,7 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType, guint
     // Unowned back-pointer
     scheduler->manager = manager;
 
-    scheduler->workerPool = workerpool_new(manager, scheduler, /*nThreads=*/nWorkers, /*nConcurrent=*/-1);
+    scheduler->workerPool = workerpool_new(manager, scheduler, /*nThreads=*/nWorkers, /*nConcurrent=*/_maxConcurrency);
 
     scheduler->endTime = endTime;
     scheduler->currentRound.endTime = scheduler->endTime;// default to one single round

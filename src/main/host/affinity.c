@@ -5,6 +5,7 @@
 #endif              // _GNU_SOURCE
 
 #include <assert.h>
+#include <errno.h>
 #include <pthread.h>
 #include <sched.h>
 #include <stdbool.h>
@@ -370,6 +371,22 @@ int affinity_initPlatformInfo() {
     return 0;
 }
 
+static cpu_set_t* _cpuSetForId(size_t* cpu_set_size, int new_cpu_num) {
+    cpu_set_t *cpu_set = CPU_ALLOC(_global_platform_info.max_cpu_num);
+    if (!cpu_set) {
+        error("Couldn't create cpu_set");
+    }
+
+    *cpu_set_size = CPU_ALLOC_SIZE(_global_platform_info.max_cpu_num);
+
+    // Clear the CPU set
+    CPU_ZERO_S(*cpu_set_size, cpu_set);
+    // And then add the new_cpu_num as the only element of the set
+    CPU_SET_S(new_cpu_num, *cpu_set_size, cpu_set);
+
+    return cpu_set;
+}
+
 int affinity_setProcessAffinity(pid_t pid, int new_cpu_num, int old_cpu_num) {
     assert(pid >= 0);
 
@@ -378,35 +395,33 @@ int affinity_setProcessAffinity(pid_t pid, int new_cpu_num, int old_cpu_num) {
         return old_cpu_num;
     }
 
-    cpu_set_t* cpu_set = NULL;
-    bool set_affinity_suceeded = false;
-    int retval = new_cpu_num;
+    size_t cpu_set_size;
+    cpu_set_t* cpu_set = _cpuSetForId(&cpu_set_size, new_cpu_num);
 
-    cpu_set = CPU_ALLOC(_global_platform_info.max_cpu_num);
-
-    if (cpu_set) { // Good, the CPU set allocation succeeded
-
-        size_t cpu_set_size = CPU_ALLOC_SIZE(_global_platform_info.max_cpu_num);
-
-        // Clear the CPU set
-        CPU_ZERO_S(cpu_set_size, cpu_set);
-        // And then add the new_cpu_num as the only element of the set
-        CPU_SET_S(new_cpu_num, cpu_set_size, cpu_set);
-
-        int rc = sched_setaffinity(pid, cpu_set_size, cpu_set);
-
-        set_affinity_suceeded = (rc == 0);
+    if (sched_setaffinity(pid, cpu_set_size, cpu_set) != 0) {
+        error("sched_setaffinity: %s", strerror(errno));
     }
 
-    if (!set_affinity_suceeded) {
-        critical("cpu-pin was set, but the CPU affinity for PID %d could not be set to %d",
-                 (int)pid, new_cpu_num);
-        retval = old_cpu_num;
+    CPU_FREE(cpu_set);
+
+    return new_cpu_num;
+}
+
+int affinity_setPthreadAffinity(pthread_t thread, int new_cpu_num, int old_cpu_num) {
+    // We can short-circuit if there's no work to do.
+    if (!_affinity_enabled || new_cpu_num == AFFINITY_UNINIT || new_cpu_num == old_cpu_num) {
+        return old_cpu_num;
     }
 
-    if (cpu_set) {
-        CPU_FREE(cpu_set);
+    size_t cpu_set_size;
+    cpu_set_t* cpu_set = _cpuSetForId(&cpu_set_size, new_cpu_num);
+    
+    int rv = pthread_setaffinity_np(thread, cpu_set_size, cpu_set);
+    if (rv != 0) {
+        error("pthread_setaffinity_np: %s", strerror(rv));
     }
 
-    return retval;
+    CPU_FREE(cpu_set);
+
+    return new_cpu_num;
 }
