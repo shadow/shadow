@@ -26,11 +26,17 @@
 
 struct _Scheduler {
     /* all worker threads used by the scheduler */
-    GQueue* threadItems;
+    //GQueue* threadItems;
+
+    // Unowned back-pointer.
+    Manager* manager;
+    
+    WorkerPool* workerPool;
 
     /* global lock for all threads, hold this as little as possible */
     GMutex globalLock;
 
+#if 0
     /* barrier for worker threads to start and stop running */
     CountDownLatch* startBarrier;
     CountDownLatch* bootBarrier;
@@ -41,6 +47,7 @@ struct _Scheduler {
     CountDownLatch* collectInfoBarrier;
     /* barrier to wait for main thread to finish updating for the next round */
     CountDownLatch* prepareRoundBarrier;
+#endif
 
     /* holds a timer for each thread to track how long threads wait for execution barrier */
     GHashTable* threadToWaitTimerMap;
@@ -76,7 +83,10 @@ struct _SchedulerThreadItem {
     CountDownLatch* notifyJoined;
 };
 
-static void _scheduler_startHosts(Scheduler* scheduler) {
+//static void _scheduler_startHosts(Scheduler* scheduler) {
+static void _scheduler_startHostsWorkerTaskFn(void* voidScheduler) {
+    Scheduler* scheduler = voidScheduler;
+    MAGIC_ASSERT(scheduler);
     if(scheduler->policy->getAssignedHosts) {
         GQueue* myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
         if(myHosts) {
@@ -88,7 +98,16 @@ static void _scheduler_startHosts(Scheduler* scheduler) {
     }
 }
 
-static void _scheduler_stopHosts(Scheduler* scheduler) {
+static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
+    Scheduler* scheduler = voidScheduler;
+    Event* event = NULL;
+    while ((event = scheduler->policy->pop(scheduler->policy, scheduler->currentRound.endTime)) != NULL) {
+        worker_runEvent(event);
+    }
+}
+
+static void _scheduler_finishTaskFn(void* voidScheduler) {
+    Scheduler* scheduler = voidScheduler;
     /* free all applications before freeing any of the hosts since freeing
      * applications may cause close() to get called on sockets which needs
      * other host information. this may cause issues if the hosts are gone.
@@ -102,18 +121,14 @@ static void _scheduler_stopHosts(Scheduler* scheduler) {
      * structs. so if we let a single thread free everything, we run into issues. */
 
 //    GList* allHosts = g_hash_table_get_values(scheduler->hostIDToHostMap);
+    GQueue* myHosts = NULL;
     if(scheduler->policy->getAssignedHosts) {
-        GQueue* myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
-        if(myHosts) {
-            guint nHosts = g_queue_get_length(myHosts);
-            message("starting to shut down %u hosts", nHosts);
-            worker_freeHosts(myHosts);
-            message("%u hosts are shut down", nHosts);
-        }
+        myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
     }
+    worker_finish(myHosts);
 }
 
-Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointer threadUserData,
+Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType, guint nWorkers, gpointer threadUserData,
         guint schedulerSeed, SimulationTime endTime) {
     Scheduler* scheduler = g_new0(Scheduler, 1);
     MAGIC_INIT(scheduler);
@@ -121,12 +136,19 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
     /* global lock */
     g_mutex_init(&(scheduler->globalLock));
 
+/*
     scheduler->startBarrier = countdownlatch_new(nWorkers+1);
     scheduler->bootBarrier = countdownlatch_new(nWorkers + 1);
     scheduler->finishBarrier = countdownlatch_new(nWorkers+1);
     scheduler->executeEventsBarrier = countdownlatch_new(nWorkers+1);
     scheduler->collectInfoBarrier = countdownlatch_new(nWorkers+1);
     scheduler->prepareRoundBarrier = countdownlatch_new(nWorkers+1);
+    */
+
+    // Unowned back-pointer
+    scheduler->manager = manager;
+
+    scheduler->workerPool = workerpool_new(manager, scheduler, /*nThreads=*/nWorkers, /*nConcurrent=*/-1);
 
     scheduler->endTime = endTime;
     scheduler->currentRound.endTime = scheduler->endTime;// default to one single round
@@ -179,13 +201,12 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
     /* make sure our ref count is set before starting the threads */
     scheduler->referenceCount = 1;
 
+#if 0
     scheduler->threadItems = g_queue_new();
 
     /* start up threads and create worker storage, each thread will call worker_new,
      * and wait at startBarrier until we are ready to launch */
     for(gint i = 0; i < nWorkers; i++) {
-        GString* name = g_string_new(NULL);
-        g_string_printf(name, "worker-%i", (i));
 
         SchedulerThreadItem* item = g_new0(SchedulerThreadItem, 1);
         item->notifyDoneRunning = countdownlatch_new(1);
@@ -200,23 +221,12 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
         runData->notifyReadyToJoin = item->notifyReadyToJoin;
         runData->notifyJoined = item->notifyJoined;
 
-        gint returnVal = pthread_create(&(item->thread), NULL, (void*(*)(void*))worker_run, runData);
-        if(returnVal != 0) {
-            critical("unable to create worker thread");
-            return NULL;
-        }
-
-        returnVal = pthread_setname_np(item->thread, name->str);
-        if(returnVal != 0) {
-            warning("unable to set name of worker thread to '%s'", name->str);
-        }
         utility_assert(item->thread);
 
         g_queue_push_tail(scheduler->threadItems, item);
         shadow_logger_register(shadow_logger_getDefault(), item->thread);
-
-        g_string_free(name, TRUE);
     }
+#endif
     message("main scheduler thread will operate with %u worker threads", nWorkers);
 
     return scheduler;
@@ -241,14 +251,16 @@ void scheduler_shutdown(Scheduler* scheduler) {
     g_hash_table_destroy(scheduler->hostIDToHostMap);
 
     /* join and free spawned worker threads */
-    guint nWorkers = g_queue_get_length(scheduler->threadItems);
+    //guint nWorkers = g_queue_get_length(scheduler->threadItems);
 
-    message("waiting for %u worker threads to finish", nWorkers);
+    message("waiting for %d worker threads to finish", workerpool_getNWorkers(scheduler->workerPool));
+    workerpool_joinAll(scheduler->workerPool);
 
     /* threads need to finish and clean up some local state */
-    g_queue_foreach(scheduler->threadItems, (GFunc)_scheduler_waitForThreadsToStopRunning, scheduler);
+    //g_queue_foreach(scheduler->threadItems, (GFunc)_scheduler_waitForThreadsToStopRunning, scheduler);
 }
 
+#if 0
 static void _scheduler_joinThreads(SchedulerThreadItem* item, Scheduler* scheduler) {
     if(item && item->thread != pthread_self()) {
         /* first tell the thread we are ready to join */
@@ -270,6 +282,7 @@ static void _scheduler_joinThreads(SchedulerThreadItem* item, Scheduler* schedul
         message("joined thread %p, total wait time for round execution barrier was %f seconds", GUINT_TO_POINTER(item->thread), totalWaitTime);
     }
 }
+#endif
 
 static void _scheduler_free(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
@@ -279,13 +292,14 @@ static void _scheduler_free(Scheduler* scheduler) {
     random_free(scheduler->random);
 
     /* "join" the threads */
-    g_queue_foreach(scheduler->threadItems, (GFunc)_scheduler_joinThreads, scheduler);
+    // g_queue_foreach(scheduler->threadItems, (GFunc)_scheduler_joinThreads, scheduler);
 
     /* dont need the timers anymore now that the threads are joined */
     if(scheduler->threadToWaitTimerMap) {
         g_hash_table_destroy(scheduler->threadToWaitTimerMap);
     }
 
+#if 0
     guint nWorkers = g_queue_get_length(scheduler->threadItems);
 
     while(!g_queue_is_empty(scheduler->threadItems)) {
@@ -312,10 +326,12 @@ static void _scheduler_free(Scheduler* scheduler) {
     countdownlatch_free(scheduler->startBarrier);
     countdownlatch_free(scheduler->bootBarrier);
     countdownlatch_free(scheduler->finishBarrier);
+#endif
 
     g_mutex_clear(&(scheduler->globalLock));
 
-    message("%i worker threads finished", nWorkers);
+    message("%d worker threads finished", workerpool_getNWorkers(scheduler->workerPool));
+    workerpool_free(scheduler->workerPool);
 
     MAGIC_CLEAR(scheduler);
     g_free(scheduler);
@@ -359,9 +375,7 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
     return TRUE;
 }
 
-Event* scheduler_pop(Scheduler* scheduler) {
-    MAGIC_ASSERT(scheduler);
-
+#if 0
     /* this function should block until a non-null event is available for the worker to run.
      * return NULL only to signal the worker thread to quit */
 
@@ -414,6 +428,23 @@ Event* scheduler_pop(Scheduler* scheduler) {
 
     /* scheduler is done, return NULL to stop worker */
     return NULL;
+}
+#endif
+
+static void _scheduler_collectInfoWorkerTask(void* voidScheduler) {
+    Scheduler* scheduler = voidScheduler;
+    MAGIC_ASSERT(scheduler);
+
+    if(scheduler->policy->getNextTime) {
+        SimulationTime nextTime = scheduler->policy->getNextTime(scheduler->policy);
+        g_mutex_lock(&(scheduler->globalLock));
+        scheduler->currentRound.minNextEventTime = MIN(scheduler->currentRound.minNextEventTime, nextTime);
+        g_mutex_unlock(&(scheduler->globalLock));
+    }
+
+    /* clear all log messages from the last round */
+    shadow_logger_flushRecords(shadow_logger_getDefault(),
+                                pthread_self());
 }
 
 void scheduler_addHost(Scheduler* scheduler, Host* host) {
@@ -497,16 +528,16 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
     GQueue* hosts = g_queue_new();
     g_hash_table_foreach(scheduler->hostIDToHostMap, (GHFunc)_scheduler_appendHostToQueue, hosts);
 
-    guint nThreads = g_queue_get_length(scheduler->threadItems);
+    //guint nThreads = g_queue_get_length(scheduler->threadItems);
 
-    if(nThreads <= 1) {
+    int nWorkers = workerpool_getNWorkers(scheduler->workerPool);
+    if(nWorkers <= 1) {
         /* either the main thread or the single worker gets everything */
         pthread_t chosen;
-        if(nThreads == 0) {
+        if(nWorkers == 0) {
             chosen = pthread_self();
         } else {
-            SchedulerThreadItem* item = g_queue_peek_head(scheduler->threadItems);
-            chosen = item->thread;
+            chosen = workerpool_getThread(scheduler->workerPool, 0);
         }
 
         /* assign *all* of the hosts to the chosen thread */
@@ -517,13 +548,14 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
         _scheduler_shuffleQueue(scheduler, hosts);
 
         /* now that our host order has been randomized, assign them evenly to worker threads */
+        int workeri = 0;
         while(!g_queue_is_empty(hosts)) {
-            SchedulerThreadItem* item = g_queue_pop_head(scheduler->threadItems);
-            pthread_t nextThread = item->thread;
+            //SchedulerThreadItem* item = g_queue_pop_head(scheduler->threadItems);
+            pthread_t nextThread = workerpool_getThread(scheduler->workerPool, workeri++ % workerpool_getNWorkers(scheduler->workerPool));
 
             _scheduler_assignHostsToThread(scheduler, hosts, nextThread, 1);
 
-            g_queue_push_tail(scheduler->threadItems, item);
+            //g_queue_push_tail(scheduler->threadItems, item);
         }
     }
 
@@ -548,13 +580,13 @@ static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
     /* now that our host order has been randomized, assign them evenly to worker threads */
     while(!g_queue_is_empty(hosts)) {
         Host* host = g_queue_pop_head(hosts);
-        SchedulerThreadItem* item = g_queue_pop_head(scheduler->threadItems);
-        pthread_t newThread = item->thread;
+        //SchedulerThreadItem* item = g_queue_pop_head(scheduler->threadItems);
+        //pthread_t newThread = item->thread;
 
 //        TODO this needs to get uncommented/updated when migration code is added
 //        scheduler->policy->migrateHost(scheduler->policy, host, newThread);
 
-        g_queue_push_tail(scheduler->threadItems, item);
+        //g_queue_push_tail(scheduler->threadItems, item);
     }
 
     if(hosts) {
@@ -572,6 +604,7 @@ gboolean scheduler_isRunning(Scheduler* scheduler) {
     return scheduler->isRunning;
 }
 
+#if 0
 void scheduler_awaitStart(Scheduler* scheduler) {
     /* Called by worker threads. When we are in single thread mode, all of the barriers have a count
      * of 1 so the countDownAwait functions always return immediately here. */
@@ -597,21 +630,27 @@ void scheduler_awaitStart(Scheduler* scheduler) {
     /* everyone will wait for the next round to be ready */
     countdownlatch_countDownAwait(scheduler->prepareRoundBarrier);
 }
+#endif
 
-void scheduler_awaitFinish(Scheduler* scheduler) {
+#if 0
+void _scheduler_stopHostsTaskFn(void* voidScheduler) {
+    Scheduler* scheduler = voidScheduler;
     /* Called by worker threads. When we are in single thread mode, all of the barriers have a count
      * of 1 so the countDownAwait functions always return immediately here. */
 
+#if 0
     /* each thread will run cleanup on their own hosts */
     g_mutex_lock(&scheduler->globalLock);
     scheduler->isRunning = FALSE;
     g_mutex_unlock(&scheduler->globalLock);
+#endif
 
     _scheduler_stopHosts(scheduler);
 
     /* wait until all threads are waiting to finish */
-    countdownlatch_countDownAwait(scheduler->finishBarrier);
+    //countdownlatch_countDownAwait(scheduler->finishBarrier);
 }
+#endif
 
 void scheduler_start(Scheduler* scheduler) {
     /* Called by the scheduler thread. */
@@ -622,6 +661,9 @@ void scheduler_start(Scheduler* scheduler) {
     scheduler->isRunning = TRUE;
     g_mutex_unlock(&scheduler->globalLock);
 
+    workerpool_startTaskFn(scheduler->workerPool, _scheduler_startHostsWorkerTaskFn, scheduler);
+    workerpool_awaitTaskFn(scheduler->workerPool);
+#if 0
     if(scheduler->policyType != SP_SERIAL_GLOBAL) {
         /* this will cause all workers to start their hosts in awaitStart */
         countdownlatch_countDownAwait(scheduler->startBarrier);
@@ -629,6 +671,7 @@ void scheduler_start(Scheduler* scheduler) {
          * round 1 */
         countdownlatch_countDownAwait(scheduler->bootBarrier);
     }
+#endif
 }
 
 void scheduler_continueNextRound(Scheduler* scheduler, SimulationTime windowStart, SimulationTime windowEnd) {
@@ -639,6 +682,9 @@ void scheduler_continueNextRound(Scheduler* scheduler, SimulationTime windowStar
     scheduler->currentRound.minNextEventTime = SIMTIME_MAX;
     g_mutex_unlock(&scheduler->globalLock);
 
+    workerpool_startTaskFn(scheduler->workerPool, _scheduler_runEventsWorkerTaskFn, scheduler);
+
+#if 0
     if(scheduler->policyType != SP_SERIAL_GLOBAL) {
         /* workers are waiting for preparation of the next round
          * this will cause them to start running events */
@@ -648,11 +694,20 @@ void scheduler_continueNextRound(Scheduler* scheduler, SimulationTime windowStar
          * when blocked because there are no more events available in the current round */
         countdownlatch_reset(scheduler->prepareRoundBarrier);
     }
+#endif
 }
 
 SimulationTime scheduler_awaitNextRound(Scheduler* scheduler) {
     /* Called by the scheduler thread. */
 
+    // Await completion of _scheduler_runEventsWorkerTaskFn
+    workerpool_awaitTaskFn(scheduler->workerPool);
+
+    // XXX Can we merge this into the execution task? e.g. track event times as we're scheduling them?
+    workerpool_startTaskFn(scheduler->workerPool, _scheduler_collectInfoWorkerTask, scheduler);
+    workerpool_awaitTaskFn(scheduler->workerPool);
+
+#if 0
     if(scheduler->policyType != SP_SERIAL_GLOBAL) {
         /* other workers will also wait at this barrier when they are finished with their events */
         countdownlatch_countDownAwait(scheduler->executeEventsBarrier);
@@ -661,6 +716,7 @@ SimulationTime scheduler_awaitNextRound(Scheduler* scheduler) {
         countdownlatch_countDownAwait(scheduler->collectInfoBarrier);
         countdownlatch_reset(scheduler->collectInfoBarrier);
     }
+    #endif
 
     SimulationTime minNextEventTime = SIMTIME_MAX;
     g_mutex_lock(&scheduler->globalLock);
@@ -675,6 +731,9 @@ void scheduler_finish(Scheduler* scheduler) {
     scheduler->isRunning = FALSE;
     g_mutex_unlock(&scheduler->globalLock);
 
+    workerpool_startTaskFn(scheduler->workerPool, _scheduler_finishTaskFn, scheduler);
+    workerpool_awaitTaskFn(scheduler->workerPool);
+#if 0
     if(scheduler->policyType != SP_SERIAL_GLOBAL) {
         /* wake up threads from their waiting for the next round.
          * because isRunning is now false, they will all exit and wait at finishBarrier */
@@ -683,6 +742,7 @@ void scheduler_finish(Scheduler* scheduler) {
         /* wait for them to be ready to finish */
         countdownlatch_countDownAwait(scheduler->finishBarrier);
     }
+#endif
 
     g_mutex_lock(&scheduler->globalLock);
     if(g_hash_table_size(scheduler->hostIDToHostMap) > 0) {

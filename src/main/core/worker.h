@@ -10,6 +10,7 @@
 #include <glib.h>
 #include <netinet/in.h>
 
+#include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
@@ -23,6 +24,7 @@
 #include "main/utility/count_down_latch.h"
 #include "support/logger/log_level.h"
 
+#if 0
 typedef struct _WorkerRunData WorkerRunData;
 struct _WorkerRunData {
     guint threadID;
@@ -32,14 +34,30 @@ struct _WorkerRunData {
     CountDownLatch* notifyReadyToJoin;
     CountDownLatch* notifyJoined;
 };
+#endif
 
 typedef struct _Worker Worker;
+
+typedef void(*WorkerPoolTaskFn)(void*);
+typedef struct _WorkerPool WorkerPool;
+
+// To be called by scheduler. Consumes `event`
+void worker_runEvent(Event* event);
+// To be called by worker thread
+void worker_finish(GQueue* hosts);
+
+WorkerPool* workerpool_new(Manager* manager, Scheduler* scheduler, int nThreads, int nConcurrent);
+void workerpool_startTaskFn(WorkerPool* pool, WorkerPoolTaskFn taskFn, void* data);
+void workerpool_awaitTaskFn(WorkerPool* pool);
+int workerpool_getNWorkers(WorkerPool* pool);
+void workerpool_joinAll(WorkerPool* pool);
+void workerpool_free(WorkerPool* pool);
+pthread_t workerpool_getThread(WorkerPool* pool, int threadId);
 
 int worker_getAffinity();
 DNS* worker_getDNS();
 Topology* worker_getTopology();
 Options* worker_getOptions();
-gpointer worker_run(WorkerRunData*);
 gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay);
 void worker_sendPacket(Packet* packet);
 gboolean worker_isAlive();
