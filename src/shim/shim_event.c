@@ -10,6 +10,10 @@ int shadow_get_ipc_blk(ShMemBlockSerialized* ipc_blk_serialized) {
     return syscall(SYS_shadow_get_ipc_blk, ipc_blk_serialized);
 }
 
+int shadow_get_shm_blk(ShMemBlockSerialized* shm_blk_serialized) {
+    return syscall(SYS_shadow_get_shm_blk, shm_blk_serialized);
+}
+
 static inline void shim_determinedSend(int sock_fd, const void* ptr,
                                        size_t nbytes) {
     const char* buf = (const char*)(ptr);

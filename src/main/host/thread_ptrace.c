@@ -742,6 +742,17 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv, const char* wor
         myenvv = g_environ_setenv(myenvv, "SHADOW_IPC_BLK", ipcBlkBuf, TRUE);
     }
 
+    {
+        ShMemBlockSerialized sharedMemBlockSerial =
+            shmemallocator_globalBlockSerialize(&thread->shimSharedMemBlock);
+
+        char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
+        shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
+
+        /* append to the env */
+        myenvv = g_environ_setenv(myenvv, "SHADOW_SHM_BLK", sharedMemBlockBuf, TRUE);
+    }
+
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr(argv);
     message("forking new thread with environment '%s', arguments '%s', and working directory '%s'",
@@ -779,7 +790,6 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv, const char* wor
             .event_id = SHD_SHIM_EVENT_START,
             .event_data.start = {
                 .simulation_nanos = worker_getEmulatedTime(),
-                .shim_shared_mem = shmemallocator_globalBlockSerialize(&thread->shimSharedMemBlock),
             }};
         shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &startEvent);
     }
@@ -787,26 +797,40 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv, const char* wor
     return thread->base.nativePid;
 }
 
+static SysCallReturn _threadptrace_getSerializedBlock(ThreadPtrace* thread, PluginPtr shm_blk_pptr,
+                                                      ShMemBlock* block, const char* syscall_name) {
+    debug("%s %p", syscall_name, (void*)shm_blk_pptr.val);
+
+    ShMemBlockSerialized* shm_blk_ptr = process_getWriteablePtr(
+        thread->base.process, &thread->base, shm_blk_pptr, sizeof(*shm_blk_ptr));
+    *shm_blk_ptr = shmemallocator_globalBlockSerialize(block);
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+}
+
 static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallArgs* args) {
     utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL ||
                    thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
     if (args->number == SYS_shadow_set_ptrace_allow_native_syscalls) {
         bool val = args->args[0].as_i64;
+
         debug("SYS_shadow_set_ptrace_allow_native_syscalls %d", val);
         _threadptrace_sharedMem(thread)->ptrace_allow_native_syscalls = val;
+
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
     }
 
     if (args->number == SYS_shadow_get_ipc_blk) {
-        PluginPtr ipc_blk_pptr = args->args[0].as_ptr;
-        debug("SYS_shadow_get_ipc_blk %p", (void*)ipc_blk_pptr.val);
-        ShMemBlockSerialized* ipc_blk_ptr = process_getWriteablePtr(
-            thread->base.process, &thread->base, ipc_blk_pptr, sizeof(*ipc_blk_ptr));
-        *ipc_blk_ptr = shmemallocator_globalBlockSerialize(&thread->ipcBlk);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        return _threadptrace_getSerializedBlock(
+            thread, args->args[0].as_ptr, &thread->ipcBlk, "SYS_shadow_get_ipc_blk");
     }
 
-    if (thread->enableIpc && _threadptrace_sharedMem(thread)->ptrace_allow_native_syscalls) {
+    if (args->number == SYS_shadow_get_shm_blk) {
+        return _threadptrace_getSerializedBlock(
+            thread, args->args[0].as_ptr, &thread->shimSharedMemBlock, "SYS_shadow_get_shm_blk");
+    }
+
+    if (_threadptrace_sharedMem(thread)->ptrace_allow_native_syscalls) {
         if (args->number == SYS_brk) {
             // brk should *always* be interposed so that the MemoryManager can track it.
             debug("Interposing brk even though native syscalls are enabled");
@@ -1029,12 +1053,21 @@ static SysCallCondition* _threadptrace_resumeSyscall(ThreadPtrace* thread, bool*
     return NULL;
 }
 
+static void _threadptrace_setSharedTime(ThreadPtrace* thread) {
+    EmulatedTime now = worker_getEmulatedTime();
+    _threadptrace_sharedMem(thread)->sim_time.tv_sec = now / SIMTIME_ONE_SECOND;
+    _threadptrace_sharedMem(thread)->sim_time.tv_nsec = now % SIMTIME_ONE_SECOND;
+}
+
 SysCallCondition* threadptrace_resume(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     if (thread->needAttachment) {
         _threadptrace_doAttach(thread);
     }
+
+    // Make sure the shim has the latest time before we resume
+    _threadptrace_setSharedTime(thread);
 
     while (true) {
         bool changedState = false;
@@ -1428,7 +1461,6 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
             .event_id = SHD_SHIM_EVENT_START,
             .event_data.start = {
                 .simulation_nanos = worker_getEmulatedTime(),
-                .shim_shared_mem = shmemallocator_globalBlockSerialize(&child->shimSharedMemBlock),
             }};
         shimevent_sendEventToPlugin(_threadptrace_ipcData(child), &startEvent);
     }
@@ -1441,10 +1473,6 @@ Thread* threadptrace_new(Host* host, Process* process, int threadID) {
 
     thread->ipcBlk = shmemallocator_globalAlloc(ipcData_nbytes());
     ipcData_init(_threadptrace_ipcData(thread), shimipc_spinMax());
-
-    thread->shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimSharedMem));
-
-    *_threadptrace_sharedMem(thread) = (ShimSharedMem){.ptrace_allow_native_syscalls = false};
     thread->enableIpc = true;
 
     return _threadPtraceToThread(thread);
@@ -1478,6 +1506,11 @@ Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
 
     thread->pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite));
     thread->readPointers = g_array_new(FALSE, FALSE, sizeof(void*));
+
+    // Set up a shared mem channel that we use even if not using IPC events
+    thread->shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimSharedMem));
+    *_threadptrace_sharedMem(thread) = (ShimSharedMem){.ptrace_allow_native_syscalls = false};
+    _threadptrace_setSharedTime(thread);
 
     worker_countObject(OBJECT_TYPE_THREAD_PTRACE, COUNTER_TYPE_NEW);
 
