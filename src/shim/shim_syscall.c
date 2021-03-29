@@ -11,24 +11,22 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include "main/core/support/definitions.h" // for SIMTIME definitions
 #include "shim/shim.h"
 #include "shim/shim_syscall.h"
 #include "support/logger/logger.h"
-
-#define SIMTIME_NANOS_PER_SEC 1000000000l
-#define SIMTIME_MICROS_PER_NANOSEC 1000l
 
 // We store the simulation time using timespec to reduce the number of
 // conversions that we need to do while servicing syscalls.
 static struct timespec _cached_simulation_time = {0};
 
 void shim_syscall_set_simtime_nanos(uint64_t simulation_nanos) {
-    _cached_simulation_time.tv_sec = simulation_nanos / SIMTIME_NANOS_PER_SEC;
-    _cached_simulation_time.tv_nsec = simulation_nanos % SIMTIME_NANOS_PER_SEC;
+    _cached_simulation_time.tv_sec = simulation_nanos / SIMTIME_ONE_SECOND;
+    _cached_simulation_time.tv_nsec = simulation_nanos % SIMTIME_ONE_SECOND;
 }
 
 uint64_t shim_syscall_get_simtime_nanos() {
-    return (uint64_t)(_cached_simulation_time.tv_sec * SIMTIME_NANOS_PER_SEC) +
+    return (uint64_t)(_cached_simulation_time.tv_sec * SIMTIME_ONE_SECOND) +
            _cached_simulation_time.tv_nsec;
 }
 
@@ -118,7 +116,7 @@ bool shim_syscall(long syscall_num, long* rv, va_list args) {
 
             if (tp) {
                 tp->tv_sec = simtime_ts->tv_sec;
-                tp->tv_usec = simtime_ts->tv_nsec / SIMTIME_MICROS_PER_NANOSEC;
+                tp->tv_usec = simtime_ts->tv_nsec / SIMTIME_ONE_MICROSECOND;
                 debug("gettimeofday() successfully copied time");
             }
             *rv = 0;
