@@ -165,7 +165,9 @@ struct Counter *counter_new(void);
 
 void counter_free(struct Counter *counter_ptr);
 
-uint64_t counter_add_one(struct Counter *counter, const char *id);
+uint64_t counter_add_value(struct Counter *counter, const char *id, uint64_t value);
+
+uint64_t counter_sub_value(struct Counter *counter, const char *id, uint64_t value);
 
 // Creates a new string representation of the counter, e.g., for logging.
 // The returned string must be free'd by passing it to counter_free_string.
