@@ -112,7 +112,12 @@ impl Counter {
                     }
                     CounterOperation::Set => *val = value,
                 }
-                *val
+                if *val > 0 {
+                    *val
+                } else {
+                    assert_eq!(self.items.remove(id), Some(0));
+                    0
+                }
             }
             None => {
                 // Allocate new key and insert it with initial value of 0.
@@ -304,6 +309,7 @@ mod tests {
         assert_eq!(counter.sub_one("read"), 1);
         assert_eq!(counter.sub_one("read"), 0);
         assert_eq!(counter.sub_one("read"), 0);
+        assert_eq!(counter.get_value("read"), 0);
         counter.set_value("read", 100);
         counter.set_value("write", 100);
         assert_eq!(counter.sub_one("read"), 99);
