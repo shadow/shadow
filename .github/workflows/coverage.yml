@@ -1,7 +1,7 @@
 # Syntax reference:
 # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
 
-name: Shadow Tests
+name: Coverage
 
 defaults:
   run:
@@ -17,28 +17,16 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  shadow:
-    # there's only one job in the workflow, so we won't give it a name
-    name: ' '
+  codecov:
     runs-on: ubuntu-latest
     container:
-      image: ${{ matrix.container }}
+      image: 'ubuntu:20.10'
       # the default for ubuntu:18.04, but with the size increased from 65536k
       options: '--shm-size="1g"'
-    strategy:
-      matrix:
-        container: ['ubuntu:16.04', 'ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:32', 'centos:7', 'centos:8']
-        cc: ['gcc', 'clang']
-        buildtype: ['debug', 'release']
-        include:
-          # Add a single configuration for testing the C syscall handlers
-          - container: 'ubuntu:20.04'
-            cc: 'clang'
-            buildtype: 'use-c-syscalls'
     env:
-      CC: ${{ matrix.cc }}
-      CONTAINER: ${{ matrix.container }}
-      BUILDTYPE: ${{ matrix.buildtype }}
+      CC: 'clang-11'
+      CONTAINER: 'ubuntu:20.10'
+      BUILDTYPE: 'coverage'
       RUSTPROFILE: minimal
 
     steps:
@@ -56,6 +44,19 @@ jobs:
 
       - name: Test
         run: . ci/container_scripts/test.sh
+
+      - name: Generate coverage report
+        run: |
+          cargo install grcov
+          grcov ./build -s src/ -t lcov --llvm --branch --ignore-not-existing -o ./grcov.lcov.txt
+
+      - name: Upload coverage report to codecov
+        uses: codecov/codecov-action@v1
+        with:
+          name: coverage
+          file: grcov.lcov.txt
+          flags: tests
+          fail_ci_if_error: false
 
       - name: Upload shadow data directories
         uses: actions/upload-artifact@v2
