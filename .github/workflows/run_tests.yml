@@ -31,10 +31,6 @@ jobs:
         cc: ['gcc', 'clang']
         buildtype: ['debug', 'release']
         include:
-          # Add a single coverage configuration
-          - container: 'ubuntu:20.10'
-            cc: 'clang-11'
-            buildtype: 'coverage'
           # Add a single configuration for testing the C syscall handlers
           - container: 'ubuntu:20.04'
             cc: 'clang'
@@ -44,7 +40,7 @@ jobs:
       CONTAINER: ${{ matrix.container }}
       BUILDTYPE: ${{ matrix.buildtype }}
       RUSTPROFILE: minimal
-        
+
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -60,21 +56,6 @@ jobs:
 
       - name: Test
         run: . ci/container_scripts/test.sh
-
-      - name: Generate coverage report
-        if: ${{ matrix.buildtype == 'coverage' }}
-        run: |
-          cargo install grcov
-          grcov ./build -s src/ -t lcov --llvm --branch --ignore-not-existing -o ./grcov.lcov.txt
-
-      - name: Upload coverage report to codecov
-        if: ${{ matrix.buildtype == 'coverage' }}
-        uses: codecov/codecov-action@v1
-        with:
-          name: coverage 
-          file: grcov.lcov.txt
-          flags: tests
-          fail_ci_if_error: false
 
       - name: Upload shadow data directories
         uses: actions/upload-artifact@v2
