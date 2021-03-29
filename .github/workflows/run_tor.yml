@@ -10,17 +10,17 @@ defaults:
 on:
   push:
     branches: [dev]
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: "Full git ref (for example 'd7a71b83...' or 'pull/1234/head')"
-        required: true
+  pull_request:
+    types: [opened, synchronize]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  testing:
+  tor:
+    # there's only one job in the workflow, so we won't give it a name
+    name: ' '
+
     runs-on: ubuntu-latest
 
     container:
@@ -46,13 +46,6 @@ jobs:
         uses: actions/checkout@v2
         with:
           path: shadow
-
-      - name: Checkout shadow input ref
-        if: github.event.inputs.ref
-        run: |
-          git fetch origin '${{ github.event.inputs.ref }}'
-          git checkout FETCH_HEAD
-          git rev-parse HEAD
 
       - name: Checkout tor
         uses: actions/checkout@v2
