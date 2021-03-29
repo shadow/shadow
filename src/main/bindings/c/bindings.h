@@ -169,6 +169,10 @@ uint64_t counter_add_value(struct Counter *counter, const char *id, uint64_t val
 
 uint64_t counter_sub_value(struct Counter *counter, const char *id, uint64_t value);
 
+void counter_add_counter(struct Counter *counter, struct Counter *other);
+
+void counter_sub_counter(struct Counter *counter, struct Counter *other);
+
 // Creates a new string representation of the counter, e.g., for logging.
 // The returned string must be free'd by passing it to counter_free_string.
 char *counter_alloc_string(struct Counter *counter);

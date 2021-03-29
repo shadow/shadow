@@ -16,8 +16,10 @@ generic types.
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result};
 use std::iter::FromIterator;
+use std::ops::{Add, Sub};
 
 /// The main counter object that maps individual keys to count values.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Counter {
     // TODO: convert this so we could count generic types instead of Strings
     items: HashMap<String, u64>,
@@ -27,7 +29,7 @@ pub struct Counter {
 enum CounterOperation {
     Add,
     Set,
-    Subtract,
+    Sub,
 }
 
 /// A collection of counters that can store and modify values for a set of keys.
@@ -49,7 +51,7 @@ impl Counter {
     /// If the decrement would produce a negative counter value, it is set to 0 instead.
     /// Returns the value of the counter after it was decremented.
     pub fn sub_one(&mut self, id: &str) -> u64 {
-        self.operate(id, CounterOperation::Subtract, 1)
+        self.operate(id, CounterOperation::Sub, 1)
     }
 
     /// Increment the counter value by the given value for the key given by id.
@@ -62,7 +64,7 @@ impl Counter {
     /// If the decrement would produce a negative counter value, it is set to 0 instead.
     /// Returns the value of the counter after it was decremented.
     pub fn sub_value(&mut self, id: &str, value: u64) -> u64 {
-        self.operate(id, CounterOperation::Subtract, value)
+        self.operate(id, CounterOperation::Sub, value)
     }
 
     /// Sets the counter value to the given value for the key given by id.
@@ -73,10 +75,24 @@ impl Counter {
 
     /// Returns the counter value for the key given by id, or 0 if no operations have
     /// been performed on the key.
-    pub fn get_value(&mut self, id: &str) -> u64 {
+    pub fn get_value(&self, id: &str) -> u64 {
         match self.items.get(&id.to_string()) {
             Some(val) => *val,
             None => 0,
+        }
+    }
+
+    /// Add all values for all keys in `other` to this counter.
+    pub fn add_counter(&mut self, other: &Counter) {
+        for (key, val) in other.items.iter() {
+            self.add_value(key, *val);
+        }
+    }
+
+    /// Subtract all values for all keys in `other` from this counter.
+    pub fn sub_counter(&mut self, other: &Counter) {
+        for (key, val) in other.items.iter() {
+            self.sub_value(key, *val);
         }
     }
 
@@ -87,7 +103,7 @@ impl Counter {
                 // Update and return the existing value without allocating new key.
                 match op {
                     CounterOperation::Add => *val = *val + value,
-                    CounterOperation::Subtract => {
+                    CounterOperation::Sub => {
                         if value < *val {
                             *val = *val - value
                         } else {
@@ -127,6 +143,24 @@ impl Display for Counter {
             }
         }
         write!(f, "}}")
+    }
+}
+
+impl Add for Counter {
+    type Output = Self;
+    /// Combines two counters by adding all values for all keys of `other` to `self`.
+    fn add(mut self, other: Self) -> Self {
+        self.add_counter(&other);
+        self
+    }
+}
+
+impl Sub for Counter {
+    type Output = Self;
+    /// Combines two counters by subtracting all values for all keys of `other` from `self`.
+    fn sub(mut self, other: Self) -> Self {
+        self.sub_counter(&other);
+        self
     }
 }
 
@@ -179,6 +213,28 @@ mod export {
         let id = unsafe { CStr::from_ptr(id) };
 
         counter.sub_value(id.to_str().unwrap(), value)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn counter_add_counter(counter: *mut Counter, other: *mut Counter) {
+        assert!(!counter.is_null());
+        assert!(!other.is_null());
+
+        let counter = unsafe { &mut *counter };
+        let other = unsafe { &mut *other };
+
+        counter.add_counter(other)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn counter_sub_counter(counter: *mut Counter, other: *mut Counter) {
+        assert!(!counter.is_null());
+        assert!(!other.is_null());
+
+        let counter = unsafe { &mut *counter };
+        let other = unsafe { &mut *other };
+
+        counter.sub_counter(other)
     }
 
     /// Creates a new string representation of the counter, e.g., for logging.
@@ -270,6 +326,86 @@ mod tests {
         assert_eq!(counter.sub_value("read", 10), 80);
         assert_eq!(counter.sub_value("write", 10), 0);
         assert_eq!(counter.sub_value("read", 10), 70);
+    }
+
+    #[test]
+    fn test_operator_add() {
+        let mut counter_a = Counter::new();
+        counter_a.set_value("read", 100);
+
+        let mut counter_b = Counter::new();
+        counter_b.set_value("read", 50);
+
+        let mut counter_sum = Counter::new();
+        counter_sum.set_value("read", 150);
+
+        // This transfers ownership of a and b to counter_added
+        let counter_added = counter_a + counter_b;
+        assert_eq!(counter_added.get_value("read"), 150);
+        assert_eq!(counter_added, counter_sum);
+    }
+
+    #[test]
+    fn test_operator_sub() {
+        let mut counter_a = Counter::new();
+        counter_a.set_value("read", 100);
+
+        let mut counter_b = Counter::new();
+        counter_b.set_value("read", 25);
+
+        let mut counter_sum = Counter::new();
+        counter_sum.set_value("read", 75);
+
+        // This transfers ownership of a and b to counter_added
+        let counter_subbed = counter_a - counter_b;
+        assert_eq!(counter_subbed.get_value("read"), 75);
+        assert_eq!(counter_subbed, counter_sum);
+    }
+
+    #[test]
+    fn test_add_counter() {
+        let mut counter_a = Counter::new();
+        counter_a.set_value("read", 100);
+        counter_a.set_value("write", 1);
+
+        let mut counter_b = Counter::new();
+        counter_b.set_value("read", 50);
+        counter_b.set_value("write", 2);
+
+        let mut counter_sum = Counter::new();
+        counter_sum.set_value("read", 150);
+        counter_sum.set_value("write", 3);
+
+        counter_a.add_counter(&counter_b);
+
+        assert_eq!(counter_a.get_value("read"), 150);
+        assert_eq!(counter_a.get_value("write"), 3);
+        assert_eq!(counter_b.get_value("read"), 50);
+        assert_eq!(counter_b.get_value("write"), 2);
+        assert_eq!(counter_a, counter_sum);
+    }
+
+    #[test]
+    fn test_sub_counter() {
+        let mut counter_a = Counter::new();
+        counter_a.set_value("read", 100);
+        counter_a.set_value("write", 3);
+
+        let mut counter_b = Counter::new();
+        counter_b.set_value("read", 25);
+        counter_b.set_value("write", 1);
+
+        let mut counter_sum = Counter::new();
+        counter_sum.set_value("read", 75);
+        counter_sum.set_value("write", 2);
+
+        counter_a.sub_counter(&counter_b);
+
+        assert_eq!(counter_a.get_value("read"), 75);
+        assert_eq!(counter_a.get_value("write"), 2);
+        assert_eq!(counter_b.get_value("read"), 25);
+        assert_eq!(counter_b.get_value("write"), 1);
+        assert_eq!(counter_a, counter_sum);
     }
 
     #[test]
