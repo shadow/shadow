@@ -21,10 +21,13 @@
 #include "support/logger/logger.h"
 
 // Whether Shadow is using preload-based interposition.
-static bool _using_interpose_preload;
+static bool _using_interpose_preload = false;
 
 // Whether Shadow is using ptrace-based interposition.
-static bool _using_interpose_ptrace;
+static bool _using_interpose_ptrace = false;
+
+// Whether Shadow is using the shim-side syscall handler optimization.
+static bool _using_shim_syscall_handler = true;
 
 // This thread's IPC block, for communication with Shadow.
 static __thread ShMemBlock _shim_ipc_blk = {0};
@@ -74,6 +77,8 @@ bool shim_interpositionEnabled() {
     return _using_interpose_preload && !_shim_disable_interposition;
 }
 
+bool shim_use_syscall_handler() { return _using_shim_syscall_handler; }
+
 // Figure out what interposition mechanism we're using, based on environment
 // variables.  This is called before disabling interposition, so should be
 // careful not to make syscalls.
@@ -104,6 +109,15 @@ static void _set_interpose_type() {
         return;
     }
     abort();
+}
+
+static void _set_use_shim_syscall_handler() {
+    const char* shim_syscall_str = getenv("SHADOW_DISABLE_SHIM_SYSCALL");
+    if (shim_syscall_str && !strcmp(shim_syscall_str, "TRUE")) {
+        _using_shim_syscall_handler = false;
+    } else {
+        _using_shim_syscall_handler = true;
+    }
 }
 
 static void _shim_parent_init_logging() {
@@ -346,6 +360,7 @@ __attribute__((constructor)) void _shim_load() {
     // We must set the interposition type before calling
     // shim_disableInterposition.
     _set_interpose_type();
+    _set_use_shim_syscall_handler();
 
     // Initialization tasks depend on interpose type and parent/child thread status.
     static bool did_global_init = false;

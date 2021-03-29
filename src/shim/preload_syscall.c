@@ -175,7 +175,7 @@ long syscall(long n, ...) {
     va_start(args, n);
     long rv;
 
-    if (shim_syscall(n, &rv, args)) {
+    if (shim_use_syscall_handler() && shim_syscall(n, &rv, args)) {
         // No inter-process syscall needed, we handled it on the shim side! :)
         debug("Successfully avoided inter-process syscall %ld", n);
         // rv was already set

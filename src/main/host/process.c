@@ -62,6 +62,16 @@
 
 #include "main/host/thread_ptrace.h"
 
+// We normally attempt to serve hot-path syscalls on the shim-side to avoid a
+// more expensive inter-process syscall. This option disables the optimization.
+// This is defined here in Shadow because it breaks the shim.
+static bool _disable_shim_syscall_handler = false;
+OPTION_EXPERIMENTAL_ENTRY("disable-shim-syscall-handler", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE,
+                          &_disable_shim_syscall_handler,
+                          "Disable shim-side syscall handler to force hot-path syscalls to be "
+                          "handled via an inter-process syscall with shadow.",
+                          NULL)
+
 static gchar* _process_outputFileName(Process* proc, const char* type);
 static void _process_check(Process* proc);
 
@@ -670,6 +680,10 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
         gchar* logFileName = _process_outputFileName(proc, "shimlog");
         envv = g_environ_setenv(envv, "SHADOW_LOG_FILE", logFileName, TRUE);
         g_free(logFileName);
+    }
+
+    if (_disable_shim_syscall_handler) {
+        envv = g_environ_setenv(envv, "SHADOW_DISABLE_SHIM_SYSCALL", "TRUE", TRUE);
     }
 
     /* save args and env */
