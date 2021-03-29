@@ -94,7 +94,7 @@ struct _WorkerPool {
     WorkerPoolTaskFn taskFn;
     void* taskData;
 
-    bool joined;
+    gboolean joined;
 
     // Array of size `nConcurrent`
     int *cpuIds;
@@ -124,9 +124,9 @@ WorkerPool* workerpool_new(Manager* manager, Scheduler* scheduler, int nWorkers,
         .nWorkers = nWorkers,
         .nConcurrent = nConcurrent,
         .finishLatch = countdownlatch_new(nWorkers),
-        .joined = false,
-        MAGIC_INITIALIZER
+        .joined = FALSE,
     };
+    MAGIC_INIT(pool);
 
     pool->cpuQs = g_new(GQueue*, nConcurrent);
     pool->doneCpuQs = g_new(GQueue*, nConcurrent);
@@ -209,7 +209,7 @@ void workerpool_joinAll(WorkerPool* pool) {
         utility_assert(threadRetval == NULL);
     }
 
-    pool->joined = true;
+    pool->joined = TRUE;
 }
 
 void workerpool_free(WorkerPool* pool) {
