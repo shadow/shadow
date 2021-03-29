@@ -1,5 +1,6 @@
 #include "shim/shim_logger.h"
 
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,6 +10,7 @@
 #include <time.h>
 
 #include "shim/shim.h"
+#include "shim/shim_syscall.h"
 #include "support/logger/log_level.h"
 #include "support/logger/logger.h"
 
@@ -17,16 +19,11 @@ typedef struct _ShimLogger {
     FILE* file;
 } ShimLogger;
 
-static uint64_t _simulation_nanos = 0;
-void shimlogger_set_simulation_nanos(uint64_t simulation_nanos) {
-    _simulation_nanos = simulation_nanos;
-}
-uint64_t shimlogger_get_simulation_nanos() { return _simulation_nanos; }
-
 static size_t _simulation_nanos_string(char* dst, size_t size) {
+    uint64_t simulation_nanos = shim_syscall_get_simtime_nanos();
     const long nanos_per_sec = 1000000000l;
-    time_t seconds = _simulation_nanos / nanos_per_sec;
-    uint64_t nanos = _simulation_nanos % nanos_per_sec;
+    time_t seconds = simulation_nanos / nanos_per_sec;
+    uint64_t nanos = simulation_nanos % nanos_per_sec;
     struct tm tm;
     gmtime_r(&seconds, &tm);
     return snprintf(

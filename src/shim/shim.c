@@ -17,7 +17,7 @@
 #include "shim/ipc.h"
 #include "shim/shim_event.h"
 #include "shim/shim_logger.h"
-#include "shim/shim_time.h"
+#include "shim/shim_syscall.h"
 #include "support/logger/logger.h"
 
 // Whether Shadow is using preload-based interposition.
@@ -246,7 +246,7 @@ static void _shim_ipc_wait_for_start_event() {
     debug("waiting for start event on %p", _shim_ipc_blk.p);
     shimevent_recvEventFromShadow(_shim_ipc_blk.p, &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
-    shimtime_set_cached_simulation_nanos(event.event_data.start.simulation_nanos);
+    shim_syscall_set_simtime_nanos(event.event_data.start.simulation_nanos);
 }
 
 static void _shim_parent_init_hybrid() {
