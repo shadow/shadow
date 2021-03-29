@@ -113,7 +113,7 @@ static void _logger_default_log(LogLevel level, const char* fileName, const char
     offset += logger_elapsed_string(&buf[offset], sizeof(buf) - offset);
     offset = MIN(offset, sizeof(buf));
 
-    offset += snprintf(&buf[offset], sizeof(buf) - offset, "%s [%s:%i] [%s] ",
+    offset += snprintf(&buf[offset], sizeof(buf) - offset, " %s [%s:%i] [%s] ",
                        loglevel_toStr(level), logger_base_name(fileName), lineNumber, functionName);
     offset = MIN(offset, sizeof(buf));
 

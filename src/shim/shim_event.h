@@ -17,16 +17,22 @@
 typedef struct _ShimSharedMem {
     // While true, Shadow allows syscalls to be executed natively.
     bool ptrace_allow_native_syscalls;
+    // Store the latest simulation time to avoid inter-process time syscalls.
+    struct timespec sim_time;
 } ShimSharedMem;
 
 #define SYS_shadow_set_ptrace_allow_native_syscalls 1000
 #define SYS_shadow_get_ipc_blk 1001
+#define SYS_shadow_get_shm_blk 1002
 
 // Returns 0 on success. Non-zero and sets errno on failure.
 int shadow_set_ptrace_allow_native_syscalls(bool val);
 
 // Returns 0 on success. Non-zero and sets errno on failure.
 int shadow_get_ipc_blk(ShMemBlockSerialized* ipc_blk_serialized);
+
+// Returns 0 on success. Non-zero and sets errno on failure.
+int shadow_get_shm_blk(ShMemBlockSerialized* shm_blk_serialized);
 
 typedef enum {
     // Next val: 11
@@ -50,8 +56,6 @@ typedef struct _ShimEvent {
         struct {
             // Update shim-side simulation clock
             uint64_t simulation_nanos;
-            // Shared memory pointer to a ShimSharedMem.
-            ShMemBlockSerialized shim_shared_mem;
         } start;
 
         struct {

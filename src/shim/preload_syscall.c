@@ -8,8 +8,8 @@
 #include "shim/ipc.h"
 #include "shim/shim.h"
 #include "shim/shim_event.h"
-#include "shim/shim_logger.h"
 #include "shim/shim_shmem.h"
+#include "shim/shim_syscall.h"
 #include "support/logger/logger.h"
 
 // Make sure we don't call any syscalls ourselves after this function is called, otherwise
@@ -91,7 +91,7 @@ static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
             case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
                 // Use provided result.
                 SysCallReg rv = res.event_data.syscall_complete.retval;
-                shimlogger_set_simulation_nanos(res.event_data.syscall_complete.simulation_nanos);
+                shim_syscall_set_simtime_nanos(res.event_data.syscall_complete.simulation_nanos);
                 return rv;
             }
             case SHD_SHIM_EVENT_SYSCALL_DO_NATIVE: {
@@ -157,29 +157,9 @@ static long _vshadow_syscall(long n, va_list args) {
     return shadow_retval_to_errno(retval.as_i64);
 }
 
-// Gettimeofday is a frequently requested syscall. Since we cache the current sim time in the shim
-// logger, we fetch that time instead of issuing a more expensive Shadow syscall.
-static long _gettimeofday_cached(va_list args) {
-    uint64_t sim_time_nanos = shimlogger_get_simulation_nanos();
-    if (sim_time_nanos != 0) {
-        struct timeval* tv = va_arg(args, struct timeval*);
-
-        const long nanos_per_sec = 1000000000l;
-        const long micros_per_nano = 1000l;
-
-        tv->tv_sec = sim_time_nanos / nanos_per_sec;
-        tv->tv_usec = (sim_time_nanos % nanos_per_sec) / micros_per_nano;
-
-        debug("Using cached time of %ld.%06ld seconds to avoid gettimeofday syscall", tv->tv_sec,
-              tv->tv_usec);
-        return 0;
-    } else {
-        return -1;
-    }
-}
-
 long syscall(long n, ...) {
     shim_ensure_init();
+
     // Ensure that subsequent stack frames are on a different page than any
     // local variables passed through to the syscall. This ensures that even
     // if any of the syscall arguments are pointers, and those pointers cause
@@ -194,20 +174,21 @@ long syscall(long n, ...) {
     va_list(args);
     va_start(args, n);
     long rv;
-    if (shim_interpositionEnabled()) {
-        // If the syscall is gettimeofday, try to get the cached time first.
-        if (n != SYS_gettimeofday || _gettimeofday_cached(args) != 0) {
-            // Either the syscall is not gettimeofday, or getting the cached time failed.
-            debug("Making interposed syscall %ld", n);
-            rv = _vshadow_syscall(n, args);
-        } else {
-            // We successfully got the cached time without a syscall.
-            rv = 0;
-        }
+
+    if (shim_use_syscall_handler() && shim_syscall(n, &rv, args)) {
+        // No inter-process syscall needed, we handled it on the shim side! :)
+        debug("Successfully avoided inter-process syscall %ld", n);
+        // rv was already set
+    } else if (shim_interpositionEnabled()) {
+        // The syscall is made using the shmem IPC channel.
+        debug("Making interposed syscall %ld", n);
+        rv = _vshadow_syscall(n, args);
     } else {
+        // The syscall is made directly; ptrace will get the syscall signal.
         debug("Making real syscall %ld", n);
         rv = _vreal_syscall(n, args);
     }
+
     va_end(args);
     return rv;
 }
