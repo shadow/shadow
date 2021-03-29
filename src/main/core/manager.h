@@ -37,7 +37,7 @@ typedef struct _Manager Manager;
 
 
 Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime, SimulationTime bootstrapEndTime,
-        guint randomSeed, const gchar* preloadShimPath, const gchar* environment);
+        guint randomSeed);
 gint manager_free(Manager* manager);
 
 gboolean manager_isForced(Manager* manager);

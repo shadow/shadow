@@ -165,7 +165,7 @@ static guint _manager_nextRandomUInt(Manager* manager) {
 }
 
 Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime, SimulationTime unlimBWEndTime,
-        guint randomSeed, const gchar* preloadShimPath, const gchar* environment) {
+        guint randomSeed) {
     if(globalmanager != NULL) {
         return NULL;
     }
