@@ -32,11 +32,6 @@ uint64_t shim_syscall_get_simtime_nanos() {
            _cached_simulation_time.tv_nsec;
 }
 
-bool shim_syscall_is_supported(long syscall_num) {
-    return syscall_num == SYS_clock_gettime || syscall_num == SYS_time ||
-           syscall_num == SYS_gettimeofday;
-}
-
 static struct timespec* _shim_syscall_get_time() {
     // First try to get time from shared mem.
     struct timespec* simtime_ts = shim_get_shared_time_location();
@@ -63,18 +58,17 @@ static struct timespec* _shim_syscall_get_time() {
 }
 
 bool shim_syscall(long syscall_num, long* rv, va_list args) {
-#ifdef DEBUG
-    assert(shim_syscall_is_supported(syscall_num));
-#endif
-
-    // We currently only support time syscalls, so return if we don't have the time.
-    struct timespec* simtime_ts = _shim_syscall_get_time();
-    if (!simtime_ts) {
-        return false;
-    }
+    // This function is called on every syscall operation so be careful not to doing
+    // anything too expensive outside of the switch cases.
+    struct timespec* simtime_ts;
 
     switch (syscall_num) {
         case SYS_clock_gettime: {
+            // We can handle it if the time is available.
+            if (!(simtime_ts = _shim_syscall_get_time())) {
+                return false;
+            }
+
             debug("servicing syscall %ld:clock_gettime from the shim", syscall_num);
 
             clockid_t clk_id = va_arg(args, clockid_t);
@@ -94,6 +88,11 @@ bool shim_syscall(long syscall_num, long* rv, va_list args) {
         }
 
         case SYS_time: {
+            // We can handle it if the time is available.
+            if (!(simtime_ts = _shim_syscall_get_time())) {
+                return false;
+            }
+
             debug("servicing syscall %ld:time from the shim", syscall_num);
 
             time_t* tp = va_arg(args, time_t*);
@@ -108,6 +107,11 @@ bool shim_syscall(long syscall_num, long* rv, va_list args) {
         }
 
         case SYS_gettimeofday: {
+            // We can handle it if the time is available.
+            if (!(simtime_ts = _shim_syscall_get_time())) {
+                return false;
+            }
+
             debug("servicing syscall %ld:gettimeofday from the shim", syscall_num);
 
             struct timeval* tp = va_arg(args, struct timeval*);

@@ -175,9 +175,9 @@ long syscall(long n, ...) {
     va_start(args, n);
     long rv;
 
-    if (shim_syscall_is_supported(n) && shim_syscall(n, &rv, args)) {
-        // No syscall needed for the time hotpath.
-        debug("Successfully avoided time-related inter-process syscall %ld", n);
+    if (shim_syscall(n, &rv, args)) {
+        // No inter-process syscall needed, we handled it on the shim side! :)
+        debug("Successfully avoided inter-process syscall %ld", n);
         // rv was already set
     } else if (shim_interpositionEnabled()) {
         // The syscall is made using the shmem IPC channel.
