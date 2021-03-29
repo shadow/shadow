@@ -416,8 +416,7 @@ gint controller_run(Controller* controller) {
      * For now we only have one manager so send it everything. */
     guint managerSeed = random_nextUInt(controller->random);
     controller->manager = manager_new(controller, controller->options, controller->endTime, controller->bootstrapEndTime,
-            managerSeed, element->preloadPath.string->str,
-            element->environment.isSet ? element->environment.string->str : NULL);
+            managerSeed);
 
     message("registering plugins and hosts");
 
