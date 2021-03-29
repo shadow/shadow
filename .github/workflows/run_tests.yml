@@ -1,7 +1,7 @@
 # Syntax reference:
 # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
 
-name: Unit/Integration Tests
+name: Shadow Tests
 
 defaults:
   run:
@@ -17,7 +17,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  testing:
+  shadow:
+    # there's only one job in the workflow, so we won't give it a name
+    name: ' '
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.container }}
