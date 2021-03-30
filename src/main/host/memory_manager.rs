@@ -698,7 +698,7 @@ impl MemoryManager {
                 assert_eq!(removed_interval, old_interval);
                 region
             } else {
-                panic!(format!("Unexpected mutation {:?}", mutations[0]))
+                panic!("Unexpected mutation {:?}", mutations[0])
             }
         };
 

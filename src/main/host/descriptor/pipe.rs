@@ -15,7 +15,8 @@ pub struct PipeFile {
     status: FileStatus,
     mode: FileMode,
     flags: FileFlags,
-    buffer_event_handle: Option<Handle<(FileStatus, FileStatus)>>,
+    // we only store this so that the handle is dropped when we are
+    _buffer_event_handle: Option<Handle<(FileStatus, FileStatus)>>,
 }
 
 impl PipeFile {
@@ -26,7 +27,7 @@ impl PipeFile {
             status: FileStatus::ACTIVE,
             mode,
             flags,
-            buffer_event_handle: None,
+            _buffer_event_handle: None,
         };
 
         rv.status
@@ -120,7 +121,7 @@ impl PipeFile {
                 // remove any status flags that aren't relevant to us
                 let monitoring = f.filter_status(monitoring);
 
-                f.buffer_event_handle = Some(f.buffer.borrow_mut().add_listener(
+                f._buffer_event_handle = Some(f.buffer.borrow_mut().add_listener(
                     monitoring,
                     NewStatusListenerFilter::Always,
                     move |status, _changed, event_queue| {
