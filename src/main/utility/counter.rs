@@ -128,9 +128,14 @@ impl Display for Counter {
     /// for known keys and values, where the list is sorted by value with the
     /// largest value first.
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        // Sort the counts with the heaviest hitters first
+        // Get the items in a vector so we can sort them.
         let mut item_vec = Vec::from_iter(&self.items);
-        item_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+
+        // Sort the counts so our string is consistent.
+        // Use reverse on vals to get the heaviest hitters first, but sort keys normally.
+        item_vec.sort_by(|&(key_a, val_a), &(key_b, val_b)| {
+            val_a.cmp(&val_b).reverse().then(key_a.cmp(&key_b))
+        });
 
         // Create a string representation of the counts by iterating over the items.
         write!(f, "{{")?;
@@ -476,6 +481,25 @@ mod tests {
         assert_eq!(
             counter.to_string(),
             String::from("{read:4, write:3, close:1}")
+        );
+    }
+
+    #[test]
+    fn test_to_string_order() {
+        let mut counter_a = Counter::new();
+        counter_a.add_one("write");
+        counter_a.add_one("close");
+        counter_a.add_one("read");
+        let mut counter_b = Counter::new();
+        counter_b.add_one("read");
+        counter_b.add_one("write");
+        counter_b.add_one("close");
+
+        // Make sure the counters of equal value are sorted based on key.
+        assert_eq!(counter_a.to_string(), counter_b.to_string());
+        assert_eq!(
+            counter_a.to_string(),
+            String::from("{close:1, read:1, write:1}")
         );
     }
 }
