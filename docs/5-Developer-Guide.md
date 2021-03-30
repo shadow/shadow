@@ -14,7 +14,8 @@ You may need to install bindgen, cbindgen, and clang:
 
 ```bash
 apt install -y clang
-cargo install --force cbindgen bindgen
+cargo install --force --version 0.18.0 cbindgen
+cargo install --force --version 0.57.0 bindgen
 ```
 
 ## Tor tests
