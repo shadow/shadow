@@ -9,7 +9,6 @@
 #include <string.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/utility/utility.h"
 
@@ -36,7 +35,7 @@ Payload* payload_new(gconstpointer data, gsize dataLength) {
         payload->length = dataLength;
     }
 
-    worker_countObject(OBJECT_TYPE_PAYLOAD, COUNTER_TYPE_NEW);
+    worker_count_allocation(Payload);
 
     return payload;
 }
@@ -53,7 +52,7 @@ static void _payload_free(Payload* payload) {
     MAGIC_CLEAR(payload);
     g_free(payload);
 
-    worker_countObject(OBJECT_TYPE_PAYLOAD, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Payload);
 }
 
 static void _payload_lock(Payload* payload) {

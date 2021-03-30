@@ -9,7 +9,6 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/epoll.h"
@@ -52,7 +51,7 @@ DescriptorTable* descriptortable_new() {
         .referenceCount = 1,
         MAGIC_INITIALIZER};
 
-    worker_countObject(OBJECT_TYPE_DESCRIPTOR_TABLE, COUNTER_TYPE_NEW);
+    worker_count_allocation(DescriptorTable);
     return table;
 }
 
@@ -69,7 +68,7 @@ static void _descriptortable_free(DescriptorTable* table) {
 
     MAGIC_CLEAR(table);
     free(table);
-    worker_countObject(OBJECT_TYPE_DESCRIPTOR_TABLE, COUNTER_TYPE_FREE);
+    worker_count_deallocation(DescriptorTable);
 }
 
 void descriptortable_ref(DescriptorTable* table) {

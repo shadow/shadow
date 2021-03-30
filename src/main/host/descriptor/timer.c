@@ -12,7 +12,6 @@
 #include <time.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
@@ -66,7 +65,7 @@ static void _timer_free(LegacyDescriptor* descriptor) {
     descriptor_clear((LegacyDescriptor*)timer);
     MAGIC_CLEAR(timer);
     g_free(timer);
-    worker_countObject(OBJECT_TYPE_TIMER, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Timer);
 }
 
 static DescriptorFunctionTable _timerFunctions = {
@@ -79,7 +78,7 @@ Timer* timer_new() {
     descriptor_init(&(timer->super), DT_TIMER, &_timerFunctions);
     descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
-    worker_countObject(OBJECT_TYPE_TIMER, COUNTER_TYPE_NEW);
+    worker_count_allocation(Timer);
 
     return timer;
 }

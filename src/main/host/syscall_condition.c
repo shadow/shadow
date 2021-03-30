@@ -49,7 +49,7 @@ SysCallCondition* syscallcondition_new(Trigger trigger, Timer* timeout) {
         descriptor_ref(cond->timeout);
     }
 
-    worker_countObject(OBJECT_TYPE_SYSCALL_CONDITION, COUNTER_TYPE_NEW);
+    worker_count_allocation(SysCallCondition);
 
     if (cond->trigger.object.as_pointer) {
         switch (cond->trigger.type) {
@@ -177,7 +177,7 @@ static void _syscallcondition_free(SysCallCondition* cond) {
 
     MAGIC_CLEAR(cond);
     free(cond);
-    worker_countObject(OBJECT_TYPE_SYSCALL_CONDITION, COUNTER_TYPE_FREE);
+    worker_count_deallocation(SysCallCondition);
 }
 
 void syscallcondition_ref(SysCallCondition* cond) {

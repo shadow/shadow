@@ -20,7 +20,6 @@
 #include <sys/types.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
@@ -2456,7 +2455,7 @@ static void _tcp_free(LegacyDescriptor* descriptor) {
     MAGIC_CLEAR(tcp);
     g_free(tcp);
 
-    worker_countObject(OBJECT_TYPE_TCP, COUNTER_TYPE_FREE);
+    worker_count_deallocation(TCP);
 }
 
 static gboolean _tcp_close(LegacyDescriptor* descriptor) {
@@ -2606,7 +2605,7 @@ TCP* tcp_new(guint receiveBufferSize, guint sendBufferSize) {
     /* initialize tcp retransmission timeout */
     _tcp_setRetransmitTimeout(tcp, CONFIG_TCP_RTO_INIT);
 
-    worker_countObject(OBJECT_TYPE_TCP, COUNTER_TYPE_NEW);
+    worker_count_allocation(TCP);
     return tcp;
 }
 

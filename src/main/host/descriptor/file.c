@@ -23,7 +23,6 @@
 #include <syscall.h>
 #include <unistd.h>
 
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/host.h"
@@ -129,7 +128,7 @@ static void _file_free(LegacyDescriptor* desc) {
     MAGIC_CLEAR(file);
     free(file);
 
-    worker_countObject(OBJECT_TYPE_FILE, COUNTER_TYPE_FREE);
+    worker_count_deallocation(File);
 }
 
 static DescriptorFunctionTable _fileFunctions = (DescriptorFunctionTable){
@@ -146,7 +145,7 @@ File* file_new() {
     MAGIC_INIT(file);
     file->osfile.fd = OSFILE_INVALID; // negative means uninitialized (0 is a valid fd)
 
-    worker_countObject(OBJECT_TYPE_FILE, COUNTER_TYPE_NEW);
+    worker_count_allocation(File);
     return file;
 }
 

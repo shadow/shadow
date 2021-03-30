@@ -12,7 +12,6 @@
 #include <sys/un.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
@@ -221,7 +220,7 @@ static void _udp_free(LegacyDescriptor* descriptor) {
     MAGIC_CLEAR(udp);
     g_free(udp);
 
-    worker_countObject(OBJECT_TYPE_UDP, COUNTER_TYPE_FREE);
+    worker_count_deallocation(UDP);
 }
 
 static gboolean _udp_close(LegacyDescriptor* descriptor) {
@@ -262,7 +261,7 @@ UDP* udp_new(guint receiveBufferSize, guint sendBufferSize) {
     descriptor_adjustStatus(
         (LegacyDescriptor*)udp, STATUS_DESCRIPTOR_ACTIVE | STATUS_DESCRIPTOR_WRITABLE, TRUE);
 
-    worker_countObject(OBJECT_TYPE_UDP, COUNTER_TYPE_NEW);
+    worker_count_allocation(UDP);
 
     return udp;
 }

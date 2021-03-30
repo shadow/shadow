@@ -8,7 +8,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
@@ -49,7 +48,7 @@ StatusListener* statuslistener_new(StatusCallbackFunc notifyFunc, void* callback
 
     MAGIC_INIT(listener);
 
-    worker_countObject(OBJECT_TYPE_STATUS_LISTENER, COUNTER_TYPE_NEW);
+    worker_count_allocation(StatusListener);
     return listener;
 }
 
@@ -66,7 +65,7 @@ static void _statuslistener_free(StatusListener* listener) {
 
     MAGIC_CLEAR(listener);
     free(listener);
-    worker_countObject(OBJECT_TYPE_STATUS_LISTENER, COUNTER_TYPE_FREE);
+    worker_count_deallocation(StatusListener);
 }
 
 void statuslistener_ref(StatusListener* listener) {

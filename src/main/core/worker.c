@@ -501,7 +501,7 @@ void worker_countObject(ObjectType otype, CounterType ctype) {
  * not have a worker object. this is only an issue when running
  * with multiple workers. */
 
-void worker_increment_object_alloc_counter(const char* object_name) {
+void __worker_increment_object_alloc_counter(const char* object_name) {
     // See COUNTER WARNING above.
     if (worker_isAlive()) {
         Worker* worker = _worker_getPrivate();
@@ -515,7 +515,7 @@ void worker_increment_object_alloc_counter(const char* object_name) {
     }
 }
 
-void worker_increment_object_dealloc_counter(const char* object_name) {
+void __worker_increment_object_dealloc_counter(const char* object_name) {
     // See COUNTER WARNING above.
     if (worker_isAlive()) {
         Worker* worker = _worker_getPrivate();

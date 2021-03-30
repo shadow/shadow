@@ -14,7 +14,6 @@
 #include <unistd.h>
 
 #include "main/bindings/c/bindings.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/timer.h"
@@ -100,7 +99,7 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
     process_ref(process);
     thread_ref(thread);
 
-    worker_countObject(OBJECT_TYPE_SYSCALL_HANDLER, COUNTER_TYPE_NEW);
+    worker_count_allocation(SysCallHandler);
     return sys;
 }
 
@@ -151,7 +150,7 @@ static void _syscallhandler_free(SysCallHandler* sys) {
 
     MAGIC_CLEAR(sys);
     free(sys);
-    worker_countObject(OBJECT_TYPE_SYSCALL_HANDLER, COUNTER_TYPE_FREE);
+    worker_count_deallocation(SysCallHandler);
 }
 
 void syscallhandler_ref(SysCallHandler* sys) {

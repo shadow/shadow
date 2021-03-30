@@ -9,7 +9,6 @@
 #include <stddef.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
@@ -710,7 +709,7 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
             address_toHostName(interface->address), address_toHostIPString(interface->address), bwUpKiBps, bwDownKiBps,
             interface->qdisc == QDISC_MODE_RR ? "rr" : "fifo");
 
-    worker_countObject(OBJECT_TYPE_NETIFACE, COUNTER_TYPE_NEW);
+    worker_count_allocation(NetworkInterface);
     return interface;
 }
 
@@ -737,6 +736,6 @@ void networkinterface_free(NetworkInterface* interface) {
     MAGIC_CLEAR(interface);
     g_free(interface);
 
-    worker_countObject(OBJECT_TYPE_NETIFACE, COUNTER_TYPE_FREE);
+    worker_count_deallocation(NetworkInterface);
 }
 

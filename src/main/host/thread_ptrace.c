@@ -15,7 +15,6 @@
 // Must come after sys/ptrace.h
 #include <linux/ptrace.h>
 
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/shimipc.h"
 #include "main/host/thread_protected.h"
@@ -1180,7 +1179,7 @@ void threadptrace_free(Thread* base) {
         syscallhandler_unref(thread->sys);
     }
 
-    worker_countObject(OBJECT_TYPE_THREAD_PTRACE, COUNTER_TYPE_FREE);
+    worker_count_deallocation(ThreadPtrace);
 }
 
 // Ensure that the child is in a ptrace-stop. If it's not (e.g. because is it's
@@ -1512,7 +1511,7 @@ Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
     *_threadptrace_sharedMem(thread) = (ShimSharedMem){.ptrace_allow_native_syscalls = false};
     _threadptrace_setSharedTime(thread);
 
-    worker_countObject(OBJECT_TYPE_THREAD_PTRACE, COUNTER_TYPE_NEW);
+    worker_count_allocation(ThreadPtrace);
 
     return _threadPtraceToThread(thread);
 }

@@ -9,7 +9,6 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/futex.h"
 #include "main/host/syscall_types.h"
@@ -31,7 +30,7 @@ FutexTable* futextable_new() {
 
     *table = (FutexTable){.referenceCount = 1, MAGIC_INITIALIZER};
 
-    worker_countObject(OBJECT_TYPE_FUTEX_TABLE, COUNTER_TYPE_NEW);
+    worker_count_allocation(FutexTable);
     return table;
 }
 
@@ -44,7 +43,7 @@ static void _futextable_free(FutexTable* table) {
 
     MAGIC_CLEAR(table);
     free(table);
-    worker_countObject(OBJECT_TYPE_FUTEX_TABLE, COUNTER_TYPE_FREE);
+    worker_count_deallocation(FutexTable);
 }
 
 void futextable_ref(FutexTable* table) {

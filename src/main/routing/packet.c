@@ -7,7 +7,6 @@
 #include <netinet/in.h>
 #include <stddef.h>
 
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/routing/address.h"
@@ -90,7 +89,7 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, gui
 
     packet->orderedStatus = g_queue_new();
 
-    worker_countObject(OBJECT_TYPE_PACKET, COUNTER_TYPE_NEW);
+    worker_count_allocation(Packet);
     return packet;
 }
 
@@ -156,7 +155,7 @@ Packet* packet_copy(Packet* packet) {
         }
     }
 
-    worker_countObject(OBJECT_TYPE_PACKET, COUNTER_TYPE_NEW);
+    worker_count_allocation(Packet);
     return copy;
 }
 
@@ -183,7 +182,7 @@ static void _packet_free(Packet* packet) {
     MAGIC_CLEAR(packet);
     g_free(packet);
 
-    worker_countObject(OBJECT_TYPE_PACKET, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Packet);
 }
 
 void packet_ref(Packet* packet) {
