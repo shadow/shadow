@@ -34,6 +34,14 @@
 #include "support/logger/log_level.h"
 #include "support/logger/logger.h"
 
+// Allow turning off object counting at run-time.
+static bool _disable_object_counters = false;
+OPTION_EXPERIMENTAL_ENTRY("disable-object-counters", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE,
+                          &_disable_object_counters,
+                          "Disable counting object allocations and deallocations. "
+                          "If disabled, we will not be able to detect object memory leaks.",
+                          NULL)
+
 struct _Worker {
     /* our thread and an id that is unique among all threads */
     pthread_t thread;
@@ -479,6 +487,10 @@ void worker_incrementPluginError() {
  * with multiple workers. */
 
 void __worker_increment_object_alloc_counter(const char* object_name) {
+    // If disabled, we never create the counter (and never send it to the manager).
+    if (_disable_object_counters) {
+        return;
+    }
     // See COUNTER WARNING above.
     if (worker_isAlive()) {
         Worker* worker = _worker_getPrivate();
@@ -493,6 +505,10 @@ void __worker_increment_object_alloc_counter(const char* object_name) {
 }
 
 void __worker_increment_object_dealloc_counter(const char* object_name) {
+    // If disabled, we never create the counter (and never send it to the manager).
+    if (_disable_object_counters) {
+        return;
+    }
     // See COUNTER WARNING above.
     if (worker_isAlive()) {
         Worker* worker = _worker_getPrivate();
