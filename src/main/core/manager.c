@@ -11,10 +11,10 @@
 #include <sys/resource.h>
 
 #include "main/core/logger/shadow_logger.h"
-#include "main/core/master.h"
+#include "main/core/controller.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
-#include "main/core/slave.h"
+#include "main/core/manager.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
@@ -42,8 +42,8 @@ typedef struct {
   MAGIC_DECLARE;
 } _ProgramMeta;
 
-struct _Slave {
-    Master* master;
+struct _Manager {
+    Controller* controller;
 
     /* the worker object associated with the main thread of execution */
 //    Worker* mainWorker;
@@ -52,7 +52,7 @@ struct _Slave {
     Options* options;
     SimulationTime bootstrapEndTime;
 
-    /* slave random source, init from master random, used to init host randoms */
+    /* manager random source, init from controller random, used to init host randoms */
     Random* random;
     guint rawFrequencyKHz;
 
@@ -83,26 +83,26 @@ struct _Slave {
     MAGIC_DECLARE;
 };
 
-static Slave* globalSlave = NULL;
+static Manager* globalmanager = NULL;
 
-static void _slave_lock(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    g_mutex_lock(&(slave->lock));
+static void _manager_lock(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    g_mutex_lock(&(manager->lock));
 }
 
-static void _slave_unlock(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    g_mutex_unlock(&(slave->lock));
+static void _manager_unlock(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    g_mutex_unlock(&(manager->lock));
 }
 
-static Host* _slave_getHost(Slave* slave, GQuark hostID) {
-    MAGIC_ASSERT(slave);
-    return scheduler_getHost(slave->scheduler, hostID);
+static Host* _manager_getHost(Manager* manager, GQuark hostID) {
+    MAGIC_ASSERT(manager);
+    return scheduler_getHost(manager->scheduler, hostID);
 }
 
 /* XXX this really belongs in the configuration file */
-static SchedulerPolicyType _slave_getEventSchedulerPolicy(Slave* slave) {
-    const gchar* policyStr = options_getEventSchedulerPolicy(slave->options);
+static SchedulerPolicyType _manager_getEventSchedulerPolicy(Manager* manager) {
+    const gchar* policyStr = options_getEventSchedulerPolicy(manager->options);
     if (g_ascii_strcasecmp(policyStr, "host") == 0) {
         return SP_PARALLEL_HOST_SINGLE;
     } else if (g_ascii_strcasecmp(policyStr, "steal") == 0) {
@@ -157,163 +157,164 @@ void _program_meta_free(gpointer data) {
     g_free(meta);
 }
 
-static guint _slave_nextRandomUInt(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    _slave_lock(slave);
-    guint r = random_nextUInt(slave->random);
-    _slave_unlock(slave);
+static guint _manager_nextRandomUInt(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    _manager_lock(manager);
+    guint r = random_nextUInt(manager->random);
+    _manager_unlock(manager);
     return r;
 }
 
-Slave* slave_new(Master* master, Options* options, SimulationTime endTime, SimulationTime unlimBWEndTime, guint randomSeed) {
-    if(globalSlave != NULL) {
+Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime, SimulationTime unlimBWEndTime,
+        guint randomSeed) {
+    if(globalmanager != NULL) {
         return NULL;
     }
 
-    Slave* slave = g_new0(Slave, 1);
-    MAGIC_INIT(slave);
-    globalSlave = slave;
+    Manager* manager = g_new0(Manager, 1);
+    MAGIC_INIT(manager);
+    globalmanager = manager;
 
-    g_mutex_init(&(slave->lock));
-    g_mutex_init(&(slave->pluginInitLock));
+    g_mutex_init(&(manager->lock));
+    g_mutex_init(&(manager->pluginInitLock));
 
-    slave->master = master;
-    slave->options = options;
-    slave->random = random_new(randomSeed);
-    slave->objectCounts = objectcounter_new();
-    slave->bootstrapEndTime = unlimBWEndTime;
+    manager->controller = controller;
+    manager->options = options;
+    manager->random = random_new(randomSeed);
+    manager->objectCounts = objectcounter_new();
+    manager->bootstrapEndTime = unlimBWEndTime;
 
-    slave->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
-    if(slave->rawFrequencyKHz == 0) {
+    manager->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
+    if(manager->rawFrequencyKHz == 0) {
         info("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
     }
 
     /* we will store the plug-in program meta data */
-    slave->programMeta = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, _program_meta_free);
+    manager->programMeta = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, _program_meta_free);
 
     /* the main scheduler may utilize multiple threads */
 
     guint nWorkers = options_getNWorkerThreads(options);
-    SchedulerPolicyType policy = _slave_getEventSchedulerPolicy(slave);
-    guint schedulerSeed = _slave_nextRandomUInt(slave);
-    slave->scheduler = scheduler_new(policy, nWorkers, slave, schedulerSeed, endTime);
+    SchedulerPolicyType policy = _manager_getEventSchedulerPolicy(manager);
+    guint schedulerSeed = _manager_nextRandomUInt(manager);
+    manager->scheduler = scheduler_new(policy, nWorkers, manager, schedulerSeed, endTime);
 
-    slave->cwdPath = g_get_current_dir();
-    slave->dataPath = g_build_filename(slave->cwdPath, options_getDataOutputPath(options), NULL);
-    slave->hostsPath = g_build_filename(slave->dataPath, "hosts", NULL);
+    manager->cwdPath = g_get_current_dir();
+    manager->dataPath = g_build_filename(manager->cwdPath, options_getDataOutputPath(options), NULL);
+    manager->hostsPath = g_build_filename(manager->dataPath, "hosts", NULL);
 
-    if(g_file_test(slave->dataPath, G_FILE_TEST_EXISTS)) {
-        gboolean success = utility_removeAll(slave->dataPath);
+    if(g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
+        gboolean success = utility_removeAll(manager->dataPath);
         utility_assert(success);
     }
 
-    gchar* templateDataPath = g_build_filename(slave->cwdPath, options_getDataTemplatePath(options), NULL);
+    gchar* templateDataPath = g_build_filename(manager->cwdPath, options_getDataTemplatePath(options), NULL);
     if(g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
-        gboolean success = utility_copyAll(templateDataPath, slave->dataPath);
+        gboolean success = utility_copyAll(templateDataPath, manager->dataPath);
         utility_assert(success);
     }
     g_free(templateDataPath);
 
     /* now make sure the hosts path exists, as it may not have been in the template */
-    g_mkdir_with_parents(slave->hostsPath, 0775);
+    g_mkdir_with_parents(manager->hostsPath, 0775);
 
-    return slave;
+    return manager;
 }
 
-gint slave_free(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    gint returnCode = (slave->numPluginErrors > 0) ? -1 : 0;
+gint manager_free(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    gint returnCode = (manager->numPluginErrors > 0) ? -1 : 0;
 
     /* we will never execute inside the plugin again */
-    slave->forceShadowContext = TRUE;
+    manager->forceShadowContext = TRUE;
 
-    if(slave->scheduler) {
+    if(manager->scheduler) {
         /* stop all of the threads and release host resources first */
-        scheduler_shutdown(slave->scheduler);
+        scheduler_shutdown(manager->scheduler);
         /* now we are the last one holding a ref, free the sched */
-        scheduler_unref(slave->scheduler);
+        scheduler_unref(manager->scheduler);
     }
 
-    if(slave->objectCounts != NULL) {
-        message("%s", objectcounter_valuesToString(slave->objectCounts));
-        message("%s", objectcounter_diffsToString(slave->objectCounts));
-        objectcounter_free(slave->objectCounts);
+    if(manager->objectCounts != NULL) {
+        message("%s", objectcounter_valuesToString(manager->objectCounts));
+        message("%s", objectcounter_diffsToString(manager->objectCounts));
+        objectcounter_free(manager->objectCounts);
     }
 
-    g_hash_table_destroy(slave->programMeta);
+    g_hash_table_destroy(manager->programMeta);
 
-    g_mutex_clear(&(slave->lock));
-    g_mutex_clear(&(slave->pluginInitLock));
+    g_mutex_clear(&(manager->lock));
+    g_mutex_clear(&(manager->pluginInitLock));
 
-    if (slave->cwdPath) {
-        g_free(slave->cwdPath);
+    if (manager->cwdPath) {
+        g_free(manager->cwdPath);
     }
-    if (slave->dataPath) {
-        g_free(slave->dataPath);
+    if (manager->dataPath) {
+        g_free(manager->dataPath);
     }
-    if (slave->hostsPath) {
-        g_free(slave->hostsPath);
+    if (manager->hostsPath) {
+        g_free(manager->hostsPath);
     }
-    if(slave->random) {
-        random_free(slave->random);
+    if(manager->random) {
+        random_free(manager->random);
     }
 
-    MAGIC_CLEAR(slave);
-    g_free(slave);
-    globalSlave = NULL;
+    MAGIC_CLEAR(manager);
+    g_free(manager);
+    globalmanager = NULL;
 
     return returnCode;
 }
 
-gboolean slave_isForced(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    return slave->forceShadowContext;
+gboolean manager_isForced(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    return manager->forceShadowContext;
 }
 
-guint slave_getRawCPUFrequency(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    _slave_lock(slave);
-    guint freq = slave->rawFrequencyKHz;
-    _slave_unlock(slave);
+guint manager_getRawCPUFrequency(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    _manager_lock(manager);
+    guint freq = manager->rawFrequencyKHz;
+    _manager_unlock(manager);
     return freq;
 }
 
-void slave_addNewProgram(Slave* slave, const gchar* name, const gchar* path, const gchar* startSymbol) {
-    MAGIC_ASSERT(slave);
+void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path, const gchar* startSymbol) {
+    MAGIC_ASSERT(manager);
 
     /* store the path to the plugin and maybe the start symbol with the given
      * name so that we can retrieve the path later when hosts' processes want
      * to load it */
-    if(g_hash_table_lookup(slave->programMeta, name) != NULL) {
+    if(g_hash_table_lookup(manager->programMeta, name) != NULL) {
         error("attempting to regiser 2 plugins with the same path."
               "this should have been caught by the configuration parser.");
     } else {
         _ProgramMeta* meta = _program_meta_new(name, path, startSymbol);
-        g_hash_table_replace(slave->programMeta, g_strdup(name), meta);
+        g_hash_table_replace(manager->programMeta, g_strdup(name), meta);
     }
 }
 
-void slave_addNewVirtualHost(Slave* slave, HostParameters* params) {
-    MAGIC_ASSERT(slave);
+void manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
+    MAGIC_ASSERT(manager);
 
-    /* quarks are unique per slave process, so do the conversion here */
+    /* quarks are unique per manager process, so do the conversion here */
     params->id = g_quark_from_string(params->hostname);
-    params->nodeSeed = _slave_nextRandomUInt(slave);
+    params->nodeSeed = _manager_nextRandomUInt(manager);
 
     Host* host = host_new(params);
-    host_setup(host, slave_getDNS(slave), slave_getTopology(slave),
-            slave_getRawCPUFrequency(slave), slave_getHostsRootPath(slave));
-    scheduler_addHost(slave->scheduler, host);
+    host_setup(host, manager_getDNS(manager), manager_getTopology(manager),
+            manager_getRawCPUFrequency(manager), manager_getHostsRootPath(manager));
+    scheduler_addHost(manager->scheduler, host);
 }
 
-void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName, gchar* preloadName,
+void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* pluginName, gchar* preloadName,
         SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
-    MAGIC_ASSERT(slave);
+    MAGIC_ASSERT(manager);
 
     /* quarks are unique per process, so do the conversion here */
     GQuark hostID = g_quark_from_string(hostName);
 
-    _ProgramMeta* meta = g_hash_table_lookup(slave->programMeta, pluginName);
+    _ProgramMeta* meta = g_hash_table_lookup(manager->programMeta, pluginName);
     if(meta == NULL) {
         error("plugin not found for name '%s'. this should be verified in the "
               "config parser.", pluginName);
@@ -321,13 +322,13 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
 
     _ProgramMeta* preload = NULL;
     if(preloadName != NULL) {
-        preload = g_hash_table_lookup(slave->programMeta, preloadName);
+        preload = g_hash_table_lookup(manager->programMeta, preloadName);
         if(preload == NULL) {
             error("preload plugin not found for name '%s'. this should be verified in the config parser", preloadName);
         }
     }
 
-    Host* host = scheduler_getHost(slave->scheduler, hostID);
+    Host* host = scheduler_getHost(manager->scheduler, hostID);
     host_continueExecutionTimer(host);
     host_addApplication(host, startTime, stopTime, pluginName, meta->path, 
                         meta->startSymbol, preloadName, 
@@ -335,63 +336,63 @@ void slave_addNewVirtualProcess(Slave* slave, gchar* hostName, gchar* pluginName
     host_stopExecutionTimer(host);
 }
 
-DNS* slave_getDNS(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    return master_getDNS(slave->master);
+DNS* manager_getDNS(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    return controller_getDNS(manager->controller);
 }
 
-Topology* slave_getTopology(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    return master_getTopology(slave->master);
+Topology* manager_getTopology(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    return controller_getTopology(manager->controller);
 }
 
-guint32 slave_getNodeBandwidthUp(Slave* slave, GQuark nodeID, in_addr_t ip) {
-    MAGIC_ASSERT(slave);
-    Host* host = _slave_getHost(slave, nodeID);
+guint32 manager_getNodeBandwidthUp(Manager* manager, GQuark nodeID, in_addr_t ip) {
+    MAGIC_ASSERT(manager);
+    Host* host = _manager_getHost(manager, nodeID);
     NetworkInterface* interface = host_lookupInterface(host, ip);
     return networkinterface_getSpeedUpKiBps(interface);
 }
 
-guint32 slave_getNodeBandwidthDown(Slave* slave, GQuark nodeID, in_addr_t ip) {
-    MAGIC_ASSERT(slave);
-    Host* host = _slave_getHost(slave, nodeID);
+guint32 manager_getNodeBandwidthDown(Manager* manager, GQuark nodeID, in_addr_t ip) {
+    MAGIC_ASSERT(manager);
+    Host* host = _manager_getHost(manager, nodeID);
     NetworkInterface* interface = host_lookupInterface(host, ip);
     return networkinterface_getSpeedDownKiBps(interface);
 }
 
-gdouble slave_getLatency(Slave* slave, GQuark sourceNodeID, GQuark destinationNodeID) {
-    MAGIC_ASSERT(slave);
-    Host* sourceNode = _slave_getHost(slave, sourceNodeID);
-    Host* destinationNode = _slave_getHost(slave, destinationNodeID);
+gdouble manager_getLatency(Manager* manager, GQuark sourceNodeID, GQuark destinationNodeID) {
+    MAGIC_ASSERT(manager);
+    Host* sourceNode = _manager_getHost(manager, sourceNodeID);
+    Host* destinationNode = _manager_getHost(manager, destinationNodeID);
     Address* sourceAddress = host_getDefaultAddress(sourceNode);
     Address* destinationAddress = host_getDefaultAddress(destinationNode);
-    return master_getLatency(slave->master, sourceAddress, destinationAddress);
+    return controller_getLatency(manager->controller, sourceAddress, destinationAddress);
 }
 
-Options* slave_getOptions(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    return slave->options;
+Options* manager_getOptions(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    return manager->options;
 }
 
-gboolean slave_schedulerIsRunning(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    return scheduler_isRunning(slave->scheduler);
+gboolean manager_schedulerIsRunning(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    return scheduler_isRunning(manager->scheduler);
 }
 
-void slave_updateMinTimeJump(Slave* slave, gdouble minPathLatency) {
-    MAGIC_ASSERT(slave);
-    _slave_lock(slave);
+void manager_updateMinTimeJump(Manager* manager, gdouble minPathLatency) {
+    MAGIC_ASSERT(manager);
+    _manager_lock(manager);
     /* this update will get applied at the next round update, so all threads
      * running now still have a valid round window */
-    master_updateMinTimeJump(slave->master, minPathLatency);
-    _slave_unlock(slave);
+    controller_updateMinTimeJump(manager->controller, minPathLatency);
+    _manager_unlock(manager);
 }
 
-static void _slave_heartbeat(Slave* slave, SimulationTime simClockNow) {
-    MAGIC_ASSERT(slave);
+static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
+    MAGIC_ASSERT(manager);
 
-    if(simClockNow > (slave->simClockLastHeartbeat + options_getHeartbeatInterval(slave->options))) {
-        slave->simClockLastHeartbeat = simClockNow;
+    if(simClockNow > (manager->simClockLastHeartbeat + options_getHeartbeatInterval(manager->options))) {
+        manager->simClockLastHeartbeat = simClockNow;
 
         struct rusage resources;
         if(!getrusage(RUSAGE_SELF, &resources)) {
@@ -410,39 +411,39 @@ static void _slave_heartbeat(Slave* slave, SimulationTime simClockNow) {
     }
 }
 
-void slave_run(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    if(scheduler_getPolicy(slave->scheduler) == SP_SERIAL_GLOBAL) {
-        scheduler_start(slave->scheduler);
+void manager_run(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    if(scheduler_getPolicy(manager->scheduler) == SP_SERIAL_GLOBAL) {
+        scheduler_start(manager->scheduler);
 
-        /* the main slave thread becomes the only worker and runs everything */
+        /* the main manager thread becomes the only worker and runs everything */
         WorkerRunData* data = g_new0(WorkerRunData, 1);
         data->threadID = 0;
-        data->scheduler = slave->scheduler;
-        data->userData = slave;
+        data->scheduler = manager->scheduler;
+        data->userData = manager;
         data->notifyDoneRunning = NULL; // we don't need to be notified in single thread mode
 
         /* the worker takes control of data pointer and frees it */
         worker_run(data);
 
-        scheduler_finish(slave->scheduler);
+        scheduler_finish(manager->scheduler);
     } else {
         /* we are the main thread, we manage the execution window updates while the workers run events */
         SimulationTime windowStart = 0, windowEnd = 1;
         SimulationTime minNextEventTime = SIMTIME_INVALID;
         gboolean keepRunning = TRUE;
 
-        scheduler_start(slave->scheduler);
+        scheduler_start(manager->scheduler);
 
         while(keepRunning) {
             /* release the workers and run next round */
-            scheduler_continueNextRound(slave->scheduler, windowStart, windowEnd);
+            scheduler_continueNextRound(manager->scheduler, windowStart, windowEnd);
 
             /* do some idle processing here if needed */
             /* TODO the heartbeat should run in single process mode too! */
-            _slave_heartbeat(slave, windowStart);
+            _manager_heartbeat(manager, windowStart);
 
-            /* flush slave threads messages */
+            /* flush manager threads messages */
             shadow_logger_flushRecords(shadow_logger_getDefault(),
                                        pthread_self());
 
@@ -450,54 +451,54 @@ void slave_run(Slave* slave) {
             shadow_logger_syncToDisk(shadow_logger_getDefault());
 
             /* wait for the workers to finish processing nodes before we update the execution window */
-            minNextEventTime = scheduler_awaitNextRound(slave->scheduler);
+            minNextEventTime = scheduler_awaitNextRound(manager->scheduler);
 
             /* we are in control now, the workers are waiting for the next round */
             info("finished execution window [%"G_GUINT64_FORMAT"--%"G_GUINT64_FORMAT"] next event at %"G_GUINT64_FORMAT,
                     windowStart, windowEnd, minNextEventTime);
 
-            /* notify master that we finished this round, and the time of our next event
+            /* notify controller that we finished this round, and the time of our next event
              * in order to fast-forward our execute window if possible */
-            keepRunning = master_slaveFinishedCurrentRound(slave->master, minNextEventTime, &windowStart, &windowEnd);
+            keepRunning = controller_managerFinishedCurrentRound(manager->controller, minNextEventTime, &windowStart, &windowEnd);
         }
 
-        scheduler_finish(slave->scheduler);
+        scheduler_finish(manager->scheduler);
     }
 }
 
-void slave_incrementPluginError(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    _slave_lock(slave);
-    slave->numPluginErrors++;
-    _slave_unlock(slave);
+void manager_incrementPluginError(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    _manager_lock(manager);
+    manager->numPluginErrors++;
+    _manager_unlock(manager);
 }
 
-const gchar* slave_getHostsRootPath(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    return slave->hostsPath;
+const gchar* manager_getHostsRootPath(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    return manager->hostsPath;
 }
 
-void slave_storeCounts(Slave* slave, ObjectCounter* objectCounter) {
-    MAGIC_ASSERT(slave);
-    _slave_lock(slave);
-    if(slave->objectCounts) {
-        objectcounter_incrementAll(globalSlave->objectCounts, objectCounter);
+void manager_storeCounts(Manager* manager, ObjectCounter* objectCounter) {
+    MAGIC_ASSERT(manager);
+    _manager_lock(manager);
+    if(manager->objectCounts) {
+        objectcounter_incrementAll(globalmanager->objectCounts, objectCounter);
     }
-    _slave_unlock(slave);
+    _manager_unlock(manager);
 }
 
-void slave_countObject(ObjectType otype, CounterType ctype) {
-    if(globalSlave) {
-        MAGIC_ASSERT(globalSlave);
-        _slave_lock(globalSlave);
-        if(globalSlave->objectCounts) {
-            objectcounter_incrementOne(globalSlave->objectCounts, otype, ctype);
+void manager_countObject(ObjectType otype, CounterType ctype) {
+    if(globalmanager) {
+        MAGIC_ASSERT(globalmanager);
+        _manager_lock(globalmanager);
+        if(globalmanager->objectCounts) {
+            objectcounter_incrementOne(globalmanager->objectCounts, otype, ctype);
         }
-        _slave_unlock(globalSlave);
+        _manager_unlock(globalmanager);
     }
 }
 
-SimulationTime slave_getBootstrapEndTime(Slave* slave) {
-    MAGIC_ASSERT(slave);
-    return slave->bootstrapEndTime;
+SimulationTime manager_getBootstrapEndTime(Manager* manager) {
+    MAGIC_ASSERT(manager);
+    return manager->bootstrapEndTime;
 }
