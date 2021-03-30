@@ -76,7 +76,6 @@ set(shadow_srcs
     core/support/options.c
     core/support/examples.c
     core/support/configuration.c
-    core/support/object_counter.c
     core/work/event.c
     core/work/message.c
     core/work/task.c

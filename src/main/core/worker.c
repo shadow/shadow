@@ -16,7 +16,6 @@
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
 #include "main/core/work/event.h"
 #include "main/core/work/task.h"
@@ -64,8 +63,6 @@ struct _Worker {
 
     SimulationTime bootstrapEndTime;
 
-    ObjectCounter* objectCounts;
-
     // A counter for objects allocated by this worker.
     Counter* object_alloc_counter;
     // A counter for objects deallocated by this worker.
@@ -107,7 +104,6 @@ static Worker* _worker_new(Manager* manager, guint threadID) {
     worker->clock.now = SIMTIME_INVALID;
     worker->clock.last = SIMTIME_INVALID;
     worker->clock.barrier = SIMTIME_INVALID;
-    worker->objectCounts = objectcounter_new();
 
     worker->bootstrapEndTime = manager_getBootstrapEndTime(worker->manager);
 
@@ -129,10 +125,6 @@ static void _worker_free(Worker* worker) {
 
     if (worker->object_dealloc_counter) {
         counter_free(worker->object_dealloc_counter);
-    }
-
-    if (worker->objectCounts != NULL) {
-        objectcounter_free(worker->objectCounts);
     }
 
     g_private_set(&workerKey, NULL);
@@ -232,7 +224,6 @@ gpointer worker_run(WorkerRunData* data) {
     }
 
     /* cleanup is all done, send counters to manager */
-    manager_storeCounts(worker->manager, worker->objectCounts);
 
     // Send object counts to manager
     if (worker->object_alloc_counter) {
@@ -479,20 +470,6 @@ gboolean worker_isFiltered(LogLevel level) {
 void worker_incrementPluginError() {
     Worker* worker = _worker_getPrivate();
     manager_incrementPluginError(worker->manager);
-}
-
-void worker_countObject(ObjectType otype, CounterType ctype) {
-    /* the issue is that the manager thread frees some objects that
-     * are created by the worker threads. but the manager thread does
-     * not have a worker object. this is only an issue when running
-     * with multiple workers. */
-    if (worker_isAlive()) {
-        Worker* worker = _worker_getPrivate();
-        objectcounter_incrementOne(worker->objectCounts, otype, ctype);
-    } else {
-        /* has a global lock, so don't do it unless there is no worker object */
-        manager_countObject(otype, ctype);
-    }
 }
 
 /* COUNTER WARNING:

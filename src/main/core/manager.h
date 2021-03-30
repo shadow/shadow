@@ -27,7 +27,6 @@
 
 #include "main/core/controller.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
 #include "main/host/host.h"
 #include "main/routing/dns.h"
@@ -65,9 +64,6 @@ void manager_addNewVirtualHost(Manager* manager, HostParameters* params);
 void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* pluginName,
                                   gchar* preloadName, SimulationTime startTime,
                                   SimulationTime stopTime, gchar* arguments);
-
-void manager_storeCounts(Manager* manager, ObjectCounter* objectCounter);
-void manager_countObject(ObjectType otype, CounterType ctype);
 
 // Increment a global counter for the allocation of the object with the given name.
 // This should be paired with an increment of the dealloc counter with the

@@ -18,7 +18,6 @@
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
 #include "main/core/worker.h"
 #include "main/host/host.h"
@@ -59,7 +58,6 @@ struct _Manager {
     guint rawFrequencyKHz;
 
     /* global object counters, we collect counts from workers at end of sim */
-    ObjectCounter* objectCounts;
     Counter* object_counter_alloc;
     Counter* object_counter_dealloc;
 
@@ -194,7 +192,6 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
     manager->controller = controller;
     manager->options = options;
     manager->random = random_new(randomSeed);
-    manager->objectCounts = objectcounter_new();
     manager->bootstrapEndTime = unlimBWEndTime;
     manager->preloadShimPath = g_strdup(preloadShimPath);
     manager->environment = g_strdup(environment);
@@ -258,16 +255,6 @@ gint manager_free(Manager* manager) {
         message("Global syscall counts: %s", str);
         counter_free_string(manager->syscall_counter, str);
         counter_free(manager->syscall_counter);
-    }
-
-    if (manager->objectCounts != NULL) {
-        message("%s", objectcounter_valuesToString(manager->objectCounts));
-        message("%s", objectcounter_diffsToString(manager->objectCounts));
-        if (objectcounter_leakDetected(manager->objectCounts)) {
-            /* don't change the formatting of this line as we search for it in test cases */
-            warning("Memory leak detected");
-        }
-        objectcounter_free(manager->objectCounts);
     }
 
     if (manager->object_counter_alloc && manager->object_counter_dealloc) {
@@ -658,26 +645,6 @@ void manager_incrementPluginError(Manager* manager) {
 const gchar* manager_getHostsRootPath(Manager* manager) {
     MAGIC_ASSERT(manager);
     return manager->hostsPath;
-}
-
-void manager_storeCounts(Manager* manager, ObjectCounter* objectCounter) {
-    MAGIC_ASSERT(manager);
-    _manager_lock(manager);
-    if (manager->objectCounts) {
-        objectcounter_incrementAll(globalmanager->objectCounts, objectCounter);
-    }
-    _manager_unlock(manager);
-}
-
-void manager_countObject(ObjectType otype, CounterType ctype) {
-    if (globalmanager) {
-        MAGIC_ASSERT(globalmanager);
-        _manager_lock(globalmanager);
-        if (globalmanager->objectCounts) {
-            objectcounter_incrementOne(globalmanager->objectCounts, otype, ctype);
-        }
-        _manager_unlock(globalmanager);
-    }
 }
 
 static void _manager_increment_object_counts(Manager* manager, Counter** mgr_obj_counts,

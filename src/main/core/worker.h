@@ -12,7 +12,6 @@
 
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
 #include "main/core/work/task.h"
 #include "main/host/host.h"
@@ -43,8 +42,6 @@ gpointer worker_run(WorkerRunData*);
 gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay);
 void worker_sendPacket(Packet* packet);
 gboolean worker_isAlive();
-
-void worker_countObject(ObjectType otype, CounterType ctype);
 
 SimulationTime worker_getCurrentTime();
 EmulatedTime worker_getEmulatedTime();
