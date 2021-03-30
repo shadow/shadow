@@ -165,9 +165,9 @@ struct Counter *counter_new(void);
 
 void counter_free(struct Counter *counter_ptr);
 
-uint64_t counter_add_value(struct Counter *counter, const char *id, uint64_t value);
+int64_t counter_add_value(struct Counter *counter, const char *id, int64_t value);
 
-uint64_t counter_sub_value(struct Counter *counter, const char *id, uint64_t value);
+int64_t counter_sub_value(struct Counter *counter, const char *id, int64_t value);
 
 void counter_add_counter(struct Counter *counter, struct Counter *other);
 

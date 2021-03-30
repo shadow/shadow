@@ -22,7 +22,7 @@ use std::ops::{Add, Sub};
 #[derive(Debug, Clone, PartialEq)]
 pub struct Counter {
     // TODO: convert this so we could count generic types instead of Strings
-    items: HashMap<String, u64>,
+    items: HashMap<String, i64>,
 }
 
 /// The supported operations on the values stored in this counter.
@@ -43,39 +43,37 @@ impl Counter {
 
     /// Increment the counter value by one for the key given by id.
     /// Returns the value of the counter after it was incremented.
-    pub fn add_one(&mut self, id: &str) -> u64 {
+    pub fn add_one(&mut self, id: &str) -> i64 {
         self.operate(id, CounterOperation::Add, 1)
     }
 
     /// Decrement the counter value by one for the key given by id.
-    /// If the decrement would produce a negative counter value, it is set to 0 instead.
     /// Returns the value of the counter after it was decremented.
-    pub fn sub_one(&mut self, id: &str) -> u64 {
+    pub fn sub_one(&mut self, id: &str) -> i64 {
         self.operate(id, CounterOperation::Sub, 1)
     }
 
     /// Increment the counter value by the given value for the key given by id.
     /// Returns the value of the counter after it was incremented.
-    pub fn add_value(&mut self, id: &str, value: u64) -> u64 {
+    pub fn add_value(&mut self, id: &str, value: i64) -> i64 {
         self.operate(id, CounterOperation::Add, value)
     }
 
     /// Decrement the counter value by the given value for the key given by id.
-    /// If the decrement would produce a negative counter value, it is set to 0 instead.
     /// Returns the value of the counter after it was decremented.
-    pub fn sub_value(&mut self, id: &str, value: u64) -> u64 {
+    pub fn sub_value(&mut self, id: &str, value: i64) -> i64 {
         self.operate(id, CounterOperation::Sub, value)
     }
 
     /// Sets the counter value to the given value for the key given by id.
     /// Returns the value of the counter after it was set.
-    pub fn set_value(&mut self, id: &str, value: u64) -> u64 {
+    pub fn set_value(&mut self, id: &str, value: i64) -> i64 {
         self.operate(id, CounterOperation::Set, value)
     }
 
     /// Returns the counter value for the key given by id, or 0 if no operations have
     /// been performed on the key.
-    pub fn get_value(&self, id: &str) -> u64 {
+    pub fn get_value(&self, id: &str) -> i64 {
         match self.items.get(&id.to_string()) {
             Some(val) => *val,
             None => 0,
@@ -97,26 +95,21 @@ impl Counter {
     }
 
     /// Perform a supported operation on the counter value.
-    fn operate(&mut self, id: &str, op: CounterOperation, value: u64) -> u64 {
+    fn operate(&mut self, id: &str, op: CounterOperation, value: i64) -> i64 {
         match self.items.get_mut(id) {
             Some(val) => {
                 // Update and return the existing value without allocating new key.
                 match op {
                     CounterOperation::Add => *val = *val + value,
-                    CounterOperation::Sub => {
-                        if value < *val {
-                            *val = *val - value
-                        } else {
-                            *val = 0
-                        }
-                    }
+                    CounterOperation::Sub => *val = *val - value,
                     CounterOperation::Set => *val = value,
                 }
-                if *val > 0 {
-                    *val
-                } else {
+                // Remove the key if the value reached 0.
+                if *val == 0 {
                     assert_eq!(self.items.remove(id), Some(0));
                     0
+                } else {
+                    *val
                 }
             }
             None => {
@@ -194,8 +187,8 @@ mod export {
     pub extern "C" fn counter_add_value(
         counter: *mut Counter,
         id: *const c_char,
-        value: u64,
-    ) -> u64 {
+        value: i64,
+    ) -> i64 {
         assert!(!counter.is_null());
         assert!(!id.is_null());
 
@@ -209,8 +202,8 @@ mod export {
     pub extern "C" fn counter_sub_value(
         counter: *mut Counter,
         id: *const c_char,
-        value: u64,
-    ) -> u64 {
+        value: i64,
+    ) -> i64 {
         assert!(!counter.is_null());
         assert!(!id.is_null());
 
@@ -308,8 +301,8 @@ mod tests {
         counter.set_value("read", 2);
         assert_eq!(counter.sub_one("read"), 1);
         assert_eq!(counter.sub_one("read"), 0);
-        assert_eq!(counter.sub_one("read"), 0);
-        assert_eq!(counter.get_value("read"), 0);
+        assert_eq!(counter.sub_one("read"), -1);
+        assert_eq!(counter.get_value("read"), -1);
         counter.set_value("read", 100);
         counter.set_value("write", 100);
         assert_eq!(counter.sub_one("read"), 99);
@@ -330,7 +323,7 @@ mod tests {
         counter.set_value("read", 100);
         assert_eq!(counter.sub_value("read", 10), 90);
         assert_eq!(counter.sub_value("read", 10), 80);
-        assert_eq!(counter.sub_value("write", 10), 0);
+        assert_eq!(counter.sub_value("write", 10), -10);
         assert_eq!(counter.sub_value("read", 10), 70);
     }
 
@@ -362,10 +355,25 @@ mod tests {
         let mut counter_sum = Counter::new();
         counter_sum.set_value("read", 75);
 
-        // This transfers ownership of a and b to counter_added
+        // This transfers ownership of a and b to counter_subbed
         let counter_subbed = counter_a - counter_b;
         assert_eq!(counter_subbed.get_value("read"), 75);
         assert_eq!(counter_subbed, counter_sum);
+    }
+
+    #[test]
+    fn test_operator_sub_multi() {
+        let mut counter_a = Counter::new();
+        counter_a.set_value("read", 100);
+
+        let mut counter_b = Counter::new();
+        counter_b.set_value("read", 25);
+
+        let mut counter_c = Counter::new();
+        counter_c.set_value("read", 75);
+
+        // Subtract to get negative first, then add back to zero.
+        assert_eq!(counter_b - counter_a + counter_c, Counter::new());
     }
 
     #[test]
