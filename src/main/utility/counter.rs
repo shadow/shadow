@@ -235,6 +235,17 @@ mod export {
         counter.sub_counter(other)
     }
 
+    #[no_mangle]
+    pub extern "C" fn counter_equals_counter(counter: *mut Counter, other: *mut Counter) -> bool {
+        assert!(!counter.is_null());
+        assert!(!other.is_null());
+
+        let counter = unsafe { &mut *counter };
+        let other = unsafe { &mut *other };
+
+        counter == other
+    }
+
     /// Creates a new string representation of the counter, e.g., for logging.
     /// The returned string must be free'd by passing it to counter_free_string.
     #[no_mangle]
@@ -420,6 +431,25 @@ mod tests {
         assert_eq!(counter_b.get_value("read"), 25);
         assert_eq!(counter_b.get_value("write"), 1);
         assert_eq!(counter_a, counter_sum);
+    }
+
+    #[test]
+    fn test_counter_equality() {
+        let mut counter_a = Counter::new();
+        counter_a.set_value("read", 1);
+        counter_a.set_value("write", 2);
+
+        let mut counter_b = Counter::new();
+        counter_b.set_value("read", 1);
+        counter_b.set_value("write", 2);
+
+        let mut counter_c = Counter::new();
+        counter_c.set_value("read", 10);
+        counter_c.set_value("write", 20);
+
+        assert_eq!(counter_a, counter_b);
+        assert_ne!(counter_a, counter_c);
+        assert_ne!(counter_b, counter_c);
     }
 
     #[test]

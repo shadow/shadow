@@ -66,6 +66,11 @@ struct _Worker {
 
     ObjectCounter* objectCounts;
 
+    // A counter for objects allocated by this worker.
+    Counter* object_alloc_counter;
+    // A counter for objects deallocated by this worker.
+    Counter* object_dealloc_counter;
+
     // A counter for all syscalls made by processes freed by this worker.
     Counter* syscall_counter;
 
@@ -116,6 +121,14 @@ static void _worker_free(Worker* worker) {
 
     if (worker->syscall_counter) {
         counter_free(worker->syscall_counter);
+    }
+
+    if (worker->object_alloc_counter) {
+        counter_free(worker->object_alloc_counter);
+    }
+
+    if (worker->object_dealloc_counter) {
+        counter_free(worker->object_dealloc_counter);
     }
 
     if (worker->objectCounts != NULL) {
@@ -218,9 +231,16 @@ gpointer worker_run(WorkerRunData* data) {
         countdownlatch_await(data->notifyReadyToJoin);
     }
 
-    /* cleanup is all done, send object counts to manager */
+    /* cleanup is all done, send counters to manager */
     manager_storeCounts(worker->manager, worker->objectCounts);
 
+    // Send object counts to manager
+    if (worker->object_alloc_counter) {
+        manager_add_alloc_object_counts(worker->manager, worker->object_alloc_counter);
+    }
+    if (worker->object_dealloc_counter) {
+        manager_add_dealloc_object_counts(worker->manager, worker->object_dealloc_counter);
+    }
     // Send syscall counts to manager
     if (worker->syscall_counter) {
         manager_add_syscall_counts(worker->manager, worker->syscall_counter);
@@ -475,11 +495,42 @@ void worker_countObject(ObjectType otype, CounterType ctype) {
     }
 }
 
+/* COUNTER WARNING:
+ * the issue is that the manager thread frees some objects that
+ * are created by the worker threads. but the manager thread does
+ * not have a worker object. this is only an issue when running
+ * with multiple workers. */
+
+void worker_increment_object_alloc_counter(const char* object_name) {
+    // See COUNTER WARNING above.
+    if (worker_isAlive()) {
+        Worker* worker = _worker_getPrivate();
+        if (!worker->object_alloc_counter) {
+            worker->object_alloc_counter = counter_new();
+        }
+        counter_add_value(worker->object_alloc_counter, object_name, 1);
+    } else {
+        /* has a global lock, so don't do it unless there is no worker object */
+        manager_increment_object_alloc_counter_global(object_name);
+    }
+}
+
+void worker_increment_object_dealloc_counter(const char* object_name) {
+    // See COUNTER WARNING above.
+    if (worker_isAlive()) {
+        Worker* worker = _worker_getPrivate();
+        if (!worker->object_dealloc_counter) {
+            worker->object_dealloc_counter = counter_new();
+        }
+        counter_add_value(worker->object_dealloc_counter, object_name, 1);
+    } else {
+        /* has a global lock, so don't do it unless there is no worker object */
+        manager_increment_object_dealloc_counter_global(object_name);
+    }
+}
+
 void worker_add_syscall_counts(Counter* syscall_counts) {
-    /* the issue is that the manager thread frees some objects that
-     * are created by the worker threads. but the manager thread does
-     * not have a worker object. this is only an issue when running
-     * with multiple workers. */
+    // See COUNTER WARNING above.
     if (worker_isAlive()) {
         Worker* worker = _worker_getPrivate();
         // This is created on the fly, so that if we did not enable counting mode

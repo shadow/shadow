@@ -60,6 +60,8 @@ struct _Manager {
 
     /* global object counters, we collect counts from workers at end of sim */
     ObjectCounter* objectCounts;
+    Counter* object_counter_alloc;
+    Counter* object_counter_dealloc;
 
     // Global syscall counter, we collect counts from workers at end of sim
     Counter* syscall_counter;
@@ -266,6 +268,30 @@ gint manager_free(Manager* manager) {
             warning("Memory leak detected");
         }
         objectcounter_free(manager->objectCounts);
+    }
+
+    if (manager->object_counter_alloc && manager->object_counter_dealloc) {
+        char* str = counter_alloc_string(manager->object_counter_alloc);
+        message("Global allocated object counts: %s", str);
+        counter_free_string(manager->object_counter_alloc, str);
+
+        str = counter_alloc_string(manager->object_counter_dealloc);
+        message("Global deallocated object counts: %s", str);
+        counter_free_string(manager->object_counter_dealloc, str);
+
+        if (counter_equals_counter(
+                manager->object_counter_alloc, manager->object_counter_dealloc)) {
+            message("We allocated and deallocated the same number of objects :)");
+        } else {
+            /* don't change the formatting of this line as we search for it in test cases */
+            warning("Memory leak detected");
+        }
+    }
+    if (manager->object_counter_alloc) {
+        counter_free(manager->object_counter_alloc);
+    }
+    if (manager->object_counter_dealloc) {
+        counter_free(manager->object_counter_dealloc);
     }
 
     g_hash_table_destroy(manager->programMeta);
@@ -652,6 +678,56 @@ void manager_countObject(ObjectType otype, CounterType ctype) {
         }
         _manager_unlock(globalmanager);
     }
+}
+
+static void _manager_increment_object_counts(Manager* manager, Counter** mgr_obj_counts,
+                                             const char* obj_name) {
+    _manager_lock(manager);
+    // This is created on the fly, so that if we did not enable counting mode
+    // then we don't need to create the counter object.
+    if (!*mgr_obj_counts) {
+        *mgr_obj_counts = counter_new();
+    }
+    counter_add_value(*mgr_obj_counts, obj_name, 1);
+    _manager_unlock(manager);
+}
+
+void manager_increment_object_alloc_counter_global(const char* object_name) {
+    if (globalmanager) {
+        MAGIC_ASSERT(globalmanager);
+        _manager_increment_object_counts(
+            globalmanager, &globalmanager->object_counter_alloc, object_name);
+    }
+}
+
+void manager_increment_object_dealloc_counter_global(const char* object_name) {
+    if (globalmanager) {
+        MAGIC_ASSERT(globalmanager);
+        _manager_increment_object_counts(
+            globalmanager, &globalmanager->object_counter_dealloc, object_name);
+    }
+}
+
+static void _manager_add_object_counts(Manager* manager, Counter** mgr_obj_counts,
+                                       Counter* obj_counts) {
+    _manager_lock(manager);
+    // This is created on the fly, so that if we did not enable counting mode
+    // then we don't need to create the counter object.
+    if (!*mgr_obj_counts) {
+        *mgr_obj_counts = counter_new();
+    }
+    counter_add_counter(*mgr_obj_counts, obj_counts);
+    _manager_unlock(manager);
+}
+
+void manager_add_alloc_object_counts(Manager* manager, Counter* alloc_obj_counts) {
+    MAGIC_ASSERT(manager);
+    _manager_add_object_counts(manager, &manager->object_counter_alloc, alloc_obj_counts);
+}
+
+void manager_add_dealloc_object_counts(Manager* manager, Counter* dealloc_obj_counts) {
+    MAGIC_ASSERT(manager);
+    _manager_add_object_counts(manager, &manager->object_counter_dealloc, dealloc_obj_counts);
 }
 
 void manager_add_syscall_counts(Manager* manager, Counter* syscall_counts) {
