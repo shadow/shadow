@@ -59,7 +59,7 @@ OPTION_EXPERIMENTAL_ENTRY("disable-memory-manager", 0, G_OPTION_FLAG_REVERSE, G_
 
 static bool _countSyscalls = false;
 OPTION_EXPERIMENTAL_ENTRY(
-    "count-syscalls", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &_countSyscalls,
+    "enable-syscall-counters", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &_countSyscalls,
     "Count the frequency with which each syscall is made by each plugin process.", NULL)
 
 SysCallHandler* syscallhandler_new(Host* host, Process* process,
@@ -114,9 +114,16 @@ static void _syscallhandler_free(SysCallHandler* sys) {
 #endif
 
     if (_countSyscalls && sys->syscall_counter) {
+        // Log the plugin thread specific counts
         char* str = counter_alloc_string(sys->syscall_counter);
-        message("Syscall counts: %s", str);
+        message("Thread %d (%s) syscall counts: %s", thread_getID(sys->thread),
+                process_getPluginName(sys->process), str);
         counter_free_string(sys->syscall_counter, str);
+
+        // Add up the counts at the worker level
+        worker_add_syscall_counts(sys->syscall_counter);
+
+        // Cleanup
         counter_free(sys->syscall_counter);
     }
 
@@ -172,7 +179,7 @@ static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
     // This avoids double counting in the case where the initial call blocked at first,
     // but then later became unblocked and is now being handled again here.
     if (sys->syscall_counter && !_syscallhandler_wasBlocked(sys)) {
-        counter_add_one(sys->syscall_counter, name);
+        counter_add_value(sys->syscall_counter, name, 1);
     }
 
 #ifdef USE_PERF_TIMERS

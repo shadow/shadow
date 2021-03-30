@@ -72,4 +72,7 @@ void worker_incrementPluginError();
 Address* worker_resolveIPToAddress(in_addr_t ip);
 Address* worker_resolveNameToAddress(const gchar* name);
 
+// Aggregate the given syscall counts in a worker syscall counter.
+void worker_add_syscall_counts(Counter* syscall_counts);
+
 #endif /* SHD_WORKER_H_ */

@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <sys/resource.h>
 
+#include "main/bindings/c/bindings.h"
 #include "main/core/controller.h"
 #include "main/core/logger/shadow_logger.h"
 #include "main/core/manager.h"
@@ -59,6 +60,9 @@ struct _Manager {
 
     /* global object counters, we collect counts from workers at end of sim */
     ObjectCounter* objectCounts;
+
+    // Global syscall counter, we collect counts from workers at end of sim
+    Counter* syscall_counter;
 
     /* the parallel event/host/thread scheduler */
     Scheduler* scheduler;
@@ -245,6 +249,13 @@ gint manager_free(Manager* manager) {
         scheduler_shutdown(manager->scheduler);
         /* now we are the last one holding a ref, free the sched */
         scheduler_unref(manager->scheduler);
+    }
+
+    if (manager->syscall_counter) {
+        char* str = counter_alloc_string(manager->syscall_counter);
+        message("Global syscall counts: %s", str);
+        counter_free_string(manager->syscall_counter, str);
+        counter_free(manager->syscall_counter);
     }
 
     if (manager->objectCounts != NULL) {
@@ -640,6 +651,24 @@ void manager_countObject(ObjectType otype, CounterType ctype) {
             objectcounter_incrementOne(globalmanager->objectCounts, otype, ctype);
         }
         _manager_unlock(globalmanager);
+    }
+}
+
+void manager_add_syscall_counts(Manager* manager, Counter* syscall_counts) {
+    MAGIC_ASSERT(manager);
+    _manager_lock(manager);
+    // This is created on the fly, so that if we did not enable counting mode
+    // then we don't need to create the counter object.
+    if (!manager->syscall_counter) {
+        manager->syscall_counter = counter_new();
+    }
+    counter_add_counter(manager->syscall_counter, syscall_counts);
+    _manager_unlock(manager);
+}
+
+void manager_add_syscall_counts_global(Counter* syscall_counts) {
+    if (globalmanager) {
+        manager_add_syscall_counts(globalmanager, syscall_counts);
     }
 }
 
