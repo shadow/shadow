@@ -7,7 +7,7 @@
 #define SHD_MESSAGE_H_
 
 /* A message for a remote virtual host, i.e.,
- * a host running on a different slave machine as the event initiator.
+ * a host running on a different manager machine as the event initiator.
  * (These are packets sent between hosts on different machines.) */
 typedef struct _Message Message;
 
