@@ -69,4 +69,9 @@ void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* plug
 void manager_storeCounts(Manager* manager, ObjectCounter* objectCounter);
 void manager_countObject(ObjectType otype, CounterType ctype);
 
+// Add the given syscall counts into a global manager counter.
+void manager_add_syscall_counts(Manager* manager, Counter* syscall_counts);
+// Add the given syscall counts, used when the worker is no longer alive.
+void manager_add_syscall_counts_global(Counter* syscall_counts);
+
 #endif /* SHD_MANAGER_H_ */

@@ -114,9 +114,16 @@ static void _syscallhandler_free(SysCallHandler* sys) {
 #endif
 
     if (_countSyscalls && sys->syscall_counter) {
+        // Log the plugin thread specific counts
         char* str = counter_alloc_string(sys->syscall_counter);
-        message("Syscall counts: %s", str);
+        message("Thread %d (%s) syscall counts: %s", thread_getID(sys->thread),
+                process_getPluginName(sys->process), str);
         counter_free_string(sys->syscall_counter, str);
+
+        // Add up the counts at the worker level
+        worker_add_syscall_counts(sys->syscall_counter);
+
+        // Cleanup
         counter_free(sys->syscall_counter);
     }
 
