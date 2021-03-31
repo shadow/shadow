@@ -241,12 +241,15 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn counter_equals_counter(counter: *mut Counter, other: *mut Counter) -> bool {
+    pub extern "C" fn counter_equals_counter(
+        counter: *const Counter,
+        other: *const Counter,
+    ) -> bool {
         assert!(!counter.is_null());
         assert!(!other.is_null());
 
-        let counter = unsafe { &mut *counter };
-        let other = unsafe { &mut *other };
+        let counter = unsafe { &*counter };
+        let other = unsafe { &*other };
 
         counter == other
     }
@@ -439,7 +442,7 @@ mod tests {
     }
 
     #[test]
-    fn test_counter_equality() {
+    fn test_counter_equality_nonzero() {
         let mut counter_a = Counter::new();
         counter_a.set_value("read", 1);
         counter_a.set_value("write", 2);
@@ -455,6 +458,29 @@ mod tests {
         assert_eq!(counter_a, counter_b);
         assert_ne!(counter_a, counter_c);
         assert_ne!(counter_b, counter_c);
+
+        let mut counter_d = Counter::new();
+        counter_d.set_value("read", 1);
+        counter_d.set_value("write", 2);
+        counter_d.set_value("close", 1);
+        counter_d.sub_value("close", 1);
+
+        assert_eq!(counter_a, counter_d);
+    }
+
+    #[test]
+    fn test_counter_equality_zero() {
+        let mut counter_a = Counter::new();
+        counter_a.set_value("read", 1);
+        counter_a.set_value("write", 2);
+
+        let mut counter_d = Counter::new();
+        counter_d.set_value("read", 1);
+        counter_d.set_value("write", 2);
+        counter_d.set_value("close", 1);
+        counter_d.sub_value("close", 1);
+
+        assert_eq!(counter_a, counter_d);
     }
 
     #[test]

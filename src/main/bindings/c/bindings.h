@@ -173,7 +173,7 @@ void counter_add_counter(struct Counter *counter, struct Counter *other);
 
 void counter_sub_counter(struct Counter *counter, struct Counter *other);
 
-bool counter_equals_counter(struct Counter *counter, struct Counter *other);
+bool counter_equals_counter(const struct Counter *counter, const struct Counter *other);
 
 // Creates a new string representation of the counter, e.g., for logging.
 // The returned string must be free'd by passing it to counter_free_string.
