@@ -177,15 +177,19 @@ long syscall(long n, ...) {
 
     if (shim_use_syscall_handler() && shim_syscall(n, &rv, args)) {
         // No inter-process syscall needed, we handled it on the shim side! :)
-        debug("Successfully avoided inter-process syscall %ld", n);
+        debug("Handled syscall %ld from the shim; we avoided inter-process overhead.", n);
         // rv was already set
     } else if (shim_interpositionEnabled()) {
         // The syscall is made using the shmem IPC channel.
-        debug("Making interposed syscall %ld", n);
+        debug("Making syscall %ld indirectly; we ask shadow to handle it using the shmem IPC "
+              "channel.",
+              n);
         rv = _vshadow_syscall(n, args);
     } else {
         // The syscall is made directly; ptrace will get the syscall signal.
-        debug("Making real syscall %ld", n);
+        debug("Making syscall %ld directly; we expect ptrace will interpose it, or it will be "
+              "handled natively by the kernel.",
+              n);
         rv = _vreal_syscall(n, args);
     }
 
