@@ -12,7 +12,6 @@
 
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
@@ -68,7 +67,7 @@ static void channel_free(LegacyDescriptor* descriptor) {
     MAGIC_CLEAR(channel);
     g_free(channel);
 
-    worker_countObject(OBJECT_TYPE_CHANNEL, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Channel);
 }
 
 static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize nBytes) {
@@ -171,7 +170,7 @@ Channel* channel_new(ChannelType type, LegacyDescriptorType dtype) {
         descriptor_adjustStatus((LegacyDescriptor*)channel, STATUS_DESCRIPTOR_WRITABLE, TRUE);
     }
 
-    worker_countObject(OBJECT_TYPE_CHANNEL, COUNTER_TYPE_NEW);
+    worker_count_allocation(Channel);
 
     return channel;
 }

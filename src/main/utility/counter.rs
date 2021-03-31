@@ -128,9 +128,14 @@ impl Display for Counter {
     /// for known keys and values, where the list is sorted by value with the
     /// largest value first.
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        // Sort the counts with the heaviest hitters first
+        // Get the items in a vector so we can sort them.
         let mut item_vec = Vec::from_iter(&self.items);
-        item_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+
+        // Sort the counts so our string is consistent.
+        // Use reverse on vals to get the heaviest hitters first, but sort keys normally.
+        item_vec.sort_by(|&(key_a, val_a), &(key_b, val_b)| {
+            val_a.cmp(&val_b).reverse().then(key_a.cmp(&key_b))
+        });
 
         // Create a string representation of the counts by iterating over the items.
         write!(f, "{{")?;
@@ -233,6 +238,20 @@ mod export {
         let other = unsafe { &mut *other };
 
         counter.sub_counter(other)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn counter_equals_counter(
+        counter: *const Counter,
+        other: *const Counter,
+    ) -> bool {
+        assert!(!counter.is_null());
+        assert!(!other.is_null());
+
+        let counter = unsafe { &*counter };
+        let other = unsafe { &*other };
+
+        counter == other
     }
 
     /// Creates a new string representation of the counter, e.g., for logging.
@@ -423,6 +442,48 @@ mod tests {
     }
 
     #[test]
+    fn test_counter_equality_nonzero() {
+        let mut counter_a = Counter::new();
+        counter_a.set_value("read", 1);
+        counter_a.set_value("write", 2);
+
+        let mut counter_b = Counter::new();
+        counter_b.set_value("read", 1);
+        counter_b.set_value("write", 2);
+
+        let mut counter_c = Counter::new();
+        counter_c.set_value("read", 10);
+        counter_c.set_value("write", 20);
+
+        assert_eq!(counter_a, counter_b);
+        assert_ne!(counter_a, counter_c);
+        assert_ne!(counter_b, counter_c);
+
+        let mut counter_d = Counter::new();
+        counter_d.set_value("read", 1);
+        counter_d.set_value("write", 2);
+        counter_d.set_value("close", 1);
+        counter_d.sub_value("close", 1);
+
+        assert_eq!(counter_a, counter_d);
+    }
+
+    #[test]
+    fn test_counter_equality_zero() {
+        let mut counter_a = Counter::new();
+        counter_a.set_value("read", 1);
+        counter_a.set_value("write", 2);
+
+        let mut counter_d = Counter::new();
+        counter_d.set_value("read", 1);
+        counter_d.set_value("write", 2);
+        counter_d.set_value("close", 1);
+        counter_d.sub_value("close", 1);
+
+        assert_eq!(counter_a, counter_d);
+    }
+
+    #[test]
     fn test_to_string() {
         let mut counter = Counter::new();
 
@@ -446,6 +507,25 @@ mod tests {
         assert_eq!(
             counter.to_string(),
             String::from("{read:4, write:3, close:1}")
+        );
+    }
+
+    #[test]
+    fn test_to_string_order() {
+        let mut counter_a = Counter::new();
+        counter_a.add_one("write");
+        counter_a.add_one("close");
+        counter_a.add_one("read");
+        let mut counter_b = Counter::new();
+        counter_b.add_one("read");
+        counter_b.add_one("write");
+        counter_b.add_one("close");
+
+        // Make sure the counters of equal value are sorted based on key.
+        assert_eq!(counter_a.to_string(), counter_b.to_string());
+        assert_eq!(
+            counter_a.to_string(),
+            String::from("{close:1, read:1, write:1}")
         );
     }
 }

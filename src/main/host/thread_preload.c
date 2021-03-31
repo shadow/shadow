@@ -10,7 +10,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/shimipc.h"
 #include "main/host/thread_preload.h"
@@ -107,7 +106,7 @@ void threadpreload_free(Thread* base) {
         g_hash_table_destroy(thread->ptr_to_block);
     }
 
-    worker_countObject(OBJECT_TYPE_THREAD_PRELOAD, COUNTER_TYPE_FREE);
+    worker_count_deallocation(ThreadPreload);
 }
 
 static gchar** _add_shadow_pid_to_env(gchar** envp) {
@@ -517,6 +516,6 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
     // of the sim. but the process may not launch/start until later. any
     // resources for launch/start should be allocated in the respective funcs.
 
-    worker_countObject(OBJECT_TYPE_THREAD_PRELOAD, COUNTER_TYPE_NEW);
+    worker_count_allocation(ThreadPreload);
     return _threadPreloadToThread(thread);
 }

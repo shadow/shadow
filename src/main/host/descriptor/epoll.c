@@ -12,7 +12,6 @@
 
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
@@ -218,7 +217,7 @@ static void _epoll_free(LegacyDescriptor* descriptor) {
     MAGIC_CLEAR(epoll);
     g_free(epoll);
 
-    worker_countObject(OBJECT_TYPE_EPOLL, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Epoll);
 }
 
 void epoll_clearWatchListeners(Epoll* epoll) {
@@ -272,7 +271,7 @@ Epoll* epoll_new() {
     /* the epoll descriptor itself is always able to be epolled */
     descriptor_adjustStatus(&(epoll->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
-    worker_countObject(OBJECT_TYPE_EPOLL, COUNTER_TYPE_NEW);
+    worker_count_allocation(Epoll);
 
     return epoll;
 }

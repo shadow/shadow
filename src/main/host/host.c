@@ -18,7 +18,6 @@
 #include <sys/un.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
 #include "main/host/descriptor/channel.h"
@@ -142,7 +141,7 @@ Host* host_new(HostParameters* params) {
     g_timer_stop(host->executionTimer);
 #endif
 
-    worker_countObject(OBJECT_TYPE_HOST, COUNTER_TYPE_NEW);
+    worker_count_allocation(Host);
 
     return host;
 }
@@ -216,7 +215,7 @@ static void _host_free(Host* host) {
     MAGIC_CLEAR(host);
     g_free(host);
 
-    worker_countObject(OBJECT_TYPE_HOST, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Host);
 }
 
 /* this is needed outside of the free function, because there are parts of the shutdown

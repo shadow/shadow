@@ -7,7 +7,6 @@
 
 #include <stddef.h>
 
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
 #include "main/host/host.h"
@@ -38,7 +37,7 @@ Event* event_new_(Task* task, SimulationTime time, gpointer srcHost, gpointer ds
     event->srcHostEventID = host_getNewEventID(srcHost);
     event->referenceCount = 1;
 
-    worker_countObject(OBJECT_TYPE_EVENT, COUNTER_TYPE_NEW);
+    worker_count_allocation(Event);
     return event;
 }
 
@@ -46,7 +45,7 @@ static void _event_free(Event* event) {
     task_unref(event->task);
     MAGIC_CLEAR(event);
     g_free(event);
-    worker_countObject(OBJECT_TYPE_EVENT, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Event);
 }
 
 void event_ref(Event* event) {

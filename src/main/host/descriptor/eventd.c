@@ -10,7 +10,6 @@
 #include <string.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
@@ -55,7 +54,7 @@ static void _eventd_free(LegacyDescriptor* descriptor) {
     MAGIC_CLEAR(eventd);
 
     free(eventd);
-    worker_countObject(OBJECT_TYPE_EVENTD, COUNTER_TYPE_FREE);
+    worker_count_deallocation(EventD);
 }
 
 static DescriptorFunctionTable _eventdFunctions = {_eventd_close, _eventd_free, MAGIC_VALUE};
@@ -77,7 +76,7 @@ EventD* eventd_new(unsigned int counter_init_val, bool is_semaphore) {
     descriptor_init(&(eventd->super), DT_EVENTD, &_eventdFunctions);
     descriptor_adjustStatus(&(eventd->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
-    worker_countObject(OBJECT_TYPE_EVENTD, COUNTER_TYPE_NEW);
+    worker_count_allocation(EventD);
     _eventd_updateStatus(eventd);
 
     return eventd;

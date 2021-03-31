@@ -10,7 +10,6 @@
 #include <stdbool.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/syscall_types.h"
 #include "main/utility/utility.h"
@@ -36,7 +35,7 @@ Futex* futex_new(PluginPhysicalPtr word) {
                      .referenceCount = 1,
                      MAGIC_INITIALIZER};
 
-    worker_countObject(OBJECT_TYPE_FUTEX, COUNTER_TYPE_NEW);
+    worker_count_allocation(Futex);
 
     return futex;
 }
@@ -45,7 +44,7 @@ static void _futex_free(Futex* futex) {
     MAGIC_ASSERT(futex);
     MAGIC_CLEAR(futex);
     free(futex);
-    worker_countObject(OBJECT_TYPE_FUTEX, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Futex);
 }
 
 void futex_ref(Futex* futex) {

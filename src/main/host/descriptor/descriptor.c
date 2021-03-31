@@ -8,7 +8,6 @@
 
 #include <stddef.h>
 
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
@@ -30,7 +29,7 @@ void descriptor_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
 
     debug("Descriptor %i has been initialized now", descriptor->handle);
 
-    worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_NEW);
+    worker_count_allocation(LegacyDescriptor);
 }
 
 void descriptor_clear(LegacyDescriptor* descriptor) {
@@ -48,7 +47,7 @@ static void _descriptor_free(LegacyDescriptor* descriptor) {
     debug("Descriptor %i calling vtable free now", descriptor->handle);
     descriptor->funcTable->free(descriptor);
 
-    worker_countObject(OBJECT_TYPE_DESCRIPTOR, COUNTER_TYPE_FREE);
+    worker_count_deallocation(LegacyDescriptor);
 }
 
 void descriptor_ref(gpointer data) {

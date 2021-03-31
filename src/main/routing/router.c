@@ -12,7 +12,6 @@
 #include <glib.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/network_interface.h"
 #include "main/routing/packet.h"
@@ -65,7 +64,7 @@ Router* router_new(QueueManagerMode queueMode, void* interface) {
 
     router->queueManager = router->queueHooks->new();
 
-    worker_countObject(OBJECT_TYPE_ROUTER, COUNTER_TYPE_NEW);
+    worker_count_allocation(Router);
     return router;
 }
 
@@ -76,7 +75,7 @@ static void _router_free(Router* router) {
 
     MAGIC_CLEAR(router);
     g_free(router);
-    worker_countObject(OBJECT_TYPE_ROUTER, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Router);
 }
 
 void router_ref(Router* router) {

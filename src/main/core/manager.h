@@ -27,7 +27,6 @@
 
 #include "main/core/controller.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/support/options.h"
 #include "main/host/host.h"
 #include "main/routing/dns.h"
@@ -66,8 +65,20 @@ void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* plug
                                   gchar* preloadName, SimulationTime startTime,
                                   SimulationTime stopTime, gchar* arguments);
 
-void manager_storeCounts(Manager* manager, ObjectCounter* objectCounter);
-void manager_countObject(ObjectType otype, CounterType ctype);
+// Increment a global counter for the allocation of the object with the given name.
+// This should be paired with an increment of the dealloc counter with the
+// same name, otherwise we print a warning that a memory leak was detected.
+void manager_increment_object_alloc_counter_global(const char* object_name);
+
+// Increment a global ounter for the deallocation of the object with the given name.
+// This should be paired with an increment of the alloc counter with the
+// same name, otherwise we print a warning that a memory leak was detected.
+void manager_increment_object_dealloc_counter_global(const char* object_name);
+
+// Add the given allocated-object counts into a global manager counter.
+void manager_add_alloc_object_counts(Manager* manager, Counter* alloc_obj_counts);
+// Add the given deallocated-object counts into a global manager counter.
+void manager_add_dealloc_object_counts(Manager* manager, Counter* dealloc_obj_counts);
 
 // Add the given syscall counts into a global manager counter.
 void manager_add_syscall_counts(Manager* manager, Counter* syscall_counts);

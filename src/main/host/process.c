@@ -34,7 +34,6 @@
 #include "glib/gprintf.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
@@ -698,7 +697,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
     proc->referenceCount = 1;
     proc->isExiting = false;
 
-    worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_NEW);
+    worker_count_allocation(Process);
 
     return proc;
 }
@@ -761,7 +760,7 @@ static void _process_free(Process* proc) {
         host_unref(proc->host);
     }
 
-    worker_countObject(OBJECT_TYPE_PROCESS, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Process);
 
     MAGIC_CLEAR(proc);
     g_free(proc);
