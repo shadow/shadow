@@ -531,7 +531,9 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
 }
 
 static void _threadptrace_enterStateExited(ThreadPtrace* thread) {
-    debug("enterStateExited");
+    debug("enterStateExited for thread %d.%d native %d.%d", thread_getProcessId(&thread->base),
+          thread_getID(&thread->base), thread_getNativePid(&thread->base),
+          thread_getNativeTid(&thread->base));
 
     // Ensure thread is detached.
     if (!thread->needAttachment) {
@@ -580,6 +582,9 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
             return;
         }
         case STOPREASON_EXITED_PROCESS: {
+            // Doesn't make sense to exit a process that never started.
+            utility_assert(thread->childState != THREAD_PTRACE_CHILD_STATE_NONE);
+
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
             _threadptrace_enterStateExited(thread);
             return;
@@ -691,7 +696,7 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
         int wstatus;
         pid_t pid = waitpid(thread->base.nativeTid, &wstatus, WNOHANG|WAITPID_COMMON_OPTIONS);
         if (pid < 0) {
-            error("waitpid: %s", strerror(pid));
+            error("waitpid: %s", strerror(errno));
             abort();
         }
         if (pid != 0) {
@@ -1160,9 +1165,38 @@ bool threadptrace_isRunning(Thread* base) {
 }
 
 void threadptrace_handleProcessExit(Thread* base) {
-    debug("threadptrace_handleProcessExit");
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-    _threadptrace_updateChildState(thread, (StopReason){.type = STOPREASON_EXITED_PROCESS});
+    debug("handleProcessExit for thread %d.%d native %d.%d", thread_getProcessId(&thread->base),
+          thread_getID(&thread->base), thread_getNativePid(&thread->base),
+          thread_getNativeTid(&thread->base));
+    if (!thread_isRunning(base)) {
+        // Nothing to do
+        utility_assert(!thread->sys);
+        return;
+    }
+
+    // Try to catch exit event. Exact conditions under which we need to do this
+    // are unclear, but detaching sometimes fails if we don't.
+    int wstatus;
+    pid_t pid = waitpid(thread->base.nativeTid, &wstatus, WAITPID_COMMON_OPTIONS);
+    if (pid < 0) {
+        if (errno == ECHILD) {
+            // Don't fully understand when this happens or not. Experimentally
+            // we *do* still need to continue to detach even if this is the
+            // case.
+            debug("Couldn't wait on dying child thread disappeared");
+        } else {
+            warning("Unexpected waitpid: %s", strerror(errno));
+        }
+    } else {
+        StopReason ptraceStopReason = _getStopReason(wstatus);
+        if (ptraceStopReason.type != STOPREASON_EXIT_EVENT) {
+            warning("Unexpected stop reason type %d", ptraceStopReason.type);
+        }
+    }
+
+    thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
+    _threadptrace_enterStateExited(thread);
 }
 
 int threadptrace_getReturnCode(Thread* base) {
