@@ -20,6 +20,7 @@
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall/clone.h"
+#include "main/host/syscall/custom.h"
 #include "main/host/syscall/epoll.h"
 #include "main/host/syscall/eventfd.h"
 #include "main/host/syscall/fcntl.h"
@@ -42,6 +43,7 @@
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
+#include "shim/shim_event.h"
 #include "support/logger/logger.h"
 
 // this is not defined on Ubuntu 16.04
@@ -367,6 +369,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(recvfrom);
         HANDLE(renameat);
         HANDLE(renameat2);
+        HANDLE(shadow_hostname_to_addr_ipv4);
         HANDLE(sendto);
         HANDLE(setsockopt);
         HANDLE(set_robust_list);

@@ -24,6 +24,7 @@ typedef struct _ShimSharedMem {
 #define SYS_shadow_set_ptrace_allow_native_syscalls 1000
 #define SYS_shadow_get_ipc_blk 1001
 #define SYS_shadow_get_shm_blk 1002
+#define SYS_shadow_hostname_to_addr_ipv4 1003
 
 // Returns 0 on success. Non-zero and sets errno on failure.
 int shadow_set_ptrace_allow_native_syscalls(bool val);
