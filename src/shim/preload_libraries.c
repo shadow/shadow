@@ -271,7 +271,7 @@ static bool _syscall_hostname_to_addr_ipv4(const char* node, uint32_t* addr) {
     debug("Performing custom shadow syscall SYS_shadow_hostname_to_addr_ipv4 for name %s", node);
 
     // Resolve the hostname using a custom syscall that shadow handles
-    if (syscall(SYS_shadow_hostname_to_addr_ipv4, node, strlen(node), addr, sizeof(*addr)) == 0) {
+    if (shadow_hostname_to_addr_ipv4(node, strlen(node), addr, sizeof(*addr)) == 0) {
 #ifdef DEBUG
         char addr_str_buf[INET_ADDRSTRLEN] = {0};
         if (inet_ntop(AF_INET, (struct in_addr*)addr, addr_str_buf, INET_ADDRSTRLEN)) {

@@ -12,6 +12,7 @@
 
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
+#include "main/shmem/shmem_allocator.h"
 #include "main/utility/utility.h"
 #include "shim/shim_event.h"
 
@@ -31,6 +32,8 @@ typedef struct _ThreadMethods {
     long (*nativeSyscall)(Thread* thread, long n, va_list args);
     int (*clone)(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
                  PluginPtr ctid, unsigned long newtls, Thread** child);
+    ShMemBlock* (*getIPCBlock)(Thread* thread);
+    ShMemBlock* (*getShMBlock)(Thread* thread);
 } ThreadMethods;
 
 struct _Thread {

@@ -14,6 +14,7 @@
 typedef struct _Thread Thread;
 
 #include "main/host/syscall_types.h"
+#include "main/shmem/shmem_allocator.h"
 
 void thread_ref(Thread* thread);
 void thread_unref(Thread* thread);
@@ -115,5 +116,11 @@ PluginVirtualPtr thread_getTidAddress(Thread* thread);
 // Returns whether the given thread is its thread group (aka process) leader.
 // Typically this is true for the first thread created in a process.
 bool thread_isLeader(Thread* thread);
+
+// Returns the block used for IPC, or NULL if no such block is is used.
+ShMemBlock* thread_getIPCBlock(Thread* thread);
+
+// Returns the block used for shared state, or NULL if no such block is is used.
+ShMemBlock* thread_getShMBlock(Thread* thread);
 
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */

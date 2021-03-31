@@ -21,11 +21,6 @@ typedef struct _ShimSharedMem {
     struct timespec sim_time;
 } ShimSharedMem;
 
-#define SYS_shadow_set_ptrace_allow_native_syscalls 1000
-#define SYS_shadow_get_ipc_blk 1001
-#define SYS_shadow_get_shm_blk 1002
-#define SYS_shadow_hostname_to_addr_ipv4 1003
-
 // Returns 0 on success. Non-zero and sets errno on failure.
 int shadow_set_ptrace_allow_native_syscalls(bool val);
 
@@ -34,6 +29,11 @@ int shadow_get_ipc_blk(ShMemBlockSerialized* ipc_blk_serialized);
 
 // Returns 0 on success. Non-zero and sets errno on failure.
 int shadow_get_shm_blk(ShMemBlockSerialized* shm_blk_serialized);
+
+// Asks shadow to find the ipv4 `addr` associated with hostname `name`.
+// Return 0 if an address was found and written to addr. Returns -1 and sets errno on failure.
+int shadow_hostname_to_addr_ipv4(const char* name, size_t name_len, uint32_t* addr,
+                                 size_t addr_len);
 
 typedef enum {
     // Next val: 11

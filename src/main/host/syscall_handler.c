@@ -20,7 +20,6 @@
 #include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/syscall/clone.h"
-#include "main/host/syscall/custom.h"
 #include "main/host/syscall/epoll.h"
 #include "main/host/syscall/eventfd.h"
 #include "main/host/syscall/fcntl.h"
@@ -33,6 +32,7 @@
 #include "main/host/syscall/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/random.h"
+#include "main/host/syscall/shadow.h"
 #include "main/host/syscall/signal.h"
 #include "main/host/syscall/socket.h"
 #include "main/host/syscall/sysinfo.h"
@@ -41,6 +41,7 @@
 #include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
 #include "main/host/syscall_handler.h"
+#include "main/host/syscall_numbers.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "shim/shim_event.h"
@@ -369,6 +370,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(recvfrom);
         HANDLE(renameat);
         HANDLE(renameat2);
+        HANDLE(shadow_set_ptrace_allow_native_syscalls);
+        HANDLE(shadow_get_ipc_blk);
+        HANDLE(shadow_get_shm_blk);
         HANDLE(shadow_hostname_to_addr_ipv4);
         HANDLE(sendto);
         HANDLE(setsockopt);

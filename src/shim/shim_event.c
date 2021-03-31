@@ -1,4 +1,5 @@
 #include "shim/shim_event.h"
+#include "main/host/syscall_numbers.h"
 
 #include <unistd.h>
 
@@ -12,6 +13,11 @@ int shadow_get_ipc_blk(ShMemBlockSerialized* ipc_blk_serialized) {
 
 int shadow_get_shm_blk(ShMemBlockSerialized* shm_blk_serialized) {
     return syscall(SYS_shadow_get_shm_blk, shm_blk_serialized);
+}
+
+int shadow_hostname_to_addr_ipv4(const char* name, size_t name_len, uint32_t* addr,
+                                 size_t addr_len) {
+    return syscall(SYS_shadow_hostname_to_addr_ipv4, name, name_len, addr, addr_len);
 }
 
 static inline void shim_determinedSend(int sock_fd, const void* ptr,
