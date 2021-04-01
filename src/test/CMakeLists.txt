@@ -69,7 +69,8 @@ macro(add_shadow_tests)
       set(SHADOW_TEST_NAME ${SHADOW_TEST_BASENAME}-shadow-${SHADOW_TEST_METHOD})
       
       set(SHADOW_TEST_COMMAND sh -c "\
-         ${yaml2xml} ${SHADOW_TEST_SHADOW_CONFIG} --output - \
+         rm -rf ${SHADOW_TEST_NAME}.data \
+         && ${yaml2xml} ${SHADOW_TEST_SHADOW_CONFIG} --output - \
          | ${CMAKE_BINARY_DIR}/src/main/shadow \
          --data-directory=${SHADOW_TEST_NAME}.data \
          --interpose-method=${SHADOW_TEST_METHOD} \

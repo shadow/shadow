@@ -104,7 +104,7 @@ Options* options_new(gint argc, gchar* argv[]) {
          "PATH to store simulation output ['shadow.data']", "PATH"},
         {"data-template", 'e', 0, G_OPTION_ARG_STRING, &(options->dataTemplatePath),
          "PATH to recursively copy during startup and use as the data-directory "
-         "['shadow.data.template']",
+         "[None]",
          "PATH"},
         {"gdb", 'g', 0, G_OPTION_ARG_NONE, &(options->debug),
          "Pause at startup for debugger attachment", NULL},
@@ -268,9 +268,6 @@ Options* options_new(gint argc, gchar* argv[]) {
     }
     if(options->dataDirPath == NULL) {
         options->dataDirPath = g_strdup("shadow.data");
-    }
-    if(options->dataTemplatePath == NULL) {
-        options->dataTemplatePath = g_strdup("shadow.data.template");
     }
 
     options->inputXMLFilename = g_string_new(argv[1]);

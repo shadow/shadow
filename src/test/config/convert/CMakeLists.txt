@@ -44,7 +44,10 @@ set_tests_properties(config-convert-yaml2xml-stdout PROPERTIES DEPENDS "config-c
 # Launch Shadow to ensure that the XML previously generated from the YAML is correct
 add_test(
     NAME config-convert-shadow
-    COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d convert.shadow.data test.shadow.config.xml
+    COMMAND sh -c "\
+    rm -rf convert.shadow.data \
+    && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d convert.shadow.data test.shadow.config.xml \
+    "
 )
 set_tests_properties(config-convert-shadow PROPERTIES DEPENDS "config-convert-yaml2xml")
 
