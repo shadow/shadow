@@ -130,4 +130,7 @@ void process_flushPtrs(Process* proc, Thread* thread);
 MemoryManager* process_getMemoryManager(Process* proc);
 void process_setMemoryManager(Process* proc, MemoryManager* memoryManager);
 
+// Returns the interpose method used by this process.
+InterposeMethod process_getInterposeMethod(Process* proc);
+
 #endif /* SHD_PROCESS_H_ */

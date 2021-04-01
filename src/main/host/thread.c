@@ -149,6 +149,18 @@ void thread_flushPtrs(Thread* thread) {
     thread->methods.flushPtrs(thread);
 }
 
+ShMemBlock* thread_getIPCBlock(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->methods.getIPCBlock);
+    return thread->methods.getIPCBlock(thread);
+}
+
+ShMemBlock* thread_getShMBlock(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->methods.getShMBlock);
+    return thread->methods.getShMBlock(thread);
+}
+
 long thread_nativeSyscall(Thread* thread, long n, ...) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.nativeSyscall);

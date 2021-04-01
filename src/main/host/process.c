@@ -796,6 +796,11 @@ void process_setMemoryManager(Process* proc, MemoryManager* memoryManager) {
     proc->memoryManager = memoryManager;
 }
 
+InterposeMethod process_getInterposeMethod(Process* proc) {
+    MAGIC_ASSERT(proc);
+    return proc->interposeMethod;
+}
+
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr) {
     // We currently don't keep a true system-wide virtual <-> physical address
     // mapping. Instead we simply assume that no shadow processes map the same

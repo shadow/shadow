@@ -125,7 +125,6 @@ bool shim_syscall(long syscall_num, long* rv, va_list args) {
         }
 
         default: {
-            debug("syscall %ld is not a supported time-related syscall", syscall_num);
             // the syscall was not handled
             return false;
         }

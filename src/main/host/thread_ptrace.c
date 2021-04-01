@@ -17,6 +17,7 @@
 
 #include "main/core/worker.h"
 #include "main/host/shimipc.h"
+#include "main/host/syscall_numbers.h"
 #include "main/host/thread_protected.h"
 #include "main/host/tsc.h"
 #include "main/utility/fork_proxy.h"
@@ -812,29 +813,31 @@ static SysCallReturn _threadptrace_getSerializedBlock(ThreadPtrace* thread, Plug
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
 
+void threadptrace_setAllowNativeSyscalls(Thread* base, bool is_allowed) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+    _threadptrace_sharedMem(thread)->ptrace_allow_native_syscalls = is_allowed;
+}
+
+static ShMemBlock* _threadptrace_getIPCBlock(Thread* base) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+    if (thread->enableIpc) {
+        return &thread->ipcBlk;
+    } else {
+        return NULL;
+    }
+}
+
+static ShMemBlock* _threadptrace_getShMBlock(Thread* base) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+    return &thread->shimSharedMemBlock;
+}
+
 static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallArgs* args) {
     utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL ||
                    thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
-    if (args->number == SYS_shadow_set_ptrace_allow_native_syscalls) {
-        bool val = args->args[0].as_i64;
 
-        debug("SYS_shadow_set_ptrace_allow_native_syscalls %d", val);
-        _threadptrace_sharedMem(thread)->ptrace_allow_native_syscalls = val;
-
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-    }
-
-    if (args->number == SYS_shadow_get_ipc_blk) {
-        return _threadptrace_getSerializedBlock(
-            thread, args->args[0].as_ptr, &thread->ipcBlk, "SYS_shadow_get_ipc_blk");
-    }
-
-    if (args->number == SYS_shadow_get_shm_blk) {
-        return _threadptrace_getSerializedBlock(
-            thread, args->args[0].as_ptr, &thread->shimSharedMemBlock, "SYS_shadow_get_shm_blk");
-    }
-
-    if (_threadptrace_sharedMem(thread)->ptrace_allow_native_syscalls) {
+    if (!syscall_num_is_shadow(args->number) &&
+        _threadptrace_sharedMem(thread)->ptrace_allow_native_syscalls) {
         if (args->number == SYS_brk) {
             // brk should *always* be interposed so that the MemoryManager can track it.
             debug("Interposing brk even though native syscalls are enabled");
@@ -1530,6 +1533,8 @@ Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
                                   .flushPtrs = threadptrace_flushPtrs,
                                   .nativeSyscall = threadptrace_nativeSyscall,
                                   .clone = threadptrace_clone,
+                                  .getIPCBlock = _threadptrace_getIPCBlock,
+                                  .getShMBlock = _threadptrace_getShMBlock,
                               }),
         // FIXME: This should the emulated CPU's frequency
         .tsc = {.cyclesPerSecond = 2000000000UL},

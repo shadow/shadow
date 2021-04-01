@@ -192,12 +192,16 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
     GMatchInfo* match_info = NULL;
     GRegex* regex = NULL;
 
+    debug("Reading /etc/hosts file");
+
     g_file_get_contents("/etc/hosts", &hosts, NULL, &error);
     if (error != NULL) {
         error("Reading /etc/hosts: %s", error->message);
         goto out;
     }
     assert(hosts != NULL);
+
+    debug("Scanning /etc/hosts contents for name %s", node);
 
     {
         gchar* escaped_node = g_regex_escape_string(node, -1);
@@ -255,6 +259,33 @@ out:
         free(pattern);
     if (hosts != NULL)
         g_free(hosts);
+}
+
+// Ask shadow to provide an ipv4 addr for a node using a custom syscall.
+// Returns true if we got a valid address from shadow, false otherwise.
+static bool _syscall_hostname_to_addr_ipv4(const char* node, uint32_t* addr) {
+    if (!node || !addr) {
+        return false;
+    }
+
+    debug("Performing custom shadow syscall SYS_shadow_hostname_to_addr_ipv4 for name %s", node);
+
+    // Resolve the hostname using a custom syscall that shadow handles
+    if (shadow_hostname_to_addr_ipv4(node, strlen(node), addr, sizeof(*addr)) == 0) {
+#ifdef DEBUG
+        char addr_str_buf[INET_ADDRSTRLEN] = {0};
+        if (inet_ntop(AF_INET, (struct in_addr*)addr, addr_str_buf, INET_ADDRSTRLEN)) {
+            debug("SYS_shadow_hostname_to_addr_ipv4 returned addr %s for name %s", addr_str_buf,
+                  node);
+        } else {
+            debug("SYS_shadow_hostname_to_addr_ipv4 succeeded for name %s", node);
+        }
+#endif
+        return true;
+    } else {
+        debug("SYS_shadow_hostname_to_addr_ipv4 failed for name %s", node);
+        return false;
+    }
 }
 
 // man 3 getaddrinfo
@@ -419,8 +450,17 @@ int getaddrinfo(const char* node, const char* service,
         // TODO: look for IPv6 addresses in /etc/hosts.
     }
     if (add_ipv4) {
-        _getaddrinfo_add_matching_hosts_ipv4(
-            res, &tail, node, add_tcp, add_udp, add_raw, port);
+        // Try a Shadow syscall first to avoid scanning the /etc/hosts file.
+        uint32_t addr;
+        if (_syscall_hostname_to_addr_ipv4(node, &addr)) {
+            _getaddrinfo_appendv4(res, &tail, add_tcp, add_udp, add_raw, addr, port);
+        } else {
+            // Fall back to scanning /etc/hosts.
+            warning("shadow_hostname_to_addr_ipv4 syscall failed for name %s, falling back to less "
+                    "efficient scan of '/etc/hosts' file.",
+                    node);
+            _getaddrinfo_add_matching_hosts_ipv4(res, &tail, node, add_tcp, add_udp, add_raw, port);
+        }
     }
 
     // TODO: maybe do DNS lookup, if we end up supporting that in Shadow.

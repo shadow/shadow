@@ -234,6 +234,18 @@ void threadpreload_flushPtrs(Thread* base) {
     _threadpreload_flushPtrs(thread);
 }
 
+static ShMemBlock* _threadpreload_getIPCBlock(Thread* base) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
+    return &thread->ipc_blk;
+}
+
+static ShMemBlock* _threadpreload_getShMBlock(Thread* base) {
+    // We currently communicate the simulation time to the shim by including it in every event
+    // we send over the IPC channel, and the shim caches it.
+    // TODO we could instead use a shmem segment like threadptrace does.
+    return NULL;
+}
+
 SysCallCondition* threadpreload_resume(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
@@ -501,6 +513,8 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                                   .getMutablePtr = threadpreload_getMutablePtr,
                                   .flushPtrs = threadpreload_flushPtrs,
                                   .nativeSyscall = threadpreload_nativeSyscall,
+                                  .getIPCBlock = _threadpreload_getIPCBlock,
+                                  .getShMBlock = _threadpreload_getShMBlock,
                               }),
         .ptr_to_block = g_hash_table_new(g_int64_hash, g_int64_equal),
         .read_list = NULL,
