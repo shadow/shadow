@@ -456,6 +456,9 @@ int getaddrinfo(const char* node, const char* service,
             _getaddrinfo_appendv4(res, &tail, add_tcp, add_udp, add_raw, addr, port);
         } else {
             // Fall back to scanning /etc/hosts.
+            warning("shadow_hostname_to_addr_ipv4 syscall failed for name %s, falling back to less "
+                    "efficient scan of '/etc/hosts' file.",
+                    node);
             _getaddrinfo_add_matching_hosts_ipv4(res, &tail, node, add_tcp, add_udp, add_raw, port);
         }
     }
