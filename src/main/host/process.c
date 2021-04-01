@@ -217,7 +217,10 @@ static void _process_handleProcessExit(Process* proc) {
     while (g_hash_table_iter_next(&iter, &key, &value)) {
         Thread* thread = value;
         thread_handleProcessExit(thread);
+        utility_assert(!thread_isRunning(thread));
         _process_reapThread(proc, thread);
+
+        // Must be last, since it unrefs the thread.
         g_hash_table_iter_remove(&iter);
     }
 
