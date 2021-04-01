@@ -67,9 +67,11 @@ struct _Topology {
     gboolean prefersDirectPaths;
 
     /* keep track of how many, and how long we spend computing shortest paths */
+#ifdef USE_PERF_TIMERS
     gdouble shortestPathTotalTime;
-    guint shortestPathCount;
     gdouble selfPathTotalTime;
+#endif
+    guint shortestPathCount;
     guint selfPathCount;
 
     /* END global topology lock */
@@ -1274,10 +1276,16 @@ static void _topology_clearCache(Topology* top) {
 
     /* lock the read on the shortest path info */
     g_mutex_lock(&(top->topologyLock));
+#ifdef USE_PERF_TIMERS
     message("path cache cleared, spent %f seconds computing %u shortest paths with dijkstra, "
             "and %f seconds computing %u shortest self paths",
             top->shortestPathTotalTime, top->shortestPathCount,
             top->selfPathTotalTime, top->selfPathCount);
+#else
+    message("path cache cleared, computed %u shortest paths with dijkstra, "
+            "and %u shortest self paths",
+            top->shortestPathCount, top->selfPathCount);
+#endif
     g_mutex_unlock(&(top->topologyLock));
 }
 
@@ -1575,8 +1583,10 @@ static gboolean _topology_computeShortestPathToSelf(Topology* top, igraph_intege
         return FALSE;
     }
 
+#ifdef USE_PERF_TIMERS
     /* time the shortest path loop */
     GTimer* pathTimer = g_timer_new();
+#endif
 
     /* keep the min latency and packetloss while iterating */
     while (!IGRAPH_EIT_END(edgeIterator)) {
@@ -1604,15 +1614,19 @@ static gboolean _topology_computeShortestPathToSelf(Topology* top, igraph_intege
 
     _topology_unlockGraph(top);
 
+#ifdef USE_PERF_TIMERS
     /* track the time spent running the algorithm */
     gdouble elapsedSeconds = g_timer_elapsed(pathTimer, NULL);
     g_timer_destroy(pathTimer);
+#endif
 
     igraph_eit_destroy(&edgeIterator);
     igraph_es_destroy(&edgeSelector);
 
     g_mutex_lock(&top->topologyLock);
+#ifdef USE_PERF_TIMERS
     top->selfPathTotalTime += elapsedSeconds;
+#endif
     top->selfPathCount++;
     g_mutex_unlock(&top->topologyLock);
 
@@ -1747,8 +1761,10 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
     _topology_lockGraph(top);
     g_rw_lock_reader_lock(&(top->edgeWeightsLock));
 
+#ifdef USE_PERF_TIMERS
     /* time the dijkstra algorithm */
     GTimer* pathTimer = g_timer_new();
+#endif
 
     /* run dijkstra's shortest path algorithm */
 #if defined (IGRAPH_VERSION_MAJOR) && defined (IGRAPH_VERSION_MINOR) && defined (IGRAPH_VERSION_PATCH)
@@ -1774,16 +1790,22 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
 #endif
 #endif
 
+#ifdef USE_PERF_TIMERS
     /* track the time spent running the algorithm */
     gdouble elapsedSeconds = g_timer_elapsed(pathTimer, NULL);
+#endif
 
     g_rw_lock_reader_unlock(&(top->edgeWeightsLock));
     _topology_unlockGraph(top);
 
+#ifdef USE_PERF_TIMERS
     g_timer_destroy(pathTimer);
+#endif
 
     g_mutex_lock(&top->topologyLock);
+#ifdef USE_PERF_TIMERS
     top->shortestPathTotalTime += elapsedSeconds;
+#endif
     top->shortestPathCount++;
     g_mutex_unlock(&top->topologyLock);
 

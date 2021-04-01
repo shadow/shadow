@@ -42,8 +42,10 @@ struct _Scheduler {
     /* barrier to wait for main thread to finish updating for the next round */
     CountDownLatch* prepareRoundBarrier;
 
+#ifdef USE_PERF_TIMERS
     /* holds a timer for each thread to track how long threads wait for execution barrier */
     GHashTable* threadToWaitTimerMap;
+#endif
 
     /* the serial/parallel host/thread mapping/scheduling policy */
     SchedulerPolicy* policy;
@@ -132,7 +134,9 @@ Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointe
     scheduler->currentRound.endTime = scheduler->endTime;// default to one single round
     scheduler->currentRound.minNextEventTime = SIMTIME_MAX;
 
+#ifdef USE_PERF_TIMERS
     scheduler->threadToWaitTimerMap = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)g_timer_destroy);
+#endif
     scheduler->hostIDToHostMap = g_hash_table_new(g_direct_hash, g_direct_equal);
 
     scheduler->random = random_new(schedulerSeed);
@@ -265,9 +269,13 @@ static void _scheduler_joinThreads(SchedulerThreadItem* item, Scheduler* schedul
             countdownlatch_await(item->notifyJoined);
         }
 
+#ifdef USE_PERF_TIMERS
         GTimer* executeEventsBarrierWaitTime = g_hash_table_lookup(scheduler->threadToWaitTimerMap, GUINT_TO_POINTER(item->thread));
         gdouble totalWaitTime = g_timer_elapsed(executeEventsBarrierWaitTime, NULL);
         message("joined thread %p, total wait time for round execution barrier was %f seconds", GUINT_TO_POINTER(item->thread), totalWaitTime);
+#else
+        message("joined thread %p", GUINT_TO_POINTER(item->thread));
+#endif
     }
 }
 
@@ -282,9 +290,11 @@ static void _scheduler_free(Scheduler* scheduler) {
     g_queue_foreach(scheduler->threadItems, (GFunc)_scheduler_joinThreads, scheduler);
 
     /* dont need the timers anymore now that the threads are joined */
+#ifdef USE_PERF_TIMERS
     if(scheduler->threadToWaitTimerMap) {
         g_hash_table_destroy(scheduler->threadToWaitTimerMap);
     }
+#endif
 
     guint nWorkers = g_queue_get_length(scheduler->threadItems);
 
@@ -378,18 +388,22 @@ Event* scheduler_pop(Scheduler* scheduler) {
             return NULL;
         } else {
             /* the running thread has no more events to execute this round and we need to block it
-             * so that we can wait for all threads to finish events from this round. We want to
-             * track idle times, so let's start by making sure we have timer elements in place. */
+             * so that we can wait for all threads to finish events from this round. */
+            
+#ifdef USE_PERF_TIMERS
+            /* We want to track idle times, so let's start by making sure we have timer elements in place. */
             GTimer* executeEventsBarrierWaitTime = g_hash_table_lookup(scheduler->threadToWaitTimerMap, GUINT_TO_POINTER(pthread_self()));
-
             /* wait for all other worker threads to finish their events too, and track wait time */
             if(executeEventsBarrierWaitTime) {
                 g_timer_continue(executeEventsBarrierWaitTime);
             }
+#endif
             countdownlatch_countDownAwait(scheduler->executeEventsBarrier);
+#ifdef USE_PERF_TIMERS
             if(executeEventsBarrierWaitTime) {
                 g_timer_stop(executeEventsBarrierWaitTime);
             }
+#endif
 
             /* now all threads reached the current round end barrier time.
              * asynchronously collect some stats that the main thread will use. */
@@ -576,6 +590,7 @@ void scheduler_awaitStart(Scheduler* scheduler) {
     /* Called by worker threads. When we are in single thread mode, all of the barriers have a count
      * of 1 so the countDownAwait functions always return immediately here. */
 
+#ifdef USE_PERF_TIMERS
     /* set up the thread timer map */
     g_mutex_lock(&scheduler->globalLock);
     if(!g_hash_table_lookup(scheduler->threadToWaitTimerMap, GUINT_TO_POINTER(pthread_self()))) {
@@ -584,6 +599,7 @@ void scheduler_awaitStart(Scheduler* scheduler) {
         g_hash_table_insert(scheduler->threadToWaitTimerMap, GUINT_TO_POINTER(pthread_self()), waitTimer);
     }
     g_mutex_unlock(&scheduler->globalLock);
+#endif
 
     /* wait until all threads are waiting to start */
     countdownlatch_countDownAwait(scheduler->startBarrier);
