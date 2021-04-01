@@ -286,6 +286,46 @@ pub struct _Thread {
     _unused: [u8; 0],
 }
 pub type Thread = _Thread;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _ShMemBlock {
+    pub p: *mut ::std::os::raw::c_void,
+    pub nbytes: size_t,
+}
+#[test]
+fn bindgen_test_layout__ShMemBlock() {
+    assert_eq!(
+        ::std::mem::size_of::<_ShMemBlock>(),
+        16usize,
+        concat!("Size of: ", stringify!(_ShMemBlock))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_ShMemBlock>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_ShMemBlock))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_ShMemBlock>())).p as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_ShMemBlock),
+            "::",
+            stringify!(p)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_ShMemBlock>())).nbytes as *const _ as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_ShMemBlock),
+            "::",
+            stringify!(nbytes)
+        )
+    );
+}
+pub type ShMemBlock = _ShMemBlock;
 extern "C" {
     pub fn thread_ref(thread: *mut Thread);
 }
@@ -392,6 +432,12 @@ extern "C" {
 }
 extern "C" {
     pub fn thread_isLeader(thread: *mut Thread) -> bool;
+}
+extern "C" {
+    pub fn thread_getIPCBlock(thread: *mut Thread) -> *mut ShMemBlock;
+}
+extern "C" {
+    pub fn thread_getShMBlock(thread: *mut Thread) -> *mut ShMemBlock;
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
