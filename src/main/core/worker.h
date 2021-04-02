@@ -10,6 +10,7 @@
 #include <glib.h>
 #include <netinet/in.h>
 
+#include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/options.h"
@@ -22,23 +23,38 @@
 #include "main/utility/count_down_latch.h"
 #include "support/logger/log_level.h"
 
-typedef struct _WorkerRunData WorkerRunData;
-struct _WorkerRunData {
-    guint threadID;
-    Scheduler* scheduler;
-    gpointer userData;
-    CountDownLatch* notifyDoneRunning;
-    CountDownLatch* notifyReadyToJoin;
-    CountDownLatch* notifyJoined;
-};
-
+// A single worker thread.
 typedef struct _Worker Worker;
+// A pool of worker threads.
+typedef struct _WorkerPool WorkerPool;
+// Task to be executed on a worker thread.
+typedef void (*WorkerPoolTaskFn)(void*);
+
+// To be called by scheduler. Consumes `event`
+void worker_runEvent(Event* event);
+// To be called by worker thread
+void worker_finish(GQueue* hosts);
+
+// Create a workerpool with `nThreads` threads, allowing up to `nConcurrent` to
+// run at a time.
+WorkerPool* workerpool_new(Manager* manager, Scheduler* scheduler, int nThreads,
+                           int nConcurrent);
+
+// Begin executing taskFn(data) on each worker thread in the pool.
+void workerpool_startTaskFn(WorkerPool* pool, WorkerPoolTaskFn taskFn,
+                            void* data);
+// Await completion of a taskFn on every thread in the pool.
+void workerpool_awaitTaskFn(WorkerPool* pool);
+int workerpool_getNWorkers(WorkerPool* pool);
+// Signal worker threads to exit and wait for them to do so.
+void workerpool_joinAll(WorkerPool* pool);
+void workerpool_free(WorkerPool* pool);
+pthread_t workerpool_getThread(WorkerPool* pool, int threadId);
 
 int worker_getAffinity();
 DNS* worker_getDNS();
 Topology* worker_getTopology();
 Options* worker_getOptions();
-gpointer worker_run(WorkerRunData*);
 gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay);
 void worker_sendPacket(Packet* packet);
 gboolean worker_isAlive();

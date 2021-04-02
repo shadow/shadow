@@ -19,7 +19,6 @@
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
 #include "main/core/support/options.h"
-#include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/host/network_interface.h"
 #include "main/routing/address.h"
@@ -210,7 +209,8 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
     guint nWorkers = options_getNWorkerThreads(options);
     SchedulerPolicyType policy = _manager_getEventSchedulerPolicy(manager);
     guint schedulerSeed = _manager_nextRandomUInt(manager);
-    manager->scheduler = scheduler_new(policy, nWorkers, manager, schedulerSeed, endTime);
+    manager->scheduler =
+        scheduler_new(manager, policy, nWorkers, schedulerSeed, endTime);
 
     manager->cwdPath = g_get_current_dir();
     manager->dataPath =
@@ -594,60 +594,44 @@ static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
 
 void manager_run(Manager* manager) {
     MAGIC_ASSERT(manager);
-    if (scheduler_getPolicy(manager->scheduler) == SP_SERIAL_GLOBAL) {
-        scheduler_start(manager->scheduler);
+    /* we are the main thread, we manage the execution window updates while the
+     * workers run events */
+    SimulationTime windowStart = 0, windowEnd = 1;
+    SimulationTime minNextEventTime = SIMTIME_INVALID;
+    gboolean keepRunning = TRUE;
 
-        /* the main manager thread becomes the only worker and runs everything */
-        WorkerRunData* data = g_new0(WorkerRunData, 1);
-        data->threadID = 0;
-        data->scheduler = manager->scheduler;
-        data->userData = manager;
-        data->notifyDoneRunning = NULL; // we don't need to be notified in single thread mode
+    scheduler_start(manager->scheduler);
 
-        /* the worker takes control of data pointer and frees it */
-        worker_run(data);
+    while (keepRunning) {
+        /* release the workers and run next round */
+        scheduler_continueNextRound(manager->scheduler, windowStart, windowEnd);
 
-        scheduler_finish(manager->scheduler);
-    } else {
-        /* we are the main thread, we manage the execution window updates while the workers run
-         * events */
-        SimulationTime windowStart = 0, windowEnd = 1;
-        SimulationTime minNextEventTime = SIMTIME_INVALID;
-        gboolean keepRunning = TRUE;
+        /* do some idle processing here if needed */
+        _manager_heartbeat(manager, windowStart);
 
-        scheduler_start(manager->scheduler);
+        /* flush manager threads messages */
+        shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
 
-        while (keepRunning) {
-            /* release the workers and run next round */
-            scheduler_continueNextRound(manager->scheduler, windowStart, windowEnd);
+        /* let the logger know it can flush everything prior to this round */
+        shadow_logger_syncToDisk(shadow_logger_getDefault());
 
-            /* do some idle processing here if needed */
-            /* TODO the heartbeat should run in single process mode too! */
-            _manager_heartbeat(manager, windowStart);
+        /* wait for the workers to finish processing nodes before we update the
+         * execution window
+         */
+        minNextEventTime = scheduler_awaitNextRound(manager->scheduler);
 
-            /* flush manager threads messages */
-            shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
+        /* we are in control now, the workers are waiting for the next round */
+        info("finished execution window [%" G_GUINT64_FORMAT
+             "--%" G_GUINT64_FORMAT "] next event at %" G_GUINT64_FORMAT,
+             windowStart, windowEnd, minNextEventTime);
 
-            /* let the logger know it can flush everything prior to this round */
-            shadow_logger_syncToDisk(shadow_logger_getDefault());
-
-            /* wait for the workers to finish processing nodes before we update the execution window
-             */
-            minNextEventTime = scheduler_awaitNextRound(manager->scheduler);
-
-            /* we are in control now, the workers are waiting for the next round */
-            info("finished execution window [%" G_GUINT64_FORMAT "--%" G_GUINT64_FORMAT
-                 "] next event at %" G_GUINT64_FORMAT,
-                 windowStart, windowEnd, minNextEventTime);
-
-            /* notify controller that we finished this round, and the time of our next event
-             * in order to fast-forward our execute window if possible */
-            keepRunning = controller_managerFinishedCurrentRound(
-                manager->controller, minNextEventTime, &windowStart, &windowEnd);
-        }
-
-        scheduler_finish(manager->scheduler);
+        /* notify controller that we finished this round, and the time of our
+         * next event in order to fast-forward our execute window if possible */
+        keepRunning = controller_managerFinishedCurrentRound(
+            manager->controller, minNextEventTime, &windowStart, &windowEnd);
     }
+
+    scheduler_finish(manager->scheduler);
 }
 
 void manager_incrementPluginError(Manager* manager) {
