@@ -205,7 +205,8 @@ void packet_setPriority(Packet *packet, double value) {
 }
 
 gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data) {
-    MAGIC_ASSERT(packet1 && packet2);
+    MAGIC_ASSERT(packet1);
+    MAGIC_ASSERT(packet2);
 
     /* packet1 for one worker might be packet2 for another, dont lock both
      * at once or a deadlock will occur */

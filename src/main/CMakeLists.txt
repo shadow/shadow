@@ -32,6 +32,7 @@ endif(SHADOW_PROFILE STREQUAL ON)
 
 ## sources for our main shadow program
 set(shadow_srcs
+    core/logical_processor.c
     core/logger/logger_helper.c
     core/logger/log_record.c
     core/logger/shadow_logger.c
