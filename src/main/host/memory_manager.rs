@@ -111,17 +111,20 @@ pub struct MemoryManager {
 struct ShmFile {
     shm_file: File,
     shm_plugin_fd: i32,
+    len: libc::off_t,
 }
 
 impl ShmFile {
     /// Allocate space in the file for the given interval.
-    fn alloc(&self, interval: &Interval) {
-        fcntl::posix_fallocate(
-            self.shm_file.as_raw_fd(),
-            interval.start as i64,
-            interval.len() as i64,
-        )
-        .unwrap();
+    fn alloc(&mut self, interval: &Interval) {
+        let needed_len = interval.end as libc::off_t;
+        // Ensure that the file size extends through the end of the interval.
+        // Unlike calling fallocate or posix_fallocate, this does not pre-reserve
+        // any space. The OS will allocate the space on-demand as it's written.
+        if needed_len > self.len {
+            nix::unistd::ftruncate(self.shm_file.as_raw_fd(), needed_len).unwrap();
+            self.len = needed_len;
+        }
     }
 
     /// De-allocate space in the file for the given interval.
@@ -229,7 +232,7 @@ fn get_regions(pid: libc::pid_t) -> IntervalMap<Region> {
 
 /// Find the heap range, and map it if non-empty.
 fn get_heap(
-    shm_file: &ShmFile,
+    shm_file: &mut ShmFile,
     thread: &mut impl Thread,
     regions: &mut IntervalMap<Region>,
 ) -> Interval {
@@ -347,6 +350,18 @@ impl MemoryManager {
             .open(&shm_path)
             .unwrap();
 
+        // We don't need the file anymore in the file system. Unlinking it now
+        // ensures that it will be removed when there are no more open file
+        // descriptors to it.
+        match std::fs::remove_file(&shm_path) {
+            Ok(_) => (),
+            Err(e) => warn!("removing '{}': {}", shm_path, e),
+        }
+
+        // The file can no longer be accessed by its original path, but *can*
+        // be accessed via the file-descriptor link in /proc.
+        let shm_path = format!("/proc/{}/fd/{}", process::id(), shm_file.as_raw_fd());
+
         let shm_plugin_fd = {
             let path_buf_len = shm_path.len() + 1;
             let path_buf_plugin_ptr: PluginPtr = thread.malloc_plugin_ptr(path_buf_len).unwrap();
@@ -370,18 +385,13 @@ impl MemoryManager {
             shm_plugin_fd
         };
 
-        // We don't need the file anymore in the file system.
-        match std::fs::remove_file(&shm_path) {
-            Ok(_) => (),
-            Err(e) => warn!("removing '{}': {}", shm_path, e),
-        }
-
-        let shm_file = ShmFile {
+        let mut shm_file = ShmFile {
             shm_file,
             shm_plugin_fd,
+            len: 0,
         };
         let mut regions = get_regions(system_pid);
-        let heap = get_heap(&shm_file, thread, &mut regions);
+        let heap = get_heap(&mut shm_file, thread, &mut regions);
         let stack_end = map_stack(&shm_file, &mut regions);
 
         MemoryManager {
