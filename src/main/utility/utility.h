@@ -51,13 +51,14 @@ do { \
 /**
  * Initialize a value declared with MAGIC_DECLARE to MAGIC_VALUE
  */
-#define MAGIC_INIT(object) object->magic = MAGIC_VALUE
+#define MAGIC_INIT(object) (object)->magic = MAGIC_VALUE
 
 /**
  * Assert that a struct declared with MAGIC_DECLARE and initialized with
  * MAGIC_INIT still holds the value MAGIC_VALUE.
  */
-#define MAGIC_ASSERT(object) utility_assert(object && (object->magic == MAGIC_VALUE))
+#define MAGIC_ASSERT(object)                                                   \
+    utility_assert((object) && ((object)->magic == MAGIC_VALUE))
 
 /**
  * CLear a magic value. Future assertions with MAGIC_ASSERT will fail.
@@ -88,6 +89,7 @@ GString* utility_getFileContents(const gchar* fileName);
 gchar* utility_getNewTemporaryFilename(const gchar* templateStr);
 gboolean utility_copyFile(const gchar* fromPath, const gchar* toPath);
 
-void utility_handleError(const gchar* file, gint line, const gchar* funtcion, const gchar* message);
+_Noreturn void utility_handleError(const gchar* file, gint line,
+                                   const gchar* funtcion, const gchar* message);
 
 #endif /* SHD_UTILITY_H_ */
