@@ -1,4 +1,4 @@
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use std::error::Error;
 use std::fmt::Display;
@@ -39,10 +39,8 @@ pub enum MappingPath {
 impl FromStr for MappingPath {
     type Err = Box<dyn Error>;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        lazy_static! {
-            static ref SPECIAL_RE: Regex = Regex::new(r"^\[(\S+)\]$").unwrap();
-            static ref THREAD_STACK_RE: Regex = Regex::new(r"^stack:(\d+)$").unwrap();
-        }
+        static SPECIAL_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\[(\S+)\]$").unwrap());
+        static THREAD_STACK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^stack:(\d+)$").unwrap());
 
         if s.starts_with('/') {
             return Ok(MappingPath::Path(PathBuf::from(s)));
@@ -104,12 +102,12 @@ where
 impl FromStr for Mapping {
     type Err = Box<dyn Error>;
     fn from_str(line: &str) -> Result<Self, Self::Err> {
-        lazy_static! {
-            static ref RE: Regex = Regex::new(
-                r"^(\S+)-(\S+)\s+(\S)(\S)(\S)(\S)\s+(\S+)\s+(\S+):(\S+)\s+(\S+)\s*(\S*)\s*(\S*)$"
+        static RE: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(
+                r"^(\S+)-(\S+)\s+(\S)(\S)(\S)(\S)\s+(\S+)\s+(\S+):(\S+)\s+(\S+)\s*(\S*)\s*(\S*)$",
             )
-            .unwrap();
-        }
+            .unwrap()
+        });
 
         let caps = RE
             .captures(line)

@@ -45,12 +45,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lazy_static"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
-
-[[package]]
 name = "libc"
 version = "0.2.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -86,6 +80,12 @@ dependencies = [
  "cfg-if",
  "libc",
 ]
+
+[[package]]
+name = "once_cell"
+version = "1.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
 
 [[package]]
 name = "ppv-lite86"
@@ -156,11 +156,11 @@ version = "2.0.0-pre"
 dependencies = [
  "atomic_refcell",
  "bitflags",
- "lazy_static",
  "libc",
  "log",
  "log-bindings",
  "nix",
+ "once_cell",
  "rand",
  "rand_chacha",
  "rand_core",
