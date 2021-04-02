@@ -9,6 +9,7 @@
 
 #include <glib.h>
 
+#include "main/core/manager.h"
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
@@ -16,8 +17,9 @@
 
 typedef struct _Scheduler Scheduler;
 
-Scheduler* scheduler_new(SchedulerPolicyType policyType, guint nWorkers, gpointer threadUserData,
-        guint schedulerSeed, SimulationTime endTime);
+Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
+                         guint nWorkers, guint schedulerSeed,
+                         SimulationTime endTime);
 void scheduler_ref(Scheduler*);
 void scheduler_unref(Scheduler*);
 void scheduler_shutdown(Scheduler* scheduler);
