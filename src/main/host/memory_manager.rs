@@ -350,6 +350,18 @@ impl MemoryManager {
             .open(&shm_path)
             .unwrap();
 
+        // We don't need the file anymore in the file system. Unlinking it now
+        // ensures that it will be removed when there are no more open file
+        // descriptors to it.
+        match std::fs::remove_file(&shm_path) {
+            Ok(_) => (),
+            Err(e) => warn!("removing '{}': {}", shm_path, e),
+        }
+
+        // The file can no longer be accessed by its original path, but *can*
+        // be accessed via the file-descriptor link in /proc.
+        let shm_path = format!("/proc/{}/fd/{}", process::id(), shm_file.as_raw_fd());
+
         let shm_plugin_fd = {
             let path_buf_len = shm_path.len() + 1;
             let path_buf_plugin_ptr: PluginPtr = thread.malloc_plugin_ptr(path_buf_len).unwrap();
@@ -372,12 +384,6 @@ impl MemoryManager {
                 .unwrap();
             shm_plugin_fd
         };
-
-        // We don't need the file anymore in the file system.
-        match std::fs::remove_file(&shm_path) {
-            Ok(_) => (),
-            Err(e) => warn!("removing '{}': {}", shm_path, e),
-        }
 
         let mut shm_file = ShmFile {
             shm_file,
