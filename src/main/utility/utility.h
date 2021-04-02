@@ -45,9 +45,12 @@ do { \
 
 /**
  * Declare a member of a struct to hold a MAGIC_VALUE. This should be placed in
- * the declaration of a struct, generally as the last member of the struct.
+ * the declaration of a struct, generally as the last member of the struct. If
+ * the struct needs to have the same size in both debug and release mode, it
+ * can use MAGIC_DECLARE_ALWAYS.
  */
-#define MAGIC_DECLARE guint magic
+#define MAGIC_DECLARE        guint magic
+#define MAGIC_DECLARE_ALWAYS guint magic
 
 /**
  * Initialize a value declared with MAGIC_DECLARE to MAGIC_VALUE. This is useful
@@ -75,6 +78,7 @@ do { \
 #else
 #define MAGIC_VALUE
 #define MAGIC_DECLARE
+#define MAGIC_DECLARE_ALWAYS guint magic
 #define MAGIC_INITIALIZER
 #define MAGIC_INIT(object)
 #define MAGIC_ASSERT(object)
