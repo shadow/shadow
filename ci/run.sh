@@ -11,7 +11,7 @@ CONTAINERS=(
     ubuntu:18.04
     ubuntu:20.04
     debian:10-slim
-    fedora:32
+    fedora:33
     centos:7
     centos:8
     )
