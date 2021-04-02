@@ -10,6 +10,7 @@ pub type __uint64_t = ::std::os::raw::c_ulong;
 pub type __pid_t = ::std::os::raw::c_int;
 pub type pid_t = __pid_t;
 pub type gint = ::std::os::raw::c_int;
+pub type guint = ::std::os::raw::c_uint;
 pub type gdouble = f64;
 pub type gpointer = *mut ::std::os::raw::c_void;
 #[repr(C)]
@@ -60,7 +61,7 @@ pub struct _Host {
     _unused: [u8; 0],
 }
 pub type Host = _Host;
-pub type LegacyDescriptor = [u64; 6usize];
+pub type LegacyDescriptor = [u64; 7usize];
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Counter {
@@ -637,6 +638,7 @@ pub struct _SysCallHandler {
     pub numSyscalls: ::std::os::raw::c_long,
     pub syscall_counter: *mut Counter,
     pub referenceCount: ::std::os::raw::c_int,
+    pub magic: guint,
 }
 #[test]
 fn bindgen_test_layout__SysCallHandler() {
@@ -774,6 +776,16 @@ fn bindgen_test_layout__SysCallHandler() {
             stringify!(_SysCallHandler),
             "::",
             stringify!(referenceCount)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).magic as *const _ as usize },
+        92usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_SysCallHandler),
+            "::",
+            stringify!(magic)
         )
     );
 }

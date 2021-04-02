@@ -54,7 +54,7 @@ case "$CC" in
         ;;
 esac
 
-if [ "$BUILDTYPE" = coverage ]
+if [ "${BUILDTYPE:-}" = coverage ]
 then
     RUST_TOOLCHAIN=nightly-2021-03-01
 else

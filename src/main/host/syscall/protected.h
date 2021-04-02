@@ -64,7 +64,9 @@ struct _SysCallHandler {
 
     int referenceCount;
 
-    MAGIC_DECLARE;
+    // Since this structure is shared with Rust, we should always include the magic struct
+    // member so that the struct is always the same size regardless of compile-time options.
+    MAGIC_DECLARE_ALWAYS;
 };
 
 /* Amount of data to transfer between Shadow and the plugin for each

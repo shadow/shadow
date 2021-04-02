@@ -54,7 +54,9 @@ struct _LegacyDescriptor {
     GHashTable* listeners;
     gint referenceCount;
     gint flags;
-    MAGIC_DECLARE;
+    // Since this structure is shared with Rust, we should always include the magic struct
+    // member so that the struct is always the same size regardless of compile-time options.
+    MAGIC_DECLARE_ALWAYS;
 };
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_DESCRIPTOR_TYPES_H_ */

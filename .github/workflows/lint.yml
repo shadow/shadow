@@ -45,7 +45,6 @@ jobs:
       CONTAINER: ubuntu:20.04
       CC: clang
       CXX: clang++
-      BUILDTYPE: release
       RUSTPROFILE: minimal
     steps:
       - name: Install git
@@ -64,11 +63,19 @@ jobs:
           # when updating these versions, also update the versions in "docs/5-Developer-Guide.md"
           cargo install --force --version 0.18.0 cbindgen
           cargo install --force --version 0.57.0 bindgen
-      - name: Check bindings
+      - name: Check bindings (release)
         run: |
-          mkdir build
+          rm -rf build && mkdir build
+          (cd build && cmake --target bindings -DCMAKE_BUILD_TYPE=Release .. && make bindings)
+          git diff --exit-code
+      - name: Check bindings (debug)
+        run: |
+          rm -rf build && mkdir build
+          (cd build && cmake --target bindings -DCMAKE_BUILD_TYPE=Debug .. && make bindings)
+          git diff --exit-code
+      - name: Details
+        if: failure()
+        run: |
           cbindgen --version
           bindgen --version
           echo "If the bindings are different, you may want to check that your local cbindgen/bindgen versions match with the CI, and update the CI version numbers if necessary."
-          (cd build && cmake --target bindings .. && make bindings)
-          git diff --exit-code
