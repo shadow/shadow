@@ -109,6 +109,13 @@ struct _WorkerPool {
     /* Set of logical processors on which workers run */
     LogicalProcessors* logicalProcessors;
 
+    // Array of size lps_n(logicalProcessors) to hold the min event times for
+    // all workers. Since only one worker runs on an lp at a time, workers
+    // can write to the entry in this array corresponding to their assigned lp
+    // without using any locks. Computing the global minimum then only requires
+    // a linear scan of O(num_lps) instead of O(num_workers).
+    SimulationTime* minEventTimes;
+
     MAGIC_DECLARE;
 };
 
@@ -136,8 +143,13 @@ WorkerPool* workerpool_new(Manager* manager, Scheduler* scheduler, int nWorkers,
         .finishLatch = countdownlatch_new(nWorkers),
         .joined = FALSE,
         .logicalProcessors = lps_new(nLogicalProcessors),
+        .minEventTimes = g_new(SimulationTime, nLogicalProcessors),
     };
     MAGIC_INIT(pool);
+
+    for (int i = 0; i < nLogicalProcessors; ++i) {
+        pool->minEventTimes[i] = SIMTIME_MAX;
+    }
 
     if (nWorkers == 0) {
         // Create singleton worker object, which will run on this thread.
@@ -266,6 +278,7 @@ void workerpool_free(WorkerPool* pool) {
     g_clear_pointer(&pool->finishLatch, countdownlatch_free);
 
     g_clear_pointer(&pool->logicalProcessors, lps_free);
+    g_clear_pointer(&pool->minEventTimes, g_free);
 
     MAGIC_CLEAR(pool);
 }
@@ -320,6 +333,24 @@ static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerPool,
 
     // Set affinity of the worker thread to match that of the logical processor.
     affinity_setProcessAffinity(worker->nativeThreadID, newCpuId, oldCpuId);
+}
+
+SimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool) {
+    MAGIC_ASSERT(workerPool);
+
+    // Compute the min time for next round, and reset for the following round.
+    // This is called by a single thread in-between rounds while the workers
+    // are idle, so let's not do anything too expensive here.
+    SimulationTime minTime = SIMTIME_MAX;
+
+    for (int i = 0; i < lps_n(workerPool->logicalProcessors); ++i) {
+        if (workerPool->minEventTimes[i] < minTime) {
+            minTime = workerPool->minEventTimes[i];
+        }
+        workerPool->minEventTimes[i] = SIMTIME_MAX;
+    }
+
+    return minTime;
 }
 
 static __thread Worker* _threadWorker = NULL;
@@ -384,6 +415,29 @@ static void _worker_free(Worker* worker) {
 
     MAGIC_CLEAR(worker);
     g_free(worker);
+}
+
+void worker_setRoundEndTime(SimulationTime newRoundEndTime) {
+    Worker* worker = _worker_getPrivate();
+    MAGIC_ASSERT(worker);
+    worker->clock.barrier = newRoundEndTime;
+}
+
+void worker_setMinEventTimeNextRound(SimulationTime simtime) {
+    Worker* worker = _worker_getPrivate();
+    MAGIC_ASSERT(worker);
+
+    // If the event will be executed during *this* round, it should not
+    // be considered while computing the start time of the *next* round.
+    if (simtime < worker->clock.barrier) {
+        return;
+    }
+
+    // No need to lock: worker is the only one running on lpi right now.
+    int lpi = worker->logicalProcessorIdx;
+    if (simtime < worker->workerPool->minEventTimes[lpi]) {
+        worker->workerPool->minEventTimes[lpi] = simtime;
+    }
 }
 
 int worker_getAffinity() {
