@@ -25,7 +25,7 @@
 static int _syscallhandler_validateFileHelper(SysCallHandler* sys, int filefd,
                                               File** file_desc_out) {
     /* Check that fd is within bounds. */
-    if (filefd <= 0) {
+    if (filefd < 0) {
         info("descriptor %i out of bounds", filefd);
         return -EBADF;
     }

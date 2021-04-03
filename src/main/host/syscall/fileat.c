@@ -34,7 +34,7 @@ static int _syscallhandler_validateDirHelper(SysCallHandler* sys, int dirfd,
             *dir_desc_out = NULL;
         }
         return 0;
-    } else if (dirfd <= 0) {
+    } else if (dirfd < 0) {
         info("descriptor %i out of bounds", dirfd);
         return -EBADF;
     }

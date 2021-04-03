@@ -279,7 +279,7 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
     debug("Trying to close fd %i", fd);
 
     /* Check that fd is within bounds. */
-    if (fd <= 0) {
+    if (fd < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
