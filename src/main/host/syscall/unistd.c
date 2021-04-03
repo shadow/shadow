@@ -297,9 +297,33 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
 }
 
 SysCallReturn syscallhandler_dup(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
-    warning("Cannot dup legacy descriptors");
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EOPNOTSUPP};
+                                 const SysCallArgs* args) {
+    gint fd = args->args[0].as_i64;
+
+    debug("Trying to dup fd %i", fd);
+
+    LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
+    if (!desc) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
+    }
+
+    LegacyDescriptorType dType = descriptor_getType(desc);
+
+    if (dType != DT_FILE) {
+        warning("Cannot dup legacy non-regular-file descriptors");
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EOPNOTSUPP};
+    }
+
+    int dupError = 0;
+    File* newFile = file_dup((File*)desc, &dupError);
+
+    if (newFile == NULL) {
+        utility_assert(dupError < 0);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = dupError};
+    }
+
+    int handle = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)newFile);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = handle};
 }
 
 SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,

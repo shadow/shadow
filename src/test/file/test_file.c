@@ -175,7 +175,6 @@ static void _test_fscanf() {
     const char wbuf[] = "testfilefscanf";
     char rbuf[sizeof(wbuf)] = {0};
     FILE* file;
-    size_t rv;
     _set_contents(&adf, wbuf, sizeof(wbuf));
     assert_nonnull_errno(file = fopen(adf.name, "r"));
     assert_true_errno(fscanf(file, "%s", rbuf) != EOF);
@@ -257,6 +256,39 @@ static void _test_tmpfile() {
     g_assert_cmpstr(rbuf, ==, wbuf);
 
     assert_nonneg_errno(fclose(file));
+}
+
+static void _test_dup() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    char rbuf[3] = {0};
+    int fd, fd2;
+    ssize_t rv;
+
+    // write "aa" on original fd
+    assert_nonneg_errno(fd = open(adf.name, O_RDWR));
+    assert_nonneg_errno(rv = write(fd, "aa", 3));
+    g_assert_cmpint(rv, ==, 3);
+
+    // dup and write "bb" on new fd
+    assert_nonneg_errno(fd2 = dup(fd));
+    assert_nonneg_errno(rv = write(fd2, "bb", 3));
+    g_assert_cmpint(rv, ==, 3);
+
+    // reset the file offset for the original fd
+    lseek(fd, 0, SEEK_SET);
+
+    // read "aa" on new fd
+    assert_nonneg_errno(rv = read(fd2, rbuf, sizeof(rbuf)));
+    g_assert_cmpint(rv, ==, sizeof(rbuf));
+    g_assert_cmpstr(rbuf, ==, "aa");
+
+    // read "bb" on original fd
+    assert_nonneg_errno(rv = read(fd, rbuf, sizeof(rbuf)));
+    g_assert_cmpint(rv, ==, sizeof(rbuf));
+    g_assert_cmpstr(rbuf, ==, "bb");
+
+    assert_nonneg_errno(close(fd));
+    assert_nonneg_errno(close(fd2));
 }
 
 static void _test_iov() {
@@ -450,6 +482,7 @@ int main(int argc, char* argv[]) {
 
     g_test_add_func("/file/dir", _test_dir);
     g_test_add_func("/file/tmpfile", _test_tmpfile);
+    g_test_add_func("/file/dup", _test_dup);
 
     //    TODO: debug and fix iov test
     //    g_test_add_func("/file/iov", _test_iov);
