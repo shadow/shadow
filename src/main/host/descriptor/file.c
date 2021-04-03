@@ -235,6 +235,11 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
     }
 #endif
 
+    int fd = _file_getFD(file);
+    if (fd < 0) {
+        error("Cannot openat() on an unregistered descriptor object with fd %d", fd);
+    }
+
     /* The default case is a regular file. We do this first so that we have
      * an absolute path to compare for special files. */
     char* abspath = _file_getPath(file, dir, pathname, workingDir);
@@ -292,7 +297,8 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
     /* The os-backed file is now ready. */
     descriptor_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
-    return _file_getFD(file);
+    /* We checked above that fd is non-negative. */
+    return fd;
 }
 
 int file_open(File* file, const char* pathname, int flags, mode_t mode, const char* workingDir) {

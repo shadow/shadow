@@ -372,6 +372,9 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
 
     File* stdfile = file_new();
 
+    CompatDescriptor* compatDesc = compatdescriptor_fromLegacy((LegacyDescriptor*)stdfile);
+    descriptortable_set(proc->descTable, fd, compatDesc);
+
     char* cwd = getcwd(NULL, 0);
     if (!cwd) {
         error("getcwd unable to allocate string buffer, error %i: %s", errno, strerror(errno));
@@ -383,14 +386,9 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
 
     if (errcode < 0) {
         error("Opening %s: %s", fileName, strerror(-errcode));
-        /* Unref and free the file object. */
-        descriptor_close((LegacyDescriptor*)stdfile);
-    } else {
-        debug("Successfully opened fd %d at %s", fd, fileName);
-
-        CompatDescriptor* compatDesc = compatdescriptor_fromLegacy((LegacyDescriptor*)stdfile);
-        descriptortable_set(proc->descTable, fd, compatDesc);
     }
+
+    debug("Successfully opened fd %d at %s", fd, fileName);
 
     return stdfile;
 }
