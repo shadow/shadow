@@ -52,6 +52,23 @@ void workerpool_joinAll(WorkerPool* pool);
 void workerpool_free(WorkerPool* pool);
 pthread_t workerpool_getThread(WorkerPool* pool, int threadId);
 
+// Compute the global min event time across all workers. We dynamically compute
+// the minimum time that we'll need for the next event round as the minimum of
+// i.) all events pushed by all workers during this round, and
+// ii.) the next queued event for all worker at the point when they stop
+// executing events.
+//
+// This func is not thread safe, so only call from the scheduler thread when the
+// workers are idle.
+SimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool);
+
+// The worker either pushed an event or finished executing its events and is
+// reporting the min time of events in their event queue.
+void worker_setMinEventTimeNextRound(SimulationTime simtime);
+
+// When a new scheduling round starts, set the end time of the new round.
+void worker_setRoundEndTime(SimulationTime newRoundEndTime);
+
 int worker_getAffinity();
 DNS* worker_getDNS();
 Topology* worker_getTopology();

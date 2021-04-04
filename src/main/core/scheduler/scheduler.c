@@ -79,11 +79,24 @@ static void _scheduler_startHostsWorkerTaskFn(void* voidScheduler) {
 
 static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
     Scheduler* scheduler = voidScheduler;
+
+    // Reset the round end time before starting the new round.
+    worker_setRoundEndTime(scheduler->currentRound.endTime);
+
     Event* event = NULL;
     while ((event = scheduler->policy->pop(
                 scheduler->policy, scheduler->currentRound.endTime)) != NULL) {
         worker_runEvent(event);
     }
+
+    // Gets the time of the event at the head of the event queue right now.
+    SimulationTime minQTime = scheduler->policy->getNextTime(scheduler->policy);
+
+    // We'll compute the global min time across all workers.
+    worker_setMinEventTimeNextRound(minQTime);
+
+    // Clear all log messages we queued during this round.
+    shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
 }
 
 static void _scheduler_finishTaskFn(void* voidScheduler) {
@@ -254,24 +267,12 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
     /* push to a queue based on the policy */
     scheduler->policy->push(scheduler->policy, event, sender, receiver, scheduler->currentRound.endTime);
 
+    // Store the minimum time of events that we are pushing between hosts. The
+    // push operation may adjust the event time, so make sure we call this after
+    // the push.
+    worker_setMinEventTimeNextRound(event_getTime(event));
+
     return TRUE;
-}
-
-static void _scheduler_collectInfoWorkerTask(void* voidScheduler) {
-    Scheduler* scheduler = voidScheduler;
-    MAGIC_ASSERT(scheduler);
-
-    if (scheduler->policy->getNextTime) {
-        SimulationTime nextTime =
-            scheduler->policy->getNextTime(scheduler->policy);
-        g_mutex_lock(&(scheduler->globalLock));
-        scheduler->currentRound.minNextEventTime =
-            MIN(scheduler->currentRound.minNextEventTime, nextTime);
-        g_mutex_unlock(&(scheduler->globalLock));
-    }
-
-    /* clear all log messages from the last round */
-    shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
 }
 
 void scheduler_addHost(Scheduler* scheduler, Host* host) {
@@ -460,17 +461,12 @@ SimulationTime scheduler_awaitNextRound(Scheduler* scheduler) {
     // Await completion of _scheduler_runEventsWorkerTaskFn
     workerpool_awaitTaskFn(scheduler->workerPool);
 
-    // XXX Can we merge this into the execution task? e.g. track event times as
-    // we're scheduling them?
-    workerpool_startTaskFn(scheduler->workerPool,
-                           _scheduler_collectInfoWorkerTask, scheduler);
-    workerpool_awaitTaskFn(scheduler->workerPool);
+    // Workers are done running the round and waiting to get woken up, so we can
+    // safely read memory without a lock to compute the min next event time.
+    scheduler->currentRound.minNextEventTime =
+        workerpool_getGlobalNextEventTime(scheduler->workerPool);
 
-    SimulationTime minNextEventTime = SIMTIME_MAX;
-    g_mutex_lock(&scheduler->globalLock);
-    minNextEventTime = scheduler->currentRound.minNextEventTime;
-    g_mutex_unlock(&scheduler->globalLock);
-    return minNextEventTime;
+    return scheduler->currentRound.minNextEventTime;
 }
 
 void scheduler_finish(Scheduler* scheduler) {
