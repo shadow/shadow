@@ -25,7 +25,6 @@ struct _Options {
     gchar* heartbeatLogLevelInput;
     gchar* heartbeatLogInfo;
     gchar* preloads;
-    gboolean runValgrind;
     gboolean debug;
     gchar* dataDirPath;
     gchar* dataTemplatePath;
@@ -130,8 +129,6 @@ Options* options_new(gint argc, gchar* argv[]) {
          "Which interposition method to use ('hybrid', 'preload', 'ptrace') ['ptrace']", "METHOD"},
         {"workers", 'w', 0, G_OPTION_ARG_INT, &(options->nWorkerThreads),
          "Run concurrently with N worker threads [0]", "N"},
-        {"valgrind", 'x', 0, G_OPTION_ARG_NONE, &(options->runValgrind),
-         "Run through valgrind for debugging", NULL},
         {"version", 'v', 0, G_OPTION_ARG_NONE, &(options->printSoftwareVersion),
          "Print software version and exit", NULL},
         {"pin-cpus", 'z', 0, G_OPTION_ARG_NONE, &(options->pinCPUs), "Use experimental CPU pinning",
@@ -394,11 +391,6 @@ guint options_getRandomSeed(Options* options) {
 gboolean options_doRunPrintVersion(Options* options) {
     MAGIC_ASSERT(options);
     return options->printSoftwareVersion;
-}
-
-gboolean options_doRunValgrind(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->runValgrind;
 }
 
 gboolean options_doRunDebug(Options* options) {
