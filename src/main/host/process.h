@@ -130,7 +130,7 @@ void* process_getWriteablePtr(Process* proc, Thread* thread, PluginPtr plugin_sr
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getMutablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n);
 
-// Flushes and invalidates all previously returned readable/writeable plugin
+// Flushes and invalidates all previously returned readable/writable plugin
 // pointers, as if returning control to the plugin. This can be useful in
 // conjunction with `thread_nativeSyscall` operations that touch memory.
 void process_flushPtrs(Process* proc, Thread* thread);

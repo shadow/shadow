@@ -78,6 +78,7 @@ struct _Worker {
     struct {
         Host* host;
         Process* process;
+        Thread* thread;
     } active;
 
     SimulationTime bootstrapEndTime;
@@ -726,6 +727,23 @@ void worker_setActiveProcess(Process* proc) {
     }
 }
 
+Thread* worker_getActiveThread() {
+    Worker* worker = _worker_getPrivate();
+    return worker->active.thread;
+}
+
+void worker_setActiveThread(Thread* thread) {
+    Worker* worker = _worker_getPrivate();
+    if (worker->active.thread) {
+        thread_unref(worker->active.thread);
+        worker->active.thread = NULL;
+    }
+    if (thread) {
+        thread_ref(thread);
+        worker->active.thread = thread;
+    }
+}
+
 Host* worker_getActiveHost() {
     Worker* worker = _worker_getPrivate();
     return worker->active.host;
@@ -866,4 +884,14 @@ gboolean worker_isBootstrapActive() {
     } else {
         return FALSE;
     }
+}
+
+int worker_readPtr(void* dst, PluginVirtualPtr src, size_t n) {
+    Worker* worker = _worker_getPrivate();
+    return process_readPtr(worker->active.process, worker->active.thread, dst, src, n);
+}
+
+int worker_writePtr(PluginVirtualPtr dst, void* src, size_t n) {
+    Worker* worker = _worker_getPrivate();
+    return process_writePtr(worker->active.process, worker->active.thread, dst, src, n);
 }

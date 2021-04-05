@@ -96,11 +96,22 @@ Host* worker_getActiveHost();
 void worker_setActiveHost(Host* host);
 Process* worker_getActiveProcess();
 void worker_setActiveProcess(Process* proc);
+Thread* worker_getActiveThread();
+void worker_setActiveThread(Thread* thread);
 
 void worker_incrementPluginError();
 
 Address* worker_resolveIPToAddress(in_addr_t ip);
 Address* worker_resolveNameToAddress(const gchar* name);
+
+// Copy `n` bytes from `src` in the current active Process to `dst`. Returns 0
+// on success or EFAULT if any of the specified range couldn't be accessed.
+int worker_readPtr(void* dst, PluginVirtualPtr src, size_t n);
+
+// Copy `n` bytes from `src` to `dst` in the current active Process. Returns 0
+// on success or EFAULT if any of the specified range couldn't be accessed. The
+// write is flushed immediately.
+int worker_writePtr(PluginVirtualPtr dst, void* src, size_t n);
 
 // Implementation for counting allocated objects. Do not use this function directly.
 // Use worker_count_allocation instead from the call site.
