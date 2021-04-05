@@ -402,6 +402,19 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
         HostStealThreadData* stolenTdata = g_array_index(data->threadList, HostStealThreadData*, stolenTnumber);
         g_rw_lock_reader_unlock(&data->lock);
 
+        // We only need to spin if the other thread has not yet initialized for
+        // this round.
+        g_mutex_lock(&(stolenTdata->lock));
+        gboolean spinForInit = barrier > stolenTdata->currentBarrier;
+        if (spinForInit) {
+            // They still have not initialized yet.
+            // Make sure the atomic is set to false so we'll detect the flip to
+            // true
+            __atomic_store_n(&stolenTdata->isStealable, false,
+                             __ATOMIC_RELEASE);
+        }
+        g_mutex_unlock(&(stolenTdata->lock));
+
         /* Make sure the workload has been updated for this round.
          * This boolean is preventing race conditions upon the start of each round.
          * Since we don't expect it to take long for the other threads to run
@@ -413,9 +426,12 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
          * performance even without the realtime scheduler, despite incurring
          * the overhead of a syscall.
          */
-        while (!__atomic_load_n(&stolenTdata->isStealable, __ATOMIC_ACQUIRE)) {
-            sched_yield();
-        };
+        if (spinForInit) {
+            while (
+                !__atomic_load_n(&stolenTdata->isStealable, __ATOMIC_ACQUIRE)) {
+                sched_yield();
+            };
+        }
 
         /* We don't need a lock here, because we're only reading, and a misread just means either
          * we read as empty when it's not, in which case the assigned thread (or one of the others)
@@ -496,9 +512,6 @@ static SimulationTime _schedulerpolicyhoststeal_getNextTime(SchedulerPolicy* pol
         /* make sure we get all hosts, which are probably held in the processedHosts queue between rounds */
         g_queue_foreach(tdata->unprocessedHosts, (GFunc)_schedulerpolicyhoststeal_findMinTime, &searchState);
         g_queue_foreach(tdata->processedHosts, (GFunc)_schedulerpolicyhoststeal_findMinTime, &searchState);
-
-        /* since we are in-between rounds, reset our stealable flag */
-        __atomic_store_n(&tdata->isStealable, false, __ATOMIC_RELEASE);
     }
 
     info("next event at time %"G_GUINT64_FORMAT, searchState.nextEventTime);
