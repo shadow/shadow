@@ -107,7 +107,6 @@ guint options_getNWorkerThreads(Options* options);
 
 const gchar* options_getArgumentString(Options* options);
 const gchar* options_getHeartbeatLogInfoString(Options* options);
-const gchar* options_getPreloadString(Options* options);
 guint options_getRandomSeed(Options* options);
 
 gboolean options_shouldExitAfterShmCleanup(Options* options);

@@ -24,7 +24,6 @@ struct _Options {
     guint heartbeatInterval;
     gchar* heartbeatLogLevelInput;
     gchar* heartbeatLogInfo;
-    gchar* preloads;
     gboolean debug;
     gchar* dataDirPath;
     gchar* dataTemplatePath;
@@ -108,9 +107,6 @@ Options* options_new(gint argc, gchar* argv[]) {
          "Log LEVEL above which to filter messages ('error' < 'critical' < 'warning' < 'message' < "
          "'info' < 'debug') ['message']",
          "LEVEL"},
-        {"preload", 'p', 0, G_OPTION_ARG_STRING, &(options->preloads),
-         "LD_PRELOAD environment VALUE to use for function interposition (/path/to/lib:...) [None]",
-         "VALUE"},
         {"runahead", 'r', 0, G_OPTION_ARG_INT, &(options->minRunAhead),
          "If set, overrides the automatically calculated minimum TIME workers may run ahead when "
          "sending events between nodes, in milliseconds [0]",
@@ -262,9 +258,6 @@ void options_free(Options* options) {
     if(options->argstr) {
         g_free(options->argstr);
     }
-    if(options->preloads) {
-        g_free(options->preloads);
-    }
     if(options->dataDirPath != NULL) {
         g_free(options->dataDirPath);
     }
@@ -383,11 +376,6 @@ gboolean options_doRunDebug(Options* options) {
 gboolean options_shouldExitAfterShmCleanup(Options* options) {
     MAGIC_ASSERT(options);
     return options->shouldExitAfterShmCleanup;
-}
-
-const gchar* options_getPreloadString(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->preloads;
 }
 
 gint options_getMinRunAhead(Options* options) {
