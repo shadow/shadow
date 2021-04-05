@@ -79,8 +79,12 @@ pub fn dup_helper(
 ) -> c::SysCallReturn {
     debug!("Duping fd {} ({:?})", fd, desc);
 
-    // clone the descriptor and register it
-    let new_desc = CompatDescriptor::New(desc.clone());
+    // clone the descriptor (but not the flags)
+    let mut new_desc = desc.clone();
+    new_desc.set_flags(DescriptorFlags::empty());
+
+    // register the descriptor
+    let new_desc = CompatDescriptor::New(new_desc);
     let new_fd = unsafe {
         c::process_registerCompatDescriptor(
             sys.process,

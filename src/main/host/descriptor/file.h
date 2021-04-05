@@ -39,6 +39,7 @@ typedef struct _File File;
 // ************************
 
 File* file_new(); // Close the file with descriptor_close()
+File* file_dup(File* file, int* dupError);
 int file_open(File* file, const char* pathname, int flags, mode_t mode, const char* workingDir);
 int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t mode,
                 const char* workingDir);

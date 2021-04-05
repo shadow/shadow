@@ -149,6 +149,38 @@ File* file_new() {
     return file;
 }
 
+File* file_dup(File* file, int* dupError) {
+    MAGIC_ASSERT(file);
+
+    int newFd;
+
+    // only dup the os fd if it's valid
+    if (file->osfile.fd >= 0) {
+        newFd = dup(file->osfile.fd);
+
+        if (newFd < 0) {
+            *dupError = errno;
+            return NULL;
+        }
+    } else {
+        newFd = file->osfile.fd;
+    }
+
+    File* newFile = file_new();
+
+    newFile->type = file->type;
+
+    newFile->osfile.fd = newFd;
+    newFile->osfile.flags = file->osfile.flags;
+    newFile->osfile.mode = file->osfile.mode;
+    newFile->osfile.abspath = strdup(file->osfile.abspath);
+
+    // CLOEXEC is a descriptor flag and it is not copied during a dup()
+    newFile->osfile.flags &= ~O_CLOEXEC;
+
+    return newFile;
+}
+
 static char* _file_getConcatStr(const char* prefix, const char sep, const char* suffix) {
     char* path = NULL;
     if (asprintf(&path, "%s%c%s", prefix, sep, suffix) < 0) {
@@ -235,6 +267,11 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
     }
 #endif
 
+    int fd = _file_getFD(file);
+    if (fd < 0) {
+        error("Cannot openat() on an unregistered descriptor object with fd %d", fd);
+    }
+
     /* The default case is a regular file. We do this first so that we have
      * an absolute path to compare for special files. */
     char* abspath = _file_getPath(file, dir, pathname, workingDir);
@@ -292,7 +329,8 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
     /* The os-backed file is now ready. */
     descriptor_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
-    return _file_getFD(file);
+    /* We checked above that fd is non-negative. */
+    return fd;
 }
 
 int file_open(File* file, const char* pathname, int flags, mode_t mode, const char* workingDir) {

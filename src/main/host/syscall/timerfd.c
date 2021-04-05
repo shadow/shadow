@@ -23,7 +23,7 @@
 static int _syscallhandler_validateTimerHelper(SysCallHandler* sys, int tfd,
                                                Timer** timer_desc_out) {
     /* Check that fd is within bounds. */
-    if (tfd <= 0) {
+    if (tfd < 0) {
         info("descriptor %i out of bounds", tfd);
         return -EBADF;
     }
