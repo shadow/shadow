@@ -118,9 +118,7 @@ gboolean options_doRunTGenExample(Options* options);
 gboolean options_doRunTestExample(Options* options);
 
 gint options_getMinRunAhead(Options* options);
-gint options_getTCPWindow(Options* options);
 const gchar* options_getTCPCongestionControl(Options* options);
-gint options_getTCPSlowStartThreshold(Options* options);
 SimulationTime options_getInterfaceBatchTime(Options* options);
 gint options_getInterfaceBufferSize(Options* options);
 gint options_getSocketReceiveBufferSize(Options* options);

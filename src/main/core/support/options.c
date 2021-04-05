@@ -33,7 +33,6 @@ struct _Options {
 
     GOptionGroup* networkOptionGroup;
     gint minRunAhead;
-    gint initialTCPWindow;
     gint interfaceBufferSize;
     gint initialSocketReceiveBufferSize;
     gint initialSocketSendBufferSize;
@@ -44,7 +43,6 @@ struct _Options {
     gchar* interposeMethod;
     SimulationTime interfaceBatchTime;
     gchar* tcpCongestionControl;
-    gint tcpSlowStartThreshold;
 
     GOptionGroup* pluginsOptionGroup;
     gboolean runTGenExample;
@@ -84,7 +82,6 @@ Options* options_new(gint argc, gchar* argv[]) {
         "efficiency and control of simulation, achieving the best of both approaches.");
 
     /* set defaults */
-    options->initialTCPWindow = 10;
     options->interfaceBufferSize = 1024000;
     options->interfaceBatchTime = 5000;
     options->randomSeed = 1;
@@ -172,8 +169,6 @@ Options* options_new(gint argc, gchar* argv[]) {
       { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(options->initialSocketReceiveBufferSize), sockrecv->str, "N" },
       { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(options->initialSocketSendBufferSize), socksend->str, "N" },
       { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(options->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['reno']", "TCPCC" },
-      { "tcp-ssthresh", 0, 0, G_OPTION_ARG_INT, &(options->tcpSlowStartThreshold), "Set TCP ssthresh value instead of discovering it via packet loss or hystart [0]", "N" },
-      { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(options->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
       { NULL },
     };
 
@@ -228,9 +223,6 @@ Options* options_new(gint argc, gchar* argv[]) {
     }
     if(options->heartbeatInterval < 1) {
         options->heartbeatInterval = 1;
-    }
-    if(options->initialTCPWindow < 1) {
-        options->initialTCPWindow = 1;
     }
     if(options->interfaceBufferSize < CONFIG_MTU) {
         options->interfaceBufferSize = CONFIG_MTU;
@@ -439,19 +431,9 @@ gint options_getMinRunAhead(Options* options) {
     return options->minRunAhead;
 }
 
-gint options_getTCPWindow(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->initialTCPWindow;
-}
-
 const gchar* options_getTCPCongestionControl(Options* options) {
     MAGIC_ASSERT(options);
     return options->tcpCongestionControl;
-}
-
-gint options_getTCPSlowStartThreshold(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->tcpSlowStartThreshold;
 }
 
 SimulationTime options_getInterfaceBatchTime(Options* options) {

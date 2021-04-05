@@ -2554,9 +2554,9 @@ TCP* tcp_new(guint receiveBufferSize, guint sendBufferSize) {
                 sendBufferSize);
 
     Options* options = worker_getOptions();
-    guint32 initial_window = options_getTCPWindow(options);
+    guint32 initial_window = 10;
     const gchar* tcpCC = options_getTCPCongestionControl(options);
-    gint tcpSSThresh = options_getTCPSlowStartThreshold(options);
+    gint tcpSSThresh = 0;
 
     TCPCongestionType congestionType = tcpCongestion_getType(tcpCC);
 
