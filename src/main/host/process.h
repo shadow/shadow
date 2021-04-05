@@ -104,6 +104,14 @@ LegacyDescriptor* process_getRegisteredLegacyDescriptor(Process* proc, int handl
 // Convert a virtual ptr in the plugin address space to a globally unique physical ptr
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr);
 
+// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
+// the specified range couldn't be accessed.
+int process_readPtr(Process* proc, Thread* thread, void* dst, PluginVirtualPtr src, size_t n);
+
+// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
+// the specified range couldn't be accessed. The write is flushed immediately.
+int process_writePtr(Process* proc, Thread* thread, PluginVirtualPtr dst, void* src, size_t n);
+
 // Make the data at plugin_src available in shadow's address space.
 //
 // The returned pointer is read-only, and is automatically invalidated when the

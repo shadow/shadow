@@ -351,6 +351,30 @@ extern "C" {
     pub fn thread_getReturnCode(thread: *mut Thread) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn thread_readPtr(
+        thread: *mut Thread,
+        dst: *mut ::std::os::raw::c_void,
+        src: PluginVirtualPtr,
+        n: size_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn thread_readStringPtr(
+        base: *mut Thread,
+        dst: *mut ::std::os::raw::c_char,
+        src: PluginVirtualPtr,
+        n: size_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn thread_writePtr(
+        thread: *mut Thread,
+        dst: PluginVirtualPtr,
+        src: *mut ::std::os::raw::c_void,
+        n: size_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn thread_getReadablePtr(
         thread: *mut Thread,
         plugin_src: PluginPtr,

@@ -269,9 +269,7 @@ static ShimSharedMem* _threadptrace_sharedMem(ThreadPtrace* thread) {
 }
 
 // Forward declaration.
-static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
-                                         PluginPtr plugin_dst, void* shadow_src,
-                                         size_t n);
+static int _threadptrace_writePtr(Thread* thread, PluginPtr plugin_dst, void* shadow_src, size_t n);
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                         size_t n);
 static void _threadptrace_ensureStopped(ThreadPtrace* thread);
@@ -866,8 +864,7 @@ static void _threadptrace_flushPtrs(ThreadPtrace* thread) {
         for (int i = 0; i < thread->pendingWrites->len; ++i) {
             PendingWrite* write =
                 &g_array_index(thread->pendingWrites, PendingWrite, i);
-            _threadptrace_memcpyToPlugin(
-                thread, write->pluginPtr, write->ptr, write->n);
+            _threadptrace_writePtr(&thread->base, write->pluginPtr, write->ptr, write->n);
             g_free(write->ptr);
         }
         thread->pendingWrites = g_array_set_size(thread->pendingWrites, 0);
@@ -1269,36 +1266,42 @@ static void _threadptrace_ensureStopped(ThreadPtrace* thread) {
     }
 }
 
-static void _threadptrace_memcpyToShadow(ThreadPtrace* thread, void* shadow_dst,
-                                         PluginPtr plugin_src, size_t n) {
+static int _threadptrace_readPtr(Thread* base, void* shadow_dst, PluginPtr plugin_src, size_t n) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
     clearerr(thread->childMemFile);
     if (fseek(thread->childMemFile, plugin_src.val, SEEK_SET) < 0) {
-        error("fseek %p: %s", (void*)plugin_src.val, g_strerror(errno));
-        return;
+        warning("fseek %p: %s", (void*)plugin_src.val, g_strerror(errno));
+        return EFAULT;
     }
     size_t count = fread(shadow_dst, 1, n, thread->childMemFile);
     if (count != n) {
         if (feof(thread->childMemFile)) {
-            error("EOF");
-            return;
+            warning("fread: EOF");
+        } else {
+            warning("fread: %zu -> %zu: %s", n, count, g_strerror(errno));
         }
-        error("fread %zu -> %zu: %s", n, count, g_strerror(errno));
+        return EFAULT;
     }
-    return;
+    return 0;
 }
 
-static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
-                                         PluginPtr plugin_dst, void* shadow_src,
-                                         size_t n) {
+static int _threadptrace_writePtr(Thread* base, PluginVirtualPtr plugin_dst, void* shadow_src,
+                                  size_t n) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
     if (fseek(thread->childMemFile, plugin_dst.val, SEEK_SET) < 0) {
-        error("fseek %p: %s", (void*)plugin_dst.val, g_strerror(errno));
-        return;
+        warning("fseek %p: %s", (void*)plugin_dst.val, g_strerror(errno));
+        return EFAULT;
     }
     size_t count = fwrite(shadow_src, 1, n, thread->childMemFile);
     if (count != n) {
-        error("fwrite %zu -> %zu: %s", n, count, g_strerror(errno));
+        warning("fwrite %zu -> %zu: %s", n, count, g_strerror(errno));
+        return EFAULT;
     }
-    return;
+    if (fflush(thread->childMemFile) != 0) {
+        warning("fflush: %s", g_strerror(errno));
+        return EFAULT;
+    }
+    return 0;
 }
 
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
@@ -1306,7 +1309,7 @@ const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     void* rv = g_new(void, n);
     g_array_append_val(thread->readPointers, rv);
-    _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
+    _threadptrace_readPtr(base, rv, plugin_src, n);
     return rv;
 }
 
@@ -1351,6 +1354,32 @@ int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
     return 0;
 }
 
+static int _threadptrace_readStringPtr(Thread* base, char* dst, PluginVirtualPtr plugin_src,
+                                       size_t n) {
+    ThreadPtrace* thread = _threadToThreadPtrace(base);
+
+    clearerr(thread->childMemFile);
+    if (fseek(thread->childMemFile, plugin_src.val, SEEK_SET) < 0) {
+        warning("fseek %p: %s", (void*)plugin_src.val, g_strerror(errno));
+        return EFAULT;
+    }
+    size_t count = 0;
+    int c;
+    while (true) {
+        if (count >= n) {
+            return ENAMETOOLONG;
+        }
+        c = fgetc(thread->childMemFile);
+        if (c == EOF) {
+            return EFAULT;
+        }
+        dst[count++] = c;
+        if (c == '\0') {
+            return 0;
+        }
+    }
+}
+
 void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
                                    size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
@@ -1363,7 +1392,7 @@ void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
 void* threadptrace_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     void* rv = g_new(void, n);
-    _threadptrace_memcpyToShadow(thread, rv, plugin_src, n);
+    _threadptrace_readPtr(&thread->base, rv, plugin_src, n);
     PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
     g_array_append_val(thread->pendingWrites, pendingWrite);
     return rv;
@@ -1535,6 +1564,9 @@ Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
                                   .clone = threadptrace_clone,
                                   .getIPCBlock = _threadptrace_getIPCBlock,
                                   .getShMBlock = _threadptrace_getShMBlock,
+                                  .readPtr = _threadptrace_readPtr,
+                                  .readStringPtr = _threadptrace_readStringPtr,
+                                  .writePtr = _threadptrace_writePtr,
                               }),
         // FIXME: This should the emulated CPU's frequency
         .tsc = {.cyclesPerSecond = 2000000000UL},
