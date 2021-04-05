@@ -83,7 +83,6 @@ struct _ConfigurationHostElement {
     ConfigurationStringAttribute heartbeatloglevel;
     ConfigurationStringAttribute heartbeatloginfo;
     ConfigurationIntegerAttribute heartbeatfrequency;
-    ConfigurationIntegerAttribute cpufrequency;
     ConfigurationStringAttribute logpcap;
     ConfigurationStringAttribute pcapdir;
 };

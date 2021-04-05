@@ -348,20 +348,16 @@ static void _controller_registerHostCallback(ConfigurationHostElement* he, Contr
         }
         params->hostname = hostnameBuffer->str;
 
-        /* cpu params - if they didnt specify a CPU frequency, use the manager machine frequency */
+        /* cpu params - use the manager machine frequency */
         gint managerCPUFreq = manager_getRawCPUFrequency(controller->manager);
-        params->cpuFrequency = he->cpufrequency.isSet
-                                   ? he->cpufrequency.integer
-                                   : (managerCPUFreq > 0) ? (guint64)managerCPUFreq : 0;
+        params->cpuFrequency = (managerCPUFreq > 0) ? (guint64)managerCPUFreq : 0;
         if (params->cpuFrequency == 0) {
             params->cpuFrequency = 2500000; // 2.5 GHz
             debug("both configured and raw manager cpu frequencies unavailable, using 2500000 KHz");
         }
 
-        gint defaultCPUThreshold = options_getCPUThreshold(controller->options);
-        params->cpuThreshold = defaultCPUThreshold > 0 ? defaultCPUThreshold : 0;
-        gint defaultCPUPrecision = options_getCPUPrecision(controller->options);
-        params->cpuPrecision = defaultCPUPrecision > 0 ? defaultCPUPrecision : 0;
+        params->cpuThreshold = 0;
+        params->cpuPrecision = 200;
 
         params->logLevel = he->loglevel.isSet ? loglevel_fromStr(he->loglevel.string->str)
                                               : options_getLogLevel(controller->options);

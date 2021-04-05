@@ -32,8 +32,6 @@ struct _Options {
     gboolean shouldExitAfterShmCleanup;
 
     GOptionGroup* networkOptionGroup;
-    gint cpuThreshold;
-    gint cpuPrecision;
     gint minRunAhead;
     gint initialTCPWindow;
     gint interfaceBufferSize;
@@ -90,8 +88,6 @@ Options* options_new(gint argc, gchar* argv[]) {
     options->interfaceBufferSize = 1024000;
     options->interfaceBatchTime = 5000;
     options->randomSeed = 1;
-    options->cpuThreshold = -1;
-    options->cpuPrecision = 200;
     options->heartbeatInterval = 1;
     options->shouldExitAfterShmCleanup = FALSE;
 
@@ -170,8 +166,6 @@ Options* options_new(gint argc, gchar* argv[]) {
     options->networkOptionGroup = g_option_group_new("sys", "System Options", "Simulated system/network behavior", NULL, NULL);
     const GOptionEntry networkEntries[] =
     {
-      { "cpu-precision", 0, 0, G_OPTION_ARG_INT, &(options->cpuPrecision), "round measured CPU delays to the nearest TIME, in microseconds (negative value to disable fuzzy CPU delays) [200]", "TIME" },
-      { "cpu-threshold", 0, 0, G_OPTION_ARG_INT, &(options->cpuThreshold), "TIME delay threshold after which the CPU becomes blocked, in microseconds (negative value to disable CPU delays) (experimental!) [-1]", "TIME" },
       { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(options->interfaceBatchTime), "Batch TIME for network interface sends and receives, in microseconds [5000]", "TIME" },
       { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(options->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
       { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(options->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
@@ -438,16 +432,6 @@ gboolean options_doRunTestExample(Options* options) {
 const gchar* options_getPreloadString(Options* options) {
     MAGIC_ASSERT(options);
     return options->preloads;
-}
-
-gint options_getCPUThreshold(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->cpuThreshold;
-}
-
-gint options_getCPUPrecision(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->cpuPrecision;
 }
 
 gint options_getMinRunAhead(Options* options) {

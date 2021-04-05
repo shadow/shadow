@@ -117,9 +117,6 @@ gboolean options_doRunDebug(Options* options);
 gboolean options_doRunTGenExample(Options* options);
 gboolean options_doRunTestExample(Options* options);
 
-gint options_getCPUThreshold(Options* options);
-gint options_getCPUPrecision(Options* options);
-
 gint options_getMinRunAhead(Options* options);
 gint options_getTCPWindow(Options* options);
 const gchar* options_getTCPCongestionControl(Options* options);
