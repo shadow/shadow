@@ -113,8 +113,6 @@ guint options_getRandomSeed(Options* options);
 gboolean options_shouldExitAfterShmCleanup(Options* options);
 gboolean options_doRunPrintVersion(Options* options);
 gboolean options_doRunDebug(Options* options);
-gboolean options_doRunTGenExample(Options* options);
-gboolean options_doRunTestExample(Options* options);
 
 gint options_getMinRunAhead(Options* options);
 const gchar* options_getTCPCongestionControl(Options* options);

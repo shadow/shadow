@@ -22,7 +22,6 @@
 #include "main/core/manager.h"
 #include "main/core/support/configuration.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/examples.h"
 #include "main/core/support/options.h"
 #include "main/host/host.h"
 #include "main/routing/address.h"
@@ -165,30 +164,25 @@ static gboolean _controller_loadConfiguration(Controller* controller) {
 
     /* parse built-in examples, or input files */
     GString* file = NULL;
-    // add options_doRunTGenExample() option
-    if (options_doRunTestExample(controller->options)) {
-        /* parse a built-in example */
-        file = example_getTestContents();
-    } else {
-        /* parse Shadow XML config file */
-        const GString* fileName = options_getInputXMLFilename(controller->options);
-        if (!fileName) {
-            critical("unable to obtain the name for the configuration file");
-            return FALSE;
-        }
 
-        // Read config from file or stdin
-        if (0 == g_strcmp0("-", fileName->str)) {
-            file = utility_getFileContents("/dev/stdin");
-        } else {
-            file = utility_getFileContents(fileName->str);
-        }
+	/* parse Shadow XML config file */
+	const GString* fileName = options_getInputXMLFilename(controller->options);
+	if (!fileName) {
+		critical("unable to obtain the name for the configuration file");
+		return FALSE;
+	}
 
-        if (!file) {
-            critical("unable to read configuration file contents");
-            return FALSE;
-        }
-    }
+	// Read config from file or stdin
+	if (0 == g_strcmp0("-", fileName->str)) {
+		file = utility_getFileContents("/dev/stdin");
+	} else {
+		file = utility_getFileContents(fileName->str);
+	}
+
+	if (!file) {
+		critical("unable to read configuration file contents");
+		return FALSE;
+	}
 
     if (file) {
         controller->config = configuration_new(controller->options, file);

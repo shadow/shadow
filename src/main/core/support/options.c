@@ -43,10 +43,6 @@ struct _Options {
     SimulationTime interfaceBatchTime;
     gchar* tcpCongestionControl;
 
-    GOptionGroup* pluginsOptionGroup;
-    gboolean runTGenExample;
-    gboolean runTestExample;
-
     gboolean pinCPUs;
 
     GString* inputXMLFilename;
@@ -139,18 +135,6 @@ Options* options_new(gint argc, gchar* argv[]) {
     g_option_group_add_entries(options->mainOptionGroup, mainEntries);
     g_option_context_set_main_group(options->context, options->mainOptionGroup);
 
-    /* now fill in the default plug-in examples option group */
-    options->pluginsOptionGroup = g_option_group_new("sim", "Simulation Examples", "Built-in simulation examples", NULL, NULL);
-    const GOptionEntry pluginEntries[] =
-    {
-      { "test", 0, 0, G_OPTION_ARG_NONE, &(options->runTestExample), "Run basic benchmark tests", NULL },
-      { "tgen", 0, 0, G_OPTION_ARG_NONE, &(options->runTGenExample), "PLACEHOLDER - Run basic data transfer simulation", NULL },
-      { NULL },
-    };
-
-    g_option_group_add_entries(options->pluginsOptionGroup, pluginEntries);
-    g_option_context_add_group(options->context, options->pluginsOptionGroup);
-
     /* now fill in the network option group */
     GString* sockrecv = g_string_new("");
     g_string_printf(sockrecv, "Initialize the socket receive buffer to N bytes [%i]", (gint)CONFIG_RECV_BUFFER_SIZE);
@@ -194,12 +178,10 @@ Options* options_new(gint argc, gchar* argv[]) {
     /* make sure we have the required arguments. program name is first arg.
      * printing the software version requires no other args. running a
      * plug-in example also requires no other args. */
-    if (!(options->printSoftwareVersion) &&
-        !(options->shouldExitAfterShmCleanup) && !(options->runTGenExample) &&
-        !(options->runTestExample) && (argc != nRequiredXMLFiles + 1)) {
+    if (!(options->printSoftwareVersion) && !(options->shouldExitAfterShmCleanup) &&
+        (argc != nRequiredXMLFiles + 1)) {
         g_printerr("** Please provide the required parameters **\n");
-        gchar* helpString =
-            g_option_context_get_help(options->context, TRUE, NULL);
+        gchar* helpString = g_option_context_get_help(options->context, TRUE, NULL);
         g_printerr("%s", helpString);
         g_free(helpString);
         options_free(options);
@@ -401,16 +383,6 @@ gboolean options_doRunDebug(Options* options) {
 gboolean options_shouldExitAfterShmCleanup(Options* options) {
     MAGIC_ASSERT(options);
     return options->shouldExitAfterShmCleanup;
-}
-
-gboolean options_doRunTGenExample(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->runTGenExample;
-}
-
-gboolean options_doRunTestExample(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->runTestExample;
 }
 
 const gchar* options_getPreloadString(Options* options) {
