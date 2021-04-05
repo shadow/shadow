@@ -20,7 +20,9 @@ jobs:
       matrix:
         python-version: [3.8]
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@master
         with:
           python-version: ${{ matrix.python-version }}
@@ -30,7 +32,7 @@ jobs:
   lint-rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v2
       - name: Rustfmt check
         run: |
           (cd src/main && cargo fmt -- --check)
@@ -51,7 +53,9 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y git
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
       - name: Install dependencies
         run: |
           ci/container_scripts/install_deps.sh
