@@ -180,28 +180,26 @@ You can also parse and plot the TGen output using the `tgentools` program from t
 
 ## Example experiment
 
-Consider a set of experiments where we would like to analyze the effect of changing the size of our nodes' initial TCP window. We run the following 2 experiments:
+Consider a set of experiments where we would like to analyze the effect of changing our nodes' traffic queueing disciplines. We run the following 2 experiments:
 
 ```bash
 cd resource/examples/
-rm -rf shadow.data shadow.log
-shadow --tcp-windows=1 shadow.config.xml > window1.log
-mv shadow.data window1.data
-shadow --tcp-windows=1000 shadow.config.xml > window1000.log
-mv shadow.data window1000.data
+rm -rf shadow.data shadow.log qdisc-fifo.data qdisc-fifo.log qdisc-rr.data qdisc-rr.log
+shadow --interface-qdisc fifo --data-directory qdisc-fifo.data shadow.config.xml > qdisc-fifo.log
+shadow --interface-qdisc rr   --data-directory qdisc-rr.data   shadow.config.xml > qdisc-rr.log
 ```
 
 To parse these log files, we use the following scripts:
 
 ```bash
-python3 ../../src/tools/parse-shadow.py --prefix=window1.results window1.log
-python3 ../../src/tools/parse-shadow.py --prefix=window1000.results window1000.log
+python3 ../../src/tools/parse-shadow.py --prefix=qdisc-fifo.results qdisc-fifo.log
+python3 ../../src/tools/parse-shadow.py --prefix=qdisc-rr.results   qdisc-rr.log
 ```
 
-Each of the directories `window1.results/` and `window1000.results/` now contain data statistics files extracted from the log files. We can now combine and visualize these results with the `plot-shadow.py` script:
+Each of the directories `qdisc-fifo.results/` and `qdisc-rr.results/` now contain data statistics files extracted from the log files. We can now combine and visualize these results with the `plot-shadow.py` script:
 
 ```bash
-python3 ../../src/tools/plot-shadow.py --prefix "window" --data window1.results/ "1 packet" --data window1000.results/ "1000 packets"
+python3 ../../src/tools/plot-shadow.py --prefix "qdisc" --data qdisc-fifo.results/ "fifo" --data qdisc-rr.results/ "round-robin"
 ```
 
 Then open the PDF file that was created to compare results from the experiments.
