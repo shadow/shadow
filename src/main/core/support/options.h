@@ -114,7 +114,6 @@ gboolean options_doRunPrintVersion(Options* options);
 gboolean options_doRunDebug(Options* options);
 
 gint options_getMinRunAhead(Options* options);
-const gchar* options_getTCPCongestionControl(Options* options);
 SimulationTime options_getInterfaceBatchTime(Options* options);
 gint options_getInterfaceBufferSize(Options* options);
 gint options_getSocketReceiveBufferSize(Options* options);

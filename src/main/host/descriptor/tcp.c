@@ -2555,21 +2555,11 @@ TCP* tcp_new(guint receiveBufferSize, guint sendBufferSize) {
 
     Options* options = worker_getOptions();
     guint32 initial_window = 10;
-    const gchar* tcpCC = options_getTCPCongestionControl(options);
     gint tcpSSThresh = 0;
 
-    TCPCongestionType congestionType = tcpCongestion_getType(tcpCC);
-
-    switch(congestionType) {
-        default:
-            warning("CC %s not implemented, falling back to reno", tcpCC);
-        case TCP_CC_RENO:
-            tcp_cong_reno_init(tcp);
-            break;
-        case TCP_CC_UNKNOWN:
-            error("Failed to initialize TCP congestion control for %s", tcpCC);
-            break;
-    }
+    /* in the future we'd like to support more congestion control types
+     * and allow it to be set as a host option */
+    tcp_cong_reno_init(tcp);
 
     tcp->send.window = initial_window;
     tcp->send.lastWindow = initial_window;
@@ -2607,12 +2597,4 @@ TCP* tcp_new(guint receiveBufferSize, guint sendBufferSize) {
 
     worker_count_allocation(TCP);
     return tcp;
-}
-
-TCPCongestionType tcpCongestion_getType(const gchar* type) {
-    if(!g_ascii_strcasecmp(type, "reno")) {
-        return TCP_CC_RENO;
-    }
-
-    return TCP_CC_UNKNOWN;
 }
