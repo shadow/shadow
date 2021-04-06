@@ -4710,7 +4710,12 @@ int process_emu_getaddrinfo(Process* proc, const char *name, const char *service
         ai_out->ai_flags = 0;
         ai_out->ai_next = NULL;
         ai_out->ai_protocol = 0;
-        ai_out->ai_socktype = SOCK_STREAM;
+        // Set dgram if they expect a dgram socket.
+        if(hints && (hints->ai_socktype & SOCK_DGRAM)) {
+            ai_out->ai_socktype = SOCK_DGRAM;
+        } else {
+            ai_out->ai_socktype = SOCK_STREAM;
+        }
 
         *res = ai_out;
         result = 0;
