@@ -78,17 +78,16 @@ static gboolean _socket_close(LegacyDescriptor* descriptor) {
     return socket->vtable->close((LegacyDescriptor*)socket);
 }
 
-static gssize _socket_sendUserData(Transport* transport, gconstpointer buffer,
-                                   gsize nBytes, in_addr_t ip, in_port_t port) {
+static gssize _socket_sendUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
+                                   in_addr_t ip, in_port_t port) {
     Socket* socket = _socket_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     return socket->vtable->send((Transport*)socket, buffer, nBytes, ip, port);
 }
 
-static gssize _socket_receiveUserData(Transport* transport, gpointer buffer,
-                                      gsize nBytes, in_addr_t* ip,
-                                      in_port_t* port) {
+static gssize _socket_receiveUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
+                                      in_addr_t* ip, in_port_t* port) {
     Socket* socket = _socket_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);

@@ -351,7 +351,7 @@ static void _networkinterface_capturePacket(NetworkInterface* interface, Packet*
 
     if(pcapPacket->payloadLength > 0) {
         pcapPacket->payload = g_new0(guchar, pcapPacket->payloadLength);
-        packet_copyPayload(packet, 0, pcapPacket->payload, pcapPacket->payloadLength);
+        packet_copyPayloadShadow(packet, 0, pcapPacket->payload, pcapPacket->payloadLength);
     }
 
     PacketTCPHeader* tcpHeader = packet_getTCPHeader(packet);

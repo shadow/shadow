@@ -486,14 +486,8 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
             sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
         }
 
-        void* buf = NULL;
-        if (bufPtr.val) {
-            // if sizeNeeded is 0, process_getWriteablePtr() will always return a null pointer
-            buf = process_getWriteablePtr(sys->process, sys->thread, bufPtr, sizeNeeded);
-        }
-
-        retval = transport_receiveUserData((Transport*)socket_desc, buf, sizeNeeded,
-                                               &inet_addr.sin_addr.s_addr, &inet_addr.sin_port);
+        retval = transport_receiveUserData((Transport*)socket_desc, bufPtr, sizeNeeded,
+                                           &inet_addr.sin_addr.s_addr, &inet_addr.sin_port);
 
         debug("recv returned %zd", retval);
     }
@@ -650,10 +644,8 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
         }
 
-        const void* buf = process_getReadablePtr(sys->process, sys->thread, bufPtr, sizeNeeded);
-
-        retval = transport_sendUserData(
-            (Transport*)socket_desc, buf, sizeNeeded, dest_ip, dest_port);
+        retval =
+            transport_sendUserData((Transport*)socket_desc, bufPtr, sizeNeeded, dest_ip, dest_port);
 
         debug("send returned %zd", retval);
     }

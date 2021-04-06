@@ -9,14 +9,20 @@
 
 #include <glib.h>
 
+#include "main/host/syscall_types.h"
+
 typedef struct _Payload Payload;
 
-Payload* payload_new(gconstpointer data, gsize dataLength);
+Payload* payload_new(PluginVirtualPtr data, gsize dataLength);
 
 void payload_ref(Payload* payload);
 void payload_unref(Payload* payload);
 
 gsize payload_getLength(Payload* payload);
-gsize payload_getData(Payload* payload, gsize offset, gpointer destBuffer, gsize destBufferLength);
+gssize payload_getData(Payload* payload, gsize offset, PluginVirtualPtr destBuffer,
+                       gsize destBufferLength);
+
+gsize payload_getDataShadow(Payload* payload, gsize offset, void* destBuffer,
+                            gsize destBufferLength);
 
 #endif /* SRC_MAIN_ROUTING_SHD_PAYLOAD_H_ */

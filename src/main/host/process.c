@@ -434,6 +434,7 @@ static void _process_start(Process* proc) {
 
     /* now we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
+    worker_setActiveThread(mainThread);
 
 #ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
@@ -450,6 +451,7 @@ static void _process_start(Process* proc) {
 #endif
 
     worker_setActiveProcess(NULL);
+    worker_setActiveThread(NULL);
 
 #ifdef USE_PERF_TIMERS
     message(
@@ -510,6 +512,7 @@ void process_continue(Process* proc, Thread* thread) {
          process_getName(proc));
 
     worker_setActiveProcess(proc);
+    worker_setActiveThread(thread);
 
 #ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
@@ -526,6 +529,7 @@ void process_continue(Process* proc, Thread* thread) {
 #endif
 
     worker_setActiveProcess(NULL);
+    worker_setActiveThread(NULL);
 
 #ifdef USE_PERF_TIMERS
     info("process '%s' ran for %f seconds", process_getName(proc), elapsed);

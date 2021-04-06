@@ -11,6 +11,7 @@
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/utility/utility.h"
+#include "support/logger/logger.h"
 
 /* packet payloads may be shared across hosts, so we must lock access to them */
 struct _Payload {
@@ -21,19 +22,23 @@ struct _Payload {
     MAGIC_DECLARE;
 };
 
-Payload* payload_new(gconstpointer data, gsize dataLength) {
+Payload* payload_new(PluginVirtualPtr data, gsize dataLength) {
     Payload* payload = g_new0(Payload, 1);
     MAGIC_INIT(payload);
 
-    g_mutex_init(&(payload->lock));
-    payload->referenceCount = 1;
-
-    if(data && dataLength > 0) {
+    if (data.val && dataLength > 0) {
         payload->data = g_malloc0(dataLength);
-        memmove(payload->data, data, dataLength);
+        if (worker_readPtr(payload->data, data, dataLength) != 0) {
+            warning("Couldn't read data for packet");
+            g_free(payload);
+            return NULL;
+        }
         utility_assert(payload->data != NULL);
         payload->length = dataLength;
     }
+
+    g_mutex_init(&(payload->lock));
+    payload->referenceCount = 1;
 
     worker_count_allocation(Payload);
 
@@ -91,7 +96,31 @@ gsize payload_getLength(Payload* payload) {
     return length;
 }
 
-gsize payload_getData(Payload* payload, gsize offset, gpointer destBuffer, gsize destBufferLength) {
+gssize payload_getData(Payload* payload, gsize offset, PluginVirtualPtr destBuffer,
+                       gsize destBufferLength) {
+    MAGIC_ASSERT(payload);
+
+    _payload_lock(payload);
+
+    utility_assert(offset <= payload->length);
+
+    gssize targetLength = payload->length - offset;
+    gssize copyLength = MIN(targetLength, destBufferLength);
+
+    if (copyLength > 0) {
+        int err = worker_writePtr(destBuffer, payload->data + offset, copyLength);
+        if (err) {
+            return -err;
+        }
+    }
+
+    _payload_unlock(payload);
+
+    return copyLength;
+}
+
+gsize payload_getDataShadow(Payload* payload, gsize offset, void* destBuffer,
+                            gsize destBufferLength) {
     MAGIC_ASSERT(payload);
 
     _payload_lock(payload);
@@ -102,7 +131,7 @@ gsize payload_getData(Payload* payload, gsize offset, gpointer destBuffer, gsize
     gsize copyLength = MIN(targetLength, destBufferLength);
 
     if(copyLength > 0) {
-        memmove(destBuffer, payload->data + offset, copyLength);
+        memcpy(destBuffer, payload->data + offset, copyLength);
     }
 
     _payload_unlock(payload);

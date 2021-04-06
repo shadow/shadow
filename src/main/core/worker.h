@@ -16,6 +16,7 @@
 #include "main/core/support/options.h"
 #include "main/core/work/task.h"
 #include "main/host/host.h"
+#include "main/host/syscall_types.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/routing/packet.h"
@@ -103,6 +104,19 @@ void worker_incrementPluginError();
 
 Address* worker_resolveIPToAddress(in_addr_t ip);
 Address* worker_resolveNameToAddress(const gchar* name);
+
+// Get a readable pointer in the current active Process.
+const void* worker_getReadablePtr(PluginVirtualPtr src, size_t n);
+
+// Get a writable pointer in the current active Process.
+void* worker_getWritablePtr(PluginVirtualPtr dst, size_t n);
+
+// Get a mutable pointer containing the data at `dst`.
+void* worker_getMutablePtr(PluginVirtualPtr dst, size_t n);
+
+// Flushes and invalidates previously returned readable, writable, and mutable
+// pointers.
+void worker_flushPtrs();
 
 // Copy `n` bytes from `src` in the current active Process to `dst`. Returns 0
 // on success or EFAULT if any of the specified range couldn't be accessed.

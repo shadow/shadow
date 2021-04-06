@@ -895,3 +895,23 @@ int worker_writePtr(PluginVirtualPtr dst, void* src, size_t n) {
     Worker* worker = _worker_getPrivate();
     return process_writePtr(worker->active.process, worker->active.thread, dst, src, n);
 }
+
+const void* worker_getReadablePtr(PluginVirtualPtr src, size_t n) {
+    Worker* worker = _worker_getPrivate();
+    return process_getReadablePtr(worker->active.process, worker->active.thread, src, n);
+}
+
+void* worker_getWritablePtr(PluginVirtualPtr dst, size_t n) {
+    Worker* worker = _worker_getPrivate();
+    return process_getWriteablePtr(worker->active.process, worker->active.thread, dst, n);
+}
+
+void* worker_getMutablePtr(PluginVirtualPtr dst, size_t n) {
+    Worker* worker = _worker_getPrivate();
+    return process_getMutablePtr(worker->active.process, worker->active.thread, dst, n);
+}
+
+void worker_flushPtrs() {
+    Worker* worker = _worker_getPrivate();
+    return process_flushPtrs(worker->active.process, worker->active.thread);
+}

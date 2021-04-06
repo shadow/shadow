@@ -70,7 +70,7 @@ const gchar* protocol_toString(ProtocolType type) {
     }
 }
 
-Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, guint64 packetID) {
+Packet* packet_new(PluginVirtualPtr payload, gsize payloadLength, guint hostID, guint64 packetID) {
     Packet* packet = g_new0(Packet, 1);
     MAGIC_INIT(packet);
 
@@ -79,7 +79,7 @@ Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, gui
     packet->hostID = hostID;
     packet->packetID = packetID;
 
-    if(payload != NULL && payloadLength > 0) {
+    if (payload.val != 0 && payloadLength > 0) {
         /* the payload starts with 1 ref, which we hold */
         packet->payload = payload_new(payload, payloadLength);
 
@@ -301,7 +301,7 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACK
     header->timestampEcho = timestampEcho;
 }
 
-guint packet_getPayloadLength(Packet* packet) {
+guint packet_getPayloadLength(const Packet* packet) {
     MAGIC_ASSERT(packet);
     if(packet->payload) {
         return (guint)payload_getLength(packet->payload);
@@ -456,11 +456,23 @@ ProtocolType packet_getProtocol(Packet* packet) {
     return packet->protocol;
 }
 
-guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, gsize bufferLength) {
+gssize packet_copyPayload(const Packet* packet, gsize payloadOffset, PluginVirtualPtr buffer,
+                          gsize bufferLength) {
     MAGIC_ASSERT(packet);
 
     if(packet->payload) {
-        return (guint) payload_getData(packet->payload, payloadOffset, buffer, bufferLength);
+        return payload_getData(packet->payload, payloadOffset, buffer, bufferLength);
+    } else {
+        return 0;
+    }
+}
+
+guint packet_copyPayloadShadow(Packet* packet, gsize payloadOffset, void* buffer,
+                               gsize bufferLength) {
+    MAGIC_ASSERT(packet);
+
+    if (packet->payload) {
+        return payload_getDataShadow(packet->payload, payloadOffset, buffer, bufferLength);
     } else {
         return 0;
     }

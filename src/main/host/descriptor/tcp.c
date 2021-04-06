@@ -803,7 +803,8 @@ static void _tcp_updateSendWindow(TCP* tcp) {
     tcp->send.window = (guint32)MIN(tcp->cong.cwnd, (gint)tcp->receive.lastWindow);
 }
 
-static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, gconstpointer payload, gsize payloadLength) {
+static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, PluginVirtualPtr payload,
+                                 gsize payloadLength) {
     MAGIC_ASSERT(tcp);
 
     /*
@@ -856,7 +857,7 @@ static void _tcp_sendControlPacket(TCP* tcp, enum ProtocolTCPFlags flags) {
           tcp->super.boundString, tcp->super.peerString);
 
     /* create the ack packet, without any payload data */
-    Packet* control = _tcp_createPacket(tcp, flags, NULL, 0);
+    Packet* control = _tcp_createPacket(tcp, flags, (PluginVirtualPtr){0}, 0);
 
     /* make sure it gets sent before whatever else is in the queue */
     packet_setPriority(control, 0.0);
@@ -1096,7 +1097,7 @@ static void _tcp_sendShutdownFin(TCP* tcp) {
 
     if(sendFin) {
         /* send a fin */
-        Packet* fin = _tcp_createPacket(tcp, PTCP_FIN, NULL, 0);
+        Packet* fin = _tcp_createPacket(tcp, PTCP_FIN, (PluginVirtualPtr){0}, 0);
         _tcp_bufferPacketOut(tcp, fin);
         _tcp_flush(tcp);
 
@@ -2195,8 +2196,8 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
     }
 }
 
-static gssize _tcp_sendUserData(Transport* transport, gconstpointer buffer,
-                                gsize nBytes, in_addr_t ip, in_port_t port) {
+static gssize _tcp_sendUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
+                                in_addr_t ip, in_port_t port) {
     TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(tcp);
 
@@ -2226,7 +2227,8 @@ static gssize _tcp_sendUserData(Transport* transport, gconstpointer buffer,
         gsize copyLength = MIN(maxPacketLength, remaining);
 
         /* use helper to create the packet */
-        Packet* packet = _tcp_createPacket(tcp, PTCP_ACK, buffer + bytesCopied, copyLength);
+        Packet* packet = _tcp_createPacket(
+            tcp, PTCP_ACK, (PluginVirtualPtr){.val = buffer.val + bytesCopied}, copyLength);
         if(copyLength > 0) {
             /* we are sending more user data */
             tcp->send.end++;
@@ -2262,9 +2264,8 @@ static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
     tcp->receive.windowUpdatePending = FALSE;
 }
 
-static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
-                                   gsize nBytes, in_addr_t* ip,
-                                   in_port_t* port) {
+static gssize _tcp_receiveUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
+                                   in_addr_t* ip, in_port_t* port) {
     TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(tcp);
 
@@ -2280,7 +2281,6 @@ static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
     _tcp_flush(tcp);
 
     gsize remaining = nBytes;
-    gsize bytesCopied = 0;
     gsize totalCopied = 0;
     gsize offset = 0;
     gsize copyLength = 0;
@@ -2291,7 +2291,7 @@ static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
         return -EWOULDBLOCK;
     }
 
-    if (buffer == NULL && nBytes > 0) {
+    if (buffer.val == 0 && nBytes > 0) {
         info("Can't recv >0 bytes into NULL buffer on socket");
         return -EFAULT;
     }
@@ -2303,7 +2303,12 @@ static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
         utility_assert(partialBytes > 0);
 
         copyLength = MIN(partialBytes, remaining);
-        bytesCopied = packet_copyPayload(tcp->partialUserDataPacket, tcp->partialOffset, buffer, copyLength);
+        gssize bytesCopied =
+            packet_copyPayload(tcp->partialUserDataPacket, tcp->partialOffset, buffer, copyLength);
+        if (bytesCopied < 0) {
+            // Error writing to PluginVirtualPtr
+            return bytesCopied;
+        }
         totalCopied += bytesCopied;
         remaining -= bytesCopied;
         offset += bytesCopied;
@@ -2329,18 +2334,29 @@ static gssize _tcp_receiveUserData(Transport* transport, gpointer buffer,
 
         /* get the next buffered packet - we'll always need it.
          * this could mark the socket as unreadable if this is its last packet.*/
-        Packet* packet = socket_removeFromInputBuffer((Socket*)tcp);
-        if(!packet) {
+        const Packet* nextPacket = socket_peekNextInPacket((Socket*)tcp);
+        if (!nextPacket) {
             /* no more packets or partial packets */
             break;
         }
 
-        guint packetLength = packet_getPayloadLength(packet);
+        guint packetLength = packet_getPayloadLength(nextPacket);
         copyLength = MIN(packetLength, remaining);
-        bytesCopied = packet_copyPayload(packet, 0, buffer + offset, copyLength);
+        gssize bytesCopied = packet_copyPayload(
+            nextPacket, 0, (PluginVirtualPtr){.val = buffer.val + offset}, copyLength);
+        if (bytesCopied < 0) {
+            // Error writing to PluginVirtualPtr
+            if (totalCopied > 0) {
+                warning("Returning error %s, but already copied %lu bytes which will be lost",
+                        g_strerror(-bytesCopied), totalCopied);
+            }
+            return bytesCopied;
+        }
         totalCopied += bytesCopied;
         remaining -= bytesCopied;
         offset += bytesCopied;
+
+        Packet* packet = socket_removeFromInputBuffer((Socket*)tcp);
 
         if(bytesCopied < packetLength) {
             /* we were only able to read part of this packet */

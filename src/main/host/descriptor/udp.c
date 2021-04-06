@@ -106,8 +106,8 @@ static void _udp_dropPacket(Socket* socket, Packet* packet) {
  * ip and port parameters. this function assumes that the socket is already
  * bound to a local port, no matter if that happened explicitly or implicitly.
  */
-static gssize _udp_sendUserData(Transport* transport, gconstpointer buffer,
-                                gsize nBytes, in_addr_t ip, in_port_t port) {
+static gssize _udp_sendUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
+                                in_addr_t ip, in_port_t port) {
     UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(udp);
 
@@ -169,9 +169,8 @@ static gssize _udp_sendUserData(Transport* transport, gconstpointer buffer,
     return bytes_sent;
 }
 
-static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
-                                   gsize nBytes, in_addr_t* ip,
-                                   in_port_t* port) {
+static gssize _udp_receiveUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
+                                   in_addr_t* ip, in_port_t* port) {
     UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(udp);
 
@@ -179,19 +178,25 @@ static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
         return -EWOULDBLOCK;
     }
 
-    if (buffer == NULL && nBytes > 0) {
+    if (buffer.val == 0 && nBytes > 0) {
         return -EFAULT;
     }
 
-    Packet* packet = socket_removeFromInputBuffer((Socket*)udp);
-    if(!packet) {
+    const Packet* nextPacket = socket_peekNextInPacket((Socket*)udp);
+    if (!nextPacket) {
         return -EWOULDBLOCK;
     }
 
     /* copy lesser of requested and available amount to application buffer */
-    guint packetLength = packet_getPayloadLength(packet);
+    guint packetLength = packet_getPayloadLength(nextPacket);
     gsize copyLength = MIN(nBytes, packetLength);
-    guint bytesCopied = packet_copyPayload(packet, 0, buffer, copyLength);
+    gssize bytesCopied = packet_copyPayload(nextPacket, 0, buffer, copyLength);
+    if (bytesCopied < 0) {
+        // Error writing to PluginVirtualPtr
+        return bytesCopied;
+    }
+
+    Packet* packet = socket_removeFromInputBuffer((Socket*)udp);
 
     utility_assert(bytesCopied == copyLength);
     packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DELIVERED);
@@ -207,7 +212,7 @@ static gssize _udp_receiveUserData(Transport* transport, gpointer buffer,
     /* destroy packet, throwing away any bytes not claimed by the app */
     packet_unref(packet);
 
-    debug("user read %u inbound UDP bytes", bytesCopied);
+    debug("user read %ld inbound UDP bytes", bytesCopied);
 
     return bytesCopied;
 }
