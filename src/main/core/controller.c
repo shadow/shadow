@@ -22,7 +22,6 @@
 #include "main/core/manager.h"
 #include "main/core/support/configuration.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/examples.h"
 #include "main/core/support/options.h"
 #include "main/host/host.h"
 #include "main/routing/address.h"
@@ -165,30 +164,25 @@ static gboolean _controller_loadConfiguration(Controller* controller) {
 
     /* parse built-in examples, or input files */
     GString* file = NULL;
-    // add options_doRunTGenExample() option
-    if (options_doRunTestExample(controller->options)) {
-        /* parse a built-in example */
-        file = example_getTestContents();
-    } else {
-        /* parse Shadow XML config file */
-        const GString* fileName = options_getInputXMLFilename(controller->options);
-        if (!fileName) {
-            critical("unable to obtain the name for the configuration file");
-            return FALSE;
-        }
 
-        // Read config from file or stdin
-        if (0 == g_strcmp0("-", fileName->str)) {
-            file = utility_getFileContents("/dev/stdin");
-        } else {
-            file = utility_getFileContents(fileName->str);
-        }
+	/* parse Shadow XML config file */
+	const GString* fileName = options_getInputXMLFilename(controller->options);
+	if (!fileName) {
+		critical("unable to obtain the name for the configuration file");
+		return FALSE;
+	}
 
-        if (!file) {
-            critical("unable to read configuration file contents");
-            return FALSE;
-        }
-    }
+	// Read config from file or stdin
+	if (0 == g_strcmp0("-", fileName->str)) {
+		file = utility_getFileContents("/dev/stdin");
+	} else {
+		file = utility_getFileContents(fileName->str);
+	}
+
+	if (!file) {
+		critical("unable to read configuration file contents");
+		return FALSE;
+	}
 
     if (file) {
         controller->config = configuration_new(controller->options, file);
@@ -348,20 +342,16 @@ static void _controller_registerHostCallback(ConfigurationHostElement* he, Contr
         }
         params->hostname = hostnameBuffer->str;
 
-        /* cpu params - if they didnt specify a CPU frequency, use the manager machine frequency */
+        /* cpu params - use the manager machine frequency */
         gint managerCPUFreq = manager_getRawCPUFrequency(controller->manager);
-        params->cpuFrequency = he->cpufrequency.isSet
-                                   ? he->cpufrequency.integer
-                                   : (managerCPUFreq > 0) ? (guint64)managerCPUFreq : 0;
+        params->cpuFrequency = (managerCPUFreq > 0) ? (guint64)managerCPUFreq : 0;
         if (params->cpuFrequency == 0) {
             params->cpuFrequency = 2500000; // 2.5 GHz
             debug("both configured and raw manager cpu frequencies unavailable, using 2500000 KHz");
         }
 
-        gint defaultCPUThreshold = options_getCPUThreshold(controller->options);
-        params->cpuThreshold = defaultCPUThreshold > 0 ? defaultCPUThreshold : 0;
-        gint defaultCPUPrecision = options_getCPUPrecision(controller->options);
-        params->cpuPrecision = defaultCPUPrecision > 0 ? defaultCPUPrecision : 0;
+        params->cpuThreshold = 0;
+        params->cpuPrecision = 200;
 
         params->logLevel = he->loglevel.isSet ? loglevel_fromStr(he->loglevel.string->str)
                                               : options_getLogLevel(controller->options);

@@ -91,60 +91,6 @@ static gint _main_helper(Options* options) {
     g_strfreev(arglist);
     g_strfreev(envlist);
 
-    /* check if we need to setup a valgrind environment and relaunch */
-    if(g_getenv("SHADOW_SPAWNED") == NULL && options_doRunValgrind(options)) {
-        message("shadow will automatically adjust valgrind environment and relaunch");
-
-        /* now start to set up the environment */
-        gchar** envlist = g_get_environ();
-        GString* commandBuffer = g_string_new(options_getArgumentString(options));
-
-        if(!envlist || !commandBuffer) {
-            critical("there was a problem loading existing environment");
-            return EXIT_FAILURE;
-        }
-
-        message("setting up environment for valgrind");
-
-        /* make glib friendlier to valgrind */
-        envlist = g_environ_setenv(envlist, "G_DEBUG", "gc-friendly", 0);
-        envlist = g_environ_setenv(envlist, "G_SLICE", "always-malloc", 0);
-
-        /* add the valgrind command and some default options */
-        g_string_prepend(commandBuffer,
-                        "valgrind --leak-check=full --show-reachable=yes --track-origins=yes --trace-children=yes --log-file=shadow-valgrind-%p.log --error-limit=no ");
-
-        /* keep track that we are relaunching shadow */
-        envlist = g_environ_setenv(envlist, "SHADOW_SPAWNED", "TRUE", 1);
-
-        gchar* command = g_string_free(commandBuffer, FALSE);
-        gchar** arglist = g_strsplit(command, " ", 0);
-        g_free(command);
-
-        message("environment was updated; shadow is relaunching now with new environment");
-
-        ShadowLogger* logger = shadow_logger_getDefault();
-        if(logger) {
-            shadow_logger_setDefault(NULL);
-            shadow_logger_unref(logger);
-        }
-
-        /* execvpe only returns if there is an error, otherwise the current process
-         * image is replaced with a new process */
-        gint returnValue = execvpe(arglist[0], arglist, envlist);
-
-        /* cleanup */
-        if(envlist) {
-            g_strfreev(envlist);
-        }
-        if(arglist) {
-            g_strfreev(arglist);
-        }
-
-        critical("** Error %i while re-launching shadow process: %s", returnValue, g_strerror(returnValue));
-        return EXIT_FAILURE;
-    }
-
     message("startup checks passed, we are ready to start simulation");
 
     /* pause for debugger attachment if the option is set */

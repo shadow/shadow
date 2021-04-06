@@ -24,18 +24,13 @@ struct _Options {
     guint heartbeatInterval;
     gchar* heartbeatLogLevelInput;
     gchar* heartbeatLogInfo;
-    gchar* preloads;
-    gboolean runValgrind;
     gboolean debug;
     gchar* dataDirPath;
     gchar* dataTemplatePath;
     gboolean shouldExitAfterShmCleanup;
 
     GOptionGroup* networkOptionGroup;
-    gint cpuThreshold;
-    gint cpuPrecision;
     gint minRunAhead;
-    gint initialTCPWindow;
     gint interfaceBufferSize;
     gint initialSocketReceiveBufferSize;
     gint initialSocketSendBufferSize;
@@ -46,11 +41,6 @@ struct _Options {
     gchar* interposeMethod;
     SimulationTime interfaceBatchTime;
     gchar* tcpCongestionControl;
-    gint tcpSlowStartThreshold;
-
-    GOptionGroup* pluginsOptionGroup;
-    gboolean runTGenExample;
-    gboolean runTestExample;
 
     gboolean pinCPUs;
 
@@ -86,12 +76,9 @@ Options* options_new(gint argc, gchar* argv[]) {
         "efficiency and control of simulation, achieving the best of both approaches.");
 
     /* set defaults */
-    options->initialTCPWindow = 10;
     options->interfaceBufferSize = 1024000;
     options->interfaceBatchTime = 5000;
     options->randomSeed = 1;
-    options->cpuThreshold = -1;
-    options->cpuPrecision = 200;
     options->heartbeatInterval = 1;
     options->shouldExitAfterShmCleanup = FALSE;
 
@@ -120,9 +107,6 @@ Options* options_new(gint argc, gchar* argv[]) {
          "Log LEVEL above which to filter messages ('error' < 'critical' < 'warning' < 'message' < "
          "'info' < 'debug') ['message']",
          "LEVEL"},
-        {"preload", 'p', 0, G_OPTION_ARG_STRING, &(options->preloads),
-         "LD_PRELOAD environment VALUE to use for function interposition (/path/to/lib:...) [None]",
-         "VALUE"},
         {"runahead", 'r', 0, G_OPTION_ARG_INT, &(options->minRunAhead),
          "If set, overrides the automatically calculated minimum TIME workers may run ahead when "
          "sending events between nodes, in milliseconds [0]",
@@ -137,8 +121,6 @@ Options* options_new(gint argc, gchar* argv[]) {
          "Which interposition method to use ('hybrid', 'preload', 'ptrace') ['ptrace']", "METHOD"},
         {"workers", 'w', 0, G_OPTION_ARG_INT, &(options->nWorkerThreads),
          "Run concurrently with N worker threads [0]", "N"},
-        {"valgrind", 'x', 0, G_OPTION_ARG_NONE, &(options->runValgrind),
-         "Run through valgrind for debugging", NULL},
         {"version", 'v', 0, G_OPTION_ARG_NONE, &(options->printSoftwareVersion),
          "Print software version and exit", NULL},
         {"pin-cpus", 'z', 0, G_OPTION_ARG_NONE, &(options->pinCPUs), "Use experimental CPU pinning",
@@ -149,18 +131,6 @@ Options* options_new(gint argc, gchar* argv[]) {
     g_option_group_add_entries(options->mainOptionGroup, mainEntries);
     g_option_context_set_main_group(options->context, options->mainOptionGroup);
 
-    /* now fill in the default plug-in examples option group */
-    options->pluginsOptionGroup = g_option_group_new("sim", "Simulation Examples", "Built-in simulation examples", NULL, NULL);
-    const GOptionEntry pluginEntries[] =
-    {
-      { "test", 0, 0, G_OPTION_ARG_NONE, &(options->runTestExample), "Run basic benchmark tests", NULL },
-      { "tgen", 0, 0, G_OPTION_ARG_NONE, &(options->runTGenExample), "PLACEHOLDER - Run basic data transfer simulation", NULL },
-      { NULL },
-    };
-
-    g_option_group_add_entries(options->pluginsOptionGroup, pluginEntries);
-    g_option_context_add_group(options->context, options->pluginsOptionGroup);
-
     /* now fill in the network option group */
     GString* sockrecv = g_string_new("");
     g_string_printf(sockrecv, "Initialize the socket receive buffer to N bytes [%i]", (gint)CONFIG_RECV_BUFFER_SIZE);
@@ -170,16 +140,12 @@ Options* options_new(gint argc, gchar* argv[]) {
     options->networkOptionGroup = g_option_group_new("sys", "System Options", "Simulated system/network behavior", NULL, NULL);
     const GOptionEntry networkEntries[] =
     {
-      { "cpu-precision", 0, 0, G_OPTION_ARG_INT, &(options->cpuPrecision), "round measured CPU delays to the nearest TIME, in microseconds (negative value to disable fuzzy CPU delays) [200]", "TIME" },
-      { "cpu-threshold", 0, 0, G_OPTION_ARG_INT, &(options->cpuThreshold), "TIME delay threshold after which the CPU becomes blocked, in microseconds (negative value to disable CPU delays) (experimental!) [-1]", "TIME" },
       { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(options->interfaceBatchTime), "Batch TIME for network interface sends and receives, in microseconds [5000]", "TIME" },
       { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(options->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
       { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(options->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
       { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(options->initialSocketReceiveBufferSize), sockrecv->str, "N" },
       { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(options->initialSocketSendBufferSize), socksend->str, "N" },
       { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(options->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['reno']", "TCPCC" },
-      { "tcp-ssthresh", 0, 0, G_OPTION_ARG_INT, &(options->tcpSlowStartThreshold), "Set TCP ssthresh value instead of discovering it via packet loss or hystart [0]", "N" },
-      { "tcp-windows", 0, 0, G_OPTION_ARG_INT, &(options->initialTCPWindow), "Initialize the TCP send, receive, and congestion windows to N packets [10]", "N" },
       { NULL },
     };
 
@@ -208,12 +174,10 @@ Options* options_new(gint argc, gchar* argv[]) {
     /* make sure we have the required arguments. program name is first arg.
      * printing the software version requires no other args. running a
      * plug-in example also requires no other args. */
-    if (!(options->printSoftwareVersion) &&
-        !(options->shouldExitAfterShmCleanup) && !(options->runTGenExample) &&
-        !(options->runTestExample) && (argc != nRequiredXMLFiles + 1)) {
+    if (!(options->printSoftwareVersion) && !(options->shouldExitAfterShmCleanup) &&
+        (argc != nRequiredXMLFiles + 1)) {
         g_printerr("** Please provide the required parameters **\n");
-        gchar* helpString =
-            g_option_context_get_help(options->context, TRUE, NULL);
+        gchar* helpString = g_option_context_get_help(options->context, TRUE, NULL);
         g_printerr("%s", helpString);
         g_free(helpString);
         options_free(options);
@@ -234,9 +198,6 @@ Options* options_new(gint argc, gchar* argv[]) {
     }
     if(options->heartbeatInterval < 1) {
         options->heartbeatInterval = 1;
-    }
-    if(options->initialTCPWindow < 1) {
-        options->initialTCPWindow = 1;
     }
     if(options->interfaceBufferSize < CONFIG_MTU) {
         options->interfaceBufferSize = CONFIG_MTU;
@@ -296,9 +257,6 @@ void options_free(Options* options) {
     g_free(options->tcpCongestionControl);
     if(options->argstr) {
         g_free(options->argstr);
-    }
-    if(options->preloads) {
-        g_free(options->preloads);
     }
     if(options->dataDirPath != NULL) {
         g_free(options->dataDirPath);
@@ -410,11 +368,6 @@ gboolean options_doRunPrintVersion(Options* options) {
     return options->printSoftwareVersion;
 }
 
-gboolean options_doRunValgrind(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->runValgrind;
-}
-
 gboolean options_doRunDebug(Options* options) {
     MAGIC_ASSERT(options);
     return options->debug;
@@ -425,49 +378,14 @@ gboolean options_shouldExitAfterShmCleanup(Options* options) {
     return options->shouldExitAfterShmCleanup;
 }
 
-gboolean options_doRunTGenExample(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->runTGenExample;
-}
-
-gboolean options_doRunTestExample(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->runTestExample;
-}
-
-const gchar* options_getPreloadString(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->preloads;
-}
-
-gint options_getCPUThreshold(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->cpuThreshold;
-}
-
-gint options_getCPUPrecision(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->cpuPrecision;
-}
-
 gint options_getMinRunAhead(Options* options) {
     MAGIC_ASSERT(options);
     return options->minRunAhead;
 }
 
-gint options_getTCPWindow(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->initialTCPWindow;
-}
-
 const gchar* options_getTCPCongestionControl(Options* options) {
     MAGIC_ASSERT(options);
     return options->tcpCongestionControl;
-}
-
-gint options_getTCPSlowStartThreshold(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->tcpSlowStartThreshold;
 }
 
 SimulationTime options_getInterfaceBatchTime(Options* options) {

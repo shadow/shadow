@@ -75,7 +75,6 @@ set(shadow_srcs
     core/scheduler/scheduler_policy_thread_perthread.c
     core/scheduler/scheduler_policy_thread_single.c
     core/support/options.c
-    core/support/examples.c
     core/support/configuration.c
     core/work/event.c
     core/work/message.c

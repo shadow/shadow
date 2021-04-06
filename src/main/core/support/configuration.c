@@ -523,9 +523,6 @@ static GError* _parser_handleHostAttributes(Parser* parser, const gchar** attrib
         } else if (!host->heartbeatfrequency.isSet && !g_ascii_strcasecmp(name, "heartbeatfrequency")) {
             host->heartbeatfrequency.integer = g_ascii_strtoull(value, NULL, 10);
             host->heartbeatfrequency.isSet = TRUE;
-        } else if (!host->cpufrequency.isSet && !g_ascii_strcasecmp(name, "cpufrequency")) {
-            host->cpufrequency.integer = g_ascii_strtoull(value, NULL, 10);
-            host->cpufrequency.isSet = TRUE;
         } else if (!host->socketrecvbuffer.isSet && !g_ascii_strcasecmp(name, "socketrecvbuffer")) {
             /* socketReceiveBufferSize */
             host->socketrecvbuffer.integer = g_ascii_strtoull(value, NULL, 10);
