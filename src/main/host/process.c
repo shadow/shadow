@@ -784,7 +784,7 @@ static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
 
     /* parse the full argument string into separate strings */
     if(proc->arguments && proc->arguments->len > 0 && g_ascii_strncasecmp(proc->arguments->str, "\0", (gsize) 1) != 0) {
-        arguments = g_strconcat(arguments, " ", proc->arguments->str);
+        arguments = g_strconcat(arguments, " ", proc->arguments->str, NULL);
     }
 
     /* setup for creating new plug-in, i.e. format into argc and argv */
