@@ -776,35 +776,30 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
 static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
     gchar* threadBuffer;
 
-    GQueue *arguments = g_queue_new();
+    gchar* arguments = NULL;
 
     /* first argument is the name of the program */
     const gchar* pluginName = _process_getPluginName(proc);
-    g_queue_push_tail(arguments, g_strdup(pluginName));
+    arguments = g_strdup(pluginName);
 
     /* parse the full argument string into separate strings */
     if(proc->arguments && proc->arguments->len > 0 && g_ascii_strncasecmp(proc->arguments->str, "\0", (gsize) 1) != 0) {
-        gchar* argumentString = g_strdup(proc->arguments->str);
-        gchar* token = strtok_r(argumentString, " ", &threadBuffer);
-        while(token != NULL) {
-            gchar* argument = g_strdup((const gchar*) token);
-            g_queue_push_tail(arguments, argument);
-            token = strtok_r(NULL, " ", &threadBuffer);
-        }
-        g_free(argumentString);
+        arguments = g_strconcat(arguments, " ", proc->arguments->str);
     }
 
     /* setup for creating new plug-in, i.e. format into argc and argv */
-    gint argc = g_queue_get_length(arguments);
+    gint argc = 0;
     /* a pointer to an array that holds pointers */
-    gchar** argv = g_new0(gchar*, argc);
+    gchar** argv = NULL;
 
-    for(gint i = 0; i < argc; i++) {
-        argv[i] = g_queue_pop_head(arguments);
+    GError *error = NULL;
+    if (!g_shell_parse_argv(arguments, &argc, &argv, &error)) {
+        error("unable to parse arguments for plugin '%s': %s", pluginName, error->message);
+        g_error_free(error);
     }
 
     /* cleanup */
-    g_queue_free(arguments);
+    g_free(arguments);
 
     /* transfer to the caller - they must free argv and each element of it */
     *argvOut = argv;
