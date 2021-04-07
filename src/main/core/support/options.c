@@ -40,7 +40,6 @@ struct _Options {
     gchar* eventSchedulingPolicy;
     gchar* interposeMethod;
     SimulationTime interfaceBatchTime;
-    gchar* tcpCongestionControl;
 
     gboolean pinCPUs;
 
@@ -145,7 +144,6 @@ Options* options_new(gint argc, gchar* argv[]) {
       { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(options->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
       { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(options->initialSocketReceiveBufferSize), sockrecv->str, "N" },
       { "socket-send-buffer", 0, 0, G_OPTION_ARG_INT, &(options->initialSocketSendBufferSize), socksend->str, "N" },
-      { "tcp-congestion-control", 0, 0, G_OPTION_ARG_STRING, &(options->tcpCongestionControl), "Congestion control algorithm to use for TCP ('aimd', 'reno', 'cubic') ['reno']", "TCPCC" },
       { NULL },
     };
 
@@ -224,9 +222,6 @@ Options* options_new(gint argc, gchar* argv[]) {
         options->initialSocketSendBufferSize = CONFIG_SEND_BUFFER_SIZE;
         options->autotuneSocketSendBuffer = TRUE;
     }
-    if(options->tcpCongestionControl == NULL) {
-        options->tcpCongestionControl = g_strdup("reno");
-    }
     if(options->dataDirPath == NULL) {
         options->dataDirPath = g_strdup("shadow.data");
     }
@@ -254,7 +249,6 @@ void options_free(Options* options) {
     g_free(options->heartbeatLogInfo);
     g_free(options->interfaceQueuingDiscipline);
     g_free(options->eventSchedulingPolicy);
-    g_free(options->tcpCongestionControl);
     if(options->argstr) {
         g_free(options->argstr);
     }
@@ -381,11 +375,6 @@ gboolean options_shouldExitAfterShmCleanup(Options* options) {
 gint options_getMinRunAhead(Options* options) {
     MAGIC_ASSERT(options);
     return options->minRunAhead;
-}
-
-const gchar* options_getTCPCongestionControl(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->tcpCongestionControl;
 }
 
 SimulationTime options_getInterfaceBatchTime(Options* options) {
