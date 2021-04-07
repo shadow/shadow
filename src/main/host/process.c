@@ -434,6 +434,7 @@ static void _process_start(Process* proc) {
 
     /* now we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
+    worker_setActiveThread(mainThread);
 
 #ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
@@ -450,6 +451,7 @@ static void _process_start(Process* proc) {
 #endif
 
     worker_setActiveProcess(NULL);
+    worker_setActiveThread(NULL);
 
 #ifdef USE_PERF_TIMERS
     message(
@@ -510,6 +512,7 @@ void process_continue(Process* proc, Thread* thread) {
          process_getName(proc));
 
     worker_setActiveProcess(proc);
+    worker_setActiveThread(thread);
 
 #ifdef USE_PERF_TIMERS
     /* time how long we execute the program */
@@ -526,6 +529,7 @@ void process_continue(Process* proc, Thread* thread) {
 #endif
 
     worker_setActiveProcess(NULL);
+    worker_setActiveThread(NULL);
 
 #ifdef USE_PERF_TIMERS
     info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
@@ -831,6 +835,28 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
     utility_assert(low >> pid_shift == 0);
 
     return (PluginPhysicalPtr){.val = low | high};
+}
+
+int process_readPtr(Process* proc, Thread* thread, void* dst, PluginVirtualPtr src, size_t n) {
+    MAGIC_ASSERT(proc);
+    if (proc->memoryManager) {
+        const void* mapped = memorymanager_getReadablePtr(proc->memoryManager, thread, src, n);
+        memcpy(dst, mapped, n);
+        return 0;
+    } else {
+        return thread_readPtr(thread, dst, src, n);
+    }
+}
+
+int process_writePtr(Process* proc, Thread* thread, PluginVirtualPtr dst, void* src, size_t n) {
+    MAGIC_ASSERT(proc);
+    if (proc->memoryManager) {
+        void* mapped = memorymanager_getWriteablePtr(proc->memoryManager, thread, dst, n);
+        memcpy(mapped, src, n);
+        return 0;
+    } else {
+        return thread_writePtr(thread, dst, src, n);
+    }
 }
 
 const void* process_getReadablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {

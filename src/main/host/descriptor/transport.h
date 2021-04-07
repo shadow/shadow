@@ -12,13 +12,16 @@
 
 #include "main/core/support/definitions.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/syscall_types.h"
 #include "main/utility/utility.h"
 
 typedef struct _Transport Transport;
 typedef struct _TransportFunctionTable TransportFunctionTable;
 
-typedef gssize (*TransportSendFunc)(Transport* transport, gconstpointer buffer, gsize nBytes, in_addr_t ip, in_port_t port);
-typedef gssize (*TransportReceiveFunc)(Transport* transport, gpointer buffer, gsize nBytes, in_addr_t* ip, in_port_t* port);
+typedef gssize (*TransportSendFunc)(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
+                                    in_addr_t ip, in_port_t port);
+typedef gssize (*TransportReceiveFunc)(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
+                                       in_addr_t* ip, in_port_t* port);
 
 struct _TransportFunctionTable {
     DescriptorCloseFunc close;
@@ -38,9 +41,9 @@ struct _Transport {
 void transport_init(Transport* transport, TransportFunctionTable* vtable,
                     LegacyDescriptorType type);
 
-gssize transport_sendUserData(Transport* transport, gconstpointer buffer, gsize nBytes,
-        in_addr_t ip, in_port_t port);
-gssize transport_receiveUserData(Transport* transport, gpointer buffer, gsize nBytes,
-        in_addr_t* ip, in_port_t* port);
+gssize transport_sendUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
+                              in_addr_t ip, in_port_t port);
+gssize transport_receiveUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
+                                 in_addr_t* ip, in_port_t* port);
 
 #endif /* SHD_TRANSPORT_H_ */

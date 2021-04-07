@@ -12,6 +12,7 @@
 
 #include "main/core/support/definitions.h"
 #include "main/host/protocol.h"
+#include "main/host/syscall_types.h"
 
 typedef struct _Packet Packet;
 
@@ -57,7 +58,7 @@ struct _PacketTCPHeader {
 
 const gchar* protocol_toString(ProtocolType type);
 
-Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, guint64 packetID);
+Packet* packet_new(PluginVirtualPtr payload, gsize payloadLength, guint hostID, guint64 packetID);
 Packet* packet_copy(Packet* packet);
 
 void packet_ref(Packet* packet);
@@ -77,7 +78,7 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
         guint window, SimulationTime timestampValue, SimulationTime timestampEcho);
 
-guint packet_getPayloadLength(Packet* packet);
+guint packet_getPayloadLength(const Packet* packet);
 gdouble packet_getPriority(const Packet* packet);
 guint packet_getHeaderSize(Packet* packet);
 
@@ -87,7 +88,10 @@ in_addr_t packet_getSourceIP(Packet* packet);
 in_port_t packet_getSourcePort(Packet* packet);
 ProtocolType packet_getProtocol(Packet* packet);
 
-guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, gsize bufferLength);
+gssize packet_copyPayload(const Packet* packet, gsize payloadOffset, PluginVirtualPtr buffer,
+                          gsize bufferLength);
+guint packet_copyPayloadShadow(Packet* packet, gsize payloadOffset, void* buffer,
+                               gsize bufferLength);
 GList* packet_copyTCPSelectiveACKs(Packet* packet);
 PacketTCPHeader* packet_getTCPHeader(Packet* packet);
 gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data);

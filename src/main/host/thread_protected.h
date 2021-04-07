@@ -34,6 +34,9 @@ typedef struct _ThreadMethods {
                  PluginPtr ctid, unsigned long newtls, Thread** child);
     ShMemBlock* (*getIPCBlock)(Thread* thread);
     ShMemBlock* (*getShMBlock)(Thread* thread);
+    int (*readPtr)(Thread* thread, void* dst, PluginVirtualPtr src, size_t n);
+    int (*readStringPtr)(Thread* thread, char* dst, PluginVirtualPtr src, size_t n);
+    int (*writePtr)(Thread* thread, PluginVirtualPtr dst, void* src, size_t n);
 } ThreadMethods;
 
 struct _Thread {

@@ -24,6 +24,19 @@ void thread_resume(Thread* thread);
 void thread_handleProcessExit(Thread* thread);
 int thread_getReturnCode(Thread* thread);
 
+// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
+// the specified range couldn't be accessed.
+int thread_readPtr(Thread* thread, void* dst, PluginVirtualPtr src, size_t n);
+
+// Copy a string of at most `n` bytes from `src` to `dst`. Returns 0 on success,
+// EFAULT if any of the specified memory couldn't be accessed, or ENAMETOOLONG
+// if there was no NULL byte in the first `n` bytes.
+int thread_readStringPtr(Thread* base, char* dst, PluginVirtualPtr src, size_t n);
+
+// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
+// the specified range couldn't be accessed. The write is flushed immediately.
+int thread_writePtr(Thread* thread, PluginVirtualPtr dst, void* src, size_t n);
+
 // Make the data at plugin_src available in shadow's address space.
 //
 // The returned pointer is read-only, and is automatically invalidated when the

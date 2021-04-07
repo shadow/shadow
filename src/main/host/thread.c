@@ -253,3 +253,21 @@ bool thread_isLeader(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->tid == process_getProcessID(thread->process);
 }
+
+int thread_readPtr(Thread* thread, void* dst, PluginVirtualPtr src, size_t n) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->methods.readPtr);
+    return thread->methods.readPtr(thread, dst, src, n);
+}
+
+int thread_readStringPtr(Thread* thread, char* dst, PluginVirtualPtr src, size_t n) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->methods.readStringPtr);
+    return thread->methods.readStringPtr(thread, dst, src, n);
+}
+
+int thread_writePtr(Thread* thread, PluginVirtualPtr dst, void* src, size_t n) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->methods.writePtr);
+    return thread->methods.writePtr(thread, dst, src, n);
+}

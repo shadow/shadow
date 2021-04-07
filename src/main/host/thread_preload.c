@@ -388,6 +388,40 @@ static ShMemBlock _threadpreload_readPtrImpl(ThreadPreload* thread, PluginPtr pl
     return blk;
 }
 
+static int _threadpreload_readPtr(Thread* base, void* dst, PluginVirtualPtr src, size_t n) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
+
+    ShMemBlock blk = _threadpreload_readPtrImpl(thread, src, n, /*is_string=*/false);
+    memcpy(dst, blk.p, n);
+    shmemallocator_globalFree(&blk);
+
+    return 0;
+}
+
+static int _threadpreload_readStringPtr(Thread* base, char* dst, PluginVirtualPtr src, size_t n) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
+
+    ShMemBlock blk = _threadpreload_readPtrImpl(thread, src, n, /*is_string=*/true);
+    strncpy(dst, blk.p, n);
+    shmemallocator_globalFree(&blk);
+
+    if (strnlen(dst, n) == n) {
+        return ENAMETOOLONG;
+    }
+
+    return 0;
+}
+
+static int _threadpreload_writePtr(Thread* thread, PluginVirtualPtr dst, void* src, size_t n) {
+    ShMemWriteBlock blk = {
+        .blk = shmemallocator_globalAlloc(n),
+        .plugin_ptr = dst,
+        .n = n,
+    };
+    _threadpreload_auxWrite(thread, &blk);
+    return 0;
+}
+
 const void* threadpreload_getReadablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
@@ -515,6 +549,9 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                                   .nativeSyscall = threadpreload_nativeSyscall,
                                   .getIPCBlock = _threadpreload_getIPCBlock,
                                   .getShMBlock = _threadpreload_getShMBlock,
+                                  .writePtr = _threadpreload_writePtr,
+                                  .readPtr = _threadpreload_readPtr,
+                                  .readStringPtr = _threadpreload_readStringPtr,
                               }),
         .ptr_to_block = g_hash_table_new(g_int64_hash, g_int64_equal),
         .read_list = NULL,

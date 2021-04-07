@@ -70,7 +70,7 @@ static void channel_free(LegacyDescriptor* descriptor) {
     worker_count_deallocation(Channel);
 }
 
-static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize nBytes) {
+static gssize channel_linkedWrite(Channel* channel, PluginVirtualPtr buffer, gsize nBytes) {
     MAGIC_ASSERT(channel);
     /* our linked channel is trying to send us data, make sure we can read it */
     utility_assert(!(channel->type & CT_WRITEONLY));
@@ -81,9 +81,17 @@ static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize 
         return (gssize)-EWOULDBLOCK;
     }
 
-    /* accept some data from the other end of the pipe */
+    // TODO: Add an interface to bytequeue that would allow us to use
+    // worker_readPtr to read directly into its storage, saving a potential copy
+    // inside worker_getReadablePtr. e.g. one that accepts a read callback.
     gsize copyLength = MIN(nBytes, available);
-    bytequeue_push(channel->buffer, buffer, copyLength);
+    const void* readablePtr = worker_getReadablePtr(buffer, copyLength);
+    if (!readablePtr) {
+        return -EFAULT;
+    }
+
+    /* accept some data from the other end of the pipe */
+    bytequeue_push(channel->buffer, readablePtr, copyLength);
     channel->bufferLength += copyLength;
 
     /* we just got some data in our buffer */
@@ -92,8 +100,8 @@ static gssize channel_linkedWrite(Channel* channel, gconstpointer buffer, gsize 
     return copyLength;
 }
 
-static gssize channel_sendUserData(Transport* transport, gconstpointer buffer,
-                                   gsize nBytes, in_addr_t ip, in_port_t port) {
+static gssize channel_sendUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
+                                   in_addr_t ip, in_port_t port) {
     Channel* channel = _channel_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(channel);
     /* the read end of a unidirectional pipe can not write! */
@@ -118,9 +126,8 @@ static gssize channel_sendUserData(Transport* transport, gconstpointer buffer,
     return result;
 }
 
-static gssize channel_receiveUserData(Transport* transport, gpointer buffer,
-                                      gsize nBytes, in_addr_t* ip,
-                                      in_port_t* port) {
+static gssize channel_receiveUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
+                                      in_addr_t* ip, in_port_t* port) {
     Channel* channel = _channel_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(channel);
     /* the write end of a unidirectional pipe can not read! */
@@ -138,9 +145,17 @@ static gssize channel_receiveUserData(Transport* transport, gpointer buffer,
         }
     }
 
-    /* accept some data from the other end of the pipe */
+    // TODO: Use `worker_writePtr` to write directly into the process's memory,
+    // saving a potential copy in worker_getWritablePtr. e.g. add an interface
+    // to bytequeue that takes a `write` callback.
     gsize copyLength = MIN(nBytes, available);
-    gsize numCopied = bytequeue_pop(channel->buffer, buffer, copyLength);
+    void* writableBuf = worker_getWritablePtr(buffer, copyLength);
+    if (!writableBuf) {
+        return -EFAULT;
+    }
+
+    /* accept some data from the other end of the pipe */
+    gsize numCopied = bytequeue_pop(channel->buffer, writableBuf, copyLength);
     channel->bufferLength -= numCopied;
 
     /* we are no longer readable if we have nothing left */

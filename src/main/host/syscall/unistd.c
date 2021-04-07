@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <sys/utsname.h>
 
+#include "main/core/worker.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/eventd.h"
@@ -124,24 +125,28 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
-    void* buf = process_getWriteablePtr(sys->process, sys->thread, bufPtr, sizeNeeded);
 
     ssize_t result = 0;
     switch (dType) {
         case DT_FILE:
             if (offset == 0) {
-                result = file_read((File*)desc, buf, sizeNeeded);
+                result =
+                    file_read((File*)desc, worker_getWritablePtr(bufPtr, sizeNeeded), sizeNeeded);
             } else {
-                result = file_pread((File*)desc, buf, sizeNeeded, offset);
+                result = file_pread(
+                    (File*)desc, worker_getWritablePtr(bufPtr, sizeNeeded), sizeNeeded, offset);
             }
             break;
-        case DT_EVENTD: result = eventd_read((EventD*)desc, buf, sizeNeeded); break;
+        case DT_EVENTD:
+            result =
+                eventd_read((EventD*)desc, worker_getWritablePtr(bufPtr, sizeNeeded), sizeNeeded);
+            break;
         case DT_TIMER:
-            result = timer_read((Timer*)desc, buf, sizeNeeded);
+            result =
+                timer_read((Timer*)desc, worker_getWritablePtr(bufPtr, sizeNeeded), sizeNeeded);
             break;
         case DT_PIPE:
-            result = transport_receiveUserData(
-                (Transport*)desc, buf, sizeNeeded, NULL, NULL);
+            result = transport_receiveUserData((Transport*)desc, bufPtr, sizeNeeded, NULL, NULL);
             break;
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:
@@ -218,22 +223,25 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
     size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
-    const void* buf = process_getReadablePtr(sys->process, sys->thread, bufPtr, sizeNeeded);
 
     ssize_t result = 0;
     switch (dType) {
         case DT_FILE:
             if (offset == 0) {
-                result = file_write((File*)desc, buf, sizeNeeded);
+                result =
+                    file_write((File*)desc, worker_getReadablePtr(bufPtr, sizeNeeded), sizeNeeded);
             } else {
-                result = file_pwrite((File*)desc, buf, sizeNeeded, offset);
+                result = file_pwrite(
+                    (File*)desc, worker_getReadablePtr(bufPtr, sizeNeeded), sizeNeeded, offset);
             }
             break;
-        case DT_EVENTD: result = eventd_write((EventD*)desc, buf, sizeNeeded); break;
+        case DT_EVENTD:
+            result =
+                eventd_write((EventD*)desc, worker_getReadablePtr(bufPtr, sizeNeeded), sizeNeeded);
+            break;
         case DT_TIMER: result = -EINVAL; break;
         case DT_PIPE:
-            result =
-                transport_sendUserData((Transport*)desc, buf, sizeNeeded, 0, 0);
+            result = transport_sendUserData((Transport*)desc, bufPtr, sizeNeeded, 0, 0);
             break;
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:

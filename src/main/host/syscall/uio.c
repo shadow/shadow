@@ -144,9 +144,8 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                     break;
                 }
                 case DT_PIPE: {
-                    void* buf = process_getWriteablePtr(sys->process, sys->thread, bufPtr, bufSize);
-                    result = transport_receiveUserData(
-                        (Transport*)desc, buf, bufSize, NULL, NULL);
+                    result =
+                        transport_receiveUserData((Transport*)desc, bufPtr, bufSize, NULL, NULL);
                     break;
                 }
                 case DT_TCPSOCKET:
@@ -263,10 +262,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                     break;
                 }
                 case DT_PIPE: {
-                    const void* buf =
-                        process_getReadablePtr(sys->process, sys->thread, bufPtr, bufSize);
-                    result = transport_sendUserData(
-                        (Transport*)desc, buf, bufSize, 0, 0);
+                    result = transport_sendUserData((Transport*)desc, bufPtr, bufSize, 0, 0);
                     break;
                 }
                 case DT_TCPSOCKET:
