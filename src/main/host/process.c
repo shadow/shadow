@@ -774,10 +774,9 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
 #endif
 
 static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
-    /* first argument is the name of the program */
     const gchar* pluginName = _process_getPluginName(proc);
 
-    /* parse the full argument string into separate strings */
+    /* build the full argument string (with plugin name as first argument) */
     gchar* arguments = NULL;
     if(proc->arguments && proc->arguments->len > 0 && g_ascii_strncasecmp(proc->arguments->str, "\0", (gsize) 1) != 0) {
         arguments = g_strconcat(pluginName, " ", proc->arguments->str, NULL);
@@ -790,6 +789,7 @@ static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
     /* a pointer to an array that holds pointers */
     gchar** argv = NULL;
 
+    /* parse the full argument string into argc and argv */
     GError *error = NULL;
     if (!g_shell_parse_argv(arguments, &argc, &argv, &error)) {
         error("unable to parse arguments for plugin '%s': %s", pluginName, error->message);
