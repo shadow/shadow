@@ -51,6 +51,14 @@ pub struct SysCallReg {
     reg: c::SysCallReg,
 }
 
+impl PartialEq for SysCallReg {
+    fn eq(&self, other: &Self) -> bool {
+        unsafe { self.reg.as_u64 == other.reg.as_u64 }
+    }
+}
+
+impl Eq for SysCallReg {}
+
 impl From<SysCallReg> for c::SysCallReg {
     fn from(v: SysCallReg) -> c::SysCallReg {
         v.reg

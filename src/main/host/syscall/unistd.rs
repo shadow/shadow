@@ -1,10 +1,12 @@
+use crate::core::worker::Context;
 use crate::cshadow as c;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::{
     CompatDescriptor, Descriptor, DescriptorFlags, FileFlags, FileMode, FileStatus, PosixFile,
-    SyscallReturn,
+    SyscallError, SyscallReturn,
 };
 use crate::host::syscall::{self, PluginPtrError, Trigger};
+use crate::host::syscall_types::PluginPtr;
 use crate::utility::event_queue::EventQueue;
 
 use std::sync::Arc;
@@ -12,7 +14,7 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use log::*;
 
-pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> SyscallReturn {
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
 
     debug!("Trying to close fd {}", fd);
@@ -20,10 +22,7 @@ pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
     // scope used to make sure that desc cannot be used after deregistering it
     {
         // get the descriptor, or return early if it doesn't exist
-        let desc = match syscall::get_descriptor(fd, sys.process) {
-            Ok(d) => unsafe { &mut *d },
-            Err(errno) => return SyscallReturn::Error(errno).into(),
-        };
+        let desc = unsafe { &mut *syscall::get_descriptor(fd, sys.process)? };
 
         // if it's a legacy descriptor, use the C syscall handler instead
         if let CompatDescriptor::Legacy(_) = desc {
@@ -32,7 +31,8 @@ pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
                     sys as *mut c::SysCallHandler,
                     args as *const c::SysCallArgs,
                 )
-            };
+            }
+            .into();
         }
     }
 
@@ -50,24 +50,22 @@ pub fn close(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallRe
     if let Some(result) = result {
         result.into()
     } else {
-        SyscallReturn::Success(0).into()
+        Ok(0.into())
     }
 }
 
-pub fn dup(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+pub fn dup(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> SyscallReturn {
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = match syscall::get_descriptor(fd, sys.process) {
-        Ok(d) => unsafe { &mut *d },
-        Err(errno) => return SyscallReturn::Error(errno).into(),
-    };
+    let desc = unsafe { &mut *syscall::get_descriptor(fd, sys.process)? };
 
     match desc {
         CompatDescriptor::New(desc) => dup_helper(sys, fd, desc),
         // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
             c::syscallhandler_dup(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
+                .into()
         },
     }
 }
@@ -76,7 +74,7 @@ pub fn dup_helper(
     sys: &mut c::SysCallHandler,
     fd: libc::c_int,
     desc: &Descriptor,
-) -> c::SysCallReturn {
+) -> SyscallReturn {
     debug!("Duping fd {} ({:?})", fd, desc);
 
     // clone the descriptor (but not the flags)
@@ -93,47 +91,43 @@ pub fn dup_helper(
     };
 
     // return the new fd
-    SyscallReturn::Success(new_fd).into()
+    Ok(new_fd.into())
 }
 
-pub fn read(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+pub fn read(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> SyscallReturn {
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
     let buf_ptr = unsafe { args.args[1].as_ptr };
     let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
     let offset = 0;
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = match syscall::get_descriptor(fd, sys.process) {
-        Ok(d) => unsafe { &mut *d },
-        Err(errno) => return SyscallReturn::Error(errno).into(),
-    };
+    let desc = unsafe { &mut *syscall::get_descriptor(fd, sys.process)? };
 
     match desc {
         CompatDescriptor::New(desc) => read_helper(sys, fd, desc, buf_ptr, buf_size, offset),
         // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
             c::syscallhandler_read(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
+                .into()
         },
     }
 }
 
-pub fn pread64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+pub fn pread64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> SyscallReturn {
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
     let buf_ptr = unsafe { args.args[1].as_ptr };
     let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
     let offset = unsafe { args.args[3].as_i64 } as libc::off_t;
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = match syscall::get_descriptor(fd, sys.process) {
-        Ok(d) => unsafe { &mut *d },
-        Err(errno) => return SyscallReturn::Error(errno).into(),
-    };
+    let desc = unsafe { &mut *syscall::get_descriptor(fd, sys.process)? };
 
     match desc {
         CompatDescriptor::New(desc) => read_helper(sys, fd, desc, buf_ptr, buf_size, offset),
         // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
             c::syscallhandler_pread64(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
+                .into()
         },
     }
 }
@@ -145,89 +139,69 @@ fn read_helper(
     buf_ptr: c::PluginPtr,
     buf_size: libc::size_t,
     offset: libc::off_t,
-) -> c::SysCallReturn {
+) -> SyscallReturn {
     // TODO: dynamically compute size based on how much data is actually available in the descriptor
     let size_needed = std::cmp::min(buf_size, c::SYSCALL_IO_BUFSIZE as usize);
-
-    let buf = match syscall::get_writable_ptr::<u8>(sys.process, sys.thread, buf_ptr, size_needed) {
-        Ok(ptr) => unsafe { Some(std::slice::from_raw_parts_mut(ptr, size_needed)) },
-        Err(PluginPtrError::Null) | Err(PluginPtrError::ZeroLen) => {
-            match (buf_ptr.val == 0, buf_size) {
-                // non-null and zero len
-                (false, 0) => Some(&mut [][..]),
-                // null and zero len
-                (true, 0) => return SyscallReturn::Success(0).into(),
-                // null and non-zero len
-                (true, _) => None,
-                // non-null and non-zero len
-                (false, _) => unreachable!(),
-            }
-        }
-        Err(PluginPtrError::LenTooSmall) => unreachable!(),
-    };
-
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
-    // call the file's read(), and run any resulting events
-    let result = EventQueue::queue_and_run(|event_queue| {
-        posix_file.borrow_mut().read(buf, offset, event_queue)
+    let result: SyscallReturn = Context::with_current(|ctx| {
+        let buf = ctx.get_writable_slice::<u8>(buf_ptr.into(), size_needed)?;
+
+        // call the file's read(), and run any resulting events
+        EventQueue::queue_and_run(|event_queue| {
+            posix_file.borrow_mut().read(Some(buf), offset, event_queue)
+        })
     });
 
     // if the syscall would block and it's a blocking descriptor
-    if result == SyscallReturn::Error(nix::errno::EWOULDBLOCK)
+    if result == Err(SyscallError::Errno(nix::errno::EWOULDBLOCK))
         && !file_flags.contains(FileFlags::NONBLOCK)
     {
         let trigger = Trigger::from_posix_file(posix_file, FileStatus::READABLE);
 
-        return c::SysCallReturn {
-            state: c::SysCallReturnState_SYSCALL_BLOCK,
-            retval: c::SysCallReg { as_i64: 0i64 },
-            cond: unsafe { c::syscallcondition_new(trigger.into(), std::ptr::null_mut()) },
-        };
+        return Err(SyscallError::Cond(unsafe {
+            c::syscallcondition_new(trigger.into(), std::ptr::null_mut())
+        }));
     }
 
-    result.into()
+    result
 }
 
-pub fn write(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+pub fn write(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> SyscallReturn {
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
     let buf_ptr = unsafe { args.args[1].as_ptr };
     let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
     let offset = 0;
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = match syscall::get_descriptor(fd, sys.process) {
-        Ok(d) => unsafe { &mut *d },
-        Err(errno) => return SyscallReturn::Error(errno).into(),
-    };
+    let desc = unsafe { &mut *syscall::get_descriptor(fd, sys.process)? };
 
     match desc {
         CompatDescriptor::New(desc) => write_helper(sys, fd, desc, buf_ptr, buf_size, offset),
         // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
             c::syscallhandler_write(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
+                .into()
         },
     }
 }
 
-pub fn pwrite64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+pub fn pwrite64(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> SyscallReturn {
     let fd = unsafe { args.args[0].as_i64 } as libc::c_int;
     let buf_ptr = unsafe { args.args[1].as_ptr };
     let buf_size = unsafe { args.args[2].as_u64 } as libc::size_t;
     let offset = unsafe { args.args[3].as_i64 } as libc::off_t;
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = match syscall::get_descriptor(fd, sys.process) {
-        Ok(d) => unsafe { &mut *d },
-        Err(errno) => return SyscallReturn::Error(errno).into(),
-    };
+    let desc = unsafe { &mut *syscall::get_descriptor(fd, sys.process)? };
 
     match desc {
         CompatDescriptor::New(desc) => write_helper(sys, fd, desc, buf_ptr, buf_size, offset),
         // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
             c::syscallhandler_pwrite64(sys as *mut c::SysCallHandler, args as *const c::SysCallArgs)
+                .into()
         },
     }
 }
@@ -239,68 +213,55 @@ fn write_helper(
     buf_ptr: c::PluginPtr,
     buf_size: libc::size_t,
     offset: libc::off_t,
-) -> c::SysCallReturn {
+) -> SyscallReturn {
     // TODO: dynamically compute size based on how much data is actually available in the descriptor
     let size_needed = std::cmp::min(buf_size, c::SYSCALL_IO_BUFSIZE as usize);
-
-    let buf = match syscall::get_readable_ptr::<u8>(sys.process, sys.thread, buf_ptr, size_needed) {
-        Ok(ptr) => unsafe { Some(std::slice::from_raw_parts(ptr, size_needed)) },
-        Err(PluginPtrError::Null) | Err(PluginPtrError::ZeroLen) => {
-            match (buf_ptr.val == 0, buf_size) {
-                // non-null and zero len
-                (false, 0) => Some(&[][..]),
-                // null and zero len
-                (true, 0) => return SyscallReturn::Success(0).into(),
-                // null and non-zero len
-                (true, _) => None,
-                // non-null and non-zero len
-                (false, _) => unreachable!(),
-            }
-        }
-        Err(PluginPtrError::LenTooSmall) => unreachable!(),
-    };
 
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
-    // call the file's write(), and run any resulting events
-    let result = EventQueue::queue_and_run(|event_queue| {
-        posix_file.borrow_mut().write(buf, offset, event_queue)
+    let result: SyscallReturn = Context::with_current(|ctx| {
+        let buf = ctx.get_slice::<u8>(buf_ptr.into(), size_needed)?;
+
+        // call the file's write(), and run any resulting events
+        EventQueue::queue_and_run(|event_queue| {
+            posix_file
+                .borrow_mut()
+                .write(Some(buf), offset, event_queue)
+        })
     });
 
     // if the syscall would block and it's a blocking descriptor
-    if result == SyscallReturn::Error(nix::errno::EWOULDBLOCK)
+    if result == Err(SyscallError::Errno(nix::errno::EWOULDBLOCK))
         && !file_flags.contains(FileFlags::NONBLOCK)
     {
         let trigger = Trigger::from_posix_file(posix_file, FileStatus::WRITABLE);
 
-        return c::SysCallReturn {
-            state: c::SysCallReturnState_SYSCALL_BLOCK,
-            retval: c::SysCallReg { as_i64: 0i64 },
-            cond: unsafe { c::syscallcondition_new(trigger.into(), std::ptr::null_mut()) },
-        };
-    }
+        return Err(SyscallError::Cond(unsafe {
+            c::syscallcondition_new(trigger.into(), std::ptr::null_mut())
+        }));
+    };
 
-    result.into()
+    result
 }
 
-pub fn pipe(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+pub fn pipe(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> SyscallReturn {
     let fd_ptr = unsafe { args.args[0].as_ptr };
 
     pipe_helper(sys, fd_ptr, 0)
 }
 
-pub fn pipe2(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> c::SysCallReturn {
+pub fn pipe2(sys: &mut c::SysCallHandler, args: &c::SysCallArgs) -> SyscallReturn {
     let fd_ptr = unsafe { args.args[0].as_ptr };
     let flags = unsafe { args.args[1].as_u64 } as libc::c_int;
 
     pipe_helper(sys, fd_ptr, flags)
 }
 
-fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: c::PluginPtr, flags: i32) -> c::SysCallReturn {
+fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: c::PluginPtr, flags: i32) -> SyscallReturn {
     // make sure they didn't pass a NULL pointer
     if fd_ptr.val == 0 {
-        return SyscallReturn::Error(nix::errno::Errno::EFAULT).into();
+        return Err(SyscallError::Errno(nix::errno::Errno::EFAULT));
     }
 
     let mut file_flags = FileFlags::empty();
@@ -324,7 +285,7 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: c::PluginPtr, flags: i32) ->
         // exit early if the O_DIRECT flag was set
         if remaining_flags & libc::O_DIRECT != 0 {
             warn!("We don't currently support pipes in 'O_DIRECT' mode");
-            return SyscallReturn::Error(nix::errno::Errno::EOPNOTSUPP).into();
+            return Err(SyscallError::Errno(nix::errno::Errno::EOPNOTSUPP));
         }
         warn!("Ignoring pipe flags");
     }
@@ -354,36 +315,30 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: c::PluginPtr, flags: i32) ->
     writer_desc.set_flags(descriptor_flags);
 
     // register the file descriptors and return them to the caller
-    let num_items = 2;
-    let size_needed = num_items * std::mem::size_of::<libc::c_int>();
+    Context::with_current(|ctx| -> SyscallReturn {
+        // XXX: Normally for a small pointer it'd be preferable to create the
+        // slice in Rust and then call ctx.write_ptr_from_slice, allowing us to
+        // hold the ctx for a smaller scope. In this case it'd be a bit awkward
+        // though, since we'd then need to unregister the descriptors if the
+        // pointer-write failed.
+        let fds = ctx.get_writable_slice::<libc::c_int>(fd_ptr.into(), 2)?;
 
-    let fds = match syscall::get_writable_ptr::<libc::c_int>(
-        sys.process,
-        sys.thread,
-        fd_ptr,
-        size_needed,
-    ) {
-        Ok(ptr) => unsafe { std::slice::from_raw_parts_mut(ptr, num_items) },
-        // we checked for a NULL pointer earlier, and we set the length ourselves
-        _ => panic!(),
-    };
+        fds[0] = unsafe {
+            c::process_registerCompatDescriptor(
+                sys.process,
+                CompatDescriptor::into_raw(Box::new(CompatDescriptor::New(reader_desc))),
+            )
+        };
+        fds[1] = unsafe {
+            c::process_registerCompatDescriptor(
+                sys.process,
+                CompatDescriptor::into_raw(Box::new(CompatDescriptor::New(writer_desc))),
+            )
+        };
 
-    fds[0] = unsafe {
-        c::process_registerCompatDescriptor(
-            sys.process,
-            CompatDescriptor::into_raw(Box::new(CompatDescriptor::New(reader_desc))),
-        )
-    };
-    fds[1] = unsafe {
-        c::process_registerCompatDescriptor(
-            sys.process,
-            CompatDescriptor::into_raw(Box::new(CompatDescriptor::New(writer_desc))),
-        )
-    };
-
-    debug!("Created pipe reader fd {} and writer fd {}", fds[0], fds[1]);
-
-    SyscallReturn::Success(0).into()
+        debug!("Created pipe reader fd {} and writer fd {}", fds[0], fds[1]);
+        Ok(0.into())
+    })
 }
 
 mod export {
@@ -395,7 +350,7 @@ mod export {
         args: *const c::SysCallArgs,
     ) -> c::SysCallReturn {
         assert!(!sys.is_null() && !args.is_null());
-        close(unsafe { &mut *sys }, unsafe { &*args })
+        close(unsafe { &mut *sys }, unsafe { &*args }).into()
     }
 
     #[no_mangle]
@@ -404,7 +359,7 @@ mod export {
         args: *const c::SysCallArgs,
     ) -> c::SysCallReturn {
         assert!(!sys.is_null() && !args.is_null());
-        dup(unsafe { &mut *sys }, unsafe { &*args })
+        dup(unsafe { &mut *sys }, unsafe { &*args }).into()
     }
 
     #[no_mangle]
@@ -413,7 +368,7 @@ mod export {
         args: *const c::SysCallArgs,
     ) -> c::SysCallReturn {
         assert!(!sys.is_null() && !args.is_null());
-        read(unsafe { &mut *sys }, unsafe { &*args })
+        read(unsafe { &mut *sys }, unsafe { &*args }).into()
     }
 
     #[no_mangle]
@@ -422,7 +377,7 @@ mod export {
         args: *const c::SysCallArgs,
     ) -> c::SysCallReturn {
         assert!(!sys.is_null() && !args.is_null());
-        pread64(unsafe { &mut *sys }, unsafe { &*args })
+        pread64(unsafe { &mut *sys }, unsafe { &*args }).into()
     }
 
     #[no_mangle]
@@ -431,7 +386,7 @@ mod export {
         args: *const c::SysCallArgs,
     ) -> c::SysCallReturn {
         assert!(!sys.is_null() && !args.is_null());
-        write(unsafe { &mut *sys }, unsafe { &*args })
+        write(unsafe { &mut *sys }, unsafe { &*args }).into()
     }
 
     #[no_mangle]
@@ -440,7 +395,7 @@ mod export {
         args: *const c::SysCallArgs,
     ) -> c::SysCallReturn {
         assert!(!sys.is_null() && !args.is_null());
-        pwrite64(unsafe { &mut *sys }, unsafe { &*args })
+        pwrite64(unsafe { &mut *sys }, unsafe { &*args }).into()
     }
 
     #[no_mangle]
@@ -449,7 +404,7 @@ mod export {
         args: *const c::SysCallArgs,
     ) -> c::SysCallReturn {
         assert!(!sys.is_null() && !args.is_null());
-        pipe(unsafe { &mut *sys }, unsafe { &*args })
+        pipe(unsafe { &mut *sys }, unsafe { &*args }).into()
     }
 
     #[no_mangle]
@@ -458,6 +413,6 @@ mod export {
         args: *const c::SysCallArgs,
     ) -> c::SysCallReturn {
         assert!(!sys.is_null() && !args.is_null());
-        pipe2(unsafe { &mut *sys }, unsafe { &*args })
+        pipe2(unsafe { &mut *sys }, unsafe { &*args }).into()
     }
 }

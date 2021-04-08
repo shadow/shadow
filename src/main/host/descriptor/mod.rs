@@ -1,4 +1,5 @@
 use atomic_refcell::AtomicRefCell;
+use log::warn;
 use std::sync::Arc;
 
 use crate::cshadow as c;
@@ -32,28 +33,79 @@ impl<T> SyncSendPointer<T> {
     }
 }
 
-#[derive(PartialEq)]
-pub enum SyscallReturn {
-    Success(i32),
-    Error(nix::errno::Errno),
+// Calling all of these errors is stretching the semantics of 'error' a bit,
+// but it makes for fluent programming in syscall handlers using the `?` operator.
+#[derive(PartialEq, Eq)]
+pub enum SyscallError {
+    Errno(nix::errno::Errno),
+    Cond(*mut c::SysCallCondition),
+    Native,
+}
+
+pub type SyscallReturn = Result<crate::host::syscall_types::SysCallReg, SyscallError>;
+
+impl From<c::SysCallReturn> for SyscallReturn {
+    fn from(r: c::SysCallReturn) -> Self {
+        match r.state {
+            c::SysCallReturnState_SYSCALL_DONE => {
+                match crate::utility::syscall::raw_return_value_to_result(unsafe {
+                    r.retval.as_i64
+                }) {
+                    Ok(r) => Ok(r),
+                    Err(e) => Err(e.into()),
+                }
+            }
+            c::SysCallReturnState_SYSCALL_BLOCK => Err(SyscallError::Cond(r.cond)),
+            c::SysCallReturnState_SYSCALL_NATIVE => Err(SyscallError::Native),
+            _ => panic!("Unexpected c::SysCallReturn state {}", r.state),
+        }
+    }
 }
 
 impl From<SyscallReturn> for c::SysCallReturn {
     fn from(syscall_return: SyscallReturn) -> Self {
         match syscall_return {
-            SyscallReturn::Success(x) => Self {
+            Ok(r) => Self {
                 state: c::SysCallReturnState_SYSCALL_DONE,
-                retval: c::SysCallReg { as_i64: x as i64 },
+                retval: r.into(),
                 cond: std::ptr::null_mut(),
             },
-            SyscallReturn::Error(errno) => Self {
+            Err(SyscallError::Errno(e)) => Self {
                 state: c::SysCallReturnState_SYSCALL_DONE,
                 retval: c::SysCallReg {
-                    as_i64: -(errno as i64),
+                    as_i64: -(e as i64),
                 },
                 cond: std::ptr::null_mut(),
             },
+            Err(SyscallError::Cond(c)) => Self {
+                state: c::SysCallReturnState_SYSCALL_BLOCK,
+                retval: c::SysCallReg { as_i64: 0 },
+                cond: c,
+            },
+            Err(SyscallError::Native) => Self {
+                state: c::SysCallReturnState_SYSCALL_NATIVE,
+                retval: c::SysCallReg { as_i64: 0 },
+                cond: std::ptr::null_mut(),
+            },
         }
+    }
+}
+
+impl From<nix::Error> for SyscallError {
+    fn from(e: nix::Error) -> Self {
+        let errno = e.as_errno();
+        let errno = errno.unwrap_or_else(|| {
+            let default = nix::errno::ENOTSUP;
+            warn!("Mapping err {} to {}", e, default);
+            default
+        });
+        SyscallError::Errno(errno)
+    }
+}
+
+impl From<nix::errno::Errno> for SyscallError {
+    fn from(e: nix::errno::Errno) -> Self {
+        SyscallError::Errno(e)
     }
 }
 

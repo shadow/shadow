@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::cshadow as c;
 use crate::host::descriptor::{
     FileFlags, FileMode, FileStatus, NewStatusListenerFilter, PosixFile, StatusEventSource,
-    SyscallReturn,
+    SyscallError, SyscallReturn,
 };
 use crate::utility::byte_queue::ByteQueue;
 use crate::utility::event_queue::{EventQueue, Handle};
@@ -51,7 +51,7 @@ impl PipeFile {
             FileStatus::CLOSED,
             event_queue,
         );
-        SyscallReturn::Success(0)
+        Ok(0.into())
     }
 
     pub fn read(
@@ -62,22 +62,22 @@ impl PipeFile {
     ) -> SyscallReturn {
         // pipes don't support seeking
         if offset != 0 {
-            return SyscallReturn::Error(nix::errno::Errno::ESPIPE);
+            return Err(SyscallError::Errno(nix::errno::Errno::ESPIPE));
         }
 
         // if the file is not open for reading, return EBADF
         if !self.mode.contains(FileMode::READ) {
-            return SyscallReturn::Error(nix::errno::Errno::EBADF);
+            return Err(SyscallError::Errno(nix::errno::Errno::EBADF));
         }
 
         let bytes = match bytes {
             Some(b) => b,
-            None => return SyscallReturn::Error(nix::errno::Errno::EFAULT),
+            None => return Err(SyscallError::Errno(nix::errno::Errno::EFAULT)),
         };
 
         let num_read = self.buffer.borrow_mut().read(bytes, event_queue);
 
-        SyscallReturn::Success(num_read as i32)
+        Ok(num_read.into())
     }
 
     pub fn write(
@@ -88,26 +88,26 @@ impl PipeFile {
     ) -> SyscallReturn {
         // pipes don't support seeking
         if offset != 0 {
-            return SyscallReturn::Error(nix::errno::Errno::ESPIPE);
+            return Err(SyscallError::Errno(nix::errno::Errno::ESPIPE));
         }
 
         // if the file is not open for writing, return EBADF
         if !self.mode.contains(FileMode::WRITE) {
-            return SyscallReturn::Error(nix::errno::Errno::EBADF);
+            return Err(SyscallError::Errno(nix::errno::Errno::EBADF));
         }
 
         let bytes = match bytes {
             Some(b) => b,
-            None => return SyscallReturn::Error(nix::errno::Errno::EFAULT),
+            None => return Err(SyscallError::Errno(nix::errno::Errno::EFAULT)),
         };
 
         let num_written = self.buffer.borrow_mut().write(bytes, event_queue);
 
         // the write would block if we could not write any bytes, but were asked to
         if num_written == 0 && !bytes.is_empty() {
-            SyscallReturn::Error(nix::errno::EWOULDBLOCK)
+            Err(SyscallError::Errno(nix::errno::EWOULDBLOCK))
         } else {
-            SyscallReturn::Success(num_written as i32)
+            Ok(num_written.into())
         }
     }
 
