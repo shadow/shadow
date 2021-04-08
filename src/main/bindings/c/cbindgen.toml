@@ -24,7 +24,7 @@ rename_variants = "ScreamingSnakeCase"
 
 [export]
 # Avoid exporting C types back through again.
-exclude = ["PluginPtr", "SysCallReg"]
+exclude = ["PluginPtr", "SysCallReg", "SysCallArgs"]
 include = ["InterposeMethod", "QDiscMode"]
 # Generate all item types, excluding opaque and enum types
 item_types = ["constants", "globals", "structs", "unions", "typedefs", "functions"]
