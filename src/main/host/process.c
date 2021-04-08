@@ -774,8 +774,6 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
 #endif
 
 static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
-    gchar* threadBuffer;
-
     /* first argument is the name of the program */
     const gchar* pluginName = _process_getPluginName(proc);
 
