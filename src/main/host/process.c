@@ -776,15 +776,15 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
 static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
     gchar* threadBuffer;
 
-    gchar* arguments = NULL;
-
     /* first argument is the name of the program */
     const gchar* pluginName = _process_getPluginName(proc);
-    arguments = g_strdup(pluginName);
 
     /* parse the full argument string into separate strings */
+    gchar* arguments = NULL;
     if(proc->arguments && proc->arguments->len > 0 && g_ascii_strncasecmp(proc->arguments->str, "\0", (gsize) 1) != 0) {
-        arguments = g_strconcat(arguments, " ", proc->arguments->str, NULL);
+        arguments = g_strconcat(pluginName, " ", proc->arguments->str, NULL);
+    } else {
+        arguments = g_strdup(pluginName);
     }
 
     /* setup for creating new plug-in, i.e. format into argc and argv */
@@ -7718,4 +7718,3 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
 #include "main/host/process_undefined.h"
 
 #undef PROCESS_EMU_UNSUPPORTED
-
