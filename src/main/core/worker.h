@@ -17,6 +17,7 @@
 #include "main/core/work/task.h"
 #include "main/host/host.h"
 #include "main/host/syscall_types.h"
+#include "main/host/thread.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/routing/packet.h"
@@ -125,7 +126,7 @@ int worker_readPtr(void* dst, PluginVirtualPtr src, size_t n);
 // Copy `n` bytes from `src` to `dst` in the current active Process. Returns 0
 // on success or EFAULT if any of the specified range couldn't be accessed. The
 // write is flushed immediately.
-int worker_writePtr(PluginVirtualPtr dst, void* src, size_t n);
+int worker_writePtr(PluginVirtualPtr dst, const void* src, size_t n);
 
 // Implementation for counting allocated objects. Do not use this function directly.
 // Use worker_count_allocation instead from the call site.

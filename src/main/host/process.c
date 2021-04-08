@@ -852,7 +852,7 @@ int process_readPtr(Process* proc, Thread* thread, void* dst, PluginVirtualPtr s
     }
 }
 
-int process_writePtr(Process* proc, Thread* thread, PluginVirtualPtr dst, void* src, size_t n) {
+int process_writePtr(Process* proc, Thread* thread, PluginVirtualPtr dst, const void* src, size_t n) {
     MAGIC_ASSERT(proc);
     if (proc->memoryManager) {
         void* mapped = memorymanager_getWriteablePtr(proc->memoryManager, thread, dst, n);

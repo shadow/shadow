@@ -412,7 +412,7 @@ static int _threadpreload_readStringPtr(Thread* base, char* dst, PluginVirtualPt
     return 0;
 }
 
-static int _threadpreload_writePtr(Thread* thread, PluginVirtualPtr dst, void* src, size_t n) {
+static int _threadpreload_writePtr(Thread* thread, PluginVirtualPtr dst, const void* src, size_t n) {
     ShMemWriteBlock blk = {
         .blk = shmemallocator_globalAlloc(n),
         .plugin_ptr = dst,

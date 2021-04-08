@@ -266,7 +266,7 @@ int thread_readStringPtr(Thread* thread, char* dst, PluginVirtualPtr src, size_t
     return thread->methods.readStringPtr(thread, dst, src, n);
 }
 
-int thread_writePtr(Thread* thread, PluginVirtualPtr dst, void* src, size_t n) {
+int thread_writePtr(Thread* thread, PluginVirtualPtr dst, const void* src, size_t n) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.writePtr);
     return thread->methods.writePtr(thread, dst, src, n);

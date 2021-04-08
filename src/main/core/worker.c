@@ -891,7 +891,7 @@ int worker_readPtr(void* dst, PluginVirtualPtr src, size_t n) {
     return process_readPtr(worker->active.process, worker->active.thread, dst, src, n);
 }
 
-int worker_writePtr(PluginVirtualPtr dst, void* src, size_t n) {
+int worker_writePtr(PluginVirtualPtr dst, const void* src, size_t n) {
     Worker* worker = _worker_getPrivate();
     return process_writePtr(worker->active.process, worker->active.thread, dst, src, n);
 }

@@ -269,7 +269,7 @@ static ShimSharedMem* _threadptrace_sharedMem(ThreadPtrace* thread) {
 }
 
 // Forward declaration.
-static int _threadptrace_writePtr(Thread* thread, PluginPtr plugin_dst, void* shadow_src, size_t n);
+static int _threadptrace_writePtr(Thread* thread, PluginPtr plugin_dst, const void* shadow_src, size_t n);
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                         size_t n);
 static void _threadptrace_ensureStopped(ThreadPtrace* thread);
@@ -1285,7 +1285,7 @@ static int _threadptrace_readPtr(Thread* base, void* shadow_dst, PluginPtr plugi
     return 0;
 }
 
-static int _threadptrace_writePtr(Thread* base, PluginVirtualPtr plugin_dst, void* shadow_src,
+static int _threadptrace_writePtr(Thread* base, PluginVirtualPtr plugin_dst, const void* shadow_src,
                                   size_t n) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     if (fseek(thread->childMemFile, plugin_dst.val, SEEK_SET) < 0) {
