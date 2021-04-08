@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::cshadow as c;
 use crate::host::descriptor::{
     FileFlags, FileMode, FileStatus, NewStatusListenerFilter, PosixFile, StatusEventSource,
-    SyscallError, SyscallReturn,
+    SyscallReturn,
 };
 use crate::utility::byte_queue::ByteQueue;
 use crate::utility::event_queue::{EventQueue, Handle};
@@ -62,17 +62,17 @@ impl PipeFile {
     ) -> SyscallReturn {
         // pipes don't support seeking
         if offset != 0 {
-            return Err(SyscallError::Errno(nix::errno::Errno::ESPIPE));
+            return Err(nix::errno::Errno::ESPIPE.into());
         }
 
         // if the file is not open for reading, return EBADF
         if !self.mode.contains(FileMode::READ) {
-            return Err(SyscallError::Errno(nix::errno::Errno::EBADF));
+            return Err(nix::errno::Errno::EBADF.into());
         }
 
         let bytes = match bytes {
             Some(b) => b,
-            None => return Err(SyscallError::Errno(nix::errno::Errno::EFAULT)),
+            None => return Err(nix::errno::Errno::EFAULT.into()),
         };
 
         let num_read = self.buffer.borrow_mut().read(bytes, event_queue);
@@ -88,24 +88,24 @@ impl PipeFile {
     ) -> SyscallReturn {
         // pipes don't support seeking
         if offset != 0 {
-            return Err(SyscallError::Errno(nix::errno::Errno::ESPIPE));
+            return Err(nix::errno::Errno::ESPIPE.into());
         }
 
         // if the file is not open for writing, return EBADF
         if !self.mode.contains(FileMode::WRITE) {
-            return Err(SyscallError::Errno(nix::errno::Errno::EBADF));
+            return Err(nix::errno::Errno::EBADF.into());
         }
 
         let bytes = match bytes {
             Some(b) => b,
-            None => return Err(SyscallError::Errno(nix::errno::Errno::EFAULT)),
+            None => return Err(nix::errno::Errno::EFAULT.into()),
         };
 
         let num_written = self.buffer.borrow_mut().write(bytes, event_queue);
 
         // the write would block if we could not write any bytes, but were asked to
         if num_written == 0 && !bytes.is_empty() {
-            Err(SyscallError::Errno(nix::errno::EWOULDBLOCK))
+            Err(nix::errno::EWOULDBLOCK.into())
         } else {
             Ok(num_written.into())
         }

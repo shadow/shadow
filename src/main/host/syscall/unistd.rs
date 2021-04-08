@@ -154,9 +154,7 @@ fn read_helper(
     });
 
     // if the syscall would block and it's a blocking descriptor
-    if result == Err(SyscallError::Errno(nix::errno::EWOULDBLOCK))
-        && !file_flags.contains(FileFlags::NONBLOCK)
-    {
+    if result == Err(nix::errno::EWOULDBLOCK.into()) && !file_flags.contains(FileFlags::NONBLOCK) {
         let trigger = Trigger::from_posix_file(posix_file, FileStatus::READABLE);
 
         return Err(SyscallError::Cond(unsafe {
@@ -231,9 +229,7 @@ fn write_helper(
     });
 
     // if the syscall would block and it's a blocking descriptor
-    if result == Err(SyscallError::Errno(nix::errno::EWOULDBLOCK))
-        && !file_flags.contains(FileFlags::NONBLOCK)
-    {
+    if result == Err(nix::errno::EWOULDBLOCK.into()) && !file_flags.contains(FileFlags::NONBLOCK) {
         let trigger = Trigger::from_posix_file(posix_file, FileStatus::WRITABLE);
 
         return Err(SyscallError::Cond(unsafe {
@@ -260,7 +256,7 @@ pub fn pipe2(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallReturn {
 fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: PluginPtr, flags: i32) -> SyscallReturn {
     // make sure they didn't pass a NULL pointer
     if fd_ptr.is_null() {
-        return Err(SyscallError::Errno(nix::errno::Errno::EFAULT));
+        return Err(nix::errno::Errno::EFAULT.into());
     }
 
     let mut file_flags = FileFlags::empty();
@@ -284,7 +280,7 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: PluginPtr, flags: i32) -> Sy
         // exit early if the O_DIRECT flag was set
         if remaining_flags & libc::O_DIRECT != 0 {
             warn!("We don't currently support pipes in 'O_DIRECT' mode");
-            return Err(SyscallError::Errno(nix::errno::Errno::EOPNOTSUPP));
+            return Err(nix::errno::Errno::EOPNOTSUPP.into());
         }
         warn!("Ignoring pipe flags");
     }
