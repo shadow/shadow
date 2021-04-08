@@ -144,7 +144,7 @@ fn read_helper(
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
-    let result: SyscallReturn = Context::with_current(|ctx| {
+    let result: SyscallReturn = Context::with_current_mut(|ctx| {
         let buf = ctx.get_writable_slice::<u8>(buf_ptr, size_needed)?;
 
         // call the file's read(), and run any resulting events
@@ -310,7 +310,7 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: PluginPtr, flags: i32) -> Sy
     writer_desc.set_flags(descriptor_flags);
 
     // register the file descriptors and return them to the caller
-    Context::with_current(|ctx| -> SyscallReturn {
+    Context::with_current_mut(|ctx| -> SyscallReturn {
         // XXX: Normally for a small pointer it'd be preferable to create the
         // slice in Rust and then call ctx.write_ptr_from_slice, allowing us to
         // hold the ctx for a smaller scope. In this case it'd be a bit awkward
