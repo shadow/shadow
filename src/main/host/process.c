@@ -774,37 +774,30 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
 #endif
 
 static gint _process_getArguments(Process* proc, gchar** argvOut[]) {
-    gchar* threadBuffer;
-
-    GQueue *arguments = g_queue_new();
-
-    /* first argument is the name of the program */
     const gchar* pluginName = _process_getPluginName(proc);
-    g_queue_push_tail(arguments, g_strdup(pluginName));
 
-    /* parse the full argument string into separate strings */
+    /* build the full argument string (with plugin name as first argument) */
+    gchar* arguments = NULL;
     if(proc->arguments && proc->arguments->len > 0 && g_ascii_strncasecmp(proc->arguments->str, "\0", (gsize) 1) != 0) {
-        gchar* argumentString = g_strdup(proc->arguments->str);
-        gchar* token = strtok_r(argumentString, " ", &threadBuffer);
-        while(token != NULL) {
-            gchar* argument = g_strdup((const gchar*) token);
-            g_queue_push_tail(arguments, argument);
-            token = strtok_r(NULL, " ", &threadBuffer);
-        }
-        g_free(argumentString);
+        arguments = g_strconcat(pluginName, " ", proc->arguments->str, NULL);
+    } else {
+        arguments = g_strdup(pluginName);
     }
 
     /* setup for creating new plug-in, i.e. format into argc and argv */
-    gint argc = g_queue_get_length(arguments);
+    gint argc = 0;
     /* a pointer to an array that holds pointers */
-    gchar** argv = g_new0(gchar*, argc);
+    gchar** argv = NULL;
 
-    for(gint i = 0; i < argc; i++) {
-        argv[i] = g_queue_pop_head(arguments);
+    /* parse the full argument string into argc and argv */
+    GError *error = NULL;
+    if (!g_shell_parse_argv(arguments, &argc, &argv, &error)) {
+        error("unable to parse arguments for plugin '%s': %s", pluginName, error->message);
+        g_error_free(error);
     }
 
     /* cleanup */
-    g_queue_free(arguments);
+    g_free(arguments);
 
     /* transfer to the caller - they must free argv and each element of it */
     *argvOut = argv;
@@ -7723,4 +7716,3 @@ int process_emu_pthread_cond_timedwait(Process* proc, pthread_cond_t *cond, pthr
 #include "main/host/process_undefined.h"
 
 #undef PROCESS_EMU_UNSUPPORTED
-
