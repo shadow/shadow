@@ -837,6 +837,9 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
 
 int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n) {
     MAGIC_ASSERT(proc);
+    if (n == 0) {
+        return 0;
+    }
     Thread* thread = worker_getActiveThread();
     if (proc->memoryManager) {
         const void* mapped = memorymanager_getReadablePtr(proc->memoryManager, thread, src, n);
@@ -849,6 +852,9 @@ int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n) {
 
 int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_t n) {
     MAGIC_ASSERT(proc);
+    if (n == 0) {
+        return 0;
+    }
     Thread* thread = worker_getActiveThread();
     if (proc->memoryManager) {
         void* mapped = memorymanager_getWriteablePtr(proc->memoryManager, thread, dst, n);

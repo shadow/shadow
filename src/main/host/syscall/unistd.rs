@@ -149,7 +149,7 @@ fn read_helper(
 
         // call the file's read(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
-            posix_file.borrow_mut().read(Some(buf), offset, event_queue)
+            posix_file.borrow_mut().read(buf, offset, event_queue)
         })
     });
 
@@ -222,9 +222,7 @@ fn write_helper(
 
         // call the file's write(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
-            posix_file
-                .borrow_mut()
-                .write(Some(buf), offset, event_queue)
+            posix_file.borrow_mut().write(buf, offset, event_queue)
         })
     });
 

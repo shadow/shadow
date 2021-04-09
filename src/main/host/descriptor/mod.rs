@@ -320,7 +320,7 @@ impl PosixFile {
 
     pub fn read(
         &mut self,
-        bytes: Option<&mut [u8]>,
+        bytes: &mut [u8],
         offset: libc::off_t,
         event_queue: &mut EventQueue,
     ) -> SyscallResult {
@@ -331,7 +331,7 @@ impl PosixFile {
 
     pub fn write(
         &mut self,
-        bytes: Option<&[u8]>,
+        bytes: &[u8],
         offset: libc::off_t,
         event_queue: &mut EventQueue,
     ) -> SyscallResult {

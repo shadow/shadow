@@ -20,6 +20,7 @@ impl Process {
     }
 
     /// Read data from `src` in the current Process into a potentially-uninitialized `dst`.
+    /// Always succeeds for zero-size `dst`.
     pub fn read_ptr_into_slice<T: Pod>(&self, dst: &mut [T], src: PluginPtr) -> nix::Result<()> {
         let status = unsafe {
             cshadow::process_readPtr(
@@ -36,14 +37,16 @@ impl Process {
         }
     }
 
-    /// Read data from `src` in the current Process into `dst`.
+    /// Read data from `src` in the current Process into `dst`. Always succeeds
+    /// for zero-size `dst`.
     pub fn read_ptr_into_val<'a, T: Pod>(&self, dst: &mut T, src: PluginPtr) -> nix::Result<()> {
         let mut slice = std::slice::from_mut(dst);
         self.read_ptr_into_slice(&mut slice, src)?;
         Ok(())
     }
 
-    /// Interpret `src` as a pointer to `T` in the current Process in `dst` and return its value.
+    /// Interpret `src` as a pointer to `T` in the current Process in `dst` and
+    /// return its value. Always succeeds for zero-size `dst`.
     pub fn read_ptr_as_val<T: Pod>(&self, src: PluginPtr) -> nix::Result<T> {
         // SAFETY: Since `T` is Pod, any bit pattern is a valid `T`.
         let mut val: T = unsafe { MaybeUninit::uninit().assume_init() };
@@ -51,7 +54,8 @@ impl Process {
         Ok(val)
     }
 
-    /// Write `src` into `dst` in the current Process.
+    /// Write `src` into `dst` in the current Process. Always succeeds with
+    /// zero-size `dst`.
     pub fn write_ptr_from_slice<T: Copy>(&mut self, dst: PluginPtr, src: &[T]) -> nix::Result<()> {
         let status = unsafe {
             cshadow::process_writePtr(
@@ -68,7 +72,8 @@ impl Process {
         }
     }
 
-    /// Write `src` into `dst` in the current Process.
+    /// Write `src` into `dst` in the current Process. Always succeeds with
+    /// zero-size `dst`.
     pub fn write_ptr_from_val<T: Copy>(&mut self, dst: PluginPtr, src: &T) -> nix::Result<()> {
         let src = std::slice::from_ref(src);
         self.write_ptr_from_slice(dst, src)
@@ -175,11 +180,14 @@ impl Process {
     }
 
     /// Get a read-only slice at `src`. Returns an error if the memory can't
-    /// be accessed.
+    /// be accessed. Returns an empty slice for len == 0.
     ///
     /// Prefer the `read_ptr_*` methods for small objects or when the data must
     /// be copied anyway.
     pub fn get_slice<T>(&self, src: PluginPtr, len: usize) -> nix::Result<&[T]> {
+        if len == 0 {
+            return Ok(&[][..]);
+        }
         let raw = self.get_readable_ptr(src, std::mem::size_of::<T>() * len)?;
         // SAFETY: `get_readable_ptr` already checked bounds, and since T
         // is Pod, any data is a valid T.
@@ -189,11 +197,16 @@ impl Process {
     /// Get a mutable slice to `src`. May return an error if the memory can't
     /// be accessed. In some cases the returned reference is to local memory that
     /// will be flushed later, in which case any errors will be deferred until
-    /// then.
+    /// then. Returns an empty slice for len == 0.
     ///
     /// Prefer the `write_ptr_*` methods when feasible, and `get_writable_ref` when
     /// you don't need the original value stored at `src`.
     pub fn get_mut_slice<T>(&mut self, src: PluginPtr, len: usize) -> nix::Result<&mut [T]> {
+        if len == 0 {
+            return Ok(unsafe {
+                std::slice::from_raw_parts_mut(std::ptr::NonNull::dangling().as_ptr(), 0)
+            });
+        }
         let raw = self.get_mutable_ptr(src, std::mem::size_of::<T>() * len)?;
         // SAFETY: `get_mutable_ptr` already checked bounds, and since T
         // is Pod, any data is a valid T.
@@ -204,6 +217,11 @@ impl Process {
     ///
     /// Prefer the `write_ptr_*` methods.
     pub fn get_writable_slice<T>(&mut self, src: PluginPtr, len: usize) -> nix::Result<&mut [T]> {
+        if len == 0 {
+            return Ok(unsafe {
+                std::slice::from_raw_parts_mut(std::ptr::NonNull::dangling().as_ptr(), 0)
+            });
+        }
         let raw = self.get_writable_ptr(src, std::mem::size_of::<T>() * len)?;
         // SAFETY: `get_mutable_ptr` already checked bounds, and since T
         // is Pod, any data is a valid T.

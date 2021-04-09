@@ -105,12 +105,12 @@ LegacyDescriptor* process_getRegisteredLegacyDescriptor(Process* proc, int handl
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr);
 
 // Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
-// the specified range couldn't be accessed.
+// the specified range couldn't be accessed. Always succeeds with n==0.
 int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n);
 
-// Copy a string of at most `n` bytes from `src` to `dst`. Returns 0 on success,
-// EFAULT if any of the specified memory couldn't be accessed, or ENAMETOOLONG
-// if there was no NULL byte in the first `n` bytes.
+// Copy a string of at most `n` bytes (including NULL) from `src` to `dst`.
+// Returns 0 on success, EFAULT if any of the specified memory couldn't be
+// accessed, or ENAMETOOLONG if there was no NULL byte in the first `n` bytes.
 int process_readStringPtr(Process* proc, char* dst, PluginVirtualPtr src, size_t n);
 
 // Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
