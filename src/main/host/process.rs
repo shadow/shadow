@@ -19,12 +19,14 @@ impl Process {
         Process { cprocess: p }
     }
 
-    /// Read data from `src` in the current Process into `dst`.
-    pub fn read_ptr_into_slice<T: Pod>(
+    /// Read data from `src` in the current Process into a potentially-uninitialized `dst`.
+    pub fn read_ptr_into_uninit_slice<'a, T: Pod>(
         &self,
-        dst: &mut [MaybeUninit<T>],
+        dst: &'a mut [MaybeUninit<T>],
         src: PluginPtr,
-    ) -> nix::Result<()> {
+    ) -> nix::Result<&'a mut [T]> {
+        // Based loosely on
+        // https://users.rust-lang.org/t/is-there-a-way-to-copy-t-into-mut-maybeuninit-t-without-unsafe/51301/4
         let status = unsafe {
             cshadow::process_readPtr(
                 self.cprocess,
@@ -34,26 +36,43 @@ impl Process {
             )
         };
         if status == 0 {
-            Ok(())
+            Ok(unsafe { std::slice::from_raw_parts_mut(dst.as_mut_ptr() as *mut T, dst.len()) })
         } else {
             Err(nix::Error::from_errno(nix::errno::from_i32(status as i32)))
         }
     }
 
-    /// Read data from `src` in the current Process into `dst`.
-    pub fn read_ptr_into_val<T: Pod>(
+    /// Read data from `src` in the current Process into a potentially-uninitialized `dst`.
+    pub fn read_ptr_into_uninit_val<'a, T: Pod>(
         &self,
-        dst: &mut MaybeUninit<T>,
+        dst: &'a mut MaybeUninit<T>,
         src: PluginPtr,
-    ) -> nix::Result<()> {
-        let mut s = std::slice::from_mut(dst);
-        self.read_ptr_into_slice(&mut s, src)
+    ) -> nix::Result<&'a mut T> {
+        let mut uninitd = std::slice::from_mut(dst);
+        let initd = self.read_ptr_into_uninit_slice(&mut uninitd, src)?;
+        Ok(unsafe { &mut *(&mut initd[0] as *mut T) })
+    }
+
+    /// Read data from `src` in the current Process into `dst`.
+    pub fn read_ptr_into_slice<T: Pod>(&self, dst: &mut [T], src: PluginPtr) -> nix::Result<()> {
+        let slice = unsafe {
+            std::slice::from_raw_parts_mut(dst.as_mut_ptr() as *mut MaybeUninit<T>, dst.len())
+        };
+        self.read_ptr_into_uninit_slice(slice, src)?;
+        Ok(())
+    }
+
+    /// Read data from `src` in the current Process into `dst`.
+    pub fn read_ptr_into_val<T: Pod>(&self, dst: &mut T, src: PluginPtr) -> nix::Result<()> {
+        let maybe = unsafe { &mut *(dst as *mut T as *mut MaybeUninit<T>) };
+        self.read_ptr_into_uninit_val(maybe, src)?;
+        Ok(())
     }
 
     /// Interpret `src` as a pointer to `T` in the current Process in `dst` and return its value.
     pub fn read_ptr_as_val<T: Pod>(&self, src: PluginPtr) -> nix::Result<T> {
         let mut val = MaybeUninit::uninit();
-        self.read_ptr_into_val(&mut val, src)?;
+        self.read_ptr_into_uninit_val(&mut val, src)?;
         Ok(unsafe { val.assume_init() })
     }
 
