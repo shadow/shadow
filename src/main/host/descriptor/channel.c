@@ -85,7 +85,7 @@ static gssize channel_linkedWrite(Channel* channel, PluginVirtualPtr buffer, gsi
     // worker_readPtr to read directly into its storage, saving a potential copy
     // inside worker_getReadablePtr. e.g. one that accepts a read callback.
     gsize copyLength = MIN(nBytes, available);
-    const void* readablePtr = worker_getReadablePtr(buffer, copyLength);
+    const void* readablePtr = process_getReadablePtr(worker_getActiveProcess(), buffer, copyLength);
     if (!readablePtr) {
         return -EFAULT;
     }
@@ -162,7 +162,7 @@ static gssize channel_receiveUserData(Transport* transport, PluginVirtualPtr buf
     // saving a potential copy in worker_getWritablePtr. e.g. add an interface
     // to bytequeue that takes a `write` callback.
     gsize copyLength = MIN(nBytes, available);
-    void* writableBuf = worker_getWritablePtr(buffer, copyLength);
+    void* writableBuf = process_getWriteablePtr(worker_getActiveProcess(), buffer, copyLength);
     if (!writableBuf) {
         return -EFAULT;
     }

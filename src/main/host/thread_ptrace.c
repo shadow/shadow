@@ -495,8 +495,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
         _threadptrace_getregs(thread);
         debug("threadptrace_enterStateSignalled regs: %s", _regs_to_str(&thread->regs.value));
         uint64_t eip = thread->regs.value.rip;
-        const uint8_t* buf = process_getReadablePtr(
-            thread->base.process, _threadPtraceToThread(thread), (PluginPtr){eip}, 4);
+        const uint8_t* buf = process_getReadablePtr(thread->base.process, (PluginPtr){eip}, 4);
         if (isRdtsc(buf)) {
             debug("emulating rdtsc");
             Tsc_emulateRdtsc(&thread->tsc, &thread->regs.value, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
@@ -804,8 +803,8 @@ static SysCallReturn _threadptrace_getSerializedBlock(ThreadPtrace* thread, Plug
                                                       ShMemBlock* block, const char* syscall_name) {
     debug("%s %p", syscall_name, (void*)shm_blk_pptr.val);
 
-    ShMemBlockSerialized* shm_blk_ptr = process_getWriteablePtr(
-        thread->base.process, &thread->base, shm_blk_pptr, sizeof(*shm_blk_ptr));
+    ShMemBlockSerialized* shm_blk_ptr =
+        process_getWriteablePtr(thread->base.process, shm_blk_pptr, sizeof(*shm_blk_ptr));
     *shm_blk_ptr = shmemallocator_globalBlockSerialize(block);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};

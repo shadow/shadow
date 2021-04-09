@@ -28,7 +28,7 @@ Payload* payload_new(PluginVirtualPtr data, gsize dataLength) {
 
     if (data.val && dataLength > 0) {
         payload->data = g_malloc0(dataLength);
-        if (worker_readPtr(payload->data, data, dataLength) != 0) {
+        if (process_readPtr(worker_getActiveProcess(), payload->data, data, dataLength) != 0) {
             warning("Couldn't read data for packet");
             g_free(payload);
             return NULL;
@@ -108,7 +108,8 @@ gssize payload_getData(Payload* payload, gsize offset, PluginVirtualPtr destBuff
     gssize copyLength = MIN(targetLength, destBufferLength);
 
     if (copyLength > 0) {
-        int err = worker_writePtr(destBuffer, payload->data + offset, copyLength);
+        int err = process_writePtr(
+            worker_getActiveProcess(), destBuffer, payload->data + offset, copyLength);
         if (err) {
             return -err;
         }

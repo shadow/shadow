@@ -1,4 +1,4 @@
-use crate::core::worker::Context;
+use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::{
@@ -144,8 +144,8 @@ fn read_helper(
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
-    let result: SyscallReturn = Context::with_current_mut(|ctx| {
-        let buf = ctx.get_writable_slice::<u8>(buf_ptr, size_needed)?;
+    let result: SyscallReturn = Worker::with_active_process_mut(|process| {
+        let buf = process.get_writable_slice::<u8>(buf_ptr, size_needed)?;
 
         // call the file's read(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
@@ -217,8 +217,8 @@ fn write_helper(
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
-    let result: SyscallReturn = Context::with_current(|ctx| {
-        let buf = ctx.get_slice::<u8>(buf_ptr.into(), size_needed)?;
+    let result: SyscallReturn = Worker::with_active_process(|process| {
+        let buf = process.get_slice::<u8>(buf_ptr.into(), size_needed)?;
 
         // call the file's write(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
@@ -310,13 +310,14 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: PluginPtr, flags: i32) -> Sy
     writer_desc.set_flags(descriptor_flags);
 
     // register the file descriptors and return them to the caller
-    Context::with_current_mut(|ctx| -> SyscallReturn {
-        // XXX: Normally for a small pointer it'd be preferable to create the
-        // slice in Rust and then call ctx.write_ptr_from_slice, allowing us to
-        // hold the ctx for a smaller scope. In this case it'd be a bit awkward
-        // though, since we'd then need to unregister the descriptors if the
-        // pointer-write failed.
-        let fds = ctx.get_writable_slice::<libc::c_int>(fd_ptr.into(), 2)?;
+    Worker::with_active_process_mut(|process| -> SyscallReturn {
+        // Normally for a small pointer it'd be a little cleaner to create the
+        // slice in Rust and then call process.write_ptr_from_slice, allowing us
+        // to hold the process for a smaller scope.
+        //
+        // In this case it'd be a bit awkward though, since we'd then need to
+        // unregister the descriptors if the pointer-write failed.
+        let fds = process.get_writable_slice::<libc::c_int>(fd_ptr.into(), 2)?;
 
         fds[0] = unsafe {
             c::process_registerCompatDescriptor(

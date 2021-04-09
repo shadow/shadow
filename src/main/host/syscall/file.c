@@ -127,7 +127,7 @@ SysCallReturn syscallhandler_fstat(SysCallHandler* sys,
     }
 
     /* Get some memory in which to return the result. */
-    struct stat* buf = process_getWriteablePtr(sys->process, sys->thread, bufPtr, sizeof(*buf));
+    struct stat* buf = process_getWriteablePtr(sys->process, bufPtr, sizeof(*buf));
 
     return (SysCallReturn){
         .state = SYSCALL_DONE, .retval.as_i64 = file_fstat(file_desc, buf)};
@@ -151,7 +151,7 @@ SysCallReturn syscallhandler_fstatfs(SysCallHandler* sys,
     }
 
     /* Get some memory in which to return the result. */
-    struct statfs* buf = process_getWriteablePtr(sys->process, sys->thread, bufPtr, sizeof(*buf));
+    struct statfs* buf = process_getWriteablePtr(sys->process, bufPtr, sizeof(*buf));
 
     return (SysCallReturn){
         .state = SYSCALL_DONE, .retval.as_i64 = file_fstatfs(file_desc, buf)};
@@ -298,9 +298,8 @@ SysCallReturn syscallhandler_fsetxattr(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    const void* value = (valuePtr.val && size > 0)
-                            ? process_getReadablePtr(sys->process, sys->thread, valuePtr, size)
-                            : NULL;
+    const void* value =
+        (valuePtr.val && size > 0) ? process_getReadablePtr(sys->process, valuePtr, size) : NULL;
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
@@ -333,9 +332,8 @@ SysCallReturn syscallhandler_fgetxattr(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    void* value = (valuePtr.val && size > 0)
-                      ? process_getWriteablePtr(sys->process, sys->thread, valuePtr, size)
-                      : NULL;
+    void* value =
+        (valuePtr.val && size > 0) ? process_getWriteablePtr(sys->process, valuePtr, size) : NULL;
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
@@ -355,9 +353,8 @@ SysCallReturn syscallhandler_flistxattr(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    void* list = (listPtr.val && size > 0)
-                     ? process_getWriteablePtr(sys->process, sys->thread, listPtr, size)
-                     : NULL;
+    void* list =
+        (listPtr.val && size > 0) ? process_getWriteablePtr(sys->process, listPtr, size) : NULL;
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
@@ -466,7 +463,7 @@ SysCallReturn syscallhandler_getdents(SysCallHandler* sys,
     }
 
     /* Get the path string from the plugin. */
-    struct linux_dirent* dirp = process_getWriteablePtr(sys->process, sys->thread, dirpPtr, count);
+    struct linux_dirent* dirp = process_getWriteablePtr(sys->process, dirpPtr, count);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
@@ -495,8 +492,7 @@ SysCallReturn syscallhandler_getdents64(SysCallHandler* sys,
     }
 
     /* Get the path string from the plugin. */
-    struct linux_dirent64* dirp =
-        process_getWriteablePtr(sys->process, sys->thread, dirpPtr, count);
+    struct linux_dirent64* dirp = process_getWriteablePtr(sys->process, dirpPtr, count);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }

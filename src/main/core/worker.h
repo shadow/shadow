@@ -106,28 +106,6 @@ void worker_incrementPluginError();
 Address* worker_resolveIPToAddress(in_addr_t ip);
 Address* worker_resolveNameToAddress(const gchar* name);
 
-// Get a readable pointer in the current active Process.
-const void* worker_getReadablePtr(PluginVirtualPtr src, size_t n);
-
-// Get a writable pointer in the current active Process.
-void* worker_getWritablePtr(PluginVirtualPtr dst, size_t n);
-
-// Get a mutable pointer containing the data at `dst`.
-void* worker_getMutablePtr(PluginVirtualPtr dst, size_t n);
-
-// Flushes and invalidates previously returned readable, writable, and mutable
-// pointers.
-void worker_flushPtrs();
-
-// Copy `n` bytes from `src` in the current active Process to `dst`. Returns 0
-// on success or EFAULT if any of the specified range couldn't be accessed.
-int worker_readPtr(void* dst, PluginVirtualPtr src, size_t n);
-
-// Copy `n` bytes from `src` to `dst` in the current active Process. Returns 0
-// on success or EFAULT if any of the specified range couldn't be accessed. The
-// write is flushed immediately.
-int worker_writePtr(PluginVirtualPtr dst, const void* src, size_t n);
-
 // Implementation for counting allocated objects. Do not use this function directly.
 // Use worker_count_allocation instead from the call site.
 void __worker_increment_object_alloc_counter(const char* object_name);

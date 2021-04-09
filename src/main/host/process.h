@@ -106,39 +106,39 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
 
 // Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
 // the specified range couldn't be accessed.
-int process_readPtr(Process* proc, Thread* thread, void* dst, PluginVirtualPtr src, size_t n);
+int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n);
 
 // Copy a string of at most `n` bytes from `src` to `dst`. Returns 0 on success,
 // EFAULT if any of the specified memory couldn't be accessed, or ENAMETOOLONG
 // if there was no NULL byte in the first `n` bytes.
-int process_readStringPtr(Process* proc, Thread* thread, char* dst, PluginVirtualPtr src, size_t n);
+int process_readStringPtr(Process* proc, char* dst, PluginVirtualPtr src, size_t n);
 
 // Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
 // the specified range couldn't be accessed. The write is flushed immediately.
-int process_writePtr(Process* proc, Thread* thread, PluginVirtualPtr dst, const void* src, size_t n);
+int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_t n);
 
 // Make the data at plugin_src available in shadow's address space.
 //
 // The returned pointer is read-only, and is automatically invalidated when the
 // plugin runs again.
-const void* process_getReadablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n);
+const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n);
 
 // Returns a writable pointer corresponding to the named region. The initial
 // contents of the returned memory are unspecified.
 //
 // The returned pointer is automatically invalidated when the plugin runs again.
-void* process_getWriteablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n);
+void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n);
 
 // Returns a writeable pointer corresponding to the specified src. Use when
 // the data at the given address needs to be both read and written.
 //
 // The returned pointer is automatically invalidated when the plugin runs again.
-void* process_getMutablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n);
+void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n);
 
 // Flushes and invalidates all previously returned readable/writable plugin
 // pointers, as if returning control to the plugin. This can be useful in
 // conjunction with `thread_nativeSyscall` operations that touch memory.
-void process_flushPtrs(Process* proc, Thread* thread);
+void process_flushPtrs(Process* proc);
 
 MemoryManager* process_getMemoryManager(Process* proc);
 void process_setMemoryManager(Process* proc, MemoryManager* memoryManager);

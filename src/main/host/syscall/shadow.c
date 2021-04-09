@@ -32,7 +32,7 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
-    const char* name = process_getReadablePtr(sys->process, sys->thread, name_ptr, name_len);
+    const char* name = process_getReadablePtr(sys->process, name_ptr, name_len);
 
     debug("Looking up name %s", name);
     Address* address = worker_resolveNameToAddress(name);
@@ -41,7 +41,7 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
         debug("Found address %s for name %s", address_toString(address), name);
 
         uint32_t ip = address_toNetworkIP(address);
-        uint32_t* addr = process_getWriteablePtr(sys->process, sys->thread, addr_ptr, addr_len);
+        uint32_t* addr = process_getWriteablePtr(sys->process, addr_ptr, addr_len);
         *addr = ip;
 
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
@@ -81,7 +81,7 @@ static SysCallReturn _syscallhandler_get_shmem_block(SysCallHandler* sys, const 
     PluginPtr shm_blk_pptr = args->args[0].as_ptr;
 
     ShMemBlockSerialized* shm_blk_ptr =
-        process_getWriteablePtr(sys->process, sys->thread, shm_blk_pptr, sizeof(*shm_blk_ptr));
+        process_getWriteablePtr(sys->process, shm_blk_pptr, sizeof(*shm_blk_ptr));
     *shm_blk_ptr = shmemallocator_globalBlockSerialize(block);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};

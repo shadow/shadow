@@ -178,7 +178,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
     PluginVirtualPtr clear_child_tid_pvp = thread_getTidAddress(thread);
     if (clear_child_tid_pvp.val && g_hash_table_size(process->threads) > 1 && !process->isExiting) {
         pid_t* clear_child_tid =
-            process_getWriteablePtr(process, thread, clear_child_tid_pvp, sizeof(pid_t*));
+            process_getWriteablePtr(process, clear_child_tid_pvp, sizeof(pid_t*));
         if (!clear_child_tid) {
             // We *might* end up getting here (or failing even earlier) if we end up having to use
             // thread_getWriteablePtr (i.e. because the address isn't shared in the
@@ -195,7 +195,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
             abort();
         }
         *clear_child_tid = 0;
-        process_flushPtrs(process, thread);
+        process_flushPtrs(process);
 
         FutexTable* ftable = host_getFutexTable(process->host);
         utility_assert(ftable);
@@ -452,17 +452,14 @@ static void _process_start(Process* proc) {
 #ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
-#endif
-
-    worker_setActiveProcess(NULL);
-    worker_setActiveThread(NULL);
-
-#ifdef USE_PERF_TIMERS
     message(
         "process '%s' started in %f seconds", process_getName(proc), elapsed);
 #else
     message("process '%s' started", process_getName(proc));
 #endif
+
+    worker_setActiveProcess(NULL);
+    worker_setActiveThread(NULL);
 
     /* call main and run until blocked */
     process_continue(proc, mainThread);
@@ -530,12 +527,6 @@ void process_continue(Process* proc, Thread* thread) {
 #ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
-#endif
-
-    worker_setActiveProcess(NULL);
-    worker_setActiveThread(NULL);
-
-#ifdef USE_PERF_TIMERS
     info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
 #else
     info("process '%s' done continuing", process_getName(proc));
@@ -548,6 +539,9 @@ void process_continue(Process* proc, Thread* thread) {
     } else {
         _process_check_thread(proc, thread);
     }
+
+    worker_setActiveProcess(NULL);
+    worker_setActiveThread(NULL);
 }
 
 void process_stop(Process* proc) {
@@ -841,8 +835,9 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
     return (PluginPhysicalPtr){.val = low | high};
 }
 
-int process_readPtr(Process* proc, Thread* thread, void* dst, PluginVirtualPtr src, size_t n) {
+int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n) {
     MAGIC_ASSERT(proc);
+    Thread* thread = worker_getActiveThread();
     if (proc->memoryManager) {
         const void* mapped = memorymanager_getReadablePtr(proc->memoryManager, thread, src, n);
         memcpy(dst, mapped, n);
@@ -852,8 +847,9 @@ int process_readPtr(Process* proc, Thread* thread, void* dst, PluginVirtualPtr s
     }
 }
 
-int process_writePtr(Process* proc, Thread* thread, PluginVirtualPtr dst, const void* src, size_t n) {
+int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_t n) {
     MAGIC_ASSERT(proc);
+    Thread* thread = worker_getActiveThread();
     if (proc->memoryManager) {
         void* mapped = memorymanager_getWriteablePtr(proc->memoryManager, thread, dst, n);
         memcpy(mapped, src, n);
@@ -863,8 +859,9 @@ int process_writePtr(Process* proc, Thread* thread, PluginVirtualPtr dst, const 
     }
 }
 
-const void* process_getReadablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
+const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
+    Thread* thread = worker_getActiveThread();
     if (proc->memoryManager) {
         return memorymanager_getReadablePtr(proc->memoryManager, thread, plugin_src, n);
     } else {
@@ -876,8 +873,9 @@ const void* process_getReadablePtr(Process* proc, Thread* thread, PluginPtr plug
 // contents of the returned memory are unspecified.
 //
 // The returned pointer is automatically invalidated when the plugin runs again.
-void* process_getWriteablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
+void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
+    Thread* thread = worker_getActiveThread();
     if (proc->memoryManager) {
         return memorymanager_getWriteablePtr(proc->memoryManager, thread, plugin_src, n);
     } else {
@@ -889,8 +887,9 @@ void* process_getWriteablePtr(Process* proc, Thread* thread, PluginPtr plugin_sr
 // the data at the given address needs to be both read and written.
 //
 // The returned pointer is automatically invalidated when the plugin runs again.
-void* process_getMutablePtr(Process* proc, Thread* thread, PluginPtr plugin_src, size_t n) {
+void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
+    Thread* thread = worker_getActiveThread();
     if (proc->memoryManager) {
         return memorymanager_getMutablePtr(proc->memoryManager, thread, plugin_src, n);
     } else {
@@ -901,8 +900,9 @@ void* process_getMutablePtr(Process* proc, Thread* thread, PluginPtr plugin_src,
 // Flushes and invalidates all previously returned readable/writeable plugin
 // pointers, as if returning control to the plugin. This can be useful in
 // conjunction with `thread_nativeSyscall` operations that touch memory.
-void process_flushPtrs(Process* proc, Thread* thread) {
+void process_flushPtrs(Process* proc) {
     MAGIC_ASSERT(proc);
+    Thread* thread = worker_getActiveThread();
     thread_flushPtrs(thread);
 }
 

@@ -483,9 +483,32 @@ extern "C" {
     ) -> *mut CompatDescriptor;
 }
 extern "C" {
+    pub fn process_readPtr(
+        proc_: *mut Process,
+        dst: *mut ::std::os::raw::c_void,
+        src: PluginVirtualPtr,
+        n: size_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn process_readStringPtr(
+        proc_: *mut Process,
+        dst: *mut ::std::os::raw::c_char,
+        src: PluginVirtualPtr,
+        n: size_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn process_writePtr(
+        proc_: *mut Process,
+        dst: PluginVirtualPtr,
+        src: *const ::std::os::raw::c_void,
+        n: size_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn process_getReadablePtr(
         proc_: *mut Process,
-        thread: *mut Thread,
         plugin_src: PluginPtr,
         n: size_t,
     ) -> *const ::std::os::raw::c_void;
@@ -493,7 +516,6 @@ extern "C" {
 extern "C" {
     pub fn process_getWriteablePtr(
         proc_: *mut Process,
-        thread: *mut Thread,
         plugin_src: PluginPtr,
         n: size_t,
     ) -> *mut ::std::os::raw::c_void;
@@ -501,7 +523,6 @@ extern "C" {
 extern "C" {
     pub fn process_getMutablePtr(
         proc_: *mut Process,
-        thread: *mut Thread,
         plugin_src: PluginPtr,
         n: size_t,
     ) -> *mut ::std::os::raw::c_void;
@@ -533,31 +554,7 @@ pub struct _Futex {
 }
 pub type Futex = _Futex;
 extern "C" {
-    pub fn worker_getReadablePtr(src: PluginVirtualPtr, n: size_t)
-        -> *const ::std::os::raw::c_void;
-}
-extern "C" {
-    pub fn worker_getWritablePtr(dst: PluginVirtualPtr, n: size_t) -> *mut ::std::os::raw::c_void;
-}
-extern "C" {
-    pub fn worker_getMutablePtr(dst: PluginVirtualPtr, n: size_t) -> *mut ::std::os::raw::c_void;
-}
-extern "C" {
-    pub fn worker_flushPtrs();
-}
-extern "C" {
-    pub fn worker_readPtr(
-        dst: *mut ::std::os::raw::c_void,
-        src: PluginVirtualPtr,
-        n: size_t,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn worker_writePtr(
-        dst: PluginVirtualPtr,
-        src: *const ::std::os::raw::c_void,
-        n: size_t,
-    ) -> ::std::os::raw::c_int;
+    pub fn worker_getActiveProcess() -> *mut Process;
 }
 pub use self::_TriggerType as TriggerType;
 pub const _TriggerType_TRIGGER_NONE: _TriggerType = 0;
