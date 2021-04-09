@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::cshadow as c;
 use crate::host::descriptor::{
     FileFlags, FileMode, FileStatus, NewStatusListenerFilter, PosixFile, StatusEventSource,
-    SyscallReturn,
+    SyscallResult,
 };
 use crate::utility::byte_queue::ByteQueue;
 use crate::utility::event_queue::{EventQueue, Handle};
@@ -44,7 +44,7 @@ impl PipeFile {
         self.flags = flags;
     }
 
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
         // set the closed flag and remove the active flag
         self.copy_status(
             FileStatus::CLOSED | FileStatus::ACTIVE,
@@ -59,7 +59,7 @@ impl PipeFile {
         bytes: Option<&mut [u8]>,
         offset: libc::off_t,
         event_queue: &mut EventQueue,
-    ) -> SyscallReturn {
+    ) -> SyscallResult {
         // pipes don't support seeking
         if offset != 0 {
             return Err(nix::errno::Errno::ESPIPE.into());
@@ -85,7 +85,7 @@ impl PipeFile {
         bytes: Option<&[u8]>,
         offset: libc::off_t,
         event_queue: &mut EventQueue,
-    ) -> SyscallReturn {
+    ) -> SyscallResult {
         // pipes don't support seeking
         if offset != 0 {
             return Err(nix::errno::Errno::ESPIPE.into());

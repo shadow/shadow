@@ -3,7 +3,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::{
     CompatDescriptor, Descriptor, DescriptorFlags, FileFlags, FileMode, FileStatus, PosixFile,
-    SyscallError, SyscallReturn,
+    SyscallError, SyscallResult,
 };
 use crate::host::syscall::{self, Trigger};
 use crate::host::syscall_types::{PluginPtr, SysCallArgs};
@@ -14,7 +14,7 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use log::*;
 
-pub fn close(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallReturn {
+pub fn close(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
 
     debug!("Trying to close fd {}", fd);
@@ -54,7 +54,7 @@ pub fn close(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallReturn {
     }
 }
 
-pub fn dup(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallReturn {
+pub fn dup(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
 
     // get the descriptor, or return early if it doesn't exist
@@ -74,7 +74,7 @@ pub fn dup_helper(
     sys: &mut c::SysCallHandler,
     fd: libc::c_int,
     desc: &Descriptor,
-) -> SyscallReturn {
+) -> SyscallResult {
     debug!("Duping fd {} ({:?})", fd, desc);
 
     // clone the descriptor (but not the flags)
@@ -94,7 +94,7 @@ pub fn dup_helper(
     Ok(new_fd.into())
 }
 
-pub fn read(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallReturn {
+pub fn read(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
     let buf_ptr = PluginPtr::from(args.get(1));
     let buf_size = libc::size_t::from(args.get(2));
@@ -112,7 +112,7 @@ pub fn read(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallReturn {
     }
 }
 
-pub fn pread64(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallReturn {
+pub fn pread64(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
     let buf_ptr = PluginPtr::from(args.get(1));
     let buf_size = libc::size_t::from(args.get(2));
@@ -138,13 +138,13 @@ fn read_helper(
     buf_ptr: PluginPtr,
     buf_size: libc::size_t,
     offset: libc::off_t,
-) -> SyscallReturn {
+) -> SyscallResult {
     // TODO: dynamically compute size based on how much data is actually available in the descriptor
     let size_needed = std::cmp::min(buf_size, c::SYSCALL_IO_BUFSIZE as usize);
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
-    let result: SyscallReturn = Worker::with_active_process_mut(|process| {
+    let result: SyscallResult = Worker::with_active_process_mut(|process| {
         let buf = process.get_writable_slice::<u8>(buf_ptr, size_needed)?;
 
         // call the file's read(), and run any resulting events
@@ -165,7 +165,7 @@ fn read_helper(
     result
 }
 
-pub fn write(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallReturn {
+pub fn write(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
     let buf_ptr = PluginPtr::from(args.get(1));
     let buf_size = libc::size_t::from(args.get(2));
@@ -184,7 +184,7 @@ pub fn write(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallReturn {
     }
 }
 
-pub fn pwrite64(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallReturn {
+pub fn pwrite64(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
     let buf_ptr = PluginPtr::from(args.get(1));
     let buf_size = libc::size_t::from(args.get(2));
@@ -210,14 +210,14 @@ fn write_helper(
     buf_ptr: PluginPtr,
     buf_size: libc::size_t,
     offset: libc::off_t,
-) -> SyscallReturn {
+) -> SyscallResult {
     // TODO: dynamically compute size based on how much data is actually available in the descriptor
     let size_needed = std::cmp::min(buf_size, c::SYSCALL_IO_BUFSIZE as usize);
 
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
-    let result: SyscallReturn = Worker::with_active_process(|process| {
+    let result: SyscallResult = Worker::with_active_process(|process| {
         let buf = process.get_slice::<u8>(buf_ptr.into(), size_needed)?;
 
         // call the file's write(), and run any resulting events
@@ -240,20 +240,20 @@ fn write_helper(
     result
 }
 
-pub fn pipe(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallReturn {
+pub fn pipe(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     let fd_ptr: PluginPtr = args.args[0].into();
 
     pipe_helper(sys, fd_ptr, 0)
 }
 
-pub fn pipe2(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallReturn {
+pub fn pipe2(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     let fd_ptr: PluginPtr = args.args[0].into();
     let flags = unsafe { args.args[1].as_u64 } as libc::c_int;
 
     pipe_helper(sys, fd_ptr, flags)
 }
 
-fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: PluginPtr, flags: i32) -> SyscallReturn {
+fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: PluginPtr, flags: i32) -> SyscallResult {
     // make sure they didn't pass a NULL pointer
     if fd_ptr.is_null() {
         return Err(nix::errno::Errno::EFAULT.into());
@@ -310,7 +310,7 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: PluginPtr, flags: i32) -> Sy
     writer_desc.set_flags(descriptor_flags);
 
     // register the file descriptors and return them to the caller
-    Worker::with_active_process_mut(|process| -> SyscallReturn {
+    Worker::with_active_process_mut(|process| -> SyscallResult {
         // Normally for a small pointer it'd be a little cleaner to create the
         // slice in Rust and then call process.write_ptr_from_slice, allowing us
         // to hold the process for a smaller scope.

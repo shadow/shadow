@@ -42,9 +42,9 @@ pub enum SyscallError {
     Native,
 }
 
-pub type SyscallReturn = Result<crate::host::syscall_types::SysCallReg, SyscallError>;
+pub type SyscallResult = Result<crate::host::syscall_types::SysCallReg, SyscallError>;
 
-impl From<c::SysCallReturn> for SyscallReturn {
+impl From<c::SysCallReturn> for SyscallResult {
     fn from(r: c::SysCallReturn) -> Self {
         match r.state {
             c::SysCallReturnState_SYSCALL_DONE => {
@@ -62,8 +62,8 @@ impl From<c::SysCallReturn> for SyscallReturn {
     }
 }
 
-impl From<SyscallReturn> for c::SysCallReturn {
-    fn from(syscall_return: SyscallReturn) -> Self {
+impl From<SyscallResult> for c::SysCallReturn {
+    fn from(syscall_return: SyscallResult) -> Self {
         match syscall_return {
             Ok(r) => Self {
                 state: c::SysCallReturnState_SYSCALL_DONE,
@@ -312,7 +312,7 @@ impl IsSend for PosixFile {}
 impl IsSync for PosixFile {}
 
 impl PosixFile {
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
         match self {
             Self::Pipe(f) => f.close(event_queue),
         }
@@ -323,7 +323,7 @@ impl PosixFile {
         bytes: Option<&mut [u8]>,
         offset: libc::off_t,
         event_queue: &mut EventQueue,
-    ) -> SyscallReturn {
+    ) -> SyscallResult {
         match self {
             Self::Pipe(f) => f.read(bytes, offset, event_queue),
         }
@@ -334,7 +334,7 @@ impl PosixFile {
         bytes: Option<&[u8]>,
         offset: libc::off_t,
         event_queue: &mut EventQueue,
-    ) -> SyscallReturn {
+    ) -> SyscallResult {
         match self {
             Self::Pipe(f) => f.write(bytes, offset, event_queue),
         }
@@ -428,7 +428,7 @@ impl Descriptor {
 
     /// Close the descriptor, and if this is the last descriptor pointing to its file, close
     /// the file as well.
-    pub fn close(self, event_queue: &mut EventQueue) -> Option<SyscallReturn> {
+    pub fn close(self, event_queue: &mut EventQueue) -> Option<SyscallResult> {
         // this isn't subject to race conditions since we should never access descriptors
         // from multiple threads at the same time
         if Arc::<()>::strong_count(&self.open_count) == 1 {
