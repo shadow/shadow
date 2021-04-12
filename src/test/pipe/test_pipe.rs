@@ -139,14 +139,21 @@ fn test_read_write_empty() -> Result<(), String> {
             || { unsafe { libc::write(write_fd, std::ptr::null(), 0,) } },
             &[]
         )?;
-
         test_utils::result_assert_eq(rv, 0, "Expected to write 0 bytes")?;
 
         let rv = test_utils::check_system_call!(
             || { unsafe { libc::read(read_fd, std::ptr::null_mut(), 0,) } },
             &[]
         )?;
+        test_utils::result_assert_eq(rv, 0, "Expected to read 0 bytes")?;
 
+        // Reading again should still succeed and not block. There are no "0
+        // byte datagrams" with pipes; reading and writing 0 bytes is just a
+        // no-op.
+        let rv = test_utils::check_system_call!(
+            || { unsafe { libc::read(read_fd, std::ptr::null_mut(), 0,) } },
+            &[]
+        )?;
         test_utils::result_assert_eq(rv, 0, "Expected to read 0 bytes")?;
 
         Ok(())
