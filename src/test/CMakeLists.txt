@@ -19,7 +19,7 @@ ExternalProject_Add(
    BUILD_ALWAYS 1
    DOWNLOAD_COMMAND ""
    CONFIGURE_COMMAND ""
-   BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build"
+   BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build --target-dir \"${CMAKE_CURRENT_BINARY_DIR}/target\""
    INSTALL_COMMAND ""
    LOG_BUILD OFF
 )
