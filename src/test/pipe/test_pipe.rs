@@ -41,6 +41,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             test_read_write,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
+        test_utils::ShadowTest::new(
+            "test_read_write_empty",
+            test_read_write_empty,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
         test_utils::ShadowTest::new("test_dup", test_dup, set![TestEnv::Libc]),
         test_utils::ShadowTest::new(
             "test_write_to_read_end",
@@ -112,6 +117,44 @@ fn test_read_write() -> Result<(), String> {
         test_utils::result_assert_eq(rv, 4, "Expected to read 4 bytes")?;
 
         test_utils::result_assert_eq(write_buf, read_buf, "Buffers differ")?;
+
+        Ok(())
+    })
+}
+
+// pipe(2) indicates that size zero writes to pipes with O_DIRECT are no-ops,
+// and somewhat implies that they are no-ops without it as well. Exerimentally
+// size zero reads and writes to pipes are both no-ops.
+fn test_read_write_empty() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(|| { unsafe { libc::pipe(fds.as_mut_ptr()) } }, &[])?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        let rv = test_utils::check_system_call!(
+            || { unsafe { libc::write(write_fd, std::ptr::null(), 0,) } },
+            &[]
+        )?;
+        test_utils::result_assert_eq(rv, 0, "Expected to write 0 bytes")?;
+
+        let rv = test_utils::check_system_call!(
+            || { unsafe { libc::read(read_fd, std::ptr::null_mut(), 0,) } },
+            &[]
+        )?;
+        test_utils::result_assert_eq(rv, 0, "Expected to read 0 bytes")?;
+
+        // Reading again should still succeed and not block. There are no "0
+        // byte datagrams" with pipes; reading and writing 0 bytes is just a
+        // no-op.
+        let rv = test_utils::check_system_call!(
+            || { unsafe { libc::read(read_fd, std::ptr::null_mut(), 0,) } },
+            &[]
+        )?;
+        test_utils::result_assert_eq(rv, 0, "Expected to read 0 bytes")?;
 
         Ok(())
     })

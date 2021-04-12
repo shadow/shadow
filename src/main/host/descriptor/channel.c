@@ -107,6 +107,13 @@ static gssize channel_sendUserData(Transport* transport, PluginVirtualPtr buffer
     /* the read end of a unidirectional pipe can not write! */
     utility_assert(channel->type != CT_READONLY);
 
+    /* Zero-size writes of pipes aren't very clearly specified. The pipe(2)
+     * documentation for O_DIRECT indicates that a size-zero write is a no-op
+     * with O_DIRECT; experimentally they are also a no-op without it. */
+    if (nBytes == 0) {
+        return 0;
+    }
+
     gssize result = 0;
 
     if(channel->linkedChannel) {
@@ -132,6 +139,12 @@ static gssize channel_receiveUserData(Transport* transport, PluginVirtualPtr buf
     MAGIC_ASSERT(channel);
     /* the write end of a unidirectional pipe can not read! */
     utility_assert(channel->type != CT_WRITEONLY);
+
+    /* Zero-size reads of pipes aren't very clearly specified, but
+     * experimentally they are a no-op. */
+    if (nBytes == 0) {
+        return 0;
+    }
 
     gsize available = channel->bufferLength;
     if(available == 0) {
