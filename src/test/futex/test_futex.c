@@ -28,7 +28,7 @@ static void _wait_for_condition(bool* c) {
     // Prevent reads from being done
     while (!__atomic_load_n(c, __ATOMIC_ACQUIRE)) {
         // Wait a bit.
-        usleep(1000);
+        usleep(1);
     }
 }
 
@@ -67,19 +67,32 @@ static void _futex_wait_test() {
     debug("Waiting for child to start");
     _wait_for_condition(&arg.child_started);
 
-    // Try to wait until child is sleeping on the lock. Not sure if there's a reasonable way to
-    // avoid a race here.
-    usleep(1000);
-
     // Verify that it *hasn't* woken yet.
     g_assert_true(!_get_condition(&arg.child_finished));
 
-    // Wake the child.
-    debug("Waking child\n");
+    // Wake the child. There's no way to guarantee that the child is already asleep
+    // on the mutex, so we need to loop.
+    int woken = 0;
+    while (1) {
+        debug("Waking child\n");
+        woken = syscall(SYS_futex, &arg.futex, FUTEX_WAKE, 1, NULL, NULL, 0);
+        assert_nonneg_errno(woken);
+        if (woken == 1) {
+            debug("Woke 1 child");
+            break;
+        }
+        g_assert_cmpint(woken, ==, 0);
+        debug("No children woken; sleeping a bit and trying again");
+        usleep(1);
+    }
+
+    // Flip the flag to let the child finish executing.
     g_assert_true(__sync_bool_compare_and_swap(&arg.futex, UNAVAILABLE, AVAILABLE));
-    int res = syscall(SYS_futex, &arg.futex, FUTEX_WAKE, 1, NULL, NULL, 0);
-    // Should have woken exactly one sleeping thread.
-    g_assert_cmpint(res, ==, 1);
+
+    // The child may or may not have gone asleep since the previous wake-up. Wake it up.
+    woken = syscall(SYS_futex, &arg.futex, FUTEX_WAKE, 1, NULL, NULL, 0);
+    assert_nonneg_errno(woken);
+    g_assert_cmpint(woken, <=, 1);
 
     // wait for it to signal that it's woken
     _wait_for_condition(&arg.child_finished);
@@ -136,14 +149,31 @@ static void _futex_wait_bitset_test() {
     }
 
     // Wait a bit until they're (hopefully) all blocked on the futex.
-    usleep(1000);
+    usleep(1);
+
+    // Wake only #2. There's no way to guarantee that its already asleep on the
+    // mutex, so we need to loop.
+    int woken = 0;
+    while (1) {
+        debug("Waking child\n");
+        woken = syscall(SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, 1 << 2);
+        assert_nonneg_errno(woken);
+        if (woken == 1) {
+            debug("Woke 1 child");
+            break;
+        }
+        g_assert_cmpint(woken, ==, 0);
+        debug("No children woken; sleeping a bit and trying again");
+        usleep(1);
+    }
 
     // Release the futex.
     __atomic_store_n(&futex, AVAILABLE, __ATOMIC_RELEASE);
 
-    // Wake just #2.
-    g_assert_cmpint(
-        syscall(SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, 1 << 2), ==, 1);
+    // Ensure #2 is now awake.
+    woken = syscall(SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, 1 << 2);
+    assert_nonneg_errno(woken);
+    g_assert_cmpint(woken, <=, 1);
 
     // Wait for #2 to signal that it's done.
     _wait_for_condition(&arg[2].child_finished);
@@ -154,22 +184,23 @@ static void _futex_wait_bitset_test() {
     g_assert_false(arg[3].child_finished);
     g_assert_false(arg[4].child_finished);
 
-    // Wake #1, #2, and #3 (even though #2 should be a no-op).
-    g_assert_cmpint(syscall(SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL,
-                            1 << 1 | 1 << 2 | 1 << 3),
-                    ==, 2);
+    // Wake #1, #2, and #3. #2 should be a no-op, and we can't guarantee that #1
+    // and #3 were asleep in the first place.
+    woken = syscall(
+        SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, 1 << 1 | 1 << 2 | 1 << 3);
+    assert_nonneg_errno(woken);
+    g_assert_cmpint(woken, <=, 2);
 
     // Wait for 1 and 3 to finish.
     _wait_for_condition(&arg[1].child_finished);
     _wait_for_condition(&arg[3].child_finished);
 
-    // 0 and 4 should still be asleep.
-    g_assert_false(arg[0].child_finished);
-    g_assert_false(arg[4].child_finished);
+    // Ensure 0 and 4 are awake and wait for them to finish. Exercise including
+    // bits we didn't actually use.
+    woken = syscall(SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, 0xffffffff);
+    assert_nonneg_errno(woken);
+    g_assert_cmpint(woken, <=, 2);
 
-    // Wake up the rest, including bits we never used.
-    g_assert_cmpint(
-        syscall(SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, 0xffffffff), ==, 2);
     _wait_for_condition(&arg[0].child_finished);
     _wait_for_condition(&arg[4].child_finished);
 }
