@@ -48,9 +48,9 @@
 //
 // Each worker thread gets its own proxy thread so that forking simulated
 // processes can be parallelized.
-static bool _useONWaitpidWorkarounds = true;
-OPTION_EXPERIMENTAL_ENTRY("disable-o-n-waitpid-workarounds", 0, G_OPTION_FLAG_REVERSE,
-                          G_OPTION_ARG_NONE, &_useONWaitpidWorkarounds,
+static bool _disableONWaitpidWorkarounds = false;
+OPTION_EXPERIMENTAL_ENTRY("disable-o-n-waitpid-workarounds", 0, G_OPTION_FLAG_NONE,
+                          G_OPTION_ARG_NONE, &_disableONWaitpidWorkarounds,
                           "Disable performance workarounds for waitpid being O(n). Beneficial to "
                           "disable if waitpid is patched to be O(1) or in some cases where it'd "
                           "otherwise result in excessive detaching and reattaching",
@@ -404,7 +404,7 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char*
         error("Unexpected signal: %d", reason.signal.signal);
     }
 
-    if (_useONWaitpidWorkarounds) {
+    if (!_disableONWaitpidWorkarounds) {
         // Stop and detach the child, allowing the shadow worker thread to
         // attach it when it's run.
         if (ptrace(PTRACE_DETACH, pid, 0, SIGSTOP) < 0) {
@@ -763,7 +763,7 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv, const char* wor
     g_free(envStr);
     g_free(argStr);
 
-    if (_useONWaitpidWorkarounds) {
+    if (!_disableONWaitpidWorkarounds) {
         // Each worker thread gets its own proxy thread so that forking simulated
         // processes can be parallelized.
         static __thread ForkProxy* forkproxy = NULL;
@@ -1084,7 +1084,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeIpcSyscall(thread, &changedState);
                 if (condition) {
-                    if (_useONWaitpidWorkarounds) {
+                    if (!_disableONWaitpidWorkarounds) {
                         // Keep inactive plugins off worker thread's tracee
                         // list.
                         _threadptrace_doDetach(thread);
@@ -1097,7 +1097,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeSyscall(thread, &changedState);
                 if (condition) {
-                    if (_useONWaitpidWorkarounds) {
+                    if (!_disableONWaitpidWorkarounds) {
                         // Keep inactive plugins off worker thread's tracee
                         // list.
                         _threadptrace_doDetach(thread);
