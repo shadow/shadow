@@ -18,8 +18,13 @@ includes = [
   "main/host/thread.h",
 ]
 
+[enum]
+prefix_with_name = true
+rename_variants = "ScreamingSnakeCase"
+
 [export]
 # Avoid exporting C types back through again.
 exclude = ["PluginPtr", "SysCallReg"]
-# Generate all item types, excluding opaque types
-item_types = ["constants", "globals", "enums", "structs", "unions", "typedefs", "functions"]
+include = ["InterposeMethod", "QDiscMode"]
+# Generate all item types, excluding opaque and enum types
+item_types = ["constants", "globals", "structs", "unions", "typedefs", "functions"]

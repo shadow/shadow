@@ -577,11 +577,11 @@ static void _networkinterface_sendPackets(NetworkInterface* interface) {
         /* choose which packet to send next based on our queuing discipline */
         Packet* packet;
         switch(interface->qdisc) {
-            case QDISC_MODE_RR: {
+            case Q_DISC_MODE_ROUND_ROBIN: {
                 packet = _networkinterface_selectRoundRobin(interface, &socketHandle);
                 break;
             }
-            case QDISC_MODE_FIFO:
+            case Q_DISC_MODE_FIFO:
             default: {
                 packet = _networkinterface_selectFirstInFirstOut(interface, &socketHandle);
                 break;
@@ -637,14 +637,14 @@ void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket*
 
     /* track the new socket for sending if not already tracking */
     switch (interface->qdisc) {
-        case QDISC_MODE_RR: {
+        case Q_DISC_MODE_ROUND_ROBIN: {
             if (!rrsocketqueue_find(&interface->rrQueue, socket)) {
                 CompatSocket newSocketRef = compatsocket_refAs(socket);
                 rrsocketqueue_push(&interface->rrQueue, &newSocketRef);
             }
             break;
         }
-        case QDISC_MODE_FIFO:
+        case Q_DISC_MODE_FIFO:
         default: {
             if (!fifosocketqueue_find(&interface->fifoQueue, socket)) {
                 CompatSocket newSocketRef = compatsocket_refAs(socket);
@@ -691,7 +691,7 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
     fifosocketqueue_init(&interface->fifoQueue);
 
     /* parse queuing discipline */
-    interface->qdisc = (qdisc == QDISC_MODE_NONE) ? QDISC_MODE_FIFO : qdisc;
+    interface->qdisc = qdisc;
 
     if(logPcap) {
         GString* filename = g_string_new(NULL);
@@ -707,7 +707,7 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
 
     info("bringing up network interface '%s' at '%s', %"G_GUINT64_FORMAT" KiB/s up and %"G_GUINT64_FORMAT" KiB/s down using queuing discipline %s",
             address_toHostName(interface->address), address_toHostIPString(interface->address), bwUpKiBps, bwDownKiBps,
-            interface->qdisc == QDISC_MODE_RR ? "rr" : "fifo");
+            interface->qdisc == Q_DISC_MODE_ROUND_ROBIN ? "rr" : "fifo");
 
     worker_count_allocation(NetworkInterface);
     return interface;

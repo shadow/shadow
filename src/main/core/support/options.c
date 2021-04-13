@@ -311,15 +311,15 @@ LogInfoFlags options_getHeartbeatLogInfo(Options* options) {
 QDiscMode options_getQueuingDiscipline(Options* options) {
     MAGIC_ASSERT(options);
 
-    if(options->interfaceQueuingDiscipline) {
-        if(!g_ascii_strcasecmp(options->interfaceQueuingDiscipline, "rr")) {
-            return QDISC_MODE_RR;
-        } else if(!g_ascii_strcasecmp(options->interfaceQueuingDiscipline, "fifo")) {
-            return QDISC_MODE_FIFO;
+    if (options->interfaceQueuingDiscipline) {
+        if (!g_ascii_strcasecmp(options->interfaceQueuingDiscipline, "rr")) {
+            return Q_DISC_MODE_ROUND_ROBIN;
+        } else if (!g_ascii_strcasecmp(options->interfaceQueuingDiscipline, "fifo")) {
+            return Q_DISC_MODE_FIFO;
         }
     }
 
-    return QDISC_MODE_NONE;
+    error("Unrecognized QDisc mode %s", options->interfaceQueuingDiscipline);
 }
 
 gchar* options_getEventSchedulerPolicy(Options* options) {
@@ -330,16 +330,16 @@ gchar* options_getEventSchedulerPolicy(Options* options) {
 InterposeMethod options_getInterposeMethod(Options* options) {
     MAGIC_ASSERT(options);
     if (!g_ascii_strcasecmp(options->interposeMethod, "preload")) {
-        return INTERPOSE_PRELOAD;
+        return INTERPOSE_METHOD_PRELOAD;
     }
     if (!g_ascii_strcasecmp(options->interposeMethod, "hybrid")) {
-        return INTERPOSE_HYBRID;
+        return INTERPOSE_METHOD_HYBRID;
     }
     if (!g_ascii_strcasecmp(options->interposeMethod, "ptrace")) {
-        return INTERPOSE_PTRACE;
+        return INTERPOSE_METHOD_PTRACE;
     }
+
     error("Unrecognized interposeMethod %s", options->interposeMethod);
-    return INTERPOSE_NONE;
 }
 
 guint options_getNWorkerThreads(Options* options) {

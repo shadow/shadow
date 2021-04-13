@@ -9,6 +9,7 @@
 
 #include <glib.h>
 
+#include "main/bindings/c/bindings-opaque.h"
 #include "main/core/support/definitions.h"
 #include "support/logger/log_level.h"
 
@@ -27,22 +28,6 @@ enum _LogInfoFlags {
     LOG_INFO_FLAGS_SOCKET = 1<<1,
     LOG_INFO_FLAGS_RAM = 1<<2,
 };
-
-typedef enum _QDiscMode QDiscMode;
-enum _QDiscMode {
-    QDISC_MODE_NONE=0, QDISC_MODE_FIFO=1, QDISC_MODE_RR=2,
-};
-
-typedef enum _InterposeMethod {
-    INTERPOSE_NONE,
-    // Use LD_PRELOAD to load a library that implements the libC interface to
-    // route syscalls to Shadow.
-    INTERPOSE_PRELOAD,
-    // Attach to child using ptrace, and use that to interpose syscalls etc.
-    INTERPOSE_PTRACE,
-    // Use both PRELOAD and PTRACE based interposition.
-    INTERPOSE_HYBRID,
-} InterposeMethod;
 
 /**
  * Create a new #Configuration and parse the command line arguments given in

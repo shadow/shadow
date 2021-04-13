@@ -3,6 +3,50 @@ use std::os::unix::ffi::OsStrExt;
 
 use crate::cshadow as c;
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[repr(C)]
+pub enum InterposeMethod {
+    /// Attach to child using ptrace and use it to interpose syscalls etc.
+    Ptrace,
+    /// Use LD_PRELOAD to load a library that implements the libC interface which will
+    /// route syscalls to Shadow.
+    Preload,
+    /// Use both PRELOAD and PTRACE based interposition.
+    Hybrid,
+}
+
+impl std::str::FromStr for InterposeMethod {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "ptrace" => Ok(Self::Ptrace),
+            "preload" => Ok(Self::Preload),
+            "hybrid" => Ok(Self::Hybrid),
+            _ => Err(format!("'{}' is not a valid interpose method", s)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[repr(C)]
+pub enum QDiscMode {
+    Fifo,
+    RoundRobin,
+}
+
+impl std::str::FromStr for QDiscMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "fifo" => Ok(Self::Fifo),
+            "round-robin" => Ok(Self::RoundRobin),
+            _ => Err(format!("'{}' is not a valid qdisc mode", s)),
+        }
+    }
+}
+
 /// Parses a string as a list of arguments following the shell's parsing rules. This
 /// uses `g_shell_parse_argv()` for parsing.
 #[allow(dead_code)]
