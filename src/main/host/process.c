@@ -419,15 +419,19 @@ static void _process_start(Process* proc) {
     // tid of first thread of a process is equal to the pid.
     int tid = proc->processID;
     Thread* mainThread = NULL;
-    if (proc->interposeMethod == INTERPOSE_HYBRID) {
-        mainThread = threadptrace_new(proc->host, proc, tid);
-    } else if (proc->interposeMethod == INTERPOSE_PTRACE) {
-        mainThread = threadptraceonly_new(proc->host, proc, tid);
-    } else if (proc->interposeMethod == INTERPOSE_PRELOAD) {
-        mainThread = threadpreload_new(proc->host, proc, tid);
-    } else {
+
+    switch (proc->interposeMethod) {
+        case INTERPOSE_METHOD_PTRACE:
+            mainThread = threadptraceonly_new(proc->host, proc, tid);
+            break;
+        case INTERPOSE_METHOD_PRELOAD: mainThread = threadpreload_new(proc->host, proc, tid); break;
+        case INTERPOSE_METHOD_HYBRID: mainThread = threadptrace_new(proc->host, proc, tid); break;
+    }
+
+    if (mainThread == NULL) {
         error("Bad interposeMethod %d", proc->interposeMethod);
     }
+
     g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
 
     message("starting process '%s'", process_getName(proc));
@@ -617,8 +621,8 @@ void process_schedule(Process* proc, gpointer nothing) {
 void process_detachPlugin(gpointer procptr, gpointer nothing) {
     Process* proc = procptr;
     MAGIC_ASSERT(proc);
-    if (proc->interposeMethod == INTERPOSE_HYBRID ||
-        proc->interposeMethod == INTERPOSE_PTRACE) {
+    if (proc->interposeMethod == INTERPOSE_METHOD_HYBRID ||
+        proc->interposeMethod == INTERPOSE_METHOD_PTRACE) {
         GHashTableIter iter;
         g_hash_table_iter_init(&iter, proc->threads);
         gpointer key, value;

@@ -385,12 +385,16 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
         g_free(timestring);
     }
 
-    if (interposeMethod == INTERPOSE_PRELOAD) {
-        envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD", 0);
-    } else if (interposeMethod == INTERPOSE_PTRACE) {
-        envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PTRACE", 0);
-    } else if (interposeMethod == INTERPOSE_HYBRID) {
-        envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "HYBRID", 0);
+    switch (interposeMethod) {
+        case INTERPOSE_METHOD_PTRACE:
+            envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PTRACE", 0);
+            break;
+        case INTERPOSE_METHOD_PRELOAD:
+            envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD", 0);
+            break;
+        case INTERPOSE_METHOD_HYBRID:
+            envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "HYBRID", 0);
+            break;
     }
 
     /* insert also the plugin preload entry if one exists.
