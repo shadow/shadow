@@ -10,12 +10,13 @@
 
 // We use an int here because the option parsing library doesn't provide a way
 // to set a boolean flag to false explicitly.
-static gint _sendExplicitBlockMessage = true;
+static bool _disableExplicitBlockMessage = false;
 OPTION_EXPERIMENTAL_ENTRY(
-    "send-explicit-block-message", 0, 0, G_OPTION_ARG_INT, &_sendExplicitBlockMessage,
-    "Send message to plugin telling it to stop spinning when a syscall blocks", "[0|1]")
+    "disable-explicit-block-message", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE,
+    &_disableExplicitBlockMessage,
+    "Don't send a \"stop spinning\" message to the plugin when a syscall blocks", NULL)
 
-bool shimipc_sendExplicitBlockMessageEnabled() { return _sendExplicitBlockMessage; }
+bool shimipc_sendExplicitBlockMessageEnabled() { return !_disableExplicitBlockMessage; }
 
 static gint _spinMax = 8096;
 OPTION_EXPERIMENTAL_ENTRY("preload-spin-max", 0, 0, G_OPTION_ARG_INT, &_spinMax,
