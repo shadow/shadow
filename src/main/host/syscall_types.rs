@@ -140,3 +140,13 @@ impl Into<SysCallReg> for () {
         SysCallReg { as_i64: 0 }
     }
 }
+
+impl std::fmt::Debug for c::SysCallReg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SysCallReg")
+            .field("as_i64", unsafe { &self.as_i64 })
+            .field("as_u64", unsafe { &self.as_u64 })
+            .field("as_ptr", unsafe { &self.as_ptr })
+            .finish()
+    }
+}

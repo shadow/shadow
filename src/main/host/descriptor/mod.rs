@@ -36,7 +36,7 @@ impl<T> SyncSendPointer<T> {
 
 // Calling all of these errors is stretching the semantics of 'error' a bit,
 // but it makes for fluent programming in syscall handlers using the `?` operator.
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum SyscallError {
     Errno(nix::errno::Errno),
     Cond(SysCallCondition),
@@ -637,5 +637,87 @@ mod export {
         let file = unsafe { &*file };
 
         file.borrow_mut().remove_legacy_listener(listener);
+    }
+}
+
+impl std::fmt::Debug for c::SysCallReturn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SysCallReturn")
+            .field("state", &self.state)
+            .field("retval", &self.retval)
+            .field("cond", &self.cond)
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::host::syscall::Trigger;
+
+    #[test]
+    fn test_syscallresult_roundtrip() {
+        for val in vec![
+            Ok(1.into()),
+            Err(SyscallError::Errno(nix::errno::Errno::EPERM)),
+            Err(SyscallError::Cond(SysCallCondition::new(Trigger::from(
+                c::Trigger {
+                    type_: 1,
+                    object: c::TriggerObject {
+                        as_pointer: std::ptr::null_mut(),
+                    },
+                    status: 2,
+                },
+            )))),
+        ]
+        .drain(..)
+        {
+            // We can't easily compare the value to the roundtripped result, since
+            // roundtripping consumes the original value, and SysCallReturn doesn't implement Clone.
+            // Compare their debug strings instead.
+            let orig_debug = format!("{:?}", &val);
+            let roundtripped = SyscallResult::from(c::SysCallReturn::from(val));
+            let roundtripped_debug = format!("{:?}", roundtripped);
+            assert_eq!(orig_debug, roundtripped_debug);
+        }
+    }
+
+    #[test]
+    fn test_syscallreturn_roundtrip() {
+        let condition = SysCallCondition::new(Trigger::from(c::Trigger {
+            type_: 1,
+            object: c::TriggerObject {
+                as_pointer: std::ptr::null_mut(),
+            },
+            status: 2,
+        }));
+        for val in vec![
+            c::SysCallReturn {
+                state: c::SysCallReturnState_SYSCALL_DONE,
+                retval: 1.into(),
+                cond: std::ptr::null_mut(),
+            },
+            c::SysCallReturn {
+                state: c::SysCallReturnState_SYSCALL_BLOCK,
+                retval: 0.into(),
+                cond: condition.into_inner(),
+            },
+            c::SysCallReturn {
+                state: c::SysCallReturnState_SYSCALL_NATIVE,
+                retval: 0.into(),
+                cond: std::ptr::null_mut(),
+            },
+        ]
+        .drain(..)
+        {
+            // We can't easily compare the value to the roundtripped result,
+            // since roundtripping consumes the original value, and
+            // SysCallReturn doesn't implement Clone. Compare their debug
+            // strings instead.
+            let orig_debug = format!("{:?}", &val);
+            let roundtripped = c::SysCallReturn::from(SyscallResult::from(val));
+            let roundtripped_debug = format!("{:?}", roundtripped);
+            assert_eq!(orig_debug, roundtripped_debug);
+        }
     }
 }

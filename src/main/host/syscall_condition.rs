@@ -2,7 +2,7 @@ use crate::cshadow;
 use crate::host::syscall::Trigger;
 
 /// Wrapper
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct SysCallCondition {
     c_ptr: *mut cshadow::SysCallCondition,
 }
