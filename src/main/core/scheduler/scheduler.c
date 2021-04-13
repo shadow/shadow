@@ -160,13 +160,12 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
             break;
         }
         case SP_PARALLEL_HOST_STEAL: {
-            if (scheduler->policyType == SP_PARALLEL_HOST_STEAL &&
-                nWorkers > _maxConcurrency) {
+            if (nWorkers > _maxConcurrency) {
                 // Proceeding will cause the scheduler to deadlock, since the
                 // work stealing scheduler threads spin-wait for each-other to
                 // finish.
                 error("Host stealing scheduler is incompatible with "
-                      "--max-concurrency > --workers");
+                      "--workers > --max-concurrency");
                 abort();
             }
             scheduler->policy = schedulerpolicyhoststeal_new();
