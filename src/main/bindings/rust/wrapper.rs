@@ -53,15 +53,6 @@ pub struct _Host {
     _unused: [u8; 0],
 }
 pub type Host = _Host;
-pub use self::_Status as Status;
-pub const _Status_STATUS_NONE: _Status = 0;
-pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
-pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
-pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
-pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
-pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
-pub type _Status = i32;
-pub type LegacyDescriptor = [u64; 7usize];
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Counter {
@@ -72,6 +63,15 @@ pub struct Counter {
 pub struct PosixFileArc {
     _unused: [u8; 0],
 }
+pub use self::_Status as Status;
+pub const _Status_STATUS_NONE: _Status = 0;
+pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
+pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
+pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
+pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
+pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
+pub type _Status = i32;
+pub type LegacyDescriptor = [u64; 7usize];
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _StatusListener {
