@@ -70,7 +70,7 @@ impl FromStr for MappingPath {
     }
 }
 
-/// Represents a single line in /proc/[pid]/maps.
+/// Represents a single line in /proc/\[pid\]/maps.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Mapping {
     pub begin: usize,
@@ -179,7 +179,7 @@ impl FromStr for Mapping {
     }
 }
 
-/// Parses the contents of a /proc/[pid]/maps file
+/// Parses the contents of a /proc/\[pid\]/maps file
 pub fn parse_file_contents(mappings: &str) -> Result<Vec<Mapping>, Box<dyn Error>> {
     let res: Result<Vec<_>, String> = mappings
         .lines()
@@ -188,7 +188,7 @@ pub fn parse_file_contents(mappings: &str) -> Result<Vec<Mapping>, Box<dyn Error
     Ok(res?)
 }
 
-/// Reads and parses the contents of a /proc/[pid]/maps file
+/// Reads and parses the contents of a /proc/\[pid\]/maps file
 pub fn mappings_for_pid(pid: libc::pid_t) -> Result<Vec<Mapping>, Box<dyn Error>> {
     use std::fs::File;
     use std::io::Read;
