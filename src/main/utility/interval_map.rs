@@ -112,8 +112,8 @@ impl<V: Clone> IntervalMap<V> {
 
     /// Mutates the map so that the given range maps to nothing, modifying and removing intervals
     /// as needed. Returns what mutations were performed, including the values of any
-    /// completely-removed intervals. If an interval is split (e.g. by inserting [5,6] into
-    /// [0,10]), its value will be cloned.
+    /// completely-removed intervals. If an interval is split (e.g. by inserting \[5,6\] into
+    /// \[0,10\]), its value will be cloned.
     ///
     /// Returned mutations are ordered by their original interval values.
     pub fn clear(&mut self, interval: Interval) -> Vec<Mutation<V>> {
