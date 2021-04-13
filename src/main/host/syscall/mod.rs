@@ -7,7 +7,7 @@ use crate::host::descriptor::{CompatDescriptor, FileStatus, PosixFile};
 
 pub mod unistd;
 
-struct Trigger(c::Trigger);
+pub struct Trigger(c::Trigger);
 
 impl From<c::Trigger> for Trigger {
     fn from(trigger: c::Trigger) -> Self {

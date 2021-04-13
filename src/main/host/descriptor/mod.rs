@@ -3,6 +3,7 @@ use log::warn;
 use std::sync::Arc;
 
 use crate::cshadow as c;
+use crate::host::syscall_condition::SysCallCondition;
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
 
 pub mod pipe;
@@ -38,7 +39,7 @@ impl<T> SyncSendPointer<T> {
 #[derive(PartialEq, Eq)]
 pub enum SyscallError {
     Errno(nix::errno::Errno),
-    Cond(*mut c::SysCallCondition),
+    Cond(SysCallCondition),
     Native,
 }
 
@@ -55,7 +56,10 @@ impl From<c::SysCallReturn> for SyscallResult {
                     Err(e) => Err(e.into()),
                 }
             }
-            c::SysCallReturnState_SYSCALL_BLOCK => Err(SyscallError::Cond(r.cond)),
+            // SAFETY: XXX: We're assuming this points to a valid SysCallCondition.
+            c::SysCallReturnState_SYSCALL_BLOCK => Err(SyscallError::Cond(unsafe {
+                SysCallCondition::consume_from_c(r.cond)
+            })),
             c::SysCallReturnState_SYSCALL_NATIVE => Err(SyscallError::Native),
             _ => panic!("Unexpected c::SysCallReturn state {}", r.state),
         }
@@ -80,7 +84,7 @@ impl From<SyscallResult> for c::SysCallReturn {
             Err(SyscallError::Cond(c)) => Self {
                 state: c::SysCallReturnState_SYSCALL_BLOCK,
                 retval: c::SysCallReg { as_i64: 0 },
-                cond: c,
+                cond: c.into_inner(),
             },
             Err(SyscallError::Native) => Self {
                 state: c::SysCallReturnState_SYSCALL_NATIVE,

@@ -6,6 +6,7 @@ use crate::host::descriptor::{
     SyscallError, SyscallResult,
 };
 use crate::host::syscall::{self, Trigger};
+use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{PluginPtr, SysCallArgs};
 use crate::utility::event_queue::EventQueue;
 
@@ -157,9 +158,7 @@ fn read_helper(
     if result == Err(nix::errno::EWOULDBLOCK.into()) && !file_flags.contains(FileFlags::NONBLOCK) {
         let trigger = Trigger::from_posix_file(posix_file, FileStatus::READABLE);
 
-        return Err(SyscallError::Cond(unsafe {
-            c::syscallcondition_new(trigger.into(), std::ptr::null_mut())
-        }));
+        return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
     }
 
     result
@@ -230,9 +229,7 @@ fn write_helper(
     if result == Err(nix::errno::EWOULDBLOCK.into()) && !file_flags.contains(FileFlags::NONBLOCK) {
         let trigger = Trigger::from_posix_file(posix_file, FileStatus::WRITABLE);
 
-        return Err(SyscallError::Cond(unsafe {
-            c::syscallcondition_new(trigger.into(), std::ptr::null_mut())
-        }));
+        return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
     };
 
     result

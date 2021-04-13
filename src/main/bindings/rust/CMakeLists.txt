@@ -34,6 +34,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "statuslistener_unref"
         --whitelist-function "statuslistener_onStatusChanged"
         --whitelist-function "syscallcondition_new"
+        --whitelist-function "syscallcondition_unref"
         --whitelist-function "syscallhandler_.*"
         --whitelist-function "worker_getActiveProcess"
         --whitelist-function "worker_readPtr"

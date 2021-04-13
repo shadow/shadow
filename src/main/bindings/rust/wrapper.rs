@@ -679,6 +679,9 @@ fn bindgen_test_layout__Trigger() {
 extern "C" {
     pub fn syscallcondition_new(trigger: Trigger, timeout: *mut Timer) -> *mut SysCallCondition;
 }
+extern "C" {
+    pub fn syscallcondition_unref(cond: *mut SysCallCondition);
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Epoll {
