@@ -513,6 +513,20 @@ extern "C" {
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
+    pub fn process_parseArgStr(
+        commandLine: *const ::std::os::raw::c_char,
+        argc: *mut ::std::os::raw::c_int,
+        argv: *mut *mut *mut ::std::os::raw::c_char,
+        error: *mut *mut ::std::os::raw::c_char,
+    ) -> bool;
+}
+extern "C" {
+    pub fn process_parseArgStrFree(
+        argv: *mut *mut ::std::os::raw::c_char,
+        error: *mut ::std::os::raw::c_char,
+    );
+}
+extern "C" {
     pub fn descriptor_unref(data: gpointer);
 }
 extern "C" {
