@@ -41,14 +41,6 @@ extern "C" {
 extern "C" {
     pub fn shadow_logger_shouldFilter(logger: *mut ShadowLogger, level: LogLevel) -> bool;
 }
-pub use self::_Status as Status;
-pub const _Status_STATUS_NONE: _Status = 0;
-pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
-pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
-pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
-pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
-pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
-pub type _Status = i32;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Process {
@@ -61,7 +53,6 @@ pub struct _Host {
     _unused: [u8; 0],
 }
 pub type Host = _Host;
-pub type LegacyDescriptor = [u64; 7usize];
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Counter {
@@ -72,6 +63,15 @@ pub struct Counter {
 pub struct PosixFileArc {
     _unused: [u8; 0],
 }
+pub use self::_Status as Status;
+pub const _Status_STATUS_NONE: _Status = 0;
+pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
+pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
+pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
+pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
+pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
+pub type _Status = i32;
+pub type LegacyDescriptor = [u64; 7usize];
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _StatusListener {
@@ -277,12 +277,6 @@ fn bindgen_test_layout__SysCallReturn() {
 pub type SysCallReturn = _SysCallReturn;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _Futex {
-    _unused: [u8; 0],
-}
-pub type Futex = _Futex;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct _Thread {
     _unused: [u8; 0],
 }
@@ -370,7 +364,7 @@ extern "C" {
     pub fn thread_writePtr(
         thread: *mut Thread,
         dst: PluginVirtualPtr,
-        src: *mut ::std::os::raw::c_void,
+        src: *const ::std::os::raw::c_void,
         n: size_t,
     ) -> ::std::os::raw::c_int;
 }
@@ -489,9 +483,32 @@ extern "C" {
     ) -> *mut CompatDescriptor;
 }
 extern "C" {
+    pub fn process_readPtr(
+        proc_: *mut Process,
+        dst: *mut ::std::os::raw::c_void,
+        src: PluginVirtualPtr,
+        n: size_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn process_readStringPtr(
+        proc_: *mut Process,
+        dst: *mut ::std::os::raw::c_char,
+        src: PluginVirtualPtr,
+        n: size_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn process_writePtr(
+        proc_: *mut Process,
+        dst: PluginVirtualPtr,
+        src: *const ::std::os::raw::c_void,
+        n: size_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn process_getReadablePtr(
         proc_: *mut Process,
-        thread: *mut Thread,
         plugin_src: PluginPtr,
         n: size_t,
     ) -> *const ::std::os::raw::c_void;
@@ -499,7 +516,6 @@ extern "C" {
 extern "C" {
     pub fn process_getWriteablePtr(
         proc_: *mut Process,
-        thread: *mut Thread,
         plugin_src: PluginPtr,
         n: size_t,
     ) -> *mut ::std::os::raw::c_void;
@@ -507,7 +523,6 @@ extern "C" {
 extern "C" {
     pub fn process_getMutablePtr(
         proc_: *mut Process,
-        thread: *mut Thread,
         plugin_src: PluginPtr,
         n: size_t,
     ) -> *mut ::std::os::raw::c_void;
@@ -531,6 +546,15 @@ extern "C" {
 }
 extern "C" {
     pub fn descriptor_setHandle(descriptor: *mut LegacyDescriptor, handle: gint);
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Futex {
+    _unused: [u8; 0],
+}
+pub type Futex = _Futex;
+extern "C" {
+    pub fn worker_getActiveProcess() -> *mut Process;
 }
 pub use self::_TriggerType as TriggerType;
 pub const _TriggerType_TRIGGER_NONE: _TriggerType = 0;
@@ -654,6 +678,9 @@ fn bindgen_test_layout__Trigger() {
 }
 extern "C" {
     pub fn syscallcondition_new(trigger: Trigger, timeout: *mut Timer) -> *mut SysCallCondition;
+}
+extern "C" {
+    pub fn syscallcondition_unref(cond: *mut SysCallCondition);
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

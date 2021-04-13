@@ -50,7 +50,7 @@ SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
         }
 
-        int** out = process_getWriteablePtr(sys->process, sys->thread, outptr, sizeof(*out));
+        int** out = process_getWriteablePtr(sys->process, outptr, sizeof(*out));
         if (!out) {
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
         }

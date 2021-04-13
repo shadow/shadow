@@ -65,7 +65,7 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
 
     /* Return the pipe fds to the caller. */
     size_t sizeNeeded = sizeof(int) * 2;
-    gint* pipefd = process_getWriteablePtr(sys->process, sys->thread, pipefdPtr, sizeNeeded);
+    gint* pipefd = process_getWriteablePtr(sys->process, pipefdPtr, sizeNeeded);
 
     pipefd[0] =
         process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)pipeReader);
@@ -119,20 +119,24 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
     switch (dType) {
         case DT_FILE:
             if (offset == 0) {
-                result =
-                    file_read((File*)desc, worker_getWritablePtr(bufPtr, sizeNeeded), sizeNeeded);
+                result = file_read((File*)desc,
+                                   process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
+                                   sizeNeeded);
             } else {
-                result = file_pread(
-                    (File*)desc, worker_getWritablePtr(bufPtr, sizeNeeded), sizeNeeded, offset);
+                result = file_pread((File*)desc,
+                                    process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
+                                    sizeNeeded, offset);
             }
             break;
         case DT_EVENTD:
             result =
-                eventd_read((EventD*)desc, worker_getWritablePtr(bufPtr, sizeNeeded), sizeNeeded);
+                eventd_read((EventD*)desc,
+                            process_getWriteablePtr(sys->process, bufPtr, sizeNeeded), sizeNeeded);
             break;
         case DT_TIMER:
             result =
-                timer_read((Timer*)desc, worker_getWritablePtr(bufPtr, sizeNeeded), sizeNeeded);
+                timer_read((Timer*)desc, process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
+                           sizeNeeded);
             break;
         case DT_PIPE:
             result = transport_receiveUserData((Transport*)desc, bufPtr, sizeNeeded, NULL, NULL);
@@ -212,16 +216,19 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
     switch (dType) {
         case DT_FILE:
             if (offset == 0) {
-                result =
-                    file_write((File*)desc, worker_getReadablePtr(bufPtr, sizeNeeded), sizeNeeded);
+                result = file_write((File*)desc,
+                                    process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
+                                    sizeNeeded);
             } else {
-                result = file_pwrite(
-                    (File*)desc, worker_getReadablePtr(bufPtr, sizeNeeded), sizeNeeded, offset);
+                result = file_pwrite((File*)desc,
+                                     process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
+                                     sizeNeeded, offset);
             }
             break;
         case DT_EVENTD:
             result =
-                eventd_write((EventD*)desc, worker_getReadablePtr(bufPtr, sizeNeeded), sizeNeeded);
+                eventd_write((EventD*)desc,
+                             process_getReadablePtr(sys->process, bufPtr, sizeNeeded), sizeNeeded);
             break;
         case DT_TIMER: result = -EINVAL; break;
         case DT_PIPE:
@@ -392,7 +399,7 @@ SysCallReturn syscallhandler_uname(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    buf = process_getWriteablePtr(sys->process, sys->thread, args->args[0].as_ptr, sizeof(*buf));
+    buf = process_getWriteablePtr(sys->process, args->args[0].as_ptr, sizeof(*buf));
 
     const gchar* hostname = host_getName(sys->host);
 

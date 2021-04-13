@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::cshadow as c;
 use crate::host::descriptor::{
     FileFlags, FileMode, FileStatus, NewStatusListenerFilter, PosixFile, StatusEventSource,
-    SyscallReturn,
+    SyscallResult,
 };
 use crate::utility::byte_queue::ByteQueue;
 use crate::utility::event_queue::{EventQueue, Handle};
@@ -44,70 +44,60 @@ impl PipeFile {
         self.flags = flags;
     }
 
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
         // set the closed flag and remove the active flag
         self.copy_status(
             FileStatus::CLOSED | FileStatus::ACTIVE,
             FileStatus::CLOSED,
             event_queue,
         );
-        SyscallReturn::Success(0)
+        Ok(0.into())
     }
 
     pub fn read(
         &mut self,
-        bytes: Option<&mut [u8]>,
+        bytes: &mut [u8],
         offset: libc::off_t,
         event_queue: &mut EventQueue,
-    ) -> SyscallReturn {
+    ) -> SyscallResult {
         // pipes don't support seeking
         if offset != 0 {
-            return SyscallReturn::Error(nix::errno::Errno::ESPIPE);
+            return Err(nix::errno::Errno::ESPIPE.into());
         }
 
         // if the file is not open for reading, return EBADF
         if !self.mode.contains(FileMode::READ) {
-            return SyscallReturn::Error(nix::errno::Errno::EBADF);
+            return Err(nix::errno::Errno::EBADF.into());
         }
-
-        let bytes = match bytes {
-            Some(b) => b,
-            None => return SyscallReturn::Error(nix::errno::Errno::EFAULT),
-        };
 
         let num_read = self.buffer.borrow_mut().read(bytes, event_queue);
 
-        SyscallReturn::Success(num_read as i32)
+        Ok(num_read.into())
     }
 
     pub fn write(
         &mut self,
-        bytes: Option<&[u8]>,
+        bytes: &[u8],
         offset: libc::off_t,
         event_queue: &mut EventQueue,
-    ) -> SyscallReturn {
+    ) -> SyscallResult {
         // pipes don't support seeking
         if offset != 0 {
-            return SyscallReturn::Error(nix::errno::Errno::ESPIPE);
+            return Err(nix::errno::Errno::ESPIPE.into());
         }
 
         // if the file is not open for writing, return EBADF
         if !self.mode.contains(FileMode::WRITE) {
-            return SyscallReturn::Error(nix::errno::Errno::EBADF);
+            return Err(nix::errno::Errno::EBADF.into());
         }
-
-        let bytes = match bytes {
-            Some(b) => b,
-            None => return SyscallReturn::Error(nix::errno::Errno::EFAULT),
-        };
 
         let num_written = self.buffer.borrow_mut().write(bytes, event_queue);
 
         // the write would block if we could not write any bytes, but were asked to
         if num_written == 0 && !bytes.is_empty() {
-            SyscallReturn::Error(nix::errno::EWOULDBLOCK)
+            Err(nix::errno::EWOULDBLOCK.into())
         } else {
-            SyscallReturn::Success(num_written as i32)
+            Ok(num_written.into())
         }
     }
 

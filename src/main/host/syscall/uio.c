@@ -51,8 +51,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd,
     }
 
     /* Get the vector of pointers. */
-    const struct iovec* iov =
-        process_getReadablePtr(sys->process, sys->thread, iovPtr, iovlen * sizeof(*iov));
+    const struct iovec* iov = process_getReadablePtr(sys->process, iovPtr, iovlen * sizeof(*iov));
 
     /* Check that all of the buf pointers are valid. */
     for (unsigned long i = 0; i < iovlen; i++) {
@@ -113,8 +112,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
             size_t bufSize = iov[i].iov_len;
 
-            buffersv[i].iov_base =
-                process_getWriteablePtr(sys->process, sys->thread, bufPtr, bufSize);
+            buffersv[i].iov_base = process_getWriteablePtr(sys->process, bufPtr, bufSize);
             buffersv[i].iov_len = bufSize;
         }
 
@@ -231,8 +229,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
             PluginPtr bufPtr = (PluginPtr){.val = (uint64_t)iov[i].iov_base};
             size_t bufSize = iov[i].iov_len;
 
-            buffersv[i].iov_base =
-                (void*)process_getReadablePtr(sys->process, sys->thread, bufPtr, bufSize);
+            buffersv[i].iov_base = (void*)process_getReadablePtr(sys->process, bufPtr, bufSize);
             buffersv[i].iov_len = bufSize;
         }
 

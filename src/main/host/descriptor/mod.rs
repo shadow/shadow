@@ -1,7 +1,9 @@
 use atomic_refcell::AtomicRefCell;
+use log::warn;
 use std::sync::Arc;
 
 use crate::cshadow as c;
+use crate::host::syscall_condition::SysCallCondition;
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
 
 pub mod pipe;
@@ -32,28 +34,82 @@ impl<T> SyncSendPointer<T> {
     }
 }
 
-#[derive(PartialEq)]
-pub enum SyscallReturn {
-    Success(i32),
-    Error(nix::errno::Errno),
+// Calling all of these errors is stretching the semantics of 'error' a bit,
+// but it makes for fluent programming in syscall handlers using the `?` operator.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SyscallError {
+    Errno(nix::errno::Errno),
+    Cond(SysCallCondition),
+    Native,
 }
 
-impl From<SyscallReturn> for c::SysCallReturn {
-    fn from(syscall_return: SyscallReturn) -> Self {
+pub type SyscallResult = Result<crate::host::syscall_types::SysCallReg, SyscallError>;
+
+impl From<c::SysCallReturn> for SyscallResult {
+    fn from(r: c::SysCallReturn) -> Self {
+        match r.state {
+            c::SysCallReturnState_SYSCALL_DONE => {
+                match crate::utility::syscall::raw_return_value_to_result(unsafe {
+                    r.retval.as_i64
+                }) {
+                    Ok(r) => Ok(r),
+                    Err(e) => Err(e.into()),
+                }
+            }
+            // SAFETY: XXX: We're assuming this points to a valid SysCallCondition.
+            c::SysCallReturnState_SYSCALL_BLOCK => Err(SyscallError::Cond(unsafe {
+                SysCallCondition::consume_from_c(r.cond)
+            })),
+            c::SysCallReturnState_SYSCALL_NATIVE => Err(SyscallError::Native),
+            _ => panic!("Unexpected c::SysCallReturn state {}", r.state),
+        }
+    }
+}
+
+impl From<SyscallResult> for c::SysCallReturn {
+    fn from(syscall_return: SyscallResult) -> Self {
         match syscall_return {
-            SyscallReturn::Success(x) => Self {
+            Ok(r) => Self {
                 state: c::SysCallReturnState_SYSCALL_DONE,
-                retval: c::SysCallReg { as_i64: x as i64 },
+                retval: r.into(),
                 cond: std::ptr::null_mut(),
             },
-            SyscallReturn::Error(errno) => Self {
+            Err(SyscallError::Errno(e)) => Self {
                 state: c::SysCallReturnState_SYSCALL_DONE,
                 retval: c::SysCallReg {
-                    as_i64: -(errno as i64),
+                    as_i64: -(e as i64),
                 },
                 cond: std::ptr::null_mut(),
             },
+            Err(SyscallError::Cond(c)) => Self {
+                state: c::SysCallReturnState_SYSCALL_BLOCK,
+                retval: c::SysCallReg { as_i64: 0 },
+                cond: c.into_inner(),
+            },
+            Err(SyscallError::Native) => Self {
+                state: c::SysCallReturnState_SYSCALL_NATIVE,
+                retval: c::SysCallReg { as_i64: 0 },
+                cond: std::ptr::null_mut(),
+            },
         }
+    }
+}
+
+impl From<nix::Error> for SyscallError {
+    fn from(e: nix::Error) -> Self {
+        let errno = e.as_errno();
+        let errno = errno.unwrap_or_else(|| {
+            let default = nix::errno::ENOTSUP;
+            warn!("Mapping err {} to {}", e, default);
+            default
+        });
+        SyscallError::Errno(errno)
+    }
+}
+
+impl From<nix::errno::Errno> for SyscallError {
+    fn from(e: nix::errno::Errno) -> Self {
+        SyscallError::Errno(e)
     }
 }
 
@@ -260,7 +316,7 @@ impl IsSend for PosixFile {}
 impl IsSync for PosixFile {}
 
 impl PosixFile {
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallReturn {
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
         match self {
             Self::Pipe(f) => f.close(event_queue),
         }
@@ -268,10 +324,10 @@ impl PosixFile {
 
     pub fn read(
         &mut self,
-        bytes: Option<&mut [u8]>,
+        bytes: &mut [u8],
         offset: libc::off_t,
         event_queue: &mut EventQueue,
-    ) -> SyscallReturn {
+    ) -> SyscallResult {
         match self {
             Self::Pipe(f) => f.read(bytes, offset, event_queue),
         }
@@ -279,10 +335,10 @@ impl PosixFile {
 
     pub fn write(
         &mut self,
-        bytes: Option<&[u8]>,
+        bytes: &[u8],
         offset: libc::off_t,
         event_queue: &mut EventQueue,
-    ) -> SyscallReturn {
+    ) -> SyscallResult {
         match self {
             Self::Pipe(f) => f.write(bytes, offset, event_queue),
         }
@@ -376,7 +432,7 @@ impl Descriptor {
 
     /// Close the descriptor, and if this is the last descriptor pointing to its file, close
     /// the file as well.
-    pub fn close(self, event_queue: &mut EventQueue) -> Option<SyscallReturn> {
+    pub fn close(self, event_queue: &mut EventQueue) -> Option<SyscallResult> {
         // this isn't subject to race conditions since we should never access descriptors
         // from multiple threads at the same time
         if Arc::<()>::strong_count(&self.open_count) == 1 {
@@ -581,5 +637,87 @@ mod export {
         let file = unsafe { &*file };
 
         file.borrow_mut().remove_legacy_listener(listener);
+    }
+}
+
+impl std::fmt::Debug for c::SysCallReturn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SysCallReturn")
+            .field("state", &self.state)
+            .field("retval", &self.retval)
+            .field("cond", &self.cond)
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::host::syscall::Trigger;
+
+    #[test]
+    fn test_syscallresult_roundtrip() {
+        for val in vec![
+            Ok(1.into()),
+            Err(SyscallError::Errno(nix::errno::Errno::EPERM)),
+            Err(SyscallError::Cond(SysCallCondition::new(Trigger::from(
+                c::Trigger {
+                    type_: 1,
+                    object: c::TriggerObject {
+                        as_pointer: std::ptr::null_mut(),
+                    },
+                    status: 2,
+                },
+            )))),
+        ]
+        .drain(..)
+        {
+            // We can't easily compare the value to the roundtripped result, since
+            // roundtripping consumes the original value, and SysCallReturn doesn't implement Clone.
+            // Compare their debug strings instead.
+            let orig_debug = format!("{:?}", &val);
+            let roundtripped = SyscallResult::from(c::SysCallReturn::from(val));
+            let roundtripped_debug = format!("{:?}", roundtripped);
+            assert_eq!(orig_debug, roundtripped_debug);
+        }
+    }
+
+    #[test]
+    fn test_syscallreturn_roundtrip() {
+        let condition = SysCallCondition::new(Trigger::from(c::Trigger {
+            type_: 1,
+            object: c::TriggerObject {
+                as_pointer: std::ptr::null_mut(),
+            },
+            status: 2,
+        }));
+        for val in vec![
+            c::SysCallReturn {
+                state: c::SysCallReturnState_SYSCALL_DONE,
+                retval: 1.into(),
+                cond: std::ptr::null_mut(),
+            },
+            c::SysCallReturn {
+                state: c::SysCallReturnState_SYSCALL_BLOCK,
+                retval: 0.into(),
+                cond: condition.into_inner(),
+            },
+            c::SysCallReturn {
+                state: c::SysCallReturnState_SYSCALL_NATIVE,
+                retval: 0.into(),
+                cond: std::ptr::null_mut(),
+            },
+        ]
+        .drain(..)
+        {
+            // We can't easily compare the value to the roundtripped result,
+            // since roundtripping consumes the original value, and
+            // SysCallReturn doesn't implement Clone. Compare their debug
+            // strings instead.
+            let orig_debug = format!("{:?}", &val);
+            let roundtripped = c::SysCallReturn::from(SyscallResult::from(val));
+            let roundtripped_debug = format!("{:?}", roundtripped);
+            assert_eq!(orig_debug, roundtripped_debug);
+        }
     }
 }

@@ -47,28 +47,28 @@ static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
 
     switch (request) {
         case SIOCINQ: { // equivalent to FIONREAD
-            int* lenout = process_getWriteablePtr(sys->process, sys->thread, argPtr, sizeof(int));
+            int* lenout = process_getWriteablePtr(sys->process, argPtr, sizeof(int));
             *lenout = (int)tcp_getInputBufferLength(tcp);
             result = 0;
             break;
         }
 
         case SIOCOUTQ: { // equivalent to TIOCOUTQ
-            int* lenout = process_getWriteablePtr(sys->process, sys->thread, argPtr, sizeof(int));
+            int* lenout = process_getWriteablePtr(sys->process, argPtr, sizeof(int));
             *lenout = (int)tcp_getOutputBufferLength(tcp);
             result = 0;
             break;
         }
 
         case SIOCOUTQNSD: {
-            int* lenout = process_getWriteablePtr(sys->process, sys->thread, argPtr, sizeof(int));
+            int* lenout = process_getWriteablePtr(sys->process, argPtr, sizeof(int));
             *lenout = (int)tcp_getNotSentBytes(tcp);
             result = 0;
             break;
         }
 
         case FIONBIO: {
-            const int* val = process_getReadablePtr(sys->process, sys->thread, argPtr, sizeof(int));
+            const int* val = process_getReadablePtr(sys->process, argPtr, sizeof(int));
             if (*val == 0) {
                 descriptor_removeFlags((LegacyDescriptor*)tcp, O_NONBLOCK);
             } else {
@@ -94,21 +94,21 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
 
     switch (request) {
         case SIOCINQ: { // equivalent to FIONREAD
-            int* lenout = process_getWriteablePtr(sys->process, sys->thread, argPtr, sizeof(int));
+            int* lenout = process_getWriteablePtr(sys->process, argPtr, sizeof(int));
             *lenout = (int)socket_getInputBufferLength((Socket*)udp);
             result = 0;
             break;
         }
 
         case SIOCOUTQ: { // equivalent to TIOCOUTQ
-            int* lenout = process_getWriteablePtr(sys->process, sys->thread, argPtr, sizeof(int));
+            int* lenout = process_getWriteablePtr(sys->process, argPtr, sizeof(int));
             *lenout = socket_getOutputBufferLength((Socket*)udp);
             result = 0;
             break;
         }
 
         case FIONBIO: {
-            const int* val = process_getReadablePtr(sys->process, sys->thread, argPtr, sizeof(int));
+            const int* val = process_getReadablePtr(sys->process, argPtr, sizeof(int));
             if (*val == 0) {
                 descriptor_removeFlags((LegacyDescriptor*)udp, O_NONBLOCK);
             } else {

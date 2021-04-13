@@ -131,8 +131,7 @@ static SysCallReturn _syscallhandler_getnameHelper(SysCallHandler* sys, struct s
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    socklen_t* addrlen =
-        process_getMutablePtr(sys->process, sys->thread, addrlenPtr, sizeof(*addrlen));
+    socklen_t* addrlen = process_getMutablePtr(sys->process, addrlenPtr, sizeof(*addrlen));
 
     /* The result is truncated if they didn't give us enough space. */
     size_t retSize = MIN(*addrlen, slen);
@@ -140,8 +139,7 @@ static SysCallReturn _syscallhandler_getnameHelper(SysCallHandler* sys, struct s
 
     if (retSize > 0) {
         /* Return the results */
-        struct sockaddr* addr =
-            process_getWriteablePtr(sys->process, sys->thread, addrPtr, retSize);
+        struct sockaddr* addr = process_getWriteablePtr(sys->process, addrPtr, retSize);
         memcpy(addr, saddr, retSize);
     }
 
@@ -354,8 +352,7 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
 
     switch (optname) {
         case SO_SNDBUF: {
-            const unsigned int* val =
-                process_getReadablePtr(sys->process, sys->thread, optvalPtr, sizeof(int));
+            const unsigned int* val = process_getReadablePtr(sys->process, optvalPtr, sizeof(int));
             size_t newsize = (size_t)(*val) * 2; // Linux kernel doubles this value upon setting
 
             // Linux also has limits SOCK_MIN_SNDBUF (slightly greater than 4096) and the sysctl max
@@ -375,8 +372,7 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
             return 0;
         }
         case SO_RCVBUF: {
-            const unsigned int* val =
-                process_getReadablePtr(sys->process, sys->thread, optvalPtr, sizeof(int));
+            const unsigned int* val = process_getReadablePtr(sys->process, optvalPtr, sizeof(int));
             size_t newsize = (size_t)(*val) * 2; // Linux kernel doubles this value upon setting
 
             // Linux also has limits SOCK_MIN_RCVBUF (slightly greater than 2048) and the sysctl max
@@ -550,7 +546,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
 
     if (destAddrPtr.val) {
         const struct sockaddr* dest_addr =
-            process_getReadablePtr(sys->process, sys->thread, destAddrPtr, addrlen);
+            process_getReadablePtr(sys->process, destAddrPtr, addrlen);
         utility_assert(dest_addr);
 
         /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
@@ -722,8 +718,7 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
-    const struct sockaddr* addr =
-        process_getReadablePtr(sys->process, sys->thread, addrPtr, addrlen);
+    const struct sockaddr* addr = process_getReadablePtr(sys->process, addrPtr, addrlen);
     utility_assert(addr);
 
     /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
@@ -773,8 +768,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
-    const struct sockaddr* addr =
-        process_getReadablePtr(sys->process, sys->thread, addrPtr, addrlen);
+    const struct sockaddr* addr = process_getReadablePtr(sys->process, addrPtr, addrlen);
     utility_assert(addr);
 
     /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
@@ -1002,8 +996,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    socklen_t* optlen =
-        process_getMutablePtr(sys->process, sys->thread, optlenPtr, sizeof(*optlen));
+    socklen_t* optlen = process_getMutablePtr(sys->process, optlenPtr, sizeof(*optlen));
 
     /* Return early if there are no bytes to store data. */
     if (*optlen == 0) {
@@ -1015,7 +1008,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    void* optval = process_getWriteablePtr(sys->process, sys->thread, optvalPtr, *optlen);
+    void* optval = process_getWriteablePtr(sys->process, optvalPtr, *optlen);
 
     errcode = 0;
     switch (level) {
@@ -1308,7 +1301,7 @@ SysCallReturn syscallhandler_socketpair(SysCallHandler* sys, const SysCallArgs* 
     }
 
     /* Return the socket fds to the caller. */
-    int* sockfd = process_getWriteablePtr(sys->process, sys->thread, fdsPtr, 2 * sizeof(int));
+    int* sockfd = process_getWriteablePtr(sys->process, fdsPtr, 2 * sizeof(int));
 
     sockfd[0] = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)socketA);
     sockfd[1] = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)socketB);

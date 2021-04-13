@@ -24,8 +24,7 @@ SysCallReturn syscallhandler_sysinfo(SysCallHandler* sys, const SysCallArgs* arg
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    struct sysinfo* info =
-        process_getWriteablePtr(sys->process, sys->thread, info_ptr, sizeof(*info));
+    struct sysinfo* info = process_getWriteablePtr(sys->process, info_ptr, sizeof(*info));
 
     if (!info) {
         error("Unable to allocate memory for sysinfo struct.");

@@ -29,7 +29,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     // Check if a timeout was given in the syscall args.
     const struct timespec* timeout;
     if (timeoutVPtr.val) {
-        timeout = process_getReadablePtr(sys->process, sys->thread, timeoutVPtr, sizeof(*timeout));
+        timeout = process_getReadablePtr(sys->process, timeoutVPtr, sizeof(*timeout));
         // Bounds checking
         if (!(timeout->tv_nsec >= 0 && timeout->tv_nsec <= 999999999)) {
             debug("A futex timeout was given, but the nanos value is out of range");
@@ -42,8 +42,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     // Normally, the load/compare is done atomically. Since Shadow does not run multiple
     // threads from the same plugin at the same time, we do not use atomic ops.
     // `man 2 futex`: blocking via a futex is an atomic compare-and-block operation
-    const uint32_t* futexVal =
-        process_getReadablePtr(sys->process, sys->thread, futexVPtr, sizeof(uint32_t));
+    const uint32_t* futexVal = process_getReadablePtr(sys->process, futexVPtr, sizeof(uint32_t));
 
     debug(
         "Futex value is %" PRIu32 ", expected value is %" PRIu32, *futexVal, (uint32_t)expectedVal);

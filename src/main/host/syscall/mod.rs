@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
@@ -8,7 +7,7 @@ use crate::host::descriptor::{CompatDescriptor, FileStatus, PosixFile};
 
 pub mod unistd;
 
-struct Trigger(c::Trigger);
+pub struct Trigger(c::Trigger);
 
 impl From<c::Trigger> for Trigger {
     fn from(trigger: c::Trigger) -> Self {
@@ -73,103 +72,4 @@ pub fn get_descriptor(
     }
 
     Ok(desc)
-}
-
-pub enum PluginPtrError {
-    /// Was `NULL` inside the plugin.
-    Null,
-    /// Length was 0.
-    ZeroLen,
-    /// Length was too small to represent the generic type `T`.
-    LenTooSmall,
-}
-
-pub fn get_readable_ptr<T>(
-    process: *mut c::Process,
-    thread: *mut c::Thread,
-    plugin_ptr: c::PluginPtr,
-    num_bytes: usize,
-) -> Result<*const T, PluginPtrError> {
-    if plugin_ptr.val == 0 {
-        return Err(PluginPtrError::Null);
-    }
-
-    if num_bytes == 0 {
-        return Err(PluginPtrError::ZeroLen);
-    }
-
-    if num_bytes < std::mem::size_of::<T>() {
-        return Err(PluginPtrError::LenTooSmall);
-    }
-
-    let num_bytes = num_bytes.try_into().unwrap();
-
-    let ptr = unsafe { c::process_getReadablePtr(process, thread, plugin_ptr, num_bytes) };
-    let ptr = ptr as *const T;
-    assert!(!ptr.is_null());
-
-    // check pointer alignment
-    assert_eq!((ptr as usize) % std::mem::align_of::<T>(), 0);
-
-    Ok(ptr)
-}
-
-pub fn get_writable_ptr<T>(
-    process: *mut c::Process,
-    thread: *mut c::Thread,
-    plugin_ptr: c::PluginPtr,
-    num_bytes: usize,
-) -> Result<*mut T, PluginPtrError> {
-    if plugin_ptr.val == 0 {
-        return Err(PluginPtrError::Null);
-    }
-
-    if num_bytes == 0 {
-        return Err(PluginPtrError::ZeroLen);
-    }
-
-    if num_bytes < std::mem::size_of::<T>() {
-        return Err(PluginPtrError::LenTooSmall);
-    }
-
-    let num_bytes = num_bytes.try_into().unwrap();
-
-    let ptr = unsafe { c::process_getWriteablePtr(process, thread, plugin_ptr, num_bytes) };
-    let ptr = ptr as *mut T;
-    assert!(!ptr.is_null());
-
-    // check pointer alignment
-    assert_eq!((ptr as usize) % std::mem::align_of::<T>(), 0);
-
-    Ok(ptr)
-}
-
-pub fn get_mutable_ptr<T>(
-    process: *mut c::Process,
-    thread: *mut c::Thread,
-    plugin_ptr: c::PluginPtr,
-    num_bytes: usize,
-) -> Result<*mut T, PluginPtrError> {
-    if plugin_ptr.val == 0 {
-        return Err(PluginPtrError::Null);
-    }
-
-    if num_bytes == 0 {
-        return Err(PluginPtrError::ZeroLen);
-    }
-
-    if num_bytes < std::mem::size_of::<T>() {
-        return Err(PluginPtrError::LenTooSmall);
-    }
-
-    let num_bytes = num_bytes.try_into().unwrap();
-
-    let ptr = unsafe { c::process_getMutablePtr(process, thread, plugin_ptr, num_bytes) };
-    let ptr = ptr as *mut T;
-    assert!(!ptr.is_null());
-
-    // check pointer alignment
-    assert_eq!((ptr as usize) % std::mem::align_of::<T>(), 0);
-
-    Ok(ptr)
 }

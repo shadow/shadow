@@ -121,8 +121,7 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
 static SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, PluginPtr fds_ptr, nfds_t nfds,
                                                 const struct timespec* timeout) {
     // Get the pollfd struct in our memory so we can read from and write to it.
-    struct pollfd* fds =
-        process_getMutablePtr(sys->process, sys->thread, fds_ptr, nfds * sizeof(*fds));
+    struct pollfd* fds = process_getMutablePtr(sys->process, fds_ptr, nfds * sizeof(*fds));
 
     // Check if any of the fds have events now
     int num_ready = _syscallhandler_getPollEvents(sys, fds, nfds);
@@ -227,8 +226,7 @@ SysCallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args)
         // NULL timespec is valid and means infinite timeout
         ts_timeout = NULL;
     } else {
-        ts_timeout =
-            process_getReadablePtr(sys->process, sys->thread, ts_timeout_ptr, sizeof(*ts_timeout));
+        ts_timeout = process_getReadablePtr(sys->process, ts_timeout_ptr, sizeof(*ts_timeout));
 
         // Negative time values in the struct are invalid
         if (ts_timeout->tv_sec < 0 || ts_timeout->tv_nsec < 0) {

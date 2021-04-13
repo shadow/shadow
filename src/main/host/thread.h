@@ -35,7 +35,7 @@ int thread_readStringPtr(Thread* base, char* dst, PluginVirtualPtr src, size_t n
 
 // Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
 // the specified range couldn't be accessed. The write is flushed immediately.
-int thread_writePtr(Thread* thread, PluginVirtualPtr dst, void* src, size_t n);
+int thread_writePtr(Thread* thread, PluginVirtualPtr dst, const void* src, size_t n);
 
 // Make the data at plugin_src available in shadow's address space.
 //
