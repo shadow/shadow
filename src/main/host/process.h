@@ -141,4 +141,10 @@ void process_setMemoryManager(Process* proc, MemoryManager* memoryManager);
 // Returns the interpose method used by this process.
 InterposeMethod process_getInterposeMethod(Process* proc);
 
+// A wrapper around GLib's `g_shell_parse_argv()` that doesn't use GLib types. The returned
+// pointers must be freed using `process_parseArgStrFree()`.
+bool process_parseArgStr(const char* commandLine, int* argc, char*** argv, char** error);
+// Free all data allocated by `process_parseArgStr()`.
+void process_parseArgStrFree(char** argv, char* error);
+
 #endif /* SHD_PROCESS_H_ */
