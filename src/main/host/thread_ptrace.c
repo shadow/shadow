@@ -56,6 +56,13 @@ OPTION_EXPERIMENTAL_ENTRY("disable-o-n-waitpid-workarounds", 0, G_OPTION_FLAG_RE
                           "otherwise result in excessive detaching and reattaching",
                           NULL)
 
+static bool _enableBufferedIo = false;
+OPTION_EXPERIMENTAL_ENTRY(
+    "enable-ptrace-buffered-io", 0, 0, G_OPTION_ARG_NONE, &_enableBufferedIo,
+    "Use buffered IO when reading plugin memory through /proc. This introduces some extra copying "
+    "but may help performance when making small sequential accesses.",
+    NULL)
+
 // Because of <https://github.com/shadow/shadow/issues/1134> we also always use __WNOTHREAD when
 // calling waitpid. Otherwise if the target task isn't waitable yet, the kernel will move onto
 // checking its siblings children.
@@ -430,6 +437,17 @@ static void _threadptrace_getChildMemoryHandle(ThreadPtrace* thread) {
     if (thread->childMemFile == NULL) {
         error("%s %s: %s", reopen ? "freopen" : "fopen", path, g_strerror(errno));
         return;
+    }
+
+    if (!_enableBufferedIo) {
+        // Buffering only helps when doing small sequential accesses. For
+        // syscalls that do large accesses (read, write), buffering just adds an
+        // extra copy.
+        //
+        // Smaller accesses are generally small structs; not many handlers
+        // access more than one, and even then it only helps if they happen to
+        // be sequential in memory.
+        setvbuf(thread->childMemFile, NULL, _IONBF, 0);
     }
 }
 
