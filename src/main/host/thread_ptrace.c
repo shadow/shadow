@@ -56,9 +56,9 @@ OPTION_EXPERIMENTAL_ENTRY("disable-o-n-waitpid-workarounds", 0, G_OPTION_FLAG_RE
                           "otherwise result in excessive detaching and reattaching",
                           NULL)
 
-static bool _useBufferedIo = false;
+static bool _enableBufferedIo = false;
 OPTION_EXPERIMENTAL_ENTRY(
-    "enable-ptrace-buffered-io", 0, 0, G_OPTION_ARG_NONE, &_useBufferedIo,
+    "enable-ptrace-buffered-io", 0, 0, G_OPTION_ARG_NONE, &_enableBufferedIo,
     "Use buffered IO when reading plugin memory through /proc. This introduces some extra copying "
     "but may help performance when making small sequential accesses.",
     NULL)
@@ -439,7 +439,7 @@ static void _threadptrace_getChildMemoryHandle(ThreadPtrace* thread) {
         return;
     }
 
-    if (!_useBufferedIo) {
+    if (!_enableBufferedIo) {
         // Buffering only helps when doing small sequential accesses. For
         // syscalls that do large accesses (read, write), buffering just adds an
         // extra copy.
