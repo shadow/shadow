@@ -12,6 +12,7 @@ automatically. As data is read, old chunks are freed automatically.
 */
 
 use std::collections::LinkedList;
+use std::io::Read;
 
 struct ByteChunk {
     buf: Vec<u8>,
@@ -21,7 +22,6 @@ struct ByteChunk {
 pub struct ByteQueue {
     chunks: LinkedList<ByteChunk>,
     tail_read_offset: usize,
-    head_write_offset: usize,
     length: usize,
     chunk_capacity: usize,
 }
@@ -29,7 +29,7 @@ pub struct ByteQueue {
 impl ByteChunk {
     fn new(capacity: usize) -> ByteChunk {
         ByteChunk {
-            buf: vec![0; capacity],
+            buf: Vec::with_capacity(capacity),
         }
     }
 }
@@ -39,7 +39,6 @@ impl ByteQueue {
         ByteQueue {
             chunks: LinkedList::new(),
             tail_read_offset: 0,
-            head_write_offset: 0,
             length: 0,
             chunk_capacity,
         }
@@ -55,18 +54,21 @@ impl ByteQueue {
     }
 
     /// Push bytes to the head of the queue.
-    pub fn push(&mut self, src: &[u8]) {
+    /// Returns an error iff `src` returns an error; i.e. this is infallible for
+    /// an infallible `src` such as a slice.
+    pub fn push<R: Read>(&mut self, src: R) -> std::io::Result<usize> {
         // create new buffer head lazily as opposed to proactively
         if self.chunks.is_empty() {
             self.create_new_head();
         }
 
-        let src_len = src.len();
-        let mut bytes_copied = 0;
+        let mut total_written = 0;
+        let mut src = src;
 
         // while there are bytes to copy
-        while bytes_copied < src_len {
-            let head_space = self.chunk_capacity - self.head_write_offset;
+        loop {
+            let head = &mut self.chunks.front_mut().unwrap().buf;
+            let head_space = head.capacity() - head.len();
 
             // if we have no space, allocate a new chunk at head
             if head_space == 0 {
@@ -74,50 +76,55 @@ impl ByteQueue {
                 continue;
             }
 
-            // how much we actually write in this iteration
-            let src_remaining = src_len - bytes_copied;
-            let num_write = if src_remaining < head_space {
-                src_remaining
-            } else {
-                head_space
-            };
+            let written = src.by_ref().take(head_space as u64).read_to_end(head)?;
+            self.length += written;
+            total_written += written;
 
-            // copy bytes from src
-            self.copy_to_head(&src[bytes_copied..(bytes_copied + num_write)]);
-            bytes_copied += num_write;
+            if written == 0 {
+                // End of the reader
+                if self.get_available_bytes_tail() == 0 {
+                    // We created an empty tail but ended up not reading any
+                    // data into it.
+                    self.destroy_old_tail();
+                }
+                return Ok(total_written);
+            }
         }
     }
 
-    /// Pop bytes from the end of the queue.
-    pub fn pop(&mut self, dst: &mut [u8]) -> usize {
-        let dst_len = dst.len();
-        let mut bytes_copied = 0;
+    /// Dequeues data into `dst` until empty or `dst` returns EOF or error.
+    /// Returns an error iff `dst` returns an error; i.e. this is infallible for
+    /// an infallible `dst` such as a slice.
+    pub fn pop<W: std::io::Write>(&mut self, dst: W) -> std::io::Result<usize> {
+        let mut total_copied = 0;
+        let mut dst = dst;
 
-        // while there are bytes to copy
-        while bytes_copied < dst_len && !self.chunks.is_empty() {
-            let tail_avail = self.get_available_bytes_tail();
-            debug_assert_ne!(tail_avail, 0);
-
-            // how much we actually read in this iteration
-            let dst_remaining = dst_len - bytes_copied;
-            let num_read = if dst_remaining < tail_avail {
-                dst_remaining
-            } else {
-                tail_avail
+        loop {
+            let back = match self.chunks.back() {
+                Some(x) => x,
+                None => {
+                    // No more data to copy
+                    return Ok(total_copied);
+                }
             };
+            debug_assert_ne!(self.get_available_bytes_tail(), 0);
 
             // copy bytes to dst
-            self.copy_from_tail(&mut dst[bytes_copied..(bytes_copied + num_read)]);
-            bytes_copied += num_read;
+            let copied = dst.write(&back.buf[self.tail_read_offset..])?;
+            self.tail_read_offset += copied;
+            self.length -= copied;
+            total_copied += copied;
 
             // proactively destroy old tail
-            let tail_avail = self.get_available_bytes_tail();
-            if tail_avail == 0 || self.length == 0 {
+            if self.get_available_bytes_tail() == 0 {
                 self.destroy_old_tail();
             }
-        }
 
-        bytes_copied
+            if copied == 0 {
+                // Writer EOF
+                return Ok(total_copied);
+            }
+        }
     }
 
     fn create_new_head(&mut self) {
@@ -126,54 +133,20 @@ impl ByteQueue {
             self.tail_read_offset = 0;
         }
 
-        self.head_write_offset = 0;
         self.chunks.push_front(ByteChunk::new(self.chunk_capacity));
     }
 
     fn destroy_old_tail(&mut self) {
         self.chunks.pop_back();
         self.tail_read_offset = 0;
-
-        if self.chunks.is_empty() {
-            // this was also the head
-            self.head_write_offset = 0;
-        }
     }
 
     fn get_available_bytes_tail(&self) -> usize {
         match self.chunks.len() {
             0 => 0,
-            1 => self.head_write_offset - self.tail_read_offset,
+            1 => self.chunks.front().unwrap().buf.len() - self.tail_read_offset,
             _ => self.chunk_capacity - self.tail_read_offset,
         }
-    }
-
-    /// Copy bytes from a slice. Assumes that the head exists, and that the
-    /// slice will not overflow the head.
-    fn copy_to_head(&mut self, src: &[u8]) {
-        let len = src.len();
-        assert!(self.head_write_offset + len <= self.chunk_capacity);
-
-        self.chunks.front_mut().unwrap().buf
-            [self.head_write_offset..(self.head_write_offset + len)]
-            .copy_from_slice(&src);
-
-        self.head_write_offset += len;
-        self.length += len;
-    }
-
-    /// Copy bytes to a slice. Assumes that the tail exists, and that the
-    /// slice does not require more bytes than exist in the tail.
-    fn copy_from_tail(&mut self, dst: &mut [u8]) {
-        let len = dst.len();
-        assert!(self.tail_read_offset + len <= self.chunk_capacity);
-
-        dst.copy_from_slice(
-            &self.chunks.back().unwrap().buf[self.tail_read_offset..(self.tail_read_offset + len)],
-        );
-
-        self.tail_read_offset += len;
-        self.length -= len;
     }
 }
 
@@ -220,7 +193,7 @@ mod export {
         assert!(!src.is_null());
         let bq = unsafe { &mut *bq };
         let src = unsafe { slice::from_raw_parts(src, len) };
-        bq.push(src)
+        bq.push(src).unwrap();
     }
 
     #[no_mangle]
@@ -233,7 +206,7 @@ mod export {
         assert!(!dst.is_null());
         let bq = unsafe { &mut *bq };
         let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
-        bq.pop(dst)
+        bq.pop(dst).unwrap()
     }
 }
 
@@ -251,8 +224,8 @@ mod tests {
         let mut dst1 = [0; 8];
         let mut dst2 = [0; 10];
 
-        bq.push(&src1);
-        bq.push(&src2);
+        bq.push(&src1[..]).unwrap();
+        bq.push(&src2[..]).unwrap();
 
         // check the number of chunk sizes is correct (ceiling division)
         assert_eq!(
@@ -263,8 +236,8 @@ mod tests {
         assert_eq!(bq.length, src1.len() + src2.len());
 
         let mut count = 0;
-        count += bq.pop(&mut dst1);
-        count += bq.pop(&mut dst2);
+        count += bq.pop(&mut dst1[..]).unwrap();
+        count += bq.pop(&mut dst2[..]).unwrap();
 
         assert_eq!(count, src1.len() + src2.len());
         assert_eq!(dst1, [1, 2, 3, 4, 5, 6, 7, 8]);
