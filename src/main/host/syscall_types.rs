@@ -1,5 +1,9 @@
 use crate::cshadow as c;
+use nix::errno::Errno;
 use std::convert::From;
+use std::io::{Seek, SeekFrom};
+use std::marker::PhantomData;
+use std::mem::size_of;
 
 #[derive(Copy, Clone, Debug)]
 pub struct PluginPtr {
@@ -148,5 +152,85 @@ impl std::fmt::Debug for c::SysCallReg {
             .field("as_u64", unsafe { &self.as_u64 })
             .field("as_ptr", unsafe { &self.as_ptr })
             .finish()
+    }
+}
+
+/// Wrapper around a PluginPtr that encapsulates its type, size, and current
+/// position.
+#[derive(Copy, Clone)]
+pub struct TypedPluginPtr<T> {
+    base: PluginPtr,
+    offset: usize,
+    count: usize,
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T> std::fmt::Debug for TypedPluginPtr<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TypedPluginPtr")
+            .field("base", &self.base)
+            .field("offset", &self.offset)
+            .field("count", &self.count)
+            .field("size_of::<T>", &size_of::<T>())
+            .finish()
+    }
+}
+
+impl<T> TypedPluginPtr<T> {
+    pub fn new(ptr: PluginPtr, count: usize) -> Self {
+        TypedPluginPtr {
+            base: ptr,
+            offset: 0,
+            count,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Raw plugin pointer for current position.
+    pub fn ptr(&self) -> Result<PluginPtr, nix::errno::Errno> {
+        if self.offset >= self.count {
+            return Err(Errno::EFAULT);
+        }
+        Ok(PluginPtr {
+            ptr: c::PluginPtr {
+                val: self.base.ptr.val + ((self.offset * std::mem::size_of::<T>()) as u64),
+            },
+        })
+    }
+
+    /// Number of items remaining at current position.
+    pub fn items_remaining(&self) -> Result<usize, Errno> {
+        if self.offset > self.count {
+            Err(Errno::EFAULT)
+        } else {
+            Ok(self.count - self.offset)
+        }
+    }
+
+    /// Number of bytes remaining at current position.
+    pub fn bytes_remaining(&self) -> Result<usize, Errno> {
+        Ok(self.items_remaining()? * size_of::<T>())
+    }
+
+    /// Analagous to std::io::Seek, but seeks item-wise instead of byte-wise.
+    pub fn seek_item(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        let new_offset = match pos {
+            SeekFrom::Current(x) => self.offset as i64 + x,
+            SeekFrom::End(x) => self.count as i64 + x,
+            SeekFrom::Start(x) => x as i64,
+        };
+        // Seeking before the beginning is an error (but seeking to or past the
+        // end isn't).
+        if new_offset < 0 {
+            return Err(std::io::Error::from_raw_os_error(Errno::EFAULT as i32));
+        }
+        self.offset = new_offset as usize;
+        Ok(self.offset as u64)
+    }
+}
+
+impl Seek for TypedPluginPtr<u8> {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        self.seek_item(pos)
     }
 }
