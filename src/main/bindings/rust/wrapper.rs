@@ -528,6 +528,9 @@ extern "C" {
     ) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
+    pub fn process_flushPtrs(proc_: *mut Process);
+}
+extern "C" {
     pub fn process_parseArgStr(
         commandLine: *const ::std::os::raw::c_char,
         argc: *mut ::std::os::raw::c_int,

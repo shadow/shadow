@@ -8,6 +8,7 @@ use crate::host::descriptor::{
 };
 use crate::utility::byte_queue::ByteQueue;
 use crate::utility::event_queue::{EventQueue, Handle};
+use crate::utility::stream_len::StreamLen;
 
 pub struct PipeFile {
     buffer: Arc<AtomicRefCell<SharedBuf>>,
@@ -54,12 +55,15 @@ impl PipeFile {
         Ok(0.into())
     }
 
-    pub fn read(
+    pub fn read<W>(
         &mut self,
-        bytes: &mut [u8],
+        bytes: W,
         offset: libc::off_t,
         event_queue: &mut EventQueue,
-    ) -> SyscallResult {
+    ) -> SyscallResult
+    where
+        W: std::io::Write + std::io::Seek,
+    {
         // pipes don't support seeking
         if offset != 0 {
             return Err(nix::errno::Errno::ESPIPE.into());
@@ -70,17 +74,26 @@ impl PipeFile {
             return Err(nix::errno::Errno::EBADF.into());
         }
 
-        let num_read = self.buffer.borrow_mut().read(bytes, event_queue);
+        let mut bytes = bytes;
+        let num_read = self.buffer.borrow_mut().read(&mut bytes, event_queue)?;
 
-        Ok(num_read.into())
+        // the read would block if we could not write any bytes, but were asked to
+        if usize::from(num_read) == 0 && bytes.stream_len_bp()? != 0 {
+            Err(nix::errno::EWOULDBLOCK.into())
+        } else {
+            Ok(num_read.into())
+        }
     }
 
-    pub fn write(
+    pub fn write<R>(
         &mut self,
-        bytes: &[u8],
+        bytes: R,
         offset: libc::off_t,
         event_queue: &mut EventQueue,
-    ) -> SyscallResult {
+    ) -> SyscallResult
+    where
+        R: std::io::Read + std::io::Seek,
+    {
         // pipes don't support seeking
         if offset != 0 {
             return Err(nix::errno::Errno::ESPIPE.into());
@@ -91,10 +104,14 @@ impl PipeFile {
             return Err(nix::errno::Errno::EBADF.into());
         }
 
-        let num_written = self.buffer.borrow_mut().write(bytes, event_queue);
+        let mut bytes = bytes;
+        let num_written = self
+            .buffer
+            .borrow_mut()
+            .write(bytes.by_ref(), event_queue)?;
 
         // the write would block if we could not write any bytes, but were asked to
-        if num_written == 0 && !bytes.is_empty() {
+        if usize::from(num_written) == 0 && bytes.stream_len_bp()? != 0 {
             Err(nix::errno::EWOULDBLOCK.into())
         } else {
             Ok(num_written.into())
@@ -221,8 +238,12 @@ impl SharedBuf {
         self.max_len - self.queue.len()
     }
 
-    pub fn read(&mut self, bytes: &mut [u8], event_queue: &mut EventQueue) -> usize {
-        let num = self.queue.pop(bytes);
+    pub fn read<W: std::io::Write>(
+        &mut self,
+        bytes: W,
+        event_queue: &mut EventQueue,
+    ) -> SyscallResult {
+        let num = self.queue.pop(bytes)?;
 
         // readable if not empty
         self.adjust_status(FileStatus::READABLE, !self.is_empty(), event_queue);
@@ -234,13 +255,15 @@ impl SharedBuf {
             event_queue,
         );
 
-        num
+        Ok(num.into())
     }
 
-    pub fn write(&mut self, bytes: &[u8], event_queue: &mut EventQueue) -> usize {
-        let available = self.space_available();
-        let writable = &bytes[..std::cmp::min(bytes.len(), available)];
-        self.queue.push(writable);
+    pub fn write<R: std::io::Read>(
+        &mut self,
+        bytes: R,
+        event_queue: &mut EventQueue,
+    ) -> SyscallResult {
+        let written = self.queue.push(bytes.take(self.space_available() as u64))?;
 
         self.adjust_status(FileStatus::READABLE, !self.is_empty(), event_queue);
         self.adjust_status(
@@ -249,7 +272,7 @@ impl SharedBuf {
             event_queue,
         );
 
-        writable.len()
+        Ok(written.into())
     }
 
     pub fn add_listener(

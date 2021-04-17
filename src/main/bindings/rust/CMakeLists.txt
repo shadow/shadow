@@ -28,6 +28,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "process_parseArgStr.*"
         --whitelist-function "process_read.*Ptr"
         --whitelist-function "process_write.*Ptr"
+        --whitelist-function "process_flushPtrs"
         --whitelist-function "shadow_logger_getDefault"
         --whitelist-function "shadow_logger_shouldFilter"
         --whitelist-function "statuslistener_ref"
