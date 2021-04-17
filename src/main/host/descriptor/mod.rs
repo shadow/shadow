@@ -113,6 +113,19 @@ impl From<nix::errno::Errno> for SyscallError {
     }
 }
 
+impl From<std::io::Error> for SyscallError {
+    fn from(e: std::io::Error) -> Self {
+        match std::io::Error::raw_os_error(&e) {
+            Some(e) => SyscallError::Errno(nix::errno::from_i32(e)),
+            None => {
+                let default = nix::errno::ENOTSUP;
+                warn!("Mapping error {} to {}", e, default);
+                SyscallError::Errno(default)
+            }
+        }
+    }
+}
+
 bitflags::bitflags! {
     /// These are flags that can potentially be changed from the plugin (analagous to the Linux
     /// `filp->f_flags` status flags). Not all `O_` flags are valid here. For example file access
@@ -322,25 +335,31 @@ impl PosixFile {
         }
     }
 
-    pub fn read(
+    pub fn read<W>(
         &mut self,
-        bytes: &mut [u8],
+        bytes: W,
         offset: libc::off_t,
         event_queue: &mut EventQueue,
-    ) -> SyscallResult {
+    ) -> SyscallResult
+    where
+        W: std::io::Write + std::io::Seek,
+    {
         match self {
             Self::Pipe(f) => f.read(bytes, offset, event_queue),
         }
     }
 
-    pub fn write(
+    pub fn write<R>(
         &mut self,
-        bytes: &[u8],
+        source: R,
         offset: libc::off_t,
         event_queue: &mut EventQueue,
-    ) -> SyscallResult {
+    ) -> SyscallResult
+    where
+        R: std::io::Read + std::io::Seek,
+    {
         match self {
-            Self::Pipe(f) => f.write(bytes, offset, event_queue),
+            Self::Pipe(f) => f.write(source, offset, event_queue),
         }
     }
 

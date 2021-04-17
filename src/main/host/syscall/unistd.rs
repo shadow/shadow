@@ -7,7 +7,7 @@ use crate::host::descriptor::{
 };
 use crate::host::syscall::{self, Trigger};
 use crate::host::syscall_condition::SysCallCondition;
-use crate::host::syscall_types::{PluginPtr, SysCallArgs};
+use crate::host::syscall_types::{PluginPtr, SysCallArgs, TypedPluginPtr};
 use crate::utility::event_queue::EventQueue;
 
 use std::sync::Arc;
@@ -140,17 +140,17 @@ fn read_helper(
     buf_size: libc::size_t,
     offset: libc::off_t,
 ) -> SyscallResult {
-    // TODO: dynamically compute size based on how much data is actually available in the descriptor
-    let size_needed = std::cmp::min(buf_size, c::SYSCALL_IO_BUFSIZE as usize);
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
     let result: SyscallResult = Worker::with_active_process_mut(|process| {
-        let buf = process.get_writable_slice::<u8>(buf_ptr, size_needed)?;
-
         // call the file's read(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
-            posix_file.borrow_mut().read(buf, offset, event_queue)
+            posix_file.borrow_mut().read(
+                process.writer(TypedPluginPtr::<u8>::new(buf_ptr, buf_size)),
+                offset,
+                event_queue,
+            )
         })
     });
 
@@ -210,18 +210,17 @@ fn write_helper(
     buf_size: libc::size_t,
     offset: libc::off_t,
 ) -> SyscallResult {
-    // TODO: dynamically compute size based on how much data is actually available in the descriptor
-    let size_needed = std::cmp::min(buf_size, c::SYSCALL_IO_BUFSIZE as usize);
-
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
     let result: SyscallResult = Worker::with_active_process(|process| {
-        let buf = process.get_slice::<u8>(buf_ptr.into(), size_needed)?;
-
         // call the file's write(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
-            posix_file.borrow_mut().write(buf, offset, event_queue)
+            posix_file.borrow_mut().write(
+                process.reader(TypedPluginPtr::<u8>::new(buf_ptr, buf_size)),
+                offset,
+                event_queue,
+            )
         })
     });
 
@@ -312,7 +311,8 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: PluginPtr, flags: i32) -> Sy
         //
         // In this case it'd be a bit awkward though, since we'd then need to
         // unregister the descriptors if the pointer-write failed.
-        let fds = process.get_writable_slice::<libc::c_int>(fd_ptr.into(), 2)?;
+        let mut writer = process.writer(TypedPluginPtr::<libc::c_int>::new(fd_ptr.into(), 2));
+        let fds = writer.as_mut_uninit()?;
 
         fds[0] = unsafe {
             c::process_registerCompatDescriptor(
