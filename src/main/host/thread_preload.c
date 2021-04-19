@@ -142,19 +142,16 @@ static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, c
             // child
 
             // Set the working directory
-            utility_assert(workingDir != NULL);
             if (chdir(workingDir) < 0) {
-                error("chdir(%s): %s", workingDir, g_strerror(errno));
+                die_after_vfork();
             }
 
             int rc = execvpe(file, argv, envp);
             if (rc == -1) {
-                error("execvpe() call failed");
-                return -1;
+                die_after_vfork();
             }
-            while (1) {
-            } // here for compiler optimization
-            break;
+            // Unreachable
+            die_after_vfork();
         }
         default: // parent
             info("started process %s with PID %d", file, pid);
