@@ -362,3 +362,19 @@ int return_code_for_signal(int signal) {
     // follow the behaviour of bash and add 128 to to the signal.
     return signal + 128;
 }
+
+void die_after_vfork() {
+    // Capture errno in a local, so that it can be examined in a stack trace.
+    int saved_errno = errno;
+
+    // Ensure our saved errno doesn't get optimized away.
+    asm volatile(/*asm=*/"" : /*outputs=*/ : /*inputs=*/"irm"(saved_errno));
+
+    // `abort` and `raise` are higher-level functions that could attempt to
+    // access global memory, which could have surprising results. We resort to a
+    // bare `kill`.
+    kill(getpid(), SIGABRT);
+
+    // Convince the compiler that we really don't return.
+    _exit(1);
+}
