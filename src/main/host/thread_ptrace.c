@@ -366,30 +366,29 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char*
             // https://github.com/shadow/shadow/issues/903), so now we jump all
             // the way to SIGKILL.
             if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
-                error("prctl: %s", g_strerror(errno));
+                die_after_vfork();
             }
             // Validate that Shadow is still alive (didn't die in between forking and calling
             // prctl).
             if (getppid() != shadow_pid) {
-                error("parent (shadow) exited");
+                die_after_vfork();
             }
             // Disable RDTSC
             if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
-                error("prctl: %s", g_strerror(errno));
+                die_after_vfork();
             }
             // Set the working directory
-            utility_assert(workingDir != NULL);
             if (chdir(workingDir) < 0) {
-                error("chdir(%s): %s", workingDir, g_strerror(errno));
+                die_after_vfork();
             }
             // Become a tracee of the parent process.
             if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
-                error("ptrace: %s", g_strerror(errno));
+                die_after_vfork();
             }
             if (execvpe(file, argv, envp) < 0) {
-                error("execvpe: %s", g_strerror(errno));
+                die_after_vfork();
             }
-            abort(); // Unreachable
+            die_after_vfork(); // Unreachable
         }
     }
     info("started process %s with PID %d", file, pid);

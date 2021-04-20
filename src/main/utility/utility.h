@@ -114,4 +114,9 @@ struct timespec utility_timespecFromMillis(int64_t millis);
 /* If a process exited by a signal, use this return code. */
 int return_code_for_signal(int signal);
 
+/* Calling anything other than a thin syscall wrapper between `vfork` and `exec`
+ can lead to confusing behavior and crashes. Use this function on errors to
+ safely abort the process (with a core dump, if enabled). */
+_Noreturn void die_after_vfork();
+
 #endif /* SHD_UTILITY_H_ */
