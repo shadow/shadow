@@ -23,6 +23,7 @@
 #include "main/core/support/options.h"
 #include "main/host/affinity.h"
 #include "main/shmem/shmem_cleanup.h"
+#include "main/utility/disable_aslr.h"
 #include "main/utility/utility.h"
 #include "shd-config.h"
 #include "support/logger/logger.h"
@@ -221,6 +222,8 @@ gint main_runShadow(gint argc, gchar* argv[]) {
             message("Successfully set real-time scheduler mode to SCHED_FIFO");
         }
     }
+
+    disable_aslr();
 
     gint returnCode = _main_helper(options);
 
