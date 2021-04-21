@@ -565,13 +565,13 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
     for(i = 0; i < igraph_strvector_size(&gnames); i++) {
         name = NULL;
         igraph_strvector_get(&gnames, (glong) i, &name);
-        type = (igraph_attribute_type_t)igraph_vector_e(&gtypes, (glong) i);
+        type = igraph_vector_e(&gtypes, (glong) i);
 
         debug("found graph attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
 
         if(_topology_isValidGraphAttributeKey(name, GRAPH_ATTR_PREFERDIRECTPATHS)) {
             /* we use a string because there is an error in igraph boolean attribute code. */
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else {
             warning("graph attribute '%s' is unsupported and will be ignored", name);
         }
@@ -588,23 +588,23 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         debug("found vertex attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
 
         if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_ID)) {
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_IP)) {
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_CITYCODE)) {
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_COUNTRYCODE)) {
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_ASN)) {
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_TYPE)) {
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_BANDWIDTHDOWN)) {
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_BANDWIDTHUP)) {
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_PACKETLOSS)) {
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else {
             info("vertex attribute '%s' is unsupported and will be ignored", name);
         }
@@ -642,11 +642,11 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         debug("found edge attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
 
         if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_LATENCY)) {
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_JITTER)) {
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_PACKETLOSS)) {
-            isSuccess = _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else {
             info("edge attribute '%s' is unsupported and will be ignored", name);
         }
