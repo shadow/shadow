@@ -399,7 +399,6 @@ static void _controller_registerHostCallback(ConfigurationHostElement* he, Contr
         params->countrycodeHint =
             he->countrycodeHint.isSet ? he->countrycodeHint.string->str : NULL;
         params->citycodeHint = he->citycodeHint.isSet ? he->citycodeHint.string->str : NULL;
-        params->geocodeHint = he->geocodeHint.isSet ? he->geocodeHint.string->str : NULL;
         params->typeHint = he->typeHint.isSet ? he->typeHint.string->str : NULL;
         params->requestedBWDownKiBps = he->bandwidthdown.isSet ? he->bandwidthdown.integer : 0;
         params->requestedBWUpKiBps = he->bandwidthup.isSet ? he->bandwidthup.integer : 0;

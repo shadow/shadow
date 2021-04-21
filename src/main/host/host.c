@@ -115,7 +115,6 @@ Host* host_new(HostParameters* params) {
     if(params->ipHint) host->params.ipHint = g_strdup(params->ipHint);
     if(params->citycodeHint) host->params.citycodeHint = g_strdup(params->citycodeHint);
     if(params->countrycodeHint) host->params.countrycodeHint = g_strdup(params->countrycodeHint);
-    if(params->geocodeHint) host->params.geocodeHint = g_strdup(params->geocodeHint);
     if(params->typeHint) host->params.typeHint = g_strdup(params->typeHint);
     if(params->pcapDir) host->params.pcapDir = g_strdup(params->pcapDir);
 
@@ -169,9 +168,9 @@ void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, cons
 
     /* connect to topology and get the default bandwidth */
     guint64 bwDownKiBps = 0, bwUpKiBps = 0;
-    topology_attach(topology, ethernetAddress, host->random,
-            host->params.ipHint, host->params.citycodeHint, host->params.countrycodeHint, host->params.geocodeHint,
-            host->params.typeHint, &bwDownKiBps, &bwUpKiBps);
+    topology_attach(topology, ethernetAddress, host->random, host->params.ipHint,
+                    host->params.citycodeHint, host->params.countrycodeHint, host->params.typeHint,
+                    &bwDownKiBps, &bwUpKiBps);
 
     /* prefer assigned bandwidth if available */
     if(host->params.requestedBWDownKiBps) {
@@ -267,7 +266,6 @@ void host_shutdown(Host* host) {
     if(host->params.ipHint) g_free(host->params.ipHint);
     if(host->params.citycodeHint) g_free(host->params.citycodeHint);
     if(host->params.countrycodeHint) g_free(host->params.countrycodeHint);
-    if(host->params.geocodeHint) g_free(host->params.geocodeHint);
     if(host->params.typeHint) g_free(host->params.typeHint);
     if(host->params.pcapDir) g_free(host->params.pcapDir);
 
