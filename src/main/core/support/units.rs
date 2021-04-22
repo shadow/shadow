@@ -73,18 +73,22 @@ impl FromStr for SiPrefix {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "n" => Ok(Self::Nano),
-            "u" | "μ" => Ok(Self::Micro),
-            "m" => Ok(Self::Milli),
-            "K" => Ok(Self::Kilo),
-            "Ki" => Ok(Self::Kibi),
-            "M" => Ok(Self::Mega),
-            "Mi" => Ok(Self::Mebi),
-            "G" => Ok(Self::Giga),
-            "Gi" => Ok(Self::Gibi),
-            "T" => Ok(Self::Tera),
-            "Ti" => Ok(Self::Tebi),
-            _ => Err("Unit prefix was not one of (n|u|μ|m|K|Ki|M|Mi|G|Gi|T|Ti)".to_string()),
+            "n" | "nano" => Ok(Self::Nano),
+            "u" | "μ" | "micro" => Ok(Self::Micro),
+            "m" | "milli" => Ok(Self::Milli),
+            "K" | "kilo" => Ok(Self::Kilo),
+            "Ki" | "kibi" => Ok(Self::Kibi),
+            "M" | "mega" => Ok(Self::Mega),
+            "Mi" | "mebi" => Ok(Self::Mebi),
+            "G" | "giga" => Ok(Self::Giga),
+            "Gi" | "gibi" => Ok(Self::Gibi),
+            "T" | "tera" => Ok(Self::Tera),
+            "Ti" | "tebi" => Ok(Self::Tebi),
+            _ => Err(
+                "Unit prefix was not one of (n|nano|u|μ|micro|m|milli|K|kilo\
+                |Ki|kibi|M|mega|Mi|mebi|G|giga|Gi|gibi|T|tera|Ti|tebi)"
+                    .to_string(),
+            ),
         }
     }
 }
@@ -156,15 +160,17 @@ impl FromStr for SiPrefixUpper {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "K" => Ok(Self::Kilo),
-            "Ki" => Ok(Self::Kibi),
-            "M" => Ok(Self::Mega),
-            "Mi" => Ok(Self::Mebi),
-            "G" => Ok(Self::Giga),
-            "Gi" => Ok(Self::Gibi),
-            "T" => Ok(Self::Tera),
-            "Ti" => Ok(Self::Tebi),
-            _ => Err("Unit prefix was not one of (K|Ki|M|Mi|G|Gi|T|Ti)".to_string()),
+            "K" | "kilo" => Ok(Self::Kilo),
+            "Ki" | "kibi" => Ok(Self::Kibi),
+            "M" | "mega" => Ok(Self::Mega),
+            "Mi" | "mebi" => Ok(Self::Mebi),
+            "G" | "giga" => Ok(Self::Giga),
+            "Gi" | "gibi" => Ok(Self::Gibi),
+            "T" | "tera" => Ok(Self::Tera),
+            "Ti" | "tebi" => Ok(Self::Tebi),
+            _ => Err("Unit prefix was not one of (K|kilo|Ki|kibi|M|mega|Mi|mebi\
+                |G|giga|Gi|gibi|T|tera|Ti|tebi)"
+                .to_string()),
         }
     }
 }
@@ -227,13 +233,18 @@ impl FromStr for TimePrefix {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "ns" => Ok(Self::Nano),
-            "us" | "μs" => Ok(Self::Micro),
-            "ms" => Ok(Self::Milli),
-            "s" | "sec" => Ok(Self::Sec),
-            "min" => Ok(Self::Min),
-            "hour" => Ok(Self::Hour),
-            _ => Err("Unit prefix was not one of (ns|us|μs|ms|s|sec|min|hour)".to_string()),
+            "ns" | "nanosecond" => Ok(Self::Nano),
+            "us" | "μs" | "microsecond" => Ok(Self::Micro),
+            "ms" | "millisecond" => Ok(Self::Milli),
+            "s" | "sec" | "secs" | "second" | "seconds" => Ok(Self::Sec),
+            "m" | "min" | "mins" | "minute" | "minutes" => Ok(Self::Min),
+            "h" | "hr" | "hrs" | "hour" | "hours" => Ok(Self::Hour),
+            _ => Err(
+                "Unit prefix was not one of (ns|nanosecond|us|μs|microsecond\
+                ms|millisecond|s|sec|secs|second|seconds|m|min|mins|minute|minutes\
+                |h|hr|hrs|hour|hours)"
+                    .to_string(),
+            ),
         }
     }
 }
@@ -287,10 +298,12 @@ impl FromStr for TimePrefixUpper {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "s" | "sec" => Ok(Self::Sec),
-            "min" => Ok(Self::Min),
-            "hour" => Ok(Self::Hour),
-            _ => Err("Unit prefix was not one of (s|sec|min|hour)".to_string()),
+            "s" | "sec" | "secs" | "second" | "seconds" => Ok(Self::Sec),
+            "m" | "min" | "mins" | "minute" | "minutes" => Ok(Self::Min),
+            "h" | "hr" | "hrs" | "hour" | "hours" => Ok(Self::Hour),
+            _ => Err("Unit prefix was not one of (s|sec|secs|second|seconds\
+                |m|min|mins|minute|minutes|h|hr|hrs|hour|hours)"
+                .to_string()),
         }
     }
 }
@@ -330,7 +343,7 @@ macro_rules! visit_fn {
 }
 
 macro_rules! unit_impl {
-    ($name:ident, $type:ident, $suffix:tt) => {
+    ($name:ident, $type:ident, $suffixes:tt) => {
         impl<T: Prefix> $name<T> {
             pub fn new(value: $type, prefix: T) -> Self {
                 Self { value, prefix }
@@ -355,8 +368,8 @@ macro_rules! unit_impl {
                 self.prefix
             }
 
-            fn suffix() -> &'static str {
-                $suffix
+            fn suffixes() -> &'static [&'static str] {
+                &$suffixes
             }
 
             fn convert(&self, prefix: Self::T) -> Result<Self, String> {
@@ -383,7 +396,7 @@ macro_rules! unit_impl {
 
         impl<T: Prefix> Display for $name<T> {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{} {}{}", self.value(), self.prefix(), Self::suffix())
+                write!(f, "{} {}{}", self.value(), self.prefix(), Self::suffixes()[0])
             }
         }
 
@@ -398,13 +411,16 @@ macro_rules! unit_impl {
 
                 let captures = RE.captures(s).ok_or("Unable to identify value and unit")?;
                 let (value, unit) = (
-                    captures.get(1).unwrap().as_str(),
-                    captures.get(2).unwrap().as_str(),
+                    captures.get(1).unwrap().as_str().trim(),
+                    captures.get(2).unwrap().as_str().trim(),
                 );
 
-                let prefix = unit
-                    .trim()
-                    .strip_suffix($name::<T>::suffix())
+                // try removing all suffixes
+                let prefix = $name::<T>::suffixes()
+                    .iter()
+                    .map(|suffix| unit.strip_suffix(suffix))
+                    .find(|x| x.is_some())
+                    .flatten()
                     .or(Some(unit))
                     .unwrap();
 
@@ -486,8 +502,7 @@ pub trait Unit: Sized {
     /// The current prefix.
     fn prefix(&self) -> Self::T;
 
-    // this can be nicer once we have &str support for constant generics
-    fn suffix() -> &'static str;
+    fn suffixes() -> &'static [&'static str];
 
     /// Convert value to a different prefix, but return an error if the conversion
     /// cannot be done without possibly losing precision.
@@ -511,7 +526,7 @@ pub struct Time<T: Prefix> {
 
 // Since our time prefix types ([TimePrefix] and [TimePrefixUpper]) aren't
 // really prefixes, time units don't have a suffix.
-unit_impl!(Time, u64, "");
+unit_impl!(Time, u64, [""]);
 
 /// A number of bytes.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -520,7 +535,7 @@ pub struct Bytes<T: Prefix> {
     pub prefix: T,
 }
 
-unit_impl!(Bytes, u64, "B");
+unit_impl!(Bytes, u64, ["B", "byte", "bytes"]);
 
 /// A throughput in bits-per-second.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -529,7 +544,7 @@ pub struct BitsPerSec<T: Prefix> {
     pub prefix: T,
 }
 
-unit_impl!(BitsPerSec, u64, "bps");
+unit_impl!(BitsPerSec, u64, ["bit"]);
 
 #[cfg(test)]
 mod tests {
@@ -558,6 +573,10 @@ mod tests {
             Time::new(10, TimePrefix::Sec)
         );
         assert_eq!(
+            Time::from_str("10  m").unwrap(),
+            Time::new(10, TimePrefix::Min)
+        );
+        assert_eq!(
             Time::from_str("10  min").unwrap(),
             Time::new(10, TimePrefix::Min)
         );
@@ -568,6 +587,10 @@ mod tests {
         assert_eq!(
             Time::from_str("10 μs").unwrap(),
             Time::new(10, TimePrefix::Micro)
+        );
+        assert_eq!(
+            Time::from_str("10 millisecond").unwrap(),
+            Time::new(10, TimePrefix::Milli)
         );
 
         assert!(Time::<TimePrefix>::from_str("-10 ms").is_err());
@@ -604,47 +627,60 @@ mod tests {
             Bytes::from_str("10 MB").unwrap(),
             Bytes::new(10, SiPrefixUpper::Mega)
         );
+        assert_eq!(
+            Bytes::from_str("10 megabyte").unwrap(),
+            Bytes::new(10, SiPrefixUpper::Mega)
+        );
+        assert_eq!(
+            Bytes::from_str("10 megabytes").unwrap(),
+            Bytes::new(10, SiPrefixUpper::Mega)
+        );
 
         assert!(Bytes::<SiPrefixUpper>::from_str("-10 KB").is_err());
         assert!(Bytes::<SiPrefixUpper>::from_str("abc 10 KB").is_err());
         assert!(Bytes::<SiPrefixUpper>::from_str("10.5 KB").is_err());
         assert!(Bytes::<SiPrefixUpper>::from_str("10 abc").is_err());
         assert!(Bytes::<SiPrefixUpper>::from_str("10 mB").is_err());
+        assert!(Bytes::<SiPrefixUpper>::from_str("10 Megabyte").is_err());
 
         assert_eq!(
             BitsPerSec::from_str("10").unwrap(),
             BitsPerSec::new(10, SiPrefixUpper::Base)
         );
         assert_eq!(
-            BitsPerSec::from_str("10 bps").unwrap(),
+            BitsPerSec::from_str("10 bit").unwrap(),
             BitsPerSec::new(10, SiPrefixUpper::Base)
         );
         assert_eq!(
-            BitsPerSec::from_str("10bps").unwrap(),
+            BitsPerSec::from_str("10bit").unwrap(),
             BitsPerSec::new(10, SiPrefixUpper::Base)
         );
         assert_eq!(
-            BitsPerSec::from_str("10   bps").unwrap(),
+            BitsPerSec::from_str("10   bit").unwrap(),
             BitsPerSec::new(10, SiPrefixUpper::Base)
         );
         assert_eq!(
-            BitsPerSec::from_str("10  Kbps").unwrap(),
+            BitsPerSec::from_str("10  Kbit").unwrap(),
             BitsPerSec::new(10, SiPrefixUpper::Kilo)
         );
         assert_eq!(
-            BitsPerSec::from_str("10 Kibps").unwrap(),
+            BitsPerSec::from_str("10 Kibit").unwrap(),
             BitsPerSec::new(10, SiPrefixUpper::Kibi)
         );
         assert_eq!(
-            BitsPerSec::from_str("10 Mbps").unwrap(),
+            BitsPerSec::from_str("10 Mbit").unwrap(),
+            BitsPerSec::new(10, SiPrefixUpper::Mega)
+        );
+        assert_eq!(
+            BitsPerSec::from_str("10 megabit").unwrap(),
             BitsPerSec::new(10, SiPrefixUpper::Mega)
         );
 
-        assert!(BitsPerSec::<SiPrefixUpper>::from_str("-10 Kbps").is_err());
-        assert!(BitsPerSec::<SiPrefixUpper>::from_str("abc 10 Kbps").is_err());
-        assert!(BitsPerSec::<SiPrefixUpper>::from_str("10.5 Kbps").is_err());
+        assert!(BitsPerSec::<SiPrefixUpper>::from_str("-10 Kbit").is_err());
+        assert!(BitsPerSec::<SiPrefixUpper>::from_str("abc 10 Kbit").is_err());
+        assert!(BitsPerSec::<SiPrefixUpper>::from_str("10.5 Kbit").is_err());
         assert!(BitsPerSec::<SiPrefixUpper>::from_str("10 abc").is_err());
-        assert!(BitsPerSec::<SiPrefixUpper>::from_str("10 mbps").is_err());
+        assert!(BitsPerSec::<SiPrefixUpper>::from_str("10 mbit").is_err());
     }
 
     #[test]
@@ -666,21 +702,21 @@ mod tests {
             Time::from_str("1 hour").unwrap()
         );
 
-        let bw = BitsPerSec::from_str("1024 Kbps").unwrap();
+        let bw = BitsPerSec::from_str("1024 Kbit").unwrap();
 
         assert_eq!(
             bw.convert(SiPrefixUpper::Base).unwrap(),
-            BitsPerSec::from_str("1024000 bps").unwrap()
+            BitsPerSec::from_str("1024000 bit").unwrap()
         );
         assert!(bw.convert(SiPrefixUpper::Kibi).is_err());
 
         assert_eq!(
             bw.convert_lossy(SiPrefixUpper::Base),
-            BitsPerSec::from_str("1024000 bps").unwrap()
+            BitsPerSec::from_str("1024000 bit").unwrap()
         );
         assert_eq!(
             bw.convert_lossy(SiPrefixUpper::Kibi),
-            BitsPerSec::from_str("1000 Kibps").unwrap()
+            BitsPerSec::from_str("1000 Kibit").unwrap()
         );
     }
 }
