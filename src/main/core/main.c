@@ -223,6 +223,9 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         }
     }
 
+    // Disable address space layout randomization of processes forked from this
+    // one to ensure determinism in cases when an executable under simulation
+    // branch on memory addresses.
     disable_aslr();
 
     gint returnCode = _main_helper(options);
