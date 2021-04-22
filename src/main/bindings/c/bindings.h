@@ -23,6 +23,9 @@
 
 void rust_logging_init(void);
 
+// Parses a string as bits-per-second. Returns '-1' on error.
+int64_t parse_bandwidth(const char *s);
+
 // The new compat descriptor takes ownership of the reference to the legacy descriptor and
 // does not increment its ref count, but will decrement the ref count when this compat
 // descriptor is freed/dropped.
