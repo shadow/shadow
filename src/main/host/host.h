@@ -38,7 +38,6 @@ struct _HostParameters {
     gchar* ipHint;
     gchar* citycodeHint;
     gchar* countrycodeHint;
-    gchar* geocodeHint;
     gchar* typeHint;
     guint64 requestedBWDownKiBps;
     guint64 requestedBWUpKiBps;

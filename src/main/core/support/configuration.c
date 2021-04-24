@@ -256,10 +256,6 @@ static void _parser_freeHostElement(ConfigurationHostElement* host) {
         utility_assert(host->countrycodeHint.string != NULL);
         g_string_free(host->countrycodeHint.string, TRUE);
     }
-    if(host->geocodeHint.isSet) {
-        utility_assert(host->geocodeHint.string != NULL);
-        g_string_free(host->geocodeHint.string, TRUE);
-    }
     if(host->typeHint.isSet) {
         utility_assert(host->typeHint.string != NULL);
         g_string_free(host->typeHint.string, TRUE);
@@ -490,9 +486,6 @@ static GError* _parser_handleHostAttributes(Parser* parser, const gchar** attrib
         } else if (!host->countrycodeHint.isSet && !g_ascii_strcasecmp(name, "countrycodehint")) {
             host->countrycodeHint.string = g_string_new(value);
             host->countrycodeHint.isSet = TRUE;
-        } else if (!host->geocodeHint.isSet && !g_ascii_strcasecmp(name, "geocodehint")) {
-            host->geocodeHint.string = g_string_new(value);
-            host->geocodeHint.isSet = TRUE;
         } else if (!host->typeHint.isSet && !g_ascii_strcasecmp(name, "typehint")) {
             host->typeHint.string = g_string_new(value);
             host->typeHint.isSet = TRUE;
