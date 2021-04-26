@@ -11,6 +11,7 @@
 #if !defined __USE_LARGEFILE64
 #define __USE_LARGEFILE64
 #endif
+
 #include <errno.h>
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -316,9 +317,7 @@ static void _controller_registerProcessCallback(ConfigurationProcessElement* pe,
     utility_assert(pe->arguments.isSet && pe->arguments.string);
 
     manager_addNewVirtualProcess(args->controller->manager, args->hostParams->hostname,
-                                 pe->plugin.string->str,
-                                 pe->preload.isSet ? pe->preload.string->str : NULL,
-                                 SIMTIME_ONE_SECOND * pe->starttime.integer,
+                                 pe->plugin.string->str, SIMTIME_ONE_SECOND * pe->starttime.integer,
                                  pe->stoptime.isSet ? SIMTIME_ONE_SECOND * pe->stoptime.integer : 0,
                                  pe->arguments.string->str);
 }
@@ -443,16 +442,14 @@ gint controller_run(Controller* controller) {
     _controller_initializeTimeWindows(controller);
 
     ConfigurationShadowElement* element = configuration_getShadowElement(controller->config);
-    g_assert(element && element->preloadPath.isSet);
 
     /* the controller will be responsible for distributing the actions to the managers so that
      * they all have a consistent view of the simulation, topology, etc.
      * For now we only have one manager so send it everything. */
     guint managerSeed = random_nextUInt(controller->random);
-    controller->manager =
-        manager_new(controller, controller->options, controller->endTime,
-                    controller->bootstrapEndTime, managerSeed, element->preloadPath.string->str,
-                    element->environment.isSet ? element->environment.string->str : NULL);
+    controller->manager = manager_new(
+        controller, controller->options, controller->endTime, controller->bootstrapEndTime,
+        managerSeed, element->environment.isSet ? element->environment.string->str : NULL);
 
     if (controller->manager == NULL) {
         error("unable to create manager");

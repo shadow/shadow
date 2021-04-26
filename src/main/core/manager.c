@@ -3,9 +3,11 @@
  * See LICENSE for licensing information
  */
 
+#include <elf.h>
 #include <errno.h>
 #include <glib.h>
 #include <inttypes.h>
+#include <link.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stddef.h>
@@ -27,6 +29,8 @@
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
+
+#define PRELOAD_SHIM_LIB_STR "libshadow-shim.so"
 
 typedef struct {
 
@@ -166,6 +170,67 @@ void _program_meta_free(gpointer data) {
     g_free(meta);
 }
 
+static gchar* _manager_getRPath() {
+    const ElfW(Dyn) *dyn = _DYNAMIC;
+    const ElfW(Dyn) *rpath = NULL;
+    const gchar *strtab = NULL;
+    for (; dyn->d_tag != DT_NULL; ++dyn) {
+        if (dyn->d_tag == DT_RPATH || dyn->d_tag == DT_RUNPATH) {
+            rpath = dyn;
+        } else if (dyn->d_tag == DT_STRTAB) {
+            strtab = (const gchar *) dyn->d_un.d_val;
+        }
+    }
+    GString* rpathStrBuf = g_string_new(NULL );
+    if (strtab != NULL && rpath != NULL ) {
+        g_string_printf(rpathStrBuf, "%s", strtab + rpath->d_un.d_val);
+    }
+    return g_string_free(rpathStrBuf, FALSE);
+}
+
+static gboolean _manager_isValidPathToPreloadLib(const gchar* path) {
+    if(path) {
+        gboolean isAbsolute = g_path_is_absolute(path);
+        gboolean exists = g_file_test(path, G_FILE_TEST_IS_REGULAR|G_FILE_TEST_EXISTS);
+        gboolean isShadowPreload = g_str_has_suffix(path, PRELOAD_SHIM_LIB_STR);
+
+        if(isAbsolute && exists && isShadowPreload) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
+static gchar* _manager_scanRPathForPreloadShim(){
+    gchar* preloadArgValue = NULL;
+
+    gchar* rpathStr = _manager_getRPath();
+    if(rpathStr != NULL) {
+        gchar** tokens = g_strsplit(rpathStr, ":", 0);
+
+        for(gint i = 0; tokens[i] != NULL; i++) {
+            GString* candidateBuffer = g_string_new(NULL);
+
+            /* rpath specifies directories, so look inside */
+            g_string_printf(candidateBuffer, "%s/%s", tokens[i], PRELOAD_SHIM_LIB_STR);
+            gchar* candidate = g_string_free(candidateBuffer, FALSE);
+
+            if(_manager_isValidPathToPreloadLib(candidate)) {
+                preloadArgValue = candidate;
+                break;
+            } else {
+                g_free(candidate);
+            }
+        }
+
+        g_strfreev(tokens);
+    }
+    g_free(rpathStr);
+
+    return preloadArgValue;
+}
+
 static guint _manager_nextRandomUInt(Manager* manager) {
     MAGIC_ASSERT(manager);
     _manager_lock(manager);
@@ -175,8 +240,7 @@ static guint _manager_nextRandomUInt(Manager* manager) {
 }
 
 Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime,
-                     SimulationTime unlimBWEndTime, guint randomSeed, const gchar* preloadShimPath,
-                     const gchar* environment) {
+                     SimulationTime unlimBWEndTime, guint randomSeed, const gchar* environment) {
     if (globalmanager != NULL) {
         return NULL;
     }
@@ -192,12 +256,18 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
     manager->options = options;
     manager->random = random_new(randomSeed);
     manager->bootstrapEndTime = unlimBWEndTime;
-    manager->preloadShimPath = g_strdup(preloadShimPath);
     manager->environment = g_strdup(environment);
 
     manager->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if (manager->rawFrequencyKHz == 0) {
         info("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
+    }
+
+    manager->preloadShimPath = _manager_scanRPathForPreloadShim();
+    if (manager->preloadShimPath != NULL) {
+        message("found %s at %s", PRELOAD_SHIM_LIB_STR, manager->preloadShimPath);
+    } else {
+        error("could not find %s in rpath", PRELOAD_SHIM_LIB_STR);
     }
 
     /* we will store the plug-in program meta data */
@@ -370,8 +440,7 @@ void manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
 }
 
 static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interposeMethod,
-                                     const gchar* preloadShimPath, const gchar* environment,
-                                     const gchar* pluginPreloadPath) {
+                                     const gchar* preloadShimPath, const gchar* environment) {
     MAGIC_ASSERT(manager);
 
     /* start with an empty environment */
@@ -399,15 +468,10 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
 
     /* insert also the plugin preload entry if one exists.
      * precendence here is:
-     *   - preload attribute in the process element
-     *   - preload attribute in the shadow element
+     *   - preload path of the shim
      *   - preload values from LD_PRELOAD entries in the environment attribute of the shadow
      * element*/
     GPtrArray* ldPreloadArray = g_ptr_array_new();
-    if (pluginPreloadPath) {
-        info("adding preload path %s", pluginPreloadPath);
-        g_ptr_array_add(ldPreloadArray, g_strdup(pluginPreloadPath));
-    }
     info("adding shim path %s", preloadShimPath ? preloadShimPath : "null");
     g_ptr_array_add(ldPreloadArray, g_strdup(preloadShimPath));
 
@@ -442,7 +506,7 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
         g_strfreev(envTokens);
     }
 
-    // Must be NULL terminated for g_strjoinv
+    /* must be NULL terminated for g_strjoinv */
     g_ptr_array_add(ldPreloadArray, NULL);
 
     gchar* ldPreloadVal = g_strjoinv(":", (gchar**)ldPreloadArray->pdata);
@@ -478,8 +542,8 @@ static gchar** _manager_getArgv(Manager* manager, gchar* exepath, gchar* argumen
 }
 
 void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* pluginName,
-                                  gchar* preloadName, SimulationTime startTime,
-                                  SimulationTime stopTime, gchar* arguments) {
+                                  SimulationTime startTime, SimulationTime stopTime,
+                                  gchar* arguments) {
     MAGIC_ASSERT(manager);
 
     /* quarks are unique per process, so do the conversion here */
@@ -494,19 +558,9 @@ void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* plug
 
     InterposeMethod interposeMethod = options_getInterposeMethod(manager->options);
 
-    _ProgramMeta* preload = NULL;
-    if (preloadName != NULL) {
-        preload = g_hash_table_lookup(manager->programMeta, preloadName);
-        if (preload == NULL) {
-            error("preload plugin not found for name '%s'. this should be verified in the config "
-                  "parser",
-                  preloadName);
-        }
-    }
-
     /* ownership is passed to the host/process below, so we don't free these */
-    gchar** envv = _manager_generateEnvv(manager, interposeMethod, manager->preloadShimPath,
-                                         manager->environment, preload ? preload->path : NULL);
+    gchar** envv = _manager_generateEnvv(
+        manager, interposeMethod, manager->preloadShimPath, manager->environment);
     gchar** argv = _manager_getArgv(manager, plugin->path, arguments);
 
     Host* host = scheduler_getHost(manager->scheduler, hostID);
