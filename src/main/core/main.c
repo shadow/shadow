@@ -28,9 +28,9 @@
 #include "shd-config.h"
 #include "support/logger/logger.h"
 
-static bool _setSchedFifo = false;
+static bool _useSchedFifo = false;
 OPTION_EXPERIMENTAL_ENTRY(
-    "set-sched-fifo", 0, 0, G_OPTION_ARG_NONE, &_setSchedFifo,
+    "set-sched-fifo", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &_useSchedFifo,
     "Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7)", NULL)
 
 static Controller* shadowcontroller;
@@ -210,7 +210,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         }
     }
 
-    if (_setSchedFifo) {
+    if (_useSchedFifo) {
         struct sched_param param = {0};
         param.sched_priority = 1;
         int rc = sched_setscheduler(0, SCHED_FIFO, &param);
