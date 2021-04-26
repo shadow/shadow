@@ -39,7 +39,6 @@ struct _Options {
     gchar* interfaceQueuingDiscipline;
     gchar* eventSchedulingPolicy;
     gchar* interposeMethod;
-    SimulationTime interfaceBatchTime;
 
     gboolean pinCPUs;
 
@@ -76,7 +75,6 @@ Options* options_new(gint argc, gchar* argv[]) {
 
     /* set defaults */
     options->interfaceBufferSize = 1024000;
-    options->interfaceBatchTime = 5000;
     options->randomSeed = 1;
     options->heartbeatInterval = 1;
     options->shouldExitAfterShmCleanup = FALSE;
@@ -139,7 +137,6 @@ Options* options_new(gint argc, gchar* argv[]) {
     options->networkOptionGroup = g_option_group_new("sys", "System Options", "Simulated system/network behavior", NULL, NULL);
     const GOptionEntry networkEntries[] =
     {
-      { "interface-batch", 0, 0, G_OPTION_ARG_INT, &(options->interfaceBatchTime), "Batch TIME for network interface sends and receives, in microseconds [5000]", "TIME" },
       { "interface-buffer", 0, 0, G_OPTION_ARG_INT, &(options->interfaceBufferSize), "Size of the network interface receive buffer, in bytes [1024000]", "N" },
       { "interface-qdisc", 0, 0, G_OPTION_ARG_STRING, &(options->interfaceQueuingDiscipline), "The interface queuing discipline QDISC used to select the next sendable socket ('fifo' or 'rr') ['fifo']", "QDISC" },
       { "socket-recv-buffer", 0, 0, G_OPTION_ARG_INT, &(options->initialSocketReceiveBufferSize), sockrecv->str, "N" },
@@ -199,11 +196,6 @@ Options* options_new(gint argc, gchar* argv[]) {
     }
     if(options->interfaceBufferSize < CONFIG_MTU) {
         options->interfaceBufferSize = CONFIG_MTU;
-    }
-    options->interfaceBatchTime *= SIMTIME_ONE_MICROSECOND;
-    if(options->interfaceBatchTime == 0) {
-        /* we require at least 1 nanosecond b/c of time granularity */
-        options->interfaceBatchTime = 1;
     }
     if(options->interfaceQueuingDiscipline == NULL) {
         options->interfaceQueuingDiscipline = g_strdup("fifo");
@@ -375,11 +367,6 @@ gboolean options_shouldExitAfterShmCleanup(Options* options) {
 gint options_getMinRunAhead(Options* options) {
     MAGIC_ASSERT(options);
     return options->minRunAhead;
-}
-
-SimulationTime options_getInterfaceBatchTime(Options* options) {
-    MAGIC_ASSERT(options);
-    return options->interfaceBatchTime;
 }
 
 gint options_getInterfaceBufferSize(Options* options) {
