@@ -59,7 +59,6 @@ struct _ConfigurationProcessElement {
     ConfigurationStringAttribute arguments;
     /* optional*/
     ConfigurationIntegerAttribute stoptime;
-    ConfigurationStringAttribute preload;
 };
 
 typedef struct _ConfigurationHostElement ConfigurationHostElement;
@@ -91,7 +90,6 @@ struct _ConfigurationShadowElement {
     /* required */
     ConfigurationIntegerAttribute stoptime;
     /* optional*/
-    ConfigurationStringAttribute preloadPath;
     ConfigurationStringAttribute environment;
     ConfigurationIntegerAttribute bootstrapEndTime;
 };
