@@ -261,6 +261,8 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
     manager->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if (manager->rawFrequencyKHz == 0) {
         info("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
+        manager->rawFrequencyKHz = 2500000; // 2.5 GHz
+        debug("raw manager cpu frequency unavailable, using 2,500,000 KHz");
     }
 
     manager->preloadShimPath = _manager_scanRPathForPreloadShim();

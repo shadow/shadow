@@ -327,6 +327,8 @@ static void _controller_registerHostCallback(ConfigurationHostElement* he, Contr
     utility_assert(he);
     utility_assert(he->id.isSet && he->id.string);
 
+    guint managerCpuFreq = manager_getRawCPUFrequency(controller->manager);
+
     guint64 quantity = he->quantity.isSet ? he->quantity.integer : 1;
 
     for (guint64 i = 0; i < quantity; i++) {
@@ -341,14 +343,7 @@ static void _controller_registerHostCallback(ConfigurationHostElement* he, Contr
         }
         params->hostname = hostnameBuffer->str;
 
-        /* cpu params - use the manager machine frequency */
-        gint managerCPUFreq = manager_getRawCPUFrequency(controller->manager);
-        params->cpuFrequency = (managerCPUFreq > 0) ? (guint64)managerCPUFreq : 0;
-        if (params->cpuFrequency == 0) {
-            params->cpuFrequency = 2500000; // 2.5 GHz
-            debug("both configured and raw manager cpu frequencies unavailable, using 2500000 KHz");
-        }
-
+        params->cpuFrequency = MAX(0, managerCpuFreq);
         params->cpuThreshold = 0;
         params->cpuPrecision = 200;
 
