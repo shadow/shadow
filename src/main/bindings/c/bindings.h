@@ -15,13 +15,153 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "main/bindings/c/bindings-opaque.h"
+#include "main/core/scheduler/scheduler_policy_type.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/status_listener.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
+#include "main/host/tracker.h"
 
 void rust_logging_init(void);
+
+struct CliOptions *clioptions_parse(int argc, const char *const *argv);
+
+void clioptions_free(struct CliOptions *options);
+
+void clioptions_freeString(char *string);
+
+bool clioptions_getGdb(const struct CliOptions *options);
+
+bool clioptions_getShmCleanup(const struct CliOptions *options);
+
+bool clioptions_getShowBuildInfo(const struct CliOptions *options);
+
+bool clioptions_getShowConfig(const struct CliOptions *options);
+
+char *clioptions_getConfig(const struct CliOptions *options);
+
+struct ConfigFileOptions *configfile_parse(const char *filename);
+
+void configfile_free(struct ConfigFileOptions *config);
+
+struct ConfigOptions *config_new(const struct ConfigFileOptions *config_file,
+                                 const struct CliOptions *options);
+
+void config_free(struct ConfigOptions *config);
+
+void config_freeString(char *string);
+
+void config_showConfig(const struct ConfigOptions *config);
+
+unsigned int config_getSeed(const struct ConfigOptions *config);
+
+LogLevel config_getLogLevel(const struct ConfigOptions *config);
+
+SimulationTime config_getHeartbeatInterval(const struct ConfigOptions *config);
+
+SimulationTime config_getRunahead(const struct ConfigOptions *config);
+
+bool config_getUseCpuPinning(const struct ConfigOptions *config);
+
+enum InterposeMethod config_getInterposeMethod(const struct ConfigOptions *config);
+
+bool config_getUseSchedFifo(const struct ConfigOptions *config);
+
+bool config_getUseOnWaitpidWorkarounds(const struct ConfigOptions *config);
+
+bool config_getUseExplicitBlockMessage(const struct ConfigOptions *config);
+
+bool config_getUseSyscallCounters(const struct ConfigOptions *config);
+
+bool config_getUseObjectCounters(const struct ConfigOptions *config);
+
+bool config_getUseMemoryManager(const struct ConfigOptions *config);
+
+bool config_getUsePtraceBufferedIo(const struct ConfigOptions *config);
+
+bool config_getUseShimSyscallHandler(const struct ConfigOptions *config);
+
+int32_t config_getPreloadSpinMax(const struct ConfigOptions *config);
+
+int32_t config_getMaxConcurrency(const struct ConfigOptions *config);
+
+SimulationTime config_getStopTime(const struct ConfigOptions *config);
+
+SimulationTime config_getBootstrapEndTime(const struct ConfigOptions *config);
+
+unsigned int config_getWorkers(const struct ConfigOptions *config);
+
+char *config_getEnvironment(const struct ConfigOptions *config);
+
+SchedulerPolicyType config_getSchedulerPolicy(const struct ConfigOptions *config);
+
+char *config_getDataDirectory(const struct ConfigOptions *config);
+
+char *config_getTemplateDirectory(const struct ConfigOptions *config);
+
+uint64_t config_getSocketRecvBuffer(const struct ConfigOptions *config);
+
+uint64_t config_getSocketSendBuffer(const struct ConfigOptions *config);
+
+bool config_getSocketSendAutotune(const struct ConfigOptions *config);
+
+bool config_getSocketRecvAutotune(const struct ConfigOptions *config);
+
+uint64_t config_getInterfaceBuffer(const struct ConfigOptions *config);
+
+enum QDiscMode config_getInterfaceQdisc(const struct ConfigOptions *config);
+
+char *config_getTopology(const struct ConfigOptions *config);
+
+void config_iterHosts(const struct ConfigOptions *config,
+                      void (*f)(const char*, const struct ConfigOptions*, const struct HostOptions*, void*),
+                      void *data);
+
+void hostoptions_freeString(char *string);
+
+unsigned int hostoptions_getQuantity(const struct HostOptions *host);
+
+LogLevel hostoptions_getLogLevel(const struct HostOptions *host);
+
+LogLevel hostoptions_getHeartbeatLogLevel(const struct HostOptions *host);
+
+LogInfoFlags hostoptions_getHeartbeatLogInfo(const struct HostOptions *host);
+
+uint32_t hostoptions_getHeartbeatInterval(const struct HostOptions *host);
+
+char *hostoptions_getPcapDirectory(const struct HostOptions *host);
+
+char *hostoptions_getIpHint(const struct HostOptions *host);
+
+char *hostoptions_getCountryCodeHint(const struct HostOptions *host);
+
+char *hostoptions_getCityCodeHint(const struct HostOptions *host);
+
+char *hostoptions_getTypeHint(const struct HostOptions *host);
+
+uint64_t hostoptions_getBandwidthDown(const struct HostOptions *host);
+
+uint64_t hostoptions_getBandwidthUp(const struct HostOptions *host);
+
+void hostoptions_iterProcesses(const struct HostOptions *host,
+                               void (*f)(const struct ProcessOptions*, void*),
+                               void *data);
+
+void processoptions_freeString(char *string);
+
+// Will return a NULL pointer if the path does not exist.
+char *processoptions_getPath(const struct ProcessOptions *proc);
+
+void processoptions_getArgs(const struct ProcessOptions *proc,
+                            void (*f)(const char*, void*),
+                            void *data);
+
+uint32_t processoptions_getQuantity(const struct ProcessOptions *proc);
+
+SimulationTime processoptions_getStartTime(const struct ProcessOptions *proc);
+
+SimulationTime processoptions_getStopTime(const struct ProcessOptions *proc);
 
 // Parses a string as bits-per-second. Returns '-1' on error.
 int64_t parse_bandwidth(const char *s);

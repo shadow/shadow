@@ -11,6 +11,7 @@
 
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/core/support/definitions.h"
+#include "main/host/tracker.h"
 #include "support/logger/log_level.h"
 
 /**
@@ -20,14 +21,6 @@
  */
 
 typedef struct _Options Options;
-
-typedef enum _LogInfoFlags LogInfoFlags;
-enum _LogInfoFlags {
-    LOG_INFO_FLAGS_NONE = 0,
-    LOG_INFO_FLAGS_NODE = 1<<0,
-    LOG_INFO_FLAGS_SOCKET = 1<<1,
-    LOG_INFO_FLAGS_RAM = 1<<2,
-};
 
 /**
  * Create a new #Configuration and parse the command line arguments given in

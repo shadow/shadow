@@ -3,7 +3,7 @@ Types for parsing/deserializing unit values.
 
 ```
 let time = Time::from_str("10 min").unwrap();
-assert_eq!(time, Time::new(10, TimePrefix::Sec));
+assert_eq!(time, Time::new(10, TimePrefix::Min));
 
 assert_eq!(
     time.convert(TimePrefix::Sec).unwrap(),
@@ -18,6 +18,7 @@ use std::str::FromStr;
 
 use once_cell::sync::Lazy;
 use regex::Regex;
+use schemars::JsonSchema;
 use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
 
@@ -46,7 +47,7 @@ pub trait Prefix: Clone + Copy + Default + PartialEq + FromStr + Display + Debug
 }
 
 /// Common SI prefixes (including base-2 prefixes since they're similar).
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, JsonSchema)]
 pub enum SiPrefix {
     Nano,
     Micro,
@@ -136,7 +137,7 @@ impl Prefix for SiPrefix {
 
 /// Common SI prefixes larger than the base unit (including base-2 prefixes
 /// since they're similar).
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, JsonSchema)]
 pub enum SiPrefixUpper {
     Base,
     Kilo,
@@ -212,7 +213,7 @@ impl Prefix for SiPrefixUpper {
 /// Time units, which we pretend are prefixes for implementation simplicity. These
 /// contain both the prefix ("n", "u", "m") and the suffix ("sec", "min", "hr")
 /// and should be used with the [`Time`] unit.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, JsonSchema)]
 pub enum TimePrefix {
     Nano,
     Micro,
@@ -255,7 +256,7 @@ impl fmt::Display for TimePrefix {
             Self::Nano => write!(f, "ns"),
             Self::Micro => write!(f, "μs"),
             Self::Milli => write!(f, "ms"),
-            Self::Sec => write!(f, "s"),
+            Self::Sec => write!(f, "sec"),
             Self::Min => write!(f, "min"),
             Self::Hour => write!(f, "hour"),
         }
@@ -280,7 +281,7 @@ impl Prefix for TimePrefix {
 /// Time units larger than the base unit, which we pretend are prefixes for
 /// implementation simplicity. These really contain the unit suffix ("sec",
 /// "min", "hr") and should be used with the [`Time`] unit.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, JsonSchema)]
 pub enum TimePrefixUpper {
     Sec,
     Min,
@@ -311,7 +312,7 @@ impl FromStr for TimePrefixUpper {
 impl fmt::Display for TimePrefixUpper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Sec => write!(f, "s"),
+            Self::Sec => write!(f, "sec"),
             Self::Min => write!(f, "min"),
             Self::Hour => write!(f, "hour"),
         }
@@ -518,7 +519,7 @@ pub trait Unit: Sized {
 
 /// An amount of time. Should only use the time prefix types ([`TimePrefix`] and
 /// [`TimePrefixUpper`]) with this type.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, JsonSchema)]
 pub struct Time<T: Prefix> {
     value: u64,
     prefix: T,
@@ -529,7 +530,7 @@ pub struct Time<T: Prefix> {
 unit_impl!(Time, u64, [""]);
 
 /// A number of bytes.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, JsonSchema)]
 pub struct Bytes<T: Prefix> {
     pub value: u64,
     pub prefix: T,
@@ -538,7 +539,7 @@ pub struct Bytes<T: Prefix> {
 unit_impl!(Bytes, u64, ["B", "byte", "bytes"]);
 
 /// A throughput in bits-per-second.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, JsonSchema)]
 pub struct BitsPerSec<T: Prefix> {
     pub value: u64,
     pub prefix: T,

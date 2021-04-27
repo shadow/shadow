@@ -6,12 +6,14 @@
 // Don't forget to whitelist functions/types/vars in CMakeLists.txt
 
 #include "main/core/logger/shadow_logger.h"
+#include "main/core/scheduler/scheduler_policy_type.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/host.h"
 #include "main/host/process.h"
 #include "main/host/status.h"
 #include "main/host/status_listener.h"
+#include "main/host/syscall/unistd.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_types.h"
-#include "main/host/syscall/unistd.h"
 #include "main/host/thread.h"

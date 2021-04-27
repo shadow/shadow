@@ -28,10 +28,21 @@ typedef enum QDiscMode {
 // A queue of byte chunks.
 typedef struct ByteQueue ByteQueue;
 
+// Run real applications over simulated networks.
+typedef struct CliOptions CliOptions;
+
 typedef struct CompatDescriptor CompatDescriptor;
+
+// Options contained in a configuration file.
+typedef struct ConfigFileOptions ConfigFileOptions;
+
+// Shadow configuration options after processing command-line and configuration file options.
+typedef struct ConfigOptions ConfigOptions;
 
 // The main counter object that maps individual keys to count values.
 typedef struct Counter Counter;
+
+typedef struct HostOptions HostOptions;
 
 // Manages the address-space for a plugin process.
 //
@@ -52,5 +63,7 @@ typedef struct MemoryManager MemoryManager;
 
 // An opaque type used when passing `*const AtomicRefCell<File>` to C.
 typedef struct PosixFileArc PosixFileArc;
+
+typedef struct ProcessOptions ProcessOptions;
 
 #endif /* main_opaque_bindings_h */
