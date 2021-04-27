@@ -9,21 +9,41 @@ from xml.dom import minidom
 from xml.sax.saxutils import unescape
 
 import yaml
+import sys
+import io
+import os
 
+from convert_legacy_topology import convert_topology
 
-XML_TO_YAML = {
-    'topology': 'topology',
+XML_TAGS_TO_YAML = {
     'plugin': 'plugins',
     'host': 'hosts',
     'node': 'hosts',
     'process': 'processes',
-    'application': 'processes'
+    'application': 'processes',
 }
-YAML_TO_XML = {
-    'topology': 'topology',
-    'plugins': 'plugin',
-    'hosts': 'host',
-    'processes': 'process'
+
+
+XML_ATTRS_TO_YAML = {
+    'bootstraptime': 'bootstrap_end_time',
+    'starttime': 'start_time',
+    'stoptime': 'stop_time',
+    'arguments': 'args',
+    'iphint': 'ip_hint',
+    'citycodehint': 'city_code_hint',
+    'countrycodehint': 'country_code_hint',
+    'geocodehint': 'geo_code_hint',
+    'typehint': 'type_hint',
+    'loglevel': 'log_level',
+    'heartbeatloglevel': 'heartbeat_log_level',
+    'heartbeatloginfo': 'heartbeat_log_info',
+    'pcapdir': 'pcap_directory',
+    'bandwidthdown': 'bandwidth_down',
+    'bandwidthup': 'bandwidth_up',
+    'heartbeatfrequency': 'heartbeat_interval',
+    'socketrecvbuffer': 'socket_recv_buffer',
+    'socketsendbuffer': 'socket_send_buffer',
+    'interfacebuffer': 'interface_buffer',
 }
 
 
@@ -31,14 +51,14 @@ def convert_xml_tag_to_yaml_key(tag: str) -> str:
     '''
     Convert an XML tag in its YAML key
     '''
-    return XML_TO_YAML.get(tag, tag)
+    return XML_TAGS_TO_YAML.get(tag, tag)
 
 
-def convert_yaml_key_to_xml_tag(tag: str) -> str:
+def convert_xml_attr_to_yaml_key(tag: str) -> str:
     '''
-    Convert an YAML key to a XML tag
+    Convert an XML attribute in its YAML key
     '''
-    return YAML_TO_XML.get(tag, tag)
+    return XML_ATTRS_TO_YAML.get(tag, tag)
 
 
 def yaml_str_presenter(dumper, data):
@@ -71,6 +91,7 @@ def convert_integer(d: Dict[str, Union[str, Any]]) -> Dict[str, Union[str, int, 
     r = {}
 
     for k, v in d.items():
+        k = convert_xml_attr_to_yaml_key(k)
         if v.isnumeric():
             r[k] = int(v)
         else:
@@ -84,14 +105,14 @@ def xml_to_dict(node: ET.Element) -> Dict:
     '''
     # Special case, contains network graph as text
     if node.tag == 'topology':
-        return {
-            # Python's xml library doesn't allow us to differentiate between whitespace in the
-            # xml or in the cdata, so we should just strip all whitespace since we are technically
-            # already losing information anyways. Otherwise indented topology text (even if the
-            # indentation is outside of the cdata) will not be valid xml since the first line
-            # of the topology cannot begin with whitespace.
-            'graphml': node.text.strip()
+        rv = {
+            **convert_integer(node.attrib)
         }
+
+        if node.text is not None:
+            rv['graphml'] = node.text.strip()
+
+        return rv
 
     # Iterates over each XML node and transforms those in dict
     if len(node) > 0:
@@ -144,13 +165,149 @@ def shadow_xml_to_dict(root: ET.Element) -> Dict:
     options = convert_integer(root.attrib)
 
     if options:
-        return {
-            'options': options,
+        converted = {
+            'general': options,
             **xml_nodes_to_dict(root)
         }
-    return {
-        **xml_nodes_to_dict(root)
-    }
+    else:
+        converted = {
+            **xml_nodes_to_dict(root)
+        }
+
+    shadow_dict_post_processing(converted)
+
+    return converted
+
+
+def append_ld_preload(env_str, preload_path):
+    '''
+    Append a path to LD_PRELOAD, which may or may not exist in the environment string.
+    '''
+
+    if len(env_str) != 0:
+        env_vars = env_str.split(';')
+    else:
+        env_vars = []
+
+    env_vars = [x.split('=', 1) for x in env_vars]
+
+    for x in env_vars:
+        if x[0] == 'LD_PRELOAD':
+            paths = x[1].split(':')
+            paths.insert(0, preload_path)
+            x[1] = ':'.join(paths)
+            break
+    else:
+        env_vars.append(['LD_PRELOAD', preload_path])
+
+    env_vars = ['='.join(x) for x in env_vars]
+    return ';'.join(env_vars)
+
+
+def shadow_dict_post_processing(shadow: Dict):
+    '''
+    Remove deprecated fields and perform other adjustments (remove the 'plugins' list,
+    convert the hosts from a list to a dict, etc)
+    '''
+
+    # the 'environment' attribute is now per-process
+    saved_environment = None
+
+    if 'general' in shadow:
+        if 'preload' in shadow['general']:
+            # we no longer support the 'preload' attribute
+            removed = shadow['general'].pop('preload')
+            print_deprecation_msg('preload', removed)
+        if 'environment' in shadow['general']:
+            saved_environment = shadow['general'].pop('environment')
+
+    # save the list of plugins
+    plugins = {}
+    if 'plugins' in shadow:
+        for plugin in shadow['plugins']:
+            plugins[plugin['id']] = plugin['path']
+            del plugin['id']
+            del plugin['path']
+            # check for remaining attributes (for example 'startsymbol')
+            for remaining in plugin:
+                print_deprecation_msg(remaining, plugin[remaining])
+        del shadow['plugins']
+
+    if 'hosts' in shadow:
+        # switch the hosts list to a dictionary
+        num_hosts = len(shadow['hosts'])
+        shadow['hosts'] = {x['id']: {y: x[y] for y in x if y != 'id'} for x in shadow['hosts']}
+        assert num_hosts == len(shadow['hosts']), "Invalid input: there are hosts with duplicate ids"
+
+        for host_name in shadow['hosts']:
+            host = shadow['hosts'][host_name]
+
+            # add all extra fields to an 'options' field
+            host_non_option_names = ['quantity', 'processes']
+            host_options = {x: host[x] for x in host if x not in host_non_option_names}
+            host_non_options = {x: host[x] for x in host if x in host_non_option_names}
+
+            host = host_non_options
+            if len(host_options) != 0:
+                host['options'] = host_options
+            shadow['hosts'][host_name] = host
+
+            if 'options' in host:
+                # shadow classic uses bandwidth units of KiB/s
+                if 'bandwidth_up' in host['options']:
+                    host['options']['bandwidth_up'] = str(host['options']['bandwidth_up'] * 8) + ' Kibit'
+
+                if 'bandwidth_down' in host['options']:
+                    host['options']['bandwidth_down'] = str(host['options']['bandwidth_down'] * 8) + ' Kibit'
+
+                # shadow classic automatically disables autotuning if the buffer sizes are set
+                if 'socket_send_buffer' in host['options']:
+                    host['options']['socket_send_autotune'] = False
+
+                if 'socket_recv_buffer' in host['options']:
+                    host['options']['socket_recv_autotune'] = False
+
+            for process in host['processes']:
+                # replace the plugin name with its path
+                plugin = process.pop('plugin')
+                process['path'] = plugins[plugin]
+
+                if saved_environment is not None:
+                    # add the saved environment
+                    assert 'environment' not in process, "Process should not have an environment attribute"
+                    process['environment'] = saved_environment
+
+                if 'preload' in process:
+                    # we no longer support the 'preload' attribute, so append it to LD_PRELOAD
+                    preload = process.pop('preload')
+                    preload_path = os.path.expanduser(plugins[preload])
+
+                    if 'environment' not in process:
+                        process['environment'] = ''
+                    process['environment'] = append_ld_preload(process['environment'], preload_path)
+
+    if 'topology' in shadow:
+        assert len(shadow['topology']) == 1, "Invalid input: there is more than one topology"
+        shadow['topology'] = shadow['topology'][0]
+
+        if 'path' in shadow['topology']:
+            path = shadow['topology']['path']
+            print("External topology file '{}' was not converted".format(path), file=sys.stderr)
+
+        if 'graphml' in shadow['topology']:
+            tree = ET.ElementTree(ET.fromstring(shadow['topology']['graphml']))
+            convert_topology(tree.getroot())
+
+            # use write() so that we don't lose the xml declaration
+            new_topology = io.BytesIO()
+            tree.write(new_topology, encoding="utf-8", xml_declaration=True)
+            new_topology.seek(0)
+
+            shadow['topology']['graphml'] = new_topology.read().decode("utf-8")
+
+
+def print_deprecation_msg(field: str, value: str):
+    print("Removed deprecated attribute '{}': '{}'".format(field, value), file=sys.stderr)
 
 
 def get_xml_root_from_filename(filename: str) -> ET.Element:
@@ -161,86 +318,13 @@ def get_xml_root_from_filename(filename: str) -> ET.Element:
     return tree.getroot()
 
 
-def get_yaml_from_filename(filename: str) -> Dict:
-    '''
-    Load an YAML file as dict
-    '''
-    with open(filename) as yaml_fd:
-        return yaml.load(yaml_fd, Loader=yaml.Loader)
-
-
-def create_xml_root(d: Dict) -> ET.Element:
-    '''
-    Create the root of the XML element
-    '''
-    xml_root = ET.Element('shadow')
-    if 'options' in d:
-        for k, v in d['options'].items():
-            xml_root.set(k, str(v))
-        del d['options']
-    return xml_root
-
-
-def dict_to_xml(xml_root: ET.Element, d: Dict, tag=None) -> None:
-    '''
-    Add to an XML element object the elements of a dict
-    '''
-    attr = {}
-
-    for k, v in d.items():
-        if isinstance(v, list):
-            list_to_xml(xml_root, k, v)
-        elif isinstance(v, dict):
-            dict_to_xml(xml_root, v, k)
-        else:
-            attr[k] = str(v)
-
-    _tag = convert_yaml_key_to_xml_tag(tag)
-    ET.SubElement(xml_root, _tag, attrib=attr)
-
-
-def list_to_xml(xml_root: ET.Element, tag: str, l: List[Dict[str, Union[List, str]]]) -> None:
-    '''
-    Add to an XML object a list of sub elements
-    '''
-    for element in l:
-        _tag = convert_yaml_key_to_xml_tag(tag)
-        sub = ET.SubElement(xml_root, _tag)
-        for k, v in sorted(element.items()):
-            if isinstance(v, list):
-                list_to_xml(sub, k, v)
-            else:
-                # Special case
-                # The graphml attribute is not a tag in XML but a text element
-                if 'graphml' == k:
-                    sub.text = '<![CDATA[{0}]]>'.format(v)
-                else:
-                    sub.set(k, str(v))
-
-
-def save_xml(xml_root: ET.Element, stream) -> None:
-    '''
-    Write an XML element in a stream
-    '''
-    _xmlstr = minidom.parseString(ET.tostring(xml_root)).toprettyxml(indent="   ")
-    stream.write(unescape(_xmlstr, entities={'&quot;': '"'}))
-
-
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Convert shadow config files between XML and YAML')
-    parser.add_argument('operation', choices=['yaml2xml', 'xml2yaml'])
+    parser = argparse.ArgumentParser(description='Convert shadow config files from XML to YAML')
     parser.add_argument('filename', help='Filename to convert')
     parser.add_argument('--output', help='Output filename', default=None, nargs='?')
     args = parser.parse_args()
 
-    if args.operation == 'yaml2xml':
-        yaml_as_dict = get_yaml_from_filename(args.filename)
-        xml_root = create_xml_root(yaml_as_dict)
-        dict_to_xml(xml_root, yaml_as_dict)
-        with get_output_stream(args, 'yaml', 'xml') as stream:
-            save_xml(xml_root, stream)
-    else:
-        xml_root = get_xml_root_from_filename(args.filename)
-        d = shadow_xml_to_dict(xml_root)
-        with get_output_stream(args, 'xml', 'yaml') as stream:
-            save_dict_in_yaml_file(d, stream)
+    xml_root = get_xml_root_from_filename(args.filename)
+    d = shadow_xml_to_dict(xml_root)
+    with get_output_stream(args, 'xml', 'yaml') as stream:
+        save_dict_in_yaml_file(d, stream)
