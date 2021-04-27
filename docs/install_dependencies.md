@@ -59,17 +59,16 @@ sudo apt-get install -y \
 
 ## YUM (Fedora/CentOS):
 
-In more recent versions of Fedora and CentOS, `yum` can be exchanged for `dnf`
-in these commands. Before running these commands, please check any
-platform-specific requirements below.
+Before running these commands, please check any platform-specific
+requirements below.
 
-**Warning:** `yum` and `dnf` often install 32-bit (`i686`) versions of
+**Warning:** `dnf` often installs 32-bit (`i686`) versions of
 libraries. You may want to use the `--best` option to make sure you're
 installing the 64-bit (`x86_64`) versions, which are required by Shadow.
 
 ```bash
 # required dependencies
-sudo yum install -y \
+sudo dnf install -y \
     cmake \
     findutils \
     glib2 \
@@ -91,7 +90,7 @@ sudo yum install -y \
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # optional python modules
-sudo yum install -y \
+sudo dnf install -y \
     python3-numpy \
     python3-lxml \
     python3-matplotlib \
@@ -100,7 +99,7 @@ sudo yum install -y \
     python3-yaml
 
 # optional tools
-sudo yum install -y \
+sudo dnf install -y \
     dstat \
     git \
     htop \

@@ -4,7 +4,7 @@
 
   + Ubuntu 18.04 and 20.04
   + Debian 10
-  + Fedora 33
+  + Fedora 34
   + CentOS Stream 8
 
 If you are installing Shadow within a Docker container, you must increase the
