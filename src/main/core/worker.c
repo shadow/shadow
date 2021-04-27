@@ -41,9 +41,9 @@
 #include "support/logger/logger.h"
 
 // Allow turning off object counting at run-time.
-static bool _disable_object_counters = false;
-OPTION_EXPERIMENTAL_ENTRY("disable-object-counters", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE,
-                          &_disable_object_counters,
+static bool _use_object_counters = true;
+OPTION_EXPERIMENTAL_ENTRY("disable-object-counters", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE,
+                          &_use_object_counters,
                           "Disable counting object allocations and deallocations. "
                           "If disabled, we will not be able to detect object memory leaks.",
                           NULL)
@@ -826,7 +826,7 @@ void worker_incrementPluginError() {
 
 void __worker_increment_object_alloc_counter(const char* object_name) {
     // If disabled, we never create the counter (and never send it to the manager).
-    if (_disable_object_counters) {
+    if (!_use_object_counters) {
         return;
     }
     // See COUNTER WARNING above.
@@ -844,7 +844,7 @@ void __worker_increment_object_alloc_counter(const char* object_name) {
 
 void __worker_increment_object_dealloc_counter(const char* object_name) {
     // If disabled, we never create the counter (and never send it to the manager).
-    if (_disable_object_counters) {
+    if (!_use_object_counters) {
         return;
     }
     // See COUNTER WARNING above.
