@@ -647,11 +647,9 @@ gboolean process_isRunning(Process* proc) {
 
 static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
 
-Process* process_new(Host* host, guint processID, SimulationTime startTime,
-                     SimulationTime stopTime, InterposeMethod interposeMethod,
-                     const gchar* hostName, const gchar* pluginName,
-                     const gchar* pluginPath, const gchar* pluginSymbol,
-                     gchar** envv, gchar** argv) {
+Process* process_new(Host* host, guint processID, SimulationTime startTime, SimulationTime stopTime,
+                     InterposeMethod interposeMethod, const gchar* hostName,
+                     const gchar* pluginName, const gchar* pluginPath, gchar** envv, gchar** argv) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -700,7 +698,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
     }
 
     /* save args and env */
-    proc->argv = argv;
+    proc->argv = g_strdupv(argv);
     proc->envv = envv;
 
     proc->descTable = descriptortable_new();

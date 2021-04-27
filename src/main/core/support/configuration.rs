@@ -39,7 +39,7 @@ pub struct CliOptions {
     #[clap(long, exclusive(true))]
     show_build_info: bool,
 
-    /// Print the final configuration
+    /// Exit after printing the final configuration
     #[clap(long)]
     show_config: bool,
 
@@ -932,7 +932,11 @@ mod export {
     pub extern "C" fn clioptions_getConfig(options: *const CliOptions) -> *mut libc::c_char {
         assert!(!options.is_null());
         let options = unsafe { &*options };
-        CString::into_raw(CString::new(options.config.as_ref().unwrap().clone()).unwrap())
+
+        match &options.config {
+            Some(s) => CString::into_raw(CString::new(s.clone()).unwrap()),
+            None => std::ptr::null_mut(),
+        }
     }
 
     #[no_mangle]

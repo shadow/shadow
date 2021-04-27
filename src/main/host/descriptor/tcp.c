@@ -20,7 +20,6 @@
 #include <sys/types.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/options.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
@@ -2569,7 +2568,7 @@ TCP* tcp_new(guint receiveBufferSize, guint sendBufferSize) {
     socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, receiveBufferSize,
                 sendBufferSize);
 
-    Options* options = worker_getOptions();
+    const ConfigOptions* config = worker_getConfig();
     guint32 initial_window = 10;
     gint tcpSSThresh = 0;
 

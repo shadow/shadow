@@ -491,9 +491,9 @@ Topology* worker_getTopology() {
     return manager_getTopology(worker->workerPool->manager);
 }
 
-Options* worker_getOptions() {
+const ConfigOptions* worker_getConfig() {
     Worker* worker = _worker_getPrivate();
-    return manager_getOptions(worker->workerPool->manager);
+    return manager_getConfig(worker->workerPool->manager);
 }
 
 /* this is the entry point for worker threads when running in parallel mode,

@@ -11,7 +11,6 @@
 #include <string.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/options.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/protocol.h"

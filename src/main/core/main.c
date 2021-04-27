@@ -19,8 +19,6 @@
 #include "main/bindings/c/bindings.h"
 #include "main/core/controller.h"
 #include "main/core/logger/shadow_logger.h"
-#include "main/core/support/configuration.h"
-#include "main/core/support/options.h"
 #include "main/host/affinity.h"
 #include "main/shmem/shmem_cleanup.h"
 #include "main/utility/disable_aslr.h"
@@ -59,7 +57,7 @@ static void _main_logEnvironment(gchar** argv, gchar** envv) {
     }
 }
 
-static gint _main_helper(Options* options, gchar* argv[]) {
+static gint _main_helper(CliOptions* options, ConfigOptions* config, gchar* argv[]) {
     /* start off with some status messages */
 #if defined(IGRAPH_VERSION)
     gint igraphMajor = -1, igraphMinor = -1, igraphPatch = -1;
@@ -93,7 +91,7 @@ static gint _main_helper(Options* options, gchar* argv[]) {
     message("startup checks passed, we are ready to start simulation");
 
     /* pause for debugger attachment if the option is set */
-    if(options_doRunDebug(options)) {
+    if(clioptions_getGdb(options)) {
         gint pid = (gint)getpid();
         message("Pausing with SIGTSTP to enable debugger attachment (pid %i)", pid);
         g_printerr("** Pausing with SIGTSTP to enable debugger attachment (pid %i)\n", pid);
@@ -103,7 +101,7 @@ static gint _main_helper(Options* options, gchar* argv[]) {
 
     /* allocate and initialize our main simulation driver */
     gint returnCode = 0;
-    shadowcontroller = controller_new(options);
+    shadowcontroller = controller_new(config);
 
     if (shadowcontroller) {
         /* run the simulation */
@@ -150,37 +148,74 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     sigprocmask(SIG_SETMASK, &new_sig_set, NULL);
 
     /* parse the options from the command line */
-    Options* options = options_new(argc, argv);
-    if(!options) {
+    CliOptions* options = clioptions_parse(argc, (const char**)argv);
+    if (!options) {
         return EXIT_FAILURE;
     }
 
-    // If we are just printing the version or running a cleanup+exit,
-    // then print the version, cleanup if requested, and exit with success.
-    if (options_doRunPrintVersion(options) ||
-        options_shouldExitAfterShmCleanup(options)) {
-        g_printerr("%s running GLib v%u.%u.%u and IGraph v%s\n%s\n%s\n",
-                SHADOW_VERSION_STRING,
-                (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
+    if (clioptions_getShowBuildInfo(options)) {
+        g_printerr("%s running GLib v%u.%u.%u and IGraph v%s\n%s\n%s\n", SHADOW_VERSION_STRING,
+                   (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
 #if defined(IGRAPH_VERSION)
-                IGRAPH_VERSION,
+                   IGRAPH_VERSION,
 #else
-                "(n/a)",
+                   "(n/a)",
 #endif
-                SHADOW_BUILD_STRING,
-                SHADOW_INFO_STRING);
+                   SHADOW_BUILD_STRING, SHADOW_INFO_STRING);
 
-        if (options_shouldExitAfterShmCleanup(options)) {
-            shmemcleanup_tryCleanup();
-        }
-
-        options_free(options);
+        clioptions_free(options);
         return EXIT_SUCCESS;
     }
 
+    if (clioptions_getShmCleanup(options)) {
+        shmemcleanup_tryCleanup();
+
+        clioptions_free(options);
+        return EXIT_SUCCESS;
+    }
+
+    char* configName = clioptions_getConfig(options);
+
+    /* since we've already checked the two exclusive flags above (--show-build-info and
+     * --shm-cleanup), configName should never be NULL*/
+    if (!configName) {
+        error("Could not get configuration file path");
+    }
+
+    /* read config from file or stdin */
+    ConfigFileOptions* configFile = NULL;
+    if (strcmp(configName, "-") != 0) {
+        configFile = configfile_parse(configName);
+    } else {
+        configFile = configfile_parse("/dev/stdin");
+    }
+
+    clioptions_freeString(configName);
+
+    /* configFile may be NULL if the config file doesn't exist or could not be parsed correctly */
+    if (!configFile) {
+        clioptions_free(options);
+        return EXIT_FAILURE;
+    }
+
+    /* generate the final shadow configuration from the config file and cli options */
+    ConfigOptions* config = config_new(configFile, options);
+    configfile_free(configFile);
+
+    if (clioptions_getShowConfig(options)) {
+        config_showConfig(config);
+
+        clioptions_free(options);
+        config_free(config);
+        return EXIT_SUCCESS;
+    }
+
+    runConfigHandlers(config);
+
+    LogLevel logLevel = config_getLogLevel(config);
+
     /* start up the logging subsystem to handle all future messages */
-    ShadowLogger* shadowLogger =
-        shadow_logger_new(options_getLogLevel(options));
+    ShadowLogger* shadowLogger = shadow_logger_new(logLevel);
     shadow_logger_setDefault(shadowLogger);
     rust_logging_init();
 
@@ -188,18 +223,20 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     shadow_logger_setEnableBuffering(shadowLogger, FALSE);
 
 #ifndef DEBUG
-    if (options_getLogLevel(options) == LOGLEVEL_DEBUG) {
+    if (logLevel == LOGLEVEL_DEBUG) {
         warning("Log level set to %s, but Shadow was not built in debug mode",
-                loglevel_toStr(options_getLogLevel(options)));
+                loglevel_toStr(logLevel));
     }
 #endif
 
     // before we run the simluation, clean up any orphaned shared memory
     shmemcleanup_tryCleanup();
-    
-    if (options_getCPUPinning(options)) {
+
+    if (config_getUseCpuPinning(config)) {
         int rc = affinity_initPlatformInfo();
         if (rc) {
+            clioptions_free(options);
+            config_free(config);
             return EXIT_FAILURE;
         }
     }
@@ -210,6 +247,8 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         int rc = sched_setscheduler(0, SCHED_FIFO, &param);
 
         if (rc != 0) {
+            clioptions_free(options);
+            config_free(config);
             error("Could not set SCHED_FIFO");
         } else {
             message("Successfully set real-time scheduler mode to SCHED_FIFO");
@@ -221,11 +260,13 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     // branch on memory addresses.
     disable_aslr();
 
-    gint returnCode = _main_helper(options, argv);
+    gint returnCode = _main_helper(options, config, argv);
 
-    options_free(options);
+    clioptions_free(options);
+    config_free(config);
+
     ShadowLogger* logger = shadow_logger_getDefault();
-    if(logger) {
+    if (logger) {
         shadow_logger_setDefault(NULL);
         shadow_logger_unref(logger);
     }

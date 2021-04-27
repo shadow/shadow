@@ -182,9 +182,9 @@ void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, cons
 
     /* virtual addresses and interfaces for managing network I/O */
     NetworkInterface* loopback = networkinterface_new(loopbackAddress, G_MAXUINT32, G_MAXUINT32,
-            host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
+            host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
     NetworkInterface* ethernet = networkinterface_new(ethernetAddress, bwDownKiBps, bwUpKiBps,
-            host->params.logPcap, host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
+            host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
 
     g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(ethernetAddress)), ethernet);
     g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
@@ -372,11 +372,9 @@ guint64 host_getNewPacketID(Host* host) {
     return host->packetIDCounter++;
 }
 
-void host_addApplication(Host* host, SimulationTime startTime,
-                         SimulationTime stopTime, InterposeMethod interposeMethod,
-                         const gchar* pluginName, const gchar* pluginPath,
-                         const gchar* pluginSymbol, gchar** envv,
-                         gchar** argv) {
+void host_addApplication(Host* host, SimulationTime startTime, SimulationTime stopTime,
+                         InterposeMethod interposeMethod, const gchar* pluginName,
+                         const gchar* pluginPath, gchar** envv, gchar** argv) {
     MAGIC_ASSERT(host);
     guint processID = host_getNewProcessID(host);
     Process* proc = process_new(host,
@@ -387,7 +385,6 @@ void host_addApplication(Host* host, SimulationTime startTime,
                                 host_getName(host),
                                 pluginName,
                                 pluginPath,
-                                pluginSymbol,
                                 envv,
                                 argv);
     g_queue_push_tail(host->processes, proc);

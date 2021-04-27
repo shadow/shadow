@@ -51,21 +51,6 @@ pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERHOST: SchedulerPolicyType = 
 pub type SchedulerPolicyType = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _Process {
-    _unused: [u8; 0],
-}
-pub type Process = _Process;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Host {
-    _unused: [u8; 0],
-}
-pub type Host = _Host;
-#[doc = " Simulation time in nanoseconds. Allows for a consistent representation"]
-#[doc = " of time throughput the simulator."]
-pub type SimulationTime = guint64;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct Counter {
     _unused: [u8; 0],
 }
@@ -79,6 +64,56 @@ pub struct MemoryManager {
 pub struct PosixFileArc {
     _unused: [u8; 0],
 }
+pub use self::_Status as Status;
+pub const _Status_STATUS_NONE: _Status = 0;
+pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
+pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
+pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
+pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
+pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
+pub type _Status = i32;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Process {
+    _unused: [u8; 0],
+}
+pub type Process = _Process;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Host {
+    _unused: [u8; 0],
+}
+pub type Host = _Host;
+#[doc = " Simulation time in nanoseconds. Allows for a consistent representation"]
+#[doc = " of time throughput the simulator."]
+pub type SimulationTime = guint64;
+pub type LegacyDescriptor = [u64; 7usize];
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _StatusListener {
+    _unused: [u8; 0],
+}
+pub type StatusListener = _StatusListener;
+extern "C" {
+    pub fn statuslistener_ref(listener: *mut StatusListener);
+}
+extern "C" {
+    pub fn statuslistener_unref(listener: *mut StatusListener);
+}
+extern "C" {
+    pub fn statuslistener_onStatusChanged(
+        listener: *mut StatusListener,
+        currentStatus: Status,
+        transitions: Status,
+    );
+}
+pub type SysCallHandler = _SysCallHandler;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Timer {
+    _unused: [u8; 0],
+}
+pub type Timer = _Timer;
 pub type PluginVirtualPtr = _PluginVirtualPtr;
 pub type PluginPtr = _PluginVirtualPtr;
 #[repr(C)]
@@ -262,41 +297,6 @@ fn bindgen_test_layout__SysCallReturn() {
     );
 }
 pub type SysCallReturn = _SysCallReturn;
-pub use self::_LogInfoFlags as LogInfoFlags;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_NONE: _LogInfoFlags = 0;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_NODE: _LogInfoFlags = 1;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_SOCKET: _LogInfoFlags = 2;
-pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
-pub type _LogInfoFlags = i32;
-pub use self::_Status as Status;
-pub const _Status_STATUS_NONE: _Status = 0;
-pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
-pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
-pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
-pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
-pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
-pub type _Status = i32;
-pub type LegacyDescriptor = [u64; 7usize];
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _StatusListener {
-    _unused: [u8; 0],
-}
-pub type StatusListener = _StatusListener;
-extern "C" {
-    pub fn statuslistener_ref(listener: *mut StatusListener);
-}
-extern "C" {
-    pub fn statuslistener_unref(listener: *mut StatusListener);
-}
-extern "C" {
-    pub fn statuslistener_onStatusChanged(
-        listener: *mut StatusListener,
-        currentStatus: Status,
-        transitions: Status,
-    );
-}
-pub type SysCallHandler = _SysCallHandler;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Thread {
@@ -417,12 +417,6 @@ extern "C" {
 extern "C" {
     pub fn thread_getShMBlock(thread: *mut Thread) -> *mut ShMemBlock;
 }
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Timer {
-    _unused: [u8; 0],
-}
-pub type Timer = _Timer;
 extern "C" {
     pub fn process_registerCompatDescriptor(
         proc_: *mut Process,
@@ -470,6 +464,12 @@ pub struct _Futex {
     _unused: [u8; 0],
 }
 pub type Futex = _Futex;
+pub use self::_LogInfoFlags as LogInfoFlags;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_NONE: _LogInfoFlags = 0;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_NODE: _LogInfoFlags = 1;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_SOCKET: _LogInfoFlags = 2;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
+pub type _LogInfoFlags = i32;
 extern "C" {
     pub fn worker_getActiveProcess() -> *mut Process;
 }

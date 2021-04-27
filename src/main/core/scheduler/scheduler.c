@@ -147,8 +147,10 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
     /* ensure we have sane default modes for the number of workers we are using */
     if(nWorkers == 0) {
         scheduler->policyType = SP_SERIAL_GLOBAL;
+        warning("Overriding the chosen scheduler policy with the serial global policy");
     } else if(nWorkers > 0 && policyType == SP_SERIAL_GLOBAL) {
         scheduler->policyType = SP_PARALLEL_HOST_STEAL;
+        warning("Overriding the chosen scheduler policy with the host stealing policy");
     } else {
         scheduler->policyType = policyType;
     }

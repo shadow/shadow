@@ -9,15 +9,15 @@
 
 #include <glib.h>
 
+#include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/options.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/routing/topology.h"
 
 typedef struct _Controller Controller;
 
-Controller* controller_new(Options*);
+Controller* controller_new(ConfigOptions*);
 void controller_free(Controller*);
 gint controller_run(Controller*);
 

@@ -9,7 +9,6 @@
 #include <stddef.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/options.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
@@ -675,7 +674,7 @@ Router* networkinterface_getRouter(NetworkInterface* interface) {
 }
 
 NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, guint64 bwUpKiBps,
-        gboolean logPcap, gchar* pcapDir, QDiscMode qdisc, guint64 interfaceReceiveLength) {
+        gchar* pcapDir, QDiscMode qdisc, guint64 interfaceReceiveLength) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);
     MAGIC_INIT(interface);
 
@@ -693,7 +692,7 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
     /* parse queuing discipline */
     interface->qdisc = qdisc;
 
-    if(logPcap) {
+    if(pcapDir != NULL) {
         GString* filename = g_string_new(NULL);
         g_string_printf(filename, "%s-%s",
                 address_toHostName(interface->address),
