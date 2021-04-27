@@ -4,6 +4,7 @@
  * See LICENSE for licensing information
  */
 
+#include <assert.h>
 #include <netinet/in.h>
 #include <stddef.h>
 
@@ -15,6 +16,21 @@
 #include "main/utility/utility.h"
 #include "support/logger/log_level.h"
 #include "support/logger/logger.h"
+
+/* g_memdup() is deprecated due to a security issue and has been replaced
+ * by g_memdup2(), but not all of our supported platforms support this yet.
+ * https://gitlab.gnome.org/GNOME/glib/-/issues/2319
+ */
+
+#ifdef HAS_MEMDUP2
+#define compat_static_g_memdup g_memdup2
+#else
+#define compat_static_g_memdup(mem, byte_size)                                                     \
+    ({                                                                                             \
+        static_assert(byte_size < UINT_MAX, "g_memdup() overflow");                                \
+        g_memdup(mem, byte_size);                                                                  \
+    })
+#endif
 
 /* thread-safe structure representing a data/network packet */
 
@@ -124,17 +140,17 @@ Packet* packet_copy(Packet* packet) {
     if(packet->header) {
         switch (packet->protocol) {
             case PLOCAL: {
-                copy->header = g_memdup(packet->header, sizeof(PacketLocalHeader));
+                copy->header = compat_static_g_memdup(packet->header, sizeof(PacketLocalHeader));
                 break;
             }
 
             case PUDP: {
-                copy->header = g_memdup(packet->header, sizeof(PacketUDPHeader));
+                copy->header = compat_static_g_memdup(packet->header, sizeof(PacketUDPHeader));
                 break;
             }
 
             case PTCP: {
-                copy->header = g_memdup(packet->header, sizeof(PacketTCPHeader));
+                copy->header = compat_static_g_memdup(packet->header, sizeof(PacketTCPHeader));
 
                 PacketTCPHeader* packetHeader = (PacketTCPHeader*)packet->header;
                 PacketTCPHeader* copyHeader = (PacketTCPHeader*)copy->header;
