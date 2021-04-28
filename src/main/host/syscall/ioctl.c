@@ -30,6 +30,19 @@ static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, File* file, int 
     // TODO: we should call file_ioctl() here, but depending on the request we may need to
     // copy in the request params first before passing them.
     switch (request) {
+        case TCGETS:
+        case TCSETS:
+        case TCSETSW:
+        case TCSETSF:
+        case TCGETA:
+        case TCSETA:
+        case TCSETAW:
+        case TCSETAF: {
+            // not a terminal
+            result = -ENOTTY;
+            break;
+        }
+
         default: {
             result = -EINVAL;
             warning("We do not yet handle ioctl request %lu on file %i",
@@ -78,6 +91,19 @@ static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
             break;
         }
 
+        case TCGETS:
+        case TCSETS:
+        case TCSETSW:
+        case TCSETSF:
+        case TCGETA:
+        case TCSETA:
+        case TCSETAW:
+        case TCSETAF: {
+            // not a terminal
+            result = -ENOTTY;
+            break;
+        }
+
         default: {
             result = -EINVAL;
             warning("We do not yet handle ioctl request %lu on tcp socket %i", request, fd);
@@ -115,6 +141,19 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
                 descriptor_addFlags((LegacyDescriptor*)udp, O_NONBLOCK);
             }
             result = 0;
+            break;
+        }
+
+        case TCGETS:
+        case TCSETS:
+        case TCSETSW:
+        case TCSETSF:
+        case TCGETA:
+        case TCSETA:
+        case TCSETAW:
+        case TCSETAF: {
+            // not a terminal
+            result = -ENOTTY;
             break;
         }
 
