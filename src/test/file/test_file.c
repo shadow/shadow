@@ -12,9 +12,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/uio.h>
+#include <termios.h>
 #include <unistd.h>
 
 #include "test/test_glib_helpers.h"
@@ -291,6 +293,35 @@ static void _test_dup() {
     assert_nonneg_errno(close(fd2));
 }
 
+static void _ioctl_check_enotty(int fd, int request) {
+    struct termios term = {0};
+    int rv = ioctl(fd, request, &term);
+    g_assert_cmpint(rv, ==, -1);
+    assert_errno_is(ENOTTY);
+}
+
+static void _test_ioctl_tty() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    int fd;
+
+    assert_nonneg_errno(fd = open(adf.name, O_RDWR));
+
+    // see 'man tty_ioctl' and 'man termios'
+    _ioctl_check_enotty(fd, TCGETS);
+    _ioctl_check_enotty(fd, TCSETS);
+    _ioctl_check_enotty(fd, TCSETSW);
+    _ioctl_check_enotty(fd, TCSETSF);
+    _ioctl_check_enotty(fd, TCGETA);
+    _ioctl_check_enotty(fd, TCSETA);
+    _ioctl_check_enotty(fd, TCSETAW);
+    _ioctl_check_enotty(fd, TCSETAF);
+
+    // in glibc, isatty() calls tcgetattr() which makes the ioctl call
+    int rv = isatty(fd);
+    g_assert_cmpint(rv, ==, 0);
+    assert_errno_is(ENOTTY);
+}
+
 static void _test_iov() {
     g_auto(AutoDeleteFile) adf = _create_auto_file();
 
@@ -483,6 +514,7 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/file/dir", _test_dir);
     g_test_add_func("/file/tmpfile", _test_tmpfile);
     g_test_add_func("/file/dup", _test_dup);
+    g_test_add_func("/file/ioctl_tty", _test_ioctl_tty);
 
     //    TODO: debug and fix iov test
     //    g_test_add_func("/file/iov", _test_iov);

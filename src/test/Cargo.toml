@@ -58,6 +58,10 @@ name = "test_sockopt"
 path = "socket/sockopt/test_sockopt.rs"
 
 [[bin]]
+name = "test_ioctl"
+path = "socket/ioctl/test_ioctl.rs"
+
+[[bin]]
 name = "test_random"
 path = "random/test_random.rs"
 
