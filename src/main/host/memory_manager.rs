@@ -1,19 +1,525 @@
-use super::syscall_types::{PluginPtr, SysCallReg};
+use super::syscall_types::{PluginPtr, SyscallError, SyscallResult, TypedPluginPtr};
 use super::thread::{CThread, Thread};
+use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
+use crate::utility::pod;
+use crate::utility::pod::Pod;
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
-use crate::utility::syscall;
-use log::{debug, info, log, warn};
+use log::*;
+use nix::errno::Errno;
 use nix::{fcntl, sys};
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::os::raw::c_void;
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::process;
+
+/// Low-level functions for reading plugin process memory.
+trait MemoryReaderTrait<T>: Debug
+where
+    T: Pod,
+{
+    fn as_ref(&self) -> Result<&[T], Errno>;
+    fn copy(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno>;
+    fn len(&self) -> usize;
+}
+
+/// Read-accessor to plugin memory.
+pub struct MemoryReader<'a, T> {
+    // Wrapping the trait object lets us implement traits such as std::io::Read.
+    // It can also be passed across the FFI boundary whereas trait objects cannot.
+    reader: Box<dyn MemoryReaderTrait<T> + 'a>,
+}
+
+impl<'a, T> MemoryReader<'a, T>
+where
+    T: Pod,
+{
+    fn new(reader: Box<dyn MemoryReaderTrait<T> + 'a>) -> Self {
+        Self { reader }
+    }
+
+    /// Access this reader's memory as a reference. May internally require a
+    /// copy, which is redundant if the data is going to be copied into Shadow's
+    /// memory anyway.
+    pub fn as_ref(&self) -> Result<&[T], Errno> {
+        (&*self.reader).as_ref()
+    }
+
+    /// Copies memory into `buf`, which must be of size `self.len()`
+    pub fn copy(&self, buf: &mut [T]) -> Result<(), Errno> {
+        assert_eq!(buf.len(), self.len());
+        self.reader.copy(0, buf)
+    }
+
+    /// Reads a single value. Panics if this reader contains more than 1 value.
+    /// Once const-generics are stabilized, this could return an array.
+    pub fn as_value(&self) -> Result<T, Errno> {
+        assert_eq!(self.reader.len(), 1);
+        // SAFETY: Any bit-pattern is valid for Pod.
+        let mut value = unsafe { [std::mem::MaybeUninit::uninit().assume_init()] };
+        self.reader.copy(0, &mut value)?;
+        Ok(value[0])
+    }
+
+    /// Number of items referenced by this reader.
+    pub fn len(&self) -> usize {
+        self.reader.len()
+    }
+}
+
+impl<'a> MemoryReader<'a, u8> {
+    /// Wraps `self` into a `MemoryReaderCursor`
+    pub fn cursor(self) -> MemoryReaderCursor<'a> {
+        MemoryReaderCursor {
+            reader: self,
+            offset: 0,
+        }
+    }
+}
+
+/// A MemoryReader that tracks a position within the region of memory it reads.
+/// Useful primarily via the std::io::Read trait.
+pub struct MemoryReaderCursor<'a> {
+    reader: MemoryReader<'a, u8>,
+    offset: usize,
+}
+
+impl<'a> std::io::Read for MemoryReaderCursor<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let reader_size = self.reader.len() - self.offset;
+        let toread = std::cmp::min(buf.len(), reader_size);
+        if toread == 0 {
+            return Ok(0);
+        }
+        self.reader
+            .reader
+            .copy(self.offset, &mut buf[..toread])
+            .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
+        self.offset += toread;
+        Ok(toread)
+    }
+}
+
+/// Shared implementation of seek for both MemoryReaderCursor and MemoryWriterCursor.
+fn seek_helper(offset: &mut usize, len: usize, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+    use std::io::SeekFrom;
+    let new_offset = match pos {
+        SeekFrom::Current(x) => *offset as i64 + x,
+        SeekFrom::End(x) => len as i64 + x,
+        SeekFrom::Start(x) => x as i64,
+    };
+    // Seeking before the beginning is an error (but seeking to or past the
+    // end isn't).
+    if new_offset < 0 {
+        return Err(std::io::Error::from_raw_os_error(Errno::EFAULT as i32));
+    }
+    *offset = new_offset as usize;
+    Ok(new_offset as u64)
+}
+
+impl<'a> std::io::Seek for MemoryReaderCursor<'a> {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        seek_helper(&mut self.offset, self.reader.len(), pos)
+    }
+}
+
+// Low level methods for writing to memory.
+trait MemoryWriterTrait<T>: Debug
+where
+    T: Pod,
+{
+    fn as_mut(&mut self) -> Result<&mut [T], Errno>;
+    fn as_mut_uninit(&mut self) -> Result<&mut [T], Errno>;
+    fn flush(&mut self) -> Result<(), Errno>;
+    fn copy(&mut self, offset: usize, buf: &[T]) -> Result<(), Errno>;
+    fn len(&self) -> usize;
+}
+
+/// Write-accessor to plugin memory.
+pub struct MemoryWriter<'a, T>
+where
+    T: Pod,
+{
+    // Wrapping the trait object lets us implement traits such as std::io::Read.
+    // It can also be passed across the FFI boundary (trait objects cannot).
+    writer: Box<dyn MemoryWriterTrait<T> + 'a>,
+    dirty: bool,
+}
+
+impl<'a, T> MemoryWriter<'a, T>
+where
+    T: Pod,
+{
+    fn new(writer: Box<dyn MemoryWriterTrait<T> + 'a>) -> Self {
+        Self {
+            writer,
+            dirty: false,
+        }
+    }
+
+    /// Access the data as a mutable slice. May require 2 copies: reading the
+    /// current contents of the region, and writing it back.
+    ///
+    /// Caller must later call `flush`, which writes back the data if needed.
+    pub fn as_mut(&mut self) -> Result<&mut [T], Errno> {
+        self.dirty = true;
+        (&mut *self.writer).as_mut()
+    }
+
+    /// Access the data as a write-only slice. May require an extra copy to write
+    /// back the contents of the buffer.
+    ///
+    /// Caller must later call `flush`, which writes back the data if needed.
+    pub fn as_mut_uninit(&mut self) -> Result<&mut [T], Errno> {
+        self.dirty = true;
+        self.writer.as_mut_uninit()
+    }
+
+    /// Write regions previously returned by `as_mut` or `as_mut_uninit` back to
+    /// process memory, if needed.
+    pub fn flush(&mut self) -> Result<(), Errno> {
+        self.writer.flush()?;
+        self.dirty = false;
+        Ok(())
+    }
+
+    /// Write the data from `buf`, which must be of size `self.len()`.
+    pub fn copy(&mut self, buf: &[T]) -> Result<(), Errno> {
+        assert_eq!(buf.len(), self.len());
+        self.writer.copy(0, buf)
+    }
+
+    /// Number of items referenced by this writer.
+    pub fn len(&self) -> usize {
+        self.writer.len()
+    }
+}
+
+impl<'a> MemoryWriter<'a, u8> {
+    /// Wraps this object in a `MemoryWriterCursor`.
+    pub fn cursor(self) -> MemoryWriterCursor<'a> {
+        MemoryWriterCursor {
+            writer: self,
+            offset: 0,
+        }
+    }
+}
+
+impl<'a, T> Drop for MemoryWriter<'a, T>
+where
+    T: Pod,
+{
+    fn drop(&mut self) {
+        // It's a bug to drop the writer without flushing and handling errors,
+        // but doesn't warrant crashing in production if the flush comples
+        // successfully.
+        debug_assert!(!self.dirty);
+        if self.dirty {
+            warn!("BUG: dropped writer without flushing");
+        }
+        // Crash if we're unable to flush, since proceeding could produce subtly
+        // wrong results.
+        self.flush().unwrap()
+    }
+}
+
+/// Wrapper around `MemoryWriter` that tracks a position within the buffer.
+/// Primarily for use with the `std::io::Write` trait.
+pub struct MemoryWriterCursor<'a> {
+    writer: MemoryWriter<'a, u8>,
+    offset: usize,
+}
+
+impl<'a> std::io::Write for MemoryWriterCursor<'a> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let writer_size = self.writer.len() - self.offset;
+        let towrite = std::cmp::min(buf.len(), writer_size);
+        if towrite == 0 {
+            return Ok(0);
+        }
+        self.writer
+            .writer
+            .copy(self.offset, &buf[..towrite])
+            .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
+        self.offset += towrite;
+        Ok(towrite)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer
+            .flush()
+            .map_err(|e| std::io::Error::from_raw_os_error(e as i32))
+    }
+}
+
+impl<'a> std::io::Seek for MemoryWriterCursor<'a> {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        seek_helper(&mut self.offset, self.writer.len(), pos)
+    }
+}
+
+/// A reader that copies data from the plugin process, resulting in extra copies
+/// when the data is accessed by reference.
+#[derive(Debug)]
+struct CopyingMemoryReader<'a, T>
+where
+    T: Pod,
+{
+    memory_manager: &'a MemoryManager,
+    readable_ptr: once_cell::unsync::OnceCell<Result<Box<[T]>, Errno>>,
+    ptr: TypedPluginPtr<T>,
+}
+
+impl<'a, T> CopyingMemoryReader<'a, T>
+where
+    T: Pod,
+{
+    fn new(memory_manager: &'a MemoryManager, ptr: TypedPluginPtr<T>) -> Self {
+        Self {
+            memory_manager,
+            readable_ptr: once_cell::unsync::OnceCell::new(),
+            ptr,
+        }
+    }
+
+    /// A pre-initialized reader.
+    fn new_with_memory(
+        memory_manager: &'a MemoryManager,
+        ptr: TypedPluginPtr<T>,
+        memory: Box<[T]>,
+    ) -> Self {
+        Self {
+            memory_manager,
+            readable_ptr: once_cell::unsync::OnceCell::from(Ok(memory)),
+            ptr,
+        }
+    }
+}
+
+impl<'a, T> MemoryReaderTrait<T> for CopyingMemoryReader<'a, T>
+where
+    T: Pod + Debug,
+{
+    fn as_ref(&self) -> Result<&[T], Errno> {
+        if self.len() == 0 {
+            debug!("as_ref returning empty slice");
+            return Ok(&mut [][..]);
+        }
+
+        match self
+            .readable_ptr
+            .get_or_init(|| -> Result<Box<[T]>, Errno> {
+                let mut vec = Vec::<T>::with_capacity(self.len());
+                // SAFETY: any value is valid for Pod.
+                unsafe { vec.set_len(self.len()) };
+                self.copy(0, &mut vec)?;
+                Ok(vec.into_boxed_slice())
+            }) {
+            // Convert box to slice
+            Ok(v) => Ok(v),
+            // Convert &Errno to Errno
+            Err(e) => Err(*e),
+        }
+    }
+
+    fn copy(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno> {
+        self.memory_manager.read_ptr(buf, self.ptr, offset)
+    }
+
+    fn len(&self) -> usize {
+        self.ptr.len()
+    }
+}
+
+#[derive(Debug)]
+struct CopyingMemoryWriter<'a, T>
+where
+    T: Pod + Debug,
+{
+    memory_manager: &'a mut MemoryManager,
+    writable_ptr: Option<Box<[T]>>,
+    ptr: TypedPluginPtr<T>,
+}
+
+impl<'a, T> CopyingMemoryWriter<'a, T>
+where
+    T: Pod + Debug,
+{
+    fn new(memory_manager: &'a mut MemoryManager, ptr: TypedPluginPtr<T>) -> Self {
+        Self {
+            memory_manager,
+            writable_ptr: None,
+            ptr,
+        }
+    }
+}
+
+impl<'a, T> MemoryWriterTrait<T> for CopyingMemoryWriter<'a, T>
+where
+    T: Pod + Debug,
+{
+    fn len(&self) -> usize {
+        self.ptr.len()
+    }
+
+    fn as_mut(&mut self) -> Result<&mut [T], Errno> {
+        if self.len() == 0 {
+            debug!("as_mut_init returning empty slice");
+            return Ok(&mut [][..]);
+        }
+
+        let mut vec = Vec::<T>::with_capacity(self.len());
+        // No need to initialize the contents of `vec`, since we're about to
+        // overwrite it.
+        // SAFETY: any bit pattern is valid Pod.
+        unsafe { vec.set_len(self.len()) };
+        self.memory_manager.read_ptr(&mut vec, self.ptr, 0)?;
+
+        debug_assert!(self.writable_ptr.is_none());
+        self.writable_ptr = Some(vec.into_boxed_slice());
+
+        Ok(&mut *self.writable_ptr.as_mut().unwrap())
+    }
+
+    fn as_mut_uninit(&mut self) -> Result<&mut [T], Errno> {
+        if self.len() == 0 {
+            debug!("as_mut_init returning empty slice");
+            return Ok(&mut [][..]);
+        }
+
+        let mut vec = Vec::<T>::with_capacity(self.len());
+        // Ideally we'd use `vec.set_len` and not initialize this memory at all.
+        // That can lead to some non-deterministic simulation behavior though if the caller doesn't
+        // actually write to the whole buffer. So instead we zero-initialize.
+        vec.resize(self.len(), pod::zeroed::<T>());
+
+        debug_assert!(self.writable_ptr.is_none());
+        self.writable_ptr = Some(vec.into_boxed_slice());
+
+        Ok(&mut *self.writable_ptr.as_mut().unwrap())
+    }
+
+    fn copy(&mut self, offset: usize, buf: &[T]) -> Result<(), Errno> {
+        self.memory_manager.write_ptr(buf, self.ptr, offset)
+    }
+
+    fn flush(&mut self) -> Result<(), Errno> {
+        if self.writable_ptr.is_none() {
+            return Ok(());
+        }
+        let mut boxed = self.writable_ptr.take().unwrap();
+
+        self.memory_manager.write_ptr(&mut *boxed, self.ptr, 0)
+    }
+}
+
+/// A reader that accesses plugin memory directly.
+#[derive(Debug)]
+struct MappedMemoryReader<'a, T>
+where
+    T: Pod,
+{
+    memory: &'a [T],
+    ptr: TypedPluginPtr<T>,
+}
+
+impl<'a, T> MappedMemoryReader<'a, T>
+where
+    T: Pod,
+{
+    fn new(memory_manager: &'a MemoryManager, ptr: TypedPluginPtr<T>) -> Option<Self> {
+        let u8ptr = ptr.cast::<u8>().unwrap();
+        if let Some(mapper) = &memory_manager.memory_mapper {
+            if let Some(cptr) = mapper.get_mapped_ptr(u8ptr.ptr(), u8ptr.len()) {
+                let memory =
+                    unsafe { std::slice::from_raw_parts::<T>(cptr as *const T, ptr.len()) };
+                return Some(Self { memory, ptr });
+            }
+        }
+        None
+    }
+}
+
+impl<'a, T> MemoryReaderTrait<T> for MappedMemoryReader<'a, T>
+where
+    T: Pod + Debug,
+{
+    fn len(&self) -> usize {
+        self.memory.len()
+    }
+
+    fn as_ref(&self) -> Result<&[T], Errno> {
+        Ok(self.memory)
+    }
+
+    fn copy(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno> {
+        buf.copy_from_slice(&self.memory[offset..offset + buf.len()]);
+        Ok(())
+    }
+}
+
+/// A writer that accesses plugin memory directly.
+#[derive(Debug)]
+struct MappedMemoryWriter<'a, T>
+where
+    T: Pod,
+{
+    memory: &'a mut [T],
+    ptr: TypedPluginPtr<T>,
+}
+
+impl<'a, T> MappedMemoryWriter<'a, T>
+where
+    T: Pod,
+{
+    fn new(memory_manager: &'a mut MemoryManager, ptr: TypedPluginPtr<T>) -> Option<Self> {
+        let u8ptr = ptr.cast::<u8>().unwrap();
+
+        if let Some(mapper) = &memory_manager.memory_mapper {
+            if let Some(cptr) = mapper.get_mapped_ptr(u8ptr.ptr(), u8ptr.len()) {
+                let memory =
+                    unsafe { std::slice::from_raw_parts_mut::<T>(cptr as *mut T, ptr.len()) };
+                return Some(Self { memory, ptr });
+            }
+        }
+        None
+    }
+}
+
+impl<'a, T> MemoryWriterTrait<T> for MappedMemoryWriter<'a, T>
+where
+    T: Pod + Debug,
+{
+    fn len(&self) -> usize {
+        self.memory.len()
+    }
+
+    fn as_mut(&mut self) -> Result<&mut [T], Errno> {
+        Ok(self.memory)
+    }
+
+    fn as_mut_uninit(&mut self) -> Result<&mut [T], Errno> {
+        Ok(self.memory)
+    }
+
+    fn copy(&mut self, offset: usize, buf: &[T]) -> Result<(), Errno> {
+        let available = self.memory.len() - offset;
+        assert!(buf.len() <= available);
+        self.memory[offset..offset + buf.len()].copy_from_slice(buf);
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), Errno> {
+        Ok(())
+    }
+}
 
 static HEAP_PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
 static STACK_PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
@@ -29,19 +535,6 @@ fn test_validate_void_size() {
 
 fn page_size() -> usize {
     unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize }
-}
-
-/// TODO: why doesn't `cargo test` run doc tests?
-/// ```
-/// let ps = page_size();
-/// assert_eq!(page_of(0), 0);
-/// assert_eq!(page_of(page_size()-1), 0);
-/// assert_eq!(page_of(page_size()), page_size());
-/// assert_eq!(page_of(2*page_size()), 2*page_size());
-/// assert_eq!(page_of(2*page_size())-1, page_size());
-/// ```
-fn page_of(p: usize) -> usize {
-    p & !(page_size() - 1)
 }
 
 // Represents a region of plugin memory.
@@ -76,30 +569,20 @@ fn log_regions<It: Iterator<Item = (Interval, Region)>>(level: log::Level, regio
 
 /// Manages the address-space for a plugin process.
 ///
-/// The MemoryManager's primary purpose is to make plugin process's memory directly accessible to
+/// The MemoryMapper's primary purpose is to make plugin process's memory directly accessible to
 /// Shadow. It does this by tracking what regions of program memory in the plugin are mapped to
 /// what (analagous to /proc/<pid>/maps), and *remapping* parts of the plugin's address space into
 /// a shared memory-file, which is also mapped into Shadow.
 ///
-/// Shadow provides several methods for allowing Shadow to access the plugin's memory, such as
-/// `get_readable_ptr`. If the corresponding region of plugin memory is mapped into the shared
-/// memory file, the corresponding Shadow pointer is returned. If not, then, it'll fall back to
-/// (generally slower) Thread APIs.
-///
 /// For the MemoryManager to maintain consistent state, and to remap regions of memory it knows how
 /// to remap, Shadow must delegate handling of mman-related syscalls (such as `mmap`) to the
-/// MemoryManager via its `handle_*` methods.
-pub struct MemoryManager {
+/// MemoryMapper via its `handle_*` methods.
+#[derive(Debug)]
+struct MemoryMapper {
     shm_file: ShmFile,
     regions: IntervalMap<Region>,
 
-    misses_by_path: HashMap<String, u32>,
-
-    /// The part of the stack that we've already remapped in the plugin.
-    /// We initially mmap enough *address space* in Shadow to accomodate a large stack, but we only
-    /// lazily allocate it. This is both to prevent wasting memory, and to handle that we can't map
-    /// the current "working area" of the stack in thread-preload.
-    stack_copied: Interval,
+    misses_by_path: RefCell<HashMap<String, u32>>,
 
     /// The bounds of the heap. Note that before the plugin's first `brk` syscall this will be a
     /// zero-sized interval (though in the case of thread-preload that'll have already happened
@@ -108,6 +591,7 @@ pub struct MemoryManager {
 }
 
 /// Shared memory file into which we relocate parts of the plugin's address space.
+#[derive(Debug)]
 struct ShmFile {
     shm_file: File,
     shm_plugin_fd: i32,
@@ -157,54 +641,53 @@ impl ShmFile {
 
     /// Copy data from the plugin's address space into the file. `interval` must be contained within
     /// `region_interval`. It can be the whole region, but notably for the stack we only copy in
-    /// parts of the region as needed.
+    /// the part of the stack that's already allocated and initialized.
     fn copy_into_file(
         &self,
-        thread: &mut impl Thread,
+        memory_manager: &MemoryManager,
         region_interval: &Interval,
         region: &Region,
         interval: &Interval,
     ) {
-        assert!(!region.shadow_base.is_null());
-        assert!(region_interval.contains(&interval.start));
-        let size = interval.end - interval.start;
-        if size == 0 {
+        if interval.len() == 0 {
             return;
         }
+        assert!(!region.shadow_base.is_null());
+        assert!(region_interval.contains(&interval.start));
         assert!(region_interval.contains(&(interval.end - 1)));
         let offset = interval.start - region_interval.start;
-        let src = unsafe {
-            std::slice::from_raw_parts(
-                thread
-                    .get_readable_ptr(PluginPtr::from(interval.start), size)
-                    .unwrap() as *const u8,
-                size,
+        let dst = unsafe {
+            std::slice::from_raw_parts_mut(
+                region.shadow_base.add(offset) as *mut u8,
+                interval.len(),
             )
         };
-        let dst = unsafe {
-            std::slice::from_raw_parts_mut(region.shadow_base.add(offset) as *mut u8, size)
-        };
-        dst.copy_from_slice(src);
+        let reader = memory_manager.reader(
+            TypedPluginPtr::<u8>::new(PluginPtr::from(interval.start), interval.len()).unwrap(),
+        );
+        reader.copy(dst).unwrap();
     }
 
     /// Map the given range of the file into the plugin's address space.
-    fn mmap_into_plugin(&self, thread: &mut impl Thread, interval: &Interval, prot: i32) {
-        thread
-            .native_mmap(
-                PluginPtr::from(interval.start),
-                interval.len(),
-                prot,
-                libc::MAP_SHARED | libc::MAP_FIXED,
-                self.shm_plugin_fd,
-                interval.start as i64,
-            )
-            .unwrap();
+    fn mmap_into_plugin(&self, interval: &Interval, prot: i32) {
+        Worker::with_active_thread_mut(|thread| {
+            thread
+                .native_mmap(
+                    PluginPtr::from(interval.start),
+                    interval.len(),
+                    prot,
+                    libc::MAP_SHARED | libc::MAP_FIXED,
+                    self.shm_plugin_fd,
+                    interval.start as i64,
+                )
+                .unwrap();
+        });
     }
 }
 
-fn get_regions(pid: libc::pid_t) -> IntervalMap<Region> {
+fn get_regions(pid: nix::unistd::Pid) -> IntervalMap<Region> {
     let mut regions = IntervalMap::new();
-    for mapping in proc_maps::mappings_for_pid(pid).unwrap() {
+    for mapping in proc_maps::mappings_for_pid(pid.as_raw()).unwrap() {
         let mut prot = 0;
         if mapping.read {
             prot |= libc::PROT_READ;
@@ -234,6 +717,7 @@ fn get_regions(pid: libc::pid_t) -> IntervalMap<Region> {
 fn get_heap(
     shm_file: &mut ShmFile,
     thread: &mut impl Thread,
+    memory_manager: &MemoryManager,
     regions: &mut IntervalMap<Region>,
 ) -> Interval {
     // If there's already a region labeled heap, we use those bounds.
@@ -261,8 +745,8 @@ fn get_heap(
     shm_file.alloc(&heap_interval);
     let mut heap_region = heap_region.clone();
     heap_region.shadow_base = shm_file.mmap_into_shadow(&heap_interval, HEAP_PROT);
-    shm_file.copy_into_file(thread, &heap_interval, &heap_region, &heap_interval);
-    shm_file.mmap_into_plugin(thread, &heap_interval, HEAP_PROT);
+    shm_file.copy_into_file(memory_manager, &heap_interval, &heap_region, &heap_interval);
+    shm_file.mmap_into_plugin(&heap_interval, HEAP_PROT);
 
     {
         let mutations = regions.insert(heap_interval.clone(), heap_region);
@@ -273,16 +757,19 @@ fn get_heap(
     heap_interval
 }
 
-/// Finds where the stack is located and reserves space in shadow's address space for the maximum
-/// size to which the stack can grow. *Doesn't* reserve space in the shared memory file; this is
-/// done on-demand as it grows and is accessed.
-fn map_stack(shm_file: &ShmFile, regions: &mut IntervalMap<Region>) -> usize {
+/// Finds where the stack is located and maps the region bounding the maximum
+/// stack size.
+fn map_stack(
+    memory_manager: &mut MemoryManager,
+    shm_file: &mut ShmFile,
+    regions: &mut IntervalMap<Region>,
+) {
     // Find the current stack region. There should be exactly one.
     let mut iter = regions
         .iter()
         .filter(|(_i, r)| r.original_path == Some(MappingPath::InitialStack));
     // Get the stack region, panicking if none.
-    let (interval, region) = iter.next().unwrap();
+    let (current_stack_bounds, region) = iter.next().unwrap();
     // Panic if there's more than one.
     assert!(iter.next().is_none());
 
@@ -293,28 +780,40 @@ fn map_stack(shm_file: &ShmFile, regions: &mut IntervalMap<Region>) -> usize {
     // file yet.
     let max_stack_size: usize = 8 * (1 << 20); // 8 MB.
 
-    let stack_end = interval.end;
-    let stack_begin = stack_end - max_stack_size;
-    let stack_bounds = stack_begin..stack_end;
+    let max_stack_end = current_stack_bounds.end;
+    let max_stack_begin = max_stack_end - max_stack_size;
+    let max_stack_bounds = max_stack_begin..max_stack_end;
     let mut region = region.clone();
-    region.shadow_base = shm_file.mmap_into_shadow(&stack_bounds, STACK_PROT);
+    region.shadow_base = shm_file.mmap_into_shadow(&max_stack_bounds, STACK_PROT);
+
+    // Allocate as much space as we might need.
+    shm_file.alloc(&max_stack_bounds);
+
+    // Copy the current contents.
+    shm_file.copy_into_file(
+        memory_manager,
+        &max_stack_bounds,
+        &region,
+        &current_stack_bounds,
+    );
+
+    shm_file.mmap_into_plugin(&max_stack_bounds, STACK_PROT);
 
     {
-        let mutations = regions.insert(stack_begin..stack_begin + max_stack_size, region);
+        let mutations = regions.insert(max_stack_bounds, region);
         // Should have overwritten the old stack region and not affected any others.
         assert!(mutations.len() == 1);
     }
-
-    stack_end
 }
 
-impl Drop for MemoryManager {
+impl Drop for MemoryMapper {
     fn drop(&mut self) {
-        if self.misses_by_path.is_empty() {
+        let misses = self.misses_by_path.borrow();
+        if misses.is_empty() {
             info!("MemoryManager misses: None");
         } else {
             info!("MemoryManager misses: (consider extending MemoryManager to remap regions with a high miss count)");
-            for (path, count) in self.misses_by_path.iter() {
+            for (path, count) in misses.iter() {
                 info!("\t{} in {}", count, path);
             }
         }
@@ -333,10 +832,8 @@ impl Drop for MemoryManager {
     }
 }
 
-impl MemoryManager {
-    pub fn new(thread: &mut impl Thread) -> MemoryManager {
-        let system_pid = thread.get_system_pid();
-
+impl MemoryMapper {
+    fn new(memory_manager: &mut MemoryManager, thread: &mut impl Thread) -> MemoryMapper {
         let shm_path = format!(
             "/dev/shm/shadow_memory_manager_{}_{}_{}",
             process::id(),
@@ -360,27 +857,23 @@ impl MemoryManager {
 
         // The file can no longer be accessed by its original path, but *can*
         // be accessed via the file-descriptor link in /proc.
-        let shm_path = format!("/proc/{}/fd/{}", process::id(), shm_file.as_raw_fd());
+        let shm_path = format!("/proc/{}/fd/{}\0", process::id(), shm_file.as_raw_fd());
 
         let shm_plugin_fd = {
-            let path_buf_len = shm_path.len() + 1;
-            let path_buf_plugin_ptr: PluginPtr = thread.malloc_plugin_ptr(path_buf_len).unwrap();
-            let path_buf_raw: *mut c_void = thread
-                .get_writeable_ptr(
-                    path_buf_plugin_ptr,
-                    std::mem::size_of::<u8>() * path_buf_len,
-                )
+            let path_buf_plugin_ptr = TypedPluginPtr::new(
+                thread.malloc_plugin_ptr(shm_path.len()).unwrap(),
+                shm_path.len(),
+            )
+            .unwrap();
+            memory_manager
+                .writer(path_buf_plugin_ptr)
+                .copy(shm_path.as_bytes())
                 .unwrap();
-            let path_buf: &mut [u8] =
-                unsafe { std::slice::from_raw_parts_mut(path_buf_raw as *mut u8, path_buf_len) };
-            path_buf[..shm_path.len()].copy_from_slice(shm_path.as_bytes());
-            path_buf[shm_path.len()] = b'\0';
-            thread.flush();
             let shm_plugin_fd = thread
-                .native_open(path_buf_plugin_ptr, libc::O_RDWR | libc::O_CLOEXEC, 0)
+                .native_open(path_buf_plugin_ptr.ptr(), libc::O_RDWR | libc::O_CLOEXEC, 0)
                 .unwrap();
             thread
-                .free_plugin_ptr(path_buf_plugin_ptr, path_buf_len)
+                .free_plugin_ptr(path_buf_plugin_ptr.ptr(), path_buf_plugin_ptr.len())
                 .unwrap();
             shm_plugin_fd
         };
@@ -390,16 +883,15 @@ impl MemoryManager {
             shm_plugin_fd,
             len: 0,
         };
-        let mut regions = get_regions(system_pid);
-        let heap = get_heap(&mut shm_file, thread, &mut regions);
-        let stack_end = map_stack(&shm_file, &mut regions);
+        let mut regions = get_regions(memory_manager.pid);
+        let heap = get_heap(&mut shm_file, thread, memory_manager, &mut regions);
+        map_stack(memory_manager, &mut shm_file, &mut regions);
 
-        MemoryManager {
+        MemoryMapper {
             shm_file,
             regions,
-            misses_by_path: HashMap::new(),
+            misses_by_path: RefCell::new(HashMap::new()),
             heap,
-            stack_copied: stack_end..stack_end,
         }
     }
 
@@ -504,7 +996,7 @@ impl MemoryManager {
     /// MemoryManager's shared memory file for fast access. Currently only private anonymous
     /// mappings are remapped.
     #[allow(clippy::too_many_arguments)]
-    pub fn handle_mmap(
+    fn handle_mmap(
         &mut self,
         thread: &mut impl Thread,
         addr: PluginPtr,
@@ -513,10 +1005,10 @@ impl MemoryManager {
         flags: i32,
         fd: i32,
         offset: i64,
-    ) -> nix::Result<PluginPtr> {
+    ) -> SyscallResult {
         let result = thread.native_mmap(addr, length, prot, flags, fd, offset)?;
         if length == 0 {
-            return Ok(result);
+            return Ok(result.into());
         }
         let addr = usize::from(result);
         let interval = addr..(addr + length);
@@ -554,7 +1046,7 @@ impl MemoryManager {
             // but doing so lets the OS decide if it's a legal mapping, and where to put it.
             self.shm_file.alloc(&interval);
             region.shadow_base = self.shm_file.mmap_into_shadow(&interval, prot);
-            self.shm_file.mmap_into_plugin(thread, &interval, prot);
+            self.shm_file.mmap_into_plugin(&interval, prot);
         }
 
         // TODO: We *could* handle file mappings and some shared mappings as well. Doesn't make
@@ -567,23 +1059,23 @@ impl MemoryManager {
             assert!(mutations.is_empty());
         }
 
-        Ok(result)
+        Ok(result.into())
     }
 
     /// Shadow should delegate a plugin's call to munmap to this method.
     ///
     /// Executes the actual mmap operation in the plugin, updates the MemoryManager's understanding of
     /// the plugin's address space, and unmaps the affected memory from Shadow if it was mapped in.
-    pub fn handle_munmap(
+    fn handle_munmap(
         &mut self,
         thread: &mut impl Thread,
         addr: PluginPtr,
         length: usize,
-    ) -> nix::Result<()> {
+    ) -> SyscallResult {
         debug!("handle_munmap({:?}, {})", addr, length);
         thread.native_munmap(addr, length)?;
         if length == 0 {
-            return Ok(());
+            return Ok(0.into());
         }
 
         // Clear out metadata and mappings for anything unmapped.
@@ -592,7 +1084,7 @@ impl MemoryManager {
         let mutations = self.regions.clear(start..end);
         self.unmap_mutations(mutations);
 
-        Ok(())
+        Ok(0.into())
     }
 
     /// Shadow should delegate a plugin's call to mremap to this method.
@@ -600,7 +1092,7 @@ impl MemoryManager {
     /// Executes the actual mremap operation in the plugin, updates the MemoryManager's
     /// understanding of the plugin's address space, and updates Shadow's mappings of that region
     /// if applicable.
-    pub fn handle_mremap(
+    fn handle_mremap(
         &mut self,
         thread: &mut impl Thread,
         old_address: PluginPtr,
@@ -608,7 +1100,7 @@ impl MemoryManager {
         new_size: usize,
         flags: i32,
         new_address: PluginPtr,
-    ) -> nix::Result<PluginPtr> {
+    ) -> SyscallResult {
         let new_address =
             thread.native_mremap(old_address, old_size, new_size, flags, new_address)?;
         let old_interval = usize::from(old_address)..(usize::from(old_address) + old_size);
@@ -630,7 +1122,7 @@ impl MemoryManager {
             assert_eq!(region.shadow_base, std::ptr::null_mut());
             let mutations = self.regions.insert(new_interval, region);
             self.unmap_mutations(mutations);
-            return Ok(new_address);
+            return Ok(new_address.into());
         }
 
         // Clear and retrieve the old mapping.
@@ -670,8 +1162,7 @@ impl MemoryManager {
                 self.shm_file.alloc(&new_interval);
 
                 // Remap the region in the child to the new position in the mem file.
-                self.shm_file
-                    .mmap_into_plugin(thread, &new_interval, region.prot);
+                self.shm_file.mmap_into_plugin(&new_interval, region.prot);
 
                 // Map the new location into Shadow.
                 let new_shadow_base = self.shm_file.mmap_into_shadow(&new_interval, region.prot);
@@ -722,24 +1213,20 @@ impl MemoryManager {
         let mutations = self.regions.insert(new_interval, region);
         assert_eq!(mutations.len(), 0);
 
-        Ok(new_address)
+        Ok(new_address.into())
     }
 
     /// Execute the requested `brk` and update our mappings accordingly. May invalidate outstanding
     /// pointers. (Rust won't allow mutable methods such as this one to be called with outstanding
     /// borrowed references).
-    pub fn handle_brk(
-        &mut self,
-        thread: &mut impl Thread,
-        ptr: PluginPtr,
-    ) -> Result<PluginPtr, i32> {
+    fn handle_brk(&mut self, thread: &mut impl Thread, ptr: PluginPtr) -> SyscallResult {
         let requested_brk = usize::from(ptr);
 
         // On error, brk syscall returns current brk (end of heap). The only errors we specifically
         // handle is trying to set the end of heap before the start. In practice this case is
         // generally triggered with a NULL argument to get the current brk value.
         if requested_brk < self.heap.start {
-            return Ok(PluginPtr::from(self.heap.end));
+            return Ok(PluginPtr::from(self.heap.end).into());
         }
 
         // Unclear how to handle a non-page-size increment. panic for now.
@@ -748,7 +1235,7 @@ impl MemoryManager {
         // Not aware of this happening in practice, but handle this case specifically so we can
         // assume it's not the case below.
         if requested_brk == self.heap.end {
-            return Ok(ptr);
+            return Ok(ptr.into());
         }
 
         let opt_heap_interval_and_region = self.regions.get(self.heap.start);
@@ -762,7 +1249,7 @@ impl MemoryManager {
                     assert_eq!(self.heap.start, self.heap.end);
                     self.shm_file.alloc(&new_heap);
                     let shadow_base = self.shm_file.mmap_into_shadow(&new_heap, HEAP_PROT);
-                    self.shm_file.mmap_into_plugin(thread, &new_heap, HEAP_PROT);
+                    self.shm_file.mmap_into_plugin(&new_heap, HEAP_PROT);
                     shadow_base
                 }
                 Some((_, heap_region)) => {
@@ -836,7 +1323,7 @@ impl MemoryManager {
         }
         self.heap = new_heap;
 
-        Ok(PluginPtr::from(requested_brk))
+        Ok(PluginPtr::from(requested_brk).into())
     }
 
     /// Shadow should delegate a plugin's call to mprotect to this method.
@@ -850,13 +1337,13 @@ impl MemoryManager {
     /// protections when the plugin calls mprotect. However, mirroring the plugin's protection
     /// settings can help catch bugs earlier. Shadow should never have reason to access plugin
     /// memory in a way that the plugin itself can't.
-    pub fn handle_mprotect(
+    fn handle_mprotect(
         &mut self,
         thread: &mut impl Thread,
         addr: PluginPtr,
         size: usize,
         prot: i32,
-    ) -> nix::Result<()> {
+    ) -> SyscallResult {
         debug!("mprotect({:?}, {}, {:?})", addr, size, prot);
         thread.native_mprotect(addr, size, prot)?;
         let protflags = sys::mman::ProtFlags::from_bits(prot).unwrap();
@@ -972,51 +1459,11 @@ impl MemoryManager {
                 }
             }
         }
-        Ok(())
+        Ok(0.into())
     }
 
-    /// Extend the portion of the stack that we've mapped downward to include `src`.
-    ///
-    /// This is carefuly designed *not* to invalidate any outstanding borrowed references or
-    /// pointers, since otherwise a caller trying to marshall multiple syscall arguments might
-    /// invalidate the first argument when marshalling the second. (While the Rust API currently
-    /// prevents there from being any outstanding references, the C API does not).
-    fn extend_stack(&mut self, thread: &mut impl Thread, src: usize) {
-        let start = page_of(src);
-        let stack_extension = start..self.stack_copied.start;
-        debug!(
-            "extending stack from {:x} to {:x}",
-            stack_extension.end, stack_extension.start
-        );
-
-        let (mapped_stack_interval, mapped_stack_region) =
-            self.regions.get(self.stack_copied.start - 1).unwrap();
-        assert!(mapped_stack_interval.contains(&src));
-
-        self.shm_file.alloc(&stack_extension);
-        self.shm_file.copy_into_file(
-            thread,
-            &mapped_stack_interval,
-            &mapped_stack_region,
-            &stack_extension,
-        );
-
-        // update stack bounds
-        self.stack_copied.start = start;
-
-        // Map into the Plugin's space, overwriting any previous mapping.
-        self.shm_file
-            .mmap_into_plugin(thread, &self.stack_copied, STACK_PROT);
-    }
-
-    /// Get a raw pointer to the plugin's memory, if it's been remapped into Shadow (or if we can do
-    /// so now, in the case of the stack).
-    fn get_mapped_ptr(
-        &mut self,
-        thread: &mut impl Thread,
-        src: PluginPtr,
-        n: usize,
-    ) -> Option<*mut c_void> {
+    /// Get a raw pointer to the plugin's memory, if it's been remapped into Shadow.
+    fn get_mapped_ptr_int(&self, src: PluginPtr, n: usize) -> Option<*mut c_void> {
         if n == 0 {
             // Length zero pointer should never be deref'd. Just return null.
             warn!("returning NULL for zero-length pointer");
@@ -1042,77 +1489,310 @@ impl MemoryManager {
         let offset = src - interval.start;
         let ptr = (region.shadow_base as usize + offset) as *mut c_void;
 
-        if region.original_path == Some(MappingPath::InitialStack)
-            && !self.stack_copied.contains(&src)
-        {
-            // src is in the stack, but in the portion we haven't mapped into shadow yet. Extend
-            // it. Note that `ptr` calculated above will still be correct, since `extend_stack`
-            // never moves shadow's mapping of the stack.
-            self.extend_stack(thread, src);
-        }
-
         Some(ptr)
     }
 
+    /// Get a raw pointer to the plugin's memory, if it's been remapped into Shadow.
+    fn get_mapped_ptr(&self, src: PluginPtr, n: usize) -> Option<*mut c_void> {
+        let res = self.get_mapped_ptr_int(src, n);
+        if res.is_none() {
+            self.inc_misses(src)
+        }
+        res
+    }
+
     /// Counts accesses where we had to fall back to the thread's (slow) apis.
-    fn inc_misses(&mut self, addr: PluginPtr) {
+    fn inc_misses(&self, addr: PluginPtr) {
         let key = match self.regions.get(usize::from(addr)) {
             Some((_, original_path)) => format!("{:?}", original_path),
             None => "not found".to_string(),
         };
-        let counter = self.misses_by_path.entry(key).or_insert(0);
+        let mut misses = self.misses_by_path.borrow_mut();
+        let counter = misses.entry(key).or_insert(0);
         *counter += 1;
     }
+}
 
-    /// Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
-    /// Never returns NULL.
-    unsafe fn get_readable_ptr(
-        &mut self,
-        thread: &mut impl Thread,
-        plugin_src: PluginPtr,
-        n: usize,
-    ) -> nix::Result<*const c_void> {
-        if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
-            Ok(p)
-        } else {
-            // Fall back to reading via the thread.
-            self.inc_misses(plugin_src);
-            thread.get_readable_ptr(plugin_src, n)
+/// Manages memory of a plugin process.
+#[derive(Debug)]
+pub struct MemoryManager {
+    // Native pid of the plugin process.
+    pid: nix::unistd::Pid,
+    // Lazily initialized MemoryMapper.
+    memory_mapper: Option<MemoryMapper>,
+}
+
+impl MemoryManager {
+    pub fn new(pid: nix::unistd::Pid) -> Self {
+        Self {
+            pid,
+            memory_mapper: None,
         }
     }
 
-    /// Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
-    /// Never returns NULL.
-    unsafe fn get_writeable_ptr(
-        &mut self,
-        thread: &mut impl Thread,
-        plugin_src: PluginPtr,
-        n: usize,
-    ) -> nix::Result<*mut c_void> {
-        if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
-            Ok(p)
-        } else {
-            // Fall back to reading via the thread.
-            self.inc_misses(plugin_src);
-            thread.get_writeable_ptr(plugin_src, n)
+    /// Initialize the MemoryMapper, allowing for more efficient access. Needs a
+    /// running thread.
+    pub fn init_mapper(&mut self, thread: &mut impl Thread) {
+        assert!(self.memory_mapper.is_none());
+        self.memory_mapper = Some(MemoryMapper::new(self, thread));
+    }
+
+    /// Whether the internal MemoryMapper has been initialized.
+    pub fn has_mapper(&self) -> bool {
+        self.memory_mapper.is_some()
+    }
+
+    /// Create a read accessor for the specified plugin memory.
+    pub fn reader<'a, T>(&'a self, ptr: TypedPluginPtr<T>) -> MemoryReader<'a, T>
+    where
+        T: Pod + Debug,
+    {
+        let reader_trait: Box<dyn MemoryReaderTrait<T> + 'a> =
+            if let Some(mapped_reader) = MappedMemoryReader::new(self, ptr) {
+                Box::new(mapped_reader)
+            } else {
+                Box::new(CopyingMemoryReader::new(self, ptr))
+            };
+        MemoryReader::new(reader_trait)
+    }
+
+    /// Create a write accessor for the specified plugin memory.
+    pub fn writer<'a, T>(&'a mut self, ptr: TypedPluginPtr<T>) -> MemoryWriter<'a, T>
+    where
+        T: Pod + Debug,
+    {
+        let writer_trait: Box<dyn MemoryWriterTrait<T> + 'a> =
+            if let Some(_) = MappedMemoryWriter::new(self, ptr) {
+                // If we directly return the contents of the `Option` created in the
+                // outer scope, the borrow-checker gets confused and doesn't realize
+                // the first mutable borrow of `self` has gone out of scope when we
+                // try to do another mutable borrow in the `else` clause. Returning
+                // a borrowed reference that was created in this inner scope makes
+                // it happy.
+                //
+                //  Alternatively we could store a pointer to `self` at the beginning
+                //  of this function, and dereference it to create the
+                //  CopyingMemoryWriter.
+                // https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=3de34f0eee732c998e05f27b1a55f3cd
+                Box::new(MappedMemoryWriter::new(self, ptr).unwrap())
+            } else {
+                Box::new(CopyingMemoryWriter::new(self, ptr))
+            };
+        MemoryWriter::new(writer_trait)
+    }
+
+    fn handle_brk(&mut self, thread: &mut impl Thread, ptr: PluginPtr) -> SyscallResult {
+        match &mut self.memory_mapper {
+            Some(mm) => mm.handle_brk(thread, ptr),
+            None => Err(SyscallError::Native),
         }
     }
 
-    /// Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
-    /// Never returns NULL.
-    unsafe fn get_mutable_ptr(
+    #[allow(clippy::too_many_arguments)]
+    fn handle_mmap(
         &mut self,
         thread: &mut impl Thread,
-        plugin_src: PluginPtr,
-        n: usize,
-    ) -> nix::Result<*mut c_void> {
-        if let Some(p) = self.get_mapped_ptr(thread, plugin_src, n) {
-            Ok(p)
-        } else {
-            // Fall back to reading via the thread.
-            self.inc_misses(plugin_src);
-            thread.get_mutable_ptr(plugin_src, n)
+        addr: PluginPtr,
+        length: usize,
+        prot: i32,
+        flags: i32,
+        fd: i32,
+        offset: i64,
+    ) -> SyscallResult {
+        match &mut self.memory_mapper {
+            Some(mm) => mm.handle_mmap(thread, addr, length, prot, flags, fd, offset),
+            None => Err(SyscallError::Native),
         }
+    }
+
+    fn handle_munmap(
+        &mut self,
+        thread: &mut impl Thread,
+        addr: PluginPtr,
+        length: usize,
+    ) -> SyscallResult {
+        match &mut self.memory_mapper {
+            Some(mm) => mm.handle_munmap(thread, addr, length),
+            None => Err(SyscallError::Native),
+        }
+    }
+
+    fn handle_mremap(
+        &mut self,
+        thread: &mut impl Thread,
+        old_address: PluginPtr,
+        old_size: usize,
+        new_size: usize,
+        flags: i32,
+        new_address: PluginPtr,
+    ) -> SyscallResult {
+        match &mut self.memory_mapper {
+            Some(mm) => {
+                mm.handle_mremap(thread, old_address, old_size, new_size, flags, new_address)
+            }
+            None => Err(SyscallError::Native),
+        }
+    }
+
+    fn handle_mprotect(
+        &mut self,
+        thread: &mut impl Thread,
+        addr: PluginPtr,
+        size: usize,
+        prot: i32,
+    ) -> SyscallResult {
+        match &mut self.memory_mapper {
+            Some(mm) => mm.handle_mprotect(thread, addr, size, prot),
+            None => Err(SyscallError::Native),
+        }
+    }
+
+    // Low level helper for reading directly from `src`. Panics if the
+    // MemoryManager's process isn't currently active.
+    fn read_ptr<T: Pod + Debug>(
+        &self,
+        dst: &mut [T],
+        src: TypedPluginPtr<T>,
+        offset: usize,
+    ) -> Result<(), Errno> {
+        let src = src.cast::<u8>().unwrap();
+        let dst = pod::to_u8_slice_mut(dst);
+        let offset = offset * std::mem::size_of::<T>();
+        assert!(dst.len() <= src.len() - offset);
+
+        let toread = dst.len();
+        debug!("read_ptr reading {} bytes", dst.len());
+        let local = [nix::sys::uio::IoVec::from_mut_slice(dst)];
+        let remote = [nix::sys::uio::RemoteIoVec {
+            base: usize::from(src.ptr()) + offset,
+            len: toread,
+        }];
+
+        // While the documentation for process_vm_readv says to use the pid, in
+        // practice it needs to be the tid of a still-running thread. i.e. using the
+        // pid after the thread group leader has exited will fail.
+        let (active_tid, active_pid) = Worker::with_active_thread(|thread| {
+            (
+                nix::unistd::Pid::from_raw(thread.get_system_tid()),
+                nix::unistd::Pid::from_raw(thread.get_system_pid()),
+            )
+        });
+        // Don't access another process's memory.
+        assert_eq!(active_pid, self.pid);
+
+        let nwritten = nix::sys::uio::process_vm_readv(active_tid, &local, &remote)
+            .map_err(|e| e.as_errno().unwrap())?;
+
+        // There shouldn't be any partial writes with a single remote iovec.
+        assert_eq!(nwritten, toread);
+        Ok(())
+    }
+
+    /// Creates a reader for a NULL-terminated string starting at `src`. Succeeds
+    /// if the NULL terminated string starting at the beginning of `src` is
+    /// accessible, even if later pages of `src` are inaccessible.
+    fn string_reader<'a>(&'a self, src: TypedPluginPtr<u8>) -> Result<MemoryReader<'a, u8>, Errno> {
+        let mut dst = Vec::<u8>::with_capacity(src.len());
+        // SAFETY: any values are legal for u8.
+        unsafe { dst.set_len(src.len()) };
+
+        // process_vm_readv reads at iovec granularity. To handle the case where
+        // the user-supplied pointer is near the end of a readable region, we split
+        // at page boundaries. i.e. succeed if we successfully read a null-terminated
+        // string, even if some of the region after that is inaccessible.
+        let mut remotes = Vec::new();
+        let mut toread = dst.len();
+        let mut address = usize::from(src.ptr());
+        while toread > 0 {
+            let mut this_toread = toread % page_size();
+            if this_toread == 0 {
+                this_toread = page_size();
+            }
+            let this_toread = std::cmp::min(this_toread, toread);
+            remotes.push(nix::sys::uio::RemoteIoVec {
+                base: address,
+                len: this_toread,
+            });
+            toread -= this_toread;
+            address += this_toread;
+        }
+        let local = [nix::sys::uio::IoVec::from_mut_slice(&mut dst)];
+
+        // While the documentation for process_vm_readv says to use the pid, in
+        // practice it needs to be the tid of a still-running thread. i.e. using the
+        // pid after the thread group leader has exited will fail.
+        let (active_tid, active_pid) = Worker::with_active_thread(|thread| {
+            (
+                nix::unistd::Pid::from_raw(thread.get_system_tid()),
+                nix::unistd::Pid::from_raw(thread.get_system_pid()),
+            )
+        });
+        // Don't access another process's memory.
+        assert_eq!(active_pid, self.pid);
+
+        let nread = nix::sys::uio::process_vm_readv(active_tid, &local, &remotes)
+            .map_err(|e| e.as_errno().unwrap())?;
+
+        dst.truncate(nread);
+        let nullpos = dst.iter().position(|c| *c == 0);
+        match nullpos {
+            Some(i) => dst.truncate(i + 1),
+            None => {
+                return if dst.len() == src.len() {
+                    // We couldn't read the whole region specified, and there
+                    // wasn't a full string in the prefix.
+                    Err(Errno::EFAULT)
+                } else {
+                    // We could read the whole region, but the string extended
+                    // beyond it.
+                    Err(Errno::ENAMETOOLONG)
+                };
+            }
+        };
+
+        Ok(MemoryReader::new(Box::new(
+            CopyingMemoryReader::new_with_memory(self, src, dst.into_boxed_slice()),
+        )))
+    }
+
+    // Low level helper for writing directly to `dst`. Panics if the
+    // MemoryManager's process isn't currently active.
+    fn write_ptr<T: Pod + Debug>(
+        &mut self,
+        src: &[T],
+        dst: TypedPluginPtr<T>,
+        offset: usize,
+    ) -> Result<(), Errno> {
+        let dst = dst.cast::<u8>().unwrap();
+        let src = pod::to_u8_slice(src);
+        let offset = offset * std::mem::size_of::<T>();
+        assert!(src.len() <= dst.len() - offset);
+
+        let towrite = src.len();
+        debug!("write_ptr writing {} bytes", towrite);
+        let local = [nix::sys::uio::IoVec::from_slice(src)];
+        let remote = [nix::sys::uio::RemoteIoVec {
+            base: usize::from(dst.ptr()) + offset,
+            len: towrite,
+        }];
+
+        // While the documentation for process_vm_writev says to use the pid, in
+        // practice it needs to be the tid of a still-running thread. i.e. using the
+        // pid after the thread group leader has exited will fail.
+        let (active_tid, active_pid) = Worker::with_active_thread(|thread| {
+            (
+                nix::unistd::Pid::from_raw(thread.get_system_tid()),
+                nix::unistd::Pid::from_raw(thread.get_system_pid()),
+            )
+        });
+        // Don't access another process's memory.
+        assert_eq!(active_pid, self.pid);
+
+        let nwritten = nix::sys::uio::process_vm_writev(active_tid, &local, &remote)
+            .map_err(|e| e.as_errno().unwrap())?;
+        // There shouldn't be any partial writes with a single remote iovec.
+        assert_eq!(nwritten, towrite);
+        Ok(())
     }
 }
 
@@ -1122,8 +1802,10 @@ mod export {
     /// # Safety
     /// * `thread` must point to a valid object.
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_new(thread: *mut c::Thread) -> *mut MemoryManager {
-        Box::into_raw(Box::new(MemoryManager::new(&mut CThread::new(thread))))
+    pub unsafe extern "C" fn memorymanager_new(pid: libc::pid_t) -> *mut MemoryManager {
+        Box::into_raw(Box::new(MemoryManager::new(nix::unistd::Pid::from_raw(
+            pid,
+        ))))
     }
 
     /// # Safety
@@ -1133,58 +1815,167 @@ mod export {
         mm.as_mut().map(|mm| Box::from_raw(mm));
     }
 
-    /// Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
-    /// # Safety
-    /// * `mm` and `thread` must point to valid objects.
+    /// Initialize the MemoryMapper if it isn't already initialized. `thread` must
+    /// be running and ready to make native syscalls.
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_getReadablePtr(
+    pub unsafe extern "C" fn memorymanager_initMapperIfNeeded(
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
+    ) {
+        let memory_manager = memory_manager.as_mut().unwrap();
+        if !memory_manager.has_mapper() {
+            let mut thread = CThread::new(thread);
+            memory_manager.init_mapper(&mut thread)
+        }
+    }
+
+    /// Get a read-accessor to the specified plugin memory.
+    /// Must be freed via `memorymanager_freeReader`.
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_getReader<'a>(
+        memory_manager: *mut MemoryManager,
         plugin_src: c::PluginPtr,
         n: usize,
+    ) -> *mut MemoryReader<'a, u8> {
+        let memory_manager = memory_manager.as_mut().unwrap();
+        let plugin_src: PluginPtr = plugin_src.into();
+        Box::into_raw(Box::new(
+            memory_manager.reader(TypedPluginPtr::new(plugin_src.into(), n).unwrap()),
+        ))
+    }
+
+    /// Get a write-accessor to the specified plugin memory.
+    /// Must be freed via `memorymanager_flushAndFreeWriter`.
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_getStringReader<'a>(
+        memory_manager: *mut MemoryManager,
+        plugin_src: c::PluginPtr,
+        n: usize,
+        reader_out: *mut *mut MemoryReader<'a, u8>,
+        strlen: *mut usize,
+    ) -> i32 {
+        let memory_manager = memory_manager.as_mut().unwrap();
+        let plugin_src = TypedPluginPtr::new(plugin_src.into(), n).unwrap();
+        let reader = match memory_manager.string_reader(plugin_src) {
+            Err(e) => return -(e as i32),
+            Ok(r) => r,
+        };
+        if !strlen.is_null() {
+            *strlen = reader.as_ref().unwrap().len();
+        }
+        *reader_out = Box::into_raw(Box::new(reader));
+        0
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_freeReader<'a>(reader: *mut MemoryReader<'a, u8>) {
+        Box::from_raw(reader);
+    }
+
+    /// Get a pointer to this reader's memory.
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_getReadablePtr<'a>(
+        reader: *mut MemoryReader<'a, u8>,
     ) -> *const c_void {
-        let mut thread = CThread::new(thread);
-        let memory_manager = memory_manager.as_mut().unwrap();
-        let plugin_src: PluginPtr = plugin_src.into();
-        memory_manager
-            .get_readable_ptr(&mut thread, plugin_src, n)
-            .unwrap()
+        let reader = &*reader;
+        match reader.as_ref() {
+            Ok(p) => p.as_ptr() as *const c_void,
+            Err(_) => std::ptr::null(),
+        }
     }
 
-    /// Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
-    /// # Safety
-    /// * `mm` and `thread` must point to valid objects.
+    /// Copy data from this reader's memory.
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_getWriteablePtr(
+    pub unsafe extern "C" fn memorymanager_readPtr(
         memory_manager: *mut MemoryManager,
-        thread: *mut c::Thread,
-        plugin_src: c::PluginPtr,
+        dst: *mut c_void,
+        src: c::PluginPtr,
         n: usize,
-    ) -> *mut c_void {
-        let mut thread = CThread::new(thread);
+    ) -> i32 {
         let memory_manager = memory_manager.as_mut().unwrap();
-        let plugin_src: PluginPtr = plugin_src.into();
-        memory_manager
-            .get_writeable_ptr(&mut thread, plugin_src, n)
-            .unwrap()
+        let src = TypedPluginPtr::<u8>::new(src.into(), n).unwrap();
+        let dst = std::slice::from_raw_parts_mut(dst as *mut u8, n);
+        match memory_manager.reader(src).copy(dst) {
+            Ok(_) => 0,
+            Err(_) => {
+                debug!("Couldn't read {:?} into {:?}", src, dst);
+                nix::errno::Errno::EFAULT as i32
+            }
+        }
     }
 
-    /// Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
-    /// # Safety
-    /// * `mm` and `thread` must point to valid objects.
+    /// Get a write-accessor to the specified plugin memory.
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_getMutablePtr(
+    pub unsafe extern "C" fn memorymanager_getWriter<'a>(
         memory_manager: *mut MemoryManager,
-        thread: *mut c::Thread,
         plugin_src: c::PluginPtr,
         n: usize,
-    ) -> *mut c_void {
-        let mut thread = CThread::new(thread);
+    ) -> *mut MemoryWriter<'a, u8> {
         let memory_manager = memory_manager.as_mut().unwrap();
         let plugin_src: PluginPtr = plugin_src.into();
-        memory_manager
-            .get_mutable_ptr(&mut thread, plugin_src, n)
-            .unwrap()
+        let rv = Box::into_raw(Box::new(
+            memory_manager.writer(TypedPluginPtr::new(plugin_src.into(), n).unwrap()),
+        ));
+        rv
+    }
+
+    /// Write-back any previously returned writable memory, and free the writer.
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_flushAndFreeWriter<'a>(
+        writer: *mut MemoryWriter<'a, u8>,
+    ) -> i32 {
+        let mut writer = Box::from_raw(writer);
+        // No way to safely recover here if the flush fails.
+        if writer.flush().is_ok() {
+            0
+        } else {
+            warn!("Failed to flush writes");
+            -(nix::errno::Errno::EFAULT as i32)
+        }
+    }
+
+    /// Write data to this writer's memory.
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_writePtr(
+        memory_manager: *mut MemoryManager,
+        dst: c::PluginPtr,
+        src: *const c_void,
+        n: usize,
+    ) -> i32 {
+        let memory_manager = memory_manager.as_mut().unwrap();
+        let dst = TypedPluginPtr::<u8>::new(dst.into(), n).unwrap();
+        let src = std::slice::from_raw_parts(src as *const u8, n);
+        match memory_manager.writer(dst).copy(src) {
+            Ok(_) => 0,
+            Err(_) => {
+                debug!("Couldn't write {:?} into {:?}", dst, src);
+                nix::errno::Errno::EFAULT as i32
+            }
+        }
+    }
+
+    /// Get a writable pointer to this writer's memory. Initial contents are unspecified.
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_getWritablePtr<'a>(
+        writer: *mut MemoryWriter<'a, u8>,
+    ) -> *mut c_void {
+        let writer = &mut *writer;
+        match writer.as_mut_uninit() {
+            Ok(p) => p.as_ptr() as *mut c_void,
+            Err(_) => std::ptr::null_mut(),
+        }
+    }
+
+    /// Get a readable and writable pointer to this writer's memory.
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_getMutablePtr<'a>(
+        writer: *mut MemoryWriter<'a, u8>,
+    ) -> *mut c_void {
+        let writer = &mut *writer;
+        match writer.as_mut() {
+            Ok(p) => p.as_ptr() as *mut c_void,
+            Err(_) => std::ptr::null_mut(),
+        }
     }
 
     /// Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
@@ -1193,16 +1984,12 @@ mod export {
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
         plugin_src: c::PluginPtr,
-    ) -> c::SysCallReg {
+    ) -> c::SysCallReturn {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(
-            match memory_manager.handle_brk(&mut thread, PluginPtr::from(plugin_src)) {
-                Ok(p) => SysCallReg::from(p),
-                // negative errno
-                Err(e) => SysCallReg::from(-e),
-            },
-        )
+        memory_manager
+            .handle_brk(&mut thread, PluginPtr::from(plugin_src))
+            .into()
     }
 
     /// Fully handles the `mmap` syscall
@@ -1216,11 +2003,11 @@ mod export {
         flags: i32,
         fd: i32,
         offset: i64,
-    ) -> c::SysCallReg {
+    ) -> c::SysCallReturn {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(SysCallReg::from(syscall::result_to_raw_return_value(
-            memory_manager.handle_mmap(
+        memory_manager
+            .handle_mmap(
                 &mut thread,
                 PluginPtr::from(addr),
                 len,
@@ -1228,8 +2015,8 @@ mod export {
                 flags,
                 fd,
                 offset,
-            ),
-        )))
+            )
+            .into()
     }
 
     /// Fully handles the `munmap` syscall
@@ -1239,12 +2026,12 @@ mod export {
         thread: *mut c::Thread,
         addr: c::PluginPtr,
         len: usize,
-    ) -> c::SysCallReg {
+    ) -> c::SysCallReturn {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(SysCallReg::from(syscall::result_to_raw_return_value(
-            memory_manager.handle_munmap(&mut thread, PluginPtr::from(addr), len),
-        )))
+        memory_manager
+            .handle_munmap(&mut thread, PluginPtr::from(addr), len)
+            .into()
     }
 
     #[no_mangle]
@@ -1256,19 +2043,19 @@ mod export {
         new_size: usize,
         flags: i32,
         new_addr: c::PluginPtr,
-    ) -> c::SysCallReg {
+    ) -> c::SysCallReturn {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(SysCallReg::from(syscall::result_to_raw_return_value(
-            memory_manager.handle_mremap(
+        memory_manager
+            .handle_mremap(
                 &mut thread,
                 PluginPtr::from(old_addr),
                 old_size,
                 new_size,
                 flags,
                 PluginPtr::from(new_addr),
-            ),
-        )))
+            )
+            .into()
     }
 
     #[no_mangle]
@@ -1278,11 +2065,11 @@ mod export {
         addr: c::PluginPtr,
         size: usize,
         prot: i32,
-    ) -> c::SysCallReg {
+    ) -> c::SysCallReturn {
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
-        c::SysCallReg::from(SysCallReg::from(syscall::result_to_raw_return_value(
-            memory_manager.handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot),
-        )))
+        memory_manager
+            .handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot)
+            .into()
     }
 }

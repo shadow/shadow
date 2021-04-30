@@ -1,9 +1,8 @@
 use atomic_refcell::AtomicRefCell;
-use log::warn;
 use std::sync::Arc;
 
 use crate::cshadow as c;
-use crate::host::syscall_condition::SysCallCondition;
+use crate::host::syscall_types::SyscallResult;
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
 
 pub mod pipe;
@@ -31,98 +30,6 @@ impl<T> SyncSendPointer<T> {
     /// Get a mutable reference to the pointer.
     pub fn ptr_ref(&mut self) -> &mut *mut T {
         &mut self.0
-    }
-}
-
-// Calling all of these errors is stretching the semantics of 'error' a bit,
-// but it makes for fluent programming in syscall handlers using the `?` operator.
-#[derive(Debug, PartialEq, Eq)]
-pub enum SyscallError {
-    Errno(nix::errno::Errno),
-    Cond(SysCallCondition),
-    Native,
-}
-
-pub type SyscallResult = Result<crate::host::syscall_types::SysCallReg, SyscallError>;
-
-impl From<c::SysCallReturn> for SyscallResult {
-    fn from(r: c::SysCallReturn) -> Self {
-        match r.state {
-            c::SysCallReturnState_SYSCALL_DONE => {
-                match crate::utility::syscall::raw_return_value_to_result(unsafe {
-                    r.retval.as_i64
-                }) {
-                    Ok(r) => Ok(r),
-                    Err(e) => Err(e.into()),
-                }
-            }
-            // SAFETY: XXX: We're assuming this points to a valid SysCallCondition.
-            c::SysCallReturnState_SYSCALL_BLOCK => Err(SyscallError::Cond(unsafe {
-                SysCallCondition::consume_from_c(r.cond)
-            })),
-            c::SysCallReturnState_SYSCALL_NATIVE => Err(SyscallError::Native),
-            _ => panic!("Unexpected c::SysCallReturn state {}", r.state),
-        }
-    }
-}
-
-impl From<SyscallResult> for c::SysCallReturn {
-    fn from(syscall_return: SyscallResult) -> Self {
-        match syscall_return {
-            Ok(r) => Self {
-                state: c::SysCallReturnState_SYSCALL_DONE,
-                retval: r.into(),
-                cond: std::ptr::null_mut(),
-            },
-            Err(SyscallError::Errno(e)) => Self {
-                state: c::SysCallReturnState_SYSCALL_DONE,
-                retval: c::SysCallReg {
-                    as_i64: -(e as i64),
-                },
-                cond: std::ptr::null_mut(),
-            },
-            Err(SyscallError::Cond(c)) => Self {
-                state: c::SysCallReturnState_SYSCALL_BLOCK,
-                retval: c::SysCallReg { as_i64: 0 },
-                cond: c.into_inner(),
-            },
-            Err(SyscallError::Native) => Self {
-                state: c::SysCallReturnState_SYSCALL_NATIVE,
-                retval: c::SysCallReg { as_i64: 0 },
-                cond: std::ptr::null_mut(),
-            },
-        }
-    }
-}
-
-impl From<nix::Error> for SyscallError {
-    fn from(e: nix::Error) -> Self {
-        let errno = e.as_errno();
-        let errno = errno.unwrap_or_else(|| {
-            let default = nix::errno::ENOTSUP;
-            warn!("Mapping err {} to {}", e, default);
-            default
-        });
-        SyscallError::Errno(errno)
-    }
-}
-
-impl From<nix::errno::Errno> for SyscallError {
-    fn from(e: nix::errno::Errno) -> Self {
-        SyscallError::Errno(e)
-    }
-}
-
-impl From<std::io::Error> for SyscallError {
-    fn from(e: std::io::Error) -> Self {
-        match std::io::Error::raw_os_error(&e) {
-            Some(e) => SyscallError::Errno(nix::errno::from_i32(e)),
-            None => {
-                let default = nix::errno::ENOTSUP;
-                warn!("Mapping error {} to {}", e, default);
-                SyscallError::Errno(default)
-            }
-        }
     }
 }
 
@@ -673,6 +580,8 @@ impl std::fmt::Debug for c::SysCallReturn {
 mod tests {
     use super::*;
     use crate::host::syscall::Trigger;
+    use crate::host::syscall_condition::SysCallCondition;
+    use crate::host::syscall_types::SyscallError;
 
     #[test]
     fn test_syscallresult_roundtrip() {

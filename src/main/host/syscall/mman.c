@@ -140,13 +140,13 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     PluginPtr pluginBufPtr = thread_mallocPluginPtr(sys->thread, maplen);
 
     /* Get a writeable pointer that can be flushed to the plugin. */
-    char* pluginBuf = thread_getWriteablePtr(sys->thread, pluginBufPtr, maplen);
+    char* pluginBuf = process_getWriteablePtr(sys->process, pluginBufPtr, maplen);
 
     /* Copy the path. */
     snprintf(pluginBuf, maplen, "%s", mmap_path);
 
     /* Flush the buffer to the plugin. */
-    thread_flushPtrs(sys->thread);
+    process_flushPtrs(sys->process);
 
     /* Get original flags that were used to open the file,
        but be careful not to try re-creating or truncating it. */
@@ -208,15 +208,18 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
 
     // Delegate execution of the mmap itself to the memorymanager.
     MemoryManager* mm = process_getMemoryManager(sys->process);
-    SysCallReg result =
-        mm ? memorymanager_handleMmap(mm, sys->thread, addrPtr, len, prot, flags, pluginFD, offset)
-           : (SysCallReg){.as_i64 = thread_nativeSyscall(
-                              sys->thread, SYS_mmap, addrPtr, len, prot, flags, pluginFD, offset)};
+    SysCallReturn result =
+        memorymanager_handleMmap(mm, sys->thread, addrPtr, len, prot, flags, pluginFD, offset);
+    if (result.state == SYSCALL_NATIVE) {
+        result = (SysCallReturn){.state = SYSCALL_DONE,
+                                 .retval = thread_nativeSyscall(sys->thread, SYS_mmap, addrPtr, len,
+                                                                prot, flags, pluginFD, offset)};
+    }
 
     debug("Plugin-native mmap syscall at plugin addr %p with plugin fd %i for "
           "%zu bytes returned %p (%s)",
-          (void*)addrPtr.val, pluginFD, len, (void*)result.as_u64,
-          strerror(syscall_rawReturnValueToErrno(result.as_i64)));
+          (void*)addrPtr.val, pluginFD, len, (void*)result.retval.as_u64,
+          strerror(syscall_rawReturnValueToErrno(result.retval.as_i64)));
 
     /* Close the file we asked them to open. */
     if (pluginFD >= 0) {
@@ -224,7 +227,7 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
     }
 
     /* Done! Return their result back to them. */
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    return result;
 }
 
 ///////////////////////////////////////////////////////////
@@ -236,9 +239,7 @@ SysCallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
 
     // Delegate to the memoryManager.
     MemoryManager* mm = process_getMemoryManager(sys->process);
-    return mm ? (SysCallReturn){.state = SYSCALL_DONE,
-                                .retval = memorymanager_handleBrk(mm, sys->thread, newBrk)}
-              : (SysCallReturn){.state = SYSCALL_NATIVE};
+    return memorymanager_handleBrk(mm, sys->thread, newBrk);
 }
 
 SysCallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) {
@@ -273,10 +274,8 @@ SysCallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args
 
     // Delegate to the memoryManager.
     MemoryManager* mm = process_getMemoryManager(sys->process);
-    return mm ? (SysCallReturn){.state = SYSCALL_DONE,
-                                .retval = memorymanager_handleMremap(
-                                    mm, sys->thread, old_addr, old_size, new_size, flags, new_addr)}
-              : (SysCallReturn){.state = SYSCALL_NATIVE};
+    return memorymanager_handleMremap(
+        mm, sys->thread, old_addr, old_size, new_size, flags, new_addr);
 }
 
 SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args) {
@@ -285,9 +284,7 @@ SysCallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args
 
     // Delegate to the memoryManager.
     MemoryManager* mm = process_getMemoryManager(sys->process);
-    return mm ? (SysCallReturn){.state = SYSCALL_DONE,
-                                .retval = memorymanager_handleMunmap(mm, sys->thread, addr, len)}
-              : (SysCallReturn){.state = SYSCALL_NATIVE};
+    return memorymanager_handleMunmap(mm, sys->thread, addr, len);
 }
 
 SysCallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* args) {
@@ -297,8 +294,5 @@ SysCallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* ar
 
     // Delegate to the memoryManager.
     MemoryManager* mm = process_getMemoryManager(sys->process);
-    return mm ? (SysCallReturn){.state = SYSCALL_DONE,
-                                .retval =
-                                    memorymanager_handleMprotect(mm, sys->thread, addr, len, prot)}
-              : (SysCallReturn){.state = SYSCALL_NATIVE};
+    return memorymanager_handleMprotect(mm, sys->thread, addr, len, prot);
 }

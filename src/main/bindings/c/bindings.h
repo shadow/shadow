@@ -23,6 +23,39 @@
 #include "main/host/thread.h"
 #include "main/host/tracker.h"
 
+// A queue of byte chunks.
+typedef struct ByteQueue ByteQueue;
+
+// Run real applications over simulated networks.
+typedef struct CliOptions CliOptions;
+
+typedef struct CompatDescriptor CompatDescriptor;
+
+// Options contained in a configuration file.
+typedef struct ConfigFileOptions ConfigFileOptions;
+
+// Shadow configuration options after processing command-line and configuration file options.
+typedef struct ConfigOptions ConfigOptions;
+
+// The main counter object that maps individual keys to count values.
+typedef struct Counter Counter;
+
+typedef struct HostOptions HostOptions;
+
+// Manages memory of a plugin process.
+typedef struct MemoryManager MemoryManager;
+
+// Read-accessor to plugin memory.
+typedef struct MemoryReader_u8 MemoryReader_u8;
+
+// Write-accessor to plugin memory.
+typedef struct MemoryWriter_u8 MemoryWriter_u8;
+
+// An opaque type used when passing `*const AtomicRefCell<File>` to C.
+typedef struct PosixFileArc PosixFileArc;
+
+typedef struct ProcessOptions ProcessOptions;
+
 void rust_logging_init(void);
 
 struct CliOptions *clioptions_parse(int argc, const char *const *argv);
@@ -211,70 +244,95 @@ void posixfile_removeListener(const struct PosixFileArc *file, StatusListener *l
 
 // # Safety
 // * `thread` must point to a valid object.
-struct MemoryManager *memorymanager_new(Thread *thread);
+struct MemoryManager *memorymanager_new(pid_t pid);
 
 // # Safety
 // * `mm` must point to a valid object.
 void memorymanager_free(struct MemoryManager *mm);
 
-// Get a readable pointer to the plugin's memory via mapping, or via the thread APIs.
-// # Safety
-// * `mm` and `thread` must point to valid objects.
-const void *memorymanager_getReadablePtr(struct MemoryManager *memory_manager,
-                                         Thread *thread,
-                                         PluginPtr plugin_src,
-                                         uintptr_t n);
+// Initialize the MemoryMapper if it isn't already initialized. `thread` must
+// be running and ready to make native syscalls.
+void memorymanager_initMapperIfNeeded(struct MemoryManager *memory_manager, Thread *thread);
 
-// Get a writeable pointer to the plugin's memory via mapping, or via the thread APIs.
-// # Safety
-// * `mm` and `thread` must point to valid objects.
-void *memorymanager_getWriteablePtr(struct MemoryManager *memory_manager,
-                                    Thread *thread,
-                                    PluginPtr plugin_src,
-                                    uintptr_t n);
+// Get a read-accessor to the specified plugin memory.
+// Must be freed via `memorymanager_freeReader`.
+struct MemoryReader_u8 *memorymanager_getReader(struct MemoryManager *memory_manager,
+                                                PluginPtr plugin_src,
+                                                uintptr_t n);
 
-// Get a mutable pointer to the plugin's memory via mapping, or via the thread APIs.
-// # Safety
-// * `mm` and `thread` must point to valid objects.
-void *memorymanager_getMutablePtr(struct MemoryManager *memory_manager,
-                                  Thread *thread,
-                                  PluginPtr plugin_src,
-                                  uintptr_t n);
+// Get a write-accessor to the specified plugin memory.
+// Must be freed via `memorymanager_flushAndFreeWriter`.
+int32_t memorymanager_getStringReader(struct MemoryManager *memory_manager,
+                                      PluginPtr plugin_src,
+                                      uintptr_t n,
+                                      struct MemoryReader_u8 **reader_out,
+                                      uintptr_t *strlen);
+
+void memorymanager_freeReader(struct MemoryReader_u8 *reader);
+
+// Get a pointer to this reader's memory.
+const void *memorymanager_getReadablePtr(struct MemoryReader_u8 *reader);
+
+// Copy data from this reader's memory.
+int32_t memorymanager_readPtr(struct MemoryManager *memory_manager,
+                              void *dst,
+                              PluginPtr src,
+                              uintptr_t n);
+
+// Get a write-accessor to the specified plugin memory.
+struct MemoryWriter_u8 *memorymanager_getWriter(struct MemoryManager *memory_manager,
+                                                PluginPtr plugin_src,
+                                                uintptr_t n);
+
+// Write-back any previously returned writable memory, and free the writer.
+int32_t memorymanager_flushAndFreeWriter(struct MemoryWriter_u8 *writer);
+
+// Write data to this writer's memory.
+int32_t memorymanager_writePtr(struct MemoryManager *memory_manager,
+                               PluginPtr dst,
+                               const void *src,
+                               uintptr_t n);
+
+// Get a writable pointer to this writer's memory. Initial contents are unspecified.
+void *memorymanager_getWritablePtr(struct MemoryWriter_u8 *writer);
+
+// Get a readable and writable pointer to this writer's memory.
+void *memorymanager_getMutablePtr(struct MemoryWriter_u8 *writer);
 
 // Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
-SysCallReg memorymanager_handleBrk(struct MemoryManager *memory_manager,
-                                   Thread *thread,
-                                   PluginPtr plugin_src);
+SysCallReturn memorymanager_handleBrk(struct MemoryManager *memory_manager,
+                                      Thread *thread,
+                                      PluginPtr plugin_src);
 
 // Fully handles the `mmap` syscall
-SysCallReg memorymanager_handleMmap(struct MemoryManager *memory_manager,
-                                    Thread *thread,
-                                    PluginPtr addr,
-                                    uintptr_t len,
-                                    int32_t prot,
-                                    int32_t flags,
-                                    int32_t fd,
-                                    int64_t offset);
+SysCallReturn memorymanager_handleMmap(struct MemoryManager *memory_manager,
+                                       Thread *thread,
+                                       PluginPtr addr,
+                                       uintptr_t len,
+                                       int32_t prot,
+                                       int32_t flags,
+                                       int32_t fd,
+                                       int64_t offset);
 
 // Fully handles the `munmap` syscall
-SysCallReg memorymanager_handleMunmap(struct MemoryManager *memory_manager,
-                                      Thread *thread,
-                                      PluginPtr addr,
-                                      uintptr_t len);
+SysCallReturn memorymanager_handleMunmap(struct MemoryManager *memory_manager,
+                                         Thread *thread,
+                                         PluginPtr addr,
+                                         uintptr_t len);
 
-SysCallReg memorymanager_handleMremap(struct MemoryManager *memory_manager,
-                                      Thread *thread,
-                                      PluginPtr old_addr,
-                                      uintptr_t old_size,
-                                      uintptr_t new_size,
-                                      int32_t flags,
-                                      PluginPtr new_addr);
+SysCallReturn memorymanager_handleMremap(struct MemoryManager *memory_manager,
+                                         Thread *thread,
+                                         PluginPtr old_addr,
+                                         uintptr_t old_size,
+                                         uintptr_t new_size,
+                                         int32_t flags,
+                                         PluginPtr new_addr);
 
-SysCallReg memorymanager_handleMprotect(struct MemoryManager *memory_manager,
-                                        Thread *thread,
-                                        PluginPtr addr,
-                                        uintptr_t size,
-                                        int32_t prot);
+SysCallReturn memorymanager_handleMprotect(struct MemoryManager *memory_manager,
+                                           Thread *thread,
+                                           PluginPtr addr,
+                                           uintptr_t size,
+                                           int32_t prot);
 
 SysCallReturn rustsyscallhandler_close(SysCallHandler *sys, const SysCallArgs *args);
 

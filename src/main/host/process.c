@@ -25,6 +25,7 @@
 #include <stddef.h>
 #include <sys/file.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <syscall.h>
@@ -137,6 +138,10 @@ struct _Process {
     /* Native pid of the process */
     pid_t nativePid;
 
+    // Pending MemoryReaders and MemoryWriters
+    GArray* memoryWriters;
+    GArray* memoryReaders;
+
     gint referenceCount;
     MAGIC_DECLARE;
 };
@@ -194,8 +199,12 @@ static void _process_reapThread(Process* process, Thread* thread) {
             error("Couldn't clear child tid; See code comments.");
             abort();
         }
+
         *clear_child_tid = 0;
-        process_flushPtrs(process);
+
+        // *don't* flush here. The write may not succeed if the current thread
+        // is dead. Leave it pending for the next thread in the process to
+        // flush.
 
         FutexTable* ftable = host_getFutexTable(process->host);
         utility_assert(ftable);
@@ -449,6 +458,8 @@ static void _process_start(Process* proc) {
     /* exec the process */
     thread_run(mainThread, proc->argv, proc->envv, proc->workingDir);
     proc->nativePid = thread_getNativePid(mainThread);
+    proc->memoryManager = memorymanager_new(proc->nativePid);
+
 #ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
@@ -700,6 +711,9 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
     proc->referenceCount = 1;
     proc->isExiting = false;
 
+    proc->memoryWriters = g_array_new(FALSE, FALSE, sizeof(MemoryWriter_u8*));
+    proc->memoryReaders = g_array_new(FALSE, FALSE, sizeof(MemoryReader_u8*));
+
     worker_count_allocation(Process);
 
     return proc;
@@ -707,6 +721,10 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
 
 static void _process_free(Process* proc) {
     MAGIC_ASSERT(proc);
+
+    process_flushPtrs(proc);
+    g_array_free(proc->memoryReaders, false);
+    g_array_free(proc->memoryWriters, false);
 
     _process_terminate_threads(proc);
     if (proc->threads) {
@@ -837,42 +855,56 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
 
 int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n) {
     MAGIC_ASSERT(proc);
-    if (n == 0) {
-        return 0;
-    }
-    Thread* thread = worker_getActiveThread();
-    if (proc->memoryManager) {
-        const void* mapped = memorymanager_getReadablePtr(proc->memoryManager, thread, src, n);
-        memcpy(dst, mapped, n);
-        return 0;
-    } else {
-        return thread_readPtr(thread, dst, src, n);
-    }
+
+    // Disallow additional references while there's a mutable reference.
+    utility_assert(proc->memoryWriters->len == 0);
+
+    return memorymanager_readPtr(proc->memoryManager, dst, src, n);
 }
 
 int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_t n) {
     MAGIC_ASSERT(proc);
-    if (n == 0) {
-        return 0;
-    }
-    Thread* thread = worker_getActiveThread();
-    if (proc->memoryManager) {
-        void* mapped = memorymanager_getWriteablePtr(proc->memoryManager, thread, dst, n);
-        memcpy(mapped, src, n);
-        return 0;
-    } else {
-        return thread_writePtr(thread, dst, src, n);
-    }
+
+    // Disallow additional references when trying to get a mutable reference.
+    utility_assert(proc->memoryWriters->len == 0);
+    utility_assert(proc->memoryReaders->len == 0);
+
+    return memorymanager_writePtr(proc->memoryManager, dst, src, n);
 }
 
 const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-    Thread* thread = worker_getActiveThread();
-    if (proc->memoryManager) {
-        return memorymanager_getReadablePtr(proc->memoryManager, thread, plugin_src, n);
+
+    // Disallow additional references while there's a mutable reference.
+    utility_assert(proc->memoryWriters->len == 0);
+
+    MemoryReader_u8* reader = memorymanager_getReader(proc->memoryManager, plugin_src, n);
+    const void* rv = memorymanager_getReadablePtr(reader);
+    if (rv == NULL) {
+        memorymanager_freeReader(reader);
     } else {
-        return thread_getReadablePtr(thread, plugin_src, n);
+        g_array_append_val(proc->memoryReaders, reader);
     }
+    return rv;
+}
+
+int process_getReadableString(Process* proc, PluginPtr plugin_src, size_t n, const char** str,
+                              size_t* strlen) {
+    MAGIC_ASSERT(proc);
+
+    // Disallow additional references while there's a mutable reference.
+    utility_assert(proc->memoryWriters->len == 0);
+
+    MemoryReader_u8* reader = NULL;
+    int res = memorymanager_getStringReader(proc->memoryManager, plugin_src, n, &reader, strlen);
+    if (res != 0) {
+        return res;
+    }
+    *str = memorymanager_getReadablePtr(reader);
+    utility_assert(str);
+    g_array_append_val(proc->memoryReaders, reader);
+
+    return 0;
 }
 
 // Returns a writable pointer corresponding to the named region. The initial
@@ -881,12 +913,19 @@ const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-    Thread* thread = worker_getActiveThread();
-    if (proc->memoryManager) {
-        return memorymanager_getWriteablePtr(proc->memoryManager, thread, plugin_src, n);
+
+    // Disallow additional references when trying to get a mutable reference.
+    utility_assert(proc->memoryWriters->len == 0);
+    utility_assert(proc->memoryReaders->len == 0);
+
+    MemoryWriter_u8* writer = memorymanager_getWriter(proc->memoryManager, plugin_src, n);
+    void* rv = memorymanager_getWritablePtr(writer);
+    if (rv == NULL) {
+        memorymanager_flushAndFreeWriter(writer);
     } else {
-        return thread_getWriteablePtr(thread, plugin_src, n);
+        g_array_append_val(proc->memoryWriters, writer);
     }
+    return rv;
 }
 
 // Returns a writeable pointer corresponding to the specified src. Use when
@@ -895,12 +934,19 @@ void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-    Thread* thread = worker_getActiveThread();
-    if (proc->memoryManager) {
-        return memorymanager_getMutablePtr(proc->memoryManager, thread, plugin_src, n);
+
+    // Disallow additional references when trying to get a mutable reference.
+    utility_assert(proc->memoryWriters->len == 0);
+    utility_assert(proc->memoryReaders->len == 0);
+
+    MemoryWriter_u8* writer = memorymanager_getWriter(proc->memoryManager, plugin_src, n);
+    void* rv = memorymanager_getMutablePtr(writer);
+    if (rv == NULL) {
+        memorymanager_flushAndFreeWriter(writer);
     } else {
-        return thread_getMutablePtr(thread, plugin_src, n);
+        g_array_append_val(proc->memoryWriters, writer);
     }
+    return rv;
 }
 
 // Flushes and invalidates all previously returned readable/writeable plugin
@@ -908,8 +954,24 @@ void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
 // conjunction with `thread_nativeSyscall` operations that touch memory.
 void process_flushPtrs(Process* proc) {
     MAGIC_ASSERT(proc);
-    Thread* thread = worker_getActiveThread();
-    thread_flushPtrs(thread);
+
+    // Free any readers
+    if (proc->memoryReaders->len > 0) {
+        for (int i = 0; i < proc->memoryReaders->len; ++i) {
+            MemoryReader_u8* reader = g_array_index(proc->memoryReaders, MemoryReader_u8*, i);
+            memorymanager_freeReader(reader);
+        }
+        proc->memoryReaders = g_array_set_size(proc->memoryReaders, 0);
+    }
+
+    // Flush and free any writers
+    if (proc->memoryWriters->len > 0) {
+        for (int i = 0; i < proc->memoryWriters->len; ++i) {
+            MemoryWriter_u8* writer = g_array_index(proc->memoryWriters, MemoryWriter_u8*, i);
+            memorymanager_flushAndFreeWriter(writer);
+        }
+        proc->memoryWriters = g_array_set_size(proc->memoryWriters, 0);
+    }
 }
 
 // ******************************************************

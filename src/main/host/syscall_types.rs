@@ -1,7 +1,8 @@
 use crate::cshadow as c;
+use crate::host::syscall_condition::SysCallCondition;
+use log::*;
 use nix::errno::Errno;
 use std::convert::From;
-use std::io::{Seek, SeekFrom};
 use std::marker::PhantomData;
 use std::mem::size_of;
 
@@ -160,7 +161,6 @@ impl std::fmt::Debug for c::SysCallReg {
 #[derive(Copy, Clone)]
 pub struct TypedPluginPtr<T> {
     base: PluginPtr,
-    offset: usize,
     count: usize,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -169,7 +169,6 @@ impl<T> std::fmt::Debug for TypedPluginPtr<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TypedPluginPtr")
             .field("base", &self.base)
-            .field("offset", &self.offset)
             .field("count", &self.count)
             .field("size_of::<T>", &size_of::<T>())
             .finish()
@@ -177,60 +176,149 @@ impl<T> std::fmt::Debug for TypedPluginPtr<T> {
 }
 
 impl<T> TypedPluginPtr<T> {
-    pub fn new(ptr: PluginPtr, count: usize) -> Self {
-        TypedPluginPtr {
-            base: ptr,
-            offset: 0,
-            count,
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Raw plugin pointer for current position.
-    pub fn ptr(&self) -> Result<PluginPtr, nix::errno::Errno> {
-        if self.offset >= self.count {
+    /// Creates a typed pointer if correctly aligned for `T`, or `None` otherwise.
+    pub fn new(ptr: PluginPtr, count: usize) -> Result<Self, Errno> {
+        // Don't create typed pointers with bad alignment.
+        if (u64::from(ptr) as *const T).align_offset(std::mem::align_of::<T>()) != 0 {
             return Err(Errno::EFAULT);
         }
-        Ok(PluginPtr {
-            ptr: c::PluginPtr {
-                val: self.base.ptr.val + ((self.offset * std::mem::size_of::<T>()) as u64),
-            },
+        Ok(TypedPluginPtr {
+            base: ptr,
+            count,
+            _phantom: PhantomData,
         })
     }
 
-    /// Number of items remaining at current position.
-    pub fn items_remaining(&self) -> Result<usize, Errno> {
-        if self.offset > self.count {
-            Err(Errno::EFAULT)
-        } else {
-            Ok(self.count - self.offset)
-        }
+    /// Raw plugin pointer.
+    pub fn ptr(&self) -> PluginPtr {
+        self.base
     }
 
-    /// Number of bytes remaining at current position.
-    pub fn bytes_remaining(&self) -> Result<usize, Errno> {
-        Ok(self.items_remaining()? * size_of::<T>())
+    /// Number of items pointed to.
+    pub fn len(&self) -> usize {
+        self.count
     }
 
-    /// Analagous to std::io::Seek, but seeks item-wise instead of byte-wise.
-    pub fn seek_item(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
-        let new_offset = match pos {
-            SeekFrom::Current(x) => self.offset as i64 + x,
-            SeekFrom::End(x) => self.count as i64 + x,
-            SeekFrom::Start(x) => x as i64,
-        };
-        // Seeking before the beginning is an error (but seeking to or past the
-        // end isn't).
-        if new_offset < 0 {
-            return Err(std::io::Error::from_raw_os_error(Errno::EFAULT as i32));
+    /// Cast to type `U`. Fails if the pointer isn't aligned for `U`, or if total size isn't a multiple of `sizeof<U>`.
+    pub fn cast<U>(&self) -> Option<TypedPluginPtr<U>> {
+        if (u64::from(self.base) as *const U).align_offset(std::mem::align_of::<U>()) != 0 {
+            return None;
         }
-        self.offset = new_offset as usize;
-        Ok(self.offset as u64)
+        let count_bytes = self.count * size_of::<T>();
+        if count_bytes % size_of::<U>() != 0 {
+            return None;
+        }
+        Some(TypedPluginPtr {
+            base: self.base,
+            count: count_bytes / size_of::<U>(),
+            _phantom: PhantomData,
+        })
+    }
+
+    /// Return a slice of this pointer.
+    pub fn slice(&self, range: std::ops::Range<usize>) -> TypedPluginPtr<T> {
+        assert!(range.end <= self.count);
+        assert!(range.start <= self.count);
+        TypedPluginPtr {
+            base: PluginPtr {
+                ptr: c::PluginPtr {
+                    val: (self.base.ptr.val as usize + range.start * size_of::<T>()) as u64,
+                },
+            },
+            count: range.len(),
+            _phantom: PhantomData,
+        }
     }
 }
 
-impl Seek for TypedPluginPtr<u8> {
-    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
-        self.seek_item(pos)
+// Calling all of these errors is stretching the semantics of 'error' a bit,
+// but it makes for fluent programming in syscall handlers using the `?` operator.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SyscallError {
+    Errno(nix::errno::Errno),
+    Cond(SysCallCondition),
+    Native,
+}
+
+pub type SyscallResult = Result<crate::host::syscall_types::SysCallReg, SyscallError>;
+
+impl From<c::SysCallReturn> for SyscallResult {
+    fn from(r: c::SysCallReturn) -> Self {
+        match r.state {
+            c::SysCallReturnState_SYSCALL_DONE => {
+                match crate::utility::syscall::raw_return_value_to_result(unsafe {
+                    r.retval.as_i64
+                }) {
+                    Ok(r) => Ok(r),
+                    Err(e) => Err(e.into()),
+                }
+            }
+            // SAFETY: XXX: We're assuming this points to a valid SysCallCondition.
+            c::SysCallReturnState_SYSCALL_BLOCK => Err(SyscallError::Cond(unsafe {
+                SysCallCondition::consume_from_c(r.cond)
+            })),
+            c::SysCallReturnState_SYSCALL_NATIVE => Err(SyscallError::Native),
+            _ => panic!("Unexpected c::SysCallReturn state {}", r.state),
+        }
+    }
+}
+
+impl From<SyscallResult> for c::SysCallReturn {
+    fn from(syscall_return: SyscallResult) -> Self {
+        match syscall_return {
+            Ok(r) => Self {
+                state: c::SysCallReturnState_SYSCALL_DONE,
+                retval: r.into(),
+                cond: std::ptr::null_mut(),
+            },
+            Err(SyscallError::Errno(e)) => Self {
+                state: c::SysCallReturnState_SYSCALL_DONE,
+                retval: c::SysCallReg {
+                    as_i64: -(e as i64),
+                },
+                cond: std::ptr::null_mut(),
+            },
+            Err(SyscallError::Cond(c)) => Self {
+                state: c::SysCallReturnState_SYSCALL_BLOCK,
+                retval: c::SysCallReg { as_i64: 0 },
+                cond: c.into_inner(),
+            },
+            Err(SyscallError::Native) => Self {
+                state: c::SysCallReturnState_SYSCALL_NATIVE,
+                retval: c::SysCallReg { as_i64: 0 },
+                cond: std::ptr::null_mut(),
+            },
+        }
+    }
+}
+
+impl From<nix::Error> for SyscallError {
+    fn from(e: nix::Error) -> Self {
+        let errno = e.as_errno();
+        let errno = errno.unwrap_or_else(|| {
+            let default = nix::errno::ENOTSUP;
+            warn!("Mapping err {} to {}", e, default);
+            default
+        });
+        SyscallError::Errno(errno)
+    }
+}
+
+impl From<nix::errno::Errno> for SyscallError {
+    fn from(e: nix::errno::Errno) -> Self {
+        SyscallError::Errno(e)
+    }
+}
+
+impl From<std::io::Error> for SyscallError {
+    fn from(e: std::io::Error) -> Self {
+        match std::io::Error::raw_os_error(&e) {
+            Some(e) => SyscallError::Errno(nix::errno::from_i32(e)),
+            None => {
+                let default = nix::errno::ENOTSUP;
+                warn!("Mapping error {} to {}", e, default);
+                SyscallError::Errno(default)
+            }
+        }
     }
 }

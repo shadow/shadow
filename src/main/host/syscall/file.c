@@ -58,8 +58,7 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
 
     /* Get the path string from the plugin. */
     const char* pathname;
-    int errcode = thread_getReadableString(
-        sys->thread, pathnamePtr, PATH_MAX, &pathname, NULL);
+    int errcode = process_getReadableString(sys->process, pathnamePtr, PATH_MAX, &pathname, NULL);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
@@ -292,8 +291,7 @@ SysCallReturn syscallhandler_fsetxattr(SysCallHandler* sys,
 
     /* Get the name/value strings from the plugin. */
     const char* name;
-    errcode =
-        thread_getReadableString(sys->thread, namePtr, PATH_MAX, &name, NULL);
+    errcode = process_getReadableString(sys->process, namePtr, PATH_MAX, &name, NULL);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
@@ -326,8 +324,7 @@ SysCallReturn syscallhandler_fgetxattr(SysCallHandler* sys,
 
     /* Get the name/value strings from the plugin. */
     const char* name;
-    errcode =
-        thread_getReadableString(sys->thread, namePtr, PATH_MAX, &name, NULL);
+    errcode = process_getReadableString(sys->process, namePtr, PATH_MAX, &name, NULL);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
@@ -379,8 +376,7 @@ SysCallReturn syscallhandler_fremovexattr(SysCallHandler* sys,
 
     /* Get the name string from the plugin. */
     const char* name;
-    errcode =
-        thread_getReadableString(sys->thread, namePtr, PATH_MAX, &name, NULL);
+    errcode = process_getReadableString(sys->process, namePtr, PATH_MAX, &name, NULL);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }

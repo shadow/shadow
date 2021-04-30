@@ -1,43 +1,15 @@
 use super::syscall_types::{PluginPtr, SysCallReg};
 use crate::cshadow as c;
 use crate::utility::syscall;
-use nix::errno::Errno;
 
 pub trait Thread {
     /// Have the plugin thread natively execute the given syscall.
     fn native_syscall(&mut self, n: i64, args: &[SysCallReg]) -> nix::Result<SysCallReg>;
 
-    /// Get a readable pointer to the plugin's memory. Never returns NULL.
-    fn get_readable_ptr(
-        &mut self,
-        plugin_src: PluginPtr,
-        n: usize,
-    ) -> nix::Result<*const ::std::os::raw::c_void>;
-
-    /// Get a writeable pointer to the plugin's memory. Never returns NULL.
-    fn get_writeable_ptr(
-        &mut self,
-        plugin_src: PluginPtr,
-        n: usize,
-    ) -> nix::Result<*mut ::std::os::raw::c_void>;
-
-    /// Get a mutable pointer to the plugin's memory. Never returns NULL.
-    /// SAFETY
-    /// * The specified memory region must be valid and writeable.
-    /// * Returned pointer mustn't be accessed after Thread runs again or flush is called.
-    fn get_mutable_ptr(
-        &mut self,
-        plugin_src: PluginPtr,
-        n: usize,
-    ) -> nix::Result<*mut ::std::os::raw::c_void>;
-
     fn get_process_id(&self) -> u32;
     fn get_host_id(&self) -> u32;
     fn get_system_pid(&self) -> libc::pid_t;
-
-    /// Flush (and invalidate) pointers previously returned by `get_readable_ptr` and
-    /// `get_writeable_ptr`.
-    fn flush(&mut self);
+    fn get_system_tid(&self) -> libc::pid_t;
 
     /// Natively execute munmap(2) on the given thread.
     fn native_munmap(&mut self, ptr: PluginPtr, size: usize) -> nix::Result<PluginPtr> {
@@ -203,55 +175,6 @@ impl Thread for CThread {
         syscall::raw_return_value_to_result(raw_res)
     }
 
-    fn get_readable_ptr(
-        &mut self,
-        plugin_src: PluginPtr,
-        n: usize,
-    ) -> nix::Result<*const ::std::os::raw::c_void> {
-        // Safety: self.cthread initialized in CThread::new.
-        let p = unsafe { c::thread_getReadablePtr(self.cthread, plugin_src.into(), n as u64) };
-        if p.is_null() {
-            Err(nix::Error::from_errno(Errno::EPERM))
-        } else {
-            Ok(p)
-        }
-    }
-
-    fn get_writeable_ptr(
-        &mut self,
-        plugin_src: PluginPtr,
-        n: usize,
-    ) -> nix::Result<*mut ::std::os::raw::c_void> {
-        // Safety: self.cthread initialized in CThread::new.
-        let p = unsafe { c::thread_getWriteablePtr(self.cthread, plugin_src.into(), n as u64) };
-        if p.is_null() {
-            Err(nix::Error::from_errno(Errno::EPERM))
-        } else {
-            Ok(p)
-        }
-    }
-
-    fn get_mutable_ptr(
-        &mut self,
-        plugin_src: PluginPtr,
-        n: usize,
-    ) -> nix::Result<*mut ::std::os::raw::c_void> {
-        // Safety: self.cthread initialized in CThread::new.
-        let p = unsafe { c::thread_getMutablePtr(self.cthread, plugin_src.into(), n as u64) };
-        if p.is_null() {
-            Err(nix::Error::from_errno(Errno::EPERM))
-        } else {
-            Ok(p)
-        }
-    }
-
-    fn flush(&mut self) {
-        // Safety: self.cthread initialized in CThread::new.
-        unsafe {
-            c::thread_flushPtrs(self.cthread);
-        }
-    }
-
     fn get_process_id(&self) -> u32 {
         // Safety: self.cthread initialized in CThread::new.
         unsafe { c::thread_getProcessId(self.cthread) }
@@ -265,6 +188,11 @@ impl Thread for CThread {
     fn get_system_pid(&self) -> libc::pid_t {
         // Safety: self.cthread initialized in CThread::new.
         unsafe { c::thread_getNativePid(self.cthread) }
+    }
+
+    fn get_system_tid(&self) -> libc::pid_t {
+        // Safety: self.cthread initialized in CThread::new.
+        unsafe { c::thread_getNativeTid(self.cthread) }
     }
 }
 

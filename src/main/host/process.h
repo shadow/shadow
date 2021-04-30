@@ -108,10 +108,19 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
 // the specified range couldn't be accessed. Always succeeds with n==0.
 int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n);
 
-// Copy a string of at most `n` bytes (including NULL) from `src` to `dst`.
-// Returns 0 on success, EFAULT if any of the specified memory couldn't be
-// accessed, or ENAMETOOLONG if there was no NULL byte in the first `n` bytes.
-int process_readStringPtr(Process* proc, char* dst, PluginVirtualPtr src, size_t n);
+// Make the data starting at plugin_src, and extending until the first NULL
+// byte, up at most `n` bytes, available in shadow's address space.
+//
+// * `str` must be non-NULL, and is set to point to the given string. It is
+//   invalidated when the plugin runs again.
+// * `strlen` may be NULL. If it isn't, is set to `strlen(str)`.
+//
+// Returns:
+// 0 on success.
+// -ENAMETOOLONG if there was no NULL byte in the first `n` characters.
+// -EFAULT if the string extends beyond the accessible address space.
+int process_getReadableString(Process* process, PluginPtr plugin_src, size_t n, const char** str,
+                              size_t* strlen);
 
 // Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
 // the specified range couldn't be accessed. The write is flushed immediately.

@@ -367,63 +367,6 @@ extern "C" {
     pub fn thread_getReturnCode(thread: *mut Thread) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn thread_readPtr(
-        thread: *mut Thread,
-        dst: *mut ::std::os::raw::c_void,
-        src: PluginVirtualPtr,
-        n: size_t,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn thread_readStringPtr(
-        base: *mut Thread,
-        dst: *mut ::std::os::raw::c_char,
-        src: PluginVirtualPtr,
-        n: size_t,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn thread_writePtr(
-        thread: *mut Thread,
-        dst: PluginVirtualPtr,
-        src: *const ::std::os::raw::c_void,
-        n: size_t,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn thread_getReadablePtr(
-        thread: *mut Thread,
-        plugin_src: PluginPtr,
-        n: size_t,
-    ) -> *const ::std::os::raw::c_void;
-}
-extern "C" {
-    pub fn thread_getReadableString(
-        thread: *mut Thread,
-        plugin_src: PluginPtr,
-        n: size_t,
-        str_: *mut *const ::std::os::raw::c_char,
-        strlen: *mut size_t,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn thread_getWriteablePtr(
-        thread: *mut Thread,
-        plugin_src: PluginPtr,
-        n: size_t,
-    ) -> *mut ::std::os::raw::c_void;
-}
-extern "C" {
-    pub fn thread_getMutablePtr(
-        thread: *mut Thread,
-        plugin_src: PluginPtr,
-        n: size_t,
-    ) -> *mut ::std::os::raw::c_void;
-}
-extern "C" {
-    pub fn thread_flushPtrs(thread: *mut Thread);
-}
-extern "C" {
     pub fn thread_nativeSyscall(
         thread: *mut Thread,
         n: ::std::os::raw::c_long,
@@ -503,54 +446,6 @@ extern "C" {
         proc_: *mut Process,
         handle: ::std::os::raw::c_int,
     ) -> *mut CompatDescriptor;
-}
-extern "C" {
-    pub fn process_readPtr(
-        proc_: *mut Process,
-        dst: *mut ::std::os::raw::c_void,
-        src: PluginVirtualPtr,
-        n: size_t,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn process_readStringPtr(
-        proc_: *mut Process,
-        dst: *mut ::std::os::raw::c_char,
-        src: PluginVirtualPtr,
-        n: size_t,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn process_writePtr(
-        proc_: *mut Process,
-        dst: PluginVirtualPtr,
-        src: *const ::std::os::raw::c_void,
-        n: size_t,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn process_getReadablePtr(
-        proc_: *mut Process,
-        plugin_src: PluginPtr,
-        n: size_t,
-    ) -> *const ::std::os::raw::c_void;
-}
-extern "C" {
-    pub fn process_getWriteablePtr(
-        proc_: *mut Process,
-        plugin_src: PluginPtr,
-        n: size_t,
-    ) -> *mut ::std::os::raw::c_void;
-}
-extern "C" {
-    pub fn process_getMutablePtr(
-        proc_: *mut Process,
-        plugin_src: PluginPtr,
-        n: size_t,
-    ) -> *mut ::std::os::raw::c_void;
-}
-extern "C" {
-    pub fn process_flushPtrs(proc_: *mut Process);
 }
 extern "C" {
     pub fn process_getMemoryManager(proc_: *mut Process) -> *mut MemoryManager;

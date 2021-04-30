@@ -4,8 +4,8 @@ use std::sync::Arc;
 use crate::cshadow as c;
 use crate::host::descriptor::{
     FileFlags, FileMode, FileStatus, NewStatusListenerFilter, PosixFile, StatusEventSource,
-    SyscallResult,
 };
+use crate::host::syscall_types::SyscallResult;
 use crate::utility::byte_queue::ByteQueue;
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;

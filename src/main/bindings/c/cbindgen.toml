@@ -27,5 +27,10 @@ rename_variants = "ScreamingSnakeCase"
 [export]
 # Avoid exporting C types back through again.
 exclude = ["LogLevel", "PluginPtr", "SysCallReg", "SysCallArgs"]
-# Generate all item types, excluding opaque and enum types
-item_types = ["constants", "globals", "structs", "unions", "typedefs", "functions"]
+# Generate all item types, excluding enum types.
+# 
+# While the opaque items are already exported, and included here via
+# bindings-opaque.h, cbindgen doesn't see their definitions if we don't
+# re-export them again here. i.e. it appears to not actually parse the headers
+# included in the `includes` list.
+item_types = ["constants", "globals", "structs", "unions", "typedefs", "opaque", "functions"]

@@ -117,38 +117,6 @@ bool thread_isRunning(Thread* thread) {
     return thread->methods.isRunning(thread);
 }
 
-const void* thread_getReadablePtr(Thread* thread, PluginPtr plugin_src,
-                                  size_t n) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getReadablePtr);
-    return thread->methods.getReadablePtr(thread, plugin_src, n);
-}
-
-int thread_getReadableString(Thread* thread, PluginPtr plugin_src, size_t n,
-                             const char** str, size_t* strlen) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getReadableString);
-    return thread->methods.getReadableString(thread, plugin_src, n, str, strlen);
-}
-
-void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getReadablePtr);
-    return thread->methods.getWriteablePtr(thread, plugin_src, n);
-}
-
-void* thread_getMutablePtr(Thread* thread, PluginPtr plugin_src, size_t n) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getMutablePtr);
-    return thread->methods.getMutablePtr(thread, plugin_src, n);
-}
-
-void thread_flushPtrs(Thread* thread) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.flushPtrs);
-    thread->methods.flushPtrs(thread);
-}
-
 ShMemBlock* thread_getIPCBlock(Thread* thread) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.getIPCBlock);
@@ -252,22 +220,4 @@ void thread_setTidAddress(Thread* thread, PluginPtr addr) {
 bool thread_isLeader(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->tid == process_getProcessID(thread->process);
-}
-
-int thread_readPtr(Thread* thread, void* dst, PluginVirtualPtr src, size_t n) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.readPtr);
-    return thread->methods.readPtr(thread, dst, src, n);
-}
-
-int thread_readStringPtr(Thread* thread, char* dst, PluginVirtualPtr src, size_t n) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.readStringPtr);
-    return thread->methods.readStringPtr(thread, dst, src, n);
-}
-
-int thread_writePtr(Thread* thread, PluginVirtualPtr dst, const void* src, size_t n) {
-    MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.writePtr);
-    return thread->methods.writePtr(thread, dst, src, n);
 }

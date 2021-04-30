@@ -24,57 +24,6 @@ void thread_resume(Thread* thread);
 void thread_handleProcessExit(Thread* thread);
 int thread_getReturnCode(Thread* thread);
 
-// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
-// the specified range couldn't be accessed.
-int thread_readPtr(Thread* thread, void* dst, PluginVirtualPtr src, size_t n);
-
-// Copy a string of at most `n` bytes from `src` to `dst`. Returns 0 on success,
-// EFAULT if any of the specified memory couldn't be accessed, or ENAMETOOLONG
-// if there was no NULL byte in the first `n` bytes.
-int thread_readStringPtr(Thread* base, char* dst, PluginVirtualPtr src, size_t n);
-
-// Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
-// the specified range couldn't be accessed. The write is flushed immediately.
-int thread_writePtr(Thread* thread, PluginVirtualPtr dst, const void* src, size_t n);
-
-// Make the data at plugin_src available in shadow's address space.
-//
-// The returned pointer is read-only, and is automatically invalidated when the
-// plugin runs again.
-const void* thread_getReadablePtr(Thread* thread, PluginPtr plugin_src,
-                                  size_t n);
-
-// Make the data starting at plugin_src, and extending until the first NULL
-// byte, up at most `n` bytes, available in shadow's address space.
-//
-// * `str` must be non-NULL, and is set to point to the given string. It is
-//   invalidated when the plugin runs again.
-// * `strlen` may be NULL. If it isn't, is set to `strlen(str)`.
-//
-// Returns:
-// 0 on success.
-// -ENAMETOOLONG if there was no NULL byte in the first `n` characters.
-// -EFAULT if the string extends beyond the accessible address space.
-int thread_getReadableString(Thread* thread, PluginPtr plugin_src, size_t n,
-                             const char** str, size_t* strlen);
-
-// Returns a writable pointer corresponding to the named region. The initial
-// contents of the returned memory are unspecified.
-//
-// The returned pointer is automatically invalidated when the plugin runs again.
-void* thread_getWriteablePtr(Thread* thread, PluginPtr plugin_src, size_t n);
-
-// Returns a writeable pointer corresponding to the specified src. Use when
-// the data at the given address needs to be both read and written.
-//
-// The returned pointer is automatically invalidated when the plugin runs again.
-void* thread_getMutablePtr(Thread* thread, PluginPtr plugin_src, size_t n);
-
-// Flushes and invalidates all previously returned readable/writeable plugin
-// pointers, as if returning control to the plugin. This can be useful in
-// conjunction with `thread_nativeSyscall` operations that touch memory.
-void thread_flushPtrs(Thread* thread);
-
 // Make the requested syscall from within the plugin. For now, does *not* flush
 // or invalidate pointers, but we may need to revisit this to support some
 // use-cases.

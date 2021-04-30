@@ -56,13 +56,6 @@ OPTION_EXPERIMENTAL_ENTRY("disable-o-n-waitpid-workarounds", 0, G_OPTION_FLAG_RE
                           "otherwise result in excessive detaching and reattaching",
                           NULL)
 
-static bool _enableBufferedIo = false;
-OPTION_EXPERIMENTAL_ENTRY(
-    "enable-ptrace-buffered-io", 0, 0, G_OPTION_ARG_NONE, &_enableBufferedIo,
-    "Use buffered IO when reading plugin memory through /proc. This introduces some extra copying "
-    "but may help performance when making small sequential accesses.",
-    NULL)
-
 // Because of <https://github.com/shadow/shadow/issues/1134> we also always use __WNOTHREAD when
 // calling waitpid. Otherwise if the target task isn't waitable yet, the kernel will move onto
 // checking its siblings children.
@@ -196,18 +189,7 @@ typedef struct _ThreadPtrace {
 
     SysCallHandler* sys;
 
-    // GArray of PendingWrite, to be flushed before returning control to the
-    // plugin.
-    GArray* pendingWrites;
-
-    // GArray of void*s that were previously returned by
-    // threadptrace_readPluginPtr. These should be freed before returning
-    // control to the plugin.
-    GArray* readPointers;
-
     Tsc tsc;
-
-    FILE* childMemFile;
 
     // Reason for the most recent transfer of control back to Shadow.
     ThreadPtraceChildState childState;
@@ -276,9 +258,6 @@ static ShimSharedMem* _threadptrace_sharedMem(ThreadPtrace* thread) {
 }
 
 // Forward declaration.
-static int _threadptrace_writePtr(Thread* thread, PluginPtr plugin_dst, const void* shadow_src, size_t n);
-const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
-                                        size_t n);
 static void _threadptrace_ensureStopped(ThreadPtrace* thread);
 static void _threadptrace_doAttach(ThreadPtrace* thread);
 static void _threadptrace_doDetach(ThreadPtrace* thread);
@@ -421,35 +400,6 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char*
     return pid;
 }
 
-static void _threadptrace_getChildMemoryHandle(ThreadPtrace* thread) {
-    char path[64];
-    snprintf(path, 64, "/proc/%d/mem", thread->base.nativePid);
-
-    bool reopen = false;
-    if (thread->childMemFile) {
-        thread->childMemFile = freopen(path, "r+", thread->childMemFile);
-        reopen = true;
-    } else {
-        thread->childMemFile = fopen(path, "r+");
-    }
-
-    if (thread->childMemFile == NULL) {
-        error("%s %s: %s", reopen ? "freopen" : "fopen", path, g_strerror(errno));
-        return;
-    }
-
-    if (!_enableBufferedIo) {
-        // Buffering only helps when doing small sequential accesses. For
-        // syscalls that do large accesses (read, write), buffering just adds an
-        // extra copy.
-        //
-        // Smaller accesses are generally small structs; not many handlers
-        // access more than one, and even then it only helps if they happen to
-        // be sequential in memory.
-        setvbuf(thread->childMemFile, NULL, _IONBF, 0);
-    }
-}
-
 static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
     // PTRACE_O_EXITKILL: Kill child if our process dies.
     // PTRACE_O_TRACESYSGOOD: Handle syscall stops explicitly.
@@ -458,15 +408,9 @@ static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
         error("ptrace: %s", strerror(errno));
         return;
     }
-    // Get a new handle to the child's memory.
-    thread->childMemFile = NULL;
-    _threadptrace_getChildMemoryHandle(thread);
 }
 
 static void _threadptrace_enterStateExecve(ThreadPtrace* thread) {
-    // We have to reopen the handle to child's memory.
-    _threadptrace_getChildMemoryHandle(thread);
-
     // Previous cached address is no longer valid.
     thread->syscall_rip = 0;
 }
@@ -800,8 +744,6 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv, const char* wor
     }
 
     thread->base.nativePid = thread->base.nativeTid;
-    thread->childMemFile = NULL;
-    _threadptrace_getChildMemoryHandle(thread);
 
     if (thread->enableIpc) {
         // Send 'start' event.
@@ -864,38 +806,6 @@ static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallAr
     debug("Ptrace not allowing native syscalls");
 
     return syscallhandler_make_syscall(thread->sys, args);
-}
-
-static void _threadptrace_flushPtrs(ThreadPtrace* thread) {
-    // Free any read pointers
-    if (thread->readPointers->len > 0) {
-        for (int i = 0; i < thread->readPointers->len; ++i) {
-            void* p = g_array_index(thread->readPointers, void*, i);
-            g_free(p);
-        }
-        thread->readPointers = g_array_set_size(thread->readPointers, 0);
-    }
-    // Perform writes if needed
-    if (thread->pendingWrites->len > 0) {
-        for (int i = 0; i < thread->pendingWrites->len; ++i) {
-            PendingWrite* write =
-                &g_array_index(thread->pendingWrites, PendingWrite, i);
-            _threadptrace_writePtr(&thread->base, write->pluginPtr, write->ptr, write->n);
-            g_free(write->ptr);
-        }
-        thread->pendingWrites = g_array_set_size(thread->pendingWrites, 0);
-    }
-    // Flush the mem file. In addition to flushing any pending writes, this
-    // invalidates the *input* buffers, which are no longer valid after
-    // returning control to the child.
-    if (fflush(thread->childMemFile) != 0) {
-        error("fflush: %s", g_strerror(errno));
-    }
-}
-
-static void threadptrace_flushPtrs(Thread* base) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-    _threadptrace_flushPtrs(thread);
 }
 
 static void _threadptrace_doAttach(ThreadPtrace* thread) {
@@ -1089,6 +999,11 @@ SysCallCondition* threadptrace_resume(Thread* base) {
     // Make sure the shim has the latest time before we resume
     _threadptrace_setSharedTime(thread);
 
+    // Try to flush any buffers left from the previous thread. In particular if
+    // the previous thread exited, we might not have been able to flush its
+    // buffers yet.
+    process_flushPtrs(base->process);
+
     while (true) {
         bool changedState = false;
         switch (thread->childState) {
@@ -1148,7 +1063,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 }
                 thread->regs.dirty = false;
             }
-            _threadptrace_flushPtrs(thread);
+            process_flushPtrs(thread->base.process);
 
             debug("ptrace resuming with signal %ld", thread->signalToDeliver);
             // Allow child to start executing.
@@ -1280,138 +1195,6 @@ static void _threadptrace_ensureStopped(ThreadPtrace* thread) {
             abort();
         }
     }
-}
-
-static int _threadptrace_readPtr(Thread* base, void* shadow_dst, PluginPtr plugin_src, size_t n) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-    clearerr(thread->childMemFile);
-    if (fseek(thread->childMemFile, plugin_src.val, SEEK_SET) < 0) {
-        warning("fseek %p: %s", (void*)plugin_src.val, g_strerror(errno));
-        return EFAULT;
-    }
-    size_t count = fread(shadow_dst, 1, n, thread->childMemFile);
-    if (count != n) {
-        if (feof(thread->childMemFile)) {
-            warning("fread: EOF");
-        } else {
-            warning("fread: %zu -> %zu: %s", n, count, g_strerror(errno));
-        }
-        return EFAULT;
-    }
-    return 0;
-}
-
-static int _threadptrace_writePtr(Thread* base, PluginVirtualPtr plugin_dst, const void* shadow_src,
-                                  size_t n) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-    if (fseek(thread->childMemFile, plugin_dst.val, SEEK_SET) < 0) {
-        warning("fseek %p: %s", (void*)plugin_dst.val, g_strerror(errno));
-        return EFAULT;
-    }
-    size_t count = fwrite(shadow_src, 1, n, thread->childMemFile);
-    if (count != n) {
-        warning("fwrite %zu -> %zu: %s", n, count, g_strerror(errno));
-        return EFAULT;
-    }
-    if (fflush(thread->childMemFile) != 0) {
-        warning("fflush: %s", g_strerror(errno));
-        return EFAULT;
-    }
-    return 0;
-}
-
-const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
-                                        size_t n) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-    void* rv = g_new(void, n);
-    g_array_append_val(thread->readPointers, rv);
-    _threadptrace_readPtr(base, rv, plugin_src, n);
-    return rv;
-}
-
-int threadptrace_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
-                                   const char** out_str, size_t* strlen) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-    char* str = g_new(char, n);
-    int err = 0;
-
-    clearerr(thread->childMemFile);
-    if (fseek(thread->childMemFile, plugin_src.val, SEEK_SET) < 0) {
-        info("fseek %p: %s", (void*)plugin_src.val, g_strerror(errno));
-        err = -EFAULT;
-    }
-    size_t count = 0;
-    while (!err) {
-        if (count >= n) {
-            err = -ENAMETOOLONG;
-            break;
-        }
-        int c = fgetc(thread->childMemFile);
-        if (c == EOF) {
-            err = -EFAULT;
-            break;
-        }
-        str[count++] = c;
-        if (c == '\0') {
-            break;
-        }
-    }
-    if (err != 0) {
-        g_free(str);
-        return err;
-    }
-    str = g_realloc(str, count);
-    g_array_append_val(thread->readPointers, str);
-    utility_assert(out_str);
-    *out_str = str;
-    if (strlen) {
-        *strlen = count - 1;
-    }
-    return 0;
-}
-
-static int _threadptrace_readStringPtr(Thread* base, char* dst, PluginVirtualPtr plugin_src,
-                                       size_t n) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-
-    clearerr(thread->childMemFile);
-    if (fseek(thread->childMemFile, plugin_src.val, SEEK_SET) < 0) {
-        warning("fseek %p: %s", (void*)plugin_src.val, g_strerror(errno));
-        return EFAULT;
-    }
-    size_t count = 0;
-    int c;
-    while (true) {
-        if (count >= n) {
-            return ENAMETOOLONG;
-        }
-        c = fgetc(thread->childMemFile);
-        if (c == EOF) {
-            return EFAULT;
-        }
-        dst[count++] = c;
-        if (c == '\0') {
-            return 0;
-        }
-    }
-}
-
-void* threadptrace_getWriteablePtr(Thread* base, PluginPtr plugin_src,
-                                   size_t n) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-    void* rv = g_new(void, n);
-    PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
-    g_array_append_val(thread->pendingWrites, pendingWrite);
-    return rv;
-}
-
-void* threadptrace_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-    void* rv = g_new(void, n);
-    _threadptrace_readPtr(&thread->base, rv, plugin_src, n);
-    PendingWrite pendingWrite = {.pluginPtr = plugin_src, .ptr = rv, .n = n};
-    g_array_append_val(thread->pendingWrites, pendingWrite);
-    return rv;
 }
 
 static long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
@@ -1571,27 +1354,16 @@ Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
                                   .getReturnCode = threadptrace_getReturnCode,
                                   .isRunning = threadptrace_isRunning,
                                   .free = threadptrace_free,
-                                  .getReadablePtr = threadptrace_getReadablePtr,
-                                  .getReadableString = threadptrace_getReadableString,
-                                  .getWriteablePtr = threadptrace_getWriteablePtr,
-                                  .getMutablePtr = threadptrace_getMutablePtr,
-                                  .flushPtrs = threadptrace_flushPtrs,
                                   .nativeSyscall = threadptrace_nativeSyscall,
                                   .clone = threadptrace_clone,
                                   .getIPCBlock = _threadptrace_getIPCBlock,
                                   .getShMBlock = _threadptrace_getShMBlock,
-                                  .readPtr = _threadptrace_readPtr,
-                                  .readStringPtr = _threadptrace_readStringPtr,
-                                  .writePtr = _threadptrace_writePtr,
                               }),
         // FIXME: This should the emulated CPU's frequency
         .tsc = {.cyclesPerSecond = 2000000000UL},
         .childState = THREAD_PTRACE_CHILD_STATE_NONE,
     };
     thread->sys = syscallhandler_new(host, process, _threadPtraceToThread(thread));
-
-    thread->pendingWrites = g_array_new(FALSE, FALSE, sizeof(PendingWrite));
-    thread->readPointers = g_array_new(FALSE, FALSE, sizeof(void*));
 
     // Set up a shared mem channel that we use even if not using IPC events
     thread->shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimSharedMem));

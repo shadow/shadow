@@ -37,7 +37,6 @@ struct _ThreadPreload {
     ShimEvent currentEvent;
 
     GHashTable* ptr_to_block;
-    GList *read_list, *write_list;
 };
 
 typedef struct _ShMemWriteBlock {
@@ -57,42 +56,6 @@ static void _threadpreload_auxFree(void* p, void* _) {
     ShMemBlock* blk = (ShMemBlock*)p;
     shmemallocator_globalFree(blk);
     free(blk);
-}
-
-static void _threadpreload_flushReads(ThreadPreload* thread) {
-    if (thread->read_list) {
-        g_list_foreach(thread->read_list, _threadpreload_auxFree, NULL);
-        g_list_free(thread->read_list);
-        thread->read_list = NULL;
-    }
-}
-
-static void _threadpreload_auxWrite(void* p, void* t) {
-    ShMemWriteBlock* write_blk = (ShMemWriteBlock*)p;
-    ThreadPreload* thread = (ThreadPreload*)t;
-
-    ShimEvent req = {
-        .event_id = SHD_SHIM_EVENT_WRITE_REQ,
-    };
-
-    ShimEvent resp = {0};
-
-    req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(&write_blk->blk);
-    req.event_data.shmem_blk.plugin_ptr = write_blk->plugin_ptr;
-    req.event_data.shmem_blk.n = write_blk->n;
-
-    shimevent_sendEventToPlugin(thread->ipc_blk.p, &req);
-    shimevent_recvEventFromPlugin(thread->ipc_blk.p, &resp);
-
-    utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
-}
-
-static void _threadpreload_flushWrites(ThreadPreload* thread) {
-    if (thread->write_list) {
-        g_list_foreach(thread->write_list, _threadpreload_auxWrite, thread);
-        g_list_free(thread->write_list);
-        thread->write_list = NULL;
-    }
 }
 
 void threadpreload_free(Thread* base) {
@@ -221,16 +184,6 @@ static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread) {
     debug("received shim_event %d", thread->currentEvent.event_id);
 }
 
-static void _threadpreload_flushPtrs(ThreadPreload* thread) {
-    _threadpreload_flushReads(thread);
-    _threadpreload_flushWrites(thread);
-}
-
-void threadpreload_flushPtrs(Thread* base) {
-    ThreadPreload* thread = _threadToThreadPreload(base);
-    _threadpreload_flushPtrs(thread);
-}
-
 static ShMemBlock* _threadpreload_getIPCBlock(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
     return &thread->ipc_blk;
@@ -247,6 +200,9 @@ SysCallCondition* threadpreload_resume(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     utility_assert(thread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
+
+    // Flush any pending writes, e.g. from a previous thread that exited without flushing.
+    process_flushPtrs(thread->base.process);
 
     while (true) {
         switch (thread->currentEvent.event_id) {
@@ -270,6 +226,9 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 SysCallReturn result = syscallhandler_make_syscall(
                     thread->sys, &thread->currentEvent.event_data.syscall.syscall_args);
 
+                // Flush any writes the syscallhandler made.
+                process_flushPtrs(thread->base.process);
+
                 if (result.state == SYSCALL_BLOCK) {
                     if (shimipc_sendExplicitBlockMessageEnabled()) {
                         debug("Sending block message to plugin");
@@ -283,8 +242,6 @@ SysCallCondition* threadpreload_resume(Thread* base) {
 
                     return result.cond;
                 }
-
-                _threadpreload_flushPtrs(thread);
 
                 ShimEvent shim_result;
                 if (result.state == SYSCALL_DONE) {
@@ -385,126 +342,6 @@ static ShMemBlock _threadpreload_readPtrImpl(ThreadPreload* thread, PluginPtr pl
     return blk;
 }
 
-static int _threadpreload_readPtr(Thread* base, void* dst, PluginVirtualPtr src, size_t n) {
-    ThreadPreload* thread = _threadToThreadPreload(base);
-
-    ShMemBlock blk = _threadpreload_readPtrImpl(thread, src, n, /*is_string=*/false);
-    memcpy(dst, blk.p, n);
-    shmemallocator_globalFree(&blk);
-
-    return 0;
-}
-
-static int _threadpreload_readStringPtr(Thread* base, char* dst, PluginVirtualPtr src, size_t n) {
-    ThreadPreload* thread = _threadToThreadPreload(base);
-
-    ShMemBlock blk = _threadpreload_readPtrImpl(thread, src, n, /*is_string=*/true);
-    strncpy(dst, blk.p, n);
-    shmemallocator_globalFree(&blk);
-
-    if (strnlen(dst, n) == n) {
-        return ENAMETOOLONG;
-    }
-
-    return 0;
-}
-
-static int _threadpreload_writePtr(Thread* thread, PluginVirtualPtr dst, const void* src, size_t n) {
-    ShMemWriteBlock blk = {
-        .blk = shmemallocator_globalAlloc(n),
-        .plugin_ptr = dst,
-        .n = n,
-    };
-    _threadpreload_auxWrite(thread, &blk);
-    return 0;
-}
-
-const void* threadpreload_getReadablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
-    ThreadPreload* thread = _threadToThreadPreload(base);
-
-    ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
-    *blk = _threadpreload_readPtrImpl(thread, plugin_src, n, false);
-
-    GList* new_head = g_list_append(thread->read_list, blk);
-    utility_assert(new_head);
-    if (!thread->read_list) {
-        thread->read_list = new_head;
-    }
-
-    return blk->p;
-}
-
-int threadpreload_getReadableString(Thread* base, PluginPtr plugin_src, size_t n,
-                                    const char** str_out, size_t* strlen_out) {
-    ThreadPreload* thread = _threadToThreadPreload(base);
-
-    ShMemBlock* blk = calloc(1, sizeof(ShMemBlock));
-    *blk = _threadpreload_readPtrImpl(thread, plugin_src, n, true);
-
-    const char* str = blk->p;
-    size_t strlen = strnlen(str, n);
-    if (strlen == n) {
-        shmemallocator_globalFree(blk);
-        return -ENAMETOOLONG;
-    }
-    if (strlen_out) {
-        *strlen_out = strlen;
-    }
-
-    GList* new_head = g_list_append(thread->read_list, blk);
-    utility_assert(new_head);
-    if (!thread->read_list) {
-        thread->read_list = new_head;
-    }
-
-    utility_assert(str_out);
-    *str_out = blk->p;
-    return 0;
-}
-
-void* threadpreload_getWriteablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
-    ThreadPreload* thread = _threadToThreadPreload(base);
-
-    // Allocate a block for the clone
-    ShMemWriteBlock* write_blk = calloc(1, sizeof(ShMemWriteBlock));
-    utility_assert(write_blk);
-    write_blk->blk = shmemallocator_globalAlloc(n);
-    write_blk->plugin_ptr = plugin_src;
-    write_blk->n = n;
-
-    utility_assert(write_blk->blk.p && write_blk->blk.nbytes == n);
-
-    GList* new_head = g_list_append(thread->write_list, write_blk);
-    utility_assert(new_head);
-    if (!thread->write_list) {
-        thread->write_list = new_head;
-    }
-
-    return write_blk->blk.p;
-}
-
-void* threadpreload_getMutablePtr(Thread* base, PluginPtr plugin_src, size_t n) {
-    ThreadPreload* thread = _threadToThreadPreload(base);
-
-    // Allocate a block for eventual write
-    ShMemWriteBlock* write_blk = calloc(1, sizeof(ShMemWriteBlock));
-    utility_assert(write_blk);
-    // Use a block initialized with the current contents of the memory.
-    write_blk->blk = _threadpreload_readPtrImpl(thread, plugin_src, n, false);
-    write_blk->plugin_ptr = plugin_src;
-    write_blk->n = n;
-
-    utility_assert(write_blk->blk.p && write_blk->blk.nbytes == n);
-
-    GList* new_head = g_list_append(thread->write_list, write_blk);
-    utility_assert(new_head);
-    if (!thread->write_list) {
-        thread->write_list = new_head;
-    }
-
-    return write_blk->blk.p;
-}
-
 long threadpreload_nativeSyscall(Thread* base, long n, va_list args) {
     ThreadPreload* thread = _threadToThreadPreload(base);
     ShimEvent req = {
@@ -538,21 +375,11 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                                   .getReturnCode = threadpreload_getReturnCode,
                                   .isRunning = threadpreload_isRunning,
                                   .free = threadpreload_free,
-                                  .getReadablePtr = threadpreload_getReadablePtr,
-                                  .getReadableString = threadpreload_getReadableString,
-                                  .getWriteablePtr = threadpreload_getWriteablePtr,
-                                  .getMutablePtr = threadpreload_getMutablePtr,
-                                  .flushPtrs = threadpreload_flushPtrs,
                                   .nativeSyscall = threadpreload_nativeSyscall,
                                   .getIPCBlock = _threadpreload_getIPCBlock,
                                   .getShMBlock = _threadpreload_getShMBlock,
-                                  .writePtr = _threadpreload_writePtr,
-                                  .readPtr = _threadpreload_readPtr,
-                                  .readStringPtr = _threadpreload_readStringPtr,
                               }),
         .ptr_to_block = g_hash_table_new(g_int64_hash, g_int64_equal),
-        .read_list = NULL,
-        .write_list = NULL,
     };
     thread->sys = syscallhandler_new(host, process, _threadPreloadToThread(thread));
 

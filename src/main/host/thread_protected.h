@@ -23,20 +23,11 @@ typedef struct _ThreadMethods {
     int (*getReturnCode)(Thread* thread);
     bool (*isRunning)(Thread* thread);
     void (*free)(Thread* thread);
-    const void* (*getReadablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
-    int (*getReadableString)(Thread* thread, PluginPtr plugin_src, size_t n, const char** str,
-                             size_t* strlen);
-    void* (*getWriteablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
-    void* (*getMutablePtr)(Thread* thread, PluginPtr plugin_src, size_t n);
-    void (*flushPtrs)(Thread* thread);
     long (*nativeSyscall)(Thread* thread, long n, va_list args);
     int (*clone)(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
                  PluginPtr ctid, unsigned long newtls, Thread** child);
     ShMemBlock* (*getIPCBlock)(Thread* thread);
     ShMemBlock* (*getShMBlock)(Thread* thread);
-    int (*readPtr)(Thread* thread, void* dst, PluginVirtualPtr src, size_t n);
-    int (*readStringPtr)(Thread* thread, char* dst, PluginVirtualPtr src, size_t n);
-    int (*writePtr)(Thread* thread, PluginVirtualPtr dst, const void* src, size_t n);
 } ThreadMethods;
 
 struct _Thread {
