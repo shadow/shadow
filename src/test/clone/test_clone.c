@@ -90,15 +90,19 @@ static void _testCloneClearTid() {
     // clone takes the "starting" address of the stack, which is the *top*.
     uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
 
-    pid_t ctid = -1;
+    // Putting this on the stack ends up somehow tripping up gcc's
+    // stack-smashing detection, so we put it on the heap instead.
+    pid_t* ctid = malloc(sizeof(*ctid));
+    *ctid = -1;
+
     pid_t tid = clone(_testCloneClearTidThread, stack_top, CLONE_FLAGS | CLONE_CHILD_CLEARTID, NULL,
-                      NULL, NULL, &ctid);
+                      NULL, NULL, ctid);
     assert_nonneg_errno(tid);
 
     // This *could* return -1 with errno=EAGAIN if the child has already exited.
     // If that happens, we should increase the sleep inside the child thread.
-    assert_nonneg_errno(syscall(SYS_futex, &ctid, FUTEX_WAIT, -1, NULL, NULL, 0));
-    g_assert_cmpint(ctid, ==, 0);
+    assert_nonneg_errno(syscall(SYS_futex, ctid, FUTEX_WAIT, -1, NULL, NULL, 0));
+    g_assert_cmpint(*ctid, ==, 0);
 
     free(stack);
 }
