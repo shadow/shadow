@@ -33,3 +33,21 @@ pub const SIMTIME_ONE_MINUTE: c::SimulationTime = 60000000000;
 
 /// Represents one hour in simulation time.
 pub const SIMTIME_ONE_HOUR: c::SimulationTime = 3600000000000;
+
+pub fn sim_time_to_duration(time: c::SimulationTime) -> std::time::Duration {
+    std::time::Duration::from_nanos(time * SIMTIME_ONE_NANOSECOND)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sim_time_to_rust_duration() {
+        let sim_time = 5 * SIMTIME_ONE_MINUTE + 7 * SIMTIME_ONE_MILLISECOND;
+        let rust_time = sim_time_to_duration(sim_time);
+
+        assert_eq!(rust_time.as_secs(), 5 * 60);
+        assert_eq!(rust_time.as_millis(), 5 * 60 * 1_000 + 7);
+    }
+}

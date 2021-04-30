@@ -529,6 +529,18 @@ pub struct Time<T: Prefix> {
 // really prefixes, time units don't have a suffix.
 unit_impl!(Time, u64, [""]);
 
+impl From<Time<TimePrefix>> for std::time::Duration {
+    fn from(time: Time<TimePrefix>) -> Self {
+        std::time::Duration::from_nanos(time.convert(TimePrefix::Nano).unwrap().value())
+    }
+}
+
+impl From<Time<TimePrefixUpper>> for std::time::Duration {
+    fn from(time: Time<TimePrefixUpper>) -> Self {
+        std::time::Duration::from_secs(time.convert(TimePrefixUpper::Sec).unwrap().value())
+    }
+}
+
 /// A number of bytes.
 #[derive(Debug, Clone, Copy, PartialEq, JsonSchema)]
 pub struct Bytes<T: Prefix> {
@@ -719,6 +731,15 @@ mod tests {
             bw.convert_lossy(SiPrefixUpper::Kibi),
             BitsPerSec::from_str("1000 Kibit").unwrap()
         );
+    }
+
+    #[test]
+    fn test_time_conversion() {
+        let time = Time::<TimePrefixUpper>::from_str("70 min").unwrap();
+        assert_eq!(std::time::Duration::from_secs(70 * 60), time.into());
+
+        let time = Time::new(1_000_000_123, TimePrefix::Nano);
+        assert_eq!(std::time::Duration::new(1, 123), time.into());
     }
 }
 
