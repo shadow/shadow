@@ -71,6 +71,11 @@ pub struct Counter {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct MemoryManager {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct PosixFileArc {
     _unused: [u8; 0],
 }
@@ -548,6 +553,9 @@ extern "C" {
     pub fn process_flushPtrs(proc_: *mut Process);
 }
 extern "C" {
+    pub fn process_getMemoryManager(proc_: *mut Process) -> *mut MemoryManager;
+}
+extern "C" {
     pub fn process_parseArgStr(
         commandLine: *const ::std::os::raw::c_char,
         argc: *mut ::std::os::raw::c_int,
@@ -575,6 +583,9 @@ pub struct _Futex {
 pub type Futex = _Futex;
 extern "C" {
     pub fn worker_getActiveProcess() -> *mut Process;
+}
+extern "C" {
+    pub fn worker_getActiveThread() -> *mut Thread;
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

@@ -38,6 +38,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "syscallcondition_unref"
         --whitelist-function "syscallhandler_.*"
         --whitelist-function "worker_getActiveProcess"
+        --whitelist-function "worker_getActiveThread"
         --whitelist-function "worker_readPtr"
         --whitelist-function "worker_writePtr"
         --whitelist-function "worker_getReadablePtr"
