@@ -1,5 +1,7 @@
 use crate::cshadow;
+use crate::host::memory_manager::MemoryManager;
 use crate::host::process::Process;
+use crate::host::thread::{CThread, Thread};
 use std::cell::RefCell;
 
 /// Worker context, capturing e.g. the current Process and Thread.
@@ -10,14 +12,60 @@ pub struct Worker {
     // This is just to track borrows for now; we retrieve the pointer
     // itself from the C Worker on-demand.
     active_process: RefCell<()>,
+    active_thread: RefCell<()>,
 }
 
 std::thread_local! {
-    static WORKER: Worker = Worker{active_process: RefCell::new(())}
+    static WORKER: Worker = Worker{
+        active_process: RefCell::new(()),
+        active_thread: RefCell::new(()),
+    }
 }
 
 impl Worker {
-    /// Run `f` with a reference to the current context.
+    /// Run `f` with a reference to the active process's memory.
+    pub fn with_active_process_memory<F, R>(f: F) -> R
+    where
+        F: FnOnce(&MemoryManager) -> R,
+    {
+        let cprocess = unsafe { cshadow::worker_getActiveProcess() };
+        let memory_manager =
+            unsafe { &*(cshadow::process_getMemoryManager(cprocess) as *const MemoryManager) };
+
+        WORKER.with(|worker| {
+            // Once the process lives in Rust, the MemoryManager will be a
+            // member of it, so accessing it will require holding a reference to
+            // the process.
+            let _borrow_process = worker.active_process.borrow();
+            f(memory_manager)
+        })
+    }
+
+    /// Run `f` with a reference to the active process's memory.
+    pub fn with_active_process_memory_mut<F, R>(f: F) -> R
+    where
+        F: FnOnce(&mut MemoryManager) -> R,
+    {
+        let cprocess = unsafe { cshadow::worker_getActiveProcess() };
+        let memory_manager =
+            unsafe { &mut *(cshadow::process_getMemoryManager(cprocess) as *mut MemoryManager) };
+
+        WORKER.with(|worker| {
+            // Once the process lives in Rust, the MemoryManager will be a
+            // member of it, so accessing it will require holding a reference to
+            // the process.
+            //
+            // It *may* turn out to be too restrictive to hold a mutable
+            // reference to the process while accessing memory, in which case
+            // the process can store a RefCell<MemoryManager>, and which we
+            // could simulate here with an immutable borrow of the process, and
+            // a mutable borrow of a stand-in RefCell for the MemoryManager.
+            let _borrow = worker.active_process.borrow_mut();
+            f(memory_manager)
+        })
+    }
+
+    /// Run `f` with a reference to the active process.
     pub fn with_active_process<F, R>(f: F) -> R
     where
         F: FnOnce(&Process) -> R,
@@ -33,7 +81,7 @@ impl Worker {
         })
     }
 
-    /// Run `f` with a reference to the current context.
+    /// Run `f` with a reference to the current process.
     pub fn with_active_process_mut<F, R>(f: F) -> R
     where
         F: FnOnce(&mut Process) -> R,
@@ -46,6 +94,38 @@ impl Worker {
         WORKER.with(|worker| {
             let _borrow = worker.active_process.borrow_mut();
             f(&mut process)
+        })
+    }
+
+    /// Run `f` with a reference to the current thread.
+    pub fn with_active_thread<F, R>(f: F) -> R
+    where
+        F: FnOnce(&dyn Thread) -> R,
+    {
+        let thread = unsafe {
+            let cthread = cshadow::worker_getActiveThread();
+            assert!(!cthread.is_null());
+            CThread::new(cthread)
+        };
+        WORKER.with(|worker| {
+            let _borrow = worker.active_thread.borrow();
+            f(&thread)
+        })
+    }
+
+    /// Run `f` with a reference to the current thread.
+    pub fn with_active_thread_mut<F, R>(f: F) -> R
+    where
+        F: FnOnce(&mut dyn Thread) -> R,
+    {
+        let mut thread = unsafe {
+            let cthread = cshadow::worker_getActiveThread();
+            assert!(!cthread.is_null());
+            CThread::new(cthread)
+        };
+        WORKER.with(|worker| {
+            let _borrow = worker.active_thread.borrow_mut();
+            f(&mut thread)
         })
     }
 }
