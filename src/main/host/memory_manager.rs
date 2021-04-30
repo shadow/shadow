@@ -774,35 +774,41 @@ fn map_stack(
     assert!(iter.next().is_none());
 
     // TODO: get actual max stack limit via getrlimit.
-    // This is the lowest address where there *could eventually* be stack allocated.
-    // We reserve enough address-space in Shadow to accomodate it so that we don't have to worry
-    // about resizing/moving it later, but we don't actually allocate any memory in the shared mem
-    // file yet.
     let max_stack_size: usize = 8 * (1 << 20); // 8 MB.
 
-    let max_stack_end = current_stack_bounds.end;
-    let max_stack_begin = max_stack_end - max_stack_size;
-    let max_stack_bounds = max_stack_begin..max_stack_end;
+    // Omit the top page of the stack so that there is still a "stack" region in
+    // the process's maps. This is where the program arguments and environment
+    // are stored; overwriting the region breaks /proc/*/cmdline and
+    // /proc/*/environ, which are used by tools such as ps and htop.
+    let remapped_stack_end = current_stack_bounds.end - page_size();
+
+    let remapped_stack_begin = current_stack_bounds.end - max_stack_size;
+    let remapped_stack_bounds = remapped_stack_begin..remapped_stack_end;
     let mut region = region.clone();
-    region.shadow_base = shm_file.mmap_into_shadow(&max_stack_bounds, STACK_PROT);
+    region.shadow_base = shm_file.mmap_into_shadow(&remapped_stack_bounds, STACK_PROT);
 
     // Allocate as much space as we might need.
-    shm_file.alloc(&max_stack_bounds);
+    shm_file.alloc(&remapped_stack_bounds);
 
-    // Copy the current contents.
-    shm_file.copy_into_file(
-        memory_manager,
-        &max_stack_bounds,
-        &region,
-        &current_stack_bounds,
-    );
+    let remapped_overlaps_current = current_stack_bounds.start < remapped_stack_bounds.end;
 
-    shm_file.mmap_into_plugin(&max_stack_bounds, STACK_PROT);
+    // Copy the current contents of the remapped part of the current stack, if any.
+    if remapped_overlaps_current {
+        shm_file.copy_into_file(
+            memory_manager,
+            &remapped_stack_bounds,
+            &region,
+            &(current_stack_bounds.start..remapped_stack_bounds.end),
+        );
+    }
 
-    {
-        let mutations = regions.insert(max_stack_bounds, region);
-        // Should have overwritten the old stack region and not affected any others.
-        assert!(mutations.len() == 1);
+    shm_file.mmap_into_plugin(&remapped_stack_bounds, STACK_PROT);
+
+    let mutations = regions.insert(remapped_stack_bounds, region);
+    if remapped_overlaps_current {
+        debug_assert_eq!(mutations.len(), 1);
+    } else {
+        debug_assert_eq!(mutations.len(), 0);
     }
 }
 
