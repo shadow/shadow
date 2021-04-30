@@ -82,10 +82,10 @@ impl ByteQueue {
 
             if written == 0 {
                 // End of the reader
-                if self.get_available_bytes_tail() == 0 {
-                    // We created an empty tail but ended up not reading any
+                if head.len() == 0 {
+                    // We created an empty head but ended up not reading any
                     // data into it.
-                    self.destroy_old_tail();
+                    self.chunks.pop_front();
                 }
                 return Ok(total_written);
             }
