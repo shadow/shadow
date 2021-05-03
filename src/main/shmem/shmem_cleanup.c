@@ -14,8 +14,9 @@
 #include "shmem_file.h"
 #include "support/logger/logger.h"
 
-// a bug with procps on Ubuntu 16.04 builds procps with WITH_SYSTEMD, but
-// when we include the header it doesn't know that
+// On some platforms, including centos 7 and 8, procps is built with
+// WITH_SYSTEMD defined, but the header is missing that symbol definition. We
+// work around it by injecting the definition into the header.
 // see: https://gitlab.com/procps-ng/procps/-/issues/31
 #define WITH_SYSTEMD
 #include <proc/readproc.h>
