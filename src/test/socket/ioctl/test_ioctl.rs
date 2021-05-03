@@ -89,6 +89,8 @@ fn test_tty(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
         test_tty_request(libc::TCSETA)?;
         test_tty_request(libc::TCSETAW)?;
         test_tty_request(libc::TCSETAF)?;
+        test_tty_request(libc::TIOCGWINSZ)?;
+        test_tty_request(libc::TIOCSWINSZ)?;
 
         // in glibc, isatty() calls tcgetattr() which makes the ioctl call
         let rv = unsafe { libc::isatty(fd) };
