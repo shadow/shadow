@@ -125,8 +125,6 @@ SimulationTime config_getBootstrapEndTime(const struct ConfigOptions *config);
 
 unsigned int config_getWorkers(const struct ConfigOptions *config);
 
-char *config_getEnvironment(const struct ConfigOptions *config);
-
 SchedulerPolicyType config_getSchedulerPolicy(const struct ConfigOptions *config);
 
 char *config_getDataDirectory(const struct ConfigOptions *config);
@@ -189,6 +187,8 @@ char *processoptions_getPath(const struct ProcessOptions *proc);
 void processoptions_getArgs(const struct ProcessOptions *proc,
                             void (*f)(const char*, void*),
                             void *data);
+
+char *processoptions_getEnvironment(const struct ProcessOptions *proc);
 
 uint32_t processoptions_getQuantity(const struct ProcessOptions *proc);
 
