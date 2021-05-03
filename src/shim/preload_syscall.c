@@ -59,7 +59,8 @@ static long _real_syscall(long n, ...) {
     return rv;
 }
 
-static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
+// Only called from asm, so need to tell compiler not to discard.
+__attribute__((used)) static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
 
     ShMemBlock ipc_blk = shim_thisThreadEventIPCBlk();
 
@@ -152,24 +153,48 @@ static long _vshadow_syscall(long n, va_list args) {
     for (int i = 0; i < 6; ++i) {
         regs[i].as_u64 = va_arg(args, uint64_t);
     }
-    SysCallReg retval = _shadow_syscall_event(&e);
+
+    /* On the first syscall, Shadow will remap the stack region of memory. In
+     * preload-mode, this process is actively involved in that operation, with
+     * several messages back and forth. To do that processing, we must use a
+     * stack region *other* than the one being remapped. We handle this by
+     * switching to a small dedicated stack, making the call, and then switching
+     * back.
+     */
+
+    // Needs to be big enough to run signal handlers in case Shadow delivers a
+    // non-fatal signal.
+    // TODO: Allocate dynamically and only do this until the MemoryManager is
+    // initialized.
+    static __thread char new_stack[4096 * 2];
+
+    void* old_stack;
+    SysCallReg retval;
+    asm volatile("movq %[EVENT], %%rdi\n"     /* set up syscall arg */
+                 "movq %%rsp, %%rbx\n" /* save stack pointer to a callee-save register*/
+                 "movq %[NEW_STACK], %%rsp\n" /* switch stack */
+                 "callq _shadow_syscall_event\n"
+                 "movq %%rbx, %%rsp\n" /* restore stack pointer */
+                 "movq %%rax, %[RETVAL]\n"    /* save return value */
+                 :                            /* outputs */
+                 [ RETVAL ] "=rm"(retval)
+                 : /* inputs */
+                 /* Must be a register, since a memory operand would be relative to the stack.
+                    Note that we need to point to the *top* of the stack. */
+                 [ NEW_STACK ] "r"(&new_stack[sizeof(new_stack)]), [ EVENT ] "rm"(&e)
+                 : /* clobbers */
+                 "memory",
+                 /* used to save rsp */
+                 "rbx",
+                 /* All caller-saved registers not already used above */
+                 "rax", "rdi", "rdx", "rcx", "rsi", "r8", "r9", "r10", "r11");
+
     shim_enableInterposition();
     return shadow_retval_to_errno(retval.as_i64);
 }
 
 long syscall(long n, ...) {
     shim_ensure_init();
-
-    // Ensure that subsequent stack frames are on a different page than any
-    // local variables passed through to the syscall. This ensures that even
-    // if any of the syscall arguments are pointers, and those pointers cause
-    // shadow to remap the pages containing those pointers, the shim-side stack
-    // frames doing that work won't get their memory remapped out from under
-    // them.
-    void* padding = alloca(sysconf(_SC_PAGE_SIZE));
-
-    // Ensure that the compiler doesn't optimize away `padding`.
-    __asm__ __volatile__("" ::"m"(padding));
 
     va_list(args);
     va_start(args, n);

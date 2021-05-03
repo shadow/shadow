@@ -3,11 +3,11 @@ use crate::cshadow as c;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::{
     CompatDescriptor, Descriptor, DescriptorFlags, FileFlags, FileMode, FileStatus, PosixFile,
-    SyscallError, SyscallResult,
 };
 use crate::host::syscall::{self, Trigger};
 use crate::host::syscall_condition::SysCallCondition;
 use crate::host::syscall_types::{PluginPtr, SysCallArgs, TypedPluginPtr};
+use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::event_queue::EventQueue;
 
 use std::sync::Arc;
@@ -143,11 +143,13 @@ fn read_helper(
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
-    let result: SyscallResult = Worker::with_active_process_mut(|process| {
+    let result: SyscallResult = Worker::with_active_process_memory_mut(|memory| {
         // call the file's read(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
             posix_file.borrow_mut().read(
-                process.writer(TypedPluginPtr::<u8>::new(buf_ptr, buf_size)),
+                memory
+                    .writer(TypedPluginPtr::<u8>::new(buf_ptr, buf_size).unwrap())
+                    .cursor(),
                 offset,
                 event_queue,
             )
@@ -213,11 +215,13 @@ fn write_helper(
     let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
-    let result: SyscallResult = Worker::with_active_process(|process| {
+    let result: SyscallResult = Worker::with_active_process_memory(|memory| {
         // call the file's write(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
             posix_file.borrow_mut().write(
-                process.reader(TypedPluginPtr::<u8>::new(buf_ptr, buf_size)),
+                memory
+                    .reader(TypedPluginPtr::<u8>::new(buf_ptr, buf_size).unwrap())
+                    .cursor(),
                 offset,
                 event_queue,
             )
@@ -303,33 +307,38 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: PluginPtr, flags: i32) -> Sy
     reader_desc.set_flags(descriptor_flags);
     writer_desc.set_flags(descriptor_flags);
 
-    // register the file descriptors and return them to the caller
-    Worker::with_active_process_mut(|process| -> SyscallResult {
-        // Normally for a small pointer it'd be a little cleaner to create the
-        // slice in Rust and then call process.write_ptr_from_slice, allowing us
-        // to hold the process for a smaller scope.
-        //
-        // In this case it'd be a bit awkward though, since we'd then need to
-        // unregister the descriptors if the pointer-write failed.
-        let mut writer = process.writer(TypedPluginPtr::<libc::c_int>::new(fd_ptr.into(), 2));
-        let fds = writer.as_mut_uninit()?;
-
-        fds[0] = unsafe {
+    // register the file descriptors
+    let fds = unsafe {
+        [
             c::process_registerCompatDescriptor(
                 sys.process,
                 CompatDescriptor::into_raw(Box::new(CompatDescriptor::New(reader_desc))),
-            )
-        };
-        fds[1] = unsafe {
+            ),
             c::process_registerCompatDescriptor(
                 sys.process,
                 CompatDescriptor::into_raw(Box::new(CompatDescriptor::New(writer_desc))),
-            )
-        };
+            ),
+        ]
+    };
 
-        debug!("Created pipe reader fd {} and writer fd {}", fds[0], fds[1]);
-        Ok(0.into())
-    })
+    // Try to write them to the caller
+    let write_res = Worker::with_active_process_memory_mut(|memory| {
+        memory
+            .writer(TypedPluginPtr::<libc::c_int>::new(fd_ptr.into(), 2)?)
+            .copy(&fds)
+    });
+
+    // Clean up in case of error
+    match write_res {
+        Ok(_) => Ok(0.into()),
+        Err(e) => {
+            unsafe {
+                c::process_deregisterCompatDescriptor(sys.process, fds[0]);
+                c::process_deregisterCompatDescriptor(sys.process, fds[1]);
+            };
+            Err(e.into())
+        }
+    }
 }
 
 mod export {

@@ -41,6 +41,10 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
         debug("Found address %s for name %s", address_toString(address), name);
 
         uint32_t ip = address_toNetworkIP(address);
+
+        // Release the readable pointer so that we can get a writable pointer.
+        process_flushPtrs(sys->process);
+
         uint32_t* addr = process_getWriteablePtr(sys->process, addr_ptr, addr_len);
         *addr = ip;
 

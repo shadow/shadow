@@ -3,7 +3,48 @@
 ///
 /// This is notably *not* true for many Rust types. e.g. interpreting the integer
 /// value `2` as a rust `bool` is undefined behavior.
-pub unsafe trait Pod: Copy {}
+///
+/// We require `Copy` to also rule out anything that implements `Drop`.
+///
+/// References are inherently non-Pod, so we can require a 'static lifetime.
+pub unsafe trait Pod: Copy + 'static {}
+
+/// Convert to a slice of raw bytes.
+pub fn to_u8_slice<T>(slice: &[T]) -> &[u8]
+where
+    T: Pod,
+{
+    // SAFETY: Any value and alignment is safe for u8.
+    unsafe {
+        std::slice::from_raw_parts(
+            slice.as_ptr() as *const u8,
+            slice.len() * std::mem::size_of::<T>(),
+        )
+    }
+}
+
+/// Convert to a mut slice of raw bytes.
+pub fn to_u8_slice_mut<T>(slice: &mut [T]) -> &mut [u8]
+where
+    T: Pod,
+{
+    // SAFETY: Any value and alignment is safe for u8.
+    unsafe {
+        std::slice::from_raw_parts_mut(
+            slice.as_mut_ptr() as *mut u8,
+            slice.len() * std::mem::size_of::<T>(),
+        )
+    }
+}
+
+/// Create a value of type `T`, with contents initialized to 0s.
+pub fn zeroed<T>() -> T
+where
+    T: Pod,
+{
+    // SAFETY: Any value is legal for Pod.
+    unsafe { std::mem::MaybeUninit::<T>::zeroed().assume_init() }
+}
 
 // Integer primitives
 unsafe impl Pod for u8 {}

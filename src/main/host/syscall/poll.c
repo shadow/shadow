@@ -220,20 +220,25 @@ SysCallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args)
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
     }
 
-    const struct timespec* ts_timeout;
+    // We read the timeout struct into local memory to avoid holding a reference
+    // to plugin memory. This avoids breaking Rust's rules for multiple
+    // references, and sidesteps pointer aliasing issues such as fds_ptr and
+    // ts_timeout_ptr overlapping.
+    struct timespec ts_timeout_val;
 
-    if (!ts_timeout_ptr.val) {
-        // NULL timespec is valid and means infinite timeout
-        ts_timeout = NULL;
-    } else {
-        ts_timeout = process_getReadablePtr(sys->process, ts_timeout_ptr, sizeof(*ts_timeout));
+    if (ts_timeout_ptr.val) {
+        if (process_readPtr(
+                sys->process, &ts_timeout_val, ts_timeout_ptr, sizeof(ts_timeout_val)) != 0) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        }
 
         // Negative time values in the struct are invalid
-        if (ts_timeout->tv_sec < 0 || ts_timeout->tv_nsec < 0) {
+        if (ts_timeout_val.tv_sec < 0 || ts_timeout_val.tv_nsec < 0) {
             debug("negative timeout given in timespec arg, returning EINVAL");
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
         }
     }
 
-    return _syscallhandler_pollHelper(sys, fds_ptr, nfds, ts_timeout);
+    return _syscallhandler_pollHelper(
+        sys, fds_ptr, nfds, ts_timeout_ptr.val ? &ts_timeout_val : NULL);
 }

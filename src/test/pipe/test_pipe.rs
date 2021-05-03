@@ -42,6 +42,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
+            "test_large_read_write",
+            test_large_read_write,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
             "test_read_write_empty",
             test_read_write_empty,
             set![TestEnv::Libc, TestEnv::Shadow],
@@ -117,6 +122,64 @@ fn test_read_write() -> Result<(), String> {
         test_utils::result_assert_eq(rv, 4, "Expected to read 4 bytes")?;
 
         test_utils::result_assert_eq(write_buf, read_buf, "Buffers differ")?;
+
+        Ok(())
+    })
+}
+
+fn test_large_read_write() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(|| { unsafe { libc::pipe(fds.as_mut_ptr()) } }, &[])?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        let mut write_buf = Vec::<u8>::with_capacity(8096 * 2);
+        for _ in 0..write_buf.capacity() {
+            let random_value = unsafe { libc::rand() };
+            write_buf.push(random_value as u8)
+        }
+
+        let mut read_buf = Vec::<u8>::with_capacity(write_buf.len());
+        read_buf.resize(read_buf.capacity(), 0);
+
+        let mut bytes_written = 0;
+        let mut bytes_read = 0;
+
+        while bytes_read < write_buf.len() {
+            let write_slice = &write_buf[bytes_written..];
+            let towrite = write_slice.len();
+            let rv = test_utils::check_system_call!(
+                || {
+                    unsafe {
+                        libc::write(
+                            write_fd,
+                            write_slice.as_ptr() as *const libc::c_void,
+                            towrite,
+                        )
+                    }
+                },
+                &[]
+            )?;
+            println!("Wrote {}", rv);
+            bytes_written += rv as usize;
+
+            let read_slice = &mut read_buf[bytes_read..];
+            let toread = read_slice.len();
+            let rv = test_utils::check_system_call!(
+                || {
+                    unsafe { libc::read(read_fd, read_slice.as_ptr() as *mut libc::c_void, toread) }
+                },
+                &[]
+            )?;
+            println!("Read {}", rv);
+            let range_read = bytes_read..bytes_read + rv as usize;
+            assert_eq!(read_buf[range_read.clone()], write_buf[range_read]);
+            bytes_read += rv as usize;
+        }
 
         Ok(())
     })

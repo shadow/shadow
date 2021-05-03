@@ -23,8 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.container }}
-      # the default for ubuntu:18.04, but with the size increased from 65536k
-      options: '--shm-size="1g"'
+      # the default shm-size for ubuntu:18.04, but with the size increased from
+      # 65536k. github's default docker seccomp policy seems to disallow
+      # process_vm_readv and process_vm_writev; disable it altogether. See
+      # https://docs.docker.com/engine/security/seccomp/
+      options: '--shm-size="1g" --security-opt seccomp=unconfined'
     strategy:
       matrix:
         container: ['ubuntu:16.04', 'ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:33', 'centos:7', 'centos:8']

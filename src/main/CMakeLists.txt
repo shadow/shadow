@@ -19,7 +19,10 @@ add_cflags(-fPIC)
 #add_cflags(-Wno-unused-command-line-argument)
 #add_cflags(-Wno-unknown-warning-option)
 #add_cflags(-Wno-visibility)
-add_cflags(-std=gnu99)
+
+# Enable C11. Be careful though, some C11 features aren't available on CentOS 7,
+# which uses gcc 4.8: https://gcc.gnu.org/wiki/C11Status
+add_cflags(-std=gnu11)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} $ENV{CXXFLAGS} -std=c++11 -fPIC")
 
 if(SHADOW_PROFILE STREQUAL ON)

@@ -131,16 +131,24 @@ static SysCallReturn _syscallhandler_getnameHelper(SysCallHandler* sys, struct s
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    socklen_t* addrlen = process_getMutablePtr(sys->process, addrlenPtr, sizeof(*addrlen));
+    socklen_t addrlen;
+    if (process_readPtr(sys->process, &addrlen, addrlenPtr, sizeof(addrlen)) != 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
 
     /* The result is truncated if they didn't give us enough space. */
-    size_t retSize = MIN(*addrlen, slen);
-    *addrlen = (socklen_t)slen;
+    size_t retSize = MIN(addrlen, slen);
+
+    addrlen = slen;
+    if (process_writePtr(sys->process, addrlenPtr, &addrlen, sizeof(addrlen)) != 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
 
     if (retSize > 0) {
         /* Return the results */
-        struct sockaddr* addr = process_getWriteablePtr(sys->process, addrPtr, retSize);
-        memcpy(addr, saddr, retSize);
+        if (process_writePtr(sys->process, addrPtr, saddr, retSize) != 0) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        }
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE};
@@ -996,10 +1004,13 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    socklen_t* optlen = process_getMutablePtr(sys->process, optlenPtr, sizeof(*optlen));
+    socklen_t optlen;
+    if (process_readPtr(sys->process, &optlen, optlenPtr, sizeof(optlen)) != 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
 
     /* Return early if there are no bytes to store data. */
-    if (*optlen == 0) {
+    if (optlen == 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
     }
 
@@ -1008,7 +1019,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    void* optval = process_getWriteablePtr(sys->process, optvalPtr, *optlen);
+    void* optval = process_getWriteablePtr(sys->process, optvalPtr, optlen);
 
     errcode = 0;
     switch (level) {
@@ -1019,17 +1030,23 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
             }
 
             errcode =
-                _syscallhandler_getTCPOptHelper(sys, (TCP*)socket_desc, optname, optval, optlen);
+                _syscallhandler_getTCPOptHelper(sys, (TCP*)socket_desc, optname, optval, &optlen);
             break;
         }
         case SOL_SOCKET: {
-            errcode = _syscallhandler_getSocketOptHelper(sys, socket_desc, optname, optval, optlen);
+            errcode =
+                _syscallhandler_getSocketOptHelper(sys, socket_desc, optname, optval, &optlen);
             break;
         }
         default:
             warning("getsockopt called with unsupported level %i", level);
             errcode = -ENOPROTOOPT;
             break;
+    }
+
+    process_flushPtrs(sys->process);
+    if (process_writePtr(sys->process, optlenPtr, &optlen, sizeof(optlen)) != 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};

@@ -118,8 +118,10 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    const struct itimerspec* newValue =
-        process_getReadablePtr(sys->process, newValuePtr, sizeof(*newValue));
+    struct itimerspec newValue;
+    if (process_readPtr(sys->process, &newValue, newValuePtr, sizeof(newValue)) != 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    };
 
     /* Old value is allowed to be null. */
     struct itimerspec* oldValue = NULL;
@@ -128,7 +130,7 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
     }
 
     /* Service the call in the timer module. */
-    errcode = timer_setTime(timer, flags, newValue, oldValue);
+    errcode = timer_setTime(timer, flags, &newValue, oldValue);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }

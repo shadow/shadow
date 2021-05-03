@@ -71,8 +71,7 @@ static int _syscallhandler_validateDirAndPathnameHelper(
     }
 
     /* Get the path string from the plugin. */
-    return thread_getReadableString(
-        sys->thread, pathnamePtr, PATH_MAX, pathname_out, NULL);
+    return process_getReadableString(sys->process, pathnamePtr, PATH_MAX, pathname_out, NULL);
 }
 
 static SysCallReturn
@@ -421,8 +420,7 @@ SysCallReturn syscallhandler_symlinkat(SysCallHandler* sys,
 
     /* Get the path string from the plugin. */
     const char* targetpath;
-    errcode = thread_getReadableString(
-        sys->thread, targetpathPtr, PATH_MAX, &targetpath, NULL);
+    errcode = process_getReadableString(sys->process, targetpathPtr, PATH_MAX, &targetpath, NULL);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }

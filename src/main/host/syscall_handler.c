@@ -257,8 +257,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     // syscall after an `exec` (which destroys the MemoryManager). It's done
     // here because the MemoryManager needs a plugin thread that's ready to
     // make syscalls in order to perform its initialization.
-    if (_useMM && !process_getMemoryManager(sys->process)) {
-        process_setMemoryManager(sys->process, memorymanager_new(sys->thread));
+    if (_useMM) {
+        memorymanager_initMapperIfNeeded(process_getMemoryManager(sys->process), sys->thread);
     }
     SysCallReturn scr;
 
