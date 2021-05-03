@@ -162,7 +162,7 @@ LogLevel hostoptions_getHeartbeatLogLevel(const struct HostOptions *host);
 
 LogInfoFlags hostoptions_getHeartbeatLogInfo(const struct HostOptions *host);
 
-uint32_t hostoptions_getHeartbeatInterval(const struct HostOptions *host);
+SimulationTime hostoptions_getHeartbeatInterval(const struct HostOptions *host);
 
 char *hostoptions_getPcapDirectory(const struct HostOptions *host);
 

@@ -1375,7 +1375,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn hostoptions_getHeartbeatInterval(host: *const HostOptions) -> u32 {
+    pub extern "C" fn hostoptions_getHeartbeatInterval(
+        host: *const HostOptions,
+    ) -> c::SimulationTime {
         assert!(!host.is_null());
         let host = unsafe { &*host };
 
@@ -1384,7 +1386,8 @@ mod export {
             .unwrap()
             .convert(units::TimePrefixUpper::Sec)
             .unwrap()
-            .value() as u32
+            .value()
+            * SIMTIME_ONE_SECOND
     }
 
     #[no_mangle]
