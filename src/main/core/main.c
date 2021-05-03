@@ -200,7 +200,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     if (options_getCPUPinning(options)) {
         int rc = affinity_initPlatformInfo();
         if (rc) {
-          return EXIT_FAILURE;
+            return EXIT_FAILURE;
         }
     }
 
@@ -211,7 +211,6 @@ gint main_runShadow(gint argc, gchar* argv[]) {
 
         if (rc != 0) {
             error("Could not set SCHED_FIFO");
-            return -1;
         } else {
             message("Successfully set real-time scheduler mode to SCHED_FIFO");
         }
@@ -231,6 +230,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         shadow_logger_unref(logger);
     }
 
-    g_printerr("** Stopping Shadow, returning code %i (%s)\n", returnCode, (returnCode == 0) ? "success" : "error");
+    g_printerr("** Stopping Shadow, returning code %i (%s)\n", returnCode,
+               (returnCode == 0) ? "success" : "error");
     return returnCode;
 }
