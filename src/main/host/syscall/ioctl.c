@@ -37,7 +37,9 @@ static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, File* file, int 
         case TCGETA:
         case TCSETA:
         case TCSETAW:
-        case TCSETAF: {
+        case TCSETAF:
+        case TIOCGWINSZ:
+        case TIOCSWINSZ: {
             // not a terminal
             result = -ENOTTY;
             break;
@@ -98,7 +100,9 @@ static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
         case TCGETA:
         case TCSETA:
         case TCSETAW:
-        case TCSETAF: {
+        case TCSETAF:
+        case TIOCGWINSZ:
+        case TIOCSWINSZ: {
             // not a terminal
             result = -ENOTTY;
             break;
@@ -151,7 +155,9 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
         case TCGETA:
         case TCSETA:
         case TCSETAW:
-        case TCSETAF: {
+        case TCSETAF:
+        case TIOCGWINSZ:
+        case TIOCSWINSZ: {
             // not a terminal
             result = -ENOTTY;
             break;

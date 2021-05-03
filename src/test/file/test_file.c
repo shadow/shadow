@@ -315,6 +315,8 @@ static void _test_ioctl_tty() {
     _ioctl_check_enotty(fd, TCSETA);
     _ioctl_check_enotty(fd, TCSETAW);
     _ioctl_check_enotty(fd, TCSETAF);
+    _ioctl_check_enotty(fd, TIOCGWINSZ);
+    _ioctl_check_enotty(fd, TIOCSWINSZ);
 
     // in glibc, isatty() calls tcgetattr() which makes the ioctl call
     int rv = isatty(fd);
