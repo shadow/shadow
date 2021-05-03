@@ -12,9 +12,11 @@
 #include <stddef.h>
 #include <sys/types.h>
 
+#include "main/bindings/c/bindings.h"
 #include "main/core/logger/shadow_logger.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
+#include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
 #include "main/core/worker.h"
@@ -25,11 +27,7 @@
 #include "support/logger/logger.h"
 
 static int _maxConcurrency = -1;
-OPTION_EXPERIMENTAL_ENTRY("max-concurrency", 0, 0, G_OPTION_ARG_INT,
-                          &_maxConcurrency,
-                          "Maximum number of workers to allow to run at once. "
-                          "Set to -1 for no limit. [-1]",
-                          "N")
+ADD_CONFIG_HANDLER(config_getMaxConcurrency, _maxConcurrency)
 
 struct _Scheduler {
     // Unowned back-pointer.

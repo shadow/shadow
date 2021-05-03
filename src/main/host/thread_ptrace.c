@@ -15,6 +15,8 @@
 // Must come after sys/ptrace.h
 #include <linux/ptrace.h>
 
+#include "main/bindings/c/bindings.h"
+#include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
 #include "main/host/shimipc.h"
 #include "main/host/syscall_numbers.h"
@@ -49,12 +51,7 @@
 // Each worker thread gets its own proxy thread so that forking simulated
 // processes can be parallelized.
 static bool _useONWaitpidWorkarounds = true;
-OPTION_EXPERIMENTAL_ENTRY("disable-o-n-waitpid-workarounds", 0, G_OPTION_FLAG_REVERSE,
-                          G_OPTION_ARG_NONE, &_useONWaitpidWorkarounds,
-                          "Disable performance workarounds for waitpid being O(n). Beneficial to "
-                          "disable if waitpid is patched to be O(1) or in some cases where it'd "
-                          "otherwise result in excessive detaching and reattaching",
-                          NULL)
+ADD_CONFIG_HANDLER(config_getUseOnWaitpidWorkarounds, _useONWaitpidWorkarounds)
 
 // Because of <https://github.com/shadow/shadow/issues/1134> we also always use __WNOTHREAD when
 // calling waitpid. Otherwise if the target task isn't waitable yet, the kernel will move onto

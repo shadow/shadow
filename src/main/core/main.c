@@ -19,6 +19,7 @@
 #include "main/bindings/c/bindings.h"
 #include "main/core/controller.h"
 #include "main/core/logger/shadow_logger.h"
+#include "main/core/support/config_handlers.h"
 #include "main/host/affinity.h"
 #include "main/shmem/shmem_cleanup.h"
 #include "main/utility/disable_aslr.h"
@@ -27,9 +28,7 @@
 #include "support/logger/logger.h"
 
 static bool _useSchedFifo = false;
-OPTION_EXPERIMENTAL_ENTRY(
-    "set-sched-fifo", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &_useSchedFifo,
-    "Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7)", NULL)
+ADD_CONFIG_HANDLER(config_getUseSchedFifo, _useSchedFifo)
 
 static Controller* shadowcontroller;
 
