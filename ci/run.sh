@@ -7,7 +7,6 @@ set -euo pipefail
 BUILD_IMAGES=0
 
 CONTAINERS=(
-    ubuntu:16.04
     ubuntu:18.04
     ubuntu:20.04
     debian:10-slim
@@ -54,9 +53,9 @@ Run all default configurations, but restrict C compilers to gcc:
   $0 -C gcc
 
 Run all default configurations, but restrict C compilers to gcc,
-and containers to ubuntu:16.04 and centos:7:
+and containers to ubuntu:18.04 and centos:7:
 
-  $0 -C gcc -c "ubuntu:16.04 centos:7"
+  $0 -C gcc -c "ubuntu:18.04 centos:7"
 
 Set "extra" configurations to ubuntu:18.04;clang;coverage
 and debian:10-slim;gcc;coverage
