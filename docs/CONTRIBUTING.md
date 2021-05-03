@@ -16,5 +16,5 @@ documentation](README.md) to get started with building and using
 Shadow.
 
 When you're ready to start coding, please take a look at our [Coding
-style](coding-style.md) and [Version control](version-control.md)
+style](coding-style.md) and [pull request](pull-requests.md)
 guidelines.
