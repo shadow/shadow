@@ -4,6 +4,7 @@ use crate::host::descriptor::CompatDescriptor;
 pub const CONFIG_PIPE_BUFFER_SIZE: u32 = 65536;
 pub const SYSCALL_IO_BUFSIZE: u32 = 10485760;
 pub type size_t = ::std::os::raw::c_ulong;
+pub type guint64 = ::std::os::raw::c_ulong;
 pub type __uint32_t = ::std::os::raw::c_uint;
 pub type __int64_t = ::std::os::raw::c_long;
 pub type __uint64_t = ::std::os::raw::c_ulong;
@@ -41,6 +42,13 @@ extern "C" {
 extern "C" {
     pub fn shadow_logger_shouldFilter(logger: *mut ShadowLogger, level: LogLevel) -> bool;
 }
+pub const SchedulerPolicyType_SP_SERIAL_GLOBAL: SchedulerPolicyType = 0;
+pub const SchedulerPolicyType_SP_PARALLEL_HOST_SINGLE: SchedulerPolicyType = 1;
+pub const SchedulerPolicyType_SP_PARALLEL_HOST_STEAL: SchedulerPolicyType = 2;
+pub const SchedulerPolicyType_SP_PARALLEL_THREAD_SINGLE: SchedulerPolicyType = 3;
+pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERTHREAD: SchedulerPolicyType = 4;
+pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERHOST: SchedulerPolicyType = 5;
+pub type SchedulerPolicyType = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Process {
@@ -53,6 +61,9 @@ pub struct _Host {
     _unused: [u8; 0],
 }
 pub type Host = _Host;
+#[doc = " Simulation time in nanoseconds. Allows for a consistent representation"]
+#[doc = " of time throughput the simulator."]
+pub type SimulationTime = guint64;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Counter {
@@ -63,35 +74,6 @@ pub struct Counter {
 pub struct PosixFileArc {
     _unused: [u8; 0],
 }
-pub use self::_Status as Status;
-pub const _Status_STATUS_NONE: _Status = 0;
-pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
-pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
-pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
-pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
-pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
-pub type _Status = i32;
-pub type LegacyDescriptor = [u64; 7usize];
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _StatusListener {
-    _unused: [u8; 0],
-}
-pub type StatusListener = _StatusListener;
-extern "C" {
-    pub fn statuslistener_ref(listener: *mut StatusListener);
-}
-extern "C" {
-    pub fn statuslistener_unref(listener: *mut StatusListener);
-}
-extern "C" {
-    pub fn statuslistener_onStatusChanged(
-        listener: *mut StatusListener,
-        currentStatus: Status,
-        transitions: Status,
-    );
-}
-pub type SysCallHandler = _SysCallHandler;
 pub type PluginVirtualPtr = _PluginVirtualPtr;
 pub type PluginPtr = _PluginVirtualPtr;
 #[repr(C)]
@@ -275,6 +257,41 @@ fn bindgen_test_layout__SysCallReturn() {
     );
 }
 pub type SysCallReturn = _SysCallReturn;
+pub use self::_LogInfoFlags as LogInfoFlags;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_NONE: _LogInfoFlags = 0;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_NODE: _LogInfoFlags = 1;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_SOCKET: _LogInfoFlags = 2;
+pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
+pub type _LogInfoFlags = i32;
+pub use self::_Status as Status;
+pub const _Status_STATUS_NONE: _Status = 0;
+pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
+pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
+pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
+pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
+pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
+pub type _Status = i32;
+pub type LegacyDescriptor = [u64; 7usize];
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _StatusListener {
+    _unused: [u8; 0],
+}
+pub type StatusListener = _StatusListener;
+extern "C" {
+    pub fn statuslistener_ref(listener: *mut StatusListener);
+}
+extern "C" {
+    pub fn statuslistener_unref(listener: *mut StatusListener);
+}
+extern "C" {
+    pub fn statuslistener_onStatusChanged(
+        listener: *mut StatusListener,
+        currentStatus: Status,
+        transitions: Status,
+    );
+}
+pub type SysCallHandler = _SysCallHandler;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Thread {
@@ -559,132 +576,6 @@ pub type Futex = _Futex;
 extern "C" {
     pub fn worker_getActiveProcess() -> *mut Process;
 }
-pub use self::_TriggerType as TriggerType;
-pub const _TriggerType_TRIGGER_NONE: _TriggerType = 0;
-pub const _TriggerType_TRIGGER_DESCRIPTOR: _TriggerType = 1;
-pub const _TriggerType_TRIGGER_POSIX_FILE: _TriggerType = 2;
-pub const _TriggerType_TRIGGER_FUTEX: _TriggerType = 3;
-pub type _TriggerType = i32;
-pub type TriggerObject = _TriggerObject;
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union _TriggerObject {
-    pub as_pointer: *mut ::std::os::raw::c_void,
-    pub as_descriptor: *mut LegacyDescriptor,
-    pub as_file: *const PosixFileArc,
-    pub as_futex: *mut Futex,
-    _bindgen_union_align: u64,
-}
-#[test]
-fn bindgen_test_layout__TriggerObject() {
-    assert_eq!(
-        ::std::mem::size_of::<_TriggerObject>(),
-        8usize,
-        concat!("Size of: ", stringify!(_TriggerObject))
-    );
-    assert_eq!(
-        ::std::mem::align_of::<_TriggerObject>(),
-        8usize,
-        concat!("Alignment of ", stringify!(_TriggerObject))
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TriggerObject>())).as_pointer as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TriggerObject),
-            "::",
-            stringify!(as_pointer)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TriggerObject>())).as_descriptor as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TriggerObject),
-            "::",
-            stringify!(as_descriptor)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TriggerObject>())).as_file as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TriggerObject),
-            "::",
-            stringify!(as_file)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TriggerObject>())).as_futex as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_TriggerObject),
-            "::",
-            stringify!(as_futex)
-        )
-    );
-}
-pub type Trigger = _Trigger;
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct _Trigger {
-    pub type_: TriggerType,
-    pub object: TriggerObject,
-    pub status: Status,
-}
-#[test]
-fn bindgen_test_layout__Trigger() {
-    assert_eq!(
-        ::std::mem::size_of::<_Trigger>(),
-        24usize,
-        concat!("Size of: ", stringify!(_Trigger))
-    );
-    assert_eq!(
-        ::std::mem::align_of::<_Trigger>(),
-        8usize,
-        concat!("Alignment of ", stringify!(_Trigger))
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Trigger>())).type_ as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Trigger),
-            "::",
-            stringify!(type_)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Trigger>())).object as *const _ as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Trigger),
-            "::",
-            stringify!(object)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Trigger>())).status as *const _ as usize },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Trigger),
-            "::",
-            stringify!(status)
-        )
-    );
-}
-extern "C" {
-    pub fn syscallcondition_new(trigger: Trigger, timeout: *mut Timer) -> *mut SysCallCondition;
-}
-extern "C" {
-    pub fn syscallcondition_unref(cond: *mut SysCallCondition);
-}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Epoll {
@@ -927,4 +818,130 @@ extern "C" {
         sys: *mut SysCallHandler,
         args: *const SysCallArgs,
     ) -> SysCallReturn;
+}
+pub use self::_TriggerType as TriggerType;
+pub const _TriggerType_TRIGGER_NONE: _TriggerType = 0;
+pub const _TriggerType_TRIGGER_DESCRIPTOR: _TriggerType = 1;
+pub const _TriggerType_TRIGGER_POSIX_FILE: _TriggerType = 2;
+pub const _TriggerType_TRIGGER_FUTEX: _TriggerType = 3;
+pub type _TriggerType = i32;
+pub type TriggerObject = _TriggerObject;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union _TriggerObject {
+    pub as_pointer: *mut ::std::os::raw::c_void,
+    pub as_descriptor: *mut LegacyDescriptor,
+    pub as_file: *const PosixFileArc,
+    pub as_futex: *mut Futex,
+    _bindgen_union_align: u64,
+}
+#[test]
+fn bindgen_test_layout__TriggerObject() {
+    assert_eq!(
+        ::std::mem::size_of::<_TriggerObject>(),
+        8usize,
+        concat!("Size of: ", stringify!(_TriggerObject))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_TriggerObject>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_TriggerObject))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_TriggerObject>())).as_pointer as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_TriggerObject),
+            "::",
+            stringify!(as_pointer)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_TriggerObject>())).as_descriptor as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_TriggerObject),
+            "::",
+            stringify!(as_descriptor)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_TriggerObject>())).as_file as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_TriggerObject),
+            "::",
+            stringify!(as_file)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_TriggerObject>())).as_futex as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_TriggerObject),
+            "::",
+            stringify!(as_futex)
+        )
+    );
+}
+pub type Trigger = _Trigger;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct _Trigger {
+    pub type_: TriggerType,
+    pub object: TriggerObject,
+    pub status: Status,
+}
+#[test]
+fn bindgen_test_layout__Trigger() {
+    assert_eq!(
+        ::std::mem::size_of::<_Trigger>(),
+        24usize,
+        concat!("Size of: ", stringify!(_Trigger))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_Trigger>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_Trigger))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Trigger>())).type_ as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Trigger),
+            "::",
+            stringify!(type_)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Trigger>())).object as *const _ as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Trigger),
+            "::",
+            stringify!(object)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Trigger>())).status as *const _ as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Trigger),
+            "::",
+            stringify!(status)
+        )
+    );
+}
+extern "C" {
+    pub fn syscallcondition_new(trigger: Trigger, timeout: *mut Timer) -> *mut SysCallCondition;
+}
+extern "C" {
+    pub fn syscallcondition_unref(cond: *mut SysCallCondition);
 }
