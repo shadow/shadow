@@ -47,11 +47,6 @@
 #include "shim/shim_event.h"
 #include "support/logger/logger.h"
 
-// this is not defined on Ubuntu 16.04
-#ifndef SYS_copy_file_range
-#define SYS_copy_file_range 326
-#endif
-
 static bool _useMM = true;
 OPTION_EXPERIMENTAL_ENTRY("disable-memory-manager", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE,
                           &_useMM,
