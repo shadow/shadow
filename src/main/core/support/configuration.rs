@@ -126,11 +126,6 @@ pub struct GeneralOptions {
     #[clap(about = GENERAL_HELP.get("stop_time").unwrap())]
     stop_time: Option<units::Time<units::TimePrefixUpper>>,
 
-    /// Environment variables passed to all simulated processes (ex: "ENV_A=1;ENV_B=2")
-    #[clap(long, value_name = "env-string")]
-    #[clap(about = GENERAL_HELP.get("environment").unwrap())]
-    environment: Option<String>,
-
     /// Initialize randomness using seed N
     #[clap(long, value_name = "N")]
     #[clap(about = GENERAL_HELP.get("seed").unwrap())]
@@ -451,6 +446,10 @@ pub struct ProcessOptions {
 
     #[serde(default = "default_args_empty")]
     args: ProcessArgs,
+
+    /// Environment variables passed to the simulated process (ex: "ENV_A=1;ENV_B=2")
+    #[serde(default)]
+    environment: String,
 
     #[serde(default)]
     quantity: Quantity,
@@ -1176,17 +1175,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getEnvironment(config: *const ConfigOptions) -> *mut libc::c_char {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        match &config.general.environment {
-            Some(x) => CString::into_raw(CString::new(x.clone()).unwrap()),
-            None => std::ptr::null_mut(),
-        }
-    }
-
-    #[no_mangle]
     pub extern "C" fn config_getSchedulerPolicy(
         config: *const ConfigOptions,
     ) -> c::SchedulerPolicyType {
@@ -1539,6 +1527,16 @@ mod export {
             let arg = CString::new(arg.as_bytes()).unwrap();
             unsafe { f(arg.as_c_str().as_ptr(), data) }
         }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn processoptions_getEnvironment(
+        proc: *const ProcessOptions,
+    ) -> *mut libc::c_char {
+        assert!(!proc.is_null());
+        let proc = unsafe { &*proc };
+
+        CString::into_raw(CString::new(proc.environment.clone()).unwrap())
     }
 
     #[no_mangle]

@@ -235,20 +235,9 @@ static const gchar* _topology_edgeAttributeToString(EdgeAttribute attr) {
     }
 }
 
-static gint _topology_edgeAttributeLength(EdgeAttribute attr) {
-    if(attr == EDGE_ATTR_LATENCY) {
-        return 7;
-    } else if(attr == EDGE_ATTR_PACKETLOSS) {
-        return 10;
-    } else if(attr == EDGE_ATTR_JITTER) {
-        return 6;
-    } else {
-        return 7;
-    }
-}
-
 static gboolean _topology_isValidEdgeAttributeKey(const gchar* attrName, EdgeAttribute attr) {
-    gint r = g_ascii_strncasecmp(attrName, _topology_edgeAttributeToString(attr), _topology_edgeAttributeLength(attr));
+    const gchar* expectedString = _topology_edgeAttributeToString(attr);
+    gint r = g_ascii_strncasecmp(attrName, expectedString, strlen(expectedString));
     return (r == 0) ? TRUE : FALSE;
 }
 

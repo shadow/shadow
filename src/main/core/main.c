@@ -59,7 +59,7 @@ static void _main_logEnvironment(gchar** argv, gchar** envv) {
     }
 }
 
-static gint _main_helper(Options* options) {
+static gint _main_helper(Options* options, gchar* argv[]) {
     /* start off with some status messages */
 #if defined(IGRAPH_VERSION)
     gint igraphMajor = -1, igraphMinor = -1, igraphPatch = -1;
@@ -87,9 +87,7 @@ static gint _main_helper(Options* options) {
     message("logging current startup arguments and environment");
 
     gchar** envlist = g_get_environ();
-    gchar** arglist = g_strsplit(options_getArgumentString(options), " ", 0);
-    _main_logEnvironment(arglist, envlist);
-    g_strfreev(arglist);
+    _main_logEnvironment(argv, envlist);
     g_strfreev(envlist);
 
     message("startup checks passed, we are ready to start simulation");
@@ -152,11 +150,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     sigprocmask(SIG_SETMASK, &new_sig_set, NULL);
 
     /* parse the options from the command line */
-    gchar* cmds = g_strjoinv(" ", argv);
-    gchar** cmdv = g_strsplit(cmds, " ", 0);
-    g_free(cmds);
-    Options* options = options_new(argc, cmdv);
-    g_strfreev(cmdv);
+    Options* options = options_new(argc, argv);
     if(!options) {
         return EXIT_FAILURE;
     }
@@ -206,7 +200,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     if (options_getCPUPinning(options)) {
         int rc = affinity_initPlatformInfo();
         if (rc) {
-          return EXIT_FAILURE;
+            return EXIT_FAILURE;
         }
     }
 
@@ -217,7 +211,6 @@ gint main_runShadow(gint argc, gchar* argv[]) {
 
         if (rc != 0) {
             error("Could not set SCHED_FIFO");
-            return -1;
         } else {
             message("Successfully set real-time scheduler mode to SCHED_FIFO");
         }
@@ -228,7 +221,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     // branch on memory addresses.
     disable_aslr();
 
-    gint returnCode = _main_helper(options);
+    gint returnCode = _main_helper(options, argv);
 
     options_free(options);
     ShadowLogger* logger = shadow_logger_getDefault();
@@ -237,6 +230,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         shadow_logger_unref(logger);
     }
 
-    g_printerr("** Stopping Shadow, returning code %i (%s)\n", returnCode, (returnCode == 0) ? "success" : "error");
+    g_printerr("** Stopping Shadow, returning code %i (%s)\n", returnCode,
+               (returnCode == 0) ? "success" : "error");
     return returnCode;
 }
