@@ -27,4 +27,4 @@ Homepage:
     
 # Contributing
 
-Contributions can be made by submitting pull requests via GitHub.
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
