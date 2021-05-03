@@ -230,12 +230,6 @@ pub struct ExperimentalOptions {
     #[clap(about = EXP_HELP.get("use_memory_manager").unwrap())]
     use_memory_manager: Option<bool>,
 
-    /// Use buffered IO when reading plugin memory through /proc. This introduces some extra copying
-    /// but may help performance when making small sequential accesses.
-    #[clap(long, value_name = "bool")]
-    #[clap(about = EXP_HELP.get("use_ptrace_buffered_io").unwrap())]
-    use_ptrace_buffered_io: Option<bool>,
-
     /// Use shim-side syscall handler to force hot-path syscalls to be handled via an inter-process syscall with Shadow
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_shim_syscall_handler").unwrap())]
@@ -311,7 +305,6 @@ impl Default for ExperimentalOptions {
             preload_spin_max: Some(8096),
             max_concurrency: None,
             use_memory_manager: Some(true),
-            use_ptrace_buffered_io: Some(false),
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(false),
             interpose_method: Some(InterposeMethod::Ptrace),
@@ -1104,13 +1097,6 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_memory_manager.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUsePtraceBufferedIo(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_ptrace_buffered_io.unwrap()
     }
 
     #[no_mangle]

@@ -114,8 +114,6 @@ bool config_getUseObjectCounters(const struct ConfigOptions *config);
 
 bool config_getUseMemoryManager(const struct ConfigOptions *config);
 
-bool config_getUsePtraceBufferedIo(const struct ConfigOptions *config);
-
 bool config_getUseShimSyscallHandler(const struct ConfigOptions *config);
 
 int32_t config_getPreloadSpinMax(const struct ConfigOptions *config);
