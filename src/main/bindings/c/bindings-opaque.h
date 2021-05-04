@@ -25,6 +25,9 @@ typedef enum QDiscMode {
   Q_DISC_MODE_ROUND_ROBIN,
 } QDiscMode;
 
+// Memory allocated by Shadow, in a remote address space.
+typedef struct AllocdMem_u8 AllocdMem_u8;
+
 // A queue of byte chunks.
 typedef struct ByteQueue ByteQueue;
 

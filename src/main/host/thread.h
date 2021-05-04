@@ -34,20 +34,6 @@ int thread_getReturnCode(Thread* thread);
 // You can map to a corresponding errno value with syscall_rawReturnValueToErrno.
 long thread_nativeSyscall(Thread* thread, long n, ...);
 
-// Allocate some memory in the plugin's address space. The returned pointer
-// should be freed with `thread_free`.
-PluginPtr thread_mallocPluginPtr(Thread* thread, size_t size);
-
-// Free memory allocated with `thread_mallocPluginPtr`. `size` should be the
-// original size passed to `thread_mallocPluginPtr`.
-//
-// TODO: It's a bit unfortunate to have to require the size here, but at this
-// time the underlying implementation (based on mmap) needs it. The alternatives
-// to this API awkwardness is either for thread_mallocPluginPtr to return an
-// opaque struct where this can be squirreled away (a different kind of API
-// awkwardness and more boilerplate), or keeping an internal map of ptr->size.
-void thread_freePluginPtr(Thread* thread, PluginPtr ptr, size_t size);
-
 bool thread_isRunning(Thread* thread);
 
 uint32_t thread_getProcessId(Thread* thread);

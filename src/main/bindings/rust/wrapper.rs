@@ -374,12 +374,6 @@ extern "C" {
     ) -> ::std::os::raw::c_long;
 }
 extern "C" {
-    pub fn thread_mallocPluginPtr(thread: *mut Thread, size: size_t) -> PluginPtr;
-}
-extern "C" {
-    pub fn thread_freePluginPtr(thread: *mut Thread, ptr: PluginPtr, size: size_t);
-}
-extern "C" {
     pub fn thread_isRunning(thread: *mut Thread) -> bool;
 }
 extern "C" {

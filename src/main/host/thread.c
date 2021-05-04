@@ -139,37 +139,6 @@ long thread_nativeSyscall(Thread* thread, long n, ...) {
     return rv;
 }
 
-PluginPtr thread_mallocPluginPtr(Thread* thread, size_t size) {
-    // For now we just implement in terms of thread_nativeSyscall.
-    // TODO: We might be able to do something more efficient by delegating to
-    // the specific thread implementation, and/or keeping a persistent
-    // mmap'd area that we allocate from.
-    MAGIC_ASSERT(thread);
-    long ptr = thread_nativeSyscall(thread, SYS_mmap, NULL, size,
-                                    PROT_READ | PROT_WRITE,
-                                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    int err = syscall_rawReturnValueToErrno(ptr);
-    if (err) {
-        error("thread_nativeSyscall(mmap): %s", strerror(err));
-        abort();
-    }
-
-    // Should be page-aligned.
-    utility_assert((ptr % sysconf(_SC_PAGE_SIZE)) == 0);
-
-    return (PluginPtr){.val = ptr};
-}
-
-void thread_freePluginPtr(Thread* thread, PluginPtr ptr, size_t size) {
-    MAGIC_ASSERT(thread);
-    int err =
-        syscall_rawReturnValueToErrno(thread_nativeSyscall(thread, SYS_munmap, ptr.val, size));
-    if (err) {
-        error("thread_nativeSyscall(munmap): %s", strerror(err));
-        abort();
-    }
-}
-
 int thread_getID(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->tid;
