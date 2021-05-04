@@ -47,7 +47,7 @@ pub trait Prefix: Clone + Copy + Default + PartialEq + FromStr + Display + Debug
 }
 
 /// Common SI prefixes (including base-2 prefixes since they're similar).
-#[derive(Debug, Copy, Clone, PartialEq, JsonSchema)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SiPrefix {
     Nano,
     Micro,
@@ -137,7 +137,7 @@ impl Prefix for SiPrefix {
 
 /// Common SI prefixes larger than the base unit (including base-2 prefixes
 /// since they're similar).
-#[derive(Debug, Copy, Clone, PartialEq, JsonSchema)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SiPrefixUpper {
     Base,
     Kilo,
@@ -213,7 +213,7 @@ impl Prefix for SiPrefixUpper {
 /// Time units, which we pretend are prefixes for implementation simplicity. These
 /// contain both the prefix ("n", "u", "m") and the suffix ("sec", "min", "hr")
 /// and should be used with the [`Time`] unit.
-#[derive(Debug, Copy, Clone, PartialEq, JsonSchema)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TimePrefix {
     Nano,
     Micro,
@@ -281,7 +281,7 @@ impl Prefix for TimePrefix {
 /// Time units larger than the base unit, which we pretend are prefixes for
 /// implementation simplicity. These really contain the unit suffix ("sec",
 /// "min", "hr") and should be used with the [`Time`] unit.
-#[derive(Debug, Copy, Clone, PartialEq, JsonSchema)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TimePrefixUpper {
     Sec,
     Min,
@@ -488,6 +488,23 @@ macro_rules! unit_impl {
                 serializer.serialize_str(&self.to_string())
             }
         }
+
+        impl<T: Prefix> JsonSchema for $name<T> {
+            fn is_referenceable() -> bool { false }
+
+            fn schema_name() -> String {
+                stringify!($name).to_owned()
+            }
+
+            fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+                schemars::schema::SchemaObject {
+                    instance_type: Some(schemars::schema::InstanceType::String.into()),
+                    format: Some(stringify!($name).to_owned()),
+                    ..Default::default()
+                }
+                .into()
+            }
+        }
     };
 }
 
@@ -519,7 +536,7 @@ pub trait Unit: Sized {
 
 /// An amount of time. Should only use the time prefix types ([`TimePrefix`] and
 /// [`TimePrefixUpper`]) with this type.
-#[derive(Debug, Clone, Copy, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Time<T: Prefix> {
     value: u64,
     prefix: T,
@@ -542,7 +559,7 @@ impl From<Time<TimePrefixUpper>> for std::time::Duration {
 }
 
 /// A number of bytes.
-#[derive(Debug, Clone, Copy, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Bytes<T: Prefix> {
     pub value: u64,
     pub prefix: T,
@@ -551,7 +568,7 @@ pub struct Bytes<T: Prefix> {
 unit_impl!(Bytes, u64, ["B", "byte", "bytes"]);
 
 /// A throughput in bits-per-second.
-#[derive(Debug, Clone, Copy, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BitsPerSec<T: Prefix> {
     pub value: u64,
     pub prefix: T,
