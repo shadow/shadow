@@ -22,8 +22,8 @@
 #include "main/core/logical_processor.h"
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
+#include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/options.h"
 #include "main/core/work/event.h"
 #include "main/core/work/task.h"
 #include "main/host/affinity.h"
@@ -42,11 +42,7 @@
 
 // Allow turning off object counting at run-time.
 static bool _use_object_counters = true;
-OPTION_EXPERIMENTAL_ENTRY("disable-object-counters", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE,
-                          &_use_object_counters,
-                          "Disable counting object allocations and deallocations. "
-                          "If disabled, we will not be able to detect object memory leaks.",
-                          NULL)
+ADD_CONFIG_HANDLER(config_getUseObjectCounters, _use_object_counters)
 
 static void* _worker_run(void* voidWorker);
 static void _worker_free(Worker* worker);
@@ -491,9 +487,9 @@ Topology* worker_getTopology() {
     return manager_getTopology(worker->workerPool->manager);
 }
 
-Options* worker_getOptions() {
+const ConfigOptions* worker_getConfig() {
     Worker* worker = _worker_getPrivate();
-    return manager_getOptions(worker->workerPool->manager);
+    return manager_getConfig(worker->workerPool->manager);
 }
 
 /* this is the entry point for worker threads when running in parallel mode,

@@ -7,11 +7,13 @@
 #include <errno.h>
 #include <glib.h>
 #include <igraph.h>
+#include <inttypes.h>
 #include <math.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/routing/address.h"
@@ -197,21 +199,21 @@ static const gchar* _topology_vertexAttributeToString(VertexAttribute attr) {
     if(attr == VERTEX_ATTR_ID) {
         return "id";
     } else if(attr == VERTEX_ATTR_BANDWIDTHDOWN) {
-        return "bandwidthdown";
+        return "bandwidth_down";
     } else if(attr == VERTEX_ATTR_BANDWIDTHUP) {
-        return "bandwidthup";
+        return "bandwidth_up";
     } else if(attr == VERTEX_ATTR_IP) {
         return "ip";
     } else if(attr == VERTEX_ATTR_CITYCODE) {
-        return "citycode";
+        return "city_code";
     } else if(attr == VERTEX_ATTR_COUNTRYCODE) {
-        return "countrycode";
+        return "country_code";
     } else if(attr == VERTEX_ATTR_ASN) {
         return "asn";
     } else if(attr == VERTEX_ATTR_TYPE) {
         return "type";
     } else if(attr == VERTEX_ATTR_PACKETLOSS) {
-        return "packetloss";
+        return "packet_loss";
     } else {
         return "unknown";
     }
@@ -227,7 +229,7 @@ static const gchar* _topology_edgeAttributeToString(EdgeAttribute attr) {
     if(attr == EDGE_ATTR_LATENCY) {
         return "latency";
     } else if(attr == EDGE_ATTR_PACKETLOSS) {
-        return "packetloss";
+        return "packet_loss";
     } else if(attr == EDGE_ATTR_JITTER) {
         return "jitter";
     } else {
@@ -239,6 +241,31 @@ static gboolean _topology_isValidEdgeAttributeKey(const gchar* attrName, EdgeAtt
     const gchar* expectedString = _topology_edgeAttributeToString(attr);
     gint r = g_ascii_strncasecmp(attrName, expectedString, strlen(expectedString));
     return (r == 0) ? TRUE : FALSE;
+}
+
+static gboolean _topology_findVertexAttributeStringBandwidth(Topology* top, igraph_integer_t vertexIndex,
+        VertexAttribute attr, guint64* valueOut) {
+    MAGIC_ASSERT(top);
+
+    const gchar* name = _topology_vertexAttributeToString(attr);
+
+    if (igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, name)) {
+        const gchar* value = igraph_cattribute_VAS(&top->graph, name, vertexIndex);
+        if (value != NULL && value[0] != '\0') {
+            if (valueOut != NULL) {
+                int64_t bandwidth = parse_bandwidth(value);
+                if (bandwidth >= 0) {
+                    /* parse_bandwidth() returns bits-per-second, but shadow works with KiB/s */
+                    /* TODO: use bits or bytes everywhere within Shadow (see also: _controller_registerHostCallback()) */
+                    bandwidth /= 8 * 1024;
+                    *valueOut = bandwidth;
+                    return TRUE;
+                }
+            }
+        }
+    }
+
+    return FALSE;
 }
 
 /* the graph lock should be held when calling this function, since it accesses igraph.
@@ -589,9 +616,9 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_TYPE)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_BANDWIDTHDOWN)) {
-            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_BANDWIDTHUP)) {
-            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_PACKETLOSS)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else {
@@ -796,10 +823,10 @@ static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_int
     /* this attribute is required, so it is an error if it doesn't exist */
     const gchar* bandwidthdownKey = _topology_vertexAttributeToString(VERTEX_ATTR_BANDWIDTHDOWN);
     if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, bandwidthdownKey)) {
-        gdouble bandwidthdownValue;
-        if(_topology_findVertexAttributeDouble(top, vertexIndex, VERTEX_ATTR_BANDWIDTHDOWN, &bandwidthdownValue) &&
-                bandwidthdownValue > 0.0f) {
-            g_string_append_printf(message, " %s='%f'", bandwidthdownKey, bandwidthdownValue);
+        guint64 bandwidthdownValue;
+        if(_topology_findVertexAttributeStringBandwidth(top, vertexIndex, VERTEX_ATTR_BANDWIDTHDOWN, &bandwidthdownValue) &&
+                bandwidthdownValue > 0) {
+            g_string_append_printf(message, " %s='%" PRIu64 "'", bandwidthdownKey, bandwidthdownValue);
         } else {
             /* its an error if they gave a value that is incorrect */
             warning("required attribute '%s' on vertex %li (%s='%s') is NAN or negative",
@@ -815,10 +842,10 @@ static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_int
     /* this attribute is required, so it is an error if it doesn't exist */
     const gchar* bandwidthupKey = _topology_vertexAttributeToString(VERTEX_ATTR_BANDWIDTHUP);
     if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, bandwidthupKey)) {
-        gdouble bandwidthupValue;
-        if(_topology_findVertexAttributeDouble(top, vertexIndex, VERTEX_ATTR_BANDWIDTHUP, &bandwidthupValue) &&
-                bandwidthupValue > 0.0f) {
-            g_string_append_printf(message, " %s='%f'", bandwidthupKey, bandwidthupValue);
+        guint64 bandwidthupValue;
+        if(_topology_findVertexAttributeStringBandwidth(top, vertexIndex, VERTEX_ATTR_BANDWIDTHUP, &bandwidthupValue) &&
+                bandwidthupValue > 0) {
+            g_string_append_printf(message, " %s='%" PRIu64 "'", bandwidthupKey, bandwidthupValue);
         } else {
             /* its an error if they gave a value that is incorrect */
             warning("required attribute '%s' on vertex %li (%s='%s') is NAN or negative",
@@ -2321,16 +2348,16 @@ void topology_attach(Topology* top, Address* address, Random* randomSourcePool,
 
     /* give them the default cluster bandwidths if they asked */
     if(bwUpOut) {
-        gdouble bandwidthUp;
-        found = _topology_findVertexAttributeDouble(top, vertexIndex, VERTEX_ATTR_BANDWIDTHUP, &bandwidthUp);
+        guint64 bandwidthUp;
+        found = _topology_findVertexAttributeStringBandwidth(top, vertexIndex, VERTEX_ATTR_BANDWIDTHUP, &bandwidthUp);
         utility_assert(found);
-        *bwUpOut = (guint64) bandwidthUp;
+        *bwUpOut = bandwidthUp;
     }
     if(bwDownOut) {
-        gdouble bandwidthDown;
-        found = _topology_findVertexAttributeDouble(top, vertexIndex, VERTEX_ATTR_BANDWIDTHDOWN, &bandwidthDown);
+        guint64 bandwidthDown;
+        found = _topology_findVertexAttributeStringBandwidth(top, vertexIndex, VERTEX_ATTR_BANDWIDTHDOWN, &bandwidthDown);
         utility_assert(found);
-        *bwDownOut = (guint64) bandwidthDown;
+        *bwDownOut = bandwidthDown;
     }
 
     found = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_ID, &idStr);

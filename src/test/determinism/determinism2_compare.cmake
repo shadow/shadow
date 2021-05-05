@@ -6,7 +6,7 @@ macro(EXEC_DIFF_CHECK FILE1 FILE2)
 endmacro()
 foreach(LOOPIDX RANGE 1 10)
     exec_diff_check(
-        ${CMAKE_BINARY_DIR}/determinism2a-shadow-${METHOD}.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}.testphold.1000.stdout
-        ${CMAKE_BINARY_DIR}/determinism2b-shadow-${METHOD}.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}.testphold.1000.stdout
+        ${CMAKE_BINARY_DIR}/determinism2a-shadow-${METHOD}.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}.test-phold.1000.stdout
+        ${CMAKE_BINARY_DIR}/determinism2b-shadow-${METHOD}.data/hosts/peer${LOOPIDX}/peer${LOOPIDX}.test-phold.1000.stdout
     )
 endforeach(LOOPIDX)

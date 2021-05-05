@@ -5,35 +5,35 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/weights.txt ${CMAKE_CURRENT_BINARY_DI
 
 # FIXME: Enable the preload tests in all configurations. See https://github.com/shadow/shadow/issues/892
 
-# We should run tests using --pin-cpus in serial, otherwise all such tests will be 
+# We should run tests using --use-cpu-pinning in serial, otherwise all such tests will be
 # pinned to the same exact CPUs.
 add_shadow_tests(
     BASENAME phold-serial
     METHODS hybrid ptrace
     LOGLEVEL info
-    ARGS --pin-cpus
+    ARGS --use-cpu-pinning true
     PROPERTIES RUN_SERIAL TRUE)
 add_shadow_tests(
     BASENAME phold-serial
     METHODS preload
     LOGLEVEL info
-    ARGS --pin-cpus
+    ARGS --use-cpu-pinning true
     PROPERTIES RUN_SERIAL TRUE
     CONFIGURATIONS ilibc)
 
-# Due to --pin-cpus, we run this in serial. Otherwise we should set the "PROCESSORS 2"
+# Due to --use-cpu-pinning, we run this in serial. Otherwise we should set the "PROCESSORS 2"
 # property since we use 2 workers here.
 add_shadow_tests(
     BASENAME phold-parallel
     METHODS hybrid ptrace
     LOGLEVEL info
-    ARGS --pin-cpus --workers 2
+    ARGS --use-cpu-pinning true --workers 2
     PROPERTIES RUN_SERIAL TRUE)
 add_shadow_tests(
     BASENAME phold-parallel
     METHODS preload
     LOGLEVEL info
-    ARGS --pin-cpus --workers 2
+    ARGS --use-cpu-pinning true --workers 2
     PROPERTIES RUN_SERIAL TRUE
     CONFIGURATIONS ilibc)
 
@@ -45,12 +45,12 @@ add_shadow_tests(
     BASENAME phold-rr-qdisc
     METHODS hybrid ptrace
     LOGLEVEL info
-    ARGS --pin-cpus --interface-qdisc=RR
+    ARGS --use-cpu-pinning true --interface-qdisc roundrobin
     PROPERTIES RUN_SERIAL TRUE)
 add_shadow_tests(
     BASENAME phold-rr-qdisc
     METHODS preload
     LOGLEVEL info
-    ARGS --pin-cpus --interface-qdisc=RR
+    ARGS --use-cpu-pinning true --interface-qdisc roundrobin
     PROPERTIES RUN_SERIAL TRUE
     CONFIGURATIONS ilibc)

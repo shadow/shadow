@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include "main/bindings/c/bindings.h"
+#include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/timer.h"
@@ -48,16 +49,10 @@
 #include "support/logger/logger.h"
 
 static bool _useMM = true;
-OPTION_EXPERIMENTAL_ENTRY("disable-memory-manager", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE,
-                          &_useMM,
-                          "Disable the MemoryManager. This can be useful for debugging, but will "
-                          "hurt performance in most cases.",
-                          NULL)
+ADD_CONFIG_HANDLER(config_getUseMemoryManager, _useMM)
 
 static bool _countSyscalls = false;
-OPTION_EXPERIMENTAL_ENTRY(
-    "enable-syscall-counters", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &_countSyscalls,
-    "Count the frequency with which each syscall is made by each plugin process.", NULL)
+ADD_CONFIG_HANDLER(config_getUseSyscallCounters, _countSyscalls)
 
 SysCallHandler* syscallhandler_new(Host* host, Process* process,
                                    Thread* thread) {

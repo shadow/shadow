@@ -34,6 +34,7 @@
 
 #include "glib/gprintf.h"
 #include "main/bindings/c/bindings.h"
+#include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
@@ -66,11 +67,7 @@
 // more expensive inter-process syscall. This option disables the optimization.
 // This is defined here in Shadow because it breaks the shim.
 static bool _use_shim_syscall_handler = true;
-OPTION_EXPERIMENTAL_ENTRY("disable-shim-syscall-handler", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE,
-                          &_use_shim_syscall_handler,
-                          "Disable shim-side syscall handler to force hot-path syscalls to be "
-                          "handled via an inter-process syscall with shadow.",
-                          NULL)
+ADD_CONFIG_HANDLER(config_getUseShimSyscallHandler, _use_shim_syscall_handler)
 
 static gchar* _process_outputFileName(Process* proc, const char* type);
 static void _process_check(Process* proc);
@@ -647,11 +644,9 @@ gboolean process_isRunning(Process* proc) {
 
 static void _thread_gpointer_unref(gpointer data) { thread_unref(data); }
 
-Process* process_new(Host* host, guint processID, SimulationTime startTime,
-                     SimulationTime stopTime, InterposeMethod interposeMethod,
-                     const gchar* hostName, const gchar* pluginName,
-                     const gchar* pluginPath, const gchar* pluginSymbol,
-                     gchar** envv, gchar** argv) {
+Process* process_new(Host* host, guint processID, SimulationTime startTime, SimulationTime stopTime,
+                     InterposeMethod interposeMethod, const gchar* hostName,
+                     const gchar* pluginName, const gchar* pluginPath, gchar** envv, gchar** argv) {
     Process* proc = g_new0(Process, 1);
     MAGIC_INIT(proc);
 
@@ -700,7 +695,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime,
     }
 
     /* save args and env */
-    proc->argv = argv;
+    proc->argv = g_strdupv(argv);
     proc->envv = envv;
 
     proc->descTable = descriptortable_new();

@@ -4,23 +4,16 @@
  * See LICENSE for licensing information
  */
 
+#include "main/bindings/c/bindings.h"
+#include "main/core/support/config_handlers.h"
 #include "main/host/shimipc.h"
 
-#include "main/core/support/options.h"
-
-// We use an int here because the option parsing library doesn't provide a way
-// to set a boolean flag to false explicitly.
-static gint _useExplicitBlockMessage = true;
-OPTION_EXPERIMENTAL_ENTRY(
-    "send-explicit-block-message", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_INT, &_useExplicitBlockMessage,
-    "Send message to plugin telling it to stop spinning when a syscall blocks", "[0|1]")
+static bool _useExplicitBlockMessage = true;
+ADD_CONFIG_HANDLER(config_getUseExplicitBlockMessage, _useExplicitBlockMessage)
 
 bool shimipc_sendExplicitBlockMessageEnabled() { return _useExplicitBlockMessage; }
 
-static gint _spinMax = 8096;
-OPTION_EXPERIMENTAL_ENTRY("preload-spin-max", 0, 0, G_OPTION_ARG_INT, &_spinMax,
-                          "Max number of iterations to busy-wait on ICP sempahore before blocking. "
-                          "-1 for unlimited. [8096]",
-                          "N")
+static int _spinMax = -1;
+ADD_CONFIG_HANDLER(config_getPreloadSpinMax, _spinMax)
 
 ssize_t shimipc_spinMax() { return _spinMax; }

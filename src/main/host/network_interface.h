@@ -10,7 +10,6 @@
 #include <glib.h>
 #include <netinet/in.h>
 
-#include "main/core/support/options.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/protocol.h"
@@ -20,7 +19,7 @@
 typedef struct _NetworkInterface NetworkInterface;
 
 NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, guint64 bwUpKiBps,
-        gboolean logPcap, gchar* pcapDir, QDiscMode qdisc, guint64 interfaceReceiveLength);
+        gchar* pcapDir, QDiscMode qdisc, guint64 interfaceReceiveLength);
 void networkinterface_free(NetworkInterface* interface);
 
 Address* networkinterface_getAddress(NetworkInterface* interface);

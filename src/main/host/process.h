@@ -37,11 +37,9 @@
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
-Process* process_new(Host* host, guint processID, SimulationTime startTime,
-                     SimulationTime stopTime, InterposeMethod interposeMethod,
-                     const gchar* hostName, const gchar* pluginName,
-                     const gchar* pluginPath, const gchar* pluginSymbol,
-                     gchar** envv, gchar** argv);
+Process* process_new(Host* host, guint processID, SimulationTime startTime, SimulationTime stopTime,
+                     InterposeMethod interposeMethod, const gchar* hostName,
+                     const gchar* pluginName, const gchar* pluginPath, gchar** envv, gchar** argv);
 void process_ref(Process* proc);
 void process_unref(Process* proc);
 

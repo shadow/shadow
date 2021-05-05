@@ -39,7 +39,7 @@ pub struct CliOptions {
     #[clap(long, exclusive(true))]
     show_build_info: bool,
 
-    /// Print the final configuration
+    /// Exit after printing the final configuration
     #[clap(long)]
     show_config: bool,
 
@@ -230,12 +230,6 @@ pub struct ExperimentalOptions {
     #[clap(about = EXP_HELP.get("use_memory_manager").unwrap())]
     use_memory_manager: Option<bool>,
 
-    /// Use buffered IO when reading plugin memory through /proc. This introduces some extra copying
-    /// but may help performance when making small sequential accesses.
-    #[clap(long, value_name = "bool")]
-    #[clap(about = EXP_HELP.get("use_ptrace_buffered_io").unwrap())]
-    use_ptrace_buffered_io: Option<bool>,
-
     /// Use shim-side syscall handler to force hot-path syscalls to be handled via an inter-process syscall with Shadow
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_shim_syscall_handler").unwrap())]
@@ -311,7 +305,6 @@ impl Default for ExperimentalOptions {
             preload_spin_max: Some(8096),
             max_concurrency: None,
             use_memory_manager: Some(true),
-            use_ptrace_buffered_io: Some(false),
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(false),
             interpose_method: Some(InterposeMethod::Ptrace),
@@ -939,7 +932,11 @@ mod export {
     pub extern "C" fn clioptions_getConfig(options: *const CliOptions) -> *mut libc::c_char {
         assert!(!options.is_null());
         let options = unsafe { &*options };
-        CString::into_raw(CString::new(options.config.as_ref().unwrap().clone()).unwrap())
+
+        match &options.config {
+            Some(s) => CString::into_raw(CString::new(s.clone()).unwrap()),
+            None => std::ptr::null_mut(),
+        }
     }
 
     #[no_mangle]
@@ -1104,13 +1101,6 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_memory_manager.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getUsePtraceBufferedIo(config: *const ConfigOptions) -> bool {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        config.experimental.use_ptrace_buffered_io.unwrap()
     }
 
     #[no_mangle]
@@ -1375,7 +1365,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn hostoptions_getHeartbeatInterval(host: *const HostOptions) -> u32 {
+    pub extern "C" fn hostoptions_getHeartbeatInterval(
+        host: *const HostOptions,
+    ) -> c::SimulationTime {
         assert!(!host.is_null());
         let host = unsafe { &*host };
 
@@ -1384,7 +1376,8 @@ mod export {
             .unwrap()
             .convert(units::TimePrefixUpper::Sec)
             .unwrap()
-            .value() as u32
+            .value()
+            * SIMTIME_ONE_SECOND
     }
 
     #[no_mangle]

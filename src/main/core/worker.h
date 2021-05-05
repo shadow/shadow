@@ -13,7 +13,6 @@
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/options.h"
 #include "main/core/work/task.h"
 #include "main/host/host.h"
 #include "main/host/syscall_types.h"
@@ -73,7 +72,7 @@ void worker_setRoundEndTime(SimulationTime newRoundEndTime);
 int worker_getAffinity();
 DNS* worker_getDNS();
 Topology* worker_getTopology();
-Options* worker_getOptions();
+const ConfigOptions* worker_getConfig();
 gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay);
 void worker_sendPacket(Packet* packet);
 gboolean worker_isAlive();

@@ -12,9 +12,11 @@
 #include <stddef.h>
 #include <sys/types.h>
 
+#include "main/bindings/c/bindings.h"
 #include "main/core/logger/shadow_logger.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
+#include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
 #include "main/core/worker.h"
@@ -25,11 +27,7 @@
 #include "support/logger/logger.h"
 
 static int _maxConcurrency = -1;
-OPTION_EXPERIMENTAL_ENTRY("max-concurrency", 0, 0, G_OPTION_ARG_INT,
-                          &_maxConcurrency,
-                          "Maximum number of workers to allow to run at once. "
-                          "Set to -1 for no limit. [-1]",
-                          "N")
+ADD_CONFIG_HANDLER(config_getMaxConcurrency, _maxConcurrency)
 
 struct _Scheduler {
     // Unowned back-pointer.
@@ -147,8 +145,10 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
     /* ensure we have sane default modes for the number of workers we are using */
     if(nWorkers == 0) {
         scheduler->policyType = SP_SERIAL_GLOBAL;
+        warning("Overriding the chosen scheduler policy with the serial global policy");
     } else if(nWorkers > 0 && policyType == SP_SERIAL_GLOBAL) {
         scheduler->policyType = SP_PARALLEL_HOST_STEAL;
+        warning("Overriding the chosen scheduler policy with the host stealing policy");
     } else {
         scheduler->policyType = policyType;
     }

@@ -20,7 +20,6 @@
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/options.h"
 #include "main/host/host.h"
 #include "main/host/network_interface.h"
 #include "main/routing/address.h"
@@ -32,20 +31,6 @@
 
 #define PRELOAD_SHIM_LIB_STR "libshadow-shim.so"
 
-typedef struct {
-
-    /* the program name. */
-    gchar* name;
-
-    /* the path to the executable */
-    gchar* path;
-
-    /* the start symbol for the program */
-    gchar* startSymbol;
-
-    MAGIC_DECLARE;
-} _ProgramMeta;
-
 struct _Manager {
     Controller* controller;
 
@@ -53,7 +38,7 @@ struct _Manager {
     //    Worker* mainWorker;
 
     /* simulation cli options */
-    Options* options;
+    ConfigOptions* config;
     SimulationTime bootstrapEndTime;
 
     /* manager random source, init from controller random, used to init host randoms */
@@ -69,9 +54,6 @@ struct _Manager {
 
     /* the parallel event/host/thread scheduler */
     Scheduler* scheduler;
-
-    /* the meta data for each program */
-    GHashTable* programMeta;
 
     GMutex lock;
     GMutex pluginInitLock;
@@ -89,7 +71,6 @@ struct _Manager {
     gchar* hostsPath;
 
     gchar* preloadShimPath;
-    gchar* environment;
 
     MAGIC_DECLARE;
 };
@@ -109,65 +90,6 @@ static void _manager_unlock(Manager* manager) {
 static Host* _manager_getHost(Manager* manager, GQuark hostID) {
     MAGIC_ASSERT(manager);
     return scheduler_getHost(manager->scheduler, hostID);
-}
-
-/* XXX this really belongs in the configuration file */
-static SchedulerPolicyType _manager_getEventSchedulerPolicy(Manager* manager) {
-    const gchar* policyStr = options_getEventSchedulerPolicy(manager->options);
-    if (g_ascii_strcasecmp(policyStr, "host") == 0) {
-        return SP_PARALLEL_HOST_SINGLE;
-    } else if (g_ascii_strcasecmp(policyStr, "steal") == 0) {
-        return SP_PARALLEL_HOST_STEAL;
-    } else if (g_ascii_strcasecmp(policyStr, "thread") == 0) {
-        return SP_PARALLEL_THREAD_SINGLE;
-    } else if (g_ascii_strcasecmp(policyStr, "threadXthread") == 0) {
-        return SP_PARALLEL_THREAD_PERTHREAD;
-    } else if (g_ascii_strcasecmp(policyStr, "threadXhost") == 0) {
-        return SP_PARALLEL_THREAD_PERHOST;
-    } else {
-        error("unknown event scheduler policy '%s'; valid values are 'thread', 'host', "
-              "'threadXthread', or 'threadXhost'",
-              policyStr);
-        return SP_SERIAL_GLOBAL;
-    }
-}
-
-_ProgramMeta* _program_meta_new(const gchar* name, const gchar* path, const gchar* startSymbol) {
-    if ((name == NULL) || (path == NULL)) {
-        error("attempting to register a program with a null name and/or path");
-    }
-
-    _ProgramMeta* meta = g_new0(_ProgramMeta, 1);
-    MAGIC_INIT(meta);
-
-    meta->name = g_strdup(name);
-    meta->path = g_strdup(path);
-
-    if (startSymbol != NULL) {
-        meta->startSymbol = g_strdup(startSymbol);
-    }
-
-    return meta;
-}
-
-void _program_meta_free(gpointer data) {
-    _ProgramMeta* meta = (_ProgramMeta*)data;
-    MAGIC_ASSERT(meta);
-
-    if (meta->name) {
-        g_free(meta->name);
-    }
-
-    if (meta->path) {
-        g_free(meta->path);
-    }
-
-    if (meta->startSymbol) {
-        g_free(meta->startSymbol);
-    }
-
-    MAGIC_CLEAR(meta);
-    g_free(meta);
 }
 
 static gchar* _manager_getRPath() {
@@ -239,8 +161,8 @@ static guint _manager_nextRandomUInt(Manager* manager) {
     return r;
 }
 
-Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime,
-                     SimulationTime unlimBWEndTime, guint randomSeed, const gchar* environment) {
+Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTime endTime,
+                     SimulationTime unlimBWEndTime, guint randomSeed) {
     if (globalmanager != NULL) {
         return NULL;
     }
@@ -253,10 +175,9 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
     g_mutex_init(&(manager->pluginInitLock));
 
     manager->controller = controller;
-    manager->options = options;
+    manager->config = config;
     manager->random = random_new(randomSeed);
     manager->bootstrapEndTime = unlimBWEndTime;
-    manager->environment = g_strdup(environment);
 
     manager->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if (manager->rawFrequencyKHz == 0) {
@@ -272,40 +193,49 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
         error("could not find %s in rpath", PRELOAD_SHIM_LIB_STR);
     }
 
-    /* we will store the plug-in program meta data */
-    manager->programMeta =
-        g_hash_table_new_full(g_str_hash, g_str_equal, g_free, _program_meta_free);
-
     /* the main scheduler may utilize multiple threads */
 
-    guint nWorkers = options_getNWorkerThreads(options);
-    SchedulerPolicyType policy = _manager_getEventSchedulerPolicy(manager);
+    guint nWorkers = config_getWorkers(config);
+    SchedulerPolicyType policy = config_getSchedulerPolicy(config);
     guint schedulerSeed = _manager_nextRandomUInt(manager);
     manager->scheduler =
         scheduler_new(manager, policy, nWorkers, schedulerSeed, endTime);
 
     manager->cwdPath = g_get_current_dir();
-    manager->dataPath =
-        g_build_filename(manager->cwdPath, options_getDataOutputPath(options), NULL);
+
+    char* dataDirectory = config_getDataDirectory(config);
+
+    if (dataDirectory == NULL) {
+        // we shouldn't reach this, but error anyways
+        error("Data directory was not set");
+    }
+
+    manager->dataPath = g_build_filename(manager->cwdPath, dataDirectory, NULL);
+    config_freeString(dataDirectory);
+
     manager->hostsPath = g_build_filename(manager->dataPath, "hosts", NULL);
 
     if (g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
         error("data directory '%s' already exists", manager->dataPath);
     }
 
-    const gchar* templateDataPath = options_getDataTemplatePath(options);
-    if (templateDataPath != NULL) {
-        gchar* absTemplatePath = g_build_filename(manager->cwdPath, templateDataPath, NULL);
+    char* templateDirectory = config_getTemplateDirectory(config);
 
-        if (!g_file_test(absTemplatePath, G_FILE_TEST_EXISTS)) {
-            error("data template directory '%s' does not exist", absTemplatePath);
+    if (templateDirectory != NULL) {
+        gchar* templateDataPath = g_build_filename(manager->cwdPath, templateDirectory, NULL);
+        config_freeString(templateDirectory);
+
+        info("Copying template directory %s to %s", templateDataPath, manager->dataPath);
+
+        if (!g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
+            error("data template directory '%s' does not exist", templateDataPath);
         }
 
-        if (!utility_copyAll(absTemplatePath, manager->dataPath)) {
-            error("could not copy the data template directory '%s'", absTemplatePath);
+        if (!utility_copyAll(templateDataPath, manager->dataPath)) {
+            error("could not copy the data template directory '%s'", templateDataPath);
         }
 
-        g_free(absTemplatePath);
+        g_free(templateDataPath);
     } else {
         /* provide a warning for backwards compatibility; can remove this sometime in the future */
         gchar* compatTemplatePath =
@@ -368,8 +298,6 @@ gint manager_free(Manager* manager) {
         counter_free(manager->object_counter_dealloc);
     }
 
-    g_hash_table_destroy(manager->programMeta);
-
     g_mutex_clear(&(manager->lock));
     g_mutex_clear(&(manager->pluginInitLock));
 
@@ -387,9 +315,6 @@ gint manager_free(Manager* manager) {
     }
     if (manager->preloadShimPath) {
         g_free(manager->preloadShimPath);
-    }
-    if (manager->environment) {
-        g_free(manager->environment);
     }
 
     MAGIC_CLEAR(manager);
@@ -410,22 +335,6 @@ guint manager_getRawCPUFrequency(Manager* manager) {
     guint freq = manager->rawFrequencyKHz;
     _manager_unlock(manager);
     return freq;
-}
-
-void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path,
-                           const gchar* startSymbol) {
-    MAGIC_ASSERT(manager);
-
-    /* store the path to the plugin and maybe the start symbol with the given
-     * name so that we can retrieve the path later when hosts' processes want
-     * to load it */
-    if (g_hash_table_lookup(manager->programMeta, name) != NULL) {
-        error("attempting to regiser 2 plugins with the same path."
-              "this should have been caught by the configuration parser.");
-    } else {
-        _ProgramMeta* meta = _program_meta_new(name, path, startSymbol);
-        g_hash_table_replace(manager->programMeta, g_strdup(name), meta);
-    }
 }
 
 void manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
@@ -523,52 +432,32 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
     return envv;
 }
 
-static gchar** _manager_getArgv(Manager* manager, gchar* exepath, gchar* arguments) {
-    MAGIC_ASSERT(manager);
-
-    /* we need at least the executable path in order to run the plugin */
-    GString* command = g_string_new(exepath);
-
-    /* if the user specified additional arguments, append those */
-    if (arguments && (g_ascii_strncasecmp(arguments, "\0", (gsize)1) != 0)) {
-        g_string_append_printf(command, " %s", arguments);
-    }
-
-    /* now split the command string to an argv */
-    gchar** argv = g_strsplit(command->str, " ", 0);
-
-    /* we don't need the command string anymore */
-    g_string_free(command, TRUE);
-
-    return argv;
-}
-
-void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* pluginName,
-                                  SimulationTime startTime, SimulationTime stopTime,
-                                  gchar* arguments) {
+void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar* pluginPath,
+                                  SimulationTime startTime, SimulationTime stopTime, gchar** argv,
+                                  char* environment) {
     MAGIC_ASSERT(manager);
 
     /* quarks are unique per process, so do the conversion here */
     GQuark hostID = g_quark_from_string(hostName);
 
-    _ProgramMeta* plugin = g_hash_table_lookup(manager->programMeta, pluginName);
-    if (plugin == NULL) {
-        error("plugin not found for name '%s'. this should be verified in the "
-              "config parser.",
-              pluginName);
-    }
-
-    InterposeMethod interposeMethod = options_getInterposeMethod(manager->options);
+    InterposeMethod interposeMethod = config_getInterposeMethod(manager->config);
 
     /* ownership is passed to the host/process below, so we don't free these */
     gchar** envv = _manager_generateEnvv(
-        manager, interposeMethod, manager->preloadShimPath, manager->environment);
-    gchar** argv = _manager_getArgv(manager, plugin->path, arguments);
+        manager, interposeMethod, manager->preloadShimPath, environment);
 
     Host* host = scheduler_getHost(manager->scheduler, hostID);
     host_continueExecutionTimer(host);
-    host_addApplication(host, startTime, stopTime, interposeMethod, plugin->name, plugin->path,
-                        plugin->startSymbol, envv, argv);
+
+    gchar* pluginName = g_path_get_basename(pluginPath);
+    if (pluginName == NULL) {
+        error("Could not get basename of plugin path");
+    }
+
+    host_addApplication(
+        host, startTime, stopTime, interposeMethod, pluginName, pluginPath, envv, argv);
+    g_free(pluginName);
+
     host_stopExecutionTimer(host);
 }
 
@@ -605,9 +494,9 @@ gdouble manager_getLatency(Manager* manager, GQuark sourceNodeID, GQuark destina
     return controller_getLatency(manager->controller, sourceAddress, destinationAddress);
 }
 
-Options* manager_getOptions(Manager* manager) {
+const ConfigOptions* manager_getConfig(Manager* manager) {
     MAGIC_ASSERT(manager);
-    return manager->options;
+    return manager->config;
 }
 
 gboolean manager_schedulerIsRunning(Manager* manager) {
@@ -627,8 +516,9 @@ void manager_updateMinTimeJump(Manager* manager, gdouble minPathLatency) {
 static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
     MAGIC_ASSERT(manager);
 
-    if (simClockNow >
-        (manager->simClockLastHeartbeat + options_getHeartbeatInterval(manager->options))) {
+    SimulationTime heartbeatInterval = config_getHeartbeatInterval(manager->config);
+
+    if (simClockNow > (manager->simClockLastHeartbeat + heartbeatInterval)) {
         manager->simClockLastHeartbeat = simClockNow;
 
         struct rusage resources;

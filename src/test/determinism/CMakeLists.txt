@@ -11,13 +11,13 @@ foreach(METHOD ptrace hybrid)
         BASENAME determinism1a
         METHODS ${METHOD}
         SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism1.test.shadow.config.yaml
-        ARGS --pin-cpus --workers 2
+        ARGS --use-cpu-pinning true --workers 2
         PROPERTIES RUN_SERIAL TRUE)
     add_shadow_tests(
         BASENAME determinism1b
         METHODS ${METHOD}
         SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism1.test.shadow.config.yaml
-        ARGS --pin-cpus --workers 2
+        ARGS --use-cpu-pinning true --workers 2
         PROPERTIES RUN_SERIAL TRUE)
     add_test(
         NAME determinism1-compare-shadow-${METHOD}
@@ -39,13 +39,13 @@ foreach(METHOD ptrace hybrid)
         BASENAME determinism2a
         METHODS ${METHOD}
         SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml
-        ARGS --pin-cpus --workers 2
+        ARGS --use-cpu-pinning true --workers 2
         PROPERTIES RUN_SERIAL TRUE)
     add_shadow_tests(
         BASENAME determinism2b
         METHODS ${METHOD}
         SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml
-        ARGS --pin-cpus --workers 2
+        ARGS --use-cpu-pinning true --workers 2
         PROPERTIES RUN_SERIAL TRUE)
     ## now compare the output
     ## TODO enable this test and fix the remaining determinism issue

@@ -24,9 +24,9 @@ add_shadow_tests(BASENAME tor-minimal
                  METHODS ptrace
                  LOGLEVEL info
                  ARGS
-                   --pin-cpus
+                   --use-cpu-pinning true
                    --workers 2
-                   --data-template "shadow.data.template"
+                   --template-directory "shadow.data.template"
                  POST_CMD "${CMAKE_CURRENT_SOURCE_DIR}/verify.sh"
                  PROPERTIES
                    TIMEOUT 180

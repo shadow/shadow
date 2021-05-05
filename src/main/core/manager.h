@@ -27,15 +27,14 @@
 
 #include "main/core/controller.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/options.h"
 #include "main/host/host.h"
 #include "main/routing/dns.h"
 #include "main/routing/topology.h"
 
 typedef struct _Manager Manager;
 
-Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime,
-                     SimulationTime bootstrapEndTime, guint randomSeed, const gchar* environment);
+Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTime endTime,
+                     SimulationTime bootstrapEndTime, guint randomSeed);
 gint manager_free(Manager* manager);
 
 gboolean manager_isForced(Manager* manager);
@@ -45,7 +44,7 @@ Topology* manager_getTopology(Manager* manager);
 guint32 manager_getNodeBandwidthUp(Manager* manager, GQuark nodeID, in_addr_t ip);
 guint32 manager_getNodeBandwidthDown(Manager* manager, GQuark nodeID, in_addr_t ip);
 gdouble manager_getLatency(Manager* manager, GQuark sourceNodeID, GQuark destinationNodeID);
-Options* manager_getOptions(Manager* manager);
+const ConfigOptions* manager_getConfig(Manager* manager);
 SimulationTime manager_getBootstrapEndTime(Manager* manager);
 
 void manager_incrementPluginError(Manager* manager);
@@ -60,9 +59,9 @@ gboolean manager_schedulerIsRunning(Manager* manager);
 void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path,
                            const gchar* startSymbol);
 void manager_addNewVirtualHost(Manager* manager, HostParameters* params);
-void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* pluginName,
-                                  SimulationTime startTime, SimulationTime stopTime,
-                                  gchar* arguments);
+void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar* pluginName,
+                                  SimulationTime startTime, SimulationTime stopTime, gchar** argv,
+                                  char* environment);
 
 // Increment a global counter for the allocation of the object with the given name.
 // This should be paired with an increment of the dealloc counter with the
