@@ -17,8 +17,8 @@ topology:
           <data key="d0">0.0</data>
           <data key="d1">0.0.0.0</data>
           <data key="d2">US</data>
-          <data key="d3">81920 Kibit</data>
-          <data key="d4">81920 Kibit</data>
+          <data key="d3">1 Gbit</data>
+          <data key="d4">1 Gbit</data>
           <data key="d5">net</data>
         </node>
         <edge source="poi-1" target="poi-1">
@@ -30,17 +30,11 @@ topology:
     </graphml>
 hosts:
   fileserver:
-    options:
-      bandwidth_down: 819200 Kibit
-      bandwidth_up: 819200 Kibit
     processes:
     - path: ~/.shadow/bin/tgen
       args: ../../../conf/tgen.server.graphml.xml
       start_time: 1
   hiddenserver:
-    options:
-      bandwidth_down: 819200 Kibit
-      bandwidth_up: 819200 Kibit
     processes:
     - path: ~/.shadow/bin/tgen
       args: ../../../conf/tgen.hiddenserver.graphml.xml
@@ -52,8 +46,6 @@ hosts:
       start_time: 900
   4uthority:
     options:
-      bandwidth_down: 81920 Kibit
-      bandwidth_up: 81920 Kibit
       ip_hint: 100.0.0.1
     processes:
     - path: ~/.shadow/bin/tor
@@ -62,9 +54,6 @@ hosts:
         -f ../../../conf/tor.authority.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
       start_time: 1
   exit1:
-    options:
-      bandwidth_down: 81920 Kibit
-      bandwidth_up: 81920 Kibit
     processes:
     - path: ~/.shadow/bin/tor
       args: --Address exit1 --Nickname exit1 --DataDirectory .
@@ -72,9 +61,6 @@ hosts:
         -f ../../../conf/tor.exit.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
       start_time: 60
   exit2:
-    options:
-      bandwidth_down: 81920 Kibit
-      bandwidth_up: 81920 Kibit
     processes:
     - path: ~/.shadow/bin/tor
       args: --Address exit2 --Nickname exit2 --DataDirectory .
@@ -82,9 +68,6 @@ hosts:
         -f ../../../conf/tor.exit.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
       start_time: 60
   relay1:
-    options:
-      bandwidth_down: 81920 Kibit
-      bandwidth_up: 81920 Kibit
     processes:
     - path: ~/.shadow/bin/tor
       args: --Address relay1 --Nickname relay1 --DataDirectory .
@@ -92,9 +75,6 @@ hosts:
         -f ../../../conf/tor.relay.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
       start_time: 60
   relay2:
-    options:
-      bandwidth_down: 81920 Kibit
-      bandwidth_up: 81920 Kibit
     processes:
     - path: ~/.shadow/bin/tor
       args: --Address relay2 --Nickname relay2 --DataDirectory .
