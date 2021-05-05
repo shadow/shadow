@@ -23,6 +23,9 @@
 #include "main/host/thread.h"
 #include "main/host/tracker.h"
 
+// Memory allocated by Shadow, in a remote address space.
+typedef struct AllocdMem_u8 AllocdMem_u8;
+
 // A queue of byte chunks.
 typedef struct ByteQueue ByteQueue;
 
@@ -249,6 +252,12 @@ struct MemoryManager *memorymanager_new(pid_t pid);
 // # Safety
 // * `mm` must point to a valid object.
 void memorymanager_free(struct MemoryManager *mm);
+
+struct AllocdMem_u8 *allocdmem_new(uintptr_t len);
+
+void allocdmem_free(struct AllocdMem_u8 *allocd_mem);
+
+PluginPtr allocdmem_pluginPtr(const struct AllocdMem_u8 *allocd_mem);
 
 // Initialize the MemoryMapper if it isn't already initialized. `thread` must
 // be running and ready to make native syscalls.

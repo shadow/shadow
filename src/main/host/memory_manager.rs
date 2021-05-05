@@ -1536,6 +1536,11 @@ impl MemoryManager {
         }
     }
 
+    /// Which process's address space this MemoryManager manages.
+    pub fn pid(&self) -> nix::unistd::Pid {
+        self.pid
+    }
+
     /// Initialize the MemoryMapper, allowing for more efficient access. Needs a
     /// running thread.
     pub fn init_mapper(&mut self, thread: &mut impl Thread) {
@@ -1802,6 +1807,90 @@ impl MemoryManager {
     }
 }
 
+/// Memory allocated by Shadow, in a remote address space.
+pub struct AllocdMem<T>
+where
+    T: Pod,
+{
+    ptr: TypedPluginPtr<T>,
+}
+
+impl<T> AllocdMem<T>
+where
+    T: Pod,
+{
+    /// Allocate memory in the current active process.
+    pub fn new(len: usize) -> Self {
+        let bytes_len = len * std::mem::size_of::<T>();
+        let prot = libc::PROT_READ | libc::PROT_WRITE;
+
+        // Allocate the memory in the plugin of the active thread.  We don't
+        // bother with trying to mmap it into Shadow as well; since the memory
+        // will typically only be accessed once by Shadow (to write to it),
+        // doing so isn't worth the overhead or complexity.
+        let ptr = Worker::with_active_thread_mut(|thread| {
+            thread
+                .native_mmap(
+                    PluginPtr::from(0usize),
+                    bytes_len,
+                    prot,
+                    libc::MAP_ANONYMOUS | libc::MAP_PRIVATE,
+                    -1,
+                    0,
+                )
+                .unwrap()
+        });
+        // Add region to known mappings.
+        Worker::with_active_process_memory_mut(|mem| {
+            if let Some(mapper) = &mut mem.memory_mapper {
+                let base = usize::from(ptr);
+                let mutations = mapper.regions.insert(
+                    base..(base + bytes_len),
+                    Region {
+                        shadow_base: std::ptr::null_mut(),
+                        prot,
+                        sharing: Sharing::Private,
+                        original_path: None,
+                    },
+                );
+                // Shouldn't have overwritten any previous known mappings.
+                debug_assert_eq!(mutations.len(), 0);
+            }
+        });
+        Self {
+            ptr: TypedPluginPtr::<T>::new(ptr, len).unwrap(),
+        }
+    }
+
+    /// Pointer to the allocated memory.
+    pub fn ptr(&self) -> TypedPluginPtr<T> {
+        self.ptr
+    }
+}
+
+impl<T> Drop for AllocdMem<T>
+where
+    T: Pod,
+{
+    fn drop(&mut self) {
+        Worker::with_active_thread_mut(|thread| {
+            thread
+                .native_munmap(self.ptr.ptr(), self.ptr.len())
+                .unwrap()
+        });
+        // Add region to known mappings.
+        Worker::with_active_process_memory_mut(|mem| {
+            if let Some(mapper) = &mut mem.memory_mapper {
+                let base = usize::from(self.ptr.ptr());
+                let bytes_len = self.ptr.len() * std::mem::size_of::<T>();
+                let mutations = mapper.regions.clear(base..(base + bytes_len));
+                // Should've dropped exactly one entry.
+                debug_assert_eq!(mutations.len(), 1);
+            }
+        });
+    }
+}
+
 mod export {
     use super::*;
 
@@ -1819,6 +1908,23 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_free(mm: *mut MemoryManager) {
         mm.as_mut().map(|mm| Box::from_raw(mm));
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn allocdmem_new(len: usize) -> *mut AllocdMem<u8> {
+        Box::into_raw(Box::new(AllocdMem::new(len)))
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn allocdmem_free(allocd_mem: *mut AllocdMem<u8>) {
+        allocd_mem
+            .as_mut()
+            .map(|allocd_mem| Box::from_raw(allocd_mem));
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn allocdmem_pluginPtr(allocd_mem: *const AllocdMem<u8>) -> c::PluginPtr {
+        allocd_mem.as_ref().unwrap().ptr().ptr().into()
     }
 
     /// Initialize the MemoryMapper if it isn't already initialized. `thread` must
