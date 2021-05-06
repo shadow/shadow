@@ -1,5 +1,6 @@
-<shadow stoptime="3600">
-  <topology><![CDATA[<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+<shadow stoptime="3600" preload="/some/path.so" environment="HELLO=WORLD">
+  <topology><![CDATA[<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
   <key attr.name="packetloss" attr.type="double" for="edge" id="d4" />
   <key attr.name="latency" attr.type="double" for="edge" id="d3" />
   <key attr.name="bandwidthup" attr.type="int" for="node" id="d2" />
@@ -17,10 +18,10 @@
     </edge>
   </graph>
 </graphml>]]></topology>
-  <kill time="5"/>
   <plugin id="testconfig" path="test-config-convert"/>
+  <plugin id="shimpath" path="/tor/shim/path.so"/>
   <node id="testclient" quantity="1">
-    <application plugin="testconfig" starttime="1" arguments="client 5678"/>
+    <application plugin="testconfig" starttime="1" arguments="client 5678" preload="shimpath"/>
   </node>
   <node id="testserver" quantity="1">
     <application plugin="testconfig" starttime="1" arguments="server 5678"/>

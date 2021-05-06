@@ -28,9 +28,6 @@ ExternalProject_Add(
 add_executable(shadow-test-launcher test_launcher.c test_launcher_common.c)
 add_executable(shadow-test-launcher-fail test_launcher_fail.c test_launcher_common.c)
 
-## Wrapper around the yaml2xml tool
-set (yaml2xml "python3 ${CMAKE_SOURCE_DIR}/src/tools/convert.py yaml2xml")
-
 ## === Helper macros for consistently defining tests. ===
 ## Tests that need more features should use add_test directly.
 
