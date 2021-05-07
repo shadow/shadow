@@ -1,4 +1,6 @@
+use crate::core::support::simulation_time::SimulationTime;
 use crate::cshadow;
+use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::process::Process;
 use crate::host::thread::{CThread, Thread};
@@ -13,12 +15,14 @@ pub struct Worker {
     // itself from the C Worker on-demand.
     active_process: RefCell<()>,
     active_thread: RefCell<()>,
+    active_host: RefCell<()>,
 }
 
 std::thread_local! {
     static WORKER: Worker = Worker{
         active_process: RefCell::new(()),
         active_thread: RefCell::new(()),
+        active_host: RefCell::new(()),
     }
 }
 
@@ -127,5 +131,47 @@ impl Worker {
             let _borrow = worker.active_thread.borrow_mut();
             f(&mut thread)
         })
+    }
+
+    /// Run `f` with a reference to the current Host, or return None if there is no current Host.
+    pub fn with_active_host<F, R>(f: F) -> Option<R>
+    where
+        F: FnOnce(&Host) -> R,
+    {
+        if !Worker::is_alive() {
+            return None;
+        }
+        let hostp = unsafe { cshadow::worker_getActiveHost() };
+        if hostp.is_null() {
+            return None;
+        }
+        let host = unsafe { Host::borrow_from_c(hostp) };
+        WORKER.with(|worker| {
+            let _borrow = worker.active_host.borrow();
+            Some(f(&host))
+        })
+    }
+
+    /// Whether currently running on a live Worker.
+    pub fn is_alive() -> bool {
+        unsafe { cshadow::worker_isAlive() != 0 }
+    }
+
+    /// Current simulation time, or None if not running on a live Worker.
+    pub fn current_time() -> Option<SimulationTime> {
+        if !Worker::is_alive() {
+            return None;
+        }
+        Some(SimulationTime::from_c_simtime(unsafe {
+            cshadow::worker_getCurrentTime()
+        }))
+    }
+
+    /// Id of the current worker thread, or None if not running on a live Worker.
+    pub fn thread_id() -> Option<i32> {
+        if !Worker::is_alive() {
+            return None;
+        }
+        Some(unsafe { cshadow::worker_getThreadID() })
     }
 }

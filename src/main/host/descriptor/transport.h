@@ -28,14 +28,14 @@ struct _TransportFunctionTable {
     DescriptorFreeFunc free;
     TransportSendFunc send;
     TransportReceiveFunc receive;
-    MAGIC_DECLARE;
+    MAGIC_DECLARE_ALWAYS;
 };
 
 struct _Transport {
     LegacyDescriptor super;
     TransportFunctionTable* vtable;
 
-    MAGIC_DECLARE;
+    MAGIC_DECLARE_ALWAYS;
 };
 
 void transport_init(Transport* transport, TransportFunctionTable* vtable,

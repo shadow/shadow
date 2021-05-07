@@ -633,12 +633,13 @@ pub struct _TransportFunctionTable {
     pub free: DescriptorFreeFunc,
     pub send: TransportSendFunc,
     pub receive: TransportReceiveFunc,
+    pub magic: guint,
 }
 #[test]
 fn bindgen_test_layout__TransportFunctionTable() {
     assert_eq!(
         ::std::mem::size_of::<_TransportFunctionTable>(),
-        32usize,
+        40usize,
         concat!("Size of: ", stringify!(_TransportFunctionTable))
     );
     assert_eq!(
@@ -686,18 +687,29 @@ fn bindgen_test_layout__TransportFunctionTable() {
             stringify!(receive)
         )
     );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).magic as *const _ as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_TransportFunctionTable),
+            "::",
+            stringify!(magic)
+        )
+    );
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Transport {
     pub super_: LegacyDescriptor,
     pub vtable: *mut TransportFunctionTable,
+    pub magic: guint,
 }
 #[test]
 fn bindgen_test_layout__Transport() {
     assert_eq!(
         ::std::mem::size_of::<_Transport>(),
-        64usize,
+        72usize,
         concat!("Size of: ", stringify!(_Transport))
     );
     assert_eq!(
@@ -723,6 +735,16 @@ fn bindgen_test_layout__Transport() {
             stringify!(_Transport),
             "::",
             stringify!(vtable)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Transport>())).magic as *const _ as usize },
+        64usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Transport),
+            "::",
+            stringify!(magic)
         )
     );
 }
@@ -766,12 +788,13 @@ pub struct _SocketFunctionTable {
     pub isFamilySupported: SocketIsFamilySupportedFunc,
     pub connectToPeer: SocketConnectToPeerFunc,
     pub dropPacket: SocketDropFunc,
+    pub magic: guint,
 }
 #[test]
 fn bindgen_test_layout__SocketFunctionTable() {
     assert_eq!(
         ::std::mem::size_of::<_SocketFunctionTable>(),
-        64usize,
+        72usize,
         concat!("Size of: ", stringify!(_SocketFunctionTable))
     );
     assert_eq!(
@@ -863,6 +886,16 @@ fn bindgen_test_layout__SocketFunctionTable() {
             stringify!(dropPacket)
         )
     );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_SocketFunctionTable>())).magic as *const _ as usize },
+        64usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_SocketFunctionTable),
+            "::",
+            stringify!(magic)
+        )
+    );
 }
 pub const SocketFlags_SF_NONE: SocketFlags = 0;
 pub const SocketFlags_SF_BOUND: SocketFlags = 1;
@@ -892,12 +925,13 @@ pub struct _Socket {
     pub outputBufferSize: gsize,
     pub outputBufferSizePending: gsize,
     pub outputBufferLength: gsize,
+    pub magic: guint,
 }
 #[test]
 fn bindgen_test_layout__Socket() {
     assert_eq!(
         ::std::mem::size_of::<_Socket>(),
-        192usize,
+        208usize,
         concat!("Size of: ", stringify!(_Socket))
     );
     assert_eq!(
@@ -917,7 +951,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).vtable as *const _ as usize },
-        64usize,
+        72usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -927,7 +961,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).flags as *const _ as usize },
-        72usize,
+        80usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -937,7 +971,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).protocol as *const _ as usize },
-        76usize,
+        84usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -947,7 +981,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).peerIP as *const _ as usize },
-        80usize,
+        88usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -957,7 +991,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).peerPort as *const _ as usize },
-        84usize,
+        92usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -967,7 +1001,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).peerString as *const _ as usize },
-        88usize,
+        96usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -977,7 +1011,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).boundAddress as *const _ as usize },
-        96usize,
+        104usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -987,7 +1021,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).boundPort as *const _ as usize },
-        100usize,
+        108usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -997,7 +1031,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).boundString as *const _ as usize },
-        104usize,
+        112usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -1007,7 +1041,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).unixPath as *const _ as usize },
-        112usize,
+        120usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -1017,7 +1051,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).inputBuffer as *const _ as usize },
-        120usize,
+        128usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -1027,7 +1061,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).inputBufferSize as *const _ as usize },
-        128usize,
+        136usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -1037,7 +1071,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).inputBufferSizePending as *const _ as usize },
-        136usize,
+        144usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -1047,7 +1081,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).inputBufferLength as *const _ as usize },
-        144usize,
+        152usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -1057,7 +1091,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).outputBuffer as *const _ as usize },
-        152usize,
+        160usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -1067,7 +1101,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).outputControlBuffer as *const _ as usize },
-        160usize,
+        168usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -1077,7 +1111,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).outputBufferSize as *const _ as usize },
-        168usize,
+        176usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -1087,7 +1121,7 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).outputBufferSizePending as *const _ as usize },
-        176usize,
+        184usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
@@ -1097,12 +1131,22 @@ fn bindgen_test_layout__Socket() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_Socket>())).outputBufferLength as *const _ as usize },
-        184usize,
+        192usize,
         concat!(
             "Offset of field: ",
             stringify!(_Socket),
             "::",
             stringify!(outputBufferLength)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Socket>())).magic as *const _ as usize },
+        200usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Socket),
+            "::",
+            stringify!(magic)
         )
     );
 }
@@ -1254,7 +1298,6 @@ pub struct _HostParameters {
     pub ipHint: *mut gchar,
     pub citycodeHint: *mut gchar,
     pub countrycodeHint: *mut gchar,
-    pub typeHint: *mut gchar,
     pub requestedBWDownKiBps: guint64,
     pub requestedBWUpKiBps: guint64,
     pub cpuFrequency: guint64,
@@ -1276,7 +1319,7 @@ pub struct _HostParameters {
 fn bindgen_test_layout__HostParameters() {
     assert_eq!(
         ::std::mem::size_of::<_HostParameters>(),
-        168usize,
+        160usize,
         concat!("Size of: ", stringify!(_HostParameters))
     );
     assert_eq!(
@@ -1345,20 +1388,10 @@ fn bindgen_test_layout__HostParameters() {
         )
     );
     assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).typeHint as *const _ as usize },
-        40usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(typeHint)
-        )
-    );
-    assert_eq!(
         unsafe {
             &(*(::std::ptr::null::<_HostParameters>())).requestedBWDownKiBps as *const _ as usize
         },
-        48usize,
+        40usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1370,7 +1403,7 @@ fn bindgen_test_layout__HostParameters() {
         unsafe {
             &(*(::std::ptr::null::<_HostParameters>())).requestedBWUpKiBps as *const _ as usize
         },
-        56usize,
+        48usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1380,7 +1413,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).cpuFrequency as *const _ as usize },
-        64usize,
+        56usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1390,7 +1423,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).cpuThreshold as *const _ as usize },
-        72usize,
+        64usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1400,7 +1433,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).cpuPrecision as *const _ as usize },
-        80usize,
+        72usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1412,7 +1445,7 @@ fn bindgen_test_layout__HostParameters() {
         unsafe {
             &(*(::std::ptr::null::<_HostParameters>())).heartbeatInterval as *const _ as usize
         },
-        88usize,
+        80usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1424,7 +1457,7 @@ fn bindgen_test_layout__HostParameters() {
         unsafe {
             &(*(::std::ptr::null::<_HostParameters>())).heartbeatLogLevel as *const _ as usize
         },
-        96usize,
+        88usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1436,7 +1469,7 @@ fn bindgen_test_layout__HostParameters() {
         unsafe {
             &(*(::std::ptr::null::<_HostParameters>())).heartbeatLogInfo as *const _ as usize
         },
-        100usize,
+        92usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1446,7 +1479,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).logLevel as *const _ as usize },
-        104usize,
+        96usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1456,7 +1489,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).pcapDir as *const _ as usize },
-        112usize,
+        104usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1466,7 +1499,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).qdisc as *const _ as usize },
-        120usize,
+        112usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1476,7 +1509,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).recvBufSize as *const _ as usize },
-        128usize,
+        120usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1486,7 +1519,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).autotuneRecvBuf as *const _ as usize },
-        136usize,
+        128usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1496,7 +1529,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).sendBufSize as *const _ as usize },
-        144usize,
+        136usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1506,7 +1539,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).autotuneSendBuf as *const _ as usize },
-        152usize,
+        144usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1518,7 +1551,7 @@ fn bindgen_test_layout__HostParameters() {
         unsafe {
             &(*(::std::ptr::null::<_HostParameters>())).interfaceBufSize as *const _ as usize
         },
-        160usize,
+        152usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
