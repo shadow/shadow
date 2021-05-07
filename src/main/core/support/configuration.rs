@@ -470,7 +470,6 @@ pub struct HostOptions {
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Error,
-    Critical,
     Warning,
     Info,
     Debug,
@@ -489,7 +488,6 @@ impl LogLevel {
     pub fn to_c_loglevel(&self) -> c::LogLevel {
         match self {
             Self::Error => c::_LogLevel_LOGLEVEL_ERROR,
-            Self::Critical => c::_LogLevel_LOGLEVEL_CRITICAL,
             Self::Warning => c::_LogLevel_LOGLEVEL_WARNING,
             Self::Info => c::_LogLevel_LOGLEVEL_INFO,
             Self::Debug => c::_LogLevel_LOGLEVEL_DEBUG,
