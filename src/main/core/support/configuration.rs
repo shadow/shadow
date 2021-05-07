@@ -65,6 +65,7 @@ pub struct ConfigFileOptions {
     #[serde(default)]
     experimental: ExperimentalOptions,
 
+    /// The network topology
     topology: Topology,
 
     // we use a BTreeMap so that the hosts are sorted by their hostname (useful for determinism)
@@ -165,6 +166,7 @@ pub struct GeneralOptions {
     /// Path to recursively copy during startup and use as the data-directory
     #[clap(long, short = 'e', value_name = "path")]
     #[clap(about = GENERAL_HELP.get("template_directory").unwrap())]
+    #[serde(default)]
     template_directory: Option<String>,
 }
 
@@ -335,13 +337,13 @@ pub struct HostDefaultOptions {
     #[clap(about = HOST_HELP.get("log_level").unwrap())]
     log_level: Option<LogLevel>,
 
-    /// Log level at which to print node statistics
+    /// Log level at which to print host statistics
     #[clap(long = "host-heartbeat-log-level", name = "host-heartbeat-log-level")]
     #[clap(value_name = "level")]
     #[clap(about = HOST_HELP.get("heartbeat_log_level").unwrap())]
     heartbeat_log_level: Option<LogLevel>,
 
-    /// List of information to show in the node's heartbeat message
+    /// List of information to show in the host's heartbeat message
     #[clap(long = "host-heartbeat-log-info", name = "host-heartbeat-log-info")]
     #[clap(parse(try_from_str = parse_set_log_info_flags))]
     #[clap(value_name = "options")]
@@ -437,19 +439,24 @@ impl Default for HostDefaultOptions {
 pub struct ProcessOptions {
     path: std::path::PathBuf,
 
+    /// Process arguments
     #[serde(default = "default_args_empty")]
     args: ProcessArgs,
 
-    /// Environment variables passed to the simulated process (ex: "ENV_A=1;ENV_B=2")
+    /// Environment variables passed when executing this process. Multiple variables can be
+    /// specified by using a semicolon separator (ex: `ENV_A=1;ENV_B=2`)
     #[serde(default)]
     environment: String,
 
+    /// The number of replicas of this process to execute
     #[serde(default)]
     quantity: Quantity,
 
+    /// The simulated time at which to execute the process
     #[serde(default)]
     start_time: units::Time<units::TimePrefixUpper>,
 
+    /// The simulated time at which to send a SIGKILL signal to the process
     #[serde(default)]
     stop_time: Option<units::Time<units::TimePrefixUpper>>,
 }
@@ -459,6 +466,7 @@ pub struct ProcessOptions {
 pub struct HostOptions {
     processes: Vec<ProcessOptions>,
 
+    /// Number of hosts to start
     #[serde(default)]
     quantity: Quantity,
 
