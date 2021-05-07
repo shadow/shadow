@@ -225,7 +225,7 @@ void host_shutdown(Host* host) {
     g_timer_continue(host->executionTimer);
 #endif
 
-    info("shutting down host %s", host->params.hostname);
+    debug("shutting down host %s", host->params.hostname);
 
     if(host->processes) {
         g_queue_free(host->processes);

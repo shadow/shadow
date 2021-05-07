@@ -35,15 +35,14 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd,
 
     /* Need non-zero len, and at least one of the above options. */
     if (len == 0 || !(flags & reqFlags)) {
-        info("Invalid len (%zu), prot (%i), or flags (%i)", len, prot, flags);
+        debug("Invalid len (%zu), prot (%i), or flags (%i)", len, prot, flags);
         return -EINVAL;
     }
 
     /* We ignore the fd on anonymous mappings, otherwise it must refer to a
      * regular file. */
     if (fd <= 2 && !(flags & MAP_ANONYMOUS)) {
-        info("Invalid fd %i and MAP_ANONYMOUS is not set in flags %i", fd,
-             flags);
+        debug("Invalid fd %i and MAP_ANONYMOUS is not set in flags %i", fd, flags);
         return -EBADF;
     }
 
@@ -52,12 +51,12 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd,
         LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
         int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
         if (errcode) {
-            info("Invalid fd %i", fd);
+            debug("Invalid fd %i", fd);
             return errcode;
         }
 
         if (descriptor_getType(desc) != DT_FILE) {
-            info("Descriptor exists for fd %i, but is not a file type", fd);
+            debug("Descriptor exists for fd %i, but is not a file type", fd);
             return -EACCES;
         }
 

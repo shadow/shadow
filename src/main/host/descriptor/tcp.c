@@ -531,8 +531,8 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp) {
         socket_setOutputBufferSize(&(tcp->super), (gsize) sendbuf_size);
     }
 
-    info("set network buffer sizes: send %"G_GSIZE_FORMAT" receive %"G_GSIZE_FORMAT,
-            socket_getOutputBufferSize(&(tcp->super)), socket_getInputBufferSize(&(tcp->super)));
+    debug("set network buffer sizes: send %" G_GSIZE_FORMAT " receive %" G_GSIZE_FORMAT,
+          socket_getOutputBufferSize(&(tcp->super)), socket_getInputBufferSize(&(tcp->super)));
 }
 
 static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
@@ -790,8 +790,9 @@ static void _tcp_updateReceiveWindow(TCP* tcp) {
          * otherwise, we may get into a deadlock situation where we never accept
          * any packets and the client never reads. */
         utility_assert(!(socket_getInputBufferLength(&(tcp->super)) == 0));
-        info("%s <-> %s: receive window is 0, we have space for %"G_GSIZE_FORMAT" bytes in the input buffer",
-                tcp->super.boundString, tcp->super.peerString, space);
+        debug("%s <-> %s: receive window is 0, we have space for %" G_GSIZE_FORMAT
+              " bytes in the input buffer",
+              tcp->super.boundString, tcp->super.peerString, space);
     }
 }
 
@@ -1336,7 +1337,7 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
     _tcp_setRetransmitTimer(tcp, now);
 
     tcp->cong.hooks->tcp_cong_timeout_ev(tcp);
-    info("[CONG] a congestion timeout has occurred on %s", tcp->super.boundString);
+    debug("[CONG] a congestion timeout has occurred on %s", tcp->super.boundString);
     _tcp_logCongestionInfo(tcp);
 
     retransmit_tally_clear_retransmitted(tcp->retransmit.tally);
@@ -1732,9 +1733,9 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
                                     tcp->send.next, is_dup);
 
     if (is_dup) {
-      info("[CONG-AVOID] duplicate ack");
-      _tcp_logCongestionInfo(tcp);
-      tcp->cong.hooks->tcp_cong_duplicate_ack_ev(tcp);
+        debug("[CONG-AVOID] duplicate ack");
+        _tcp_logCongestionInfo(tcp);
+        tcp->cong.hooks->tcp_cong_duplicate_ack_ev(tcp);
     }
 
     gint nPacketsAcked = 0;
@@ -1755,7 +1756,7 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         if(nPacketsAcked > 0) {
             flags |= TCP_PF_DATA_ACKED;
 
-            info("[CONG] %i packets were acked", nPacketsAcked);
+            debug("[CONG] %i packets were acked", nPacketsAcked);
             tcp->cong.hooks->tcp_cong_new_ack_ev(tcp, nPacketsAcked);
 
             /* increase send buffer size with autotuning */
@@ -1802,12 +1803,13 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
     gsize inLength = socket_getInputBufferLength(&tcp->super);
     double ploss = (double) (tcp->info.retransmitCount / tcp->send.packetsSent);
 
-    info("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
-            "sndbufsize=%"G_GSIZE_FORMAT" sndbuflen=%"G_GSIZE_FORMAT" rcvbufsize=%"G_GSIZE_FORMAT" rcbuflen=%"G_GSIZE_FORMAT" "
-            "retrans=%"G_GSIZE_FORMAT" ploss=%f fd=%i",
-            tcp->cong.cwnd, tcp->cong.hooks->tcp_cong_ssthresh(tcp), tcp->timing.rttSmoothed,
-            outSize, outLength, inSize, inLength, tcp->info.retransmitCount, ploss,
-            tcp->super.super.super.handle);
+    debug("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
+          "sndbufsize=%" G_GSIZE_FORMAT " sndbuflen=%" G_GSIZE_FORMAT " rcvbufsize=%" G_GSIZE_FORMAT
+          " rcbuflen=%" G_GSIZE_FORMAT " "
+          "retrans=%" G_GSIZE_FORMAT " ploss=%f fd=%i",
+          tcp->cong.cwnd, tcp->cong.hooks->tcp_cong_ssthresh(tcp), tcp->timing.rttSmoothed, outSize,
+          outLength, inSize, inLength, tcp->info.retransmitCount, ploss,
+          tcp->super.super.super.handle);
 }
 
 static void _tcp_sendACKTaskCallback(TCP* tcp, gpointer userData) {
@@ -2291,7 +2293,7 @@ static gssize _tcp_receiveUserData(Transport* transport, PluginVirtualPtr buffer
     }
 
     if (buffer.val == 0 && nBytes > 0) {
-        info("Can't recv >0 bytes into NULL buffer on socket");
+        debug("Can't recv >0 bytes into NULL buffer on socket");
         return -EFAULT;
     }
 

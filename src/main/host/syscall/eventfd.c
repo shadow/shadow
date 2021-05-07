@@ -24,7 +24,7 @@ static int _syscallhandler_validateEventFDHelper(SysCallHandler* sys, int efd,
                                                  EventD** event_desc_out) {
     /* Check that fd is within bounds. */
     if (efd < 0) {
-        info("descriptor %i out of bounds", efd);
+        debug("descriptor %i out of bounds", efd);
         return -EBADF;
     }
 
@@ -36,7 +36,7 @@ static int _syscallhandler_validateEventFDHelper(SysCallHandler* sys, int efd,
 
     int errcode = _syscallhandler_validateDescriptor(desc, DT_EVENTD);
     if (errcode) {
-        info("descriptor %i is invalid", efd);
+        debug("descriptor %i is invalid", efd);
         return errcode;
     }
 
@@ -50,7 +50,7 @@ static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys, unsigned
 
     /* any of 3 values can be bitwise ORed into flags */
     if (flags & ~(EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE)) {
-        info("Invalid eventfd flags were given: %i", flags);
+        debug("Invalid eventfd flags were given: %i", flags);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 

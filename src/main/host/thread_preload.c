@@ -117,7 +117,7 @@ static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, c
             die_after_vfork();
         }
         default: // parent
-            info("started process %s with PID %d", file, pid);
+            debug("started process %s with PID %d", file, pid);
             return pid;
             break;
     }

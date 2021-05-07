@@ -67,7 +67,7 @@ Tsc Tsc_measure() {
         tsc.cyclesPerSecond =
             MIN(tsc.cyclesPerSecond, cycles * 1000000000 / ns);
     }
-    info("Calculated %" PRIu64 " cyclesPerSecond", tsc.cyclesPerSecond);
+    debug("Calculated %" PRIu64 " cyclesPerSecond", tsc.cyclesPerSecond);
 
     return tsc;
 }

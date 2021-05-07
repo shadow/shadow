@@ -181,7 +181,7 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
 
     manager->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if (manager->rawFrequencyKHz == 0) {
-        info("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
+        debug("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
         manager->rawFrequencyKHz = 2500000; // 2.5 GHz
         trace("raw manager cpu frequency unavailable, using 2,500,000 KHz");
     }
@@ -225,7 +225,7 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
         gchar* templateDataPath = g_build_filename(manager->cwdPath, templateDirectory, NULL);
         config_freeString(templateDirectory);
 
-        info("Copying template directory %s to %s", templateDataPath, manager->dataPath);
+        debug("Copying template directory %s to %s", templateDataPath, manager->dataPath);
 
         if (!g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
             error("data template directory '%s' does not exist", templateDataPath);
@@ -383,7 +383,7 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
      *   - preload values from LD_PRELOAD entries in the environment attribute of the shadow
      * element*/
     GPtrArray* ldPreloadArray = g_ptr_array_new();
-    info("adding shim path %s", preloadShimPath ? preloadShimPath : "null");
+    debug("adding shim path %s", preloadShimPath ? preloadShimPath : "null");
     g_ptr_array_add(ldPreloadArray, g_strdup(preloadShimPath));
 
     /* now we also have to scan the other env variables that were given in the shadow conf file */
@@ -403,7 +403,7 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
                 /* check if the key is LD_PRELOAD */
                 if (!g_ascii_strncasecmp(key, "LD_PRELOAD", 10)) {
                     /* append all LD_PRELOAD entries */
-                    info("adding key path %s", value);
+                    debug("adding key path %s", value);
                     g_ptr_array_add(ldPreloadArray, g_strdup(value));
                 } else {
                     /* set the key=value pair, but don't overwrite any existing settings */
@@ -571,9 +571,9 @@ void manager_run(Manager* manager) {
         minNextEventTime = scheduler_awaitNextRound(manager->scheduler);
 
         /* we are in control now, the workers are waiting for the next round */
-        info("finished execution window [%" G_GUINT64_FORMAT
-             "--%" G_GUINT64_FORMAT "] next event at %" G_GUINT64_FORMAT,
-             windowStart, windowEnd, minNextEventTime);
+        debug("finished execution window [%" G_GUINT64_FORMAT "--%" G_GUINT64_FORMAT
+              "] next event at %" G_GUINT64_FORMAT,
+              windowStart, windowEnd, minNextEventTime);
 
         /* notify controller that we finished this round, and the time of our
          * next event in order to fast-forward our execute window if possible */

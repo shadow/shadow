@@ -35,7 +35,7 @@ static int _syscallhandler_validateDirHelper(SysCallHandler* sys, int dirfd,
         }
         return 0;
     } else if (dirfd < 0) {
-        info("descriptor %i out of bounds", dirfd);
+        debug("descriptor %i out of bounds", dirfd);
         return -EBADF;
     }
 
@@ -47,7 +47,7 @@ static int _syscallhandler_validateDirHelper(SysCallHandler* sys, int dirfd,
 
     int errcode = _syscallhandler_validateDescriptor(desc, DT_FILE);
     if (errcode) {
-        info("descriptor %i is invalid", dirfd);
+        debug("descriptor %i is invalid", dirfd);
         return errcode;
     }
 

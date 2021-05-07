@@ -355,13 +355,13 @@ static void _process_check(Process* proc) {
 
 static void _process_check_thread(Process* proc, Thread* thread) {
     if (thread_isRunning(thread)) {
-        info("thread %d in process '%s' still running, but blocked", thread_getID(thread),
-             process_getName(proc));
+        debug("thread %d in process '%s' still running, but blocked", thread_getID(thread),
+              process_getName(proc));
         return;
     }
     int returnCode = thread_getReturnCode(thread);
-    info("thread %d in process '%s' exited with code %d", thread_getID(thread),
-         process_getName(proc), returnCode);
+    debug("thread %d in process '%s' exited with code %d", thread_getID(thread),
+          process_getName(proc), returnCode);
     _process_reapThread(proc, thread);
     g_hash_table_remove(proc->threads, GUINT_TO_POINTER(thread_getID(thread)));
     _process_check(proc);
@@ -517,8 +517,8 @@ void process_continue(Process* proc, Thread* thread) {
         return;
     }
 
-    info("switching to thread controller to continue executing process '%s'",
-         process_getName(proc));
+    debug(
+        "switching to thread controller to continue executing process '%s'", process_getName(proc));
 
     worker_setActiveProcess(proc);
     worker_setActiveThread(thread);
@@ -537,7 +537,7 @@ void process_continue(Process* proc, Thread* thread) {
     _process_handleTimerResult(proc, elapsed);
     info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
 #else
-    info("process '%s' done continuing", process_getName(proc));
+    debug("process '%s' done continuing", process_getName(proc));
 #endif
 
     if (proc->isExiting) {

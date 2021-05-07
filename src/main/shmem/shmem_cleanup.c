@@ -97,7 +97,7 @@ static bool _shmemcleanup_unlinkIfShadow(const char* filename,
         strncpy(name_buf + 1, filename, SHD_SHMEM_FILE_NAME_NBYTES - 1);
         int rc = shm_unlink(name_buf);
         if (rc == 0) {
-            info("Removing orphaned shared memory file: %s", name_buf);
+            debug("Removing orphaned shared memory file: %s", name_buf);
             did_remove = true;
         }
     }
@@ -113,8 +113,7 @@ void shmemcleanup_tryCleanup() {
         return;
     }
 
-    info(
-        "Num. processes in system's procfs: %u", g_hash_table_size(proc_set));
+    debug("Num. processes in system's procfs: %u", g_hash_table_size(proc_set));
 
     // If we can get a list of running processes on the machine, iterate
     // through the files in shared memory and try to remove them.
@@ -140,7 +139,7 @@ void shmemcleanup_tryCleanup() {
         closedir(dir);
     }
 
-    info("Num. removed shared memory files: %zu", n_removed);
+    debug("Num. removed shared memory files: %zu", n_removed);
 
     g_hash_table_destroy(proc_set);
 }

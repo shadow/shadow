@@ -816,11 +816,11 @@ impl Drop for MemoryMapper {
     fn drop(&mut self) {
         let misses = self.misses_by_path.borrow();
         if misses.is_empty() {
-            info!("MemoryManager misses: None");
+            debug!("MemoryManager misses: None");
         } else {
-            info!("MemoryManager misses: (consider extending MemoryManager to remap regions with a high miss count)");
+            debug!("MemoryManager misses: (consider extending MemoryManager to remap regions with a high miss count)");
             for (path, count) in misses.iter() {
-                info!("\t{} in {}", count, path);
+                debug!("\t{} in {}", count, path);
             }
         }
 

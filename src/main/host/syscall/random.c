@@ -26,7 +26,7 @@ SysCallReturn syscallhandler_getrandom(SysCallHandler* sys, const SysCallArgs* a
     trace("Trying to read %zu random bytes.", count);
 
     if (!bufPtr.val) {
-        info("Invalid buffer.");
+        debug("Invalid buffer.");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 

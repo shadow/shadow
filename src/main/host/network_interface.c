@@ -219,16 +219,14 @@ static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
     interface->receiveBucket.bytesCapacity =
         (interface->receiveBucket.bytesRefill * capacityFactor) + CONFIG_MTU;
 
-    info("interface %s token buckets can send %" G_GUINT64_FORMAT " bytes "
-         "every %" G_GUINT64_FORMAT " nanoseconds",
-         address_toString(interface->address),
-         interface->sendBucket.bytesRefill,
-         _networkinterface_getRefillInterval());
-    info("interface %s token buckets can receive %" G_GUINT64_FORMAT " bytes "
-         "every %" G_GUINT64_FORMAT " nanoseconds",
-         address_toString(interface->address),
-         interface->receiveBucket.bytesRefill,
-         _networkinterface_getRefillInterval());
+    debug("interface %s token buckets can send %" G_GUINT64_FORMAT " bytes "
+          "every %" G_GUINT64_FORMAT " nanoseconds",
+          address_toString(interface->address), interface->sendBucket.bytesRefill,
+          _networkinterface_getRefillInterval());
+    debug("interface %s token buckets can receive %" G_GUINT64_FORMAT " bytes "
+          "every %" G_GUINT64_FORMAT " nanoseconds",
+          address_toString(interface->address), interface->receiveBucket.bytesRefill,
+          _networkinterface_getRefillInterval());
 }
 
 Address* networkinterface_getAddress(NetworkInterface* interface) {
@@ -704,9 +702,10 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
     /* set size and refill rates for token buckets */
     _networkinterface_setupTokenBuckets(interface, bwDownKiBps, bwUpKiBps);
 
-    info("bringing up network interface '%s' at '%s', %"G_GUINT64_FORMAT" KiB/s up and %"G_GUINT64_FORMAT" KiB/s down using queuing discipline %s",
-            address_toHostName(interface->address), address_toHostIPString(interface->address), bwUpKiBps, bwDownKiBps,
-            interface->qdisc == Q_DISC_MODE_ROUND_ROBIN ? "rr" : "fifo");
+    debug("bringing up network interface '%s' at '%s', %" G_GUINT64_FORMAT
+          " KiB/s up and %" G_GUINT64_FORMAT " KiB/s down using queuing discipline %s",
+          address_toHostName(interface->address), address_toHostIPString(interface->address),
+          bwUpKiBps, bwDownKiBps, interface->qdisc == Q_DISC_MODE_ROUND_ROBIN ? "rr" : "fifo");
 
     worker_count_allocation(NetworkInterface);
     return interface;

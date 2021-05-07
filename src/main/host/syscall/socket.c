@@ -51,7 +51,7 @@ static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
                                                 Socket** sock_desc_out) {
     /* Check that fd is within bounds. */
     if (sockfd < 0) {
-        info("descriptor %i out of bounds", sockfd);
+        debug("descriptor %i out of bounds", sockfd);
         return -EBADF;
     }
 
@@ -63,13 +63,13 @@ static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
 
     int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
     if (errcode) {
-        info("descriptor %i is invalid", sockfd);
+        debug("descriptor %i is invalid", sockfd);
         return errcode;
     }
 
     LegacyDescriptorType type = descriptor_getType(desc);
     if (type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_UNIXSOCKET) {
-        info("descriptor %i with type %i is not a socket", sockfd, (int)type);
+        debug("descriptor %i with type %i is not a socket", sockfd, (int)type);
         return -ENOTSOCK;
     }
 
@@ -92,7 +92,7 @@ static int _syscallhandler_validateTCPSocketHelper(SysCallHandler* sys,
 
     LegacyDescriptorType type = descriptor_getType((LegacyDescriptor*)sock_desc);
     if (type != DT_TCPSOCKET) {
-        info("descriptor %i is not a TCP socket", sockfd);
+        debug("descriptor %i is not a TCP socket", sockfd);
         return -EOPNOTSUPP;
     }
 
@@ -115,7 +115,7 @@ static int _syscallhandler_validateUDPSocketHelper(SysCallHandler* sys,
 
     LegacyDescriptorType type = descriptor_getType((LegacyDescriptor*)sock_desc);
     if (type != DT_UDPSOCKET) {
-        info("descriptor %i is not a UDP socket", sockfd);
+        debug("descriptor %i is not a UDP socket", sockfd);
         return -EOPNOTSUPP;
     }
 
@@ -127,7 +127,7 @@ static SysCallReturn _syscallhandler_getnameHelper(SysCallHandler* sys, struct s
                                                    size_t slen, PluginPtr addrPtr,
                                                    PluginPtr addrlenPtr) {
     if (!addrPtr.val || !addrlenPtr.val) {
-        info("Cannot get name with NULL return address info.");
+        debug("Cannot get name with NULL return address info.");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
@@ -162,9 +162,9 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
 
     /* Check that non-valid flags are not given. */
     if (flags & ~(SOCK_NONBLOCK | SOCK_CLOEXEC)) {
-        info("invalid flags \"%i\", only SOCK_NONBLOCK and SOCK_CLOEXEC are "
-             "allowed",
-             flags);
+        debug("invalid flags \"%i\", only SOCK_NONBLOCK and SOCK_CLOEXEC are "
+              "allowed",
+              flags);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
@@ -180,13 +180,13 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
 
     /* We must be listening in order to accept. */
     if (!tcp_isValidListener(tcp_desc)) {
-        info("socket %i is not listening", sockfd);
+        debug("socket %i is not listening", sockfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Make sure they supplied addrlen if they requested an addr. */
     if (addrPtr.val && !addrlenPtr.val) {
-        info("addrlen was NULL when addr was non-NULL");
+        debug("addrlen was NULL when addr was non-NULL");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
@@ -252,7 +252,7 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, Socket* socket_desc,
 
     /* make sure we have an interface at that address */
     if (!host_doesInterfaceExist(sys->host, addr)) {
-        info("no network interface exists for the provided bind address");
+        debug("no network interface exists for the provided bind address");
         return -EINVAL;
     }
 
@@ -268,14 +268,14 @@ static int _syscallhandler_bindHelper(SysCallHandler* sys, Socket* socket_desc,
 
     /* Ephemeral port unavailable. */
     if (port == 0) {
-        info("binding required an ephemeral port and none are available");
+        debug("binding required an ephemeral port and none are available");
         return -EADDRINUSE;
     }
 
     /* Make sure the port is available at this address for this protocol. */
     if (!host_isInterfaceAvailable(
             sys->host, ptype, addr, port, peerAddr, peerPort)) {
-        info("the provided address and port %u are not available", ntohs(port));
+        debug("the provided address and port %u are not available", ntohs(port));
         return -EADDRINUSE;
     }
 
@@ -453,7 +453,7 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
     }
 
     if (srcAddrPtr.val && !addrlenPtr.val) {
-        info("Cannot get from address with NULL address length info.");
+        debug("Cannot get from address with NULL address length info.");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
@@ -532,15 +532,14 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
 
     /* Need non-NULL buffer. */
     if (!bufPtr.val) {
-        info("Can't send from NULL buffer on socket %i", sockfd);
+        debug("Can't send from NULL buffer on socket %i", sockfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     /* TODO: when we support AF_UNIX this could be sockaddr_un */
     size_t inet_len = sizeof(struct sockaddr_in);
     if (destAddrPtr.val && addrlen < inet_len) {
-        info("Address length %ld is too small on socket %i", (long int)addrlen,
-             sockfd);
+        debug("Address length %ld is too small on socket %i", (long int)addrlen, sockfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
@@ -708,7 +707,7 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
 
     /* It's an error if it is already bound. */
     if (socket_isBound(socket_desc)) {
-        info("socket descriptor %i is already bound to an address", sockfd);
+        debug("socket descriptor %i is already bound to an address", sockfd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
@@ -716,13 +715,13 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
     // size_t unix_len = sizeof(struct sockaddr_un); // if sa_family==AF_UNIX
     size_t inet_len = sizeof(struct sockaddr_in);
     if (addrlen < inet_len) {
-        info("supplied address is not large enough for a inet address");
+        debug("supplied address is not large enough for a inet address");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
     /* Make sure the addr PluginPtr is not NULL. */
     if (!addrPtr.val) {
-        info("binding to a NULL address is invalid");
+        debug("binding to a NULL address is invalid");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
@@ -765,7 +764,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
 
     /* Make sure the addr PluginPtr is not NULL. */
     if (!addrPtr.val) {
-        info("connecting to a NULL address is invalid");
+        debug("connecting to a NULL address is invalid");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
@@ -915,7 +914,7 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
         gboolean hasName =
             socket_getPeerName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
         if (!hasName) {
-            info("Socket %i has no peer name.", sockfd);
+            debug("Socket %i has no peer name.", sockfd);
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
         }
 
@@ -1070,7 +1069,7 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
 
     /* only listen on the socket if it is not used for other functions */
     if (!tcp_isListeningAllowed(tcp_desc)) {
-        info("Cannot listen on previously used socket %i", sockfd);
+        debug("Cannot listen on previously used socket %i", sockfd);
         return (SysCallReturn){
             .state = SYSCALL_DONE, .retval.as_i64 = -EOPNOTSUPP};
     }
@@ -1166,7 +1165,7 @@ SysCallReturn syscallhandler_shutdown(SysCallHandler* sys,
     trace("trying to shutdown on socket %i with how %i", sockfd, how);
 
     if (how != SHUT_RD && how != SHUT_WR && how != SHUT_RDWR) {
-        info("invalid how %i", how);
+        debug("invalid how %i", how);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 

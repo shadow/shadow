@@ -174,7 +174,7 @@ gboolean utility_removeAll(const gchar* path) {
         warning("unable to remove path '%s': error %i: %s", path, errno, strerror(errno));
         isSuccess = FALSE;
     } else {
-        info("removed path '%s' from filesystem", path);
+        debug("removed path '%s' from filesystem", path);
         isSuccess = TRUE;
     }
 
@@ -246,7 +246,7 @@ gboolean utility_copyAll(const gchar* srcPath, const gchar* dstPath) {
         if(isSuccess && !err) {
             isSuccess = g_file_set_contents(dstPath, srcContents, (gssize)srcLength, &err);
             if(isSuccess & !err) {
-                info("copied path '%s' to '%s'", srcPath, dstPath);
+                debug("copied path '%s' to '%s'", srcPath, dstPath);
             }
         }
 

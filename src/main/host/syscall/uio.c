@@ -59,12 +59,12 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd,
         size_t bufSize = iov[i].iov_len;
 
         if (!bufPtr.val) {
-            info("Invalid NULL pointer in iovec[%ld]", i);
+            debug("Invalid NULL pointer in iovec[%ld]", i);
             return -EFAULT;
         }
 
         if (!bufSize) {
-            info("Invalid size 0 in iovec[%ld]", i);
+            debug("Invalid size 0 in iovec[%ld]", i);
             return -EINVAL;
         }
     }

@@ -24,7 +24,7 @@ static int _syscallhandler_validateTimerHelper(SysCallHandler* sys, int tfd,
                                                Timer** timer_desc_out) {
     /* Check that fd is within bounds. */
     if (tfd < 0) {
-        info("descriptor %i out of bounds", tfd);
+        debug("descriptor %i out of bounds", tfd);
         return -EBADF;
     }
 
@@ -36,7 +36,7 @@ static int _syscallhandler_validateTimerHelper(SysCallHandler* sys, int tfd,
 
     int errcode = _syscallhandler_validateDescriptor(desc, DT_TIMER);
     if (errcode) {
-        info("descriptor %i is invalid", tfd);
+        debug("descriptor %i is invalid", tfd);
         return errcode;
     }
 
@@ -56,12 +56,12 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
     /* Check the clockid arg. */
     if (clockid == CLOCK_BOOTTIME || clockid == CLOCK_REALTIME_ALARM ||
         clockid == CLOCK_BOOTTIME_ALARM) {
-        info("Unsupported clockid %i, we support CLOCK_REALTIME and "
-             "CLOCK_MONOTONIC.",
-             clockid);
+        debug("Unsupported clockid %i, we support CLOCK_REALTIME and "
+              "CLOCK_MONOTONIC.",
+              clockid);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
     } else if (clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC) {
-        info("Unknown clockid %i.", clockid);
+        debug("Unknown clockid %i.", clockid);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 

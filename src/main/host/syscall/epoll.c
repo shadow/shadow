@@ -97,7 +97,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     CompatDescriptor* compatDescriptor = process_getRegisteredCompatDescriptor(sys->process, fd);
 
     if (compatDescriptor == NULL) {
-        info("Child %i is not a shadow descriptor", fd);
+        debug("Child %i is not a shadow descriptor", fd);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
     }
 
@@ -113,7 +113,7 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
         errorCode = _syscallhandler_validateDescriptor(legacyDescriptor, DT_NONE);
 
         if (errorCode) {
-            info("Child %i of epoll %i is closed", fd, epfd);
+            debug("Child %i of epoll %i is closed", fd, epfd);
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
         }
     }

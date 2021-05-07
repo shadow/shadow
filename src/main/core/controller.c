@@ -145,11 +145,11 @@ void controller_updateMinTimeJump(Controller* controller, gdouble minPathLatency
         utility_assert(minPathLatency > 0.0f);
         SimulationTime oldJumpMS = controller->nextMinJumpTime;
         controller->nextMinJumpTime = ((SimulationTime)minPathLatency) * SIMTIME_ONE_MILLISECOND;
-        info("updated topology minimum time jump from %" G_GUINT64_FORMAT " to %" G_GUINT64_FORMAT
-             " nanoseconds; "
-             "the minimum config override is %s (%" G_GUINT64_FORMAT " nanoseconds)",
-             oldJumpMS, controller->nextMinJumpTime,
-             controller->minJumpTimeConfig > 0 ? "set" : "not set", controller->minJumpTimeConfig);
+        debug("updated topology minimum time jump from %" G_GUINT64_FORMAT " to %" G_GUINT64_FORMAT
+              " nanoseconds; "
+              "the minimum config override is %s (%" G_GUINT64_FORMAT " nanoseconds)",
+              oldJumpMS, controller->nextMinJumpTime,
+              controller->minJumpTimeConfig > 0 ? "set" : "not set", controller->minJumpTimeConfig);
     }
 }
 

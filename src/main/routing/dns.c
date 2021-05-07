@@ -184,7 +184,7 @@ Address* dns_resolveIPToAddress(DNS* dns, in_addr_t ip) {
     Address* result = g_hash_table_lookup(dns->addressByIP, GUINT_TO_POINTER(ip));
     if(!result) {
         gchar* ipStr = address_ipToNewString(ip);
-        info("address for '%s' does not yet exist", ipStr);
+        debug("address for '%s' does not yet exist", ipStr);
         g_free(ipStr);
     }
     return result;
@@ -209,8 +209,8 @@ static void _dns_cleanupHostsFile(DNS* dns) {
 
     if(dns->hosts.path) {
         if (unlink(dns->hosts.path) < 0) {
-            info("unlink unable to remove hosts file at '%s', error %i: %s",
-                 dns->hosts.path, errno, strerror(errno));
+            debug("unlink unable to remove hosts file at '%s', error %i: %s", dns->hosts.path,
+                  errno, strerror(errno));
         }
         free(dns->hosts.path);
         dns->hosts.path = NULL;

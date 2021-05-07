@@ -508,9 +508,9 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
         }
 
         if (ecount < vcount) {
-            info("Vert id=%li has %li incident edges to %li total verts "
-                "and thus this isn't a complete graph",
-                (long int)vertexID, (long int)ecount, (long int)vcount);
+            debug("Vert id=%li has %li incident edges to %li total verts "
+                  "and thus this isn't a complete graph",
+                  (long int)vertexID, (long int)ecount, (long int)vcount);
             is_success = TRUE;
             is_complete = FALSE;
             igraph_vector_destroy(&iedges);
@@ -527,7 +527,7 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
         IGRAPH_VIT_NEXT(vit);
     }
 
-    info("Determined this graph is complete.");
+    debug("Determined this graph is complete.");
     is_complete = TRUE;
     is_success = TRUE;
 
@@ -540,7 +540,8 @@ done:
 
 static gboolean _topology_checkAttributeType(gchar* parsedName, igraph_attribute_type_t parsedType, igraph_attribute_type_t requiredType) {
     if(parsedType == requiredType) {
-        info("graph attribute '%s' with type '%s' is supported", parsedName, _topology_igraphAttributeTypeToString(parsedType));
+        debug("graph attribute '%s' with type '%s' is supported", parsedName,
+              _topology_igraphAttributeTypeToString(parsedType));
         return TRUE;
     } else {
         warning("graph attribute '%s' with type '%s' is supported, but we found unsupported type '%s'",
@@ -622,7 +623,7 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_PACKETLOSS)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else {
-            info("vertex attribute '%s' is unsupported and will be ignored", name);
+            debug("vertex attribute '%s' is unsupported and will be ignored", name);
         }
     }
 
@@ -664,7 +665,7 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         } else if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_PACKETLOSS)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else {
-            info("edge attribute '%s' is unsupported and will be ignored", name);
+            debug("edge attribute '%s' is unsupported and will be ignored", name);
         }
     }
 
@@ -864,8 +865,8 @@ static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_int
         if(_topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_IP, &ipVal)) {
             g_string_append_printf(message, " %s='%s'", ipKey, ipVal);
         } else {
-            info("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring",
-                    ipKey, (glong)vertexIndex, idKey, idStr);
+            debug("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring", ipKey,
+                  (glong)vertexIndex, idKey, idStr);
         }
     }
 
@@ -876,8 +877,8 @@ static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_int
         if(_topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_CITYCODE, &citycodeVal)) {
             g_string_append_printf(message, " %s='%s'", citycodeKey, citycodeVal);
         } else {
-            info("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring",
-                    citycodeKey, (glong)vertexIndex, idKey, idStr);
+            debug("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring", citycodeKey,
+                  (glong)vertexIndex, idKey, idStr);
         }
     }
 
@@ -888,8 +889,8 @@ static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_int
         if(_topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_COUNTRYCODE, &countrycodeVal)) {
             g_string_append_printf(message, " %s='%s'", countrycodeKey, countrycodeVal);
         } else {
-            info("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring",
-                    countrycodeKey, (glong)vertexIndex, idKey, idStr);
+            debug("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring",
+                  countrycodeKey, (glong)vertexIndex, idKey, idStr);
         }
     }
 
@@ -900,8 +901,8 @@ static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_int
         if(_topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_TYPE, &typeVal)) {
             g_string_append_printf(message, " %s='%s'", typeKey, typeVal);
         } else {
-            info("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring",
-                    typeKey, (glong)vertexIndex, idKey, idStr);
+            debug("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring", typeKey,
+                  (glong)vertexIndex, idKey, idStr);
         }
     }
 
@@ -1620,11 +1621,11 @@ static gboolean _topology_computeShortestPathToSelf(Topology* top, igraph_intege
     igraph_real_t latency = 2.0f * minLatency;
     igraph_real_t reliability = reliabilityOfMinLatencyEdge * reliabilityOfMinLatencyEdge;
 
-    info("shortest path back to self is %f ms with %f loss, path: "
-            "%s%s--[%f,%f]-->%s%s--[%f,%f]-->%s",
-            (gdouble)latency, (gdouble)(1.0f-reliability),
-            idStr, top->isDirected ? "" : "<", minLatency, 1.0f-reliabilityOfMinLatencyEdge,
-            targetIDStr, top->isDirected ? "" : "<", minLatency, 1.0f-reliabilityOfMinLatencyEdge, idStr);
+    debug("shortest path back to self is %f ms with %f loss, path: "
+          "%s%s--[%f,%f]-->%s%s--[%f,%f]-->%s",
+          (gdouble)latency, (gdouble)(1.0f - reliability), idStr, top->isDirected ? "" : "<",
+          minLatency, 1.0f - reliabilityOfMinLatencyEdge, targetIDStr, top->isDirected ? "" : "<",
+          minLatency, 1.0f - reliabilityOfMinLatencyEdge, idStr);
 
     /* cache the latency and reliability we just computed */
     _topology_storePathInCache(top, FALSE, vertexIndex, vertexIndex, latency, reliability);
@@ -1648,8 +1649,8 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
     utility_assert(found);
     _topology_unlockGraph(top);
 
-    info("requested path between source vertex %li (%s) and destination vertex %li (%s)",
-            (glong)srcVertexIndex, srcIDStr, (glong)dstVertexIndex, dstIDStr);
+    debug("requested path between source vertex %li (%s) and destination vertex %li (%s)",
+          (glong)srcVertexIndex, srcIDStr, (glong)dstVertexIndex, dstIDStr);
 
     if(srcVertexIndex == dstVertexIndex) {
         return _topology_computeShortestPathToSelf(top, srcVertexIndex, srcIDStr);
@@ -1721,8 +1722,9 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
     utility_assert(numTargets == igraph_vector_ptr_size(&resultPaths));
     utility_assert(foundDstVertexIndex == TRUE);
 
-    info("computing shortest paths from source vertex %li (%s) to all %u vertices with connected hosts",
-            (glong)srcVertexIndex, srcIDStr, numTargets);
+    debug("computing shortest paths from source vertex %li (%s) to all %u vertices with connected "
+          "hosts",
+          (glong)srcVertexIndex, srcIDStr, numTargets);
 
     _topology_lockGraph(top);
     g_rw_lock_reader_lock(&(top->edgeWeightsLock));
@@ -1826,7 +1828,7 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
                 if(dstVertexIndexPosition == position) {
                     utility_assert(dstVertexIndex == pathTargetIndex);
                     foundDstPosition = TRUE;
-                    info("%s", logMessage->str);
+                    debug("%s", logMessage->str);
                 } else {
                     trace("%s", logMessage->str);
                 }
@@ -1933,9 +1935,9 @@ static void _topology_logAllCachedPathsHelper2(gpointer dstIndexKey, Path* path,
         utility_assert(found);
         _topology_unlockGraph(top);
 
-        /* log this at info level so we don't spam the message level logs */
-        info("Found path %s%s%s in cache: %s",
-                srcIDStr, top->isDirected ? "->" : "<->", dstIDStr, pathStr);
+        /* log this at debug level so we don't spam the message level logs */
+        debug("Found path %s%s%s in cache: %s", srcIDStr, top->isDirected ? "->" : "<->", dstIDStr,
+              pathStr);
 
         g_free(pathStr);
     }
@@ -1995,24 +1997,23 @@ static Path* _topology_getPathEntry(Topology* top, Address* srcAddress, Address*
 
         gboolean verticesAreAdjacent = _topology_verticesAreAdjacent(top, srcVertexIndex, dstVertexIndex);
 
-        info("We need a path between node %s at %s (vertex %i) and "
-                "node %s at %s (vertex %i), topology properties are: "
-                "isComplete=%s, prefersDirectPaths=%s, verticesAreAdjacent=%s",
-                address_toString(srcAddress), srcIDStr, (gint)srcVertexIndex,
-                address_toString(dstAddress), dstIDStr, (gint)dstVertexIndex,
-                top->isComplete ? "True" : "False",
-                top->prefersDirectPaths ? "True" : "False",
-                verticesAreAdjacent ? "True" : "False");
+        debug("We need a path between node %s at %s (vertex %i) and "
+              "node %s at %s (vertex %i), topology properties are: "
+              "isComplete=%s, prefersDirectPaths=%s, verticesAreAdjacent=%s",
+              address_toString(srcAddress), srcIDStr, (gint)srcVertexIndex,
+              address_toString(dstAddress), dstIDStr, (gint)dstVertexIndex,
+              top->isComplete ? "True" : "False", top->prefersDirectPaths ? "True" : "False",
+              verticesAreAdjacent ? "True" : "False");
 
         if(top->isComplete || (top->prefersDirectPaths && verticesAreAdjacent)) {
             /* use the edge between src and dst as the path */
             success = _topology_lookupDirectPath(top, srcVertexIndex, dstVertexIndex);
 
             if(success) {
-                info("We found a direct path between node %s at %s (vertex %i) and "
-                        "node %s at %s (vertex %i), and stored the path in the cache.",
-                        address_toString(srcAddress), srcIDStr, (gint)srcVertexIndex,
-                        address_toString(dstAddress), dstIDStr, (gint)dstVertexIndex);
+                debug("We found a direct path between node %s at %s (vertex %i) and "
+                      "node %s at %s (vertex %i), and stored the path in the cache.",
+                      address_toString(srcAddress), srcIDStr, (gint)srcVertexIndex,
+                      address_toString(dstAddress), dstIDStr, (gint)dstVertexIndex);
             }
         } else {
             success = _topology_computeSourcePaths(top, srcVertexIndex, dstVertexIndex);

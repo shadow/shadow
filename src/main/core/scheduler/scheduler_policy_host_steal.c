@@ -249,8 +249,9 @@ static void _schedulerpolicyhoststeal_push(SchedulerPolicy* policy, Event* event
 
     if(srcHost != dstHost && eventTime < barrier) {
         event_setTime(event, barrier);
-        info("Inter-host event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" "
-                "to ensure event causality", eventTime, barrier);
+        debug("Inter-host event time %" G_GUINT64_FORMAT " changed to %" G_GUINT64_FORMAT " "
+              "to ensure event causality",
+              eventTime, barrier);
     }
 
     g_rw_lock_reader_lock(&data->lock);
@@ -514,7 +515,7 @@ static SimulationTime _schedulerpolicyhoststeal_getNextTime(SchedulerPolicy* pol
         g_queue_foreach(tdata->processedHosts, (GFunc)_schedulerpolicyhoststeal_findMinTime, &searchState);
     }
 
-    info("next event at time %"G_GUINT64_FORMAT, searchState.nextEventTime);
+    debug("next event at time %" G_GUINT64_FORMAT, searchState.nextEventTime);
 
     return searchState.nextEventTime;
 }

@@ -367,7 +367,7 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char*
             die_after_vfork(); // Unreachable
         }
     }
-    info("started process %s with PID %d", file, pid);
+    debug("started process %s with PID %d", file, pid);
 
     // Because we use vfork (in non-coverage mode), the parent is
     // guaranteed not to execute again until the child has called
