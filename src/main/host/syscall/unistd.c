@@ -159,9 +159,9 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
-            critical("Indefinitely blocking a read of %zu bytes on file %i at "
-                     "offset %li",
-                     bufSize, fd, offset);
+            error("Indefinitely blocking a read of %zu bytes on file %i at "
+                  "offset %li",
+                  bufSize, fd, offset);
         }
 
         /* We need to block until the descriptor is ready to read. */
@@ -251,9 +251,9 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
-            critical("Indefinitely blocking a write of %zu bytes on file %i at "
-                     "offset %li",
-                     bufSize, fd, offset);
+            error("Indefinitely blocking a write of %zu bytes on file %i at "
+                  "offset %li",
+                  bufSize, fd, offset);
         }
 
         /* We need to block until the descriptor is ready to write. */

@@ -485,9 +485,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                 "Detected unsupported syscall %ld called from thread %i in process %s on host %s",
                 args->number, thread_getID(sys->thread), process_getName(sys->process),
                 host_getName(sys->host));
-            critical("Returning error %i (ENOSYS) for unsupported syscall %li, which may result in "
-                     "unusual behavior",
-                     ENOSYS, args->number);
+            error("Returning error %i (ENOSYS) for unsupported syscall %li, which may result in "
+                  "unusual behavior",
+                  ENOSYS, args->number);
             scr = (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
             break;
     }

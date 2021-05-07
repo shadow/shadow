@@ -175,8 +175,8 @@ static gboolean _controller_loadTopology(Controller* controller) {
     g_unlink(temporaryFilename);
 
     if (!controller->topology) {
-        critical("fatal error loading topology at path '%s', check your syntax and try again",
-                 temporaryFilename);
+        error("fatal error loading topology at path '%s', check your syntax and try again",
+              temporaryFilename);
         g_free(temporaryFilename);
         return FALSE;
     }

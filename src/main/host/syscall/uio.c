@@ -181,9 +181,9 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
-            critical("Indefinitely blocking a readv of vector length %lu on "
-                     "file %i at offset %li",
-                     iovlen, fd, offset);
+            error("Indefinitely blocking a readv of vector length %lu on "
+                  "file %i at offset %li",
+                  iovlen, fd, offset);
         }
 
         /* We need to block until the descriptor is ready to write. */
@@ -296,9 +296,9 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
-            critical("Indefinitely blocking a writev of vector length %lu on "
-                     "file %i at offset %li",
-                     iovlen, fd, offset);
+            error("Indefinitely blocking a writev of vector length %lu on "
+                  "file %i at offset %li",
+                  iovlen, fd, offset);
         }
 
         /* We need to block until the descriptor is ready to write. */

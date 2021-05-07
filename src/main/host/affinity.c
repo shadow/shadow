@@ -399,8 +399,8 @@ int affinity_setProcessAffinity(pid_t pid, int new_cpu_num, int old_cpu_num) {
     }
 
     if (!set_affinity_suceeded) {
-        critical("cpu-pin was set, but the CPU affinity for PID %d could not be set to %d",
-                 (int)pid, new_cpu_num);
+        error("cpu-pin was set, but the CPU affinity for PID %d could not be set to %d", (int)pid,
+              new_cpu_num);
         retval = old_cpu_num;
     }
 
