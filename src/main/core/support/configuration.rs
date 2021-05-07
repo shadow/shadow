@@ -148,7 +148,7 @@ pub struct GeneralOptions {
     /// messages at level 'trace' will always be dropped
     #[clap(long, short = 'l', value_name = "level")]
     #[clap(about = GENERAL_HELP.get("log_level").unwrap())]
-    #[serde(default = "default_some_message")]
+    #[serde(default = "default_some_info")]
     log_level: Option<LogLevel>,
 
     /// Interval at which to print heartbeat messages
@@ -668,7 +668,7 @@ fn default_some_time_1() -> Option<units::Time<units::TimePrefixUpper>> {
 }
 
 /// Helper function for serde default `Some(LogLevel::Info)` values.
-fn default_some_message() -> Option<LogLevel> {
+fn default_some_info() -> Option<LogLevel> {
     Some(LogLevel::Info)
 }
 
