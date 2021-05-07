@@ -500,7 +500,7 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
             /* If the edge does not exist, then -1 will be stored in edge_id.
              * If it is found, then it will be >= 0 */
             if (result == IGRAPH_SUCCESS && edge_id >= 0) {
-                debug("Subtracting one from vert id=%li's edge count because "
+                trace("Subtracting one from vert id=%li's edge count because "
                         "this is an undirected graph and this vertex's "
                         "self-looping edge has been counted twice", (long int)vertexID);
                 ecount -= 1;
@@ -516,7 +516,7 @@ static gboolean _topology_isComplete(Topology* top, gboolean *result) {
             igraph_vector_destroy(&iedges);
             goto done;
         } else {
-            debug("Vert id=%li has %li incident edges to %li total verts "
+            trace("Vert id=%li has %li incident edges to %li total verts "
                 "and thus doesn't determine whether this graph is incomplete. "
                 "Must keep searching.", (long int)vertexID,
                 (long int)ecount, (long int)vcount);
@@ -583,7 +583,7 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         igraph_strvector_get(&gnames, (glong) i, &name);
         type = igraph_vector_e(&gtypes, (glong) i);
 
-        debug("found graph attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
+        trace("found graph attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
 
         if(_topology_isValidGraphAttributeKey(name, GRAPH_ATTR_PREFERDIRECTPATHS)) {
             /* we use a string because there is an error in igraph boolean attribute code. */
@@ -601,7 +601,7 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         igraph_strvector_get(&vnames, (glong) i, &name);
         type = igraph_vector_e(&vtypes, (glong) i);
 
-        debug("found vertex attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
+        trace("found vertex attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
 
         if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_ID)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
@@ -655,7 +655,7 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         igraph_strvector_get(&enames, (glong) i, &name);
         type = igraph_vector_e(&etypes, (glong) i);
 
-        debug("found edge attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
+        trace("found edge attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
 
         if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_LATENCY)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
@@ -937,7 +937,7 @@ static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_int
         }
     }
 
-    debug("%s", message->str);
+    trace("%s", message->str);
 
     g_string_free(message, TRUE);
     g_free(idStr);
@@ -1084,7 +1084,7 @@ static gboolean _topology_checkGraphEdgesHelperHook(Topology* top, igraph_intege
         }
     }
 
-    debug("%s", message->str);
+    trace("%s", message->str);
 
     g_string_free(message, TRUE);
 
@@ -1828,7 +1828,7 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
                     foundDstPosition = TRUE;
                     info("%s", logMessage->str);
                 } else {
-                    debug("%s", logMessage->str);
+                    trace("%s", logMessage->str);
                 }
 
                 g_string_free(logMessage, TRUE);

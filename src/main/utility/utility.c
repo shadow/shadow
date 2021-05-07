@@ -277,9 +277,9 @@ GString* utility_getFileContents(const gchar* fileName) {
     GError *error = NULL;
 
     /* get the xml file */
-    debug("attempting to get contents of file '%s'", fileName);
+    trace("attempting to get contents of file '%s'", fileName);
     gboolean success = g_file_get_contents(fileName, &content, &length, &error);
-    debug("finished getting contents of file '%s'", fileName);
+    trace("finished getting contents of file '%s'", fileName);
 
     /* check for success */
     if (!success) {

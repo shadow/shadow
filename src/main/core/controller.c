@@ -368,8 +368,8 @@ gint controller_run(Controller* controller) {
 
     message("running simulation");
 
-    /* dont buffer log messages in debug mode */
-    if (config_getLogLevel(controller->config) != LOGLEVEL_DEBUG) {
+    /* dont buffer log messages in trace mode */
+    if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
         message("log message buffering is enabled for efficiency");
         shadow_logger_setEnableBuffering(shadow_logger_getDefault(), TRUE);
     }
@@ -379,7 +379,7 @@ gint controller_run(Controller* controller) {
 
     /* only need to disable buffering if it was enabled, otherwise
      * don't log the message as it may confuse the user. */
-    if (config_getLogLevel(controller->config) != LOGLEVEL_DEBUG) {
+    if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
         message("log message buffering is disabled during cleanup");
         shadow_logger_setEnableBuffering(shadow_logger_getDefault(), FALSE);
     }

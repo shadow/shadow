@@ -124,7 +124,7 @@ static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, c
 }
 
 static void _threadpreload_cleanup(ThreadPreload* thread) {
-    debug("child %d exited", thread->base.nativePid);
+    trace("child %d exited", thread->base.nativePid);
     thread->isRunning = 0;
 
     if (thread->sys) {
@@ -181,7 +181,7 @@ static inline void _threadpreload_waitForNextEvent(ThreadPreload* thread) {
     MAGIC_ASSERT(_threadPreloadToThread(thread));
     utility_assert(thread->ipc_blk.p > 0);
     shimevent_recvEventFromPlugin(thread->ipc_blk.p, &thread->currentEvent);
-    debug("received shim_event %d", thread->currentEvent.event_id);
+    trace("received shim_event %d", thread->currentEvent.event_id);
 }
 
 static ShMemBlock* _threadpreload_getIPCBlock(Thread* base) {
@@ -209,7 +209,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
             case SHD_SHIM_EVENT_START: {
                 // send the message to the shim to call main(),
                 // the plugin will run until it makes a blocking call
-                debug("sending start event code to %d on %p", thread->base.nativePid,
+                trace("sending start event code to %d on %p", thread->base.nativePid,
                       thread->ipc_blk.p);
 
                 thread->currentEvent.event_data.start.simulation_nanos = worker_getEmulatedTime();
@@ -231,7 +231,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
 
                 if (result.state == SYSCALL_BLOCK) {
                     if (shimipc_sendExplicitBlockMessageEnabled()) {
-                        debug("Sending block message to plugin");
+                        trace("Sending block message to plugin");
                         // thread is blocked on simulation progress. Tell it to
                         // stop spinning so that releases its CPU core for the next
                         // thread to be run.

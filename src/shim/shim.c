@@ -42,11 +42,11 @@ static __thread int _shim_disable_interposition = 0;
 static void _shim_set_allow_native_syscalls(bool is_allowed) {
     if (_shim_shared_mem) {
         _shim_shared_mem->ptrace_allow_native_syscalls = is_allowed;
-        debug("%s native-syscalls via shmem %p", is_allowed ? "allowing" : "disallowing",
+        trace("%s native-syscalls via shmem %p", is_allowed ? "allowing" : "disallowing",
               _shim_shared_mem);
     } else {
         shadow_set_ptrace_allow_native_syscalls(is_allowed);
-        debug("%s native-syscalls via custom syscall", is_allowed ? "allowing" : "disallowing");
+        trace("%s native-syscalls via custom syscall", is_allowed ? "allowing" : "disallowing");
     }
 }
 
@@ -163,7 +163,7 @@ static void _verify_parent_pid_or_exit() {
 
     if (valid_parse_pid) {
         if (getppid() == shadow_pid) { // Validate that Shadow is still alive.
-            debug("Plugin verified Shadow is still running as parent.");
+            trace("Plugin verified Shadow is still running as parent.");
         } else {
             error("Shadow exited.");
             exit(-1); // If Shadow's dead, we can just get out(?)
@@ -257,7 +257,7 @@ static void _shim_ipc_wait_for_start_event() {
     assert(_shim_ipc_blk.p);
 
     ShimEvent event;
-    debug("waiting for start event on %p", _shim_ipc_blk.p);
+    trace("waiting for start event on %p", _shim_ipc_blk.p);
     shimevent_recvEventFromShadow(_shim_ipc_blk.p, &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
     shim_syscall_set_simtime_nanos(event.event_data.start.simulation_nanos);
@@ -373,7 +373,7 @@ __attribute__((constructor)) void _shim_load() {
             _shim_parent_init_preload();
         }
         did_global_init = true;
-        debug("Finished shim parent init");
+        trace("Finished shim parent init");
     } else {
         if (_using_interpose_ptrace && _using_interpose_preload) {
             _shim_child_init_hybrid();
@@ -382,7 +382,7 @@ __attribute__((constructor)) void _shim_load() {
         } else if (_using_interpose_preload) {
             _shim_child_init_preload();
         }
-        debug("Finished shim child init");
+        trace("Finished shim child init");
     }
 }
 
@@ -404,7 +404,7 @@ __attribute__((destructor)) static void _shim_unload() {
     ShMemBlock ipc_blk = shim_thisThreadEventIPCBlk();
     ShimEvent shim_event;
     shim_event.event_id = SHD_SHIM_EVENT_STOP;
-    debug("sending stop event on %p", ipc_blk.p);
+    trace("sending stop event on %p", ipc_blk.p);
     shimevent_sendEventToShadow(ipc_blk.p, &shim_event);
 
     // Leave interposition disabled; shadow is waiting for

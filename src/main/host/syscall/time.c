@@ -80,7 +80,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
 SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
                                            const SysCallArgs* args) {
     clockid_t clk_id = args->args[0].as_u64;
-    debug("syscallhandler_clock_gettime with %d %p", clk_id,
+    trace("syscallhandler_clock_gettime with %d %p", clk_id,
           GUINT_TO_POINTER(args->args[1].as_ptr.val));
 
     /* Make sure they didn't pass a NULL pointer. */

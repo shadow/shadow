@@ -392,13 +392,13 @@ void host_addApplication(Host* host, SimulationTime startTime, SimulationTime st
 
 void host_freeAllApplications(Host* host) {
     MAGIC_ASSERT(host);
-    debug("start freeing applications for host '%s'", host->params.hostname);
+    trace("start freeing applications for host '%s'", host->params.hostname);
     while(!g_queue_is_empty(host->processes)) {
         Process* proc = g_queue_pop_head(host->processes);
         process_stop(proc);
         process_unref(proc);
     }
-    debug("done freeing application for host '%s'", host->params.hostname);
+    trace("done freeing application for host '%s'", host->params.hostname);
 }
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {

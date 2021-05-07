@@ -70,7 +70,7 @@ static gboolean _dns_isIPInRange(const in_addr_t netIP, const gchar* cidrStr) {
         gchar* ipStr = address_ipToNewString(netIP);
         gchar* subnetIPStr = address_ipToNewString(subnetIP);
         gchar* netmaskStr = address_ipToNewString(netmask);
-        debug("ip '%s' is in range '%s' using subnet '%s' and mask '%s'",
+        trace("ip '%s' is in range '%s' using subnet '%s' and mask '%s'",
                 ipStr, cidrStr, subnetIPStr, netmaskStr);
         g_free(ipStr);
         g_free(subnetIPStr);
@@ -247,7 +247,7 @@ static bool _dns_writeNewHostsFile(DNS* dns) {
     GString* buf = g_string_new("127.0.0.1 localhost\n");
     g_hash_table_foreach(dns->addressByName, _dns_writeHostLine, buf);
 
-    debug("Hosts file string buffer is %zu bytes.", buf->len);
+    trace("Hosts file string buffer is %zu bytes.", buf->len);
 
     size_t amt = 0;
     while(amt < buf->len) {

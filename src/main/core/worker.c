@@ -538,7 +538,7 @@ void* _worker_run(void* voidWorker) {
         }
         countdownlatch_countDown(workerPool->finishLatch);
     } while (taskFn != NULL);
-    debug("Worker finished");
+    trace("Worker finished");
     return NULL;
 }
 

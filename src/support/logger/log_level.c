@@ -16,6 +16,7 @@ const char* loglevel_toStr(LogLevel level) {
         case LOGLEVEL_MESSAGE: return "message";
         case LOGLEVEL_INFO: return "info";
         case LOGLEVEL_DEBUG: return "debug";
+        case LOGLEVEL_TRACE: return "trace";
         case LOGLEVEL_UNSET:
         default: return "unset";
     }
@@ -36,6 +37,8 @@ LogLevel loglevel_fromStr(const char* levelStr) {
         return LOGLEVEL_INFO;
     } else if (g_ascii_strcasecmp(levelStr, "debug") == 0) {
         return LOGLEVEL_DEBUG;
+    } else if (g_ascii_strcasecmp(levelStr, "trace") == 0) {
+        return LOGLEVEL_TRACE;
     } else {
         return LOGLEVEL_UNSET;
     }

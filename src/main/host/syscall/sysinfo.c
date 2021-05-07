@@ -18,7 +18,7 @@ SysCallReturn syscallhandler_sysinfo(SysCallHandler* sys, const SysCallArgs* arg
     utility_assert(sys && args);
     PluginPtr info_ptr = args->args[0].as_ptr; // struct sysinfo*
 
-    debug("sysinfo called");
+    trace("sysinfo called");
 
     if (!info_ptr.val) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};

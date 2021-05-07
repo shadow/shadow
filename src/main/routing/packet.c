@@ -661,7 +661,7 @@ void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) 
 
     packet->allStatus |= status;
 
-    gboolean skipDebug = worker_isFiltered(LOGLEVEL_DEBUG);
+    gboolean skipDebug = worker_isFiltered(LOGLEVEL_TRACE);
     if(!skipDebug) {
         g_queue_push_tail(packet->orderedStatus, GUINT_TO_POINTER(status));
         gchar* packetStr = packet_toString(packet);

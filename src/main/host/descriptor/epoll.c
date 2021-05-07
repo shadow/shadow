@@ -395,7 +395,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, CompatDescriptor* descr
                    const struct epoll_event* event) {
     MAGIC_ASSERT(epoll);
 
-    debug("epoll descriptor %i, operation %s, descriptor %i", epoll->super.handle,
+    trace("epoll descriptor %i, operation %s, descriptor %i", epoll->super.handle,
           _epoll_operationToStr(operation), fd);
 
     EpollWatchTypes watchType;
@@ -567,7 +567,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
 
     *nEvents = eventIndex;
 
-    debug("epoll descriptor %i collected %i events", descriptor_getHandle(&epoll->super), eventIndex);
+    trace("epoll descriptor %i collected %i events", descriptor_getHandle(&epoll->super), eventIndex);
 
     /* if we consumed all the events that we had to report,
      * then our parent descriptor can no longer read child epolls */
@@ -580,12 +580,12 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
 static void _epoll_descriptorStatusChanged(Epoll* epoll, const EpollKey* key) {
     MAGIC_ASSERT(epoll);
 
-    debug("status changed on epoll %i", descriptor_getHandle(&epoll->super));
+    trace("status changed on epoll %i", descriptor_getHandle(&epoll->super));
 
     if (key != NULL) {
         EpollWatch* watch = g_hash_table_lookup(epoll->watching, key);
         if (watch != NULL) {
-            debug("status changed in epoll %i on watched descriptor %i",
+            trace("status changed in epoll %i on watched descriptor %i",
                   descriptor_getHandle(&epoll->super), watch->fd);
 
             /* update the status for the child watch fd */

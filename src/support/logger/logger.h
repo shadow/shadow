@@ -27,10 +27,11 @@
 #define warning(...)    logger_log(logger_getDefault(), LOGLEVEL_WARNING, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define message(...)    logger_log(logger_getDefault(), LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define info(...)       logger_log(logger_getDefault(), LOGLEVEL_INFO, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
-#ifdef DEBUG
 #define debug(...)      logger_log(logger_getDefault(), LOGLEVEL_DEBUG, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
+#ifdef DEBUG
+#define trace(...)      logger_log(logger_getDefault(), LOGLEVEL_TRACE, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #else
-#define debug(...)
+#define trace(...)
 #endif
 
 // clang-format on

@@ -309,7 +309,7 @@ where
 {
     fn as_ref(&self) -> Result<&[T], Errno> {
         if self.len() == 0 {
-            debug!("as_ref returning empty slice");
+            trace!("as_ref returning empty slice");
             return Ok(&mut [][..]);
         }
 
@@ -371,7 +371,7 @@ where
 
     fn as_mut(&mut self) -> Result<&mut [T], Errno> {
         if self.len() == 0 {
-            debug!("as_mut_init returning empty slice");
+            trace!("as_mut_init returning empty slice");
             return Ok(&mut [][..]);
         }
 
@@ -390,7 +390,7 @@ where
 
     fn as_mut_uninit(&mut self) -> Result<&mut [T], Errno> {
         if self.len() == 0 {
-            debug!("as_mut_init returning empty slice");
+            trace!("as_mut_init returning empty slice");
             return Ok(&mut [][..]);
         }
 
@@ -613,7 +613,7 @@ impl ShmFile {
 
     /// De-allocate space in the file for the given interval.
     fn dealloc(&self, interval: &Interval) {
-        debug!("dealloc {:?}", interval);
+        trace!("dealloc {:?}", interval);
         fcntl::fallocate(
             self.shm_file.as_raw_fd(),
             fcntl::FallocateFlags::FALLOC_FL_PUNCH_HOLE
@@ -1078,7 +1078,7 @@ impl MemoryMapper {
         addr: PluginPtr,
         length: usize,
     ) -> SyscallResult {
-        debug!("handle_munmap({:?}, {})", addr, length);
+        trace!("handle_munmap({:?}, {})", addr, length);
         thread.native_munmap(addr, length)?;
         if length == 0 {
             return Ok(0.into());
@@ -1350,7 +1350,7 @@ impl MemoryMapper {
         size: usize,
         prot: i32,
     ) -> SyscallResult {
-        debug!("mprotect({:?}, {}, {:?})", addr, size, prot);
+        trace!("mprotect({:?}, {}, {:?})", addr, size, prot);
         thread.native_mprotect(addr, size, prot)?;
         let protflags = sys::mman::ProtFlags::from_bits(prot).unwrap();
 
@@ -1672,7 +1672,7 @@ impl MemoryManager {
         assert!(dst.len() <= src.len() - offset);
 
         let toread = dst.len();
-        debug!("read_ptr reading {} bytes", dst.len());
+        trace!("read_ptr reading {} bytes", dst.len());
         let local = [nix::sys::uio::IoVec::from_mut_slice(dst)];
         let remote = [nix::sys::uio::RemoteIoVec {
             base: usize::from(src.ptr()) + offset,
@@ -1780,7 +1780,7 @@ impl MemoryManager {
         assert!(src.len() <= dst.len() - offset);
 
         let towrite = src.len();
-        debug!("write_ptr writing {} bytes", towrite);
+        trace!("write_ptr writing {} bytes", towrite);
         let local = [nix::sys::uio::IoVec::from_slice(src)];
         let remote = [nix::sys::uio::RemoteIoVec {
             base: usize::from(dst.ptr()) + offset,
@@ -2010,7 +2010,7 @@ mod export {
         match memory_manager.reader(src).copy(dst) {
             Ok(_) => 0,
             Err(_) => {
-                debug!("Couldn't read {:?} into {:?}", src, dst);
+                trace!("Couldn't read {:?} into {:?}", src, dst);
                 nix::errno::Errno::EFAULT as i32
             }
         }
@@ -2060,7 +2060,7 @@ mod export {
         match memory_manager.writer(dst).copy(src) {
             Ok(_) => 0,
             Err(_) => {
-                debug!("Couldn't write {:?} into {:?}", dst, src);
+                trace!("Couldn't write {:?} into {:?}", dst, src);
                 nix::errno::Errno::EFAULT as i32
             }
         }

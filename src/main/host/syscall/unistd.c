@@ -72,7 +72,7 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
     pipefd[1] =
         process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)pipeWriter);
 
-    debug("Created pipe reader fd %i and writer fd %i", pipefd[0], pipefd[1]);
+    trace("Created pipe reader fd %i and writer fd %i", pipefd[0], pipefd[1]);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
@@ -80,7 +80,7 @@ static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
 static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
                                                 PluginPtr bufPtr,
                                                 size_t bufSize, off_t offset) {
-    debug(
+    trace(
         "trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
 
     /* Get the descriptor. */
@@ -177,7 +177,7 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
 static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
                                                  PluginPtr bufPtr,
                                                  size_t bufSize, off_t offset) {
-    debug("trying to write %zu bytes on fd %i at offset %li", bufSize, fd,
+    trace("trying to write %zu bytes on fd %i at offset %li", bufSize, fd,
           offset);
 
     /* Get the descriptor. */
@@ -275,7 +275,7 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
     gint fd = args->args[0].as_i64;
     gint errorCode = 0;
 
-    debug("Trying to close fd %i", fd);
+    trace("Trying to close fd %i", fd);
 
     /* Check that fd is within bounds. */
     if (fd < 0) {
@@ -287,7 +287,7 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
     errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
 
     if (descriptor && !errorCode) {
-        debug("Closing descriptor %i", descriptor_getHandle(descriptor));
+        trace("Closing descriptor %i", descriptor_getHandle(descriptor));
         descriptor_close(descriptor);
         return (SysCallReturn){.state = SYSCALL_DONE};
     }
@@ -299,7 +299,7 @@ SysCallReturn syscallhandler_dup(SysCallHandler* sys,
                                  const SysCallArgs* args) {
     gint fd = args->args[0].as_i64;
 
-    debug("Trying to dup fd %i", fd);
+    trace("Trying to dup fd %i", fd);
 
     LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
     if (!desc) {
@@ -365,7 +365,7 @@ SysCallReturn syscallhandler_pwrite64(SysCallHandler* sys,
 }
 
 SysCallReturn syscallhandler_exit_group(SysCallHandler* sys, const SysCallArgs* args) {
-    debug("Exit group with exit code %ld", args->args[0].as_i64);
+    trace("Exit group with exit code %ld", args->args[0].as_i64);
     process_markAsExiting(sys->process);
     return (SysCallReturn){.state = SYSCALL_NATIVE};
 }

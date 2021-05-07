@@ -40,7 +40,7 @@ static void _main_logEnvironment(gchar** argv, gchar** envv) {
         }
     }
 
-    /* log some useful environment variables at message, the rest at debug */
+    /* log some useful environment variables at message, the rest at trace */
     if(envv) {
         for(gint i = 0; envv[i] != NULL; i++) {
             if(!g_ascii_strncasecmp(envv[i], "LD_PRELOAD", 10) ||
@@ -50,7 +50,7 @@ static void _main_logEnvironment(gchar** argv, gchar** envv) {
                     !g_ascii_strncasecmp(envv[i], "G_SLICE", 7)) {
                 message("env: %s", envv[i]);
             } else {
-                debug("env: %s", envv[i]);
+                trace("env: %s", envv[i]);
             }
         }
     }
@@ -222,7 +222,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     shadow_logger_setEnableBuffering(shadowLogger, FALSE);
 
 #ifndef DEBUG
-    if (logLevel == LOGLEVEL_DEBUG) {
+    if (logLevel == LOGLEVEL_TRACE) {
         warning("Log level set to %s, but Shadow was not built in debug mode",
                 loglevel_toStr(logLevel));
     }

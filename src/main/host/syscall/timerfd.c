@@ -86,7 +86,7 @@ SysCallReturn syscallhandler_timerfd_create(SysCallHandler* sys,
         descriptor_addFlags((LegacyDescriptor*)timer, O_CLOEXEC);
     }
 
-    debug("timerfd_create() returning fd %i", tfd);
+    trace("timerfd_create() returning fd %i", tfd);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = tfd};
 }

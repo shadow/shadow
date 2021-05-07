@@ -47,7 +47,7 @@ static int _do_connect(int fd, struct sockaddr_in* serveraddr) {
             message("waited for connect for 1 second, giving up");
             break;
         }
-        debug("connect() returned EINPROGRESS, retrying in 1 millisecond");
+        trace("connect() returned EINPROGRESS, retrying in 1 millisecond");
         usleep((useconds_t)1000);
     }
     errno = saved_errno;
@@ -62,7 +62,7 @@ static int _do_accept(int fd) {
     while (1) {
         result = accept(fd, NULL, NULL);
         saved_errno = errno;
-        debug("accept() returned %i %s", result, strerror(errno));
+        trace("accept() returned %i %s", result, strerror(errno));
         if (result >= 0 || errno != EINPROGRESS) {
             break;
         }
@@ -70,7 +70,7 @@ static int _do_accept(int fd) {
             message("waited for accept for 1 second, giving up");
             break;
         }
-        debug("accept() returned EINPROGRESS, retrying in 1 millisecond");
+        trace("accept() returned EINPROGRESS, retrying in 1 millisecond");
         usleep((useconds_t)1000);
     }
     errno = saved_errno;
@@ -81,35 +81,35 @@ static void _test_explicit_bind(gconstpointer gp) {
     int socket_type = GPOINTER_TO_INT(gp);
     int fd1 = 0, fd2 = 0;
 
-    debug("creating sockets");
+    trace("creating sockets");
 
     assert_true_errno((fd1 = socket(AF_INET, socket_type, 0)) >= 0);
     assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
-    debug("binding one socket to localhost:11111");
+    trace("binding one socket to localhost:11111");
     assert_true_errno(_do_bind(fd1, (in_addr_t)htonl(INADDR_LOOPBACK),
                                (in_port_t)htons(11111)) == 0);
 
-    debug("try to bind the same socket again, which this should fail since we already did bind");
+    trace("try to bind the same socket again, which this should fail since we already did bind");
     g_assert_true(_do_bind(fd1, (in_addr_t)htonl(INADDR_LOOPBACK),
                            (in_port_t)htons(11111)) == -1);
     assert_errno_is(EINVAL);
 
-    debug("binding a second socket to the same address as the first should fail");
+    trace("binding a second socket to the same address as the first should fail");
     g_assert_true(_do_bind(fd2, (in_addr_t)htonl(INADDR_LOOPBACK),
                            (in_port_t)htons(11111)) == -1);
     assert_errno_is(EADDRINUSE);
 
-    debug("binding a second socket to ANY with same port as the first should fail");
+    trace("binding a second socket to ANY with same port as the first should fail");
     g_assert_true(_do_bind(fd2, (in_addr_t)htonl(INADDR_ANY),
                            (in_port_t)htons(11111)) == -1);
     assert_errno_is(EADDRINUSE);
 
-    debug("binding to 0.0.0.0:0 should succeed");
+    trace("binding to 0.0.0.0:0 should succeed");
     assert_true_errno(
         _do_bind(fd2, (in_addr_t)htonl(INADDR_ANY), (in_port_t)htons(0)) == 0);
 
-    debug("re-binding a socket bound to 0.0.0.0:0 should fail");
+    trace("re-binding a socket bound to 0.0.0.0:0 should fail");
     g_assert_true(_do_bind(fd2, (in_addr_t)htonl(INADDR_ANY),
                            (in_port_t)htons(22222)) == -1);
     assert_errno_is(EINVAL);
@@ -133,20 +133,20 @@ static int _check_matching_addresses(int fd_server_listen, int fd_server_accept,
 
     assert_true_errno(getsockname(fd_server_listen, (struct sockaddr*) &server_listen_sockname, &addr_len) == 0);
 
-    debug("found sockname %s:%i for server listen fd %i",
+    trace("found sockname %s:%i for server listen fd %i",
             inet_ntoa(server_listen_sockname.sin_addr),
             (int)server_listen_sockname.sin_port, fd_server_listen);
 
     assert_true_errno(getsockname(fd_server_accept, (struct sockaddr*) &server_accept_sockname, &addr_len) == 0);
 
-    debug("found sockname %s:%i for server accept fd %i",
+    trace("found sockname %s:%i for server accept fd %i",
             inet_ntoa(server_accept_sockname.sin_addr),
             (int)server_accept_sockname.sin_port, fd_server_accept);
 
     assert_true_errno(getsockname(fd_client, (struct sockaddr*)&client_sockname,
                                   &addr_len) == 0);
 
-    debug("found sockname %s:%i for client fd %i",
+    trace("found sockname %s:%i for client fd %i",
             inet_ntoa(client_sockname.sin_addr), (int)client_sockname.sin_port,
             fd_client);
 
@@ -154,14 +154,14 @@ static int _check_matching_addresses(int fd_server_listen, int fd_server_accept,
                                   (struct sockaddr*)&server_accept_peername,
                                   &addr_len) == 0);
 
-    debug("found peername %s:%i for server accept fd %i",
+    trace("found peername %s:%i for server accept fd %i",
             inet_ntoa(server_accept_peername.sin_addr),
             (int)server_accept_peername.sin_port, fd_server_accept);
 
     assert_true_errno(getpeername(fd_client, (struct sockaddr*)&client_peername,
                                   &addr_len) == 0);
 
-    debug("found peername %s:%i for client fd %i",
+    trace("found peername %s:%i for client fd %i",
             inet_ntoa(client_peername.sin_addr), (int)client_peername.sin_port,
             fd_client);
 
@@ -191,14 +191,14 @@ static void _test_implicit_bind(gconstpointer gp) {
     socklen_t addr_len = sizeof(struct sockaddr_in);
     memset(&serveraddr, 0, sizeof(struct sockaddr_in));
 
-    debug("creating sockets");
+    trace("creating sockets");
     assert_true_errno((fd1 = socket(AF_INET, socket_type, 0)) >= 0);
     assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
-    debug("listening on server socket with implicit bind");
+    trace("listening on server socket with implicit bind");
     assert_true_errno(listen(fd1, 0) == 0);
 
-    debug("checking socket address with getsockname");
+    trace("checking socket address with getsockname");
     assert_true_errno(
         getsockname(fd1, (struct sockaddr*)&serveraddr, &addr_len) >= 0);
     g_assert_cmpint(serveraddr.sin_addr.s_addr,==,htonl(INADDR_ANY));
@@ -213,21 +213,21 @@ static void _test_implicit_bind(gconstpointer gp) {
     }
     // FIXME end
 
-    debug("connecting client socket to server at 0.0.0.0");
+    trace("connecting client socket to server at 0.0.0.0");
     assert_true_errno(_do_connect(fd2, &serveraddr) == 0);
 
     close(fd2);
     fd2 = 0;
     assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
-    debug("connecting client socket to server at 127.0.0.1");
+    trace("connecting client socket to server at 127.0.0.1");
     serveraddr.sin_addr.s_addr = (in_addr_t) htonl(INADDR_LOOPBACK);
     assert_true_errno(_do_connect(fd2, &serveraddr) == 0);
 
-    debug("accepting client connection");
+    trace("accepting client connection");
     assert_true_errno((fd3 = _do_accept(fd1)) >= 0);
 
-    debug("checking that server and client addresses match");
+    trace("checking that server and client addresses match");
     g_assert_true(_check_matching_addresses(fd1, fd3, fd2) == EXIT_SUCCESS);
 
     close(fd1);

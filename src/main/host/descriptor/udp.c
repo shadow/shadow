@@ -49,7 +49,7 @@ static void _udp_setState(UDP* udp, enum UDPState state) {
     udp->stateLast = udp->state;
     udp->state = state;
 
-    debug("%s <-> %s: moved from UDP state '%s' to '%s'", udp->super.boundString, udp->super.peerString,
+    trace("%s <-> %s: moved from UDP state '%s' to '%s'", udp->super.boundString, udp->super.peerString,
             _udp_stateToAscii(udp->stateLast), _udp_stateToAscii(udp->state));
 }
 
@@ -159,7 +159,7 @@ static gssize _udp_sendUserData(Transport* transport, PluginVirtualPtr buffer, g
         warning("unable to send UDP packet");
     }
 
-    debug("buffered %"G_GSIZE_FORMAT" outbound UDP bytes from user", bytes_sent);
+    trace("buffered %"G_GSIZE_FORMAT" outbound UDP bytes from user", bytes_sent);
 
     // return EWOULDBLOCK only if no bytes were sent, and we were requested to send >0 bytes
     if(bytes_sent == 0 && nBytes > 0) {
@@ -212,7 +212,7 @@ static gssize _udp_receiveUserData(Transport* transport, PluginVirtualPtr buffer
     /* destroy packet, throwing away any bytes not claimed by the app */
     packet_unref(packet);
 
-    debug("user read %ld inbound UDP bytes", bytesCopied);
+    trace("user read %ld inbound UDP bytes", bytesCopied);
 
     return bytesCopied;
 }

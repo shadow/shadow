@@ -327,7 +327,7 @@ void networkinterface_associate(NetworkInterface* interface, const CompatSocket*
     /* insert to our storage, key is now owned by table */
     g_hash_table_replace(interface->boundSockets, key, (void*)compatsocket_toTagged(&newSocketRef));
 
-    debug("associated socket key %s", key);
+    trace("associated socket key %s", key);
 }
 
 void networkinterface_disassociate(NetworkInterface* interface, const CompatSocket* socket) {
@@ -338,7 +338,7 @@ void networkinterface_disassociate(NetworkInterface* interface, const CompatSock
     /* we will no longer receive packets for this port, this unrefs descriptor */
     g_hash_table_remove(interface->boundSockets, key);
 
-    debug("disassociated socket key %s", key);
+    trace("disassociated socket key %s", key);
     g_free(key);
 }
 
@@ -407,7 +407,7 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
 
     /* the first check is for servers who don't associate with specific destinations */
     gchar* key = _networkinterface_getAssociationKey(interface, ptype, bindPort, 0, 0);
-    debug("looking for socket associated with general key %s", key);
+    trace("looking for socket associated with general key %s", key);
 
     CompatSocket socket = _boundsockets_lookup(interface->boundSockets, key);
     g_free(key);
@@ -418,7 +418,7 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
         in_port_t peerPort = packet_getSourcePort(packet);
 
         key = _networkinterface_getAssociationKey(interface, ptype, bindPort, peerIP, peerPort);
-        debug("looking for socket associated with specific key %s", key);
+        trace("looking for socket associated with specific key %s", key);
         socket = _boundsockets_lookup(interface->boundSockets, key);
         g_free(key);
     }

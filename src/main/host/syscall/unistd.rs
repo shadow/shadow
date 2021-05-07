@@ -18,7 +18,7 @@ use log::*;
 pub fn close(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
 
-    debug!("Trying to close fd {}", fd);
+    trace!("Trying to close fd {}", fd);
 
     // scope used to make sure that desc cannot be used after deregistering it
     {
@@ -76,7 +76,7 @@ pub fn dup_helper(
     fd: libc::c_int,
     desc: &Descriptor,
 ) -> SyscallResult {
-    debug!("Duping fd {} ({:?})", fd, desc);
+    trace!("Duping fd {} ({:?})", fd, desc);
 
     // clone the descriptor (but not the flags)
     let mut new_desc = desc.clone();

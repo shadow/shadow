@@ -28,7 +28,7 @@ void descriptor_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
         g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)statuslistener_unref);
     descriptor->referenceCount = 1;
 
-    debug("Descriptor %i has been initialized now", descriptor->handle);
+    trace("Descriptor %i has been initialized now", descriptor->handle);
 
     worker_count_allocation(LegacyDescriptor);
 }
@@ -45,7 +45,7 @@ static void _descriptor_free(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 
-    debug("Descriptor %i calling vtable free now", descriptor->handle);
+    trace("Descriptor %i calling vtable free now", descriptor->handle);
     descriptor->funcTable->free(descriptor);
 
     worker_count_deallocation(LegacyDescriptor);
@@ -56,7 +56,7 @@ void descriptor_ref(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     (descriptor->referenceCount)++;
-    debug("Descriptor %i ref++ to %i", descriptor->handle,
+    trace("Descriptor %i ref++ to %i", descriptor->handle,
           descriptor->referenceCount);
 }
 
@@ -65,7 +65,7 @@ void descriptor_unref(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     (descriptor->referenceCount)--;
-    debug("Descriptor %i ref-- to %i", descriptor->handle,
+    trace("Descriptor %i ref-- to %i", descriptor->handle,
           descriptor->referenceCount);
 
     utility_assert(descriptor->referenceCount >= 0);
@@ -78,7 +78,7 @@ void descriptor_unref(gpointer data) {
 void descriptor_close(LegacyDescriptor* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
-    debug("Descriptor %i calling vtable close now", descriptor->handle);
+    trace("Descriptor %i calling vtable close now", descriptor->handle);
     descriptor_adjustStatus(descriptor, STATUS_DESCRIPTOR_CLOSED, TRUE);
     if (descriptor->funcTable->close(descriptor) && descriptor->ownerProcess) {
         process_deregisterLegacyDescriptor(descriptor->ownerProcess, descriptor);
@@ -157,7 +157,7 @@ static void _descriptor_handleStatusChange(LegacyDescriptor* descriptor, Status 
 #ifdef DEBUG
     gchar* before = _descriptor_statusToString(oldStatus);
     gchar* after = _descriptor_statusToString(descriptor->status);
-    debug("Status changed on desc %i, from %s to %s", descriptor->handle, before, after);
+    trace("Status changed on desc %i, from %s to %s", descriptor->handle, before, after);
     g_free(before);
     g_free(after);
 #endif

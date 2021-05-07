@@ -87,7 +87,7 @@ static char* _file_createPersistentMMapPath(int file_fd, int osfile_fd) {
 
     // Handle the case where the OS file has not been opened yet.
     if (osfile_fd < 0) {
-        debug("Unable to produce persistent path to an unopened file.");
+        trace("Unable to produce persistent path to an unopened file.");
         return NULL;
     }
 
@@ -104,7 +104,7 @@ static char* _file_createPersistentMMapPath(int file_fd, int osfile_fd) {
 
     // Make sure the path is accessible
     if (path && access(path, F_OK) == 0) {
-        debug("File %d (linux file %d) is persistent in procfs at %s", file_fd, osfile_fd, path);
+        trace("File %d (linux file %d) is persistent in procfs at %s", file_fd, osfile_fd, path);
         return path;
     }
 
@@ -118,7 +118,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
 
     int fd = descriptor_getHandle((LegacyDescriptor*)file);
 
-    debug("Trying to open file %i in the plugin", fd);
+    trace("Trying to open file %i in the plugin", fd);
 
     /* TODO: make sure we don't open special files like /dev/urandom,
      * /etc/localtime etc. in the plugin via mmap */
@@ -126,7 +126,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     // The file is in the shadow process, and we want to open it in the plugin.
     char* mmap_path = _file_createPersistentMMapPath(fd, file_getOSBackedFD(file));
     if (mmap_path == NULL) {
-        debug("File %i has a NULL path.", fd);
+        trace("File %i has a NULL path.", fd);
         return -1;
     }
 
@@ -134,7 +134,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     size_t maplen = strnlen(mmap_path, PATH_MAX - 1) + 1; // an extra 1 for null
     utility_assert(maplen > 1);
 
-    debug("Opening path '%s' in plugin.", mmap_path);
+    trace("Opening path '%s' in plugin.", mmap_path);
 
     /* Get some memory in the plugin to write the path of the file to open. */
     AllocdMem_u8 *allocdMem = allocdmem_new(maplen);
@@ -158,9 +158,9 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
                                       flags, file_getMode(file));
     int err = syscall_rawReturnValueToErrno(result);
     if (err) {
-        debug("Failed to open path '%s' in plugin, error %i: %s.", mmap_path, err, strerror(err));
+        trace("Failed to open path '%s' in plugin, error %i: %s.", mmap_path, err, strerror(err));
     } else {
-        debug("Successfully opened path '%s' in plugin, got plugin fd %i.", mmap_path, result);
+        trace("Successfully opened path '%s' in plugin, got plugin fd %i.", mmap_path, result);
     }
 
     /* Release the PluginPtr memory. */
@@ -175,16 +175,16 @@ static void _syscallhandler_closePluginFile(SysCallHandler* sys, int pluginFD) {
     int result = thread_nativeSyscall(sys->thread, SYS_close, pluginFD);
     int err = syscall_rawReturnValueToErrno(result);
     if (err) {
-        debug("Failed to close file at fd %i in plugin, error %i: %s.",
+        trace("Failed to close file at fd %i in plugin, error %i: %s.",
               pluginFD, -result, strerror(-result));
     } else {
-        debug("Successfully closed file at fd %i in plugin.", pluginFD);
+        trace("Successfully closed file at fd %i in plugin.", pluginFD);
     }
 }
 
 static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr, size_t len,
                                           int prot, int flags, int fd, int64_t offset) {
-    debug("mmap called on fd %d for %zu bytes", fd, len);
+    trace("mmap called on fd %d for %zu bytes", fd, len);
 
     /* First check the input args to see if we can avoid doing the less
      * efficient shadow-plugin cross-process mmap procedure. */
@@ -217,7 +217,7 @@ static SysCallReturn _syscallhandler_mmap(SysCallHandler* sys, PluginPtr addrPtr
                                                                 prot, flags, pluginFD, offset)};
     }
 
-    debug("Plugin-native mmap syscall at plugin addr %p with plugin fd %i for "
+    trace("Plugin-native mmap syscall at plugin addr %p with plugin fd %i for "
           "%zu bytes returned %p (%s)",
           (void*)addrPtr.val, pluginFD, len, (void*)result.retval.as_u64,
           strerror(syscall_rawReturnValueToErrno(result.retval.as_i64)));

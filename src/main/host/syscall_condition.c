@@ -245,7 +245,7 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
                                (unsigned long)value.it_value.tv_nsec);
     }
 
-    debug("%s", string->str);
+    trace("%s", string->str);
 
     g_string_free(string, TRUE);
 }

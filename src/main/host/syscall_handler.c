@@ -162,7 +162,7 @@ void syscallhandler_unref(SysCallHandler* sys) {
 
 static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
                                         const char* name) {
-    debug("SYSCALL_HANDLER_PRE(%s,pid=%u): handling syscall %ld %s%s",
+    trace("SYSCALL_HANDLER_PRE(%s,pid=%u): handling syscall %ld %s%s",
           process_getPluginName(sys->process),
           thread_getID(sys->thread), number, name,
           _syscallhandler_wasBlocked(sys) ? " (previously BLOCKed)" : "");
@@ -187,7 +187,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
     sys->perfSecondsCurrent += g_timer_elapsed(sys->perfTimer, NULL);
 #endif
 
-    debug("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
+    trace("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
           "code=%d(%s)",
           process_getPluginName(sys->process), thread_getID(sys->thread), number, name,
           _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "",
@@ -223,7 +223,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         break
 #define NATIVE(s)                                                              \
     case SYS_##s:                                                              \
-        debug("native syscall %ld " #s, args->number);                         \
+        trace("native syscall %ld " #s, args->number);                         \
         scr = (SysCallReturn){.state = SYSCALL_NATIVE};                        \
         break
 

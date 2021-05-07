@@ -46,7 +46,7 @@ static int _syscallhandler_validateEventFDHelper(SysCallHandler* sys, int efd,
 
 static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys, unsigned int initval,
                                                    int flags) {
-    debug("eventfd() called with initval %u and flags %i", initval, flags);
+    trace("eventfd() called with initval %u and flags %i", initval, flags);
 
     /* any of 3 values can be bitwise ORed into flags */
     if (flags & ~(EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE)) {
@@ -75,7 +75,7 @@ static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys, unsigned
         descriptor_addFlags((LegacyDescriptor*)eventd, O_CLOEXEC);
     }
 
-    debug("eventfd() returning fd %i", efd);
+    trace("eventfd() returning fd %i", efd);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = efd};
 }

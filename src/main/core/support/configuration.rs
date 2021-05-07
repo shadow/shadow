@@ -144,7 +144,7 @@ pub struct GeneralOptions {
     bootstrap_end_time: Option<units::Time<units::TimePrefixUpper>>,
 
     /// Log level of output written on stdout. If Shadow was built in release mode, then log
-    /// messages at a level lower than 'info' will always be dropped
+    /// messages at level 'trace' will always be dropped
     #[clap(long, short = 'l', value_name = "level")]
     #[clap(about = GENERAL_HELP.get("log_level").unwrap())]
     #[serde(default = "default_some_message")]

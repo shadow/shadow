@@ -85,7 +85,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     /* Reconstruct the offset from the high and low bits */
     off_t offset = (off_t)((pos_h << 32) & pos_l);
 
-    debug("Trying to readv from fd %d, ptr %p, size %zu, pos_l %lu, pos_h %lu, "
+    trace("Trying to readv from fd %d, ptr %p, size %zu, pos_l %lu, pos_h %lu, "
           "offset %ld, flags %d",
           fd, (void*)iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
 
@@ -202,7 +202,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     /* Reconstruct the offset from the high and low bits */
     off_t offset = (off_t)((pos_h << 32) & pos_l);
 
-    debug("Trying to writev to fd %d, ptr %p, size %zu, pos_l %lu, pos_h %lu, "
+    trace("Trying to writev to fd %d, ptr %p, size %zu, pos_l %lu, pos_h %lu, "
           "offset %ld, flags %d",
           fd, (void*)iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
 

@@ -49,7 +49,7 @@ static int _syscallhandler_validateFileHelper(SysCallHandler* sys, int filefd,
 static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
                                                 PluginPtr pathnamePtr,
                                                 int flags, mode_t mode) {
-    debug("Trying to open file with path name at plugin addr %p",
+    trace("Trying to open file with path name at plugin addr %p",
           (void*)pathnamePtr.val);
 
     if (!pathnamePtr.val) {

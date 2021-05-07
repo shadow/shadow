@@ -183,7 +183,7 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
     unsigned long request = args->args[1].as_i64;
     PluginPtr argPtr = args->args[2].as_ptr; // type depends on request
 
-    debug("ioctl called on fd %d for request %ld", fd, request);
+    trace("ioctl called on fd %d for request %ld", fd, request);
 
     LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
     int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);

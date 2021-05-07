@@ -214,7 +214,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
 }
 
 static void _process_handleProcessExit(Process* proc) {
-    debug("handleProcessExit");
+    trace("handleProcessExit");
     utility_assert(!process_isRunning(proc));
 
     GHashTableIter iter;
@@ -234,7 +234,7 @@ static void _process_handleProcessExit(Process* proc) {
 }
 
 static void _process_terminate_threads(Process* proc) {
-    debug("Terminating threads");
+    trace("Terminating threads");
     if (process_isRunning(proc)) {
         if (kill(proc->nativePid, SIGKILL)) {
             warning("kill(pid=%d) error %d: %s", proc->nativePid, errno, g_strerror(errno));
@@ -394,7 +394,7 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
         error("Opening %s: %s", fileName, strerror(-errcode));
     }
 
-    debug("Successfully opened fd %d at %s", fd, fileName);
+    trace("Successfully opened fd %d at %s", fd, fileName);
 
     return stdfile;
 }
@@ -504,13 +504,13 @@ void process_addThread(Process* proc, Thread* thread) {
 
 void process_markAsExiting(Process* proc) {
     MAGIC_ASSERT(proc);
-    debug("Process %d marked as exiting", proc->processID);
+    trace("Process %d marked as exiting", proc->processID);
     proc->isExiting = true;
 }
 
 void process_continue(Process* proc, Thread* thread) {
     MAGIC_ASSERT(proc);
-    debug("Continuing thread %d in process %d", thread_getID(thread), proc->processID);
+    trace("Continuing thread %d in process %d", thread_getID(thread), proc->processID);
 
     /* if we are not running, no need to notify anyone */
     if(!process_isRunning(proc)) {
@@ -573,7 +573,7 @@ void process_stop(Process* proc) {
     _process_handleTimerResult(proc, elapsed);
 #endif
 
-    debug("Starting descriptor table shutdown hack");
+    trace("Starting descriptor table shutdown hack");
     descriptortable_shutdownHelper(proc->descTable);
 
     worker_setActiveProcess(NULL);

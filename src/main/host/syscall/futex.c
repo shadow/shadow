@@ -32,7 +32,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
         timeout = process_getReadablePtr(sys->process, timeoutVPtr, sizeof(*timeout));
         // Bounds checking
         if (!(timeout->tv_nsec >= 0 && timeout->tv_nsec <= 999999999)) {
-            debug("A futex timeout was given, but the nanos value is out of range");
+            trace("A futex timeout was given, but the nanos value is out of range");
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
         }
     } else {
@@ -44,10 +44,10 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     // `man 2 futex`: blocking via a futex is an atomic compare-and-block operation
     const uint32_t* futexVal = process_getReadablePtr(sys->process, futexVPtr, sizeof(uint32_t));
 
-    debug(
+    trace(
         "Futex value is %" PRIu32 ", expected value is %" PRIu32, *futexVal, (uint32_t)expectedVal);
     if (!_syscallhandler_wasBlocked(sys) && *futexVal != (uint32_t)expectedVal) {
-        debug("Futex values don't match, try again later");
+        trace("Futex values don't match, try again later");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EAGAIN};
     }
 
@@ -65,17 +65,17 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
         // We already blocked on wait, so this is either a timeout or wakeup
         if (timeout && _syscallhandler_didListenTimeoutExpire(sys)) {
             // Timeout while waiting for a wakeup
-            debug("Futex %p timeout out while waiting", (void*)futexPPtr.val);
+            trace("Futex %p timeout out while waiting", (void*)futexPPtr.val);
             result = -ETIMEDOUT;
         } else {
             // Proper wakeup from another thread
-            debug("Futex %p has been woke up", (void*)futexPPtr.val);
+            trace("Futex %p has been woke up", (void*)futexPPtr.val);
             result = 0;
         }
 
         // Dynamically clean up the futex if needed
         if (futex_getListenerCount(futex) == 0) {
-            debug("Dynamically freed a futex object for futex addr %p", (void*)futexPPtr.val);
+            trace("Dynamically freed a futex object for futex addr %p", (void*)futexPPtr.val);
             bool success = futextable_remove(ftable, futex);
             utility_assert(success);
         }
@@ -85,14 +85,14 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
 
     // We'll need to block, dynamically create a futex if one does not yet exist
     if (!futex) {
-        debug("Dynamically created a new futex object for futex addr %p", (void*)futexPPtr.val);
+        trace("Dynamically created a new futex object for futex addr %p", (void*)futexPPtr.val);
         futex = futex_new(futexPPtr);
         bool success = futextable_add(ftable, futex);
         utility_assert(success);
     }
 
     // Now we need to block until another thread does a wake on the futex.
-    debug("Futex blocking for wakeup %s timeout", timeout ? "with" : "without");
+    trace("Futex blocking for wakeup %s timeout", timeout ? "with" : "without");
     Trigger trigger =
         (Trigger){.type = TRIGGER_FUTEX, .object = futex, .status = STATUS_FUTEX_WAKEUP};
     if (timeout) {
@@ -111,13 +111,13 @@ static SysCallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, Plugin
     FutexTable* ftable = host_getFutexTable(sys->host);
     Futex* futex = futextable_get(ftable, futexPPtr);
 
-    debug("Found futex %p at futex addr %p", futex, (void*)futexPPtr.val);
+    trace("Found futex %p at futex addr %p", futex, (void*)futexPPtr.val);
 
     int numWoken = 0;
     if (futex && numWakeups > 0) {
-        debug("Futex trying to perform %i wakeups", numWakeups);
+        trace("Futex trying to perform %i wakeups", numWakeups);
         numWoken = futex_wake(futex, (unsigned int)numWakeups);
-        debug("Futex was able to perform %i/%i wakeups", numWoken, numWakeups);
+        trace("Futex was able to perform %i/%i wakeups", numWoken, numWakeups);
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = numWoken};
@@ -145,12 +145,12 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
     int options = futex_op & possible_options;
     int operation = futex_op & ~possible_options;
 
-    debug("futex called with addr=%p op=%i (operation=%i and options=%i) and val=%i",
+    trace("futex called with addr=%p op=%i (operation=%i and options=%i) and val=%i",
           (void*)uaddrptr.val, futex_op, operation, options, val);
 
     // futex addr cannot be NULL
     if (!uaddrptr.val) {
-        debug("Futex addr cannot be NULL");
+        trace("Futex addr cannot be NULL");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
@@ -158,12 +158,12 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
 
     switch (operation) {
         case FUTEX_WAIT: {
-            debug("Handling FUTEX_WAIT operation %i", operation);
+            trace("Handling FUTEX_WAIT operation %i", operation);
             return _syscallhandler_futexWaitHelper(sys, uaddrptr, val, timeoutptr);
         }
 
         case FUTEX_WAKE: {
-            debug("Handling FUTEX_WAKE operation %i", operation);
+            trace("Handling FUTEX_WAKE operation %i", operation);
             return _syscallhandler_futexWakeHelper(sys, uaddrptr, val);
         }
 
