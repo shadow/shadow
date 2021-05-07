@@ -317,7 +317,7 @@ static void _logger_logStartupMessage(ShadowLogger* logger) {
 
     gchar* nowStr = _logger_getNewLocalTimeStr(logger);
 
-    shadow_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__,
+    shadow_logger_log(logger, LOGLEVEL_INFO, __FILE__, __FUNCTION__,
                       __LINE__, "logging system started at %s", nowStr);
 
     if (nowStr) {
@@ -331,7 +331,7 @@ static void _logger_logShutdownMessage(ShadowLogger* logger) {
     gchar* nowStr = _logger_getNewLocalTimeStr(logger);
     gchar* runTimeStr = _logger_getNewRunTimeStr(logger);
 
-    shadow_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__,
+    shadow_logger_log(logger, LOGLEVEL_INFO, __FILE__, __FUNCTION__,
                       __LINE__, "logging system stopped at %s, run time was %s",
                       nowStr, runTimeStr);
 

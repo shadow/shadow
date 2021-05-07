@@ -156,8 +156,8 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv, const char* wo
 
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr(argv);
-    message("forking new thread with environment '%s', arguments '%s', and working directory '%s'",
-            envStr, argStr, workingDir);
+    info("forking new thread with environment '%s', arguments '%s', and working directory '%s'",
+         envStr, argStr, workingDir);
     g_free(envStr);
     g_free(argStr);
 

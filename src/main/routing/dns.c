@@ -261,7 +261,7 @@ static bool _dns_writeNewHostsFile(DNS* dns) {
         }
     }
 
-    message("Wrote new hosts file of size %zu bytes at path '%s'", amt, dns->hosts.path);
+    info("Wrote new hosts file of size %zu bytes at path '%s'", amt, dns->hosts.path);
     dns->hosts.isStale = false;
     g_string_free(buf, TRUE);
     return true;

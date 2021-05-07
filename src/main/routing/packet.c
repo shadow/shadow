@@ -665,7 +665,7 @@ void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) 
     if(!skipDebug) {
         g_queue_push_tail(packet->orderedStatus, GUINT_TO_POINTER(status));
         gchar* packetStr = packet_toString(packet);
-        message("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
+        info("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
         g_free(packetStr);
     }
 }

@@ -299,7 +299,7 @@ static void _process_getAndLogReturnCode(Process* proc) {
         // TODO: once we've implemented clean shutdown via SIGTERM,
         //       treat death by SIGKILL as a plugin error
         if (proc->returnCode == 0 || proc->returnCode == return_code_for_signal(SIGKILL)) {
-            message("%s", mainResultString->str);
+            info("%s", mainResultString->str);
         } else {
             warning("%s", mainResultString->str);
             worker_incrementPluginError();
@@ -345,7 +345,7 @@ static void _process_check(Process* proc) {
         return;
     }
 
-    message("process '%s' has completed or is otherwise no longer running", process_getName(proc));
+    info("process '%s' has completed or is otherwise no longer running", process_getName(proc));
     _process_getAndLogReturnCode(proc);
 #ifdef USE_PERF_TIMERS
     message(
@@ -440,7 +440,7 @@ static void _process_start(Process* proc) {
 
     g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
 
-    message("starting process '%s'", process_getName(proc));
+    info("starting process '%s'", process_getName(proc));
 
     /* now we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
@@ -463,7 +463,7 @@ static void _process_start(Process* proc) {
     message(
         "process '%s' started in %f seconds", process_getName(proc), elapsed);
 #else
-    message("process '%s' started", process_getName(proc));
+    info("process '%s' started", process_getName(proc));
 #endif
 
     worker_setActiveProcess(NULL);
@@ -555,7 +555,7 @@ void process_continue(Process* proc, Thread* thread) {
 void process_stop(Process* proc) {
     MAGIC_ASSERT(proc);
 
-    message("terminating process '%s'", process_getName(proc));
+    info("terminating process '%s'", process_getName(proc));
 
     worker_setActiveProcess(proc);
 
@@ -582,7 +582,7 @@ void process_stop(Process* proc) {
     message(
         "process '%s' stopped in %f seconds", process_getName(proc), elapsed);
 #else
-    message("process '%s' stopped", process_getName(proc));
+    info("process '%s' stopped", process_getName(proc));
 #endif
 
     _process_check(proc);

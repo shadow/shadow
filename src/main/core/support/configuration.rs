@@ -418,7 +418,7 @@ impl Default for HostDefaultOptions {
     fn default() -> Self {
         Self {
             log_level: None,
-            heartbeat_log_level: Some(LogLevel::Message),
+            heartbeat_log_level: Some(LogLevel::Info),
             heartbeat_log_info: Some(std::array::IntoIter::new([LogInfoFlag::Node]).collect()),
             heartbeat_interval: Some(units::Time::new(1, units::TimePrefixUpper::Sec)),
             pcap_directory: None,
@@ -663,9 +663,9 @@ fn default_some_time_1() -> Option<units::Time<units::TimePrefixUpper>> {
     Some(units::Time::new(1, units::TimePrefixUpper::Sec))
 }
 
-/// Helper function for serde default `Some(LogLevel::Message)` values.
+/// Helper function for serde default `Some(LogLevel::Info)` values.
 fn default_some_message() -> Option<LogLevel> {
-    Some(LogLevel::Message)
+    Some(LogLevel::Info)
 }
 
 const DEFAULT_TOPOLOGY: &str = r#"<?xml version="1.0" encoding="utf-8"?>

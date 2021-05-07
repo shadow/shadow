@@ -96,8 +96,9 @@ static void _hostsinglethreaddata_free(HostSingleThreadData* tdata) {
             g_timer_destroy(tdata->popIdleTime);
         }
 
-        message("scheduler thread data destroyed, total push wait time was %f seconds, "
-                "total pop wait time was %f seconds", totalPushWaitTime, totalPopWaitTime);
+        info("scheduler thread data destroyed, total push wait time was %f seconds, "
+             "total pop wait time was %f seconds",
+             totalPushWaitTime, totalPopWaitTime);
 #endif
         g_free(tdata);
     }

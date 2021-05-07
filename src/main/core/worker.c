@@ -256,8 +256,8 @@ void workerpool_joinAll(WorkerPool* pool) {
 
 #ifdef USE_PERF_TIMERS
     for (int i = 0; i < lps_n(pool->logicalProcessors); ++i) {
-        message("Logical Processor %d total idle time was %f seconds", i,
-                lps_idleTimerElapsed(pool->logicalProcessors, i));
+        info("Logical Processor %d total idle time was %f seconds", i,
+             lps_idleTimerElapsed(pool->logicalProcessors, i));
     }
 #endif
 
@@ -562,10 +562,10 @@ void worker_finish(GQueue* hosts) {
 
     if (hosts) {
         guint nHosts = g_queue_get_length(hosts);
-        message("starting to shut down %u hosts", nHosts);
+        info("starting to shut down %u hosts", nHosts);
         g_queue_foreach(hosts, (GFunc)_worker_freeHostProcesses, worker);
         g_queue_foreach(hosts, (GFunc)_worker_shutdownHost, worker);
-        message("%u hosts are shut down", nHosts);
+        info("%u hosts are shut down", nHosts);
     }
 
     // Flushes any remaining message buffered for this thread.

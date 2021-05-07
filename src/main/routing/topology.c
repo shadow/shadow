@@ -369,7 +369,7 @@ static gboolean _topology_loadGraph(Topology* top, const gchar* graphPath) {
     }
 
     _topology_lockGraph(top);
-    message("reading graphml topology graph at '%s'...", graphPath);
+    info("reading graphml topology graph at '%s'...", graphPath);
     gint result = igraph_read_graph_graphml(&top->graph, graphFile, 0);
     _topology_unlockGraph(top);
 
@@ -380,7 +380,7 @@ static gboolean _topology_loadGraph(Topology* top, const gchar* graphPath) {
         return FALSE;
     }
 
-    message("successfully read graphml topology graph at '%s'", graphPath);
+    info("successfully read graphml topology graph at '%s'", graphPath);
 
     return TRUE;
 }
@@ -555,7 +555,7 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
 
     gboolean isSuccess = TRUE;
 
-    message("checking graph attributes...");
+    info("checking graph attributes...");
 
     /* now check list of all attributes */
     igraph_strvector_t gnames, vnames, enames;
@@ -694,7 +694,7 @@ cleanup:
     igraph_vector_destroy(&etypes);
 
     if(isSuccess) {
-        message("successfully verified all graph, vertex, and edge attributes");
+        info("successfully verified all graph, vertex, and edge attributes");
     } else {
         warning("we could not properly validate all graph, vertex, and edge attributes");
     }
@@ -706,7 +706,7 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
     MAGIC_ASSERT(top);
     gint result = 0;
 
-    message("checking graph properties...");
+    info("checking graph properties...");
 
     if(!_topology_checkGraphAttributes(top)) {
         critical("topology validation failed because of problem with graph, vertex, or edge attributes");
@@ -760,22 +760,22 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
 
         /* check if it is true or not */
         if (valueIsTrue) {
-            message("If a direct path between any pair of nodes exists, Shadow will prefer it over shortest path.");
+            info("If a direct path between any pair of nodes exists, Shadow will prefer it over "
+                 "shortest path.");
             prefersDirectPaths = TRUE;
         } else {
-            message("Shadow will always use shortest path between a pair of nodes, even if a direct path exists "
-                    "(to override, set '%s' to 'yes' or 'true' or '1' to enable)",
-                    _topology_graphAttributeToString(GRAPH_ATTR_PREFERDIRECTPATHS));
+            info("Shadow will always use shortest path between a pair of nodes, even if a direct "
+                 "path exists "
+                 "(to override, set '%s' to 'yes' or 'true' or '1' to enable)",
+                 _topology_graphAttributeToString(GRAPH_ATTR_PREFERDIRECTPATHS));
         }
     }
     top->prefersDirectPaths = prefersDirectPaths;
 
-    message("topology graph is %s, %s, and %s with %u %s. It does%s prefer direct paths.",
-            top->isComplete ? "complete" : "incomplete",
-            top->isDirected ? "directed" : "undirected",
-            top->isConnected ? "strongly connected" : "disconnected",
-            (guint)top->clusterCount, top->clusterCount == 1 ? "cluster" : "clusters",
-            top->prefersDirectPaths ? "" : " not");
+    info("topology graph is %s, %s, and %s with %u %s. It does%s prefer direct paths.",
+         top->isComplete ? "complete" : "incomplete", top->isDirected ? "directed" : "undirected",
+         top->isConnected ? "strongly connected" : "disconnected", (guint)top->clusterCount,
+         top->clusterCount == 1 ? "cluster" : "clusters", top->prefersDirectPaths ? "" : " not");
 
     /* it must be connected so everyone can route to everyone else */
     if(!top->isConnected || top->clusterCount > 1) {
@@ -988,7 +988,7 @@ static igraph_integer_t _topology_iterateAllVertices(Topology* top, VertexNotify
 static gboolean _topology_checkGraphVertices(Topology* top) {
     MAGIC_ASSERT(top);
 
-    message("checking graph vertices...");
+    info("checking graph vertices...");
 
     igraph_integer_t vertexCount = _topology_iterateAllVertices(top, _topology_checkGraphVerticesHelperHook, NULL);
     if(vertexCount < 0) {
@@ -1002,7 +1002,7 @@ static gboolean _topology_checkGraphVertices(Topology* top) {
         warning("igraph_vcount %d does not match iterator count %d", top->vertexCount, vertexCount);
     }
 
-    message("%u graph vertices ok", (guint) top->vertexCount);
+    info("%u graph vertices ok", (guint)top->vertexCount);
 
     return TRUE;
 }
@@ -1134,7 +1134,7 @@ static igraph_integer_t _topology_iterateAllEdges(Topology* top, EdgeNotifyFunc 
 static gboolean _topology_checkGraphEdges(Topology* top) {
     MAGIC_ASSERT(top);
 
-    message("checking graph edges...");
+    info("checking graph edges...");
 
     igraph_integer_t edgeCount = _topology_iterateAllEdges(top, _topology_checkGraphEdgesHelperHook, NULL);
     if(edgeCount < 0) {
@@ -1148,7 +1148,7 @@ static gboolean _topology_checkGraphEdges(Topology* top) {
         warning("igraph_vcount %d does not match iterator count %d", top->edgeCount, edgeCount);
     }
 
-    message("%u graph edges ok", (guint) top->edgeCount);
+    info("%u graph edges ok", (guint)top->edgeCount);
 
     return TRUE;
 }
@@ -1164,12 +1164,12 @@ static gboolean _topology_checkGraph(Topology* top) {
         isSuccess = FALSE;
     } else {
         isSuccess = TRUE;
-        message("successfully parsed graphml and validated topology: "
-                "graph is %s with %u %s, %u %s, and %u %s",
-                top->isConnected ? "strongly connected" : "disconnected",
-                (guint)top->clusterCount, top->clusterCount == 1 ? "cluster" : "clusters",
-                (guint)top->vertexCount, top->vertexCount == 1 ? "vertex" : "vertices",
-                (guint)top->edgeCount, top->edgeCount == 1 ? "edge" : "edges");
+        info("successfully parsed graphml and validated topology: "
+             "graph is %s with %u %s, %u %s, and %u %s",
+             top->isConnected ? "strongly connected" : "disconnected", (guint)top->clusterCount,
+             top->clusterCount == 1 ? "cluster" : "clusters", (guint)top->vertexCount,
+             top->vertexCount == 1 ? "vertex" : "vertices", (guint)top->edgeCount,
+             top->edgeCount == 1 ? "edge" : "edges");
     }
 
     _topology_unlockGraph(top);
@@ -1249,9 +1249,9 @@ static void _topology_clearCache(Topology* top) {
             top->shortestPathTotalTime, top->shortestPathCount,
             top->selfPathTotalTime, top->selfPathCount);
 #else
-    message("path cache cleared, computed %u shortest paths with dijkstra, "
-            "and %u shortest self paths",
-            top->shortestPathCount, top->selfPathCount);
+    info("path cache cleared, computed %u shortest paths with dijkstra, "
+         "and %u shortest self paths",
+         top->shortestPathCount, top->selfPathCount);
 #endif
     g_mutex_unlock(&(top->topologyLock));
 }
@@ -2373,11 +2373,11 @@ void topology_attach(Topology* top, Address* address, Random* randomSourcePool,
 
     _topology_unlockGraph(top);
 
-    message("attached address '%s' to vertex %li ('%s') "
-            "with attributes (ip=%s, citycode=%s, countrycode=%s, type=%s) "
-            "using hints (ip=%s, citycode=%s, countrycode=%s, type=%s)",
-            address_toHostIPString(address), (glong)vertexIndex, idStr, ipStr, citycodeStr,
-            countrycodeStr, typeStr, ipHint, citycodeHint, countrycodeHint, typeHint);
+    info("attached address '%s' to vertex %li ('%s') "
+         "with attributes (ip=%s, citycode=%s, countrycode=%s, type=%s) "
+         "using hints (ip=%s, citycode=%s, countrycode=%s, type=%s)",
+         address_toHostIPString(address), (glong)vertexIndex, idStr, ipStr, citycodeStr,
+         countrycodeStr, typeStr, ipHint, citycodeHint, countrycodeHint, typeHint);
 }
 
 void topology_detach(Topology* top, Address* address) {

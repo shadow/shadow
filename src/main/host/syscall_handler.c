@@ -100,16 +100,16 @@ static void _syscallhandler_free(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
 #ifdef USE_PERF_TIMERS
-    message("handled %li syscalls in %f seconds", sys->numSyscalls, sys->perfSecondsTotal);
+    info("handled %li syscalls in %f seconds", sys->numSyscalls, sys->perfSecondsTotal);
 #else
-    message("handled %li syscalls", sys->numSyscalls);
+    info("handled %li syscalls", sys->numSyscalls);
 #endif
 
     if (_countSyscalls && sys->syscall_counter) {
         // Log the plugin thread specific counts
         char* str = counter_alloc_string(sys->syscall_counter);
-        message("Thread %d (%s) syscall counts: %s", thread_getID(sys->thread),
-                process_getPluginName(sys->process), str);
+        info("Thread %d (%s) syscall counts: %s", thread_getID(sys->thread),
+             process_getPluginName(sys->process), str);
         counter_free_string(sys->syscall_counter, str);
 
         // Add up the counts at the worker level

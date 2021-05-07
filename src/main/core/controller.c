@@ -100,7 +100,7 @@ Controller* controller_new(ConfigOptions* config) {
     //  g_unix_signal_add(SIGHUP, (GSourceFunc)_controller_handleInterruptSignal, controller);
     //  g_unix_signal_add(SIGINT, (GSourceFunc)_controller_handleInterruptSignal, controller);
 
-    message("simulation controller created");
+    info("simulation controller created");
     return controller;
 }
 
@@ -120,7 +120,7 @@ void controller_free(Controller* controller) {
     MAGIC_CLEAR(controller);
     g_free(controller);
 
-    message("simulation controller destroyed");
+    info("simulation controller destroyed");
 }
 
 static SimulationTime _controller_getMinTimeJump(Controller* controller) {
@@ -340,7 +340,7 @@ static void _controller_registerHosts(Controller* controller) {
 gint controller_run(Controller* controller) {
     MAGIC_ASSERT(controller);
 
-    message("loading and initializing simulation data");
+    info("loading and initializing simulation data");
 
     gboolean isSuccess = _controller_loadTopology(controller);
     if (!isSuccess) {
@@ -360,17 +360,17 @@ gint controller_run(Controller* controller) {
         error("unable to create manager");
     }
 
-    message("registering plugins and hosts");
+    info("registering plugins and hosts");
 
     /* register the components needed by each manager.
      * this must be done after managers are available so we can send them messages */
     _controller_registerHosts(controller);
 
-    message("running simulation");
+    info("running simulation");
 
     /* dont buffer log messages in trace mode */
     if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
-        message("log message buffering is enabled for efficiency");
+        info("log message buffering is enabled for efficiency");
         shadow_logger_setEnableBuffering(shadow_logger_getDefault(), TRUE);
     }
 
@@ -380,11 +380,11 @@ gint controller_run(Controller* controller) {
     /* only need to disable buffering if it was enabled, otherwise
      * don't log the message as it may confuse the user. */
     if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
-        message("log message buffering is disabled during cleanup");
+        info("log message buffering is disabled during cleanup");
         shadow_logger_setEnableBuffering(shadow_logger_getDefault(), FALSE);
     }
 
-    message("simulation finished, cleaning up now");
+    info("simulation finished, cleaning up now");
 
     return manager_free(controller->manager);
 }

@@ -44,7 +44,7 @@ static int _do_connect(int fd, struct sockaddr_in* serveraddr) {
             break;
         }
         if (count++ > 1000) {
-            message("waited for connect for 1 second, giving up");
+            info("waited for connect for 1 second, giving up");
             break;
         }
         trace("connect() returned EINPROGRESS, retrying in 1 millisecond");
@@ -67,7 +67,7 @@ static int _do_accept(int fd) {
             break;
         }
         if (count++ > 1000) {
-            message("waited for accept for 1 second, giving up");
+            info("waited for accept for 1 second, giving up");
             break;
         }
         trace("accept() returned EINPROGRESS, retrying in 1 millisecond");
