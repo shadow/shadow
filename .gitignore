@@ -12,3 +12,5 @@ cscope.*
 # other temp files
 *.swp
 /src/support/logger/rust_bindings/Cargo.lock
+target
+__pycache__
