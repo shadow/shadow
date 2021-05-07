@@ -172,7 +172,7 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
     unsigned long command = args->args[1].as_i64;
     SysCallReg argReg = args->args[2]; // type depends on command
 
-    debug("fcntl called on fd %d for command %lu", fd, command);
+    trace("fcntl called on fd %d for command %lu", fd, command);
 
     LegacyDescriptor* desc = process_getRegisteredLegacyDescriptor(sys->process, fd);
     int errcode = _syscallhandler_validateDescriptor(desc, DT_NONE);
@@ -210,6 +210,6 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
 SysCallReturn syscallhandler_fcntl64(SysCallHandler* sys, const SysCallArgs* args) {
     // Our fcntl supports the flock64 struct when any of the F_GETLK64, F_SETLK64, and F_SETLKW64
     // commands are specified, so we can just use our fcntl handler directly.
-    debug("fcntl64 called, forwarding to fcntl handler");
+    trace("fcntl64 called, forwarding to fcntl handler");
     return syscallhandler_fcntl(sys, args);
 }

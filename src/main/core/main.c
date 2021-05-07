@@ -36,11 +36,11 @@ static void _main_logEnvironment(gchar** argv, gchar** envv) {
     /* log all args */
     if(argv) {
         for(gint i = 0; argv[i] != NULL; i++) {
-            message("arg: %s", argv[i]);
+            info("arg: %s", argv[i]);
         }
     }
 
-    /* log some useful environment variables at message, the rest at debug */
+    /* log some useful environment variables at info, the rest at trace */
     if(envv) {
         for(gint i = 0; envv[i] != NULL; i++) {
             if(!g_ascii_strncasecmp(envv[i], "LD_PRELOAD", 10) ||
@@ -48,9 +48,9 @@ static void _main_logEnvironment(gchar** argv, gchar** envv) {
                     !g_ascii_strncasecmp(envv[i], "LD_STATIC_TLS_EXTRA", 19) ||
                     !g_ascii_strncasecmp(envv[i], "G_DEBUG", 7) ||
                     !g_ascii_strncasecmp(envv[i], "G_SLICE", 7)) {
-                message("env: %s", envv[i]);
+                info("env: %s", envv[i]);
             } else {
-                debug("env: %s", envv[i]);
+                trace("env: %s", envv[i]);
             }
         }
     }
@@ -72,30 +72,30 @@ static gint _main_helper(CliOptions* options, ConfigOptions* config, gchar* argv
             (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
 #endif
 
-    message("%s", startupStr);
+    info("%s", startupStr);
     /* avoid logging the message to stderr twice (only log if this is not a relaunch) */
     if(g_getenv("SHADOW_SPAWNED") == NULL) {
         g_printerr("** %s\n", startupStr);
     }
     g_free(startupStr);
 
-    message(SHADOW_BUILD_STRING);
-    message(SHADOW_INFO_STRING);
-    message("logging current startup arguments and environment");
+    info(SHADOW_BUILD_STRING);
+    info(SHADOW_INFO_STRING);
+    info("logging current startup arguments and environment");
 
     gchar** envlist = g_get_environ();
     _main_logEnvironment(argv, envlist);
     g_strfreev(envlist);
 
-    message("startup checks passed, we are ready to start simulation");
+    info("startup checks passed, we are ready to start simulation");
 
     /* pause for debugger attachment if the option is set */
     if(clioptions_getGdb(options)) {
         gint pid = (gint)getpid();
-        message("Pausing with SIGTSTP to enable debugger attachment (pid %i)", pid);
+        info("Pausing with SIGTSTP to enable debugger attachment (pid %i)", pid);
         g_printerr("** Pausing with SIGTSTP to enable debugger attachment (pid %i)\n", pid);
         raise(SIGTSTP);
-        message("Resuming now");
+        info("Resuming now");
     }
 
     /* allocate and initialize our main simulation driver */
@@ -111,7 +111,8 @@ static gint _main_helper(CliOptions* options, ConfigOptions* config, gchar* argv
         shadowcontroller = NULL;
     }
 
-    message("%s simulation was shut down cleanly, returning code %i", SHADOW_VERSION_STRING, returnCode);
+    info("%s simulation was shut down cleanly, returning code %i", SHADOW_VERSION_STRING,
+         returnCode);
     return returnCode;
 }
 
@@ -178,7 +179,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     /* since we've already checked the two exclusive flags above (--show-build-info and
      * --shm-cleanup), configName should never be NULL*/
     if (!configName) {
-        error("Could not get configuration file path");
+        utility_panic("Could not get configuration file path");
     }
 
     /* read config from file or stdin */
@@ -222,7 +223,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     shadow_logger_setEnableBuffering(shadowLogger, FALSE);
 
 #ifndef DEBUG
-    if (logLevel == LOGLEVEL_DEBUG) {
+    if (logLevel == LOGLEVEL_TRACE) {
         warning("Log level set to %s, but Shadow was not built in debug mode",
                 loglevel_toStr(logLevel));
     }
@@ -248,9 +249,9 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         if (rc != 0) {
             clioptions_free(options);
             config_free(config);
-            error("Could not set SCHED_FIFO");
+            utility_panic("Could not set SCHED_FIFO");
         } else {
-            message("Successfully set real-time scheduler mode to SCHED_FIFO");
+            info("Successfully set real-time scheduler mode to SCHED_FIFO");
         }
     }
 

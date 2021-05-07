@@ -340,7 +340,7 @@ int affinity_initPlatformInfo() {
     assert(lscpu_contents);
 
     if (rc) {
-        error("Could not run `lscpu`, which is required for CPU pinning.");
+        panic("Could not run `lscpu`, which is required for CPU pinning.");
         return -1;
     }
 
@@ -348,7 +348,7 @@ int affinity_initPlatformInfo() {
         lscpu_contents, &_global_platform_info.p_cpus, &_global_platform_info.n_cpus);
 
     if (rc) {
-        error("Could not run `lscpu`, which is required for CPU pinning.");
+        panic("Could not run `lscpu`, which is required for CPU pinning.");
         return -1;
     }
 
@@ -399,8 +399,8 @@ int affinity_setProcessAffinity(pid_t pid, int new_cpu_num, int old_cpu_num) {
     }
 
     if (!set_affinity_suceeded) {
-        critical("cpu-pin was set, but the CPU affinity for PID %d could not be set to %d",
-                 (int)pid, new_cpu_num);
+        error("cpu-pin was set, but the CPU affinity for PID %d could not be set to %d", (int)pid,
+              new_cpu_num);
         retval = old_cpu_num;
     }
 

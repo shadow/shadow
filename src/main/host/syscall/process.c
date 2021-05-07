@@ -39,7 +39,7 @@ SysCallReturn syscallhandler_prctl(SysCallHandler* sys, const SysCallArgs* args)
     utility_assert(sys && args);
 
     int option = args->args[0].as_i64;
-    debug("prctl called with option %i", option);
+    trace("prctl called with option %i", option);
 
     if (option == PR_GET_TID_ADDRESS) {
         PluginVirtualPtr tid_addr = thread_getTidAddress(sys->thread);
@@ -68,7 +68,7 @@ SysCallReturn syscallhandler_prlimit(SysCallHandler* sys, const SysCallArgs* arg
     int resource = args->args[1].as_i64;
     PluginPtr newlim = args->args[2].as_ptr; // const struct rlimit*
     PluginPtr oldlim = args->args[3].as_ptr; // const struct rlimit*
-    debug("prlimit called on pid %i for resource %i", pid, resource);
+    trace("prlimit called on pid %i for resource %i", pid, resource);
     return _syscallhandler_prlimitHelper(sys, pid, resource, newlim, oldlim);
 }
 
@@ -78,7 +78,7 @@ SysCallReturn syscallhandler_prlimit64(SysCallHandler* sys, const SysCallArgs* a
     int resource = args->args[1].as_i64;
     PluginPtr newlim = args->args[2].as_ptr; // const struct rlimit*
     PluginPtr oldlim = args->args[3].as_ptr; // const struct rlimit*
-    debug("prlimit called on pid %i for resource %i", pid, resource);
+    trace("prlimit called on pid %i for resource %i", pid, resource);
     return _syscallhandler_prlimitHelper(sys, pid, resource, newlim, oldlim);
 }
 

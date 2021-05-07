@@ -26,7 +26,7 @@ impl EventQueue {
 
             count += 1;
             if count == 200 {
-                debug!("Possible infinite loop of event callbacks.");
+                trace!("Possible infinite loop of event callbacks.");
             } else if count == 10_000 {
                 warn!("Very likely an infinite loop of event callbacks.");
             }

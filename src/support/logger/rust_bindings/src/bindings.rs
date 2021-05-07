@@ -6,12 +6,10 @@ pub type __int64_t = ::std::os::raw::c_long;
 pub use self::_LogLevel as LogLevel;
 pub const _LogLevel_LOGLEVEL_UNSET: _LogLevel = 0;
 pub const _LogLevel_LOGLEVEL_ERROR: _LogLevel = 1;
-pub const _LogLevel_LOGLEVEL_CRITICAL: _LogLevel = 2;
-pub const _LogLevel_LOGLEVEL_WARNING: _LogLevel = 3;
-pub const _LogLevel_LOGLEVEL_MESSAGE: _LogLevel = 4;
-pub const _LogLevel_LOGLEVEL_INFO: _LogLevel = 5;
-pub const _LogLevel_LOGLEVEL_DEBUG: _LogLevel = 6;
-pub const _LogLevel_LOGLEVEL_TRACE: _LogLevel = 7;
+pub const _LogLevel_LOGLEVEL_WARNING: _LogLevel = 2;
+pub const _LogLevel_LOGLEVEL_INFO: _LogLevel = 3;
+pub const _LogLevel_LOGLEVEL_DEBUG: _LogLevel = 4;
+pub const _LogLevel_LOGLEVEL_TRACE: _LogLevel = 5;
 pub type _LogLevel = i32;
 pub type Logger = _Logger;
 #[repr(C)]

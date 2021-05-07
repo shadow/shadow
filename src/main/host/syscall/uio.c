@@ -59,12 +59,12 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd,
         size_t bufSize = iov[i].iov_len;
 
         if (!bufPtr.val) {
-            info("Invalid NULL pointer in iovec[%ld]", i);
+            debug("Invalid NULL pointer in iovec[%ld]", i);
             return -EFAULT;
         }
 
         if (!bufSize) {
-            info("Invalid size 0 in iovec[%ld]", i);
+            debug("Invalid size 0 in iovec[%ld]", i);
             return -EINVAL;
         }
     }
@@ -85,7 +85,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     /* Reconstruct the offset from the high and low bits */
     off_t offset = (off_t)((pos_h << 32) & pos_l);
 
-    debug("Trying to readv from fd %d, ptr %p, size %zu, pos_l %lu, pos_h %lu, "
+    trace("Trying to readv from fd %d, ptr %p, size %zu, pos_l %lu, pos_h %lu, "
           "offset %ld, flags %d",
           fd, (void*)iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
 
@@ -181,9 +181,9 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
-            critical("Indefinitely blocking a readv of vector length %lu on "
-                     "file %i at offset %li",
-                     iovlen, fd, offset);
+            error("Indefinitely blocking a readv of vector length %lu on "
+                  "file %i at offset %li",
+                  iovlen, fd, offset);
         }
 
         /* We need to block until the descriptor is ready to write. */
@@ -202,7 +202,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
     /* Reconstruct the offset from the high and low bits */
     off_t offset = (off_t)((pos_h << 32) & pos_l);
 
-    debug("Trying to writev to fd %d, ptr %p, size %zu, pos_l %lu, pos_h %lu, "
+    trace("Trying to writev to fd %d, ptr %p, size %zu, pos_l %lu, pos_h %lu, "
           "offset %ld, flags %d",
           fd, (void*)iovPtr.val, iovlen, pos_l, pos_h, offset, flags);
 
@@ -296,9 +296,9 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
-            critical("Indefinitely blocking a writev of vector length %lu on "
-                     "file %i at offset %li",
-                     iovlen, fd, offset);
+            error("Indefinitely blocking a writev of vector length %lu on "
+                  "file %i at offset %li",
+                  iovlen, fd, offset);
         }
 
         /* We need to block until the descriptor is ready to write. */

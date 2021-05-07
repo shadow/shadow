@@ -46,9 +46,9 @@ static struct timespec* _shim_syscall_get_time() {
 
 #ifdef DEBUG
     if (simtime_ts == &_cached_simulation_time) {
-        debug("simtime is available in the shim using cached time");
+        trace("simtime is available in the shim using cached time");
     } else {
-        debug("simtime is available in the shim using shared memory");
+        trace("simtime is available in the shim using shared memory");
     }
 #endif
 
@@ -67,17 +67,17 @@ bool shim_syscall(long syscall_num, long* rv, va_list args) {
                 return false;
             }
 
-            debug("servicing syscall %ld:clock_gettime from the shim", syscall_num);
+            trace("servicing syscall %ld:clock_gettime from the shim", syscall_num);
 
             clockid_t clk_id = va_arg(args, clockid_t);
             struct timespec* tp = va_arg(args, struct timespec*);
 
             if (tp) {
                 *tp = *simtime_ts;
-                debug("clock_gettime() successfully copied time");
+                trace("clock_gettime() successfully copied time");
                 *rv = 0;
             } else {
-                debug("found NULL timespec pointer in clock_gettime");
+                trace("found NULL timespec pointer in clock_gettime");
                 *rv = -1;
                 errno = EFAULT;
             }
@@ -91,13 +91,13 @@ bool shim_syscall(long syscall_num, long* rv, va_list args) {
                 return false;
             }
 
-            debug("servicing syscall %ld:time from the shim", syscall_num);
+            trace("servicing syscall %ld:time from the shim", syscall_num);
 
             time_t* tp = va_arg(args, time_t*);
 
             if (tp) {
                 *tp = simtime_ts->tv_sec;
-                debug("time() successfully copied time");
+                trace("time() successfully copied time");
             }
             *rv = simtime_ts->tv_sec;
 
@@ -110,14 +110,14 @@ bool shim_syscall(long syscall_num, long* rv, va_list args) {
                 return false;
             }
 
-            debug("servicing syscall %ld:gettimeofday from the shim", syscall_num);
+            trace("servicing syscall %ld:gettimeofday from the shim", syscall_num);
 
             struct timeval* tp = va_arg(args, struct timeval*);
 
             if (tp) {
                 tp->tv_sec = simtime_ts->tv_sec;
                 tp->tv_usec = simtime_ts->tv_nsec / SIMTIME_ONE_MICROSECOND;
-                debug("gettimeofday() successfully copied time");
+                trace("gettimeofday() successfully copied time");
             }
             *rv = 0;
 

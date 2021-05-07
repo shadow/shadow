@@ -181,16 +181,16 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
 
     manager->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
     if (manager->rawFrequencyKHz == 0) {
-        info("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
+        debug("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
         manager->rawFrequencyKHz = 2500000; // 2.5 GHz
-        debug("raw manager cpu frequency unavailable, using 2,500,000 KHz");
+        trace("raw manager cpu frequency unavailable, using 2,500,000 KHz");
     }
 
     manager->preloadShimPath = _manager_scanRPathForPreloadShim();
     if (manager->preloadShimPath != NULL) {
-        message("found %s at %s", PRELOAD_SHIM_LIB_STR, manager->preloadShimPath);
+        info("found %s at %s", PRELOAD_SHIM_LIB_STR, manager->preloadShimPath);
     } else {
-        error("could not find %s in rpath", PRELOAD_SHIM_LIB_STR);
+        utility_panic("could not find %s in rpath", PRELOAD_SHIM_LIB_STR);
     }
 
     /* the main scheduler may utilize multiple threads */
@@ -206,8 +206,8 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
     char* dataDirectory = config_getDataDirectory(config);
 
     if (dataDirectory == NULL) {
-        // we shouldn't reach this, but error anyways
-        error("Data directory was not set");
+        // we shouldn't reach this, but panic anyways
+        utility_panic("Data directory was not set");
     }
 
     manager->dataPath = g_build_filename(manager->cwdPath, dataDirectory, NULL);
@@ -216,7 +216,7 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
     manager->hostsPath = g_build_filename(manager->dataPath, "hosts", NULL);
 
     if (g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
-        error("data directory '%s' already exists", manager->dataPath);
+        utility_panic("data directory '%s' already exists", manager->dataPath);
     }
 
     char* templateDirectory = config_getTemplateDirectory(config);
@@ -225,14 +225,14 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
         gchar* templateDataPath = g_build_filename(manager->cwdPath, templateDirectory, NULL);
         config_freeString(templateDirectory);
 
-        info("Copying template directory %s to %s", templateDataPath, manager->dataPath);
+        debug("Copying template directory %s to %s", templateDataPath, manager->dataPath);
 
         if (!g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
-            error("data template directory '%s' does not exist", templateDataPath);
+            utility_panic("data template directory '%s' does not exist", templateDataPath);
         }
 
         if (!utility_copyAll(templateDataPath, manager->dataPath)) {
-            error("could not copy the data template directory '%s'", templateDataPath);
+            utility_panic("could not copy the data template directory '%s'", templateDataPath);
         }
 
         g_free(templateDataPath);
@@ -269,23 +269,23 @@ gint manager_free(Manager* manager) {
 
     if (manager->syscall_counter) {
         char* str = counter_alloc_string(manager->syscall_counter);
-        message("Global syscall counts: %s", str);
+        info("Global syscall counts: %s", str);
         counter_free_string(manager->syscall_counter, str);
         counter_free(manager->syscall_counter);
     }
 
     if (manager->object_counter_alloc && manager->object_counter_dealloc) {
         char* str = counter_alloc_string(manager->object_counter_alloc);
-        message("Global allocated object counts: %s", str);
+        info("Global allocated object counts: %s", str);
         counter_free_string(manager->object_counter_alloc, str);
 
         str = counter_alloc_string(manager->object_counter_dealloc);
-        message("Global deallocated object counts: %s", str);
+        info("Global deallocated object counts: %s", str);
         counter_free_string(manager->object_counter_dealloc, str);
 
         if (counter_equals_counter(
                 manager->object_counter_alloc, manager->object_counter_dealloc)) {
-            message("We allocated and deallocated the same number of objects :)");
+            info("We allocated and deallocated the same number of objects :)");
         } else {
             /* don't change the formatting of this line as we search for it in test cases */
             warning("Memory leak detected");
@@ -383,7 +383,7 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
      *   - preload values from LD_PRELOAD entries in the environment attribute of the shadow
      * element*/
     GPtrArray* ldPreloadArray = g_ptr_array_new();
-    info("adding shim path %s", preloadShimPath ? preloadShimPath : "null");
+    debug("adding shim path %s", preloadShimPath ? preloadShimPath : "null");
     g_ptr_array_add(ldPreloadArray, g_strdup(preloadShimPath));
 
     /* now we also have to scan the other env variables that were given in the shadow conf file */
@@ -403,7 +403,7 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
                 /* check if the key is LD_PRELOAD */
                 if (!g_ascii_strncasecmp(key, "LD_PRELOAD", 10)) {
                     /* append all LD_PRELOAD entries */
-                    info("adding key path %s", value);
+                    debug("adding key path %s", value);
                     g_ptr_array_add(ldPreloadArray, g_strdup(value));
                 } else {
                     /* set the key=value pair, but don't overwrite any existing settings */
@@ -451,7 +451,7 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar
 
     gchar* pluginName = g_path_get_basename(pluginPath);
     if (pluginName == NULL) {
-        error("Could not get basename of plugin path");
+        utility_panic("Could not get basename of plugin path");
     }
 
     host_addApplication(
@@ -529,12 +529,11 @@ static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
             gdouble systemTimeMinutes = ((gdouble)resources.ru_stime.tv_sec) / ((gdouble)60.0f);
 
             /* log the usage results */
-            message("process resource usage at simtime %" G_GUINT64_FORMAT
-                    " reported by getrusage(): "
-                    "ru_maxrss=%03f GiB, ru_utime=%03f minutes, ru_stime=%03f minutes, "
-                    "ru_nvcsw=%li, ru_nivcsw=%li",
-                    simClockNow, maxMemory, userTimeMinutes, systemTimeMinutes, resources.ru_nvcsw,
-                    resources.ru_nivcsw);
+            info("process resource usage at simtime %" G_GUINT64_FORMAT " reported by getrusage(): "
+                 "ru_maxrss=%03f GiB, ru_utime=%03f minutes, ru_stime=%03f minutes, "
+                 "ru_nvcsw=%li, ru_nivcsw=%li",
+                 simClockNow, maxMemory, userTimeMinutes, systemTimeMinutes, resources.ru_nvcsw,
+                 resources.ru_nivcsw);
         } else {
             warning("unable to print process resources usage: error %i in getrusage: %s", errno,
                     g_strerror(errno));
@@ -571,9 +570,9 @@ void manager_run(Manager* manager) {
         minNextEventTime = scheduler_awaitNextRound(manager->scheduler);
 
         /* we are in control now, the workers are waiting for the next round */
-        info("finished execution window [%" G_GUINT64_FORMAT
-             "--%" G_GUINT64_FORMAT "] next event at %" G_GUINT64_FORMAT,
-             windowStart, windowEnd, minNextEventTime);
+        debug("finished execution window [%" G_GUINT64_FORMAT "--%" G_GUINT64_FORMAT
+              "] next event at %" G_GUINT64_FORMAT,
+              windowStart, windowEnd, minNextEventTime);
 
         /* notify controller that we finished this round, and the time of our
          * next event in order to fast-forward our execute window if possible */

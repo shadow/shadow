@@ -225,15 +225,6 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         shadow_logger_syncToDisk(logger);
         logger->lastTimespan = timespan;
     }
-
-    if (level == LOGLEVEL_ERROR) {
-        /* tell the helper to stop, and join to make sure it finished flushing
-         */
-        _logger_stopHelper(logger);
-
-        /* now abort, but get a backtrace */
-        utility_assert(FALSE && "failure due to error-level log message");
-    }
 }
 
 void shadow_logger_log(ShadowLogger* logger, LogLevel level,
@@ -317,7 +308,7 @@ static void _logger_logStartupMessage(ShadowLogger* logger) {
 
     gchar* nowStr = _logger_getNewLocalTimeStr(logger);
 
-    shadow_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__,
+    shadow_logger_log(logger, LOGLEVEL_INFO, __FILE__, __FUNCTION__,
                       __LINE__, "logging system started at %s", nowStr);
 
     if (nowStr) {
@@ -331,7 +322,7 @@ static void _logger_logShutdownMessage(ShadowLogger* logger) {
     gchar* nowStr = _logger_getNewLocalTimeStr(logger);
     gchar* runTimeStr = _logger_getNewRunTimeStr(logger);
 
-    shadow_logger_log(logger, LOGLEVEL_MESSAGE, __FILE__, __FUNCTION__,
+    shadow_logger_log(logger, LOGLEVEL_INFO, __FILE__, __FUNCTION__,
                       __LINE__, "logging system stopped at %s, run time was %s",
                       nowStr, runTimeStr);
 

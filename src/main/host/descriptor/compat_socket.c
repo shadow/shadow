@@ -17,7 +17,7 @@ static void compatsockettypes_assertValid(CompatSocketTypes type) {
         case CST_LEGACY_SOCKET:
         case CST_NONE: return;
     }
-    error("Invalid CompatSocket type");
+    utility_panic("Invalid CompatSocket type");
 }
 
 CompatSocket compatsocket_fromLegacySocket(Socket* socket) {
@@ -36,7 +36,7 @@ CompatSocket compatsocket_refAs(const CompatSocket* socket) {
 
     switch (new_socket.type) {
         case CST_LEGACY_SOCKET: descriptor_ref(new_socket.object.as_legacy_socket); break;
-        case CST_NONE: error("Unexpected CompatSocket type");
+        case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
     compatsockettypes_assertValid(new_socket.type);
@@ -47,7 +47,7 @@ CompatSocket compatsocket_refAs(const CompatSocket* socket) {
 void compatsocket_unref(const CompatSocket* socket) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET: descriptor_unref(socket->object.as_legacy_socket); break;
-        case CST_NONE: error("Unexpected CompatSocket type");
+        case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
     compatsockettypes_assertValid(socket->type);
@@ -61,7 +61,7 @@ uintptr_t compatsocket_toTagged(const CompatSocket* socket) {
 
     switch (socket->type) {
         case CST_LEGACY_SOCKET: object_ptr = object.as_legacy_socket; break;
-        case CST_NONE: error("Unexpected CompatSocket type");
+        case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
     compatsockettypes_assertValid(socket->type);
@@ -78,7 +78,7 @@ CompatSocket compatsocket_fromTagged(uintptr_t ptr) {
 
     switch (tag) {
         case CST_LEGACY_SOCKET: object.as_legacy_socket = object_ptr; break;
-        case CST_NONE: error("Unexpected socket pointer tag");
+        case CST_NONE: utility_panic("Unexpected socket pointer tag");
     }
 
     compatsockettypes_assertValid(tag);
@@ -96,55 +96,55 @@ CompatSocket compatsocket_fromTagged(uintptr_t ptr) {
 ProtocolType compatsocket_getProtocol(const CompatSocket* socket) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET: return socket_getProtocol(socket->object.as_legacy_socket);
-        case CST_NONE: error("Unexpected CompatSocket type");
+        case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
-    error("Invalid CompatSocket type");
+    utility_panic("Invalid CompatSocket type");
 }
 
 bool compatsocket_getPeerName(const CompatSocket* socket, in_addr_t* ip, in_port_t* port) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET:
             return socket_getPeerName(socket->object.as_legacy_socket, ip, port);
-        case CST_NONE: error("Unexpected CompatSocket type");
+        case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
-    error("Invalid CompatSocket type");
+    utility_panic("Invalid CompatSocket type");
 }
 
 bool compatsocket_getSocketName(const CompatSocket* socket, in_addr_t* ip, in_port_t* port) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET:
             return socket_getSocketName(socket->object.as_legacy_socket, ip, port);
-        case CST_NONE: error("Unexpected CompatSocket type");
+        case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
-    error("Invalid CompatSocket type");
+    utility_panic("Invalid CompatSocket type");
 }
 
 const Packet* compatsocket_peekNextOutPacket(const CompatSocket* socket) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET: return socket_peekNextOutPacket(socket->object.as_legacy_socket);
-        case CST_NONE: error("Unexpected CompatSocket type");
+        case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
-    error("Invalid CompatSocket type");
+    utility_panic("Invalid CompatSocket type");
 }
 
 void compatsocket_pushInPacket(const CompatSocket* socket, Packet* packet) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET: return socket_pushInPacket(socket->object.as_legacy_socket, packet);
-        case CST_NONE: error("Unexpected CompatSocket type");
+        case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
-    error("Invalid CompatSocket type");
+    utility_panic("Invalid CompatSocket type");
 }
 
 Packet* compatsocket_pullOutPacket(const CompatSocket* socket) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET: return socket_pullOutPacket(socket->object.as_legacy_socket);
-        case CST_NONE: error("Unexpected CompatSocket type");
+        case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
-    error("Invalid CompatSocket type");
+    utility_panic("Invalid CompatSocket type");
 }

@@ -112,8 +112,9 @@ static void _hoststealthreaddata_free(HostStealThreadData* tdata) {
             g_timer_destroy(tdata->popIdleTime);
         }
 
-        message("scheduler thread data destroyed, total push wait time was %f seconds, "
-                "total pop wait time was %f seconds", totalPushWaitTime, totalPopWaitTime);
+        info("scheduler thread data destroyed, total push wait time was %f seconds, "
+             "total pop wait time was %f seconds",
+             totalPushWaitTime, totalPopWaitTime);
 #endif        
         g_free(tdata);
     }
@@ -201,7 +202,7 @@ static void _schedulerpolicyhoststeal_migrateHost(SchedulerPolicy* policy, Host*
         utility_assert(tdata->runningHost != tdataNew->runningHost);
         /* migrate the TLS of all objects associated with this host */
 //        host_migrate(host, &oldThread, &newThread);
-        debug("Migrating host %s from thread %u to thread %u", host_getName(host), tdata->tnumber,
+        trace("Migrating host %s from thread %u to thread %u", host_getName(host), tdata->tnumber,
               tdataNew->tnumber);
     }
     _schedulerpolicyhoststeal_addHost(policy, host, newThread);
@@ -249,8 +250,9 @@ static void _schedulerpolicyhoststeal_push(SchedulerPolicy* policy, Event* event
 
     if(srcHost != dstHost && eventTime < barrier) {
         event_setTime(event, barrier);
-        info("Inter-host event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" "
-                "to ensure event causality", eventTime, barrier);
+        debug("Inter-host event time %" G_GUINT64_FORMAT " changed to %" G_GUINT64_FORMAT " "
+              "to ensure event causality",
+              eventTime, barrier);
     }
 
     g_rw_lock_reader_lock(&data->lock);
@@ -514,7 +516,7 @@ static SimulationTime _schedulerpolicyhoststeal_getNextTime(SchedulerPolicy* pol
         g_queue_foreach(tdata->processedHosts, (GFunc)_schedulerpolicyhoststeal_findMinTime, &searchState);
     }
 
-    info("next event at time %"G_GUINT64_FORMAT, searchState.nextEventTime);
+    debug("next event at time %" G_GUINT64_FORMAT, searchState.nextEventTime);
 
     return searchState.nextEventTime;
 }

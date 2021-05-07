@@ -68,9 +68,9 @@ static void _scheduler_startHostsWorkerTaskFn(void* voidScheduler) {
         GQueue* myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
         if(myHosts) {
             guint nHosts = g_queue_get_length(myHosts);
-            message("starting to boot %u hosts", nHosts);
+            info("starting to boot %u hosts", nHosts);
             worker_bootHosts(myHosts);
-            message("%u hosts are booted", nHosts);
+            info("%u hosts are booted", nHosts);
         }
     }
 }
@@ -164,8 +164,8 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
                 // Proceeding will cause the scheduler to deadlock, since the
                 // work stealing scheduler threads spin-wait for each-other to
                 // finish.
-                error("Host stealing scheduler is incompatible with "
-                      "--workers > --max-concurrency");
+                utility_panic("Host stealing scheduler is incompatible with "
+                              "--workers > --max-concurrency");
                 abort();
             }
             scheduler->policy = schedulerpolicyhoststeal_new();
@@ -194,7 +194,7 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
     /* make sure our ref count is set before starting the threads */
     scheduler->referenceCount = 1;
 
-    message("main scheduler thread will operate with %u worker threads", nWorkers);
+    info("main scheduler thread will operate with %u worker threads", nWorkers);
 
     return scheduler;
 }
@@ -202,15 +202,14 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
 void scheduler_shutdown(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
 
-    message("scheduler is shutting down now");
+    info("scheduler is shutting down now");
 
     /* this launches delete on all the plugins and should be called before
      * the engine is marked "killed" and workers are destroyed, so that
      * each plug-in is able to destroy/free its virtual nodes properly */
     g_hash_table_destroy(scheduler->hostIDToHostMap);
 
-    message("waiting for %d worker threads to finish",
-            workerpool_getNWorkers(scheduler->workerPool));
+    info("waiting for %d worker threads to finish", workerpool_getNWorkers(scheduler->workerPool));
     workerpool_joinAll(scheduler->workerPool);
 }
 
@@ -223,8 +222,7 @@ static void _scheduler_free(Scheduler* scheduler) {
 
     g_mutex_clear(&(scheduler->globalLock));
 
-    message("%d worker threads finished",
-            workerpool_getNWorkers(scheduler->workerPool));
+    info("%d worker threads finished", workerpool_getNWorkers(scheduler->workerPool));
     workerpool_free(scheduler->workerPool);
 
     MAGIC_CLEAR(scheduler);
@@ -389,7 +387,7 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
 
 static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
-    error("Unimplemented");
+    utility_panic("Unimplemented");
 
     // WARNING if this is run, then all existing eventSequenceCounters
     // need to get set to the max of all existing counters to ensure order correctness

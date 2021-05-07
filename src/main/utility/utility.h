@@ -14,17 +14,19 @@
 #include "main/core/support/definitions.h"
 
 #ifdef DEBUG
-#define utility_assert(expr) \
-do { \
-    if G_LIKELY (expr) { \
-        ; \
-    } else { \
-        utility_handleError(__FILE__, __LINE__, G_STRFUNC, #expr); \
-    } \
-} while (0)
+#define utility_assert(expr)                                                                       \
+    do {                                                                                           \
+        if G_LIKELY (expr) {                                                                       \
+            ;                                                                                      \
+        } else {                                                                                   \
+            utility_handleError(__FILE__, __LINE__, G_STRFUNC, "Assertion failed: %s", #expr);     \
+        }                                                                                          \
+    } while (0)
 #else
 #define utility_assert(expr)
 #endif
+
+#define utility_panic(...) utility_handleError(__FILE__, __LINE__, G_STRFUNC, __VA_ARGS__);
 
 #ifdef DEBUG
 /**
@@ -104,8 +106,8 @@ gboolean utility_copyFile(const gchar* fromPath, const gchar* toPath);
 
 gchar* utility_strvToNewStr(gchar** strv);
 
-_Noreturn void utility_handleError(const gchar* file, gint line,
-                                   const gchar* funtcion, const gchar* message);
+_Noreturn void utility_handleError(const gchar* file, gint line, const gchar* funtcion,
+                                   const gchar* message, ...);
 
 /* Converts millis milliseconds to a timespec with the corresponding number
  * of seconds and nanoseconds. */

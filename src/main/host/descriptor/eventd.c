@@ -34,7 +34,7 @@ static gboolean _eventd_close(LegacyDescriptor* descriptor) {
     EventD* eventd = _eventfd_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(eventd);
 
-    debug("event fd %i closing now", eventd->super.handle);
+    trace("event fd %i closing now", eventd->super.handle);
 
     eventd->is_closed = true;
     descriptor_adjustStatus(&(eventd->super), STATUS_DESCRIPTOR_ACTIVE, FALSE);
@@ -85,16 +85,16 @@ EventD* eventd_new(unsigned int counter_init_val, bool is_semaphore) {
 ssize_t eventd_read(EventD* eventd, void* buf, size_t buflen) {
     MAGIC_ASSERT(eventd);
 
-    debug("Trying to read %zu bytes from event fd %i with counter %lu", buflen,
+    trace("Trying to read %zu bytes from event fd %i with counter %lu", buflen,
           eventd->super.handle, (long unsigned int)eventd->counter);
 
     if (buflen < sizeof(uint64_t)) {
-        debug("Reading from eventd requires buffer of at least 8 bytes");
+        trace("Reading from eventd requires buffer of at least 8 bytes");
         return -EINVAL;
     }
 
     if (eventd->counter == 0) {
-        debug("Eventd counter is 0 and cannot be read right now");
+        trace("Eventd counter is 0 and cannot be read right now");
         return -EWOULDBLOCK;
     }
 
@@ -117,11 +117,11 @@ ssize_t eventd_read(EventD* eventd, void* buf, size_t buflen) {
 ssize_t eventd_write(EventD* eventd, const void* buf, size_t buflen) {
     MAGIC_ASSERT(eventd);
 
-    debug("Trying to write %zu bytes to event fd %i with counter %lu", buflen, eventd->super.handle,
+    trace("Trying to write %zu bytes to event fd %i with counter %lu", buflen, eventd->super.handle,
           (long unsigned int)eventd->counter);
 
     if (buflen < sizeof(uint64_t)) {
-        debug("Writing to eventd requires a buffer with at least 8 bytes");
+        trace("Writing to eventd requires a buffer with at least 8 bytes");
         return -EINVAL;
     }
 
@@ -129,13 +129,13 @@ ssize_t eventd_write(EventD* eventd, const void* buf, size_t buflen) {
     memcpy(&value, buf, sizeof(uint64_t));
 
     if (value == UINT64_MAX) {
-        debug("We do not allow writing the max counter value");
+        trace("We do not allow writing the max counter value");
         return -EINVAL;
     }
 
     const uint64_t max_allowed = UINT64_MAX - 1;
     if (value > max_allowed - eventd->counter) {
-        debug("The write value does not currently fit into the counter");
+        trace("The write value does not currently fit into the counter");
         return -EWOULDBLOCK;
     } else {
         eventd->counter += value;

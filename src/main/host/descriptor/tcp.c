@@ -395,9 +395,10 @@ static guint _tcp_calculateRTT(TCP* tcp) {
         guint receiveLatency = (guint) ceil(dstLatency);
 
         if(sendLatency == 0 || receiveLatency == 0) {
-          error("need nonzero latency to set buffer sizes, "
-                  "source=%"G_GUINT32_FORMAT" dest=%"G_GUINT32_FORMAT" send=%"G_GUINT32_FORMAT" recv=%"G_GUINT32_FORMAT,
-                  sourceID, destinationID, sendLatency, receiveLatency);
+            utility_panic("need nonzero latency to set buffer sizes, "
+                          "source=%" G_GUINT32_FORMAT " dest=%" G_GUINT32_FORMAT
+                          " send=%" G_GUINT32_FORMAT " recv=%" G_GUINT32_FORMAT,
+                          sourceID, destinationID, sendLatency, receiveLatency);
         }
         utility_assert(sendLatency > 0 && receiveLatency > 0);
 
@@ -476,11 +477,11 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp) {
         /* localhost always gets adjusted unless user explicitly set a set */
         if(!tcp->autotune.userDisabledReceive) {
             socket_setInputBufferSize(&(tcp->super), (gsize) CONFIG_TCP_RMEM_MAX);
-            debug("set loopback receive buffer size to %"G_GSIZE_FORMAT, (gsize)CONFIG_TCP_RMEM_MAX);
+            trace("set loopback receive buffer size to %"G_GSIZE_FORMAT, (gsize)CONFIG_TCP_RMEM_MAX);
         }
         if(!tcp->autotune.userDisabledSend) {
             socket_setOutputBufferSize(&(tcp->super), (gsize) CONFIG_TCP_WMEM_MAX);
-            debug("set loopback send buffer size to %"G_GSIZE_FORMAT, (gsize)CONFIG_TCP_WMEM_MAX);
+            trace("set loopback send buffer size to %"G_GSIZE_FORMAT, (gsize)CONFIG_TCP_WMEM_MAX);
         }
 
         tcp->info.rtt = G_MAXUINT32; // not sure why this is here
@@ -531,8 +532,8 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp) {
         socket_setOutputBufferSize(&(tcp->super), (gsize) sendbuf_size);
     }
 
-    info("set network buffer sizes: send %"G_GSIZE_FORMAT" receive %"G_GSIZE_FORMAT,
-            socket_getOutputBufferSize(&(tcp->super)), socket_getInputBufferSize(&(tcp->super)));
+    debug("set network buffer sizes: send %" G_GSIZE_FORMAT " receive %" G_GSIZE_FORMAT,
+          socket_getOutputBufferSize(&(tcp->super)), socket_getInputBufferSize(&(tcp->super)));
 }
 
 static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
@@ -549,7 +550,7 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
         gsize newSize = (gsize) MIN(space, _tcp_computeMaxRMEM(tcp));
         if(newSize > currentSize) {
             socket_setInputBufferSize(&tcp->super, newSize);
-            debug("[autotune] input buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
+            trace("[autotune] input buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
                     currentSize, newSize);
         }
     }
@@ -588,7 +589,7 @@ static void _tcp_autotuneSendBuffer(TCP* tcp) {
     gsize currentSize = socket_getOutputBufferSize(&tcp->super);
     if(newSize > currentSize) {
         socket_setOutputBufferSize(&tcp->super, newSize);
-        debug("[autotune] output buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
+        trace("[autotune] output buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
                 currentSize, newSize);
     }
 }
@@ -613,7 +614,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
     tcp->stateLast = tcp->state;
     tcp->state = state;
 
-    debug("%s <-> %s: moved from TCP state '%s' to '%s'", tcp->super.boundString, tcp->super.peerString,
+    trace("%s <-> %s: moved from TCP state '%s' to '%s'", tcp->super.boundString, tcp->super.peerString,
             _tcp_stateToAscii(tcp->stateLast), _tcp_stateToAscii(tcp->state));
 
     /* some state transitions require us to update the descriptor status */
@@ -790,8 +791,9 @@ static void _tcp_updateReceiveWindow(TCP* tcp) {
          * otherwise, we may get into a deadlock situation where we never accept
          * any packets and the client never reads. */
         utility_assert(!(socket_getInputBufferLength(&(tcp->super)) == 0));
-        info("%s <-> %s: receive window is 0, we have space for %"G_GSIZE_FORMAT" bytes in the input buffer",
-                tcp->super.boundString, tcp->super.peerString, space);
+        debug("%s <-> %s: receive window is 0, we have space for %" G_GSIZE_FORMAT
+              " bytes in the input buffer",
+              tcp->super.boundString, tcp->super.peerString, space);
     }
 }
 
@@ -852,7 +854,7 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, PluginVi
 static void _tcp_sendControlPacket(TCP* tcp, enum ProtocolTCPFlags flags) {
     MAGIC_ASSERT(tcp);
 
-    debug("%s <-> %s: sending response control packet now",
+    trace("%s <-> %s: sending response control packet now",
           tcp->super.boundString, tcp->super.peerString);
 
     /* create the ack packet, without any payload data */
@@ -954,7 +956,7 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, SimulationTime now, Simulatio
         worker_scheduleTask(retexpTask, delay);
         task_unref(retexpTask);
 
-        debug("%s retransmit timer scheduled for %"G_GUINT64_FORMAT" ns",
+        trace("%s retransmit timer scheduled for %"G_GUINT64_FORMAT" ns",
                 tcp->super.boundString, *expireTimePtr);
     } else {
         warning("%s could not schedule a retransmit timer for %"G_GUINT64_FORMAT" ns",
@@ -994,7 +996,7 @@ static void _tcp_stopRetransmitTimer(TCP* tcp) {
      * lets mark our desired time as 0 so we know to cancel when the event fires. */
     tcp->retransmit.desiredTimerExpiration = 0;
 
-    debug("%s retransmit timer disabled", tcp->super.boundString);
+    trace("%s retransmit timer disabled", tcp->super.boundString);
 }
 
 static void _tcp_setRetransmitTimeout(TCP* tcp, gint newTimeout) {
@@ -1038,7 +1040,7 @@ static void _tcp_updateRTTEstimate(TCP* tcp, SimulationTime timestamp) {
     // fprintf(stderr, "newRTO - %d\n", newRTO);
     _tcp_setRetransmitTimeout(tcp, newRTO);
 
-    debug("srtt=%d rttvar=%d rto=%d", tcp->timing.rttSmoothed,
+    trace("srtt=%d rttvar=%d rto=%d", tcp->timing.rttSmoothed,
             tcp->timing.rttVariance, tcp->retransmit.timeout);
 }
 
@@ -1055,7 +1057,7 @@ static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
 
     PacketTCPHeader* hdr = packet_getTCPHeader(packet);
 
-    debug("retransmitting packet %d", sequence);
+    trace("retransmitting packet %d", sequence);
     // fprintf(stderr, "R- retransmitting packet %d with ts %llu\n", sequence, hdr.timestampValue);
 
     /* remove from queue and update length and status.
@@ -1304,7 +1306,7 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
     utility_assert(scheduledTimerExpirationPtr);
     g_free(scheduledTimerExpirationPtr);
 
-    debug("%s a scheduled retransmit timer expired", tcp->super.boundString);
+    trace("%s a scheduled retransmit timer expired", tcp->super.boundString);
 
     /* if we are closed, we don't care */
     if(tcp->state == TCPS_CLOSED) {
@@ -1336,7 +1338,7 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
     _tcp_setRetransmitTimer(tcp, now);
 
     tcp->cong.hooks->tcp_cong_timeout_ev(tcp);
-    info("[CONG] a congestion timeout has occurred on %s", tcp->super.boundString);
+    debug("[CONG] a congestion timeout has occurred on %s", tcp->super.boundString);
     _tcp_logCongestionInfo(tcp);
 
     retransmit_tally_clear_retransmitted(tcp->retransmit.tally);
@@ -1510,7 +1512,7 @@ static gint _tcp_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port,
     /* send 1st part of 3-way handshake, state->syn_sent */
     _tcp_sendControlPacket(tcp, PTCP_SYN);
 
-    debug("%s <-> %s: user initiated connection", tcp->super.boundString, tcp->super.peerString);
+    trace("%s <-> %s: user initiated connection", tcp->super.boundString, tcp->super.peerString);
     _tcp_setState(tcp, TCPS_SYNSENT);
 
     /* We need to signal when we it succeeds. */
@@ -1635,7 +1637,7 @@ static GList* _tcp_removeSacks(GList* selectiveACKs, gint sequence) {
 TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *header) {
     MAGIC_ASSERT(tcp);
 
-    debug("processing data");
+    trace("processing data");
 
     TCPProcessFlags flags = TCP_PF_NONE;
     SimulationTime now = worker_getCurrentTime();
@@ -1691,12 +1693,12 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
             tcp->info.lastDataReceived = now;
             flags |= TCP_PF_DATA_RECEIVED;
         } else {
-            debug("no space for packet even though its in our window");
+            trace("no space for packet even though its in our window");
             packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
         }
     }
 
-    debug("processing data returning flags %i", (int)flags);
+    trace("processing data returning flags %i", (int)flags);
 
     return flags;
 }
@@ -1704,7 +1706,7 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
 TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *header) {
     MAGIC_ASSERT(tcp);
 
-    debug("processing acks");
+    trace("processing acks");
 
     TCPProcessFlags flags = TCP_PF_PROCESSED;
     SimulationTime now = worker_getCurrentTime();
@@ -1732,9 +1734,9 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
                                     tcp->send.next, is_dup);
 
     if (is_dup) {
-      info("[CONG-AVOID] duplicate ack");
-      _tcp_logCongestionInfo(tcp);
-      tcp->cong.hooks->tcp_cong_duplicate_ack_ev(tcp);
+        debug("[CONG-AVOID] duplicate ack");
+        _tcp_logCongestionInfo(tcp);
+        tcp->cong.hooks->tcp_cong_duplicate_ack_ev(tcp);
     }
 
     gint nPacketsAcked = 0;
@@ -1755,7 +1757,7 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         if(nPacketsAcked > 0) {
             flags |= TCP_PF_DATA_ACKED;
 
-            info("[CONG] %i packets were acked", nPacketsAcked);
+            debug("[CONG] %i packets were acked", nPacketsAcked);
             tcp->cong.hooks->tcp_cong_new_ack_ev(tcp, nPacketsAcked);
 
             /* increase send buffer size with autotuning */
@@ -1790,7 +1792,7 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
 
     tcp->info.lastAckReceived = now;
 
-    debug("processing acks returning flags %i", (int)flags);
+    trace("processing acks returning flags %i", (int)flags);
 
     return flags;
 }
@@ -1802,23 +1804,24 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
     gsize inLength = socket_getInputBufferLength(&tcp->super);
     double ploss = (double) (tcp->info.retransmitCount / tcp->send.packetsSent);
 
-    info("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
-            "sndbufsize=%"G_GSIZE_FORMAT" sndbuflen=%"G_GSIZE_FORMAT" rcvbufsize=%"G_GSIZE_FORMAT" rcbuflen=%"G_GSIZE_FORMAT" "
-            "retrans=%"G_GSIZE_FORMAT" ploss=%f fd=%i",
-            tcp->cong.cwnd, tcp->cong.hooks->tcp_cong_ssthresh(tcp), tcp->timing.rttSmoothed,
-            outSize, outLength, inSize, inLength, tcp->info.retransmitCount, ploss,
-            tcp->super.super.super.handle);
+    debug("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
+          "sndbufsize=%" G_GSIZE_FORMAT " sndbuflen=%" G_GSIZE_FORMAT " rcvbufsize=%" G_GSIZE_FORMAT
+          " rcbuflen=%" G_GSIZE_FORMAT " "
+          "retrans=%" G_GSIZE_FORMAT " ploss=%f fd=%i",
+          tcp->cong.cwnd, tcp->cong.hooks->tcp_cong_ssthresh(tcp), tcp->timing.rttSmoothed, outSize,
+          outLength, inSize, inLength, tcp->info.retransmitCount, ploss,
+          tcp->super.super.super.handle);
 }
 
 static void _tcp_sendACKTaskCallback(TCP* tcp, gpointer userData) {
     MAGIC_ASSERT(tcp);
     tcp->send.delayedACKIsScheduled = FALSE;
     if(tcp->send.delayedACKCounter > 0) {
-        debug("sending a delayed ACK now");
+        trace("sending a delayed ACK now");
         _tcp_sendControlPacket(tcp, PTCP_ACK);
         tcp->send.delayedACKCounter = 0;
     } else {
-        debug("delayed ACK was cancelled");
+        trace("delayed ACK was cancelled");
     }
 }
 
@@ -1840,7 +1843,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
     /* if packet is reset, don't process */
     if(header->flags & PTCP_RST) {
         /* @todo: not sure if this is handled correctly */
-        debug("received RESET packet");
+        trace("received RESET packet");
 
         if(!(tcp->state & TCPS_LISTEN) && !(tcp->error & TCPE_CONNECTION_RESET)) {
             tcp->error |= TCPE_CONNECTION_RESET;
@@ -1868,7 +1871,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
     TCPProcessFlags flags = TCP_PF_NONE;
     enum ProtocolTCPFlags responseFlags = PTCP_NONE;
 
-    debug("processing packet while in state %s", _tcp_stateToAscii(tcp->state));
+    trace("processing packet while in state %s", _tcp_stateToAscii(tcp->state));
 
     switch(tcp->state) {
         case TCPS_LISTEN: {
@@ -1898,7 +1901,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                 multiplexed->receive.start = header->sequence;
                 multiplexed->receive.next = multiplexed->receive.start + 1;
 
-                debug("%s <-> %s: server multiplexed child socket %s <-> %s",
+                trace("%s <-> %s: server multiplexed child socket %s <-> %s",
                         tcp->super.boundString, tcp->super.peerString,
                         multiplexed->super.boundString, multiplexed->super.peerString);
 
@@ -1908,7 +1911,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                 tcp = multiplexed;
                 responseFlags = PTCP_SYN|PTCP_ACK;
 
-                debug("new child state %s", _tcp_stateToAscii(tcp->state));
+                trace("new child state %s", _tcp_stateToAscii(tcp->state));
             }
             break;
         }
@@ -2032,7 +2035,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                 flags |= TCP_PF_PROCESSED;
                 _tcp_setState(tcp, TCPS_CLOSED);
                 /* we closed, cant use tcp anymore */
-                debug("packet caused us to close and won't send response");
+                trace("packet caused us to close and won't send response");
                 return;
             }
             break;
@@ -2042,7 +2045,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
         case TCPS_CLOSED: {
             /* stray packet, drop without retransmit */
             packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
-            debug("already closed and won't send response");
+            trace("already closed and won't send response");
             return;
             break;
         }
@@ -2053,11 +2056,11 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
         if(!(flags & TCP_PF_PROCESSED)) {
             packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
         }
-        debug("listener does not respond to packets");
+        trace("listener does not respond to packets");
         return;
     }
 
-    debug("state after switch is %s", _tcp_stateToAscii(tcp->state));
+    trace("state after switch is %s", _tcp_stateToAscii(tcp->state));
 
     /* if TCPE_RECEIVE_EOF, we are not supposed to receive any more */
     if(packetLength > 0 && !(tcp->error & TCPE_RECEIVE_EOF)) {
@@ -2071,7 +2074,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
     /* if it is a spurious packet, drop it */
     if(!(flags & TCP_PF_PROCESSED)) {
         _rswlog(tcp, "Dropping spurious packet %d.\n", header->sequence);
-        debug("dropping packet that had no useful info for us");
+        trace("dropping packet that had no useful info for us");
         utility_assert(responseFlags == PTCP_NONE);
         packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
         return;
@@ -2115,7 +2118,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
         responseFlags |= PTCP_ACK;
     }
 
-    debug("checking if response is needed: flags=%i RCV_EOF=%i FIN=%i",
+    trace("checking if response is needed: flags=%i RCV_EOF=%i FIN=%i",
           (int)responseFlags, (int)(tcp->error & TCPE_RECEIVE_EOF),
           (int)(responseFlags & PTCP_FIN));
 
@@ -2128,10 +2131,10 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
 
         if(responseFlags != PTCP_ACK) { // includes DUPACKs
             /* just send the response now */
-            debug("sending ACK control packet now");
+            trace("sending ACK control packet now");
             _tcp_sendControlPacket(tcp, responseFlags);
         } else {
-            debug("waiting for delayed ACK control packet");
+            trace("waiting for delayed ACK control packet");
             if(tcp->send.delayedACKIsScheduled == FALSE) {
                 /* we need to send an ACK, lets schedule a task so we don't send an ACK
                  * for all packets that are received during this same simtime receiving round. */
@@ -2166,7 +2169,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
     /* clear it so we dont send outdated timestamp echos */
     tcp->receive.lastTimestamp = 0;
 
-    debug("done processing in state %s", _tcp_stateToAscii(tcp->state));
+    trace("done processing in state %s", _tcp_stateToAscii(tcp->state));
 }
 
 static void _tcp_dropPacket(Socket* socket, Packet* packet) {
@@ -2185,7 +2188,7 @@ static void _tcp_dropPacket(Socket* socket, Packet* packet) {
 static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
     MAGIC_ASSERT(tcp);
 
-    debug("%s <-> %s: signaling close to user, socket no longer usable", tcp->super.boundString, tcp->super.peerString);
+    trace("%s <-> %s: signaling close to user, socket no longer usable", tcp->super.boundString, tcp->super.peerString);
     tcp->flags |= flags;
 
     if((tcp->flags & TCPF_EOF_RD_SIGNALED) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
@@ -2203,7 +2206,7 @@ static gssize _tcp_sendUserData(Transport* transport, PluginVirtualPtr buffer, g
     /* return 0 to signal close, if necessary */
     if(tcp->error & TCPE_SEND_EOF)
     {
-        debug("send EOF is set");
+        trace("send EOF is set");
         if(tcp->state == TCPS_CLOSED) {
             return -ENOTCONN;
         } else {
@@ -2243,7 +2246,7 @@ static gssize _tcp_sendUserData(Transport* transport, PluginVirtualPtr buffer, g
         bytesCopied += copyLength;
     }
 
-    debug("%s <-> %s: sending %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
+    trace("%s <-> %s: sending %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
 
     /* now flush as much as possible out to socket */
     _tcp_flush(tcp);
@@ -2253,7 +2256,7 @@ static gssize _tcp_sendUserData(Transport* transport, PluginVirtualPtr buffer, g
 
 static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
     MAGIC_ASSERT(tcp);
-    debug("%s <-> %s: receive window opened, advertising the new "
+    trace("%s <-> %s: receive window opened, advertising the new "
             "receive window %"G_GUINT32_FORMAT" as an ACK control packet",
             tcp->super.boundString, tcp->super.peerString, tcp->receive.window);
 
@@ -2291,7 +2294,7 @@ static gssize _tcp_receiveUserData(Transport* transport, PluginVirtualPtr buffer
     }
 
     if (buffer.val == 0 && nBytes > 0) {
-        info("Can't recv >0 bytes into NULL buffer on socket");
+        debug("Can't recv >0 bytes into NULL buffer on socket");
         return -EFAULT;
     }
 
@@ -2425,7 +2428,7 @@ static gssize _tcp_receiveUserData(Transport* transport, PluginVirtualPtr buffer
         tcp->receive.windowUpdatePending = TRUE;
     }
 
-    debug("%s <-> %s: receiving %" G_GSIZE_FORMAT " user bytes", tcp->super.boundString,
+    trace("%s <-> %s: receiving %" G_GSIZE_FORMAT " user bytes", tcp->super.boundString,
           tcp->super.peerString, totalCopied);
 
     // only return EWOULDBLOCK if no bytes were copied, and either we requested bytes or there is no
@@ -2480,7 +2483,7 @@ static gboolean _tcp_close(LegacyDescriptor* descriptor) {
     /* We always return FALSE because we handle process deregististration
      * on our own. */
 
-    debug("%s <-> %s:  user closed connection", tcp->super.boundString, tcp->super.peerString);
+    trace("%s <-> %s:  user closed connection", tcp->super.boundString, tcp->super.peerString);
     tcp->flags |= TCPF_LOCAL_CLOSED_WR;
     tcp->flags |= TCPF_LOCAL_CLOSED_RD;
 

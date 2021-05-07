@@ -30,7 +30,7 @@ static SysCallReturn _syscallhandler_killHelper(SysCallHandler* sys, pid_t pid, 
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
     }
 
-    debug(
+    trace(
         "making syscall %li in native thread %i (pid=%i and tid=%i)", syscallnum, my_tid, pid, tid);
 
     long result = 0;
@@ -41,12 +41,12 @@ static SysCallReturn _syscallhandler_killHelper(SysCallHandler* sys, pid_t pid, 
         case SYS_tgkill:
             result = thread_nativeSyscall(sys->thread, SYS_tgkill, pid, tid, sig);
             break;
-        default: error("Invalid syscall number %li given", syscallnum); break;
+        default: utility_panic("Invalid syscall number %li given", syscallnum); break;
     }
 
     int error = syscall_rawReturnValueToErrno(result);
 
-    debug("native syscall returned error code %i", error);
+    trace("native syscall returned error code %i", error);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -error};
 }
@@ -60,7 +60,7 @@ SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) 
     pid_t pid = args->args[0].as_i64;
     int sig = args->args[1].as_i64;
 
-    debug("kill called on pid %i with signal %i", pid, sig);
+    trace("kill called on pid %i with signal %i", pid, sig);
 
     pid_t native_pid = 0;
 
@@ -79,7 +79,7 @@ SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) 
         }
     }
 
-    debug("translated virtual pid %i to native pid %i", pid, native_pid);
+    trace("translated virtual pid %i to native pid %i", pid, native_pid);
     return _syscallhandler_killHelper(sys, native_pid, 0, sig, SYS_kill);
 }
 
@@ -90,7 +90,7 @@ SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args
     pid_t tid = args->args[1].as_i64;
     int sig = args->args[2].as_i64;
 
-    debug("tgkill called on tgid %i and tid %i with signal %i", tgid, tid, sig);
+    trace("tgkill called on tgid %i and tid %i with signal %i", tgid, tid, sig);
 
     // Translate from virtual to native tgid and tid
     pid_t native_tgid = host_getNativeTID(sys->host, tgid, 0);
@@ -101,7 +101,7 @@ SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESRCH};
     }
 
-    debug("translated virtual tgid %i to native tgid %i and virtual tid %i to native tid %i", tgid,
+    trace("translated virtual tgid %i to native tgid %i and virtual tid %i to native tid %i", tgid,
           native_tgid, tid, native_tid);
     return _syscallhandler_killHelper(sys, native_tgid, native_tid, sig, SYS_tgkill);
 }
@@ -111,7 +111,7 @@ SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args)
     pid_t tid = args->args[0].as_i64;
     int sig = args->args[1].as_i64;
 
-    debug("tkill called on tid %i with signal %i", tid, sig);
+    trace("tkill called on tid %i with signal %i", tid, sig);
 
     // Translate from virtual to native tid
     pid_t native_tid = host_getNativeTID(sys->host, 0, tid);
@@ -121,6 +121,6 @@ SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args)
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESRCH};
     }
 
-    debug("translated virtual tid %i to native tid %i", tid, native_tid);
+    trace("translated virtual tid %i to native tid %i", tid, native_tid);
     return _syscallhandler_killHelper(sys, 0, native_tid, sig, SYS_tkill);
 }

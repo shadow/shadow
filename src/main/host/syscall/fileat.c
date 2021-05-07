@@ -35,7 +35,7 @@ static int _syscallhandler_validateDirHelper(SysCallHandler* sys, int dirfd,
         }
         return 0;
     } else if (dirfd < 0) {
-        info("descriptor %i out of bounds", dirfd);
+        debug("descriptor %i out of bounds", dirfd);
         return -EBADF;
     }
 
@@ -47,7 +47,7 @@ static int _syscallhandler_validateDirHelper(SysCallHandler* sys, int dirfd,
 
     int errcode = _syscallhandler_validateDescriptor(desc, DT_FILE);
     if (errcode) {
-        info("descriptor %i is invalid", dirfd);
+        debug("descriptor %i is invalid", dirfd);
         return errcode;
     }
 
@@ -114,7 +114,7 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
     int flags = args->args[2].as_i64;
     mode_t mode = args->args[3].as_u64;
 
-    debug("Trying to openat file with path name at plugin addr %p",
+    trace("Trying to openat file with path name at plugin addr %p",
           (void*)pathnamePtr.val);
 
     /* Validate params. */
