@@ -23,10 +23,10 @@ SysCallReturn syscallhandler_getrandom(SysCallHandler* sys, const SysCallArgs* a
     // We ignore the flags arg, because we use the same random source for both
     // random and urandom, and it never blocks anyway.
 
-    debug("Trying to read %zu random bytes.", count);
+    trace("Trying to read %zu random bytes.", count);
 
     if (!bufPtr.val) {
-        info("Invalid buffer.");
+        debug("Invalid buffer.");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 

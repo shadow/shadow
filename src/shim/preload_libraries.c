@@ -192,16 +192,16 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
     GMatchInfo* match_info = NULL;
     GRegex* regex = NULL;
 
-    debug("Reading /etc/hosts file");
+    trace("Reading /etc/hosts file");
 
     g_file_get_contents("/etc/hosts", &hosts, NULL, &error);
     if (error != NULL) {
-        error("Reading /etc/hosts: %s", error->message);
+        panic("Reading /etc/hosts: %s", error->message);
         goto out;
     }
     assert(hosts != NULL);
 
-    debug("Scanning /etc/hosts contents for name %s", node);
+    trace("Scanning /etc/hosts contents for name %s", node);
 
     {
         gchar* escaped_node = g_regex_escape_string(node, -1);
@@ -212,15 +212,15 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
                      escaped_node);
         g_free(escaped_node);
         if (rv < 0) {
-            error("asprintf failed: %d", rv);
+            panic("asprintf failed: %d", rv);
             goto out;
         }
     }
-    debug("Node:%s -> regex:%s", node, pattern);
+    trace("Node:%s -> regex:%s", node, pattern);
 
     regex = g_regex_new(pattern, G_REGEX_MULTILINE, 0, &error);
     if (error != NULL) {
-        error("g_regex_new: %s", error->message);
+        panic("g_regex_new: %s", error->message);
         goto out;
     }
     assert(regex != NULL);
@@ -233,17 +233,17 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
 #ifdef DEBUG
         {
             gchar* matched_string = g_match_info_fetch(match_info, 0);
-            debug("Node:%s -> match:%s", node, matched_string);
+            trace("Node:%s -> match:%s", node, matched_string);
             g_free(matched_string);
         }
 #endif
         gchar* address_string = g_match_info_fetch(match_info, 1);
-        debug("Node:%s -> address string:%s", node, address_string);
+        trace("Node:%s -> address string:%s", node, address_string);
         assert(address_string != NULL);
         uint32_t addr;
         int rv = inet_pton(AF_INET, address_string, &addr);
         if (rv != 1) {
-            error("Bad address in /etc/hosts: %s\n", address_string);
+            panic("Bad address in /etc/hosts: %s\n", address_string);
         } else {
             _getaddrinfo_appendv4(
                 head, tail, add_tcp, add_udp, add_raw, addr, port);
@@ -268,22 +268,22 @@ static bool _syscall_hostname_to_addr_ipv4(const char* node, uint32_t* addr) {
         return false;
     }
 
-    debug("Performing custom shadow syscall SYS_shadow_hostname_to_addr_ipv4 for name %s", node);
+    trace("Performing custom shadow syscall SYS_shadow_hostname_to_addr_ipv4 for name %s", node);
 
     // Resolve the hostname using a custom syscall that shadow handles
     if (shadow_hostname_to_addr_ipv4(node, strlen(node), addr, sizeof(*addr)) == 0) {
 #ifdef DEBUG
         char addr_str_buf[INET_ADDRSTRLEN] = {0};
         if (inet_ntop(AF_INET, (struct in_addr*)addr, addr_str_buf, INET_ADDRSTRLEN)) {
-            debug("SYS_shadow_hostname_to_addr_ipv4 returned addr %s for name %s", addr_str_buf,
+            trace("SYS_shadow_hostname_to_addr_ipv4 returned addr %s for name %s", addr_str_buf,
                   node);
         } else {
-            debug("SYS_shadow_hostname_to_addr_ipv4 succeeded for name %s", node);
+            trace("SYS_shadow_hostname_to_addr_ipv4 succeeded for name %s", node);
         }
 #endif
         return true;
     } else {
-        debug("SYS_shadow_hostname_to_addr_ipv4 failed for name %s", node);
+        trace("SYS_shadow_hostname_to_addr_ipv4 failed for name %s", node);
         return false;
     }
 }
@@ -557,7 +557,7 @@ int __fxstat(int ver, int a, struct stat* b) {
     // on x86_64 with a modern kernel, glibc should use the same stat struct as the kernel, so check
     // that this function was indeed called with the expected stat struct
     if (ver != 1 /* _STAT_VER_KERNEL for x86_64 */) {
-        error("__fxstat called with unexpected ver of %d", ver);
+        panic("__fxstat called with unexpected ver of %d", ver);
         errno = EINVAL;
         return -1;
     }
@@ -569,7 +569,7 @@ int __fxstat64(int ver, int a, struct stat64* b) {
     // on x86_64 with a modern kernel, glibc should use the same stat struct as the kernel, so check
     // that this function was indeed called with the expected stat struct
     if (ver != 1 /* _STAT_VER_KERNEL for x86_64 */) {
-        error("__fxstat64 called with unexpected ver of %d", ver);
+        panic("__fxstat64 called with unexpected ver of %d", ver);
         errno = EINVAL;
         return -1;
     }

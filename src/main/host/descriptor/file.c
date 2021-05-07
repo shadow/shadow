@@ -87,7 +87,7 @@ int file_getOSBackedFD(File* file) { return _file_getOSBackedFD(file); }
 
 static void _file_closeHelper(File* file) {
     if (file && file->osfile.fd != OSFILE_INVALID) {
-        debug("On file %i, closing os-backed file %i", _file_getFD(file),
+        trace("On file %i, closing os-backed file %i", _file_getFD(file),
               _file_getOSBackedFD(file));
 
         close(file->osfile.fd);
@@ -101,7 +101,7 @@ static void _file_closeHelper(File* file) {
 static gboolean _file_close(LegacyDescriptor* desc) {
     File* file = _file_descriptorToFile(desc);
 
-    debug("Closing file %i with os-backed file %i", _file_getFD(file),
+    trace("Closing file %i with os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     /* Make sure we mimic the close on the OS-backed file now. */
@@ -115,7 +115,7 @@ static gboolean _file_close(LegacyDescriptor* desc) {
 static void _file_free(LegacyDescriptor* desc) {
     File* file = _file_descriptorToFile(desc);
 
-    debug("Freeing file %i with os-backed file %i", _file_getFD(file),
+    trace("Freeing file %i with os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     _file_closeHelper(file);
@@ -184,8 +184,7 @@ File* file_dup(File* file, int* dupError) {
 static char* _file_getConcatStr(const char* prefix, const char sep, const char* suffix) {
     char* path = NULL;
     if (asprintf(&path, "%s%c%s", prefix, sep, suffix) < 0) {
-        error("asprintf could not allocate a buffer, error %i: %s", errno,
-              strerror(errno));
+        utility_panic("asprintf could not allocate a buffer, error %i: %s", errno, strerror(errno));
         abort();
     }
     return path;
@@ -246,7 +245,7 @@ static void _file_print_flags(int flags) {
     if (!flag_str) {
         asprintf(&flag_str, "0");
     }
-    debug("Found flags: %s", flag_str);
+    trace("Found flags: %s", flag_str);
     if (flag_str) {
         free(flag_str);
     }
@@ -259,7 +258,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
     MAGIC_ASSERT(file);
     utility_assert(file->osfile.fd == OSFILE_INVALID);
 
-    debug("Attempting to open file with pathname=%s flags=%i mode=%i workingdir=%s", pathname,
+    trace("Attempting to open file with pathname=%s flags=%i mode=%i workingdir=%s", pathname,
           flags, (int)mode, workingDir);
 #ifdef DEBUG
     if (flags) {
@@ -269,7 +268,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
 
     int fd = _file_getFD(file);
     if (fd < 0) {
-        error("Cannot openat() on an unregistered descriptor object with fd %d", fd);
+        utility_panic("Cannot openat() on an unregistered descriptor object with fd %d", fd);
     }
 
     /* The default case is a regular file. We do this first so that we have
@@ -308,7 +307,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
     }
 
     if (osfd < 0) {
-        debug("File %i opening path '%s' returned %i: %s", _file_getFD(file), abspath, osfd,
+        trace("File %i opening path '%s' returned %i: %s", _file_getFD(file), abspath, osfd,
               strerror(errcode));
         if (abspath) {
             free(abspath);
@@ -323,7 +322,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
     file->osfile.flags = flags;
     file->osfile.mode = mode;
 
-    debug("File %i opened os-backed file %i at absolute path %s",
+    trace("File %i opened os-backed file %i at absolute path %s",
           _file_getFD(file), _file_getOSBackedFD(file), file->osfile.abspath);
 
     /* The os-backed file is now ready. */
@@ -343,7 +342,7 @@ static void _file_readRandomBytes(File* file, void* buf, size_t numBytes) {
     Host* host = worker_getActiveHost();
     utility_assert(host != NULL);
 
-    debug("File %i will read %zu bytes from random source for host %s", _file_getFD(file), numBytes,
+    trace("File %i will read %zu bytes from random source for host %s", _file_getFD(file), numBytes,
           host_getName(host));
 
     Random* rng = host_getRandom(host);
@@ -371,7 +370,7 @@ ssize_t file_read(File* file, void* buf, size_t bufSize) {
         return (ssize_t)bufSize;
     }
 
-    debug("File %i will read %zu bytes from os-backed file %i at path '%s'",
+    trace("File %i will read %zu bytes from os-backed file %i at path '%s'",
           _file_getFD(file), bufSize, _file_getOSBackedFD(file),
           file->osfile.abspath);
 
@@ -393,7 +392,7 @@ ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
         return (ssize_t)bufSize;
     }
 
-    debug("File %i will pread %zu bytes from os-backed file %i at path '%s'",
+    trace("File %i will pread %zu bytes from os-backed file %i at path '%s'",
           _file_getFD(file), bufSize, _file_getOSBackedFD(file),
           file->osfile.abspath);
 
@@ -414,7 +413,7 @@ ssize_t file_preadv(File* file, const struct iovec* iov, int iovcnt, off_t offse
         return (ssize_t)_file_readvRandomBytes(file, iov, iovcnt);
     }
 
-    debug("File %i will preadv %d vector items from os-backed file %i at path "
+    trace("File %i will preadv %d vector items from os-backed file %i at path "
           "'%s'",
           _file_getFD(file), iovcnt, _file_getOSBackedFD(file), file->osfile.abspath);
 
@@ -437,7 +436,7 @@ ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt,
         return (ssize_t)_file_readvRandomBytes(file, iov, iovcnt);
     }
 
-    debug("File %i will preadv2 %d vector items from os-backed file %i at path "
+    trace("File %i will preadv2 %d vector items from os-backed file %i at path "
           "'%s'",
           _file_getFD(file), iovcnt, _file_getOSBackedFD(file),
           file->osfile.abspath);
@@ -457,7 +456,7 @@ ssize_t file_write(File* file, const void* buf, size_t bufSize) {
         return -EBADF;
     }
 
-    debug("File %i will write %zu bytes to os-backed file %i at path '%s'",
+    trace("File %i will write %zu bytes to os-backed file %i at path '%s'",
           _file_getFD(file), bufSize, _file_getOSBackedFD(file),
           file->osfile.abspath);
 
@@ -474,7 +473,7 @@ ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset) {
         return -EBADF;
     }
 
-    debug("File %i will pwrite %zu bytes to os-backed file %i at path '%s'",
+    trace("File %i will pwrite %zu bytes to os-backed file %i at path '%s'",
           _file_getFD(file), bufSize, _file_getOSBackedFD(file),
           file->osfile.abspath);
 
@@ -491,7 +490,7 @@ ssize_t file_pwritev(File* file, const struct iovec* iov, int iovcnt, off_t offs
         return -EBADF;
     }
 
-    debug("File %i will pwritev %d vector items from os-backed file %i at "
+    trace("File %i will pwritev %d vector items from os-backed file %i at "
           "path '%s'",
           _file_getFD(file), iovcnt, _file_getOSBackedFD(file), file->osfile.abspath);
 
@@ -510,7 +509,7 @@ ssize_t file_pwritev2(File* file, const struct iovec* iov, int iovcnt,
         return -EBADF;
     }
 
-    debug("File %i will pwritev2 %d vector items from os-backed file %i at "
+    trace("File %i will pwritev2 %d vector items from os-backed file %i at "
           "path '%s'",
           _file_getFD(file), iovcnt, _file_getOSBackedFD(file),
           file->osfile.abspath);
@@ -530,7 +529,7 @@ int file_fstat(File* file, struct stat* statbuf) {
         return -EBADF;
     }
 
-    debug("File %i fstat os-backed file %i", _file_getFD(file),
+    trace("File %i fstat os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = fstat(_file_getOSBackedFD(file), statbuf);
@@ -544,7 +543,7 @@ int file_fstatfs(File* file, struct statfs* statbuf) {
         return -EBADF;
     }
 
-    debug("File %i fstatfs os-backed file %i", _file_getFD(file),
+    trace("File %i fstatfs os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = fstatfs(_file_getOSBackedFD(file), statbuf);
@@ -558,7 +557,7 @@ int file_fsync(File* file) {
         return -EBADF;
     }
 
-    debug("File %i fsync os-backed file %i", _file_getFD(file),
+    trace("File %i fsync os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = fsync(_file_getOSBackedFD(file));
@@ -572,7 +571,7 @@ int file_fchown(File* file, uid_t owner, gid_t group) {
         return -EBADF;
     }
 
-    debug("File %i fchown os-backed file %i", _file_getFD(file),
+    trace("File %i fchown os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = fchown(_file_getOSBackedFD(file), owner, group);
@@ -586,7 +585,7 @@ int file_fchmod(File* file, mode_t mode) {
         return -EBADF;
     }
 
-    debug("File %i fchmod os-backed file %i", _file_getFD(file),
+    trace("File %i fchmod os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = fchmod(_file_getOSBackedFD(file), mode);
@@ -600,7 +599,7 @@ int file_ftruncate(File* file, off_t length) {
         return -EBADF;
     }
 
-    debug("File %i ftruncate os-backed file %i", _file_getFD(file),
+    trace("File %i ftruncate os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = ftruncate(_file_getOSBackedFD(file), length);
@@ -614,7 +613,7 @@ int file_fallocate(File* file, int mode, off_t offset, off_t length) {
         return -EBADF;
     }
 
-    debug("File %i fallocate os-backed file %i", _file_getFD(file),
+    trace("File %i fallocate os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = fallocate(_file_getOSBackedFD(file), mode, offset, length);
@@ -628,7 +627,7 @@ int file_fadvise(File* file, off_t offset, off_t len, int advice) {
         return -EBADF;
     }
 
-    debug("File %i fadvise os-backed file %i", _file_getFD(file),
+    trace("File %i fadvise os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = posix_fadvise(_file_getOSBackedFD(file), offset, len, advice);
@@ -642,7 +641,7 @@ int file_flock(File* file, int operation) {
         return -EBADF;
     }
 
-    debug("File %i flock os-backed file %i", _file_getFD(file),
+    trace("File %i flock os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = flock(_file_getOSBackedFD(file), operation);
@@ -657,7 +656,7 @@ int file_fsetxattr(File* file, const char* name, const void* value, size_t size,
         return -EBADF;
     }
 
-    debug("File %i fsetxattr os-backed file %i", _file_getFD(file),
+    trace("File %i fsetxattr os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = fsetxattr(_file_getOSBackedFD(file), name, value, size, flags);
@@ -671,7 +670,7 @@ ssize_t file_fgetxattr(File* file, const char* name, void* value, size_t size) {
         return -EBADF;
     }
 
-    debug("File %i fgetxattr os-backed file %i", _file_getFD(file),
+    trace("File %i fgetxattr os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     ssize_t result = fgetxattr(_file_getOSBackedFD(file), name, value, size);
@@ -685,7 +684,7 @@ ssize_t file_flistxattr(File* file, char* list, size_t size) {
         return -EBADF;
     }
 
-    debug("File %i flistxattr os-backed file %i", _file_getFD(file),
+    trace("File %i flistxattr os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     ssize_t result = flistxattr(_file_getOSBackedFD(file), list, size);
@@ -699,7 +698,7 @@ int file_fremovexattr(File* file, const char* name) {
         return -EBADF;
     }
 
-    debug("File %i fremovexattr os-backed file %i", _file_getFD(file),
+    trace("File %i fremovexattr os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = fremovexattr(_file_getOSBackedFD(file), name);
@@ -714,7 +713,7 @@ int file_sync_range(File* file, off64_t offset, off64_t nbytes,
         return -EBADF;
     }
 
-    debug("File %i sync_file_range os-backed file %i", _file_getFD(file),
+    trace("File %i sync_file_range os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result =
@@ -729,7 +728,7 @@ ssize_t file_readahead(File* file, off64_t offset, size_t count) {
         return -EBADF;
     }
 
-    debug("File %i readahead os-backed file %i", _file_getFD(file),
+    trace("File %i readahead os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     ssize_t result = readahead(_file_getOSBackedFD(file), offset, count);
@@ -743,7 +742,7 @@ off_t file_lseek(File* file, off_t offset, int whence) {
         return -EBADF;
     }
 
-    debug("File %i lseek os-backed file %i", _file_getFD(file),
+    trace("File %i lseek os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     ssize_t result = lseek(_file_getOSBackedFD(file), offset, whence);
@@ -757,7 +756,7 @@ int file_getdents(File* file, struct linux_dirent* dirp, unsigned int count) {
         return -EBADF;
     }
 
-    debug("File %i getdents os-backed file %i", _file_getFD(file),
+    trace("File %i getdents os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     // getdents is not available for a direct call
@@ -774,7 +773,7 @@ int file_getdents64(File* file, struct linux_dirent64* dirp,
         return -EBADF;
     }
 
-    debug("File %i getdents64 os-backed file %i", _file_getFD(file),
+    trace("File %i getdents64 os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result =
@@ -789,7 +788,7 @@ int file_ioctl(File* file, unsigned long request, void* arg) {
         return -EBADF;
     }
 
-    debug("File %i ioctl os-backed file %i", _file_getFD(file),
+    trace("File %i ioctl os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = ioctl(_file_getOSBackedFD(file), request, arg);
@@ -803,7 +802,7 @@ int file_fcntl(File* file, unsigned long command, void* arg) {
         return -EBADF;
     }
 
-    debug("File %i fcntl os-backed file %i", _file_getFD(file),
+    trace("File %i fcntl os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
     int result = fcntl(_file_getOSBackedFD(file), command, arg);
@@ -817,7 +816,7 @@ int file_poll(File* file, struct pollfd* pfd) {
         return -EBADF;
     }
 
-    debug("File %i poll os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
+    trace("File %i poll os-backed file %i", _file_getFD(file), _file_getOSBackedFD(file));
 
     // Don't let the OS block us
     int oldfd = pfd->fd;
@@ -842,7 +841,7 @@ static inline int _file_getOSDirFD(File* dir) {
 
 int file_fstatat(File* dir, const char* pathname, struct stat* statbuf,
                  int flags) {
-    debug("File %i fstatat os-backed file %i", dir ? _file_getFD(dir) : 0,
+    trace("File %i fstatat os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
     int result = fstatat(_file_getOSDirFD(dir), pathname, statbuf, flags);
@@ -851,7 +850,7 @@ int file_fstatat(File* dir, const char* pathname, struct stat* statbuf,
 
 int file_fchownat(File* dir, const char* pathname, uid_t owner, gid_t group,
                   int flags) {
-    debug("File %i fchownat os-backed file %i", dir ? _file_getFD(dir) : 0,
+    trace("File %i fchownat os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
     int result = fchownat(_file_getOSDirFD(dir), pathname, owner, group, flags);
@@ -859,7 +858,7 @@ int file_fchownat(File* dir, const char* pathname, uid_t owner, gid_t group,
 }
 
 int file_fchmodat(File* dir, const char* pathname, mode_t mode, int flags) {
-    debug("File %i fchmodat os-backed file %i", dir ? _file_getFD(dir) : 0,
+    trace("File %i fchmodat os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
     int result = fchmodat(_file_getOSDirFD(dir), pathname, mode, flags);
@@ -868,7 +867,7 @@ int file_fchmodat(File* dir, const char* pathname, mode_t mode, int flags) {
 
 int file_futimesat(File* dir, const char* pathname,
                    const struct timeval times[2]) {
-    debug("File %i futimesat os-backed file %i", dir ? _file_getFD(dir) : 0,
+    trace("File %i futimesat os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
     int result = futimesat(_file_getOSDirFD(dir), pathname, times);
@@ -877,7 +876,7 @@ int file_futimesat(File* dir, const char* pathname,
 
 int file_utimensat(File* dir, const char* pathname,
                    const struct timespec times[2], int flags) {
-    debug("File %i utimesat os-backed file %i", dir ? _file_getFD(dir) : 0,
+    trace("File %i utimesat os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
     int result = utimensat(_file_getOSDirFD(dir), pathname, times, flags);
@@ -885,7 +884,7 @@ int file_utimensat(File* dir, const char* pathname,
 }
 
 int file_faccessat(File* dir, const char* pathname, int mode, int flags) {
-    debug("File %i faccessat os-backed file %i", dir ? _file_getFD(dir) : 0,
+    trace("File %i faccessat os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
     int result = faccessat(_file_getOSDirFD(dir), pathname, mode, flags);
@@ -893,7 +892,7 @@ int file_faccessat(File* dir, const char* pathname, int mode, int flags) {
 }
 
 int file_mkdirat(File* dir, const char* pathname, mode_t mode) {
-    debug("File %i mkdirat os-backed file %i", dir ? _file_getFD(dir) : 0,
+    trace("File %i mkdirat os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
     int result = mkdirat(_file_getOSDirFD(dir), pathname, mode);
@@ -901,7 +900,7 @@ int file_mkdirat(File* dir, const char* pathname, mode_t mode) {
 }
 
 int file_mknodat(File* dir, const char* pathname, mode_t mode, dev_t dev) {
-    debug("File %i mknodat os-backed file %i", dir ? _file_getFD(dir) : 0,
+    trace("File %i mknodat os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
     int result = mknodat(_file_getOSDirFD(dir), pathname, mode, dev);
@@ -913,7 +912,7 @@ int file_linkat(File* olddir, const char* oldpath, File* newdir,
     int oldosdirfd = _file_getOSDirFD(olddir);
     int newosdirfd = _file_getOSDirFD(newdir);
 
-    debug("File %i linkat os-backed file %i", olddir ? _file_getFD(olddir) : 0,
+    trace("File %i linkat os-backed file %i", olddir ? _file_getFD(olddir) : 0,
           oldosdirfd);
 
     int result = linkat(oldosdirfd, oldpath, newosdirfd, newpath, flags);
@@ -921,7 +920,7 @@ int file_linkat(File* olddir, const char* oldpath, File* newdir,
 }
 
 int file_unlinkat(File* dir, const char* pathname, int flags) {
-    debug("File %i unlinkat os-backed file %i", dir ? _file_getFD(dir) : 0,
+    trace("File %i unlinkat os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
     int result = unlinkat(_file_getOSDirFD(dir), pathname, flags);
@@ -929,7 +928,7 @@ int file_unlinkat(File* dir, const char* pathname, int flags) {
 }
 
 int file_symlinkat(File* dir, const char* linkpath, const char* target) {
-    debug("File %i symlinkat os-backed file %i", dir ? _file_getFD(dir) : 0,
+    trace("File %i symlinkat os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
     int result = symlinkat(target, _file_getOSDirFD(dir), linkpath);
@@ -938,7 +937,7 @@ int file_symlinkat(File* dir, const char* linkpath, const char* target) {
 
 ssize_t file_readlinkat(File* dir, const char* pathname, char* buf,
                         size_t bufsize) {
-    debug("File %i readlinkat os-backed file %i", dir ? _file_getFD(dir) : 0,
+    trace("File %i readlinkat os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
     ssize_t result = readlinkat(_file_getOSDirFD(dir), pathname, buf, bufsize);
@@ -950,7 +949,7 @@ int file_renameat2(File* olddir, const char* oldpath, File* newdir,
     int oldosdirfd = _file_getOSDirFD(olddir);
     int newosdirfd = _file_getOSDirFD(newdir);
 
-    debug("File %i renameat2 os-backed file %i",
+    trace("File %i renameat2 os-backed file %i",
           olddir ? _file_getFD(olddir) : 0, oldosdirfd);
 
     int result = (int)syscall(
@@ -961,7 +960,7 @@ int file_renameat2(File* olddir, const char* oldpath, File* newdir,
 #ifdef SYS_statx
 int file_statx(File* dir, const char* pathname, int flags, unsigned int mask,
                struct statx* statxbuf) {
-    debug("File %i statx os-backed file %i", dir ? _file_getFD(dir) : 0,
+    trace("File %i statx os-backed file %i", dir ? _file_getFD(dir) : 0,
           _file_getOSDirFD(dir));
 
     int result = (int)syscall(

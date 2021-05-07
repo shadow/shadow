@@ -73,7 +73,7 @@ static int _syscallhandler_getPollEvents(SysCallHandler* sys, struct pollfd* fds
             continue;
         }
 
-        debug("poll checking fd %i", pfd->fd);
+        trace("poll checking fd %i", pfd->fd);
 
         /* Get the descriptor. */
         CompatDescriptor* cdesc = process_getRegisteredCompatDescriptor(sys->process, pfd->fd);
@@ -126,17 +126,17 @@ static SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, PluginPtr f
     // Check if any of the fds have events now
     int num_ready = _syscallhandler_getPollEvents(sys, fds, nfds);
 
-    debug("poll update: %i of %lu fds are ready", num_ready, nfds);
+    trace("poll update: %i of %lu fds are ready", num_ready, nfds);
 
     // Block or not depending on the timeout values
     if (num_ready == 0) {
         bool dont_block = timeout && timeout->tv_sec == 0 && timeout->tv_nsec == 0;
 
         if (dont_block || _syscallhandler_wasBlocked(sys)) {
-            debug("No events are ready and poll needs to return now");
+            trace("No events are ready and poll needs to return now");
             goto done;
         } else {
-            debug("No events are ready and poll needs to block");
+            trace("No events are ready and poll needs to block");
 
             // Our epoll will tell us when we have events
             _syscallhandler_registerPollFDs(sys, fds, nfds);
@@ -159,7 +159,7 @@ static SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, PluginPtr f
     }
 
     // We have events now and we've already written them to fds_ptr
-    debug("poll returning %i ready events now", num_ready);
+    trace("poll returning %i ready events now", num_ready);
 done:
     // Clear epoll for the next poll
     epoll_reset(sys->epoll);
@@ -168,10 +168,10 @@ done:
 
 static int _syscallhandler_checkPollArgs(PluginPtr fds_ptr, nfds_t nfds) {
     if (nfds > INT_MAX) {
-        debug("nfds was out of range [0, INT_MAX], returning EINVAL");
+        trace("nfds was out of range [0, INT_MAX], returning EINVAL");
         return -EINVAL;
     } else if (!fds_ptr.val) {
-        debug("fd array was null, returning EFAULT");
+        trace("fd array was null, returning EFAULT");
         return -EFAULT;
     } else {
         return 0;
@@ -187,7 +187,7 @@ SysCallReturn syscallhandler_poll(SysCallHandler* sys, const SysCallArgs* args) 
     nfds_t nfds = args->args[1].as_u64;
     int timeout_millis = args->args[2].as_i64;
 
-    debug("poll was called with nfds=%lu and timeout=%d", nfds, timeout_millis);
+    trace("poll was called with nfds=%lu and timeout=%d", nfds, timeout_millis);
 
     if (nfds == 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
@@ -209,7 +209,7 @@ SysCallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args)
     nfds_t nfds = args->args[1].as_u64;
     PluginPtr ts_timeout_ptr = args->args[2].as_ptr; // const struct timespec*
 
-    debug("ppoll was called with nfds=%lu and timeout_ptr=%p", nfds, (void*)ts_timeout_ptr.val);
+    trace("ppoll was called with nfds=%lu and timeout_ptr=%p", nfds, (void*)ts_timeout_ptr.val);
 
     if (nfds == 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
@@ -234,7 +234,7 @@ SysCallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args)
 
         // Negative time values in the struct are invalid
         if (ts_timeout_val.tv_sec < 0 || ts_timeout_val.tv_nsec < 0) {
-            debug("negative timeout given in timespec arg, returning EINVAL");
+            trace("negative timeout given in timespec arg, returning EINVAL");
             return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
         }
     }

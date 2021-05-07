@@ -24,7 +24,7 @@ static int _syscallhandler_validateEventFDHelper(SysCallHandler* sys, int efd,
                                                  EventD** event_desc_out) {
     /* Check that fd is within bounds. */
     if (efd < 0) {
-        info("descriptor %i out of bounds", efd);
+        debug("descriptor %i out of bounds", efd);
         return -EBADF;
     }
 
@@ -36,7 +36,7 @@ static int _syscallhandler_validateEventFDHelper(SysCallHandler* sys, int efd,
 
     int errcode = _syscallhandler_validateDescriptor(desc, DT_EVENTD);
     if (errcode) {
-        info("descriptor %i is invalid", efd);
+        debug("descriptor %i is invalid", efd);
         return errcode;
     }
 
@@ -46,11 +46,11 @@ static int _syscallhandler_validateEventFDHelper(SysCallHandler* sys, int efd,
 
 static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys, unsigned int initval,
                                                    int flags) {
-    debug("eventfd() called with initval %u and flags %i", initval, flags);
+    trace("eventfd() called with initval %u and flags %i", initval, flags);
 
     /* any of 3 values can be bitwise ORed into flags */
     if (flags & ~(EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE)) {
-        info("Invalid eventfd flags were given: %i", flags);
+        debug("Invalid eventfd flags were given: %i", flags);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
@@ -62,7 +62,7 @@ static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys, unsigned
     /* This should always be a valid descriptor. */
     int errcode = _syscallhandler_validateEventFDHelper(sys, efd, NULL);
     if (errcode != 0) {
-        error("Unable to find eventfd %i that we just created.", efd);
+        utility_panic("Unable to find eventfd %i that we just created.", efd);
     }
     utility_assert(errcode == 0);
 #endif
@@ -75,7 +75,7 @@ static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys, unsigned
         descriptor_addFlags((LegacyDescriptor*)eventd, O_CLOEXEC);
     }
 
-    debug("eventfd() returning fd %i", efd);
+    trace("eventfd() returning fd %i", efd);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = efd};
 }

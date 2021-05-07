@@ -47,13 +47,13 @@ typedef struct {
 static void* _futex_wait_test_child(void* void_arg) {
     FutexWaitTestChildArg* arg = void_arg;
     _set_condition(&arg->child_started);
-    debug("Child about to wait");
+    trace("Child about to wait");
     assert_true_errno(syscall(SYS_futex, &arg->futex, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0) == 0);
-    debug("Child returned from wait");
+    trace("Child returned from wait");
     __sync_synchronize();
     g_assert_cmpint(arg->futex, ==, AVAILABLE);
     _set_condition(&arg->child_finished);
-    debug("Child finished");
+    trace("Child finished");
     return NULL;
 }
 
@@ -64,7 +64,7 @@ static void _futex_wait_test() {
     assert_nonneg_errno(pthread_create(&child, NULL, _futex_wait_test_child, &arg));
 
     // Wait for it to signal it's started.
-    debug("Waiting for child to start");
+    trace("Waiting for child to start");
     _wait_for_condition(&arg.child_started);
 
     // Verify that it *hasn't* woken yet.
@@ -74,15 +74,15 @@ static void _futex_wait_test() {
     // on the mutex, so we need to loop.
     int woken = 0;
     while (1) {
-        debug("Waking child\n");
+        trace("Waking child\n");
         woken = syscall(SYS_futex, &arg.futex, FUTEX_WAKE, 1, NULL, NULL, 0);
         assert_nonneg_errno(woken);
         if (woken == 1) {
-            debug("Woke 1 child");
+            trace("Woke 1 child");
             break;
         }
         g_assert_cmpint(woken, ==, 0);
-        debug("No children woken; sleeping a bit and trying again");
+        trace("No children woken; sleeping a bit and trying again");
         usleep(1);
     }
 
@@ -119,13 +119,13 @@ typedef struct {
 static void* _futex_wait_bitset_test_child(void* void_arg) {
     FutexWaitBitsetTestChildArg* arg = void_arg;
     _set_condition(&arg->child_started);
-    debug("Child %d about to wait", arg->id);
+    trace("Child %d about to wait", arg->id);
     assert_true_errno(syscall(SYS_futex, arg->futex, FUTEX_WAIT_BITSET, UNAVAILABLE, NULL, NULL,
                               1 << arg->id) == 0);
-    debug("Child %d returned from wait", arg->id);
+    trace("Child %d returned from wait", arg->id);
     g_assert_cmpint(__atomic_load_n(arg->futex, __ATOMIC_ACQUIRE), ==, AVAILABLE);
     _set_condition(&arg->child_finished);
-    debug("Child finished");
+    trace("Child finished");
     return NULL;
 }
 
@@ -144,7 +144,7 @@ static void _futex_wait_bitset_test() {
 
         pthread_t child = {0};
         assert_nonneg_errno(pthread_create(&child, NULL, _futex_wait_bitset_test_child, &arg[i]));
-        debug("Waiting for child %d to start", i);
+        trace("Waiting for child %d to start", i);
         _wait_for_condition(&arg[i].child_started);
     }
 
@@ -155,15 +155,15 @@ static void _futex_wait_bitset_test() {
     // mutex, so we need to loop.
     int woken = 0;
     while (1) {
-        debug("Waking child\n");
+        trace("Waking child\n");
         woken = syscall(SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, 1 << 2);
         assert_nonneg_errno(woken);
         if (woken == 1) {
-            debug("Woke 1 child");
+            trace("Woke 1 child");
             break;
         }
         g_assert_cmpint(woken, ==, 0);
-        debug("No children woken; sleeping a bit and trying again");
+        trace("No children woken; sleeping a bit and trying again");
         usleep(1);
     }
 
@@ -232,7 +232,7 @@ static int _futex_wait(int* word) {
             if (res == -1 && errno != EAGAIN) {
                 char errbuf[32] = {0};
                 strerror_r(errno, errbuf, 32);
-                error("FUTEX_WAIT syscall failed: error %i: %s", errno, errbuf);
+                panic("FUTEX_WAIT syscall failed: error %i: %s", errno, errbuf);
                 return EXIT_FAILURE;
             }
         }
@@ -250,7 +250,7 @@ static int _futex_post(int* word) {
         if (res == -1) {
             char errbuf[32] = {0};
             strerror_r(errno, errbuf, 32);
-            error("FUTEX_WAKE syscall failed: error %i: %s", errno, errbuf);
+            panic("FUTEX_WAKE syscall failed: error %i: %s", errno, errbuf);
             return EXIT_FAILURE;
         }
     }
@@ -274,7 +274,7 @@ static int _run_futex_loop(int* word1, int* word2, int slow) {
             return EXIT_FAILURE;
         }
 
-        debug("thread %i loop %i/%i\n", threadID, j, NUM_LOOPS);
+        trace("thread %i loop %i/%i\n", threadID, j, NUM_LOOPS);
 
         if (_futex_post(word2) != EXIT_SUCCESS) {
             return EXIT_FAILURE;

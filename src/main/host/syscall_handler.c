@@ -100,16 +100,16 @@ static void _syscallhandler_free(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
 #ifdef USE_PERF_TIMERS
-    message("handled %li syscalls in %f seconds", sys->numSyscalls, sys->perfSecondsTotal);
+    info("handled %li syscalls in %f seconds", sys->numSyscalls, sys->perfSecondsTotal);
 #else
-    message("handled %li syscalls", sys->numSyscalls);
+    info("handled %li syscalls", sys->numSyscalls);
 #endif
 
     if (_countSyscalls && sys->syscall_counter) {
         // Log the plugin thread specific counts
         char* str = counter_alloc_string(sys->syscall_counter);
-        message("Thread %d (%s) syscall counts: %s", thread_getID(sys->thread),
-                process_getPluginName(sys->process), str);
+        info("Thread %d (%s) syscall counts: %s", thread_getID(sys->thread),
+             process_getPluginName(sys->process), str);
         counter_free_string(sys->syscall_counter, str);
 
         // Add up the counts at the worker level
@@ -162,7 +162,7 @@ void syscallhandler_unref(SysCallHandler* sys) {
 
 static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
                                         const char* name) {
-    debug("SYSCALL_HANDLER_PRE(%s,pid=%u): handling syscall %ld %s%s",
+    trace("SYSCALL_HANDLER_PRE(%s,pid=%u): handling syscall %ld %s%s",
           process_getPluginName(sys->process),
           thread_getID(sys->thread), number, name,
           _syscallhandler_wasBlocked(sys) ? " (previously BLOCKed)" : "");
@@ -187,7 +187,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
     sys->perfSecondsCurrent += g_timer_elapsed(sys->perfTimer, NULL);
 #endif
 
-    debug("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
+    trace("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
           "code=%d(%s)",
           process_getPluginName(sys->process), thread_getID(sys->thread), number, name,
           _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "",
@@ -223,7 +223,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         break
 #define NATIVE(s)                                                              \
     case SYS_##s:                                                              \
-        debug("native syscall %ld " #s, args->number);                         \
+        trace("native syscall %ld " #s, args->number);                         \
         scr = (SysCallReturn){.state = SYSCALL_NATIVE};                        \
         break
 
@@ -256,9 +256,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
      * or if we blocked a syscall, then that same syscall
      * should be executed again when it becomes unblocked. */
     if (sys->blockedSyscallNR >= 0 && sys->blockedSyscallNR != args->number) {
-        error("We blocked syscall number %ld but syscall number %ld "
-              "is unexpectedly being invoked",
-              sys->blockedSyscallNR, args->number);
+        utility_panic("We blocked syscall number %ld but syscall number %ld "
+                      "is unexpectedly being invoked",
+                      sys->blockedSyscallNR, args->number);
     }
 
     switch (args->number) {
@@ -485,9 +485,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                 "Detected unsupported syscall %ld called from thread %i in process %s on host %s",
                 args->number, thread_getID(sys->thread), process_getName(sys->process),
                 host_getName(sys->host));
-            critical("Returning error %i (ENOSYS) for unsupported syscall %li, which may result in "
-                     "unusual behavior",
-                     ENOSYS, args->number);
+            error("Returning error %i (ENOSYS) for unsupported syscall %li, which may result in "
+                  "unusual behavior",
+                  ENOSYS, args->number);
             scr = (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
             break;
     }

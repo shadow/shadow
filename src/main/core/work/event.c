@@ -73,7 +73,7 @@ void event_execute(Event* event) {
 
     if(cpu_isBlocked(cpu)) {
         SimulationTime cpuDelay = cpu_getDelay(cpu);
-        debug("event blocked on CPU, rescheduled for %"G_GUINT64_FORMAT" nanoseconds from now", cpuDelay);
+        trace("event blocked on CPU, rescheduled for %"G_GUINT64_FORMAT" nanoseconds from now", cpuDelay);
 
         /* track the event delay time */
         tracker_addVirtualProcessingDelay(host_getTracker(event->dstHost), cpuDelay);

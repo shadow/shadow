@@ -8,6 +8,7 @@
 #include <execinfo.h>
 #include <glib/gstdio.h>
 #include <netinet/in.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -84,13 +85,16 @@ guint utility_getRawCPUFrequency(const gchar* freqFilename) {
     return rawFrequencyKHz;
 }
 
-static GString* _utility_formatError(const gchar* file, gint line, const gchar* function, const gchar* message) {
+static GString* _utility_formatError(const gchar* file, gint line, const gchar* function,
+                                     const gchar* message, va_list vargs) {
     GString* errorString = g_string_new("**ERROR ENCOUNTERED**\n");
     g_string_append_printf(errorString, "\tAt process: %i (parent %i)\n", (gint) getpid(), (gint) getppid());
     g_string_append_printf(errorString, "\tAt file: %s\n", file);
     g_string_append_printf(errorString, "\tAt line: %i\n", line);
     g_string_append_printf(errorString, "\tAt function: %s\n", function);
-    g_string_append_printf(errorString, "\tMessage: %s\n", message);
+    g_string_append_printf(errorString, "\tMessage: ");
+    g_string_append_vprintf(errorString, message, vargs);
+    g_string_append_printf(errorString, "\n");
     return errorString;
 }
 
@@ -114,8 +118,14 @@ static GString* _utility_formatBacktrace() {
     return backtraceString;
 }
 
-void utility_handleError(const gchar* file, gint line, const gchar* function, const gchar* message) {
-    GString* errorString = _utility_formatError(file, line, function, message);
+void utility_handleError(const gchar* file, gint line, const gchar* function, const gchar* message,
+                         ...) {
+    logger_flush(logger_getDefault());
+
+    va_list vargs;
+    va_start(vargs, message);
+    GString* errorString = _utility_formatError(file, line, function, message, vargs);
+    va_end(vargs);
     GString* backtraceString = _utility_formatBacktrace();
     if(!isatty(fileno(stdout))) {
         g_print("%s%s**ABORTING**\n", errorString->str, backtraceString->str);
@@ -174,7 +184,7 @@ gboolean utility_removeAll(const gchar* path) {
         warning("unable to remove path '%s': error %i: %s", path, errno, strerror(errno));
         isSuccess = FALSE;
     } else {
-        info("removed path '%s' from filesystem", path);
+        debug("removed path '%s' from filesystem", path);
         isSuccess = TRUE;
     }
 
@@ -246,7 +256,7 @@ gboolean utility_copyAll(const gchar* srcPath, const gchar* dstPath) {
         if(isSuccess && !err) {
             isSuccess = g_file_set_contents(dstPath, srcContents, (gssize)srcLength, &err);
             if(isSuccess & !err) {
-                info("copied path '%s' to '%s'", srcPath, dstPath);
+                debug("copied path '%s' to '%s'", srcPath, dstPath);
             }
         }
 
@@ -277,9 +287,9 @@ GString* utility_getFileContents(const gchar* fileName) {
     GError *error = NULL;
 
     /* get the xml file */
-    debug("attempting to get contents of file '%s'", fileName);
+    trace("attempting to get contents of file '%s'", fileName);
     gboolean success = g_file_get_contents(fileName, &content, &length, &error);
-    debug("finished getting contents of file '%s'", fileName);
+    trace("finished getting contents of file '%s'", fileName);
 
     /* check for success */
     if (!success) {
@@ -300,7 +310,7 @@ gchar* utility_getNewTemporaryFilename(const gchar* templateStr) {
 
     gint openedFile = g_file_open_tmp(templateStr, &temporaryFilename, &error);
     if(openedFile < 0) {
-        error("unable to open temporary file for cdata topology: %s", error->message);
+        utility_panic("unable to open temporary file for cdata topology: %s", error->message);
         return NULL;
     }
 
@@ -317,15 +327,15 @@ gboolean utility_copyFile(const gchar* fromPath, const gchar* toPath) {
 
     /* get the original file */
     if(!g_file_get_contents(fromPath, &contents, &length, &error)) {
-        error("unable to read '%s' for copying: %s", fromPath, error->message);
+        utility_panic("unable to read '%s' for copying: %s", fromPath, error->message);
         return FALSE;
     }
     error = NULL;
 
     /* copy to the new file */
     if(!g_file_set_contents(toPath, contents, (gssize)length, &error)) {
-        error("unable to write private copy of '%s' to '%s': %s",
-                fromPath, toPath, error->message);
+        utility_panic(
+            "unable to write private copy of '%s' to '%s': %s", fromPath, toPath, error->message);
         return FALSE;
     }
 

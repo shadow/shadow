@@ -139,7 +139,7 @@ static void _routerqueuecodel_drop(Packet* packet) {
     packet_addDeliveryStatus(packet, PDS_ROUTER_DROPPED);
 #ifdef DEBUG
     gchar* pString = packet_toString(packet);
-    debug("Router dropped packet %s", pString);
+    trace("Router dropped packet %s", pString);
     g_free(pString);
 #endif
     packet_unref(packet);

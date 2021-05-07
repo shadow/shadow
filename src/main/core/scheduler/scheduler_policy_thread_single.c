@@ -92,8 +92,9 @@ static void _schedulerpolicythreadsingle_push(SchedulerPolicy* policy, Event* ev
 
     if(!pthread_equal(srcThread, dstThread) && eventTime < barrier) {
         event_setTime(event, barrier);
-        info("Inter-host event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" "
-                "to ensure event causality", eventTime, barrier);
+        debug("Inter-host event time %" G_GUINT64_FORMAT " changed to %" G_GUINT64_FORMAT " "
+              "to ensure event causality",
+              eventTime, barrier);
     }
 
     /* get the queue for the destination */

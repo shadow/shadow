@@ -193,7 +193,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
             // to do the memory write, and just skip if there are no more
             // living threads in the process. Probably better to avoid that
             // complexity if we can, though.
-            error("Couldn't clear child tid; See code comments.");
+            utility_panic("Couldn't clear child tid; See code comments.");
             abort();
         }
 
@@ -214,7 +214,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
 }
 
 static void _process_handleProcessExit(Process* proc) {
-    debug("handleProcessExit");
+    trace("handleProcessExit");
     utility_assert(!process_isRunning(proc));
 
     GHashTableIter iter;
@@ -234,7 +234,7 @@ static void _process_handleProcessExit(Process* proc) {
 }
 
 static void _process_terminate_threads(Process* proc) {
-    debug("Terminating threads");
+    trace("Terminating threads");
     if (process_isRunning(proc)) {
         if (kill(proc->nativePid, SIGKILL)) {
             warning("kill(pid=%d) error %d: %s", proc->nativePid, errno, g_strerror(errno));
@@ -299,7 +299,7 @@ static void _process_getAndLogReturnCode(Process* proc) {
         // TODO: once we've implemented clean shutdown via SIGTERM,
         //       treat death by SIGKILL as a plugin error
         if (proc->returnCode == 0 || proc->returnCode == return_code_for_signal(SIGKILL)) {
-            message("%s", mainResultString->str);
+            info("%s", mainResultString->str);
         } else {
             warning("%s", mainResultString->str);
             worker_incrementPluginError();
@@ -345,7 +345,7 @@ static void _process_check(Process* proc) {
         return;
     }
 
-    message("process '%s' has completed or is otherwise no longer running", process_getName(proc));
+    info("process '%s' has completed or is otherwise no longer running", process_getName(proc));
     _process_getAndLogReturnCode(proc);
 #ifdef USE_PERF_TIMERS
     message(
@@ -355,13 +355,13 @@ static void _process_check(Process* proc) {
 
 static void _process_check_thread(Process* proc, Thread* thread) {
     if (thread_isRunning(thread)) {
-        info("thread %d in process '%s' still running, but blocked", thread_getID(thread),
-             process_getName(proc));
+        debug("thread %d in process '%s' still running, but blocked", thread_getID(thread),
+              process_getName(proc));
         return;
     }
     int returnCode = thread_getReturnCode(thread);
-    info("thread %d in process '%s' exited with code %d", thread_getID(thread),
-         process_getName(proc), returnCode);
+    debug("thread %d in process '%s' exited with code %d", thread_getID(thread),
+          process_getName(proc), returnCode);
     _process_reapThread(proc, thread);
     g_hash_table_remove(proc->threads, GUINT_TO_POINTER(thread_getID(thread)));
     _process_check(proc);
@@ -383,7 +383,8 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
 
     char* cwd = getcwd(NULL, 0);
     if (!cwd) {
-        error("getcwd unable to allocate string buffer, error %i: %s", errno, strerror(errno));
+        utility_panic(
+            "getcwd unable to allocate string buffer, error %i: %s", errno, strerror(errno));
     }
 
     int errcode = file_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
@@ -391,10 +392,10 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
     free(cwd);
 
     if (errcode < 0) {
-        error("Opening %s: %s", fileName, strerror(-errcode));
+        utility_panic("Opening %s: %s", fileName, strerror(-errcode));
     }
 
-    debug("Successfully opened fd %d at %s", fd, fileName);
+    trace("Successfully opened fd %d at %s", fd, fileName);
 
     return stdfile;
 }
@@ -435,12 +436,12 @@ static void _process_start(Process* proc) {
     }
 
     if (mainThread == NULL) {
-        error("Bad interposeMethod %d", proc->interposeMethod);
+        utility_panic("Bad interposeMethod %d", proc->interposeMethod);
     }
 
     g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
 
-    message("starting process '%s'", process_getName(proc));
+    info("starting process '%s'", process_getName(proc));
 
     /* now we will execute in the pth/plugin context, so we need to load the state */
     worker_setActiveProcess(proc);
@@ -463,7 +464,7 @@ static void _process_start(Process* proc) {
     message(
         "process '%s' started in %f seconds", process_getName(proc), elapsed);
 #else
-    message("process '%s' started", process_getName(proc));
+    info("process '%s' started", process_getName(proc));
 #endif
 
     worker_setActiveProcess(NULL);
@@ -504,21 +505,21 @@ void process_addThread(Process* proc, Thread* thread) {
 
 void process_markAsExiting(Process* proc) {
     MAGIC_ASSERT(proc);
-    debug("Process %d marked as exiting", proc->processID);
+    trace("Process %d marked as exiting", proc->processID);
     proc->isExiting = true;
 }
 
 void process_continue(Process* proc, Thread* thread) {
     MAGIC_ASSERT(proc);
-    debug("Continuing thread %d in process %d", thread_getID(thread), proc->processID);
+    trace("Continuing thread %d in process %d", thread_getID(thread), proc->processID);
 
     /* if we are not running, no need to notify anyone */
     if(!process_isRunning(proc)) {
         return;
     }
 
-    info("switching to thread controller to continue executing process '%s'",
-         process_getName(proc));
+    debug(
+        "switching to thread controller to continue executing process '%s'", process_getName(proc));
 
     worker_setActiveProcess(proc);
     worker_setActiveThread(thread);
@@ -537,7 +538,7 @@ void process_continue(Process* proc, Thread* thread) {
     _process_handleTimerResult(proc, elapsed);
     info("process '%s' ran for %f seconds", process_getName(proc), elapsed);
 #else
-    info("process '%s' done continuing", process_getName(proc));
+    debug("process '%s' done continuing", process_getName(proc));
 #endif
 
     if (proc->isExiting) {
@@ -555,7 +556,7 @@ void process_continue(Process* proc, Thread* thread) {
 void process_stop(Process* proc) {
     MAGIC_ASSERT(proc);
 
-    message("terminating process '%s'", process_getName(proc));
+    info("terminating process '%s'", process_getName(proc));
 
     worker_setActiveProcess(proc);
 
@@ -573,7 +574,7 @@ void process_stop(Process* proc) {
     _process_handleTimerResult(proc, elapsed);
 #endif
 
-    debug("Starting descriptor table shutdown hack");
+    trace("Starting descriptor table shutdown hack");
     descriptortable_shutdownHelper(proc->descTable);
 
     worker_setActiveProcess(NULL);
@@ -582,7 +583,7 @@ void process_stop(Process* proc) {
     message(
         "process '%s' stopped in %f seconds", process_getName(proc), elapsed);
 #else
-    message("process '%s' stopped", process_getName(proc));
+    info("process '%s' stopped", process_getName(proc));
 #endif
 
     _process_check(proc);
@@ -679,8 +680,9 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
     proc->workingDir = realpath(host_getDataPath(host), NULL);
 
     if (proc->workingDir == NULL) {
-        error("Could not allocate memory for the process' working directory, or directory did not "
-              "exist");
+        utility_panic(
+            "Could not allocate memory for the process' working directory, or directory did not "
+            "exist");
     }
 
     /* add log file to env */

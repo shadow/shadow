@@ -145,7 +145,7 @@ pub struct GeneralOptions {
     bootstrap_end_time: Option<units::Time<units::TimePrefixUpper>>,
 
     /// Log level of output written on stdout. If Shadow was built in release mode, then log
-    /// messages at a level lower than 'info' will always be dropped
+    /// messages at level 'trace' will always be dropped
     #[clap(long, short = 'l', value_name = "level")]
     #[clap(about = GENERAL_HELP.get("log_level").unwrap())]
     #[serde(default = "default_some_message")]
@@ -420,7 +420,7 @@ impl Default for HostDefaultOptions {
     fn default() -> Self {
         Self {
             log_level: None,
-            heartbeat_log_level: Some(LogLevel::Message),
+            heartbeat_log_level: Some(LogLevel::Info),
             heartbeat_log_info: Some(std::array::IntoIter::new([LogInfoFlag::Node]).collect()),
             heartbeat_interval: Some(units::Time::new(1, units::TimePrefixUpper::Sec)),
             pcap_directory: None,
@@ -478,9 +478,7 @@ pub struct HostOptions {
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Error,
-    Critical,
     Warning,
-    Message,
     Info,
     Debug,
     Trace,
@@ -498,9 +496,7 @@ impl LogLevel {
     pub fn to_c_loglevel(&self) -> c::LogLevel {
         match self {
             Self::Error => c::_LogLevel_LOGLEVEL_ERROR,
-            Self::Critical => c::_LogLevel_LOGLEVEL_CRITICAL,
             Self::Warning => c::_LogLevel_LOGLEVEL_WARNING,
-            Self::Message => c::_LogLevel_LOGLEVEL_MESSAGE,
             Self::Info => c::_LogLevel_LOGLEVEL_INFO,
             Self::Debug => c::_LogLevel_LOGLEVEL_DEBUG,
             Self::Trace => c::_LogLevel_LOGLEVEL_TRACE,
@@ -671,9 +667,9 @@ fn default_some_time_1() -> Option<units::Time<units::TimePrefixUpper>> {
     Some(units::Time::new(1, units::TimePrefixUpper::Sec))
 }
 
-/// Helper function for serde default `Some(LogLevel::Message)` values.
+/// Helper function for serde default `Some(LogLevel::Info)` values.
 fn default_some_message() -> Option<LogLevel> {
-    Some(LogLevel::Message)
+    Some(LogLevel::Info)
 }
 
 const DEFAULT_TOPOLOGY: &str = r#"<?xml version="1.0" encoding="utf-8"?>

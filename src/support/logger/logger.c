@@ -141,13 +141,7 @@ void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
     }
     va_end(vargs);
     if (level == LOGLEVEL_ERROR) {
-#ifdef DEBUG
-        // Dumps a core file (if the system is configured to do so), but may not
-        // clean up properly. e.g. `atexit` handlers won't be run.
-        abort();
-#else
-        exit(1);
-#endif
+        logger_flush(logger);
     }
 }
 

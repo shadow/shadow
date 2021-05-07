@@ -73,8 +73,8 @@ SysCallCondition* syscallcondition_new(Trigger trigger, Timer* timeout) {
             // No default, forcing a compiler warning if not kept up to date
         }
 
-        // Log error if we get a non-enumerator at run-time.
-        error("Unhandled enumerator %d", cond->trigger.type);
+        // Log panic if we get a non-enumerator at run-time.
+        utility_panic("Unhandled enumerator %d", cond->trigger.type);
     }
 
     return cond;
@@ -245,7 +245,7 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
                                (unsigned long)value.it_value.tv_nsec);
     }
 
-    debug("%s", string->str);
+    trace("%s", string->str);
 
     g_string_free(string, TRUE);
 }

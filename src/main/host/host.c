@@ -130,7 +130,8 @@ Host* host_new(HostParameters* params) {
     /* applications this node will run */
     host->processes = g_queue_new();
 
-    message("Created host id '%u' name '%s'", (guint)host->params.id, g_quark_to_string(host->params.id));
+    info("Created host id '%u' name '%s'", (guint)host->params.id,
+         g_quark_to_string(host->params.id));
 
     host->processIDCounter = 1000;
     host->referenceCount = 1;
@@ -198,15 +199,15 @@ void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, cons
     address_unref(loopbackAddress);
     address_unref(ethernetAddress);
 
-    message("Setup host id '%u' name '%s' with seed %u, ip %s, "
-                "%"G_GUINT64_FORMAT" bwUpKiBps, %"G_GUINT64_FORMAT" bwDownKiBps, "
-                "%"G_GUINT64_FORMAT" initSockSendBufSize, %"G_GUINT64_FORMAT" initSockRecvBufSize, "
-                "%"G_GUINT64_FORMAT" cpuFrequency, %"G_GUINT64_FORMAT" cpuThreshold, "
-                "%"G_GUINT64_FORMAT" cpuPrecision",
-                (guint)host->params.id, host->params.hostname, host->params.nodeSeed,
-                address_toHostIPString(host->defaultAddress),
-                bwUpKiBps, bwDownKiBps, host->params.sendBufSize, host->params.recvBufSize,
-                host->params.cpuFrequency, host->params.cpuThreshold, host->params.cpuPrecision);
+    info("Setup host id '%u' name '%s' with seed %u, ip %s, "
+         "%" G_GUINT64_FORMAT " bwUpKiBps, %" G_GUINT64_FORMAT " bwDownKiBps, "
+         "%" G_GUINT64_FORMAT " initSockSendBufSize, %" G_GUINT64_FORMAT " initSockRecvBufSize, "
+         "%" G_GUINT64_FORMAT " cpuFrequency, %" G_GUINT64_FORMAT " cpuThreshold, "
+         "%" G_GUINT64_FORMAT " cpuPrecision",
+         (guint)host->params.id, host->params.hostname, host->params.nodeSeed,
+         address_toHostIPString(host->defaultAddress), bwUpKiBps, bwDownKiBps,
+         host->params.sendBufSize, host->params.recvBufSize, host->params.cpuFrequency,
+         host->params.cpuThreshold, host->params.cpuPrecision);
 }
 
 static void _host_free(Host* host) {
@@ -225,7 +226,7 @@ void host_shutdown(Host* host) {
     g_timer_continue(host->executionTimer);
 #endif
 
-    info("shutting down host %s", host->params.hostname);
+    debug("shutting down host %s", host->params.hostname);
 
     if(host->processes) {
         g_queue_free(host->processes);
@@ -281,7 +282,7 @@ void host_shutdown(Host* host) {
     message("host '%s' has been shut down, total execution time was %f seconds",
             host->params.hostname, totalExecutionTime);
 #else
-    message("host '%s' has been shut down", host->params.hostname);
+    info("host '%s' has been shut down", host->params.hostname);
 #endif
 
     if(host->defaultAddress) address_unref(host->defaultAddress);
@@ -392,13 +393,13 @@ void host_addApplication(Host* host, SimulationTime startTime, SimulationTime st
 
 void host_freeAllApplications(Host* host) {
     MAGIC_ASSERT(host);
-    debug("start freeing applications for host '%s'", host->params.hostname);
+    trace("start freeing applications for host '%s'", host->params.hostname);
     while(!g_queue_is_empty(host->processes)) {
         Process* proc = g_queue_pop_head(host->processes);
         process_stop(proc);
         process_unref(proc);
     }
-    debug("done freeing application for host '%s'", host->params.hostname);
+    trace("done freeing application for host '%s'", host->params.hostname);
 }
 
 gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data) {

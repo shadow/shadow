@@ -219,16 +219,14 @@ static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
     interface->receiveBucket.bytesCapacity =
         (interface->receiveBucket.bytesRefill * capacityFactor) + CONFIG_MTU;
 
-    info("interface %s token buckets can send %" G_GUINT64_FORMAT " bytes "
-         "every %" G_GUINT64_FORMAT " nanoseconds",
-         address_toString(interface->address),
-         interface->sendBucket.bytesRefill,
-         _networkinterface_getRefillInterval());
-    info("interface %s token buckets can receive %" G_GUINT64_FORMAT " bytes "
-         "every %" G_GUINT64_FORMAT " nanoseconds",
-         address_toString(interface->address),
-         interface->receiveBucket.bytesRefill,
-         _networkinterface_getRefillInterval());
+    debug("interface %s token buckets can send %" G_GUINT64_FORMAT " bytes "
+          "every %" G_GUINT64_FORMAT " nanoseconds",
+          address_toString(interface->address), interface->sendBucket.bytesRefill,
+          _networkinterface_getRefillInterval());
+    debug("interface %s token buckets can receive %" G_GUINT64_FORMAT " bytes "
+          "every %" G_GUINT64_FORMAT " nanoseconds",
+          address_toString(interface->address), interface->receiveBucket.bytesRefill,
+          _networkinterface_getRefillInterval());
 }
 
 Address* networkinterface_getAddress(NetworkInterface* interface) {
@@ -327,7 +325,7 @@ void networkinterface_associate(NetworkInterface* interface, const CompatSocket*
     /* insert to our storage, key is now owned by table */
     g_hash_table_replace(interface->boundSockets, key, (void*)compatsocket_toTagged(&newSocketRef));
 
-    debug("associated socket key %s", key);
+    trace("associated socket key %s", key);
 }
 
 void networkinterface_disassociate(NetworkInterface* interface, const CompatSocket* socket) {
@@ -338,7 +336,7 @@ void networkinterface_disassociate(NetworkInterface* interface, const CompatSock
     /* we will no longer receive packets for this port, this unrefs descriptor */
     g_hash_table_remove(interface->boundSockets, key);
 
-    debug("disassociated socket key %s", key);
+    trace("disassociated socket key %s", key);
     g_free(key);
 }
 
@@ -407,7 +405,7 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
 
     /* the first check is for servers who don't associate with specific destinations */
     gchar* key = _networkinterface_getAssociationKey(interface, ptype, bindPort, 0, 0);
-    debug("looking for socket associated with general key %s", key);
+    trace("looking for socket associated with general key %s", key);
 
     CompatSocket socket = _boundsockets_lookup(interface->boundSockets, key);
     g_free(key);
@@ -418,7 +416,7 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
         in_port_t peerPort = packet_getSourcePort(packet);
 
         key = _networkinterface_getAssociationKey(interface, ptype, bindPort, peerIP, peerPort);
-        debug("looking for socket associated with specific key %s", key);
+        trace("looking for socket associated with specific key %s", key);
         socket = _boundsockets_lookup(interface->boundSockets, key);
         g_free(key);
     }
@@ -704,9 +702,10 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
     /* set size and refill rates for token buckets */
     _networkinterface_setupTokenBuckets(interface, bwDownKiBps, bwUpKiBps);
 
-    info("bringing up network interface '%s' at '%s', %"G_GUINT64_FORMAT" KiB/s up and %"G_GUINT64_FORMAT" KiB/s down using queuing discipline %s",
-            address_toHostName(interface->address), address_toHostIPString(interface->address), bwUpKiBps, bwDownKiBps,
-            interface->qdisc == Q_DISC_MODE_ROUND_ROBIN ? "rr" : "fifo");
+    debug("bringing up network interface '%s' at '%s', %" G_GUINT64_FORMAT
+          " KiB/s up and %" G_GUINT64_FORMAT " KiB/s down using queuing discipline %s",
+          address_toHostName(interface->address), address_toHostIPString(interface->address),
+          bwUpKiBps, bwDownKiBps, interface->qdisc == Q_DISC_MODE_ROUND_ROBIN ? "rr" : "fifo");
 
     worker_count_allocation(NetworkInterface);
     return interface;

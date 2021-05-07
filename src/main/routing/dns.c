@@ -70,7 +70,7 @@ static gboolean _dns_isIPInRange(const in_addr_t netIP, const gchar* cidrStr) {
         gchar* ipStr = address_ipToNewString(netIP);
         gchar* subnetIPStr = address_ipToNewString(subnetIP);
         gchar* netmaskStr = address_ipToNewString(netmask);
-        debug("ip '%s' is in range '%s' using subnet '%s' and mask '%s'",
+        trace("ip '%s' is in range '%s' using subnet '%s' and mask '%s'",
                 ipStr, cidrStr, subnetIPStr, netmaskStr);
         g_free(ipStr);
         g_free(subnetIPStr);
@@ -184,7 +184,7 @@ Address* dns_resolveIPToAddress(DNS* dns, in_addr_t ip) {
     Address* result = g_hash_table_lookup(dns->addressByIP, GUINT_TO_POINTER(ip));
     if(!result) {
         gchar* ipStr = address_ipToNewString(ip);
-        info("address for '%s' does not yet exist", ipStr);
+        debug("address for '%s' does not yet exist", ipStr);
         g_free(ipStr);
     }
     return result;
@@ -209,8 +209,8 @@ static void _dns_cleanupHostsFile(DNS* dns) {
 
     if(dns->hosts.path) {
         if (unlink(dns->hosts.path) < 0) {
-            info("unlink unable to remove hosts file at '%s', error %i: %s",
-                 dns->hosts.path, errno, strerror(errno));
+            debug("unlink unable to remove hosts file at '%s', error %i: %s", dns->hosts.path,
+                  errno, strerror(errno));
         }
         free(dns->hosts.path);
         dns->hosts.path = NULL;
@@ -220,7 +220,7 @@ static void _dns_cleanupHostsFile(DNS* dns) {
 static char* _dns_getHostsPath(DNS* dns) {
     char* abspath = NULL;
     if (asprintf(&abspath, "/tmp/shadow-%i-hosts-XXXXXX", (int)getpid()) < 0) {
-        error("asprintf could not allocate string for hosts file");
+        utility_panic("asprintf could not allocate string for hosts file");
         abort();
     }
     return abspath;
@@ -247,7 +247,7 @@ static bool _dns_writeNewHostsFile(DNS* dns) {
     GString* buf = g_string_new("127.0.0.1 localhost\n");
     g_hash_table_foreach(dns->addressByName, _dns_writeHostLine, buf);
 
-    debug("Hosts file string buffer is %zu bytes.", buf->len);
+    trace("Hosts file string buffer is %zu bytes.", buf->len);
 
     size_t amt = 0;
     while(amt < buf->len) {
@@ -261,7 +261,7 @@ static bool _dns_writeNewHostsFile(DNS* dns) {
         }
     }
 
-    message("Wrote new hosts file of size %zu bytes at path '%s'", amt, dns->hosts.path);
+    info("Wrote new hosts file of size %zu bytes at path '%s'", amt, dns->hosts.path);
     dns->hosts.isStale = false;
     g_string_free(buf, TRUE);
     return true;

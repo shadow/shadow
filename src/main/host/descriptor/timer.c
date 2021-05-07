@@ -49,7 +49,7 @@ static Timer* _timer_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
 static gboolean _timer_close(LegacyDescriptor* descriptor) {
     Timer* timer = _timer_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(timer);
-    debug("timer fd %i closing now", timer->super.handle);
+    trace("timer fd %i closing now", timer->super.handle);
     timer->isClosed = TRUE;
     descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_ACTIVE, FALSE);
     if (timer->super.handle > 0) {
@@ -136,7 +136,7 @@ static void _timer_disarm(Timer* timer) {
     timer->nextExpireTime = 0;
     timer->expireInterval = 0;
     timer->minValidExpireID = timer->nextExpireID;
-    debug("timer fd %i disarmed", timer->super.handle);
+    trace("timer fd %i disarmed", timer->super.handle);
 }
 
 static SimulationTime _timer_timespecToSimTime(const struct timespec* config, gboolean configTimeIsEmulatedTime) {
@@ -216,7 +216,7 @@ static void _timer_scheduleNewExpireEvent(Timer* timer) {
      * or disarmed the timer in the meantime. This prevents queueing the task indefinitely. */
     delay = MIN(delay, SIMTIME_ONE_SECOND);
 
-    debug("Scheduling timer expiration task for %"G_GUINT64_FORMAT" nanoseconds", delay);
+    trace("Scheduling timer expiration task for %"G_GUINT64_FORMAT" nanoseconds", delay);
     worker_scheduleTask(task, delay);
     task_unref(task);
 
@@ -230,7 +230,7 @@ static void _timer_expire(Timer* timer, gpointer data) {
     /* this is a task callback event */
 
     guint expireID = GPOINTER_TO_UINT(data);
-    debug("timer fd %i expire check; isClosed=%i expireID=%u minValidExpireID=%u",
+    trace("timer fd %i expire check; isClosed=%i expireID=%u minValidExpireID=%u",
           timer->super.handle, timer->isClosed, expireID,
           timer->minValidExpireID);
 
@@ -280,7 +280,7 @@ static void _timer_arm(Timer* timer, const struct itimerspec *config, gint flags
     SimulationTime now = worker_getCurrentTime();
     if(timer->nextExpireTime >= now) {
         _timer_scheduleNewExpireEvent(timer);
-        debug("timer fd %i armed to expire in %"G_GUINT64_FORMAT" nanos",
+        trace("timer fd %i armed to expire in %"G_GUINT64_FORMAT" nanos",
                 timer->super.handle, timer->nextExpireTime - now);
     }
 }
@@ -308,7 +308,7 @@ gint timer_setTime(Timer* timer, gint flags,
         return -EINVAL;
     }
 
-    debug("Setting timer value to "
+    trace("Setting timer value to "
           "%" G_GUINT64_FORMAT ".%09" G_GUINT64_FORMAT " seconds "
           "and timer interval to "
           "%" G_GUINT64_FORMAT ".%09" G_GUINT64_FORMAT " seconds "
@@ -351,7 +351,7 @@ ssize_t timer_read(Timer* timer, void *buf, size_t count) {
             return (ssize_t)-EINVAL;
         }
 
-        debug("Reading %" G_GUINT64_FORMAT " expirations from timer fd %d",
+        trace("Reading %" G_GUINT64_FORMAT " expirations from timer fd %d",
               timer->expireCountSinceLastSet, timer->super.handle);
 
         memcpy(buf, &(timer->expireCountSinceLastSet), sizeof(guint64));

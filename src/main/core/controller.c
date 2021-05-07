@@ -100,7 +100,7 @@ Controller* controller_new(ConfigOptions* config) {
     //  g_unix_signal_add(SIGHUP, (GSourceFunc)_controller_handleInterruptSignal, controller);
     //  g_unix_signal_add(SIGINT, (GSourceFunc)_controller_handleInterruptSignal, controller);
 
-    message("simulation controller created");
+    info("simulation controller created");
     return controller;
 }
 
@@ -120,7 +120,7 @@ void controller_free(Controller* controller) {
     MAGIC_CLEAR(controller);
     g_free(controller);
 
-    message("simulation controller destroyed");
+    info("simulation controller destroyed");
 }
 
 static SimulationTime _controller_getMinTimeJump(Controller* controller) {
@@ -145,11 +145,11 @@ void controller_updateMinTimeJump(Controller* controller, gdouble minPathLatency
         utility_assert(minPathLatency > 0.0f);
         SimulationTime oldJumpMS = controller->nextMinJumpTime;
         controller->nextMinJumpTime = ((SimulationTime)minPathLatency) * SIMTIME_ONE_MILLISECOND;
-        info("updated topology minimum time jump from %" G_GUINT64_FORMAT " to %" G_GUINT64_FORMAT
-             " nanoseconds; "
-             "the minimum config override is %s (%" G_GUINT64_FORMAT " nanoseconds)",
-             oldJumpMS, controller->nextMinJumpTime,
-             controller->minJumpTimeConfig > 0 ? "set" : "not set", controller->minJumpTimeConfig);
+        debug("updated topology minimum time jump from %" G_GUINT64_FORMAT " to %" G_GUINT64_FORMAT
+              " nanoseconds; "
+              "the minimum config override is %s (%" G_GUINT64_FORMAT " nanoseconds)",
+              oldJumpMS, controller->nextMinJumpTime,
+              controller->minJumpTimeConfig > 0 ? "set" : "not set", controller->minJumpTimeConfig);
     }
 }
 
@@ -164,7 +164,8 @@ static gboolean _controller_loadTopology(Controller* controller) {
     /* write the topology to a temporary file */
     GError* error = NULL;
     if (!g_file_set_contents(temporaryFilename, topologyString, strlen(topologyString), &error)) {
-        error("unable to write the topology to '%s': %s", temporaryFilename, error->message);
+        utility_panic(
+            "unable to write the topology to '%s': %s", temporaryFilename, error->message);
     }
 
     config_freeString(topologyString);
@@ -174,8 +175,8 @@ static gboolean _controller_loadTopology(Controller* controller) {
     g_unlink(temporaryFilename);
 
     if (!controller->topology) {
-        critical("fatal error loading topology at path '%s', check your syntax and try again",
-                 temporaryFilename);
+        error("fatal error loading topology at path '%s', check your syntax and try again",
+              temporaryFilename);
         g_free(temporaryFilename);
         return FALSE;
     }
@@ -229,7 +230,7 @@ static void _controller_registerProcessCallback(const ProcessOptions* proc, void
 
     char* plugin = processoptions_getPath(proc);
     if (plugin == NULL) {
-        error("The process binary could not be found");
+        utility_panic("The process binary could not be found");
     }
 
     // build an argv array
@@ -340,7 +341,7 @@ static void _controller_registerHosts(Controller* controller) {
 gint controller_run(Controller* controller) {
     MAGIC_ASSERT(controller);
 
-    message("loading and initializing simulation data");
+    info("loading and initializing simulation data");
 
     gboolean isSuccess = _controller_loadTopology(controller);
     if (!isSuccess) {
@@ -357,20 +358,20 @@ gint controller_run(Controller* controller) {
                                       controller->bootstrapEndTime, managerSeed);
 
     if (controller->manager == NULL) {
-        error("unable to create manager");
+        utility_panic("unable to create manager");
     }
 
-    message("registering plugins and hosts");
+    info("registering plugins and hosts");
 
     /* register the components needed by each manager.
      * this must be done after managers are available so we can send them messages */
     _controller_registerHosts(controller);
 
-    message("running simulation");
+    info("running simulation");
 
-    /* dont buffer log messages in debug mode */
-    if (config_getLogLevel(controller->config) != LOGLEVEL_DEBUG) {
-        message("log message buffering is enabled for efficiency");
+    /* dont buffer log messages in trace mode */
+    if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
+        info("log message buffering is enabled for efficiency");
         shadow_logger_setEnableBuffering(shadow_logger_getDefault(), TRUE);
     }
 
@@ -379,12 +380,12 @@ gint controller_run(Controller* controller) {
 
     /* only need to disable buffering if it was enabled, otherwise
      * don't log the message as it may confuse the user. */
-    if (config_getLogLevel(controller->config) != LOGLEVEL_DEBUG) {
-        message("log message buffering is disabled during cleanup");
+    if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
+        info("log message buffering is disabled during cleanup");
         shadow_logger_setEnableBuffering(shadow_logger_getDefault(), FALSE);
     }
 
-    message("simulation finished, cleaning up now");
+    info("simulation finished, cleaning up now");
 
     return manager_free(controller->manager);
 }

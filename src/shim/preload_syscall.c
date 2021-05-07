@@ -64,7 +64,7 @@ __attribute__((used)) static SysCallReg _shadow_syscall_event(const ShimEvent* s
 
     ShMemBlock ipc_blk = shim_thisThreadEventIPCBlk();
 
-    debug("sending syscall %ld event on %p", syscall_event->event_data.syscall.syscall_args.number,
+    trace("sending syscall %ld event on %p", syscall_event->event_data.syscall.syscall_args.number,
           ipc_blk.p);
 
     shimevent_sendEventToShadow(ipc_blk.p, syscall_event);
@@ -74,10 +74,10 @@ __attribute__((used)) static SysCallReg _shadow_syscall_event(const ShimEvent* s
     // rather than letting the OS block this thread.
     bool spin = true;
     while (true) {
-        debug("waiting for event on %p", ipc_blk.p);
+        trace("waiting for event on %p", ipc_blk.p);
         ShimEvent res = {0};
         shimevent_recvEventFromShadow(ipc_blk.p, &res, spin);
-        debug("got response of type %d on %p", res.event_id, ipc_blk.p);
+        trace("got response of type %d on %p", res.event_id, ipc_blk.p);
         // Reset spin-flag to true. (May have been set to false by a SHD_SHIM_EVENT_BLOCK in the
         // previous iteration)
         spin = true;
@@ -136,7 +136,7 @@ __attribute__((used)) static SysCallReg _shadow_syscall_event(const ShimEvent* s
                 shim_shmemNotifyComplete(ipc_blk.p);
                 break;
             default: {
-                error("Got unexpected event %d", res.event_id);
+                panic("Got unexpected event %d", res.event_id);
                 abort();
             }
         }
@@ -202,17 +202,17 @@ long syscall(long n, ...) {
 
     if (shim_use_syscall_handler() && shim_syscall(n, &rv, args)) {
         // No inter-process syscall needed, we handled it on the shim side! :)
-        debug("Handled syscall %ld from the shim; we avoided inter-process overhead.", n);
+        trace("Handled syscall %ld from the shim; we avoided inter-process overhead.", n);
         // rv was already set
     } else if (shim_interpositionEnabled()) {
         // The syscall is made using the shmem IPC channel.
-        debug("Making syscall %ld indirectly; we ask shadow to handle it using the shmem IPC "
+        trace("Making syscall %ld indirectly; we ask shadow to handle it using the shmem IPC "
               "channel.",
               n);
         rv = _vshadow_syscall(n, args);
     } else {
         // The syscall is made directly; ptrace will get the syscall signal.
-        debug("Making syscall %ld directly; we expect ptrace will interpose it, or it will be "
+        trace("Making syscall %ld directly; we expect ptrace will interpose it, or it will be "
               "handled natively by the kernel.",
               n);
         rv = _vreal_syscall(n, args);
