@@ -176,6 +176,11 @@ pub const QDiscMode_Q_DISC_MODE_ROUND_ROBIN: QDiscMode = 1;
 pub type QDiscMode = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct ConfigOptions {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct Counter {
     _unused: [u8; 0],
 }
@@ -212,6 +217,11 @@ pub type Host = _Host;
 #[doc = " Simulation time in nanoseconds. Allows for a consistent representation"]
 #[doc = " of time throughput the simulator."]
 pub type SimulationTime = guint64;
+#[doc = " Emulation time in nanoseconds. Allows for a consistent representation"]
+#[doc = " of time throughput the simulator. Emulation time is the simulation time"]
+#[doc = " plus the EMULATION_TIME_OFFSET. This type allows us to explicitly"]
+#[doc = " distinguish each type of time in the code.,"]
+pub type EmulatedTime = guint64;
 pub type LegacyDescriptor = [u64; 7usize];
 pub type DescriptorCloseFunc =
     ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor) -> gboolean>;
@@ -1669,11 +1679,116 @@ extern "C" {
 extern "C" {
     pub fn host_getNativeTID(host: *mut Host, virtualPID: pid_t, virtualTID: pid_t) -> pid_t;
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Task {
+    _unused: [u8; 0],
+}
+pub type Task = _Task;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Event {
+    _unused: [u8; 0],
+}
+pub type Event = _Event;
+extern "C" {
+    pub fn worker_runEvent(event: *mut Event);
+}
+extern "C" {
+    pub fn worker_finish(hosts: *mut GQueue);
+}
+extern "C" {
+    pub fn worker_setMinEventTimeNextRound(simtime: SimulationTime);
+}
+extern "C" {
+    pub fn worker_setRoundEndTime(newRoundEndTime: SimulationTime);
+}
+extern "C" {
+    pub fn worker_getAffinity() -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn worker_getDNS() -> *mut DNS;
+}
+extern "C" {
+    pub fn worker_getTopology() -> *mut Topology;
+}
+extern "C" {
+    pub fn worker_getConfig() -> *const ConfigOptions;
+}
+extern "C" {
+    pub fn worker_scheduleTask(task: *mut Task, nanoDelay: SimulationTime) -> gboolean;
+}
+extern "C" {
+    pub fn worker_sendPacket(packet: *mut Packet);
+}
+extern "C" {
+    pub fn worker_isAlive() -> gboolean;
+}
+extern "C" {
+    pub fn worker_getCurrentTime() -> SimulationTime;
+}
+extern "C" {
+    pub fn worker_getEmulatedTime() -> EmulatedTime;
+}
+extern "C" {
+    pub fn worker_isBootstrapActive() -> gboolean;
+}
+extern "C" {
+    pub fn worker_getNodeBandwidthUp(nodeID: GQuark, ip: in_addr_t) -> guint32;
+}
+extern "C" {
+    pub fn worker_getNodeBandwidthDown(nodeID: GQuark, ip: in_addr_t) -> guint32;
+}
+extern "C" {
+    pub fn worker_getLatency(sourceNodeID: GQuark, destinationNodeID: GQuark) -> gdouble;
+}
+extern "C" {
+    pub fn worker_getThreadID() -> gint;
+}
+extern "C" {
+    pub fn worker_updateMinTimeJump(minPathLatency: gdouble);
+}
+extern "C" {
+    pub fn worker_setCurrentTime(time: SimulationTime);
+}
+extern "C" {
+    pub fn worker_isFiltered(level: LogLevel) -> gboolean;
+}
+extern "C" {
+    pub fn worker_bootHosts(hosts: *mut GQueue);
+}
+extern "C" {
+    pub fn worker_freeHosts(hosts: *mut GQueue);
+}
+extern "C" {
+    pub fn worker_getActiveHost() -> *mut Host;
+}
+extern "C" {
+    pub fn worker_setActiveHost(host: *mut Host);
+}
 extern "C" {
     pub fn worker_getActiveProcess() -> *mut Process;
 }
 extern "C" {
+    pub fn worker_setActiveProcess(proc_: *mut Process);
+}
+extern "C" {
     pub fn worker_getActiveThread() -> *mut Thread;
+}
+extern "C" {
+    pub fn worker_setActiveThread(thread: *mut Thread);
+}
+extern "C" {
+    pub fn worker_incrementPluginError();
+}
+extern "C" {
+    pub fn worker_resolveIPToAddress(ip: in_addr_t) -> *mut Address;
+}
+extern "C" {
+    pub fn worker_resolveNameToAddress(name: *const gchar) -> *mut Address;
+}
+extern "C" {
+    pub fn worker_add_syscall_counts(syscall_counts: *mut Counter);
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
