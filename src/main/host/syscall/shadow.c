@@ -32,7 +32,12 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
-    const char* name = process_getReadablePtr(sys->process, name_ptr, name_len);
+    const char* name;
+    int rv = process_getReadableString(
+        sys->process, name_ptr, name_len + 1 /* NULL byte */, &name, &name_len);
+    if (rv != 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
+    }
 
     trace("Looking up name %s", name);
     Address* address = worker_resolveNameToAddress(name);
