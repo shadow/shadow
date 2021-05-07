@@ -193,7 +193,7 @@ static void _process_reapThread(Process* process, Thread* thread) {
             // to do the memory write, and just skip if there are no more
             // living threads in the process. Probably better to avoid that
             // complexity if we can, though.
-            error("Couldn't clear child tid; See code comments.");
+            utility_panic("Couldn't clear child tid; See code comments.");
             abort();
         }
 
@@ -383,7 +383,8 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
 
     char* cwd = getcwd(NULL, 0);
     if (!cwd) {
-        error("getcwd unable to allocate string buffer, error %i: %s", errno, strerror(errno));
+        utility_panic(
+            "getcwd unable to allocate string buffer, error %i: %s", errno, strerror(errno));
     }
 
     int errcode = file_open(stdfile, fileName, O_WRONLY | O_CREAT | O_TRUNC,
@@ -391,7 +392,7 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
     free(cwd);
 
     if (errcode < 0) {
-        error("Opening %s: %s", fileName, strerror(-errcode));
+        utility_panic("Opening %s: %s", fileName, strerror(-errcode));
     }
 
     trace("Successfully opened fd %d at %s", fd, fileName);
@@ -435,7 +436,7 @@ static void _process_start(Process* proc) {
     }
 
     if (mainThread == NULL) {
-        error("Bad interposeMethod %d", proc->interposeMethod);
+        utility_panic("Bad interposeMethod %d", proc->interposeMethod);
     }
 
     g_hash_table_insert(proc->threads, GUINT_TO_POINTER(tid), mainThread);
@@ -679,8 +680,9 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
     proc->workingDir = realpath(host_getDataPath(host), NULL);
 
     if (proc->workingDir == NULL) {
-        error("Could not allocate memory for the process' working directory, or directory did not "
-              "exist");
+        utility_panic(
+            "Could not allocate memory for the process' working directory, or directory did not "
+            "exist");
     }
 
     /* add log file to env */

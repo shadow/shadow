@@ -102,7 +102,7 @@ static bool _statuslistener_shouldNotify(StatusListener* listener, Status curren
     }
 
     // error if we didn't handle all possible filters
-    error("Unhandled enumerator %d", listener->filter);
+    utility_panic("Unhandled enumerator %d", listener->filter);
     return false;
 }
 

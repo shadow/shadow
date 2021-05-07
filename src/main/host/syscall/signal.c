@@ -41,7 +41,7 @@ static SysCallReturn _syscallhandler_killHelper(SysCallHandler* sys, pid_t pid, 
         case SYS_tgkill:
             result = thread_nativeSyscall(sys->thread, SYS_tgkill, pid, tid, sig);
             break;
-        default: error("Invalid syscall number %li given", syscallnum); break;
+        default: utility_panic("Invalid syscall number %li given", syscallnum); break;
     }
 
     int error = syscall_rawReturnValueToErrno(result);

@@ -232,7 +232,7 @@ static int _futex_wait(int* word) {
             if (res == -1 && errno != EAGAIN) {
                 char errbuf[32] = {0};
                 strerror_r(errno, errbuf, 32);
-                error("FUTEX_WAIT syscall failed: error %i: %s", errno, errbuf);
+                panic("FUTEX_WAIT syscall failed: error %i: %s", errno, errbuf);
                 return EXIT_FAILURE;
             }
         }
@@ -250,7 +250,7 @@ static int _futex_post(int* word) {
         if (res == -1) {
             char errbuf[32] = {0};
             strerror_r(errno, errbuf, 32);
-            error("FUTEX_WAKE syscall failed: error %i: %s", errno, errbuf);
+            panic("FUTEX_WAKE syscall failed: error %i: %s", errno, errbuf);
             return EXIT_FAILURE;
         }
     }

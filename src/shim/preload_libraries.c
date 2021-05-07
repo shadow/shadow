@@ -196,7 +196,7 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
 
     g_file_get_contents("/etc/hosts", &hosts, NULL, &error);
     if (error != NULL) {
-        error("Reading /etc/hosts: %s", error->message);
+        panic("Reading /etc/hosts: %s", error->message);
         goto out;
     }
     assert(hosts != NULL);
@@ -212,7 +212,7 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
                      escaped_node);
         g_free(escaped_node);
         if (rv < 0) {
-            error("asprintf failed: %d", rv);
+            panic("asprintf failed: %d", rv);
             goto out;
         }
     }
@@ -220,7 +220,7 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
 
     regex = g_regex_new(pattern, G_REGEX_MULTILINE, 0, &error);
     if (error != NULL) {
-        error("g_regex_new: %s", error->message);
+        panic("g_regex_new: %s", error->message);
         goto out;
     }
     assert(regex != NULL);
@@ -243,7 +243,7 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
         uint32_t addr;
         int rv = inet_pton(AF_INET, address_string, &addr);
         if (rv != 1) {
-            error("Bad address in /etc/hosts: %s\n", address_string);
+            panic("Bad address in /etc/hosts: %s\n", address_string);
         } else {
             _getaddrinfo_appendv4(
                 head, tail, add_tcp, add_udp, add_raw, addr, port);
@@ -557,7 +557,7 @@ int __fxstat(int ver, int a, struct stat* b) {
     // on x86_64 with a modern kernel, glibc should use the same stat struct as the kernel, so check
     // that this function was indeed called with the expected stat struct
     if (ver != 1 /* _STAT_VER_KERNEL for x86_64 */) {
-        error("__fxstat called with unexpected ver of %d", ver);
+        panic("__fxstat called with unexpected ver of %d", ver);
         errno = EINVAL;
         return -1;
     }
@@ -569,7 +569,7 @@ int __fxstat64(int ver, int a, struct stat64* b) {
     // on x86_64 with a modern kernel, glibc should use the same stat struct as the kernel, so check
     // that this function was indeed called with the expected stat struct
     if (ver != 1 /* _STAT_VER_KERNEL for x86_64 */) {
-        error("__fxstat64 called with unexpected ver of %d", ver);
+        panic("__fxstat64 called with unexpected ver of %d", ver);
         errno = EINVAL;
         return -1;
     }

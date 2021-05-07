@@ -96,8 +96,9 @@ static char* _file_createPersistentMMapPath(int file_fd, int osfile_fd) {
     int rv = asprintf(&path, "/proc/%d/fd/%d", getpid(), osfile_fd);
 
     if (rv < 0) {
-        error("asprintf could not allocate a buffer to hold a /proc file path, error %i: %s", errno,
-              strerror(errno));
+        utility_panic(
+            "asprintf could not allocate a buffer to hold a /proc file path, error %i: %s", errno,
+            strerror(errno));
         return NULL;
     }
 

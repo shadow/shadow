@@ -184,8 +184,7 @@ File* file_dup(File* file, int* dupError) {
 static char* _file_getConcatStr(const char* prefix, const char sep, const char* suffix) {
     char* path = NULL;
     if (asprintf(&path, "%s%c%s", prefix, sep, suffix) < 0) {
-        error("asprintf could not allocate a buffer, error %i: %s", errno,
-              strerror(errno));
+        utility_panic("asprintf could not allocate a buffer, error %i: %s", errno, strerror(errno));
         abort();
     }
     return path;
@@ -269,7 +268,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
 
     int fd = _file_getFD(file);
     if (fd < 0) {
-        error("Cannot openat() on an unregistered descriptor object with fd %d", fd);
+        utility_panic("Cannot openat() on an unregistered descriptor object with fd %d", fd);
     }
 
     /* The default case is a regular file. We do this first so that we have

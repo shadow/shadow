@@ -30,9 +30,9 @@ void _syscallhandler_setListenTimeout(SysCallHandler* sys,
     gint result = timer_setTime(sys->timer, 0, &value, NULL);
 
     if (result != 0) {
-        error("syscallhandler failed to set timeout to %lu.%09lu seconds",
-              (long unsigned int)value.it_value.tv_sec,
-              (long unsigned int)value.it_value.tv_nsec);
+        utility_panic("syscallhandler failed to set timeout to %lu.%09lu seconds",
+                      (long unsigned int)value.it_value.tv_sec,
+                      (long unsigned int)value.it_value.tv_nsec);
         utility_assert(result == 0);
     }
 }

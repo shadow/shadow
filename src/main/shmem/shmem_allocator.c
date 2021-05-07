@@ -131,8 +131,7 @@ ShMemAllocator* shmemallocator_getGlobal() {
         _global_allocator = shmemallocator_create();
 
         if (!_global_allocator) { // something bad happened, and we definitely can't continue
-            error("error allocating global shared memory allocator");
-            abort();
+            panic("error allocating global shared memory allocator");
         }
 
         // Destroy the allocator at exit, freeing the underlying shared memory storage.
@@ -151,8 +150,7 @@ ShMemSerializer* shmemserializer_getGlobal() {
         _global_serializer = shmemserializer_create();
 
         if (!_global_serializer) { // something bad happened, and we definitely can't continue
-            error("error allocating global shared memory serializer");
-            abort();
+            panic("error allocating global shared memory serializer");
         }
 
         // No need to arrange for the serializer to be destroyed at exit, since

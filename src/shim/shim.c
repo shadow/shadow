@@ -157,7 +157,7 @@ static void _verify_parent_pid_or_exit() {
         if (rc == 1) {
             valid_parse_pid = true;
         } else {
-            error("SHADOW_PID does not contain an unsigned: %s", shadow_pid_str);
+            panic("SHADOW_PID does not contain an unsigned: %s", shadow_pid_str);
         }
     }
 
@@ -165,7 +165,7 @@ static void _verify_parent_pid_or_exit() {
         if (getppid() == shadow_pid) { // Validate that Shadow is still alive.
             trace("Plugin verified Shadow is still running as parent.");
         } else {
-            error("Shadow exited.");
+            panic("Shadow exited.");
             exit(-1); // If Shadow's dead, we can just get out(?)
         }
     }
@@ -210,7 +210,7 @@ static void _shim_child_init_shm() {
         ShMemBlockSerialized shm_blk_serialized;
         int rv = shadow_get_shm_blk(&shm_blk_serialized);
         if (rv != 0) {
-            error("shadow_get_shm_blk: %s", strerror(errno));
+            panic("shadow_get_shm_blk: %s", strerror(errno));
             abort();
         }
 
@@ -244,7 +244,7 @@ static void _shim_child_init_ipc() {
         ShMemBlockSerialized ipc_blk_serialized;
         int rv = shadow_get_ipc_blk(&ipc_blk_serialized);
         if (rv != 0) {
-            error("shadow_get_ipc_blk: %s", strerror(errno));
+            panic("shadow_get_ipc_blk: %s", strerror(errno));
             abort();
         }
         _shim_ipc_blk = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);

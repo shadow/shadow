@@ -386,7 +386,7 @@ static void _getWatchObject(CompatDescriptor* descriptor, EpollWatchTypes* watch
             *watchType = EWT_POSIX_FILE;
             watchObject->as_file = file;
         } else {
-            error("unrecognized watch object");
+            utility_panic("unrecognized watch object");
         }
     }
 }
@@ -414,9 +414,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, CompatDescriptor* descr
         case EWT_POSIX_FILE:
             key.objectPtr = (uintptr_t)(void*)watchObject.as_file;
             break;
-        default:
-            error("unrecognized watch type");
-            return -ENOENT;
+        default: utility_panic("unrecognized watch type"); return -ENOENT;
     }
 
     EpollWatch* watch = g_hash_table_lookup(epoll->watching, &key);

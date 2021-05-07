@@ -49,7 +49,7 @@ void* forkproxy_fn(void* void_forkproxy) {
     while (1) {
         // Wait for a request.
         if (_sem_wait_ignoring_interrupts(&forkproxy->sem_begin) != 0) {
-            error("sem_wait: %s", g_strerror(errno));
+            utility_panic("sem_wait: %s", g_strerror(errno));
         }
 
         forkproxy->child_pid = forkproxy->do_fork_exec(
@@ -67,14 +67,14 @@ ForkProxy* forkproxy_new(pid_t (*do_fork_exec)(const char* file, char* const arg
         .do_fork_exec = do_fork_exec,
     };
     if (sem_init(&forkproxy->sem_begin, 0, 0) != 0) {
-        error("sem_init: %s", g_strerror(errno));
+        utility_panic("sem_init: %s", g_strerror(errno));
     }
     if (sem_init(&forkproxy->sem_done, 0, 0) != 0) {
-        error("sem_init: %s", g_strerror(errno));
+        utility_panic("sem_init: %s", g_strerror(errno));
     }
     int rv;
     if ((rv = pthread_create(&forkproxy->pthread, NULL, forkproxy_fn, forkproxy)) != 0) {
-        error("pthread_create: %s", g_strerror(rv));
+        utility_panic("pthread_create: %s", g_strerror(rv));
     }
     char name[20] = {0};
     snprintf(name, 20, "forker-%d", worker_getThreadID());
@@ -91,10 +91,10 @@ pid_t forkproxy_forkExec(ForkProxy* forkproxy, const char* file, char* const arg
     forkproxy->envp = envp;
     forkproxy->working_dir = working_dir;
     if (sem_post(&forkproxy->sem_begin) != 0) {
-        error("sem_post: %s", g_strerror(errno));
+        utility_panic("sem_post: %s", g_strerror(errno));
     }
     if (_sem_wait_ignoring_interrupts(&forkproxy->sem_done) != 0) {
-        error("sem_wait: %s", g_strerror(errno));
+        utility_panic("sem_wait: %s", g_strerror(errno));
     }
     return forkproxy->child_pid;
 }

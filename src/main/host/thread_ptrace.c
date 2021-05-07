@@ -332,7 +332,7 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char*
 
     switch (pid) {
         case -1: {
-            error("fork: %s", g_strerror(errno));
+            utility_panic("fork: %s", g_strerror(errno));
             abort(); // Unreachable
         }
         case 0: {
@@ -376,21 +376,21 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char*
     // do so without waiting on the pending ptrace-stop first.
     int wstatus;
     if (waitpid(pid, &wstatus, WAITPID_COMMON_OPTIONS) < 0) {
-        error("waitpid: %s", g_strerror(errno));
+        utility_panic("waitpid: %s", g_strerror(errno));
     }
     StopReason reason = _getStopReason(wstatus);
     if (reason.type != STOPREASON_SIGNAL) {
-        error("Unexpected stop reason: %d", reason.type);
+        utility_panic("Unexpected stop reason: %d", reason.type);
     }
     if (reason.signal.signal != SIGTRAP) {
-        error("Unexpected signal: %d", reason.signal.signal);
+        utility_panic("Unexpected signal: %d", reason.signal.signal);
     }
 
     if (_useONWaitpidWorkarounds) {
         // Stop and detach the child, allowing the shadow worker thread to
         // attach it when it's run.
         if (ptrace(PTRACE_DETACH, pid, 0, SIGSTOP) < 0) {
-            error("ptrace: %s", g_strerror(errno));
+            utility_panic("ptrace: %s", g_strerror(errno));
         }
     }
 
@@ -402,7 +402,7 @@ static void _threadptrace_enterStateTraceMe(ThreadPtrace* thread) {
     // PTRACE_O_TRACESYSGOOD: Handle syscall stops explicitly.
     // PTRACE_O_TRACEEXEC: Handle execve stops explicitly.
     if (ptrace(PTRACE_SETOPTIONS, thread->base.nativeTid, 0, THREADPTRACE_PTRACE_OPTIONS) < 0) {
-        error("ptrace: %s", strerror(errno));
+        utility_panic("ptrace: %s", strerror(errno));
         return;
     }
 }
@@ -418,7 +418,7 @@ static void _threadptrace_getregs(ThreadPtrace* thread) {
         return;
     }
     if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
-        error("ptrace: %s", g_strerror(errno));
+        utility_panic("ptrace: %s", g_strerror(errno));
     }
     if (thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL ||
         (thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL &&
@@ -467,7 +467,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
             thread->regs.dirty = true;
             return;
         }
-        // Do not use `error` here, since that'll cause us to immediately abort
+        // Do not use `panic` here, since that'll cause us to immediately abort
         // in debug builds. Better to let the SIGSEGV be delivered so that it
         // can generate a core file for debugging.
         warning("Unhandled SIGSEGV addr:%016lx contents:%x %x %x %x", eip, buf[0], buf[1], buf[2],
@@ -495,7 +495,7 @@ static void _threadptrace_enterStateExited(ThreadPtrace* thread) {
     if (!thread->needAttachment) {
         if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, 0) < 0) {
             // Getting here is a bug, but since the thread is exiting anyway
-            // not serious enough to merit `error`ing out.
+            // not serious enough to merit `panic`ing out.
             warning("PTRACE_DETACH: %s", g_strerror(errno));
         }
 
@@ -523,7 +523,7 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
         case STOPREASON_EXIT_EVENT: {
             unsigned long exit_code;
             if (ptrace(PTRACE_GETEVENTMSG, thread->base.nativeTid, NULL, &exit_code) < 0) {
-                error("ptrace: %s", g_strerror(errno));
+                utility_panic("ptrace: %s", g_strerror(errno));
             }
             thread->returnCode = exit_code;
             thread->childState = THREAD_PTRACE_CHILD_STATE_EXITED;
@@ -571,10 +571,10 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
             return;
         case STOPREASON_UNKNOWN:
         case STOPREASON_CONTINUED:
-            error("Unhandled stop reason. stop type: %d", reason.type);
+            utility_panic("Unhandled stop reason. stop type: %d", reason.type);
             return;
     }
-    error("Invalid stop reason. stop type: %d", reason.type);
+    utility_panic("Invalid stop reason. stop type: %d", reason.type);
     return;
 }
 
@@ -652,7 +652,7 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
         int wstatus;
         pid_t pid = waitpid(thread->base.nativeTid, &wstatus, WNOHANG|WAITPID_COMMON_OPTIONS);
         if (pid < 0) {
-            error("waitpid: %s", strerror(errno));
+            utility_panic("waitpid: %s", strerror(errno));
             abort();
         }
         if (pid != 0) {
@@ -736,7 +736,7 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv, const char* wor
         thread->base.nativeTid = _threadptrace_fork_exec(argv[0], argv, myenvv, workingDir);
         thread->needAttachment = false;
         if (ptrace(PTRACE_SETOPTIONS, thread->base.nativeTid, 0, THREADPTRACE_PTRACE_OPTIONS) < 0) {
-            error("ptrace: %s", strerror(errno));
+            utility_panic("ptrace: %s", strerror(errno));
         }
     }
 
@@ -808,19 +808,19 @@ static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallAr
 static void _threadptrace_doAttach(ThreadPtrace* thread) {
     trace("thread %i attaching to child %i", thread->base.tid, (int)thread->base.nativeTid);
     if (ptrace(PTRACE_ATTACH, thread->base.nativeTid, 0, 0) < 0) {
-        error("ptrace: %s", g_strerror(errno));
+        utility_panic("ptrace: %s", g_strerror(errno));
         abort();
     }
     int wstatus;
     if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
-        error("waitpid: %s", g_strerror(errno));
+        utility_panic("waitpid: %s", g_strerror(errno));
         abort();
     }
     StopReason reason = _getStopReason(wstatus);
     utility_assert(reason.type == STOPREASON_SIGNAL && reason.signal.signal == SIGSTOP);
 
     if (ptrace(PTRACE_SETOPTIONS, thread->base.nativeTid, 0, THREADPTRACE_PTRACE_OPTIONS) < 0) {
-        error("ptrace: %s", strerror(errno));
+        utility_panic("ptrace: %s", strerror(errno));
         return;
     }
 
@@ -829,7 +829,7 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
         // Check that rip is where we left it.
         struct user_regs_struct actual_regs;
         if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &actual_regs) < 0) {
-            error("ptrace: %s", g_strerror(errno));
+            utility_panic("ptrace: %s", g_strerror(errno));
             abort();
         }
         utility_assert(thread->regs.value.rip == actual_regs.rip);
@@ -868,7 +868,7 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
     // tracee is not already ptrace-stopped, because no signal delivery happens
     // while it is—not even SIGSTOP.
     if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, SIGSTOP) < 0) {
-        error("ptrace: %s", g_strerror(errno));
+        utility_panic("ptrace: %s", g_strerror(errno));
         abort();
     }
 
@@ -1055,7 +1055,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 // restore registers
                 // TODO: track if dirty, and only restore if so.
                 if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &thread->regs.value) < 0) {
-                    error("ptrace: %s", g_strerror(errno));
+                    utility_panic("ptrace: %s", g_strerror(errno));
                     abort();
                 }
                 thread->regs.dirty = false;
@@ -1065,7 +1065,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
             trace("ptrace resuming with signal %ld", thread->signalToDeliver);
             // Allow child to start executing.
             if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, thread->signalToDeliver) < 0) {
-                error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
+                utility_panic("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
                 return NULL;
             }
             thread->regs.valid = false;
@@ -1159,7 +1159,7 @@ static void _threadptrace_ensureStopped(ThreadPtrace* thread) {
 
     trace("sending sigstop");
     if (syscall(SYS_tgkill, thread->base.nativePid, thread->base.nativeTid, SIGSTOP) < 0) {
-        error("kill: %s", g_strerror(errno));
+        utility_panic("kill: %s", g_strerror(errno));
         abort();
     }
 
@@ -1168,7 +1168,7 @@ static void _threadptrace_ensureStopped(ThreadPtrace* thread) {
     while (1) {
         int wstatus;
         if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
-            error("waitpid: %s", g_strerror(errno));
+            utility_panic("waitpid: %s", g_strerror(errno));
             abort();
         }
         StopReason reason = _getStopReason(wstatus);
@@ -1188,7 +1188,7 @@ static void _threadptrace_ensureStopped(ThreadPtrace* thread) {
 
             return;
         } else {
-            error("Unexpected stop");
+            utility_panic("Unexpected stop");
             abort();
         }
     }
@@ -1224,7 +1224,7 @@ static long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     trace("threadptrace_nativeSyscall setting regs: rip=0x%llx n=%lld %s", regs.rip, regs.rax,
           _syscall_regs_to_str(&regs));
     if (ptrace(PTRACE_SETREGS, thread->base.nativeTid, 0, &regs) < 0) {
-        error("ptrace: %s", g_strerror(errno));
+        utility_panic("ptrace: %s", g_strerror(errno));
         abort();
     }
     // We're altering the child's actual register state, so we need to restore it from thread->regs
@@ -1235,12 +1235,12 @@ static long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
     // on stopping the exact same number of times here.
     do {
         if (ptrace(PTRACE_SINGLESTEP, thread->base.nativeTid, 0, 0) < 0) {
-            error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
+            utility_panic("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
             abort();
         }
         int wstatus;
         if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
-            error("waitpid: %s", g_strerror(errno));
+            utility_panic("waitpid: %s", g_strerror(errno));
             abort();
         }
         StopReason reason = _getStopReason(wstatus);
@@ -1262,7 +1262,7 @@ static long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
         // Don't use _threadptrace_getregs here, since that'd overwrite our
         // saved registers we need to restore later.
         if (ptrace(PTRACE_GETREGS, thread->base.nativeTid, 0, &regs) < 0) {
-            error("ptrace: %s", g_strerror(errno));
+            utility_panic("ptrace: %s", g_strerror(errno));
             abort();
         }
         trace("threadptrace_nativeSyscall %s", _regs_to_str(&regs));
@@ -1308,7 +1308,7 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
     // THREAD_PTRACE_CHILD_STATE_TRACE_ME state.
     int wstatus;
     if (_waitpid_spin(childNativeTid, &wstatus, 0) < 0) {
-        error("waitpid: %s", g_strerror(errno));
+        utility_panic("waitpid: %s", g_strerror(errno));
         abort();
     }
     StopReason reason = _getStopReason(wstatus);

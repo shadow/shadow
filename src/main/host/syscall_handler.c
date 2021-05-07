@@ -256,9 +256,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
      * or if we blocked a syscall, then that same syscall
      * should be executed again when it becomes unblocked. */
     if (sys->blockedSyscallNR >= 0 && sys->blockedSyscallNR != args->number) {
-        error("We blocked syscall number %ld but syscall number %ld "
-              "is unexpectedly being invoked",
-              sys->blockedSyscallNR, args->number);
+        utility_panic("We blocked syscall number %ld but syscall number %ld "
+                      "is unexpectedly being invoked",
+                      sys->blockedSyscallNR, args->number);
     }
 
     switch (args->number) {

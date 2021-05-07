@@ -53,7 +53,7 @@ Router* router_new(QueueManagerMode queueMode, void* interface) {
     } else if(router->queueMode == QUEUE_MANAGER_CODEL) {
         router->queueHooks = routerqueuecodel_getHooks();
     } else {
-        error("Queue manager mode %i is undefined", (int)queueMode);
+        utility_panic("Queue manager mode %i is undefined", (int)queueMode);
     }
 
     utility_assert(router->queueHooks->new);

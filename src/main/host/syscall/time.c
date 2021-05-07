@@ -64,12 +64,12 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     if (requestToBlock && wasBlocked) {
         /* Make sure we don't have a pending timer. */
         if (_syscallhandler_isListenTimeoutPending(sys)) {
-            error("nanosleep unblocked but a timer is still pending.");
+            utility_panic("nanosleep unblocked but a timer is still pending.");
         }
 
         /* The timer must have expired. */
         if (!_syscallhandler_didListenTimeoutExpire(sys)) {
-            error("nanosleep unblocked but the timer did not expire.");
+            utility_panic("nanosleep unblocked but the timer did not expire.");
         }
     }
 

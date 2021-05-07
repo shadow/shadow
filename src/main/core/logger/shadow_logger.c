@@ -225,15 +225,6 @@ void shadow_logger_logVA(ShadowLogger* logger, LogLevel level,
         shadow_logger_syncToDisk(logger);
         logger->lastTimespan = timespan;
     }
-
-    if (level == LOGLEVEL_ERROR) {
-        /* tell the helper to stop, and join to make sure it finished flushing
-         */
-        _logger_stopHelper(logger);
-
-        /* now abort, but get a backtrace */
-        utility_assert(FALSE && "failure due to error-level log message");
-    }
 }
 
 void shadow_logger_log(ShadowLogger* logger, LogLevel level,

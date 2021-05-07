@@ -149,7 +149,7 @@ Packet* packet_copy(Packet* packet) {
             }
 
             default: {
-                error("unrecognized protocol");
+                utility_panic("unrecognized protocol");
                 break;
             }
         }
@@ -345,7 +345,7 @@ in_addr_t packet_getDestinationIP(Packet* packet) {
         }
 
         default: {
-            error("unrecognized protocol");
+            utility_panic("unrecognized protocol");
             break;
         }
     }
@@ -378,7 +378,7 @@ in_port_t packet_getDestinationPort(Packet* packet) {
         }
 
         default: {
-            error("unrecognized protocol");
+            utility_panic("unrecognized protocol");
             break;
         }
     }
@@ -410,7 +410,7 @@ in_addr_t packet_getSourceIP(Packet* packet) {
         }
 
         default: {
-            error("unrecognized protocol");
+            utility_panic("unrecognized protocol");
             break;
         }
     }
@@ -443,7 +443,7 @@ in_port_t packet_getSourcePort(Packet* packet) {
         }
 
         default: {
-            error("unrecognized protocol");
+            utility_panic("unrecognized protocol");
             break;
         }
     }
@@ -627,7 +627,7 @@ gchar* packet_toString(Packet* packet) {
         }
 
         default: {
-            error("unrecognized protocol");
+            utility_panic("unrecognized protocol");
             break;
         }
     }

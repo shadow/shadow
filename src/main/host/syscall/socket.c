@@ -1248,7 +1248,7 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
 
     int errcode = _syscallhandler_validateSocketHelper(sys, sockfd, NULL);
     if (errcode != 0) {
-        error("Unable to find socket %i that we just created.", sockfd);
+        utility_panic("Unable to find socket %i that we just created.", sockfd);
     }
     utility_assert(errcode == 0);
 

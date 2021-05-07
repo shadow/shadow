@@ -98,7 +98,7 @@ static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, c
 
     switch (pid) {
         case -1:
-            error("fork failed");
+            utility_panic("fork failed");
             return -1;
             break;
         case 0: {
@@ -267,7 +267,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 break;
             }
             default: {
-                error("unknown event type");
+                utility_panic("unknown event type");
                 break;
             }
         }

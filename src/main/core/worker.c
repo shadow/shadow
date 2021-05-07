@@ -235,7 +235,7 @@ void _workerpool_startTaskFn(WorkerPool* pool, WorkerPoolTaskFn taskFn,
             MAGIC_ASSERT(worker);
             lps_idleTimerStop(pool->logicalProcessors, i);
             if (sem_post(&worker->beginSem) != 0) {
-                error("sem_post: %s", g_strerror(errno));
+                utility_panic("sem_post: %s", g_strerror(errno));
             }
         } else {
             // There's no more work to do.
@@ -266,7 +266,7 @@ void workerpool_joinAll(WorkerPool* pool) {
         void* threadRetval;
         int rv = pthread_join(pool->workers[i]->thread, &threadRetval);
         if (rv != 0) {
-            error("pthread_join: %s", g_strerror(rv));
+            utility_panic("pthread_join: %s", g_strerror(rv));
         }
         utility_assert(threadRetval == NULL);
     }
@@ -396,7 +396,7 @@ static Worker* _worker_new(WorkerPool* workerPool, int threadID) {
 
     int rv = pthread_create(&worker->thread, NULL, _worker_run, worker);
     if (rv != 0) {
-        error("pthread_create: %s", g_strerror(rv));
+        utility_panic("pthread_create: %s", g_strerror(rv));
     }
 
     GString* name = g_string_new(NULL);
@@ -514,7 +514,7 @@ void* _worker_run(void* voidWorker) {
     do {
         // Wait for work to do.
         if (sem_wait(&worker->beginSem) != 0) {
-            error("sem_wait: %s", g_strerror(errno));
+            utility_panic("sem_wait: %s", g_strerror(errno));
         }
         int lpi = worker->logicalProcessorIdx;
 
@@ -530,7 +530,7 @@ void* _worker_run(void* voidWorker) {
         if (nextWorker) {
             // Start running the next worker.
             if (sem_post(&nextWorker->beginSem) != 0) {
-                error("sem_post: %s", g_strerror(errno));
+                utility_panic("sem_post: %s", g_strerror(errno));
             }
         } else {
             // No more workers to run; lpi is now idle.
@@ -629,7 +629,7 @@ void worker_sendPacket(Packet* packet) {
     Address* dstAddress = worker_resolveIPToAddress(dstIP);
 
     if (!srcAddress || !dstAddress) {
-        error("unable to schedule packet because of null addresses");
+        utility_panic("unable to schedule packet because of null addresses");
         return;
     }
 

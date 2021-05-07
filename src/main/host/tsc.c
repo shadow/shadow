@@ -48,7 +48,7 @@ Tsc Tsc_measure() {
         struct timespec ts_start;
         unsigned int unused;
         if (clock_gettime(CLOCK_MONOTONIC, &ts_start) < 0) {
-            error("clock_gettime: %s", strerror(errno));
+            panic("clock_gettime: %s", strerror(errno));
         }
         uint64_t rdtsc_start = rdtscp(&unused);
 
@@ -56,7 +56,7 @@ Tsc Tsc_measure() {
 
         struct timespec ts_end;
         if (clock_gettime(CLOCK_MONOTONIC, &ts_end) < 0) {
-            error("clock_gettime: %s", strerror(errno));
+            panic("clock_gettime: %s", strerror(errno));
         }
 
         uint64_t rdtsc_end = rdtscp(&unused);

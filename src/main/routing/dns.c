@@ -220,7 +220,7 @@ static void _dns_cleanupHostsFile(DNS* dns) {
 static char* _dns_getHostsPath(DNS* dns) {
     char* abspath = NULL;
     if (asprintf(&abspath, "/tmp/shadow-%i-hosts-XXXXXX", (int)getpid()) < 0) {
-        error("asprintf could not allocate string for hosts file");
+        utility_panic("asprintf could not allocate string for hosts file");
         abort();
     }
     return abspath;

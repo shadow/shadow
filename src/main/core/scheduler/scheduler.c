@@ -164,8 +164,8 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
                 // Proceeding will cause the scheduler to deadlock, since the
                 // work stealing scheduler threads spin-wait for each-other to
                 // finish.
-                error("Host stealing scheduler is incompatible with "
-                      "--workers > --max-concurrency");
+                utility_panic("Host stealing scheduler is incompatible with "
+                              "--workers > --max-concurrency");
                 abort();
             }
             scheduler->policy = schedulerpolicyhoststeal_new();
@@ -387,7 +387,7 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
 
 static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
-    error("Unimplemented");
+    utility_panic("Unimplemented");
 
     // WARNING if this is run, then all existing eventSequenceCounters
     // need to get set to the max of all existing counters to ensure order correctness

@@ -20,9 +20,8 @@
 /* convenience macros for logging messages at various levels */
 // clang-format off
 
-// logger_log() should already exit/abort at error level, but we include it here explicitly
-// so that the compiler knows it will not return
-#define error(...)    { logger_log(logger_getDefault(), LOGLEVEL_ERROR, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__); abort(); }
+#define panic(...)    { logger_log(logger_getDefault(), LOGLEVEL_ERROR, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__); abort(); }
+#define error(...)      logger_log(logger_getDefault(), LOGLEVEL_ERROR, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define critical(...)   logger_log(logger_getDefault(), LOGLEVEL_CRITICAL, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define warning(...)    logger_log(logger_getDefault(), LOGLEVEL_WARNING, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define info(...)       logger_log(logger_getDefault(), LOGLEVEL_INFO, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
@@ -59,9 +58,6 @@ Logger* logger_getDefault();
 // writes to stdout.
 //
 // Doesn't do dynamic memory allocation.
-//
-// Never returns after logging a LOGLEVEL_ERROR. After logging, calls `abort()`
-// if DEBUG is defined, or `exit(1)` otherwise.
 //
 // The `__format__` attribute tells the compiler to apply the same format-string
 // diagnostics that it does for `printf`.

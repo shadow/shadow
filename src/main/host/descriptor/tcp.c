@@ -395,9 +395,10 @@ static guint _tcp_calculateRTT(TCP* tcp) {
         guint receiveLatency = (guint) ceil(dstLatency);
 
         if(sendLatency == 0 || receiveLatency == 0) {
-          error("need nonzero latency to set buffer sizes, "
-                  "source=%"G_GUINT32_FORMAT" dest=%"G_GUINT32_FORMAT" send=%"G_GUINT32_FORMAT" recv=%"G_GUINT32_FORMAT,
-                  sourceID, destinationID, sendLatency, receiveLatency);
+            utility_panic("need nonzero latency to set buffer sizes, "
+                          "source=%" G_GUINT32_FORMAT " dest=%" G_GUINT32_FORMAT
+                          " send=%" G_GUINT32_FORMAT " recv=%" G_GUINT32_FORMAT,
+                          sourceID, destinationID, sendLatency, receiveLatency);
         }
         utility_assert(sendLatency > 0 && receiveLatency > 0);
 

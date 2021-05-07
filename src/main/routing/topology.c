@@ -2028,10 +2028,10 @@ static Path* _topology_getPathEntry(Topology* top, Address* srcAddress, Address*
 
         if(!path) {
             /* some error finding the path */
-            error("unable to find path between node %s at %s (vertex %i) "
-                    "and node %s at %s (vertex %i)",
-                    address_toString(srcAddress), srcIDStr, (gint)srcVertexIndex,
-                    address_toString(dstAddress), dstIDStr, (gint)dstVertexIndex);
+            utility_panic("unable to find path between node %s at %s (vertex %i) "
+                          "and node %s at %s (vertex %i)",
+                          address_toString(srcAddress), srcIDStr, (gint)srcVertexIndex,
+                          address_toString(dstAddress), dstIDStr, (gint)dstVertexIndex);
         }
     }
 
@@ -2046,8 +2046,8 @@ void topology_incrementPathPacketCounter(Topology* top, Address* srcAddress, Add
     if(path != NULL) {
         path_incrementPacketCount(path);
     } else {
-        error("unable to find path between node %s and node %s",
-                address_toString(srcAddress), address_toString(dstAddress));
+        utility_panic("unable to find path between node %s and node %s",
+                      address_toString(srcAddress), address_toString(dstAddress));
     }
 }
 

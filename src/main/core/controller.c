@@ -164,7 +164,8 @@ static gboolean _controller_loadTopology(Controller* controller) {
     /* write the topology to a temporary file */
     GError* error = NULL;
     if (!g_file_set_contents(temporaryFilename, topologyString, strlen(topologyString), &error)) {
-        error("unable to write the topology to '%s': %s", temporaryFilename, error->message);
+        utility_panic(
+            "unable to write the topology to '%s': %s", temporaryFilename, error->message);
     }
 
     config_freeString(topologyString);
@@ -229,7 +230,7 @@ static void _controller_registerProcessCallback(const ProcessOptions* proc, void
 
     char* plugin = processoptions_getPath(proc);
     if (plugin == NULL) {
-        error("The process binary could not be found");
+        utility_panic("The process binary could not be found");
     }
 
     // build an argv array
@@ -357,7 +358,7 @@ gint controller_run(Controller* controller) {
                                       controller->bootstrapEndTime, managerSeed);
 
     if (controller->manager == NULL) {
-        error("unable to create manager");
+        utility_panic("unable to create manager");
     }
 
     info("registering plugins and hosts");

@@ -340,7 +340,7 @@ int affinity_initPlatformInfo() {
     assert(lscpu_contents);
 
     if (rc) {
-        error("Could not run `lscpu`, which is required for CPU pinning.");
+        panic("Could not run `lscpu`, which is required for CPU pinning.");
         return -1;
     }
 
@@ -348,7 +348,7 @@ int affinity_initPlatformInfo() {
         lscpu_contents, &_global_platform_info.p_cpus, &_global_platform_info.n_cpus);
 
     if (rc) {
-        error("Could not run `lscpu`, which is required for CPU pinning.");
+        panic("Could not run `lscpu`, which is required for CPU pinning.");
         return -1;
     }
 

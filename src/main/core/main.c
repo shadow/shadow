@@ -179,7 +179,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     /* since we've already checked the two exclusive flags above (--show-build-info and
      * --shm-cleanup), configName should never be NULL*/
     if (!configName) {
-        error("Could not get configuration file path");
+        utility_panic("Could not get configuration file path");
     }
 
     /* read config from file or stdin */
@@ -249,7 +249,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
         if (rc != 0) {
             clioptions_free(options);
             config_free(config);
-            error("Could not set SCHED_FIFO");
+            utility_panic("Could not set SCHED_FIFO");
         } else {
             info("Successfully set real-time scheduler mode to SCHED_FIFO");
         }

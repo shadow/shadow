@@ -190,7 +190,7 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
     if (manager->preloadShimPath != NULL) {
         info("found %s at %s", PRELOAD_SHIM_LIB_STR, manager->preloadShimPath);
     } else {
-        error("could not find %s in rpath", PRELOAD_SHIM_LIB_STR);
+        utility_panic("could not find %s in rpath", PRELOAD_SHIM_LIB_STR);
     }
 
     /* the main scheduler may utilize multiple threads */
@@ -206,8 +206,8 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
     char* dataDirectory = config_getDataDirectory(config);
 
     if (dataDirectory == NULL) {
-        // we shouldn't reach this, but error anyways
-        error("Data directory was not set");
+        // we shouldn't reach this, but panic anyways
+        utility_panic("Data directory was not set");
     }
 
     manager->dataPath = g_build_filename(manager->cwdPath, dataDirectory, NULL);
@@ -216,7 +216,7 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
     manager->hostsPath = g_build_filename(manager->dataPath, "hosts", NULL);
 
     if (g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
-        error("data directory '%s' already exists", manager->dataPath);
+        utility_panic("data directory '%s' already exists", manager->dataPath);
     }
 
     char* templateDirectory = config_getTemplateDirectory(config);
@@ -228,11 +228,11 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
         debug("Copying template directory %s to %s", templateDataPath, manager->dataPath);
 
         if (!g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
-            error("data template directory '%s' does not exist", templateDataPath);
+            utility_panic("data template directory '%s' does not exist", templateDataPath);
         }
 
         if (!utility_copyAll(templateDataPath, manager->dataPath)) {
-            error("could not copy the data template directory '%s'", templateDataPath);
+            utility_panic("could not copy the data template directory '%s'", templateDataPath);
         }
 
         g_free(templateDataPath);
@@ -451,7 +451,7 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar
 
     gchar* pluginName = g_path_get_basename(pluginPath);
     if (pluginName == NULL) {
-        error("Could not get basename of plugin path");
+        utility_panic("Could not get basename of plugin path");
     }
 
     host_addApplication(

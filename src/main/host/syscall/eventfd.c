@@ -62,7 +62,7 @@ static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys, unsigned
     /* This should always be a valid descriptor. */
     int errcode = _syscallhandler_validateEventFDHelper(sys, efd, NULL);
     if (errcode != 0) {
-        error("Unable to find eventfd %i that we just created.", efd);
+        utility_panic("Unable to find eventfd %i that we just created.", efd);
     }
     utility_assert(errcode == 0);
 #endif

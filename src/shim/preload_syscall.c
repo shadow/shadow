@@ -136,7 +136,7 @@ __attribute__((used)) static SysCallReg _shadow_syscall_event(const ShimEvent* s
                 shim_shmemNotifyComplete(ipc_blk.p);
                 break;
             default: {
-                error("Got unexpected event %d", res.event_id);
+                panic("Got unexpected event %d", res.event_id);
                 abort();
             }
         }
