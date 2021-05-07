@@ -13,7 +13,6 @@ const char* loglevel_toStr(LogLevel level) {
         case LOGLEVEL_ERROR: return "error";
         case LOGLEVEL_CRITICAL: return "critical";
         case LOGLEVEL_WARNING: return "warning";
-        case LOGLEVEL_MESSAGE: return "message";
         case LOGLEVEL_INFO: return "info";
         case LOGLEVEL_DEBUG: return "debug";
         case LOGLEVEL_TRACE: return "trace";
@@ -31,8 +30,6 @@ LogLevel loglevel_fromStr(const char* levelStr) {
         return LOGLEVEL_CRITICAL;
     } else if (g_ascii_strcasecmp(levelStr, "warning") == 0) {
         return LOGLEVEL_WARNING;
-    } else if (g_ascii_strcasecmp(levelStr, "message") == 0) {
-        return LOGLEVEL_MESSAGE;
     } else if (g_ascii_strcasecmp(levelStr, "info") == 0) {
         return LOGLEVEL_INFO;
     } else if (g_ascii_strcasecmp(levelStr, "debug") == 0) {
