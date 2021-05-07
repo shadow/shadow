@@ -29,7 +29,7 @@ jobs:
     env:
       CC: 'clang-12'
       CONTAINER: 'ubuntu:21.04'
-      BUILDTYPE: 'coverage'
+      BUILDTYPE: 'debug'
       RUSTPROFILE: minimal
 
     steps:
