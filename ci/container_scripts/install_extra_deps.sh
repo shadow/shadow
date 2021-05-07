@@ -45,8 +45,8 @@ case "$CC" in
         fi
         install_packages clang
         ;;
-    clang-11)
-        install_packages clang-11
+    clang-12)
+        install_packages clang-12
         ;;
     *)
         echo "Unhandled cc $CC"
@@ -56,7 +56,7 @@ esac
 
 if [ "${BUILDTYPE:-}" = coverage ]
 then
-    RUST_TOOLCHAIN=nightly-2021-03-01
+    RUST_TOOLCHAIN=nightly-2021-05-06
 else
     RUST_TOOLCHAIN=stable
 fi
