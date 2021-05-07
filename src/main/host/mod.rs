@@ -1,4 +1,5 @@
 pub mod descriptor;
+pub mod host;
 pub mod memory_manager;
 pub mod process;
 pub mod syscall;
