@@ -11,6 +11,7 @@
  */
 
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -44,6 +45,8 @@ struct _Logger {
     // Flush all logged output.
     void (*flush)(Logger* logger);
     void (*destroy)(Logger* logger);
+    void (*setLevel)(Logger* logger, LogLevel level);
+    bool (*isEnabled)(Logger* logger, LogLevel level);
 };
 
 // Not thread safe. The previously set logger, if any, will be destroyed.
@@ -65,6 +68,10 @@ Logger* logger_getDefault();
 __attribute__((__format__(__printf__, 6, 7))) void
 logger_log(Logger* logger, LogLevel level, const char* fileName, const char* functionName,
            const int lineNumber, const char* format, ...);
+
+void logger_setLevel(Logger* logger, LogLevel level);
+
+bool logger_isEnabled(Logger* logger, LogLevel level);
 
 // Returns an agreed-upon start time for logging purposes, as returned by
 // logger_now_micros.

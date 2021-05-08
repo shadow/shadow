@@ -13,7 +13,6 @@
 #include <sys/types.h>
 
 #include "main/bindings/c/bindings.h"
-#include "main/core/logger/shadow_logger.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/config_handlers.h"
@@ -92,9 +91,6 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
 
     // We'll compute the global min time across all workers.
     worker_setMinEventTimeNextRound(minQTime);
-
-    // Clear all log messages we queued during this round.
-    shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
 }
 
 static void _scheduler_finishTaskFn(void* voidScheduler) {

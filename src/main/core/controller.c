@@ -19,7 +19,6 @@
 #include <unistd.h>
 
 #include "main/core/controller.h"
-#include "main/core/logger/shadow_logger.h"
 #include "main/core/manager.h"
 #include "main/core/support/definitions.h"
 #include "main/host/host.h"
@@ -370,7 +369,7 @@ gint controller_run(Controller* controller) {
     /* dont buffer log messages in trace mode */
     if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
         info("log message buffering is enabled for efficiency");
-        shadow_logger_setEnableBuffering(shadow_logger_getDefault(), TRUE);
+        shadow_logger_setEnableBuffering(TRUE);
     }
 
     /* start running each manager */
@@ -380,7 +379,7 @@ gint controller_run(Controller* controller) {
      * don't log the message as it may confuse the user. */
     if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
         info("log message buffering is disabled during cleanup");
-        shadow_logger_setEnableBuffering(shadow_logger_getDefault(), FALSE);
+        shadow_logger_setEnableBuffering(FALSE);
     }
 
     info("simulation finished, cleaning up now");

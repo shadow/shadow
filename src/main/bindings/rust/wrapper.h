@@ -5,7 +5,6 @@
 
 // Don't forget to whitelist functions/types/vars in CMakeLists.txt
 
-#include "main/core/logger/shadow_logger.h"
 #include "main/core/scheduler/scheduler_policy_type.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"

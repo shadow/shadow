@@ -7,7 +7,6 @@
 #include <sys/prctl.h>
 #include <unistd.h>
 
-#include "main/core/logger/shadow_logger.h"
 #include "main/core/worker.h"
 #include "support/logger/logger.h"
 
@@ -44,7 +43,6 @@ static int _sem_wait_ignoring_interrupts(sem_t* sem) {
 // Function executed by a ForkProxy thread.
 void* forkproxy_fn(void* void_forkproxy) {
     ForkProxy* forkproxy = void_forkproxy;
-    shadow_logger_register(shadow_logger_getDefault(), pthread_self());
 
     while (1) {
         // Wait for a request.

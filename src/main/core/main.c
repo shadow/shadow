@@ -18,7 +18,7 @@
 #include "igraph_version.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/controller.h"
-#include "main/core/logger/shadow_logger.h"
+#include "main/core/logger/log_wrapper.h"
 #include "main/core/support/config_handlers.h"
 #include "main/host/affinity.h"
 #include "main/shmem/shmem_cleanup.h"
@@ -215,12 +215,12 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     LogLevel logLevel = config_getLogLevel(config);
 
     /* start up the logging subsystem to handle all future messages */
-    ShadowLogger* shadowLogger = shadow_logger_new(logLevel);
-    shadow_logger_setDefault(shadowLogger);
-    rust_logging_init();
+    shadow_logger_init();
+    logger_setDefault(rustlogger_new(logLevel));
+    logger_setLevel(logger_getDefault(), logLevel);
 
     /* disable buffering during startup so that we see every message immediately in the terminal */
-    shadow_logger_setEnableBuffering(shadowLogger, FALSE);
+    shadow_logger_setEnableBuffering(FALSE);
 
 #ifndef DEBUG
     if (logLevel == LOGLEVEL_TRACE) {
@@ -265,11 +265,8 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     clioptions_free(options);
     config_free(config);
 
-    ShadowLogger* logger = shadow_logger_getDefault();
-    if (logger) {
-        shadow_logger_setDefault(NULL);
-        shadow_logger_unref(logger);
-    }
+    // Flush the logger
+    logger_flush(logger_getDefault());
 
     g_printerr("** Stopping Shadow, returning code %i (%s)\n", returnCode,
                (returnCode == 0) ? "success" : "error");

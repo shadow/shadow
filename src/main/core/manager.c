@@ -15,7 +15,6 @@
 
 #include "main/bindings/c/bindings.h"
 #include "main/core/controller.h"
-#include "main/core/logger/shadow_logger.h"
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
@@ -557,12 +556,6 @@ void manager_run(Manager* manager) {
 
         /* do some idle processing here if needed */
         _manager_heartbeat(manager, windowStart);
-
-        /* flush manager threads messages */
-        shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
-
-        /* let the logger know it can flush everything prior to this round */
-        shadow_logger_syncToDisk(shadow_logger_getDefault());
 
         /* wait for the workers to finish processing nodes before we update the
          * execution window

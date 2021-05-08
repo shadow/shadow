@@ -14,6 +14,7 @@ use std::num::NonZeroU32;
 use super::simulation_time::{SIMTIME_ONE_NANOSECOND, SIMTIME_ONE_SECOND};
 use super::units::{self, Unit};
 use crate::cshadow as c;
+use log_bindings as c_log;
 
 const END_HELP_TEXT: &str = "\
     If units are not specified, all values are assumed to be given in their base \
@@ -489,13 +490,13 @@ impl std::str::FromStr for LogLevel {
 }
 
 impl LogLevel {
-    pub fn to_c_loglevel(&self) -> c::LogLevel {
+    pub fn to_c_loglevel(&self) -> c_log::LogLevel {
         match self {
-            Self::Error => c::_LogLevel_LOGLEVEL_ERROR,
-            Self::Warning => c::_LogLevel_LOGLEVEL_WARNING,
-            Self::Info => c::_LogLevel_LOGLEVEL_INFO,
-            Self::Debug => c::_LogLevel_LOGLEVEL_DEBUG,
-            Self::Trace => c::_LogLevel_LOGLEVEL_TRACE,
+            Self::Error => c_log::_LogLevel_LOGLEVEL_ERROR,
+            Self::Warning => c_log::_LogLevel_LOGLEVEL_WARNING,
+            Self::Info => c_log::_LogLevel_LOGLEVEL_INFO,
+            Self::Debug => c_log::_LogLevel_LOGLEVEL_DEBUG,
+            Self::Trace => c_log::_LogLevel_LOGLEVEL_TRACE,
         }
     }
 }
@@ -1010,7 +1011,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getLogLevel(config: *const ConfigOptions) -> c::LogLevel {
+    pub extern "C" fn config_getLogLevel(config: *const ConfigOptions) -> c_log::LogLevel {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.general.log_level.as_ref().unwrap().to_c_loglevel()
@@ -1329,24 +1330,26 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn hostoptions_getLogLevel(host: *const HostOptions) -> c::LogLevel {
+    pub extern "C" fn hostoptions_getLogLevel(host: *const HostOptions) -> c_log::LogLevel {
         assert!(!host.is_null());
         let host = unsafe { &*host };
 
         match &host.options.log_level {
             Some(x) => x.to_c_loglevel(),
-            None => c::_LogLevel_LOGLEVEL_UNSET,
+            None => c_log::_LogLevel_LOGLEVEL_UNSET,
         }
     }
 
     #[no_mangle]
-    pub extern "C" fn hostoptions_getHeartbeatLogLevel(host: *const HostOptions) -> c::LogLevel {
+    pub extern "C" fn hostoptions_getHeartbeatLogLevel(
+        host: *const HostOptions,
+    ) -> c_log::LogLevel {
         assert!(!host.is_null());
         let host = unsafe { &*host };
 
         match &host.options.heartbeat_log_level {
             Some(x) => x.to_c_loglevel(),
-            None => c::_LogLevel_LOGLEVEL_UNSET,
+            None => c_log::_LogLevel_LOGLEVEL_UNSET,
         }
     }
 
