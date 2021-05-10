@@ -14,7 +14,7 @@ bitflags = "1.2"
 clap = { version = "3.0.0-beta.2", features = ["wrap_help"] }
 libc = "0.2"
 # don't log debug or trace levels in release mode
-log = { version = "0.4", features = ["release_max_level_info"] }
+log = { version = "0.4", features = ["release_max_level_debug"] }
 log-bindings = { path = "../support/logger/rust_bindings" }
 merge = "0.1"
 nix = "0.20.0"
