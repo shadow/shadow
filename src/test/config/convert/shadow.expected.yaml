@@ -4,12 +4,14 @@ topology:
   graphml: |-
     <?xml version='1.0' encoding='utf-8'?>
     <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+      <key attr.name="prefer_direct_paths" attr.type="string" for="graph" id="d5" />
       <key attr.name="packet_loss" attr.type="double" for="edge" id="d4" />
       <key attr.name="latency" attr.type="double" for="edge" id="d3" />
       <key attr.name="bandwidth_up" attr.type="string" for="node" id="d2" />
       <key attr.name="bandwidth_down" attr.type="string" for="node" id="d1" />
       <key attr.name="country_code" attr.type="string" for="node" id="d0" />
       <graph edgedefault="undirected">
+        <data key="d5">True</data>
         <node id="poi-1">
           <data key="d0">US</data>
           <data key="d1">81920 Kibit</data>

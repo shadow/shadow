@@ -295,7 +295,6 @@ static void _controller_registerHostCallback(const char* name, const ConfigOptio
         params->ipHint = hostoptions_getIpHint(host);
         params->countrycodeHint = hostoptions_getCountryCodeHint(host);
         params->citycodeHint = hostoptions_getCityCodeHint(host);
-        params->typeHint = hostoptions_getTypeHint(host);
 
         /* shadow uses values in KiB/s, but the config uses b/s */
         /* TODO: use bits or bytes everywhere within Shadow (see also:
@@ -327,7 +326,6 @@ static void _controller_registerHostCallback(const char* name, const ConfigOptio
         hostoptions_freeString(params->ipHint);
         hostoptions_freeString(params->countrycodeHint);
         hostoptions_freeString(params->citycodeHint);
-        hostoptions_freeString(params->typeHint);
 
         g_free(params);
     }

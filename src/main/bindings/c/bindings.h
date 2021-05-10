@@ -170,8 +170,6 @@ char *hostoptions_getCountryCodeHint(const struct HostOptions *host);
 
 char *hostoptions_getCityCodeHint(const struct HostOptions *host);
 
-char *hostoptions_getTypeHint(const struct HostOptions *host);
-
 uint64_t hostoptions_getBandwidthDown(const struct HostOptions *host);
 
 uint64_t hostoptions_getBandwidthUp(const struct HostOptions *host);
