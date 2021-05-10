@@ -452,26 +452,27 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
     if (signal == SIGSEGV) {
         _threadptrace_getregs(thread);
         trace("threadptrace_enterStateSignalled regs: %s", _regs_to_str(&thread->regs.value));
-        uint64_t eip = thread->regs.value.rip;
-        const uint8_t* buf = process_getReadablePtr(thread->base.process, (PluginPtr){eip}, 4);
-        if (isRdtsc(buf)) {
-            trace("emulating rdtsc");
-            Tsc_emulateRdtsc(&thread->tsc, &thread->regs.value, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
-            thread->regs.dirty = true;
-            return;
-        }
-        if (isRdtscp(buf)) {
-            trace("emulating rdtscp");
-            Tsc_emulateRdtscp(
-                &thread->tsc, &thread->regs.value, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
-            thread->regs.dirty = true;
-            return;
+        uint64_t rip = thread->regs.value.rip;
+        uint8_t buf[4];
+        if (process_readPtr(thread->base.process, buf, (PluginPtr){rip}, sizeof(buf)) == 0) {
+            if (isRdtsc(buf)) {
+                trace("emulating rdtsc");
+                Tsc_emulateRdtsc(&thread->tsc, &thread->regs.value, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
+                thread->regs.dirty = true;
+                return;
+            }
+            if (isRdtscp(buf)) {
+                trace("emulating rdtscp");
+                Tsc_emulateRdtscp(
+                    &thread->tsc, &thread->regs.value, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
+                thread->regs.dirty = true;
+                return;
+            }
         }
         // Do not use `panic` here, since that'll cause us to immediately abort
         // in debug builds. Better to let the SIGSEGV be delivered so that it
         // can generate a core file for debugging.
-        warning("Unhandled SIGSEGV addr:%016lx contents:%x %x %x %x", eip, buf[0], buf[1], buf[2],
-                buf[3]);
+        warning("Unhandled SIGSEGV at rip:%016lx", rip);
         // fall through
     } else if (signal == SIGSTOP) {
         trace("Suppressing SIGSTOP");
