@@ -358,7 +358,13 @@ static gboolean _topology_findEdgeAttributeDouble(Topology* top, igraph_integer_
 static gboolean _topology_loadGraph(Topology* top, const gchar* graphPath) {
     MAGIC_ASSERT(top);
     /* initialize the built-in C attribute handler */
+#if defined(IGRAPH_VERSION_MAJOR_GUESS) && defined(IGRAPH_VERSION_MINOR_GUESS) &&                  \
+    ((IGRAPH_VERSION_MAJOR_GUESS == 0 && IGRAPH_VERSION_MINOR_GUESS >= 9) ||                       \
+     IGRAPH_VERSION_MAJOR_GUESS > 0)
+    igraph_attribute_table_t* oldHandler = igraph_set_attribute_table(&igraph_cattribute_table);
+#else
     igraph_attribute_table_t* oldHandler = igraph_i_set_attribute_table(&igraph_cattribute_table);
+#endif
 
     /* get the file */
     FILE* graphFile = fopen(graphPath, "r");

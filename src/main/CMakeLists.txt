@@ -2,6 +2,17 @@
 #pkg_check_modules (GLIB2   glib-2.0>=2.32)
 #message(STATUS "GLIB2_VERSION = ${GLIB2_VERSION}")
 
+include(CheckSymbolExists)
+
+list(APPEND CMAKE_REQUIRED_INCLUDES ${GLIB_INCLUDES})
+list(APPEND CMAKE_REQUIRED_LIBRARIES ${GLIB_LIBRARIES})
+
+check_symbol_exists(g_memdup2 "glib.h" HAS_MEMDUP2)
+
+if(HAS_MEMDUP2)
+    add_compile_definitions(HAS_MEMDUP2)
+endif()
+
 include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
 
 ## link to the shim (rpath will not contain this path when shadow is installed)
