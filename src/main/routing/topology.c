@@ -176,22 +176,15 @@ static const gchar* _topology_igraphAttributeTypeToString(igraph_attribute_type_
 
 static const gchar* _topology_graphAttributeToString(GraphAttribute attr) {
     if(attr == GRAPH_ATTR_PREFERDIRECTPATHS) {
-        return "preferdirectpaths";
+        return "prefer_direct_paths";
     } else {
         return "unknown";
     }
 }
 
-static gint _topology_graphAttributeLength(GraphAttribute attr) {
-    if(attr == GRAPH_ATTR_PREFERDIRECTPATHS) {
-        return 17;
-    } else {
-        return 7;
-    }
-}
-
 static gboolean _topology_isValidGraphAttributeKey(const gchar* attrName, GraphAttribute attr) {
-    gint r = g_ascii_strncasecmp(attrName, _topology_graphAttributeToString(attr), _topology_graphAttributeLength(attr));
+    const gchar* expectedString = _topology_graphAttributeToString(attr);
+    gint r = g_ascii_strncasecmp(attrName, expectedString, strlen(expectedString));
     return (r == 0) ? TRUE : FALSE;
 }
 

@@ -19,6 +19,7 @@ def bandwidth_conversion(x):
 
 # original attribute name: (new attribute name, new attribute type, value transform fn)
 ATTR_CONVERSIONS = {
+    'preferdirectpaths': ('prefer_direct_paths', None, None),
     'bandwidthup': ('bandwidth_up', 'string', bandwidth_conversion),
     'bandwidthdown': ('bandwidth_down', 'string', bandwidth_conversion),
     'packetloss': ('packet_loss', None, None),
