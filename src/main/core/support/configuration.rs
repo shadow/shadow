@@ -376,11 +376,6 @@ pub struct HostDefaultOptions {
     #[clap(about = HOST_HELP.get("city_code_hint").unwrap())]
     city_code_hint: Option<String>,
 
-    /// Node type hint for Shadow's name and routing system
-    #[clap(long, value_name = "type")]
-    #[clap(about = HOST_HELP.get("type_hint").unwrap())]
-    type_hint: Option<String>,
-
     /// Downstream bandwidth capacity of the host
     #[clap(long, value_name = "bits")]
     #[clap(about = HOST_HELP.get("bandwidth_down").unwrap())]
@@ -403,7 +398,6 @@ impl HostDefaultOptions {
             ip_hint: None,
             country_code_hint: None,
             city_code_hint: None,
-            type_hint: None,
             bandwidth_down: None,
             bandwidth_up: None,
         }
@@ -427,7 +421,6 @@ impl Default for HostDefaultOptions {
             ip_hint: None,
             country_code_hint: None,
             city_code_hint: None,
-            type_hint: None,
             bandwidth_down: None,
             bandwidth_up: None,
         }
@@ -1428,17 +1421,6 @@ mod export {
         let host = unsafe { &*host };
 
         match host.options.city_code_hint.as_ref() {
-            Some(x) => CString::into_raw(CString::new(x.to_string()).unwrap()),
-            None => std::ptr::null_mut(),
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getTypeHint(host: *const HostOptions) -> *mut libc::c_char {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        match host.options.type_hint.as_ref() {
             Some(x) => CString::into_raw(CString::new(x.to_string()).unwrap()),
             None => std::ptr::null_mut(),
         }
