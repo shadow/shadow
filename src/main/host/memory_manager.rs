@@ -114,6 +114,15 @@ impl<'a> MemoryReader<'a, u8> {
             offset: 0,
         }
     }
+
+    fn ref_string(&self) -> Result<&std::ffi::CStr, Errno> {
+        let buf = self.reader.ref_some()?;
+        let nullpos = match buf.iter().position(|c| *c == 0) {
+            Some(i) => i,
+            None => return Err(Errno::ENAMETOOLONG),
+        };
+        std::ffi::CStr::from_bytes_with_nul(&buf[..=nullpos]).map_err(|_| Errno::ENAMETOOLONG)
+    }
 }
 
 /// A MemoryReader that tracks a position within the region of memory it reads.
@@ -317,19 +326,6 @@ where
         Self {
             memory_manager,
             readable_ptr: once_cell::unsync::OnceCell::new(),
-            ptr,
-        }
-    }
-
-    /// A pre-initialized reader.
-    fn new_with_memory(
-        memory_manager: &'a MemoryManager,
-        ptr: TypedPluginPtr<T>,
-        memory: Box<[T]>,
-    ) -> Self {
-        Self {
-            memory_manager,
-            readable_ptr: once_cell::unsync::OnceCell::from(Ok(memory)),
             ptr,
         }
     }
@@ -1810,76 +1806,6 @@ impl MemoryManager {
         Ok(nread)
     }
 
-    /// Creates a reader for a NULL-terminated string starting at `src`. Succeeds
-    /// if the NULL terminated string starting at the beginning of `src` is
-    /// accessible, even if later pages of `src` are inaccessible.
-    fn string_reader<'a>(&'a self, src: TypedPluginPtr<u8>) -> Result<MemoryReader<'a, u8>, Errno> {
-        let mut dst = Vec::<u8>::with_capacity(src.len());
-        // SAFETY: any values are legal for u8.
-        unsafe { dst.set_len(src.len()) };
-
-        // process_vm_readv reads at iovec granularity. To handle the case where
-        // the user-supplied pointer is near the end of a readable region, we split
-        // at page boundaries. i.e. succeed if we successfully read a null-terminated
-        // string, even if some of the region after that is inaccessible.
-        let mut remotes = Vec::new();
-        let mut toread = dst.len();
-        let mut address = usize::from(src.ptr());
-        while toread > 0 {
-            let mut this_toread = toread % page_size();
-            if this_toread == 0 {
-                this_toread = page_size();
-            }
-            let this_toread = std::cmp::min(this_toread, toread);
-            remotes.push(nix::sys::uio::RemoteIoVec {
-                base: address,
-                len: this_toread,
-            });
-            toread -= this_toread;
-            address += this_toread;
-        }
-        let local = [nix::sys::uio::IoVec::from_mut_slice(&mut dst)];
-
-        // While the documentation for process_vm_readv says to use the pid, in
-        // practice it needs to be the tid of a still-running thread. i.e. using the
-        // pid after the thread group leader has exited will fail.
-        let (active_tid, active_pid) = Worker::with_active_thread(|thread| {
-            (
-                nix::unistd::Pid::from_raw(thread.get_system_tid()),
-                nix::unistd::Pid::from_raw(thread.get_system_pid()),
-            )
-        });
-        // Don't access another process's memory.
-        assert_eq!(active_pid, self.pid);
-
-        let nread = nix::sys::uio::process_vm_readv(active_tid, &local, &remotes)
-            .map_err(|e| e.as_errno().unwrap())?;
-
-        dst.truncate(nread);
-        let src = src.slice(..nread);
-
-        let nullpos = dst.iter().position(|c| *c == 0);
-        match nullpos {
-            Some(i) => dst.truncate(i + 1),
-            None => {
-                return if dst.len() == src.len() {
-                    // We couldn't read the whole region specified, and there
-                    // wasn't a full string in the prefix.
-                    Err(Errno::EFAULT)
-                } else {
-                    // We could read the whole region, but the string extended
-                    // beyond it.
-                    Err(Errno::ENAMETOOLONG)
-                };
-            }
-        };
-
-        trace!("XXX Returning string reader with len {}", dst.len());
-        Ok(MemoryReader::new(Box::new(
-            CopyingMemoryReader::new_with_memory(self, src.slice(..dst.len()), dst.into_boxed_slice()),
-        )))
-    }
-
     // Low level helper for writing directly to `dst`. Panics if the
     // MemoryManager's process isn't currently active.
     fn write_ptr<T: Pod + Debug>(
@@ -2070,35 +1996,6 @@ mod export {
         ))
     }
 
-    /// Get a write-accessor to the specified plugin memory.
-    /// Must be freed via `memorymanager_flushAndFreeWriter`.
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_getStringReader<'a>(
-        memory_manager: *mut MemoryManager,
-        plugin_src: c::PluginPtr,
-        n: usize,
-        reader_out: *mut *mut MemoryReader<'a, u8>,
-        strlen: *mut usize,
-    ) -> i32 {
-        let memory_manager = memory_manager.as_mut().unwrap();
-        let plugin_src = TypedPluginPtr::new(plugin_src.into(), n).unwrap();
-        let reader = match memory_manager.string_reader(plugin_src) {
-            Err(e) => return -(e as i32),
-            Ok(r) => r,
-        };
-        if !strlen.is_null() {
-            *strlen = reader.ref_exact().unwrap().len();
-        }
-        // FIXME
-        if reader.ref_exact().is_ok() {
-            trace!("XXX Read string: '{:?}'", std::ffi::CStr::from_bytes_with_nul(reader.ref_exact().unwrap()));
-        } else {
-            trace!("XXX Failed to read string");
-        }
-        *reader_out = Box::into_raw(Box::new(reader));
-        0
-    }
-
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_freeReader<'a>(reader: *mut MemoryReader<'a, u8>) {
         Box::from_raw(reader);
@@ -2115,6 +2012,28 @@ mod export {
             Ok(p) => p.as_ptr() as *const c_void,
             Err(_) => std::ptr::null(),
         }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_getReadableString<'a>(
+        reader: *const MemoryReader<'a, u8>,
+        str: *mut *const libc::c_char,
+        strlen: *mut libc::size_t,
+    ) -> i32 {
+        debug_assert!(!reader.is_null());
+        debug_assert!(!str.is_null());
+        let reader = &*reader;
+        let cstr = match reader.ref_string() {
+            Ok(c) => c,
+            Err(e) => {
+                return -(e as i32);
+            }
+        };
+        *str = cstr.as_ptr();
+        if !strlen.is_null() {
+            *strlen = cstr.to_bytes().len();
+        }
+        0
     }
 
     /// Copy data from this reader's memory.

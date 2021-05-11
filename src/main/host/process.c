@@ -892,16 +892,15 @@ int process_getReadableString(Process* proc, PluginPtr plugin_src, size_t n, con
     // Disallow additional references while there's a mutable reference.
     utility_assert(proc->memoryWriters->len == 0);
 
-    MemoryReader_u8* reader = NULL;
-    int res = memorymanager_getStringReader(proc->memoryManager, plugin_src, n, &reader, strlen);
+    MemoryReader_u8* reader = memorymanager_getReader(proc->memoryManager, plugin_src, n);
+    int res = memorymanager_getReadableString(reader, str, strlen);
     if (res != 0) {
-        return res;
+        memorymanager_freeReader(reader);
+    } else {
+        g_array_append_val(proc->memoryReaders, reader);
     }
-    *str = memorymanager_getReadablePtr(reader);
-    utility_assert(str);
-    g_array_append_val(proc->memoryReaders, reader);
 
-    return 0;
+    return res;
 }
 
 // Returns a writable pointer corresponding to the named region. The initial
