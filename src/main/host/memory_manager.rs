@@ -25,10 +25,13 @@ trait MemoryReaderTrait<T>: Debug
 where
     T: Pod,
 {
-    fn as_ref(&self) -> Result<&[T], Errno>;
+    /// Get a reference to the readable prefix of the region.
+    fn ref_some(&self) -> Result<&[T], Errno>;
+
     /// Reads up to min(self.len(), buf.len()). May read less if the end of the
     /// region is inaccessible.
     fn read_some(&self, offset: usize, buf: &mut [T]) -> Result<usize, Errno>;
+
     fn len(&self) -> usize;
 
     // Reads exactly buf.len() or returns an error.
@@ -38,6 +41,17 @@ where
             Ok(())
         } else {
             warn!("Partial read: got:{} expected:{}", buf.len(), n);
+            Err(Errno::EFAULT)
+        }
+    }
+
+    /// Get a reference to the whole region, or return an error.
+    fn ref_exact(&self) -> Result<&[T], Errno> {
+        let slice = self.ref_some()?;
+        if slice.len() == self.len() {
+            Ok(slice)
+        } else {
+            warn!("Partial ref: got:{} expected:{}", slice.len(), self.len());
             Err(Errno::EFAULT)
         }
     }
@@ -58,11 +72,14 @@ where
         Self { reader }
     }
 
-    /// Access this reader's memory as a reference. May internally require a
-    /// copy, which is redundant if the data is going to be copied into Shadow's
-    /// memory anyway.
-    pub fn as_ref(&self) -> Result<&[T], Errno> {
-        (&*self.reader).as_ref()
+    /// Get a reference to the readable prefix of the region.
+    pub fn ref_some(&self) -> Result<&[T], Errno> {
+        self.reader.ref_some()
+    }
+
+    /// Get a reference to the whole region, or return an error.
+    pub fn ref_exact(&self) -> Result<&[T], Errno> {
+        self.reader.ref_exact()
     }
 
     /// Copies up to min(self.len(), buf.len()). May read less if the end
@@ -294,7 +311,7 @@ where
 
 impl<'a, T> CopyingMemoryReader<'a, T>
 where
-    T: Pod,
+    T: Pod + Debug,
 {
     fn new(memory_manager: &'a MemoryManager, ptr: TypedPluginPtr<T>) -> Self {
         Self {
@@ -322,9 +339,9 @@ impl<'a, T> MemoryReaderTrait<T> for CopyingMemoryReader<'a, T>
 where
     T: Pod + Debug,
 {
-    fn as_ref(&self) -> Result<&[T], Errno> {
+    fn ref_some(&self) -> Result<&[T], Errno> {
         if self.len() == 0 {
-            trace!("as_ref returning empty slice");
+            trace!("returning empty slice");
             return Ok(&mut [][..]);
         }
 
@@ -334,7 +351,8 @@ where
                 let mut vec = Vec::<T>::with_capacity(self.len());
                 // SAFETY: any value is valid for Pod.
                 unsafe { vec.set_len(self.len()) };
-                self.read_exact(0, &mut vec)?;
+                let nread = self.read_some(0, &mut vec)?;
+                vec.truncate(nread);
                 Ok(vec.into_boxed_slice())
             }) {
             // Convert box to slice
@@ -345,8 +363,7 @@ where
     }
 
     fn read_some(&self, offset: usize, buf: &mut [T]) -> Result<usize, Errno> {
-        self.memory_manager
-            .readv_ptrs(&mut [buf], &[self.ptr.slice(offset..)])
+        self.memory_manager.read_some(buf, self.ptr.slice(offset..))
     }
 
     fn len(&self) -> usize {
@@ -471,7 +488,9 @@ where
         self.memory.len()
     }
 
-    fn as_ref(&self) -> Result<&[T], Errno> {
+    fn ref_some(&self) -> Result<&[T], Errno> {
+        // We only create a MappedMemoryReader when we already know the whole
+        // region is accessible.
         Ok(self.memory)
     }
 
@@ -681,7 +700,7 @@ impl ShmFile {
         let reader = memory_manager.reader(
             TypedPluginPtr::<u8>::new(PluginPtr::from(interval.start), interval.len()).unwrap(),
         );
-        reader.read_some(dst).unwrap();
+        reader.read_exact(dst).unwrap();
     }
 
     /// Map the given range of the file into the plugin's address space.
@@ -1674,35 +1693,92 @@ impl MemoryManager {
         }
     }
 
-    // Low level helper for reading directly from `srcs` to `dsts`.
-    // Returns the number of bytes read. Panics if the
-    // MemoryManager's process isn't currently active.
-    fn readv_ptrs<T: Pod + Debug>(
+    // Read as much of `ptr` as is accessible into `buf`.
+    fn read_some<T: Debug + Pod>(
         &self,
-        dsts: &mut [&mut [T]],
-        srcs: &[TypedPluginPtr<T>],
+        buf: &mut [T],
+        ptr: TypedPluginPtr<T>,
     ) -> Result<usize, Errno> {
-        let srcs: Vec<_> = srcs
-            .iter()
-            .map(|src| nix::sys::uio::RemoteIoVec {
-                base: usize::from(src.ptr()),
-                len: src.cast::<u8>().unwrap().len(),
-            })
-            .collect();
-        let dsts: Vec<_> = dsts
-            .iter_mut()
-            .map(|dst: &mut &mut [T]| -> nix::sys::uio::IoVec<&mut [u8]> {
-                nix::sys::uio::IoVec::from_mut_slice(pod::to_u8_slice_mut(*dst))
-            })
-            .collect();
+        // Convert to u8
+        let mut buf = pod::to_u8_slice_mut(buf);
+        let ptr = ptr.cast::<u8>().unwrap();
 
-        self.readv_iovecs::<T>(&dsts, &srcs)
+        // Split at page boundaries to allow partial reads.
+        let mut slices = Vec::with_capacity((buf.len() + page_size() - 1) / page_size() + 1);
+        let mut total_bytes_toread = std::cmp::min(buf.len(), ptr.len());
+
+        // First chunk to read is from pointer to beginning of next page.
+        let prev_page_boundary = usize::from(ptr.ptr()) / page_size() * page_size();
+        let next_page_boundary = prev_page_boundary + page_size();
+        let mut next_bytes_toread = std::cmp::min(
+            next_page_boundary - usize::from(ptr.ptr()),
+            total_bytes_toread,
+        );
+
+        while next_bytes_toread > 0 {
+            // Add the next chunk to read.
+            let (prefix, suffix) = buf.split_at_mut(next_bytes_toread);
+            buf = suffix;
+            slices.push(prefix);
+            total_bytes_toread -= next_bytes_toread;
+
+            // Reads should now be page-aligned. Read a whole page at a time,
+            // up to however much is left.
+            next_bytes_toread = std::cmp::min(total_bytes_toread, page_size());
+        }
+        let bytes_read = self.readv_ptrs(&mut slices, &[ptr])?;
+        Ok(bytes_read / std::mem::size_of::<T>())
+    }
+
+    // Read exactly enough to fill `buf`, or fail.
+    fn read_exact<T: Debug + Pod>(
+        &self,
+        buf: &mut [T],
+        ptr: TypedPluginPtr<T>,
+    ) -> Result<(), Errno> {
+        let buf = pod::to_u8_slice_mut(buf);
+        let ptr = ptr.cast::<u8>().unwrap();
+        let bytes_read = self.readv_ptrs(&mut [buf], &[ptr])?;
+        if bytes_read != buf.len() {
+            warn!(
+                "Tried to read {} bytes but only got {}",
+                buf.len(),
+                bytes_read
+            );
+            return Err(Errno::EFAULT);
+        }
+        Ok(())
     }
 
     // Low level helper for reading directly from `srcs` to `dsts`.
     // Returns the number of bytes read. Panics if the
     // MemoryManager's process isn't currently active.
-    fn readv_iovecs<T: Pod + Debug>(
+    fn readv_ptrs(
+        &self,
+        dsts: &mut [&mut [u8]],
+        srcs: &[TypedPluginPtr<u8>],
+    ) -> Result<usize, Errno> {
+        let srcs: Vec<_> = srcs
+            .iter()
+            .map(|src| nix::sys::uio::RemoteIoVec {
+                base: usize::from(src.ptr()),
+                len: src.len(),
+            })
+            .collect();
+        let dsts: Vec<_> = dsts
+            .iter_mut()
+            .map(|dst: &mut &mut [u8]| -> nix::sys::uio::IoVec<&mut [u8]> {
+                nix::sys::uio::IoVec::from_mut_slice(*dst)
+            })
+            .collect();
+
+        self.readv_iovecs(&dsts, &srcs)
+    }
+
+    // Low level helper for reading directly from `srcs` to `dsts`.
+    // Returns the number of bytes read. Panics if the
+    // MemoryManager's process isn't currently active.
+    fn readv_iovecs(
         &self,
         dsts: &[nix::sys::uio::IoVec<&mut [u8]>],
         srcs: &[nix::sys::uio::RemoteIoVec],
@@ -1780,6 +1856,8 @@ impl MemoryManager {
             .map_err(|e| e.as_errno().unwrap())?;
 
         dst.truncate(nread);
+        let src = src.slice(..nread);
+
         let nullpos = dst.iter().position(|c| *c == 0);
         match nullpos {
             Some(i) => dst.truncate(i + 1),
@@ -1796,8 +1874,9 @@ impl MemoryManager {
             }
         };
 
+        trace!("XXX Returning string reader with len {}", dst.len());
         Ok(MemoryReader::new(Box::new(
-            CopyingMemoryReader::new_with_memory(self, src, dst.into_boxed_slice()),
+            CopyingMemoryReader::new_with_memory(self, src.slice(..dst.len()), dst.into_boxed_slice()),
         )))
     }
 
@@ -2008,7 +2087,13 @@ mod export {
             Ok(r) => r,
         };
         if !strlen.is_null() {
-            *strlen = reader.as_ref().unwrap().len();
+            *strlen = reader.ref_exact().unwrap().len();
+        }
+        // FIXME
+        if reader.ref_exact().is_ok() {
+            trace!("XXX Read string: '{:?}'", std::ffi::CStr::from_bytes_with_nul(reader.ref_exact().unwrap()));
+        } else {
+            trace!("XXX Failed to read string");
         }
         *reader_out = Box::into_raw(Box::new(reader));
         0
@@ -2024,8 +2109,9 @@ mod export {
     pub unsafe extern "C" fn memorymanager_getReadablePtr<'a>(
         reader: *mut MemoryReader<'a, u8>,
     ) -> *const c_void {
+        debug_assert!(!reader.is_null());
         let reader = &*reader;
-        match reader.as_ref() {
+        match reader.ref_exact() {
             Ok(p) => p.as_ptr() as *const c_void,
             Err(_) => std::ptr::null(),
         }
