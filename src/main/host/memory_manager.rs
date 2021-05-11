@@ -330,7 +330,7 @@ where
     }
 
     fn copy(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno> {
-        self.memory_manager.read_ptr(buf, self.ptr, offset)
+        self.memory_manager.read_ptr(buf, self.ptr.slice(offset..))
     }
 
     fn len(&self) -> usize {
@@ -380,7 +380,7 @@ where
         // overwrite it.
         // SAFETY: any bit pattern is valid Pod.
         unsafe { vec.set_len(self.len()) };
-        self.memory_manager.read_ptr(&mut vec, self.ptr, 0)?;
+        self.memory_manager.read_ptr(&mut vec, self.ptr)?;
 
         debug_assert!(self.writable_ptr.is_none());
         self.writable_ptr = Some(vec.into_boxed_slice());
@@ -1664,18 +1664,16 @@ impl MemoryManager {
         &self,
         dst: &mut [T],
         src: TypedPluginPtr<T>,
-        offset: usize,
     ) -> Result<(), Errno> {
         let src = src.cast::<u8>().unwrap();
         let dst = pod::to_u8_slice_mut(dst);
-        let offset = offset * std::mem::size_of::<T>();
-        assert!(dst.len() <= src.len() - offset);
+        assert!(dst.len() <= src.len());
 
         let toread = dst.len();
         trace!("read_ptr reading {} bytes", dst.len());
         let local = [nix::sys::uio::IoVec::from_mut_slice(dst)];
         let remote = [nix::sys::uio::RemoteIoVec {
-            base: usize::from(src.ptr()) + offset,
+            base: usize::from(src.ptr()),
             len: toread,
         }];
 
