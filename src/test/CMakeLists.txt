@@ -45,7 +45,11 @@ macro(add_shadow_tests)
    cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG;CHECK_RETVAL;POST_CMD" "METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
 
    if(NOT DEFINED SHADOW_TEST_LOGLEVEL)
-      set(SHADOW_TEST_LOGLEVEL "trace")
+      if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+         set(SHADOW_TEST_LOGLEVEL "trace")
+      else()
+         set(SHADOW_TEST_LOGLEVEL "info")
+      endif()
    endif()
 
    if(NOT DEFINED SHADOW_TEST_SHADOW_CONFIG)
