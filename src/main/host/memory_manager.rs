@@ -12,6 +12,7 @@ use nix::errno::Errno;
 use nix::{fcntl, sys};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -112,6 +113,16 @@ impl<'a> MemoryReader<'a, u8> {
         MemoryReaderCursor {
             reader: self,
             offset: 0,
+        }
+    }
+
+    fn read_string(&self, buf: &mut [u8]) -> Result<usize, Errno> {
+        let nread = self.reader.read_some(0, buf)?;
+        let buf = &buf[..nread];
+        let nullpos = buf.iter().position(|c| *c == 0);
+        match nullpos {
+            Some(i) => Ok(i),
+            None => Err(Errno::ENAMETOOLONG),
         }
     }
 
@@ -2034,6 +2045,22 @@ mod export {
             *strlen = cstr.to_bytes().len();
         }
         0
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_readString<'a>(
+        reader: *const MemoryReader<'a, u8>,
+        str: *mut libc::c_char,
+        strlen: libc::size_t,
+    ) -> libc::ssize_t {
+        debug_assert!(!reader.is_null());
+        debug_assert!(!str.is_null());
+        let reader = &*reader;
+        let dst = std::slice::from_raw_parts_mut(str as *mut u8, strlen);
+        match reader.read_string(dst) {
+            Ok(n) => libc::ssize_t::try_from(n).unwrap_or(-(Errno::ENAMETOOLONG as libc::ssize_t)),
+            Err(e) => return -(e as libc::ssize_t),
+        }
     }
 
     /// Copy data from this reader's memory.

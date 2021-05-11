@@ -274,6 +274,8 @@ int32_t memorymanager_getReadableString(const struct MemoryReader_u8 *reader,
                                         const char **str,
                                         size_t *strlen);
 
+ssize_t memorymanager_readString(const struct MemoryReader_u8 *reader, char *str, size_t strlen);
+
 // Copy data from this reader's memory.
 int32_t memorymanager_readPtr(struct MemoryManager *memory_manager,
                               void *dst,

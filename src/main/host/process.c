@@ -903,6 +903,18 @@ int process_getReadableString(Process* proc, PluginPtr plugin_src, size_t n, con
     return res;
 }
 
+ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_t n) {
+    MAGIC_ASSERT(proc);
+
+    // Disallow additional references while there's a mutable reference.
+    utility_assert(proc->memoryWriters->len == 0);
+
+    MemoryReader_u8* reader = memorymanager_getReader(proc->memoryManager, src, n);
+    ssize_t res = memorymanager_readString(reader, str, n);
+    memorymanager_freeReader(reader);
+    return res;
+}
+
 // Returns a writable pointer corresponding to the named region. The initial
 // contents of the returned memory are unspecified.
 //
