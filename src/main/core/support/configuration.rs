@@ -301,10 +301,10 @@ impl Default for ExperimentalOptions {
         Self {
             use_sched_fifo: Some(false),
             use_o_n_waitpid_workarounds: Some(true),
-            use_explicit_block_message: Some(true),
+            use_explicit_block_message: Some(false),
             use_syscall_counters: Some(false),
             use_object_counters: Some(true),
-            preload_spin_max: Some(8096),
+            preload_spin_max: Some(0),
             max_concurrency: None,
             use_memory_manager: Some(true),
             use_shim_syscall_handler: Some(true),
