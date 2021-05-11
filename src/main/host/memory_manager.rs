@@ -330,7 +330,14 @@ where
     }
 
     fn copy(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno> {
-        self.memory_manager.read_ptr(buf, self.ptr.slice(offset..))
+        let nread = self
+            .memory_manager
+            .readv_ptrs(&mut [buf], &[self.ptr.slice(offset..)])?;
+        if nread != buf.len() {
+            Err(Errno::EFAULT)
+        } else {
+            Ok(())
+        }
     }
 
     fn len(&self) -> usize {
@@ -380,7 +387,7 @@ where
         // overwrite it.
         // SAFETY: any bit pattern is valid Pod.
         unsafe { vec.set_len(self.len()) };
-        self.memory_manager.read_ptr(&mut vec, self.ptr)?;
+        self.memory_manager.read_exact(&mut vec, self.ptr)?;
 
         debug_assert!(self.writable_ptr.is_none());
         self.writable_ptr = Some(vec.into_boxed_slice());
@@ -1658,24 +1665,47 @@ impl MemoryManager {
         }
     }
 
-    // Low level helper for reading directly from `src`. Panics if the
+    // Low level helper for reading directly from `srcs` to `dsts`.
+    // Returns the number of bytes read. Panics if the
     // MemoryManager's process isn't currently active.
-    fn read_ptr<T: Pod + Debug>(
+    fn readv_ptrs<T: Pod + Debug>(
         &self,
-        dst: &mut [T],
-        src: TypedPluginPtr<T>,
-    ) -> Result<(), Errno> {
-        let src = src.cast::<u8>().unwrap();
-        let dst = pod::to_u8_slice_mut(dst);
-        assert!(dst.len() <= src.len());
+        dsts: &mut [&mut [T]],
+        srcs: &[TypedPluginPtr<T>],
+    ) -> Result<usize, Errno> {
+        let srcs: Vec<_> = srcs
+            .iter()
+            .map(|src| nix::sys::uio::RemoteIoVec {
+                base: usize::from(src.ptr()),
+                len: src.cast::<u8>().unwrap().len(),
+            })
+            .collect();
+        let dsts: Vec<_> = dsts
+            .iter_mut()
+            .map(|dst: &mut &mut [T]| -> nix::sys::uio::IoVec<&mut [u8]> {
+                nix::sys::uio::IoVec::from_mut_slice(pod::to_u8_slice_mut(*dst))
+            })
+            .collect();
 
-        let toread = dst.len();
-        trace!("read_ptr reading {} bytes", dst.len());
-        let local = [nix::sys::uio::IoVec::from_mut_slice(dst)];
-        let remote = [nix::sys::uio::RemoteIoVec {
-            base: usize::from(src.ptr()),
-            len: toread,
-        }];
+        self.readv_iovecs::<T>(&dsts, &srcs)
+    }
+
+    // Low level helper for reading directly from `srcs` to `dsts`.
+    // Returns the number of bytes read. Panics if the
+    // MemoryManager's process isn't currently active.
+    fn readv_iovecs<T: Pod + Debug>(
+        &self,
+        dsts: &[nix::sys::uio::IoVec<&mut [u8]>],
+        srcs: &[nix::sys::uio::RemoteIoVec],
+    ) -> Result<usize, Errno> {
+        trace!(
+            "Reading from srcs of len {}",
+            srcs.iter().map(|s| s.len).sum::<usize>()
+        );
+        trace!(
+            "Reading to dsts of len {}",
+            dsts.iter().map(|d| d.as_slice().len()).sum::<usize>()
+        );
 
         // While the documentation for process_vm_readv says to use the pid, in
         // practice it needs to be the tid of a still-running thread. i.e. using the
@@ -1689,12 +1719,10 @@ impl MemoryManager {
         // Don't access another process's memory.
         assert_eq!(active_pid, self.pid);
 
-        let nwritten = nix::sys::uio::process_vm_readv(active_tid, &local, &remote)
+        let nread = nix::sys::uio::process_vm_readv(active_tid, &dsts, &srcs)
             .map_err(|e| e.as_errno().unwrap())?;
 
-        // There shouldn't be any partial writes with a single remote iovec.
-        assert_eq!(nwritten, toread);
-        Ok(())
+        Ok(nread)
     }
 
     /// Creates a reader for a NULL-terminated string starting at `src`. Succeeds
