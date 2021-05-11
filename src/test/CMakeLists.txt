@@ -64,6 +64,12 @@ macro(add_shadow_tests)
       set(SHADOW_TEST_POST_CMD "true")
    endif()
    
+   # If cpu pinning is not explicitly set, we disable it so we avoid pinning
+   # multiple tests that should be running in parallel to the same exact CPUs.
+   if(NOT "${SHADOW_TEST_ARGS}" MATCHES ".*--use-cpu-pinning.*")
+      list(APPEND SHADOW_TEST_ARGS "--use-cpu-pinning" "false")
+   endif()
+
    string(REPLACE ";" " " SHADOW_TEST_ARGS "${SHADOW_TEST_ARGS}")
 
    foreach(SHADOW_TEST_METHOD ${SHADOW_TEST_METHODS})
