@@ -37,29 +37,49 @@ static GHashTable* _shmemcleanup_getProcSet() {
                    "proc.tid not int-sized on this architecture");
 
     GHashTable* proc_set = g_hash_table_new(g_direct_hash, g_direct_equal);
+    assert(proc_set);
 
-    if (proc_set) {
-        PROCTAB* ptab = openproc(PROC_FILLSTAT);
-        if (!ptab) { // if we can't get the current process table, just return
-                     // nothing.
-            g_hash_table_destroy(proc_set);
-            proc_set = NULL;
-            return proc_set;
-        }
-
-        bool could_add = false;
-        // go through each proc in procfs and add the pid (proc.tid) to our
-        // proc set
-        while (readproc(ptab, &proc)) {
-            could_add = g_hash_table_add(proc_set, GINT_TO_POINTER(proc.tid));
-            assert(could_add); // we should never encounter two processes with
-                               // the same PID
-        }
-
-        closeproc(ptab);
+    PROCTAB* ptab = openproc(PROC_FILLSTAT);
+    if (!ptab) {
+        // if we can't get the current process table, just return nothing.
+        g_hash_table_destroy(proc_set);
+        return NULL;
     }
 
+    // go through each proc in procfs and add the pid (proc.tid) to our
+    // proc set
+    while (readproc(ptab, &proc)) {
+        bool could_add = g_hash_table_add(proc_set, GINT_TO_POINTER(proc.tid));
+        // we should never encounter two processes with the same PID
+        assert(could_add);
+    }
+
+    closeproc(ptab);
+
     return proc_set;
+}
+
+/*
+ * Return an array of Shadow shared memory file names. Caller owns the returned
+ * array and should free it via `g_ptr_array_free`. Returns NULL if the
+ * directory couldn't be read.
+ */
+static GPtrArray* _shmemcleanup_getFiles() {
+    GPtrArray* files = g_ptr_array_new_with_free_func(g_free);
+    DIR* dir = opendir(SHM_DIR);
+    if (!dir) {
+        g_ptr_array_free(files, true);
+        return NULL;
+    }
+    const struct dirent* ent = readdir(dir);
+    while (ent) {
+        if (shmemfile_nameHasShadowPrefix(ent->d_name)) {
+            g_ptr_array_add(files, g_strdup(ent->d_name));
+        }
+        ent = readdir(dir);
+    }
+    closedir(dir);
+    return files;
 }
 
 /*
@@ -106,40 +126,35 @@ static bool _shmemcleanup_unlinkIfShadow(const char* filename,
 }
 
 void shmemcleanup_tryCleanup() {
-
+    // Get list of existing shmem files.
+    GPtrArray* files = _shmemcleanup_getFiles();
+    if (!files) {
+        warning("Couldn't read directory %s; skipping shm cleanup", SHM_DIR);
+        return;
+    }
+    // Get running processes. This must be done after getting the list of files
+    // to ensure we don't delete a file of a process that's starting
+    // concurrently with ours.
     GHashTable* proc_set = _shmemcleanup_getProcSet();
-
     if (!proc_set) {
+        warning("Couldn't read proc; skipping shm cleanup");
+        g_ptr_array_free(files, TRUE);
         return;
     }
 
-    debug("Num. processes in system's procfs: %u", g_hash_table_size(proc_set));
-
-    // If we can get a list of running processes on the machine, iterate
-    // through the files in shared memory and try to remove them.
-
-    DIR* dir = opendir(SHM_DIR);
+    trace("Num. processes in system's procfs: %u", g_hash_table_size(proc_set));
 
     size_t n_removed = 0;
-
-    if (dir) {
-
-        const struct dirent* ent = readdir(dir);
-
-        while (ent) {
-            bool did_remove = _shmemcleanup_unlinkIfShadow(
-                ent->d_name, proc_set);
-
-            if (did_remove) {
-                ++n_removed;
-            }
-            ent = readdir(dir);
+    for(int i = 0; i < files->len; ++i) {
+        bool did_remove = _shmemcleanup_unlinkIfShadow(
+            g_ptr_array_index(files, i), proc_set);
+        if (did_remove) {
+            ++n_removed;
         }
-
-        closedir(dir);
     }
 
     debug("Num. removed shared memory files: %zu", n_removed);
 
     g_hash_table_destroy(proc_set);
+    g_ptr_array_free(files, TRUE);
 }

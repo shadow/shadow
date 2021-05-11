@@ -191,7 +191,7 @@ int shmemfile_free(ShMemFile* shmf) {
     if (rc == 0) {
         rc = shm_unlink(shmf->name);
         if (rc) {
-            panic("error on shm_unlink: %s", strerror(errno));
+            panic("error on shm_unlink of %s: %s", shmf->name, strerror(errno));
         }
     }
 
