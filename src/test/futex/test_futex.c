@@ -48,7 +48,8 @@ static void* _futex_wait_test_child(void* void_arg) {
     FutexWaitTestChildArg* arg = void_arg;
     _set_condition(&arg->child_started);
     trace("Child about to wait");
-    assert_true_errno(syscall(SYS_futex, &arg->futex, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0) == 0);
+    assert_true_errno(!syscall(SYS_futex, &arg->futex, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0) ||
+                      (errno == EAGAIN && !running_in_shadow()));
     trace("Child returned from wait");
     __sync_synchronize();
     g_assert_cmpint(arg->futex, ==, AVAILABLE);
@@ -120,8 +121,9 @@ static void* _futex_wait_bitset_test_child(void* void_arg) {
     FutexWaitBitsetTestChildArg* arg = void_arg;
     _set_condition(&arg->child_started);
     trace("Child %d about to wait", arg->id);
-    assert_true_errno(syscall(SYS_futex, arg->futex, FUTEX_WAIT_BITSET, UNAVAILABLE, NULL, NULL,
-                              1 << arg->id) == 0);
+    assert_true_errno(
+        !syscall(SYS_futex, arg->futex, FUTEX_WAIT_BITSET, UNAVAILABLE, NULL, NULL, 1 << arg->id) ||
+        (errno == EAGAIN && !running_in_shadow()));
     trace("Child %d returned from wait", arg->id);
     g_assert_cmpint(__atomic_load_n(arg->futex, __ATOMIC_ACQUIRE), ==, AVAILABLE);
     _set_condition(&arg->child_finished);
