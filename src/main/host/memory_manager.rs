@@ -26,8 +26,21 @@ where
     T: Pod,
 {
     fn as_ref(&self) -> Result<&[T], Errno>;
-    fn copy(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno>;
+    /// Reads up to min(self.len(), buf.len()). May read less if the end of the
+    /// region is inaccessible.
+    fn read_some(&self, offset: usize, buf: &mut [T]) -> Result<usize, Errno>;
     fn len(&self) -> usize;
+
+    // Reads exactly buf.len() or returns an error.
+    fn read_exact(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno> {
+        let n = self.read_some(offset, buf)?;
+        if n == buf.len() {
+            Ok(())
+        } else {
+            warn!("Partial read: got:{} expected:{}", buf.len(), n);
+            Err(Errno::EFAULT)
+        }
+    }
 }
 
 /// Read-accessor to plugin memory.
@@ -52,20 +65,22 @@ where
         (&*self.reader).as_ref()
     }
 
-    /// Copies memory into `buf`, which must be of size `self.len()`
-    pub fn copy(&self, buf: &mut [T]) -> Result<(), Errno> {
-        assert_eq!(buf.len(), self.len());
-        self.reader.copy(0, buf)
+    /// Copies up to min(self.len(), buf.len()). May read less if the end
+    /// of the region is inaccessible.
+    pub fn read_some(&self, buf: &mut [T]) -> Result<usize, Errno> {
+        self.reader.read_some(0, buf)
     }
 
-    /// Reads a single value. Panics if this reader contains more than 1 value.
-    /// Once const-generics are stabilized, this could return an array.
-    pub fn as_value(&self) -> Result<T, Errno> {
-        assert_eq!(self.reader.len(), 1);
+    pub fn read_exact(&self, buf: &mut [T]) -> Result<(), Errno> {
+        self.reader.read_exact(0, buf)
+    }
+
+    /// Reads N values.
+    pub fn as_values<const N: usize>(&self) -> Result<[T; N], Errno> {
         // SAFETY: Any bit-pattern is valid for Pod.
-        let mut value = unsafe { [std::mem::MaybeUninit::uninit().assume_init()] };
-        self.reader.copy(0, &mut value)?;
-        Ok(value[0])
+        let mut value: [T; N] = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
+        self.reader.read_exact(0, &mut value)?;
+        Ok(value)
     }
 
     /// Number of items referenced by this reader.
@@ -100,7 +115,7 @@ impl<'a> std::io::Read for MemoryReaderCursor<'a> {
         }
         self.reader
             .reader
-            .copy(self.offset, &mut buf[..toread])
+            .read_exact(self.offset, &mut buf[..toread])
             .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
         self.offset += toread;
         Ok(toread)
@@ -319,7 +334,7 @@ where
                 let mut vec = Vec::<T>::with_capacity(self.len());
                 // SAFETY: any value is valid for Pod.
                 unsafe { vec.set_len(self.len()) };
-                self.copy(0, &mut vec)?;
+                self.read_exact(0, &mut vec)?;
                 Ok(vec.into_boxed_slice())
             }) {
             // Convert box to slice
@@ -329,15 +344,9 @@ where
         }
     }
 
-    fn copy(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno> {
-        let nread = self
-            .memory_manager
-            .readv_ptrs(&mut [buf], &[self.ptr.slice(offset..)])?;
-        if nread != buf.len() {
-            Err(Errno::EFAULT)
-        } else {
-            Ok(())
-        }
+    fn read_some(&self, offset: usize, buf: &mut [T]) -> Result<usize, Errno> {
+        self.memory_manager
+            .readv_ptrs(&mut [buf], &[self.ptr.slice(offset..)])
     }
 
     fn len(&self) -> usize {
@@ -466,9 +475,9 @@ where
         Ok(self.memory)
     }
 
-    fn copy(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno> {
+    fn read_some(&self, offset: usize, buf: &mut [T]) -> Result<usize, Errno> {
         buf.copy_from_slice(&self.memory[offset..offset + buf.len()]);
-        Ok(())
+        Ok(buf.len())
     }
 }
 
@@ -672,7 +681,7 @@ impl ShmFile {
         let reader = memory_manager.reader(
             TypedPluginPtr::<u8>::new(PluginPtr::from(interval.start), interval.len()).unwrap(),
         );
-        reader.copy(dst).unwrap();
+        reader.read_some(dst).unwrap();
     }
 
     /// Map the given range of the file into the plugin's address space.
@@ -2033,7 +2042,7 @@ mod export {
         let memory_manager = memory_manager.as_mut().unwrap();
         let src = TypedPluginPtr::<u8>::new(src.into(), n).unwrap();
         let dst = std::slice::from_raw_parts_mut(dst as *mut u8, n);
-        match memory_manager.reader(src).copy(dst) {
+        match memory_manager.reader(src).read_some(dst) {
             Ok(_) => 0,
             Err(_) => {
                 trace!("Couldn't read {:?} into {:?}", src, dst);
