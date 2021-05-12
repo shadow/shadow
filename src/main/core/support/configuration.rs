@@ -237,7 +237,7 @@ pub struct ExperimentalOptions {
     #[clap(about = EXP_HELP.get("use_shim_syscall_handler").unwrap())]
     use_shim_syscall_handler: Option<bool>,
 
-    /// Use CPU pinning
+    /// Pin each thread and any processes it executes to the same logical CPU Core to improve cache affinity
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_cpu_pinning").unwrap())]
     use_cpu_pinning: Option<bool>,
@@ -301,14 +301,14 @@ impl Default for ExperimentalOptions {
         Self {
             use_sched_fifo: Some(false),
             use_o_n_waitpid_workarounds: Some(true),
-            use_explicit_block_message: Some(true),
+            use_explicit_block_message: Some(false),
             use_syscall_counters: Some(false),
             use_object_counters: Some(true),
-            preload_spin_max: Some(8096),
+            preload_spin_max: Some(0),
             max_concurrency: None,
             use_memory_manager: Some(true),
             use_shim_syscall_handler: Some(true),
-            use_cpu_pinning: Some(false),
+            use_cpu_pinning: Some(true),
             interpose_method: Some(InterposeMethod::Ptrace),
             runahead: None,
             scheduler_policy: Some(SchedulerPolicy::Steal),
