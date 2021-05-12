@@ -1,7 +1,7 @@
 general:
   # Should be greater than NUM_SECONDS from test_threads_group_leader_exits.rs
   stop_time: 10
-topology: plain
+topology: 1_gbit_switch
 hosts:
   testnode:
     processes:
