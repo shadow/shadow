@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <glib.h>
+#include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -214,6 +215,28 @@ static void _test_fstat() {
 
     /* success! */
     fclose(file);
+}
+
+static void _test_fstatat() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+
+    assert_nonneg_errno(chmod(adf.name, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
+
+    DIR* dir;
+    assert_nonnull_errno(dir = opendir(dirname(adf.name)));
+
+    int this_dirfd;
+    assert_nonneg_errno(this_dirfd = dirfd(dir));
+
+    struct stat filestat = {0};
+    assert_nonneg_errno(fstatat(this_dirfd, basename(adf.name), &filestat, 0));
+
+    g_assert_cmpint(filestat.st_mode & S_IXOTH, ==, 0);
+    g_assert_cmpint(filestat.st_mode & S_IWOTH, ==, 0);
+    g_assert_cmpint(filestat.st_mode & S_IROTH, ==, 0);
+
+    /* success! */
+    closedir(dir);
 }
 
 static void _test_dir() {
@@ -512,6 +535,7 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/file/fscanf", _test_fscanf);
     g_test_add_func("/file/chmod", _test_fchmod);
     g_test_add_func("/file/fstat", _test_fstat);
+    g_test_add_func("/file/fstatat", _test_fstatat);
 
     g_test_add_func("/file/dir", _test_dir);
     g_test_add_func("/file/tmpfile", _test_tmpfile);
