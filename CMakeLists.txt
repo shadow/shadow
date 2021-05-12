@@ -141,6 +141,13 @@ add_compile_options(-fno-omit-frame-pointer)
 add_compile_options(-Wreturn-type)
 add_compile_options(-Wswitch)
 
+if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+    # we only check for unused functions when builing in debug mode since some
+    # functions are only called when logging, which can be #ifdef'd out in
+    # release mode
+    add_compile_options(-Wunused-function)
+endif()
+
 if("${CMAKE_BUILD_TYPE}" STREQUAL "")
     set(CMAKE_BUILD_TYPE "Release")
 endif()

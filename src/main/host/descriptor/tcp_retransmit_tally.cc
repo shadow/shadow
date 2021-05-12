@@ -284,17 +284,12 @@ void retransmit_tally_populate_lost_ranges(const void *p, uint32_t *lost) {
 
 } // extern "C"
 
-static void TEST() {
-   assert(false);
-}
-
 RetransmitTally::RetransmitTally()
    : last_ack_(-1),
      num_dupl_ack_(0),
      magic_num_(kMagicNum),
      marked_lost_{}, sacked_{}, retransmitted_{}, lost_{}
 {
-   // TEST();
 }
 
 RetransmitTally &RetransmitTally::operator=(RetransmitTally &&rhs) {

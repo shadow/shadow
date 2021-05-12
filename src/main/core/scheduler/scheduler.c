@@ -385,7 +385,7 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
     g_mutex_unlock(&scheduler->globalLock);
 }
 
-static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
+__attribute__((unused)) static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
     utility_panic("Unimplemented");
 

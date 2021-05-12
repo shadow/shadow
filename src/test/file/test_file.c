@@ -347,7 +347,7 @@ static void _test_ioctl_tty() {
     assert_errno_is(ENOTTY);
 }
 
-static void _test_iov() {
+__attribute__((unused)) static void _test_iov() {
     g_auto(AutoDeleteFile) adf = _create_auto_file();
 
     FILE* file;

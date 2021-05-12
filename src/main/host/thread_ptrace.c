@@ -61,7 +61,7 @@ ADD_CONFIG_HANDLER(config_getUseOnWaitpidWorkarounds, _useONWaitpidWorkarounds)
 // current thread's tracee.
 #define WAITPID_COMMON_OPTIONS __WNOTHREAD
 
-static char SYSCALL_INSTRUCTION[] = {0x0f, 0x05};
+static char SYSCALL_INSTRUCTION[] __attribute__((unused)) = {0x0f, 0x05};
 
 // Number of times to do a non-blocking wait while waiting for traced thread.
 #define THREADPTRACE_MAX_SPIN 8096
@@ -756,8 +756,9 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv, const char* wor
     return thread->base.nativePid;
 }
 
-static SysCallReturn _threadptrace_getSerializedBlock(ThreadPtrace* thread, PluginPtr shm_blk_pptr,
-                                                      ShMemBlock* block, const char* syscall_name) {
+__attribute__((unused)) static SysCallReturn
+_threadptrace_getSerializedBlock(ThreadPtrace* thread, PluginPtr shm_blk_pptr, ShMemBlock* block,
+                                 const char* syscall_name) {
     trace("%s %p", syscall_name, (void*)shm_blk_pptr.val);
 
     ShMemBlockSerialized* shm_blk_ptr =

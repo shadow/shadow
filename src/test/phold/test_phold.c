@@ -139,20 +139,20 @@ static double _phold_generate_normal_deviate() {
     return x;
 }
 
-static double _phold_generate_normal(double location, double scale) {
+__attribute__((unused)) static double _phold_generate_normal(double location, double scale) {
     // location is mu, mean of normal distribution
     // scale is sigma, sqrt of the variance of normal distribution
     double z = _phold_generate_normal_deviate();
     return location + (scale * z);
 }
 
-static double _phold_generate_exponential(double rate) {
+__attribute__((unused)) static double _phold_generate_exponential(double rate) {
     // inverse transform sampling
     double u = _phold_get_uniform_double();
     return -log(u)/rate;
 }
 
-static in_addr_t _phold_lookupIP(PHold* phold, const gchar* hostname) {
+__attribute__((unused)) static in_addr_t _phold_lookupIP(PHold* phold, const gchar* hostname) {
     PHOLD_ASSERT(phold);
 
     in_addr_t ip = htonl(INADDR_NONE);
