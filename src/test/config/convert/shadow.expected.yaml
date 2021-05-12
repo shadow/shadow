@@ -26,6 +26,7 @@ topology:
 hosts:
   testclient:
     quantity: 1
+    bandwidth_down: 8000 Kibit
     processes:
     - start_time: 1
       args: client 5678
