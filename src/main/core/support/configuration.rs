@@ -375,16 +375,6 @@ pub struct HostDefaultOptions {
     #[clap(long, value_name = "city")]
     #[clap(about = HOST_HELP.get("city_code_hint").unwrap())]
     city_code_hint: Option<String>,
-
-    /// Downstream bandwidth capacity of the host
-    #[clap(long, value_name = "bits")]
-    #[clap(about = HOST_HELP.get("bandwidth_down").unwrap())]
-    bandwidth_down: Option<units::BitsPerSec<units::SiPrefixUpper>>,
-
-    /// Upstream bandwidth capacity of the host
-    #[clap(long, value_name = "bits")]
-    #[clap(about = HOST_HELP.get("bandwidth_up").unwrap())]
-    bandwidth_up: Option<units::BitsPerSec<units::SiPrefixUpper>>,
 }
 
 impl HostDefaultOptions {
@@ -398,8 +388,6 @@ impl HostDefaultOptions {
             ip_hint: None,
             country_code_hint: None,
             city_code_hint: None,
-            bandwidth_down: None,
-            bandwidth_up: None,
         }
     }
 
@@ -421,8 +409,6 @@ impl Default for HostDefaultOptions {
             ip_hint: None,
             country_code_hint: None,
             city_code_hint: None,
-            bandwidth_down: None,
-            bandwidth_up: None,
         }
     }
 }
@@ -462,6 +448,14 @@ pub struct HostOptions {
     /// Number of hosts to start
     #[serde(default)]
     quantity: Quantity,
+
+    /// Downstream bandwidth capacity of the host
+    #[serde(default)]
+    bandwidth_down: Option<units::BitsPerSec<units::SiPrefixUpper>>,
+
+    /// Upstream bandwidth capacity of the host
+    #[serde(default)]
+    bandwidth_up: Option<units::BitsPerSec<units::SiPrefixUpper>>,
 
     #[serde(default = "HostDefaultOptions::new_empty")]
     options: HostDefaultOptions,
@@ -1431,7 +1425,7 @@ mod export {
         assert!(!host.is_null());
         let host = unsafe { &*host };
 
-        match host.options.bandwidth_down {
+        match host.bandwidth_down {
             Some(x) => x.convert(units::SiPrefixUpper::Base).unwrap().value(),
             None => 0,
         }
@@ -1442,7 +1436,7 @@ mod export {
         assert!(!host.is_null());
         let host = unsafe { &*host };
 
-        match host.options.bandwidth_up {
+        match host.bandwidth_up {
             Some(x) => x.convert(units::SiPrefixUpper::Base).unwrap().value(),
             None => 0,
         }

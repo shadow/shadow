@@ -243,7 +243,7 @@ def shadow_dict_post_processing(shadow: Dict):
             host = shadow['hosts'][host_name]
 
             # add all extra fields to an 'options' field
-            host_non_option_names = ['quantity', 'processes']
+            host_non_option_names = ['quantity', 'processes', 'bandwidth_down', 'bandwidth_up']
             host_options = {x: host[x] for x in host if x not in host_non_option_names}
             host_non_options = {x: host[x] for x in host if x in host_non_option_names}
 
@@ -252,14 +252,14 @@ def shadow_dict_post_processing(shadow: Dict):
                 host['options'] = host_options
             shadow['hosts'][host_name] = host
 
+            # shadow classic uses bandwidth units of KiB/s
+            if 'bandwidth_up' in host:
+                host['bandwidth_up'] = str(host['bandwidth_up'] * 8) + ' Kibit'
+
+            if 'bandwidth_down' in host:
+                host['bandwidth_down'] = str(host['bandwidth_down'] * 8) + ' Kibit'
+
             if 'options' in host:
-                # shadow classic uses bandwidth units of KiB/s
-                if 'bandwidth_up' in host['options']:
-                    host['options']['bandwidth_up'] = str(host['options']['bandwidth_up'] * 8) + ' Kibit'
-
-                if 'bandwidth_down' in host['options']:
-                    host['options']['bandwidth_down'] = str(host['options']['bandwidth_down'] * 8) + ' Kibit'
-
                 # shadow classic automatically disables autotuning if the buffer sizes are set
                 if 'socket_send_buffer' in host['options']:
                     host['options']['socket_send_autotune'] = False
