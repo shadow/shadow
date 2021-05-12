@@ -148,7 +148,7 @@ fn read_helper(
         EventQueue::queue_and_run(|event_queue| {
             posix_file.borrow_mut().read(
                 memory
-                    .writer(TypedPluginPtr::<u8>::new(buf_ptr, buf_size).unwrap())
+                    .writer(TypedPluginPtr::<u8>::new(buf_ptr, buf_size).unwrap())?
                     .cursor(),
                 offset,
                 event_queue,
@@ -220,7 +220,7 @@ fn write_helper(
         EventQueue::queue_and_run(|event_queue| {
             posix_file.borrow_mut().write(
                 memory
-                    .reader(TypedPluginPtr::<u8>::new(buf_ptr, buf_size).unwrap())
+                    .reader(TypedPluginPtr::<u8>::new(buf_ptr, buf_size).unwrap())?
                     .cursor(),
                 offset,
                 event_queue,
@@ -324,7 +324,7 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: PluginPtr, flags: i32) -> Sy
     // Try to write them to the caller
     let write_res = Worker::with_active_process_memory_mut(|memory| {
         memory
-            .writer(TypedPluginPtr::<libc::c_int>::new(fd_ptr.into(), 2)?)
+            .writer(TypedPluginPtr::<libc::c_int>::new(fd_ptr.into(), 2)?)?
             .copy(&fds)
     });
 

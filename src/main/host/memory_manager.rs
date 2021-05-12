@@ -28,10 +28,15 @@ where
     fn as_ref(&self) -> Result<&[T], Errno>;
     fn copy(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno>;
     fn len(&self) -> usize;
+    fn ptr(&self) -> TypedPluginPtr<T>;
+    fn memory_manager(&self) -> &MemoryManager;
 }
 
 /// Read-accessor to plugin memory.
-pub struct MemoryReader<'a, T> {
+pub struct MemoryReader<'a, T>
+where
+    T: Pod + Debug,
+{
     // Wrapping the trait object lets us implement traits such as std::io::Read.
     // It can also be passed across the FFI boundary whereas trait objects cannot.
     reader: Box<dyn MemoryReaderTrait<T> + 'a>,
@@ -39,10 +44,93 @@ pub struct MemoryReader<'a, T> {
 
 impl<'a, T> MemoryReader<'a, T>
 where
-    T: Pod,
+    T: Pod + Debug,
 {
-    fn new(reader: Box<dyn MemoryReaderTrait<T> + 'a>) -> Self {
-        Self { reader }
+    pub fn new(
+        memory_manager: &'a MemoryManager,
+        ptr: TypedPluginPtr<T>,
+    ) -> Result<MemoryReader<'a, T>, Errno> {
+        let reader_trait: Box<dyn MemoryReaderTrait<T> + 'a> =
+            if let Some(mapped_reader) = MappedMemoryReader::new(memory_manager, ptr) {
+                Box::new(mapped_reader)
+            } else {
+                Box::new(CopyingMemoryReader::new(memory_manager, ptr))
+            };
+        memory_manager.add_ref(ptr)?;
+        Ok(MemoryReader {
+            reader: reader_trait,
+        })
+    }
+
+    fn new_string(
+        memory_manager: &'a MemoryManager,
+        src: TypedPluginPtr<u8>,
+    ) -> Result<MemoryReader<'a, u8>, Errno> {
+        let mut dst = Vec::<u8>::with_capacity(src.len());
+        // SAFETY: any values are legal for u8.
+        unsafe { dst.set_len(src.len()) };
+
+        // process_vm_readv reads at iovec granularity. To handle the case where
+        // the user-supplied pointer is near the end of a readable region, we split
+        // at page boundaries. i.e. succeed if we successfully read a null-terminated
+        // string, even if some of the region after that is inaccessible.
+        let mut remotes = Vec::new();
+        let mut toread = dst.len();
+        let mut address = usize::from(src.ptr());
+        while toread > 0 {
+            let mut this_toread = toread % page_size();
+            if this_toread == 0 {
+                this_toread = page_size();
+            }
+            let this_toread = std::cmp::min(this_toread, toread);
+            remotes.push(nix::sys::uio::RemoteIoVec {
+                base: address,
+                len: this_toread,
+            });
+            toread -= this_toread;
+            address += this_toread;
+        }
+        let local = [nix::sys::uio::IoVec::from_mut_slice(&mut dst)];
+
+        // While the documentation for process_vm_readv says to use the pid, in
+        // practice it needs to be the tid of a still-running thread. i.e. using the
+        // pid after the thread group leader has exited will fail.
+        let (active_tid, active_pid) = Worker::with_active_thread(|thread| {
+            (
+                nix::unistd::Pid::from_raw(thread.get_system_tid()),
+                nix::unistd::Pid::from_raw(thread.get_system_pid()),
+            )
+        });
+        // Don't access another process's memory.
+        assert_eq!(active_pid, memory_manager.pid);
+
+        let nread = nix::sys::uio::process_vm_readv(active_tid, &local, &remotes)
+            .map_err(|e| e.as_errno().unwrap())?;
+
+        dst.truncate(nread);
+        let nullpos = dst.iter().position(|c| *c == 0);
+        match nullpos {
+            Some(i) => dst.truncate(i + 1),
+            None => {
+                return if dst.len() == src.len() {
+                    // We couldn't read the whole region specified, and there
+                    // wasn't a full string in the prefix.
+                    Err(Errno::EFAULT)
+                } else {
+                    // We could read the whole region, but the string extended
+                    // beyond it.
+                    Err(Errno::ENAMETOOLONG)
+                };
+            }
+        };
+
+        memory_manager.add_ref(src)?;
+        let reader = Box::new(CopyingMemoryReader::<u8>::new_with_memory(
+            memory_manager,
+            src,
+            dst.into_boxed_slice(),
+        ));
+        Ok(MemoryReader { reader })
     }
 
     /// Access this reader's memory as a reference. May internally require a
@@ -71,6 +159,15 @@ where
     /// Number of items referenced by this reader.
     pub fn len(&self) -> usize {
         self.reader.len()
+    }
+}
+
+impl<'a, T> Drop for MemoryReader<'a, T>
+where
+    T: Pod + Debug,
+{
+    fn drop(&mut self) {
+        self.reader.memory_manager().drop_ref(self.reader.ptr())
     }
 }
 
@@ -140,12 +237,14 @@ where
     fn flush(&mut self) -> Result<(), Errno>;
     fn copy(&mut self, offset: usize, buf: &[T]) -> Result<(), Errno>;
     fn len(&self) -> usize;
+    fn ptr(&self) -> TypedPluginPtr<T>;
+    fn memory_manager(&self) -> &MemoryManager;
 }
 
 /// Write-accessor to plugin memory.
 pub struct MemoryWriter<'a, T>
 where
-    T: Pod,
+    T: Pod + Debug,
 {
     // Wrapping the trait object lets us implement traits such as std::io::Read.
     // It can also be passed across the FFI boundary (trait objects cannot).
@@ -155,13 +254,20 @@ where
 
 impl<'a, T> MemoryWriter<'a, T>
 where
-    T: Pod,
+    T: Pod + Debug,
 {
-    fn new(writer: Box<dyn MemoryWriterTrait<T> + 'a>) -> Self {
-        Self {
-            writer,
+    fn new(memory_manager: &'a MemoryManager, ptr: TypedPluginPtr<T>) -> Result<Self, Errno> {
+        let writer_trait: Box<dyn MemoryWriterTrait<T> + 'a> =
+            if let Some(w) = MappedMemoryWriter::new(memory_manager, ptr) {
+                Box::new(w)
+            } else {
+                Box::new(CopyingMemoryWriter::new(memory_manager, ptr))
+            };
+        memory_manager.add_mut(ptr)?;
+        Ok(Self {
+            writer: writer_trait,
             dirty: false,
-        }
+        })
     }
 
     /// Access the data as a mutable slice. May require 2 copies: reading the
@@ -214,7 +320,7 @@ impl<'a> MemoryWriter<'a, u8> {
 
 impl<'a, T> Drop for MemoryWriter<'a, T>
 where
-    T: Pod,
+    T: Pod + Debug,
 {
     fn drop(&mut self) {
         // It's a bug to drop the writer without flushing and handling errors,
@@ -226,7 +332,8 @@ where
         }
         // Crash if we're unable to flush, since proceeding could produce subtly
         // wrong results.
-        self.flush().unwrap()
+        self.flush().unwrap();
+        self.writer.memory_manager().drop_mut(self.writer.ptr());
     }
 }
 
@@ -336,6 +443,14 @@ where
     fn len(&self) -> usize {
         self.ptr.len()
     }
+
+    fn ptr(&self) -> TypedPluginPtr<T> {
+        self.ptr
+    }
+
+    fn memory_manager(&self) -> &MemoryManager {
+        self.memory_manager
+    }
 }
 
 #[derive(Debug)]
@@ -343,7 +458,7 @@ struct CopyingMemoryWriter<'a, T>
 where
     T: Pod + Debug,
 {
-    memory_manager: &'a mut MemoryManager,
+    memory_manager: &'a MemoryManager,
     writable_ptr: Option<Box<[T]>>,
     ptr: TypedPluginPtr<T>,
 }
@@ -352,12 +467,47 @@ impl<'a, T> CopyingMemoryWriter<'a, T>
 where
     T: Pod + Debug,
 {
-    fn new(memory_manager: &'a mut MemoryManager, ptr: TypedPluginPtr<T>) -> Self {
+    fn new(memory_manager: &'a MemoryManager, ptr: TypedPluginPtr<T>) -> Self {
         Self {
             memory_manager,
             writable_ptr: None,
             ptr,
         }
+    }
+
+    // Low level helper for writing directly to `dst`. Panics if the
+    // MemoryManager's process isn't currently active.
+    fn write_ptr(&mut self, src: &[T], offset: usize) -> Result<(), Errno> {
+        let dst = self.ptr.cast::<u8>().unwrap();
+        let src = pod::to_u8_slice(src);
+        let offset = offset * std::mem::size_of::<T>();
+        assert!(src.len() <= dst.len() - offset);
+
+        let towrite = src.len();
+        trace!("write_ptr writing {} bytes", towrite);
+        let local = [nix::sys::uio::IoVec::from_slice(src)];
+        let remote = [nix::sys::uio::RemoteIoVec {
+            base: usize::from(dst.ptr()) + offset,
+            len: towrite,
+        }];
+
+        // While the documentation for process_vm_writev says to use the pid, in
+        // practice it needs to be the tid of a still-running thread. i.e. using the
+        // pid after the thread group leader has exited will fail.
+        let (active_tid, active_pid) = Worker::with_active_thread(|thread| {
+            (
+                nix::unistd::Pid::from_raw(thread.get_system_tid()),
+                nix::unistd::Pid::from_raw(thread.get_system_pid()),
+            )
+        });
+        // Don't access another process's memory.
+        assert_eq!(active_pid, self.memory_manager.pid);
+
+        let nwritten = nix::sys::uio::process_vm_writev(active_tid, &local, &remote)
+            .map_err(|e| e.as_errno().unwrap())?;
+        // There shouldn't be any partial writes with a single remote iovec.
+        assert_eq!(nwritten, towrite);
+        Ok(())
     }
 }
 
@@ -407,7 +557,7 @@ where
     }
 
     fn copy(&mut self, offset: usize, buf: &[T]) -> Result<(), Errno> {
-        self.memory_manager.write_ptr(buf, self.ptr, offset)
+        self.write_ptr(buf, offset)
     }
 
     fn flush(&mut self) -> Result<(), Errno> {
@@ -416,7 +566,15 @@ where
         }
         let mut boxed = self.writable_ptr.take().unwrap();
 
-        self.memory_manager.write_ptr(&mut *boxed, self.ptr, 0)
+        self.write_ptr(&mut *boxed, 0)
+    }
+
+    fn ptr(&self) -> TypedPluginPtr<T> {
+        self.ptr
+    }
+
+    fn memory_manager(&self) -> &MemoryManager {
+        self.memory_manager
     }
 }
 
@@ -428,6 +586,7 @@ where
 {
     memory: &'a [T],
     ptr: TypedPluginPtr<T>,
+    memory_manager: &'a MemoryManager,
 }
 
 impl<'a, T> MappedMemoryReader<'a, T>
@@ -440,7 +599,11 @@ where
             if let Some(cptr) = mapper.get_mapped_ptr(u8ptr.ptr(), u8ptr.len()) {
                 let memory =
                     unsafe { std::slice::from_raw_parts::<T>(cptr as *const T, ptr.len()) };
-                return Some(Self { memory, ptr });
+                return Some(Self {
+                    memory,
+                    ptr,
+                    memory_manager,
+                });
             }
         }
         None
@@ -463,6 +626,14 @@ where
         buf.copy_from_slice(&self.memory[offset..offset + buf.len()]);
         Ok(())
     }
+
+    fn ptr(&self) -> TypedPluginPtr<T> {
+        self.ptr
+    }
+
+    fn memory_manager(&self) -> &MemoryManager {
+        self.memory_manager
+    }
 }
 
 /// A writer that accesses plugin memory directly.
@@ -473,20 +644,25 @@ where
 {
     memory: &'a mut [T],
     ptr: TypedPluginPtr<T>,
+    memory_manager: &'a MemoryManager,
 }
 
 impl<'a, T> MappedMemoryWriter<'a, T>
 where
     T: Pod,
 {
-    fn new(memory_manager: &'a mut MemoryManager, ptr: TypedPluginPtr<T>) -> Option<Self> {
+    fn new(memory_manager: &'a MemoryManager, ptr: TypedPluginPtr<T>) -> Option<Self> {
         let u8ptr = ptr.cast::<u8>().unwrap();
 
         if let Some(mapper) = &memory_manager.memory_mapper {
             if let Some(cptr) = mapper.get_mapped_ptr(u8ptr.ptr(), u8ptr.len()) {
                 let memory =
                     unsafe { std::slice::from_raw_parts_mut::<T>(cptr as *mut T, ptr.len()) };
-                return Some(Self { memory, ptr });
+                return Some(Self {
+                    memory,
+                    ptr,
+                    memory_manager,
+                });
             }
         }
         None
@@ -518,6 +694,14 @@ where
 
     fn flush(&mut self) -> Result<(), Errno> {
         Ok(())
+    }
+
+    fn ptr(&self) -> TypedPluginPtr<T> {
+        self.ptr
+    }
+
+    fn memory_manager(&self) -> &MemoryManager {
+        self.memory_manager
     }
 }
 
@@ -662,9 +846,11 @@ impl ShmFile {
                 interval.len(),
             )
         };
-        let reader = memory_manager.reader(
-            TypedPluginPtr::<u8>::new(PluginPtr::from(interval.start), interval.len()).unwrap(),
-        );
+        let reader = memory_manager
+            .reader(
+                TypedPluginPtr::<u8>::new(PluginPtr::from(interval.start), interval.len()).unwrap(),
+            )
+            .unwrap();
         reader.copy(dst).unwrap();
     }
 
@@ -873,6 +1059,7 @@ impl MemoryMapper {
             .unwrap();
             memory_manager
                 .writer(path_buf_plugin_ptr)
+                .unwrap()
                 .copy(shm_path.as_bytes())
                 .unwrap();
             let shm_plugin_fd = thread
@@ -1526,13 +1713,123 @@ pub struct MemoryManager {
     pid: nix::unistd::Pid,
     // Lazily initialized MemoryMapper.
     memory_mapper: Option<MemoryMapper>,
+    // Ranges of memory with existing MemoryWriters
+    mut_refs: RefCell<IntervalMap<()>>,
+    // Ranges of memory with existing MemoryReaders
+    refs: RefCell<IntervalMap<usize>>,
 }
 
 impl MemoryManager {
+    // Add an outstanding immutable reference for `ptr`.
+    fn add_ref<T>(&self, ptr: TypedPluginPtr<T>) -> Result<(), Errno> {
+        if ptr.len() == 0 {
+            return Ok(());
+        }
+        let mut refs = self.refs.borrow_mut();
+        let mut_refs = self.mut_refs.borrow();
+        let u8_ptr = ptr.cast::<u8>().unwrap();
+        let range = usize::from(u8_ptr.ptr())..usize::from(u8_ptr.ptr()) + u8_ptr.len();
+        if mut_refs.overlaps(range.clone()) {
+            return Err(Errno::EADDRINUSE);
+        }
+        // Insert a count of 1 for the given range, clobbering what's already there.
+        for mutation in refs.insert(range, 1usize) {
+            // For overlapping regions, add back in the old value.
+            match mutation {
+                Mutation::ModifiedBegin(interval, new_begin) => {
+                    let oldcount = *refs.get(new_begin).unwrap().1;
+                    *refs.get_mut(interval.start).unwrap().1 += oldcount;
+                }
+                Mutation::ModifiedEnd(interval, new_end) => {
+                    let oldcount = *refs.get(interval.start).unwrap().1;
+                    *refs.get_mut(new_end).unwrap().1 += oldcount;
+                }
+                Mutation::Split(_, left, _) => {
+                    let oldcount = *refs.get(left.start).unwrap().1;
+                    *refs.get_mut(left.end).unwrap().1 += oldcount;
+                }
+                Mutation::Removed(interval, val) => {
+                    refs.insert(interval, val + 1);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    // Drop an outstanding immutable reference for `ptr`.
+    fn drop_ref<T>(&self, ptr: TypedPluginPtr<T>) {
+        if ptr.len() == 0 {
+            return;
+        }
+        let mut refs = self.refs.borrow_mut();
+        let u8_ptr = ptr.cast::<u8>().unwrap();
+        let range = usize::from(u8_ptr.ptr())..usize::from(u8_ptr.ptr()) + u8_ptr.len();
+        // Clear the given range
+        for mutation in refs.clear(range) {
+            // For removed sections with a count > 1, add back in a decremented count.
+            match mutation {
+                Mutation::ModifiedBegin(original, new_begin) => {
+                    let oldcount = *refs.get(new_begin).unwrap().1;
+                    if oldcount > 1 {
+                        refs.insert(original.start..new_begin, oldcount - 1);
+                    }
+                }
+                Mutation::ModifiedEnd(original, new_end) => {
+                    let oldcount = *refs.get(original.start).unwrap().1;
+                    if oldcount > 1 {
+                        refs.insert(new_end..original.end, oldcount - 1);
+                    }
+                }
+                Mutation::Split(_original, left, right) => {
+                    let oldcount = *refs.get(left.start).unwrap().1;
+                    if oldcount > 1 {
+                        refs.insert(left.end..right.start, oldcount - 1);
+                    }
+                }
+                Mutation::Removed(interval, val) => {
+                    if val > 1 {
+                        refs.insert(interval, val - 1);
+                    }
+                }
+            }
+        }
+    }
+
+    // Add an outstanding mutable reference for `ptr`.
+    fn add_mut<T>(&self, ptr: TypedPluginPtr<T>) -> Result<(), Errno> {
+        if ptr.len() == 0 {
+            return Ok(());
+        }
+        let refs = self.refs.borrow_mut();
+        let mut mut_refs = self.mut_refs.borrow_mut();
+        let u8_ptr = ptr.cast::<u8>().unwrap();
+        let range = usize::from(u8_ptr.ptr())..usize::from(u8_ptr.ptr()) + u8_ptr.len();
+        if refs.overlaps(range.clone()) || mut_refs.overlaps(range.clone()) {
+            return Err(Errno::EADDRINUSE);
+        }
+        let mutations = mut_refs.insert(range, ());
+        debug_assert_eq!(&mutations, &[]);
+        Ok(())
+    }
+
+    // Drop an outstanding mutable reference for `ptr`.
+    fn drop_mut<T>(&self, ptr: TypedPluginPtr<T>) {
+        if ptr.len() == 0 {
+            return;
+        }
+        let mut mut_refs = self.mut_refs.borrow_mut();
+        let u8_ptr = ptr.cast::<u8>().unwrap();
+        let range = usize::from(u8_ptr.ptr())..usize::from(u8_ptr.ptr()) + u8_ptr.len();
+        let mutations = mut_refs.clear(range.clone());
+        debug_assert_eq!(&mutations, &[Mutation::Removed(range, ())]);
+    }
+
     pub fn new(pid: nix::unistd::Pid) -> Self {
         Self {
             pid,
             memory_mapper: None,
+            mut_refs: RefCell::new(IntervalMap::new()),
+            refs: RefCell::new(IntervalMap::new()),
         }
     }
 
@@ -1554,42 +1851,19 @@ impl MemoryManager {
     }
 
     /// Create a read accessor for the specified plugin memory.
-    pub fn reader<'a, T>(&'a self, ptr: TypedPluginPtr<T>) -> MemoryReader<'a, T>
+    pub fn reader<'a, T>(&'a self, ptr: TypedPluginPtr<T>) -> Result<MemoryReader<'a, T>, Errno>
     where
         T: Pod + Debug,
     {
-        let reader_trait: Box<dyn MemoryReaderTrait<T> + 'a> =
-            if let Some(mapped_reader) = MappedMemoryReader::new(self, ptr) {
-                Box::new(mapped_reader)
-            } else {
-                Box::new(CopyingMemoryReader::new(self, ptr))
-            };
-        MemoryReader::new(reader_trait)
+        MemoryReader::new(self, ptr)
     }
 
     /// Create a write accessor for the specified plugin memory.
-    pub fn writer<'a, T>(&'a mut self, ptr: TypedPluginPtr<T>) -> MemoryWriter<'a, T>
+    pub fn writer<'a, T>(&'a self, ptr: TypedPluginPtr<T>) -> Result<MemoryWriter<'a, T>, Errno>
     where
         T: Pod + Debug,
     {
-        let writer_trait: Box<dyn MemoryWriterTrait<T> + 'a> =
-            if let Some(_) = MappedMemoryWriter::new(self, ptr) {
-                // If we directly return the contents of the `Option` created in the
-                // outer scope, the borrow-checker gets confused and doesn't realize
-                // the first mutable borrow of `self` has gone out of scope when we
-                // try to do another mutable borrow in the `else` clause. Returning
-                // a borrowed reference that was created in this inner scope makes
-                // it happy.
-                //
-                //  Alternatively we could store a pointer to `self` at the beginning
-                //  of this function, and dereference it to create the
-                //  CopyingMemoryWriter.
-                // https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=3de34f0eee732c998e05f27b1a55f3cd
-                Box::new(MappedMemoryWriter::new(self, ptr).unwrap())
-            } else {
-                Box::new(CopyingMemoryWriter::new(self, ptr))
-            };
-        MemoryWriter::new(writer_trait)
+        MemoryWriter::new(self, ptr)
     }
 
     fn handle_brk(&mut self, thread: &mut impl Thread, ptr: PluginPtr) -> SyscallResult {
@@ -1703,107 +1977,7 @@ impl MemoryManager {
     /// if the NULL terminated string starting at the beginning of `src` is
     /// accessible, even if later pages of `src` are inaccessible.
     fn string_reader<'a>(&'a self, src: TypedPluginPtr<u8>) -> Result<MemoryReader<'a, u8>, Errno> {
-        let mut dst = Vec::<u8>::with_capacity(src.len());
-        // SAFETY: any values are legal for u8.
-        unsafe { dst.set_len(src.len()) };
-
-        // process_vm_readv reads at iovec granularity. To handle the case where
-        // the user-supplied pointer is near the end of a readable region, we split
-        // at page boundaries. i.e. succeed if we successfully read a null-terminated
-        // string, even if some of the region after that is inaccessible.
-        let mut remotes = Vec::new();
-        let mut toread = dst.len();
-        let mut address = usize::from(src.ptr());
-        while toread > 0 {
-            let mut this_toread = toread % page_size();
-            if this_toread == 0 {
-                this_toread = page_size();
-            }
-            let this_toread = std::cmp::min(this_toread, toread);
-            remotes.push(nix::sys::uio::RemoteIoVec {
-                base: address,
-                len: this_toread,
-            });
-            toread -= this_toread;
-            address += this_toread;
-        }
-        let local = [nix::sys::uio::IoVec::from_mut_slice(&mut dst)];
-
-        // While the documentation for process_vm_readv says to use the pid, in
-        // practice it needs to be the tid of a still-running thread. i.e. using the
-        // pid after the thread group leader has exited will fail.
-        let (active_tid, active_pid) = Worker::with_active_thread(|thread| {
-            (
-                nix::unistd::Pid::from_raw(thread.get_system_tid()),
-                nix::unistd::Pid::from_raw(thread.get_system_pid()),
-            )
-        });
-        // Don't access another process's memory.
-        assert_eq!(active_pid, self.pid);
-
-        let nread = nix::sys::uio::process_vm_readv(active_tid, &local, &remotes)
-            .map_err(|e| e.as_errno().unwrap())?;
-
-        dst.truncate(nread);
-        let nullpos = dst.iter().position(|c| *c == 0);
-        match nullpos {
-            Some(i) => dst.truncate(i + 1),
-            None => {
-                return if dst.len() == src.len() {
-                    // We couldn't read the whole region specified, and there
-                    // wasn't a full string in the prefix.
-                    Err(Errno::EFAULT)
-                } else {
-                    // We could read the whole region, but the string extended
-                    // beyond it.
-                    Err(Errno::ENAMETOOLONG)
-                };
-            }
-        };
-
-        Ok(MemoryReader::new(Box::new(
-            CopyingMemoryReader::new_with_memory(self, src, dst.into_boxed_slice()),
-        )))
-    }
-
-    // Low level helper for writing directly to `dst`. Panics if the
-    // MemoryManager's process isn't currently active.
-    fn write_ptr<T: Pod + Debug>(
-        &mut self,
-        src: &[T],
-        dst: TypedPluginPtr<T>,
-        offset: usize,
-    ) -> Result<(), Errno> {
-        let dst = dst.cast::<u8>().unwrap();
-        let src = pod::to_u8_slice(src);
-        let offset = offset * std::mem::size_of::<T>();
-        assert!(src.len() <= dst.len() - offset);
-
-        let towrite = src.len();
-        trace!("write_ptr writing {} bytes", towrite);
-        let local = [nix::sys::uio::IoVec::from_slice(src)];
-        let remote = [nix::sys::uio::RemoteIoVec {
-            base: usize::from(dst.ptr()) + offset,
-            len: towrite,
-        }];
-
-        // While the documentation for process_vm_writev says to use the pid, in
-        // practice it needs to be the tid of a still-running thread. i.e. using the
-        // pid after the thread group leader has exited will fail.
-        let (active_tid, active_pid) = Worker::with_active_thread(|thread| {
-            (
-                nix::unistd::Pid::from_raw(thread.get_system_tid()),
-                nix::unistd::Pid::from_raw(thread.get_system_pid()),
-            )
-        });
-        // Don't access another process's memory.
-        assert_eq!(active_pid, self.pid);
-
-        let nwritten = nix::sys::uio::process_vm_writev(active_tid, &local, &remote)
-            .map_err(|e| e.as_errno().unwrap())?;
-        // There shouldn't be any partial writes with a single remote iovec.
-        assert_eq!(nwritten, towrite);
-        Ok(())
+        MemoryReader::<u8>::new_string(self, src)
     }
 }
 
@@ -1951,9 +2125,15 @@ mod export {
     ) -> *mut MemoryReader<'a, u8> {
         let memory_manager = memory_manager.as_mut().unwrap();
         let plugin_src: PluginPtr = plugin_src.into();
-        Box::into_raw(Box::new(
-            memory_manager.reader(TypedPluginPtr::new(plugin_src.into(), n).unwrap()),
-        ))
+        let reader = match memory_manager.reader(TypedPluginPtr::new(plugin_src.into(), n).unwrap())
+        {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("Failed to created reader for {:?}: {:?}", plugin_src, e);
+                return std::ptr::null_mut();
+            }
+        };
+        Box::into_raw(Box::new(reader))
     }
 
     /// Get a write-accessor to the specified plugin memory.
@@ -2007,11 +2187,18 @@ mod export {
         let memory_manager = memory_manager.as_mut().unwrap();
         let src = TypedPluginPtr::<u8>::new(src.into(), n).unwrap();
         let dst = std::slice::from_raw_parts_mut(dst as *mut u8, n);
-        match memory_manager.reader(src).copy(dst) {
+        let reader = match memory_manager.reader(src) {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
+                return e as i32;
+            }
+        };
+        match reader.copy(dst) {
             Ok(_) => 0,
-            Err(_) => {
-                trace!("Couldn't read {:?} into {:?}", src, dst);
-                nix::errno::Errno::EFAULT as i32
+            Err(e) => {
+                warn!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
+                e as i32
             }
         }
     }
@@ -2025,10 +2212,15 @@ mod export {
     ) -> *mut MemoryWriter<'a, u8> {
         let memory_manager = memory_manager.as_mut().unwrap();
         let plugin_src: PluginPtr = plugin_src.into();
-        let rv = Box::into_raw(Box::new(
-            memory_manager.writer(TypedPluginPtr::new(plugin_src.into(), n).unwrap()),
-        ));
-        rv
+        let writer = match memory_manager.writer(TypedPluginPtr::new(plugin_src.into(), n).unwrap())
+        {
+            Ok(w) => w,
+            Err(e) => {
+                warn!("Couldn't get writer for {:?}+{}: {:?}", plugin_src, n, e);
+                return std::ptr::null_mut();
+            }
+        };
+        Box::into_raw(Box::new(writer))
     }
 
     /// Write-back any previously returned writable memory, and free the writer.
@@ -2057,11 +2249,18 @@ mod export {
         let memory_manager = memory_manager.as_mut().unwrap();
         let dst = TypedPluginPtr::<u8>::new(dst.into(), n).unwrap();
         let src = std::slice::from_raw_parts(src as *const u8, n);
-        match memory_manager.writer(dst).copy(src) {
+        let mut writer = match memory_manager.writer(dst) {
+            Ok(w) => w,
+            Err(e) => {
+                warn!("Couldn't get writer for {:?}: {:?}", dst, e);
+                return e as i32;
+            }
+        };
+        match writer.copy(src) {
             Ok(_) => 0,
-            Err(_) => {
-                trace!("Couldn't write {:?} into {:?}", dst, src);
-                nix::errno::Errno::EFAULT as i32
+            Err(e) => {
+                trace!("Couldn't write {:?} into {:?}: {:?}", dst, src, e);
+                e as i32
             }
         }
     }

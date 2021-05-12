@@ -853,27 +853,17 @@ PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPt
 int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n) {
     MAGIC_ASSERT(proc);
 
-    // Disallow additional references while there's a mutable reference.
-    utility_assert(proc->memoryWriters->len == 0);
-
     return memorymanager_readPtr(proc->memoryManager, dst, src, n);
 }
 
 int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_t n) {
     MAGIC_ASSERT(proc);
 
-    // Disallow additional references when trying to get a mutable reference.
-    utility_assert(proc->memoryWriters->len == 0);
-    utility_assert(proc->memoryReaders->len == 0);
-
     return memorymanager_writePtr(proc->memoryManager, dst, src, n);
 }
 
 const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references while there's a mutable reference.
-    utility_assert(proc->memoryWriters->len == 0);
 
     MemoryReader_u8* reader = memorymanager_getReader(proc->memoryManager, plugin_src, n);
     const void* rv = memorymanager_getReadablePtr(reader);
@@ -888,9 +878,6 @@ const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n
 int process_getReadableString(Process* proc, PluginPtr plugin_src, size_t n, const char** str,
                               size_t* strlen) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references while there's a mutable reference.
-    utility_assert(proc->memoryWriters->len == 0);
 
     MemoryReader_u8* reader = NULL;
     int res = memorymanager_getStringReader(proc->memoryManager, plugin_src, n, &reader, strlen);
@@ -911,10 +898,6 @@ int process_getReadableString(Process* proc, PluginPtr plugin_src, size_t n, con
 void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
 
-    // Disallow additional references when trying to get a mutable reference.
-    utility_assert(proc->memoryWriters->len == 0);
-    utility_assert(proc->memoryReaders->len == 0);
-
     MemoryWriter_u8* writer = memorymanager_getWriter(proc->memoryManager, plugin_src, n);
     void* rv = memorymanager_getWritablePtr(writer);
     if (rv == NULL) {
@@ -931,10 +914,6 @@ void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
 // The returned pointer is automatically invalidated when the plugin runs again.
 void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n) {
     MAGIC_ASSERT(proc);
-
-    // Disallow additional references when trying to get a mutable reference.
-    utility_assert(proc->memoryWriters->len == 0);
-    utility_assert(proc->memoryReaders->len == 0);
 
     MemoryWriter_u8* writer = memorymanager_getWriter(proc->memoryManager, plugin_src, n);
     void* rv = memorymanager_getMutablePtr(writer);

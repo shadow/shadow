@@ -110,6 +110,14 @@ impl<V: Clone> IntervalMap<V> {
         ItemIter { map: self, i: idx }
     }
 
+    pub fn overlaps(&self, interval: Interval) -> bool {
+        let mut iter = self.iter_from(interval.start);
+        match iter.next() {
+            None => false,
+            Some((r, _)) => interval.contains(&r.start) || interval.contains(&r.end),
+        }
+    }
+
     /// Mutates the map so that the given range maps to nothing, modifying and removing intervals
     /// as needed. Returns what mutations were performed, including the values of any
     /// completely-removed intervals. If an interval is split (e.g. by inserting \[5,6\] into
@@ -757,5 +765,23 @@ mod tests {
         assert_eq!(m.iter_from(5).collect::<Vec<_>>(), vec![(4..6, &"i2")]);
         assert_eq!(m.iter_from(6).collect::<Vec<_>>(), vec![]);
         assert_eq!(m.iter_from(7).collect::<Vec<_>>(), vec![]);
+    }
+
+    #[test]
+    fn test_overlaps() {
+        let mut m = IntervalMap::<String>::new();
+        m.insert(3..5, "interval".to_string());
+        assert!(!m.overlaps(0..1));
+        assert!(!m.overlaps(0..2));
+        assert!(!m.overlaps(0..3));
+        assert!(m.overlaps(0..4));
+        assert!(m.overlaps(0..5));
+        assert!(m.overlaps(0..6));
+        assert!(m.overlaps(1..6));
+        assert!(m.overlaps(2..6));
+        assert!(m.overlaps(3..6));
+        assert!(m.overlaps(4..6));
+        assert!(!m.overlaps(5..6));
+        assert!(!m.overlaps(6..6));
     }
 }
