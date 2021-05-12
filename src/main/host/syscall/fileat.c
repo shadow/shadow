@@ -65,11 +65,6 @@ static int _syscallhandler_validateDirAndPathnameHelper(
         return errcode;
     }
 
-    /* Path should be non-NULL. */
-    if (!pathnamePtr.val) {
-        return -EFAULT;
-    }
-
     /* Get the path string from the plugin. */
     return process_getReadableString(sys->process, pathnamePtr, PATH_MAX, pathname_out, NULL);
 }
@@ -153,10 +148,17 @@ SysCallReturn syscallhandler_newfstatat(SysCallHandler* sys,
 
     /* Validate params. */
     File* dir_desc = NULL;
-    const char* pathname;
 
-    int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+    ssize_t errcode = _syscallhandler_validateDirHelper(sys, dirfd, &dir_desc);
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    }
+
+    /* Copy the path rather than getting a reference, so that the MemoryManager
+     * will still allow us to get a mutable reference to memory below.
+     */
+    char pathname[PATH_MAX];
+    errcode = process_readString(sys->process, pathname, pathnamePtr, PATH_MAX);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
@@ -235,13 +237,11 @@ SysCallReturn syscallhandler_futimesat(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    /* Check for non-NULL pathname and time struct. */
-    if (!timesPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     const struct timeval* times =
         process_getReadablePtr(sys->process, timesPtr, 2 * sizeof(*times));
+    if (!times) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
@@ -265,13 +265,11 @@ SysCallReturn syscallhandler_utimensat(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    /* Check for non-NULL pathname and time struct. */
-    if (!timesPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     const struct timespec* times =
         process_getReadablePtr(sys->process, timesPtr, 2 * sizeof(*times));
+    if (!times) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
 
     return (SysCallReturn){
         .state = SYSCALL_DONE,
@@ -413,11 +411,6 @@ SysCallReturn syscallhandler_symlinkat(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    /* Path should be non-NULL. */
-    if (!targetpathPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     /* Get the path string from the plugin. */
     const char* targetpath;
     errcode = process_getReadableString(sys->process, targetpathPtr, PATH_MAX, &targetpath, NULL);
@@ -439,27 +432,25 @@ SysCallReturn syscallhandler_readlinkat(SysCallHandler* sys,
 
     /* Validate params. */
     File* dir_desc = NULL;
-    const char* pathname;
 
-    int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+    ssize_t errcode = _syscallhandler_validateDirHelper(sys, dirfd, &dir_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    /* Path should be non-NULL. */
-    if (!bufPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
-    if (bufSize == 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    /* Copy the path rather than getting a reference, so that the MemoryManager
+     * will still allow us to get a mutable reference to memory below.
+     */
+    char pathname[PATH_MAX];
+    errcode = process_readString(sys->process, pathname, pathnamePtr, PATH_MAX);
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
     /* Get the path string from the plugin. */
     char* buf = process_getWriteablePtr(sys->process, bufPtr, bufSize);
-    if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    if (!buf) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     return (SysCallReturn){
@@ -492,23 +483,25 @@ SysCallReturn syscallhandler_statx(SysCallHandler* sys,
 
     /* Validate params. */
     File* dir_desc = NULL;
-    const char* pathname;
 
-    int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+    ssize_t errcode = _syscallhandler_validateDirHelper(sys, dirfd, &dir_desc);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
-    /* Path should be non-NULL. */
-    if (!statxbufPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    /* Copy the path rather than getting a reference, so that the MemoryManager
+     * will still allow us to get a mutable reference to memory below.
+     */
+    char pathname[PATH_MAX];
+    errcode = process_readString(sys->process, pathname, pathnamePtr, PATH_MAX);
+    if (errcode < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }
 
     /* Get the path string from the plugin. */
     struct statx* statxbuf = process_getWriteablePtr(sys->process, statxbufPtr, sizeof(*statxbuf));
-    if (errcode < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
+    if (!statxbuf) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
     return (SysCallReturn){
