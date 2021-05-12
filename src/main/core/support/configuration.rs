@@ -602,7 +602,8 @@ impl std::str::FromStr for QDiscMode {
 enum Topology {
     Path(String),
     GraphMl(String),
-    Plain,
+    #[serde(rename = "1_gbit_switch")]
+    OneGbitSwitch,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -659,7 +660,7 @@ fn default_some_info() -> Option<LogLevel> {
     Some(LogLevel::Info)
 }
 
-const DEFAULT_TOPOLOGY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+const ONE_GBIT_SWITCH_TOPOLOGY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
     <key attr.name="packet_loss"    attr.type="double" for="edge" id="edge_packet_loss" />
     <key attr.name="jitter"         attr.type="double" for="edge" id="edge_jitter" />
@@ -1270,7 +1271,7 @@ mod export {
         let topology = match &config.topology {
             Topology::Path(f) => std::fs::read_to_string(f).unwrap(),
             Topology::GraphMl(s) => s.clone(),
-            Topology::Plain => DEFAULT_TOPOLOGY.to_string(),
+            Topology::OneGbitSwitch => ONE_GBIT_SWITCH_TOPOLOGY.to_string(),
         };
 
         CString::into_raw(CString::new(topology).unwrap())

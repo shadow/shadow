@@ -1,6 +1,6 @@
 general:
   stop_time: 2
-topology: plain
+topology: 1_gbit_switch
 hosts:
   testnode:
     processes:
