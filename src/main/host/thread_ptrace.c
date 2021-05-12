@@ -1098,29 +1098,32 @@ void threadptrace_handleProcessExit(Thread* base) {
     trace("handleProcessExit for thread %d.%d native %d.%d", thread_getProcessId(&thread->base),
           thread_getID(&thread->base), thread_getNativePid(&thread->base),
           thread_getNativeTid(&thread->base));
+
     if (!thread_isRunning(base)) {
         // Nothing to do
         utility_assert(!thread->sys);
         return;
     }
 
-    // Try to catch exit event. Exact conditions under which we need to do this
-    // are unclear, but detaching sometimes fails if we don't.
-    int wstatus;
-    pid_t pid = waitpid(thread->base.nativeTid, &wstatus, WAITPID_COMMON_OPTIONS);
-    if (pid < 0) {
-        if (errno == ECHILD) {
-            // Don't fully understand when this happens or not. Experimentally
-            // we *do* still need to continue to detach even if this is the
-            // case.
-            trace("Couldn't wait on dying child thread disappeared");
+    if (!thread->needAttachment) {
+        // Try to catch exit event. Exact conditions under which we need to do this
+        // are unclear, but detaching sometimes fails if we don't.
+        int wstatus;
+        pid_t pid = waitpid(thread->base.nativeTid, &wstatus, WAITPID_COMMON_OPTIONS);
+        if (pid < 0) {
+            if (errno == ECHILD) {
+                // Don't fully understand when this happens or not. Experimentally
+                // we *do* still need to continue to detach even if this is the
+                // case.
+                trace("Couldn't wait on dying child thread disappeared");
+            } else {
+                warning("Unexpected waitpid: %s", strerror(errno));
+            }
         } else {
-            warning("Unexpected waitpid: %s", strerror(errno));
-        }
-    } else {
-        StopReason ptraceStopReason = _getStopReason(wstatus);
-        if (ptraceStopReason.type != STOPREASON_EXIT_EVENT) {
-            warning("Unexpected stop reason type %d", ptraceStopReason.type);
+            StopReason ptraceStopReason = _getStopReason(wstatus);
+            if (ptraceStopReason.type != STOPREASON_EXIT_EVENT) {
+                warning("Unexpected stop reason type %d", ptraceStopReason.type);
+            }
         }
     }
 

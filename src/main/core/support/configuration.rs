@@ -194,9 +194,9 @@ pub struct ExperimentalOptions {
     #[clap(about = EXP_HELP.get("use_sched_fifo").unwrap())]
     use_sched_fifo: Option<bool>,
 
-    /// Enable performance workarounds for waitpid being O(n). Beneficial to disable if waitpid
-    /// is patched to be O(1) or in some cases where it'd otherwise result in excessive detaching
-    /// and reattaching
+    /// Use performance workarounds for waitpid being O(n). Beneficial to disable if waitpid
+    /// is patched to be O(1), if using one logical processor per host, or in some cases where
+    /// it'd otherwise result in excessive detaching and reattaching
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_o_n_waitpid_workarounds").unwrap())]
     use_o_n_waitpid_workarounds: Option<bool>,
@@ -300,7 +300,7 @@ impl Default for ExperimentalOptions {
     fn default() -> Self {
         Self {
             use_sched_fifo: Some(false),
-            use_o_n_waitpid_workarounds: Some(true),
+            use_o_n_waitpid_workarounds: Some(false),
             use_explicit_block_message: Some(false),
             use_syscall_counters: Some(false),
             use_object_counters: Some(true),
