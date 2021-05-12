@@ -1958,6 +1958,7 @@ mod export {
     /// * `mm` must point to a valid object.
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_free(mm: *mut MemoryManager) {
+        debug_assert!(!mm.is_null());
         mm.as_mut().map(|mm| Box::from_raw(mm));
     }
 
@@ -1968,6 +1969,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn allocdmem_free(allocd_mem: *mut AllocdMem<u8>) {
+        debug_assert!(!allocd_mem.is_null());
         allocd_mem
             .as_mut()
             .map(|allocd_mem| Box::from_raw(allocd_mem));
@@ -1975,6 +1977,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn allocdmem_pluginPtr(allocd_mem: *const AllocdMem<u8>) -> c::PluginPtr {
+        debug_assert!(!allocd_mem.is_null());
         allocd_mem.as_ref().unwrap().ptr().ptr().into()
     }
 
@@ -1985,6 +1988,8 @@ mod export {
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
     ) {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!thread.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         if !memory_manager.has_mapper() {
             let mut thread = CThread::new(thread);
@@ -2000,6 +2005,7 @@ mod export {
         plugin_src: c::PluginPtr,
         n: usize,
     ) -> *mut MemoryReader<'a, u8> {
+        debug_assert!(!memory_manager.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let plugin_src: PluginPtr = plugin_src.into();
         Box::into_raw(Box::new(
@@ -2009,6 +2015,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_freeReader<'a>(reader: *mut MemoryReader<'a, u8>) {
+        debug_assert!(!reader.is_null());
         Box::from_raw(reader);
     }
 
@@ -2090,6 +2097,7 @@ mod export {
         plugin_src: c::PluginPtr,
         n: usize,
     ) -> *mut MemoryWriter<'a, u8> {
+        debug_assert!(!memory_manager.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let plugin_src: PluginPtr = plugin_src.into();
         let rv = Box::into_raw(Box::new(
@@ -2103,6 +2111,7 @@ mod export {
     pub unsafe extern "C" fn memorymanager_flushAndFreeWriter<'a>(
         writer: *mut MemoryWriter<'a, u8>,
     ) -> i32 {
+        debug_assert!(!writer.is_null());
         let mut writer = Box::from_raw(writer);
         // No way to safely recover here if the flush fails.
         if writer.flush().is_ok() {
@@ -2121,6 +2130,8 @@ mod export {
         src: *const c_void,
         n: usize,
     ) -> i32 {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!src.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let dst = TypedPluginPtr::<u8>::new(dst.into(), n).unwrap();
         let src = std::slice::from_raw_parts(src as *const u8, n);
@@ -2138,6 +2149,7 @@ mod export {
     pub unsafe extern "C" fn memorymanager_getWritablePtr<'a>(
         writer: *mut MemoryWriter<'a, u8>,
     ) -> *mut c_void {
+        debug_assert!(!writer.is_null());
         let writer = &mut *writer;
         match writer.as_mut_uninit() {
             Ok(p) => p.as_ptr() as *mut c_void,
@@ -2150,6 +2162,7 @@ mod export {
     pub unsafe extern "C" fn memorymanager_getMutablePtr<'a>(
         writer: *mut MemoryWriter<'a, u8>,
     ) -> *mut c_void {
+        debug_assert!(!writer.is_null());
         let writer = &mut *writer;
         match writer.as_mut() {
             Ok(p) => p.as_ptr() as *mut c_void,
@@ -2164,6 +2177,8 @@ mod export {
         thread: *mut c::Thread,
         plugin_src: c::PluginPtr,
     ) -> c::SysCallReturn {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!thread.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         memory_manager
@@ -2183,6 +2198,8 @@ mod export {
         fd: i32,
         offset: i64,
     ) -> c::SysCallReturn {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!thread.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         memory_manager
@@ -2206,6 +2223,8 @@ mod export {
         addr: c::PluginPtr,
         len: usize,
     ) -> c::SysCallReturn {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!thread.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         memory_manager
@@ -2223,6 +2242,8 @@ mod export {
         flags: i32,
         new_addr: c::PluginPtr,
     ) -> c::SysCallReturn {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!thread.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         memory_manager
@@ -2245,6 +2266,8 @@ mod export {
         size: usize,
         prot: i32,
     ) -> c::SysCallReturn {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!thread.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         memory_manager
