@@ -1,6 +1,6 @@
 general:
   stop_time: 60
-topology: plain
+topology: 1_gbit_switch
 hosts:
   server:
     processes:
