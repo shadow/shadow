@@ -20,10 +20,22 @@ endforeach(COMPILE_DEFINITION)
 # Generate wrapper.rs in the source tree.
 add_custom_command(OUTPUT wrapper.rs
     COMMAND bindgen
+        # Haven't decided how to handle glib struct types yet. Avoid using them
+        # until we do.
+        --blacklist-type "_?GList"
+        --blacklist-type "_?GQueue"
+        # Needs GQueue
+        --blacklist-type "_?Socket.*"
+        # Needs Socket
+        --blacklist-type "_?CompatSocket.*"
+
         --whitelist-function "thread_.*"
         --whitelist-function "descriptor_unref"
         --whitelist-function "descriptor_setHandle"
         --whitelist-function "host_.*"
+        # Needs CompatSocket
+        --blacklist-function "host_.*Interface"
+
         --whitelist-function "process_.*CompatDescriptor"
         --whitelist-function "process_parseArgStr.*"
         --whitelist-function "process_getMemoryManager"
@@ -36,6 +48,11 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "syscallcondition_unref"
         --whitelist-function "syscallhandler_.*"
         --whitelist-function "worker_.*"
+        # Needs GQueue
+        --blacklist-function "worker_finish"
+        --blacklist-function "worker_bootHosts"
+        --blacklist-function "worker_freeHosts"
+
         --blacklist-function "syscallhandler_new"
         --blacklist-function "syscallhandler_ref"
         --blacklist-function "syscallhandler_unref"
