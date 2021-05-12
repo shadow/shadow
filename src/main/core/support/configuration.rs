@@ -237,7 +237,7 @@ pub struct ExperimentalOptions {
     #[clap(about = EXP_HELP.get("use_shim_syscall_handler").unwrap())]
     use_shim_syscall_handler: Option<bool>,
 
-    /// Pin each thread and any processes it executes to the same CPU to improve cache affinity
+    /// Pin each thread and any processes it executes to the same logical CPU Core to improve cache affinity
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_cpu_pinning").unwrap())]
     use_cpu_pinning: Option<bool>,
