@@ -1,7 +1,6 @@
 use crate::core::support::simulation_time::SimulationTime;
 use crate::core::worker::Worker;
 use crossbeam::queue::SegQueue;
-use log::*;
 use log::{Level, Log, Metadata, Record, SetLoggerError};
 use log_bindings as c_log;
 use once_cell::sync::Lazy;
@@ -130,6 +129,36 @@ pub struct ShadowLogger {
 }
 
 thread_local!(static SENDER: RefCell<Option<Sender<LoggerCommand>>> = RefCell::new(None));
+thread_local!(static THREAD_NAME: Lazy<String> = Lazy::new(|| { get_thread_name() }));
+
+fn get_thread_name() -> String {
+    let mut thread_name = Vec::<i8>::with_capacity(16);
+    let res = unsafe {
+        thread_name.set_len(thread_name.capacity());
+        // ~infallible when host_name is at least 16 bytes.
+        libc::pthread_getname_np(
+            libc::pthread_self(),
+            thread_name.as_mut_ptr(),
+            thread_name.len(),
+        )
+    };
+    // The most likely cause of failure is a bug in the caller.
+    debug_assert_eq!(res, 0, "pthread_getname_np: {}", nix::errno::from_i32(res));
+    if res == 0 {
+        // SAFETY: We just initialized the input buffer `thread_name`, and
+        // `thread_name_cstr` won't outlive it.
+        let thread_name_cstr = unsafe { std::ffi::CStr::from_ptr(thread_name.as_ptr()) };
+        return thread_name_cstr.to_owned().to_string_lossy().to_string();
+    }
+
+    // Another potential reason for failure is if it couldn't open
+    // /proc/self/task/[tid]/comm. We're probably in a bad state anyway if that
+    // happens, but try to recover anyway.
+
+    // Fall back on raw tid.
+    let tid = unsafe { libc::syscall(libc::SYS_gettid) };
+    format!("tid={}", tid)
+}
 
 impl ShadowLogger {
     fn new() -> ShadowLogger {
@@ -191,11 +220,7 @@ impl ShadowLogger {
                     parts.nanos / 1000
                 )?;
             }
-            if let Some(id) = record.thread_id {
-                write!(stdout, " [thread-{}]", id)?;
-            } else {
-                write!(stdout, " [n/a]")?;
-            }
+            write!(stdout, " [{}]", record.thread_name)?;
             if let Some(sim_time) = record.sim_time {
                 let parts = TimeParts::from_nanos(sim_time.as_nanos());
                 write!(
@@ -234,9 +259,16 @@ impl ShadowLogger {
             )?;
         }
         if let Some(done_sender) = done_sender {
-            done_sender
-                .send(())
-                .unwrap_or_else(|e| warn!("Couldn't notify calling thread: {:?}", e));
+            // We can't log from this thread without risking deadlock, so in the
+            // unlikely case that the calling thread has gone away, just print
+            // directly.
+            done_sender.send(()).unwrap_or_else(|e| {
+                println!(
+                    "WARNING: Logger couldn't notify
+                calling thread: {:?}",
+                    e
+                )
+            });
         }
         Ok(())
     }
@@ -268,13 +300,27 @@ impl ShadowLogger {
 
     // Send a command to the logger thread.
     fn send_command(&self, cmd: LoggerCommand) {
-        SENDER.with(|sender| {
-            if sender.borrow().is_none() {
-                let lock = self.command_sender.lock().unwrap();
-                *sender.borrow_mut() = Some(lock.clone());
-            }
-            sender.borrow().as_ref().unwrap().send(cmd).unwrap();
-        });
+        SENDER
+            .try_with(|thread_sender| {
+                if thread_sender.borrow().is_none() {
+                    let lock = self.command_sender.lock().unwrap();
+                    *thread_sender.borrow_mut() = Some(lock.clone());
+                }
+                thread_sender
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .send(cmd)
+                    .unwrap_or_else(|e| {
+                        println!("WARNING: Couldn't send command to logger thread: {:?}", e);
+                    });
+            })
+            .unwrap_or_else(|e| {
+                println!(
+                    "WARNING: Couldn't get sender channel to logger thread: {:?}",
+                    e
+                );
+            });
     }
 }
 
@@ -307,7 +353,9 @@ impl Log for ShadowLogger {
             }),
 
             sim_time: Worker::current_time(),
-            thread_id: Worker::thread_id(),
+            thread_name: THREAD_NAME
+                .try_with(|name| (*name).clone())
+                .unwrap_or_else(|_| get_thread_name()),
             host_name,
         });
 
@@ -339,7 +387,7 @@ struct ShadowLogRecord {
     wall_time: Duration,
 
     sim_time: Option<SimulationTime>,
-    thread_id: Option<i32>,
+    thread_name: String,
     host_name: Option<String>,
 }
 
