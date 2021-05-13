@@ -4,16 +4,24 @@ use crate::host::descriptor::CompatDescriptor;
 pub const CONFIG_PIPE_BUFFER_SIZE: u32 = 65536;
 pub const SYSCALL_IO_BUFSIZE: u32 = 10485760;
 pub type size_t = ::std::os::raw::c_ulong;
+pub type guint32 = ::std::os::raw::c_uint;
 pub type guint64 = ::std::os::raw::c_ulong;
+pub type gssize = ::std::os::raw::c_long;
+pub type gsize = ::std::os::raw::c_ulong;
+pub type __uint16_t = ::std::os::raw::c_ushort;
 pub type __uint32_t = ::std::os::raw::c_uint;
 pub type __int64_t = ::std::os::raw::c_long;
 pub type __uint64_t = ::std::os::raw::c_ulong;
 pub type __pid_t = ::std::os::raw::c_int;
 pub type pid_t = __pid_t;
+pub type gchar = ::std::os::raw::c_char;
 pub type gint = ::std::os::raw::c_int;
+pub type gboolean = gint;
 pub type guint = ::std::os::raw::c_uint;
 pub type gdouble = f64;
 pub type gpointer = *mut ::std::os::raw::c_void;
+pub type gconstpointer = *const ::std::os::raw::c_void;
+pub type GQuark = guint32;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _GTimer {
@@ -47,6 +55,21 @@ pub const SchedulerPolicyType_SP_PARALLEL_THREAD_SINGLE: SchedulerPolicyType = 3
 pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERTHREAD: SchedulerPolicyType = 4;
 pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERHOST: SchedulerPolicyType = 5;
 pub type SchedulerPolicyType = ::std::os::raw::c_uint;
+pub type sa_family_t = ::std::os::raw::c_ushort;
+pub type in_addr_t = u32;
+pub type in_port_t = u16;
+pub const InterposeMethod_INTERPOSE_METHOD_PTRACE: InterposeMethod = 0;
+pub const InterposeMethod_INTERPOSE_METHOD_PRELOAD: InterposeMethod = 1;
+pub const InterposeMethod_INTERPOSE_METHOD_HYBRID: InterposeMethod = 2;
+pub type InterposeMethod = ::std::os::raw::c_uint;
+pub const QDiscMode_Q_DISC_MODE_FIFO: QDiscMode = 0;
+pub const QDiscMode_Q_DISC_MODE_ROUND_ROBIN: QDiscMode = 1;
+pub type QDiscMode = ::std::os::raw::c_uint;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ConfigOptions {
+    _unused: [u8; 0],
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Counter {
@@ -85,7 +108,16 @@ pub type Host = _Host;
 #[doc = " Simulation time in nanoseconds. Allows for a consistent representation"]
 #[doc = " of time throughput the simulator."]
 pub type SimulationTime = guint64;
+#[doc = " Emulation time in nanoseconds. Allows for a consistent representation"]
+#[doc = " of time throughput the simulator. Emulation time is the simulation time"]
+#[doc = " plus the EMULATION_TIME_OFFSET. This type allows us to explicitly"]
+#[doc = " distinguish each type of time in the code.,"]
+pub type EmulatedTime = guint64;
 pub type LegacyDescriptor = [u64; 7usize];
+pub type DescriptorCloseFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor) -> gboolean>;
+pub type DescriptorFreeFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _StatusListener {
@@ -106,6 +138,12 @@ extern "C" {
     );
 }
 pub type SysCallHandler = _SysCallHandler;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _CPU {
+    _unused: [u8; 0],
+}
+pub type CPU = _CPU;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Timer {
@@ -456,23 +494,737 @@ extern "C" {
 extern "C" {
     pub fn descriptor_setHandle(descriptor: *mut LegacyDescriptor, handle: gint);
 }
+pub type Transport = _Transport;
+pub type TransportFunctionTable = _TransportFunctionTable;
+pub type TransportSendFunc = ::std::option::Option<
+    unsafe extern "C" fn(
+        transport: *mut Transport,
+        buffer: PluginVirtualPtr,
+        nBytes: gsize,
+        ip: in_addr_t,
+        port: in_port_t,
+    ) -> gssize,
+>;
+pub type TransportReceiveFunc = ::std::option::Option<
+    unsafe extern "C" fn(
+        transport: *mut Transport,
+        buffer: PluginVirtualPtr,
+        nBytes: gsize,
+        ip: *mut in_addr_t,
+        port: *mut in_port_t,
+    ) -> gssize,
+>;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _TransportFunctionTable {
+    pub close: DescriptorCloseFunc,
+    pub free: DescriptorFreeFunc,
+    pub send: TransportSendFunc,
+    pub receive: TransportReceiveFunc,
+    pub magic: guint,
+}
+#[test]
+fn bindgen_test_layout__TransportFunctionTable() {
+    assert_eq!(
+        ::std::mem::size_of::<_TransportFunctionTable>(),
+        40usize,
+        concat!("Size of: ", stringify!(_TransportFunctionTable))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_TransportFunctionTable>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_TransportFunctionTable))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).close as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_TransportFunctionTable),
+            "::",
+            stringify!(close)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).free as *const _ as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_TransportFunctionTable),
+            "::",
+            stringify!(free)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).send as *const _ as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_TransportFunctionTable),
+            "::",
+            stringify!(send)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).receive as *const _ as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_TransportFunctionTable),
+            "::",
+            stringify!(receive)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).magic as *const _ as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_TransportFunctionTable),
+            "::",
+            stringify!(magic)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Transport {
+    pub super_: LegacyDescriptor,
+    pub vtable: *mut TransportFunctionTable,
+    pub magic: guint,
+}
+#[test]
+fn bindgen_test_layout__Transport() {
+    assert_eq!(
+        ::std::mem::size_of::<_Transport>(),
+        72usize,
+        concat!("Size of: ", stringify!(_Transport))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_Transport>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_Transport))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Transport>())).super_ as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Transport),
+            "::",
+            stringify!(super_)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Transport>())).vtable as *const _ as usize },
+        56usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Transport),
+            "::",
+            stringify!(vtable)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Transport>())).magic as *const _ as usize },
+        64usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Transport),
+            "::",
+            stringify!(magic)
+        )
+    );
+}
+pub use self::_ProtocolType as ProtocolType;
+pub const _ProtocolType_PNONE: _ProtocolType = 0;
+pub const _ProtocolType_PLOCAL: _ProtocolType = 1;
+pub const _ProtocolType_PTCP: _ProtocolType = 2;
+pub const _ProtocolType_PUDP: _ProtocolType = 3;
+pub type _ProtocolType = i32;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Packet {
+    _unused: [u8; 0],
+}
+pub type Packet = _Packet;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Futex {
     _unused: [u8; 0],
 }
 pub type Futex = _Futex;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _FutexTable {
+    _unused: [u8; 0],
+}
+pub type FutexTable = _FutexTable;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Address {
+    _unused: [u8; 0],
+}
+#[doc = " An Address structure holds information used to identify nodes, allowing for"]
+#[doc = " easy extraction of both integer and string forms of an IP address as well as"]
+#[doc = " the string hostname associated with the IP. Address is an opaque structure and"]
+#[doc = " should only be accessed using the functions in this class."]
+pub type Address = _Address;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Router {
+    _unused: [u8; 0],
+}
+pub type Router = _Router;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _NetworkInterface {
+    _unused: [u8; 0],
+}
+pub type NetworkInterface = _NetworkInterface;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Tracker {
+    _unused: [u8; 0],
+}
+pub type Tracker = _Tracker;
 pub use self::_LogInfoFlags as LogInfoFlags;
 pub const _LogInfoFlags_LOG_INFO_FLAGS_NONE: _LogInfoFlags = 0;
 pub const _LogInfoFlags_LOG_INFO_FLAGS_NODE: _LogInfoFlags = 1;
 pub const _LogInfoFlags_LOG_INFO_FLAGS_SOCKET: _LogInfoFlags = 2;
 pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
 pub type _LogInfoFlags = i32;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _DNS {
+    _unused: [u8; 0],
+}
+pub type DNS = _DNS;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Random {
+    _unused: [u8; 0],
+}
+#[doc = " An opaque structure representing a random source."]
+pub type Random = _Random;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Topology {
+    _unused: [u8; 0],
+}
+pub type Topology = _Topology;
+pub type HostParameters = _HostParameters;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _HostParameters {
+    pub id: GQuark,
+    pub nodeSeed: guint,
+    pub hostname: *mut gchar,
+    pub ipHint: *mut gchar,
+    pub citycodeHint: *mut gchar,
+    pub countrycodeHint: *mut gchar,
+    pub requestedBWDownKiBps: guint64,
+    pub requestedBWUpKiBps: guint64,
+    pub cpuFrequency: guint64,
+    pub cpuThreshold: guint64,
+    pub cpuPrecision: guint64,
+    pub heartbeatInterval: SimulationTime,
+    pub heartbeatLogLevel: LogLevel,
+    pub heartbeatLogInfo: LogInfoFlags,
+    pub logLevel: LogLevel,
+    pub pcapDir: *mut gchar,
+    pub qdisc: QDiscMode,
+    pub recvBufSize: guint64,
+    pub autotuneRecvBuf: gboolean,
+    pub sendBufSize: guint64,
+    pub autotuneSendBuf: gboolean,
+    pub interfaceBufSize: guint64,
+}
+#[test]
+fn bindgen_test_layout__HostParameters() {
+    assert_eq!(
+        ::std::mem::size_of::<_HostParameters>(),
+        160usize,
+        concat!("Size of: ", stringify!(_HostParameters))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_HostParameters>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_HostParameters))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).id as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(id)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).nodeSeed as *const _ as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(nodeSeed)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).hostname as *const _ as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(hostname)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).ipHint as *const _ as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(ipHint)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).citycodeHint as *const _ as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(citycodeHint)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).countrycodeHint as *const _ as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(countrycodeHint)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<_HostParameters>())).requestedBWDownKiBps as *const _ as usize
+        },
+        40usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(requestedBWDownKiBps)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<_HostParameters>())).requestedBWUpKiBps as *const _ as usize
+        },
+        48usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(requestedBWUpKiBps)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).cpuFrequency as *const _ as usize },
+        56usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(cpuFrequency)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).cpuThreshold as *const _ as usize },
+        64usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(cpuThreshold)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).cpuPrecision as *const _ as usize },
+        72usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(cpuPrecision)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<_HostParameters>())).heartbeatInterval as *const _ as usize
+        },
+        80usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(heartbeatInterval)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<_HostParameters>())).heartbeatLogLevel as *const _ as usize
+        },
+        88usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(heartbeatLogLevel)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<_HostParameters>())).heartbeatLogInfo as *const _ as usize
+        },
+        92usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(heartbeatLogInfo)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).logLevel as *const _ as usize },
+        96usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(logLevel)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).pcapDir as *const _ as usize },
+        104usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(pcapDir)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).qdisc as *const _ as usize },
+        112usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(qdisc)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).recvBufSize as *const _ as usize },
+        120usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(recvBufSize)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).autotuneRecvBuf as *const _ as usize },
+        128usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(autotuneRecvBuf)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).sendBufSize as *const _ as usize },
+        136usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(sendBufSize)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).autotuneSendBuf as *const _ as usize },
+        144usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(autotuneSendBuf)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<_HostParameters>())).interfaceBufSize as *const _ as usize
+        },
+        152usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(interfaceBufSize)
+        )
+    );
+}
+extern "C" {
+    pub fn host_new(params: *mut HostParameters) -> *mut Host;
+}
+extern "C" {
+    pub fn host_ref(host: *mut Host);
+}
+extern "C" {
+    pub fn host_unref(host: *mut Host);
+}
+extern "C" {
+    pub fn host_lock(host: *mut Host);
+}
+extern "C" {
+    pub fn host_unlock(host: *mut Host);
+}
+extern "C" {
+    pub fn host_setup(
+        host: *mut Host,
+        dns: *mut DNS,
+        topology: *mut Topology,
+        rawCPUFreq: guint,
+        hostRootPath: *const gchar,
+    );
+}
+extern "C" {
+    pub fn host_boot(host: *mut Host);
+}
+extern "C" {
+    pub fn host_shutdown(host: *mut Host);
+}
+extern "C" {
+    pub fn host_getNewProcessID(host: *mut Host) -> guint;
+}
+extern "C" {
+    pub fn host_getNewEventID(host: *mut Host) -> guint64;
+}
+extern "C" {
+    pub fn host_getNewPacketID(host: *mut Host) -> guint64;
+}
+extern "C" {
+    pub fn host_addApplication(
+        host: *mut Host,
+        startTime: SimulationTime,
+        stopTime: SimulationTime,
+        interposeMethod: InterposeMethod,
+        pluginName: *const gchar,
+        pluginPath: *const gchar,
+        envv: *mut *mut gchar,
+        argv: *mut *mut gchar,
+    );
+}
+extern "C" {
+    pub fn host_detachAllPlugins(host: *mut Host);
+}
+extern "C" {
+    pub fn host_freeAllApplications(host: *mut Host);
+}
+extern "C" {
+    pub fn host_compare(a: gconstpointer, b: gconstpointer, user_data: gpointer) -> gint;
+}
+extern "C" {
+    pub fn host_getID(host: *mut Host) -> GQuark;
+}
+extern "C" {
+    pub fn host_isEqual(a: *mut Host, b: *mut Host) -> gboolean;
+}
+extern "C" {
+    pub fn host_getCPU(host: *mut Host) -> *mut CPU;
+}
+extern "C" {
+    pub fn host_getName(host: *mut Host) -> *mut gchar;
+}
+extern "C" {
+    pub fn host_getDefaultAddress(host: *mut Host) -> *mut Address;
+}
+extern "C" {
+    pub fn host_getDefaultIP(host: *mut Host) -> in_addr_t;
+}
+extern "C" {
+    pub fn host_getRandom(host: *mut Host) -> *mut Random;
+}
+extern "C" {
+    pub fn host_getNextPacketPriority(host: *mut Host) -> gdouble;
+}
+extern "C" {
+    pub fn host_autotuneReceiveBuffer(host: *mut Host) -> gboolean;
+}
+extern "C" {
+    pub fn host_autotuneSendBuffer(host: *mut Host) -> gboolean;
+}
+extern "C" {
+    pub fn host_getConfiguredRecvBufSize(host: *mut Host) -> guint64;
+}
+extern "C" {
+    pub fn host_getConfiguredSendBufSize(host: *mut Host) -> guint64;
+}
+extern "C" {
+    pub fn host_getUpstreamRouter(host: *mut Host, handle: in_addr_t) -> *mut Router;
+}
+extern "C" {
+    pub fn host_returnHandleHack(handle: gint);
+}
+extern "C" {
+    pub fn host_getTracker(host: *mut Host) -> *mut Tracker;
+}
+extern "C" {
+    pub fn host_getLogLevel(host: *mut Host) -> LogLevel;
+}
+extern "C" {
+    pub fn host_getDataPath(host: *mut Host) -> *const gchar;
+}
+extern "C" {
+    pub fn host_doesInterfaceExist(host: *mut Host, interfaceIP: in_addr_t) -> gboolean;
+}
+extern "C" {
+    pub fn host_isInterfaceAvailable(
+        host: *mut Host,
+        type_: ProtocolType,
+        interfaceIP: in_addr_t,
+        port: in_port_t,
+        peerIP: in_addr_t,
+        peerPort: in_port_t,
+    ) -> gboolean;
+}
+extern "C" {
+    pub fn host_getRandomFreePort(
+        host: *mut Host,
+        type_: ProtocolType,
+        interfaceIP: in_addr_t,
+        peerIP: in_addr_t,
+        peerPort: in_port_t,
+    ) -> in_port_t;
+}
+extern "C" {
+    pub fn host_getFutexTable(host: *mut Host) -> *mut FutexTable;
+}
+extern "C" {
+    pub fn host_getNativeTID(host: *mut Host, virtualPID: pid_t, virtualTID: pid_t) -> pid_t;
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Task {
+    _unused: [u8; 0],
+}
+pub type Task = _Task;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Event {
+    _unused: [u8; 0],
+}
+pub type Event = _Event;
+extern "C" {
+    pub fn worker_runEvent(event: *mut Event);
+}
+extern "C" {
+    pub fn worker_setMinEventTimeNextRound(simtime: SimulationTime);
+}
+extern "C" {
+    pub fn worker_setRoundEndTime(newRoundEndTime: SimulationTime);
+}
+extern "C" {
+    pub fn worker_getAffinity() -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn worker_getDNS() -> *mut DNS;
+}
+extern "C" {
+    pub fn worker_getTopology() -> *mut Topology;
+}
+extern "C" {
+    pub fn worker_getConfig() -> *const ConfigOptions;
+}
+extern "C" {
+    pub fn worker_scheduleTask(task: *mut Task, nanoDelay: SimulationTime) -> gboolean;
+}
+extern "C" {
+    pub fn worker_sendPacket(packet: *mut Packet);
+}
+extern "C" {
+    pub fn worker_isAlive() -> gboolean;
+}
+extern "C" {
+    pub fn worker_getCurrentTime() -> SimulationTime;
+}
+extern "C" {
+    pub fn worker_getEmulatedTime() -> EmulatedTime;
+}
+extern "C" {
+    pub fn worker_isBootstrapActive() -> gboolean;
+}
+extern "C" {
+    pub fn worker_getNodeBandwidthUp(nodeID: GQuark, ip: in_addr_t) -> guint32;
+}
+extern "C" {
+    pub fn worker_getNodeBandwidthDown(nodeID: GQuark, ip: in_addr_t) -> guint32;
+}
+extern "C" {
+    pub fn worker_getLatency(sourceNodeID: GQuark, destinationNodeID: GQuark) -> gdouble;
+}
+extern "C" {
+    pub fn worker_getThreadID() -> gint;
+}
+extern "C" {
+    pub fn worker_updateMinTimeJump(minPathLatency: gdouble);
+}
+extern "C" {
+    pub fn worker_setCurrentTime(time: SimulationTime);
+}
+extern "C" {
+    pub fn worker_isFiltered(level: LogLevel) -> gboolean;
+}
+extern "C" {
+    pub fn worker_getActiveHost() -> *mut Host;
+}
+extern "C" {
+    pub fn worker_setActiveHost(host: *mut Host);
+}
 extern "C" {
     pub fn worker_getActiveProcess() -> *mut Process;
 }
 extern "C" {
+    pub fn worker_setActiveProcess(proc_: *mut Process);
+}
+extern "C" {
     pub fn worker_getActiveThread() -> *mut Thread;
+}
+extern "C" {
+    pub fn worker_setActiveThread(thread: *mut Thread);
+}
+extern "C" {
+    pub fn worker_incrementPluginError();
+}
+extern "C" {
+    pub fn worker_resolveIPToAddress(ip: in_addr_t) -> *mut Address;
+}
+extern "C" {
+    pub fn worker_resolveNameToAddress(name: *const gchar) -> *mut Address;
+}
+extern "C" {
+    pub fn worker_add_syscall_counts(syscall_counts: *mut Counter);
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

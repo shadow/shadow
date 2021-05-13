@@ -34,7 +34,7 @@ struct _SocketFunctionTable {
     SocketIsFamilySupportedFunc isFamilySupported;
     SocketConnectToPeerFunc connectToPeer;
     SocketDropFunc dropPacket;
-    MAGIC_DECLARE;
+    MAGIC_DECLARE_ALWAYS;
 };
 
 enum SocketFlags {
@@ -74,7 +74,7 @@ struct _Socket {
     gsize outputBufferSizePending;
     gsize outputBufferLength;
 
-    MAGIC_DECLARE;
+    MAGIC_DECLARE_ALWAYS;
 };
 
 void socket_init(Socket* socket, SocketFunctionTable* vtable,

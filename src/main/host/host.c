@@ -111,7 +111,8 @@ Host* host_new(HostParameters* params) {
     host->params = *params;
 
     /* now dup the strings so we own them */
-    if(params->hostname) host->params.hostname = g_strdup(params->hostname);
+    utility_assert(params->hostname);
+    host->params.hostname = g_strdup(params->hostname);
     if(params->ipHint) host->params.ipHint = g_strdup(params->ipHint);
     if(params->citycodeHint) host->params.citycodeHint = g_strdup(params->citycodeHint);
     if(params->countrycodeHint) host->params.countrycodeHint = g_strdup(params->countrycodeHint);

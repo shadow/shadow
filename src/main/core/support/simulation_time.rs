@@ -9,6 +9,30 @@ module contains some identically-named constants defined as C macros in
 
 use crate::cshadow as c;
 
+pub struct SimulationTime(std::time::Duration);
+
+impl std::ops::Deref for SimulationTime {
+    type Target = std::time::Duration;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl SimulationTime {
+    pub fn from_c_simtime(val: u64) -> Self {
+        Self::from(std::time::Duration::from_nanos(
+            val * SIMTIME_ONE_NANOSECOND,
+        ))
+    }
+}
+
+impl std::convert::From<std::time::Duration> for SimulationTime {
+    fn from(val: std::time::Duration) -> Self {
+        Self(val)
+    }
+}
+
 /// Invalid simulation time.
 pub const SIMTIME_INVALID: c::SimulationTime = u64::MAX;
 
@@ -34,18 +58,14 @@ pub const SIMTIME_ONE_MINUTE: c::SimulationTime = 60000000000;
 /// Represents one hour in simulation time.
 pub const SIMTIME_ONE_HOUR: c::SimulationTime = 3600000000000;
 
-pub fn sim_time_to_duration(time: c::SimulationTime) -> std::time::Duration {
-    std::time::Duration::from_nanos(time * SIMTIME_ONE_NANOSECOND)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_sim_time_to_rust_duration() {
+    fn test_from_sim_time() {
         let sim_time = 5 * SIMTIME_ONE_MINUTE + 7 * SIMTIME_ONE_MILLISECOND;
-        let rust_time = sim_time_to_duration(sim_time);
+        let rust_time = SimulationTime::from_c_simtime(sim_time);
 
         assert_eq!(rust_time.as_secs(), 5 * 60);
         assert_eq!(rust_time.as_millis(), 5 * 60 * 1_000 + 7);
