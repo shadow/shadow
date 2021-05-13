@@ -29,7 +29,7 @@ XML_ATTRS_TO_YAML = {
     'starttime': 'start_time',
     'stoptime': 'stop_time',
     'arguments': 'args',
-    'iphint': 'ip_hint',
+    'iphint': 'ip_address_hint',
     'citycodehint': 'city_code_hint',
     'countrycodehint': 'country_code_hint',
     'geocodehint': 'geo_code_hint',

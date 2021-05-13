@@ -164,7 +164,7 @@ SimulationTime hostoptions_getHeartbeatInterval(const struct HostOptions *host);
 
 char *hostoptions_getPcapDirectory(const struct HostOptions *host);
 
-char *hostoptions_getIpHint(const struct HostOptions *host);
+char *hostoptions_getIpAddressHint(const struct HostOptions *host);
 
 char *hostoptions_getCountryCodeHint(const struct HostOptions *host);
 

@@ -292,7 +292,7 @@ static void _controller_registerHostCallback(const char* name, const ConfigOptio
 
         params->pcapDir = hostoptions_getPcapDirectory(host);
 
-        params->ipHint = hostoptions_getIpHint(host);
+        params->ipHint = hostoptions_getIpAddressHint(host);
         params->countrycodeHint = hostoptions_getCountryCodeHint(host);
         params->citycodeHint = hostoptions_getCityCodeHint(host);
 

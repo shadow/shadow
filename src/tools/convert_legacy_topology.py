@@ -26,6 +26,7 @@ ATTR_CONVERSIONS = {
     'countrycode': ('country_code', None, None),
     'citycode': ('city_code', None, None),
     'geocode': ('geo_code', None, None),
+    'ip': ('ip_address', None, None),
 }
 
 
