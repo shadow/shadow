@@ -665,7 +665,6 @@ const ONE_GBIT_SWITCH_TOPOLOGY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
     <key attr.name="packet_loss"    attr.type="double" for="edge" id="edge_packet_loss" />
     <key attr.name="jitter"         attr.type="double" for="edge" id="edge_jitter" />
     <key attr.name="latency"        attr.type="double" for="edge" id="edge_latency" />
-    <key attr.name="type"           attr.type="string" for="node" id="node_type" />
     <key attr.name="bandwidth_up"   attr.type="string" for="node" id="node_bandwidth_up" />
     <key attr.name="bandwidth_down" attr.type="string" for="node" id="node_bandwidth_down" />
     <key attr.name="country_code"   attr.type="string" for="node" id="node_country_code" />
@@ -678,7 +677,6 @@ const ONE_GBIT_SWITCH_TOPOLOGY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
             <data key="node_country_code">XX</data>
             <data key="node_bandwidth_down">1 Gbit</data>
             <data key="node_bandwidth_up">1 Gbit</data>
-            <data key="node_type">net</data>
         </node>
         <edge source="poi-1" target="poi-1">
             <data key="edge_latency">1.0</data>

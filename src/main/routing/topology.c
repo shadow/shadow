@@ -578,7 +578,8 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
             /* we use a string because there is an error in igraph boolean attribute code. */
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else {
-            warning("graph attribute '%s' is unsupported and will be ignored", name);
+            error("graph attribute '%s' is unsupported", name);
+            isSuccess = FALSE;
         }
     }
 
@@ -609,7 +610,8 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_PACKETLOSS)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else {
-            debug("vertex attribute '%s' is unsupported and will be ignored", name);
+            error("vertex attribute '%s' is unsupported", name);
+            isSuccess = FALSE;
         }
     }
 
@@ -651,7 +653,8 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         } else if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_PACKETLOSS)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else {
-            debug("edge attribute '%s' is unsupported and will be ignored", name);
+            error("edge attribute '%s' is unsupported", name);
+            isSuccess = FALSE;
         }
     }
 
