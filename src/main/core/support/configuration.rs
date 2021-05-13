@@ -363,8 +363,8 @@ pub struct HostDefaultOptions {
 
     /// IPv4 address hint for Shadow's name and routing system (ex: "100.0.0.1")
     #[clap(long, value_name = "ip")]
-    #[clap(about = HOST_HELP.get("ip_hint").unwrap())]
-    ip_hint: Option<String>,
+    #[clap(about = HOST_HELP.get("ip_address_hint").unwrap())]
+    ip_address_hint: Option<String>,
 
     /// Country code hint for Shadow's name and routing system (ex: "US")
     #[clap(long, value_name = "country")]
@@ -385,7 +385,7 @@ impl HostDefaultOptions {
             heartbeat_log_info: None,
             heartbeat_interval: None,
             pcap_directory: None,
-            ip_hint: None,
+            ip_address_hint: None,
             country_code_hint: None,
             city_code_hint: None,
         }
@@ -406,7 +406,7 @@ impl Default for HostDefaultOptions {
             heartbeat_log_info: Some(std::array::IntoIter::new([LogInfoFlag::Node]).collect()),
             heartbeat_interval: Some(units::Time::new(1, units::TimePrefixUpper::Sec)),
             pcap_directory: None,
-            ip_hint: None,
+            ip_address_hint: None,
             country_code_hint: None,
             city_code_hint: None,
         }
@@ -668,12 +668,12 @@ const ONE_GBIT_SWITCH_TOPOLOGY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
     <key attr.name="bandwidth_up"   attr.type="string" for="node" id="node_bandwidth_up" />
     <key attr.name="bandwidth_down" attr.type="string" for="node" id="node_bandwidth_down" />
     <key attr.name="country_code"   attr.type="string" for="node" id="node_country_code" />
-    <key attr.name="ip"             attr.type="string" for="node" id="node_ip" />
+    <key attr.name="ip_address"     attr.type="string" for="node" id="node_ip_address" />
     <key attr.name="packet_loss"    attr.type="double" for="node" id="node_packet_loss" />
     <graph edgedefault="undirected">
         <node id="poi-1">
             <data key="node_packet_loss">0.0</data>
-            <data key="node_ip">0.0.0.0</data>
+            <data key="node_ip_address">0.0.0.0</data>
             <data key="node_country_code">XX</data>
             <data key="node_bandwidth_down">1 Gbit</data>
             <data key="node_bandwidth_up">1 Gbit</data>
@@ -1385,11 +1385,11 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn hostoptions_getIpHint(host: *const HostOptions) -> *mut libc::c_char {
+    pub extern "C" fn hostoptions_getIpAddressHint(host: *const HostOptions) -> *mut libc::c_char {
         assert!(!host.is_null());
         let host = unsafe { &*host };
 
-        match host.options.ip_hint.as_ref() {
+        match host.options.ip_address_hint.as_ref() {
             Some(x) => CString::into_raw(CString::new(x.to_string()).unwrap()),
             None => std::ptr::null_mut(),
         }

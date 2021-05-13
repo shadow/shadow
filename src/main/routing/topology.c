@@ -92,7 +92,7 @@ enum _VertexAttribute {
     VERTEX_ATTR_ID=2,
     VERTEX_ATTR_BANDWIDTHDOWN=3,
     VERTEX_ATTR_BANDWIDTHUP=4,
-    VERTEX_ATTR_IP=5,
+    VERTEX_ATTR_IP_ADDRESS=5,
     VERTEX_ATTR_CITYCODE=6,
     VERTEX_ATTR_COUNTRYCODE=7,
     VERTEX_ATTR_ASN=8,
@@ -118,7 +118,7 @@ struct _AttachHelper {
     guint numIPsGeo;
     guint numIPsAll;
 
-    gchar* ipHint;
+    gchar* ipAddressHint;
     gchar* citycodeHint;
     gchar* countrycodeHint;
 
@@ -186,8 +186,8 @@ static const gchar* _topology_vertexAttributeToString(VertexAttribute attr) {
         return "bandwidth_down";
     } else if(attr == VERTEX_ATTR_BANDWIDTHUP) {
         return "bandwidth_up";
-    } else if(attr == VERTEX_ATTR_IP) {
-        return "ip";
+    } else if(attr == VERTEX_ATTR_IP_ADDRESS) {
+        return "ip_address";
     } else if(attr == VERTEX_ATTR_CITYCODE) {
         return "city_code";
     } else if(attr == VERTEX_ATTR_COUNTRYCODE) {
@@ -595,7 +595,7 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
 
         if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_ID)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
-        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_IP)) {
+        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_IP_ADDRESS)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_CITYCODE)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
@@ -849,10 +849,10 @@ static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_int
     }
 
     /* this attribute is NOT required, so it is OK if it doesn't exist */
-    const gchar* ipKey = _topology_vertexAttributeToString(VERTEX_ATTR_IP);
+    const gchar* ipKey = _topology_vertexAttributeToString(VERTEX_ATTR_IP_ADDRESS);
     if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, ipKey)) {
         const gchar* ipVal;
-        if(_topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_IP, &ipVal)) {
+        if (_topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_IP_ADDRESS, &ipVal)) {
             g_string_append_printf(message, " %s='%s'", ipKey, ipVal);
         } else {
             debug("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring", ipKey,
@@ -2075,7 +2075,7 @@ static gboolean _topology_findAttachmentVertexHelperHook(Topology* top, igraph_i
     const gchar* citycodeStr = NULL;
     const gchar* countrycodeStr = NULL;
 
-    gboolean ipFound = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_IP, &ipStr);
+    gboolean ipFound = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_IP_ADDRESS, &ipStr);
     gboolean citycodeFound = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_CITYCODE, &citycodeStr);
     gboolean countrycodeFound = _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_COUNTRYCODE, &countrycodeStr);
 
@@ -2168,19 +2168,19 @@ static igraph_integer_t* _topology_getLongestPrefixMatch(Topology* top, GQueue* 
 }
 
 static igraph_integer_t _topology_findAttachmentVertex(Topology* top, Random* randomSourcePool, in_addr_t nodeIP,
-        gchar* ipHint, gchar* citycodeHint, gchar* countrycodeHint) {
+        gchar* ipAddressHint, gchar* citycodeHint, gchar* countrycodeHint) {
     MAGIC_ASSERT(top);
 
     igraph_integer_t vertexIndex = (igraph_integer_t) -1;
     igraph_integer_t* vertexIndexPtr = GINT_TO_POINTER(-1);
 
     AttachHelper* ah = g_new0(AttachHelper, 1);
-    ah->ipHint = ipHint;
+    ah->ipAddressHint = ipAddressHint;
     ah->citycodeHint = citycodeHint;
     ah->countrycodeHint = countrycodeHint;
 
-    if(ipHint) {
-        in_addr_t ip = address_stringToIP(ipHint);
+    if(ipAddressHint) {
+        in_addr_t ip = address_stringToIP(ipAddressHint);
         if(ip != INADDR_NONE && ip != INADDR_ANY && ip != INADDR_LOOPBACK) {
             ah->requestedIPIsUsable = TRUE;
             ah->requestedIP = ip;
@@ -2213,7 +2213,7 @@ static igraph_integer_t _topology_findAttachmentVertex(Topology* top, Random* ra
         useLongestPrefixMatching = (ah->requestedIPIsUsable && ah->numIPsCountry > 0);
     } else {
         candidates = ah->candidatesAll;
-        useLongestPrefixMatching = (ipHint && ah->numIPsAll > 0);
+        useLongestPrefixMatching = (ipAddressHint && ah->numIPsAll > 0);
     }
 
     guint numCandidates = g_queue_get_length(candidates);
@@ -2253,15 +2253,15 @@ static igraph_integer_t _topology_findAttachmentVertex(Topology* top, Random* ra
     return vertexIndex;
 }
 
-void topology_attach(Topology* top, Address* address, Random* randomSourcePool, gchar* ipHint,
-                     gchar* citycodeHint, gchar* countrycodeHint, guint64* bwDownOut,
-                     guint64* bwUpOut) {
+void topology_attach(Topology* top, Address* address, Random* randomSourcePool,
+                     gchar* ipAddressHint, gchar* citycodeHint, gchar* countrycodeHint,
+                     guint64* bwDownOut, guint64* bwUpOut) {
     MAGIC_ASSERT(top);
     utility_assert(address);
 
     in_addr_t nodeIP = address_toNetworkIP(address);
     igraph_integer_t vertexIndex = _topology_findAttachmentVertex(top, randomSourcePool, nodeIP,
-            ipHint, citycodeHint, countrycodeHint);
+            ipAddressHint, citycodeHint, countrycodeHint);
 
     /* attach it, i.e. store the mapping so we can route later */
     g_rw_lock_writer_lock(&(top->virtualIPLock));
@@ -2296,7 +2296,7 @@ void topology_attach(Topology* top, Address* address, Random* randomSourcePool, 
 
     /* these may fail and not set the string value if the vertex does not have the attribute.
      * that's ok though, glib will print null in its place in the format string below. */
-    _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_IP, &ipStr);
+    _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_IP_ADDRESS, &ipStr);
     _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_CITYCODE, &citycodeStr);
     _topology_findVertexAttributeString(top, vertexIndex, VERTEX_ATTR_COUNTRYCODE, &countrycodeStr);
 
@@ -2306,7 +2306,7 @@ void topology_attach(Topology* top, Address* address, Random* randomSourcePool, 
          "with attributes (ip=%s, citycode=%s, countrycode=%s) "
          "using hints (ip=%s, citycode=%s, countrycode=%s)",
          address_toHostIPString(address), (glong)vertexIndex, idStr, ipStr, citycodeStr,
-         countrycodeStr, ipHint, citycodeHint, countrycodeHint);
+         countrycodeStr, ipAddressHint, citycodeHint, countrycodeHint);
 }
 
 void topology_detach(Topology* top, Address* address) {

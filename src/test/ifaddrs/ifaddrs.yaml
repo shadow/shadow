@@ -4,7 +4,7 @@ topology: 1_gbit_switch
 hosts:
   testnode:
     options:
-      ip_hint: 128.1.2.3
+      ip_address_hint: 128.1.2.3
     processes:
     - path: ../target/debug/test_ifaddrs
       args: 127.0.0.1 128.1.2.3
