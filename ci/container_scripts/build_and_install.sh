@@ -9,8 +9,8 @@ gcc)
 clang)
   export CXX="clang++"
   ;;
-clang-11)
-  export CXX="clang++-11"
+clang-12)
+  export CXX="clang++-12"
   ;;
 *)
   echo "Unknown cc $CC"
