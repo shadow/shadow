@@ -95,7 +95,6 @@ enum _VertexAttribute {
     VERTEX_ATTR_IP_ADDRESS=5,
     VERTEX_ATTR_CITYCODE=6,
     VERTEX_ATTR_COUNTRYCODE=7,
-    VERTEX_ATTR_PACKETLOSS=8,
 };
 
 typedef enum _EdgeAttribute EdgeAttribute;
@@ -191,8 +190,6 @@ static const gchar* _topology_vertexAttributeToString(VertexAttribute attr) {
         return "city_code";
     } else if(attr == VERTEX_ATTR_COUNTRYCODE) {
         return "country_code";
-    } else if(attr == VERTEX_ATTR_PACKETLOSS) {
-        return "packet_loss";
     } else {
         return "unknown";
     }
@@ -602,8 +599,6 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_BANDWIDTHUP)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
-        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_PACKETLOSS)) {
-            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else {
             error("vertex attribute '%s' is unsupported", name);
             isSuccess = FALSE;
@@ -876,22 +871,6 @@ static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_int
         } else {
             debug("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring",
                   countrycodeKey, (glong)vertexIndex, idKey, idStr);
-        }
-    }
-
-    /* this attribute is NOT required, so it is OK if it doesn't exist */
-    const gchar* packetlossKey = _topology_vertexAttributeToString(VERTEX_ATTR_PACKETLOSS);
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, packetlossKey)) {
-        gdouble packetlossValue;
-        if(_topology_findVertexAttributeDouble(top, vertexIndex, VERTEX_ATTR_PACKETLOSS, &packetlossValue)) {
-            if(packetlossValue >= 0.0f && packetlossValue <= 1.0f) {
-                g_string_append_printf(message, " %s='%f'", packetlossKey, packetlossValue);
-            } else {
-                /* its an error if they gave a value that is incorrect */
-                warning("optional attribute '%s' on vertex %li (%s='%s') is out of range [0.0,1.0]",
-                        packetlossKey, (glong)vertexIndex, idKey, idStr);
-                isSuccess = FALSE;
-            }
         }
     }
 
@@ -1370,12 +1349,6 @@ static gboolean _topology_computePathProperties(Topology* top, igraph_integer_t 
 
     _topology_lockGraph(top);
 
-    /* get source properties */
-    gdouble sourcePacketLoss;
-    if(_topology_findVertexAttributeDouble(top, srcVertexIndex, VERTEX_ATTR_PACKETLOSS, &sourcePacketLoss)) {
-        totalReliability *= (1.0f - sourcePacketLoss);
-    }
-
     gboolean found = _topology_findVertexAttributeString(top, srcVertexIndex, VERTEX_ATTR_ID, &srcIDStr);
     utility_assert(found);
     g_string_printf(pathStringBuffer, "%s", srcIDStr);
@@ -1384,14 +1357,6 @@ static gboolean _topology_computePathProperties(Topology* top, igraph_integer_t 
     targetVertexIndex = (igraph_integer_t) igraph_vector_tail(resultPathVertices);
     found = _topology_findVertexAttributeString(top, targetVertexIndex, VERTEX_ATTR_ID, &dstIDStr);
     utility_assert(found);
-
-    /* only include dst loss if there is no path between src and dst vertices */
-    if((srcVertexIndex != targetVertexIndex) || (srcVertexIndex == targetVertexIndex && nVertices > 2)) {
-        gdouble destPacketLoss;
-        if(_topology_findVertexAttributeDouble(top, targetVertexIndex, VERTEX_ATTR_PACKETLOSS, &destPacketLoss)) {
-            totalReliability *= (1.0f - destPacketLoss);
-        }
-    }
 
     /* the source is in the first position only if we have more than one vertex */
     if(nVertices > 1) {
@@ -1844,15 +1809,6 @@ static gboolean _topology_lookupDirectPath(Topology* top, igraph_integer_t srcVe
     utility_assert(found);
     found = _topology_findVertexAttributeString(top, dstVertexIndex, VERTEX_ATTR_ID, &dstIDStr);
     utility_assert(found);
-
-    gdouble sourcePacketLoss;
-    if(_topology_findVertexAttributeDouble(top, srcVertexIndex, VERTEX_ATTR_PACKETLOSS, &sourcePacketLoss)) {
-        totalReliability *= (1.0f - sourcePacketLoss);
-    }
-    gdouble destPacketLoss;
-    if(_topology_findVertexAttributeDouble(top, dstVertexIndex, VERTEX_ATTR_PACKETLOSS, &destPacketLoss)) {
-        totalReliability *= (1.0f - destPacketLoss);
-    }
 
     gint result = _topology_getEdgeHelper(top, srcVertexIndex, dstVertexIndex, NULL, &edgeLatency, &edgeReliability);
 

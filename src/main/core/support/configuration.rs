@@ -669,10 +669,8 @@ const ONE_GBIT_SWITCH_TOPOLOGY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
     <key attr.name="bandwidth_down" attr.type="string" for="node" id="node_bandwidth_down" />
     <key attr.name="country_code"   attr.type="string" for="node" id="node_country_code" />
     <key attr.name="ip_address"     attr.type="string" for="node" id="node_ip_address" />
-    <key attr.name="packet_loss"    attr.type="double" for="node" id="node_packet_loss" />
     <graph edgedefault="undirected">
         <node id="poi-1">
-            <data key="node_packet_loss">0.0</data>
             <data key="node_ip_address">0.0.0.0</data>
             <data key="node_country_code">XX</data>
             <data key="node_bandwidth_down">1 Gbit</data>
