@@ -95,8 +95,7 @@ enum _VertexAttribute {
     VERTEX_ATTR_IP_ADDRESS=5,
     VERTEX_ATTR_CITYCODE=6,
     VERTEX_ATTR_COUNTRYCODE=7,
-    VERTEX_ATTR_ASN=8,
-    VERTEX_ATTR_PACKETLOSS=9,
+    VERTEX_ATTR_PACKETLOSS=8,
 };
 
 typedef enum _EdgeAttribute EdgeAttribute;
@@ -192,8 +191,6 @@ static const gchar* _topology_vertexAttributeToString(VertexAttribute attr) {
         return "city_code";
     } else if(attr == VERTEX_ATTR_COUNTRYCODE) {
         return "country_code";
-    } else if(attr == VERTEX_ATTR_ASN) {
-        return "asn";
     } else if(attr == VERTEX_ATTR_PACKETLOSS) {
         return "packet_loss";
     } else {
@@ -601,8 +598,6 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_COUNTRYCODE)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
-        } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_ASN)) {
-            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_BANDWIDTHDOWN)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidVertexAttributeKey(name, VERTEX_ATTR_BANDWIDTHUP)) {
@@ -881,22 +876,6 @@ static gboolean _topology_checkGraphVerticesHelperHook(Topology* top, igraph_int
         } else {
             debug("optional attribute '%s' on vertex %li (%s='%s') is NULL, ignoring",
                   countrycodeKey, (glong)vertexIndex, idKey, idStr);
-        }
-    }
-
-    /* this attribute is NOT required, so it is OK if it doesn't exist */
-    const gchar* asnKey = _topology_vertexAttributeToString(VERTEX_ATTR_ASN);
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX, asnKey)) {
-        gdouble asnValue;
-        if(_topology_findVertexAttributeDouble(top, vertexIndex, VERTEX_ATTR_ASN, &asnValue)) {
-            if(asnValue > 0.0f) {
-                g_string_append_printf(message, " %s='%f'", asnKey, asnValue);
-            } else {
-                /* its an error if they gave a value that is incorrect */
-                warning("optional attribute '%s' on vertex %li (%s='%s') is non-positive",
-                        asnKey, (glong)vertexIndex, idKey, idStr);
-                isSuccess = FALSE;
-            }
         }
     }
 
