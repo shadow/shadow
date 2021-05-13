@@ -12,6 +12,7 @@ use nix::errno::Errno;
 use nix::{fcntl, sys};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -25,9 +26,36 @@ trait MemoryReaderTrait<T>: Debug
 where
     T: Pod,
 {
-    fn as_ref(&self) -> Result<&[T], Errno>;
-    fn copy(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno>;
+    /// Get a reference to the readable prefix of the region.
+    fn ref_some(&self) -> Result<&[T], Errno>;
+
+    /// Reads up to min(self.len(), buf.len()). May read less if the end of the
+    /// region is inaccessible.
+    fn read_some(&self, offset: usize, buf: &mut [T]) -> Result<usize, Errno>;
+
     fn len(&self) -> usize;
+
+    // Reads exactly buf.len() or returns an error.
+    fn read_exact(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno> {
+        let n = self.read_some(offset, buf)?;
+        if n == buf.len() {
+            Ok(())
+        } else {
+            warn!("Partial read: got:{} expected:{}", buf.len(), n);
+            Err(Errno::EFAULT)
+        }
+    }
+
+    /// Get a reference to the whole region, or return an error.
+    fn ref_exact(&self) -> Result<&[T], Errno> {
+        let slice = self.ref_some()?;
+        if slice.len() == self.len() {
+            Ok(slice)
+        } else {
+            warn!("Partial ref: got:{} expected:{}", slice.len(), self.len());
+            Err(Errno::EFAULT)
+        }
+    }
 }
 
 /// Read-accessor to plugin memory.
@@ -45,27 +73,32 @@ where
         Self { reader }
     }
 
-    /// Access this reader's memory as a reference. May internally require a
-    /// copy, which is redundant if the data is going to be copied into Shadow's
-    /// memory anyway.
-    pub fn as_ref(&self) -> Result<&[T], Errno> {
-        (&*self.reader).as_ref()
+    /// Get a reference to the readable prefix of the region.
+    pub fn ref_some(&self) -> Result<&[T], Errno> {
+        self.reader.ref_some()
     }
 
-    /// Copies memory into `buf`, which must be of size `self.len()`
-    pub fn copy(&self, buf: &mut [T]) -> Result<(), Errno> {
-        assert_eq!(buf.len(), self.len());
-        self.reader.copy(0, buf)
+    /// Get a reference to the whole region, or return an error.
+    pub fn ref_exact(&self) -> Result<&[T], Errno> {
+        self.reader.ref_exact()
     }
 
-    /// Reads a single value. Panics if this reader contains more than 1 value.
-    /// Once const-generics are stabilized, this could return an array.
-    pub fn as_value(&self) -> Result<T, Errno> {
-        assert_eq!(self.reader.len(), 1);
+    /// Copies up to min(self.len(), buf.len()). May read less if the end
+    /// of the region is inaccessible.
+    pub fn read_some(&self, buf: &mut [T]) -> Result<usize, Errno> {
+        self.reader.read_some(0, buf)
+    }
+
+    pub fn read_exact(&self, buf: &mut [T]) -> Result<(), Errno> {
+        self.reader.read_exact(0, buf)
+    }
+
+    /// Reads N values.
+    pub fn as_values<const N: usize>(&self) -> Result<[T; N], Errno> {
         // SAFETY: Any bit-pattern is valid for Pod.
-        let mut value = unsafe { [std::mem::MaybeUninit::uninit().assume_init()] };
-        self.reader.copy(0, &mut value)?;
-        Ok(value[0])
+        let mut value: [T; N] = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
+        self.reader.read_exact(0, &mut value)?;
+        Ok(value)
     }
 
     /// Number of items referenced by this reader.
@@ -81,6 +114,25 @@ impl<'a> MemoryReader<'a, u8> {
             reader: self,
             offset: 0,
         }
+    }
+
+    fn read_string(&self, buf: &mut [u8]) -> Result<usize, Errno> {
+        let nread = self.reader.read_some(0, buf)?;
+        let buf = &buf[..nread];
+        let nullpos = buf.iter().position(|c| *c == 0);
+        match nullpos {
+            Some(i) => Ok(i),
+            None => Err(Errno::ENAMETOOLONG),
+        }
+    }
+
+    fn ref_string(&self) -> Result<&std::ffi::CStr, Errno> {
+        let buf = self.reader.ref_some()?;
+        let nullpos = match buf.iter().position(|c| *c == 0) {
+            Some(i) => i,
+            None => return Err(Errno::ENAMETOOLONG),
+        };
+        std::ffi::CStr::from_bytes_with_nul(&buf[..=nullpos]).map_err(|_| Errno::ENAMETOOLONG)
     }
 }
 
@@ -100,7 +152,7 @@ impl<'a> std::io::Read for MemoryReaderCursor<'a> {
         }
         self.reader
             .reader
-            .copy(self.offset, &mut buf[..toread])
+            .read_exact(self.offset, &mut buf[..toread])
             .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
         self.offset += toread;
         Ok(toread)
@@ -279,25 +331,12 @@ where
 
 impl<'a, T> CopyingMemoryReader<'a, T>
 where
-    T: Pod,
+    T: Pod + Debug,
 {
     fn new(memory_manager: &'a MemoryManager, ptr: TypedPluginPtr<T>) -> Self {
         Self {
             memory_manager,
             readable_ptr: once_cell::unsync::OnceCell::new(),
-            ptr,
-        }
-    }
-
-    /// A pre-initialized reader.
-    fn new_with_memory(
-        memory_manager: &'a MemoryManager,
-        ptr: TypedPluginPtr<T>,
-        memory: Box<[T]>,
-    ) -> Self {
-        Self {
-            memory_manager,
-            readable_ptr: once_cell::unsync::OnceCell::from(Ok(memory)),
             ptr,
         }
     }
@@ -307,9 +346,9 @@ impl<'a, T> MemoryReaderTrait<T> for CopyingMemoryReader<'a, T>
 where
     T: Pod + Debug,
 {
-    fn as_ref(&self) -> Result<&[T], Errno> {
+    fn ref_some(&self) -> Result<&[T], Errno> {
         if self.len() == 0 {
-            trace!("as_ref returning empty slice");
+            trace!("returning empty slice");
             return Ok(&mut [][..]);
         }
 
@@ -319,7 +358,8 @@ where
                 let mut vec = Vec::<T>::with_capacity(self.len());
                 // SAFETY: any value is valid for Pod.
                 unsafe { vec.set_len(self.len()) };
-                self.copy(0, &mut vec)?;
+                let nread = self.read_some(0, &mut vec)?;
+                vec.truncate(nread);
                 Ok(vec.into_boxed_slice())
             }) {
             // Convert box to slice
@@ -329,8 +369,8 @@ where
         }
     }
 
-    fn copy(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno> {
-        self.memory_manager.read_ptr(buf, self.ptr, offset)
+    fn read_some(&self, offset: usize, buf: &mut [T]) -> Result<usize, Errno> {
+        self.memory_manager.read_some(buf, self.ptr.slice(offset..))
     }
 
     fn len(&self) -> usize {
@@ -380,7 +420,7 @@ where
         // overwrite it.
         // SAFETY: any bit pattern is valid Pod.
         unsafe { vec.set_len(self.len()) };
-        self.memory_manager.read_ptr(&mut vec, self.ptr, 0)?;
+        self.memory_manager.read_exact(&mut vec, self.ptr)?;
 
         debug_assert!(self.writable_ptr.is_none());
         self.writable_ptr = Some(vec.into_boxed_slice());
@@ -455,13 +495,15 @@ where
         self.memory.len()
     }
 
-    fn as_ref(&self) -> Result<&[T], Errno> {
+    fn ref_some(&self) -> Result<&[T], Errno> {
+        // We only create a MappedMemoryReader when we already know the whole
+        // region is accessible.
         Ok(self.memory)
     }
 
-    fn copy(&self, offset: usize, buf: &mut [T]) -> Result<(), Errno> {
+    fn read_some(&self, offset: usize, buf: &mut [T]) -> Result<usize, Errno> {
         buf.copy_from_slice(&self.memory[offset..offset + buf.len()]);
-        Ok(())
+        Ok(buf.len())
     }
 }
 
@@ -665,7 +707,7 @@ impl ShmFile {
         let reader = memory_manager.reader(
             TypedPluginPtr::<u8>::new(PluginPtr::from(interval.start), interval.len()).unwrap(),
         );
-        reader.copy(dst).unwrap();
+        reader.read_exact(dst).unwrap();
     }
 
     /// Map the given range of the file into the plugin's address space.
@@ -1658,76 +1700,104 @@ impl MemoryManager {
         }
     }
 
-    // Low level helper for reading directly from `src`. Panics if the
-    // MemoryManager's process isn't currently active.
-    fn read_ptr<T: Pod + Debug>(
+    // Read as much of `ptr` as is accessible into `buf`.
+    fn read_some<T: Debug + Pod>(
         &self,
-        dst: &mut [T],
-        src: TypedPluginPtr<T>,
-        offset: usize,
+        buf: &mut [T],
+        ptr: TypedPluginPtr<T>,
+    ) -> Result<usize, Errno> {
+        // Convert to u8
+        let mut buf = pod::to_u8_slice_mut(buf);
+        let ptr = ptr.cast::<u8>().unwrap();
+
+        // Split at page boundaries to allow partial reads.
+        let mut slices = Vec::with_capacity((buf.len() + page_size() - 1) / page_size() + 1);
+        let mut total_bytes_toread = std::cmp::min(buf.len(), ptr.len());
+
+        // First chunk to read is from pointer to beginning of next page.
+        let prev_page_boundary = usize::from(ptr.ptr()) / page_size() * page_size();
+        let next_page_boundary = prev_page_boundary + page_size();
+        let mut next_bytes_toread = std::cmp::min(
+            next_page_boundary - usize::from(ptr.ptr()),
+            total_bytes_toread,
+        );
+
+        while next_bytes_toread > 0 {
+            // Add the next chunk to read.
+            let (prefix, suffix) = buf.split_at_mut(next_bytes_toread);
+            buf = suffix;
+            slices.push(prefix);
+            total_bytes_toread -= next_bytes_toread;
+
+            // Reads should now be page-aligned. Read a whole page at a time,
+            // up to however much is left.
+            next_bytes_toread = std::cmp::min(total_bytes_toread, page_size());
+        }
+        let bytes_read = self.readv_ptrs(&mut slices, &[ptr])?;
+        Ok(bytes_read / std::mem::size_of::<T>())
+    }
+
+    // Read exactly enough to fill `buf`, or fail.
+    fn read_exact<T: Debug + Pod>(
+        &self,
+        buf: &mut [T],
+        ptr: TypedPluginPtr<T>,
     ) -> Result<(), Errno> {
-        let src = src.cast::<u8>().unwrap();
-        let dst = pod::to_u8_slice_mut(dst);
-        let offset = offset * std::mem::size_of::<T>();
-        assert!(dst.len() <= src.len() - offset);
-
-        let toread = dst.len();
-        trace!("read_ptr reading {} bytes", dst.len());
-        let local = [nix::sys::uio::IoVec::from_mut_slice(dst)];
-        let remote = [nix::sys::uio::RemoteIoVec {
-            base: usize::from(src.ptr()) + offset,
-            len: toread,
-        }];
-
-        // While the documentation for process_vm_readv says to use the pid, in
-        // practice it needs to be the tid of a still-running thread. i.e. using the
-        // pid after the thread group leader has exited will fail.
-        let (active_tid, active_pid) = Worker::with_active_thread(|thread| {
-            (
-                nix::unistd::Pid::from_raw(thread.get_system_tid()),
-                nix::unistd::Pid::from_raw(thread.get_system_pid()),
-            )
-        });
-        // Don't access another process's memory.
-        assert_eq!(active_pid, self.pid);
-
-        let nwritten = nix::sys::uio::process_vm_readv(active_tid, &local, &remote)
-            .map_err(|e| e.as_errno().unwrap())?;
-
-        // There shouldn't be any partial writes with a single remote iovec.
-        assert_eq!(nwritten, toread);
+        let buf = pod::to_u8_slice_mut(buf);
+        let ptr = ptr.cast::<u8>().unwrap();
+        let bytes_read = self.readv_ptrs(&mut [buf], &[ptr])?;
+        if bytes_read != buf.len() {
+            warn!(
+                "Tried to read {} bytes but only got {}",
+                buf.len(),
+                bytes_read
+            );
+            return Err(Errno::EFAULT);
+        }
         Ok(())
     }
 
-    /// Creates a reader for a NULL-terminated string starting at `src`. Succeeds
-    /// if the NULL terminated string starting at the beginning of `src` is
-    /// accessible, even if later pages of `src` are inaccessible.
-    fn string_reader<'a>(&'a self, src: TypedPluginPtr<u8>) -> Result<MemoryReader<'a, u8>, Errno> {
-        let mut dst = Vec::<u8>::with_capacity(src.len());
-        // SAFETY: any values are legal for u8.
-        unsafe { dst.set_len(src.len()) };
+    // Low level helper for reading directly from `srcs` to `dsts`.
+    // Returns the number of bytes read. Panics if the
+    // MemoryManager's process isn't currently active.
+    fn readv_ptrs(
+        &self,
+        dsts: &mut [&mut [u8]],
+        srcs: &[TypedPluginPtr<u8>],
+    ) -> Result<usize, Errno> {
+        let srcs: Vec<_> = srcs
+            .iter()
+            .map(|src| nix::sys::uio::RemoteIoVec {
+                base: usize::from(src.ptr()),
+                len: src.len(),
+            })
+            .collect();
+        let dsts: Vec<_> = dsts
+            .iter_mut()
+            .map(|dst: &mut &mut [u8]| -> nix::sys::uio::IoVec<&mut [u8]> {
+                nix::sys::uio::IoVec::from_mut_slice(*dst)
+            })
+            .collect();
 
-        // process_vm_readv reads at iovec granularity. To handle the case where
-        // the user-supplied pointer is near the end of a readable region, we split
-        // at page boundaries. i.e. succeed if we successfully read a null-terminated
-        // string, even if some of the region after that is inaccessible.
-        let mut remotes = Vec::new();
-        let mut toread = dst.len();
-        let mut address = usize::from(src.ptr());
-        while toread > 0 {
-            let mut this_toread = toread % page_size();
-            if this_toread == 0 {
-                this_toread = page_size();
-            }
-            let this_toread = std::cmp::min(this_toread, toread);
-            remotes.push(nix::sys::uio::RemoteIoVec {
-                base: address,
-                len: this_toread,
-            });
-            toread -= this_toread;
-            address += this_toread;
-        }
-        let local = [nix::sys::uio::IoVec::from_mut_slice(&mut dst)];
+        self.readv_iovecs(&dsts, &srcs)
+    }
+
+    // Low level helper for reading directly from `srcs` to `dsts`.
+    // Returns the number of bytes read. Panics if the
+    // MemoryManager's process isn't currently active.
+    fn readv_iovecs(
+        &self,
+        dsts: &[nix::sys::uio::IoVec<&mut [u8]>],
+        srcs: &[nix::sys::uio::RemoteIoVec],
+    ) -> Result<usize, Errno> {
+        trace!(
+            "Reading from srcs of len {}",
+            srcs.iter().map(|s| s.len).sum::<usize>()
+        );
+        trace!(
+            "Reading to dsts of len {}",
+            dsts.iter().map(|d| d.as_slice().len()).sum::<usize>()
+        );
 
         // While the documentation for process_vm_readv says to use the pid, in
         // practice it needs to be the tid of a still-running thread. i.e. using the
@@ -1741,29 +1811,10 @@ impl MemoryManager {
         // Don't access another process's memory.
         assert_eq!(active_pid, self.pid);
 
-        let nread = nix::sys::uio::process_vm_readv(active_tid, &local, &remotes)
+        let nread = nix::sys::uio::process_vm_readv(active_tid, &dsts, &srcs)
             .map_err(|e| e.as_errno().unwrap())?;
 
-        dst.truncate(nread);
-        let nullpos = dst.iter().position(|c| *c == 0);
-        match nullpos {
-            Some(i) => dst.truncate(i + 1),
-            None => {
-                return if dst.len() == src.len() {
-                    // We couldn't read the whole region specified, and there
-                    // wasn't a full string in the prefix.
-                    Err(Errno::EFAULT)
-                } else {
-                    // We could read the whole region, but the string extended
-                    // beyond it.
-                    Err(Errno::ENAMETOOLONG)
-                };
-            }
-        };
-
-        Ok(MemoryReader::new(Box::new(
-            CopyingMemoryReader::new_with_memory(self, src, dst.into_boxed_slice()),
-        )))
+        Ok(nread)
     }
 
     // Low level helper for writing directly to `dst`. Panics if the
@@ -1907,6 +1958,7 @@ mod export {
     /// * `mm` must point to a valid object.
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_free(mm: *mut MemoryManager) {
+        debug_assert!(!mm.is_null());
         mm.as_mut().map(|mm| Box::from_raw(mm));
     }
 
@@ -1917,6 +1969,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn allocdmem_free(allocd_mem: *mut AllocdMem<u8>) {
+        debug_assert!(!allocd_mem.is_null());
         allocd_mem
             .as_mut()
             .map(|allocd_mem| Box::from_raw(allocd_mem));
@@ -1924,6 +1977,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn allocdmem_pluginPtr(allocd_mem: *const AllocdMem<u8>) -> c::PluginPtr {
+        debug_assert!(!allocd_mem.is_null());
         allocd_mem.as_ref().unwrap().ptr().ptr().into()
     }
 
@@ -1934,6 +1988,8 @@ mod export {
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
     ) {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!thread.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         if !memory_manager.has_mapper() {
             let mut thread = CThread::new(thread);
@@ -1949,6 +2005,7 @@ mod export {
         plugin_src: c::PluginPtr,
         n: usize,
     ) -> *mut MemoryReader<'a, u8> {
+        debug_assert!(!memory_manager.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let plugin_src: PluginPtr = plugin_src.into();
         Box::into_raw(Box::new(
@@ -1956,31 +2013,9 @@ mod export {
         ))
     }
 
-    /// Get a write-accessor to the specified plugin memory.
-    /// Must be freed via `memorymanager_flushAndFreeWriter`.
-    #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_getStringReader<'a>(
-        memory_manager: *mut MemoryManager,
-        plugin_src: c::PluginPtr,
-        n: usize,
-        reader_out: *mut *mut MemoryReader<'a, u8>,
-        strlen: *mut usize,
-    ) -> i32 {
-        let memory_manager = memory_manager.as_mut().unwrap();
-        let plugin_src = TypedPluginPtr::new(plugin_src.into(), n).unwrap();
-        let reader = match memory_manager.string_reader(plugin_src) {
-            Err(e) => return -(e as i32),
-            Ok(r) => r,
-        };
-        if !strlen.is_null() {
-            *strlen = reader.as_ref().unwrap().len();
-        }
-        *reader_out = Box::into_raw(Box::new(reader));
-        0
-    }
-
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_freeReader<'a>(reader: *mut MemoryReader<'a, u8>) {
+        debug_assert!(!reader.is_null());
         Box::from_raw(reader);
     }
 
@@ -1989,10 +2024,49 @@ mod export {
     pub unsafe extern "C" fn memorymanager_getReadablePtr<'a>(
         reader: *mut MemoryReader<'a, u8>,
     ) -> *const c_void {
+        debug_assert!(!reader.is_null());
         let reader = &*reader;
-        match reader.as_ref() {
+        match reader.ref_exact() {
             Ok(p) => p.as_ptr() as *const c_void,
             Err(_) => std::ptr::null(),
+        }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_getReadableString<'a>(
+        reader: *const MemoryReader<'a, u8>,
+        str: *mut *const libc::c_char,
+        strlen: *mut libc::size_t,
+    ) -> i32 {
+        debug_assert!(!reader.is_null());
+        debug_assert!(!str.is_null());
+        let reader = &*reader;
+        let cstr = match reader.ref_string() {
+            Ok(c) => c,
+            Err(e) => {
+                return -(e as i32);
+            }
+        };
+        *str = cstr.as_ptr();
+        if !strlen.is_null() {
+            *strlen = cstr.to_bytes().len();
+        }
+        0
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn memorymanager_readString<'a>(
+        reader: *const MemoryReader<'a, u8>,
+        str: *mut libc::c_char,
+        strlen: libc::size_t,
+    ) -> libc::ssize_t {
+        debug_assert!(!reader.is_null());
+        debug_assert!(!str.is_null());
+        let reader = &*reader;
+        let dst = std::slice::from_raw_parts_mut(str as *mut u8, strlen);
+        match reader.read_string(dst) {
+            Ok(n) => libc::ssize_t::try_from(n).unwrap_or(-(Errno::ENAMETOOLONG as libc::ssize_t)),
+            Err(e) => return -(e as libc::ssize_t),
         }
     }
 
@@ -2007,7 +2081,7 @@ mod export {
         let memory_manager = memory_manager.as_mut().unwrap();
         let src = TypedPluginPtr::<u8>::new(src.into(), n).unwrap();
         let dst = std::slice::from_raw_parts_mut(dst as *mut u8, n);
-        match memory_manager.reader(src).copy(dst) {
+        match memory_manager.reader(src).read_some(dst) {
             Ok(_) => 0,
             Err(_) => {
                 trace!("Couldn't read {:?} into {:?}", src, dst);
@@ -2023,6 +2097,7 @@ mod export {
         plugin_src: c::PluginPtr,
         n: usize,
     ) -> *mut MemoryWriter<'a, u8> {
+        debug_assert!(!memory_manager.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let plugin_src: PluginPtr = plugin_src.into();
         let rv = Box::into_raw(Box::new(
@@ -2036,6 +2111,7 @@ mod export {
     pub unsafe extern "C" fn memorymanager_flushAndFreeWriter<'a>(
         writer: *mut MemoryWriter<'a, u8>,
     ) -> i32 {
+        debug_assert!(!writer.is_null());
         let mut writer = Box::from_raw(writer);
         // No way to safely recover here if the flush fails.
         if writer.flush().is_ok() {
@@ -2054,6 +2130,8 @@ mod export {
         src: *const c_void,
         n: usize,
     ) -> i32 {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!src.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let dst = TypedPluginPtr::<u8>::new(dst.into(), n).unwrap();
         let src = std::slice::from_raw_parts(src as *const u8, n);
@@ -2071,6 +2149,7 @@ mod export {
     pub unsafe extern "C" fn memorymanager_getWritablePtr<'a>(
         writer: *mut MemoryWriter<'a, u8>,
     ) -> *mut c_void {
+        debug_assert!(!writer.is_null());
         let writer = &mut *writer;
         match writer.as_mut_uninit() {
             Ok(p) => p.as_ptr() as *mut c_void,
@@ -2083,6 +2162,7 @@ mod export {
     pub unsafe extern "C" fn memorymanager_getMutablePtr<'a>(
         writer: *mut MemoryWriter<'a, u8>,
     ) -> *mut c_void {
+        debug_assert!(!writer.is_null());
         let writer = &mut *writer;
         match writer.as_mut() {
             Ok(p) => p.as_ptr() as *mut c_void,
@@ -2097,6 +2177,8 @@ mod export {
         thread: *mut c::Thread,
         plugin_src: c::PluginPtr,
     ) -> c::SysCallReturn {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!thread.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         memory_manager
@@ -2116,6 +2198,8 @@ mod export {
         fd: i32,
         offset: i64,
     ) -> c::SysCallReturn {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!thread.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         memory_manager
@@ -2139,6 +2223,8 @@ mod export {
         addr: c::PluginPtr,
         len: usize,
     ) -> c::SysCallReturn {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!thread.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         memory_manager
@@ -2156,6 +2242,8 @@ mod export {
         flags: i32,
         new_addr: c::PluginPtr,
     ) -> c::SysCallReturn {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!thread.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         memory_manager
@@ -2178,6 +2266,8 @@ mod export {
         size: usize,
         prot: i32,
     ) -> c::SysCallReturn {
+        debug_assert!(!memory_manager.is_null());
+        debug_assert!(!thread.is_null());
         let memory_manager = memory_manager.as_mut().unwrap();
         let mut thread = CThread::new(thread);
         memory_manager

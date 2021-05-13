@@ -265,18 +265,16 @@ struct MemoryReader_u8 *memorymanager_getReader(struct MemoryManager *memory_man
                                                 PluginPtr plugin_src,
                                                 uintptr_t n);
 
-// Get a write-accessor to the specified plugin memory.
-// Must be freed via `memorymanager_flushAndFreeWriter`.
-int32_t memorymanager_getStringReader(struct MemoryManager *memory_manager,
-                                      PluginPtr plugin_src,
-                                      uintptr_t n,
-                                      struct MemoryReader_u8 **reader_out,
-                                      uintptr_t *strlen);
-
 void memorymanager_freeReader(struct MemoryReader_u8 *reader);
 
 // Get a pointer to this reader's memory.
 const void *memorymanager_getReadablePtr(struct MemoryReader_u8 *reader);
+
+int32_t memorymanager_getReadableString(const struct MemoryReader_u8 *reader,
+                                        const char **str,
+                                        size_t *strlen);
+
+ssize_t memorymanager_readString(const struct MemoryReader_u8 *reader, char *str, size_t strlen);
 
 // Copy data from this reader's memory.
 int32_t memorymanager_readPtr(struct MemoryManager *memory_manager,

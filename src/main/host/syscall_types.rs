@@ -216,16 +216,27 @@ impl<T> TypedPluginPtr<T> {
     }
 
     /// Return a slice of this pointer.
-    pub fn slice(&self, range: std::ops::Range<usize>) -> TypedPluginPtr<T> {
-        assert!(range.end <= self.count);
-        assert!(range.start <= self.count);
+    pub fn slice<R: std::ops::RangeBounds<usize>>(&self, range: R) -> TypedPluginPtr<T> {
+        use std::ops::Bound;
+        let excluded_end = match range.end_bound() {
+            Bound::Included(e) => e + 1,
+            Bound::Excluded(e) => *e,
+            Bound::Unbounded => self.count,
+        };
+        let included_start = match range.start_bound() {
+            Bound::Included(s) => *s,
+            Bound::Excluded(s) => s + 1,
+            Bound::Unbounded => 0,
+        };
+        assert!(excluded_end <= self.count);
+        assert!(included_start < self.count);
         TypedPluginPtr {
             base: PluginPtr {
                 ptr: c::PluginPtr {
-                    val: (self.base.ptr.val as usize + range.start * size_of::<T>()) as u64,
+                    val: (self.base.ptr.val as usize + included_start * size_of::<T>()) as u64,
                 },
             },
-            count: range.len(),
+            count: excluded_end - included_start,
             _phantom: PhantomData,
         }
     }

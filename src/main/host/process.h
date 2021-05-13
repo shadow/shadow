@@ -120,6 +120,14 @@ int process_readPtr(Process* proc, void* dst, PluginVirtualPtr src, size_t n);
 int process_getReadableString(Process* process, PluginPtr plugin_src, size_t n, const char** str,
                               size_t* strlen);
 
+// Reads up to `n` bytes into `str`.
+//
+// Returns:
+// strlen(str) on success.
+// -ENAMETOOLONG if there was no NULL byte in the first `n` characters.
+// -EFAULT if the string extends beyond the accessible address space.
+ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_t n);
+
 // Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
 // the specified range couldn't be accessed. The write is flushed immediately.
 int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_t n);
