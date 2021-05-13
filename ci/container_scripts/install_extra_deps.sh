@@ -45,8 +45,21 @@ case "$CC" in
         fi
         install_packages clang
         ;;
-    clang-11)
-        install_packages clang-11
+    clang-12)
+        case "$CONTAINER" in
+            ubuntu:*|debian:*)
+                curl https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /usr/share/keyrings/llvm-archive-keyring.gpg
+        esac
+        case "$CONTAINER" in
+            ubuntu:20.04)
+                echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/focal/ llvm-toolchain-focal-12 main" \
+                  >> /etc/apt/sources.list
+        esac
+        case "$CONTAINER" in
+            ubuntu:*|debian:*)
+                apt-get update
+        esac
+        install_packages clang-12
         ;;
     *)
         echo "Unhandled cc $CC"
@@ -56,7 +69,7 @@ esac
 
 if [ "${BUILDTYPE:-}" = coverage ]
 then
-    RUST_TOOLCHAIN=nightly-2021-03-01
+    RUST_TOOLCHAIN=nightly-2021-05-12
 else
     RUST_TOOLCHAIN=stable
 fi

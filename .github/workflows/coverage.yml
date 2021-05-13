@@ -20,15 +20,15 @@ jobs:
   codecov:
     runs-on: ubuntu-latest
     container:
-      image: 'ubuntu:20.10'
+      image: 'ubuntu:20.04'
       # the default shm-size for ubuntu:18.04, but with the size increased from
       # 65536k. github's default docker seccomp policy seems to disallow
       # process_vm_readv and process_vm_writev; disable it altogether. See
       # https://docs.docker.com/engine/security/seccomp/
       options: '--shm-size="1g" --security-opt seccomp=unconfined'
     env:
-      CC: 'clang-11'
-      CONTAINER: 'ubuntu:20.10'
+      CC: 'clang-12'
+      CONTAINER: 'ubuntu:20.04'
       BUILDTYPE: 'coverage'
       RUSTPROFILE: minimal
 
