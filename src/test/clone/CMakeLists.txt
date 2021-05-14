@@ -1,5 +1,5 @@
 include_directories(${GLIB_INCLUDES})
-add_executable(test_clone test_clone.c)
+add_executable(test_clone test_clone.c ../test_common.c)
 target_compile_options(test_clone PUBLIC "-pthread")
 target_link_libraries(test_clone ${GLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 add_linux_tests(BASENAME clone COMMAND test_clone)

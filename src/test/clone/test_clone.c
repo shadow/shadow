@@ -12,11 +12,13 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "test/test_common.h"
 #include "test/test_glib_helpers.h"
 
 #define CLONE_TEST_STACK_NBYTES (4*4096)
@@ -42,17 +44,19 @@ _Noreturn static void _exit_thread(int code) {
     abort();  // Unreachable.
 }
 
-static volatile int _clone_minimal_acc = 0;
+static int _clone_minimal_done = 0;
 
 // _clone_testCloneStandardFlags calls this upon cloning
 static int _clone_minimal_thread(void* args) {
-    ++_clone_minimal_acc;
+    __atomic_store_n(&_clone_minimal_done, 1, __ATOMIC_RELEASE);
     _exit_thread(0);
 }
 
 static void _clone_minimal() {
     // allocate some memory for the cloned thread.
-    uint8_t* stack = calloc(CLONE_TEST_STACK_NBYTES, 1);
+    uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    assert_true_errno(stack != MAP_FAILED);
 
     // clone takes the "starting" address of the stack, which is the *top*.
     uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
@@ -67,12 +71,14 @@ static void _clone_minimal() {
     // *this process's parent*, not this process. We might be able to work around
     // this by forking first so that we can wait in the parent of the threaded process
     // (using __WCLONE), but we don't want this test rely on fork, either.
-    while (!_clone_minimal_acc) {
+    while (!__atomic_load_n(&_clone_minimal_done, __ATOMIC_ACQUIRE)) {
         usleep(1);
     }
-    g_assert_cmpint(_clone_minimal_acc, ==, 1);
+    g_assert_cmpint(_clone_minimal_done, ==, 1);
 
-    free(stack);
+    // Intentionally leak `stack`. In this test we can't reliably know when the
+    // child thread is done with it.
+    // munmap(stack, CLONE_TEST_STACK_NBYTES);
 }
 
 // _clone_testCloneTids calls this upon cloning
@@ -85,7 +91,9 @@ static int _testCloneClearTidThread(void* args) {
 
 static void _testCloneClearTid() {
     // allocate some memory for the cloned thread.
-    uint8_t* stack = calloc(CLONE_TEST_STACK_NBYTES, 1);
+    uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    assert_true_errno(stack != MAP_FAILED);
 
     // clone takes the "starting" address of the stack, which is the *top*.
     uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
@@ -99,18 +107,31 @@ static void _testCloneClearTid() {
                       NULL, NULL, ctid);
     assert_nonneg_errno(tid);
 
-    // This *could* return -1 with errno=EAGAIN if the child has already exited.
-    // If that happens, we should increase the sleep inside the child thread.
-    assert_nonneg_errno(syscall(SYS_futex, ctid, FUTEX_WAIT, -1, NULL, NULL, 0));
-    g_assert_cmpint(*ctid, ==, 0);
+    long rv;
+    while ((rv = syscall(SYS_futex, ctid, FUTEX_WAIT, -1, NULL, NULL, 0)) == 0 && *ctid == -1) {
+        // Spurious wakeup. Try again.
+        g_assert(!running_in_shadow());
+    }
+    if (rv == 0) {
+        // Normal wakeup.
+        g_assert_cmpint(*ctid, ==, 0);
+    } else {
+        // Child exited and set ctid before we went to sleep on the futex.
+        g_assert_cmpint(rv, ==, -1);
+        assert_errno_is(EAGAIN);
+        g_assert_cmpint(*ctid, ==, 0);
+        g_assert(!running_in_shadow());
+    }
 
-    free(stack);
+    // Because we used CLONE_CHILD_CLEARTID to be notified of the child thread
+    // exit, we can safely deallocate it's stack.
+    munmap(stack, CLONE_TEST_STACK_NBYTES);
 }
 
-static volatile int _clone_child_exits_after_leader_acc = 0;
+static int _clone_child_exits_after_leader_acc = 0;
 
 static int _clone_child_exits_after_leader_thread(void* args) {
-    ++_clone_child_exits_after_leader_acc;
+    __atomic_store_n(&_clone_child_exits_after_leader_acc, 1, __ATOMIC_RELEASE);
     // Racy when executed natively (but test will still pass). In Shadow this
     // should deterministically ensure that this thread exits after the leader
     // thread.
@@ -120,7 +141,9 @@ static int _clone_child_exits_after_leader_thread(void* args) {
 
 static void _clone_child_exits_after_leader() {
     // allocate some memory for the cloned thread.
-    uint8_t* stack = calloc(CLONE_TEST_STACK_NBYTES, 1);
+    uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    assert_true_errno(stack != MAP_FAILED);
 
     // clone takes the "starting" address of the stack, which is the *top*.
     uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
@@ -136,12 +159,14 @@ static void _clone_child_exits_after_leader() {
     // *this process's parent*, not this process. We might be able to work around
     // this by forking first so that we can wait in the parent of the threaded process
     // (using __WCLONE), but we don't want this test rely on fork, either.
-    while (!_clone_child_exits_after_leader_acc) {
+    while (!__atomic_load_n(&_clone_child_exits_after_leader_acc, __ATOMIC_ACQUIRE)) {
         usleep(1);
     }
     g_assert_cmpint(_clone_child_exits_after_leader_acc, ==, 1);
 
-    free(stack);
+    // Intentionally leak `stack`. In this test we can't reliably know when the
+    // child thread is done with it.
+    // munmap(stack, CLONE_TEST_STACK_NBYTES);
 }
 
 int main(int argc, char** argv) {
