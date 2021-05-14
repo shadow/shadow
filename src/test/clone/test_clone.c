@@ -44,11 +44,11 @@ _Noreturn static void _exit_thread(int code) {
     abort();  // Unreachable.
 }
 
-static volatile int _clone_minimal_acc = 0;
+static int _clone_minimal_done = 0;
 
 // _clone_testCloneStandardFlags calls this upon cloning
 static int _clone_minimal_thread(void* args) {
-    ++_clone_minimal_acc;
+    __atomic_store_n(&_clone_minimal_done, 1, __ATOMIC_RELEASE);
     _exit_thread(0);
 }
 
@@ -71,10 +71,10 @@ static void _clone_minimal() {
     // *this process's parent*, not this process. We might be able to work around
     // this by forking first so that we can wait in the parent of the threaded process
     // (using __WCLONE), but we don't want this test rely on fork, either.
-    while (!_clone_minimal_acc) {
+    while (!__atomic_load_n(&_clone_minimal_done, __ATOMIC_ACQUIRE)) {
         usleep(1);
     }
-    g_assert_cmpint(_clone_minimal_acc, ==, 1);
+    g_assert_cmpint(_clone_minimal_done, ==, 1);
 
     // Intentionally leak `stack`. In this test we can't reliably know when the
     // child thread is done with it.
@@ -128,10 +128,10 @@ static void _testCloneClearTid() {
     munmap(stack, CLONE_TEST_STACK_NBYTES);
 }
 
-static volatile int _clone_child_exits_after_leader_acc = 0;
+static int _clone_child_exits_after_leader_acc = 0;
 
 static int _clone_child_exits_after_leader_thread(void* args) {
-    ++_clone_child_exits_after_leader_acc;
+    __atomic_store_n(&_clone_child_exits_after_leader_acc, 1, __ATOMIC_RELEASE);
     // Racy when executed natively (but test will still pass). In Shadow this
     // should deterministically ensure that this thread exits after the leader
     // thread.
@@ -159,7 +159,7 @@ static void _clone_child_exits_after_leader() {
     // *this process's parent*, not this process. We might be able to work around
     // this by forking first so that we can wait in the parent of the threaded process
     // (using __WCLONE), but we don't want this test rely on fork, either.
-    while (!_clone_child_exits_after_leader_acc) {
+    while (!__atomic_load_n(&_clone_child_exits_after_leader_acc, __ATOMIC_ACQUIRE)) {
         usleep(1);
     }
     g_assert_cmpint(_clone_child_exits_after_leader_acc, ==, 1);
