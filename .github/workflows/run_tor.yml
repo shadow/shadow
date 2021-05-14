@@ -36,6 +36,8 @@ jobs:
         container: ['ubuntu:20.04']
         # supported tor releases are here:
         # https://gitlab.torproject.org/legacy/trac/-/wikis/org/teams/NetworkTeam/CoreTorReleases
+        # when changing the tor versions, make sure to also update the
+        # required CI tests in the GitHub repository settings
         tor: ['tor-0.3.5.14', 'tor-0.4.4.8', 'tor-0.4.5.8']
 
     env:
