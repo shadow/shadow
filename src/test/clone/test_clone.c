@@ -18,6 +18,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "test/test_common.h"
 #include "test/test_glib_helpers.h"
 
 #define CLONE_TEST_STACK_NBYTES (4*4096)
@@ -106,10 +107,21 @@ static void _testCloneClearTid() {
                       NULL, NULL, ctid);
     assert_nonneg_errno(tid);
 
-    // This *could* return -1 with errno=EAGAIN if the child has already exited.
-    // If that happens, we should increase the sleep inside the child thread.
-    assert_nonneg_errno(syscall(SYS_futex, ctid, FUTEX_WAIT, -1, NULL, NULL, 0));
-    g_assert_cmpint(*ctid, ==, 0);
+    long rv;
+    while ((rv = syscall(SYS_futex, ctid, FUTEX_WAIT, -1, NULL, NULL, 0)) == 0 && *ctid == -1) {
+        // Spurious wakeup. Try again.
+        g_assert(!running_in_shadow());
+    }
+    if (rv == 0) {
+        // Normal wakeup.
+        g_assert_cmpint(*ctid, ==, 0);
+    } else {
+        // Child exited and set ctid before we went to sleep on the futex.
+        g_assert_cmpint(rv, ==, -1);
+        assert_errno_is(EAGAIN);
+        g_assert_cmpint(*ctid, ==, 0);
+        g_assert(!running_in_shadow());
+    }
 
     // Because we used CLONE_CHILD_CLEARTID to be notified of the child thread
     // exit, we can safely deallocate it's stack.
