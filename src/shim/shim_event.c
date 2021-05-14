@@ -47,12 +47,12 @@ static inline void shim_determinedRecv(int sock_fd, void* ptr, size_t nbytes) {
     }
 }
 
-static inline void shim_sendUint32_t(int sock_fd, uint32_t value) {
+__attribute__((unused)) static inline void shim_sendUint32_t(int sock_fd, uint32_t value) {
     value = htonl(value);
     shim_determinedSend(sock_fd, &value, sizeof(uint32_t));
 }
 
-static inline uint32_t shim_recvUint32_t(int sock_fd) {
+__attribute__((unused)) static inline uint32_t shim_recvUint32_t(int sock_fd) {
     uint32_t value;
     shim_determinedRecv(sock_fd, &value, sizeof(uint32_t));
     return ntohl(value);

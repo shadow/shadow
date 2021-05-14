@@ -290,8 +290,9 @@ static gboolean _topology_findVertexAttributeString(Topology* top, igraph_intege
 /* the graph lock should be held when calling this function, since it accesses igraph.
  * if the value is found and not NULL, it's value is returned in valueOut.
  * returns true if valueOut has been set, false otherwise */
-static gboolean _topology_findVertexAttributeDouble(Topology* top, igraph_integer_t vertexIndex,
-        VertexAttribute attr, gdouble* valueOut) {
+__attribute__((unused)) static gboolean
+_topology_findVertexAttributeDouble(Topology* top, igraph_integer_t vertexIndex,
+                                    VertexAttribute attr, gdouble* valueOut) {
     MAGIC_ASSERT(top);
 
     const gchar* name = _topology_vertexAttributeToString(attr);

@@ -52,7 +52,7 @@ static ThreadPreload* _threadToThreadPreload(Thread* thread) {
 
 static Thread* _threadPreloadToThread(ThreadPreload* thread) { return (Thread*)thread; }
 
-static void _threadpreload_auxFree(void* p, void* _) {
+__attribute__((unused)) static void _threadpreload_auxFree(void* p, void* _) {
     ShMemBlock* blk = (ShMemBlock*)p;
     shmemallocator_globalFree(blk);
     free(blk);
@@ -317,8 +317,8 @@ bool threadpreload_isRunning(Thread* base) {
  * Helper function, issues a clone/read request to the plugin.
  * The returned ShMemBlock is owned by the caller and needs to be freed.
  */
-static ShMemBlock _threadpreload_readPtrImpl(ThreadPreload* thread, PluginPtr plugin_src, size_t n,
-                                             bool is_string) {
+__attribute__((unused)) static ShMemBlock
+_threadpreload_readPtrImpl(ThreadPreload* thread, PluginPtr plugin_src, size_t n, bool is_string) {
     // Allocate a block for the clone
     ShMemBlock blk = shmemallocator_globalAlloc(n);
     utility_assert(blk.p && blk.nbytes == n);
