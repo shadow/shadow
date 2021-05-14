@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -52,7 +53,9 @@ static int _clone_minimal_thread(void* args) {
 
 static void _clone_minimal() {
     // allocate some memory for the cloned thread.
-    uint8_t* stack = calloc(CLONE_TEST_STACK_NBYTES, 1);
+    uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    assert_true_errno(stack != MAP_FAILED);
 
     // clone takes the "starting" address of the stack, which is the *top*.
     uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
@@ -72,7 +75,9 @@ static void _clone_minimal() {
     }
     g_assert_cmpint(_clone_minimal_acc, ==, 1);
 
-    free(stack);
+    // Intentionally leak `stack`. In this test we can't reliably know when the
+    // child thread is done with it.
+    // munmap(stack, CLONE_TEST_STACK_NBYTES);
 }
 
 // _clone_testCloneTids calls this upon cloning
@@ -85,7 +90,9 @@ static int _testCloneClearTidThread(void* args) {
 
 static void _testCloneClearTid() {
     // allocate some memory for the cloned thread.
-    uint8_t* stack = calloc(CLONE_TEST_STACK_NBYTES, 1);
+    uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    assert_true_errno(stack != MAP_FAILED);
 
     // clone takes the "starting" address of the stack, which is the *top*.
     uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
@@ -104,7 +111,9 @@ static void _testCloneClearTid() {
     assert_nonneg_errno(syscall(SYS_futex, ctid, FUTEX_WAIT, -1, NULL, NULL, 0));
     g_assert_cmpint(*ctid, ==, 0);
 
-    free(stack);
+    // Because we used CLONE_CHILD_CLEARTID to be notified of the child thread
+    // exit, we can safely deallocate it's stack.
+    munmap(stack, CLONE_TEST_STACK_NBYTES);
 }
 
 static volatile int _clone_child_exits_after_leader_acc = 0;
@@ -120,7 +129,9 @@ static int _clone_child_exits_after_leader_thread(void* args) {
 
 static void _clone_child_exits_after_leader() {
     // allocate some memory for the cloned thread.
-    uint8_t* stack = calloc(CLONE_TEST_STACK_NBYTES, 1);
+    uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    assert_true_errno(stack != MAP_FAILED);
 
     // clone takes the "starting" address of the stack, which is the *top*.
     uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
@@ -141,7 +152,9 @@ static void _clone_child_exits_after_leader() {
     }
     g_assert_cmpint(_clone_child_exits_after_leader_acc, ==, 1);
 
-    free(stack);
+    // Intentionally leak `stack`. In this test we can't reliably know when the
+    // child thread is done with it.
+    // munmap(stack, CLONE_TEST_STACK_NBYTES);
 }
 
 int main(int argc, char** argv) {
