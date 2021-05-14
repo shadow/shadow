@@ -50,14 +50,29 @@ typedef struct HostOptions HostOptions;
 // Manages memory of a plugin process.
 typedef struct MemoryManager MemoryManager;
 
-// Read-accessor to plugin memory.
-typedef struct MemoryReader_u8 MemoryReader_u8;
-
-// Write-accessor to plugin memory.
-typedef struct MemoryWriter_u8 MemoryWriter_u8;
-
 // An opaque type used when passing `*const AtomicRefCell<File>` to C.
 typedef struct PosixFileArc PosixFileArc;
+
+// A mutable reference to a slice of plugin memory. Implements DerefMut<[T]>,
+// allowing, e.g.:
+//
+// let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
+// let pmr = memory_manager.memory_ref_mut(ptr);
+// assert_eq!(pmr.len(), 10);
+// pmr[5] = 100;
+//
+// The object must be disposed of by calling `flush` or `noflush`.  Dropping
+// the object without doing so will result in a panic.
+typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
+
+// An immutable reference to a slice of plugin memory. Implements Deref<[T]>,
+// allowing, e.g.:
+//
+// let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
+// let pmr = memory_manager.memory_ref(ptr);
+// assert_eq!(pmr.len(), 10);
+// let x = pmr[5];
+typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
 

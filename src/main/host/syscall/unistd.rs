@@ -147,9 +147,7 @@ fn read_helper(
         // call the file's read(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
             posix_file.borrow_mut().read(
-                memory
-                    .writer(TypedPluginPtr::<u8>::new(buf_ptr, buf_size).unwrap())
-                    .cursor(),
+                memory.writer(TypedPluginPtr::new(buf_ptr, buf_size).unwrap()),
                 offset,
                 event_queue,
             )
@@ -219,9 +217,7 @@ fn write_helper(
         // call the file's write(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
             posix_file.borrow_mut().write(
-                memory
-                    .reader(TypedPluginPtr::<u8>::new(buf_ptr, buf_size).unwrap())
-                    .cursor(),
+                memory.reader(TypedPluginPtr::<u8>::new(buf_ptr, buf_size).unwrap()),
                 offset,
                 event_queue,
             )
@@ -323,9 +319,7 @@ fn pipe_helper(sys: &mut c::SysCallHandler, fd_ptr: PluginPtr, flags: i32) -> Sy
 
     // Try to write them to the caller
     let write_res = Worker::with_active_process_memory_mut(|memory| {
-        memory
-            .writer(TypedPluginPtr::<libc::c_int>::new(fd_ptr.into(), 2)?)
-            .copy(&fds)
+        memory.copy_to_ptr(TypedPluginPtr::new(fd_ptr.into(), 2)?, &fds)
     });
 
     // Clean up in case of error

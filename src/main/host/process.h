@@ -142,6 +142,10 @@ const void* process_getReadablePtr(Process* proc, PluginPtr plugin_src, size_t n
 // contents of the returned memory are unspecified.
 //
 // The returned pointer is automatically invalidated when the plugin runs again.
+//
+// CAUTION: if the unspecified contents aren't overwritten, and the pointer
+// isn't explicitly freed via `process_freePtrsWithoutFlushing`, those unspecified contents may
+// be written back into process memory.
 void* process_getWriteablePtr(Process* proc, PluginPtr plugin_src, size_t n);
 
 // Returns a writeable pointer corresponding to the specified src. Use when
@@ -154,6 +158,13 @@ void* process_getMutablePtr(Process* proc, PluginPtr plugin_src, size_t n);
 // pointers, as if returning control to the plugin. This can be useful in
 // conjunction with `thread_nativeSyscall` operations that touch memory.
 void process_flushPtrs(Process* proc);
+
+// Frees all readable/writable plugin pointers. Unlike process_flushPtrs, any
+// previously returned writable pointer is *not* written back. Useful
+// if an uninitialized writable pointer was obtained via `process_getWriteablePtr`,
+// and we end up not wanting to write anything after all (in particular, don't
+// write back whatever garbage data was in the uninialized bueffer).
+void process_freePtrsWithoutFlushing(Process* proc);
 
 MemoryManager* process_getMemoryManager(Process* proc);
 void process_setMemoryManager(Process* proc, MemoryManager* memoryManager);

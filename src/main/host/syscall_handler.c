@@ -45,6 +45,7 @@
 #include "main/host/syscall_numbers.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
+#include "main/utility/syscall.h"
 #include "shim/shim_event.h"
 #include "support/logger/logger.h"
 
@@ -501,6 +502,12 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
          * sure any previously used listener timeouts are ignored.*/
         _syscallhandler_setListenTimeout(sys, NULL);
         sys->blockedSyscallNR = -1;
+    }
+
+    if (!(scr.state == SYSCALL_DONE && syscall_rawReturnValueToErrno(scr.retval.as_i64) == 0)) {
+        // The syscall didn't complete successfully; don't write back pointers.
+        trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
+        process_freePtrsWithoutFlushing(sys->process);
     }
 
     return scr;

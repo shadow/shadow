@@ -12,10 +12,9 @@ pub trait Thread {
     fn get_system_tid(&self) -> libc::pid_t;
 
     /// Natively execute munmap(2) on the given thread.
-    fn native_munmap(&mut self, ptr: PluginPtr, size: usize) -> nix::Result<PluginPtr> {
-        Ok(self
-            .native_syscall(libc::SYS_munmap, &[ptr.into(), size.into()])?
-            .into())
+    fn native_munmap(&mut self, ptr: PluginPtr, size: usize) -> nix::Result<()> {
+        self.native_syscall(libc::SYS_munmap, &[ptr.into(), size.into()])?;
+        Ok(())
     }
 
     /// Natively execute mmap(2) on the given thread.
