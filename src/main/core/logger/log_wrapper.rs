@@ -18,7 +18,8 @@ unsafe fn optional_str(ptr: *const c_char) -> Option<&'static str> {
     if ptr.is_null() {
         None
     } else {
-        std::ffi::CStr::from_ptr(ptr).to_str().ok()
+        // Safe if caller obeyed doc'd preconditions.
+        unsafe { std::ffi::CStr::from_ptr(ptr).to_str().ok() }
     }
 }
 
@@ -64,15 +65,18 @@ pub unsafe extern "C" fn rustlogger_log(
         return;
     }
 
-    let msg_vec = vsprintf_raw(format, va_list).unwrap();
+    // SAFETY: Safe if caller provided valid format and va_list.
+    let msg_vec = unsafe { vsprintf_raw(format, va_list).unwrap() };
     let msg = String::from_utf8_lossy(&msg_vec);
 
     log::logger().log(
         &log::Record::builder()
             .level(log_level)
-            .file_static(optional_str(file_name))
+            // SAFETY: file_name is statically allocated.
+            .file_static(unsafe { optional_str(file_name) })
             .line(Some(u32::try_from(line).unwrap()))
-            .module_path_static(optional_str(fn_name))
+            // SAFETY: fn_name is statically allocated.
+            .module_path_static(unsafe { optional_str(fn_name) })
             .args(format_args!("{}", msg))
             .build(),
     );
