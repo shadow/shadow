@@ -207,7 +207,15 @@ impl ShadowLogger {
         let stdout_locked = stdout_unlocked.lock();
         let mut stdout = std::io::BufWriter::new(stdout_locked);
         while toflush > 0 {
-            let record = self.records.pop().unwrap();
+            let record = match self.records.pop() {
+                Some(r) => r,
+                None => {
+                    // This can happen if another thread panics while the
+                    // logging thread is flushing. In that case both threads
+                    // will be consuming from the queue.
+                    break;
+                }
+            };
             toflush -= 1;
             {
                 let parts = TimeParts::from_nanos(record.wall_time.as_nanos());
