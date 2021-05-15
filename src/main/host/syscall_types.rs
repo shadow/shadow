@@ -229,7 +229,9 @@ impl<T> TypedPluginPtr<T> {
             Bound::Unbounded => 0,
         };
         assert!(excluded_end <= self.count);
-        assert!(included_start < self.count);
+        // `<=` rather than `<`, to allow empty slice at end of ptr.
+        // e.g. `assert_eq!(&[1,2,3][3..3], &[])` passes.
+        assert!(included_start <= self.count);
         TypedPluginPtr {
             base: PluginPtr {
                 ptr: c::PluginPtr {
