@@ -134,16 +134,16 @@ static Worker* _worker_new(WorkerPool*, int);
 static void _worker_free(Worker*);
 
 WorkerPool* workerpool_new(Manager* manager, Scheduler* scheduler, int nWorkers,
-                           int nConcurrent) {
+                           int nParallel) {
     int nLogicalProcessors = 0;
-    if (nWorkers == 0 || nConcurrent == 0) {
+    if (nWorkers == 0 || nParallel == 0) {
         // With no concurrency, we still use a single logical processor.
         nLogicalProcessors = 1;
-    } else if (nConcurrent < 0 || nConcurrent > nWorkers) {
+    } else if (nParallel < 0 || nParallel > nWorkers) {
         // Never makes sense to use more logical processors than workers.
         nLogicalProcessors = nWorkers;
     } else {
-        nLogicalProcessors = nConcurrent;
+        nLogicalProcessors = nParallel;
     }
 
     WorkerPool* pool = g_new(WorkerPool, 1);

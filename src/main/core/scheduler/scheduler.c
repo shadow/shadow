@@ -26,8 +26,8 @@
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
-static int _maxConcurrency = -1;
-ADD_CONFIG_HANDLER(config_getMaxConcurrency, _maxConcurrency)
+static int _parallelism = -1;
+ADD_CONFIG_HANDLER(config_getParallelism, _parallelism)
 
 struct _Scheduler {
     // Unowned back-pointer.
@@ -130,9 +130,8 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
     // Unowned back-pointer
     scheduler->manager = manager;
 
-    scheduler->workerPool =
-        workerpool_new(manager, scheduler, /*nThreads=*/nWorkers,
-                       /*nConcurrent=*/_maxConcurrency);
+    scheduler->workerPool = workerpool_new(manager, scheduler, /*nThreads=*/nWorkers,
+                                           /*nParallel=*/_parallelism);
 
     scheduler->endTime = endTime;
     scheduler->currentRound.endTime = scheduler->endTime;// default to one single round
@@ -160,12 +159,12 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
             break;
         }
         case SP_PARALLEL_HOST_STEAL: {
-            if (nWorkers > _maxConcurrency) {
+            if (nWorkers > _parallelism) {
                 // Proceeding will cause the scheduler to deadlock, since the
                 // work stealing scheduler threads spin-wait for each-other to
                 // finish.
                 utility_panic("Host stealing scheduler is incompatible with "
-                              "--workers > --max-concurrency");
+                              "--workers > --parallelism");
                 abort();
             }
             scheduler->policy = schedulerpolicyhoststeal_new();

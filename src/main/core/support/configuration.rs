@@ -139,6 +139,14 @@ pub struct GeneralOptions {
     #[serde(default = "default_some_0")]
     workers: Option<u32>,
 
+    /// How many parallel threads to use to run the simulation. Optimal
+    /// performance is usually obtained with `nproc`, or sometimes `nproc/2`
+    /// with hyperthreading.
+    #[clap(long, short = 'p', value_name = "cores")]
+    #[clap(about = GENERAL_HELP.get("parallelism").unwrap())]
+    #[serde(default = "default_some_0")]
+    parallelism: Option<u32>,
+
     #[clap(long, value_name = "seconds")]
     #[clap(about = GENERAL_HELP.get("bootstrap_end_time").unwrap())]
     #[serde(default = "default_some_time_0")]
@@ -221,11 +229,6 @@ pub struct ExperimentalOptions {
     #[clap(about = EXP_HELP.get("preload_spin_max").unwrap())]
     preload_spin_max: Option<i32>,
 
-    /// Maximum number of workers to allow to run at once
-    #[clap(long, value_name = "workers")]
-    #[clap(about = EXP_HELP.get("max_concurrency").unwrap())]
-    max_concurrency: Option<i32>,
-
     /// Use the MemoryManager. It can be useful to disable for debugging, but will hurt performance in
     /// most cases
     #[clap(long, value_name = "bool")]
@@ -305,7 +308,6 @@ impl Default for ExperimentalOptions {
             use_syscall_counters: Some(false),
             use_object_counters: Some(true),
             preload_spin_max: Some(0),
-            max_concurrency: None,
             use_memory_manager: Some(true),
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),
@@ -1106,13 +1108,10 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getMaxConcurrency(config: *const ConfigOptions) -> i32 {
+    pub extern "C" fn config_getParallelism(config: *const ConfigOptions) -> u32 {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        match config.experimental.max_concurrency {
-            Some(x) => x,
-            None => -1,
-        }
+        config.general.parallelism.unwrap()
     }
 
     #[no_mangle]
