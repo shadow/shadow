@@ -8,6 +8,7 @@ use merge::Merge;
 use once_cell::sync::Lazy;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
 
 use super::simulation_time::{SIMTIME_ONE_NANOSECOND, SIMTIME_ONE_SECOND};
 use super::units::{self, Unit};
@@ -132,12 +133,6 @@ pub struct GeneralOptions {
     #[clap(about = GENERAL_HELP.get("seed").unwrap())]
     #[serde(default = "default_some_1")]
     seed: Option<u32>,
-
-    /// Run concurrently with N worker threads
-    #[clap(long, short = 'w', value_name = "N")]
-    #[clap(about = GENERAL_HELP.get("workers").unwrap())]
-    #[serde(default = "default_some_0")]
-    workers: Option<u32>,
 
     /// How many parallel threads to use to run the simulation. Optimal
     /// performance is usually obtained with `nproc`, or sometimes `nproc/2`
@@ -289,6 +284,16 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "mode")]
     #[clap(about = EXP_HELP.get("interface_qdisc").unwrap())]
     interface_qdisc: Option<QDiscMode>,
+
+    /// Create N worker threads. Note though, that `--parallelism` of them will
+    /// be allowed to run simultaneously. If unset, will create a thread for
+    /// each simulated Host. This is to work around limitations in ptrace, and
+    /// may change in the future. "0" is a valid value, and will cause the
+    /// simulation to be run directly on the main Shadow thread, but this
+    /// functionality may be removed in the future.
+    #[clap(long, value_name = "N")]
+    #[clap(about = EXP_HELP.get("worker_threads").unwrap())]
+    worker_threads: Option<u32>,
 }
 
 impl ExperimentalOptions {
@@ -320,6 +325,7 @@ impl Default for ExperimentalOptions {
             socket_recv_autotune: Some(true),
             interface_buffer: Some(units::Bytes::new(1_024_000, units::SiPrefixUpper::Base)),
             interface_qdisc: Some(QDiscMode::Fifo),
+            worker_threads: None,
         }
     }
 }
@@ -1148,7 +1154,13 @@ mod export {
     pub extern "C" fn config_getWorkers(config: *const ConfigOptions) -> libc::c_uint {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        config.general.workers.unwrap()
+        match &config.experimental.worker_threads {
+            Some(w) => *w,
+            None => {
+                // By default use 1 worker per host.
+                config.hosts.len().try_into().unwrap()
+            }
+        }
     }
 
     #[no_mangle]
