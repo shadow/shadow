@@ -313,7 +313,7 @@ impl Default for ExperimentalOptions {
             use_cpu_pinning: Some(true),
             interpose_method: Some(InterposeMethod::Ptrace),
             runahead: None,
-            scheduler_policy: Some(SchedulerPolicy::Steal),
+            scheduler_policy: Some(SchedulerPolicy::Host),
             socket_send_buffer: Some(units::Bytes::new(131_072, units::SiPrefixUpper::Base)),
             socket_send_autotune: Some(true),
             socket_recv_buffer: Some(units::Bytes::new(174_760, units::SiPrefixUpper::Base)),
