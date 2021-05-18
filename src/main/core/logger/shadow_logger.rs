@@ -124,8 +124,8 @@ pub struct ShadowLogger {
     //
     // The size is roughly SYNC_FLUSH_QD_LINES_THRESHOLD *
     // size_of<ShadowLogRecord>; we might want to consider SegQueue (which grows
-    // and shrinks dynamically) instead if we ever make
-    // SYNC_FLUSH_QD_LINES_THRESHOLD very large.
+    // and shrinks dynamically) instead if we ever make SYNC_FLUSH_QD_LINES_THRESHOLD very
+    // large.
     records: ArrayQueue<ShadowLogRecord>,
 
     // When false, sends a (still-asynchronous) flush command to the logger
@@ -246,7 +246,7 @@ impl ShadowLogger {
             }
             write!(
                 stdout,
-                " [{level}] [{host}] [{file}:{line}] [{module}] {msg}\n",
+                " [{level}] [{host}] [{file}:",
                 level = record.level,
                 host = record
                     .host_name
@@ -261,12 +261,15 @@ impl ShadowLogger {
                         f
                     })
                     .unwrap_or("n/a"),
-                line = record
-                    .line
-                    .map(|l| format!("{}", l))
-                    .as_ref()
-                    .map(|s| s.as_str())
-                    .unwrap_or("n/a"),
+            )?;
+            if let Some(line) = record.line {
+                write!(stdout, "{line}", line = line)?;
+            } else {
+                write!(stdout, "n/a")?;
+            }
+            write!(
+                stdout,
+                "] [{module}] {msg}\n",
                 module = record.module_path.unwrap_or("n/a"),
                 msg = record.message
             )?;
