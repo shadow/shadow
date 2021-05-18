@@ -26,4 +26,9 @@ impl Host {
         let addr = unsafe { cshadow::host_getDefaultIP(self.chost) };
         net::IpAddr::V4(net::Ipv4Addr::from(addr.to_le_bytes()))
     }
+
+    pub fn log_level(&self) -> Option<log::LevelFilter> {
+        let level = unsafe { cshadow::host_getLogLevel(self.chost) };
+        crate::core::logger::log_wrapper::c_to_rust_log_level(level).map(|l| l.to_level_filter())
+    }
 }

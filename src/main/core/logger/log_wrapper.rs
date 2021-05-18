@@ -23,14 +23,15 @@ unsafe fn optional_str(ptr: *const c_char) -> Option<&'static str> {
     }
 }
 
-fn c_to_rust_log_level(level: log_bindings::LogLevel) -> log::Level {
+pub fn c_to_rust_log_level(level: log_bindings::LogLevel) -> Option<log::Level> {
     use log::Level::*;
     match level {
-        c_log::_LogLevel_LOGLEVEL_ERROR => Error,
-        c_log::_LogLevel_LOGLEVEL_WARNING => Warn,
-        c_log::_LogLevel_LOGLEVEL_INFO => Info,
-        c_log::_LogLevel_LOGLEVEL_DEBUG => Debug,
-        c_log::_LogLevel_LOGLEVEL_TRACE => Trace,
+        c_log::_LogLevel_LOGLEVEL_ERROR => Some(Error),
+        c_log::_LogLevel_LOGLEVEL_WARNING => Some(Warn),
+        c_log::_LogLevel_LOGLEVEL_INFO => Some(Info),
+        c_log::_LogLevel_LOGLEVEL_DEBUG => Some(Debug),
+        c_log::_LogLevel_LOGLEVEL_TRACE => Some(Trace),
+        c_log::_LogLevel_LOGLEVEL_UNSET => None,
         _ => panic!("Unexpected log level {}", level),
     }
 }
@@ -38,14 +39,14 @@ fn c_to_rust_log_level(level: log_bindings::LogLevel) -> log::Level {
 /// Set the max (noisiest) logging level to `level`.
 #[no_mangle]
 pub unsafe extern "C" fn rustlogger_setLevel(level: log_bindings::LogLevel) {
-    let level = c_to_rust_log_level(level);
+    let level = c_to_rust_log_level(level).unwrap();
     log::set_max_level(level.to_level_filter());
 }
 
 /// Whether logging is currently enabled for `level`.
 #[no_mangle]
 pub unsafe extern "C" fn rustlogger_isEnabled(level: log_bindings::LogLevel) -> c_int {
-    let level = c_to_rust_log_level(level);
+    let level = c_to_rust_log_level(level).unwrap();
     log_enabled!(level).into()
 }
 
@@ -59,7 +60,7 @@ pub unsafe extern "C" fn rustlogger_log(
     format: *const c_char,
     va_list: *mut c_void,
 ) {
-    let log_level = c_to_rust_log_level(level);
+    let log_level = c_to_rust_log_level(level).unwrap();
 
     if !log_enabled!(log_level) {
         return;

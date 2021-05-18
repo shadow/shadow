@@ -1,2 +1,2 @@
-mod log_wrapper;
+pub mod log_wrapper;
 mod shadow_logger;

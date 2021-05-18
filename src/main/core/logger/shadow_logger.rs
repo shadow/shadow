@@ -342,7 +342,11 @@ impl ShadowLogger {
 
 impl Log for ShadowLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= log::max_level()
+        let filter = match Worker::with_active_host(|host| host.log_level()) {
+            Some(Some(level)) => level,
+            _ => log::max_level(),
+        };
+        metadata.level() <= filter
     }
 
     fn log(&self, record: &Record) {
