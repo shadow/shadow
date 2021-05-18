@@ -1831,10 +1831,17 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
         /* check the number of vertices in the result path */
         glong nVertices = igraph_vector_size(resultPathVertices);
 
-        /* if there are no vertices, then the source and destination hosts are attached to
-         * the same igraph vertex. igraph doesn't give us a shortest path in this case.
-         * so, we handle the other cases here where it does provide paths. */
-        if(nVertices > 0) {
+        if (nVertices <= 0) {
+            /* If there are no vertices, then the source and destination hosts are attached to
+             * the same igraph vertex. igraph doesn't give us a shortest path in this case,
+             * but we already handle this case in _topology_computeShortestPathToSelf(). */
+        } else if (nVertices == 1 && srcVertexIndex == igraph_vector_e(resultPathVertices, 0)) {
+            /* If there is one vertex but it's the source, we also don't need to worry about
+             * cacheing the result. Igraph gives us this if it's one of the paths it had to
+             * compute along the way to computing a longer path. We don't need to cache it
+             * because we already handle this case in _topology_computeShortestPathToSelf(). */
+        } else {
+            /* Handle cases where there is a legitimate non-self path that we need to cache. */
             igraph_integer_t pathTargetIndex = 0;
             igraph_real_t pathLatency = 0.0f, pathReliability = 0.0f;
 
