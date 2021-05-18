@@ -98,9 +98,7 @@ static void _logger_default_log(LogLevel level, const char* fileName, const char
         // dropping the message.
         return;
     }
-    // This logger is used only when a logger has not been set yet. In this case, we only log
-    // at a severity level of warning or more severe than warning.
-    if (level > LOGLEVEL_WARNING) {
+    if (!logger_isEnabled(NULL, level)) {
         return;
     }
     in_logger = true;
@@ -142,6 +140,22 @@ void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
     va_end(vargs);
     if (level == LOGLEVEL_ERROR) {
         logger_flush(logger);
+    }
+}
+
+void logger_setLevel(Logger* logger, LogLevel level) {
+    if (!logger) {
+        // Not implemented for default logger.
+    } else {
+        logger->setLevel(logger, level);
+    }
+}
+
+bool logger_isEnabled(Logger* logger, LogLevel level) {
+    if (!logger) {
+        return level > LOGLEVEL_WARNING;
+    } else {
+        return logger->isEnabled(logger, level);
     }
 }
 

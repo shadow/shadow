@@ -28,12 +28,15 @@ pub struct _Logger {
     >,
     pub flush: ::std::option::Option<unsafe extern "C" fn(logger: *mut Logger)>,
     pub destroy: ::std::option::Option<unsafe extern "C" fn(logger: *mut Logger)>,
+    pub setLevel: ::std::option::Option<unsafe extern "C" fn(logger: *mut Logger, level: LogLevel)>,
+    pub isEnabled:
+        ::std::option::Option<unsafe extern "C" fn(logger: *mut Logger, level: LogLevel) -> bool>,
 }
 #[test]
 fn bindgen_test_layout__Logger() {
     assert_eq!(
         ::std::mem::size_of::<_Logger>(),
-        24usize,
+        40usize,
         concat!("Size of: ", stringify!(_Logger))
     );
     assert_eq!(
@@ -71,6 +74,26 @@ fn bindgen_test_layout__Logger() {
             stringify!(destroy)
         )
     );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Logger>())).setLevel as *const _ as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Logger),
+            "::",
+            stringify!(setLevel)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Logger>())).isEnabled as *const _ as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Logger),
+            "::",
+            stringify!(isEnabled)
+        )
+    );
 }
 extern "C" {
     pub fn logger_setDefault(logger: *mut Logger);
@@ -88,6 +111,12 @@ extern "C" {
         format: *const ::std::os::raw::c_char,
         ...
     );
+}
+extern "C" {
+    pub fn logger_setLevel(logger: *mut Logger, level: LogLevel);
+}
+extern "C" {
+    pub fn logger_isEnabled(logger: *mut Logger, level: LogLevel) -> bool;
 }
 extern "C" {
     pub fn logger_get_global_start_time_micros() -> i64;

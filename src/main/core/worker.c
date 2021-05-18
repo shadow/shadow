@@ -18,7 +18,6 @@
 #include <sys/types.h>
 
 #include "main/bindings/c/bindings.h"
-#include "main/core/logger/shadow_logger.h"
 #include "main/core/logical_processor.h"
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
@@ -403,8 +402,6 @@ static Worker* _worker_new(WorkerPool* workerPool, int threadID) {
     }
     g_string_free(name, TRUE);
 
-    shadow_logger_register(shadow_logger_getDefault(), worker->thread);
-
     return worker;
 }
 
@@ -562,9 +559,6 @@ void worker_finish(GQueue* hosts) {
         g_queue_foreach(hosts, (GFunc)_worker_shutdownHost, worker);
         info("%u hosts are shut down", nHosts);
     }
-
-    // Flushes any remaining message buffered for this thread.
-    shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
 
     /* cleanup is all done, send counters to manager */
 
@@ -800,9 +794,7 @@ void worker_setCurrentTime(SimulationTime time) {
     worker->clock.now = time;
 }
 
-gboolean worker_isFiltered(LogLevel level) {
-    return shadow_logger_shouldFilter(shadow_logger_getDefault(), level);
-}
+gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }
 
 void worker_incrementPluginError() {
     Worker* worker = _worker_getPrivate();

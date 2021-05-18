@@ -3,6 +3,13 @@ use crate::host::descriptor::CompatDescriptor;
 
 pub const CONFIG_PIPE_BUFFER_SIZE: u32 = 65536;
 pub const SYSCALL_IO_BUFSIZE: u32 = 10485760;
+pub const SchedulerPolicyType_SP_SERIAL_GLOBAL: SchedulerPolicyType = 0;
+pub const SchedulerPolicyType_SP_PARALLEL_HOST_SINGLE: SchedulerPolicyType = 1;
+pub const SchedulerPolicyType_SP_PARALLEL_HOST_STEAL: SchedulerPolicyType = 2;
+pub const SchedulerPolicyType_SP_PARALLEL_THREAD_SINGLE: SchedulerPolicyType = 3;
+pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERTHREAD: SchedulerPolicyType = 4;
+pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERHOST: SchedulerPolicyType = 5;
+pub type SchedulerPolicyType = ::std::os::raw::c_uint;
 pub type size_t = ::std::os::raw::c_ulong;
 pub type guint32 = ::std::os::raw::c_uint;
 pub type guint64 = ::std::os::raw::c_ulong;
@@ -28,33 +35,6 @@ pub struct _GTimer {
     _unused: [u8; 0],
 }
 pub type GTimer = _GTimer;
-pub use self::_LogLevel as LogLevel;
-pub const _LogLevel_LOGLEVEL_UNSET: _LogLevel = 0;
-pub const _LogLevel_LOGLEVEL_ERROR: _LogLevel = 1;
-pub const _LogLevel_LOGLEVEL_WARNING: _LogLevel = 2;
-pub const _LogLevel_LOGLEVEL_INFO: _LogLevel = 3;
-pub const _LogLevel_LOGLEVEL_DEBUG: _LogLevel = 4;
-pub const _LogLevel_LOGLEVEL_TRACE: _LogLevel = 5;
-pub type _LogLevel = i32;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _ShadowLogger {
-    _unused: [u8; 0],
-}
-pub type ShadowLogger = _ShadowLogger;
-extern "C" {
-    pub fn shadow_logger_getDefault() -> *mut ShadowLogger;
-}
-extern "C" {
-    pub fn shadow_logger_shouldFilter(logger: *mut ShadowLogger, level: LogLevel) -> bool;
-}
-pub const SchedulerPolicyType_SP_SERIAL_GLOBAL: SchedulerPolicyType = 0;
-pub const SchedulerPolicyType_SP_PARALLEL_HOST_SINGLE: SchedulerPolicyType = 1;
-pub const SchedulerPolicyType_SP_PARALLEL_HOST_STEAL: SchedulerPolicyType = 2;
-pub const SchedulerPolicyType_SP_PARALLEL_THREAD_SINGLE: SchedulerPolicyType = 3;
-pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERTHREAD: SchedulerPolicyType = 4;
-pub const SchedulerPolicyType_SP_PARALLEL_THREAD_PERHOST: SchedulerPolicyType = 5;
-pub type SchedulerPolicyType = ::std::os::raw::c_uint;
 pub type sa_family_t = ::std::os::raw::c_ushort;
 pub type in_addr_t = u32;
 pub type in_port_t = u16;
@@ -682,6 +662,14 @@ pub struct _NetworkInterface {
     _unused: [u8; 0],
 }
 pub type NetworkInterface = _NetworkInterface;
+pub use self::_LogLevel as LogLevel;
+pub const _LogLevel_LOGLEVEL_UNSET: _LogLevel = 0;
+pub const _LogLevel_LOGLEVEL_ERROR: _LogLevel = 1;
+pub const _LogLevel_LOGLEVEL_WARNING: _LogLevel = 2;
+pub const _LogLevel_LOGLEVEL_INFO: _LogLevel = 3;
+pub const _LogLevel_LOGLEVEL_DEBUG: _LogLevel = 4;
+pub const _LogLevel_LOGLEVEL_TRACE: _LogLevel = 5;
+pub type _LogLevel = i32;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Tracker {

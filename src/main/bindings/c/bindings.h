@@ -59,7 +59,33 @@ typedef struct PosixFileArc PosixFileArc;
 
 typedef struct ProcessOptions ProcessOptions;
 
-void rust_logging_init(void);
+// Flush Rust's log::logger().
+void rustlogger_flush(void);
+
+// Set the max (noisiest) logging level to `level`.
+void rustlogger_setLevel(LogLevel level);
+
+// Whether logging is currently enabled for `level`.
+int rustlogger_isEnabled(LogLevel level);
+
+// Log to Rust's log::logger().
+void rustlogger_log(LogLevel level,
+                    const char *file_name,
+                    const char *fn_name,
+                    int32_t line,
+                    const char *format,
+                    void *va_list);
+
+// Creates a ShadowLogger and installs it as the default logger for Rust's
+// `log` crate. The returned pointer is never deallocated, since loggers
+// registered with the `log` crate are required to live for the life of the
+// program.
+void shadow_logger_init(void);
+
+// When disabled, the logger thread is notified to write each record as
+// soon as it's created.  The calling thread still isn't blocked on the
+// record actually being written, though.
+void shadow_logger_setEnableBuffering(int32_t buffering_enabled);
 
 struct CliOptions *clioptions_parse(int argc, const char *const *argv);
 

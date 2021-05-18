@@ -17,6 +17,7 @@
 typedef struct _ShimLogger {
     Logger base;
     FILE* file;
+    LogLevel level;
 } ShimLogger;
 
 static size_t _simulation_nanos_string(char* dst, size_t size) {
@@ -32,6 +33,9 @@ static size_t _simulation_nanos_string(char* dst, size_t size) {
 
 void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const char* functionName,
                     const int lineNumber, const char* format, va_list vargs) {
+    if (!logger_isEnabled(base, level)) {
+        return;
+    }
     static __thread bool in_logger = false;
     // Stack-allocated to avoid dynamic allocation.
     char buf[200];
@@ -75,9 +79,9 @@ void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const ch
     // that's runnable.
     fwrite_unlocked(buf, 1, offset, logger->file);
 
-#ifdef DEBUG
-    fflush_unlocked(logger->file);
-#endif
+    if (logger->level == LOGLEVEL_TRACE || level == LOGLEVEL_ERROR) {
+        fflush_unlocked(logger->file);
+    }
     shim_enableInterposition();
     in_logger = false;
 }
@@ -86,15 +90,41 @@ void shimlogger_destroy(Logger* logger) {
     free(logger);
 }
 
+void shimlogger_flush(Logger* base) {
+    ShimLogger* logger = (ShimLogger*)base;
+    shim_disableInterposition();
+    fflush_unlocked(logger->file);
+    shim_enableInterposition();
+}
+
+bool shimlogger_isEnabled(Logger* base, LogLevel level) {
+    ShimLogger* logger = (ShimLogger*)base;
+    return level >= logger->level;
+}
+
+void shimlogger_setLevel(Logger* base, LogLevel level) {
+    ShimLogger* logger = (ShimLogger*)base;
+    logger->level = level;
+}
+
 Logger* shimlogger_new(FILE* file) {
     ShimLogger* logger = malloc(sizeof(*logger));
+    #ifdef DEBUG
+        LogLevel level = LOGLEVEL_TRACE;
+    #else
+        LogLevel level = LOGLEVEL_INFO;
+    #endif
     *logger = (ShimLogger){
         .base =
             {
                 .log = shimlogger_log,
                 .destroy = shimlogger_destroy,
+                .flush = shimlogger_flush,
+                .isEnabled = shimlogger_isEnabled,
+                .setLevel = shimlogger_setLevel,
             },
         .file = file,
+        .level = level,
     };
     return (Logger*)logger;
 }
