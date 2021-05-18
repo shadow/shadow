@@ -134,17 +134,12 @@ static Worker* _worker_new(WorkerPool*, int);
 static void _worker_free(Worker*);
 
 WorkerPool* workerpool_new(Manager* manager, Scheduler* scheduler, int nWorkers,
-                           int nConcurrent) {
-    int nLogicalProcessors = 0;
-    if (nWorkers == 0 || nConcurrent == 0) {
-        // With no concurrency, we still use a single logical processor.
-        nLogicalProcessors = 1;
-    } else if (nConcurrent < 0 || nConcurrent > nWorkers) {
-        // Never makes sense to use more logical processors than workers.
-        nLogicalProcessors = nWorkers;
-    } else {
-        nLogicalProcessors = nConcurrent;
-    }
+                           int nParallel) {
+    // Should have been ensured earlier by `config_getParallelism`.
+    utility_assert(nParallel >= 1);
+
+    // Never makes sense to use more logical processors than workers.
+    int nLogicalProcessors = MIN(nParallel, nWorkers);
 
     WorkerPool* pool = g_new(WorkerPool, 1);
     *pool = (WorkerPool){

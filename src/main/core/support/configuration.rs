@@ -8,6 +8,8 @@ use merge::Merge;
 use once_cell::sync::Lazy;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
+use std::num::NonZeroU32;
 
 use super::simulation_time::{SIMTIME_ONE_NANOSECOND, SIMTIME_ONE_SECOND};
 use super::units::{self, Unit};
@@ -133,11 +135,13 @@ pub struct GeneralOptions {
     #[serde(default = "default_some_1")]
     seed: Option<u32>,
 
-    /// Run concurrently with N worker threads
-    #[clap(long, short = 'w', value_name = "N")]
-    #[clap(about = GENERAL_HELP.get("workers").unwrap())]
-    #[serde(default = "default_some_0")]
-    workers: Option<u32>,
+    /// How many parallel threads to use to run the simulation. Optimal
+    /// performance is usually obtained with `nproc`, or sometimes `nproc/2`
+    /// with hyperthreading.
+    #[clap(long, short = 'p', value_name = "cores")]
+    #[clap(about = GENERAL_HELP.get("parallelism").unwrap())]
+    #[serde(default = "default_some_nz_1")]
+    parallelism: Option<NonZeroU32>,
 
     #[clap(long, value_name = "seconds")]
     #[clap(about = GENERAL_HELP.get("bootstrap_end_time").unwrap())]
@@ -221,11 +225,6 @@ pub struct ExperimentalOptions {
     #[clap(about = EXP_HELP.get("preload_spin_max").unwrap())]
     preload_spin_max: Option<i32>,
 
-    /// Maximum number of workers to allow to run at once
-    #[clap(long, value_name = "workers")]
-    #[clap(about = EXP_HELP.get("max_concurrency").unwrap())]
-    max_concurrency: Option<i32>,
-
     /// Use the MemoryManager. It can be useful to disable for debugging, but will hurt performance in
     /// most cases
     #[clap(long, value_name = "bool")]
@@ -286,6 +285,16 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "mode")]
     #[clap(about = EXP_HELP.get("interface_qdisc").unwrap())]
     interface_qdisc: Option<QDiscMode>,
+
+    /// Create N worker threads. Note though, that `--parallelism` of them will
+    /// be allowed to run simultaneously. If unset, will create a thread for
+    /// each simulated Host. This is to work around limitations in ptrace, and
+    /// may change in the future. "0" is a valid value, and will cause the
+    /// simulation to be run directly on the main Shadow thread, but this
+    /// functionality may be removed in the future.
+    #[clap(long, value_name = "N")]
+    #[clap(about = EXP_HELP.get("worker_threads").unwrap())]
+    worker_threads: Option<u32>,
 }
 
 impl ExperimentalOptions {
@@ -305,19 +314,19 @@ impl Default for ExperimentalOptions {
             use_syscall_counters: Some(false),
             use_object_counters: Some(true),
             preload_spin_max: Some(0),
-            max_concurrency: None,
             use_memory_manager: Some(true),
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),
             interpose_method: Some(InterposeMethod::Ptrace),
             runahead: None,
-            scheduler_policy: Some(SchedulerPolicy::Steal),
+            scheduler_policy: Some(SchedulerPolicy::Host),
             socket_send_buffer: Some(units::Bytes::new(131_072, units::SiPrefixUpper::Base)),
             socket_send_autotune: Some(true),
             socket_recv_buffer: Some(units::Bytes::new(174_760, units::SiPrefixUpper::Base)),
             socket_recv_autotune: Some(true),
             interface_buffer: Some(units::Bytes::new(1_024_000, units::SiPrefixUpper::Base)),
             interface_qdisc: Some(QDiscMode::Fifo),
+            worker_threads: None,
         }
     }
 }
@@ -640,14 +649,14 @@ fn default_some_time_0() -> Option<units::Time<units::TimePrefixUpper>> {
     Some(units::Time::new(0, units::TimePrefixUpper::Sec))
 }
 
-/// Helper function for serde default `Some(0)` values.
-fn default_some_0() -> Option<u32> {
-    Some(0)
-}
-
 /// Helper function for serde default `Some(1)` values.
 fn default_some_1() -> Option<u32> {
     Some(1)
+}
+
+/// Helper function for serde default `Some(1)` values.
+fn default_some_nz_1() -> Option<NonZeroU32> {
+    Some(std::num::NonZeroU32::new(1).unwrap())
 }
 
 /// Helper function for serde default `Some(0)` values.
@@ -1106,13 +1115,10 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getMaxConcurrency(config: *const ConfigOptions) -> i32 {
+    pub extern "C" fn config_getParallelism(config: *const ConfigOptions) -> NonZeroU32 {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        match config.experimental.max_concurrency {
-            Some(x) => x,
-            None => -1,
-        }
+        config.general.parallelism.unwrap()
     }
 
     #[no_mangle]
@@ -1149,7 +1155,13 @@ mod export {
     pub extern "C" fn config_getWorkers(config: *const ConfigOptions) -> libc::c_uint {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        config.general.workers.unwrap()
+        match &config.experimental.worker_threads {
+            Some(w) => *w,
+            None => {
+                // By default use 1 worker per host.
+                config.hosts.len().try_into().unwrap()
+            }
+        }
     }
 
     #[no_mangle]

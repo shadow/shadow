@@ -27,13 +27,13 @@ add_shadow_tests(
     BASENAME phold-parallel
     METHODS hybrid ptrace
     LOGLEVEL info
-    ARGS --use-cpu-pinning true --workers 2
+    ARGS --use-cpu-pinning true --parallelism 2
     PROPERTIES RUN_SERIAL TRUE)
 add_shadow_tests(
     BASENAME phold-parallel
     METHODS preload
     LOGLEVEL info
-    ARGS --use-cpu-pinning true --workers 2
+    ARGS --use-cpu-pinning true --parallelism 2
     PROPERTIES RUN_SERIAL TRUE
     CONFIGURATIONS ilibc)
 

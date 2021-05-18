@@ -25,7 +25,7 @@ add_shadow_tests(BASENAME tor-minimal
                  LOGLEVEL info
                  ARGS
                    --use-cpu-pinning true
-                   --workers 2
+                   --parallelism 2
                    --template-directory "shadow.data.template"
                  POST_CMD "${CMAKE_CURRENT_SOURCE_DIR}/verify.sh"
                  PROPERTIES
