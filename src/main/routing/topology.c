@@ -1718,8 +1718,8 @@ static gboolean _topology_computeSourcePaths(Topology* top, igraph_integer_t src
     gboolean foundDstVertexIndex = FALSE;
     gint dstVertexIndexPosition = -1;
     for(gint position = 0; position < numTargets; position++) {
+        // Note that the pointer can be NULL because 0 is a valid vertex index.
         gpointer vertexIndexPointer = g_queue_pop_head(attachedTargets);
-        utility_assert(vertexIndexPointer != NULL);
 
         /* set each vertex index as a destination for dijkstra */
         igraph_integer_t vertexIndex = (igraph_integer_t) GPOINTER_TO_INT(vertexIndexPointer);
