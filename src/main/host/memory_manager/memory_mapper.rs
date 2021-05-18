@@ -2,6 +2,7 @@ use crate::host::memory_manager::{page_size, MemoryCopier, MemoryManager};
 use crate::host::syscall_types::{PluginPtr, SyscallResult, TypedPluginPtr};
 use crate::host::thread::Thread;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
+use crate::utility::notnull::*;
 use crate::utility::pod::Pod;
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
@@ -999,7 +1000,7 @@ impl MemoryMapper {
             return Some(&[]);
         }
         let ptr = self.get_mapped_ptr_and_count(src)?;
-        Some(unsafe { std::slice::from_raw_parts(ptr, src.len()) })
+        Some(unsafe { std::slice::from_raw_parts(notnull_debug(ptr), src.len()) })
     }
 
     pub unsafe fn get_mut<T: Debug + Pod>(&self, src: TypedPluginPtr<T>) -> Option<&mut [T]> {
@@ -1007,7 +1008,7 @@ impl MemoryMapper {
             return Some(&mut []);
         }
         let ptr = self.get_mapped_ptr_and_count(src)?;
-        Some(unsafe { std::slice::from_raw_parts_mut(ptr, src.len()) })
+        Some(unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(ptr), src.len()) })
     }
 
     /// Counts accesses where we had to fall back to the thread's (slow) apis.

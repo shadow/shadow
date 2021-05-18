@@ -2,6 +2,7 @@ use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult, TypedPluginPtr};
 use crate::host::thread::{CThread, Thread};
+use crate::utility::notnull::*;
 use crate::utility::pod;
 use crate::utility::pod::Pod;
 use log::*;
@@ -684,8 +685,7 @@ mod export {
     /// * `mm` must point to a valid object.
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_free(mm: *mut MemoryManager) {
-        debug_assert!(!mm.is_null());
-        unsafe { mm.as_mut().map(|mm| Box::from_raw(mm)) };
+        unsafe { mm.as_mut().map(|mm| Box::from_raw(notnull_mut_debug(mm))) };
     }
 
     #[no_mangle]
@@ -695,17 +695,15 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn allocdmem_free(allocd_mem: *mut AllocdMem<u8>) {
-        debug_assert!(!allocd_mem.is_null());
         unsafe {
             allocd_mem
                 .as_mut()
-                .map(|allocd_mem| Box::from_raw(allocd_mem))
+                .map(|allocd_mem| Box::from_raw(notnull_mut_debug(allocd_mem)))
         };
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn allocdmem_pluginPtr(allocd_mem: *const AllocdMem<u8>) -> c::PluginPtr {
-        debug_assert!(!allocd_mem.is_null());
         unsafe { allocd_mem.as_ref().unwrap().ptr().ptr().into() }
     }
 
@@ -716,19 +714,16 @@ mod export {
         memory_manager: *mut MemoryManager,
         thread: *mut c::Thread,
     ) {
-        debug_assert!(!memory_manager.is_null());
-        debug_assert!(!thread.is_null());
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
         if !memory_manager.has_mapper() {
-            let mut thread = unsafe { CThread::new(thread) };
+            let mut thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
             memory_manager.init_mapper(&mut thread)
         }
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_freeRef<'a>(memory_ref: *mut ProcessMemoryRef<'a, u8>) {
-        debug_assert!(!memory_ref.is_null());
-        unsafe { Box::from_raw(memory_ref) };
+        unsafe { Box::from_raw(notnull_mut_debug(memory_ref)) };
     }
 
     #[no_mangle]
@@ -791,8 +786,8 @@ mod export {
         maxlen: libc::size_t,
     ) -> libc::ssize_t {
         let memory_manager = unsafe { memory_manager.as_ref().unwrap() };
-        debug_assert!(!strbuf.is_null());
-        let buf = unsafe { std::slice::from_raw_parts_mut(strbuf as *mut u8, maxlen) };
+        let buf =
+            unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(strbuf) as *mut u8, maxlen) };
         let cstr = match memory_manager
             .copy_str_from_ptr(buf, TypedPluginPtr::new_u8(PluginPtr::from(ptr), maxlen))
         {
@@ -812,7 +807,7 @@ mod export {
     ) -> i32 {
         let memory_manager = unsafe { memory_manager.as_ref().unwrap() };
         let src = TypedPluginPtr::new_u8(src.into(), n);
-        let dst = unsafe { std::slice::from_raw_parts_mut(dst as *mut u8, n) };
+        let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
         match memory_manager.copy_from_ptr(dst, src) {
             Ok(_) => 0,
             Err(e) => {
@@ -830,11 +825,9 @@ mod export {
         src: *const c_void,
         n: usize,
     ) -> i32 {
-        debug_assert!(!memory_manager.is_null());
-        debug_assert!(!src.is_null());
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
         let dst = TypedPluginPtr::new_u8(dst.into(), n);
-        let src = unsafe { std::slice::from_raw_parts(src as *const u8, n) };
+        let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
         match memory_manager.copy_to_ptr(dst, src) {
             Ok(_) => 0,
             Err(_) => {
@@ -901,8 +894,7 @@ mod export {
     pub unsafe extern "C" fn memorymanager_freeMutRefWithFlush<'a>(
         mref: *mut ProcessMemoryRefMut<'a, u8>,
     ) -> i32 {
-        debug_assert!(!mref.is_null());
-        let mref = unsafe { Box::from_raw(mref) };
+        let mref = unsafe { Box::from_raw(notnull_mut_debug(mref)) };
         // No way to safely recover here if the flush fails.
         match mref.flush() {
             Ok(()) => 0,
@@ -918,8 +910,7 @@ mod export {
     pub unsafe extern "C" fn memorymanager_freeMutRefWithoutFlush<'a>(
         mref: *mut ProcessMemoryRefMut<'a, u8>,
     ) {
-        debug_assert!(!mref.is_null());
-        let mref = unsafe { Box::from_raw(mref) };
+        let mref = unsafe { Box::from_raw(notnull_mut_debug(mref)) };
         // No way to safely recover here if the flush fails.
         mref.noflush()
     }
@@ -931,10 +922,8 @@ mod export {
         thread: *mut c::Thread,
         plugin_src: c::PluginPtr,
     ) -> c::SysCallReturn {
-        debug_assert!(!memory_manager.is_null());
-        debug_assert!(!thread.is_null());
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { CThread::new(thread) };
+        let mut thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
         memory_manager
             .handle_brk(&mut thread, PluginPtr::from(plugin_src))
             .into()
@@ -952,10 +941,8 @@ mod export {
         fd: i32,
         offset: i64,
     ) -> c::SysCallReturn {
-        debug_assert!(!memory_manager.is_null());
-        debug_assert!(!thread.is_null());
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { CThread::new(thread) };
+        let mut thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
         memory_manager
             .do_mmap(
                 &mut thread,
@@ -977,10 +964,8 @@ mod export {
         addr: c::PluginPtr,
         len: usize,
     ) -> c::SysCallReturn {
-        debug_assert!(!memory_manager.is_null());
-        debug_assert!(!thread.is_null());
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { CThread::new(thread) };
+        let mut thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
         memory_manager
             .handle_munmap(&mut thread, PluginPtr::from(addr), len)
             .into()
@@ -996,10 +981,8 @@ mod export {
         flags: i32,
         new_addr: c::PluginPtr,
     ) -> c::SysCallReturn {
-        debug_assert!(!memory_manager.is_null());
-        debug_assert!(!thread.is_null());
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { CThread::new(thread) };
+        let mut thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
         memory_manager
             .handle_mremap(
                 &mut thread,
@@ -1020,10 +1003,8 @@ mod export {
         size: usize,
         prot: i32,
     ) -> c::SysCallReturn {
-        debug_assert!(!memory_manager.is_null());
-        debug_assert!(!thread.is_null());
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let mut thread = unsafe { CThread::new(thread) };
+        let mut thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
         memory_manager
             .handle_mprotect(&mut thread, PluginPtr::from(addr), size, prot)
             .into()
