@@ -26,7 +26,7 @@
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
-static int _parallelism = -1;
+static int _parallelism;
 ADD_CONFIG_HANDLER(config_getParallelism, _parallelism)
 
 struct _Scheduler {

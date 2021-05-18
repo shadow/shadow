@@ -9,6 +9,7 @@ use once_cell::sync::Lazy;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
+use std::num::NonZeroU32;
 
 use super::simulation_time::{SIMTIME_ONE_NANOSECOND, SIMTIME_ONE_SECOND};
 use super::units::{self, Unit};
@@ -139,8 +140,8 @@ pub struct GeneralOptions {
     /// with hyperthreading.
     #[clap(long, short = 'p', value_name = "cores")]
     #[clap(about = GENERAL_HELP.get("parallelism").unwrap())]
-    #[serde(default = "default_some_0")]
-    parallelism: Option<u32>,
+    #[serde(default = "default_some_nz_1")]
+    parallelism: Option<NonZeroU32>,
 
     #[clap(long, value_name = "seconds")]
     #[clap(about = GENERAL_HELP.get("bootstrap_end_time").unwrap())]
@@ -648,14 +649,14 @@ fn default_some_time_0() -> Option<units::Time<units::TimePrefixUpper>> {
     Some(units::Time::new(0, units::TimePrefixUpper::Sec))
 }
 
-/// Helper function for serde default `Some(0)` values.
-fn default_some_0() -> Option<u32> {
-    Some(0)
-}
-
 /// Helper function for serde default `Some(1)` values.
 fn default_some_1() -> Option<u32> {
     Some(1)
+}
+
+/// Helper function for serde default `Some(1)` values.
+fn default_some_nz_1() -> Option<NonZeroU32> {
+    Some(std::num::NonZeroU32::new(1).unwrap())
 }
 
 /// Helper function for serde default `Some(0)` values.
@@ -1114,7 +1115,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getParallelism(config: *const ConfigOptions) -> u32 {
+    pub extern "C" fn config_getParallelism(config: *const ConfigOptions) -> NonZeroU32 {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.general.parallelism.unwrap()
