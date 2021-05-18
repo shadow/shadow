@@ -45,17 +45,34 @@ typedef struct Counter Counter;
 
 typedef struct HostOptions HostOptions;
 
-// Manages memory of a plugin process.
+// Provides accessors for reading and writing another process's memory.
+// When in use, any operation that touches that process's memory must go
+// through the MemoryManager to ensure soundness. See MemoryManager::new.
 typedef struct MemoryManager MemoryManager;
-
-// Read-accessor to plugin memory.
-typedef struct MemoryReader_u8 MemoryReader_u8;
-
-// Write-accessor to plugin memory.
-typedef struct MemoryWriter_u8 MemoryWriter_u8;
 
 // An opaque type used when passing `*const AtomicRefCell<File>` to C.
 typedef struct PosixFileArc PosixFileArc;
+
+// A mutable reference to a slice of plugin memory. Implements DerefMut<[T]>,
+// allowing, e.g.:
+//
+// let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
+// let pmr = memory_manager.memory_ref_mut(ptr);
+// assert_eq!(pmr.len(), 10);
+// pmr[5] = 100;
+//
+// The object must be disposed of by calling `flush` or `noflush`.  Dropping
+// the object without doing so will result in a panic.
+typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
+
+// An immutable reference to a slice of plugin memory. Implements Deref<[T]>,
+// allowing, e.g.:
+//
+// let tpp = TypedPluginPtr::<u32>::new(ptr, 10);
+// let pmr = memory_manager.memory_ref(ptr);
+// assert_eq!(pmr.len(), 10);
+// let x = pmr[5];
+typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
 
@@ -285,36 +302,32 @@ PluginPtr allocdmem_pluginPtr(const struct AllocdMem_u8 *allocd_mem);
 // be running and ready to make native syscalls.
 void memorymanager_initMapperIfNeeded(struct MemoryManager *memory_manager, Thread *thread);
 
+void memorymanager_freeRef(struct ProcessMemoryRef_u8 *memory_ref);
+
+const void *memorymanagerref_ptr(const struct ProcessMemoryRef_u8 *memory_ref);
+
+size_t memorymanagerref_sizeof(const struct ProcessMemoryRef_u8 *memory_ref);
+
 // Get a read-accessor to the specified plugin memory.
 // Must be freed via `memorymanager_freeReader`.
-struct MemoryReader_u8 *memorymanager_getReader(struct MemoryManager *memory_manager,
-                                                PluginPtr plugin_src,
-                                                uintptr_t n);
+struct ProcessMemoryRef_u8 *memorymanager_getReadablePtr(const struct MemoryManager *memory_manager,
+                                                         PluginPtr plugin_src,
+                                                         uintptr_t n);
 
-void memorymanager_freeReader(struct MemoryReader_u8 *reader);
+struct ProcessMemoryRef_u8 *memorymanager_getReadablePtrPrefix(const struct MemoryManager *memory_manager,
+                                                               PluginPtr plugin_src,
+                                                               uintptr_t n);
 
-// Get a pointer to this reader's memory.
-const void *memorymanager_getReadablePtr(struct MemoryReader_u8 *reader);
-
-int32_t memorymanager_getReadableString(const struct MemoryReader_u8 *reader,
-                                        const char **str,
-                                        size_t *strlen);
-
-ssize_t memorymanager_readString(const struct MemoryReader_u8 *reader, char *str, size_t strlen);
+ssize_t memorymanager_readString(const struct MemoryManager *memory_manager,
+                                 PluginPtr ptr,
+                                 char *strbuf,
+                                 size_t maxlen);
 
 // Copy data from this reader's memory.
-int32_t memorymanager_readPtr(struct MemoryManager *memory_manager,
+int32_t memorymanager_readPtr(const struct MemoryManager *memory_manager,
                               void *dst,
                               PluginPtr src,
                               uintptr_t n);
-
-// Get a write-accessor to the specified plugin memory.
-struct MemoryWriter_u8 *memorymanager_getWriter(struct MemoryManager *memory_manager,
-                                                PluginPtr plugin_src,
-                                                uintptr_t n);
-
-// Write-back any previously returned writable memory, and free the writer.
-int32_t memorymanager_flushAndFreeWriter(struct MemoryWriter_u8 *writer);
 
 // Write data to this writer's memory.
 int32_t memorymanager_writePtr(struct MemoryManager *memory_manager,
@@ -323,10 +336,24 @@ int32_t memorymanager_writePtr(struct MemoryManager *memory_manager,
                                uintptr_t n);
 
 // Get a writable pointer to this writer's memory. Initial contents are unspecified.
-void *memorymanager_getWritablePtr(struct MemoryWriter_u8 *writer);
+struct ProcessMemoryRefMut_u8 *memorymanager_getWritablePtr(struct MemoryManager *memory_manager,
+                                                            PluginPtr plugin_src,
+                                                            uintptr_t n);
 
 // Get a readable and writable pointer to this writer's memory.
-void *memorymanager_getMutablePtr(struct MemoryWriter_u8 *writer);
+struct ProcessMemoryRefMut_u8 *memorymanager_getMutablePtr(struct MemoryManager *memory_manager,
+                                                           PluginPtr plugin_src,
+                                                           uintptr_t n);
+
+void *memorymanagermut_ptr(struct ProcessMemoryRefMut_u8 *memory_ref);
+
+size_t memorymanagermut_sizeof(struct ProcessMemoryRefMut_u8 *memory_ref);
+
+// Write-back any previously returned writable memory, and free the writer.
+int32_t memorymanager_freeMutRefWithFlush(struct ProcessMemoryRefMut_u8 *mref);
+
+// Write-back any previously returned writable memory, and free the writer.
+void memorymanager_freeMutRefWithoutFlush(struct ProcessMemoryRefMut_u8 *mref);
 
 // Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
 SysCallReturn memorymanager_handleBrk(struct MemoryManager *memory_manager,

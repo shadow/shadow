@@ -215,6 +215,11 @@ impl<T> TypedPluginPtr<T> {
         })
     }
 
+    /// Cast to u8. Infallible since always aligned.
+    pub fn cast_u8(&self) -> TypedPluginPtr<u8> {
+        self.cast::<u8>().unwrap()
+    }
+
     /// Return a slice of this pointer.
     pub fn slice<R: std::ops::RangeBounds<usize>>(&self, range: R) -> TypedPluginPtr<T> {
         use std::ops::Bound;
@@ -240,6 +245,17 @@ impl<T> TypedPluginPtr<T> {
                 },
             },
             count: excluded_end - included_start,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl TypedPluginPtr<u8> {
+    /// Creates a u8 typed pointer. Infallible since u8 is always aligned.
+    pub fn new_u8(ptr: PluginPtr, count: usize) -> Self {
+        TypedPluginPtr {
+            base: ptr,
+            count,
             _phantom: PhantomData,
         }
     }
