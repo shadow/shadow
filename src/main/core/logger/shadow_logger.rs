@@ -1,6 +1,6 @@
 use crate::core::support::simulation_time::SimulationTime;
 use crate::core::worker::Worker;
-use crossbeam::queue::SegQueue;
+use crossbeam::queue::ArrayQueue;
 use log::{Level, Log, Metadata, Record, SetLoggerError};
 use log_bindings as c_log;
 use once_cell::sync::Lazy;
@@ -121,7 +121,12 @@ pub struct ShadowLogger {
     // themselves in the `command_sender`, because `Sender` doesn't support
     // getting the queue length. Conversely we don't put commands in this queue
     // because it doesn't support blocking operations.
-    records: SegQueue<ShadowLogRecord>,
+    //
+    // The size is roughly SYNC_FLUSH_QD_LINES_THRESHOLD *
+    // size_of<ShadowLogRecord>; we might want to consider SegQueue (which grows
+    // and shrinks dynamically) instead if we ever make
+    // SYNC_FLUSH_QD_LINES_THRESHOLD very large.
+    records: ArrayQueue<ShadowLogRecord>,
 
     // When false, sends a (still-asynchronous) flush command to the logger
     // thread every time a record is pushed into `records`.
@@ -164,7 +169,7 @@ impl ShadowLogger {
     fn new() -> ShadowLogger {
         let (sender, receiver) = std::sync::mpsc::channel();
         let logger = ShadowLogger {
-            records: SegQueue::new(),
+            records: ArrayQueue::new(SYNC_FLUSH_QD_LINES_THRESHOLD),
             command_sender: Mutex::new(sender),
             command_receiver: Mutex::new(receiver),
             buffering_enabled: RwLock::new(false),
@@ -350,7 +355,7 @@ impl Log for ShadowLogger {
             format!("{}~{}", name, ip)
         });
 
-        self.records.push(ShadowLogRecord {
+        let mut shadowrecord = ShadowLogRecord {
             level: record.level(),
             file: record.file_static(),
             module_path: record.module_path_static(),
@@ -365,9 +370,20 @@ impl Log for ShadowLogger {
                 .try_with(|name| (*name).clone())
                 .unwrap_or_else(|_| get_thread_name()),
             host_name,
-        });
+        };
 
-        if record.level() == Level::Error || self.records.len() > SYNC_FLUSH_QD_LINES_THRESHOLD {
+        loop {
+            match self.records.push(shadowrecord) {
+                Ok(()) => break,
+                Err(r) => {
+                    // Queue is full. Flush it and try again.
+                    shadowrecord = r;
+                    self.flush_sync();
+                }
+            }
+        }
+
+        if record.level() == Level::Error {
             // Unlike in Shadow's C code, we don't abort the program on Error
             // logs. In Rust the same purpose is filled with `panic` and
             // `unwrap`. C callers will still exit or abort via the support/logger wrapper.
