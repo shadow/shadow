@@ -1,3 +1,20 @@
+//! Access and manage memory of a plugin process.
+//!
+//! The starting point for the public API is [`MemoryManager`].
+//! [`MemoryManager`] can be used to:
+//!
+//! * Directly read or write process memory
+//! * Obtain smart pointers ([`ProcessMemoryRef`] and [`ProcessMemoryRefMut`])
+//! to process memory
+//! * Obtain cursors to process memory implementing `std::io::Seek` and either
+//! `std::io::Read` or `std::io::Write` ([`MemoryReaderCursor`] and
+//! [`MemoryWriterCursor`])
+//!
+//! For the [`MemoryManager`] to maintain a consistent view of the process's address space,
+//! and for it to be able to enforce Rust's safety requirements for references and sharing,
+//! all access to process memory must go through it. This includes servicing syscalls that
+//! modify the process address space (such as `mmap`).
+
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult, TypedPluginPtr};
@@ -258,14 +275,30 @@ fn page_size() -> usize {
     unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize }
 }
 
-/// Manages memory of a plugin process.
+/// Provides accessors for reading and writing another process's memory.
+/// When in use, any operation that touches that process's memory must go
+/// through the MemoryManager to ensure soundness. See MemoryManager::new.
+//
+// The MemoryManager is the Rust representation of a plugin process's address
+// space.  For every access it tries to go through the more-efficient
+// MemoryMapper helper first, and falls back to the MemoryCopier if it hasn't
+// been initialized yet, or the access isn't contained entirely within a region
+// that's been remapped.
 #[derive(Debug)]
 pub struct MemoryManager {
+    // Memory accessor that works by copying data to and from process memory.
+    // This is the most robust mechanism, but requires some syscalls, and in
+    // some cases extra copies of the referenced data.
     memory_copier: MemoryCopier,
+
+    // Memory accessor that works by remapping memory of the target process into
+    // the calling process's address space. Individual accesses are fast, but
+    // this accessor isn't available at program start, and doesn't support all
+    // accesses.
+    memory_mapper: Option<MemoryMapper>,
+
     // Native pid of the plugin process.
     pid: Pid,
-    // Lazily initialized MemoryMapper.
-    memory_mapper: Option<MemoryMapper>,
 }
 
 impl MemoryManager {
@@ -289,6 +322,9 @@ impl MemoryManager {
         }
     }
 
+    // Internal helper for getting a reference to memory via the
+    // `memory_mapper`.  Calling methods should fall back to the `memory_copier`
+    // on failure.
     fn mapped_ref<'a, T: Pod + Debug>(&'a self, ptr: TypedPluginPtr<T>) -> Option<&[T]> {
         let mm = self.memory_mapper.as_ref()?;
         // SAFETY: No mutable refs to process memory exist by preconditions of
@@ -296,6 +332,9 @@ impl MemoryManager {
         unsafe { mm.get_ref(ptr) }
     }
 
+    // Internal helper for getting a reference to memory via the
+    // `memory_mapper`.  Calling methods should fall back to the `memory_copier`
+    // on failure.
     fn mapped_mut<'a, T: Pod + Debug>(&'a mut self, ptr: TypedPluginPtr<T>) -> Option<&mut [T]> {
         let mm = self.memory_mapper.as_ref()?;
         // SAFETY: No other refs to process memory exist by preconditions of

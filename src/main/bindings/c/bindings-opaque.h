@@ -47,7 +47,9 @@ typedef struct Counter Counter;
 
 typedef struct HostOptions HostOptions;
 
-// Manages memory of a plugin process.
+// Provides accessors for reading and writing another process's memory.
+// When in use, any operation that touches that process's memory must go
+// through the MemoryManager to ensure soundness. See MemoryManager::new.
 typedef struct MemoryManager MemoryManager;
 
 // An opaque type used when passing `*const AtomicRefCell<File>` to C.
