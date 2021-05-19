@@ -14,14 +14,16 @@ else
     EXCLUDE=""
 fi
 
-# On centos:7 we enable extra tests that currently require a patched libc.
-# https://github.com/shadow/shadow/issues/892
 EXTRA_FLAGS=""
 if [ "$CONTAINER" = "centos:7" ]
 then
+    # On centos:7 we enable extra tests that currently require a patched libc.
+    # https://github.com/shadow/shadow/issues/892
     CONFIG="ilibc"
 else
-    CONFIG=""
+    # On all other platforms, we run extra tests that we don't generally require (for
+    # example tests that require additional dependencies).
+    CONFIG="extra"
 fi
 
 # Array of flags to be passed on to setup script
@@ -38,6 +40,9 @@ FLAGS+=("-E" "$EXCLUDE")
 
 # Pass through an optional config-name, which can enable more tests
 FLAGS+=("-C" "$CONFIG")
+
+# Exclude tor tests as we test them in a different workflow
+FLAGS+=("-LE" "tor")
 
 FLAGS+=("--output-on-failure")
 
