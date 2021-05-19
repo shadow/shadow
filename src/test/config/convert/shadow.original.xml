@@ -7,7 +7,7 @@
   <key attr.name="bandwidthup" attr.type="int" for="node" id="d2" />
   <key attr.name="bandwidthdown" attr.type="int" for="node" id="d1" />
   <key attr.name="countrycode" attr.type="string" for="node" id="d0" />
-  <graph edgedefault="undirected">
+  <graph edgedefault="directed">
     <data key="d5">True</data>
     <node id="poi-1">
       <data key="d0">US</data>
