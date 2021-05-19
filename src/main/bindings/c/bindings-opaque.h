@@ -45,6 +45,9 @@ typedef struct ConfigOptions ConfigOptions;
 // The main counter object that maps individual keys to count values.
 typedef struct Counter Counter;
 
+// Table of (file) descriptors. Typically owned by a Process.
+typedef struct DescriptorTable DescriptorTable;
+
 typedef struct HostOptions HostOptions;
 
 // Provides accessors for reading and writing another process's memory.

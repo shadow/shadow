@@ -68,11 +68,45 @@ static void _test_open() {
     close(fd); // not testing close yet so don't assert here
 }
 
+// `open` specifies that the lowest available fd is returned.
+static void _test_open_returns_lowest() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    int fd1, fd2;
+    assert_nonneg_errno(fd1 = open(adf.name, O_RDONLY));
+    assert_nonneg_errno(fd2 = open(adf.name, O_RDONLY));
+    g_assert_cmpint(fd1, <, fd2);
+    int fd3;
+    assert_nonneg_errno(fd3 = open(adf.name, O_RDONLY));
+    g_assert_cmpint(fd2, <, fd3);
+
+    // Close file descriptors and reopen. We should get fd1 again since that
+    // will be the lowest-available again. Be careful to close this in between
+    // closing the other two to rule out simpler implementations that return the
+    // most recently or least recently closed.
+    assert_nonneg_errno(close(fd2));
+    assert_nonneg_errno(close(fd1));
+    assert_nonneg_errno(close(fd3));
+    int fd4;
+    assert_nonneg_errno(fd4 = open(adf.name, O_RDONLY));
+    g_assert_cmpint(fd1, ==, fd4);
+
+    assert_nonneg_errno(close(fd4));
+}
+
 static void _test_close() {
     g_auto(AutoDeleteFile) adf = _create_auto_file();
     int fd;
     assert_nonneg_errno(fd = open(adf.name, O_RDONLY));
     assert_nonneg_errno(close(fd));
+}
+
+static void _test_close_nonexistent() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    int fd;
+    assert_nonneg_errno(fd = open(adf.name, O_RDONLY));
+    assert_nonneg_errno(close(fd));
+    g_assert_cmpint(close(fd), ==, -1);
+    assert_errno_is(EBADF);
 }
 
 static void _test_write() {
@@ -522,7 +556,9 @@ int main(int argc, char* argv[]) {
     // These are generally ordered by increasing level of required functionality.
     // I.e., later tests use some of the functions tested in earlier tests.
     g_test_add_func("/file/open", _test_open);
+    g_test_add_func("/file/open_returns_lowest", _test_open_returns_lowest);
     g_test_add_func("/file/close", _test_close);
+    g_test_add_func("/file/close_nonexistent", _test_close_nonexistent);
     g_test_add_func("/file/write", _test_write);
     g_test_add_func("/file/read", _test_read);
     g_test_add_func("/file/lseek", _test_lseek);

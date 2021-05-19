@@ -26,7 +26,7 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static void _syscallhandler_getPollEventsHelper(CompatDescriptor* cdesc, struct pollfd* pfd) {
+static void _syscallhandler_getPollEventsHelper(const CompatDescriptor* cdesc, struct pollfd* pfd) {
     // Handle legacy and non-legacy descriptors. This will be NULL if it's not a legacy descriptor.
     LegacyDescriptor* ldesc = compatdescriptor_asLegacy(cdesc);
 
@@ -76,7 +76,8 @@ static int _syscallhandler_getPollEvents(SysCallHandler* sys, struct pollfd* fds
         trace("poll checking fd %i", pfd->fd);
 
         /* Get the descriptor. */
-        CompatDescriptor* cdesc = process_getRegisteredCompatDescriptor(sys->process, pfd->fd);
+        const CompatDescriptor* cdesc =
+            process_getRegisteredCompatDescriptor(sys->process, pfd->fd);
         if (cdesc) {
             _syscallhandler_getPollEventsHelper(cdesc, pfd);
         } else {
@@ -101,7 +102,8 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
             continue;
         }
 
-        CompatDescriptor* cdesc = process_getRegisteredCompatDescriptor(sys->process, pfd->fd);
+        const CompatDescriptor* cdesc =
+            process_getRegisteredCompatDescriptor(sys->process, pfd->fd);
         utility_assert(cdesc); // we would have returned POLLNVAL in getPollEvents
 
         struct epoll_event epev = {0};

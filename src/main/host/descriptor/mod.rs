@@ -1,10 +1,12 @@
 use atomic_refcell::AtomicRefCell;
+use std::convert::TryInto;
 use std::sync::Arc;
 
 use crate::cshadow as c;
 use crate::host::syscall_types::SyscallResult;
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
 
+pub mod descriptor_table;
 pub mod pipe;
 
 /// A trait we can use as a compile-time check to make sure that an object is Send.
@@ -15,7 +17,7 @@ trait IsSync: Sync {}
 
 /// A type that allows us to make a pointer Send + Sync since there is no way
 /// to add these traits to the pointer itself.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct SyncSendPointer<T>(*mut T);
 
 unsafe impl<T> Send for SyncSendPointer<T> {}
@@ -371,6 +373,7 @@ impl Descriptor {
 
 /// Represents an owned reference to a legacy descriptor. Will decrement the descriptor's ref
 /// count when dropped.
+#[derive(Debug)]
 pub struct OwnedLegacyDescriptor(SyncSendPointer<c::LegacyDescriptor>);
 
 impl OwnedLegacyDescriptor {
@@ -393,6 +396,7 @@ impl Drop for OwnedLegacyDescriptor {
 }
 
 // don't implement copy or clone without considering the legacy descriptor's ref count
+#[derive(Debug)]
 pub enum CompatDescriptor {
     New(Descriptor),
     Legacy(OwnedLegacyDescriptor),
@@ -413,6 +417,15 @@ impl CompatDescriptor {
         }
 
         unsafe { Some(Box::from_raw(descriptor)) }
+    }
+
+    /// Update the handle.
+    /// This is a no-op for non-legacy descriptors.
+    pub fn set_handle(&mut self, handle: u32) {
+        if let CompatDescriptor::Legacy(d) = self {
+            unsafe { c::descriptor_setHandle(d.ptr(), handle.try_into().unwrap()) }
+        }
+        // new descriptor types don't store their file handle, so do nothing
     }
 }
 
@@ -460,33 +473,16 @@ mod export {
         CompatDescriptor::from_raw(descriptor);
     }
 
-    /// This is a no-op for non-legacy descriptors.
-    #[no_mangle]
-    pub extern "C" fn compatdescriptor_setHandle(
-        descriptor: *mut CompatDescriptor,
-        handle: libc::c_int,
-    ) {
-        assert!(!descriptor.is_null());
-
-        let descriptor = unsafe { &mut *descriptor };
-
-        if let CompatDescriptor::Legacy(d) = descriptor {
-            unsafe { c::descriptor_setHandle(d.ptr(), handle) }
-        }
-
-        // new descriptor types don't store their file handle, so do nothing
-    }
-
     /// If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
     /// posix file object. Otherwise returns NULL. The posix file object's ref count is not
     /// modified, so the pointer must not outlive the lifetime of the compat descriptor.
     #[no_mangle]
     pub extern "C" fn compatdescriptor_borrowPosixFile(
-        descriptor: *mut CompatDescriptor,
+        descriptor: *const CompatDescriptor,
     ) -> *const PosixFileArc {
         assert!(!descriptor.is_null());
 
-        let descriptor = unsafe { &mut *descriptor };
+        let descriptor = unsafe { &*descriptor };
 
         (match descriptor {
             CompatDescriptor::Legacy(_) => std::ptr::null_mut(),
@@ -500,11 +496,11 @@ mod export {
     /// the memory will leak.
     #[no_mangle]
     pub extern "C" fn compatdescriptor_newRefPosixFile(
-        descriptor: *mut CompatDescriptor,
+        descriptor: *const CompatDescriptor,
     ) -> *const PosixFileArc {
         assert!(!descriptor.is_null());
 
-        let descriptor = unsafe { &mut *descriptor };
+        let descriptor = unsafe { &*descriptor };
 
         (match descriptor {
             CompatDescriptor::Legacy(_) => std::ptr::null_mut(),

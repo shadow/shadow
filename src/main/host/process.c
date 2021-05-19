@@ -42,7 +42,6 @@
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/descriptor/descriptor_table.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/descriptor/file.h"
 #include "main/host/descriptor/socket.h"
@@ -769,7 +768,7 @@ static void _process_free(Process* proc) {
 
     /* Now free all remaining descriptors stored in our table. */
     if (proc->descTable) {
-        descriptortable_unref(proc->descTable);
+        descriptortable_free(proc->descTable);
     }
 
     /* And we no longer need to access the host. */
@@ -1019,9 +1018,9 @@ CompatDescriptor* process_deregisterCompatDescriptor(Process* proc, int handle) 
     return descriptortable_remove(proc->descTable, handle);
 }
 
-CompatDescriptor* process_getRegisteredCompatDescriptor(Process* proc, int handle) {
+const CompatDescriptor* process_getRegisteredCompatDescriptor(Process* proc, int handle) {
     MAGIC_ASSERT(proc);
-    CompatDescriptor* compatDesc = descriptortable_get(proc->descTable, handle);
+    const CompatDescriptor* compatDesc = descriptortable_get(proc->descTable, handle);
     return compatDesc;
 }
 
@@ -1054,7 +1053,7 @@ void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
 LegacyDescriptor* process_getRegisteredLegacyDescriptor(Process* proc, int handle) {
     MAGIC_ASSERT(proc);
 
-    CompatDescriptor* compatDesc = process_getRegisteredCompatDescriptor(proc, handle);
+    const CompatDescriptor* compatDesc = process_getRegisteredCompatDescriptor(proc, handle);
     if (compatDesc == NULL) {
         return NULL;
     }

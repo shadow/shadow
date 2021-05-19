@@ -371,8 +371,8 @@ static const gchar* _epoll_operationToStr(gint op) {
     }
 }
 
-static void _getWatchObject(CompatDescriptor* descriptor, EpollWatchTypes* watchType,
-                          EpollWatchObject* watchObject) {
+static void _getWatchObject(const CompatDescriptor* descriptor, EpollWatchTypes* watchType,
+                            EpollWatchObject* watchObject) {
     LegacyDescriptor* legacyDescriptor = compatdescriptor_asLegacy(descriptor);
 
     /* if the compat descriptor is for a legacy descriptor */
@@ -391,7 +391,7 @@ static void _getWatchObject(CompatDescriptor* descriptor, EpollWatchTypes* watch
     }
 }
 
-gint epoll_control(Epoll* epoll, gint operation, int fd, CompatDescriptor* descriptor,
+gint epoll_control(Epoll* epoll, gint operation, int fd, const CompatDescriptor* descriptor,
                    const struct epoll_event* event) {
     MAGIC_ASSERT(epoll);
 

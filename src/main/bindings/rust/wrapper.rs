@@ -449,7 +449,7 @@ extern "C" {
     pub fn process_getRegisteredCompatDescriptor(
         proc_: *mut Process,
         handle: ::std::os::raw::c_int,
-    ) -> *mut CompatDescriptor;
+    ) -> *const CompatDescriptor;
 }
 extern "C" {
     pub fn process_getMemoryManager(proc_: *mut Process) -> *mut MemoryManager;
@@ -473,6 +473,9 @@ extern "C" {
 }
 extern "C" {
     pub fn descriptor_setHandle(descriptor: *mut LegacyDescriptor, handle: gint);
+}
+extern "C" {
+    pub fn descriptor_shutdownHelper(legacyDesc: *mut LegacyDescriptor);
 }
 pub type Transport = _Transport;
 pub type TransportFunctionTable = _TransportFunctionTable;

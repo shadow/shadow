@@ -76,4 +76,14 @@ void descriptor_addListener(LegacyDescriptor* descriptor, StatusListener* listen
  * transitions (bit flips). */
 void descriptor_removeListener(LegacyDescriptor* descriptor, StatusListener* listener);
 
+/* This is a helper function that handles some corner cases where some
+ * descriptors are linked to each other and we must remove that link in
+ * order to ensure that the reference count reaches zero and they are properly
+ * freed. Otherwise the circular reference will prevent the free operation.
+ * TODO: remove this once the TCP layer is better designed.
+ *
+ * Intended to be called only from descriptor_table.rs.
+ */
+void descriptor_shutdownHelper(LegacyDescriptor* legacyDesc);
+
 #endif /* SHD_DESCRIPTOR_H_ */
