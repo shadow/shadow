@@ -32,6 +32,7 @@ add_custom_command(OUTPUT wrapper.rs
         --whitelist-function "thread_.*"
         --whitelist-function "descriptor_unref"
         --whitelist-function "descriptor_setHandle"
+        --whitelist-function "descriptor_shutdownHelper"
         --whitelist-function "host_.*"
         # Needs CompatSocket
         --blacklist-function "host_.*Interface"

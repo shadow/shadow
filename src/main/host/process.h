@@ -90,7 +90,7 @@ pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID);
  * an owned reference to that CompatDescriptor, and you must drop it manually when finished. */
 int process_registerCompatDescriptor(Process* proc, CompatDescriptor* compatDesc);
 CompatDescriptor* process_deregisterCompatDescriptor(Process* proc, int handle);
-CompatDescriptor* process_getRegisteredCompatDescriptor(Process* proc, int handle);
+const CompatDescriptor* process_getRegisteredCompatDescriptor(Process* proc, int handle);
 
 /* Handle only the legacy descriptors owned by this process. Unlike the deregister method for the
  * CompatDescriptor, you do not need to manually unref the LegacyDescriptor as it's done

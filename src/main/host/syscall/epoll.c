@@ -94,7 +94,8 @@ SysCallReturn syscallhandler_epoll_ctl(SysCallHandler* sys,
     utility_assert(epoll);
 
     /* Find the child descriptor that the epoll is monitoring. */
-    CompatDescriptor* compatDescriptor = process_getRegisteredCompatDescriptor(sys->process, fd);
+    const CompatDescriptor* compatDescriptor =
+        process_getRegisteredCompatDescriptor(sys->process, fd);
 
     if (compatDescriptor == NULL) {
         debug("Child %i is not a shadow descriptor", fd);

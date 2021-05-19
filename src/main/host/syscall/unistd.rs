@@ -23,7 +23,7 @@ pub fn close(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     // scope used to make sure that desc cannot be used after deregistering it
     {
         // get the descriptor, or return early if it doesn't exist
-        let desc = unsafe { &mut *syscall::get_descriptor(fd, sys.process)? };
+        let desc = unsafe { &*syscall::get_descriptor(fd, sys.process)? };
 
         // if it's a legacy descriptor, use the C syscall handler instead
         if let CompatDescriptor::Legacy(_) = desc {
@@ -59,7 +59,7 @@ pub fn dup(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = unsafe { &mut *syscall::get_descriptor(fd, sys.process)? };
+    let desc = unsafe { &*syscall::get_descriptor(fd, sys.process)? };
 
     match desc {
         CompatDescriptor::New(desc) => dup_helper(sys, fd, desc),
@@ -102,7 +102,7 @@ pub fn read(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     let offset = 0;
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = unsafe { &mut *syscall::get_descriptor(fd, sys.process)? };
+    let desc = unsafe { &*syscall::get_descriptor(fd, sys.process)? };
 
     match desc {
         CompatDescriptor::New(desc) => read_helper(sys, fd, desc, buf_ptr, buf_size, offset),
@@ -120,7 +120,7 @@ pub fn pread64(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult
     let offset = libc::off_t::from(args.get(3));
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = unsafe { &mut *syscall::get_descriptor(fd, sys.process)? };
+    let desc = unsafe { &*syscall::get_descriptor(fd, sys.process)? };
 
     match desc {
         CompatDescriptor::New(desc) => read_helper(sys, fd, desc, buf_ptr, buf_size, offset),
@@ -171,7 +171,7 @@ pub fn write(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResult {
     let offset = 0;
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = unsafe { &mut *syscall::get_descriptor(fd, sys.process)? };
+    let desc = unsafe { &*syscall::get_descriptor(fd, sys.process)? };
 
     match desc {
         CompatDescriptor::New(desc) => write_helper(sys, fd, desc, buf_ptr, buf_size, offset),
@@ -190,7 +190,7 @@ pub fn pwrite64(sys: &mut c::SysCallHandler, args: &SysCallArgs) -> SyscallResul
     let offset = libc::off_t::from(args.get(3));
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = unsafe { &mut *syscall::get_descriptor(fd, sys.process)? };
+    let desc = unsafe { &*syscall::get_descriptor(fd, sys.process)? };
 
     match desc {
         CompatDescriptor::New(desc) => write_helper(sys, fd, desc, buf_ptr, buf_size, offset),

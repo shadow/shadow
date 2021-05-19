@@ -43,6 +43,9 @@ typedef struct ConfigOptions ConfigOptions;
 // The main counter object that maps individual keys to count values.
 typedef struct Counter Counter;
 
+// Table of (file) descriptors. Typically owned by a Process.
+typedef struct DescriptorTable DescriptorTable;
+
 typedef struct HostOptions HostOptions;
 
 // Provides accessors for reading and writing another process's memory.
@@ -241,6 +244,48 @@ SimulationTime processoptions_getStopTime(const struct ProcessOptions *proc);
 // Parses a string as bits-per-second. Returns '-1' on error.
 int64_t parse_bandwidth(const char *s);
 
+// Create an object that can be used to store all descriptors created by a
+// process. When the table is no longer required, use descriptortable_free
+// to release the reference.
+struct DescriptorTable *descriptortable_new(void);
+
+// Free the table.
+void descriptortable_free(struct DescriptorTable *table);
+
+// Store a descriptor object for later reference at the next available index
+// in the table. The chosen table index is stored in the descriptor object and
+// returned. The descriptor is guaranteed to be stored successfully.
+//
+// The table takes ownership of the descriptor, invalidating the caller's pointer.
+int descriptortable_add(struct DescriptorTable *table, struct CompatDescriptor *descriptor);
+
+// Stop storing the descriptor so that it can no longer be referenced. The table
+// index that was used to store the descriptor is cleared from the descriptor
+// and may be assigned to new descriptors that are later added to the table.
+//
+// Returns an owned pointer to the CompatDescriptor if the descriptor was found
+// in the table and removed, and NULL otherwise.
+struct CompatDescriptor *descriptortable_remove(struct DescriptorTable *table, int index);
+
+// Returns the descriptor at the given table index, or NULL if we are not
+// storing a descriptor at the given index.
+const struct CompatDescriptor *descriptortable_get(const struct DescriptorTable *table, int index);
+
+// Store the given descriptor at given index. Any previous descriptor that was
+// stored there will be removed and its table index will be cleared. This
+// unrefs any existing descriptor stored at index as in remove(), and consumes
+// a ref to the existing descriptor as in add().
+void descriptortable_set(struct DescriptorTable *table,
+                         int index,
+                         struct CompatDescriptor *descriptor);
+
+// This is a helper function that handles some corner cases where some
+// descriptors are linked to each other and we must remove that link in
+// order to ensure that the reference count reaches zero and they are properly
+// freed. Otherwise the circular reference will prevent the free operation.
+// TODO: remove this once the TCP layer is better designed.
+void descriptortable_shutdownHelper(struct DescriptorTable *table);
+
 // The new compat descriptor takes ownership of the reference to the legacy descriptor and
 // does not increment its ref count, but will decrement the ref count when this compat
 // descriptor is freed/dropped.
@@ -255,19 +300,16 @@ LegacyDescriptor *compatdescriptor_asLegacy(const struct CompatDescriptor *descr
 // ref count.
 void compatdescriptor_free(struct CompatDescriptor *descriptor);
 
-// This is a no-op for non-legacy descriptors.
-void compatdescriptor_setHandle(struct CompatDescriptor *descriptor, int handle);
-
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
 // posix file object. Otherwise returns NULL. The posix file object's ref count is not
 // modified, so the pointer must not outlive the lifetime of the compat descriptor.
-const struct PosixFileArc *compatdescriptor_borrowPosixFile(struct CompatDescriptor *descriptor);
+const struct PosixFileArc *compatdescriptor_borrowPosixFile(const struct CompatDescriptor *descriptor);
 
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
 // posix file object. Otherwise returns NULL. The posix file object's ref count is
 // incremented, so the pointer must always later be passed to `posixfile_drop()`, otherwise
 // the memory will leak.
-const struct PosixFileArc *compatdescriptor_newRefPosixFile(struct CompatDescriptor *descriptor);
+const struct PosixFileArc *compatdescriptor_newRefPosixFile(const struct CompatDescriptor *descriptor);
 
 // Decrement the ref count of the posix file object. The pointer must not be used after
 // calling this function.

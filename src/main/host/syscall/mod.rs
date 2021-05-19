@@ -59,7 +59,7 @@ impl c::SysCallReturn {
 pub fn get_descriptor(
     fd: libc::c_int,
     process: *mut c::Process,
-) -> Result<*mut CompatDescriptor, nix::errno::Errno> {
+) -> Result<*const CompatDescriptor, nix::errno::Errno> {
     // check that fd is within bounds
     if fd < 0 {
         return Err(nix::errno::Errno::EBADF);
