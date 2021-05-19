@@ -156,7 +156,7 @@ static gboolean _controller_loadTopology(Controller* controller) {
     MAGIC_ASSERT(controller);
 
     gchar* temporaryFilename =
-        utility_getNewTemporaryFilename("shadow-topology-XXXXXX.graphml.xml");
+        utility_getNewTemporaryFilename("shadow-topology-XXXXXX.gml");
 
     char* topologyString = config_getTopology(controller->config);
 

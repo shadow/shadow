@@ -358,18 +358,18 @@ static gboolean _topology_loadGraph(Topology* top, const gchar* graphPath) {
     }
 
     _topology_lockGraph(top);
-    info("reading graphml topology graph at '%s'...", graphPath);
+    info("reading gml topology graph at '%s'...", graphPath);
     gint result = igraph_read_graph_gml(&top->graph, graphFile);
     _topology_unlockGraph(top);
 
     fclose(graphFile);
 
     if(result != IGRAPH_SUCCESS) {
-        error("igraph_read_graph_graphml return non-success code %i", result);
+        error("igraph_read_graph_gml return non-success code %i", result);
         return FALSE;
     }
 
-    info("successfully read graphml topology graph at '%s'", graphPath);
+    info("successfully read gml topology graph at '%s'", graphPath);
 
     return TRUE;
 }
@@ -1111,7 +1111,7 @@ static gboolean _topology_checkGraph(Topology* top) {
         isSuccess = FALSE;
     } else {
         isSuccess = TRUE;
-        info("successfully parsed graphml and validated topology: "
+        info("successfully parsed gml and validated topology: "
              "graph is %s with %u %s, %u %s, and %u %s",
              top->isConnected ? "strongly connected" : "disconnected", (guint)top->clusterCount,
              top->clusterCount == 1 ? "cluster" : "clusters", (guint)top->vertexCount,
@@ -2335,7 +2335,7 @@ Topology* topology_new(const gchar* graphPath) {
             !_topology_extractEdgeWeights(top)) {
         topology_free(top);
         error("we failed to create the simulation topology because we were unable to validate the "
-              "topology graphml file");
+              "topology gml file");
         return NULL;
     }
 
