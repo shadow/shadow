@@ -618,14 +618,14 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
             _topology_vertexAttributeToString(VERTEX_ATTR_BANDWIDTHDOWN))) {
         warning("the vertex attribute '%s' of type '%s' is required but not provided",
                 _topology_vertexAttributeToString(VERTEX_ATTR_BANDWIDTHDOWN),
-                _topology_igraphAttributeTypeToString(IGRAPH_ATTRIBUTE_NUMERIC));
+                _topology_igraphAttributeTypeToString(IGRAPH_ATTRIBUTE_STRING));
         isSuccess = FALSE;
     }
     if(!igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_VERTEX,
             _topology_vertexAttributeToString(VERTEX_ATTR_BANDWIDTHUP))) {
         warning("the vertex attribute '%s' of type '%s' is required but not provided",
                 _topology_vertexAttributeToString(VERTEX_ATTR_BANDWIDTHUP),
-                _topology_igraphAttributeTypeToString(IGRAPH_ATTRIBUTE_NUMERIC));
+                _topology_igraphAttributeTypeToString(IGRAPH_ATTRIBUTE_STRING));
         isSuccess = FALSE;
     }
 
