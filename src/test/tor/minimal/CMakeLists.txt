@@ -31,5 +31,5 @@ add_shadow_tests(BASENAME tor-minimal
                  PROPERTIES
                    TIMEOUT 180
                    LABELS tor
-                   CONFIGURATIONS tor
+                   CONFIGURATIONS extra
                    RUN_SERIAL TRUE)

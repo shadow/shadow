@@ -106,7 +106,7 @@ jobs:
       - name: Test
         run: |
           cd shadow
-          ./setup test -- --build-config tor --label-regex tor
+          ./setup test -- --build-config extra --label-regex tor
 
       - name: Last 200 log lines
         if: failure()
