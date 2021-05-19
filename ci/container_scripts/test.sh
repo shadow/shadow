@@ -36,13 +36,13 @@ FLAGS+=("-j$(nproc)")
 FLAGS+=("--")
 
 # We exclude some tests in some configurations.
-FLAGS+=("-E" "$EXCLUDE")
+FLAGS+=("--exclude-regex" "$EXCLUDE")
 
 # Pass through an optional config-name, which can enable more tests
-FLAGS+=("-C" "$CONFIG")
+FLAGS+=("--build-config" "$CONFIG")
 
 # Exclude tor tests as we test them in a different workflow
-FLAGS+=("-LE" "tor")
+FLAGS+=("--label-exclude" "tor")
 
 FLAGS+=("--output-on-failure")
 
