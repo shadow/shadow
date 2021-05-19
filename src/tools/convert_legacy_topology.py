@@ -8,8 +8,15 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from xml.sax.saxutils import unescape
 
+import networkx as nx
+
 import yaml
 import sys
+import io
+
+
+def boolean_conversion(x):
+    return '1' if x.lower() == 'true' else '0'
 
 
 def bandwidth_conversion(x):
@@ -19,7 +26,7 @@ def bandwidth_conversion(x):
 
 # original attribute name: (new attribute name, new attribute type, value transform fn)
 ATTR_CONVERSIONS = {
-    'preferdirectpaths': ('prefer_direct_paths', None, None),
+    'preferdirectpaths': ('prefer_direct_paths', 'int', boolean_conversion),
     'bandwidthup': ('bandwidth_up', 'string', bandwidth_conversion),
     'bandwidthdown': ('bandwidth_down', 'string', bandwidth_conversion),
     'packetloss': ('packet_loss', None, None),
@@ -30,7 +37,7 @@ ATTR_CONVERSIONS = {
 }
 
 
-def convert_topology(xml_root):
+def convert_topology(xml_root, out_file):
     graphml_ns = 'http://graphml.graphdrawing.org/xmlns'
     graphml_ns_prefix = '{' + graphml_ns + '}'
 
@@ -52,12 +59,38 @@ def convert_topology(xml_root):
 
     # transform the text/values for any nodes or edges
     for x in xml_root.findall('{}graph'.format(graphml_ns_prefix)):
+        for y in x.findall('{}data'.format(graphml_ns_prefix)):
+            if y.attrib['key'] in id_type_conversions:
+                y.text = id_type_conversions[y.attrib['key']](y.text)
         nodes = x.findall('{}node'.format(graphml_ns_prefix))
         edges = x.findall('{}edge'.format(graphml_ns_prefix))
         for y in nodes + edges:
             for z in y.findall('{}data'.format(graphml_ns_prefix)):
                 if z.attrib['key'] in id_type_conversions:
                     z.text = id_type_conversions[z.attrib['key']](z.text)
+
+    # build the graph from the xml
+    xml = ET.tostring(xml_root, encoding='utf-8', method='xml').decode('utf-8')
+    graph = nx.parse_graphml(xml)
+
+    # shadow doesn't use any attributes that would go in 'node_default' or
+    # 'edge_default', so we don't expect there to be any
+    if 'node_default' in graph.graph:
+        assert len(graph.graph['node_default']) == 0
+        del graph.graph['node_default']
+
+    if 'edge_default' in graph.graph:
+        assert len(graph.graph['edge_default']) == 0
+        del graph.graph['edge_default']
+
+    # generate gml from the graph
+    try:
+        nx.write_gml(graph, out_file)
+    except nx.exception.NetworkXError:
+        # we require keys with underscores which isn't technically allowed by the
+        # spec, but both igraph and recent versions of networkx allow them
+        print("Unable to write GML. Do you have networkx version >= 2.5?", file=sys.stderr)
+        raise
 
 
 if __name__ == '__main__':
@@ -73,6 +106,4 @@ if __name__ == '__main__':
 
     tree = ET.parse(filename)
 
-    convert_topology(tree.getroot())
-
-    tree.write('/dev/stdout', encoding="utf-8", xml_declaration=True)
+    convert_topology(tree.getroot(), sys.stdout.buffer)

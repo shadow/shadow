@@ -295,15 +295,13 @@ def shadow_dict_post_processing(shadow: Dict):
             print("External topology file '{}' was not converted".format(path), file=sys.stderr)
 
         if 'graphml' in shadow['topology']:
-            tree = ET.ElementTree(ET.fromstring(shadow['topology']['graphml']))
-            convert_topology(tree.getroot())
-
-            # use write() so that we don't lose the xml declaration
+            graphml = shadow['topology'].pop('graphml')
+            tree = ET.ElementTree(ET.fromstring(graphml))
             new_topology = io.BytesIO()
-            tree.write(new_topology, encoding="utf-8", xml_declaration=True)
+            convert_topology(tree.getroot(), new_topology)
             new_topology.seek(0)
 
-            shadow['topology']['graphml'] = new_topology.read().decode("utf-8")
+            shadow['topology']['gml'] = new_topology.read().decode("utf-8")
 
 
 def print_deprecation_msg(field: str, value: str):

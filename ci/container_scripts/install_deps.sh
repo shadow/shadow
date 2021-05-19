@@ -49,6 +49,7 @@ RPM_CI_PACKAGES="
 
 PYTHON_PACKAGES="
   PyYaml
+  networkx>=2.5
   "
 
 case "$CONTAINER" in

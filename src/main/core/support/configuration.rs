@@ -611,7 +611,7 @@ impl std::str::FromStr for QDiscMode {
 #[serde(rename_all = "lowercase")]
 enum Topology {
     Path(String),
-    GraphMl(String),
+    Gml(String),
     #[serde(rename = "1_gbit_switch")]
     OneGbitSwitch,
 }
@@ -670,29 +670,23 @@ fn default_some_info() -> Option<LogLevel> {
     Some(LogLevel::Info)
 }
 
-const ONE_GBIT_SWITCH_TOPOLOGY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
-<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
-    <key attr.name="packet_loss"    attr.type="double" for="edge" id="edge_packet_loss" />
-    <key attr.name="jitter"         attr.type="double" for="edge" id="edge_jitter" />
-    <key attr.name="latency"        attr.type="double" for="edge" id="edge_latency" />
-    <key attr.name="bandwidth_up"   attr.type="string" for="node" id="node_bandwidth_up" />
-    <key attr.name="bandwidth_down" attr.type="string" for="node" id="node_bandwidth_down" />
-    <key attr.name="country_code"   attr.type="string" for="node" id="node_country_code" />
-    <key attr.name="ip_address"     attr.type="string" for="node" id="node_ip_address" />
-    <graph edgedefault="undirected">
-        <node id="poi-1">
-            <data key="node_ip_address">0.0.0.0</data>
-            <data key="node_country_code">XX</data>
-            <data key="node_bandwidth_down">1 Gbit</data>
-            <data key="node_bandwidth_up">1 Gbit</data>
-        </node>
-        <edge source="poi-1" target="poi-1">
-            <data key="edge_latency">1.0</data>
-            <data key="edge_jitter">0.0</data>
-            <data key="edge_packet_loss">0.0</data>
-        </edge>
-    </graph>
-</graphml>"#;
+const ONE_GBIT_SWITCH_TOPOLOGY: &str = r#"graph [
+  directed 0
+  node [
+    id 0
+    ip_address "0.0.0.0"
+    country_code "XX"
+    bandwidth_up "1 Gbit"
+    bandwidth_down "1 Gbit"
+  ]
+  edge [
+    source 0
+    target 0
+    latency 1.0
+    jitter 0.0
+    packet_loss 0.0
+  ]
+]"#;
 
 /// Generate help strings for objects in a JSON schema, including the Serde defaults if available.
 fn generate_help_strs(
@@ -1279,7 +1273,7 @@ mod export {
 
         let topology = match &config.topology {
             Topology::Path(f) => std::fs::read_to_string(f).unwrap(),
-            Topology::GraphMl(s) => s.clone(),
+            Topology::Gml(s) => s.clone(),
             Topology::OneGbitSwitch => ONE_GBIT_SWITCH_TOPOLOGY.to_string(),
         };
 
