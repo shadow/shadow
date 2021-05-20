@@ -192,7 +192,7 @@ static EXP_HELP: Lazy<std::collections::HashMap<String, String>> =
 #[clap(
     help_heading = "EXPERIMENTAL (Unstable and may change or be removed at any time, regardless of Shadow version)"
 )]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct ExperimentalOptions {
     /// Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7)
     #[clap(long, value_name = "bool")]
@@ -339,7 +339,7 @@ static HOST_HELP: Lazy<std::collections::HashMap<String, String>> =
 
 #[derive(Debug, Clone, Clap, Serialize, Deserialize, Merge, JsonSchema)]
 #[clap(help_heading = "HOST DEFAULTS (Default options for hosts)")]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct HostDefaultOptions {
     /// Log level at which to print node messages
     #[clap(long = "host-log-level", name = "host-log-level")]
