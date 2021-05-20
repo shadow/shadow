@@ -190,7 +190,7 @@ uint64_t config_getInterfaceBuffer(const struct ConfigOptions *config);
 
 enum QDiscMode config_getInterfaceQdisc(const struct ConfigOptions *config);
 
-char *config_getTopology(const struct ConfigOptions *config);
+char *config_getTopologyGraph(const struct ConfigOptions *config);
 
 void config_iterHosts(const struct ConfigOptions *config,
                       void (*f)(const char*, const struct ConfigOptions*, const struct HostOptions*, void*),

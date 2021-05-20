@@ -50,6 +50,9 @@ pub struct CliOptions {
     general: GeneralOptions,
 
     #[clap(flatten)]
+    topology: TopologyOptions,
+
+    #[clap(flatten)]
     host_defaults: HostDefaultOptions,
 
     #[clap(flatten)]
@@ -62,14 +65,13 @@ pub struct CliOptions {
 pub struct ConfigFileOptions {
     general: GeneralOptions,
 
+    topology: TopologyOptions,
+
     #[serde(default)]
     host_defaults: HostDefaultOptions,
 
     #[serde(default)]
     experimental: ExperimentalOptions,
-
-    /// The network topology
-    topology: Topology,
 
     // we use a BTreeMap so that the hosts are sorted by their hostname (useful for determinism)
     hosts: BTreeMap<String, HostOptions>,
@@ -80,9 +82,9 @@ pub struct ConfigFileOptions {
 pub struct ConfigOptions {
     general: GeneralOptions,
 
-    experimental: ExperimentalOptions,
+    topology: TopologyOptions,
 
-    topology: Topology,
+    experimental: ExperimentalOptions,
 
     // we use a BTreeMap so that the hosts are sorted by their hostname (useful for determinism)
     hosts: BTreeMap<String, HostOptions>,
@@ -92,6 +94,7 @@ impl ConfigOptions {
     pub fn new(mut config_file: ConfigFileOptions, options: CliOptions) -> Self {
         // override config options with command line options
         config_file.general = options.general.with_defaults(config_file.general);
+        config_file.topology = options.topology.with_defaults(config_file.topology);
         config_file.host_defaults = options
             .host_defaults
             .with_defaults(config_file.host_defaults);
@@ -107,8 +110,8 @@ impl ConfigOptions {
 
         Self {
             general: config_file.general,
-            experimental: config_file.experimental,
             topology: config_file.topology,
+            experimental: config_file.experimental,
             hosts: config_file.hosts,
         }
     }
@@ -176,6 +179,30 @@ pub struct GeneralOptions {
 }
 
 impl GeneralOptions {
+    /// Replace unset (`None`) values of `base` with values from `default`.
+    pub fn with_defaults(mut self, default: Self) -> Self {
+        self.merge(default);
+        self
+    }
+}
+
+/// Help messages used by Clap for command line arguments, combining the doc string with
+/// the Serde default.
+static TOPOLOGY_HELP: Lazy<std::collections::HashMap<String, String>> =
+    Lazy::new(|| generate_help_strs(schema_for!(TopologyOptions)));
+
+// these must all be Option types since they aren't required by the CLI, even if they're
+// required in the configuration file
+#[derive(Debug, Clone, Clap, Serialize, Deserialize, Merge, JsonSchema)]
+#[clap(help_heading = "TOPOLOGY (Override topology options)")]
+#[serde(deny_unknown_fields)]
+struct TopologyOptions {
+    /// The network topology graph
+    #[clap(skip)]
+    graph: Option<GraphOptions>,
+}
+
+impl TopologyOptions {
     /// Replace unset (`None`) values of `base` with values from `default`.
     pub fn with_defaults(mut self, default: Self) -> Self {
         self.merge(default);
@@ -609,9 +636,15 @@ impl std::str::FromStr for QDiscMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
-enum Topology {
+enum CustomGraph {
     Path(String),
-    Gml(String),
+    Inline(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum GraphOptions {
+    Gml(CustomGraph),
     #[serde(rename = "1_gbit_switch")]
     OneGbitSwitch,
 }
@@ -650,6 +683,11 @@ fn default_some_time_0() -> Option<units::Time<units::TimePrefixUpper>> {
     Some(units::Time::new(0, units::TimePrefixUpper::Sec))
 }
 
+/// Helper function for serde default `Some(true)` values.
+fn default_some_true() -> Option<bool> {
+    Some(true)
+}
+
 /// Helper function for serde default `Some(1)` values.
 fn default_some_1() -> Option<u32> {
     Some(1)
@@ -670,7 +708,7 @@ fn default_some_info() -> Option<LogLevel> {
     Some(LogLevel::Info)
 }
 
-const ONE_GBIT_SWITCH_TOPOLOGY: &str = r#"graph [
+const ONE_GBIT_SWITCH_GRAPH: &str = r#"graph [
   directed 0
   node [
     id 0
@@ -694,16 +732,17 @@ fn generate_help_strs(
 ) -> std::collections::HashMap<String, String> {
     let mut defaults = std::collections::HashMap::<String, String>::new();
     for (name, obj) in &schema.schema.object.as_ref().unwrap().properties {
-        let meta = obj.clone().into_object().metadata.unwrap();
-        let description = meta.description.or(Some("".to_string())).unwrap();
-        let space = if description.len() > 0 { " " } else { "" };
-        match meta.default {
-            Some(default) => defaults.insert(
-                name.clone(),
-                format!("{}{}[default: {}]", description, space, default),
-            ),
-            None => defaults.insert(name.clone(), description.to_string()),
-        };
+        if let Some(meta) = obj.clone().into_object().metadata {
+            let description = meta.description.or(Some("".to_string())).unwrap();
+            let space = if description.len() > 0 { " " } else { "" };
+            match meta.default {
+                Some(default) => defaults.insert(
+                    name.clone(),
+                    format!("{}{}[default: {}]", description, space, default),
+                ),
+                None => defaults.insert(name.clone(), description.to_string()),
+            };
+        }
     }
     defaults
 }
@@ -1267,17 +1306,17 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getTopology(config: *const ConfigOptions) -> *mut libc::c_char {
+    pub extern "C" fn config_getTopologyGraph(config: *const ConfigOptions) -> *mut libc::c_char {
         assert!(!config.is_null());
         let config = unsafe { &*config };
 
-        let topology = match &config.topology {
-            Topology::Path(f) => std::fs::read_to_string(f).unwrap(),
-            Topology::Gml(s) => s.clone(),
-            Topology::OneGbitSwitch => ONE_GBIT_SWITCH_TOPOLOGY.to_string(),
+        let graph = match config.topology.graph.as_ref().unwrap() {
+            GraphOptions::Gml(CustomGraph::Path(f)) => std::fs::read_to_string(f).unwrap(),
+            GraphOptions::Gml(CustomGraph::Inline(s)) => s.clone(),
+            GraphOptions::OneGbitSwitch => ONE_GBIT_SWITCH_GRAPH.to_string(),
         };
 
-        CString::into_raw(CString::new(topology).unwrap())
+        CString::into_raw(CString::new(graph).unwrap())
     }
 
     #[no_mangle]

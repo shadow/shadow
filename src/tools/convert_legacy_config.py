@@ -290,8 +290,11 @@ def shadow_dict_post_processing(shadow: Dict):
         assert len(shadow['topology']) == 1, "Invalid input: there is more than one topology"
         shadow['topology'] = shadow['topology'][0]
 
+        path = None
+        gml = None
+
         if 'path' in shadow['topology']:
-            path = shadow['topology']['path']
+            path = shadow['topology'].pop('path')
             print("External topology file '{}' was not converted".format(path), file=sys.stderr)
 
         if 'graphml' in shadow['topology']:
@@ -300,8 +303,16 @@ def shadow_dict_post_processing(shadow: Dict):
             new_topology = io.BytesIO()
             convert_topology(tree.getroot(), new_topology)
             new_topology.seek(0)
+            gml = new_topology.read().decode("utf-8")
 
-            shadow['topology']['gml'] = new_topology.read().decode("utf-8")
+        shadow['topology']['graph'] = {}
+        shadow['topology']['graph']['type'] = 'gml'
+
+        if path is not None:
+            shadow['topology']['graph']['path'] = path
+
+        if gml is not None:
+            shadow['topology']['graph']['inline'] = gml
 
 
 def print_deprecation_msg(field: str, value: str):
