@@ -1,6 +1,6 @@
 general:
   stop_time: 3600
-topology:
+network:
   graph:
     type: gml
     inline: |

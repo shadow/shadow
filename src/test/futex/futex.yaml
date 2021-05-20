@@ -1,6 +1,6 @@
 general:
   stop_time: 15
-topology:
+network:
   graph:
     type: 1_gbit_switch
 hosts:

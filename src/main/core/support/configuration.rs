@@ -50,7 +50,7 @@ pub struct CliOptions {
     general: GeneralOptions,
 
     #[clap(flatten)]
-    topology: TopologyOptions,
+    network: NetworkOptions,
 
     #[clap(flatten)]
     host_defaults: HostDefaultOptions,
@@ -65,7 +65,7 @@ pub struct CliOptions {
 pub struct ConfigFileOptions {
     general: GeneralOptions,
 
-    topology: TopologyOptions,
+    network: NetworkOptions,
 
     #[serde(default)]
     host_defaults: HostDefaultOptions,
@@ -82,7 +82,7 @@ pub struct ConfigFileOptions {
 pub struct ConfigOptions {
     general: GeneralOptions,
 
-    topology: TopologyOptions,
+    network: NetworkOptions,
 
     experimental: ExperimentalOptions,
 
@@ -94,7 +94,7 @@ impl ConfigOptions {
     pub fn new(mut config_file: ConfigFileOptions, options: CliOptions) -> Self {
         // override config options with command line options
         config_file.general = options.general.with_defaults(config_file.general);
-        config_file.topology = options.topology.with_defaults(config_file.topology);
+        config_file.network = options.network.with_defaults(config_file.network);
         config_file.host_defaults = options
             .host_defaults
             .with_defaults(config_file.host_defaults);
@@ -110,7 +110,7 @@ impl ConfigOptions {
 
         Self {
             general: config_file.general,
-            topology: config_file.topology,
+            network: config_file.network,
             experimental: config_file.experimental,
             hosts: config_file.hosts,
         }
@@ -188,21 +188,21 @@ impl GeneralOptions {
 
 /// Help messages used by Clap for command line arguments, combining the doc string with
 /// the Serde default.
-static TOPOLOGY_HELP: Lazy<std::collections::HashMap<String, String>> =
-    Lazy::new(|| generate_help_strs(schema_for!(TopologyOptions)));
+static NETWORK_HELP: Lazy<std::collections::HashMap<String, String>> =
+    Lazy::new(|| generate_help_strs(schema_for!(NetworkOptions)));
 
 // these must all be Option types since they aren't required by the CLI, even if they're
 // required in the configuration file
 #[derive(Debug, Clone, Clap, Serialize, Deserialize, Merge, JsonSchema)]
-#[clap(help_heading = "TOPOLOGY (Override topology options)")]
+#[clap(help_heading = "NETWORK (Override network options)")]
 #[serde(deny_unknown_fields)]
-struct TopologyOptions {
+struct NetworkOptions {
     /// The network topology graph
     #[clap(skip)]
     graph: Option<GraphOptions>,
 }
 
-impl TopologyOptions {
+impl NetworkOptions {
     /// Replace unset (`None`) values of `base` with values from `default`.
     pub fn with_defaults(mut self, default: Self) -> Self {
         self.merge(default);
@@ -1306,11 +1306,11 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getTopologyGraph(config: *const ConfigOptions) -> *mut libc::c_char {
+    pub extern "C" fn config_getNetworkGraph(config: *const ConfigOptions) -> *mut libc::c_char {
         assert!(!config.is_null());
         let config = unsafe { &*config };
 
-        let graph = match config.topology.graph.as_ref().unwrap() {
+        let graph = match config.network.graph.as_ref().unwrap() {
             GraphOptions::Gml(CustomGraph::Path(f)) => std::fs::read_to_string(f).unwrap(),
             GraphOptions::Gml(CustomGraph::Inline(s)) => s.clone(),
             GraphOptions::OneGbitSwitch => ONE_GBIT_SWITCH_GRAPH.to_string(),

@@ -17,6 +17,7 @@ from convert_legacy_topology import convert_topology
 
 XML_TAGS_TO_YAML = {
     'plugin': 'plugins',
+    'topology': 'network',
     'host': 'hosts',
     'node': 'hosts',
     'process': 'processes',
@@ -286,33 +287,33 @@ def shadow_dict_post_processing(shadow: Dict):
                         process['environment'] = ''
                     process['environment'] = append_ld_preload(process['environment'], preload_path)
 
-    if 'topology' in shadow:
-        assert len(shadow['topology']) == 1, "Invalid input: there is more than one topology"
-        shadow['topology'] = shadow['topology'][0]
+    if 'network' in shadow:
+        assert len(shadow['network']) == 1, "Invalid input: there is more than one topology"
+        shadow['network'] = shadow['network'][0]
 
         path = None
         gml = None
 
-        if 'path' in shadow['topology']:
-            path = shadow['topology'].pop('path')
+        if 'path' in shadow['network']:
+            path = shadow['network'].pop('path')
             print("External topology file '{}' was not converted".format(path), file=sys.stderr)
 
-        if 'graphml' in shadow['topology']:
-            graphml = shadow['topology'].pop('graphml')
+        if 'graphml' in shadow['network']:
+            graphml = shadow['network'].pop('graphml')
             tree = ET.ElementTree(ET.fromstring(graphml))
             new_topology = io.BytesIO()
             convert_topology(tree.getroot(), new_topology)
             new_topology.seek(0)
             gml = new_topology.read().decode("utf-8")
 
-        shadow['topology']['graph'] = {}
-        shadow['topology']['graph']['type'] = 'gml'
+        shadow['network']['graph'] = {}
+        shadow['network']['graph']['type'] = 'gml'
 
         if path is not None:
-            shadow['topology']['graph']['path'] = path
+            shadow['network']['graph']['path'] = path
 
         if gml is not None:
-            shadow['topology']['graph']['inline'] = gml
+            shadow['network']['graph']['inline'] = gml
 
 
 def print_deprecation_msg(field: str, value: str):
