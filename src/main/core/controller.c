@@ -158,7 +158,7 @@ static gboolean _controller_loadTopology(Controller* controller) {
     gchar* temporaryFilename =
         utility_getNewTemporaryFilename("shadow-topology-XXXXXX.gml");
 
-    char* topologyString = config_getTopology(controller->config);
+    char* topologyString = config_getNetworkGraph(controller->config);
 
     /* write the topology to a temporary file */
     GError* error = NULL;

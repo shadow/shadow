@@ -1,6 +1,8 @@
 general:
   stop_time: 5
-topology: 1_gbit_switch
+network:
+  graph:
+    type: 1_gbit_switch
 hosts:
   testnode:
     processes:

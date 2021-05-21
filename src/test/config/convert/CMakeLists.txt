@@ -15,13 +15,13 @@ add_test(
     && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d shadow.data shadow.generated.yaml \
     "
     CONFIGURATIONS extra
-    DEPENDS "config-convert"
 )
+set_tests_properties(config-convert-run-shadow PROPERTIES DEPENDS "config-convert")
 
 # Ensure the format of the conversion is as expected
 add_test(
     NAME config-convert-check-format
     COMMAND diff -U 5 ${CMAKE_CURRENT_SOURCE_DIR}/shadow.expected.yaml shadow.generated.yaml
     CONFIGURATIONS extra
-    DEPENDS "config-convert"
 )
+set_tests_properties(config-convert-check-format PROPERTIES DEPENDS "config-convert")
