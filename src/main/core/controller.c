@@ -170,7 +170,7 @@ static gboolean _controller_loadTopology(Controller* controller) {
     config_freeString(topologyString);
 
     /* initialize global routing model */
-    controller->topology = topology_new(temporaryFilename);
+    controller->topology = topology_new(temporaryFilename, config_getUseShortestPath(controller->config));
     g_unlink(temporaryFilename);
 
     if (!controller->topology) {
