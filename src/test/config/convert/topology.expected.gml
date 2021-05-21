@@ -1,6 +1,5 @@
 graph [
   directed 1
-  prefer_direct_paths 1
   node [
     id 0
     label "poi-1"

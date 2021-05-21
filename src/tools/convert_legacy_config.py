@@ -302,9 +302,17 @@ def shadow_dict_post_processing(shadow: Dict):
             graphml = shadow['network'].pop('graphml')
             tree = ET.ElementTree(ET.fromstring(graphml))
             new_topology = io.BytesIO()
-            convert_topology(tree.getroot(), new_topology)
+            removed_graph_data = convert_topology(tree.getroot(), new_topology)
             new_topology.seek(0)
             gml = new_topology.read().decode("utf-8")
+
+            if 'preferdirectpaths' in removed_graph_data:
+                value = removed_graph_data.pop('preferdirectpaths')
+                value = True if value.lower() == 'true' else False
+                shadow['network']['use_shortest_path'] = not value
+
+            for removed in removed_graph_data:
+                print_deprecation_msg(removed, removed_graph_data[removed])
 
         shadow['network']['graph'] = {}
         shadow['network']['graph']['type'] = 'gml'

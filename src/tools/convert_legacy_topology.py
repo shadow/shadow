@@ -15,10 +15,6 @@ import sys
 import io
 
 
-def boolean_conversion(x):
-    return '1' if x.lower() == 'true' else '0'
-
-
 def bandwidth_conversion(x):
     # shadow classic uses bandwidths units of KiB/s
     return str(int(x) * 8) + ' Kibit'
@@ -26,7 +22,6 @@ def bandwidth_conversion(x):
 
 # original attribute name: (new attribute name, new attribute type, value transform fn)
 ATTR_CONVERSIONS = {
-    'preferdirectpaths': ('prefer_direct_paths', 'int', boolean_conversion),
     'bandwidthup': ('bandwidth_up', 'string', bandwidth_conversion),
     'bandwidthdown': ('bandwidth_down', 'string', bandwidth_conversion),
     'packetloss': ('packet_loss', None, None),
@@ -57,7 +52,7 @@ def convert_topology(xml_root, out_file):
             if attr_map_fn != None:
                 id_type_conversions[x.attrib['id']] = attr_map_fn
 
-    # transform the text/values for any nodes or edges
+    # transform the text/values
     for x in xml_root.findall('{}graph'.format(graphml_ns_prefix)):
         for y in x.findall('{}data'.format(graphml_ns_prefix)):
             if y.attrib['key'] in id_type_conversions:
@@ -68,6 +63,23 @@ def convert_topology(xml_root, out_file):
             for z in y.findall('{}data'.format(graphml_ns_prefix)):
                 if z.attrib['key'] in id_type_conversions:
                     z.text = id_type_conversions[z.attrib['key']](z.text)
+
+    removed_graph_keys = {}
+    removed_graph_data = {}
+
+    # collect and remove the keys for any unsupported graph attributes
+    for x in xml_root.findall('{}key'.format(graphml_ns_prefix)):
+        # if x.attrib['attr.name'] in UNSUPPORTED_ATTRS:
+        if x.attrib['for'] == 'graph':
+            removed_graph_keys[x.attrib['id']] = x.attrib['attr.name']
+            xml_root.remove(x)
+
+    # store and remove the text/values for any unsupported graph attributes
+    for x in xml_root.findall('{}graph'.format(graphml_ns_prefix)):
+        for y in x.findall('{}data'.format(graphml_ns_prefix)):
+            if y.attrib['key'] in removed_graph_keys:
+                removed_graph_data[removed_graph_keys[y.attrib['key']]] = y.text
+                x.remove(y)
 
     # build the graph from the xml
     xml = ET.tostring(xml_root, encoding='utf-8', method='xml').decode('utf-8')
@@ -89,8 +101,11 @@ def convert_topology(xml_root, out_file):
     except nx.exception.NetworkXError:
         # we require keys with underscores which isn't technically allowed by the
         # spec, but both igraph and recent versions of networkx allow them
-        print("Unable to write GML. Do you have networkx version >= 2.5?", file=sys.stderr)
+        print("Unable to write GML. Do you have networkx version >= 2.5?",
+              file=sys.stderr)
         raise
+
+    return removed_graph_data
 
 
 if __name__ == '__main__':
@@ -106,4 +121,16 @@ if __name__ == '__main__':
 
     tree = ET.parse(filename)
 
-    convert_topology(tree.getroot(), sys.stdout.buffer)
+    # We remove and show a warning for deprecated graph attributes, but leave deprecated
+    # node/edge attributes alone. Shadow currently refuses to read graphs with unrecognized
+    # node/edge attributes so the user will be able to tell if any are no longer used, but
+    # igraph is unable to read GML graph attributes and will not raise an error, so we show
+    # the error here instead. In the case of 'preferdirectpaths', this also lets us convert
+    # the option to 'use_shortest_path' in 'convert_legacy_config.py' without needing to
+    # raise an error.
+
+    removed_graph_data = convert_topology(tree.getroot(), sys.stdout.buffer)
+
+    for x in removed_graph_data:
+        print('Removed the deprecated graph attribute \'{}\': {}'.format(
+            x, removed_graph_data[x]), file=sys.stderr)
