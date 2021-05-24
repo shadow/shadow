@@ -192,6 +192,8 @@ enum QDiscMode config_getInterfaceQdisc(const struct ConfigOptions *config);
 
 char *config_getNetworkGraph(const struct ConfigOptions *config);
 
+bool config_getUseShortestPath(const struct ConfigOptions *config);
+
 void config_iterHosts(const struct ConfigOptions *config,
                       void (*f)(const char*, const struct ConfigOptions*, const struct HostOptions*, void*),
                       void *data);

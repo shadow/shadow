@@ -59,14 +59,16 @@ struct _Topology {
     igraph_bool_t isConnected;
     igraph_bool_t isDirected;
     igraph_bool_t isComplete;
-    /* Also a graph property. Normally when a graph is not complete, Shadow
-     * will always do shortest path to get from A to B, even if a path from A
-     * to B already exists. Sometimes ACB is shorter than AB.
+    /* A shadow config property. Normally Shadow will always do shortest path to get
+     * from A to B, even if a direct path from A to B already exists. Sometimes ACB
+     * is shorter than AB.
      *
-     * If this is true and the graph is not complete, then when Shadow needs to
-     * route from A to B, it will prefer to use AB (if it exists) even if it
-     * could do shortest path to determine ACB is shorter. */
-    gboolean prefersDirectPaths;
+     * If this is false and the graph is complete, then when Shadow needs to route
+     * from A to B, it will prefer to use AB (if it exists) even if it could do
+     * shortest path to determine ACB is shorter.
+     *
+     * If false, requires that the graph is complete. */
+    gboolean useShortestPath;
 
     /* keep track of how many, and how long we spend computing shortest paths */
 #ifdef USE_PERF_TIMERS
@@ -80,11 +82,6 @@ struct _Topology {
     /******/
 
     MAGIC_DECLARE;
-};
-
-typedef enum _GraphAttribute GraphAttribute;
-enum _GraphAttribute {
-    GRAPH_ATTR_PREFERDIRECTPATHS=1,
 };
 
 typedef enum _VertexAttribute VertexAttribute;
@@ -165,20 +162,6 @@ static const gchar* _topology_igraphAttributeTypeToString(igraph_attribute_type_
     }
 }
 
-static const gchar* _topology_graphAttributeToString(GraphAttribute attr) {
-    if(attr == GRAPH_ATTR_PREFERDIRECTPATHS) {
-        return "prefer_direct_paths";
-    } else {
-        return "unknown";
-    }
-}
-
-static gboolean _topology_isValidGraphAttributeKey(const gchar* attrName, GraphAttribute attr) {
-    const gchar* expectedString = _topology_graphAttributeToString(attr);
-    gint r = g_ascii_strncasecmp(attrName, expectedString, strlen(expectedString));
-    return (r == 0) ? TRUE : FALSE;
-}
-
 static const gchar* _topology_vertexAttributeToString(VertexAttribute attr) {
     if(attr == VERTEX_ATTR_ID) {
         return "id";
@@ -243,27 +226,6 @@ static gboolean _topology_findVertexAttributeStringBandwidth(Topology* top, igra
                     *valueOut = bandwidth;
                     return TRUE;
                 }
-            }
-        }
-    }
-
-    return FALSE;
-}
-
-/* the graph lock should be held when calling this function, since it accesses igraph.
- * if the value is found and not NULL, it's value is returned in valueOut.
- * returns true if valueOut has been set, false otherwise */
-static gboolean _topology_findGraphAttributeString(Topology* top, GraphAttribute attr, const gchar** valueOut) {
-    MAGIC_ASSERT(top);
-
-    const gchar* name = _topology_graphAttributeToString(attr);
-
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_GRAPH, name)) {
-        const gchar* value = igraph_cattribute_GAS(&top->graph, name);
-        if(value != NULL && value[0] != '\0') {
-            if(valueOut != NULL) {
-                *valueOut = value;
-                return TRUE;
             }
         }
     }
@@ -567,25 +529,6 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
     gchar* name = NULL;
     igraph_attribute_type_t type = 0;
 
-    /* check all provided graph attributes */
-    for(i = 0; i < igraph_strvector_size(&gnames); i++) {
-        name = NULL;
-        igraph_strvector_get(&gnames, (glong) i, &name);
-        type = igraph_vector_e(&gtypes, (glong) i);
-
-        trace("found graph attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
-
-        if(_topology_isValidGraphAttributeKey(name, GRAPH_ATTR_PREFERDIRECTPATHS)) {
-            /* we use a string because there is an error in igraph boolean attribute code. */
-            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
-        } else {
-            error("graph attribute '%s' is unsupported", name);
-            isSuccess = FALSE;
-        }
-    }
-
-    /* we dont have required graph attributes (yet) */
-
     /* check all provided vertex attributes */
     for(i = 0; i < igraph_strvector_size(&vnames); i++) {
         name = NULL;
@@ -729,44 +672,15 @@ static gboolean _topology_checkGraphProperties(Topology* top) {
     }
     top->isComplete = (igraph_bool_t)is_complete;
 
-    /* if the value is not set in the graph, we default to always using shortest path */
-    gboolean prefersDirectPaths = FALSE;
-
-    /* check if the graph sets a preference for using direct paths.
-     * get the string value of the graph attribute, and check for true of false.
-     * we must use a string because there is a bug in igraph boolean attribute code:
-     * https://github.com/igraph/igraph/issues/1056 */
-    const gchar* value;
-
-    if (_topology_findGraphAttributeString(top, GRAPH_ATTR_PREFERDIRECTPATHS, &value)) {
-        /* extract the boolean value from the string */
-        igraph_bool_t valueIsTrue = 0;
-        if(g_ascii_strncasecmp(value, "true", 4) == 0 ||
-                g_ascii_strncasecmp(value, "yes", 3) == 0 ||
-                g_ascii_strncasecmp(value, "1", 1) == 0) {
-            valueIsTrue = 1;
-        } else {
-            valueIsTrue = 0;
-        }
-
-        /* check if it is true or not */
-        if (valueIsTrue) {
-            info("If a direct path between any pair of nodes exists, Shadow will prefer it over "
-                 "shortest path.");
-            prefersDirectPaths = TRUE;
-        } else {
-            info("Shadow will always use shortest path between a pair of nodes, even if a direct "
-                 "path exists "
-                 "(to override, set '%s' to 'yes' or 'true' or '1' to enable)",
-                 _topology_graphAttributeToString(GRAPH_ATTR_PREFERDIRECTPATHS));
-        }
+    if (!top->isComplete && !top->useShortestPath) {
+        error("The 'use_shortest_path' feature is disabled/false, but the graph is not complete");
+        return FALSE;
     }
-    top->prefersDirectPaths = prefersDirectPaths;
 
-    info("topology graph is %s, %s, and %s with %u %s. It does%s prefer direct paths.",
+    info("topology graph is %s, %s, and %s with %u %s. It %s shortest paths.",
          top->isComplete ? "complete" : "incomplete", top->isDirected ? "directed" : "undirected",
          top->isConnected ? "strongly connected" : "disconnected", (guint)top->clusterCount,
-         top->clusterCount == 1 ? "cluster" : "clusters", top->prefersDirectPaths ? "" : " not");
+         top->clusterCount == 1 ? "cluster" : "clusters", top->useShortestPath ? "uses" : "does not use");
 
     /* it must be connected so everyone can route to everyone else */
     if(!top->isConnected || top->clusterCount > 1) {
@@ -1239,12 +1153,9 @@ static gboolean _topology_shouldStorePath(Topology* top, gboolean isDirectPath,
         return FALSE;
     }
 
-    /* sanity check: complete graphs should only have direct paths and nothing else */
-    if(top->isComplete && !isDirectPath) {
-        return FALSE;
-    }
-
-    if(top->prefersDirectPaths && !isDirectPath) {
+    /* if there exists a direct path between the two nodes (they are adjacent), this new path is not
+     * direct, and we are not supposed to use the shortest path, then don't cache the path */
+    if(!isDirectPath && !top->useShortestPath) {
         /* we only accept a non-direct path if a direct path does not exist in the graph */
         gboolean verticesAreAdjacent = _topology_verticesAreAdjacent(top, srcVertexIndex, dstVertexIndex);
         if(verticesAreAdjacent) {
@@ -1982,13 +1893,14 @@ static Path* _topology_getPathEntry(Topology* top, Address* srcAddress, Address*
 
         debug("We need a path between node %s at %li (vertex %i) and "
               "node %s at %li (vertex %i), topology properties are: "
-              "isComplete=%s, prefersDirectPaths=%s, verticesAreAdjacent=%s",
+              "isComplete=%s, useShortestPath=%s, verticesAreAdjacent=%s",
               address_toString(srcAddress), (long)srcID, (gint)srcVertexIndex,
               address_toString(dstAddress), (long)dstID, (gint)dstVertexIndex,
-              top->isComplete ? "True" : "False", top->prefersDirectPaths ? "True" : "False",
+              top->isComplete ? "True" : "False", top->useShortestPath ? "True" : "False",
               verticesAreAdjacent ? "True" : "False");
 
-        if(top->isComplete || (top->prefersDirectPaths && verticesAreAdjacent)) {
+        if (!top->useShortestPath) {
+            utility_assert(top->isComplete);
             /* use the edge between src and dst as the path */
             success = _topology_lookupDirectPath(top, srcVertexIndex, dstVertexIndex);
 
@@ -2366,13 +2278,14 @@ void topology_free(Topology* top) {
     g_free(top);
 }
 
-Topology* topology_new(const gchar* graphPath) {
+Topology* topology_new(const gchar* graphPath, gboolean useShortestPath) {
     utility_assert(graphPath);
     Topology* top = g_new0(Topology, 1);
     MAGIC_INIT(top);
 
     top->virtualIP = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
     top->verticesWithAttachedHosts = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
+    top->useShortestPath = useShortestPath;
 
     _topology_initGraphLock(&(top->graphLock));
     g_mutex_init(&(top->topologyLock));

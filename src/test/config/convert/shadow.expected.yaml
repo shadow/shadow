@@ -1,12 +1,12 @@
 general:
   stop_time: 3600
 network:
+  use_shortest_path: false
   graph:
     type: gml
     inline: |
       graph [
         directed 1
-        prefer_direct_paths 1
         node [
           id 0
           label "poi-1"

@@ -200,6 +200,13 @@ struct NetworkOptions {
     /// The network topology graph
     #[clap(skip)]
     graph: Option<GraphOptions>,
+
+    /// When routing packets, follow the shortest path rather than following a direct
+    /// edge between nodes. If false, the network graph is required to be complete.
+    #[serde(default = "default_some_true")]
+    #[clap(long, value_name = "bool")]
+    #[clap(about = NETWORK_HELP.get("use_shortest_path").unwrap())]
+    use_shortest_path: Option<bool>,
 }
 
 impl NetworkOptions {
@@ -1317,6 +1324,14 @@ mod export {
         };
 
         CString::into_raw(CString::new(graph).unwrap())
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getUseShortestPath(config: *const ConfigOptions) -> bool {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+
+        config.network.use_shortest_path.unwrap()
     }
 
     #[no_mangle]
