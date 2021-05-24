@@ -27,7 +27,7 @@
 
 #include "main/core/controller.h"
 #include "main/core/support/definitions.h"
-#include "main/host/host.h"
+#include "main/host/host_parameters.h"
 #include "main/routing/dns.h"
 #include "main/routing/topology.h"
 

@@ -75,7 +75,7 @@ ForkProxy* forkproxy_new(pid_t (*do_fork_exec)(const char* file, char* const arg
         utility_panic("pthread_create: %s", g_strerror(rv));
     }
     char name[20] = {0};
-    snprintf(name, 20, "forker-%d", worker_getThreadID());
+    snprintf(name, 20, "forker-%d", worker_threadID());
     if ((rv = pthread_setname_np(forkproxy->pthread, name)) != 0) {
         warning("pthread_setname_np: %s", g_strerror(rv));
     }

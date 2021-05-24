@@ -16,6 +16,7 @@ pub type guint64 = ::std::os::raw::c_ulong;
 pub type gssize = ::std::os::raw::c_long;
 pub type gsize = ::std::os::raw::c_ulong;
 pub type __uint16_t = ::std::os::raw::c_ushort;
+pub type __int32_t = ::std::os::raw::c_int;
 pub type __uint32_t = ::std::os::raw::c_uint;
 pub type __int64_t = ::std::os::raw::c_long;
 pub type __uint64_t = ::std::os::raw::c_ulong;
@@ -64,6 +65,24 @@ pub struct MemoryManager {
 #[derive(Debug, Copy, Clone)]
 pub struct PosixFileArc {
     _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct WorkerRef {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct WorkerRefMut {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct WorkerC {
+    _unused: [u8; 0],
+}
+extern "C" {
+    pub fn workerc_free(arg1: *mut WorkerC);
 }
 pub use self::_Status as Status;
 pub const _Status_STATUS_NONE: _Status = 0;
@@ -645,36 +664,6 @@ pub struct _FutexTable {
 pub type FutexTable = _FutexTable;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _Address {
-    _unused: [u8; 0],
-}
-#[doc = " An Address structure holds information used to identify nodes, allowing for"]
-#[doc = " easy extraction of both integer and string forms of an IP address as well as"]
-#[doc = " the string hostname associated with the IP. Address is an opaque structure and"]
-#[doc = " should only be accessed using the functions in this class."]
-pub type Address = _Address;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Router {
-    _unused: [u8; 0],
-}
-pub type Router = _Router;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _NetworkInterface {
-    _unused: [u8; 0],
-}
-pub type NetworkInterface = _NetworkInterface;
-pub use self::_LogLevel as LogLevel;
-pub const _LogLevel_LOGLEVEL_UNSET: _LogLevel = 0;
-pub const _LogLevel_LOGLEVEL_ERROR: _LogLevel = 1;
-pub const _LogLevel_LOGLEVEL_WARNING: _LogLevel = 2;
-pub const _LogLevel_LOGLEVEL_INFO: _LogLevel = 3;
-pub const _LogLevel_LOGLEVEL_DEBUG: _LogLevel = 4;
-pub const _LogLevel_LOGLEVEL_TRACE: _LogLevel = 5;
-pub type _LogLevel = i32;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct _Tracker {
     _unused: [u8; 0],
 }
@@ -685,25 +674,14 @@ pub const _LogInfoFlags_LOG_INFO_FLAGS_NODE: _LogInfoFlags = 1;
 pub const _LogInfoFlags_LOG_INFO_FLAGS_SOCKET: _LogInfoFlags = 2;
 pub const _LogInfoFlags_LOG_INFO_FLAGS_RAM: _LogInfoFlags = 4;
 pub type _LogInfoFlags = i32;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _DNS {
-    _unused: [u8; 0],
-}
-pub type DNS = _DNS;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Random {
-    _unused: [u8; 0],
-}
-#[doc = " An opaque structure representing a random source."]
-pub type Random = _Random;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Topology {
-    _unused: [u8; 0],
-}
-pub type Topology = _Topology;
+pub use self::_LogLevel as LogLevel;
+pub const _LogLevel_LOGLEVEL_UNSET: _LogLevel = 0;
+pub const _LogLevel_LOGLEVEL_ERROR: _LogLevel = 1;
+pub const _LogLevel_LOGLEVEL_WARNING: _LogLevel = 2;
+pub const _LogLevel_LOGLEVEL_INFO: _LogLevel = 3;
+pub const _LogLevel_LOGLEVEL_DEBUG: _LogLevel = 4;
+pub const _LogLevel_LOGLEVEL_TRACE: _LogLevel = 5;
+pub type _LogLevel = i32;
 pub type HostParameters = _HostParameters;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -976,6 +954,47 @@ fn bindgen_test_layout__HostParameters() {
         )
     );
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Address {
+    _unused: [u8; 0],
+}
+#[doc = " An Address structure holds information used to identify nodes, allowing for"]
+#[doc = " easy extraction of both integer and string forms of an IP address as well as"]
+#[doc = " the string hostname associated with the IP. Address is an opaque structure and"]
+#[doc = " should only be accessed using the functions in this class."]
+pub type Address = _Address;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Router {
+    _unused: [u8; 0],
+}
+pub type Router = _Router;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _NetworkInterface {
+    _unused: [u8; 0],
+}
+pub type NetworkInterface = _NetworkInterface;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _DNS {
+    _unused: [u8; 0],
+}
+pub type DNS = _DNS;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Random {
+    _unused: [u8; 0],
+}
+#[doc = " An opaque structure representing a random source."]
+pub type Random = _Random;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Topology {
+    _unused: [u8; 0],
+}
+pub type Topology = _Topology;
 extern "C" {
     pub fn host_new(params: *mut HostParameters) -> *mut Host;
 }
@@ -1115,6 +1134,18 @@ extern "C" {
 extern "C" {
     pub fn host_getNativeTID(host: *mut Host, virtualPID: pid_t, virtualTID: pid_t) -> pid_t;
 }
+extern "C" {
+    pub fn worker_newForThisThread(cworker: *mut WorkerC, worker_id: i32);
+}
+extern "C" {
+    pub fn worker_borrowMut() -> *mut WorkerRefMut;
+}
+extern "C" {
+    pub fn worker_borrow() -> *mut WorkerRef;
+}
+extern "C" {
+    pub fn worker_threadID() -> i32;
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Task {
@@ -1174,9 +1205,6 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_getLatency(sourceNodeID: GQuark, destinationNodeID: GQuark) -> gdouble;
-}
-extern "C" {
-    pub fn worker_getThreadID() -> gint;
 }
 extern "C" {
     pub fn worker_updateMinTimeJump(minPathLatency: gdouble);
