@@ -1550,12 +1550,34 @@ static GQueue* _topology_getUniqueVertexTargets(Topology* top) {
     return uniqueVertexIDs;
 }
 
+static gboolean _topology_getOppositeVertex(igraph_t* graph,
+                                            igraph_integer_t edge,
+                                            igraph_integer_t vertexA,
+                                            igraph_integer_t* vertexB) {
+    utility_assert(vertexB != NULL);
+
+    igraph_integer_t fromVertexIndex, toVertexIndex;
+    gint result = igraph_edge(graph, edge, &fromVertexIndex, &toVertexIndex);
+
+    if (result != IGRAPH_SUCCESS) {
+        critical("igraph_edge return non-success code %i", result);
+        return FALSE;
+    }
+
+    /* figure out which index is the other side of the edge */
+    *vertexB = (fromVertexIndex == vertexA) ? toVertexIndex : fromVertexIndex;
+
+    return TRUE;
+}
+
 static gboolean _topology_computeShortestPathToSelf(Topology* top, igraph_integer_t vertexIndex, const gchar* idStr) {
     MAGIC_ASSERT(top);
 
-    igraph_real_t minLatency = 0.0f;
+    igraph_real_t minLatency = -1.0f;
     igraph_real_t reliabilityOfMinLatencyEdge = 0.0f;
-    igraph_integer_t indexOfMinLatencyEdge = 0;
+    igraph_integer_t indexOfMinLatencyEdge = -1;
+    igraph_real_t oppositeVertexIndexOfMinLatencyEdge = -1;
+    gboolean isDirectPath = FALSE;
     gint result = 0;
     gboolean found = FALSE;
 
@@ -1594,22 +1616,48 @@ static gboolean _topology_computeShortestPathToSelf(Topology* top, igraph_intege
 
         igraph_real_t edgeLatency = 0.0f;
         igraph_real_t edgePacketLoss = 0.0f;
+        gboolean edgeIsDirect = FALSE;
 
         /* latency and packet loss are required attributes on edges */
         found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
         utility_assert(found);
 
-        if(minLatency == 0 || edgeLatency < minLatency) {
+        igraph_integer_t oppositeVertexIndex = -1;
+        if (!_topology_getOppositeVertex(&top->graph, edgeIndex, vertexIndex,
+                                         &oppositeVertexIndex)) {
+            igraph_es_destroy(&edgeSelector);
+            _topology_unlockGraph(top);
+            return FALSE;
+        }
+
+        edgeIsDirect = (vertexIndex == oppositeVertexIndex);
+
+        /* if not direct, this edge will be used "twice" to get back to source */
+        /* TODO: is this valid if the topology is undirected? */
+        if (!edgeIsDirect) {
+            edgeLatency *= 2.0f;
+        }
+
+        if (minLatency == -1 || edgeLatency < minLatency) {
             minLatency = edgeLatency;
 
             found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_PACKETLOSS, &edgePacketLoss);
             utility_assert(found);
             reliabilityOfMinLatencyEdge = 1.0f - edgePacketLoss;
 
+            oppositeVertexIndexOfMinLatencyEdge = oppositeVertexIndex;
+            isDirectPath = edgeIsDirect;
+
             indexOfMinLatencyEdge = edgeIndex;
         }
 
         IGRAPH_EIT_NEXT(edgeIterator);
+    }
+
+    /* if the vertex had no edges */
+    if (minLatency == -1) {
+        minLatency = 0;
+        isDirectPath = TRUE;
     }
 
     _topology_unlockGraph(top);
@@ -1632,36 +1680,39 @@ static gboolean _topology_computeShortestPathToSelf(Topology* top, igraph_intege
 
     _topology_lockGraph(top);
 
-    /* get the other vertex that we chose */
-    igraph_integer_t fromVertexIndex, toVertexIndex;
-    result = igraph_edge(&top->graph, indexOfMinLatencyEdge, &fromVertexIndex, &toVertexIndex);
-
-    if(result != IGRAPH_SUCCESS) {
-        critical("igraph_edge return non-success code %i", result);
-        _topology_unlockGraph(top);
-        return FALSE;
-    }
-
-    /* figure out which index is the other side of the edge */
-    igraph_integer_t targetIndex = (fromVertexIndex == vertexIndex) ? toVertexIndex : fromVertexIndex;
     const gchar* targetIDStr;
-    found = _topology_findVertexAttributeString(top, targetIndex, VERTEX_ATTR_ID, &targetIDStr);
+    found = _topology_findVertexAttributeString(top, oppositeVertexIndexOfMinLatencyEdge, VERTEX_ATTR_ID, &targetIDStr);
     utility_assert(found);
 
     _topology_unlockGraph(top);
 
-    /* this edge will be used "twice" to get back to source */
-    igraph_real_t latency = 2.0f * minLatency;
-    igraph_real_t reliability = reliabilityOfMinLatencyEdge * reliabilityOfMinLatencyEdge;
+    igraph_real_t latency = minLatency;
+    igraph_real_t reliability = reliabilityOfMinLatencyEdge;
 
-    info("shortest path back to self is %f ms with %f loss, path: "
-            "%s%s--[%f,%f]-->%s%s--[%f,%f]-->%s",
-            (gdouble)latency, (gdouble)(1.0f-reliability),
-            idStr, top->isDirected ? "" : "<", minLatency, 1.0f-reliabilityOfMinLatencyEdge,
-            targetIDStr, top->isDirected ? "" : "<", minLatency, 1.0f-reliabilityOfMinLatencyEdge, idStr);
+    /* if not direct, this edge will be used "twice" to get back to source */
+    if (!isDirectPath) {
+        /* we already doubled the latency above */
+        reliability = reliability * reliability;
+    }
+
+    if (isDirectPath) {
+        info("shortest path back to self is %f ms with %f loss, path: "
+             "%s%s--[%f,%f]-->%s",
+             (gdouble)latency, (gdouble)(1.0f - reliability), idStr,
+             top->isDirected ? "" : "<", minLatency,
+             1.0f - reliabilityOfMinLatencyEdge, idStr);
+    } else {
+        info("shortest path back to self is %f ms with %f loss, path: "
+             "%s%s--[%f,%f]-->%s%s--[%f,%f]-->%s",
+             (gdouble)latency, (gdouble)(1.0f - reliability), idStr,
+             top->isDirected ? "" : "<", minLatency / 2,
+             1.0f - reliabilityOfMinLatencyEdge, targetIDStr,
+             top->isDirected ? "" : "<", minLatency / 2,
+             1.0f - reliabilityOfMinLatencyEdge, idStr);
+    }
 
     /* cache the latency and reliability we just computed */
-    _topology_storePathInCache(top, FALSE, vertexIndex, vertexIndex, latency, reliability);
+    _topology_storePathInCache(top, isDirectPath, vertexIndex, vertexIndex, latency, reliability);
 
     return TRUE;
 }
