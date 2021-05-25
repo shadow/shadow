@@ -302,7 +302,7 @@ def shadow_dict_post_processing(shadow: Dict):
             graphml = shadow['network'].pop('graphml')
             tree = ET.ElementTree(ET.fromstring(graphml))
             new_topology = io.BytesIO()
-            removed_graph_data = convert_topology(tree.getroot(), new_topology)
+            removed_graph_data = convert_topology(tree.getroot(), new_topology, False)
             new_topology.seek(0)
             gml = new_topology.read().decode("utf-8")
 
