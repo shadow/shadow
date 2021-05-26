@@ -1,9 +1,8 @@
 ## Installing Dependencies
 
 #### Required:
-  + gcc, gcc-c++
-  + python 3 (version >= 3.6)
-  + PyYAML
+  + gcc, gcc-c++ (or clang, clang++)
+  + python (version >= 3.6)
   + glib (version >= 2.32.0)
   + igraph (version >= 0.5.4)
   + cmake (version >= 3.2)
@@ -14,7 +13,7 @@
   + cargo
 
 #### Recommended Python Modules (for helper/analysis scripts):
-  + numpy, scipy, matplotlib, networkx, lxml
+  + numpy, scipy, matplotlib, networkx, lxml, pyyaml
 
 #### Recommended System Tools:
   + git, dstat, screen, htop
@@ -45,7 +44,6 @@ sudo yum install -y \
     gcc \
     gcc-c++ \
     cargo
-python3 -m pip install pyyaml
 sudo yum install -y \
     python3-numpy \
     python3-lxml \
@@ -64,13 +62,13 @@ sudo yum install -y \
 
 You must enable the EPEL repository using:
 
-```
+```bash
 yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
 ```
 
 Instead of installing `cmake`, you should instead install `cmake3`:
 
-```
+```bash
 yum install -y cmake3
 alternatives --install /usr/local/bin/cmake cmake /usr/bin/cmake3 20 \
     --slave /usr/local/bin/ctest ctest /usr/bin/ctest3 \
@@ -85,7 +83,7 @@ As cargo is not available on CentOS 7, you can install cargo following the steps
 
 As procps-ng-devel, igraph, and igraph-devel are not available on CentOS 8, you must install them manually.
 
-```
+```bash
 dnf remove -y procps-ng procps-ng-devel
 dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-3.3.10-26.el7.x86_64.rpm
 dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-devel-3.3.10-26.el7.x86_64.rpm
@@ -114,7 +112,6 @@ sudo apt-get install -y \
     gcc \
     g++ \
     cargo
-python3 -m pip install pyyaml
 sudo apt-get install -y \
     python3-numpy \
     python3-lxml \
