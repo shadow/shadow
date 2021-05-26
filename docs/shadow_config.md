@@ -153,7 +153,7 @@ Network topology settings.
 
 The network topology graph.
 
-A network topology represented by a connected graph with certain attributes specified on the nodes and edges. For more information on how to structure this data, see the [Topology Format](3.2-Network-Config.md).
+A network topology represented by a connected graph with certain attributes specified on the nodes and edges. For more information on how to structure this data, see the [Topology Format](network_config.md).
 
 Example:
 
@@ -405,7 +405,7 @@ Type: Object
 
 The simulated hosts which execute processes. Each field corresponds to a host configuration, with the field name being used as the network hostname.
 
-Shadow assigns each host to a node in the [network topology](3.2-Network-Config.md).
+Shadow assigns each host to a node in the [network topology](network_config.md).
 
 #### `hosts.<hostname>.bandwidth_down`
 

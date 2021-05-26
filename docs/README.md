@@ -3,27 +3,27 @@
 The docs contain important information about installing and using the Shadow discrete event network simulator. Please [open an issue](https://github.com/shadow/shadow/issues/new/choose) if you notice something out of date, or fix it yourself if you can.
 
  * The Shadow simulator
-   * [Design Overview](0-Design-Overview.md)
+   * [Design Overview](design_overview.md)
    * Installation and Setup
-     * [Shadow](1.1-Shadow.md)
-     * [Shadow with Docker](1.2-Shadow-with-Docker.md)
-   * [Getting Started Tutorial](2-Getting-Started-Tutorial.md)
+     * [Shadow](install_shadow.md)
+     * [Shadow with Docker](install_shadow_with_docker.md)
+   * [Getting Started](getting_started.md)
    * Simulation Customization
-     * [Shadow Configuration](3.1-Shadow-Config.md)
-     * [Network Configuration](3.2-Network-Config.md)
-   * [Notes and FAQs](4-Notes-and-FAQs.md)
+     * [Shadow Configuration](shadow_config.md)
+     * [Network Configuration](network_config.md)
+   * [Notes and FAQs](notes_and_faq.md)
    * Developer Guides
-     * [Debugging and profiling](5-Developer-Guide.md)
+     * [Debugging and profiling](developer_guide.md)
      * [Continous integration tests](ci.md)
    * Advanced usage
-     * [Using a recompiled libc](using-recompiled-libc.md) to get higher libc
+     * [Using a recompiled libc](using_recompiled_libc.md) to get higher libc
        API coverage using preload interposition.
  * The Shadow project
-   * [Contributing](CONTRIBUTING.md)
-     * [Coding style](coding-style.md)
-     * [Pull requests](pull-requests.md)
-   * [Maintainer playbook](maintainer-playbook.md)
-   * [NSF Sponsorship](nsf-sponsorship.md)
+   * [Contributing](contributing.md)
+     * [Coding style](coding_style.md)
+     * [Pull requests](pull_requests.md)
+   * [Maintainer playbook](maintainer_playbook.md)
+   * [NSF Sponsorship](nsf_sponsorship.md)
 
 ## Plug-in Info:
 

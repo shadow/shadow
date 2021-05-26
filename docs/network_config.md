@@ -24,7 +24,7 @@ The bandwidth of the virtual hosts and the end-to-end latency and packet loss fo
 #### Important Notes
 
   - The network graph may be directed or undirected, as long as the graph is structured such that every vertex can reach every other vertex through a series of edges.
-  - If the network graph is a [complete graph](https://en.wikipedia.org/wiki/Complete_graph) (there exists a single unique edge between every pair of vertices), then we can avoid running the shortest path algorithm as a performance optimization by setting the [use_shortest_path option](3.1-Shadow-Config.md#networkuse_shortest_path) to `False`.
+  - If the network graph is a [complete graph](https://en.wikipedia.org/wiki/Complete_graph) (there exists a single unique edge between every pair of vertices), then we can avoid running the shortest path algorithm as a performance optimization by setting the [use_shortest_path option](shadow_config.md#networkuse_shortest_path) to `False`.
 
 ### Network Graph Attributes
 
