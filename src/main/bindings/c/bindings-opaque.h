@@ -81,4 +81,10 @@ typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
 
+// A borrowed immutable reference to the current thread's Worker.
+typedef struct WorkerRef WorkerRef;
+
+// A borrowed mutable reference to the current thread's Worker.
+typedef struct WorkerRefMut WorkerRefMut;
+
 #endif /* main_opaque_bindings_h */

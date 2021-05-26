@@ -12,18 +12,9 @@
 
 #include "main/core/support/definitions.h"
 #include "main/host/protocol.h"
+#include "main/host/tracker_types.h"
 #include "main/routing/packet.h"
 #include "support/logger/log_level.h"
-
-typedef struct _Tracker Tracker;
-
-typedef enum _LogInfoFlags LogInfoFlags;
-enum _LogInfoFlags {
-    LOG_INFO_FLAGS_NONE = 0,
-    LOG_INFO_FLAGS_NODE = 1<<0,
-    LOG_INFO_FLAGS_SOCKET = 1<<1,
-    LOG_INFO_FLAGS_RAM = 1<<2,
-};
 
 Tracker* tracker_new(SimulationTime interval, LogLevel loglevel, LogInfoFlags loginfo);
 void tracker_free(Tracker* tracker);

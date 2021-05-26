@@ -17,43 +17,18 @@
 
 #include "main/core/support/definitions.h"
 #include "main/host/cpu.h"
-#include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/compat_socket.h"
+#include "main/host/descriptor/descriptor.h"
 #include "main/host/futex_table.h"
+#include "main/host/host_parameters.h"
 #include "main/host/network_interface.h"
-#include "main/host/tracker.h"
+#include "main/host/tracker_types.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/routing/router.h"
 #include "main/routing/topology.h"
 #include "main/utility/random.h"
 #include "support/logger/log_level.h"
-
-typedef struct _HostParameters HostParameters;
-struct _HostParameters {
-    GQuark id;
-    guint nodeSeed;
-    gchar* hostname;
-    gchar* ipHint;
-    gchar* citycodeHint;
-    gchar* countrycodeHint;
-    guint64 requestedBWDownKiBps;
-    guint64 requestedBWUpKiBps;
-    guint64 cpuFrequency;
-    guint64 cpuThreshold;
-    guint64 cpuPrecision;
-    SimulationTime heartbeatInterval;
-    LogLevel heartbeatLogLevel;
-    LogInfoFlags heartbeatLogInfo;
-    LogLevel logLevel;
-    gchar* pcapDir;
-    QDiscMode qdisc;
-    guint64 recvBufSize;
-    gboolean autotuneRecvBuf;
-    guint64 sendBufSize;
-    gboolean autotuneSendBuf;
-    guint64 interfaceBufSize;
-};
 
 Host* host_new(HostParameters* params);
 void host_ref(Host* host);

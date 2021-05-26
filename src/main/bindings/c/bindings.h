@@ -16,12 +16,14 @@
 #include <stdlib.h>
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/core/scheduler/scheduler_policy_type.h"
+#include "main/core/worker.h"
+#include "main/core/worker_c.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/status_listener.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
-#include "main/host/tracker.h"
+#include "main/host/tracker_types.h"
 
 // Memory allocated by Shadow, in a remote address space.
 typedef struct AllocdMem_u8 AllocdMem_u8;
@@ -78,6 +80,12 @@ typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
 typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
+
+// A borrowed immutable reference to the current thread's Worker.
+typedef struct WorkerRef WorkerRef;
+
+// A borrowed mutable reference to the current thread's Worker.
+typedef struct WorkerRefMut WorkerRefMut;
 
 // Flush Rust's log::logger().
 void rustlogger_flush(void);
@@ -170,7 +178,7 @@ SimulationTime config_getStopTime(const struct ConfigOptions *config);
 
 SimulationTime config_getBootstrapEndTime(const struct ConfigOptions *config);
 
-unsigned int config_getWorkers(const struct ConfigOptions *config);
+uint32_t config_getWorkers(const struct ConfigOptions *config);
 
 SchedulerPolicyType config_getSchedulerPolicy(const struct ConfigOptions *config);
 
@@ -245,6 +253,34 @@ SimulationTime processoptions_getStopTime(const struct ProcessOptions *proc);
 
 // Parses a string as bits-per-second. Returns '-1' on error.
 int64_t parse_bandwidth(const char *s);
+
+// Initialize a Worker for this thread.
+void worker_newForThisThread(WorkerC *cworker, int32_t worker_id);
+
+// If worker is alive, returns mutable reference to it. Otherwise returns NULL.
+// SAFETY: Returned pointer is invalid after `worker_freeForThisThread` is called
+// or when global destructors start running.
+struct WorkerRefMut *worker_borrowMut(void);
+
+// Return a borrowed reference.
+void workerrefmut_free(struct WorkerRefMut *worker);
+
+// SAFETY: Returned pointer must not outlive `workerRefMut`.
+WorkerC *workerrefmut_raw(struct WorkerRefMut *worker_ref);
+
+// If worker is alive, returns an immutable reference to it. Otherwise returns NULL.
+// SAFETY: Returned pointer is invalid after `worker_freeForThisThread` is called
+// or when global destructors start running.
+struct WorkerRef *worker_borrow(void);
+
+// Return a borrowed reference.
+void workerref_free(struct WorkerRef *worker);
+
+// SAFETY: Returned pointer must not outlive `workerRef`.
+const WorkerC *workerref_raw(struct WorkerRef *worker_ref);
+
+// ID of the current thread's Worker. Panics if the thread has no Worker.
+int32_t worker_threadID(void);
 
 // Create an object that can be used to store all descriptors created by a
 // process. When the table is no longer required, use descriptortable_free

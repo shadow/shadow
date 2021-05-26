@@ -24,8 +24,8 @@
 #include "main/utility/count_down_latch.h"
 #include "support/logger/log_level.h"
 
-// A single worker thread.
-typedef struct _Worker Worker;
+#include "main/bindings/c/bindings.h"
+
 // A pool of worker threads.
 typedef struct _WorkerPool WorkerPool;
 // Task to be executed on a worker thread.
@@ -85,7 +85,6 @@ guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID);
-gint worker_getThreadID();
 void worker_updateMinTimeJump(gdouble minPathLatency);
 void worker_setCurrentTime(SimulationTime time);
 gboolean worker_isFiltered(LogLevel level);

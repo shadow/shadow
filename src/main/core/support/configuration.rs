@@ -324,12 +324,10 @@ pub struct ExperimentalOptions {
     /// Create N worker threads. Note though, that `--parallelism` of them will
     /// be allowed to run simultaneously. If unset, will create a thread for
     /// each simulated Host. This is to work around limitations in ptrace, and
-    /// may change in the future. "0" is a valid value, and will cause the
-    /// simulation to be run directly on the main Shadow thread, but this
-    /// functionality may be removed in the future.
+    /// may change in the future.
     #[clap(long, value_name = "N")]
     #[clap(about = EXP_HELP.get("worker_threads").unwrap())]
-    worker_threads: Option<u32>,
+    worker_threads: Option<NonZeroU32>,
 }
 
 impl ExperimentalOptions {
@@ -1193,14 +1191,14 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getWorkers(config: *const ConfigOptions) -> libc::c_uint {
+    pub extern "C" fn config_getWorkers(config: *const ConfigOptions) -> NonZeroU32 {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         match &config.experimental.worker_threads {
             Some(w) => *w,
             None => {
                 // By default use 1 worker per host.
-                config.hosts.len().try_into().unwrap()
+                NonZeroU32::new(config.hosts.len().try_into().unwrap()).unwrap()
             }
         }
     }

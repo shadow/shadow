@@ -44,6 +44,18 @@ struct _LogicalProcessors {
     MAGIC_DECLARE;
 };
 
+static void* _idx_to_ptr(int idx) {
+    // g_async_queue stores pointers. We need to use GINT_TO_POINTER to
+    // transform the integer to a pointer. Unfortunately that translates 0 to
+    // NULL, so we need to offset by 1.
+    return GINT_TO_POINTER(idx + 1);
+}
+
+static int _ptr_to_idx(void* ptr) {
+    // Undo the offset added in _idx_to_ptr.
+    return GPOINTER_TO_INT(ptr) - 1;
+}
+
 static LogicalProcessor* _idx(LogicalProcessors* lps, int n) {
     MAGIC_ASSERT(lps);
     utility_assert(n >= 0);
@@ -127,32 +139,32 @@ double lps_idleTimerElapsed(LogicalProcessors* lps, int lpi) {
 }
 #endif
 
-void lps_readyPush(LogicalProcessors* lps, int lpi, Worker* worker) {
+void lps_readyPush(LogicalProcessors* lps, int lpi, int worker) {
     LogicalProcessor* lp = _idx(lps, lpi);
-    g_async_queue_push_front(lp->readyWorkers, worker);
+    g_async_queue_push_front(lp->readyWorkers, _idx_to_ptr(worker));
 }
 
-Worker* lps_popWorkerToRunOn(LogicalProcessors* lps, int lpi) {
+int lps_popWorkerToRunOn(LogicalProcessors* lps, int lpi) {
     LogicalProcessor* lp = _idx(lps, lpi);
     for (int i = 0; i < lps_n(lps); ++i) {
         // Start with workers that last ran on `lpi`; if none are available
         // steal from another in round-robin order.
         int fromLpi = (lpi + i) % lps_n(lps);
         LogicalProcessor* fromLp = _idx(lps, fromLpi);
-        Worker* worker = g_async_queue_try_pop(fromLp->readyWorkers);
+        gpointer worker = g_async_queue_try_pop(fromLp->readyWorkers);
         if (worker) {
-            return worker;
+            return _ptr_to_idx(worker);
         }
     }
-    return NULL;
+    return -1;
 }
 
-void lps_donePush(LogicalProcessors* lps, int lpi, Worker* worker) {
+void lps_donePush(LogicalProcessors* lps, int lpi, int worker) {
     LogicalProcessor* lp = _idx(lps, lpi);
     // Push to the *front* of the queue so that the last workers to run the
     // current task, which are freshest in cache, are the first ones to run the
     // next task.
-    g_async_queue_push_front(lp->doneWorkers, worker);
+    g_async_queue_push_front(lp->doneWorkers, _idx_to_ptr(worker));
 }
 
 void lps_finishTask(LogicalProcessors* lps) {
