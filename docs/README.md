@@ -25,9 +25,3 @@ The docs contain important information about installing and using the Shadow dis
      * [Pull requests](pull_requests.md)
    * [Maintainer playbook](maintainer_playbook.md)
    * [NSF Sponsorship](nsf_sponsorship.md)
-
-## Plug-in Info:
-
-TGen: https://github.com/shadow/tgen  
-Tor: https://github.com/shadow/shadow-plugin-tor/wiki  
-Bitcoin: https://github.com/shadow/shadow-plugin-bitcoin/wiki
