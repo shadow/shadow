@@ -176,7 +176,16 @@ shadow --help
     + `-g` or `--debug` to build Shadow with debugging symbols
     + `--include` and `--library` if you installed any dependencies in non-standard locations or somewhere other than `~/.shadow`.
     + `--prefix` if you want to install Shadow somewhere besides `~/.shadow`
-  + The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but strongly discouraged.
+  + The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but strongly discouraged. For example:
+
+    ```bash
+    # alternative installation method
+    rm -r build && mkdir build && cd build
+    cmake -DCMAKE_INSTALL_PREFIX="~/.shadow" -DSHADOW_TEST=ON ..
+    make
+    ctest
+    make install
+    ```
 
 ## TGen Setup
 
