@@ -114,8 +114,8 @@ Log level of output written on stdout. If Shadow was built in release mode, then
 
 #### `general.parallelism`
 
-Default: null  
-Type: Integer OR null
+Default: 1  
+Type: Integer
 
 How many parallel threads to use to run the simulation. Optimal performance is
 usually obtained with `nproc`, or sometimes `nproc/2` with hyperthreading.
