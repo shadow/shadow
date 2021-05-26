@@ -4,10 +4,11 @@ The docs contain important information about installing and using the Shadow dis
 
  * The Shadow simulator
    * [Design Overview](design_overview.md)
-   * Installation and Setup
+   * [Installation Guide](install_guide.md)
+     * [Dependencies](install_dependencies.md)
      * [Shadow](install_shadow.md)
-     * [Shadow with Docker](install_shadow_with_docker.md)
      * [System Configuration](system_configuration.md)
+     * [(Experimental) Shadow with Docker](install_shadow_with_docker.md)
    * [Getting Started](getting_started.md)
    * Simulation Customization
      * [Shadow Configuration](shadow_config.md)
