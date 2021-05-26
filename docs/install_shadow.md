@@ -38,18 +38,3 @@ shadow --help
     ctest
     make install
     ```
-
-## TGen Setup
-
-Installing Shadow gives you the simulation environment, but you'll almost certainly want to run some processes inside of Shadow. The [TGen traffic generator](https://github.com/shadow/tgen) is useful for generating and transferring traffic through Shadow.
-
-TGen was moved to its own repo on April 3, 2019 as of [this commit](https://github.com/shadow/shadow/commit/75973e75a6ab7d08ff0f04d9aab47fc0e4e97d89) for organizational reasons, but installing it is easy (TGen's dependencies are a subset of Shadow's):
-
-```bash
-git clone git@github.com:shadow/tgen.git
-cd tgen && mkdir build && cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=/home/$USER/.shadow
-make && make install
-```
-
-Now you can run `~/.shadow/bin/tgen` either inside of Shadow, or outside of Shadow. See the [TGen repo](https://github.com/shadow/tgen) for more info.
