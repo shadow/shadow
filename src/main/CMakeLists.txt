@@ -80,7 +80,6 @@ set(shadow_srcs
     core/logical_processor.c
     core/logger/log_wrapper.c
     core/scheduler/scheduler.c
-    core/scheduler/scheduler_policy_global_single.c
     core/scheduler/scheduler_policy_host_single.c
     core/scheduler/scheduler_policy_host_steal.c
     core/scheduler/scheduler_policy_thread_perhost.c

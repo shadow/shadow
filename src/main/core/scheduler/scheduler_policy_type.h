@@ -7,8 +7,6 @@
 #define SHD_SCHEDULER_POLICY_TYPE_H_
 
 typedef enum {
-    /* one global unlocked priority queue */
-    SP_SERIAL_GLOBAL,
     /* every host has a locked pqueue into which every thread inserts events,
      * max queue contention is N for N threads */
     SP_PARALLEL_HOST_SINGLE,

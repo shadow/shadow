@@ -137,16 +137,8 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
 
     scheduler->random = random_new(schedulerSeed);
 
-    /* ensure we have sane default modes for the number of workers we are using */
-    if(nWorkers == 0) {
-        scheduler->policyType = SP_SERIAL_GLOBAL;
-        warning("Overriding the chosen scheduler policy with the serial global policy");
-    } else if(nWorkers > 0 && policyType == SP_SERIAL_GLOBAL) {
-        scheduler->policyType = SP_PARALLEL_HOST_STEAL;
-        warning("Overriding the chosen scheduler policy with the host stealing policy");
-    } else {
-        scheduler->policyType = policyType;
-    }
+    utility_assert(nWorkers >= 1);
+    scheduler->policyType = policyType;
 
     /* create the configured policy to handle queues */
     switch(scheduler->policyType) {
@@ -159,9 +151,9 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
                 // Proceeding will cause the scheduler to deadlock, since the
                 // work stealing scheduler threads spin-wait for each-other to
                 // finish.
-                utility_panic("Host stealing scheduler is incompatible with "
-                              "--workers > --parallelism");
-                abort();
+                error("Host stealing scheduler is incompatible with --worker_threads > "
+                      "--parallelism");
+                exit(1);
             }
             scheduler->policy = schedulerpolicyhoststeal_new();
             break;
@@ -176,11 +168,6 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
         }
         case SP_PARALLEL_THREAD_PERHOST: {
             scheduler->policy = schedulerpolicythreadperhost_new();
-            break;
-        }
-        case SP_SERIAL_GLOBAL:
-        default: {
-            scheduler->policy = schedulerpolicyglobalsingle_new();
             break;
         }
     }
@@ -349,29 +336,14 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
     g_hash_table_foreach(scheduler->hostIDToHostMap, (GHFunc)_scheduler_appendHostToQueue, hosts);
 
     int nWorkers = workerpool_getNWorkers(scheduler->workerPool);
-    if (nWorkers <= 1) {
-        /* either the main thread or the single worker gets everything */
-        pthread_t chosen;
-        if (nWorkers == 0) {
-            chosen = pthread_self();
-        } else {
-            chosen = workerpool_getThread(scheduler->workerPool, 0);
-        }
+    /* we need to shuffle the list of hosts to make sure they are randomly assigned */
+    _scheduler_shuffleQueue(scheduler, hosts);
 
-        /* assign *all* of the hosts to the chosen thread */
-        _scheduler_assignHostsToThread(scheduler, hosts, chosen, 0);
-        utility_assert(g_queue_is_empty(hosts));
-    } else {
-        /* we need to shuffle the list of hosts to make sure they are randomly assigned */
-        _scheduler_shuffleQueue(scheduler, hosts);
-
-        /* now that our host order has been randomized, assign them evenly to worker threads */
-        int workeri = 0;
-        while(!g_queue_is_empty(hosts)) {
-            pthread_t nextThread = workerpool_getThread(scheduler->workerPool,
-                                                        workeri++ % nWorkers);
-            _scheduler_assignHostsToThread(scheduler, hosts, nextThread, 1);
-        }
+    /* now that our host order has been randomized, assign them evenly to worker threads */
+    int workeri = 0;
+    while (!g_queue_is_empty(hosts)) {
+        pthread_t nextThread = workerpool_getThread(scheduler->workerPool, workeri++ % nWorkers);
+        _scheduler_assignHostsToThread(scheduler, hosts, nextThread, 1);
     }
 
     if(hosts) {
