@@ -4,7 +4,8 @@ The docs contain important information about installing and using the Shadow dis
 
  * The Shadow simulator
    * [Design Overview](design_overview.md)
-   * [Installation Guide](install_guide.md)
+   * Installation Guide
+     * [Supported Platforms](supported_platforms.md)
      * [Dependencies](install_dependencies.md)
      * [Shadow](install_shadow.md)
      * [System Configuration](system_configuration.md)
