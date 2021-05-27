@@ -1,5 +1,11 @@
 ## Mission: Run Tor in a Box
 
+| ❗ Notice                                                                                                    |
+|--------------------------------------------------------------------------------------------------------------|
+| This overview describes Shadow's original<br>architecture (version 1.x) and not the current<br>architecture. |
+
+<br>
+
 <!--[[https://raw.githubusercontent.com/wiki/shadow/shadow/assets/torinabox.png|align=right|width=175px]]-->
 <!--[Run Tor in a box with Shadow!][image-torinabox]-->
 <!--[image-torinabox]: https://raw.githubusercontent.com/wiki/shadow/shadow/assets/torinabox.png-->

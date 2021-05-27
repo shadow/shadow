@@ -1,6 +1,4 @@
-This page describes how to set up Shadow using Docker; this installation method is optional.
-
-## Run from the official Dockerfile
+## Run from the Dockerfile
 
 1. Install docker from https://docs.docker.com/engine/install/.
 2. Build container:

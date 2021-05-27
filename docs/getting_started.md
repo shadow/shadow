@@ -4,38 +4,32 @@ So you've got Shadow installed and your machine configured. Its time to see what
 
 When installing Shadow, the main executable was placed in `/bin` in your install prefix (`~/.shadow/bin` by default). As a reminder, it would be helpful if this location was included in your environment `PATH`.
 
-`shadow` is the main Shadow binary executable. It contains most of the simulator's code, including events and the event engine, the network stack, and the routing logic.
+`shadow` is the main Shadow binary executable. It contains most of the simulator's code, including events and the event engine, the network stack, and the routing logic. Shadow's event engine supports multi-threading using the `-p` or `--parallelism` flags (or their corresponding [configuration file option](shadow_config.md#generalparallelism)) to simulate multiple hosts in parallel.
 
-The `shadow` binary is capable of appending custom **function interposition** libraries to the `LD_PRELOAD`  environment variable to make it possible to intercept real operating system functions and manage them in the simulation environment. The `shadow` binary also assists with running `valgrind`, mostly for debugging and development purposes. For more information:
+The `shadow` binary is capable of appending custom **function interposition** libraries to the `LD_PRELOAD` environment variable to make it possible to intercept real operating system functions and manage them in the simulation environment. The `shadow` binary also assists with running `valgrind`, mostly for debugging and development purposes. For more information:
 
 ```bash
 shadow --help
 ```
 
-## Shadow plug-ins
+## Supported applications
 
-Generic applications may be run in Shadow. The most important required features of the application code to enable this are:
+Since Shadow 2.0, applications can typically be run under Shadow without modification. Currently the only requirements are:
 
  + doesn't fork/exec processes
  + blocking calls (e.g. `sleep()`) are supported, but if nonblocking is used then it should poll I/O events using one of the `epoll`, `poll`, or `select` interfaces (see, e.g., `$ man epoll`)
 
 #### Traffic generation
 
-We also maintain a [traffic generator plug-in called TGen](https://github.com/shadow/tgen) that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format. With this powerful plug-in, different behavior models can be implemented by simply writing a python script to generate new graphml files rather than modifying simulator code or writing new plug-ins.
+We also maintain a [traffic generator application called TGen](https://github.com/shadow/tgen) that is capable of modeling generic behaviors represented using an action-dependency graph and the standard graphml xml format. With this powerful application, different behavior models can be implemented by simply writing a python script to generate new graphml files rather than modifying simulator code or writing new applications.
 
-Make sure you have TGen installed as described on [the Shadow setup page](https://github.com/shadow/shadow/wiki/1.1-Shadow#tgen-setup) as we will use it for this tutorial.
+Make sure you have TGen installed as described on [the TGen setup page](https://github.com/shadow/tgen/#setup) as we will use it for this tutorial.
 
 See the [TGen documentation](https://github.com/shadow/tgen/tree/main/doc) for more information about customizing TGen behaviors.
 
-#### Other plugins
-
-Existing plug-ins for Shadow also include [shadow-plugin-tor](https://github.com/shadow/shadow-plugin-tor) for running Tor anonymity networks and [shadow-plugin-bitcoin](https://github.com/shadow/shadow-plugin-bitcoin) for running Bitcoin cryptocurrency networks. Other useful plug-ins exist in the [shadow-plugin-extras repository](https://github.com/shadow/shadow-plugin-extras), including an HTML-supported web browser and server combo.
-
-To write your own plug-in, start by inspecting the [hello plug-in from the extras repository](https://github.com/shadow/shadow-plugin-extras/tree/master/hello): it contains a useful basic "hello world" example that illustrates how a program running outside of Shadow may also be run inside of Shadow. The example provides useful comments and a general structure that will be useful to understand when writing your own plug-ins.
-
 ## Basic functional tests
 
-Shadow provides a virtual system and network that are used by plug-in applications. Fortunately, Shadow already contains a traffic generator application (tgen) so you can get started without writing your own. 
+Shadow provides a virtual system and network that are used by applications. Fortunately, Shadow already contains a traffic generator application (tgen) so you can get started without writing your own.
 
 The following example runs tgen with 10 clients that each download 10 files from a set of 5 servers over a simple network topology. The example could take a few minutes, and you probably want to redirect the output to a log file:
 
@@ -69,7 +63,7 @@ We now need to know more about the configuration process, as this is a major par
 
 Shadow requires **XML input files** to configure an experiment. These files are used to describe the structure of the network topology, the network hosts that should be started, and application configuration options for each host. The network, node, and application configuration is specified in the `shadow.config.xml` file; the client behavior models (traffic generator configurations) are specified in the `tgen.*.graphml.xml` files.
 
-Lets take another look at the `tgen` example from above, the configuration for which can be found in the `resource/examples/shadow.config.xml` file. After parsing this file, Shadow creates the internal representation of the network, loads the plug-ins, and generates the virtual hosts. You should examine these configuration files and understand how they are used. For example, you might try changing the quantity of clients, or the bandwidth of the network vertices or the latency of the network edges to see how download times are affected.
+Lets take another look at the `tgen` example from above, the configuration for which can be found in the `resource/examples/shadow.config.xml` file. After parsing this file, Shadow creates the internal representation of the network, loads the applications, and generates the virtual hosts. You should examine these configuration files and understand how they are used. For example, you might try changing the quantity of clients, or the bandwidth of the network vertices or the latency of the network edges to see how download times are affected.
 
 The network topology used for the simulation is also configured inside of the `shadow.config.xml` file. In the example above, the network topology was embedded as CDATA inside of the `<topology>` element. This network topology is itself XML in the standard graphml format, and can be stored in a separate file instead of embedding it. You may then modify `shadow.config.xml` to reference the external graphml topology file rather than embedding it with something like `<topology path="~/.shadow/share/topology.graphml.xml" />`.
 
@@ -90,7 +84,7 @@ the ID of the worker thread that generated the message
 + _virtual-time_:  
 the simulated time since the start of the experiment, represented as `hours:minutes:seconds:nanoseconds`
 + _logdomain_:  
-either `shadow` or the name of one of the plug-ins as specified in the _id_ tag of the _plugin_ element in the XML file (e.g., `tgen`, `tor`, `bitcoin`)
+either `shadow` or the name of one of the applications as specified in the _id_ tag of the _plugin_ element in the XML file (e.g., `tgen`, `tor`, `bitcoin`)
 + _loglevel_:  
 one of `error` < `critical` < `warning` < `message` < `info` < `debug`, in that order
 + _hostname_:  
@@ -102,7 +96,7 @@ the name of the function logging the message
 + _MESSAGE_:  
 the actual message to be logged
 
-By default, Shadow only prints core messages at or below the `message` log level. This behavior can be changed using the Shadow option `-l` or `--log-level` to increase or decrease the verbosity of the output. As mentioned in the example from the previous section, the output from each virtual process (i.e. plug-in) is stored in separate log files beneath the `shadow.data` directory, and the format of those log files is application-specific (i.e., Shadow writes application output _directly_ to file).  
+By default, Shadow only prints core messages at or below the `message` log level. This behavior can be changed using the Shadow option `-l` or `--log-level` to increase or decrease the verbosity of the output. As mentioned in the example from the previous section, the output from each application process is stored in separate log files beneath the `shadow.data` directory, and the format of those log files is application-specific (i.e., Shadow writes application output _directly_ to file).
 
 ## Gathering statistics
 
@@ -132,7 +126,7 @@ Ram:
 
 Only the `node` subsystem is on by default; be aware that the other subsystems track a lot of information and may significantly increase the amount of output that Shadow produces.
 
-The tgen plug-in also logs generally useful statistics, such as file download size and timing information. This information can be parsed from the corresponding log files in the virtual process data directories.
+The tgen application also logs generally useful statistics, such as file download size and timing information. This information can be parsed from the corresponding log files in the virtual process data directories.
 
 ## Parsing and plotting results
 
