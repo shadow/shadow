@@ -18,6 +18,43 @@
 #### Recommended System Tools:
   + git, dstat, screen, htop
 
+### APT (Debian/Ubuntu):
+
+```bash
+sudo apt-get install -y \
+    cmake \
+    findutils \
+    libc-dbg \
+    libglib2.0-0 \
+    libglib2.0-dev \
+    libigraph0-dev \
+    libigraph0v5 \
+    libprocps-dev \
+    make \
+    python3 \
+    python3-pip \
+    xz-utils \
+    gcc \
+    g++ \
+    cargo
+
+# Optional dependencies
+
+sudo apt-get install -y \
+    python3-numpy \
+    python3-lxml \
+    python3-matplotlib \
+    python3-networkx \
+    python3-scipy \
+    python3-yaml
+
+sudo apt-get install -y \
+    dstat \
+    git \
+    htop \
+    screen
+```
+
 ### YUM (Fedora/CentOS):
 
 In more recent versions of Fedora and CentOS, `yum` can be exchanged for `dnf` in these commands.
@@ -93,41 +130,4 @@ dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps
 dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-devel-3.3.10-26.el7.x86_64.rpm
 dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-0.7.1-12.el7.x86_64.rpm
 dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-devel-0.7.1-12.el7.x86_64.rpm
-```
-
-### APT (Debian/Ubuntu):
-
-```bash
-sudo apt-get install -y \
-    cmake \
-    findutils \
-    libc-dbg \
-    libglib2.0-0 \
-    libglib2.0-dev \
-    libigraph0-dev \
-    libigraph0v5 \
-    libprocps-dev \
-    make \
-    python3 \
-    python3-pip \
-    xz-utils \
-    gcc \
-    g++ \
-    cargo
-
-# Optional dependencies
-
-sudo apt-get install -y \
-    python3-numpy \
-    python3-lxml \
-    python3-matplotlib \
-    python3-networkx \
-    python3-scipy \
-    python3-yaml
-
-sudo apt-get install -y \
-    dstat \
-    git \
-    htop \
-    screen
 ```
