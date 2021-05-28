@@ -20,6 +20,7 @@ pub type __uint32_t = ::std::os::raw::c_uint;
 pub type __int64_t = ::std::os::raw::c_long;
 pub type __uint64_t = ::std::os::raw::c_ulong;
 pub type __pid_t = ::std::os::raw::c_int;
+pub type __ssize_t = ::std::os::raw::c_long;
 pub type pid_t = __pid_t;
 pub type gchar = ::std::os::raw::c_char;
 pub type gint = ::std::os::raw::c_int;
@@ -29,6 +30,7 @@ pub type gdouble = f64;
 pub type gpointer = *mut ::std::os::raw::c_void;
 pub type gconstpointer = *const ::std::os::raw::c_void;
 pub type GQuark = guint32;
+pub type ssize_t = __ssize_t;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _GTimer {
@@ -150,6 +152,7 @@ pub struct _Timer {
 pub type Timer = _Timer;
 pub type PluginVirtualPtr = _PluginVirtualPtr;
 pub type PluginPtr = _PluginVirtualPtr;
+pub type PluginPhysicalPtr = _PluginPhysicalPtr;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _PluginVirtualPtr {
@@ -173,6 +176,34 @@ fn bindgen_test_layout__PluginVirtualPtr() {
         concat!(
             "Offset of field: ",
             stringify!(_PluginVirtualPtr),
+            "::",
+            stringify!(val)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _PluginPhysicalPtr {
+    pub val: u64,
+}
+#[test]
+fn bindgen_test_layout__PluginPhysicalPtr() {
+    assert_eq!(
+        ::std::mem::size_of::<_PluginPhysicalPtr>(),
+        8usize,
+        concat!("Size of: ", stringify!(_PluginPhysicalPtr))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_PluginPhysicalPtr>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_PluginPhysicalPtr))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_PluginPhysicalPtr>())).val as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_PluginPhysicalPtr),
             "::",
             stringify!(val)
         )
@@ -452,6 +483,72 @@ extern "C" {
     pub fn thread_getShMBlock(thread: *mut Thread) -> *mut ShMemBlock;
 }
 extern "C" {
+    pub fn thread_getSysCallHandler(thread: *mut Thread) -> *mut SysCallHandler;
+}
+extern "C" {
+    pub fn process_new(
+        host: *mut Host,
+        processID: guint,
+        startTime: SimulationTime,
+        stopTime: SimulationTime,
+        interposeMethod: InterposeMethod,
+        hostName: *const gchar,
+        pluginName: *const gchar,
+        pluginPath: *const gchar,
+        envv: *mut *mut gchar,
+        argv: *mut *mut gchar,
+    ) -> *mut Process;
+}
+extern "C" {
+    pub fn process_ref(proc_: *mut Process);
+}
+extern "C" {
+    pub fn process_unref(proc_: *mut Process);
+}
+extern "C" {
+    pub fn process_schedule(proc_: *mut Process, nothing: gpointer);
+}
+extern "C" {
+    pub fn process_continue(proc_: *mut Process, thread: *mut Thread);
+}
+extern "C" {
+    pub fn process_stop(proc_: *mut Process);
+}
+extern "C" {
+    pub fn process_detachPlugin(procptr: gpointer, nothing: gpointer);
+}
+extern "C" {
+    pub fn process_getWorkingDir(proc_: *mut Process) -> *const ::std::os::raw::c_char;
+}
+extern "C" {
+    pub fn process_addThread(proc_: *mut Process, thread: *mut Thread);
+}
+extern "C" {
+    pub fn process_markAsExiting(proc_: *mut Process);
+}
+extern "C" {
+    pub fn process_isRunning(proc_: *mut Process) -> gboolean;
+}
+extern "C" {
+    pub fn process_getName(proc_: *mut Process) -> *const gchar;
+}
+extern "C" {
+    pub fn process_getPluginName(proc_: *mut Process) -> *const gchar;
+}
+extern "C" {
+    pub fn process_getProcessID(proc_: *mut Process) -> guint;
+}
+extern "C" {
+    pub fn process_getNativePid(proc_: *const Process) -> pid_t;
+}
+extern "C" {
+    pub fn process_findNativeTID(
+        proc_: *mut Process,
+        virtualPID: pid_t,
+        virtualTID: pid_t,
+    ) -> pid_t;
+}
+extern "C" {
     pub fn process_registerCompatDescriptor(
         proc_: *mut Process,
         compatDesc: *mut CompatDescriptor,
@@ -470,7 +567,97 @@ extern "C" {
     ) -> *const CompatDescriptor;
 }
 extern "C" {
+    pub fn process_registerLegacyDescriptor(
+        proc_: *mut Process,
+        desc: *mut LegacyDescriptor,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn process_deregisterLegacyDescriptor(proc_: *mut Process, desc: *mut LegacyDescriptor);
+}
+extern "C" {
+    pub fn process_getRegisteredLegacyDescriptor(
+        proc_: *mut Process,
+        handle: ::std::os::raw::c_int,
+    ) -> *mut LegacyDescriptor;
+}
+extern "C" {
+    pub fn process_getPhysicalAddress(
+        proc_: *mut Process,
+        vPtr: PluginVirtualPtr,
+    ) -> PluginPhysicalPtr;
+}
+extern "C" {
+    pub fn process_readPtr(
+        proc_: *mut Process,
+        dst: *mut ::std::os::raw::c_void,
+        src: PluginVirtualPtr,
+        n: size_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn process_getReadableString(
+        process: *mut Process,
+        plugin_src: PluginPtr,
+        n: size_t,
+        str_: *mut *const ::std::os::raw::c_char,
+        strlen: *mut size_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn process_readString(
+        proc_: *mut Process,
+        str_: *mut ::std::os::raw::c_char,
+        src: PluginVirtualPtr,
+        n: size_t,
+    ) -> ssize_t;
+}
+extern "C" {
+    pub fn process_writePtr(
+        proc_: *mut Process,
+        dst: PluginVirtualPtr,
+        src: *const ::std::os::raw::c_void,
+        n: size_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn process_getReadablePtr(
+        proc_: *mut Process,
+        plugin_src: PluginPtr,
+        n: size_t,
+    ) -> *const ::std::os::raw::c_void;
+}
+extern "C" {
+    pub fn process_getWriteablePtr(
+        proc_: *mut Process,
+        plugin_src: PluginPtr,
+        n: size_t,
+    ) -> *mut ::std::os::raw::c_void;
+}
+extern "C" {
+    pub fn process_getMutablePtr(
+        proc_: *mut Process,
+        plugin_src: PluginPtr,
+        n: size_t,
+    ) -> *mut ::std::os::raw::c_void;
+}
+extern "C" {
+    pub fn process_flushPtrs(proc_: *mut Process);
+}
+extern "C" {
+    pub fn process_freePtrsWithoutFlushing(proc_: *mut Process);
+}
+extern "C" {
     pub fn process_getMemoryManager(proc_: *mut Process) -> *mut MemoryManager;
+}
+extern "C" {
+    pub fn process_setMemoryManager(proc_: *mut Process, memoryManager: *mut MemoryManager);
+}
+extern "C" {
+    pub fn process_getHostId(proc_: *const Process) -> u32;
+}
+extern "C" {
+    pub fn process_getInterposeMethod(proc_: *mut Process) -> InterposeMethod;
 }
 extern "C" {
     pub fn process_parseArgStr(
@@ -1145,6 +1332,24 @@ extern "C" {
 extern "C" {
     pub fn worker_threadID() -> i32;
 }
+extern "C" {
+    pub fn worker_setActiveHost(host: *mut Host);
+}
+extern "C" {
+    pub fn worker_setActiveProcess(process: *mut Process);
+}
+extern "C" {
+    pub fn worker_setActiveThread(thread: *mut Thread);
+}
+extern "C" {
+    pub fn worker_getActiveHost() -> *mut Host;
+}
+extern "C" {
+    pub fn worker_getActiveProcess() -> *mut Process;
+}
+extern "C" {
+    pub fn worker_getActiveThread() -> *mut Thread;
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Task {
@@ -1213,24 +1418,6 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_isFiltered(level: LogLevel) -> gboolean;
-}
-extern "C" {
-    pub fn worker_getActiveHost() -> *mut Host;
-}
-extern "C" {
-    pub fn worker_setActiveHost(host: *mut Host);
-}
-extern "C" {
-    pub fn worker_getActiveProcess() -> *mut Process;
-}
-extern "C" {
-    pub fn worker_setActiveProcess(proc_: *mut Process);
-}
-extern "C" {
-    pub fn worker_getActiveThread() -> *mut Thread;
-}
-extern "C" {
-    pub fn worker_setActiveThread(thread: *mut Thread);
 }
 extern "C" {
     pub fn worker_incrementPluginError();

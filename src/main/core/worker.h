@@ -92,13 +92,6 @@ gboolean worker_isFiltered(LogLevel level);
 void worker_bootHosts(GQueue* hosts);
 void worker_freeHosts(GQueue* hosts);
 
-Host* worker_getActiveHost();
-void worker_setActiveHost(Host* host);
-Process* worker_getActiveProcess();
-void worker_setActiveProcess(Process* proc);
-Thread* worker_getActiveThread();
-void worker_setActiveThread(Thread* thread);
-
 void worker_incrementPluginError();
 
 Address* worker_resolveIPToAddress(in_addr_t ip);

@@ -153,12 +153,9 @@ impl MemoryCopier {
         // While the documentation for process_vm_readv says to use the pid, in
         // practice it needs to be the tid of a still-running thread. i.e. using the
         // pid after the thread group leader has exited will fail.
-        let (active_tid, active_pid) = Worker::with_active_thread(|thread| {
-            (
-                Pid::from_raw(thread.get_system_tid()),
-                Pid::from_raw(thread.get_system_pid()),
-            )
-        });
+        let active_tid = Worker::active_thread_native_tid().unwrap();
+        let active_pid = Worker::active_process_native_pid().unwrap();
+
         // Don't access another process's memory.
         assert_eq!(active_pid, self.pid);
 
@@ -191,12 +188,9 @@ impl MemoryCopier {
         // While the documentation for process_vm_writev says to use the pid, in
         // practice it needs to be the tid of a still-running thread. i.e. using the
         // pid after the thread group leader has exited will fail.
-        let (active_tid, active_pid) = Worker::with_active_thread(|thread| {
-            (
-                Pid::from_raw(thread.get_system_tid()),
-                Pid::from_raw(thread.get_system_pid()),
-            )
-        });
+        let active_tid = Worker::active_thread_native_tid().unwrap();
+        let active_pid = Worker::active_process_native_pid().unwrap();
+
         // Don't access another process's memory.
         assert_eq!(active_pid, self.pid);
 

@@ -35,6 +35,10 @@ Thread thread_create(Host* host, Process* process, int threadID, int type_id,
                      MAGIC_INITIALIZER};
     host_ref(host);
     process_ref(process);
+
+    // .sys is created (and destroyed) in implementation, since it needs the
+    // address of the Thread (which we don't have yet).
+
     return thread;
 }
 
@@ -127,6 +131,10 @@ ShMemBlock* thread_getShMBlock(Thread* thread) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.getShMBlock);
     return thread->methods.getShMBlock(thread);
+}
+
+SysCallHandler* thread_getSysCallHandler(Thread* thread) {
+    return thread->sys;
 }
 
 long thread_nativeSyscall(Thread* thread, long n, ...) {

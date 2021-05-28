@@ -284,6 +284,18 @@ const WorkerC *workerref_raw(struct WorkerRef *worker_ref);
 // ID of the current thread's Worker. Panics if the thread has no Worker.
 int32_t worker_threadID(void);
 
+void worker_setActiveHost(Host *host);
+
+void worker_setActiveProcess(Process *process);
+
+void worker_setActiveThread(Thread *thread);
+
+Host *worker_getActiveHost(void);
+
+Process *worker_getActiveProcess(void);
+
+Thread *worker_getActiveThread(void);
+
 // Create an object that can be used to store all descriptors created by a
 // process. When the table is no longer required, use descriptortable_free
 // to release the reference.
@@ -374,9 +386,9 @@ struct MemoryManager *memorymanager_new(pid_t pid);
 // * `mm` must point to a valid object.
 void memorymanager_free(struct MemoryManager *mm);
 
-struct AllocdMem_u8 *allocdmem_new(uintptr_t len);
+struct AllocdMem_u8 *allocdmem_new(Thread *thread, uintptr_t len);
 
-void allocdmem_free(struct AllocdMem_u8 *allocd_mem);
+void allocdmem_free(Thread *thread, struct AllocdMem_u8 *allocd_mem);
 
 PluginPtr allocdmem_pluginPtr(const struct AllocdMem_u8 *allocd_mem);
 

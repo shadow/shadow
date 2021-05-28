@@ -175,6 +175,11 @@ guint process_getProcessID(Process* proc) {
     return proc->processID;
 }
 
+pid_t process_getNativePid(const Process* proc) {
+    MAGIC_ASSERT(proc);
+    return proc->nativePid;
+}
+
 static void _process_reapThread(Process* process, Thread* thread) {
     utility_assert(!thread_isRunning(thread));
 
@@ -819,6 +824,12 @@ void process_setMemoryManager(Process* proc, MemoryManager* memoryManager) {
         memorymanager_free(proc->memoryManager);
     }
     proc->memoryManager = memoryManager;
+}
+
+uint32_t process_getHostId(const Process* proc) {
+    MAGIC_ASSERT(proc);
+    utility_assert(proc->host);
+    return host_getID(proc->host);
 }
 
 InterposeMethod process_getInterposeMethod(Process* proc) {

@@ -184,8 +184,6 @@ static StopReason _getStopReason(int wstatus) {
 typedef struct _ThreadPtrace {
     Thread base;
 
-    SysCallHandler* sys;
-
     Tsc tsc;
 
     // Reason for the most recent transfer of control back to Shadow.
@@ -505,9 +503,9 @@ static void _threadptrace_enterStateExited(ThreadPtrace* thread) {
     }
 
     // Remove circular ref so that thread can be destroyed.
-    if (thread->sys) {
-        syscallhandler_unref(thread->sys);
-        thread->sys = NULL;
+    if (thread->base.sys) {
+        syscallhandler_unref(thread->base.sys);
+        thread->base.sys = NULL;
     }
 }
 
@@ -796,7 +794,7 @@ static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallAr
         if (args->number == SYS_brk) {
             // brk should *always* be interposed so that the MemoryManager can track it.
             trace("Interposing brk even though native syscalls are enabled");
-            return syscallhandler_make_syscall(thread->sys, args);
+            return syscallhandler_make_syscall(thread->base.sys, args);
         } else {
             trace("Ptrace allowing native syscalls");
             return (SysCallReturn){.state = SYSCALL_NATIVE};
@@ -804,7 +802,7 @@ static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallAr
     }
     trace("Ptrace not allowing native syscalls");
 
-    return syscallhandler_make_syscall(thread->sys, args);
+    return syscallhandler_make_syscall(thread->base.sys, args);
 }
 
 static void _threadptrace_doAttach(ThreadPtrace* thread) {
@@ -884,7 +882,7 @@ void threadptrace_detach(Thread* base) {
 }
 
 static SysCallCondition* _threadptrace_resumeIpcSyscall(ThreadPtrace* thread, bool* changedState) {
-    SysCallReturn ret = syscallhandler_make_syscall(thread->sys, &thread->syscall_args);
+    SysCallReturn ret = syscallhandler_make_syscall(thread->base.sys, &thread->syscall_args);
     switch (ret.state) {
         case SYSCALL_BLOCK:
             trace("ipc_syscall blocked");
@@ -1102,7 +1100,7 @@ void threadptrace_handleProcessExit(Thread* base) {
 
     if (!thread_isRunning(base)) {
         // Nothing to do
-        utility_assert(!thread->sys);
+        utility_assert(!thread->base.sys);
         return;
     }
 
@@ -1142,8 +1140,8 @@ void threadptrace_free(Thread* base) {
     trace("threadptrace_free");
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
-    if (thread->sys) {
-        syscallhandler_unref(thread->sys);
+    if (thread->base.sys) {
+        syscallhandler_unref(thread->base.sys);
     }
 
     worker_count_deallocation(ThreadPtrace);
@@ -1365,7 +1363,7 @@ Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
         .tsc = {.cyclesPerSecond = 2000000000UL},
         .childState = THREAD_PTRACE_CHILD_STATE_NONE,
     };
-    thread->sys = syscallhandler_new(host, process, _threadPtraceToThread(thread));
+    thread->base.sys = syscallhandler_new(host, process, _threadPtraceToThread(thread));
 
     // Set up a shared mem channel that we use even if not using IPC events
     thread->shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimSharedMem));

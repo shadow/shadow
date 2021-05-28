@@ -73,14 +73,6 @@ struct WorkerC {
         SimulationTime barrier;
     } clock;
 
-    /* cached storage of active objects for the event that
-     * is currently being processed by the worker */
-    struct {
-        Host* host;
-        Process* process;
-        Thread* thread;
-    } active;
-
     SimulationTime bootstrapEndTime;
 
     // A counter for objects allocated by this worker.
@@ -418,8 +410,6 @@ WorkerC* workerc_new(WorkerPool* workerPool, int threadID) {
 
 void workerc_free(WorkerC* worker) {
     MAGIC_ASSERT(worker);
-    utility_assert(!worker->active.host);
-    utility_assert(!worker->active.process);
 
     if (worker->syscall_counter) {
         counter_free(worker->syscall_counter);
@@ -610,22 +600,19 @@ gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
         return FALSE;
     }
 
-    Host* srcHost = NULL;
+    Host* host = worker_getActiveHost();
+    utility_assert(host);
+
     SimulationTime clock_now = 0;
     {
         g_autoptr(WorkerRefMut) ref = worker_borrowMut();
         WorkerC* worker = workerrefmut_raw(ref);
-        srcHost = worker->active.host;
         clock_now = worker->clock.now;
     }
     utility_assert(clock_now != SIMTIME_INVALID);
-    utility_assert(srcHost != NULL);
 
-    Host* dstHost = srcHost;
-
-    Event* event = event_new_(task, clock_now + nanoDelay, srcHost, dstHost);
-
-    return scheduler_push(worker_pool()->scheduler, event, srcHost, dstHost);
+    Event* event = event_new_(task, clock_now + nanoDelay, host, host);
+    return scheduler_push(worker_pool()->scheduler, event, host, host);
 }
 
 static void _worker_runDeliverPacketTask(Packet* packet, gpointer userData) {
@@ -728,78 +715,6 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     host_shutdown(host);
     worker_setActiveHost(NULL);
     host_unref(host);
-}
-
-Process* worker_getActiveProcess() {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    // FIXME: Unsound. This should return a ProcessRefMut* or ProcessRef*.
-    // Or more likely, go away completely and be passed around
-    // explicitly in a Context object.
-    return workerref_raw(ref)->active.process;
-}
-
-void worker_setActiveProcess(Process* proc) {
-    Process* oldProcess = NULL;
-    {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        WorkerC* worker = workerrefmut_raw(ref);
-        oldProcess = worker->active.process;
-        worker->active.process = proc;
-    }
-    if (oldProcess) {
-        process_unref(oldProcess);
-    }
-    if (proc) {
-        process_ref(proc);
-    }
-}
-
-Thread* worker_getActiveThread() {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    // FIXME: Unsound. This should return a ProcessRefMut* or ProcessRef*.
-    // Or more likely, go away completely and be passed around
-    // explicitly in a Context object.
-    return workerref_raw(ref)->active.thread;
-}
-
-void worker_setActiveThread(Thread* thread) {
-    Thread* oldThread = NULL;
-    {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        WorkerC* worker = workerrefmut_raw(ref);
-        oldThread = worker->active.thread;
-        worker->active.thread = thread;
-    }
-    if (oldThread) {
-        thread_unref(oldThread);
-    }
-    if (thread) {
-        thread_ref(thread);
-    }
-}
-
-Host* worker_getActiveHost() {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    // FIXME: Unsound. This should return a HostRefMut* or HostRef*.
-    // Or more likely, go away completely and be passed around
-    // explicitly in a Context object.
-    return workerref_raw(ref)->active.host;
-}
-
-void worker_setActiveHost(Host* host) {
-    Host* oldHost = NULL;
-    {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        WorkerC* worker = workerrefmut_raw(ref);
-        oldHost = worker->active.host;
-        worker->active.host = host;
-    }
-    if (oldHost) {
-        host_unref(oldHost);
-    }
-    if (host) {
-        host_ref(host);
-    }
 }
 
 SimulationTime worker_getCurrentTime() {
