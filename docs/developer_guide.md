@@ -18,6 +18,8 @@ cargo install --force --version 0.18.0 cbindgen
 cargo install --force --version 0.57.0 bindgen
 ```
 
+The versions of bindgen and cbindgen you install should match the [versions installed in the CI](https://github.com/shadow/shadow/blob/dev/.github/workflows/lint.yml).
+
 ## Extra tests
 
 Shadow includes tests that require additional dependencies, such as Tor, TGen, and networkx. These aren't run by default, but are run as part of the CI tests. To run them locally, first make sure that both tor and tgen are located at `~/.shadow/bin/{tor,tgen}`. These can be symlinks to tor and tgen binaries elsewhere in the filesystem. You should also install all of Shadow's optional dependencies.
