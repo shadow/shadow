@@ -8,7 +8,6 @@
   + cmake (version >= 3.2)
   + make
   + xz-utils
-  + glibc debuginfo
   + procps
   + cargo, rustc (version \~ latest)
 
