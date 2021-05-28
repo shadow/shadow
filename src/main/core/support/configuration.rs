@@ -328,6 +328,11 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "N")]
     #[clap(about = EXP_HELP.get("worker_threads").unwrap())]
     worker_threads: Option<NonZeroU32>,
+
+    /// Don't adjust the working directories of the plugins
+    #[clap(long, value_name = "bool")]
+    #[clap(about = EXP_HELP.get("use_legacy_working_dir").unwrap())]
+    use_legacy_working_dir: Option<bool>,
 }
 
 impl ExperimentalOptions {
@@ -360,6 +365,7 @@ impl Default for ExperimentalOptions {
             interface_buffer: Some(units::Bytes::new(1_024_000, units::SiPrefixUpper::Base)),
             interface_qdisc: Some(QDiscMode::Fifo),
             worker_threads: None,
+            use_legacy_working_dir: Some(false),
         }
     }
 }
@@ -1308,6 +1314,13 @@ mod export {
         let config = unsafe { &*config };
 
         config.experimental.interface_qdisc.unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getUseLegacyWorkingDir(config: *const ConfigOptions) -> bool {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        config.experimental.use_legacy_working_dir.unwrap()
     }
 
     #[no_mangle]

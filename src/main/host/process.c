@@ -68,6 +68,12 @@
 static bool _use_shim_syscall_handler = true;
 ADD_CONFIG_HANDLER(config_getUseShimSyscallHandler, _use_shim_syscall_handler)
 
+// Shadow 1.x did not adjust the plugins working directories, but Shadow now runs each plugin with
+// the working directory of the host data path. Using the legacy working directory is useful when
+// running the same experiment in multiple versions of Shadow for performacne comparison purposes.
+static bool _use_legacy_working_dir = false;
+ADD_CONFIG_HANDLER(config_getUseLegacyWorkingDir, _use_legacy_working_dir)
+
 static gchar* _process_outputFileName(Process* proc, const char* type);
 static void _process_check(Process* proc);
 
@@ -676,7 +682,13 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 
     proc->interposeMethod = interposeMethod;
 
-    proc->workingDir = realpath(host_getDataPath(host), NULL);
+    if (_use_legacy_working_dir) {
+        /* use Shadow's working directory */
+        proc->workingDir = getcwd(NULL, 0);
+    } else {
+        /* use the host's data directory */
+        proc->workingDir = realpath(host_getDataPath(host), NULL);
+    }
 
     if (proc->workingDir == NULL) {
         utility_panic(

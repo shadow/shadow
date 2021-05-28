@@ -198,6 +198,8 @@ uint64_t config_getInterfaceBuffer(const struct ConfigOptions *config);
 
 enum QDiscMode config_getInterfaceQdisc(const struct ConfigOptions *config);
 
+bool config_getUseLegacyWorkingDir(const struct ConfigOptions *config);
+
 char *config_getNetworkGraph(const struct ConfigOptions *config);
 
 bool config_getUseShortestPath(const struct ConfigOptions *config);
