@@ -112,7 +112,6 @@ struct _AttachHelper {
 
     guint numIPsCity;
     guint numIPsCountry;
-    guint numIPsGeo;
     guint numIPsAll;
 
     gchar* ipAddressHint;
@@ -2067,7 +2066,8 @@ static igraph_integer_t* _topology_getLongestPrefixMatch(Topology* top, GQueue* 
         igraph_integer_t* vertexIndexPtr = g_queue_pop_head(vertexSet);
         igraph_integer_t vertexIndex = (igraph_integer_t) GPOINTER_TO_INT(vertexIndexPtr);
         _topology_lockGraph(top);
-        const gchar* ipStr = VAS(&top->graph, "ip", vertexIndex);
+        const gchar* attrString = _topology_vertexAttributeToString(VERTEX_ATTR_IP_ADDRESS);
+        const gchar* ipStr = VAS(&top->graph, attrString, vertexIndex);
         _topology_unlockGraph(top);
         in_addr_t vertexIP = address_stringToIP(ipStr);
 
