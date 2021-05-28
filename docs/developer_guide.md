@@ -18,15 +18,19 @@ cargo install --force --version 0.18.0 cbindgen
 cargo install --force --version 0.57.0 bindgen
 ```
 
-## Tor tests
+## Extra tests
 
-Shadow includes tests that use Tor and TGen. These are not run by default. To run them, first make sure that both tor and tgen are located at `~/.shadow/bin/{tor,tgen}`. These can be symlinks to tor and tgen binaries elsewhere in the filesystem. It is recommended to build Shadow in release mode, otherwise the tests may take much longer to complete.
+Shadow includes tests that require additional dependencies, such as Tor, TGen, and networkx. These aren't run by default, but are run as part of the CI tests. To run them locally, first make sure that both tor and tgen are located at `~/.shadow/bin/{tor,tgen}`. These can be symlinks to tor and tgen binaries elsewhere in the filesystem. You should also install all of Shadow's optional dependencies.
+
+It is recommended to build Shadow in release mode, otherwise the Tor tests may not complete before the timeout.
 
 ```bash
-./setup test -- --build-config extra --label-regex tor
+./setup test -- --build-config extra
+# To exclude the Tor tests (for example if you built Shadow in debug mode)
+./setup test -- --build-config extra --label-exclude tor
 ```
 
-If you change the tor version by updating the version at `~/.shadow/bin/tor`, make sure to re-run `./setup build --test`.
+If you change the version of tor located at `~/.shadow/bin/tor`, make sure to re-run `./setup build --test`.
 
 ## Debugging
 
