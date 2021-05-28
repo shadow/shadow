@@ -10,7 +10,7 @@
   + xz-utils
   + glibc debuginfo
   + procps
-  + cargo, rustc
+  + cargo, rustc (version \~ latest)
 
 #### Recommended Python Modules (for helper/analysis scripts):
   + numpy, scipy, matplotlib, networkx, lxml, pyyaml
@@ -35,8 +35,10 @@ sudo apt-get install -y \
     python3-pip \
     xz-utils \
     gcc \
-    g++ \
-    cargo
+    g++
+
+# rustup: https://rustup.rs
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Optional dependencies
 
@@ -79,8 +81,10 @@ sudo yum install -y \
     yum-utils \
     diffutils \
     gcc \
-    gcc-c++ \
-    cargo
+    gcc-c++
+
+# rustup: https://rustup.rs
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Optional dependencies
 
@@ -117,8 +121,6 @@ alternatives --install /usr/local/bin/cmake cmake /usr/bin/cmake3 20 \
     --slave /usr/local/bin/ccmake ccmake /usr/bin/ccmake3 \
     --family cmake
 ```
-
-As cargo is not available on CentOS 7, you can install cargo following the steps at https://rustup.rs/.
 
 #### CentOS 8
 
