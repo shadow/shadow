@@ -120,6 +120,8 @@ Type: Integer
 How many parallel threads to use to run the simulation. Optimal performance is
 usually obtained with `nproc`, or sometimes `nproc/2` with hyperthreading.
 
+Virtual hosts depend on network packets that can potentially arrive from other virtual hosts, so each worker can only advance according to the propagation delay to avoid dependency violations. Therefore, not all threads will have 100% CPU utilization.
+
 #### `general.seed`
 
 Default: 1  
