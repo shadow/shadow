@@ -1584,12 +1584,10 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
     }
 
     *acceptedHandle = tcpChild->super.super.super.handle;
-    if(ip) {
-        *ip = tcpChild->super.peerIP;
-    }
-    if(port) {
-        *port = tcpChild->super.peerPort;
-    }
+    utility_assert(ip);
+    *ip = tcpChild->super.peerIP;
+    utility_assert(port);
+    *port = tcpChild->super.peerPort;
 
     Tracker* tracker = host_getTracker(worker_getActiveHost());
     tracker_updateSocketPeer(tracker, *acceptedHandle, *ip, ntohs(tcpChild->super.peerPort));
@@ -1802,7 +1800,7 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
     gsize outLength = socket_getOutputBufferLength(&tcp->super);
     gsize inSize = socket_getInputBufferSize(&tcp->super);
     gsize inLength = socket_getInputBufferLength(&tcp->super);
-    double ploss = (double) (tcp->info.retransmitCount / tcp->send.packetsSent);
+    double ploss = (double)tcp->info.retransmitCount / tcp->send.packetsSent;
 
     debug("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
           "sndbufsize=%" G_GSIZE_FORMAT " sndbuflen=%" G_GSIZE_FORMAT " rcvbufsize=%" G_GSIZE_FORMAT
