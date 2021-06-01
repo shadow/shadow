@@ -258,9 +258,8 @@ static void _process_terminate_threads(Process* proc) {
 #ifdef USE_PERF_TIMERS
 static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
     SimulationTime delay = (SimulationTime) (elapsedTimeSec * SIMTIME_ONE_SECOND);
-    Host* currentHost = worker_getActiveHost();
-    cpu_addDelay(host_getCPU(currentHost), delay);
-    tracker_addProcessingTime(host_getTracker(currentHost), delay);
+    cpu_addDelay(host_getCPU(proc->host), delay);
+    tracker_addProcessingTime(host_getTracker(proc->host), delay);
     proc->totalRunTime += elapsedTimeSec;
 }
 #endif
@@ -484,7 +483,7 @@ static void _process_start(Process* proc) {
     process_continue(proc, mainThread);
 }
 
-static void _start_thread_task(gpointer callbackObject, gpointer callbackArgument) {
+static void _start_thread_task(Host* host, gpointer callbackObject, gpointer callbackArgument) {
     Process* process = callbackObject;
     Thread* thread = callbackArgument;
     process_continue(process, thread);
@@ -509,7 +508,7 @@ void process_addThread(Process* proc, Thread* thread) {
     process_ref(proc);
     Task* task = task_new(_start_thread_task, proc, thread, _start_thread_task_free_process,
                           _start_thread_task_free_thread);
-    worker_scheduleTask(task, 0);
+    worker_scheduleTask(task, proc->host, 0);
     task_unref(task);
 }
 
@@ -599,11 +598,11 @@ void process_stop(Process* proc) {
     _process_check(proc);
 }
 
-static void _process_runStartTask(Process* proc, gpointer nothing) {
+static void _process_runStartTask(Host* host, gpointer proc, gpointer nothing) {
     _process_start(proc);
 }
 
-static void _process_runStopTask(Process* proc, gpointer nothing) {
+static void _process_runStopTask(Host* host, gpointer proc, gpointer nothing) {
     process_stop(proc);
 }
 
@@ -615,18 +614,18 @@ void process_schedule(Process* proc, gpointer nothing) {
     if(proc->stopTime == 0 || proc->startTime < proc->stopTime) {
         SimulationTime startDelay = proc->startTime <= now ? 1 : proc->startTime - now;
         process_ref(proc);
-        Task* startProcessTask = task_new((TaskCallbackFunc)_process_runStartTask,
-                proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
-        worker_scheduleTask(startProcessTask, startDelay);
+        Task* startProcessTask =
+            task_new(_process_runStartTask, proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
+        worker_scheduleTask(startProcessTask, proc->host, startDelay);
         task_unref(startProcessTask);
     }
 
     if(proc->stopTime > 0 && proc->stopTime > proc->startTime) {
         SimulationTime stopDelay = proc->stopTime <= now ? 1 : proc->stopTime - now;
         process_ref(proc);
-        Task* stopProcessTask = task_new((TaskCallbackFunc)_process_runStopTask,
-                proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
-        worker_scheduleTask(stopProcessTask, stopDelay);
+        Task* stopProcessTask =
+            task_new(_process_runStopTask, proc, NULL, (TaskObjectFreeFunc)process_unref, NULL);
+        worker_scheduleTask(stopProcessTask, proc->host, stopDelay);
         task_unref(stopProcessTask);
     }
 }
@@ -775,11 +774,11 @@ static void _process_free(Process* proc) {
      * Closing the descriptors will remove them from the table and the table
      * will release it's ref. We also need to release our proc ref. */
     if (proc->stderrFile) {
-        descriptor_close((LegacyDescriptor*)proc->stderrFile);
+        descriptor_close((LegacyDescriptor*)proc->stderrFile, proc->host);
         descriptor_unref((LegacyDescriptor*)proc->stderrFile);
     }
     if (proc->stdoutFile) {
-        descriptor_close((LegacyDescriptor*)proc->stdoutFile);
+        descriptor_close((LegacyDescriptor*)proc->stdoutFile, proc->host);
         descriptor_unref((LegacyDescriptor*)proc->stdoutFile);
     }
 

@@ -25,6 +25,8 @@
 #include <glib.h>
 #include <netinet/in.h>
 
+#include "main/core/support/definitions.h"
+
 typedef struct _PCapWriter PCapWriter;
 
 typedef struct _PCapPacket PCapPacket;
@@ -45,7 +47,7 @@ struct _PCapPacket {
     gpointer payload;
 };
 
-PCapWriter* pcapwriter_new(gchar* pcapDirectory, gchar* pcapFilename);
+PCapWriter* pcapwriter_new(Host* host, gchar* pcapDirectory, gchar* pcapFilename);
 void pcapwriter_free(PCapWriter* pcap);
 void pcapwriter_writePacket(PCapWriter* pcap, PCapPacket* packet);
 

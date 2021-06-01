@@ -92,15 +92,15 @@ void router_unref(Router* router) {
     }
 }
 
-void router_forward(Router* router, Packet* packet) {
+void router_forward(Router* router, Host* src, Packet* packet) {
     MAGIC_ASSERT(router);
     /* just immediately forward the sending task to the worker, who will compute the
      * path and the appropriate delays to the destination. The packet will arrive
      * at the destination's router after a delay equal to the network latency.  */
-    worker_sendPacket(packet);
+    worker_sendPacket(src, packet);
 }
 
-void router_enqueue(Router* router, Packet* packet) {
+void router_enqueue(Router* router, Host* host, Packet* packet) {
     MAGIC_ASSERT(router);
     utility_assert(packet);
 
@@ -116,7 +116,7 @@ void router_enqueue(Router* router, Packet* packet) {
 
     /* notify the netiface that we have a new packet so it can dequeue it. */
     if(!bufferedPacket && wasQueued) {
-        networkinterface_receivePackets(router->interface);
+        networkinterface_receivePackets(router->interface, host);
     }
 }
 

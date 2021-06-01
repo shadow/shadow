@@ -33,6 +33,7 @@
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
 #include "main/routing/address.h"
+#include "main/routing/packet.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
@@ -253,7 +254,7 @@ static void _rswlog(const TCP *tcp, const char *format, ...) {
 #endif // RSWLOG
 }
 
-static void _tcp_flush(TCP* tcp);
+static void _tcp_flush(TCP* tcp, Host* host);
 
 static TCP* _tcp_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     utility_assert(descriptor_getType(descriptor) == DT_TCPSOCKET);
@@ -363,7 +364,7 @@ static in_addr_t tcp_getPeerIP(TCP* tcp) {
     return ip;
 }
 
-static guint _tcp_calculateRTT(TCP* tcp) {
+static guint _tcp_calculateRTT(TCP* tcp, Host* host) {
     MAGIC_ASSERT(tcp);
 
     in_addr_t sourceIP = tcp_getIP(tcp);
@@ -374,7 +375,7 @@ static guint _tcp_calculateRTT(TCP* tcp) {
         if(destinationIP == htonl(INADDR_LOOPBACK)) {
             sourceIP = htonl(INADDR_LOOPBACK);
         } else {
-            sourceIP = host_getDefaultIP(worker_getActiveHost());
+            sourceIP = host_getDefaultIP(host);
         }
     }
 
@@ -408,8 +409,7 @@ static guint _tcp_calculateRTT(TCP* tcp) {
     return rtt;
 }
 
-static gsize _tcp_computeRTTMEM(TCP* tcp, gboolean isRMEM) {
-    Host* host = worker_getActiveHost();
+static gsize _tcp_computeRTTMEM(TCP* tcp, Host* host, gboolean isRMEM) {
     Address* address = host_getDefaultAddress(host);
     in_addr_t ip = (in_addr_t)address_toNetworkIP(address);
 
@@ -430,19 +430,19 @@ static gsize _tcp_computeRTTMEM(TCP* tcp, gboolean isRMEM) {
     return mem;
 }
 
-static gsize _tcp_computeMaxRMEM(TCP* tcp) {
-    gsize mem = _tcp_computeRTTMEM(tcp, TRUE);
+static gsize _tcp_computeMaxRMEM(TCP* tcp, Host* host) {
+    gsize mem = _tcp_computeRTTMEM(tcp, host, TRUE);
     mem = CLAMP(mem, CONFIG_TCP_RMEM_MAX, CONFIG_TCP_RMEM_MAX*10);
     return mem;
 }
 
-static gsize _tcp_computeMaxWMEM(TCP* tcp) {
-    gsize mem = _tcp_computeRTTMEM(tcp, FALSE);
+static gsize _tcp_computeMaxWMEM(TCP* tcp, Host* host) {
+    gsize mem = _tcp_computeRTTMEM(tcp, host, FALSE);
     mem = CLAMP(mem, CONFIG_TCP_WMEM_MAX, CONFIG_TCP_WMEM_MAX*10);
     return mem;
 }
 
-static void _tcp_tuneInitialBufferSizes(TCP* tcp) {
+static void _tcp_tuneInitialBufferSizes(TCP* tcp, Host* host) {
     MAGIC_ASSERT(tcp);
 
     if(!CONFIG_TCPAUTOTUNE) {
@@ -465,7 +465,7 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp) {
         if(destinationIP == htonl(INADDR_LOOPBACK)) {
             sourceIP = htonl(INADDR_LOOPBACK);
         } else {
-            sourceIP = host_getDefaultIP(worker_getActiveHost());
+            sourceIP = host_getDefaultIP(host);
         }
     }
 
@@ -488,7 +488,7 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp) {
         return;
     }
 
-    guint32 rtt_milliseconds = (guint32)_tcp_calculateRTT(tcp);
+    guint32 rtt_milliseconds = (guint32)_tcp_calculateRTT(tcp, host);
 
     Address* srcAddress = worker_resolveIPToAddress(sourceIP);
     Address* dstAddress = worker_resolveIPToAddress(destinationIP);
@@ -523,11 +523,10 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp) {
 
     /* check to see if the node should set buffer sizes via autotuning, or
      * they were specified by configuration or parameters in XML */
-    Host* node = worker_getActiveHost();
-    if(!tcp->autotune.userDisabledReceive && host_autotuneReceiveBuffer(node)) {
+    if (!tcp->autotune.userDisabledReceive && host_autotuneReceiveBuffer(host)) {
         socket_setInputBufferSize(&(tcp->super), (gsize) receivebuf_size);
     }
-    if(!tcp->autotune.userDisabledSend && host_autotuneSendBuffer(node)) {
+    if (!tcp->autotune.userDisabledSend && host_autotuneSendBuffer(host)) {
         tcp->super.outputBufferSize = sendbuf_size;
         socket_setOutputBufferSize(&(tcp->super), (gsize) sendbuf_size);
     }
@@ -536,7 +535,7 @@ static void _tcp_tuneInitialBufferSizes(TCP* tcp) {
           socket_getOutputBufferSize(&(tcp->super)), socket_getInputBufferSize(&(tcp->super)));
 }
 
-static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
+static void _tcp_autotuneReceiveBuffer(TCP* tcp, Host* host, guint bytesCopied) {
     MAGIC_ASSERT(tcp);
 
     tcp->autotune.bytesCopied += (gsize)bytesCopied;
@@ -547,7 +546,7 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
     if(space > currentSize) {
         tcp->autotune.space = space;
 
-        gsize newSize = (gsize) MIN(space, _tcp_computeMaxRMEM(tcp));
+        gsize newSize = (gsize)MIN(space, _tcp_computeMaxRMEM(tcp, host));
         if(newSize > currentSize) {
             socket_setInputBufferSize(&tcp->super, newSize);
             trace("[autotune] input buffer size adjusted from %"G_GSIZE_FORMAT" to %"G_GSIZE_FORMAT,
@@ -567,7 +566,7 @@ static void _tcp_autotuneReceiveBuffer(TCP* tcp, guint bytesCopied) {
     }
 }
 
-static void _tcp_autotuneSendBuffer(TCP* tcp) {
+static void _tcp_autotuneSendBuffer(TCP* tcp, Host* host) {
     MAGIC_ASSERT(tcp);
 
     /* Linux Kernel 3.11.6:
@@ -584,7 +583,7 @@ static void _tcp_autotuneSendBuffer(TCP* tcp) {
     gsize sndmem = 2404;
     gsize demanded = (gsize)tcp->cong.cwnd;
 
-    gsize newSize = (gsize) MIN((gsize)(sndmem * 2 * demanded), _tcp_computeMaxWMEM(tcp));
+    gsize newSize = (gsize)MIN((gsize)(sndmem * 2 * demanded), _tcp_computeMaxWMEM(tcp, host));
 
     gsize currentSize = socket_getOutputBufferSize(&tcp->super);
     if(newSize > currentSize) {
@@ -605,10 +604,10 @@ void tcp_disableReceiveBufferAutotuning(TCP* tcp) {
 }
 
 // XXX declaration
-static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData);
+static void _tcp_runCloseTimerExpiredTask(Host* host, gpointer tcp, gpointer userData);
 static void _tcp_clearRetransmit(TCP* tcp, guint sequence);
 
-static void _tcp_setState(TCP* tcp, enum TCPState state) {
+static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
     MAGIC_ASSERT(tcp);
 
     tcp->stateLast = tcp->state;
@@ -683,8 +682,8 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
         case TCPS_TIMEWAIT: {
             /* schedule a close timer self-event to finish out the closing process */
             descriptor_ref(tcp);
-            Task* closeTask = task_new((TaskCallbackFunc)_tcp_runCloseTimerExpiredTask,
-                    tcp, NULL, descriptor_unref, NULL);
+            Task* closeTask =
+                task_new(_tcp_runCloseTimerExpiredTask, tcp, NULL, descriptor_unref, NULL);
             SimulationTime delay = CONFIG_TCPCLOSETIMER_DELAY;
 
             /* if a child of a server initiated the close, close more quickly */
@@ -692,7 +691,7 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
                 delay = SIMTIME_ONE_SECOND;
             }
 
-            worker_scheduleTask(closeTask, delay);
+            worker_scheduleTask(closeTask, host, delay);
             task_unref(closeTask);
             break;
         }
@@ -701,9 +700,10 @@ static void _tcp_setState(TCP* tcp, enum TCPState state) {
     }
 }
 
-static void _tcp_runCloseTimerExpiredTask(TCP* tcp, gpointer userData) {
+static void _tcp_runCloseTimerExpiredTask(Host* host, gpointer voidTcp, gpointer userData) {
+    TCP* tcp = voidTcp;
     MAGIC_ASSERT(tcp);
-    _tcp_setState(tcp, TCPS_CLOSED);
+    _tcp_setState(tcp, host, TCPS_CLOSED);
 }
 
 /* returns the total amount of buffered data in this TCP socket, including TCP-specific buffers */
@@ -804,8 +804,8 @@ static void _tcp_updateSendWindow(TCP* tcp) {
     tcp->send.window = (guint32)MIN(tcp->cong.cwnd, (gint)tcp->receive.lastWindow);
 }
 
-static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, PluginVirtualPtr payload,
-                                 gsize payloadLength) {
+static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, Host* host, enum ProtocolTCPFlags flags,
+                                               bool isEmpty) {
     MAGIC_ASSERT(tcp);
 
     /*
@@ -823,7 +823,7 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, PluginVi
         if(destinationIP == htonl(INADDR_LOOPBACK)) {
             sourceIP = htonl(INADDR_LOOPBACK);
         } else {
-            sourceIP = host_getDefaultIP(worker_getActiveHost());
+            sourceIP = host_getDefaultIP(host);
         }
     }
 
@@ -835,11 +835,10 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, PluginVi
     /* control packets have no sequence number
      * (except FIN, so we close after sending everything) */
     gboolean isFinNotAck = ((flags & PTCP_FIN) && !(flags & PTCP_ACK));
-    guint sequence = payloadLength > 0 || isFinNotAck ? tcp->send.next : 0;
+    guint sequence = !isEmpty || isFinNotAck ? tcp->send.next : 0;
 
     /* create the TCP packet. the ack, window, and timestamps will be set in _tcp_flush */
-    Host* host = worker_getActiveHost();
-    Packet* packet = packet_new(payload, payloadLength, (guint)host_getID(host), host_getNewPacketID(host));
+    Packet* packet = packet_new(host);
     packet_setTCP(packet, flags, sourceIP, sourcePort, destinationIP, destinationPort, sequence);
     packet_addDeliveryStatus(packet, PDS_SND_CREATED);
 
@@ -851,21 +850,40 @@ static Packet* _tcp_createPacket(TCP* tcp, enum ProtocolTCPFlags flags, PluginVi
     return packet;
 }
 
-static void _tcp_sendControlPacket(TCP* tcp, enum ProtocolTCPFlags flags) {
+static Packet* _tcp_createDataPacket(TCP* tcp, Thread* thread, enum ProtocolTCPFlags flags,
+                                     PluginVirtualPtr payload, gsize payloadLength) {
+    MAGIC_ASSERT(tcp);
+
+    Host* host = thread_getHost(thread);
+    bool isEmpty = payloadLength == 0;
+    Packet* packet = _tcp_createPacketWithoutPayload(tcp, host, flags, isEmpty);
+    if (!isEmpty) {
+        packet_setPayload(packet, thread, payload, payloadLength);
+    }
+    return packet;
+}
+
+static Packet* _tcp_createControlPacket(TCP* tcp, Host* host, enum ProtocolTCPFlags flags) {
+    MAGIC_ASSERT(tcp);
+
+    return _tcp_createPacketWithoutPayload(tcp, host, flags, /*isEmpty=*/true);
+}
+
+static void _tcp_sendControlPacket(TCP* tcp, Host* host, enum ProtocolTCPFlags flags) {
     MAGIC_ASSERT(tcp);
 
     trace("%s <-> %s: sending response control packet now",
           tcp->super.boundString, tcp->super.peerString);
 
     /* create the ack packet, without any payload data */
-    Packet* control = _tcp_createPacket(tcp, flags, (PluginVirtualPtr){0}, 0);
+    Packet* control = _tcp_createControlPacket(tcp, host, flags);
 
     /* make sure it gets sent before whatever else is in the queue */
     packet_setPriority(control, 0.0);
 
     /* push it in the buffer and to the socket */
     _tcp_bufferPacketOut(tcp, control);
-    _tcp_flush(tcp);
+    _tcp_flush(tcp, host);
 
     /* the output buffer holds the packet ref now */
     packet_unref(control);
@@ -940,9 +958,11 @@ static void _tcp_clearRetransmitRange(TCP* tcp, guint begin, guint end) {
 }
 
 // XXX forward declaration
-static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData);
+static void _tcp_runRetransmitTimerExpiredTask(Host* host, gpointer /*TCP*/ tcp,
+                                               gpointer /*Thread*/ thread);
 
-static void _tcp_scheduleRetransmitTimer(TCP* tcp, SimulationTime now, SimulationTime delay) {
+static void _tcp_scheduleRetransmitTimer(TCP* tcp, Host* host, SimulationTime now,
+                                         SimulationTime delay) {
     MAGIC_ASSERT(tcp);
 
     SimulationTime* expireTimePtr = g_new0(SimulationTime, 1);
@@ -951,9 +971,9 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, SimulationTime now, Simulatio
 
     if(success) {
         descriptor_ref(tcp);
-        Task* retexpTask = task_new((TaskCallbackFunc)_tcp_runRetransmitTimerExpiredTask,
-                tcp, NULL, descriptor_unref, NULL);
-        worker_scheduleTask(retexpTask, delay);
+        Task* retexpTask =
+            task_new(_tcp_runRetransmitTimerExpiredTask, tcp, NULL, descriptor_unref, NULL);
+        worker_scheduleTask(retexpTask, host, delay);
         task_unref(retexpTask);
 
         trace("%s retransmit timer scheduled for %"G_GUINT64_FORMAT" ns",
@@ -965,7 +985,7 @@ static void _tcp_scheduleRetransmitTimer(TCP* tcp, SimulationTime now, Simulatio
     }
 }
 
-static void _tcp_scheduleRetransmitTimerIfNeeded(TCP* tcp, SimulationTime now) {
+static void _tcp_scheduleRetransmitTimerIfNeeded(TCP* tcp, Host* host, SimulationTime now) {
     /* logic for scheduling retransmission events. we only need to schedule one if
      * we have no events that will allow us to schedule one later. */
     SimulationTime* nextTimePtr = priorityqueue_peek(tcp->retransmit.scheduledTimerExpirations);
@@ -976,10 +996,10 @@ static void _tcp_scheduleRetransmitTimerIfNeeded(TCP* tcp, SimulationTime now) {
 
     /* no existing timer will expire as early as desired */
     SimulationTime delay = tcp->retransmit.desiredTimerExpiration - now;
-    _tcp_scheduleRetransmitTimer(tcp, now, delay);
+    _tcp_scheduleRetransmitTimer(tcp, host, now, delay);
 }
 
-static void _tcp_setRetransmitTimer(TCP* tcp, SimulationTime now) {
+static void _tcp_setRetransmitTimer(TCP* tcp, Host* host, SimulationTime now) {
     MAGIC_ASSERT(tcp);
 
     /* our retransmission timer needs to change
@@ -987,7 +1007,7 @@ static void _tcp_setRetransmitTimer(TCP* tcp, SimulationTime now) {
     SimulationTime delay = tcp->retransmit.timeout * SIMTIME_ONE_MILLISECOND;
     tcp->retransmit.desiredTimerExpiration = now + delay;
 
-    _tcp_scheduleRetransmitTimerIfNeeded(tcp, now);
+    _tcp_scheduleRetransmitTimerIfNeeded(tcp, host, now);
 }
 
 static void _tcp_stopRetransmitTimer(TCP* tcp) {
@@ -1008,7 +1028,7 @@ static void _tcp_setRetransmitTimeout(TCP* tcp, gint newTimeout) {
     tcp->retransmit.timeout = MAX(tcp->retransmit.timeout, CONFIG_TCP_RTO_MIN);
 }
 
-static void _tcp_updateRTTEstimate(TCP* tcp, SimulationTime timestamp) {
+static void _tcp_updateRTTEstimate(TCP* tcp, Host* host, SimulationTime timestamp) {
     MAGIC_ASSERT(tcp);
 
     SimulationTime now = worker_getCurrentTime();
@@ -1025,7 +1045,7 @@ static void _tcp_updateRTTEstimate(TCP* tcp, SimulationTime timestamp) {
         tcp->timing.rttVariance = rtt / 2;
 
         if(tcp->autotune.isEnabled && !tcp->autotune.didInitializeBufferSizes) {
-            _tcp_tuneInitialBufferSizes(tcp);
+            _tcp_tuneInitialBufferSizes(tcp, host);
         }
     } else {
         /* RTTVAR = (1 - beta) * RTTVAR + beta * |SRTT - R|   (beta = 1/4) */
@@ -1044,7 +1064,7 @@ static void _tcp_updateRTTEstimate(TCP* tcp, SimulationTime timestamp) {
             tcp->timing.rttVariance, tcp->retransmit.timeout);
 }
 
-static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
+static void _tcp_retransmitPacket(TCP* tcp, Host* host, gint sequence) {
     MAGIC_ASSERT(tcp);
 
     Packet* packet = g_hash_table_lookup(tcp->retransmit.queue, GINT_TO_POINTER(sequence));
@@ -1073,7 +1093,7 @@ static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
     }
 
     /* reset retransmit timer since we are resending it now */
-    _tcp_setRetransmitTimer(tcp, worker_getCurrentTime());
+    _tcp_setRetransmitTimer(tcp, host, worker_getCurrentTime());
 
     /* queue it for sending */
     _tcp_bufferPacketOut(tcp, packet);
@@ -1084,30 +1104,30 @@ static void _tcp_retransmitPacket(TCP* tcp, gint sequence) {
     packet_unref(packet);
 }
 
-static void _tcp_sendShutdownFin(TCP* tcp) {
+static void _tcp_sendShutdownFin(TCP* tcp, Host* host) {
     MAGIC_ASSERT(tcp);
 
     gboolean sendFin = FALSE;
     if(tcp->state == TCPS_ESTABLISHED || tcp->state == TCPS_SYNRECEIVED) {
-        _tcp_setState(tcp, TCPS_FINWAIT1);
+        _tcp_setState(tcp, host, TCPS_FINWAIT1);
         sendFin = TRUE;
     } else if(tcp->state == TCPS_CLOSEWAIT) {
-        _tcp_setState(tcp, TCPS_LASTACK);
+        _tcp_setState(tcp, host, TCPS_LASTACK);
         sendFin = TRUE;
     }
 
     if(sendFin) {
         /* send a fin */
-        Packet* fin = _tcp_createPacket(tcp, PTCP_FIN, (PluginVirtualPtr){0}, 0);
+        Packet* fin = _tcp_createControlPacket(tcp, host, PTCP_FIN);
         _tcp_bufferPacketOut(tcp, fin);
-        _tcp_flush(tcp);
+        _tcp_flush(tcp, host);
 
         /* the output buffer holds the packet ref now */
         packet_unref(fin);
     }
 }
 
-void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Packet* packet) {
+void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Host* host, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
     SimulationTime now = worker_getCurrentTime();
@@ -1133,12 +1153,12 @@ void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Packet* packet) {
 
         /* start retransmit timer if its not running (rfc 6298, section 5.1) */
         if(!tcp->retransmit.desiredTimerExpiration) {
-            _tcp_setRetransmitTimer(tcp, now);
+            _tcp_setRetransmitTimer(tcp, host, now);
         }
     }
 }
 
-static void _tcp_flush(TCP* tcp) {
+static void _tcp_flush(TCP* tcp, Host* host) {
     MAGIC_ASSERT(tcp);
 
     /* make sure our information is up to date */
@@ -1164,7 +1184,7 @@ static void _tcp_flush(TCP* tcp) {
 
            for (uint32_t jdx = begin; jdx < end; ++jdx) {
                // fprintf(stderr, "CW - %s Retransmitting %d @ %f, %zu lost ranges\n", tcp->super.boundString, jdx, dtime, num_lost_ranges);
-               _tcp_retransmitPacket(tcp, jdx);
+               _tcp_retransmitPacket(tcp, host, jdx);
            }
 
            retransmit_tally_mark_retransmitted(tcp->retransmit.tally,
@@ -1216,7 +1236,7 @@ static void _tcp_flush(TCP* tcp) {
         /* packet will get stored in retrans queue in tcp_networkInterfaceIsAboutToSendPacket */
 
         /* socket will queue it ASAP */
-        gboolean success = socket_addToOutputBuffer(&(tcp->super), packet);
+        gboolean success = socket_addToOutputBuffer(&(tcp->super), host, packet);
         tcp->send.packetsSent++;
         tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header->sequence);
 
@@ -1235,7 +1255,7 @@ static void _tcp_flush(TCP* tcp) {
         _rswlog(tcp, "I just received packet %d\n", header->sequence);
         if(header->sequence == tcp->receive.next) {
             /* move from the unordered buffer to user input buffer */
-            gboolean fitInBuffer = socket_addToInputBuffer(&(tcp->super), packet);
+            gboolean fitInBuffer = socket_addToInputBuffer(&(tcp->super), host, packet);
 
             if(fitInBuffer) {
                 // fprintf(stderr, "SND/RCV Recv %s %s %d @ %f\n", tcp->super.boundString, tcp->super.peerString, header.sequence, dtime);
@@ -1256,7 +1276,7 @@ static void _tcp_flush(TCP* tcp) {
     }
 
     /* update the tracker input/output buffer stats */
-    Tracker* tracker = host_getTracker(worker_getActiveHost());
+    Tracker* tracker = host_getTracker(host);
     Socket* socket = (Socket* )tcp;
     LegacyDescriptor* descriptor = (LegacyDescriptor *)socket;
     gsize inSize = socket_getInputBufferSize(&(tcp->super));
@@ -1266,7 +1286,7 @@ static void _tcp_flush(TCP* tcp) {
 
     /* should we send a fin after clearing the output buffer */
     if((tcp->flags & TCPF_SHOULD_SEND_WR_FIN) && tcp_getOutputBufferLength(tcp) == 0) {
-        _tcp_sendShutdownFin(tcp);
+        _tcp_sendShutdownFin(tcp, host);
         tcp->flags &= ~TCPF_SHOULD_SEND_WR_FIN;
     }
 
@@ -1297,7 +1317,8 @@ static void _tcp_flush(TCP* tcp) {
     }
 }
 
-static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
+static void _tcp_runRetransmitTimerExpiredTask(Host* host, gpointer voidTcp, gpointer unused) {
+    TCP* tcp = voidTcp;
     MAGIC_ASSERT(tcp);
 
     /* a timer expired, update our timer tracking state */
@@ -1326,7 +1347,7 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
     } else if(tcp->retransmit.desiredTimerExpiration > now) {
         /* the timer was reset after this event was scheduled, check if we need to
          * schedule another event, or if we can do it when the next event fires instead */
-        _tcp_scheduleRetransmitTimerIfNeeded(tcp, now);
+        _tcp_scheduleRetransmitTimerIfNeeded(tcp, host, now);
         return;
     }
 
@@ -1335,7 +1356,7 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
      * do exponential backoff */
     tcp->retransmit.backoffCount++;
     _tcp_setRetransmitTimeout(tcp, tcp->retransmit.timeout * 2);
-    _tcp_setRetransmitTimer(tcp, now);
+    _tcp_setRetransmitTimer(tcp, host, now);
 
     tcp->cong.hooks->tcp_cong_timeout_ev(tcp);
     debug("[CONG] a congestion timeout has occurred on %s", tcp->super.boundString);
@@ -1349,7 +1370,7 @@ static void _tcp_runRetransmitTimerExpiredTask(TCP* tcp, gpointer userData) {
 
     _rswlog(tcp, "Timeout, marking %d as lost.\n", tcp->receive.lastAcknowledgment);
 
-    _tcp_flush(tcp);
+    _tcp_flush(tcp, host);
 }
 
 static gboolean _tcp_isFamilySupported(Socket* socket, sa_family_t family) {
@@ -1498,7 +1519,7 @@ void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo) {
     tcpinfo->tcpi_total_retrans = (u_int32_t)tcp->info.retransmitCount;
 }
 
-static gint _tcp_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port,
+static gint _tcp_connectToPeer(Socket* socket, Host* host, in_addr_t ip, in_port_t port,
                                sa_family_t family) {
     TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(tcp);
@@ -1510,10 +1531,10 @@ static gint _tcp_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port,
     }
 
     /* send 1st part of 3-way handshake, state->syn_sent */
-    _tcp_sendControlPacket(tcp, PTCP_SYN);
+    _tcp_sendControlPacket(tcp, host, PTCP_SYN);
 
     trace("%s <-> %s: user initiated connection", tcp->super.boundString, tcp->super.peerString);
-    _tcp_setState(tcp, TCPS_SYNSENT);
+    _tcp_setState(tcp, host, TCPS_SYNSENT);
 
     /* We need to signal when we it succeeds. */
     tcp->flags |= TCPF_CONNECT_SIGNAL_NEEDED;
@@ -1522,17 +1543,18 @@ static gint _tcp_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port,
     return -EINPROGRESS;
 }
 
-void tcp_enterServerMode(TCP* tcp, gint backlog) {
+void tcp_enterServerMode(TCP* tcp, Host* host, gint backlog) {
     MAGIC_ASSERT(tcp);
 
     /* we are a server ready to listen, build our server state */
     tcp->server = _tcpserver_new(backlog);
 
     /* we are now listening for connections */
-    _tcp_setState(tcp, TCPS_LISTEN);
+    _tcp_setState(tcp, host, TCPS_LISTEN);
 }
 
-gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* acceptedHandle) {
+gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
+                          gint* acceptedHandle) {
     MAGIC_ASSERT(tcp);
     utility_assert(acceptedHandle);
 
@@ -1589,7 +1611,7 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
     utility_assert(port);
     *port = tcpChild->super.peerPort;
 
-    Tracker* tracker = host_getTracker(worker_getActiveHost());
+    Tracker* tracker = host_getTracker(host);
     tracker_updateSocketPeer(tracker, *acceptedHandle, *ip, ntohs(tcpChild->super.peerPort));
 
     return 0;
@@ -1701,7 +1723,7 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
     return flags;
 }
 
-TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *header) {
+TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Host* host, Packet* packet, PacketTCPHeader* header) {
     MAGIC_ASSERT(tcp);
 
     trace("processing acks");
@@ -1759,9 +1781,9 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
             tcp->cong.hooks->tcp_cong_new_ack_ev(tcp, nPacketsAcked);
 
             /* increase send buffer size with autotuning */
-            if(tcp->autotune.isEnabled && !tcp->autotune.userDisabledSend &&
-                    host_autotuneSendBuffer(worker_getActiveHost())) {
-                _tcp_autotuneSendBuffer(tcp);
+            if (tcp->autotune.isEnabled && !tcp->autotune.userDisabledSend &&
+                host_autotuneSendBuffer(host)) {
+                _tcp_autotuneSendBuffer(tcp, host);
             }
         }
 
@@ -1785,7 +1807,7 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *he
         _tcp_stopRetransmitTimer(tcp);
     } else if(nPacketsAcked > 0) {
         /* new data has been acked */
-        _tcp_setRetransmitTimer(tcp, now);
+        _tcp_setRetransmitTimer(tcp, host, now);
     }
 
     tcp->info.lastAckReceived = now;
@@ -1811,12 +1833,13 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
           tcp->super.super.super.handle);
 }
 
-static void _tcp_sendACKTaskCallback(TCP* tcp, gpointer userData) {
+static void _tcp_sendACKTaskCallback(Host* host, gpointer voidTcp, gpointer userData) {
+    TCP* tcp = voidTcp;
     MAGIC_ASSERT(tcp);
     tcp->send.delayedACKIsScheduled = FALSE;
     if(tcp->send.delayedACKCounter > 0) {
         trace("sending a delayed ACK now");
-        _tcp_sendControlPacket(tcp, PTCP_ACK);
+        _tcp_sendControlPacket(tcp, host, PTCP_ACK);
         tcp->send.delayedACKCounter = 0;
     } else {
         trace("delayed ACK was cancelled");
@@ -1824,7 +1847,7 @@ static void _tcp_sendACKTaskCallback(TCP* tcp, gpointer userData) {
 }
 
 /* return TRUE if the packet should be retransmitted */
-static void _tcp_processPacket(Socket* socket, Packet* packet) {
+static void _tcp_processPacket(Socket* socket, Host* host, Packet* packet) {
     TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(tcp);
 
@@ -1847,7 +1870,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
             tcp->error |= TCPE_CONNECTION_RESET;
             tcp->flags |= TCPF_REMOTE_CLOSED;
 
-            _tcp_setState(tcp, TCPS_TIMEWAIT);
+            _tcp_setState(tcp, host, TCPS_TIMEWAIT);
 
             /* it will send no more user data after what we have now */
             tcp->receive.end = tcp->receive.next;
@@ -1879,11 +1902,10 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                 flags |= TCP_PF_PROCESSED;
 
                 /* we need to multiplex a new child */
-                Host* node = worker_getActiveHost();
-                guint64 recvBufSize = host_getConfiguredRecvBufSize(node);
-                guint64 sendBufSize = host_getConfiguredSendBufSize(node);
+                guint64 recvBufSize = host_getConfiguredRecvBufSize(host);
+                guint64 sendBufSize = host_getConfiguredSendBufSize(host);
 
-                TCP* multiplexed = tcp_new(recvBufSize, sendBufSize);
+                TCP* multiplexed = tcp_new(host, recvBufSize, sendBufSize);
                 process_registerLegacyDescriptor(
                     descriptor_getOwnerProcess((LegacyDescriptor*)tcp),
                     (LegacyDescriptor*)multiplexed);
@@ -1903,7 +1925,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                         tcp->super.boundString, tcp->super.peerString,
                         multiplexed->super.boundString, multiplexed->super.peerString);
 
-                _tcp_setState(multiplexed, TCPS_SYNRECEIVED);
+                _tcp_setState(multiplexed, host, TCPS_SYNRECEIVED);
 
                 /* child will send response */
                 tcp = multiplexed;
@@ -1922,7 +1944,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                 tcp->receive.next = tcp->receive.start + 1;
 
                 responseFlags |= PTCP_ACK;
-                _tcp_setState(tcp, TCPS_ESTABLISHED);
+                _tcp_setState(tcp, host, TCPS_ESTABLISHED);
 
                 /* remove the SYN from the retransmit queue */
                 _tcp_clearRetransmit(tcp, 1);
@@ -1934,7 +1956,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                 tcp->receive.next = tcp->receive.start + 1;
 
                 responseFlags |= PTCP_ACK;
-                _tcp_setState(tcp, TCPS_SYNRECEIVED);
+                _tcp_setState(tcp, host, TCPS_SYNRECEIVED);
             }
 
             break;
@@ -1944,7 +1966,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
             /* receive ACK, move to ESTABLISHED */
             if(header->flags & PTCP_ACK) {
                 flags |= TCP_PF_PROCESSED;
-                _tcp_setState(tcp, TCPS_ESTABLISHED);
+                _tcp_setState(tcp, host, TCPS_ESTABLISHED);
 
                 /* remove the SYNACK from the retransmit queue */
                 _tcp_clearRetransmit(tcp, 1);
@@ -1969,7 +1991,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                 /* other side of connection closed */
                 tcp->flags |= TCPF_REMOTE_CLOSED;
                 responseFlags |= (PTCP_FIN|PTCP_ACK);
-                _tcp_setState(tcp, TCPS_CLOSEWAIT);
+                _tcp_setState(tcp, host, TCPS_CLOSEWAIT);
 
                 /* remote will send us no more user data after this sequence */
                 tcp->receive.end = header->sequence;
@@ -1981,14 +2003,14 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
             /* receive FINACK, move to FINWAIT2 */
             if((header->flags & PTCP_FIN) && (header->flags & PTCP_ACK)) {
                 flags |= TCP_PF_PROCESSED;
-                _tcp_setState(tcp, TCPS_FINWAIT2);
+                _tcp_setState(tcp, host, TCPS_FINWAIT2);
             }
             /* receive FIN, send FINACK, move to CLOSING (simultaneous close) */
             else if(header->flags & PTCP_FIN) {
                 flags |= TCP_PF_PROCESSED;
                 responseFlags |= (PTCP_FIN|PTCP_ACK);
                 tcp->flags |= TCPF_REMOTE_CLOSED;
-                _tcp_setState(tcp, TCPS_CLOSING);
+                _tcp_setState(tcp, host, TCPS_CLOSING);
 
                 /* it will send no more user data after this sequence */
                 tcp->receive.end = header->sequence;
@@ -2002,7 +2024,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                 flags |= TCP_PF_PROCESSED;
                 responseFlags |= (PTCP_FIN|PTCP_ACK);
                 tcp->flags |= TCPF_REMOTE_CLOSED;
-                _tcp_setState(tcp, TCPS_TIMEWAIT);
+                _tcp_setState(tcp, host, TCPS_TIMEWAIT);
 
                 /* it will send no more user data after this sequence */
                 tcp->receive.end = header->sequence;
@@ -2014,7 +2036,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
             /* receive FINACK, move to TIMEWAIT */
             if((header->flags & PTCP_FIN) && (header->flags & PTCP_ACK)) {
                 flags |= TCP_PF_PROCESSED;
-                _tcp_setState(tcp, TCPS_TIMEWAIT);
+                _tcp_setState(tcp, host, TCPS_TIMEWAIT);
             }
             break;
         }
@@ -2031,7 +2053,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
             /* receive FINACK, move to CLOSED */
             if((header->flags & PTCP_FIN) && (header->flags & PTCP_ACK)) {
                 flags |= TCP_PF_PROCESSED;
-                _tcp_setState(tcp, TCPS_CLOSED);
+                _tcp_setState(tcp, host, TCPS_CLOSED);
                 /* we closed, cant use tcp anymore */
                 trace("packet caused us to close and won't send response");
                 return;
@@ -2066,7 +2088,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
     }
 
     if(header->flags & PTCP_ACK) {
-        flags |= _tcp_ackProcessing(tcp, packet, header);
+        flags |= _tcp_ackProcessing(tcp, host, packet, header);
     }
 
     /* if it is a spurious packet, drop it */
@@ -2091,7 +2113,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
     /* update the last time stamp value (RFC 1323) */
     tcp->receive.lastTimestamp = header->timestampValue;
     if(header->timestampEcho && tcp->retransmit.backoffCount == 0) {
-        _tcp_updateRTTEstimate(tcp, header->timestampEcho);
+        _tcp_updateRTTEstimate(tcp, host, header->timestampEcho);
     }
 
     gboolean isAckDubious = ((packetLength == 0) && !(flags & TCP_PF_DATA_ACKED) && !(flags & TCP_PF_RWND_UPDATED)) || (flags & TCP_PF_DATA_SACKED);
@@ -2130,14 +2152,14 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
         if(responseFlags != PTCP_ACK) { // includes DUPACKs
             /* just send the response now */
             trace("sending ACK control packet now");
-            _tcp_sendControlPacket(tcp, responseFlags);
+            _tcp_sendControlPacket(tcp, host, responseFlags);
         } else {
             trace("waiting for delayed ACK control packet");
             if(tcp->send.delayedACKIsScheduled == FALSE) {
                 /* we need to send an ACK, lets schedule a task so we don't send an ACK
                  * for all packets that are received during this same simtime receiving round. */
-                Task* sendACKTask = task_new((TaskCallbackFunc)_tcp_sendACKTaskCallback,
-                                tcp, NULL, descriptor_unref, NULL);
+                Task* sendACKTask =
+                    task_new(_tcp_sendACKTaskCallback, tcp, NULL, descriptor_unref, NULL);
                 /* taks holds a ref to tcp */
                 descriptor_ref(tcp);
 
@@ -2152,7 +2174,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
                     delay = 5*SIMTIME_ONE_MILLISECOND;
                 }
 
-                worker_scheduleTask(sendACKTask, delay);
+                worker_scheduleTask(sendACKTask, host, delay);
                 task_unref(sendACKTask);
 
                 tcp->send.delayedACKIsScheduled = TRUE;
@@ -2162,7 +2184,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
     }
 
     /* now flush as many packets as we can to socket */
-    _tcp_flush(tcp);
+    _tcp_flush(tcp, host);
 
     /* clear it so we dont send outdated timestamp echos */
     tcp->receive.lastTimestamp = 0;
@@ -2170,7 +2192,7 @@ static void _tcp_processPacket(Socket* socket, Packet* packet) {
     trace("done processing in state %s", _tcp_stateToAscii(tcp->state));
 }
 
-static void _tcp_dropPacket(Socket* socket, Packet* packet) {
+static void _tcp_dropPacket(Socket* socket, Host* host, Packet* packet) {
     TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(tcp);
 
@@ -2180,7 +2202,7 @@ static void _tcp_dropPacket(Socket* socket, Packet* packet) {
     /* now we have the true TCP for the packet */
     MAGIC_ASSERT(tcp);
 
-    _tcp_flush(tcp);
+    _tcp_flush(tcp, host);
 }
 
 static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
@@ -2196,8 +2218,8 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
     }
 }
 
-static gssize _tcp_sendUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
-                                in_addr_t ip, in_port_t port) {
+static gssize _tcp_sendUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
+                                gsize nBytes, in_addr_t ip, in_port_t port) {
     TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(tcp);
 
@@ -2227,8 +2249,8 @@ static gssize _tcp_sendUserData(Transport* transport, PluginVirtualPtr buffer, g
         gsize copyLength = MIN(maxPacketLength, remaining);
 
         /* use helper to create the packet */
-        Packet* packet = _tcp_createPacket(
-            tcp, PTCP_ACK, (PluginVirtualPtr){.val = buffer.val + bytesCopied}, copyLength);
+        Packet* packet = _tcp_createDataPacket(
+            tcp, thread, PTCP_ACK, (PluginVirtualPtr){.val = buffer.val + bytesCopied}, copyLength);
         if(copyLength > 0) {
             /* we are sending more user data */
             tcp->send.end++;
@@ -2247,27 +2269,30 @@ static gssize _tcp_sendUserData(Transport* transport, PluginVirtualPtr buffer, g
     trace("%s <-> %s: sending %"G_GSIZE_FORMAT" user bytes", tcp->super.boundString, tcp->super.peerString, bytesCopied);
 
     /* now flush as much as possible out to socket */
-    _tcp_flush(tcp);
+    _tcp_flush(tcp, thread_getHost(thread));
 
     return (gssize)(bytesCopied == 0 && nBytes != 0 ? -EWOULDBLOCK : bytesCopied);
 }
 
-static void _tcp_sendWindowUpdate(TCP* tcp, gpointer data) {
+static void _tcp_sendWindowUpdate(Host* host, gpointer voidTcp, gpointer data) {
+    TCP* tcp = voidTcp;
     MAGIC_ASSERT(tcp);
     trace("%s <-> %s: receive window opened, advertising the new "
             "receive window %"G_GUINT32_FORMAT" as an ACK control packet",
             tcp->super.boundString, tcp->super.peerString, tcp->receive.window);
 
     // XXX we may be in trouble if this packet gets dropped
-    _tcp_sendControlPacket(tcp, PTCP_ACK);
+    _tcp_sendControlPacket(tcp, host, PTCP_ACK);
 
     tcp->receive.windowUpdatePending = FALSE;
 }
 
-static gssize _tcp_receiveUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
-                                   in_addr_t* ip, in_port_t* port) {
+static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
+                                   gsize nBytes, in_addr_t* ip, in_port_t* port) {
     TCP* tcp = _tcp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(tcp);
+
+    Host* host = thread_getHost(thread);
 
     /*
      * TODO
@@ -2278,7 +2303,7 @@ static gssize _tcp_receiveUserData(Transport* transport, PluginVirtualPtr buffer
      */
 
     /* make sure we pull in all readable user data */
-    _tcp_flush(tcp);
+    _tcp_flush(tcp, host);
 
     gsize remaining = nBytes;
     gsize totalCopied = 0;
@@ -2303,8 +2328,8 @@ static gssize _tcp_receiveUserData(Transport* transport, PluginVirtualPtr buffer
         utility_assert(partialBytes > 0);
 
         copyLength = MIN(partialBytes, remaining);
-        gssize bytesCopied =
-            packet_copyPayload(tcp->partialUserDataPacket, tcp->partialOffset, buffer, copyLength);
+        gssize bytesCopied = packet_copyPayload(
+            tcp->partialUserDataPacket, thread, tcp->partialOffset, buffer, copyLength);
         if (bytesCopied < 0) {
             // Error writing to PluginVirtualPtr
             return bytesCopied;
@@ -2343,7 +2368,7 @@ static gssize _tcp_receiveUserData(Transport* transport, PluginVirtualPtr buffer
         guint packetLength = packet_getPayloadLength(nextPacket);
         copyLength = MIN(packetLength, remaining);
         gssize bytesCopied = packet_copyPayload(
-            nextPacket, 0, (PluginVirtualPtr){.val = buffer.val + offset}, copyLength);
+            nextPacket, thread, 0, (PluginVirtualPtr){.val = buffer.val + offset}, copyLength);
         if (bytesCopied < 0) {
             // Error writing to PluginVirtualPtr
             if (totalCopied > 0) {
@@ -2356,7 +2381,7 @@ static gssize _tcp_receiveUserData(Transport* transport, PluginVirtualPtr buffer
         remaining -= bytesCopied;
         offset += bytesCopied;
 
-        Packet* packet = socket_removeFromInputBuffer((Socket*)tcp);
+        Packet* packet = socket_removeFromInputBuffer((Socket*)tcp, host);
 
         if(bytesCopied < packetLength) {
             /* we were only able to read part of this packet */
@@ -2403,9 +2428,8 @@ static gssize _tcp_receiveUserData(Transport* transport, PluginVirtualPtr buffer
 
     /* update the receive buffer size based on new packets received */
     if(tcp->autotune.isEnabled && !tcp->autotune.userDisabledReceive) {
-        Host* host = worker_getActiveHost();
         if(host_autotuneReceiveBuffer(host)) {
-            _tcp_autotuneReceiveBuffer(tcp, totalCopied);
+            _tcp_autotuneReceiveBuffer(tcp, host, totalCopied);
         }
     }
 
@@ -2418,9 +2442,8 @@ static gssize _tcp_receiveUserData(Transport* transport, PluginVirtualPtr buffer
          * make sure we don't send multiple events when read is called many times per instant */
         descriptor_ref(tcp);
 
-        Task* updateWindowTask = task_new((TaskCallbackFunc)_tcp_sendWindowUpdate,
-                tcp, NULL, descriptor_unref, NULL);
-        worker_scheduleTask(updateWindowTask, 1);
+        Task* updateWindowTask = task_new(_tcp_sendWindowUpdate, tcp, NULL, descriptor_unref, NULL);
+        worker_scheduleTask(updateWindowTask, thread_getHost(thread), 1);
         task_unref(updateWindowTask);
 
         tcp->receive.windowUpdatePending = TRUE;
@@ -2474,7 +2497,7 @@ static void _tcp_free(LegacyDescriptor* descriptor) {
     worker_count_deallocation(TCP);
 }
 
-static gboolean _tcp_close(LegacyDescriptor* descriptor) {
+static gboolean _tcp_close(LegacyDescriptor* descriptor, Host* host) {
     TCP* tcp = _tcp_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(tcp);
 
@@ -2491,7 +2514,7 @@ static gboolean _tcp_close(LegacyDescriptor* descriptor) {
     switch (tcp->state) {
         case TCPS_LISTEN:
         case TCPS_SYNSENT: {
-            _tcp_setState(tcp, TCPS_CLOSED);
+            _tcp_setState(tcp, host, TCPS_CLOSED);
             return FALSE;
         }
 
@@ -2499,7 +2522,7 @@ static gboolean _tcp_close(LegacyDescriptor* descriptor) {
         case TCPS_ESTABLISHED:
         case TCPS_CLOSEWAIT: {
             if(tcp_getOutputBufferLength(tcp) == 0) {
-                _tcp_sendShutdownFin(tcp);
+                _tcp_sendShutdownFin(tcp, host);
             } else {
                 /* we still have data. send that first, and then finish with fin */
                 tcp->flags |= TCPF_SHOULD_SEND_WR_FIN;
@@ -2519,7 +2542,7 @@ static gboolean _tcp_close(LegacyDescriptor* descriptor) {
         default: {
             /* if we didnt start connection yet, we still want to make sure
              * we set the state to closed so we unbind the socket */
-            _tcp_setState(tcp, TCPS_CLOSED);
+            _tcp_setState(tcp, host, TCPS_CLOSED);
             return FALSE;
         }
     }
@@ -2527,7 +2550,7 @@ static gboolean _tcp_close(LegacyDescriptor* descriptor) {
     return FALSE;
 }
 
-gint tcp_shutdown(TCP* tcp, gint how) {
+gint tcp_shutdown(TCP* tcp, Host* host, gint how) {
     MAGIC_ASSERT(tcp);
 
     if(tcp->state == TCPS_SYNSENT || tcp->state == TCPS_SYNRECEIVED ||
@@ -2547,7 +2570,7 @@ gint tcp_shutdown(TCP* tcp, gint how) {
         tcp->error |= TCPE_SEND_EOF;
 
         if(tcp_getOutputBufferLength(tcp) == 0) {
-            _tcp_sendShutdownFin(tcp);
+            _tcp_sendShutdownFin(tcp, host);
         } else {
             tcp->flags |= TCPF_SHOULD_SEND_WR_FIN;
         }
@@ -2562,12 +2585,12 @@ SocketFunctionTable tcp_functions = {
     _tcp_receiveUserData, _tcp_processPacket, _tcp_isFamilySupported,
     _tcp_connectToPeer,   _tcp_dropPacket,    MAGIC_VALUE};
 
-TCP* tcp_new(guint receiveBufferSize, guint sendBufferSize) {
+TCP* tcp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
     TCP* tcp = g_new0(TCP, 1);
     MAGIC_INIT(tcp);
 
-    socket_init(&(tcp->super), &tcp_functions, DT_TCPSOCKET, receiveBufferSize,
-                sendBufferSize);
+    socket_init(
+        &(tcp->super), host, &tcp_functions, DT_TCPSOCKET, receiveBufferSize, sendBufferSize);
 
     const ConfigOptions* config = worker_getConfig();
     guint32 initial_window = 10;

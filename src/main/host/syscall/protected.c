@@ -27,7 +27,7 @@ void _syscallhandler_setListenTimeout(SysCallHandler* sys,
     };
 
     /* This causes us to lose the previous state of the timer. */
-    gint result = timer_setTime(sys->timer, 0, &value, NULL);
+    gint result = timer_setTime(sys->timer, sys->host, 0, &value, NULL);
 
     if (result != 0) {
         utility_panic("syscallhandler failed to set timeout to %lu.%09lu seconds",

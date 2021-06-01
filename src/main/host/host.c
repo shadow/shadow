@@ -182,10 +182,12 @@ void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, cons
     }
 
     /* virtual addresses and interfaces for managing network I/O */
-    NetworkInterface* loopback = networkinterface_new(loopbackAddress, G_MAXUINT32, G_MAXUINT32,
-            host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
-    NetworkInterface* ethernet = networkinterface_new(ethernetAddress, bwDownKiBps, bwUpKiBps,
-            host->params.pcapDir, host->params.qdisc, host->params.interfaceBufSize);
+    NetworkInterface* loopback =
+        networkinterface_new(host, loopbackAddress, G_MAXUINT32, G_MAXUINT32, host->params.pcapDir,
+                             host->params.qdisc, host->params.interfaceBufSize);
+    NetworkInterface* ethernet =
+        networkinterface_new(host, ethernetAddress, bwDownKiBps, bwUpKiBps, host->params.pcapDir,
+                             host->params.qdisc, host->params.interfaceBufSize);
 
     g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(ethernetAddress)), ethernet);
     g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
@@ -336,7 +338,8 @@ void host_boot(Host* host) {
     MAGIC_ASSERT(host);
 
     /* must be done after the default IP exists so tracker_heartbeat works */
-    host->tracker = tracker_new(host->params.heartbeatInterval, host->params.heartbeatLogLevel, host->params.heartbeatLogInfo);
+    host->tracker = tracker_new(host, host->params.heartbeatInterval,
+                                host->params.heartbeatLogLevel, host->params.heartbeatLogInfo);
 
     /* start refilling the token buckets for all interfaces */
     GHashTableIter iter;
@@ -345,7 +348,7 @@ void host_boot(Host* host) {
 
     while(g_hash_table_iter_next(&iter, &key, &value)) {
         NetworkInterface* interface = value;
-        networkinterface_startRefillingTokenBuckets(interface);
+        networkinterface_startRefillingTokenBuckets(interface, host);
     }
 
     /* scheduling the starting and stopping of our virtual processes */

@@ -16,6 +16,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+#include "main/core/support/definitions.h"
 #include "main/host/syscall/kernel_types.h"
 
 /* Opaque type representing a file-backed file descriptor. */
@@ -61,12 +62,12 @@ int file_getOSBackedFD(File* file);
 // Operations that require a non-null File*
 // ****************************************
 
-ssize_t file_read(File* file, void* buf, size_t bufSize);
-ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset);
-ssize_t file_preadv(File* file, const struct iovec* iov, int iovcnt, off_t offset);
+ssize_t file_read(File* file, Host* host, void* buf, size_t bufSize);
+ssize_t file_pread(File* file, Host* host, void* buf, size_t bufSize, off_t offset);
+ssize_t file_preadv(File* file, Host* host, const struct iovec* iov, int iovcnt, off_t offset);
 #ifdef SYS_preadv2
-ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt,
-                     off_t offset, int flags);
+ssize_t file_preadv2(File* file, Host* host, const struct iovec* iov, int iovcnt, off_t offset,
+                     int flags);
 #endif
 ssize_t file_write(File* file, const void* buf, size_t bufSize);
 ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset);

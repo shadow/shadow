@@ -137,6 +137,10 @@ SysCallHandler* thread_getSysCallHandler(Thread* thread) {
     return thread->sys;
 }
 
+Process* thread_getProcess(Thread* thread) { return thread->process; }
+
+Host* thread_getHost(Thread* thread) { return thread->host; }
+
 long thread_nativeSyscall(Thread* thread, long n, ...) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.nativeSyscall);

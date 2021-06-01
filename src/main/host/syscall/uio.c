@@ -117,12 +117,12 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         }
 
 #ifdef SYS_preadv2
-        result = file_preadv2((File*)desc, buffersv, iovlen, offset, flags);
+        result = file_preadv2((File*)desc, sys->host, buffersv, iovlen, offset, flags);
 #else
         if (flags) {
             warning("Ignoring flags");
         }
-        result = file_preadv((File*)desc, buffersv, iovlen, offset);
+        result = file_preadv((File*)desc, sys->host, buffersv, iovlen, offset);
 #endif
 
         free(buffersv);
@@ -142,8 +142,8 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                     break;
                 }
                 case DT_PIPE: {
-                    result =
-                        transport_receiveUserData((Transport*)desc, bufPtr, bufSize, NULL, NULL);
+                    result = transport_receiveUserData(
+                        (Transport*)desc, sys->thread, bufPtr, bufSize, NULL, NULL);
                     break;
                 }
                 case DT_TCPSOCKET:
@@ -259,7 +259,8 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                     break;
                 }
                 case DT_PIPE: {
-                    result = transport_sendUserData((Transport*)desc, bufPtr, bufSize, 0, 0);
+                    result = transport_sendUserData(
+                        (Transport*)desc, sys->thread, bufPtr, bufSize, 0, 0);
                     break;
                 }
                 case DT_TCPSOCKET:

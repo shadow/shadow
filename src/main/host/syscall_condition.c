@@ -283,7 +283,7 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
     return false;
 }
 
-static void _syscallcondition_signal(void* obj, void* arg) {
+static void _syscallcondition_signal(Host* host, void* obj, void* arg) {
     SysCallCondition* cond = obj;
     bool wasTimeout = (bool)arg;
     MAGIC_ASSERT(cond);
@@ -317,7 +317,8 @@ static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
     Task* signalTask =
         task_new(_syscallcondition_signal, cond, (void*)wasTimeout,
                  _syscallcondition_unrefcb, NULL);
-    worker_scheduleTask(signalTask, 0); // Call without moving time forward
+    worker_scheduleTask(
+        signalTask, thread_getHost(cond->thread), 0); // Call without moving time forward
 
     syscallcondition_ref(cond);
     task_unref(signalTask);

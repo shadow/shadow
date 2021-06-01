@@ -114,8 +114,9 @@ pub type SimulationTime = guint64;
 #[doc = " distinguish each type of time in the code.,"]
 pub type EmulatedTime = guint64;
 pub type LegacyDescriptor = [u64; 7usize];
-pub type DescriptorCloseFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor) -> gboolean>;
+pub type DescriptorCloseFunc = ::std::option::Option<
+    unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host) -> gboolean,
+>;
 pub type DescriptorFreeFunc =
     ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
 #[repr(C)]
@@ -483,6 +484,12 @@ extern "C" {
     pub fn thread_getShMBlock(thread: *mut Thread) -> *mut ShMemBlock;
 }
 extern "C" {
+    pub fn thread_getProcess(thread: *mut Thread) -> *mut Process;
+}
+extern "C" {
+    pub fn thread_getHost(thread: *mut Thread) -> *mut Host;
+}
+extern "C" {
     pub fn thread_getSysCallHandler(thread: *mut Thread) -> *mut SysCallHandler;
 }
 extern "C" {
@@ -687,6 +694,7 @@ pub type TransportFunctionTable = _TransportFunctionTable;
 pub type TransportSendFunc = ::std::option::Option<
     unsafe extern "C" fn(
         transport: *mut Transport,
+        thread: *mut Thread,
         buffer: PluginVirtualPtr,
         nBytes: gsize,
         ip: in_addr_t,
@@ -696,6 +704,7 @@ pub type TransportSendFunc = ::std::option::Option<
 pub type TransportReceiveFunc = ::std::option::Option<
     unsafe extern "C" fn(
         transport: *mut Transport,
+        thread: *mut Thread,
         buffer: PluginVirtualPtr,
         nBytes: gsize,
         ip: *mut in_addr_t,
@@ -1384,10 +1393,14 @@ extern "C" {
     pub fn worker_getConfig() -> *const ConfigOptions;
 }
 extern "C" {
-    pub fn worker_scheduleTask(task: *mut Task, nanoDelay: SimulationTime) -> gboolean;
+    pub fn worker_scheduleTask(
+        task: *mut Task,
+        host: *mut Host,
+        nanoDelay: SimulationTime,
+    ) -> gboolean;
 }
 extern "C" {
-    pub fn worker_sendPacket(packet: *mut Packet);
+    pub fn worker_sendPacket(src: *mut Host, packet: *mut Packet);
 }
 extern "C" {
     pub fn worker_isAlive() -> gboolean;

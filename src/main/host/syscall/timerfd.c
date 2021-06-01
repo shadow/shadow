@@ -130,7 +130,7 @@ SysCallReturn syscallhandler_timerfd_settime(SysCallHandler* sys,
     }
 
     /* Service the call in the timer module. */
-    errcode = timer_setTime(timer, flags, &newValue, oldValue);
+    errcode = timer_setTime(timer, sys->host, flags, &newValue, oldValue);
     if (errcode < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errcode};
     }

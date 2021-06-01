@@ -64,7 +64,7 @@ static gboolean _udp_isFamilySupported(Socket* socket, sa_family_t family) {
     return (family == AF_INET || family == AF_UNSPEC || family == AF_UNIX) ? TRUE : FALSE;
 }
 
-static gint _udp_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port,
+static gint _udp_connectToPeer(Socket* socket, Host* host, in_addr_t ip, in_port_t port,
                                sa_family_t family) {
     UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(udp);
@@ -84,17 +84,17 @@ static gint _udp_connectToPeer(Socket* socket, in_addr_t ip, in_port_t port,
     return 0;
 }
 
-static void _udp_processPacket(Socket* socket, Packet* packet) {
+static void _udp_processPacket(Socket* socket, Host* host, Packet* packet) {
     UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(udp);
 
     /* UDP packet can be buffered immediately */
-    if (!socket_addToInputBuffer((Socket*)udp, packet)) {
+    if (!socket_addToInputBuffer((Socket*)udp, host, packet)) {
         packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
     }
 }
 
-static void _udp_dropPacket(Socket* socket, Packet* packet) {
+static void _udp_dropPacket(Socket* socket, Host* host, Packet* packet) {
     UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)socket);
     MAGIC_ASSERT(udp);
 
@@ -106,8 +106,8 @@ static void _udp_dropPacket(Socket* socket, Packet* packet) {
  * ip and port parameters. this function assumes that the socket is already
  * bound to a local port, no matter if that happened explicitly or implicitly.
  */
-static gssize _udp_sendUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
-                                in_addr_t ip, in_port_t port) {
+static gssize _udp_sendUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
+                                gsize nBytes, in_addr_t ip, in_port_t port) {
     UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(udp);
 
@@ -130,26 +130,26 @@ static gssize _udp_sendUserData(Transport* transport, PluginVirtualPtr buffer, g
     in_port_t sourcePort = 0;
     socket_getSocketName(&(udp->super), &sourceIP, &sourcePort);
 
+    Host* host = thread_getHost(thread);
     if (sourceIP == htonl(INADDR_ANY)) {
         /* source interface depends on destination */
         if (destinationIP == htonl(INADDR_LOOPBACK)) {
             sourceIP = htonl(INADDR_LOOPBACK);
         } else {
-            sourceIP = host_getDefaultIP(worker_getActiveHost());
+            sourceIP = host_getDefaultIP(host);
         }
     }
 
     utility_assert(sourceIP && sourcePort && destinationIP && destinationPort);
 
     /* create the UDP packet */
-    Host* host = worker_getActiveHost();
-    Packet* packet =
-        packet_new(buffer, nBytes, (guint)host_getID(host), host_getNewPacketID(host));
+    Packet* packet = packet_new(host);
+    packet_setPayload(packet, thread, buffer, nBytes);
     packet_setUDP(packet, PUDP_NONE, sourceIP, sourcePort, destinationIP, destinationPort);
     packet_addDeliveryStatus(packet, PDS_SND_CREATED);
 
     /* buffer it in the transport layer, to be sent out when possible */
-    gboolean success = socket_addToOutputBuffer((Socket*)udp, packet);
+    gboolean success = socket_addToOutputBuffer((Socket*)udp, host, packet);
 
     gsize bytes_sent = 0;
     /* counter maintenance */
@@ -169,8 +169,8 @@ static gssize _udp_sendUserData(Transport* transport, PluginVirtualPtr buffer, g
     return bytes_sent;
 }
 
-static gssize _udp_receiveUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
-                                   in_addr_t* ip, in_port_t* port) {
+static gssize _udp_receiveUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
+                                   gsize nBytes, in_addr_t* ip, in_port_t* port) {
     UDP* udp = _udp_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(udp);
 
@@ -190,13 +190,13 @@ static gssize _udp_receiveUserData(Transport* transport, PluginVirtualPtr buffer
     /* copy lesser of requested and available amount to application buffer */
     guint packetLength = packet_getPayloadLength(nextPacket);
     gsize copyLength = MIN(nBytes, packetLength);
-    gssize bytesCopied = packet_copyPayload(nextPacket, 0, buffer, copyLength);
+    gssize bytesCopied = packet_copyPayload(nextPacket, thread, 0, buffer, copyLength);
     if (bytesCopied < 0) {
         // Error writing to PluginVirtualPtr
         return bytesCopied;
     }
 
-    Packet* packet = socket_removeFromInputBuffer((Socket*)udp);
+    Packet* packet = socket_removeFromInputBuffer((Socket*)udp, thread_getHost(thread));
 
     utility_assert(bytesCopied == copyLength);
     packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DELIVERED);
@@ -228,7 +228,7 @@ static void _udp_free(LegacyDescriptor* descriptor) {
     worker_count_deallocation(UDP);
 }
 
-static gboolean _udp_close(LegacyDescriptor* descriptor) {
+static gboolean _udp_close(LegacyDescriptor* descriptor, Host* host) {
     UDP* udp = _udp_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(udp);
     /* Deregister us from the process upon return. */
@@ -252,12 +252,12 @@ SocketFunctionTable udp_functions = {
     _udp_receiveUserData, _udp_processPacket, _udp_isFamilySupported,
     _udp_connectToPeer,   _udp_dropPacket,    MAGIC_VALUE};
 
-UDP* udp_new(guint receiveBufferSize, guint sendBufferSize) {
+UDP* udp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
     UDP* udp = g_new0(UDP, 1);
     MAGIC_INIT(udp);
 
-    socket_init(&(udp->super), &udp_functions, DT_UDPSOCKET, receiveBufferSize,
-                sendBufferSize);
+    socket_init(
+        &(udp->super), host, &udp_functions, DT_UDPSOCKET, receiveBufferSize, sendBufferSize);
 
     udp->state = UDPS_CLOSED;
     udp->stateLast = UDPS_CLOSED;

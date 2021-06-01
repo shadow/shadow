@@ -98,7 +98,7 @@ static void _file_closeHelper(File* file) {
     }
 }
 
-static gboolean _file_close(LegacyDescriptor* desc) {
+static gboolean _file_close(LegacyDescriptor* desc, Host* host) {
     File* file = _file_descriptorToFile(desc);
 
     trace("Closing file %i with os-backed file %i", _file_getFD(file),
@@ -336,10 +336,9 @@ int file_open(File* file, const char* pathname, int flags, mode_t mode, const ch
     return file_openat(file, NULL, pathname, flags, mode, workingDir);
 }
 
-static void _file_readRandomBytes(File* file, void* buf, size_t numBytes) {
+static void _file_readRandomBytes(File* file, Host* host, void* buf, size_t numBytes) {
     utility_assert(file->type == FILE_TYPE_RANDOM);
 
-    Host* host = worker_getActiveHost();
     utility_assert(host != NULL);
 
     trace("File %i will read %zu bytes from random source for host %s", _file_getFD(file), numBytes,
@@ -349,16 +348,16 @@ static void _file_readRandomBytes(File* file, void* buf, size_t numBytes) {
     random_nextNBytes(rng, buf, numBytes);
 }
 
-static size_t _file_readvRandomBytes(File* file, const struct iovec* iov, int iovcnt) {
+static size_t _file_readvRandomBytes(File* file, Host* host, const struct iovec* iov, int iovcnt) {
     size_t total = 0;
     for (int i = 0; i < iovcnt; i++) {
-        _file_readRandomBytes(file, iov[i].iov_base, iov[i].iov_len);
+        _file_readRandomBytes(file, host, iov[i].iov_base, iov[i].iov_len);
         total += iov[i].iov_len;
     }
     return total;
 }
 
-ssize_t file_read(File* file, void* buf, size_t bufSize) {
+ssize_t file_read(File* file, Host* host, void* buf, size_t bufSize) {
     MAGIC_ASSERT(file);
 
     if (!_file_getOSBackedFD(file)) {
@@ -366,7 +365,7 @@ ssize_t file_read(File* file, void* buf, size_t bufSize) {
     }
 
     if (file->type == FILE_TYPE_RANDOM) {
-        _file_readRandomBytes(file, buf, bufSize);
+        _file_readRandomBytes(file, host, buf, bufSize);
         return (ssize_t)bufSize;
     }
 
@@ -380,7 +379,7 @@ ssize_t file_read(File* file, void* buf, size_t bufSize) {
     return (result < 0) ? -errno : result;
 }
 
-ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
+ssize_t file_pread(File* file, Host* host, void* buf, size_t bufSize, off_t offset) {
     MAGIC_ASSERT(file);
 
     if (!_file_getOSBackedFD(file)) {
@@ -388,7 +387,7 @@ ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
     }
 
     if (file->type == FILE_TYPE_RANDOM) {
-        _file_readRandomBytes(file, buf, bufSize);
+        _file_readRandomBytes(file, host, buf, bufSize);
         return (ssize_t)bufSize;
     }
 
@@ -402,7 +401,7 @@ ssize_t file_pread(File* file, void* buf, size_t bufSize, off_t offset) {
     return (result < 0) ? -errno : result;
 }
 
-ssize_t file_preadv(File* file, const struct iovec* iov, int iovcnt, off_t offset) {
+ssize_t file_preadv(File* file, Host* host, const struct iovec* iov, int iovcnt, off_t offset) {
     MAGIC_ASSERT(file);
 
     if (!_file_getOSBackedFD(file)) {
@@ -410,7 +409,7 @@ ssize_t file_preadv(File* file, const struct iovec* iov, int iovcnt, off_t offse
     }
 
     if (file->type == FILE_TYPE_RANDOM) {
-        return (ssize_t)_file_readvRandomBytes(file, iov, iovcnt);
+        return (ssize_t)_file_readvRandomBytes(file, host, iov, iovcnt);
     }
 
     trace("File %i will preadv %d vector items from os-backed file %i at path "
@@ -424,8 +423,8 @@ ssize_t file_preadv(File* file, const struct iovec* iov, int iovcnt, off_t offse
 }
 
 #ifdef SYS_preadv2
-ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt,
-                     off_t offset, int flags) {
+ssize_t file_preadv2(File* file, Host* host, const struct iovec* iov, int iovcnt, off_t offset,
+                     int flags) {
     MAGIC_ASSERT(file);
 
     if (!_file_getOSBackedFD(file)) {
@@ -433,7 +432,7 @@ ssize_t file_preadv2(File* file, const struct iovec* iov, int iovcnt,
     }
 
     if (file->type == FILE_TYPE_RANDOM) {
-        return (ssize_t)_file_readvRandomBytes(file, iov, iovcnt);
+        return (ssize_t)_file_readvRandomBytes(file, host, iov, iovcnt);
     }
 
     trace("File %i will preadv2 %d vector items from os-backed file %i at path "

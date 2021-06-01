@@ -86,27 +86,32 @@ const gchar* protocol_toString(ProtocolType type) {
     }
 }
 
-Packet* packet_new(PluginVirtualPtr payload, gsize payloadLength, guint hostID, guint64 packetID) {
+Packet* packet_new(Host* host) {
     Packet* packet = g_new0(Packet, 1);
     MAGIC_INIT(packet);
 
     packet->referenceCount = 1;
 
-    packet->hostID = hostID;
-    packet->packetID = packetID;
-
-    if (payload.val != 0 && payloadLength > 0) {
-        /* the payload starts with 1 ref, which we hold */
-        packet->payload = payload_new(payload, payloadLength);
-
-        /* application data needs a priority ordering for FIFO onto the wire */
-        packet->priority = host_getNextPacketPriority(worker_getActiveHost());
-    }
+    packet->hostID = host_getID(host);
+    packet->packetID = host_getNewPacketID(host);
 
     packet->orderedStatus = g_queue_new();
 
     worker_count_allocation(Packet);
     return packet;
+}
+
+void packet_setPayload(Packet* packet, Thread* thread, PluginVirtualPtr payload,
+                       gsize payloadLength) {
+    MAGIC_ASSERT(packet);
+    utility_assert(thread);
+    utility_assert(payload.val);
+    utility_assert(!packet->payload);
+
+    /* the payload starts with 1 ref, which we hold */
+    packet->payload = payload_new(thread, payload, payloadLength);
+    /* application data needs a priority ordering for FIFO onto the wire */
+    packet->priority = host_getNextPacketPriority(thread_getHost(thread));
 }
 
 /* copy everything except the payload.
@@ -472,12 +477,12 @@ ProtocolType packet_getProtocol(Packet* packet) {
     return packet->protocol;
 }
 
-gssize packet_copyPayload(const Packet* packet, gsize payloadOffset, PluginVirtualPtr buffer,
-                          gsize bufferLength) {
+gssize packet_copyPayload(const Packet* packet, Thread* thread, gsize payloadOffset,
+                          PluginVirtualPtr buffer, gsize bufferLength) {
     MAGIC_ASSERT(packet);
 
     if(packet->payload) {
-        return payload_getData(packet->payload, payloadOffset, buffer, bufferLength);
+        return payload_getData(packet->payload, thread, payloadOffset, buffer, bufferLength);
     } else {
         return 0;
     }

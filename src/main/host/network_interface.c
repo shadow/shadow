@@ -81,8 +81,8 @@ struct _NetworkInterface {
 };
 
 /* forward declarations */
-static void _networkinterface_sendPackets(NetworkInterface* interface);
-static void _networkinterface_refillTokenBucketsCB(NetworkInterface* interface,
+static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src);
+static void _networkinterface_refillTokenBucketsCB(Host* host, gpointer interface,
                                                    gpointer userData);
 
 static void _compatsocket_unrefTaggedVoid(void* taggedSocketPtr) {
@@ -124,16 +124,15 @@ _networkinterface_consumeTokenBucket(NetworkInterfaceTokenBucket* bucket,
     }
 }
 
-static void _networkinterface_scheduleRefillTask(NetworkInterface* interface,
-                                                 TaskCallbackFunc func,
-                                                 SimulationTime delay) {
+static void _networkinterface_scheduleRefillTask(NetworkInterface* interface, Host* host,
+                                                 TaskCallbackFunc func, SimulationTime delay) {
     Task* refillTask = task_new(func, interface, NULL, NULL, NULL);
-    worker_scheduleTask(refillTask, delay);
+    worker_scheduleTask(refillTask, host, delay);
     task_unref(refillTask);
     interface->isRefillPending = TRUE;
 }
 
-static void _networkinterface_scheduleNextRefill(NetworkInterface* interface) {
+static void _networkinterface_scheduleNextRefill(NetworkInterface* interface, Host* host) {
     SimulationTime now = worker_getCurrentTime();
     SimulationTime interval = _networkinterface_getRefillInterval();
 
@@ -146,8 +145,7 @@ static void _networkinterface_scheduleNextRefill(NetworkInterface* interface) {
 
     /* call back when we need the next refill */
     _networkinterface_scheduleRefillTask(
-        interface, (TaskCallbackFunc)_networkinterface_refillTokenBucketsCB,
-        relTimeUntilNextRefill);
+        interface, host, _networkinterface_refillTokenBucketsCB, relTimeUntilNextRefill);
 }
 
 static gboolean _networkinterface_isRefillNeeded(NetworkInterface* interface) {
@@ -159,15 +157,15 @@ static gboolean _networkinterface_isRefillNeeded(NetworkInterface* interface) {
            !interface->isRefillPending;
 }
 
-static void
-_networkinterface_scheduleNextRefillIfNeeded(NetworkInterface* interface) {
+static void _networkinterface_scheduleNextRefillIfNeeded(NetworkInterface* interface, Host* host) {
     if (_networkinterface_isRefillNeeded(interface)) {
-        _networkinterface_scheduleNextRefill(interface);
+        _networkinterface_scheduleNextRefill(interface, host);
     }
 }
 
-static void _networkinterface_refillTokenBucketsCB(NetworkInterface* interface,
+static void _networkinterface_refillTokenBucketsCB(Host* host, gpointer voidInterface,
                                                    gpointer userData) {
+    NetworkInterface* interface = voidInterface;
     MAGIC_ASSERT(interface);
 
     /* We no longer have an outstanding event in the event queue. */
@@ -181,18 +179,18 @@ static void _networkinterface_refillTokenBucketsCB(NetworkInterface* interface,
      * we only receive packets from an upstream router if we have one (i.e.,
      * if this is not a loopback interface). */
     if(interface->router) {
-        networkinterface_receivePackets(interface);
+        networkinterface_receivePackets(interface, host);
     }
-    _networkinterface_sendPackets(interface);
+    _networkinterface_sendPackets(interface, host);
 
-    _networkinterface_scheduleNextRefillIfNeeded(interface);
+    _networkinterface_scheduleNextRefillIfNeeded(interface, host);
 }
 
-void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface) {
+void networkinterface_startRefillingTokenBuckets(NetworkInterface* interface, Host* host) {
     MAGIC_ASSERT(interface);
 
     interface->timeStartedRefillingBuckets = worker_getCurrentTime();
-    _networkinterface_refillTokenBucketsCB(interface, NULL);
+    _networkinterface_refillTokenBucketsCB(host, interface, NULL);
 }
 
 static void _networkinterface_setupTokenBuckets(NetworkInterface* interface,
@@ -390,7 +388,8 @@ static CompatSocket _boundsockets_lookup(GHashTable* table, gchar* key) {
     return compatsocket_fromTagged((uintptr_t)ptr);
 }
 
-static void _networkinterface_receivePacket(NetworkInterface* interface, Packet* packet) {
+static void _networkinterface_receivePacket(Host* host, NetworkInterface* interface,
+                                            Packet* packet) {
     MAGIC_ASSERT(interface);
 
     /* get the next packet */
@@ -423,7 +422,7 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
 
     /* if the socket closed, just drop the packet */
     if (socket.type != CST_NONE) {
-        compatsocket_pushInPacket(&socket, packet);
+        compatsocket_pushInPacket(&socket, host, packet);
     } else {
         packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_DROPPED);
     }
@@ -435,13 +434,18 @@ static void _networkinterface_receivePacket(NetworkInterface* interface, Packet*
     }
 
     /* count our bandwidth usage by interface, and by socket handle if possible */
-    tracker_addInputBytes(host_getTracker(worker_getActiveHost()), packet, socketHandle);
+    tracker_addInputBytes(host_getTracker(host), packet, socketHandle);
     if (interface->pcap) {
         _networkinterface_capturePacket(interface, packet);
     }
 }
 
-void networkinterface_receivePackets(NetworkInterface* interface) {
+static void _networkinterface_receivePacketTask(Host* host, gpointer voidInterface,
+                                                gpointer voidPacket) {
+    _networkinterface_receivePacket(host, voidInterface, voidPacket);
+}
+
+void networkinterface_receivePackets(NetworkInterface* interface, Host* host) {
     MAGIC_ASSERT(interface);
 
     /* we can only receive packets from the upstream router if we actually have one.
@@ -463,7 +467,7 @@ void networkinterface_receivePackets(NetworkInterface* interface) {
 
         guint64 length = (guint64)(packet_getPayloadLength(packet) + packet_getHeaderSize(packet));
 
-        _networkinterface_receivePacket(interface, packet);
+        _networkinterface_receivePacket(host, interface, packet);
 
         /* release reference from router */
         packet_unref(packet);
@@ -472,25 +476,27 @@ void networkinterface_receivePackets(NetworkInterface* interface) {
         if(!bootstrapping) {
             _networkinterface_consumeTokenBucket(&interface->receiveBucket,
                                                  length);
-            _networkinterface_scheduleNextRefillIfNeeded(interface);
+            _networkinterface_scheduleNextRefillIfNeeded(interface, host);
         }
     }
 }
 
-static void _networkinterface_updatePacketHeader(const CompatSocket* socket, Packet* packet) {
+static void _networkinterface_updatePacketHeader(Host* host, const CompatSocket* socket,
+                                                 Packet* packet) {
     if (socket->type == CST_LEGACY_SOCKET) {
         LegacyDescriptor* descriptor = (LegacyDescriptor*)socket->object.as_legacy_socket;
 
         LegacyDescriptorType type = descriptor_getType(descriptor);
         if (type == DT_TCPSOCKET) {
             TCP* tcp = (TCP*)descriptor;
-            tcp_networkInterfaceIsAboutToSendPacket(tcp, packet);
+            tcp_networkInterfaceIsAboutToSendPacket(tcp, host, packet);
         }
     }
 }
 
 /* round robin queuing discipline ($ man tc)*/
-static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, gint* socketHandle) {
+static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, Host* host,
+                                                  gint* socketHandle) {
     Packet* packet = NULL;
 
     while (!packet && !rrsocketqueue_isEmpty(&interface->rrQueue)) {
@@ -502,14 +508,14 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, g
             continue;
         }
 
-        packet = compatsocket_pullOutPacket(&socket);
+        packet = compatsocket_pullOutPacket(&socket, host);
         if (socket.type == CST_LEGACY_SOCKET) {
             *socketHandle =
                 *descriptor_getHandleReference((LegacyDescriptor*)socket.object.as_legacy_socket);
         }
 
         if (packet) {
-            _networkinterface_updatePacketHeader(&socket, packet);
+            _networkinterface_updatePacketHeader(host, &socket, packet);
         }
 
         if (compatsocket_peekNextOutPacket(&socket)) {
@@ -525,7 +531,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, g
 }
 
 /* first-in-first-out queuing discipline ($ man tc)*/
-static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface,
+static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface, Host* host,
                                                        gint* socketHandle) {
     /* use packet priority field to select based on application ordering.
      * this is really a simplification of prioritizing on timestamps. */
@@ -540,14 +546,14 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
             continue;
         }
 
-        packet = compatsocket_pullOutPacket(&socket);
+        packet = compatsocket_pullOutPacket(&socket, host);
         if (socket.type == CST_LEGACY_SOCKET) {
             *socketHandle =
                 *descriptor_getHandleReference((LegacyDescriptor*)socket.object.as_legacy_socket);
         }
 
         if (packet) {
-            _networkinterface_updatePacketHeader(&socket, packet);
+            _networkinterface_updatePacketHeader(host, &socket, packet);
         }
 
         if (compatsocket_peekNextOutPacket(&socket)) {
@@ -562,7 +568,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
     return packet;
 }
 
-static void _networkinterface_sendPackets(NetworkInterface* interface) {
+static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src) {
     MAGIC_ASSERT(interface);
 
     gboolean bootstrapping = worker_isBootstrapActive();
@@ -575,12 +581,12 @@ static void _networkinterface_sendPackets(NetworkInterface* interface) {
         Packet* packet;
         switch(interface->qdisc) {
             case Q_DISC_MODE_ROUND_ROBIN: {
-                packet = _networkinterface_selectRoundRobin(interface, &socketHandle);
+                packet = _networkinterface_selectRoundRobin(interface, src, &socketHandle);
                 break;
             }
             case Q_DISC_MODE_FIFO:
             default: {
-                packet = _networkinterface_selectFirstInFirstOut(interface, &socketHandle);
+                packet = _networkinterface_selectFirstInFirstOut(interface, src, &socketHandle);
                 break;
             }
         }
@@ -595,15 +601,15 @@ static void _networkinterface_sendPackets(NetworkInterface* interface) {
             /* packet will arrive on our own interface, so it doesn't need to
              * go through the upstream router and does not consume bandwidth. */
             packet_ref(packet);
-            Task* packetTask = task_new((TaskCallbackFunc)_networkinterface_receivePacket,
-                    interface, packet, NULL, (TaskArgumentFreeFunc)packet_unref);
-            worker_scheduleTask(packetTask, 1);
+            Task* packetTask = task_new(_networkinterface_receivePacketTask, interface, packet,
+                                        NULL, packet_unrefTaskFreeFunc);
+            worker_scheduleTask(packetTask, src, 1);
             task_unref(packetTask);
         } else {
             /* let the upstream router send to remote with appropriate delays.
              * if we get here we are not loopback and should have been assigned a router. */
             utility_assert(interface->router);
-            router_forward(interface->router, packet);
+            router_forward(interface->router, src, packet);
         }
 
         /* successfully sent, calculate how long it took to 'send' this packet */
@@ -611,10 +617,10 @@ static void _networkinterface_sendPackets(NetworkInterface* interface) {
             guint length = packet_getPayloadLength(packet) + packet_getHeaderSize(packet);
             _networkinterface_consumeTokenBucket(&interface->sendBucket,
                                                  length);
-            _networkinterface_scheduleNextRefillIfNeeded(interface);
+            _networkinterface_scheduleNextRefillIfNeeded(interface, src);
         }
 
-        tracker_addOutputBytes(host_getTracker(worker_getActiveHost()), packet, socketHandle);
+        tracker_addOutputBytes(host_getTracker(src), packet, socketHandle);
         if(interface->pcap) {
             _networkinterface_capturePacket(interface, packet);
         }
@@ -624,7 +630,8 @@ static void _networkinterface_sendPackets(NetworkInterface* interface) {
     }
 }
 
-void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket* socket) {
+void networkinterface_wantsSend(NetworkInterface* interface, Host* host,
+                                const CompatSocket* socket) {
     MAGIC_ASSERT(interface);
 
     if (compatsocket_peekNextOutPacket(socket) == NULL) {
@@ -652,7 +659,7 @@ void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket*
     }
 
     /* send packets if we can */
-    _networkinterface_sendPackets(interface);
+    _networkinterface_sendPackets(interface, host);
 }
 
 void networkinterface_setRouter(NetworkInterface* interface, Router* router) {
@@ -671,8 +678,9 @@ Router* networkinterface_getRouter(NetworkInterface* interface) {
     return interface->router;
 }
 
-NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, guint64 bwUpKiBps,
-        gchar* pcapDir, QDiscMode qdisc, guint64 interfaceReceiveLength) {
+NetworkInterface* networkinterface_new(Host* host, Address* address, guint64 bwDownKiBps,
+                                       guint64 bwUpKiBps, gchar* pcapDir, QDiscMode qdisc,
+                                       guint64 interfaceReceiveLength) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);
     MAGIC_INIT(interface);
 
@@ -695,7 +703,7 @@ NetworkInterface* networkinterface_new(Address* address, guint64 bwDownKiBps, gu
         g_string_printf(filename, "%s-%s",
                 address_toHostName(interface->address),
                 address_toHostIPString(interface->address));
-        interface->pcap = pcapwriter_new(pcapDir, filename->str);
+        interface->pcap = pcapwriter_new(host, pcapDir, filename->str);
         g_string_free(filename, TRUE);
     }
 

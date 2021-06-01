@@ -12,7 +12,8 @@
 #include <netinet/tcp.h>
 #include <sys/un.h>
 
-#include "main/routing/packet.h"
+#include "main/core/support/definitions.h"
+#include "main/routing/packet.minimal.h"
 
 #define TCP_MIN_CWND 10
 
@@ -38,7 +39,7 @@ enum _TCPCongestionType {
     TCP_CC_UNKNOWN, TCP_CC_AIMD, TCP_CC_RENO, TCP_CC_CUBIC,
 };
 
-TCP* tcp_new(guint receiveBufferSize, guint sendBufferSize);
+TCP* tcp_new(Host* host, guint receiveBufferSize, guint sendBufferSize);
 
 // clang-format off
 /* Returns a positive number to indicate that we have not yet sent a SYN
@@ -61,8 +62,9 @@ gint tcp_getConnectionError(TCP* tcp);
 // clang-format on
 
 void tcp_getInfo(TCP* tcp, struct tcp_info *tcpinfo);
-void tcp_enterServerMode(TCP* tcp, gint backlog);
-gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* acceptedHandle);
+void tcp_enterServerMode(TCP* tcp, Host* host, gint backlog);
+gint tcp_acceptServerPeer(TCP* tcp, Host* host, in_addr_t* ip, in_port_t* port,
+                          gint* acceptedHandle);
 
 struct TCPCong_ *tcp_cong(TCP *tcp);
 
@@ -78,9 +80,9 @@ void tcp_disableReceiveBufferAutotuning(TCP* tcp);
 gboolean tcp_isValidListener(TCP* tcp);
 gboolean tcp_isListeningAllowed(TCP* tcp);
 
-gint tcp_shutdown(TCP* tcp, gint how);
+gint tcp_shutdown(TCP* tcp, Host* host, gint how);
 
-void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Packet* packet);
+void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, Host* host, Packet* packet);
 
 TCPCongestionType tcpCongestion_getType(const gchar* type);
 

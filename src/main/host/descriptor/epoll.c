@@ -248,7 +248,7 @@ void epoll_reset(Epoll* epoll) {
     g_hash_table_remove_all(epoll->watching);
 }
 
-static gboolean _epoll_close(LegacyDescriptor* descriptor) {
+static gboolean _epoll_close(LegacyDescriptor* descriptor, Host* host) {
     Epoll* epoll = _epoll_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(epoll);
     epoll_clearWatchListeners(epoll);

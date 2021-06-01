@@ -9,13 +9,14 @@
 #include <glib.h>
 #include <sys/types.h>
 
+#include "main/core/support/definitions.h"
+
 typedef struct _Timer Timer;
 
 /* free this with descriptor_free() */
 Timer* timer_new();
-gint timer_setTime(Timer* timer, gint flags,
-                   const struct itimerspec *new_value,
-                   struct itimerspec *old_value);
+gint timer_setTime(Timer* timer, Host* host, gint flags, const struct itimerspec* new_value,
+                   struct itimerspec* old_value);
 gint timer_getTime(Timer* timer, struct itimerspec *curr_value);
 ssize_t timer_read(Timer* timer, void *buf, size_t count);
 gint timer_close(Timer* timer);

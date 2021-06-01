@@ -10,7 +10,8 @@
 
 #include <glib.h>
 
-#include "main/routing/packet.h"
+#include "main/core/support/definitions.h"
+#include "main/routing/packet.minimal.h"
 
 typedef struct _Router Router;
 typedef enum _QueueManagerMode QueueManagerMode;
@@ -41,10 +42,10 @@ void router_ref(Router* router);
 void router_unref(Router* router);
 
 /* forward an outgoing packet to the destination's upstream router */
-void router_forward(Router* router, Packet* packet);
+void router_forward(Router* router, Host* src, Packet* packet);
 
 /* enqueue a downstream packet, i.e., buffer it until the host can receive it */
-void router_enqueue(Router* router, Packet* packet);
+void router_enqueue(Router* router, Host* host, Packet* packet);
 /* dequeue a downstream packet, i.e., receive it from the network */
 Packet* router_dequeue(Router* router);
 
