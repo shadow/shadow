@@ -2,6 +2,7 @@
 # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
 
 name: Lint Checks
+permissions: read-all
 
 on:
   push:
