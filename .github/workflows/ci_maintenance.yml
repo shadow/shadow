@@ -1,4 +1,5 @@
 name: CI Maintenance
+permissions: read-all
 
 on:
   schedule:
