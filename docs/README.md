@@ -18,7 +18,6 @@ The docs contain important information about installing and using the Shadow dis
    * Developer Guides
      * [Debugging and profiling](developer_guide.md)
      * [Continous integration tests](ci.md)
-   * Advanced usage
      * [Using a recompiled libc](using_recompiled_libc.md) to get higher libc
        API coverage using preload interposition.
  * The Shadow project

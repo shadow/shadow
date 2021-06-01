@@ -8,9 +8,8 @@
   + cmake (version >= 3.2)
   + make
   + xz-utils
-  + glibc debuginfo
   + procps
-  + cargo
+  + cargo, rustc (version \~ latest)
 
 #### Recommended Python Modules (for helper/analysis scripts):
   + numpy, scipy, matplotlib, networkx, lxml, pyyaml
@@ -18,12 +17,51 @@
 #### Recommended System Tools:
   + git, dstat, screen, htop
 
-#### YUM (Fedora/CentOS):
+### APT (Debian/Ubuntu):
+
+```bash
+sudo apt-get install -y \
+    cmake \
+    findutils \
+    libc-dbg \
+    libglib2.0-0 \
+    libglib2.0-dev \
+    libigraph0-dev \
+    libigraph0v5 \
+    libprocps-dev \
+    make \
+    python3 \
+    python3-pip \
+    xz-utils \
+    gcc \
+    g++
+
+# rustup: https://rustup.rs
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Optional dependencies
+
+sudo apt-get install -y \
+    python3-numpy \
+    python3-lxml \
+    python3-matplotlib \
+    python3-networkx \
+    python3-scipy \
+    python3-yaml
+
+sudo apt-get install -y \
+    dstat \
+    git \
+    htop \
+    screen
+```
+
+### YUM (Fedora/CentOS):
 
 In more recent versions of Fedora and CentOS, `yum` can be exchanged for `dnf` in these commands.
 Before running these commands, please check any platform-specific requirements below.
 
-**Warning:** YUM and DNF often install 32-bit (`i686`) versions of libraries. You may want to use the `--best` option to make sure you're installing the 64-bit (`x86_64`) versions, which are required by Shadow.
+**Warning:** `yum` and `dnf` often install 32-bit (`i686`) versions of libraries. You may want to use the `--best` option to make sure you're installing the 64-bit (`x86_64`) versions, which are required by Shadow.
 
 ```bash
 sudo yum install -y \
@@ -42,8 +80,13 @@ sudo yum install -y \
     yum-utils \
     diffutils \
     gcc \
-    gcc-c++ \
-    cargo
+    gcc-c++
+
+# rustup: https://rustup.rs
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Optional dependencies
+
 sudo yum install -y \
     python3-numpy \
     python3-lxml \
@@ -51,6 +94,7 @@ sudo yum install -y \
     python3-networkx \
     python3-scipy \
     python3-yaml
+
 sudo yum install -y \
     dstat \
     git \
@@ -58,7 +102,7 @@ sudo yum install -y \
     screen
 ```
 
-##### CentOS 7
+#### CentOS 7
 
 You must enable the EPEL repository using:
 
@@ -77,9 +121,7 @@ alternatives --install /usr/local/bin/cmake cmake /usr/bin/cmake3 20 \
     --family cmake
 ```
 
-As cargo is not available on CentOS 7, you can install cargo following the steps at https://rustup.rs/.
-
-##### CentOS 8
+#### CentOS 8
 
 As procps-ng-devel, igraph, and igraph-devel are not available on CentOS 8, you must install them manually.
 
@@ -89,39 +131,4 @@ dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps
 dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-devel-3.3.10-26.el7.x86_64.rpm
 dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-0.7.1-12.el7.x86_64.rpm
 dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-devel-0.7.1-12.el7.x86_64.rpm
-```
-
-#### APT (Debian/Ubuntu):
-
-Before running these commands, please check any platform-specific requirements below.
-
-```bash
-sudo apt-get install -y \
-    cmake \
-    findutils \
-    libc-dbg \
-    libglib2.0-0 \
-    libglib2.0-dev \
-    libigraph0-dev \
-    libigraph0v5 \
-    libprocps-dev \
-    make \
-    python3 \
-    python3-pip \
-    xz-utils \
-    gcc \
-    g++ \
-    cargo
-sudo apt-get install -y \
-    python3-numpy \
-    python3-lxml \
-    python3-matplotlib \
-    python3-networkx \
-    python3-scipy \
-    python3-yaml
-sudo apt-get install -y \
-    dstat \
-    git \
-    htop \
-    screen
 ```
