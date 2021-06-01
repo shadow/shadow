@@ -1584,12 +1584,10 @@ gint tcp_acceptServerPeer(TCP* tcp, in_addr_t* ip, in_port_t* port, gint* accept
     }
 
     *acceptedHandle = tcpChild->super.super.super.handle;
-    if(ip) {
-        *ip = tcpChild->super.peerIP;
-    }
-    if(port) {
-        *port = tcpChild->super.peerPort;
-    }
+    utility_assert(ip);
+    *ip = tcpChild->super.peerIP;
+    utility_assert(port);
+    *port = tcpChild->super.peerPort;
 
     Tracker* tracker = host_getTracker(worker_getActiveHost());
     tracker_updateSocketPeer(tracker, *acceptedHandle, *ip, ntohs(tcpChild->super.peerPort));
