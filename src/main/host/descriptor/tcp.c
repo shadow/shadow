@@ -1800,7 +1800,7 @@ static void _tcp_logCongestionInfo(TCP* tcp) {
     gsize outLength = socket_getOutputBufferLength(&tcp->super);
     gsize inSize = socket_getInputBufferSize(&tcp->super);
     gsize inLength = socket_getInputBufferLength(&tcp->super);
-    double ploss = (double) (tcp->info.retransmitCount / tcp->send.packetsSent);
+    double ploss = (double)tcp->info.retransmitCount / tcp->send.packetsSent;
 
     debug("[CONG-AVOID] cwnd=%d ssthresh=%d rtt=%d "
           "sndbufsize=%" G_GSIZE_FORMAT " sndbuflen=%" G_GSIZE_FORMAT " rcvbufsize=%" G_GSIZE_FORMAT
