@@ -8,11 +8,13 @@
 #define _GNU_SOURCE
 #endif
 #include <dlfcn.h>
+#include <errno.h>
 #include <glib.h>
 #include <sched.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
 #include "igraph_version.h"
@@ -239,6 +241,18 @@ gint main_runShadow(gint argc, gchar* argv[]) {
             config_free(config);
             return EXIT_FAILURE;
         }
+    }
+
+    /* raise fd soft limit to hard limit */
+    struct rlimit lim = {0};
+    if (getrlimit(RLIMIT_NOFILE, &lim) != 0) {
+        error("Could not get rlimit: %s", strerror(errno));
+        return EXIT_FAILURE;
+    }
+    lim.rlim_cur = lim.rlim_max;
+    if (setrlimit(RLIMIT_NOFILE, &lim) != 0) {
+        error("Could not update rlimit: %s", strerror(errno));
+        return EXIT_FAILURE;
     }
 
     if (_useSchedFifo) {
