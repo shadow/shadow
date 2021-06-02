@@ -128,10 +128,7 @@ static void _testCloneClearTid() {
     munmap(stack, CLONE_TEST_STACK_NBYTES);
 }
 
-static int _clone_child_exits_after_leader_acc = 0;
-
-static int _clone_child_exits_after_leader_thread(void* args) {
-    __atomic_store_n(&_clone_child_exits_after_leader_acc, 1, __ATOMIC_RELEASE);
+static int _clone_child_exits_after_leader_waitee_thread(void* args) {
     // Racy when executed natively (but test will still pass). In Shadow this
     // should deterministically ensure that this thread exits after the leader
     // thread.
@@ -139,34 +136,59 @@ static int _clone_child_exits_after_leader_thread(void* args) {
     _exit_thread(0);
 }
 
-static void _clone_child_exits_after_leader() {
-    // allocate some memory for the cloned thread.
-    uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
-                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
-    assert_true_errno(stack != MAP_FAILED);
+static int _clone_child_exits_after_leader_waiter_thread(void* voidCtid) {
+    pid_t* ctid = voidCtid;
 
-    // clone takes the "starting" address of the stack, which is the *top*.
-    uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
-
-    int child_tid =
-        clone(_clone_child_exits_after_leader_thread, stack_top, CLONE_FLAGS, NULL, NULL, NULL);
-    g_assert_cmpint(child_tid, >, 0);
-
-    // The conventional way to wait for a child is futex, but we don't want this
-    // test to rely on it.
-    //
-    // We can't use `wait` etc, because the child "thread" process's parent is
-    // *this process's parent*, not this process. We might be able to work around
-    // this by forking first so that we can wait in the parent of the threaded process
-    // (using __WCLONE), but we don't want this test rely on fork, either.
-    while (!__atomic_load_n(&_clone_child_exits_after_leader_acc, __ATOMIC_ACQUIRE)) {
+    // Wait for the specified child to exit, using a loop to avoid relying on futex.
+    while (__atomic_load_n(ctid, __ATOMIC_ACQUIRE) != 0) {
         usleep(1);
     }
-    g_assert_cmpint(_clone_child_exits_after_leader_acc, ==, 1);
+    _exit_thread(0);
+}
 
-    // Intentionally leak `stack`. In this test we can't reliably know when the
-    // child thread is done with it.
-    // munmap(stack, CLONE_TEST_STACK_NBYTES);
+static void _clone_child_exits_after_leader() {
+    pid_t* ctid = malloc(sizeof(*ctid));
+    *ctid = -1;
+
+    // Create "waitee" thread.
+    {
+        // allocate some memory for the cloned thread.
+        uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
+                              MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+        assert_true_errno(stack != MAP_FAILED);
+
+        // clone takes the "starting" address of the stack, which is the *top*.
+        uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
+
+        int child_tid = clone(_clone_child_exits_after_leader_waitee_thread, stack_top,
+                              CLONE_FLAGS | CLONE_CHILD_CLEARTID, NULL, NULL, NULL, ctid);
+        g_assert_cmpint(child_tid, >, 0);
+
+        // Intentionally leak `stack`.
+    }
+
+    // Create "waiter" thread. This thread waits for the "waitee" thread to
+    // exit, and then exits itself. This is meant to test that Shadow still
+    // correctly clears the `ctid` when the waitee thread exits. In particular
+    // this is a regression test for using the pid of a dead task (the thread
+    // leader) for process_vm_writev.
+    {
+        // allocate some memory for the cloned thread.
+        uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
+                              MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+        assert_true_errno(stack != MAP_FAILED);
+
+        // clone takes the "starting" address of the stack, which is the *top*.
+        uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
+
+        int child_tid = clone(_clone_child_exits_after_leader_waiter_thread, stack_top, CLONE_FLAGS,
+                              ctid, NULL, NULL, NULL);
+        g_assert_cmpint(child_tid, >, 0);
+
+        // Intentionally leak `stack`.
+    }
+
+    // Intentionally leak `ctid`.
 }
 
 int main(int argc, char** argv) {
@@ -180,5 +202,10 @@ int main(int argc, char** argv) {
     g_test_add("/clone/clone_child_exits_after_leader", void, NULL, NULL,
                _clone_child_exits_after_leader, NULL);
 
-    return g_test_run();
+    int rv = g_test_run();
+
+    // For the `clone_child_exits_after_leader` test to be valid, we need to
+    // explicitly exit *just* this thread. Returning will kill the whole
+    // process.
+    _exit_thread(rv);
 }
