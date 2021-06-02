@@ -1350,15 +1350,6 @@ extern "C" {
 extern "C" {
     pub fn worker_setActiveThread(thread: *mut Thread);
 }
-extern "C" {
-    pub fn worker_getActiveHost() -> *mut Host;
-}
-extern "C" {
-    pub fn worker_getActiveProcess() -> *mut Process;
-}
-extern "C" {
-    pub fn worker_getActiveThread() -> *mut Thread;
-}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Task {
