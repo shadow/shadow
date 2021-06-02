@@ -22,13 +22,13 @@ struct _Payload {
     MAGIC_DECLARE;
 };
 
-Payload* payload_new(PluginVirtualPtr data, gsize dataLength) {
+Payload* payload_new(Thread* thread, PluginVirtualPtr data, gsize dataLength) {
     Payload* payload = g_new0(Payload, 1);
     MAGIC_INIT(payload);
 
     if (data.val && dataLength > 0) {
         payload->data = g_malloc0(dataLength);
-        if (process_readPtr(worker_getActiveProcess(), payload->data, data, dataLength) != 0) {
+        if (process_readPtr(thread_getProcess(thread), payload->data, data, dataLength) != 0) {
             warning("Couldn't read data for packet");
             g_free(payload);
             return NULL;
@@ -96,7 +96,7 @@ gsize payload_getLength(Payload* payload) {
     return length;
 }
 
-gssize payload_getData(Payload* payload, gsize offset, PluginVirtualPtr destBuffer,
+gssize payload_getData(Payload* payload, Thread* thread, gsize offset, PluginVirtualPtr destBuffer,
                        gsize destBufferLength) {
     MAGIC_ASSERT(payload);
 
@@ -109,7 +109,7 @@ gssize payload_getData(Payload* payload, gsize offset, PluginVirtualPtr destBuff
 
     if (copyLength > 0) {
         int err = process_writePtr(
-            worker_getActiveProcess(), destBuffer, payload->data + offset, copyLength);
+            thread_getProcess(thread), destBuffer, payload->data + offset, copyLength);
         if (err) {
             return -err;
         }

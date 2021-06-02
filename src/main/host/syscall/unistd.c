@@ -119,11 +119,11 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
     switch (dType) {
         case DT_FILE:
             if (offset == 0) {
-                result = file_read((File*)desc,
+                result = file_read((File*)desc, sys->host,
                                    process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
                                    sizeNeeded);
             } else {
-                result = file_pread((File*)desc,
+                result = file_pread((File*)desc, sys->host,
                                     process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
                                     sizeNeeded, offset);
             }
@@ -139,7 +139,8 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
                            sizeNeeded);
             break;
         case DT_PIPE:
-            result = transport_receiveUserData((Transport*)desc, bufPtr, sizeNeeded, NULL, NULL);
+            result = transport_receiveUserData(
+                (Transport*)desc, sys->thread, bufPtr, sizeNeeded, NULL, NULL);
             break;
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:
@@ -232,7 +233,8 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
             break;
         case DT_TIMER: result = -EINVAL; break;
         case DT_PIPE:
-            result = transport_sendUserData((Transport*)desc, bufPtr, sizeNeeded, 0, 0);
+            result =
+                transport_sendUserData((Transport*)desc, sys->thread, bufPtr, sizeNeeded, 0, 0);
             break;
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:
@@ -288,7 +290,7 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
 
     if (descriptor && !errorCode) {
         trace("Closing descriptor %i", descriptor_getHandle(descriptor));
-        descriptor_close(descriptor);
+        descriptor_close(descriptor, sys->host);
         return (SysCallReturn){.state = SYSCALL_DONE};
     }
 

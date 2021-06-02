@@ -79,11 +79,11 @@ void event_execute(Event* event) {
         tracker_addVirtualProcessingDelay(host_getTracker(event->dstHost), cpuDelay);
 
         /* this event is delayed due to cpu, so reschedule it to ourselves */
-        worker_scheduleTask(event->task, cpuDelay);
+        worker_scheduleTask(event->task, event->dstHost, cpuDelay);
     } else {
         /* cpu is not blocked, its ok to execute the event */
         host_continueExecutionTimer(event->dstHost);
-        task_execute(event->task);
+        task_execute(event->task, event->dstHost);
         host_stopExecutionTimer(event->dstHost);
     }
 

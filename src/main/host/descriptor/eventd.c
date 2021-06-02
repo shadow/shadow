@@ -30,7 +30,7 @@ static EventD* _eventfd_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     return (EventD*)descriptor;
 }
 
-static gboolean _eventd_close(LegacyDescriptor* descriptor) {
+static gboolean _eventd_close(LegacyDescriptor* descriptor, Host* host) {
     EventD* eventd = _eventfd_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(eventd);
 

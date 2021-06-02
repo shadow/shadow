@@ -593,15 +593,13 @@ void worker_finish(GQueue* hosts) {
     }
 }
 
-gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
+gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
     utility_assert(task);
+    utility_assert(host);
 
     if (!manager_schedulerIsRunning(worker_pool()->manager)) {
         return FALSE;
     }
-
-    Host* host = worker_getActiveHost();
-    utility_assert(host);
 
     SimulationTime clock_now = 0;
     {
@@ -615,14 +613,15 @@ gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay) {
     return scheduler_push(worker_pool()->scheduler, event, host, host);
 }
 
-static void _worker_runDeliverPacketTask(Packet* packet, gpointer userData) {
+static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpointer userData) {
+    Packet* packet = voidPacket;
     in_addr_t ip = packet_getDestinationIP(packet);
-    Router* router = host_getUpstreamRouter(worker_getActiveHost(), ip);
+    Router* router = host_getUpstreamRouter(host, ip);
     utility_assert(router != NULL);
-    router_enqueue(router, packet);
+    router_enqueue(router, host, packet);
 }
 
-void worker_sendPacket(Packet* packet) {
+void worker_sendPacket(Host* srcHost, Packet* packet) {
     utility_assert(packet != NULL);
 
     if (!manager_schedulerIsRunning(worker_pool()->manager)) {
@@ -645,7 +644,7 @@ void worker_sendPacket(Packet* packet) {
 
     /* check if network reliability forces us to 'drop' the packet */
     gdouble reliability = topology_getReliability(worker_getTopology(), srcAddress, dstAddress);
-    Random* random = host_getRandom(worker_getActiveHost());
+    Random* random = host_getRandom(srcHost);
     gdouble chance = random_nextDouble(random);
 
     /* don't drop control packets with length 0, otherwise congestion
@@ -662,7 +661,6 @@ void worker_sendPacket(Packet* packet) {
          * this is the only place where tasks are sent between separate hosts */
 
         Scheduler* scheduler = worker_pool()->scheduler;
-        Host* srcHost = worker_getActiveHost();
         GQuark dstID = (GQuark)address_getID(dstAddress);
         Host* dstHost = scheduler_getHost(scheduler, dstID);
         utility_assert(dstHost);
@@ -673,8 +671,8 @@ void worker_sendPacket(Packet* packet) {
          * and unreffed after the task is finished executing. */
         Packet* packetCopy = packet_copy(packet);
 
-        Task* packetTask = task_new((TaskCallbackFunc)_worker_runDeliverPacketTask, packetCopy,
-                                    NULL, (TaskObjectFreeFunc)packet_unref, NULL);
+        Task* packetTask = task_new(
+            _worker_runDeliverPacketTask, packetCopy, NULL, (TaskObjectFreeFunc)packet_unref, NULL);
         Event* packetEvent = event_new_(packetTask, deliverTime, srcHost, dstHost);
         task_unref(packetTask);
 

@@ -19,7 +19,7 @@
 #include "main/host/thread.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
-#include "main/routing/packet.h"
+#include "main/routing/packet.minimal.h"
 #include "main/routing/topology.h"
 #include "main/utility/count_down_latch.h"
 #include "support/logger/log_level.h"
@@ -73,8 +73,8 @@ int worker_getAffinity();
 DNS* worker_getDNS();
 Topology* worker_getTopology();
 const ConfigOptions* worker_getConfig();
-gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay);
-void worker_sendPacket(Packet* packet);
+gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay);
+void worker_sendPacket(Host* src, Packet* packet);
 gboolean worker_isAlive();
 
 SimulationTime worker_getCurrentTime();

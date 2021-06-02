@@ -194,7 +194,7 @@ static SysCallReturn _syscallhandler_acceptHelper(SysCallHandler* sys,
     struct sockaddr_in inet_addr = {.sin_family = AF_INET};
     int accepted_fd = 0;
     errcode = tcp_acceptServerPeer(
-        tcp_desc, &inet_addr.sin_addr.s_addr, &inet_addr.sin_port, &accepted_fd);
+        tcp_desc, sys->host, &inet_addr.sin_addr.s_addr, &inet_addr.sin_port, &accepted_fd);
 
     LegacyDescriptor* desc = (LegacyDescriptor*)tcp_desc;
     if (errcode == -EWOULDBLOCK && !(descriptor_getFlags(desc) & O_NONBLOCK)) {
@@ -490,7 +490,7 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
             sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
         }
 
-        retval = transport_receiveUserData((Transport*)socket_desc, bufPtr, sizeNeeded,
+        retval = transport_receiveUserData((Transport*)socket_desc, sys->thread, bufPtr, sizeNeeded,
                                            &inet_addr.sin_addr.s_addr, &inet_addr.sin_port);
 
         trace("recv returned %zd", retval);
@@ -647,8 +647,8 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
             sizeNeeded = MIN(sizeNeeded, CONFIG_DATAGRAM_MAX_SIZE + 1);
         }
 
-        retval =
-            transport_sendUserData((Transport*)socket_desc, bufPtr, sizeNeeded, dest_ip, dest_port);
+        retval = transport_sendUserData(
+            (Transport*)socket_desc, sys->thread, bufPtr, sizeNeeded, dest_ip, dest_port);
 
         trace("send returned %zd", retval);
     }
@@ -833,7 +833,7 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
     }
 
     /* Now we are ready to connect. */
-    errcode = socket_connectToPeer(socket_desc, peerAddr, peerPort, family);
+    errcode = socket_connectToPeer(socket_desc, sys->host, peerAddr, peerPort, family);
 
     LegacyDescriptor* desc = (LegacyDescriptor*)socket_desc;
     if (descriptor_getType(desc) == DT_TCPSOCKET &&
@@ -1094,7 +1094,7 @@ SysCallReturn syscallhandler_listen(SysCallHandler* sys,
         }
     }
 
-    tcp_enterServerMode(tcp_desc, backlog);
+    tcp_enterServerMode(tcp_desc, sys->host, backlog);
     return (SysCallReturn){.state = SYSCALL_DONE};
 }
 
@@ -1179,7 +1179,7 @@ SysCallReturn syscallhandler_shutdown(SysCallHandler* sys,
     errcode = _syscallhandler_validateTCPSocketHelper(sys, sockfd, &tcp_desc);
     if (errcode >= 0) {
         return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = tcp_shutdown(tcp_desc, how)};
+            .state = SYSCALL_DONE, .retval.as_i64 = tcp_shutdown(tcp_desc, sys->host, how)};
     }
 
     UDP* udp_desc = NULL;
@@ -1237,9 +1237,9 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
 
     Socket* sock_desc = NULL;
     if (type_no_flags == SOCK_STREAM) {
-        sock_desc = (Socket*)tcp_new(recvBufSize, sendBufSize);
+        sock_desc = (Socket*)tcp_new(sys->host, recvBufSize, sendBufSize);
     } else {
-        sock_desc = (Socket*)udp_new(recvBufSize, sendBufSize);
+        sock_desc = (Socket*)udp_new(sys->host, recvBufSize, sendBufSize);
     }
 
     /* Now make sure it will be valid when we operate on it. */

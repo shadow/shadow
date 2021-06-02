@@ -38,7 +38,7 @@ static Channel* _channel_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     return (Channel*)descriptor;
 }
 
-static gboolean channel_close(LegacyDescriptor* descriptor) {
+static gboolean channel_close(LegacyDescriptor* descriptor, Host* host) {
     Channel* channel = _channel_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(channel);
     /* tell our link that we are done */
@@ -70,7 +70,8 @@ static void channel_free(LegacyDescriptor* descriptor) {
     worker_count_deallocation(Channel);
 }
 
-static gssize channel_linkedWrite(Channel* channel, PluginVirtualPtr buffer, gsize nBytes) {
+static gssize channel_linkedWrite(Channel* channel, Thread* thread, PluginVirtualPtr buffer,
+                                  gsize nBytes) {
     MAGIC_ASSERT(channel);
     /* our linked channel is trying to send us data, make sure we can read it */
     utility_assert(!(channel->type & CT_WRITEONLY));
@@ -85,7 +86,7 @@ static gssize channel_linkedWrite(Channel* channel, PluginVirtualPtr buffer, gsi
     // worker_readPtr to read directly into its storage, saving a potential copy
     // inside worker_getReadablePtr. e.g. one that accepts a read callback.
     gsize copyLength = MIN(nBytes, available);
-    const void* readablePtr = process_getReadablePtr(worker_getActiveProcess(), buffer, copyLength);
+    const void* readablePtr = process_getReadablePtr(thread_getProcess(thread), buffer, copyLength);
     if (!readablePtr) {
         return -EFAULT;
     }
@@ -100,8 +101,8 @@ static gssize channel_linkedWrite(Channel* channel, PluginVirtualPtr buffer, gsi
     return copyLength;
 }
 
-static gssize channel_sendUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
-                                   in_addr_t ip, in_port_t port) {
+static gssize channel_sendUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
+                                   gsize nBytes, in_addr_t ip, in_port_t port) {
     Channel* channel = _channel_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(channel);
     /* the read end of a unidirectional pipe can not write! */
@@ -118,7 +119,7 @@ static gssize channel_sendUserData(Transport* transport, PluginVirtualPtr buffer
 
     if(channel->linkedChannel) {
         if (nBytes > 0) {
-            result = channel_linkedWrite(channel->linkedChannel, buffer, nBytes);
+            result = channel_linkedWrite(channel->linkedChannel, thread, buffer, nBytes);
         }
     } else {
         /* the other end closed or doesn't exist */
@@ -133,8 +134,8 @@ static gssize channel_sendUserData(Transport* transport, PluginVirtualPtr buffer
     return result;
 }
 
-static gssize channel_receiveUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
-                                      in_addr_t* ip, in_port_t* port) {
+static gssize channel_receiveUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
+                                      gsize nBytes, in_addr_t* ip, in_port_t* port) {
     Channel* channel = _channel_fromLegacyDescriptor((LegacyDescriptor*)transport);
     MAGIC_ASSERT(channel);
     /* the write end of a unidirectional pipe can not read! */
@@ -162,7 +163,7 @@ static gssize channel_receiveUserData(Transport* transport, PluginVirtualPtr buf
     // saving a potential copy in worker_getWritablePtr. e.g. add an interface
     // to bytequeue that takes a `write` callback.
     gsize copyLength = MIN(nBytes, available);
-    void* writableBuf = process_getWriteablePtr(worker_getActiveProcess(), buffer, copyLength);
+    void* writableBuf = process_getWriteablePtr(thread_getProcess(thread), buffer, copyLength);
     if (!writableBuf) {
         return -EFAULT;
     }

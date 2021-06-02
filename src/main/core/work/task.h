@@ -8,7 +8,9 @@
 
 #include <glib.h>
 
-typedef void (*TaskCallbackFunc)(gpointer callbackObject, gpointer callbackArgument);
+#include "main/core/support/definitions.h"
+
+typedef void (*TaskCallbackFunc)(Host* host, gpointer callbackObject, gpointer callbackArgument);
 typedef void (*TaskObjectFreeFunc)(gpointer data);
 typedef void (*TaskArgumentFreeFunc)(gpointer data);
 
@@ -21,6 +23,6 @@ Task* task_new(TaskCallbackFunc callback, gpointer callbackObject, gpointer call
         TaskObjectFreeFunc objectFree, TaskArgumentFreeFunc argumentFree);
 void task_ref(Task* task);
 void task_unref(Task* task);
-void task_execute(Task* task);
+void task_execute(Task* task, Host* host);
 
 #endif /* SHD_TASK_H_ */

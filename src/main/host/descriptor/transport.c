@@ -33,11 +33,11 @@ static void _transport_free(LegacyDescriptor* descriptor) {
     transport->vtable->free(descriptor);
 }
 
-static gboolean _transport_close(LegacyDescriptor* descriptor) {
+static gboolean _transport_close(LegacyDescriptor* descriptor, Host* host) {
     Transport* transport = _transport_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
-    return transport->vtable->close(descriptor);
+    return transport->vtable->close(descriptor, host);
 }
 
 DescriptorFunctionTable transport_functions = {
@@ -55,16 +55,16 @@ void transport_init(Transport* transport, TransportFunctionTable* vtable,
     transport->vtable = vtable;
 }
 
-gssize transport_sendUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
-                              in_addr_t ip, in_port_t port) {
+gssize transport_sendUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
+                              gsize nBytes, in_addr_t ip, in_port_t port) {
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
-    return transport->vtable->send(transport, buffer, nBytes, ip, port);
+    return transport->vtable->send(transport, thread, buffer, nBytes, ip, port);
 }
 
-gssize transport_receiveUserData(Transport* transport, PluginVirtualPtr buffer, gsize nBytes,
-                                 in_addr_t* ip, in_port_t* port) {
+gssize transport_receiveUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,
+                                 gsize nBytes, in_addr_t* ip, in_port_t* port) {
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
-    return transport->vtable->receive(transport, buffer, nBytes, ip, port);
+    return transport->vtable->receive(transport, thread, buffer, nBytes, ip, port);
 }

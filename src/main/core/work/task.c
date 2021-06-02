@@ -64,7 +64,7 @@ void task_unref(Task* task) {
     }
 }
 
-void task_execute(Task* task) {
+void task_execute(Task* task, Host* host) {
     MAGIC_ASSERT(task);
-    task->execute(task->callbackObject, task->callbackArgument);
+    task->execute(host, task->callbackObject, task->callbackArgument);
 }

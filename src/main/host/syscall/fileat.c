@@ -131,7 +131,7 @@ SysCallReturn syscallhandler_openat(SysCallHandler* sys,
     errcode = file_openat(file_desc, dir_desc, pathname, flags, mode, process_getWorkingDir(sys->process));
     if (errcode < 0) {
         /* This will remove the descriptor entry and unref/free the File. */
-        descriptor_close((LegacyDescriptor*)file_desc);
+        descriptor_close((LegacyDescriptor*)file_desc, sys->host);
     } else {
         utility_assert(errcode == handle);
     }
