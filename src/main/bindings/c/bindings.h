@@ -290,12 +290,6 @@ void worker_setActiveProcess(Process *process);
 
 void worker_setActiveThread(Thread *thread);
 
-Host *worker_getActiveHost(void);
-
-Process *worker_getActiveProcess(void);
-
-Thread *worker_getActiveThread(void);
-
 // Create an object that can be used to store all descriptors created by a
 // process. When the table is no longer required, use descriptortable_free
 // to release the reference.

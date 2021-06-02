@@ -45,13 +45,6 @@ pub struct Worker {
 
     // Owned pointer to legacy Worker bits.
     cworker: *mut cshadow::WorkerC,
-
-    // For supporting legacy worker_getActive*.
-    // Rust code should instead get these objects through the call stack to
-    // ensure aliasing rules are obeyed.
-    c_active_host: *mut cshadow::Host,
-    c_active_process: *mut cshadow::Process,
-    c_active_thread: *mut cshadow::Thread,
 }
 
 std::thread_local! {
@@ -70,9 +63,6 @@ impl Worker {
                 active_process_info: None,
                 active_thread_info: None,
                 cworker: notnull_mut(cworker),
-                c_active_host: std::ptr::null_mut(),
-                c_active_process: std::ptr::null_mut(),
-                c_active_thread: std::ptr::null_mut(),
             }));
             assert!(res.is_ok(), "Worker already initialized");
         });
@@ -92,29 +82,20 @@ impl Worker {
     /// Set the currently-active Host.
     pub fn set_active_host(host: &Host) {
         let info = host.info().clone();
-        let c_host = notnull_mut_debug(host.chost());
-        unsafe { cshadow::host_ref(c_host) };
         WORKER.with(|worker| {
             let mut worker = worker.get().unwrap().borrow_mut();
             let old = worker.active_host_info.replace(info);
             debug_assert!(old.is_none());
-            debug_assert!(worker.c_active_host.is_null());
-            worker.c_active_host = notnull_mut_debug(c_host);
         });
     }
 
     /// Clear the currently-active Host.
     pub fn clear_active_host() {
-        let c_host = WORKER.with(|worker| {
+        WORKER.with(|worker| {
             let mut worker = worker.get().unwrap().borrow_mut();
             let old = worker.active_host_info.take();
             debug_assert!(!old.is_none());
-            let old = worker.c_active_host;
-            debug_assert!(!old.is_null());
-            worker.c_active_host = std::ptr::null_mut();
-            old
         });
-        unsafe { cshadow::host_unref(c_host) };
     }
 
     /// Set the currently-active Process.
@@ -127,29 +108,20 @@ impl Worker {
             id: process.id(),
             native_pid: process.native_pid(),
         };
-        let c_process = notnull_mut_debug(process.cprocess());
-        unsafe { cshadow::process_ref(c_process) };
         WORKER.with(|worker| {
             let mut worker = worker.get().unwrap().borrow_mut();
             let old = worker.active_process_info.replace(info);
             debug_assert!(old.is_none());
-            debug_assert!(worker.c_active_process.is_null());
-            worker.c_active_process = c_process;
         });
     }
 
     /// Clear the currently-active Process.
     pub fn clear_active_process() {
-        let c_process = WORKER.with(|worker| {
+        WORKER.with(|worker| {
             let mut worker = worker.get().unwrap().borrow_mut();
             let old = worker.active_process_info.take();
             debug_assert!(!old.is_none());
-            let old = worker.c_active_process;
-            debug_assert!(!old.is_null());
-            worker.c_active_process = std::ptr::null_mut();
-            old
         });
-        unsafe { cshadow::process_unref(c_process) };
     }
 
     /// Set the currently-active Thread.
@@ -163,29 +135,20 @@ impl Worker {
             id: thread.id(),
             native_tid: thread.system_tid(),
         };
-        let c_thread = notnull_mut_debug(thread.cthread());
-        unsafe { cshadow::thread_ref(c_thread) };
         WORKER.with(|worker| {
             let mut worker = worker.get().unwrap().borrow_mut();
             let old = worker.active_thread_info.replace(info);
             debug_assert!(old.is_none());
-            debug_assert!(worker.c_active_thread.is_null());
-            worker.c_active_thread = c_thread;
         });
     }
 
     /// Clear the currently-active Thread.
     pub fn clear_active_thread() {
-        let c_thread = WORKER.with(|worker| {
+        WORKER.with(|worker| {
             let mut worker = worker.get().unwrap().borrow_mut();
             let old = worker.active_thread_info.take();
             debug_assert!(!old.is_none());
-            let old = worker.c_active_thread;
-            debug_assert!(!old.is_null());
-            worker.c_active_thread = std::ptr::null_mut();
-            old
         });
-        unsafe { cshadow::thread_unref(c_thread) };
     }
 
     /// Whether currently running on a live Worker.
@@ -362,35 +325,5 @@ mod export {
             let thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
             Worker::set_active_thread(&thread);
         }
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn worker_getActiveHost() -> *mut cshadow::Host {
-        WORKER.with(|worker| {
-            worker
-                .get()
-                .map(|w| w.borrow().c_active_host)
-                .unwrap_or(std::ptr::null_mut())
-        })
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn worker_getActiveProcess() -> *mut cshadow::Process {
-        WORKER.with(|worker| {
-            worker
-                .get()
-                .map(|w| w.borrow().c_active_process)
-                .unwrap_or(std::ptr::null_mut())
-        })
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn worker_getActiveThread() -> *mut cshadow::Thread {
-        WORKER.with(|worker| {
-            worker
-                .get()
-                .map(|w| w.borrow().c_active_thread)
-                .unwrap_or(std::ptr::null_mut())
-        })
     }
 }
