@@ -198,9 +198,7 @@ impl Worker {
         if !Worker::is_alive() {
             return None;
         }
-        Some(SimulationTime::from_c_simtime(unsafe {
-            cshadow::worker_getCurrentTime()
-        }))
+        SimulationTime::from_c_simtime(unsafe { cshadow::worker_getCurrentTime() })
     }
 
     /// ID of this thread's Worker, if any.

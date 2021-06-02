@@ -20,10 +20,14 @@ impl std::ops::Deref for SimulationTime {
 }
 
 impl SimulationTime {
-    pub fn from_c_simtime(val: u64) -> Self {
-        Self::from(std::time::Duration::from_nanos(
+    pub fn from_c_simtime(val: u64) -> Option<Self> {
+        if val == SIMTIME_INVALID {
+            return None;
+        }
+
+        Some(Self::from(std::time::Duration::from_nanos(
             val * SIMTIME_ONE_NANOSECOND,
-        ))
+        )))
     }
 }
 
@@ -65,7 +69,7 @@ mod tests {
     #[test]
     fn test_from_sim_time() {
         let sim_time = 5 * SIMTIME_ONE_MINUTE + 7 * SIMTIME_ONE_MILLISECOND;
-        let rust_time = SimulationTime::from_c_simtime(sim_time);
+        let rust_time = SimulationTime::from_c_simtime(sim_time).unwrap();
 
         assert_eq!(rust_time.as_secs(), 5 * 60);
         assert_eq!(rust_time.as_millis(), 5 * 60 * 1_000 + 7);
