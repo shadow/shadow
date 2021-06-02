@@ -24,10 +24,6 @@
 struct _ThreadPreload {
     Thread base;
 
-    // needs to store comm channel state, etc.
-
-    SysCallHandler* sys;
-
     ShMemBlock ipc_blk;
 
     int isRunning;
@@ -61,8 +57,8 @@ __attribute__((unused)) static void _threadpreload_auxFree(void* p, void* _) {
 void threadpreload_free(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
-    if (thread->sys) {
-        syscallhandler_unref(thread->sys);
+    if (thread->base.sys) {
+        syscallhandler_unref(thread->base.sys);
     }
 
     if (thread->ptr_to_block) {
@@ -127,9 +123,9 @@ static void _threadpreload_cleanup(ThreadPreload* thread) {
     trace("child %d exited", thread->base.nativePid);
     thread->isRunning = 0;
 
-    if (thread->sys) {
-        syscallhandler_unref(thread->sys);
-        thread->sys = NULL;
+    if (thread->base.sys) {
+        syscallhandler_unref(thread->base.sys);
+        thread->base.sys = NULL;
     }
 }
 
@@ -224,7 +220,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
             }
             case SHD_SHIM_EVENT_SYSCALL: {
                 SysCallReturn result = syscallhandler_make_syscall(
-                    thread->sys, &thread->currentEvent.event_data.syscall.syscall_args);
+                    thread->base.sys, &thread->currentEvent.event_data.syscall.syscall_args);
 
                 // Flush any writes the syscallhandler made.
                 process_flushPtrs(thread->base.process);
@@ -283,9 +279,9 @@ void threadpreload_handleProcessExit(Thread* base) {
     // TODO [rwails]: come back and make this logic more solid
 
     /* make sure we cleanup circular refs */
-    if (thread->sys) {
-        syscallhandler_unref(thread->sys);
-        thread->sys = NULL;
+    if (thread->base.sys) {
+        syscallhandler_unref(thread->base.sys);
+        thread->base.sys = NULL;
     }
 
     if (!thread->isRunning) {
@@ -381,7 +377,7 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                               }),
         .ptr_to_block = g_hash_table_new(g_int64_hash, g_int64_equal),
     };
-    thread->sys = syscallhandler_new(host, process, _threadPreloadToThread(thread));
+    thread->base.sys = syscallhandler_new(host, process, _threadPreloadToThread(thread));
 
     _Static_assert(sizeof(void*) == 8, "thread-preload impl assumes 8 byte pointers");
 

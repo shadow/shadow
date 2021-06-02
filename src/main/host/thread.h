@@ -13,6 +13,7 @@
 
 typedef struct _Thread Thread;
 
+#include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/shmem/shmem_allocator.h"
 
@@ -70,5 +71,8 @@ ShMemBlock* thread_getIPCBlock(Thread* thread);
 
 // Returns the block used for shared state, or NULL if no such block is is used.
 ShMemBlock* thread_getShMBlock(Thread* thread);
+
+// Get the syscallhandler for this thread.
+SysCallHandler* thread_getSysCallHandler(Thread* thread);
 
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */

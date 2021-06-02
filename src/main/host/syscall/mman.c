@@ -137,7 +137,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     trace("Opening path '%s' in plugin.", mmap_path);
 
     /* Get some memory in the plugin to write the path of the file to open. */
-    AllocdMem_u8 *allocdMem = allocdmem_new(maplen);
+    AllocdMem_u8 *allocdMem = allocdmem_new(sys->thread, maplen);
     PluginPtr pluginBufPtr = allocdmem_pluginPtr(allocdMem);
 
     /* Get a writeable pointer that can be flushed to the plugin. */
@@ -164,7 +164,7 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     }
 
     /* Release the PluginPtr memory. */
-    allocdmem_free(allocdMem);
+    allocdmem_free(sys->thread, allocdMem);
     free(mmap_path);
 
     return result;

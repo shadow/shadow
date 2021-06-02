@@ -46,6 +46,8 @@ struct _Thread {
     PluginPtr tidAddress;
     int referenceCount;
 
+    SysCallHandler* sys;
+
     // Non-null if blocked by a syscall.
     SysCallCondition* cond;
 

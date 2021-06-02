@@ -78,6 +78,9 @@ const gchar* process_getPluginName(Process* proc);
 /* Returns the processID that was assigned to us in process_new */
 guint process_getProcessID(Process* proc);
 
+/* Returns the native pid of the process */
+pid_t process_getNativePid(const Process* proc);
+
 /* Returns the native tid of the thread with the given virtual PID and TID.
  * Although the process knows its own virtualPID already, giving it as a param
  * here allows us to control which of the PIF and TID get matched:
@@ -168,6 +171,8 @@ void process_freePtrsWithoutFlushing(Process* proc);
 
 MemoryManager* process_getMemoryManager(Process* proc);
 void process_setMemoryManager(Process* proc, MemoryManager* memoryManager);
+
+uint32_t process_getHostId(const Process* proc);
 
 // Returns the interpose method used by this process.
 InterposeMethod process_getInterposeMethod(Process* proc);

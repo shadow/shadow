@@ -329,13 +329,13 @@ impl Drop for MemoryMapper {
 
 impl MemoryMapper {
     pub fn new(memory_manager: &mut MemoryManager, thread: &mut impl Thread) -> MemoryMapper {
-        let memory_copier = MemoryCopier::new(Pid::from_raw(thread.get_process_id() as i32));
+        let memory_copier = MemoryCopier::new(thread.system_pid());
 
         let shm_path = format!(
             "/dev/shm/shadow_memory_manager_{}_{}_{}",
             process::id(),
-            thread.get_host_id(),
-            thread.get_process_id()
+            u32::from(thread.host_id()),
+            u32::from(thread.process_id())
         );
         let shm_file = OpenOptions::new()
             .read(true)
@@ -524,7 +524,7 @@ impl MemoryMapper {
             // sense to eventually move the mechanics of opening the child fd into here (in which
             // case we'll already have it) than to pipe the string through this API.
             Some(MappingPath::Path(
-                std::fs::read_link(format!("/proc/{}/fd/{}", thread.get_system_pid(), fd))
+                std::fs::read_link(format!("/proc/{}/fd/{}", thread.system_pid(), fd))
                     .unwrap_or_else(|_| PathBuf::from(format!("bad-fd-{}", fd))),
             ))
         };

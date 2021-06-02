@@ -1,15 +1,24 @@
+use super::host::HostId;
+use super::process::ProcessId;
 use super::syscall_types::{PluginPtr, SysCallReg};
 use crate::cshadow as c;
 use crate::utility::syscall;
+use nix::unistd::Pid;
+use std::convert::TryInto;
+
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
+pub struct ThreadId(u32);
 
 pub trait Thread {
     /// Have the plugin thread natively execute the given syscall.
     fn native_syscall(&mut self, n: i64, args: &[SysCallReg]) -> nix::Result<SysCallReg>;
 
-    fn get_process_id(&self) -> u32;
-    fn get_host_id(&self) -> u32;
-    fn get_system_pid(&self) -> libc::pid_t;
-    fn get_system_tid(&self) -> libc::pid_t;
+    fn process_id(&self) -> ProcessId;
+    fn host_id(&self) -> HostId;
+    fn system_pid(&self) -> Pid;
+    fn system_tid(&self) -> Pid;
+    fn csyscallhandler(&mut self) -> *mut c::SysCallHandler;
+    fn id(&self) -> ThreadId;
 
     /// Natively execute munmap(2) on the given thread.
     fn native_munmap(&mut self, ptr: PluginPtr, size: usize) -> nix::Result<()> {
@@ -137,6 +146,10 @@ impl CThread {
         unsafe { c::thread_ref(cthread) };
         CThread { cthread }
     }
+
+    pub fn cthread(&self) -> *mut c::Thread {
+        self.cthread
+    }
 }
 
 impl Thread for CThread {
@@ -174,24 +187,32 @@ impl Thread for CThread {
         syscall::raw_return_value_to_result(raw_res)
     }
 
-    fn get_process_id(&self) -> u32 {
-        // Safety: self.cthread initialized in CThread::new.
-        unsafe { c::thread_getProcessId(self.cthread) }
+    fn id(&self) -> ThreadId {
+        ThreadId(unsafe { c::thread_getID(self.cthread).try_into().unwrap() })
     }
 
-    fn get_host_id(&self) -> u32 {
+    fn process_id(&self) -> ProcessId {
         // Safety: self.cthread initialized in CThread::new.
-        unsafe { c::thread_getHostId(self.cthread) }
+        ProcessId::from(unsafe { c::thread_getProcessId(self.cthread) })
     }
 
-    fn get_system_pid(&self) -> libc::pid_t {
+    fn host_id(&self) -> HostId {
         // Safety: self.cthread initialized in CThread::new.
-        unsafe { c::thread_getNativePid(self.cthread) }
+        HostId::from(unsafe { c::thread_getHostId(self.cthread) })
     }
 
-    fn get_system_tid(&self) -> libc::pid_t {
+    fn system_pid(&self) -> Pid {
         // Safety: self.cthread initialized in CThread::new.
-        unsafe { c::thread_getNativeTid(self.cthread) }
+        Pid::from_raw(unsafe { c::thread_getNativePid(self.cthread) })
+    }
+
+    fn system_tid(&self) -> Pid {
+        // Safety: self.cthread initialized in CThread::new.
+        Pid::from_raw(unsafe { c::thread_getNativeTid(self.cthread) })
+    }
+
+    fn csyscallhandler(&mut self) -> *mut c::SysCallHandler {
+        unsafe { c::thread_getSysCallHandler(self.cthread) }
     }
 }
 

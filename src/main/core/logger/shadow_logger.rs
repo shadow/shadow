@@ -1,5 +1,6 @@
 use crate::core::support::simulation_time::SimulationTime;
 use crate::core::worker::Worker;
+use crate::host::host::HostInfo;
 use crossbeam::queue::ArrayQueue;
 use log::{Level, Log, Metadata, Record, SetLoggerError};
 use log_bindings as c_log;
@@ -7,6 +8,7 @@ use once_cell::sync::Lazy;
 use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::Arc;
 use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
@@ -244,15 +246,20 @@ impl ShadowLogger {
             } else {
                 write!(stdout, " n/a")?;
             }
+            write!(stdout, " [{level}]", level = record.level)?;
+            if let Some(host) = record.host_info {
+                write!(
+                    stdout,
+                    " [{hostname}:{ip}]",
+                    hostname = host.name,
+                    ip = host.default_ip,
+                )?;
+            } else {
+                write!(stdout, " [n/a]",)?;
+            }
             write!(
                 stdout,
-                " [{level}] [{host}] [{file}:",
-                level = record.level,
-                host = record
-                    .host_name
-                    .as_ref()
-                    .map(|s| s.as_str())
-                    .unwrap_or("n/a"),
+                " [{file}:",
                 file = record
                     .file
                     .map(|f| if let Some(sep_pos) = f.rfind('/') {
@@ -342,7 +349,7 @@ impl ShadowLogger {
 
 impl Log for ShadowLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        let filter = match Worker::with_active_host(|host| host.log_level()) {
+        let filter = match Worker::with_active_host_info(|host| host.log_level) {
             Some(Some(level)) => level,
             _ => log::max_level(),
         };
@@ -356,11 +363,7 @@ impl Log for ShadowLogger {
 
         let message = std::fmt::format(*record.args());
 
-        let host_name = Worker::with_active_host(|host| {
-            let name = host.name();
-            let ip = host.default_ip();
-            format!("{}~{}", name, ip)
-        });
+        let host_info = Worker::with_active_host_info(|host| host.clone());
 
         let mut shadowrecord = ShadowLogRecord {
             level: record.level(),
@@ -376,7 +379,7 @@ impl Log for ShadowLogger {
             thread_name: THREAD_NAME
                 .try_with(|name| (*name).clone())
                 .unwrap_or_else(|_| get_thread_name()),
-            host_name,
+            host_info,
         };
 
         loop {
@@ -419,7 +422,7 @@ struct ShadowLogRecord {
 
     sim_time: Option<SimulationTime>,
     thread_name: String,
-    host_name: Option<String>,
+    host_info: Option<Arc<HostInfo>>,
 }
 
 enum LoggerCommand {

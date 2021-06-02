@@ -28,7 +28,7 @@ rename_variants = "ScreamingSnakeCase"
 
 [export]
 # Avoid exporting C types back through again.
-exclude = ["LogLevel", "PluginPtr", "SysCallReg", "SysCallArgs"]
+exclude = ["LogLevel", "PluginPtr", "SysCallReg", "SysCallArgs", "Process", "Host", "Thread"]
 # Generate all item types, excluding enum types.
 # 
 # While the opaque items are already exported, and included here via

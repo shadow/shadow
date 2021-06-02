@@ -37,9 +37,7 @@ add_custom_command(OUTPUT wrapper.rs
         # Needs CompatSocket
         --blacklist-function "host_.*Interface"
 
-        --whitelist-function "process_.*CompatDescriptor"
-        --whitelist-function "process_parseArgStr.*"
-        --whitelist-function "process_getMemoryManager"
+        --whitelist-function "process_.*"
         --whitelist-function "shadow_logger_getDefault"
         --whitelist-function "shadow_logger_shouldFilter"
         --whitelist-function "statuslistener_ref"

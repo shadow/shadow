@@ -15,7 +15,6 @@
 //! all access to process memory must go through it. This includes servicing syscalls that
 //! modify the process address space (such as `mmap`).
 
-use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult, TypedPluginPtr};
 use crate::host::thread::{CThread, Thread};
@@ -30,6 +29,8 @@ use std::fmt::Debug;
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::os::raw::c_void;
+
+use super::context::ThreadContext;
 
 mod memory_copier;
 mod memory_mapper;
@@ -658,6 +659,8 @@ where
     T: Pod,
 {
     ptr: TypedPluginPtr<T>,
+    // Whether the pointer has been freed.
+    freed: bool,
 }
 
 impl<T> AllocdMem<T>
@@ -665,13 +668,16 @@ where
     T: Pod,
 {
     /// Allocate memory in the current active process.
-    pub fn new(len: usize) -> Self {
+    /// Must be freed explicitly via `free`.
+    pub fn new(ctx: &mut ThreadContext, len: usize) -> Self {
         let prot = libc::PROT_READ | libc::PROT_WRITE;
 
-        let ptr = PluginPtr::from(Worker::with_active_process_memory_mut(|mem| {
-            Worker::with_active_thread_mut(|thread| {
-                mem.do_mmap(
-                    thread,
+        // Allocate through the MemoryManager, so that it knows about this region.
+        let ptr = PluginPtr::from(
+            ctx.process
+                .memory_mut()
+                .do_mmap(
+                    ctx.thread,
                     PluginPtr::from(0usize),
                     len * std::mem::size_of::<T>(),
                     prot,
@@ -679,17 +685,26 @@ where
                     -1,
                     0,
                 )
-                .unwrap()
-            })
-        }));
+                .unwrap(),
+        );
+
         Self {
             ptr: TypedPluginPtr::<T>::new(ptr, len).unwrap(),
+            freed: false,
         }
     }
 
     /// Pointer to the allocated memory.
     pub fn ptr(&self) -> TypedPluginPtr<T> {
         self.ptr
+    }
+
+    pub fn free(mut self, ctx: &mut ThreadContext) {
+        ctx.process
+            .memory_mut()
+            .do_munmap(ctx.thread, self.ptr.ptr(), self.ptr.len())
+            .unwrap();
+        self.freed = true;
     }
 }
 
@@ -698,16 +713,18 @@ where
     T: Pod,
 {
     fn drop(&mut self) {
-        Worker::with_active_thread_mut(|thread| {
-            Worker::with_active_process_memory_mut(|mem| {
-                mem.do_munmap(thread, self.ptr.ptr(), self.ptr.len())
-                    .unwrap()
-            })
-        });
+        // We need the thread context to free the memory. Nothing to do now but
+        // complain.
+        if !self.freed {
+            warn!("Memory leak: failed to free {:?}", self.ptr)
+        }
+        debug_assert!(self.freed);
     }
 }
 
 mod export {
+    use crate::host::context::ThreadContextObjs;
+
     use super::*;
     use std::convert::TryInto;
 
@@ -728,17 +745,22 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn allocdmem_new(len: usize) -> *mut AllocdMem<u8> {
-        Box::into_raw(Box::new(AllocdMem::new(len)))
+    pub unsafe extern "C" fn allocdmem_new(
+        thread: *mut c::Thread,
+        len: usize,
+    ) -> *mut AllocdMem<u8> {
+        let mut objs = unsafe { ThreadContextObjs::from_thread(notnull_mut_debug(thread)) };
+        Box::into_raw(Box::new(AllocdMem::new(&mut objs.borrow(), len)))
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn allocdmem_free(allocd_mem: *mut AllocdMem<u8>) {
-        unsafe {
-            allocd_mem
-                .as_mut()
-                .map(|allocd_mem| Box::from_raw(notnull_mut_debug(allocd_mem)))
-        };
+    pub unsafe extern "C" fn allocdmem_free(
+        thread: *mut c::Thread,
+        allocd_mem: *mut AllocdMem<u8>,
+    ) {
+        let allocd_mem = unsafe { Box::from_raw(notnull_mut_debug(allocd_mem)) };
+        let mut objs = unsafe { ThreadContextObjs::from_thread(notnull_mut_debug(thread)) };
+        allocd_mem.free(&mut objs.borrow());
     }
 
     #[no_mangle]
