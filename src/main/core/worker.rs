@@ -17,7 +17,6 @@ use std::sync::Arc;
 pub struct WorkerThreadID(u32);
 
 struct ProcessInfo {
-    #[allow(dead_code)]
     id: ProcessId,
     native_pid: Pid,
 }
