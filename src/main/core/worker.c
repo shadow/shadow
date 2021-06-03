@@ -25,7 +25,6 @@
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
 #include "main/core/work/task.h"
-#include "main/core/worker_c.h"
 #include "main/host/affinity.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
@@ -54,20 +53,10 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(WorkerRefMut, workerrefmut_free);
 static bool _use_object_counters = true;
 ADD_CONFIG_HANDLER(config_getUseObjectCounters, _use_object_counters)
 
-WorkerC* workerc_new(WorkerPool* workerPool, int threadID);
 static void* _worker_run(void* voidWorker);
 static void _worker_freeHostProcesses(Host* host, void* _unused);
 static void _worker_shutdownHost(Host* host, void* _unused);
 static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerpool, int workerID, int cpuId);
-
-// Legacy struct for internal use. Eventually everything here should be moved
-// into the Rust Worker. In the meantime, the Rust Worker owns an instance of
-// this struct.
-struct WorkerC {
-    WorkerPool* workerPool;
-
-    MAGIC_DECLARE;
-};
 
 struct _WorkerPool {
     /* Unowned pointer to the object that communicates with the controller
@@ -374,25 +363,6 @@ gboolean worker_isAlive() {
     return ref != NULL;
 }
 
-WorkerC* workerc_new(WorkerPool* workerPool, int threadID) {
-    WorkerC* worker = g_new0(WorkerC, 1);
-    *worker = (WorkerC){.workerPool = workerPool,
-                        MAGIC_INITIALIZER};
-
-    utility_assert(threadID >= 0);
-    sem_init(&workerPool->workerBeginSems[threadID], 0, 0);
-    workerPool->workerLogicalProcessorIdxs[threadID] = -1;
-    workerPool->workerNativeThreadIDs[threadID] = syscall(SYS_gettid);
-
-    return worker;
-}
-
-void workerc_free(WorkerC* worker) {
-    MAGIC_ASSERT(worker);
-    MAGIC_CLEAR(worker);
-    g_free(worker);
-}
-
 void worker_setMinEventTimeNextRound(SimulationTime simtime) {
     // If the event will be executed during *this* round, it should not
     // be considered while computing the start time of the *next* round.
@@ -458,11 +428,16 @@ void* _worker_run(void* voidWorkerThreadInfo) {
         g_string_free(name, TRUE);
     }
 
+    LogicalProcessors* lps = workerPool->logicalProcessors;
+
+    // Initialize this thread's 'rows' in `workerPool`.
+    sem_init(&workerPool->workerBeginSems[threadID], 0, 0);
+    workerPool->workerLogicalProcessorIdxs[threadID] = -1;
+    workerPool->workerNativeThreadIDs[threadID] = syscall(SYS_gettid);
+
     // Create the thread-local Worker object.
     worker_newForThisThread(workerPool, threadID,
                             manager_getBootstrapEndTime(workerPool->manager));
-
-    LogicalProcessors* lps = workerPool->logicalProcessors;
 
     // Signal parent thread that we've set the nativeThreadID.
     countdownlatch_countDown(workerPool->finishLatch);

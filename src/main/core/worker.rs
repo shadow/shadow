@@ -331,7 +331,7 @@ mod export {
     pub unsafe extern "C" fn workerrefmut_syscallCounter(
         worker_ref: *mut WorkerRefMut,
     ) -> *mut Counter {
-        unsafe { (&mut worker_ref.as_mut().unwrap().0.object_dealloc_counter) as *mut Counter }
+        unsafe { (&mut worker_ref.as_mut().unwrap().0.syscall_counter) as *mut Counter }
     }
 
     /// If worker is alive, returns an immutable reference to it. Otherwise returns NULL.

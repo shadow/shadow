@@ -78,14 +78,6 @@ pub struct WorkerRef {
 pub struct WorkerRefMut {
     _unused: [u8; 0],
 }
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct WorkerC {
-    _unused: [u8; 0],
-}
-extern "C" {
-    pub fn workerc_free(arg1: *mut WorkerC);
-}
 pub use self::_Status as Status;
 pub const _Status_STATUS_NONE: _Status = 0;
 pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;

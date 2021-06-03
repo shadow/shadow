@@ -17,7 +17,6 @@
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/core/scheduler/scheduler_policy_type.h"
 #include "main/core/worker.h"
-#include "main/core/worker_c.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/status_listener.h"
 #include "main/host/syscall_handler.h"
