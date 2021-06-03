@@ -101,29 +101,20 @@ impl Worker {
     where
         F: FnOnce(&Arc<HostInfo>) -> R,
     {
-        WORKER
-            .try_with(|worker| worker.get()?.borrow().active_host_info.as_ref().map(f))
-            .ok()
-            .flatten()
+        Worker::with(|w| w.active_host_info.as_ref().map(f)).flatten()
     }
 
     /// Set the currently-active Host.
     pub fn set_active_host(host: &Host) {
         let info = host.info().clone();
-        WORKER.with(|worker| {
-            let mut worker = worker.get().unwrap().borrow_mut();
-            let old = worker.active_host_info.replace(info);
-            debug_assert!(old.is_none());
-        });
+        let old = Worker::with_mut(|w| w.active_host_info.replace(info)).unwrap();
+        debug_assert!(old.is_none());
     }
 
     /// Clear the currently-active Host.
     pub fn clear_active_host() {
-        WORKER.with(|worker| {
-            let mut worker = worker.get().unwrap().borrow_mut();
-            let old = worker.active_host_info.take();
-            debug_assert!(!old.is_none());
-        });
+        let old = Worker::with_mut(|w| w.active_host_info.take()).unwrap();
+        debug_assert!(old.is_some());
     }
 
     /// Set the currently-active Process.
@@ -136,20 +127,14 @@ impl Worker {
             id: process.id(),
             native_pid: process.native_pid(),
         };
-        WORKER.with(|worker| {
-            let mut worker = worker.get().unwrap().borrow_mut();
-            let old = worker.active_process_info.replace(info);
-            debug_assert!(old.is_none());
-        });
+        let old = Worker::with_mut(|w| w.active_process_info.replace(info)).unwrap();
+        debug_assert!(old.is_none());
     }
 
     /// Clear the currently-active Process.
     pub fn clear_active_process() {
-        WORKER.with(|worker| {
-            let mut worker = worker.get().unwrap().borrow_mut();
-            let old = worker.active_process_info.take();
-            debug_assert!(!old.is_none());
-        });
+        let old = Worker::with_mut(|w| w.active_process_info.take()).unwrap();
+        debug_assert!(old.is_some());
     }
 
     /// Set the currently-active Thread.
@@ -163,93 +148,84 @@ impl Worker {
             id: thread.id(),
             native_tid: thread.system_tid(),
         };
-        WORKER.with(|worker| {
-            let mut worker = worker.get().unwrap().borrow_mut();
-            let old = worker.active_thread_info.replace(info);
-            debug_assert!(old.is_none());
-        });
+        let old = Worker::with_mut(|w| w.active_thread_info.replace(info)).unwrap();
+        debug_assert!(old.is_none());
     }
 
     /// Clear the currently-active Thread.
     pub fn clear_active_thread() {
-        WORKER.with(|worker| {
-            let mut worker = worker.get().unwrap().borrow_mut();
-            let old = worker.active_thread_info.take();
-            debug_assert!(!old.is_none());
-        });
+        let old = Worker::with_mut(|w| w.active_thread_info.take());
+        debug_assert!(!old.is_none());
     }
 
     /// Whether currently running on a live Worker.
     pub fn is_alive() -> bool {
-        unsafe { cshadow::worker_isAlive() != 0 }
+        Worker::with(|_| ()).is_some()
     }
 
     /// ID of this thread's Worker, if any.
     pub fn thread_id() -> Option<WorkerThreadID> {
-        WORKER.with(|worker| worker.get().map(|w| w.borrow().worker_id))
+        Worker::with(|w| w.worker_id)
     }
 
     pub fn active_process_native_pid() -> Option<nix::unistd::Pid> {
-        WORKER
-            .with(|worker| {
-                worker.get().map(|w| {
-                    w.borrow()
-                        .active_process_info
-                        .as_ref()
-                        .map(|p| p.native_pid)
-                })
-            })
-            .flatten()
+        Worker::with(|w| w.active_process_info.as_ref().map(|p| p.native_pid)).flatten()
     }
 
     pub fn active_process_id() -> Option<ProcessId> {
-        WORKER
-            .with(|worker| {
-                worker
-                    .get()
-                    .map(|w| w.borrow().active_process_info.as_ref().map(|p| p.id))
-            })
-            .flatten()
+        Worker::with(|w| w.active_process_info.as_ref().map(|p| p.id)).flatten()
     }
 
     pub fn active_thread_native_tid() -> Option<nix::unistd::Pid> {
-        WORKER
-            .with(|worker| {
-                worker
-                    .get()
-                    .map(|w| w.borrow().active_thread_info.as_ref().map(|t| t.native_tid))
-            })
-            .flatten()
+        Worker::with(|w| w.active_thread_info.as_ref().map(|t| t.native_tid)).flatten()
     }
 
     fn set_round_end_time(t: SimulationTime) {
-        WORKER.with(|w| w.get().unwrap().borrow_mut().clock.barrier.replace(t));
+        Worker::with_mut(|w| w.clock.barrier.replace(t)).unwrap();
     }
 
     fn round_end_time() -> Option<SimulationTime> {
-        WORKER.with(|w| w.get().unwrap().borrow().clock.barrier)
+        Worker::with(|w| w.clock.barrier).flatten()
     }
 
     fn set_current_time(t: SimulationTime) {
-        WORKER.with(|w| w.get().unwrap().borrow_mut().clock.now.replace(t));
+        Worker::with_mut(|w| w.clock.now.replace(t)).unwrap();
     }
 
     fn clear_current_time() {
-        WORKER.with(|w| w.get().unwrap().borrow_mut().clock.now.take());
+        Worker::with_mut(|w| w.clock.now.take());
     }
 
     pub fn current_time() -> Option<SimulationTime> {
-        WORKER
-            .with(|w| w.get().map(|w| w.borrow().clock.now))
-            .flatten()
+        Worker::with(|w| w.clock.now).flatten()
     }
 
     fn set_last_event_time(t: SimulationTime) {
-        WORKER.with(|w| w.get().unwrap().borrow_mut().clock.last.replace(t));
+        Worker::with_mut(|w| w.clock.last.replace(t)).unwrap();
     }
 
-    fn bootstrap_end_time() -> SimulationTime {
-        WORKER.with(|w| w.get().unwrap().borrow().bootstrap_end_time)
+    // Runs `f` with a shared reference to the current thread's Worker. Returns
+    // None if this thread has no Worker object.
+    fn with<F, O>(f: F) -> Option<O>
+    where
+        F: FnOnce(&Worker) -> O,
+    {
+        WORKER
+            .try_with(|w| w.get().map(|w| f(&w.borrow())))
+            .ok()
+            .flatten()
+    }
+
+    // Runs `f` with a mutable reference to the current thread's Worker. Returns
+    // None if this thread has no Worker object.
+    fn with_mut<F, O>(f: F) -> Option<O>
+    where
+        F: FnOnce(&mut Worker) -> O,
+    {
+        WORKER
+            .try_with(|w| w.get().map(|w| f(&mut w.borrow_mut())))
+            .ok()
+            .flatten()
     }
 }
 
@@ -274,94 +250,24 @@ mod export {
         }
     }
 
-    /// A borrowed mutable reference to the current thread's Worker.
-    pub struct WorkerRefMut(std::cell::RefMut<'static, Worker>);
-
-    /// A borrowed immutable reference to the current thread's Worker.
-    pub struct WorkerRef(std::cell::Ref<'static, Worker>);
-
-    /// If worker is alive, returns mutable reference to it. Otherwise returns NULL.
-    /// SAFETY: Returned pointer is invalid after `worker_freeForThisThread` is called
-    /// or when global destructors start running.
+    /// Returns NULL if there is no live Worker.
     #[no_mangle]
-    pub unsafe extern "C" fn worker_borrowMut() -> *mut WorkerRefMut {
-        WORKER.with(|worker| {
-            // Cast to 'static lifetime.
-            // SAFETY: Safe by the SAFETY preconditions of this method.
-            let worker = unsafe { &*(worker as *const OnceCell<RefCell<Worker>>) };
-            worker
-                .get()
-                .map(|w| Box::into_raw(Box::new(WorkerRefMut(w.borrow_mut()))))
-                .unwrap_or(std::ptr::null_mut())
-        })
+    pub extern "C" fn _worker_objectAllocCounter() -> *mut Counter {
+        Worker::with_mut(|w| &mut w.object_alloc_counter as *mut Counter)
+            .unwrap_or(std::ptr::null_mut())
     }
 
-    /// Return a borrowed reference.
+    /// Returns NULL if there is no live Worker.
     #[no_mangle]
-    pub unsafe extern "C" fn workerrefmut_free(worker: *mut WorkerRefMut) {
-        unsafe { Box::from_raw(notnull_mut(worker)) };
+    pub extern "C" fn _worker_objectDeallocCounter() -> *mut Counter {
+        Worker::with_mut(|w| &mut w.object_dealloc_counter as *mut Counter)
+            .unwrap_or(std::ptr::null_mut())
     }
 
-    /// SAFETY: Returned pointer is invalid after `workerRefMut` is destroyed.
+    /// Returns NULL if there is no live Worker.
     #[no_mangle]
-    pub unsafe extern "C" fn workerrefmut_workerPool(
-        worker_ref: *mut WorkerRefMut,
-    ) -> *mut cshadow::WorkerPool {
-        unsafe { worker_ref.as_mut().unwrap().0.worker_pool }
-    }
-
-    /// SAFETY: Returned pointer is invalid after `workerRefMut` is destroyed.
-    #[no_mangle]
-    pub unsafe extern "C" fn workerrefmut_objectAllocCounter(
-        worker_ref: *mut WorkerRefMut,
-    ) -> *mut Counter {
-        unsafe { (&mut worker_ref.as_mut().unwrap().0.object_alloc_counter) as *mut Counter }
-    }
-
-    /// SAFETY: Returned pointer is invalid after `workerRefMut` is destroyed.
-    #[no_mangle]
-    pub unsafe extern "C" fn workerrefmut_objectDeallocCounter(
-        worker_ref: *mut WorkerRefMut,
-    ) -> *mut Counter {
-        unsafe { (&mut worker_ref.as_mut().unwrap().0.object_dealloc_counter) as *mut Counter }
-    }
-
-    /// SAFETY: Returned pointer is invalid after `workerRefMut` is destroyed.
-    #[no_mangle]
-    pub unsafe extern "C" fn workerrefmut_syscallCounter(
-        worker_ref: *mut WorkerRefMut,
-    ) -> *mut Counter {
-        unsafe { (&mut worker_ref.as_mut().unwrap().0.syscall_counter) as *mut Counter }
-    }
-
-    /// If worker is alive, returns an immutable reference to it. Otherwise returns NULL.
-    /// SAFETY: Returned pointer is invalid after `worker_freeForThisThread` is called
-    /// or when global destructors start running.
-    #[no_mangle]
-    pub unsafe extern "C" fn worker_borrow() -> *mut WorkerRef {
-        WORKER.with(|worker| {
-            // Cast to 'static lifetime.
-            // SAFETY: Safe by the SAFETY preconditions of this method.
-            let worker = unsafe { &*(worker as *const OnceCell<RefCell<Worker>>) };
-            worker
-                .get()
-                .map(|w| Box::into_raw(Box::new(WorkerRef(w.borrow()))))
-                .unwrap_or(std::ptr::null_mut())
-        })
-    }
-
-    /// Return a borrowed reference.
-    #[no_mangle]
-    pub unsafe extern "C" fn workerref_free(worker: *mut WorkerRef) {
-        unsafe { Box::from_raw(worker) };
-    }
-
-    /// SAFETY: Returned pointer is invalid after `workerRef` is destroyed.
-    #[no_mangle]
-    pub unsafe extern "C" fn workerref_worker_pool(
-        worker_ref: *mut WorkerRef,
-    ) -> *const cshadow::WorkerPool {
-        unsafe { worker_ref.as_mut().unwrap().0.worker_pool }
+    pub extern "C" fn _worker_syscallCounter() -> *mut Counter {
+        Worker::with_mut(|w| &mut w.syscall_counter as *mut Counter).unwrap_or(std::ptr::null_mut())
     }
 
     /// ID of the current thread's Worker. Panics if the thread has no Worker.
@@ -401,17 +307,17 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn worker_setRoundEndTime(t: cshadow::SimulationTime) {
+    pub extern "C" fn worker_setRoundEndTime(t: cshadow::SimulationTime) {
         Worker::set_round_end_time(SimulationTime::from_c_simtime(t).unwrap());
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn _worker_getRoundEndTime() -> cshadow::SimulationTime {
+    pub extern "C" fn _worker_getRoundEndTime() -> cshadow::SimulationTime {
         SimulationTime::to_c_simtime(Worker::round_end_time())
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn worker_setCurrentTime(t: cshadow::SimulationTime) {
+    pub extern "C" fn worker_setCurrentTime(t: cshadow::SimulationTime) {
         if let Some(t) = SimulationTime::from_c_simtime(t) {
             Worker::set_current_time(t);
         } else {
@@ -420,29 +326,27 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn worker_getCurrentTime() -> cshadow::SimulationTime {
+    pub extern "C" fn worker_getCurrentTime() -> cshadow::SimulationTime {
         SimulationTime::to_c_simtime(Worker::current_time())
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn _worker_setLastEventTime(t: cshadow::SimulationTime) {
+    pub extern "C" fn _worker_setLastEventTime(t: cshadow::SimulationTime) {
         Worker::set_last_event_time(SimulationTime::from_c_simtime(t).unwrap());
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn worker_isBootstrapActive() -> bool {
-        Worker::current_time().unwrap() < Worker::bootstrap_end_time()
+    pub extern "C" fn worker_isBootstrapActive() -> bool {
+        Worker::with(|w| w.clock.now.unwrap() < w.bootstrap_end_time).unwrap()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn _worker_pool() -> *mut cshadow::WorkerPool {
-        WORKER.with(|worker| {
-            // Cast to 'static lifetime.
-            // SAFETY: Safe by the SAFETY preconditions of this method.
-            worker
-                .get()
-                .map(|w| w.borrow_mut().worker_pool as *mut cshadow::WorkerPool)
-                .unwrap()
-        })
+    pub extern "C" fn _worker_pool() -> *mut cshadow::WorkerPool {
+        Worker::with_mut(|w| w.worker_pool).unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_isAlive() -> bool {
+        Worker::is_alive()
     }
 }

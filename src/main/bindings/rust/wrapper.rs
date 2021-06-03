@@ -68,16 +68,6 @@ pub struct MemoryManager {
 pub struct PosixFileArc {
     _unused: [u8; 0],
 }
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct WorkerRef {
-    _unused: [u8; 0],
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct WorkerRefMut {
-    _unused: [u8; 0],
-}
 pub use self::_Status as Status;
 pub const _Status_STATUS_NONE: _Status = 0;
 pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
@@ -1330,12 +1320,6 @@ extern "C" {
     );
 }
 extern "C" {
-    pub fn worker_borrowMut() -> *mut WorkerRefMut;
-}
-extern "C" {
-    pub fn worker_borrow() -> *mut WorkerRef;
-}
-extern "C" {
     pub fn worker_threadID() -> i32;
 }
 extern "C" {
@@ -1358,6 +1342,9 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_isBootstrapActive() -> bool;
+}
+extern "C" {
+    pub fn worker_isAlive() -> bool;
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1398,9 +1385,6 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_sendPacket(src: *mut Host, packet: *mut Packet);
-}
-extern "C" {
-    pub fn worker_isAlive() -> gboolean;
 }
 extern "C" {
     pub fn worker_getEmulatedTime() -> EmulatedTime;

@@ -76,7 +76,7 @@ Topology* worker_getTopology();
 const ConfigOptions* worker_getConfig();
 gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay);
 void worker_sendPacket(Host* src, Packet* packet);
-gboolean worker_isAlive();
+bool worker_isAlive(void);
 
 SimulationTime worker_getCurrentTime();
 EmulatedTime worker_getEmulatedTime();

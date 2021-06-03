@@ -39,16 +39,6 @@
 #include "support/logger/log_level.h"
 #include "support/logger/logger.h"
 
-// Enable use of g_autoptr with WorkerRef and WorkerRefMut.
-//
-// Defines some functions that aren't necessarily used (e.g. for freeing lists
-// of these types), so we suppress unused code warnings.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(WorkerRef, workerref_free);
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(WorkerRefMut, workerrefmut_free);
-#pragma GCC diagnostic pop
-
 // Allow turning off object counting at run-time.
 static bool _use_object_counters = true;
 ADD_CONFIG_HANDLER(config_getUseObjectCounters, _use_object_counters)
@@ -358,11 +348,6 @@ SimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool) {
     return minTime;
 }
 
-gboolean worker_isAlive() {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    return ref != NULL;
-}
-
 void worker_setMinEventTimeNextRound(SimulationTime simtime) {
     // If the event will be executed during *this* round, it should not
     // be considered while computing the start time of the *next* round.
@@ -498,17 +483,16 @@ void worker_finish(GQueue* hosts) {
     }
 
     /* cleanup is all done, send counters to manager */
-    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-    WorkerPool* pool = workerrefmut_workerPool(ref);
+    WorkerPool* pool = _worker_pool();
 
     // Send object counts to manager
     manager_add_alloc_object_counts(
-        pool->manager, workerrefmut_objectAllocCounter(ref));
+        pool->manager, _worker_objectAllocCounter());
     manager_add_dealloc_object_counts(
-        pool->manager, workerrefmut_objectDeallocCounter(ref));
+        pool->manager, _worker_objectDeallocCounter());
 
     // Send syscall counts to manager
-    manager_add_syscall_counts(pool->manager, workerrefmut_syscallCounter(ref));
+    manager_add_syscall_counts(pool->manager, _worker_syscallCounter());
 }
 
 gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
@@ -654,9 +638,9 @@ void __worker_increment_object_alloc_counter(const char* object_name) {
     if (!_use_object_counters) {
         return;
     }
-    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-    if (ref) {
-        counter_add_value(workerrefmut_objectAllocCounter(ref), object_name, 1);
+    Counter* counter = _worker_objectAllocCounter();
+    if (counter) {
+        counter_add_value(counter, object_name, 1);
     } else {
         // No live worker; fall back to the shared manager counter.
         manager_increment_object_alloc_counter_global(object_name);
@@ -668,9 +652,9 @@ void __worker_increment_object_dealloc_counter(const char* object_name) {
     if (!_use_object_counters) {
         return;
     }
-    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-    if (ref) {
-        counter_add_value(workerrefmut_objectDeallocCounter(ref), object_name, 1);
+    Counter* counter = _worker_objectDeallocCounter();
+    if (counter) {
+        counter_add_value(counter, object_name, 1);
     } else {
         // No live worker; fall back to the shared manager counter.
         manager_increment_object_dealloc_counter_global(object_name);
@@ -678,9 +662,9 @@ void __worker_increment_object_dealloc_counter(const char* object_name) {
 }
 
 void worker_add_syscall_counts(Counter* syscall_counts) {
-    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-    if (ref) {
-        counter_add_counter(workerrefmut_syscallCounter(ref), syscall_counts);
+    Counter* counter = _worker_syscallCounter();
+    if (counter) {
+        counter_add_counter(counter, syscall_counts);
     } else {
         // No live worker; fall back to the shared manager counter.
         manager_add_syscall_counts_global(syscall_counts);
