@@ -257,7 +257,9 @@ SimulationTime processoptions_getStopTime(const struct ProcessOptions *proc);
 int64_t parse_bandwidth(const char *s);
 
 // Initialize a Worker for this thread.
-void worker_newForThisThread(WorkerC *cworker, int32_t worker_id);
+void worker_newForThisThread(WorkerC *cworker,
+                             int32_t worker_id,
+                             SimulationTime bootstrap_end_time);
 
 // If worker is alive, returns mutable reference to it. Otherwise returns NULL.
 // SAFETY: Returned pointer is invalid after `worker_freeForThisThread` is called
@@ -289,6 +291,18 @@ void worker_setActiveHost(Host *host);
 void worker_setActiveProcess(Process *process);
 
 void worker_setActiveThread(Thread *thread);
+
+void worker_setRoundEndTime(SimulationTime t);
+
+SimulationTime _worker_getRoundEndTime(void);
+
+void worker_setCurrentTime(SimulationTime t);
+
+SimulationTime worker_getCurrentTime(void);
+
+void _worker_setLastEventTime(SimulationTime t);
+
+bool worker_isBootstrapActive(void);
 
 // Create an object that can be used to store all descriptors created by a
 // process. When the table is no longer required, use descriptortable_free

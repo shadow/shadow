@@ -28,6 +28,12 @@ struct ThreadInfo {
     native_tid: Pid,
 }
 
+struct Clock {
+    now: Option<SimulationTime>,
+    last: Option<SimulationTime>,
+    barrier: Option<SimulationTime>,
+}
+
 /// Worker context, containing 'global' information for the current thread.
 pub struct Worker {
     worker_id: WorkerThreadID,
@@ -43,6 +49,9 @@ pub struct Worker {
     active_process_info: Option<ProcessInfo>,
     active_thread_info: Option<ThreadInfo>,
 
+    clock: Clock,
+    bootstrap_end_time: SimulationTime,
+
     // Owned pointer to legacy Worker bits.
     cworker: *mut cshadow::WorkerC,
 }
@@ -55,13 +64,23 @@ std::thread_local! {
 
 impl Worker {
     // Create worker for this thread.
-    pub unsafe fn new_for_this_thread(cworker: *mut cshadow::WorkerC, worker_id: WorkerThreadID) {
+    pub unsafe fn new_for_this_thread(
+        cworker: *mut cshadow::WorkerC,
+        worker_id: WorkerThreadID,
+        bootstrap_end_time: SimulationTime,
+    ) {
         WORKER.with(|worker| {
             let res = worker.set(RefCell::new(Self {
                 worker_id,
                 active_host_info: None,
                 active_process_info: None,
                 active_thread_info: None,
+                clock: Clock {
+                    now: None,
+                    last: None,
+                    barrier: None,
+                },
+                bootstrap_end_time,
                 cworker: notnull_mut(cworker),
             }));
             assert!(res.is_ok(), "Worker already initialized");
@@ -156,14 +175,6 @@ impl Worker {
         unsafe { cshadow::worker_isAlive() != 0 }
     }
 
-    /// Current simulation time, or None if not running on a live Worker.
-    pub fn current_time() -> Option<SimulationTime> {
-        if !Worker::is_alive() {
-            return None;
-        }
-        SimulationTime::from_c_simtime(unsafe { cshadow::worker_getCurrentTime() })
-    }
-
     /// ID of this thread's Worker, if any.
     pub fn thread_id() -> Option<WorkerThreadID> {
         WORKER.with(|worker| worker.get().map(|w| w.borrow().worker_id))
@@ -201,6 +212,36 @@ impl Worker {
             })
             .flatten()
     }
+
+    fn set_round_end_time(t: SimulationTime) {
+        WORKER.with(|w| w.get().unwrap().borrow_mut().clock.barrier.replace(t));
+    }
+
+    fn round_end_time() -> Option<SimulationTime> {
+        WORKER.with(|w| w.get().unwrap().borrow().clock.barrier)
+    }
+
+    fn set_current_time(t: SimulationTime) {
+        WORKER.with(|w| w.get().unwrap().borrow_mut().clock.now.replace(t));
+    }
+
+    fn clear_current_time() {
+        WORKER.with(|w| w.get().unwrap().borrow_mut().clock.now.take());
+    }
+
+    pub fn current_time() -> Option<SimulationTime> {
+        WORKER
+            .with(|w| w.get().map(|w| w.borrow().clock.now))
+            .flatten()
+    }
+
+    fn set_last_event_time(t: SimulationTime) {
+        WORKER.with(|w| w.get().unwrap().borrow_mut().clock.last.replace(t));
+    }
+
+    fn bootstrap_end_time() -> SimulationTime {
+        WORKER.with(|w| w.get().unwrap().borrow().bootstrap_end_time)
+    }
 }
 
 impl Drop for Worker {
@@ -218,11 +259,14 @@ mod export {
     pub unsafe extern "C" fn worker_newForThisThread(
         cworker: *mut cshadow::WorkerC,
         worker_id: i32,
+        bootstrap_end_time: cshadow::SimulationTime,
     ) {
+        let bootstrap_end_time = SimulationTime::from_c_simtime(bootstrap_end_time).unwrap();
         unsafe {
             Worker::new_for_this_thread(
                 notnull_mut(cworker),
                 WorkerThreadID(worker_id.try_into().unwrap()),
+                bootstrap_end_time,
             )
         }
     }
@@ -325,5 +369,39 @@ mod export {
             let thread = unsafe { CThread::new(notnull_mut_debug(thread)) };
             Worker::set_active_thread(&thread);
         }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn worker_setRoundEndTime(t: cshadow::SimulationTime) {
+        Worker::set_round_end_time(SimulationTime::from_c_simtime(t).unwrap());
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _worker_getRoundEndTime() -> cshadow::SimulationTime {
+        SimulationTime::to_c_simtime(Worker::round_end_time())
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn worker_setCurrentTime(t: cshadow::SimulationTime) {
+        if let Some(t) = SimulationTime::from_c_simtime(t) {
+            Worker::set_current_time(t);
+        } else {
+            Worker::clear_current_time();
+        }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn worker_getCurrentTime() -> cshadow::SimulationTime {
+        SimulationTime::to_c_simtime(Worker::current_time())
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _worker_setLastEventTime(t: cshadow::SimulationTime) {
+        Worker::set_last_event_time(SimulationTime::from_c_simtime(t).unwrap());
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn worker_isBootstrapActive() -> bool {
+        Worker::current_time().unwrap() < Worker::bootstrap_end_time()
     }
 }

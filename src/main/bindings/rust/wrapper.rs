@@ -1330,7 +1330,11 @@ extern "C" {
     pub fn host_getNativeTID(host: *mut Host, virtualPID: pid_t, virtualTID: pid_t) -> pid_t;
 }
 extern "C" {
-    pub fn worker_newForThisThread(cworker: *mut WorkerC, worker_id: i32);
+    pub fn worker_newForThisThread(
+        cworker: *mut WorkerC,
+        worker_id: i32,
+        bootstrap_end_time: SimulationTime,
+    );
 }
 extern "C" {
     pub fn worker_borrowMut() -> *mut WorkerRefMut;
@@ -1350,6 +1354,18 @@ extern "C" {
 extern "C" {
     pub fn worker_setActiveThread(thread: *mut Thread);
 }
+extern "C" {
+    pub fn worker_setRoundEndTime(t: SimulationTime);
+}
+extern "C" {
+    pub fn worker_setCurrentTime(t: SimulationTime);
+}
+extern "C" {
+    pub fn worker_getCurrentTime() -> SimulationTime;
+}
+extern "C" {
+    pub fn worker_isBootstrapActive() -> bool;
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Task {
@@ -1367,9 +1383,6 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_setMinEventTimeNextRound(simtime: SimulationTime);
-}
-extern "C" {
-    pub fn worker_setRoundEndTime(newRoundEndTime: SimulationTime);
 }
 extern "C" {
     pub fn worker_getAffinity() -> ::std::os::raw::c_int;
@@ -1397,13 +1410,7 @@ extern "C" {
     pub fn worker_isAlive() -> gboolean;
 }
 extern "C" {
-    pub fn worker_getCurrentTime() -> SimulationTime;
-}
-extern "C" {
     pub fn worker_getEmulatedTime() -> EmulatedTime;
-}
-extern "C" {
-    pub fn worker_isBootstrapActive() -> gboolean;
 }
 extern "C" {
     pub fn worker_getNodeBandwidthUp(nodeID: GQuark, ip: in_addr_t) -> guint32;
@@ -1416,9 +1423,6 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_updateMinTimeJump(minPathLatency: gdouble);
-}
-extern "C" {
-    pub fn worker_setCurrentTime(time: SimulationTime);
 }
 extern "C" {
     pub fn worker_isFiltered(level: LogLevel) -> gboolean;

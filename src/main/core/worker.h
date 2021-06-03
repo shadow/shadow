@@ -9,6 +9,7 @@
 
 #include <glib.h>
 #include <netinet/in.h>
+#include <stdbool.h>
 
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
@@ -80,7 +81,7 @@ gboolean worker_isAlive();
 SimulationTime worker_getCurrentTime();
 EmulatedTime worker_getEmulatedTime();
 
-gboolean worker_isBootstrapActive();
+bool worker_isBootstrapActive(void);
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 

@@ -66,15 +66,6 @@ static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerpool, int worke
 struct WorkerC {
     WorkerPool* workerPool;
 
-    /* timing information tracked by this worker */
-    struct {
-        SimulationTime now;
-        SimulationTime last;
-        SimulationTime barrier;
-    } clock;
-
-    SimulationTime bootstrapEndTime;
-
     // A counter for objects allocated by this worker.
     Counter* object_alloc_counter;
     // A counter for objects deallocated by this worker.
@@ -394,10 +385,6 @@ gboolean worker_isAlive() {
 WorkerC* workerc_new(WorkerPool* workerPool, int threadID) {
     WorkerC* worker = g_new0(WorkerC, 1);
     *worker = (WorkerC){.workerPool = workerPool,
-                        .clock.now = SIMTIME_INVALID,
-                        .clock.last = SIMTIME_INVALID,
-                        .clock.barrier = SIMTIME_INVALID,
-                        .bootstrapEndTime = manager_getBootstrapEndTime(workerPool->manager),
                         MAGIC_INITIALIZER};
 
     utility_assert(threadID >= 0);
@@ -432,18 +419,13 @@ WorkerPool* worker_pool() {
     return workerref_raw(ref)->workerPool;
 }
 
-void worker_setRoundEndTime(SimulationTime newRoundEndTime) {
-    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-    workerrefmut_raw(ref)->clock.barrier = newRoundEndTime;
-}
-
 void worker_setMinEventTimeNextRound(SimulationTime simtime) {
     g_autoptr(WorkerRef) ref = worker_borrow();
     const WorkerC* worker = workerref_raw(ref);
 
     // If the event will be executed during *this* round, it should not
     // be considered while computing the start time of the *next* round.
-    if (simtime < worker->clock.barrier) {
+    if (simtime < _worker_getRoundEndTime()) {
         return;
     }
 
@@ -505,7 +487,8 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     }
 
     // Create the thread-local Worker object.
-    worker_newForThisThread(workerc_new(workerPool, threadID), threadID);
+    worker_newForThisThread(workerc_new(workerPool, threadID), threadID,
+                            manager_getBootstrapEndTime(workerPool->manager));
 
     LogicalProcessors* lps = workerPool->logicalProcessors;
 
@@ -547,24 +530,15 @@ void* _worker_run(void* voidWorkerThreadInfo) {
 void worker_runEvent(Event* event) {
 
     /* update cache, reset clocks */
-    {
-        /* Restrict the scope of the borrow, so that it's still available
-         * to the event. Alternatively we could pass the borrowed reference
-         * to the event.
-         */
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        workerrefmut_raw(ref)->clock.now = event_getTime(event);
-    }
+    worker_setCurrentTime(event_getTime(event));
 
     /* process the local event */
     event_execute(event);
     event_unref(event);
 
     /* update times */
-    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-    WorkerC* worker = workerrefmut_raw(ref);
-    worker->clock.last = worker->clock.now;
-    worker->clock.now = SIMTIME_INVALID;
+    _worker_setLastEventTime(worker_getCurrentTime());
+    worker_setCurrentTime(SIMTIME_INVALID);
 }
 
 void worker_finish(GQueue* hosts) {
@@ -601,12 +575,7 @@ gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
         return FALSE;
     }
 
-    SimulationTime clock_now = 0;
-    {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        WorkerC* worker = workerrefmut_raw(ref);
-        clock_now = worker->clock.now;
-    }
+    SimulationTime clock_now = worker_getCurrentTime();
     utility_assert(clock_now != SIMTIME_INVALID);
 
     Event* event = event_new_(task, clock_now + nanoDelay, host, host);
@@ -684,17 +653,11 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
 
 static void _worker_bootHost(Host* host, void* _unused) {
     worker_setActiveHost(host);
-    {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        workerrefmut_raw(ref)->clock.now = 0;
-    }
+    worker_setCurrentTime(0);
     host_continueExecutionTimer(host);
     host_boot(host);
     host_stopExecutionTimer(host);
-    {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        workerrefmut_raw(ref)->clock.now = SIMTIME_INVALID;
-    }
+    worker_setCurrentTime(SIMTIME_INVALID);
     worker_setActiveHost(NULL);
 }
 
@@ -713,11 +676,6 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     host_shutdown(host);
     worker_setActiveHost(NULL);
     host_unref(host);
-}
-
-SimulationTime worker_getCurrentTime() {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    return workerref_raw(ref)->clock.now;
 }
 
 /* The emulated time starts at January 1st, 2000. This time should be used
@@ -743,16 +701,15 @@ void worker_updateMinTimeJump(gdouble minPathLatency) {
     manager_updateMinTimeJump(worker_pool()->manager, minPathLatency);
 }
 
-void worker_setCurrentTime(SimulationTime time) {
-    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-    workerrefmut_raw(ref)->clock.now = time;
-}
-
 gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }
 
 void worker_incrementPluginError() { manager_incrementPluginError(worker_pool()->manager); }
 
 /* COUNTER WARNING:
+    pub fn get_current_time() -> Option<SimulationTime> {
+        WORKER.with(|w| w.get().map(|w| w.borrow().clock.now)).flatten()
+    }
+
  * the issue is that the manager thread frees some objects that
  * are created by the worker threads. but the manager thread does
  * not have a worker object. this is only an issue when running
@@ -810,16 +767,5 @@ void worker_add_syscall_counts(Counter* syscall_counts) {
     } else {
         /* has a global lock, so don't do it unless there is no worker object */
         manager_add_syscall_counts_global(syscall_counts);
-    }
-}
-
-gboolean worker_isBootstrapActive() {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    const WorkerC* worker = workerref_raw(ref);
-
-    if (worker->clock.now < worker->bootstrapEndTime) {
-        return TRUE;
-    } else {
-        return FALSE;
     }
 }

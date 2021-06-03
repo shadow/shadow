@@ -8,7 +8,9 @@ module contains some identically-named constants defined as C macros in
 */
 
 use crate::cshadow as c;
+use std::convert::TryFrom;
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
 pub struct SimulationTime(std::time::Duration);
 
 impl std::ops::Deref for SimulationTime {
@@ -28,6 +30,14 @@ impl SimulationTime {
         Some(Self::from(std::time::Duration::from_nanos(
             val * SIMTIME_ONE_NANOSECOND,
         )))
+    }
+
+    pub fn to_c_simtime(val: Option<Self>) -> c::SimulationTime {
+        if let Some(val) = val {
+            u64::try_from(val.as_nanos() / u128::from(SIMTIME_ONE_NANOSECOND)).unwrap()
+        } else {
+            SIMTIME_INVALID
+        }
     }
 }
 
@@ -73,5 +83,16 @@ mod tests {
 
         assert_eq!(rust_time.as_secs(), 5 * 60);
         assert_eq!(rust_time.as_millis(), 5 * 60 * 1_000 + 7);
+    }
+
+    #[test]
+    fn test_to_sim_time() {
+        let rust_time = SimulationTime::from(
+            5 * std::time::Duration::from_secs(60) + 7 * std::time::Duration::from_micros(1000),
+        );
+        let sim_time = 5 * SIMTIME_ONE_MINUTE + 7 * SIMTIME_ONE_MILLISECOND;
+
+        assert_eq!(SimulationTime::to_c_simtime(Some(rust_time)), sim_time);
+        assert_eq!(SimulationTime::to_c_simtime(None), SIMTIME_INVALID);
     }
 }
