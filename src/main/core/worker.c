@@ -421,8 +421,7 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     workerPool->workerNativeThreadIDs[threadID] = syscall(SYS_gettid);
 
     // Create the thread-local Worker object.
-    worker_newForThisThread(workerPool, threadID,
-                            manager_getBootstrapEndTime(workerPool->manager));
+    worker_newForThisThread(workerPool, threadID, manager_getBootstrapEndTime(workerPool->manager));
 
     // Signal parent thread that we've set the nativeThreadID.
     countdownlatch_countDown(workerPool->finishLatch);
@@ -486,10 +485,8 @@ void worker_finish(GQueue* hosts) {
     WorkerPool* pool = _worker_pool();
 
     // Send object counts to manager
-    manager_add_alloc_object_counts(
-        pool->manager, _worker_objectAllocCounter());
-    manager_add_dealloc_object_counts(
-        pool->manager, _worker_objectDeallocCounter());
+    manager_add_alloc_object_counts(pool->manager, _worker_objectAllocCounter());
+    manager_add_dealloc_object_counts(pool->manager, _worker_objectDeallocCounter());
 
     // Send syscall counts to manager
     manager_add_syscall_counts(pool->manager, _worker_syscallCounter());
