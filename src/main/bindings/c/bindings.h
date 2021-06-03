@@ -257,7 +257,7 @@ SimulationTime processoptions_getStopTime(const struct ProcessOptions *proc);
 int64_t parse_bandwidth(const char *s);
 
 // Initialize a Worker for this thread.
-void worker_newForThisThread(WorkerC *cworker,
+void worker_newForThisThread(WorkerPool *worker_pool,
                              int32_t worker_id,
                              SimulationTime bootstrap_end_time);
 
@@ -269,16 +269,16 @@ struct WorkerRefMut *worker_borrowMut(void);
 // Return a borrowed reference.
 void workerrefmut_free(struct WorkerRefMut *worker);
 
-// SAFETY: Returned pointer must not outlive `workerRefMut`.
-WorkerC *workerrefmut_raw(struct WorkerRefMut *worker_ref);
+// SAFETY: Returned pointer is invalid after `workerRefMut` is destroyed.
+WorkerPool *workerrefmut_workerPool(struct WorkerRefMut *worker_ref);
 
-// SAFETY: Returned pointer must not outlive `workerRefMut`.
+// SAFETY: Returned pointer is invalid after `workerRefMut` is destroyed.
 struct Counter *workerrefmut_objectAllocCounter(struct WorkerRefMut *worker_ref);
 
-// SAFETY: Returned pointer must not outlive `workerRefMut`.
+// SAFETY: Returned pointer is invalid after `workerRefMut` is destroyed.
 struct Counter *workerrefmut_objectDeallocCounter(struct WorkerRefMut *worker_ref);
 
-// SAFETY: Returned pointer must not outlive `workerRefMut`.
+// SAFETY: Returned pointer is invalid after `workerRefMut` is destroyed.
 struct Counter *workerrefmut_syscallCounter(struct WorkerRefMut *worker_ref);
 
 // If worker is alive, returns an immutable reference to it. Otherwise returns NULL.
@@ -289,8 +289,8 @@ struct WorkerRef *worker_borrow(void);
 // Return a borrowed reference.
 void workerref_free(struct WorkerRef *worker);
 
-// SAFETY: Returned pointer must not outlive `workerRef`.
-const WorkerC *workerref_raw(struct WorkerRef *worker_ref);
+// SAFETY: Returned pointer is invalid after `workerRef` is destroyed.
+const WorkerPool *workerref_worker_pool(struct WorkerRef *worker_ref);
 
 // ID of the current thread's Worker. Panics if the thread has no Worker.
 int32_t worker_threadID(void);
@@ -312,6 +312,8 @@ SimulationTime worker_getCurrentTime(void);
 void _worker_setLastEventTime(SimulationTime t);
 
 bool worker_isBootstrapActive(void);
+
+WorkerPool *_worker_pool(void);
 
 // Create an object that can be used to store all descriptors created by a
 // process. When the table is no longer required, use descriptortable_free

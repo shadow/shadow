@@ -59,8 +59,7 @@ pub struct Worker {
     // A counter for objects deallocated by this worker.
     object_dealloc_counter: Counter,
 
-    // Owned pointer to legacy Worker bits.
-    cworker: *mut cshadow::WorkerC,
+    worker_pool: *mut cshadow::WorkerPool,
 }
 
 std::thread_local! {
@@ -72,7 +71,7 @@ std::thread_local! {
 impl Worker {
     // Create worker for this thread.
     pub unsafe fn new_for_this_thread(
-        cworker: *mut cshadow::WorkerC,
+        worker_pool: *mut cshadow::WorkerPool,
         worker_id: WorkerThreadID,
         bootstrap_end_time: SimulationTime,
     ) {
@@ -91,7 +90,7 @@ impl Worker {
                 object_alloc_counter: Counter::new(),
                 object_dealloc_counter: Counter::new(),
                 syscall_counter: Counter::new(),
-                cworker: notnull_mut(cworker),
+                worker_pool: notnull_mut(worker_pool),
             }));
             assert!(res.is_ok(), "Worker already initialized");
         });
@@ -254,12 +253,6 @@ impl Worker {
     }
 }
 
-impl Drop for Worker {
-    fn drop(&mut self) {
-        unsafe { cshadow::workerc_free(self.cworker) }
-    }
-}
-
 mod export {
     use super::*;
     use std::convert::TryInto;
@@ -267,14 +260,14 @@ mod export {
     /// Initialize a Worker for this thread.
     #[no_mangle]
     pub unsafe extern "C" fn worker_newForThisThread(
-        cworker: *mut cshadow::WorkerC,
+        worker_pool: *mut cshadow::WorkerPool,
         worker_id: i32,
         bootstrap_end_time: cshadow::SimulationTime,
     ) {
         let bootstrap_end_time = SimulationTime::from_c_simtime(bootstrap_end_time).unwrap();
         unsafe {
             Worker::new_for_this_thread(
-                notnull_mut(cworker),
+                notnull_mut(worker_pool),
                 WorkerThreadID(worker_id.try_into().unwrap()),
                 bootstrap_end_time,
             )
@@ -309,15 +302,15 @@ mod export {
         unsafe { Box::from_raw(notnull_mut(worker)) };
     }
 
-    /// SAFETY: Returned pointer must not outlive `workerRefMut`.
+    /// SAFETY: Returned pointer is invalid after `workerRefMut` is destroyed.
     #[no_mangle]
-    pub unsafe extern "C" fn workerrefmut_raw(
+    pub unsafe extern "C" fn workerrefmut_workerPool(
         worker_ref: *mut WorkerRefMut,
-    ) -> *mut cshadow::WorkerC {
-        unsafe { worker_ref.as_mut().unwrap().0.cworker }
+    ) -> *mut cshadow::WorkerPool {
+        unsafe { worker_ref.as_mut().unwrap().0.worker_pool }
     }
 
-    /// SAFETY: Returned pointer must not outlive `workerRefMut`.
+    /// SAFETY: Returned pointer is invalid after `workerRefMut` is destroyed.
     #[no_mangle]
     pub unsafe extern "C" fn workerrefmut_objectAllocCounter(
         worker_ref: *mut WorkerRefMut,
@@ -325,7 +318,7 @@ mod export {
         unsafe { (&mut worker_ref.as_mut().unwrap().0.object_alloc_counter) as *mut Counter }
     }
 
-    /// SAFETY: Returned pointer must not outlive `workerRefMut`.
+    /// SAFETY: Returned pointer is invalid after `workerRefMut` is destroyed.
     #[no_mangle]
     pub unsafe extern "C" fn workerrefmut_objectDeallocCounter(
         worker_ref: *mut WorkerRefMut,
@@ -333,7 +326,7 @@ mod export {
         unsafe { (&mut worker_ref.as_mut().unwrap().0.object_dealloc_counter) as *mut Counter }
     }
 
-    /// SAFETY: Returned pointer must not outlive `workerRefMut`.
+    /// SAFETY: Returned pointer is invalid after `workerRefMut` is destroyed.
     #[no_mangle]
     pub unsafe extern "C" fn workerrefmut_syscallCounter(
         worker_ref: *mut WorkerRefMut,
@@ -363,10 +356,12 @@ mod export {
         unsafe { Box::from_raw(worker) };
     }
 
-    /// SAFETY: Returned pointer must not outlive `workerRef`.
+    /// SAFETY: Returned pointer is invalid after `workerRef` is destroyed.
     #[no_mangle]
-    pub unsafe extern "C" fn workerref_raw(worker_ref: *mut WorkerRef) -> *const cshadow::WorkerC {
-        unsafe { worker_ref.as_mut().unwrap().0.cworker }
+    pub unsafe extern "C" fn workerref_worker_pool(
+        worker_ref: *mut WorkerRef,
+    ) -> *const cshadow::WorkerPool {
+        unsafe { worker_ref.as_mut().unwrap().0.worker_pool }
     }
 
     /// ID of the current thread's Worker. Panics if the thread has no Worker.
@@ -437,5 +432,17 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn worker_isBootstrapActive() -> bool {
         Worker::current_time().unwrap() < Worker::bootstrap_end_time()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn _worker_pool() -> *mut cshadow::WorkerPool {
+        WORKER.with(|worker| {
+            // Cast to 'static lifetime.
+            // SAFETY: Safe by the SAFETY preconditions of this method.
+            worker
+                .get()
+                .map(|w| w.borrow_mut().worker_pool as *mut cshadow::WorkerPool)
+                .unwrap()
+        })
     }
 }

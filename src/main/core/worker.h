@@ -11,6 +11,11 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 
+// A pool of worker threads.
+typedef struct _WorkerPool WorkerPool;
+// Task to be executed on a worker thread.
+typedef void (*WorkerPoolTaskFn)(void*);
+
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/definitions.h"
@@ -26,11 +31,6 @@
 #include "support/logger/log_level.h"
 
 #include "main/bindings/c/bindings.h"
-
-// A pool of worker threads.
-typedef struct _WorkerPool WorkerPool;
-// Task to be executed on a worker thread.
-typedef void (*WorkerPoolTaskFn)(void*);
 
 // To be called by scheduler. Consumes `event`
 void worker_runEvent(Event* event);

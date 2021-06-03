@@ -40,6 +40,7 @@ pub type GTimer = _GTimer;
 pub type sa_family_t = ::std::os::raw::c_ushort;
 pub type in_addr_t = u32;
 pub type in_port_t = u16;
+pub type WorkerPool = u8;
 pub const InterposeMethod_INTERPOSE_METHOD_PTRACE: InterposeMethod = 0;
 pub const InterposeMethod_INTERPOSE_METHOD_PRELOAD: InterposeMethod = 1;
 pub const InterposeMethod_INTERPOSE_METHOD_HYBRID: InterposeMethod = 2;
@@ -1331,7 +1332,7 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_newForThisThread(
-        cworker: *mut WorkerC,
+        worker_pool: *mut WorkerPool,
         worker_id: i32,
         bootstrap_end_time: SimulationTime,
     );

@@ -393,15 +393,7 @@ void workerc_free(WorkerC* worker) {
     g_free(worker);
 }
 
-WorkerPool* worker_pool() {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    return workerref_raw(ref)->workerPool;
-}
-
 void worker_setMinEventTimeNextRound(SimulationTime simtime) {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    const WorkerC* worker = workerref_raw(ref);
-
     // If the event will be executed during *this* round, it should not
     // be considered while computing the start time of the *next* round.
     if (simtime < _worker_getRoundEndTime()) {
@@ -409,18 +401,19 @@ void worker_setMinEventTimeNextRound(SimulationTime simtime) {
     }
 
     // No need to lock: worker is the only one running on lpi right now.
-    int lpi = worker->workerPool->workerLogicalProcessorIdxs[worker_threadID()];
-    if (simtime < worker->workerPool->minEventTimes[lpi]) {
-        worker->workerPool->minEventTimes[lpi] = simtime;
+    WorkerPool* pool = _worker_pool();
+    int lpi = pool->workerLogicalProcessorIdxs[worker_threadID()];
+    if (simtime < pool->minEventTimes[lpi]) {
+        pool->minEventTimes[lpi] = simtime;
     }
 }
 
 int worker_getAffinity() {
-    WorkerPool* pool = worker_pool();
+    WorkerPool* pool = _worker_pool();
     return lps_cpuId(pool->logicalProcessors, pool->workerLogicalProcessorIdxs[worker_threadID()]);
 }
 
-DNS* worker_getDNS() { return manager_getDNS(worker_pool()->manager); }
+DNS* worker_getDNS() { return manager_getDNS(_worker_pool()->manager); }
 
 Address* worker_resolveIPToAddress(in_addr_t ip) {
     DNS* dns = worker_getDNS();
@@ -432,9 +425,9 @@ Address* worker_resolveNameToAddress(const gchar* name) {
     return dns_resolveNameToAddress(dns, name);
 }
 
-Topology* worker_getTopology() { return manager_getTopology(worker_pool()->manager); }
+Topology* worker_getTopology() { return manager_getTopology(_worker_pool()->manager); }
 
-const ConfigOptions* worker_getConfig() { return manager_getConfig(worker_pool()->manager); }
+const ConfigOptions* worker_getConfig() { return manager_getConfig(_worker_pool()->manager); }
 
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
@@ -466,7 +459,7 @@ void* _worker_run(void* voidWorkerThreadInfo) {
     }
 
     // Create the thread-local Worker object.
-    worker_newForThisThread(workerc_new(workerPool, threadID), threadID,
+    worker_newForThisThread(workerPool, threadID,
                             manager_getBootstrapEndTime(workerPool->manager));
 
     LogicalProcessors* lps = workerPool->logicalProcessors;
@@ -531,23 +524,23 @@ void worker_finish(GQueue* hosts) {
 
     /* cleanup is all done, send counters to manager */
     g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-    WorkerC* worker = workerrefmut_raw(ref);
+    WorkerPool* pool = workerrefmut_workerPool(ref);
 
     // Send object counts to manager
     manager_add_alloc_object_counts(
-        worker->workerPool->manager, workerrefmut_objectAllocCounter(ref));
+        pool->manager, workerrefmut_objectAllocCounter(ref));
     manager_add_dealloc_object_counts(
-        worker->workerPool->manager, workerrefmut_objectDeallocCounter(ref));
+        pool->manager, workerrefmut_objectDeallocCounter(ref));
 
     // Send syscall counts to manager
-    manager_add_syscall_counts(worker->workerPool->manager, workerrefmut_syscallCounter(ref));
+    manager_add_syscall_counts(pool->manager, workerrefmut_syscallCounter(ref));
 }
 
 gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
     utility_assert(task);
     utility_assert(host);
 
-    if (!manager_schedulerIsRunning(worker_pool()->manager)) {
+    if (!manager_schedulerIsRunning(_worker_pool()->manager)) {
         return FALSE;
     }
 
@@ -555,7 +548,7 @@ gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
     utility_assert(clock_now != SIMTIME_INVALID);
 
     Event* event = event_new_(task, clock_now + nanoDelay, host, host);
-    return scheduler_push(worker_pool()->scheduler, event, host, host);
+    return scheduler_push(_worker_pool()->scheduler, event, host, host);
 }
 
 static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpointer userData) {
@@ -569,7 +562,7 @@ static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpoint
 void worker_sendPacket(Host* srcHost, Packet* packet) {
     utility_assert(packet != NULL);
 
-    if (!manager_schedulerIsRunning(worker_pool()->manager)) {
+    if (!manager_schedulerIsRunning(_worker_pool()->manager)) {
         /* the simulation is over, don't bother */
         return;
     }
@@ -605,7 +598,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         /* TODO this should change for sending to remote manager (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
 
-        Scheduler* scheduler = worker_pool()->scheduler;
+        Scheduler* scheduler = _worker_pool()->scheduler;
         GQuark dstID = (GQuark)address_getID(dstAddress);
         Host* dstHost = scheduler_getHost(scheduler, dstID);
         utility_assert(dstHost);
@@ -662,24 +655,24 @@ EmulatedTime worker_getEmulatedTime() {
 }
 
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip) {
-    return manager_getNodeBandwidthUp(worker_pool()->manager, nodeID, ip);
+    return manager_getNodeBandwidthUp(_worker_pool()->manager, nodeID, ip);
 }
 
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip) {
-    return manager_getNodeBandwidthDown(worker_pool()->manager, nodeID, ip);
+    return manager_getNodeBandwidthDown(_worker_pool()->manager, nodeID, ip);
 }
 
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID) {
-    return manager_getLatency(worker_pool()->manager, sourceNodeID, destinationNodeID);
+    return manager_getLatency(_worker_pool()->manager, sourceNodeID, destinationNodeID);
 }
 
 void worker_updateMinTimeJump(gdouble minPathLatency) {
-    manager_updateMinTimeJump(worker_pool()->manager, minPathLatency);
+    manager_updateMinTimeJump(_worker_pool()->manager, minPathLatency);
 }
 
 gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }
 
-void worker_incrementPluginError() { manager_incrementPluginError(worker_pool()->manager); }
+void worker_incrementPluginError() { manager_incrementPluginError(_worker_pool()->manager); }
 
 void __worker_increment_object_alloc_counter(const char* object_name) {
     // If disabled, we never create the counter (and never send it to the manager).
