@@ -66,14 +66,6 @@ static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerpool, int worke
 struct WorkerC {
     WorkerPool* workerPool;
 
-    // A counter for objects allocated by this worker.
-    Counter* object_alloc_counter;
-    // A counter for objects deallocated by this worker.
-    Counter* object_dealloc_counter;
-
-    // A counter for all syscalls made by processes freed by this worker.
-    Counter* syscall_counter;
-
     MAGIC_DECLARE;
 };
 
@@ -397,19 +389,6 @@ WorkerC* workerc_new(WorkerPool* workerPool, int threadID) {
 
 void workerc_free(WorkerC* worker) {
     MAGIC_ASSERT(worker);
-
-    if (worker->syscall_counter) {
-        counter_free(worker->syscall_counter);
-    }
-
-    if (worker->object_alloc_counter) {
-        counter_free(worker->object_alloc_counter);
-    }
-
-    if (worker->object_dealloc_counter) {
-        counter_free(worker->object_dealloc_counter);
-    }
-
     MAGIC_CLEAR(worker);
     g_free(worker);
 }
@@ -555,16 +534,13 @@ void worker_finish(GQueue* hosts) {
     WorkerC* worker = workerrefmut_raw(ref);
 
     // Send object counts to manager
-    if (worker->object_alloc_counter) {
-        manager_add_alloc_object_counts(worker->workerPool->manager, worker->object_alloc_counter);
-    }
-    if (worker->object_dealloc_counter) {
-        manager_add_dealloc_object_counts(worker->workerPool->manager, worker->object_dealloc_counter);
-    }
+    manager_add_alloc_object_counts(
+        worker->workerPool->manager, workerrefmut_objectAllocCounter(ref));
+    manager_add_dealloc_object_counts(
+        worker->workerPool->manager, workerrefmut_objectDeallocCounter(ref));
+
     // Send syscall counts to manager
-    if (worker->syscall_counter) {
-        manager_add_syscall_counts(worker->workerPool->manager, worker->syscall_counter);
-    }
+    manager_add_syscall_counts(worker->workerPool->manager, workerrefmut_syscallCounter(ref));
 }
 
 gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
@@ -705,31 +681,16 @@ gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_get
 
 void worker_incrementPluginError() { manager_incrementPluginError(worker_pool()->manager); }
 
-/* COUNTER WARNING:
-    pub fn get_current_time() -> Option<SimulationTime> {
-        WORKER.with(|w| w.get().map(|w| w.borrow().clock.now)).flatten()
-    }
-
- * the issue is that the manager thread frees some objects that
- * are created by the worker threads. but the manager thread does
- * not have a worker object. this is only an issue when running
- * with multiple workers. */
-
 void __worker_increment_object_alloc_counter(const char* object_name) {
     // If disabled, we never create the counter (and never send it to the manager).
     if (!_use_object_counters) {
         return;
     }
-    // See COUNTER WARNING above.
-    if (worker_isAlive()) {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        WorkerC* worker = workerrefmut_raw(ref);
-        if (!worker->object_alloc_counter) {
-            worker->object_alloc_counter = counter_new();
-        }
-        counter_add_value(worker->object_alloc_counter, object_name, 1);
+    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
+    if (ref) {
+        counter_add_value(workerrefmut_objectAllocCounter(ref), object_name, 1);
     } else {
-        /* has a global lock, so don't do it unless there is no worker object */
+        // No live worker; fall back to the shared manager counter.
         manager_increment_object_alloc_counter_global(object_name);
     }
 }
@@ -739,33 +700,21 @@ void __worker_increment_object_dealloc_counter(const char* object_name) {
     if (!_use_object_counters) {
         return;
     }
-    // See COUNTER WARNING above.
-    if (worker_isAlive()) {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        WorkerC* worker = workerrefmut_raw(ref);
-        if (!worker->object_dealloc_counter) {
-            worker->object_dealloc_counter = counter_new();
-        }
-        counter_add_value(worker->object_dealloc_counter, object_name, 1);
+    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
+    if (ref) {
+        counter_add_value(workerrefmut_objectDeallocCounter(ref), object_name, 1);
     } else {
-        /* has a global lock, so don't do it unless there is no worker object */
+        // No live worker; fall back to the shared manager counter.
         manager_increment_object_dealloc_counter_global(object_name);
     }
 }
 
 void worker_add_syscall_counts(Counter* syscall_counts) {
-    // See COUNTER WARNING above.
-    if (worker_isAlive()) {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        WorkerC* worker = workerrefmut_raw(ref);
-        // This is created on the fly, so that if we did not enable counting mode
-        // then we don't need to create the counter object.
-        if (!worker->syscall_counter) {
-            worker->syscall_counter = counter_new();
-        }
-        counter_add_counter(worker->syscall_counter, syscall_counts);
+    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
+    if (ref) {
+        counter_add_counter(workerrefmut_syscallCounter(ref), syscall_counts);
     } else {
-        /* has a global lock, so don't do it unless there is no worker object */
+        // No live worker; fall back to the shared manager counter.
         manager_add_syscall_counts_global(syscall_counts);
     }
 }

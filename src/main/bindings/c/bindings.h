@@ -272,6 +272,15 @@ void workerrefmut_free(struct WorkerRefMut *worker);
 // SAFETY: Returned pointer must not outlive `workerRefMut`.
 WorkerC *workerrefmut_raw(struct WorkerRefMut *worker_ref);
 
+// SAFETY: Returned pointer must not outlive `workerRefMut`.
+struct Counter *workerrefmut_objectAllocCounter(struct WorkerRefMut *worker_ref);
+
+// SAFETY: Returned pointer must not outlive `workerRefMut`.
+struct Counter *workerrefmut_objectDeallocCounter(struct WorkerRefMut *worker_ref);
+
+// SAFETY: Returned pointer must not outlive `workerRefMut`.
+struct Counter *workerrefmut_syscallCounter(struct WorkerRefMut *worker_ref);
+
 // If worker is alive, returns an immutable reference to it. Otherwise returns NULL.
 // SAFETY: Returned pointer is invalid after `worker_freeForThisThread` is called
 // or when global destructors start running.

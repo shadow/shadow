@@ -9,6 +9,7 @@ use crate::host::process::Process;
 use crate::host::process::ProcessId;
 use crate::host::thread::ThreadId;
 use crate::host::thread::{CThread, Thread};
+use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -51,6 +52,13 @@ pub struct Worker {
     clock: Clock,
     bootstrap_end_time: SimulationTime,
 
+    // A counter for all syscalls made by processes freed by this worker.
+    syscall_counter: Counter,
+    // A counter for objects allocated by this worker.
+    object_alloc_counter: Counter,
+    // A counter for objects deallocated by this worker.
+    object_dealloc_counter: Counter,
+
     // Owned pointer to legacy Worker bits.
     cworker: *mut cshadow::WorkerC,
 }
@@ -80,6 +88,9 @@ impl Worker {
                     barrier: None,
                 },
                 bootstrap_end_time,
+                object_alloc_counter: Counter::new(),
+                object_dealloc_counter: Counter::new(),
+                syscall_counter: Counter::new(),
                 cworker: notnull_mut(cworker),
             }));
             assert!(res.is_ok(), "Worker already initialized");
@@ -304,6 +315,30 @@ mod export {
         worker_ref: *mut WorkerRefMut,
     ) -> *mut cshadow::WorkerC {
         unsafe { worker_ref.as_mut().unwrap().0.cworker }
+    }
+
+    /// SAFETY: Returned pointer must not outlive `workerRefMut`.
+    #[no_mangle]
+    pub unsafe extern "C" fn workerrefmut_objectAllocCounter(
+        worker_ref: *mut WorkerRefMut,
+    ) -> *mut Counter {
+        unsafe { (&mut worker_ref.as_mut().unwrap().0.object_alloc_counter) as *mut Counter }
+    }
+
+    /// SAFETY: Returned pointer must not outlive `workerRefMut`.
+    #[no_mangle]
+    pub unsafe extern "C" fn workerrefmut_objectDeallocCounter(
+        worker_ref: *mut WorkerRefMut,
+    ) -> *mut Counter {
+        unsafe { (&mut worker_ref.as_mut().unwrap().0.object_dealloc_counter) as *mut Counter }
+    }
+
+    /// SAFETY: Returned pointer must not outlive `workerRefMut`.
+    #[no_mangle]
+    pub unsafe extern "C" fn workerrefmut_syscallCounter(
+        worker_ref: *mut WorkerRefMut,
+    ) -> *mut Counter {
+        unsafe { (&mut worker_ref.as_mut().unwrap().0.object_dealloc_counter) as *mut Counter }
     }
 
     /// If worker is alive, returns an immutable reference to it. Otherwise returns NULL.
