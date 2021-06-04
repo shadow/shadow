@@ -39,6 +39,7 @@ RPM_PACKAGES="
   xz-devel
   yum-utils
   diffutils
+  libarchive
   "
 
 # packages that are only required for our CI environment

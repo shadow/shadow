@@ -132,3 +132,9 @@ dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps
 dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-0.7.1-12.el7.x86_64.rpm
 dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-devel-0.7.1-12.el7.x86_64.rpm
 ```
+
+Due to [a bug](https://bugs.centos.org/view.php?id=18212) in the CentOS 8 CMake package, you must also install libarchive manually.
+
+```bash
+dnf install -y libarchive
+```
