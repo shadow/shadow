@@ -255,11 +255,3 @@ set(SHADOW_INFO_STRING_CONF "For more information, visit https://shadow.github.i
 ## generate config header and make sure its on the include path
 ## this should come after create the version info to make sure it's included
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_BINARY_DIR}/src/shd-config.h)
-install(FILES ${CMAKE_BINARY_DIR}/src/shd-config.h DESTINATION include/)
-
-## install our 'exported' libs so they can be imported by others
-file(GLOB CMAKE_CUSTOM_MODULES "${CMAKE_SOURCE_DIR}/cmake/*cmake")
-install(FILES ${CMAKE_CUSTOM_MODULES} DESTINATION share/cmake/Modules/)
-if(SHADOW_EXPORT STREQUAL ON)
-    install(EXPORT shadow-externals DESTINATION share/)
-endif(SHADOW_EXPORT STREQUAL ON)
