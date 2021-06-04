@@ -1,4 +1,6 @@
-## Shadow Setup
+# Shadow Setup
+
+After building and testing Shadow, the install step is optional. If you do not wish to install Shadow, you can run it directly from the build directory (`./build/src/main/shadow`).
 
 ```bash
 git clone https://github.com/shadow/shadow.git
@@ -8,7 +10,7 @@ cd shadow
 ./setup install
 ```
 
-You should add `/home/${USER}/.shadow/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`).
+If you installed Shadow, you should add `/home/${USER}/.shadow/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`).
 
 ```bash
 echo 'export PATH="${PATH}:/home/${USER}/.shadow/bin"' >> ~/.bashrc && source ~/.bashrc
@@ -21,7 +23,11 @@ shadow --version
 shadow --help
 ```
 
-#### Setup Notes
+## Uninstall Shadow
+
+After running `./setup install`, you can find the list of installed files in `./build/install_manifest.txt`. To uninstall Shadow, remove any files listed.
+
+## Setup Notes
 
   + All build output is generated out-of-source, by default to the `./build` directory.
   + Use `./setup build --help` to see all build options; the most useful build options are:  

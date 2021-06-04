@@ -29,13 +29,13 @@ the name of the function logging the message
 - `MESSAGE`:  
 the actual message to be logged
 
-By default, Shadow only prints core messages at or below the `message` log level. This behavior can be changed using the Shadow option `-l` or `--log-level` to increase or decrease the verbosity of the output. As mentioned in the example from the previous section, the output from each application process is stored in separate log files beneath the `shadow.data` directory, and the format of those log files is application-specific (i.e., Shadow writes application output _directly_ to file).
+By default, Shadow only prints core messages at or below the [`info` log level](shadow_config.md#generallog_level). This behavior can be changed using the Shadow option `-l` or `--log-level` to increase or decrease the verbosity of the output. As mentioned in the example from the previous section, the output from each application process is stored in separate log files beneath the `shadow.data` directory, and the format of those log files is application-specific (i.e., Shadow writes application output _directly_ to file).
 
 ## Heartbeat Messages
 
 Shadow logs simulator heartbeat messages that contain useful system information for each virtual node in the experiment, in messages containing the string `shadow-heartbeat`. By default, these heartbeats are logged once per second, but the frequency can be changed using the `--heartbeat-frequency` option to Shadow (see `shadow --help`).
 
-There are currently three heartbeat statistic subsystems: `node`, `socket`, and `ram`. For each subsystem that is enabled, Shadow will print a 'header' message followed by regular message every frequency interval. The 'header' messages generally describe the statistics that are printed in the regular messages for that subsystem.
+There are currently three [heartbeat statistic subsystems](shadow_config.md#host_defaultsheartbeat_log_info): `node`, `socket`, and `ram`. For each subsystem that is enabled, Shadow will print a 'header' message followed by regular message every frequency interval. The 'header' messages generally describe the statistics that are printed in the regular messages for that subsystem.
 
 The following are examples of the statistics that are available for each subsystem:
 
