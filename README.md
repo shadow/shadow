@@ -10,22 +10,26 @@ efficiency and control of simulation, achieving the best of both approaches.
 
 Quick Setup (installs everything in `~/.shadow`):
 ```
-$ ./setup build --clean --debug
+$ ./setup build --clean
+$ ./setup test
 $ ./setup install
 ```
 
 Detailed Documentation
   + [docs/README.md](docs/README.md)
 
-Questions and Bug Reports:
+Questions:
+  + https://github.com/shadow/shadow/discussions
+
+Bug Reports:
   + https://github.com/shadow/shadow/issues
 
-Shadow Plug-ins and Project Development:
+Shadow Project Development:
   + https://github.com/shadow
         
 Homepage:
   + https://shadow.github.io
     
-# Contributing
+## Contributing
 
 See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
