@@ -32,4 +32,4 @@ Homepage:
     
 ## Contributing
 
-See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
+See [docs/contributing.md](docs/contributing.md)
