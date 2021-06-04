@@ -122,7 +122,7 @@ src/tools/plot-shadow.py --data results "example-plots"
 
 The `parse-*.py` scripts generate `stats.*.json.xz` files. The (heavily trimmed) contents of `stats.shadow.json` look like the following:
 
-```json
+```text
 $ xzcat results/stats.shadow.json.xz
 {
   "nodes": {
