@@ -11,6 +11,8 @@ The docs contain important information about installing and using the Shadow dis
      * [System Configuration](system_configuration.md)
      * [(Experimental) Shadow with Docker](install_shadow_with_docker.md)
    * [Getting Started](getting_started.md)
+   * [Parsing Statistics](parsing_statistics.md)
+   * [Log Format](log_format.md)
    * Simulation Customization
      * [Shadow Configuration](shadow_config.md)
      * [Network Configuration](network_config.md)
