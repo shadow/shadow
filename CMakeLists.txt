@@ -218,7 +218,6 @@ if(SHADOW_TEST STREQUAL ON)
 endif(SHADOW_TEST STREQUAL ON)
 
 ## recurse our project tree
-add_subdirectory(${CMAKE_SOURCE_DIR}/resource/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/cpack/)
 
