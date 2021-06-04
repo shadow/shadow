@@ -25,7 +25,6 @@
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
 #include "main/core/work/task.h"
-#include "main/core/worker_c.h"
 #include "main/host/affinity.h"
 #include "main/host/host.h"
 #include "main/host/process.h"
@@ -40,51 +39,14 @@
 #include "support/logger/log_level.h"
 #include "support/logger/logger.h"
 
-// Enable use of g_autoptr with WorkerRef and WorkerRefMut.
-//
-// Defines some functions that aren't necessarily used (e.g. for freeing lists
-// of these types), so we suppress unused code warnings.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(WorkerRef, workerref_free);
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(WorkerRefMut, workerrefmut_free);
-#pragma GCC diagnostic pop
-
 // Allow turning off object counting at run-time.
 static bool _use_object_counters = true;
 ADD_CONFIG_HANDLER(config_getUseObjectCounters, _use_object_counters)
 
-WorkerC* workerc_new(WorkerPool* workerPool, int threadID);
 static void* _worker_run(void* voidWorker);
 static void _worker_freeHostProcesses(Host* host, void* _unused);
 static void _worker_shutdownHost(Host* host, void* _unused);
 static void _workerpool_setLogicalProcessorIdx(WorkerPool* workerpool, int workerID, int cpuId);
-
-// Legacy struct for internal use. Eventually everything here should be moved
-// into the Rust Worker. In the meantime, the Rust Worker owns an instance of
-// this struct.
-struct WorkerC {
-    WorkerPool* workerPool;
-
-    /* timing information tracked by this worker */
-    struct {
-        SimulationTime now;
-        SimulationTime last;
-        SimulationTime barrier;
-    } clock;
-
-    SimulationTime bootstrapEndTime;
-
-    // A counter for objects allocated by this worker.
-    Counter* object_alloc_counter;
-    // A counter for objects deallocated by this worker.
-    Counter* object_dealloc_counter;
-
-    // A counter for all syscalls made by processes freed by this worker.
-    Counter* syscall_counter;
-
-    MAGIC_DECLARE;
-};
 
 struct _WorkerPool {
     /* Unowned pointer to the object that communicates with the controller
@@ -386,80 +348,27 @@ SimulationTime workerpool_getGlobalNextEventTime(WorkerPool* workerPool) {
     return minTime;
 }
 
-gboolean worker_isAlive() {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    return ref != NULL;
-}
-
-WorkerC* workerc_new(WorkerPool* workerPool, int threadID) {
-    WorkerC* worker = g_new0(WorkerC, 1);
-    *worker = (WorkerC){.workerPool = workerPool,
-                        .clock.now = SIMTIME_INVALID,
-                        .clock.last = SIMTIME_INVALID,
-                        .clock.barrier = SIMTIME_INVALID,
-                        .bootstrapEndTime = manager_getBootstrapEndTime(workerPool->manager),
-                        MAGIC_INITIALIZER};
-
-    utility_assert(threadID >= 0);
-    sem_init(&workerPool->workerBeginSems[threadID], 0, 0);
-    workerPool->workerLogicalProcessorIdxs[threadID] = -1;
-    workerPool->workerNativeThreadIDs[threadID] = syscall(SYS_gettid);
-
-    return worker;
-}
-
-void workerc_free(WorkerC* worker) {
-    MAGIC_ASSERT(worker);
-
-    if (worker->syscall_counter) {
-        counter_free(worker->syscall_counter);
-    }
-
-    if (worker->object_alloc_counter) {
-        counter_free(worker->object_alloc_counter);
-    }
-
-    if (worker->object_dealloc_counter) {
-        counter_free(worker->object_dealloc_counter);
-    }
-
-    MAGIC_CLEAR(worker);
-    g_free(worker);
-}
-
-WorkerPool* worker_pool() {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    return workerref_raw(ref)->workerPool;
-}
-
-void worker_setRoundEndTime(SimulationTime newRoundEndTime) {
-    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-    workerrefmut_raw(ref)->clock.barrier = newRoundEndTime;
-}
-
 void worker_setMinEventTimeNextRound(SimulationTime simtime) {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    const WorkerC* worker = workerref_raw(ref);
-
     // If the event will be executed during *this* round, it should not
     // be considered while computing the start time of the *next* round.
-    if (simtime < worker->clock.barrier) {
+    if (simtime < _worker_getRoundEndTime()) {
         return;
     }
 
     // No need to lock: worker is the only one running on lpi right now.
-    int lpi = worker->workerPool->workerLogicalProcessorIdxs[worker_threadID()];
-    if (simtime < worker->workerPool->minEventTimes[lpi]) {
-        worker->workerPool->minEventTimes[lpi] = simtime;
+    WorkerPool* pool = _worker_pool();
+    int lpi = pool->workerLogicalProcessorIdxs[worker_threadID()];
+    if (simtime < pool->minEventTimes[lpi]) {
+        pool->minEventTimes[lpi] = simtime;
     }
 }
 
 int worker_getAffinity() {
-    WorkerPool* pool = worker_pool();
+    WorkerPool* pool = _worker_pool();
     return lps_cpuId(pool->logicalProcessors, pool->workerLogicalProcessorIdxs[worker_threadID()]);
 }
 
-DNS* worker_getDNS() { return manager_getDNS(worker_pool()->manager); }
+DNS* worker_getDNS() { return manager_getDNS(_worker_pool()->manager); }
 
 Address* worker_resolveIPToAddress(in_addr_t ip) {
     DNS* dns = worker_getDNS();
@@ -471,9 +380,9 @@ Address* worker_resolveNameToAddress(const gchar* name) {
     return dns_resolveNameToAddress(dns, name);
 }
 
-Topology* worker_getTopology() { return manager_getTopology(worker_pool()->manager); }
+Topology* worker_getTopology() { return manager_getTopology(_worker_pool()->manager); }
 
-const ConfigOptions* worker_getConfig() { return manager_getConfig(worker_pool()->manager); }
+const ConfigOptions* worker_getConfig() { return manager_getConfig(_worker_pool()->manager); }
 
 /* this is the entry point for worker threads when running in parallel mode,
  * and otherwise is the main event loop when running in serial mode */
@@ -504,10 +413,15 @@ void* _worker_run(void* voidWorkerThreadInfo) {
         g_string_free(name, TRUE);
     }
 
-    // Create the thread-local Worker object.
-    worker_newForThisThread(workerc_new(workerPool, threadID), threadID);
-
     LogicalProcessors* lps = workerPool->logicalProcessors;
+
+    // Initialize this thread's 'rows' in `workerPool`.
+    sem_init(&workerPool->workerBeginSems[threadID], 0, 0);
+    workerPool->workerLogicalProcessorIdxs[threadID] = -1;
+    workerPool->workerNativeThreadIDs[threadID] = syscall(SYS_gettid);
+
+    // Create the thread-local Worker object.
+    worker_newForThisThread(workerPool, threadID, manager_getBootstrapEndTime(workerPool->manager));
 
     // Signal parent thread that we've set the nativeThreadID.
     countdownlatch_countDown(workerPool->finishLatch);
@@ -547,24 +461,15 @@ void* _worker_run(void* voidWorkerThreadInfo) {
 void worker_runEvent(Event* event) {
 
     /* update cache, reset clocks */
-    {
-        /* Restrict the scope of the borrow, so that it's still available
-         * to the event. Alternatively we could pass the borrowed reference
-         * to the event.
-         */
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        workerrefmut_raw(ref)->clock.now = event_getTime(event);
-    }
+    worker_setCurrentTime(event_getTime(event));
 
     /* process the local event */
     event_execute(event);
     event_unref(event);
 
     /* update times */
-    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-    WorkerC* worker = workerrefmut_raw(ref);
-    worker->clock.last = worker->clock.now;
-    worker->clock.now = SIMTIME_INVALID;
+    _worker_setLastEventTime(worker_getCurrentTime());
+    worker_setCurrentTime(SIMTIME_INVALID);
 }
 
 void worker_finish(GQueue* hosts) {
@@ -577,40 +482,29 @@ void worker_finish(GQueue* hosts) {
     }
 
     /* cleanup is all done, send counters to manager */
-    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-    WorkerC* worker = workerrefmut_raw(ref);
+    WorkerPool* pool = _worker_pool();
 
     // Send object counts to manager
-    if (worker->object_alloc_counter) {
-        manager_add_alloc_object_counts(worker->workerPool->manager, worker->object_alloc_counter);
-    }
-    if (worker->object_dealloc_counter) {
-        manager_add_dealloc_object_counts(worker->workerPool->manager, worker->object_dealloc_counter);
-    }
+    manager_add_alloc_object_counts(pool->manager, _worker_objectAllocCounter());
+    manager_add_dealloc_object_counts(pool->manager, _worker_objectDeallocCounter());
+
     // Send syscall counts to manager
-    if (worker->syscall_counter) {
-        manager_add_syscall_counts(worker->workerPool->manager, worker->syscall_counter);
-    }
+    manager_add_syscall_counts(pool->manager, _worker_syscallCounter());
 }
 
 gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay) {
     utility_assert(task);
     utility_assert(host);
 
-    if (!manager_schedulerIsRunning(worker_pool()->manager)) {
+    if (!manager_schedulerIsRunning(_worker_pool()->manager)) {
         return FALSE;
     }
 
-    SimulationTime clock_now = 0;
-    {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        WorkerC* worker = workerrefmut_raw(ref);
-        clock_now = worker->clock.now;
-    }
+    SimulationTime clock_now = worker_getCurrentTime();
     utility_assert(clock_now != SIMTIME_INVALID);
 
     Event* event = event_new_(task, clock_now + nanoDelay, host, host);
-    return scheduler_push(worker_pool()->scheduler, event, host, host);
+    return scheduler_push(_worker_pool()->scheduler, event, host, host);
 }
 
 static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpointer userData) {
@@ -624,7 +518,7 @@ static void _worker_runDeliverPacketTask(Host* host, gpointer voidPacket, gpoint
 void worker_sendPacket(Host* srcHost, Packet* packet) {
     utility_assert(packet != NULL);
 
-    if (!manager_schedulerIsRunning(worker_pool()->manager)) {
+    if (!manager_schedulerIsRunning(_worker_pool()->manager)) {
         /* the simulation is over, don't bother */
         return;
     }
@@ -660,7 +554,7 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
         /* TODO this should change for sending to remote manager (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
 
-        Scheduler* scheduler = worker_pool()->scheduler;
+        Scheduler* scheduler = _worker_pool()->scheduler;
         GQuark dstID = (GQuark)address_getID(dstAddress);
         Host* dstHost = scheduler_getHost(scheduler, dstID);
         utility_assert(dstHost);
@@ -684,17 +578,11 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
 
 static void _worker_bootHost(Host* host, void* _unused) {
     worker_setActiveHost(host);
-    {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        workerrefmut_raw(ref)->clock.now = 0;
-    }
+    worker_setCurrentTime(0);
     host_continueExecutionTimer(host);
     host_boot(host);
     host_stopExecutionTimer(host);
-    {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        workerrefmut_raw(ref)->clock.now = SIMTIME_INVALID;
-    }
+    worker_setCurrentTime(SIMTIME_INVALID);
     worker_setActiveHost(NULL);
 }
 
@@ -715,11 +603,6 @@ static void _worker_shutdownHost(Host* host, void* _unused) {
     host_unref(host);
 }
 
-SimulationTime worker_getCurrentTime() {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    return workerref_raw(ref)->clock.now;
-}
-
 /* The emulated time starts at January 1st, 2000. This time should be used
  * in any places where time is returned to the application, to handle code
  * that assumes the world is in a relatively recent time. */
@@ -728,51 +611,35 @@ EmulatedTime worker_getEmulatedTime() {
 }
 
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip) {
-    return manager_getNodeBandwidthUp(worker_pool()->manager, nodeID, ip);
+    return manager_getNodeBandwidthUp(_worker_pool()->manager, nodeID, ip);
 }
 
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip) {
-    return manager_getNodeBandwidthDown(worker_pool()->manager, nodeID, ip);
+    return manager_getNodeBandwidthDown(_worker_pool()->manager, nodeID, ip);
 }
 
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID) {
-    return manager_getLatency(worker_pool()->manager, sourceNodeID, destinationNodeID);
+    return manager_getLatency(_worker_pool()->manager, sourceNodeID, destinationNodeID);
 }
 
 void worker_updateMinTimeJump(gdouble minPathLatency) {
-    manager_updateMinTimeJump(worker_pool()->manager, minPathLatency);
-}
-
-void worker_setCurrentTime(SimulationTime time) {
-    g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-    workerrefmut_raw(ref)->clock.now = time;
+    manager_updateMinTimeJump(_worker_pool()->manager, minPathLatency);
 }
 
 gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }
 
-void worker_incrementPluginError() { manager_incrementPluginError(worker_pool()->manager); }
-
-/* COUNTER WARNING:
- * the issue is that the manager thread frees some objects that
- * are created by the worker threads. but the manager thread does
- * not have a worker object. this is only an issue when running
- * with multiple workers. */
+void worker_incrementPluginError() { manager_incrementPluginError(_worker_pool()->manager); }
 
 void __worker_increment_object_alloc_counter(const char* object_name) {
     // If disabled, we never create the counter (and never send it to the manager).
     if (!_use_object_counters) {
         return;
     }
-    // See COUNTER WARNING above.
-    if (worker_isAlive()) {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        WorkerC* worker = workerrefmut_raw(ref);
-        if (!worker->object_alloc_counter) {
-            worker->object_alloc_counter = counter_new();
-        }
-        counter_add_value(worker->object_alloc_counter, object_name, 1);
+    Counter* counter = _worker_objectAllocCounter();
+    if (counter) {
+        counter_add_value(counter, object_name, 1);
     } else {
-        /* has a global lock, so don't do it unless there is no worker object */
+        // No live worker; fall back to the shared manager counter.
         manager_increment_object_alloc_counter_global(object_name);
     }
 }
@@ -782,44 +649,21 @@ void __worker_increment_object_dealloc_counter(const char* object_name) {
     if (!_use_object_counters) {
         return;
     }
-    // See COUNTER WARNING above.
-    if (worker_isAlive()) {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        WorkerC* worker = workerrefmut_raw(ref);
-        if (!worker->object_dealloc_counter) {
-            worker->object_dealloc_counter = counter_new();
-        }
-        counter_add_value(worker->object_dealloc_counter, object_name, 1);
+    Counter* counter = _worker_objectDeallocCounter();
+    if (counter) {
+        counter_add_value(counter, object_name, 1);
     } else {
-        /* has a global lock, so don't do it unless there is no worker object */
+        // No live worker; fall back to the shared manager counter.
         manager_increment_object_dealloc_counter_global(object_name);
     }
 }
 
 void worker_add_syscall_counts(Counter* syscall_counts) {
-    // See COUNTER WARNING above.
-    if (worker_isAlive()) {
-        g_autoptr(WorkerRefMut) ref = worker_borrowMut();
-        WorkerC* worker = workerrefmut_raw(ref);
-        // This is created on the fly, so that if we did not enable counting mode
-        // then we don't need to create the counter object.
-        if (!worker->syscall_counter) {
-            worker->syscall_counter = counter_new();
-        }
-        counter_add_counter(worker->syscall_counter, syscall_counts);
+    Counter* counter = _worker_syscallCounter();
+    if (counter) {
+        counter_add_counter(counter, syscall_counts);
     } else {
-        /* has a global lock, so don't do it unless there is no worker object */
+        // No live worker; fall back to the shared manager counter.
         manager_add_syscall_counts_global(syscall_counts);
-    }
-}
-
-gboolean worker_isBootstrapActive() {
-    g_autoptr(WorkerRef) ref = worker_borrow();
-    const WorkerC* worker = workerref_raw(ref);
-
-    if (worker->clock.now < worker->bootstrapEndTime) {
-        return TRUE;
-    } else {
-        return FALSE;
     }
 }

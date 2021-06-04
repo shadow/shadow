@@ -17,7 +17,6 @@
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/core/scheduler/scheduler_policy_type.h"
 #include "main/core/worker.h"
-#include "main/core/worker_c.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/status_listener.h"
 #include "main/host/syscall_handler.h"
@@ -80,12 +79,6 @@ typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
 typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
-
-// A borrowed immutable reference to the current thread's Worker.
-typedef struct WorkerRef WorkerRef;
-
-// A borrowed mutable reference to the current thread's Worker.
-typedef struct WorkerRefMut WorkerRefMut;
 
 // Flush Rust's log::logger().
 void rustlogger_flush(void);
@@ -257,29 +250,18 @@ SimulationTime processoptions_getStopTime(const struct ProcessOptions *proc);
 int64_t parse_bandwidth(const char *s);
 
 // Initialize a Worker for this thread.
-void worker_newForThisThread(WorkerC *cworker, int32_t worker_id);
+void worker_newForThisThread(WorkerPool *worker_pool,
+                             int32_t worker_id,
+                             SimulationTime bootstrap_end_time);
 
-// If worker is alive, returns mutable reference to it. Otherwise returns NULL.
-// SAFETY: Returned pointer is invalid after `worker_freeForThisThread` is called
-// or when global destructors start running.
-struct WorkerRefMut *worker_borrowMut(void);
+// Returns NULL if there is no live Worker.
+struct Counter *_worker_objectAllocCounter(void);
 
-// Return a borrowed reference.
-void workerrefmut_free(struct WorkerRefMut *worker);
+// Returns NULL if there is no live Worker.
+struct Counter *_worker_objectDeallocCounter(void);
 
-// SAFETY: Returned pointer must not outlive `workerRefMut`.
-WorkerC *workerrefmut_raw(struct WorkerRefMut *worker_ref);
-
-// If worker is alive, returns an immutable reference to it. Otherwise returns NULL.
-// SAFETY: Returned pointer is invalid after `worker_freeForThisThread` is called
-// or when global destructors start running.
-struct WorkerRef *worker_borrow(void);
-
-// Return a borrowed reference.
-void workerref_free(struct WorkerRef *worker);
-
-// SAFETY: Returned pointer must not outlive `workerRef`.
-const WorkerC *workerref_raw(struct WorkerRef *worker_ref);
+// Returns NULL if there is no live Worker.
+struct Counter *_worker_syscallCounter(void);
 
 // ID of the current thread's Worker. Panics if the thread has no Worker.
 int32_t worker_threadID(void);
@@ -289,6 +271,22 @@ void worker_setActiveHost(Host *host);
 void worker_setActiveProcess(Process *process);
 
 void worker_setActiveThread(Thread *thread);
+
+void worker_setRoundEndTime(SimulationTime t);
+
+SimulationTime _worker_getRoundEndTime(void);
+
+void worker_setCurrentTime(SimulationTime t);
+
+SimulationTime worker_getCurrentTime(void);
+
+void _worker_setLastEventTime(SimulationTime t);
+
+bool worker_isBootstrapActive(void);
+
+WorkerPool *_worker_pool(void);
+
+bool worker_isAlive(void);
 
 // Create an object that can be used to store all descriptors created by a
 // process. When the table is no longer required, use descriptortable_free

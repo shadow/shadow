@@ -7,7 +7,6 @@
 
 #include "main/core/scheduler/scheduler_policy_type.h"
 #include "main/core/worker.h"
-#include "main/core/worker_c.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/host.h"
 #include "main/host/process.h"

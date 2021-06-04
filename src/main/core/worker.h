@@ -9,6 +9,12 @@
 
 #include <glib.h>
 #include <netinet/in.h>
+#include <stdbool.h>
+
+// A pool of worker threads.
+typedef struct _WorkerPool WorkerPool;
+// Task to be executed on a worker thread.
+typedef void (*WorkerPoolTaskFn)(void*);
 
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
@@ -25,11 +31,6 @@
 #include "support/logger/log_level.h"
 
 #include "main/bindings/c/bindings.h"
-
-// A pool of worker threads.
-typedef struct _WorkerPool WorkerPool;
-// Task to be executed on a worker thread.
-typedef void (*WorkerPoolTaskFn)(void*);
 
 // To be called by scheduler. Consumes `event`
 void worker_runEvent(Event* event);
@@ -75,12 +76,12 @@ Topology* worker_getTopology();
 const ConfigOptions* worker_getConfig();
 gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay);
 void worker_sendPacket(Host* src, Packet* packet);
-gboolean worker_isAlive();
+bool worker_isAlive(void);
 
 SimulationTime worker_getCurrentTime();
 EmulatedTime worker_getEmulatedTime();
 
-gboolean worker_isBootstrapActive();
+bool worker_isBootstrapActive(void);
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 
