@@ -14,8 +14,10 @@ The docs contain important information about installing and using the Shadow dis
    * [Parsing Statistics](parsing_statistics.md)
    * [Log Format](log_format.md)
    * Simulation Customization
-     * [Shadow Configuration](shadow_config_options.md)
+     * [Shadow Configuration](shadow_config.md)
+       * [Shadow Configuration Options](shadow_config_options.md)
      * [Network Configuration](network_config.md)
+       * [Network Graph Attributes](network_graph_attributes.md)
    * [Notes and FAQs](notes_and_faq.md)
    * Developer Guides
      * [Debugging and profiling](developer_guide.md)

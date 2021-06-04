@@ -1,4 +1,6 @@
-Shadow uses the standard YAML format to accept configuration options from users. Examples of a Shadow configuration file, `shadow.config.yaml`, are distributed with the release. The following describes Shadow's YAML format that can be used to customize a simulation.
+# Shadow Configuration Options
+
+Shadow uses the standard YAML format to accept configuration options from users. The following describes Shadow's YAML format that can be used to customize a simulation.
 
 Example:
 
