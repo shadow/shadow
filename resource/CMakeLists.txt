@@ -11,8 +11,6 @@ macro(xzexe xzfilename)
            message(FATAL_ERROR "xz failed. Is xz installed (xz-utils) and in your path?")
         endif(NOT (${XZRESULT} EQUAL 0))
     endif(NOT EXISTS ${xz_output})
-    
-    install(FILES ${xz_output} DESTINATION share/)
 endmacro()
 
 xzexe(topology.graphml.xml)
