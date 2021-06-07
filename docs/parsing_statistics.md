@@ -12,14 +12,26 @@ TGen is capable of modeling generic behaviors with an action-dependency graph in
 
 ```yaml
 general:
-  # stop after 1 simulated hour
-  stop_time: 3600
+  stop_time: 10 mins
 
 network:
   graph:
-    # use a built-in network graph containing
-    # a single vertex with a bandwidth of 1 Gbit
-    type: 1_gbit_switch
+    # a custom single-node topology
+    type: gml
+    inline: |
+      graph [
+        node [
+          id 0
+          bandwidth_down "140 Mbit"
+          bandwidth_up "18 Mbit"
+        ]
+        edge [
+          source 0
+          target 0
+          latency 50
+          packet_loss 0.01
+        ]
+      ]
 
 hosts:
   # a host with the hostname 'server'
@@ -30,7 +42,7 @@ hosts:
       start_time: 1
   # a host with the hostname 'client'
   client:
-    count: 10
+    quantity: 10
     processes:
     - path: ~/.local/bin/tgen
       args: ../../../tgen.client.graphml.xml
@@ -133,7 +145,7 @@ $ xzcat results/stats.shadow.json.xz
           "1": 0,
           "2": 0,
           ...
-          "3599": 0
+          "599": 0
         },
         "bytes_control_header_retrans": { ... },
         "bytes_data_header": { ... },
@@ -153,7 +165,7 @@ $ xzcat results/stats.shadow.json.xz
     },
     "3": { ... },
     ...
-    "3599": { ... }
+    "599": { ... }
   }
 }
 ```
@@ -164,26 +176,28 @@ You can also parse and plot the TGen output using the `tgentools` program from t
 
 ### Combining Simulation Data
 
-Consider a set of experiments where we would like to analyze the effect of changing our nodes' traffic queueing disciplines. We run the following 2 experiments:
+Consider a set of experiments where we would like to analyze the effect of changing our nodes' socket receive buffer sizes. We run the following 2 experiments:
 
 ```bash
 # delete any existing simulation data and post-processing
-rm -rf shadow.data shadow.log qdisc-fifo.data qdisc-fifo.log qdisc-rr.data qdisc-rr.log
-shadow --interface-qdisc fifo       --data-directory qdisc-fifo.data shadow.yaml > qdisc-fifo.log
-shadow --interface-qdisc roundrobin --data-directory qdisc-rr.data   shadow.yaml > qdisc-rr.log
+rm -rf shadow.{data,log} 10KiB.{data,results,log} 100KiB.{data,results,log} *.results.pdf
+shadow --socket-recv-buffer  10KiB --socket-recv-autotune false \
+       --data-directory  10KiB.data shadow.yaml >  10KiB.log
+shadow --socket-recv-buffer 100KiB --socket-recv-autotune false \
+       --data-directory 100KiB.data shadow.yaml > 100KiB.log
 ```
 
 To parse these log files, we use the following scripts:
 
 ```bash
-src/tools/parse-shadow.py --prefix=qdisc-fifo.results qdisc-fifo.log
-src/tools/parse-shadow.py --prefix=qdisc-rr.results   qdisc-rr.log
+src/tools/parse-shadow.py --prefix=10KiB.results   10KiB.log
+src/tools/parse-shadow.py --prefix=100KiB.results 100KiB.log
 ```
 
-Each of the directories `qdisc-fifo.results/` and `qdisc-rr.results/` now contain data statistics files extracted from the log files. We can now combine and visualize these results with the `plot-shadow.py` script:
+Each of the directories `10KiB.results/` and `100KiB.results/` now contain data statistics files extracted from the log files. We can now combine and visualize these results with the `plot-shadow.py` script:
 
 ```bash
-src/tools/plot-shadow.py --prefix "qdisc" --data qdisc-fifo.results/ "fifo" --data qdisc-rr.results/ "round-robin"
+src/tools/plot-shadow.py --prefix "recv-buffer" --data 10KiB.results/ "10 KiB" --data 100KiB.results/ "100 KiB"
 ```
 
 Open the PDF file that was created to compare results from the experiments.
