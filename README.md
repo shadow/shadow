@@ -8,7 +8,7 @@ applications like Tor and Bitcoin, and distributed systems of thousands of
 nodes on a single machine. Shadow combines the accuracy of emulation with the 
 efficiency and control of simulation, achieving the best of both approaches.
 
-Quick Setup (installs everything in `~/.shadow`):
+Quick Setup (installs Shadow in `~/.local`):
 ```
 $ ./setup build --clean
 $ ./setup test

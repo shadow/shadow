@@ -80,7 +80,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           # dependencies for tor
           DEBIAN_FRONTEND=noninteractive apt-get install -y automake libevent-dev libssl-dev zlib1g-dev
-          mkdir -p ~/.shadow/bin
+          mkdir -p ~/.local/bin
 
       - name: Build tor
         run: |
@@ -88,7 +88,7 @@ jobs:
           ./autogen.sh
           ./configure --disable-asciidoc --disable-unittests
           make -j$(nproc)
-          ln -s $(pwd)/src/app/tor ~/.shadow/bin/tor
+          ln -s $(pwd)/src/app/tor ~/.local/bin/tor
 
       - name: Build tgen
         run: |
@@ -97,7 +97,7 @@ jobs:
           cmake ..
           make -j$(nproc)
           cd ..
-          ln -s $(pwd)/build/src/tgen ~/.shadow/bin/tgen
+          ln -s $(pwd)/build/src/tgen ~/.local/bin/tgen
 
       - name: Build shadow
         run: |

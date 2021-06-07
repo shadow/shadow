@@ -15,7 +15,7 @@ import logging
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
 
 BUILD_PREFIX="./build"
-INSTALL_PREFIX=os.path.expanduser("~/.shadow")
+INSTALL_PREFIX=os.path.expanduser("~/.local")
 
 def main():
     parser_main = argparse.ArgumentParser(

@@ -22,7 +22,7 @@ The versions of bindgen and cbindgen you install should match the [versions inst
 
 ## Extra tests
 
-Shadow includes tests that require additional dependencies, such as Tor, TGen, and networkx. These aren't run by default, but are run as part of the CI tests. To run them locally, first make sure that both tor and tgen are located at `~/.shadow/bin/{tor,tgen}`. These can be symlinks to tor and tgen binaries elsewhere in the filesystem. You should also install all of Shadow's optional dependencies.
+Shadow includes tests that require additional dependencies, such as Tor, TGen, and networkx. These aren't run by default, but are run as part of the CI tests. To run them locally, first make sure that both tor and tgen are located at `~/.local/bin/{tor,tgen}`. These can be symlinks to tor and tgen binaries elsewhere in the filesystem. You should also install all of Shadow's optional dependencies.
 
 It is recommended to build Shadow in release mode, otherwise the Tor tests may not complete before the timeout.
 
@@ -32,7 +32,7 @@ It is recommended to build Shadow in release mode, otherwise the Tor tests may n
 ./setup test -- --build-config extra --label-exclude tor
 ```
 
-If you change the version of tor located at `~/.shadow/bin/tor`, make sure to re-run `./setup build --test`.
+If you change the version of tor located at `~/.local/bin/tor`, make sure to re-run `./setup build --test`.
 
 ## Debugging
 
