@@ -24,89 +24,88 @@ network:
 hosts:
   fileserver:
     processes:
-    - path: ~/.shadow/bin/tgen
+    - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.server.graphml.xml
       start_time: 1
   hiddenserver:
     processes:
-    - path: ~/.shadow/bin/tgen
+    - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.hiddenserver.graphml.xml
       start_time: 1
-    - path: ~/.shadow/bin/tor
+    - path: ~/.local/bin/tor
       args: --Address hiddenserver --Nickname hiddenserver --DataDirectory .
-        --GeoIPFile ~/.shadow/share/geoip --defaults-torrc ../../../conf/tor.common.torrc
-        -f ../../../conf/tor.hiddenserver.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
+        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.hiddenserver.torrc
+        --BandwidthRate 1024000 --BandwidthBurst 1024000
       start_time: 900
   4uthority:
     options:
       ip_address_hint: 100.0.0.1
     processes:
-    - path: ~/.shadow/bin/tor
+    - path: ~/.local/bin/tor
       args: --Address 4uthority --Nickname 4uthority --DataDirectory .
-        --GeoIPFile ~/.shadow/share/geoip --defaults-torrc ../../../conf/tor.common.torrc
-        -f ../../../conf/tor.authority.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
+        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.authority.torrc
+        --BandwidthRate 1024000 --BandwidthBurst 1024000
       start_time: 1
   exit1:
     processes:
-    - path: ~/.shadow/bin/tor
+    - path: ~/.local/bin/tor
       args: --Address exit1 --Nickname exit1 --DataDirectory .
-        --GeoIPFile ~/.shadow/share/geoip --defaults-torrc ../../../conf/tor.common.torrc
-        -f ../../../conf/tor.exit.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
+        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.exit.torrc
+        --BandwidthRate 1024000 --BandwidthBurst 1024000
       start_time: 60
   exit2:
     processes:
-    - path: ~/.shadow/bin/tor
+    - path: ~/.local/bin/tor
       args: --Address exit2 --Nickname exit2 --DataDirectory .
-        --GeoIPFile ~/.shadow/share/geoip --defaults-torrc ../../../conf/tor.common.torrc
-        -f ../../../conf/tor.exit.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
+        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.exit.torrc
+        --BandwidthRate 1024000 --BandwidthBurst 1024000
       start_time: 60
   relay1:
     processes:
-    - path: ~/.shadow/bin/tor
+    - path: ~/.local/bin/tor
       args: --Address relay1 --Nickname relay1 --DataDirectory .
-        --GeoIPFile ~/.shadow/share/geoip --defaults-torrc ../../../conf/tor.common.torrc
-        -f ../../../conf/tor.relay.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
+        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.relay.torrc
+        --BandwidthRate 1024000 --BandwidthBurst 1024000
       start_time: 60
   relay2:
     processes:
-    - path: ~/.shadow/bin/tor
+    - path: ~/.local/bin/tor
       args: --Address relay2 --Nickname relay2 --DataDirectory .
-        --GeoIPFile ~/.shadow/share/geoip --defaults-torrc ../../../conf/tor.common.torrc
-        -f ../../../conf/tor.relay.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
+        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.relay.torrc
+        --BandwidthRate 1024000 --BandwidthBurst 1024000
       start_time: 60
   client:
     processes:
-    - path: ~/.shadow/bin/tgen
+    - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.client.graphml.xml
       start_time: 600
   torclient:
     processes:
-    - path: ~/.shadow/bin/tor
+    - path: ~/.local/bin/tor
       args: --Address torclient --Nickname torclient --DataDirectory .
-        --GeoIPFile ~/.shadow/share/geoip --defaults-torrc ../../../conf/tor.common.torrc
-        -f ../../../conf/tor.client.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
+        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.client.torrc
+        --BandwidthRate 1024000 --BandwidthBurst 1024000
       start_time: 900
-    - path: ~/.shadow/bin/tgen
+    - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.torclient.graphml.xml
       start_time: 1500
   torbridgeclient:
     processes:
-    - path: ~/.shadow/bin/tor
+    - path: ~/.local/bin/tor
       args: --Address torbridgeclient --Nickname torbridgeclient --DataDirectory .
-        --GeoIPFile ~/.shadow/share/geoip --defaults-torrc ../../../conf/tor.common.torrc
-        -f ../../../conf/tor.client.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
-        --UseBridges 1 --Bridge 100.0.0.1:9111
+        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.client.torrc
+        --BandwidthRate 1024000 --BandwidthBurst 1024000 --UseBridges 1 --Bridge 100.0.0.1:9111
       start_time: 900
-    - path: ~/.shadow/bin/tgen
+    - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.torclient.graphml.xml
       start_time: 1500
   torhiddenclient:
     processes:
-    - path: ~/.shadow/bin/tor
+    - path: ~/.local/bin/tor
       args: --Address torhiddenclient --Nickname torhiddenclient --DataDirectory .
-        --GeoIPFile ~/.shadow/share/geoip --defaults-torrc ../../../conf/tor.common.torrc
-        -f ../../../conf/tor.client.torrc --BandwidthRate 1024000 --BandwidthBurst 1024000
+        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.client.torrc
+        --BandwidthRate 1024000 --BandwidthBurst 1024000
       start_time: 900
-    - path: ~/.shadow/bin/tgen
+    - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.torhiddenclient.graphml.xml
       start_time: 1500

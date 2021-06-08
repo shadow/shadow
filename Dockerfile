@@ -16,5 +16,5 @@ RUN ci/container_scripts/install_extra_deps.sh
 ENV PATH "/root/.cargo/bin:${PATH}"
 RUN ci/container_scripts/build_and_install.sh
 
-ENV PATH="/root/.shadow/bin:${PATH}"
+ENV PATH="/root/.local/bin:${PATH}"
 ENTRYPOINT ["shadow"]
