@@ -33,46 +33,40 @@ hosts:
       args: ../../../conf/tgen.hiddenserver.graphml.xml
       start_time: 1
     - path: ~/.local/bin/tor
-      args: --Address hiddenserver --Nickname hiddenserver --DataDirectory .
-        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.hiddenserver.torrc
-        --BandwidthRate 1024000 --BandwidthBurst 1024000
+      args: --Address hiddenserver --Nickname hiddenserver
+            --defaults-torrc torrc-defaults -f torrc
       start_time: 900
   4uthority:
     options:
       ip_address_hint: 100.0.0.1
     processes:
     - path: ~/.local/bin/tor
-      args: --Address 4uthority --Nickname 4uthority --DataDirectory .
-        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.authority.torrc
-        --BandwidthRate 1024000 --BandwidthBurst 1024000
+      args: --Address 4uthority --Nickname 4uthority
+            --defaults-torrc torrc-defaults -f torrc
       start_time: 1
   exit1:
     processes:
     - path: ~/.local/bin/tor
-      args: --Address exit1 --Nickname exit1 --DataDirectory .
-        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.exit.torrc
-        --BandwidthRate 1024000 --BandwidthBurst 1024000
+      args: --Address exit1 --Nickname exit1
+            --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   exit2:
     processes:
     - path: ~/.local/bin/tor
-      args: --Address exit2 --Nickname exit2 --DataDirectory .
-        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.exit.torrc
-        --BandwidthRate 1024000 --BandwidthBurst 1024000
+      args: --Address exit2 --Nickname exit2
+            --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   relay1:
     processes:
     - path: ~/.local/bin/tor
-      args: --Address relay1 --Nickname relay1 --DataDirectory .
-        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.relay.torrc
-        --BandwidthRate 1024000 --BandwidthBurst 1024000
+      args: --Address relay1 --Nickname relay1
+            --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   relay2:
     processes:
     - path: ~/.local/bin/tor
-      args: --Address relay2 --Nickname relay2 --DataDirectory .
-        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.relay.torrc
-        --BandwidthRate 1024000 --BandwidthBurst 1024000
+      args: --Address relay2 --Nickname relay2
+            --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   client:
     processes:
@@ -82,9 +76,8 @@ hosts:
   torclient:
     processes:
     - path: ~/.local/bin/tor
-      args: --Address torclient --Nickname torclient --DataDirectory .
-        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.client.torrc
-        --BandwidthRate 1024000 --BandwidthBurst 1024000
+      args: --Address torclient --Nickname torclient
+            --defaults-torrc torrc-defaults -f torrc
       start_time: 900
     - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.torclient.graphml.xml
@@ -92,9 +85,9 @@ hosts:
   torbridgeclient:
     processes:
     - path: ~/.local/bin/tor
-      args: --Address torbridgeclient --Nickname torbridgeclient --DataDirectory .
-        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.client.torrc
-        --BandwidthRate 1024000 --BandwidthBurst 1024000 --UseBridges 1 --Bridge 100.0.0.1:9111
+      args: --Address torbridgeclient --Nickname torbridgeclient
+            --UseBridges 1 --Bridge 100.0.0.1:9111
+            --defaults-torrc torrc-defaults -f torrc
       start_time: 900
     - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.torclient.graphml.xml
@@ -102,9 +95,8 @@ hosts:
   torhiddenclient:
     processes:
     - path: ~/.local/bin/tor
-      args: --Address torhiddenclient --Nickname torhiddenclient --DataDirectory .
-        --defaults-torrc ../../../conf/tor.common.torrc -f ../../../conf/tor.client.torrc
-        --BandwidthRate 1024000 --BandwidthBurst 1024000
+      args: --Address torhiddenclient --Nickname torhiddenclient
+            --defaults-torrc torrc-defaults -f torrc
       start_time: 900
     - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.torhiddenclient.graphml.xml

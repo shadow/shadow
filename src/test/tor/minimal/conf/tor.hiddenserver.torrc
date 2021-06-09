@@ -1,7 +1,2 @@
-ORPort 0
-DirPort 0
-ClientOnly 1
-SocksPort 9000
-SocksListenAddress 127.0.0.1
 HiddenServiceDir hs
 HiddenServicePort 80 127.0.0.1:8080
