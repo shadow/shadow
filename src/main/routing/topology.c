@@ -277,6 +277,28 @@ _topology_findVertexAttributeDouble(Topology* top, igraph_integer_t vertexIndex,
     return FALSE;
 }
 
+static gboolean _topology_findEdgeAttributeStringTimeMs(Topology* top, igraph_integer_t edgeIndex,
+        EdgeAttribute attr, guint64* valueOut) {
+    MAGIC_ASSERT(top);
+
+    const gchar* name = _topology_edgeAttributeToString(attr);
+
+    if (igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, name)) {
+        const gchar* value = igraph_cattribute_EAS(&top->graph, name, edgeIndex);
+        if (value != NULL && value[0] != '\0') {
+            if (valueOut != NULL) {
+                int64_t timeMs = parse_time_ms(value);
+                if (timeMs >= 0) {
+                    *valueOut = timeMs;
+                    return TRUE;
+                }
+            }
+        }
+    }
+
+    return FALSE;
+}
+
 /* the graph lock should be held when calling this function, since it accesses igraph.
  * if the value is found and not NULL, it's value is returned in valueOut.
  * returns true if valueOut has been set, false otherwise */
@@ -362,8 +384,8 @@ static gint _topology_getEdgeHelper(Topology* top,
 
     /* get edge properties from graph */
     if(edgeLatencyOut) {
-        gdouble edgeLatency;
-        gdouble found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
+        guint64 edgeLatency;
+        gdouble found = _topology_findEdgeAttributeStringTimeMs(top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
         utility_assert(found);
         *edgeLatencyOut = edgeLatency;
     }
@@ -588,7 +610,7 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         trace("found edge attribute '%s' with type '%s'", name, _topology_igraphAttributeTypeToString(type));
 
         if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_LATENCY)) {
-            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
+            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_STRING);
         } else if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_JITTER)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_PACKETLOSS)) {
@@ -606,7 +628,7 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
             _topology_edgeAttributeToString(EDGE_ATTR_LATENCY))) {
         warning("the edge attribute '%s' of type '%s' is required but not provided",
                 _topology_edgeAttributeToString(EDGE_ATTR_LATENCY),
-                _topology_igraphAttributeTypeToString(IGRAPH_ATTRIBUTE_NUMERIC));
+                _topology_igraphAttributeTypeToString(IGRAPH_ATTRIBUTE_STRING));
         isSuccess = FALSE;
     }
     if(!igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE,
@@ -893,11 +915,12 @@ static gboolean _topology_checkGraphEdgesHelperHook(Topology* top, igraph_intege
 
     /* this attribute is required, so it is an error if it doesn't exist */
     const gchar* latencyKey = _topology_edgeAttributeToString(EDGE_ATTR_LATENCY);
-    gdouble latencyValue;
+    guint64 latencyValue;
     if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, latencyKey) &&
-            _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_LATENCY, &latencyValue)) {
-        if(latencyValue > 0.0f) {
-            g_string_append_printf(message, " %s='%f'", latencyKey, latencyValue);
+        _topology_findEdgeAttributeStringTimeMs(top, edgeIndex, EDGE_ATTR_LATENCY, &latencyValue)) {
+
+        if(latencyValue > 0) {
+            g_string_append_printf(message, " %s='%ld'", latencyKey, latencyValue);
         } else {
             /* its an error if they gave a value that is incorrect */
             warning("required attribute '%s' on edge %li (from '%li' to '%li') is non-positive",
@@ -934,7 +957,8 @@ static gboolean _topology_checkGraphEdgesHelperHook(Topology* top, igraph_intege
     const gchar* jitterKey = _topology_edgeAttributeToString(EDGE_ATTR_JITTER);
     gdouble jitterValue;
     if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, jitterKey) &&
-            _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_JITTER, &jitterValue)) {
+        _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_JITTER, &jitterValue)) {
+
         if(jitterValue >= 0.0f) {
             g_string_append_printf(message, " %s='%f'", jitterKey, jitterValue);
         } else {
@@ -1053,23 +1077,46 @@ static gboolean _topology_extractEdgeWeights(Topology* top) {
     }
 
     /* now we have fresh memory */
-    gint result = igraph_vector_init(top->edgeWeights, (glong) top->edgeCount);
-    if(result != IGRAPH_SUCCESS) {
+    gint result = igraph_vector_init(top->edgeWeights, (glong)top->edgeCount);
+    if (result != IGRAPH_SUCCESS) {
         g_rw_lock_writer_unlock(&(top->edgeWeightsLock));
         _topology_unlockGraph(top);
         error("igraph_vector_init return non-success code %i", result);
         return FALSE;
     }
 
-    /* use the 'latency' edge attribute as the edge weight */
-    const gchar* latencyKey = _topology_edgeAttributeToString(EDGE_ATTR_LATENCY);
-    result = EANV(&top->graph, latencyKey, top->edgeWeights);
-    g_rw_lock_writer_unlock(&(top->edgeWeightsLock));
-    _topology_unlockGraph(top);
-    if(result != IGRAPH_SUCCESS) {
-        error("igraph_cattribute_EANV return non-success code %i", result);
+    /* now we set up an iterator on these edges */
+    igraph_eit_t edgeIterator;
+    result = igraph_eit_create(&top->graph, igraph_ess_all(IGRAPH_EDGEORDER_ID), &edgeIterator);
+
+    if (result != IGRAPH_SUCCESS) {
+        g_rw_lock_writer_unlock(&(top->edgeWeightsLock));
+        _topology_unlockGraph(top);
+        error("igraph_eit_create return non-success code %i", result);
         return FALSE;
     }
+
+    /* get the latency string for each edge and convert it to a number */
+    long edgeCounter = 0;
+    while (!IGRAPH_EIT_END(edgeIterator)) {
+        igraph_integer_t edgeIndex = IGRAPH_EIT_GET(edgeIterator);
+
+        guint64 edgeLatency = 0;
+        gboolean found = _topology_findEdgeAttributeStringTimeMs(
+            top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
+        utility_assert(found);
+        igraph_vector_set(top->edgeWeights, edgeCounter, (igraph_real_t)edgeLatency);
+
+        edgeCounter++;
+        IGRAPH_EIT_NEXT(edgeIterator);
+    }
+
+    utility_assert(edgeCounter == (long)top->edgeCount);
+
+    igraph_eit_destroy(&edgeIterator);
+
+    g_rw_lock_writer_unlock(&(top->edgeWeightsLock));
+    _topology_unlockGraph(top);
 
     return TRUE;
 }
@@ -1430,8 +1477,10 @@ static gboolean _topology_computeShortestPathToSelf(Topology* top, igraph_intege
         gboolean edgeIsDirect = FALSE;
 
         /* latency and packet loss are required attributes on edges */
-        found = _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
+        guint64 tmpEdgeLatency = 0;
+        found = _topology_findEdgeAttributeStringTimeMs(top, edgeIndex, EDGE_ATTR_LATENCY, &tmpEdgeLatency);
         utility_assert(found);
+        edgeLatency = (double)tmpEdgeLatency;
 
         igraph_integer_t oppositeVertexIndex = -1;
         if (!_topology_getOppositeVertex(&top->graph, edgeIndex, vertexIndex,

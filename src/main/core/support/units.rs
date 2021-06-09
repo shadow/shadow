@@ -795,4 +795,36 @@ mod export {
 
         rv
     }
+
+    /// Parses a string as a time in milliseconds. Returns '-1' on error.
+    #[no_mangle]
+    pub extern "C" fn parse_time_ms(s: *const libc::c_char) -> i64 {
+        assert!(!s.is_null());
+
+        let s = match unsafe { std::ffi::CStr::from_ptr(s) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                warn!("{}", e.to_string());
+                return -1;
+            }
+        };
+
+        let value = match Time::from_str(s) {
+            Ok(x) => x.convert(TimePrefix::Milli).unwrap().value(),
+            Err(e) => {
+                warn!("{}", e.to_string());
+                return -1;
+            }
+        };
+
+        let rv: i64 = match value.try_into() {
+            Ok(x) => x,
+            Err(e) => {
+                warn!("{}", e.to_string());
+                return -1;
+            }
+        };
+
+        rv
+    }
 }

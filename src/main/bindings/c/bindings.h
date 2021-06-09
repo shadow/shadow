@@ -249,6 +249,9 @@ SimulationTime processoptions_getStopTime(const struct ProcessOptions *proc);
 // Parses a string as bits-per-second. Returns '-1' on error.
 int64_t parse_bandwidth(const char *s);
 
+// Parses a string as a time in milliseconds. Returns '-1' on error.
+int64_t parse_time_ms(const char *s);
+
 // Initialize a Worker for this thread.
 void worker_newForThisThread(WorkerPool *worker_pool,
                              int32_t worker_id,
