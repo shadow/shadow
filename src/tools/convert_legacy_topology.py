@@ -20,10 +20,18 @@ def bandwidth_conversion(x):
     return str(int(x) * 8) + ' Kibit'
 
 
+def latency_conversion(x):
+    # shadow classic uses latency units of milliseconds
+    x = float(x)
+    assert x.is_integer(), 'Sub-millisecond latencies are not supported'
+    return str(int(x)) + ' ms'
+
+
 # original attribute name: (new attribute name, new attribute type, value transform fn)
 ATTR_CONVERSIONS = {
     'bandwidthup': ('bandwidth_up', 'string', bandwidth_conversion),
     'bandwidthdown': ('bandwidth_down', 'string', bandwidth_conversion),
+    'latency': ('latency', 'string', latency_conversion),
     'packetloss': ('packet_loss', None, None),
     'countrycode': ('country_code', None, None),
     'citycode': ('city_code', None, None),

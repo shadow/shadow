@@ -28,7 +28,7 @@ network:
         edge [
           source 0
           target 0
-          latency 50
+          latency "50 ms"
           packet_loss 0.01
         ]
       ]

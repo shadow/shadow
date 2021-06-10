@@ -22,7 +22,7 @@ graph [
     source 0
     target 0
     label "path from 1.2.3.4 to 1.2.3.4"
-    latency 10.0
+    latency "10 ms"
     jitter 0.0
     packet_loss 0.0
   ]
@@ -132,9 +132,9 @@ An optional, human-meaningful string description of the edge. The string may be 
 #### `edge.latency`
 
 Required: True  
-Type: Float
+Type: String
 
-The latency that will be added to packets traversing this edge. This value is used as a weight while running Dijkstra's shortest path algorithm.
+The latency that will be added to packets traversing this edge. This value is used as a weight while running Dijkstra's shortest path algorithm. The format of the string specifies the latency and its unit, e.g., `10 ms`. If a unit is not specified, it will be assumed that it is in the base unit of "seconds".
 
 #### `edge.jitter`
 

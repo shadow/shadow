@@ -10,7 +10,7 @@ graph [
   edge [
     source 0
     target 0
-    latency 50.0
+    latency "50 ms"
     packet_loss 0.0
   ]
 ]

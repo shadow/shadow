@@ -724,15 +724,13 @@ const ONE_GBIT_SWITCH_GRAPH: &str = r#"graph [
   node [
     id 0
     ip_address "0.0.0.0"
-    country_code "XX"
     bandwidth_up "1 Gbit"
     bandwidth_down "1 Gbit"
   ]
   edge [
     source 0
     target 0
-    latency 1.0
-    jitter 0.0
+    latency "1 ms"
     packet_loss 0.0
   ]
 ]"#;
