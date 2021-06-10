@@ -1,5 +1,9 @@
 # Using a recompiled libc
 
+NOTE: This technique is only needed when using `preload` interposition
+(`--interpose-method=preload`). By default, Shadow uses `ptrace` to reliably
+interpose all syscalls, making the technique described here unnecessary.
+
 With a stock libc library, it's difficult to interpose every syscall via
 `LD_PRELOAD`. Once code is executing inside a libc function such as `fwrite`,
 it typically makes non-PLT calls and uses inline assembly to make system calls,
@@ -124,13 +128,16 @@ cd ~/rpmbuild/SPECS && rpmbuild -ba glibc.spec
 
 ## Using the compiled libc
 
-Our patched libc can be injected via `LD_LIBRARY_PATH` or `LD_PRELOAD`.
-I've been using `LD_LIBRARY_PATH` because there are actually multiple libraries
-compiled, and we'll want those others to be preferred as well (e.g. `libpthread`).
-In shadow's configuration file you can set the environment variable for all
-loaded plugins with the `environment` attribute of the `shadow` tag. e.g.:
+The patched libc can be injected into a plugin by setting `LD_LIBRARY_PATH` in each target plugin's environment. e.g.:
 
 ```
-<shadow environment="LD_LIBRARY_PATH=/path/to/glibc-2.27/build-tree/amd64-libc">
+...
+hosts:
+  my_host:
+    processes:
+      - path: /path/to/process
+        environment: LD_LIBRARY_PATH=/path/to/glibc-2.27/build-tree/amd64-libc
+...
+
 ```
 

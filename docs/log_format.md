@@ -5,21 +5,21 @@
 Shadow produces simulator log messages in the following format:
 
 ```text
-real-time [thread-id] virtual-time [loglevel] [hostname:ip] [src-file:line-number] [function-name] MESSAGE
+real-time [thread-name] virtual-time [loglevel] [hostname:ip] [src-file:line-number] [function-name] MESSAGE
 ```
 
 - `real-time`:  
 the wall clock time since the start of the experiment, represented as `hours:minutes:seconds`
-- `thread-id`:  
-the ID of the worker thread that generated the message
+- `thread-name`:  
+the name of the system thread that generated the message
 - `virtual-time`:  
 the simulated time since the start of the experiment, represented as `hours:minutes:seconds`
 - `loglevel`:  
 one of `ERROR` < `WARN` < `INFO` < `DEBUG` < `TRACE`, in that order
 - `hostname`:  
-the name of the node as specified in the _id_ tag of the _node_ element in the XML file
+the name of the node as specified in `hosts.<hostname>` of the simulation config
 - `ip`:  
-the IP address of the node as specified in the _ip_ tag of the _node_ element in the XML file, or a random IP address if one is not specified  
+the IP address of the node as specified in `hosts.<hostname>.ip_address_hint` of the simulation config, or a random IP address if one is not specified  
 - `src-file`:  
 the name of the source code file where the message is logged
 - `line-number`:  

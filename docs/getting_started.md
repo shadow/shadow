@@ -32,7 +32,7 @@ Shadow requires a configuration file that specifies information about the networ
 ```yaml
 general:
   # stop after 10 simulated seconds
-  stop_time: 10
+  stop_time: 10s
 
 network:
   graph:
@@ -46,14 +46,14 @@ hosts:
     processes:
     - path: /bin/python3
       args: ../../../server.py
-      start_time: 3
+      start_time: 3s
   # three hosts with hostnames 'client1', 'client2', and 'client3'
   client:
     quantity: 3
     processes:
     - path: /bin/curl
       args: -s server
-      start_time: 5
+      start_time: 5s
 ```
 
 Shadow stores simulation data to the `shadow.data` directory by default. We first remove this directory if it already exists, and then run Shadow.
