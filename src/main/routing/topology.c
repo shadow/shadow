@@ -278,7 +278,7 @@ _topology_findVertexAttributeDouble(Topology* top, igraph_integer_t vertexIndex,
 }
 
 static gboolean _topology_findEdgeAttributeStringTimeMs(Topology* top, igraph_integer_t edgeIndex,
-        EdgeAttribute attr, guint64* valueOut) {
+        EdgeAttribute attr, gdouble* valueOut) {
     MAGIC_ASSERT(top);
 
     const gchar* name = _topology_edgeAttributeToString(attr);
@@ -287,9 +287,11 @@ static gboolean _topology_findEdgeAttributeStringTimeMs(Topology* top, igraph_in
         const gchar* value = igraph_cattribute_EAS(&top->graph, name, edgeIndex);
         if (value != NULL && value[0] != '\0') {
             if (valueOut != NULL) {
-                int64_t timeMs = parse_time_ms(value);
-                if (timeMs >= 0) {
-                    *valueOut = timeMs;
+                int64_t timeNanoSec = parse_time_nanosec(value);
+                if (timeNanoSec >= 0) {
+                    /* convert from nanoseconds to milliseconds since the rest
+                                           of the topology code assumes milliseconds */
+                    *valueOut = (gdouble)timeNanoSec / 1000000.0;
                     return TRUE;
                 }
             }
@@ -384,10 +386,8 @@ static gint _topology_getEdgeHelper(Topology* top,
 
     /* get edge properties from graph */
     if(edgeLatencyOut) {
-        guint64 edgeLatency;
-        gdouble found = _topology_findEdgeAttributeStringTimeMs(top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
+        gdouble found = _topology_findEdgeAttributeStringTimeMs(top, edgeIndex, EDGE_ATTR_LATENCY, edgeLatencyOut);
         utility_assert(found);
-        *edgeLatencyOut = edgeLatency;
     }
     if(edgeReliabilityOut) {
         gdouble edgePacketLoss;
@@ -915,12 +915,12 @@ static gboolean _topology_checkGraphEdgesHelperHook(Topology* top, igraph_intege
 
     /* this attribute is required, so it is an error if it doesn't exist */
     const gchar* latencyKey = _topology_edgeAttributeToString(EDGE_ATTR_LATENCY);
-    guint64 latencyValue;
+    gdouble latencyValue;
     if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, latencyKey) &&
         _topology_findEdgeAttributeStringTimeMs(top, edgeIndex, EDGE_ATTR_LATENCY, &latencyValue)) {
 
-        if(latencyValue > 0) {
-            g_string_append_printf(message, " %s='%ld'", latencyKey, latencyValue);
+        if(latencyValue > 0.0) {
+            g_string_append_printf(message, " %s='%f'", latencyKey, latencyValue);
         } else {
             /* its an error if they gave a value that is incorrect */
             warning("required attribute '%s' on edge %li (from '%li' to '%li') is non-positive",
@@ -1101,11 +1101,11 @@ static gboolean _topology_extractEdgeWeights(Topology* top) {
     while (!IGRAPH_EIT_END(edgeIterator)) {
         igraph_integer_t edgeIndex = IGRAPH_EIT_GET(edgeIterator);
 
-        guint64 edgeLatency = 0;
+        gdouble edgeLatency = 0.0;
         gboolean found = _topology_findEdgeAttributeStringTimeMs(
             top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
         utility_assert(found);
-        igraph_vector_set(top->edgeWeights, edgeCounter, (igraph_real_t)edgeLatency);
+        igraph_vector_set(top->edgeWeights, edgeCounter, edgeLatency);
 
         edgeCounter++;
         IGRAPH_EIT_NEXT(edgeIterator);
@@ -1477,10 +1477,8 @@ static gboolean _topology_computeShortestPathToSelf(Topology* top, igraph_intege
         gboolean edgeIsDirect = FALSE;
 
         /* latency and packet loss are required attributes on edges */
-        guint64 tmpEdgeLatency = 0;
-        found = _topology_findEdgeAttributeStringTimeMs(top, edgeIndex, EDGE_ATTR_LATENCY, &tmpEdgeLatency);
+        found = _topology_findEdgeAttributeStringTimeMs(top, edgeIndex, EDGE_ATTR_LATENCY, &edgeLatency);
         utility_assert(found);
-        edgeLatency = (double)tmpEdgeLatency;
 
         igraph_integer_t oppositeVertexIndex = -1;
         if (!_topology_getOppositeVertex(&top->graph, edgeIndex, vertexIndex,
