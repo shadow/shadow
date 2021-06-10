@@ -7,10 +7,14 @@ git clone https://github.com/shadow/shadow.git
 cd shadow
 ./setup build --clean --test
 ./setup test
+# Optionally install (to ~/.local/bin by default). Can otherwise run the binary
+# directly at build/src/main/shadow.
 ./setup install
 ```
 
-If you installed Shadow, you should add `/home/${USER}/.local/bin` to your shell setup for the PATH environment variable (e.g., in `~/.bashrc` or `~/.bash_profile`).
+For the remainder of this documentation, we assume the Shadow binary is in your
+`PATH`. The default installed location of `/home/${USER}/.local/bin` is
+probably already in your `PATH`. If it isn't, you can add it by running:
 
 ```bash
 echo 'export PATH="${PATH}:/home/${USER}/.local/bin"' >> ~/.bashrc && source ~/.bashrc
@@ -30,11 +34,11 @@ After running `./setup install`, you can find the list of installed files in `./
 ## Setup Notes
 
   + All build output is generated out-of-source, by default to the `./build` directory.
-  + Use `./setup build --help` to see all build options; the most useful build options are:  
+  + Use `./setup build --help` to see all build options; some useful build options are:  
     + `-g` or `--debug` to build Shadow with debugging symbols
     + `--include` and `--library` if you installed any dependencies in non-standard locations or somewhere other than `~/.local`.
     + `--prefix` if you want to install Shadow somewhere besides `~/.local`
-  + The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but strongly discouraged. For example:
+  + The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but unsupported. For example:
 
     ```bash
     # alternative installation method

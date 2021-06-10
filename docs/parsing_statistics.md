@@ -12,7 +12,7 @@ TGen is capable of modeling generic behaviors with an action-dependency graph in
 
 ```yaml
 general:
-  stop_time: 10 mins
+  stop_time: 10m
 
 network:
   graph:
@@ -32,21 +32,18 @@ network:
           packet_loss 0.01
         ]
       ]
-
 hosts:
-  # a host with the hostname 'server'
   server:
     processes:
     - path: ~/.local/bin/tgen
       args: ../../../tgen.server.graphml.xml
-      start_time: 1
-  # a host with the hostname 'client'
+      start_time: 1s
   client:
     quantity: 10
     processes:
     - path: ~/.local/bin/tgen
       args: ../../../tgen.client.graphml.xml
-      start_time: 2
+      start_time: 2s
 ```
 
 TGen requires an action-dependency graph for the client and server. See the [TGen documentation](https://github.com/shadow/tgen/tree/main/doc) for more information about customizing TGen behaviors.
@@ -110,13 +107,13 @@ shadow shadow.yaml > shadow.log
 In the TGen process output, lines containing `stream-success` represent completed downloads and contain useful timing statistics. From these lines we should see that clients have completed a total of **100** streams:
 
 ```bash
-for d in shadow.data/hosts/client*; do grep "stream-success" ${d}/* ; done | tee clients.log | wc -l
+for d in shadow.data/hosts/client*; do grep "stream-success" ${d}/*.stdout ; done | wc -l
 ```
 
 We can also look at the transfers from the servers' perspective:
 
 ```bash
-for d in shadow.data/hosts/server*; do grep "stream-success" ${d}/* ; done | tee servers.log | wc -l
+for d in shadow.data/hosts/server*; do grep "stream-success" ${d}/*.stdout ; done | wc -l
 ```
 
 ## Parsing and Plotting Results
