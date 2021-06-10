@@ -59,15 +59,15 @@ gdb --pid=PID
 > continue
 ```
 
-### Debugging plugins with gdb
+### Debugging managed processes with gdb
 
-In its default mode of operation, Shadow uses ptrace to control its emulated
+In its default mode of operation, Shadow uses ptrace to control its managed
 processes. This means that GDB *cannot* attach to those processes. As long as
 GDB's `follow-fork-mode` is `parent` (which is currently the default), it will
 correctly attach to Shadow and its worker threads, but not attempt to attach to
-forked plugin processes.
+Shadow-managed processes.
 
-If a plugin process is crashing (e.g. being killed by a signal within the
+If a managed process is crashing (e.g. being killed by a signal within the
 simulation), it is still possible to use gdb to help debug it by generating a
 core file, and using gdb to inspect it afterwards:
 
@@ -75,12 +75,12 @@ core file, and using gdb to inspect it afterwards:
 # Enable core dumps
 ulimit -c unlimited
 
-# Run the simulation in which a plugin is crashing
+# Run the simulation in which a managed process is crashing
 shadow shadow.config.xml
 
 # Tell gdb to inspect the core file. From within gdb you'll be able to
 # inspect the state of the process just before it was killed. 
-gdb <path-to-plugin-executable> <path-to-core-file>
+gdb <path-to-process-executable> <path-to-core-file>
 
 # It's often useful to look at the stack backtrace:
 > bt
