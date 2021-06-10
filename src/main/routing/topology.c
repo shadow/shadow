@@ -590,7 +590,7 @@ static gboolean _topology_checkGraphAttributes(Topology* top) {
         if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_LATENCY)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_JITTER)) {
-            isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
+            // we don't yet use the 'jitter' attribute, so ignore it
         } else if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_PACKETLOSS)) {
             isSuccess = isSuccess && _topology_checkAttributeType(name, type, IGRAPH_ATTRIBUTE_NUMERIC);
         } else if(_topology_isValidEdgeAttributeKey(name, EDGE_ATTR_LABEL)) {
@@ -930,20 +930,7 @@ static gboolean _topology_checkGraphEdgesHelperHook(Topology* top, igraph_intege
         isSuccess = FALSE;
     }
 
-    /* this attribute is optional, so it is OK if it doesn't exist */
-    const gchar* jitterKey = _topology_edgeAttributeToString(EDGE_ATTR_JITTER);
-    gdouble jitterValue;
-    if(igraph_cattribute_has_attr(&top->graph, IGRAPH_ATTRIBUTE_EDGE, jitterKey) &&
-            _topology_findEdgeAttributeDouble(top, edgeIndex, EDGE_ATTR_JITTER, &jitterValue)) {
-        if(jitterValue >= 0.0f) {
-            g_string_append_printf(message, " %s='%f'", jitterKey, jitterValue);
-        } else {
-            /* its an error if they gave a value that is incorrect */
-            warning("optional attribute '%s' on edge %li (from '%li' to '%li') is negative",
-                    jitterKey, (glong)edgeIndex, (long)fromID, (long)toID);
-            isSuccess = FALSE;
-        }
-    }
+    /* the jitter attribute is currently ignored */
 
     trace("%s", message->str);
 
