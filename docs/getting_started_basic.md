@@ -1,4 +1,4 @@
-# Getting Started
+# Getting Started Basic
 
 When installing Shadow, the main executable was placed in `/bin` in your install prefix (`~/.local/bin` by default). As a reminder, it would be helpful if this location was included in your environment `PATH`.
 

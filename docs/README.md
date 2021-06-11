@@ -1,6 +1,10 @@
 # The Shadow Simulator Documentation
 
-The docs contain important information about installing and using the Shadow discrete event network simulator. Please [open an issue](https://github.com/shadow/shadow/issues/new/choose) if you notice something out of date, or fix it yourself if you can.
+The docs contain important information about installing and using the Shadow
+discrete-event network simulator. Please [open an
+issue](https://github.com/shadow/shadow/issues) if you notice something out of
+date, or [open a pull request](https://github.com/shadow/shadow/pulls) if you
+can fix it.
 
  * The Shadow simulator
    * [Design Overview](design_overview.md)
@@ -10,7 +14,9 @@ The docs contain important information about installing and using the Shadow dis
      * [Shadow](install_shadow.md)
      * [System Configuration](system_configuration.md)
      * [(Experimental) Shadow with Docker](install_shadow_with_docker.md)
-   * [Getting Started](getting_started.md)
+   * Getting Started
+     * [Basic File Transfer](getting_started_basic.md)
+     * [Simple Tor Network](getting_started_tor.md)
    * [Parsing Statistics](parsing_statistics.md)
    * [Log Format](log_format.md)
    * Simulation Customization

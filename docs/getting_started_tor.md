@@ -1,0 +1,29 @@
+# Getting Started Tor
+
+Once Shadow is installed, it can be used to run Tor experiments. We recommend
+getting started with the [basic file transfer
+simulation](getting_started_basic.md) to orient yourself with Shadow before
+running this slightly more complex Tor simulation.
+
+This example requires that you have installed (or linked) a Tor executable in
+`~/.local/bin/tor` (see [the Tor install
+REAME)[https://github.com/torproject/tor/blob/main/README]). You also need to
+install (or link) a TGen executable in `~/.local/bin/tgen` (see [the TGen
+installation guide](https://shadow.github.io/docs/guide/tgen)).
+
+Once Shadow, Tor, and TGen are installed, you can quickly get started running a
+very simple Tor network:
+
+```bash
+cd shadow/src/test/tor/minimal
+shadow --template-directory shadow.data.template tor-minimal.yaml > shadow.log
+./verify.sh
+```
+
+After the experiment, have a look in the `shadow.data/host/*` directories to
+inspect the individual log files from the Tor relays and TGen clients.
+
+You can use the [tornettools
+toolkit](https://shadow.github.io/docs/guide/tornettools) to run larger, more
+complex Tor networks that are meant to more accurately resemble the
+characteristics and state of the public Tor network.
