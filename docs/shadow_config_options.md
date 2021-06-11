@@ -288,7 +288,7 @@ Send message to managed process telling it to stop spinning when a syscall block
 Default: false  
 Type: Bool
 
-Don't adjust the working directories of the managed processes.
+Don't adjust the working directories of the virtual processes.
 
 #### `experimental.use_memory_manager`
 

@@ -16,9 +16,9 @@ shadow/src/tools/convert_legacy_config.py my-shadow-config.xml
 ```
 
 You may have to manually tweak the new configuration file to support the new
-managed process [working directory](https://en.wikipedia.org/wiki/Working_directory). In
-Shadow 1.x, each managed process (then called a plugin) has the same working directory as the Shadow process
-itself. In Shadow 2.x, the working directory of each managed process is its host data
+virtual process [working directory](https://en.wikipedia.org/wiki/Working_directory). In
+Shadow 1.x, each virtual process (then called a plugin) has the same working directory as the Shadow process
+itself. In Shadow 2.x, the working directory of each virtual process is its host data
 directory. For example a process running on host `myhost` would have the working
 directory `shadow.data/hosts/myhost/`. You can use the
 [`experimental.use_legacy_working_dir`](shadow_config_options.md#experimentaluse_legacy_working_dir)

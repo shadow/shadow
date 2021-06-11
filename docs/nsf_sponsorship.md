@@ -36,7 +36,7 @@ Here we outline some high level tasks that we are completing or plan to complete
    * Improve maintainability and accuracy of TCP implementation - [milestone](https://github.com/shadow/shadow/milestone/18)
    * Simplify event scheduler, implement continuous event execution model
    * Build a distributed core simulation engine
-   * Develop CPU usage model to ensure managed process CPU utilization consumes simulation time
+   * Develop CPU usage model to ensure virtual process CPU utilization consumes simulation time
 
  * **Task 2: Develop User Interface and Visualizations**
    * Design control protocol and API for interacting with Shadow
