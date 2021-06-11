@@ -128,7 +128,7 @@ cd ~/rpmbuild/SPECS && rpmbuild -ba glibc.spec
 
 ## Using the compiled libc
 
-The patched libc can be injected into a plugin by setting `LD_LIBRARY_PATH` in each target plugin's environment. e.g.:
+The patched libc can be injected into a virtual process by setting `LD_LIBRARY_PATH` in each process's environment. e.g.:
 
 ```
 ...
