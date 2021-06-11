@@ -12,7 +12,7 @@ controlled and deterministically replicated.
 
 Build, test, and install Shadow into `~/.local`:
 ```
-$ ./setup build --clean
+$ ./setup build --clean --test
 $ ./setup test
 $ ./setup install
 ```
