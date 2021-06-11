@@ -23,7 +23,7 @@ graph [
     target 0
     label "path from 1.2.3.4 to 1.2.3.4"
     latency "10 ms"
-    jitter 0.0
+    jitter "0 ms"
     packet_loss 0.0
   ]
 ]
@@ -140,7 +140,7 @@ The latency that will be added to packets traversing this edge. This value is us
 
 Required: False  
 Default: n/a  
-Type: Float
+Type: String
 
 This keyword is allowed but currently nonfunctional; it is reserved for future use.
 
