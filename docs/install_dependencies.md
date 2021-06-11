@@ -15,11 +15,12 @@
   + numpy, scipy, matplotlib, networkx, lxml, pyyaml
 
 #### Recommended System Tools:
-  + git, dstat, screen, htop
+  + git, dstat, htop, tmux
 
 ### APT (Debian/Ubuntu):
 
 ```bash
+# required dependencies
 sudo apt-get install -y \
     cmake \
     findutils \
@@ -39,8 +40,7 @@ sudo apt-get install -y \
 # rustup: https://rustup.rs
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Optional dependencies
-
+# optional python modules
 sudo apt-get install -y \
     python3-numpy \
     python3-lxml \
@@ -49,11 +49,12 @@ sudo apt-get install -y \
     python3-scipy \
     python3-yaml
 
+# optional tools
 sudo apt-get install -y \
     dstat \
     git \
     htop \
-    screen
+    tmux
 ```
 
 ### YUM (Fedora/CentOS):
@@ -64,6 +65,7 @@ Before running these commands, please check any platform-specific requirements b
 **Warning:** `yum` and `dnf` often install 32-bit (`i686`) versions of libraries. You may want to use the `--best` option to make sure you're installing the 64-bit (`x86_64`) versions, which are required by Shadow.
 
 ```bash
+# required dependencies
 sudo yum install -y \
     cmake \
     findutils \
@@ -85,8 +87,7 @@ sudo yum install -y \
 # rustup: https://rustup.rs
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Optional dependencies
-
+# optional python modules
 sudo yum install -y \
     python3-numpy \
     python3-lxml \
@@ -95,11 +96,12 @@ sudo yum install -y \
     python3-scipy \
     python3-yaml
 
+# optional tools
 sudo yum install -y \
     dstat \
     git \
     htop \
-    screen
+    tmux
 ```
 
 #### CentOS 7
