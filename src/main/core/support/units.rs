@@ -796,9 +796,9 @@ mod export {
         rv
     }
 
-    /// Parses a string as a time in milliseconds. Returns '-1' on error.
+    /// Parses a string as a time in nanoseconds. Returns '-1' on error.
     #[no_mangle]
-    pub extern "C" fn parse_time_ms(s: *const libc::c_char) -> i64 {
+    pub extern "C" fn parse_time_nanosec(s: *const libc::c_char) -> i64 {
         assert!(!s.is_null());
 
         let s = match unsafe { std::ffi::CStr::from_ptr(s) }.to_str() {
@@ -810,7 +810,7 @@ mod export {
         };
 
         let value = match Time::from_str(s) {
-            Ok(x) => x.convert(TimePrefix::Milli).unwrap().value(),
+            Ok(x) => x.convert(TimePrefix::Nano).unwrap().value(),
             Err(e) => {
                 warn!("{}", e.to_string());
                 return -1;
