@@ -234,15 +234,15 @@ impl FromStr for TimePrefix {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "ns" | "nanosecond" => Ok(Self::Nano),
-            "us" | "μs" | "microsecond" => Ok(Self::Micro),
-            "ms" | "millisecond" => Ok(Self::Milli),
+            "ns" | "nanosecond" | "nanoseconds" => Ok(Self::Nano),
+            "us" | "μs" | "microsecond" | "microseconds" => Ok(Self::Micro),
+            "ms" | "millisecond" | "milliseconds" => Ok(Self::Milli),
             "s" | "sec" | "secs" | "second" | "seconds" => Ok(Self::Sec),
             "m" | "min" | "mins" | "minute" | "minutes" => Ok(Self::Min),
             "h" | "hr" | "hrs" | "hour" | "hours" => Ok(Self::Hour),
             _ => Err(
-                "Unit prefix was not one of (ns|nanosecond|us|μs|microsecond\
-                ms|millisecond|s|sec|secs|second|seconds|m|min|mins|minute|minutes\
+                "Unit was not one of (ns|nanosecond|nanoseconds|us|μs|microsecond|microseconds\
+                |ms|millisecond|milliseconds|s|sec|secs|second|seconds|m|min|mins|minute|minutes\
                 |h|hr|hrs|hour|hours)"
                     .to_string(),
             ),
@@ -574,7 +574,7 @@ pub struct BitsPerSec<T: Prefix> {
     pub prefix: T,
 }
 
-unit_impl!(BitsPerSec, u64, ["bit"]);
+unit_impl!(BitsPerSec, u64, ["bit", "bits"]);
 
 #[cfg(test)]
 mod tests {
@@ -620,6 +620,10 @@ mod tests {
         );
         assert_eq!(
             Time::from_str("10 millisecond").unwrap(),
+            Time::new(10, TimePrefix::Milli)
+        );
+        assert_eq!(
+            Time::from_str("10 milliseconds").unwrap(),
             Time::new(10, TimePrefix::Milli)
         );
 
@@ -703,6 +707,10 @@ mod tests {
         );
         assert_eq!(
             BitsPerSec::from_str("10 megabit").unwrap(),
+            BitsPerSec::new(10, SiPrefixUpper::Mega)
+        );
+        assert_eq!(
+            BitsPerSec::from_str("10 megabits").unwrap(),
             BitsPerSec::new(10, SiPrefixUpper::Mega)
         );
 
