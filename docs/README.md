@@ -25,7 +25,6 @@ can fix it.
      * [Network Configuration](network_config.md)
        * [Network Graph Attributes](network_graph_attributes.md)
    * [Migrating Simulations from Shadow 1.x](migrating_from_1x.md)
-   * [Notes and FAQs](notes_and_faq.md)
    * Developer Guides
      * [Debugging and profiling](developer_guide.md)
      * [Continous integration tests](ci.md)
