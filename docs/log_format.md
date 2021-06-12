@@ -9,35 +9,56 @@ real-time [thread-name] virtual-time [loglevel] [hostname:ip] [src-file:line-num
 ```
 
 - `real-time`:  
-the wall clock time since the start of the experiment, represented as `hours:minutes:seconds`
+  the wall clock time since the start of the experiment, represented as
+  `hours:minutes:seconds`
 - `thread-name`:  
-the name of the system thread that generated the message
+  the name of the system thread that generated the message
 - `virtual-time`:  
-the simulated time since the start of the experiment, represented as `hours:minutes:seconds`
+  the simulated time since the start of the experiment, represented as
+  `hours:minutes:seconds`
 - `loglevel`:  
-one of `ERROR` < `WARN` < `INFO` < `DEBUG` < `TRACE`, in that order
+  one of `ERROR` < `WARN` < `INFO` < `DEBUG` < `TRACE`, in that order
 - `hostname`:  
-the name of the node as specified in `hosts.<hostname>` of the simulation config
+  the name of the node as specified in `hosts.<hostname>` of the simulation
+  config
 - `ip`:  
-the IP address of the node as specified in `hosts.<hostname>.ip_address_hint` of the simulation config, or a random IP address if one is not specified  
+  the IP address of the node as specified in `hosts.<hostname>.ip_address_hint`
+  of the simulation config, or a random IP address if one is not specified  
 - `src-file`:  
-the name of the source code file where the message is logged
+  the name of the source code file where the message is logged
 - `line-number`:  
-the line number in the source code file where the message is logged
+  the line number in the source code file where the message is logged
 - `function-name`:  
-the name of the function logging the message
+  the name of the function logging the message
 - `MESSAGE`:  
-the actual message to be logged
+  the actual message to be logged
 
-By default, Shadow only prints core messages at or below the [`info` log level](shadow_config_options.md#generallog_level). This behavior can be changed using the Shadow option `-l` or `--log-level` to increase or decrease the verbosity of the output. As mentioned in the example from the previous section, the output from each application process is stored in separate log files beneath the `shadow.data` directory, and the format of those log files is application-specific (i.e., Shadow writes application output _directly_ to file).
+By default, Shadow only prints core messages at or below the [`info` log
+level](shadow_config_options.md#generallog_level). This behavior can be changed
+using the Shadow option `-l` or `--log-level` to increase or decrease the
+verbosity of the output. As mentioned in the example from the previous section,
+the output from each application process is stored in separate log files beneath
+the `shadow.data` directory, and the format of those log files is
+application-specific (i.e., Shadow writes application output _directly_ to
+file).
 
 ## Heartbeat Messages
 
-Shadow logs simulator heartbeat messages that contain useful system information for each virtual node in the experiment, in messages containing the string `shadow-heartbeat`. By default, these heartbeats are logged once per second, but the frequency can be changed using the `--heartbeat-frequency` option to Shadow (see `shadow --help`).
+Shadow logs simulator heartbeat messages that contain useful system information
+for each virtual node in the experiment, in messages containing the string
+`shadow-heartbeat`. By default, these heartbeats are logged once per second, but
+the frequency can be changed using the `--heartbeat-frequency` option to Shadow
+(see `shadow --help`).
 
-There are currently three [heartbeat statistic subsystems](shadow_config_options.md#host_defaultsheartbeat_log_info): `node`, `socket`, and `ram`. For each subsystem that is enabled, Shadow will print a 'header' message followed by regular message every frequency interval. The 'header' messages generally describe the statistics that are printed in the regular messages for that subsystem.
+There are currently three [heartbeat statistic
+subsystems](shadow_config_options.md#host_defaultsheartbeat_log_info): `node`,
+`socket`, and `ram`. For each subsystem that is enabled, Shadow will print a
+'header' message followed by regular message every frequency interval. The
+'header' messages generally describe the statistics that are printed in the
+regular messages for that subsystem.
 
-The following are examples of the statistics that are available for each subsystem:
+The following are examples of the statistics that are available for each
+subsystem:
 
 Node:
 

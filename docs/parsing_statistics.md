@@ -1,12 +1,23 @@
 # Parsing Statistics
 
-Shadow logs simulator heartbeat messages that contain useful system information for each virtual node in the experiment. For example, Shadow logs the number of bytes sent/received, number of bytes allocated/deallocated, CPU usage, etc. You can parse these heartbeat log messages to get insight into the simulation. Details of these heartbeat messages can be found [here](log_format.md#heartbeat-messages).
+Shadow logs simulator heartbeat messages that contain useful system information
+for each virtual node in the experiment. For example, Shadow logs the number of
+bytes sent/received, number of bytes allocated/deallocated, CPU usage, etc. You
+can parse these heartbeat log messages to get insight into the simulation.
+Details of these heartbeat messages can be found
+[here](log_format.md#heartbeat-messages).
  
 ## Generating Traffic
 
-This example uses the [TGen traffic generator](https://github.com/shadow/tgen) to generate network traffic between hosts, and then shows results from Shadow's heartbeat messages.
+This example uses the [TGen traffic generator](https://github.com/shadow/tgen)
+to generate network traffic between hosts, and then shows results from Shadow's
+heartbeat messages.
 
-TGen is capable of modeling generic behaviors with an action-dependency graph in the standard GraphML format. If you don't have it installed, you can follow the [instructions here](https://github.com/shadow/tgen/#setup). The following example runs TGen with 10 clients that each download 10 files from a server over a simple network topology.
+TGen is capable of modeling generic behaviors with an action-dependency graph in
+the standard GraphML format. If you don't have it installed, you can follow the
+[instructions here](https://github.com/shadow/tgen/#setup). The following
+example runs TGen with 10 clients that each download 10 files from a server over
+a simple network topology.
 
 `shadow.yaml`:
 
@@ -46,7 +57,9 @@ hosts:
       start_time: 2s
 ```
 
-TGen requires an action-dependency graph for the client and server. See the [TGen documentation](https://github.com/shadow/tgen/tree/main/doc) for more information about customizing TGen behaviors.
+TGen requires an action-dependency graph for the client and server. See the
+[TGen documentation](https://github.com/shadow/tgen/tree/main/doc) for more
+information about customizing TGen behaviors.
 
 `tgen.server.graphml.xml`:
 
@@ -96,7 +109,8 @@ TGen requires an action-dependency graph for the client and server. See the [TGe
 </graphml>
 ```
 
-With those three files saved in the same directory, you can start a simulation. This example may take a few minutes.
+With those three files saved in the same directory, you can start a simulation.
+This example may take a few minutes.
 
 ```bash
 # delete any existing simulation data
@@ -104,7 +118,9 @@ rm -rf shadow.data
 shadow shadow.yaml > shadow.log
 ```
 
-In the TGen process output, lines containing `stream-success` represent completed downloads and contain useful timing statistics. From these lines we should see that clients have completed a total of **100** streams:
+In the TGen process output, lines containing `stream-success` represent
+completed downloads and contain useful timing statistics. From these lines we
+should see that clients have completed a total of **100** streams:
 
 ```bash
 for d in shadow.data/hosts/client*; do grep "stream-success" ${d}/*.stdout ; done | wc -l
@@ -118,7 +134,10 @@ for d in shadow.data/hosts/server*; do grep "stream-success" ${d}/*.stdout ; don
 
 ## Parsing and Plotting Results
 
-Shadow includes some Python scripts that can parse important statistics from the Shadow log messages, including network throughput over time, client download statistics, and client load statistics, and then visualize the results. The following will parse and plot the output produced from the above experiment:
+Shadow includes some Python scripts that can parse important statistics from the
+Shadow log messages, including network throughput over time, client download
+statistics, and client load statistics, and then visualize the results. The
+following will parse and plot the output produced from the above experiment:
 
 ```bash
 # parse the shadow output file
@@ -129,7 +148,8 @@ src/tools/plot-shadow.py --help
 src/tools/plot-shadow.py --data results "example-plots"
 ```
 
-The `parse-*.py` scripts generate `stats.*.json.xz` files. The (heavily trimmed) contents of `stats.shadow.json` look like the following:
+The `parse-*.py` scripts generate `stats.*.json.xz` files. The (heavily trimmed)
+contents of `stats.shadow.json` look like the following:
 
 ```text
 $ xzcat results/stats.shadow.json.xz
@@ -167,13 +187,19 @@ $ xzcat results/stats.shadow.json.xz
 }
 ```
 
-The `plot-*.py` scripts generate graphs. Open the PDF file that was created to see the graphed results.
+The `plot-*.py` scripts generate graphs. Open the PDF file that was created to
+see the graphed results.
 
-You can also parse and plot the TGen output using the `tgentools` program from the TGen repo. [This page](https://github.com/shadow/tgen/blob/main/doc/Tools-Setup.md) describes how to get started.
+You can also parse and plot the TGen output using the `tgentools` program from
+the TGen repo. [This
+page](https://github.com/shadow/tgen/blob/main/doc/Tools-Setup.md) describes how
+to get started.
 
 ### Combining Simulation Data
 
-Consider a set of experiments where we would like to analyze the effect of changing our nodes' socket receive buffer sizes. We run the following 2 experiments:
+Consider a set of experiments where we would like to analyze the effect of
+changing our nodes' socket receive buffer sizes. We run the following 2
+experiments:
 
 ```bash
 # delete any existing simulation data and post-processing
@@ -191,7 +217,9 @@ src/tools/parse-shadow.py --prefix=10KiB.results   10KiB.log
 src/tools/parse-shadow.py --prefix=100KiB.results 100KiB.log
 ```
 
-Each of the directories `10KiB.results/` and `100KiB.results/` now contain data statistics files extracted from the log files. We can now combine and visualize these results with the `plot-shadow.py` script:
+Each of the directories `10KiB.results/` and `100KiB.results/` now contain data
+statistics files extracted from the log files. We can now combine and visualize
+these results with the `plot-shadow.py` script:
 
 ```bash
 src/tools/plot-shadow.py --prefix "recv-buffer" --data 10KiB.results/ "10 KiB" --data 100KiB.results/ "100 KiB"

@@ -59,10 +59,13 @@ sudo apt-get install -y \
 
 ### YUM (Fedora/CentOS):
 
-In more recent versions of Fedora and CentOS, `yum` can be exchanged for `dnf` in these commands.
-Before running these commands, please check any platform-specific requirements below.
+In more recent versions of Fedora and CentOS, `yum` can be exchanged for `dnf`
+in these commands. Before running these commands, please check any
+platform-specific requirements below.
 
-**Warning:** `yum` and `dnf` often install 32-bit (`i686`) versions of libraries. You may want to use the `--best` option to make sure you're installing the 64-bit (`x86_64`) versions, which are required by Shadow.
+**Warning:** `yum` and `dnf` often install 32-bit (`i686`) versions of
+libraries. You may want to use the `--best` option to make sure you're
+installing the 64-bit (`x86_64`) versions, which are required by Shadow.
 
 ```bash
 # required dependencies
@@ -125,7 +128,8 @@ alternatives --install /usr/local/bin/cmake cmake /usr/bin/cmake3 20 \
 
 #### CentOS 8
 
-As procps-ng-devel, igraph, and igraph-devel are not available on CentOS 8, you must install them manually.
+As procps-ng-devel, igraph, and igraph-devel are not available on CentOS 8, you
+must install them manually.
 
 ```bash
 dnf remove -y procps-ng procps-ng-devel
@@ -135,7 +139,8 @@ dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages
 dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-devel-0.7.1-12.el7.x86_64.rpm
 ```
 
-Due to [a bug](https://bugs.centos.org/view.php?id=18212) in the CentOS 8 CMake package, you must also install libarchive manually.
+Due to [a bug](https://bugs.centos.org/view.php?id=18212) in the CentOS 8 CMake
+package, you must also install libarchive manually.
 
 ```bash
 dnf install -y libarchive

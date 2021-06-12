@@ -1,6 +1,8 @@
 # Shadow Configuration Options
 
-Shadow uses the standard YAML format to accept configuration options from users. The following describes Shadow's YAML format that can be used to customize a simulation.
+Shadow uses the standard YAML format to accept configuration options from users.
+The following describes Shadow's YAML format that can be used to customize a
+simulation.
 
 Example:
 
@@ -113,7 +115,8 @@ Interval at which to print heartbeat messages.
 Default: "info"  
 Type: "error" OR "warning" OR "info" OR "debug" OR "trace"
 
-Log level of output written on stdout. If Shadow was built in release mode, then messages at level 'trace' will always be dropped.
+Log level of output written on stdout. If Shadow was built in release mode, then
+messages at level 'trace' will always be dropped.
 
 #### `general.parallelism`
 
@@ -123,7 +126,10 @@ Type: Integer
 How many parallel threads to use to run the simulation. Optimal performance is
 usually obtained with `nproc`, or sometimes `nproc/2` with hyperthreading.
 
-Virtual hosts depend on network packets that can potentially arrive from other virtual hosts, so each worker can only advance according to the propagation delay to avoid dependency violations. Therefore, not all threads will have 100% CPU utilization.
+Virtual hosts depend on network packets that can potentially arrive from other
+virtual hosts, so each worker can only advance according to the propagation
+delay to avoid dependency violations. Therefore, not all threads will have 100%
+CPU utilization.
 
 #### `general.seed`
 
@@ -158,7 +164,9 @@ Network topology settings.
 
 The network topology graph.
 
-A network topology represented by a connected graph with certain attributes specified on the nodes and edges. For more information on how to structure this data, see the [Topology Format](network_config.md).
+A network topology represented by a connected graph with certain attributes
+specified on the nodes and edges. For more information on how to structure this
+data, see the [Topology Format](network_config.md).
 
 Example:
 
@@ -177,27 +185,32 @@ network:
 *Required*  
 Type: "gml" OR "1\_gbit\_switch"
 
-The network graph can be specified in the GML format, or a built-in "1\_gbit\_switch" graph with a single node can be used instead.
+The network graph can be specified in the GML format, or a built-in
+"1\_gbit\_switch" graph with a single node can be used instead.
 
 #### `network.graph.<path|inline>`
 
 *Required if `network.graph.type` is `gml`*  
 Type: String
 
-If the network graph type is not a built-in network graph, the graph data can be specified as a path to an external file, or as an inline string.
+If the network graph type is not a built-in network graph, the graph data can be
+specified as a path to an external file, or as an inline string.
 
-If a path is given and begins with `~/`, it will be considered relative to the current user's home directory.
+If a path is given and begins with `~/`, it will be considered relative to the
+current user's home directory.
 
 #### `network.use_shortest_path`
 
 *Required*
 Type: Bool
 
-When routing packets, follow the shortest path rather than following a direct edge between nodes. If false, the network graph is required to be complete.
+When routing packets, follow the shortest path rather than following a direct
+edge between nodes. If false, the network graph is required to be complete.
 
 #### `experimental`
 
-Experimental experiment settings. Unstable and may change or be removed at any time, regardless of Shadow version.
+Experimental experiment settings. Unstable and may change or be removed at any
+time, regardless of Shadow version.
 
 #### `experimental.interface_buffer`
 
@@ -232,7 +245,8 @@ Max number of iterations to busy-wait on IPC semaphore before blocking.
 Default: null  
 Type: String OR null
 
-If set, overrides the automatically calculated minimum time workers may run ahead when sending events between nodes.
+If set, overrides the automatically calculated minimum time workers may run
+ahead when sending events between nodes.
 
 #### `experimental.scheduler_policy`
 
@@ -274,14 +288,16 @@ Initial size of the socket's send buffer.
 Default: true  
 Type: Bool
 
-Pin each thread and any processes it executes to the same logical CPU Core to improve cache affinity.
+Pin each thread and any processes it executes to the same logical CPU Core to
+improve cache affinity.
 
 #### `experimental.use_explicit_block_message`
 
 Default: false  
 Type: Bool
 
-Send message to managed process telling it to stop spinning when a syscall blocks.
+Send message to managed process telling it to stop spinning when a syscall
+blocks.
 
 #### `experimental.use_legacy_working_dir`
 
@@ -295,35 +311,41 @@ Don't adjust the working directories of the virtual processes.
 Default: true  
 Type: Bool
 
-Use the MemoryManager. It can be useful to disable for debugging, but will hurt performance in most cases.
+Use the MemoryManager. It can be useful to disable for debugging, but will hurt
+performance in most cases.
 
 #### `experimental.use_o_n_waitpid_workarounds`
 
 Default: false
 Type: Bool
 
-Use performance workarounds for waitpid being O(n). Beneficial to disable if waitpid is patched to be O(1), if using one logical processor per host, or in some cases where it'd otherwise result in excessive detaching and reattaching.
+Use performance workarounds for waitpid being O(n). Beneficial to disable if
+waitpid is patched to be O(1), if using one logical processor per host, or in
+some cases where it'd otherwise result in excessive detaching and reattaching.
 
 #### `experimental.use_object_counters`
 
 Default: true  
 Type: Bool
 
-Count object allocations and deallocations. If disabled, we will not be able to detect object memory leaks.
+Count object allocations and deallocations. If disabled, we will not be able to
+detect object memory leaks.
 
 #### `experimental.use_sched_fifo`
 
 Default: false  
 Type: Bool
 
-Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7).
+Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7),
+capabilities(7).
 
 #### `experimental.use_shim_syscall_handler`
 
 Default: true  
 Type: Bool
 
-Use shim-side syscall handler to force hot-path syscalls to be handled via an inter-process syscall with Shadow.
+Use shim-side syscall handler to force hot-path syscalls to be handled via an
+inter-process syscall with Shadow.
 
 #### `experimental.use_syscall_counters`
 
@@ -344,7 +366,8 @@ future.
 
 #### `host_defaults`
 
-Default options for all hosts. These options can also be overridden for each host individually.
+Default options for all hosts. These options can also be overridden for each
+host individually.
 
 #### `host_defaults.city_code_hint`
 
@@ -353,7 +376,8 @@ Type: String OR null
 
 City code hint for Shadow's name and routing system.
 
-This hint will be used to assign the host to a node based on the city codes of nodes in the network topology.
+This hint will be used to assign the host to a node based on the city codes of
+nodes in the network topology.
 
 #### `host_defaults.country_code_hint`
 
@@ -362,7 +386,8 @@ Type: String OR null
 
 Country code hint for Shadow's name and routing system (ex: "US").
 
-This hint will be used to assign the host to a node based on the country codes of nodes in the network topology.
+This hint will be used to assign the host to a node based on the country codes
+of nodes in the network topology.
 
 #### `host_defaults.heartbeat_interval`
 
@@ -392,7 +417,8 @@ Type: String OR null
 
 IPv4 address hint for Shadow's name and routing system (ex: "100.0.0.1").
 
-This hint will be used to assign the host to a node based on the IP values of nodes in the network topology.
+This hint will be used to assign the host to a node based on the IP values of
+nodes in the network topology.
 
 #### `host_defaults.log_level`
 
@@ -408,14 +434,16 @@ Type: String OR null
 
 Where to save the pcap files (relative to the host directory).
 
-Logs all network input and output for this host in PCAP format (for viewing in e.g. wireshark).
+Logs all network input and output for this host in PCAP format (for viewing in
+e.g. wireshark).
 
 #### `hosts`
 
 *Required*
 Type: Object
 
-The simulated hosts which execute processes. Each field corresponds to a host configuration, with the field name being used as the network hostname.
+The simulated hosts which execute processes. Each field corresponds to a host
+configuration, with the field name being used as the network hostname.
 
 Shadow assigns each host to a node in the [network topology](network_config.md).
 
@@ -426,7 +454,8 @@ Type: String OR Integer OR null
 
 Downstream bandwidth capacity of the host.
 
-Overrides any default bandwidth values set in the assigned network topology node.
+Overrides any default bandwidth values set in the assigned network topology
+node.
 
 #### `hosts.<hostname>.bandwidth_up`
 
@@ -435,7 +464,8 @@ Type: String OR Integer OR null
 
 Upstream bandwidth capacity of the host.
 
-Overrides any default bandwidth values set in the assigned network topology node.
+Overrides any default bandwidth values set in the assigned network topology
+node.
 
 #### `hosts.<hostname>.options`
 
@@ -448,7 +478,9 @@ Type: Integer
 
 Number of hosts to start.
 
-If quantity is greater than 1, each host's hostname will be suffixed with a counter. For example, a host with an id of `host` and quantity of 2 would produce nodes with hostnames `host1` and `host2`.
+If quantity is greater than 1, each host's hostname will be suffixed with a
+counter. For example, a host with an id of `host` and quantity of 2 would
+produce nodes with hostnames `host1` and `host2`.
 
 #### `hosts.<hostname>.processes`
 
@@ -469,14 +501,16 @@ Process arguments.
 Default: ""  
 Type: String
 
-Environment variables passed when executing this process. Multiple variables can be specified by using a semicolon separator (ex: `ENV_A=1;ENV_B=2`).
+Environment variables passed when executing this process. Multiple variables can
+be specified by using a semicolon separator (ex: `ENV_A=1;ENV_B=2`).
 
 #### `hosts.<hostname>.processes[*].path`
 
 *Required*  
 Type: String
 
-If the path begins with `~/`, it will be considered relative to the current user's home directory.
+If the path begins with `~/`, it will be considered relative to the current
+user's home directory.
 
 #### `hosts.<hostname>.processes[*].quantity`
 
