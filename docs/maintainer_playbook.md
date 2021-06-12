@@ -15,17 +15,18 @@ git checkout main
 # that commit.
 bumpversion <patch|minor|major> --tag --commit
 
-# Update the Cargo lock files
+# Get the new version number.
+VERSION=`awk -F "=" '/current_version/ {print $2}' .bumpversion.cfg | tr -d ' '`
+
+# Update the Cargo lock files, then update the commit and tag
 (cd src/main && cargo update --workspace)
 (cd src/test && cargo update --workspace)
 git add src/main/Cargo.lock src/test/Cargo.lock
 git commit --amend --no-edit
-
-# Get the new version number.
-VERSION=`awk -F "=" '/current_version/ {print $2}' .bumpversion.cfg | tr -d ' '`
+git tag -f -a "v$VERSION"
 
 # Push to GitHub.
-git push origin v$VERSION
+git push origin "v$VERSION"
 ```
 
 Our releases will then be tagged off of the main branch.
