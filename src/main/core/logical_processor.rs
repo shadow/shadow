@@ -28,8 +28,6 @@ pub type gint = libc::c_int;
 pub type gpointer = *mut libc::c_void;
 pub type GDestroyNotify = Option<unsafe extern "C" fn(_: gpointer) -> ()>;
 pub type GAsyncQueue = _GAsyncQueue;
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct _LogicalProcessors {
     pub lps: *mut LogicalProcessor,
     pub n: size_t,
@@ -41,12 +39,10 @@ pub struct _LogicalProcessors {
  * See LICENSE for licensing information
  */
 pub type LogicalProcessor = _LogicalProcessor;
-#[derive(Copy, Clone)]
-#[repr(C)]
 pub struct _LogicalProcessor {
-    pub cpuId: libc::c_int,
-    pub readyWorkers: *mut GAsyncQueue,
-    pub doneWorkers: *mut GAsyncQueue,
+    cpuId: libc::c_int,
+    readyWorkers: *mut GAsyncQueue,
+    doneWorkers: *mut GAsyncQueue,
 }
 pub type LogicalProcessors = _LogicalProcessors;
 #[derive(Copy, Clone)]
