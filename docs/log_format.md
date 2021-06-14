@@ -1,4 +1,4 @@
-# Log Format
+# Format of Shadow Log Messages
 
 ## Log Line Prefix
 
@@ -34,7 +34,7 @@ real-time [thread-name] virtual-time [loglevel] [hostname:ip] [src-file:line-num
   the actual message to be logged
 
 By default, Shadow only prints core messages at or below the [`info` log
-level](shadow_config_options.md#generallog_level). This behavior can be changed
+level](shadow_config_spec.md#generallog_level). This behavior can be changed
 using the Shadow option `-l` or `--log-level` to increase or decrease the
 verbosity of the output. As mentioned in the example from the previous section,
 the output from each application process is stored in separate log files beneath
@@ -51,7 +51,7 @@ the frequency can be changed using the `--heartbeat-frequency` option to Shadow
 (see `shadow --help`).
 
 There are currently three [heartbeat statistic
-subsystems](shadow_config_options.md#host_defaultsheartbeat_log_info): `node`,
+subsystems](shadow_config_spec.md#host_defaultsheartbeat_log_info): `node`,
 `socket`, and `ram`. For each subsystem that is enabled, Shadow will print a
 'header' message followed by regular message every frequency interval. The
 'header' messages generally describe the statistics that are printed in the

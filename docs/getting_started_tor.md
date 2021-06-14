@@ -1,9 +1,9 @@
 # Getting Started Tor
 
-Once Shadow is installed, it can be used to run Tor experiments. We recommend
-getting started with the [basic file transfer
-simulation](getting_started_basic.md) to orient yourself with Shadow before
-running this slightly more complex Tor simulation.
+_We recommend getting started with the [basic file
+transfer](getting_started_basic.md) and [traffic
+generation](getting_started_tgen.md) examples to orient yourself with Shadow
+before running this slightly more complex Tor simulation._
 
 This example requires that you have installed (or linked) a Tor executable in
 `~/.local/bin/tor` (see [the Tor install

@@ -1,23 +1,23 @@
-# Shadow Configuration
+# Shadow Configuration Overview
 
 Shadow requires a configuration file that provides a network topology graph and
 information about the processes to run during the simulation. This configuration
 file uses the YAML format. The options and their effect on the simulation are
 described in more detail (alongside a simple example configuration file) on [the
-configuration options page](shadow_config_options.md).
+configuration options page](shadow_config_spec.md).
 
 Many of the configuration file options can also be overridden using command-line
 options. For example, the configuration option
-[`general.stop_time`](shadow_config_options.md#generalstop_time) can be
+[`general.stop_time`](shadow_config_spec.md#generalstop_time) can be
 overridden with shadow's `--stop-time` option, and
-[`general.log_level`](shadow_config_options.md#generallog_level) can be
+[`general.log_level`](shadow_config_spec.md#generallog_level) can be
 overridden with `--log-level`. See `shadow --help` for other command-line
 options.
 
 ## Quantities with Units
 
 Some options such as
-[`hosts.<hostname>.bandwidth_down`](shadow_config_options.md#hostshostnamebandwidth_down)
+[`hosts.<hostname>.bandwidth_down`](shadow_config_spec.md#hostshostnamebandwidth_down)
 accept quantity values containing a magnitude and a unit. For example bandwidth
 values can be expressed as `1 Mbit`, `1000 Kbit`, `977 Kibit`, etc. The space
 between the magnitude and unit is optional (for example `5Mbit`), and the unit
@@ -27,7 +27,7 @@ can be pluralized (for example `5 Mbits`). Units are case-sensitive.
 
 Time values are expressed as either sub-second units, seconds, minutes, or
 hours. Not all options will accept sub-second units. For example
-[`general.stop_time`](shadow_config_options.md#generalstop_time) must be
+[`general.stop_time`](shadow_config_spec.md#generalstop_time) must be
 expressed in units of seconds or larger.
 
 Acceptable units are:

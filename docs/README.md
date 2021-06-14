@@ -14,17 +14,22 @@ can fix it.
      * [Shadow](install_shadow.md)
      * [System Configuration](system_configuration.md)
      * [(Experimental) Shadow with Docker](install_shadow_with_docker.md)
-   * Getting Started
-     * [Basic File Transfer](getting_started_basic.md)
-     * [Simple Tor Network](getting_started_tor.md)
-   * [Parsing Statistics](parsing_statistics.md)
-   * [Log Format](log_format.md)
-   * Simulation Customization
-     * [Shadow Configuration](shadow_config.md)
-       * [Shadow Configuration Options](shadow_config_options.md)
-     * [Network Configuration](network_config.md)
-       * [Network Graph Attributes](network_graph_attributes.md)
-   * [Migrating Simulations from Shadow 1.x](migrating_from_1x.md)
+   * Usage Guide
+     * [Overview](run_shadow_overview.md)
+     * Running Your First Simulations
+       * [Basic File Transfer](getting_started_basic.md)
+       * [Traffic Generation](getting_started_tgen.md)
+       * [Simple Tor Network](getting_started_tor.md)
+     * Understanding Shadow Output
+       * [Format of the Log Messages](log_format.md)
+       * [Parsing Statistics from the Logs](parsing_shadow_logs.md)
+     * Configuring Your Own Simulation
+       * [Shadow Config Overview](shadow_config_overview.md)
+       * [Shadow Config Specification](shadow_config_spec.md)
+     * Configuring Your Own Network
+       * [Network Graph Overview](network_graph_overview.md)
+       * [Network Graph Specification](network_graph_spec.md)
+     * [Migrating Simulations from Shadow 1.x](migrating_from_1x.md)
    * Developer Guides
      * [Debugging and profiling](developer_guide.md)
      * [Continous integration tests](ci.md)

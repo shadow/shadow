@@ -1,8 +1,8 @@
-### Network Graph Attributes
+### Network Graph Specification
 
-The [network graph overview](network_config.md) provides a general summary of
-Shadow's use of a network graph to abstractly model network position and to
-connect virtual hosts in a network topology while enforcing network
+The [network graph overview](network_graph_overview.md) provides a general
+summary of Shadow's use of a network graph to abstractly model network position
+and to connect virtual hosts in a network topology while enforcing network
 characteristics on paths between hosts. This page describes the specific
 attributes that can be configured in the network graph, and the effect that each
 attribute has on the simulation.
@@ -94,7 +94,7 @@ A code for the country in which the node represented by this vertex is located.
 This code can be used to control the placement of hosts in the network: when
 attaching a specific host into the network, we ignore any vertex whose
 `country_code` does not match the host's [`country_code_hint` host configuration
-value](shadow_config_options.md#host_defaultscountry_code_hint) (if one is
+value](shadow_config_spec.md#host_defaultscountry_code_hint) (if one is
 configured).
 
 #### `vertex.city_code`
@@ -107,7 +107,7 @@ A code for the city in which the node represented by this vertex is located.
 This code can be used to control the placement of hosts in the network: when
 attaching a specific host into the network, we ignore any vertex whose
 `city_code` does not match the host's [`city_code_hint` host configuration
-value](shadow_config_options.md#host_defaultscity_code_hint) (if one is
+value](shadow_config_spec.md#host_defaultscity_code_hint) (if one is
 configured).
 
 #### `vertex.ip_address`
@@ -122,7 +122,7 @@ filtering vertices based on the city and country codes (as described above), we
 perform a [longest prefix
 match](https://en.wikipedia.org/wiki/Longest_prefix_match) on the remaining
 vertices by comparing the vertex `ip_address` with the host's [`ip_address_hint`
-host configuration value](shadow_config_options.md#host_defaultsip_address_hint)
+host configuration value](shadow_config_spec.md#host_defaultsip_address_hint)
 (if one is configured) and attach the host to the vertex with the closest match.
 We assign the host the address specified in `ip_address_hint` as long as that
 address has not yet been assigned to another host, otherwise we choose a unique
@@ -135,9 +135,9 @@ Type: String
 
 A string defining the downstream (receive) bandwidth that will be allowed for
 any host attached to this vertex. Hosts may individually override this value in
-[the Shadow config file](shadow_config_options.md#hostshostnamebandwidth_down).
+[the Shadow config file](shadow_config_spec.md#hostshostnamebandwidth_down).
 The format of the string specifies the bandwidth and its unit as described in
-the [config documentation](shadow_config_options.md), e.g., `10 Mbit`. Note that
+the [config documentation](shadow_config_spec.md), e.g., `10 Mbit`. Note that
 this bandwidth is allowed for every host that is attached to this vertex; it is
 **not** the total bandwidth logically available at the node (which is not
 defined).
@@ -149,9 +149,9 @@ Type: String
 
 A string defining the upstream (send) bandwidth that will be allowed for any
 host attached to this vertex. Hosts may individually override this value in [the
-Shadow config file](shadow_config_options.md#hostshostnamebandwidth_up). The
+Shadow config file](shadow_config_spec.md#hostshostnamebandwidth_up). The
 format of the string specifies the bandwidth and its unit as described in the
-[config documentation](shadow_config_options.md), e.g., `10 Mbit`. Note that
+[config documentation](shadow_config_spec.md), e.g., `10 Mbit`. Note that
 this bandwidth is allowed for every host that is attached to this vertex; it is
 **not** the total bandwidth logically available at the node (which is not
 defined).

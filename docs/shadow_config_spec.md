@@ -1,8 +1,8 @@
-# Shadow Configuration Options
+# Shadow Configuration Specification
 
 Shadow uses the standard YAML format to accept configuration options from users.
-The following describes Shadow's YAML format that can be used to customize a
-simulation.
+The following describes Shadow's YAML format and all of the options that Shadow
+supports that can be used to customize a simulation.
 
 Example:
 
@@ -166,7 +166,7 @@ The network topology graph.
 
 A network topology represented by a connected graph with certain attributes
 specified on the nodes and edges. For more information on how to structure this
-data, see the [Topology Format](network_config.md).
+data, see the [Topology Format](network_graph_overview.md).
 
 Example:
 
@@ -445,7 +445,7 @@ Type: Object
 The simulated hosts which execute processes. Each field corresponds to a host
 configuration, with the field name being used as the network hostname.
 
-Shadow assigns each host to a node in the [network topology](network_config.md).
+Shadow assigns each host to a node in the [network topology](network_graph_overview.md).
 
 #### `hosts.<hostname>.bandwidth_down`
 

@@ -53,14 +53,14 @@ communication.
     unique edge between every pair of vertices), then we can avoid running the
     shortest path algorithm as a performance optimization by setting the
     [use_shortest_path
-    option](shadow_config_options.md#networkuse_shortest_path) to `False`.
+    option](shadow_config_spec.md#networkuse_shortest_path) to `False`.
 
 ### Network Graph Attributes
 
 We encode attributes on the vertices and edges that allow for configuring the
 simulated network characteristics. The attributes and their effect on the
 simulated network are described in more detail (alongside a simple example
-graph) on [the network graph attributes page](network_graph_attributes.md).
+graph) on [the network graph specification page](network_graph_spec.md).
 
 ### Using an Existing Graph
 
