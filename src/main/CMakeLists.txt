@@ -77,7 +77,6 @@ add_test(NAME shmem COMMAND shd-shmem-test)
 
 ## sources for our main shadow program
 set(shadow_srcs
-    core/logical_processor.c
     core/logger/log_wrapper.c
     core/scheduler/scheduler.c
     core/scheduler/scheduler_policy_host_single.c

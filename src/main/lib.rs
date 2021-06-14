@@ -5,6 +5,8 @@
 
 // https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md
 #![deny(unsafe_op_in_unsafe_fn)]
+#![feature(extern_types)]
+#![feature(register_tool)]
 
 mod cshadow {
     // Inline the bindgen-generated Rust bindings, suppressing warnings.
@@ -16,7 +18,6 @@ mod cshadow {
     #![allow(improper_ctypes)]
     include!("bindings/rust/wrapper.rs");
 }
-
 pub mod core;
 pub mod host;
 pub mod routing;
