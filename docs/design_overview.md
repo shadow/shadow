@@ -15,7 +15,7 @@
 Shadow was developed because there was a recognized need for an accurate,
 efficient, and scalable tool for Tor experimentation: using the PlanetLab
 platform is undesirable due to management overhead and lack of control; existing
-emulators are far too inefficient when scaling to thousands of nodes;
+emulators are far too inefficient when scaling to thousands of virtual hosts;
 roll-your-own simulators are often too inaccurate or generic to be useful for
 multiple projects; and experiments on the live Tor network are often infeasible
 due to privacy risks.

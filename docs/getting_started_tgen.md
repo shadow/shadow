@@ -19,7 +19,7 @@ features in this example.
 If you don't have it installed, you can follow the [instructions
 here](https://github.com/shadow/tgen/#setup). The following example runs TGen
 with 10 clients that each download 10 files from a server over a simple network
-topology.
+graph.
 
 ## A Shadow Simulation using TGen
 
@@ -41,7 +41,7 @@ general:
 
 network:
   graph:
-    # a custom single-node topology
+    # a custom single-node graph
     type: gml
     inline: |
       graph [

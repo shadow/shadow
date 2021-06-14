@@ -1,7 +1,7 @@
 # Migrating Simulations from Shadow 1.x
 
-Shadow 2.0 has changed the formatting of its configuration and topology files.
-The configuration format has changed from XML to YAML, and the topology format
+Shadow 2.0 has changed the formatting of its configuration and network graph files.
+The configuration format has changed from XML to YAML, and the network graph format
 has changed from GraphML to GML. Various options have been added, renamed, and
 removed. Shadow includes convenience scripts to convert these files to their new
 formats. These scripts are intended to aid in converting to the new formats, and
@@ -35,9 +35,9 @@ use the
 option to use the Shadow 1.x working directory, but this is an experimental
 option and may be removed in the future.
 
-### Converting a topology file to the Shadow 2.0 format
+### Converting a network graph file to the Shadow 2.0 format
 
-The following will create a new topology file `my-shadow-topology.gml`.
+The following will create a new network graph file `my-shadow-topology.gml`.
 
 ```bash
 shadow/src/tools/convert_legacy_topology.py my-shadow-topology.graphml.xml > my-shadow-topology.gml

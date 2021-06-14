@@ -156,7 +156,7 @@ Path to recursively copy during startup and use as the data-directory.
 
 *Required*
 
-Network topology settings.
+Network settings.
 
 #### `network.graph`
 
@@ -165,8 +165,8 @@ Network topology settings.
 The network topology graph.
 
 A network topology represented by a connected graph with certain attributes
-specified on the nodes and edges. For more information on how to structure this
-data, see the [Topology Format](network_graph_overview.md).
+specified on the network nodes and edges. For more information on how to
+structure this data, see the [Network Graph Overview](network_graph_overview.md).
 
 Example:
 
@@ -186,7 +186,7 @@ network:
 Type: "gml" OR "1\_gbit\_switch"
 
 The network graph can be specified in the GML format, or a built-in
-"1\_gbit\_switch" graph with a single node can be used instead.
+"1\_gbit\_switch" graph with a single network node can be used instead.
 
 #### `network.graph.<path|inline>`
 
@@ -205,7 +205,8 @@ current user's home directory.
 Type: Bool
 
 When routing packets, follow the shortest path rather than following a direct
-edge between nodes. If false, the network graph is required to be complete.
+edge between network nodes. If false, the network graph is required to be
+complete.
 
 #### `experimental`
 
@@ -246,7 +247,7 @@ Default: null
 Type: String OR null
 
 If set, overrides the automatically calculated minimum time workers may run
-ahead when sending events between nodes.
+ahead when sending events between virtual hosts.
 
 #### `experimental.scheduler_policy`
 
@@ -376,8 +377,8 @@ Type: String OR null
 
 City code hint for Shadow's name and routing system.
 
-This hint will be used to assign the host to a node based on the city codes of
-nodes in the network topology.
+This hint will be used to assign the host to a network node based on the city
+codes of nodes in the network graph.
 
 #### `host_defaults.country_code_hint`
 
@@ -386,8 +387,8 @@ Type: String OR null
 
 Country code hint for Shadow's name and routing system (ex: "US").
 
-This hint will be used to assign the host to a node based on the country codes
-of nodes in the network topology.
+This hint will be used to assign the host to a network node based on the country
+codes of nodes in the network graph.
 
 #### `host_defaults.heartbeat_interval`
 
@@ -417,15 +418,15 @@ Type: String OR null
 
 IPv4 address hint for Shadow's name and routing system (ex: "100.0.0.1").
 
-This hint will be used to assign the host to a node based on the IP values of
-nodes in the network topology.
+This hint will be used to assign the host to a network node based on the IP
+values of nodes in the network graph.
 
 #### `host_defaults.log_level`
 
 Default: null  
 Type: "error" OR "warning" OR "info" OR "debug" OR "trace" OR null
 
-Log level at which to print node messages.
+Log level at which to print host log messages.
 
 #### `host_defaults.pcap_directory`
 
@@ -445,7 +446,7 @@ Type: Object
 The simulated hosts which execute processes. Each field corresponds to a host
 configuration, with the field name being used as the network hostname.
 
-Shadow assigns each host to a node in the [network topology](network_graph_overview.md).
+Shadow assigns each host to a network node in the [network graph](network_graph_overview.md).
 
 #### `hosts.<hostname>.bandwidth_down`
 
@@ -454,7 +455,7 @@ Type: String OR Integer OR null
 
 Downstream bandwidth capacity of the host.
 
-Overrides any default bandwidth values set in the assigned network topology
+Overrides any default bandwidth values set in the assigned network graph
 node.
 
 #### `hosts.<hostname>.bandwidth_up`
@@ -464,7 +465,7 @@ Type: String OR Integer OR null
 
 Upstream bandwidth capacity of the host.
 
-Overrides any default bandwidth values set in the assigned network topology
+Overrides any default bandwidth values set in the assigned network graph
 node.
 
 #### `hosts.<hostname>.options`
@@ -480,7 +481,7 @@ Number of hosts to start.
 
 If quantity is greater than 1, each host's hostname will be suffixed with a
 counter. For example, a host with an id of `host` and quantity of 2 would
-produce nodes with hostnames `host1` and `host2`.
+produce hosts with hostnames `host1` and `host2`.
 
 #### `hosts.<hostname>.processes`
 

@@ -1,15 +1,15 @@
 ## System Configs and Limits
 
 Some Linux system configuration changes are needed to run large-scale Shadow
-simulations (more than about 1000 nodes).
+simulations (more than about 1000 processes).
 
 #### Number of Open Files
 
-There is a default linux system limit on the number of open files. If each node
-in your Shadow plug-in opens many file or socket descriptors (if you have many
-nodes, this is very likely to happen), you'll likely want to increase the limit
-so you application doesn't start getting errors when calling `open()` or
-`socket()`.
+There is a default linux system limit on the number of open files. If each
+process in your Shadow virtual host opens many file or socket descriptors (if
+you have many hosts, this is very likely to happen), you'll likely want to
+increase the limit so you application doesn't start getting errors when calling
+`open()` or `socket()`.
 
 ###### System-wide Limits
 

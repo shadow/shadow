@@ -19,20 +19,27 @@ This page describes the routing module and how it can be configured.
 Shadow represents a network topology over which processes can communicate using
 a [weighted graph](https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)).
 The graph contains _vertices_ that abstractly represent network locations, and
-_edges_ representing network paths between those locations. Shadow requires that
-the graph is
+_edges_ representing network paths between those locations.
+
+When referring to a network graph, the terms _vertices_ and _nodes_ are
+interchangeable. In our documentation, we refer to these as _nodes_. Note that
+nodes in the network graph are distinct from virtual hosts in the Shadow config
+file: a virtual host models an end-host machine, whereas a network node
+represents a location at which a host can connect to the simulated network.
+
+Shadow requires that the network graph is
 [connected](https://en.wikipedia.org/wiki/Connectivity_(graph_theory)) such that
 there exists at least one _path_ (a series of one or more edges) between every
-pair of vertices.
+pair of nodes.
 
 #### Behavior
 
 The graph encodes network positioning and path characteristics as attributes on
-the vertices and edges. Shadow uses the connectivity graph along with the
-information encoded in vertex and edge attributes to:
+the nodes and edges. Shadow uses the connectivity graph along with the
+information encoded in node and edge attributes to:
 
-  - attach virtual hosts to specific vertices (i.e., locations) in the network
-    topology;
+  - attach virtual hosts to specific nodes (i.e., locations) in the network
+    graph;
   - assign the bandwidth allowed for each attached virtual host;
   - compute the shortest path (weighted by edge `latency`) between two virtual
     hosts using [Dijkstra's
@@ -46,18 +53,18 @@ communication.
 #### Important Notes
 
   - The network graph may be directed or undirected, as long as the graph is
-    structured such that every vertex can reach every other vertex through a
+    structured such that every node can reach every other node through a
     series of edges.
   - If the network graph is a [complete
     graph](https://en.wikipedia.org/wiki/Complete_graph) (there exists a single
-    unique edge between every pair of vertices), then we can avoid running the
+    unique edge between every pair of nodes), then we can avoid running the
     shortest path algorithm as a performance optimization by setting the
     [use_shortest_path
     option](shadow_config_spec.md#networkuse_shortest_path) to `False`.
 
 ### Network Graph Attributes
 
-We encode attributes on the vertices and edges that allow for configuring the
+We encode attributes on the nodes and edges that allow for configuring the
 simulated network characteristics. The attributes and their effect on the
 simulated network are described in more detail (alongside a simple example
 graph) on [the network graph specification page](network_graph_spec.md).

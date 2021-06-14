@@ -19,7 +19,7 @@ httpd.serve_forever()
 ```
 
 Shadow requires a configuration file that specifies information about the
-network topology and the processes to run within the simulation. This example
+network graph and the processes to run within the simulation. This example
 uses a built-in network graph for simplicity. Write this configuration file to
 the same directory as the `server.py` Python script above.
 

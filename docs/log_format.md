@@ -19,10 +19,10 @@ real-time [thread-name] virtual-time [loglevel] [hostname:ip] [src-file:line-num
 - `loglevel`:  
   one of `ERROR` < `WARN` < `INFO` < `DEBUG` < `TRACE`, in that order
 - `hostname`:  
-  the name of the node as specified in `hosts.<hostname>` of the simulation
+  the name of the host as specified in `hosts.<hostname>` of the simulation
   config
 - `ip`:  
-  the IP address of the node as specified in `hosts.<hostname>.ip_address_hint`
+  the IP address of the host as specified in `hosts.<hostname>.ip_address_hint`
   of the simulation config, or a random IP address if one is not specified  
 - `src-file`:  
   the name of the source code file where the message is logged

@@ -1,6 +1,6 @@
 # Shadow Configuration Overview
 
-Shadow requires a configuration file that provides a network topology graph and
+Shadow requires a configuration file that provides a network graph and
 information about the processes to run during the simulation. This configuration
 file uses the YAML format. The options and their effect on the simulation are
 described in more detail (alongside a simple example configuration file) on [the

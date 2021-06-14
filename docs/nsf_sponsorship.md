@@ -57,8 +57,8 @@ ACE will be developed with the following features:
    parallel, and we will design ACE such that any number of processes can be
    executed across multiple distinct machines. Therefore, ACE will scale to
    realistically-sized anonymous communication networks containing millions of
-   nodes, and can be deployed on whatever existing infrastructure is available
-   at community members' institutions.
+   virtual hosts, and can be deployed on whatever existing infrastructure is
+   available at community members' institutions.
 
 As part of the ACE framework, we will also develop a **user interface** to
 control and monitor the experimental process, a **toolkit** to help users set up

@@ -10,7 +10,8 @@ attribute has on the simulation.
 ### Example Graph
 
 Below is an example of a simple network graph in the Shadow-supported GML format
-(note that GML calls _vertices_ as _nodes_).
+(note that GML calls graph _vertices_ as _nodes_, but these terms are generally
+interchangeable).
 
 ```gml
 graph [
@@ -38,13 +39,13 @@ graph [
 ### Configurable Attributes
 
 - [`graph.directed`](#graphdirected)
-- [`vertex.id`](#vertexid)
-- [`vertex.label`](#vertexlabel)
-- [`vertex.country_code`](#vertexcountry_code)
-- [`vertex.city_code`](#vertexcity_code)
-- [`vertex.ip_address`](#vertexip_address)
-- [`vertex.bandwidth_down`](#vertexbandwidth_down)
-- [`vertex.bandwidth_up`](#vertexbandwidth_up)
+- [`node.id`](#nodeid)
+- [`node.label`](#nodelabel)
+- [`node.country_code`](#nodecountry_code)
+- [`node.city_code`](#nodecity_code)
+- [`node.ip_address`](#nodeip_address)
+- [`node.bandwidth_down`](#nodebandwidth_down)
+- [`node.bandwidth_up`](#nodebandwidth_up)
 - [`edge.source`](#edgesource)
 - [`edge.target`](#edgetarget)
 - [`edge.label`](#edgelabel)
@@ -61,98 +62,98 @@ Type: Integer
 Specifies the symmetry of the edges in the graph. If set to `0` (the default),
 the graph is an [undirected
 graph](https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)): an edge
-between vertex `u` and vertex `v` is symmetric and can be used to construct a
+between node `u` and node `v` is symmetric and can be used to construct a
 path both from `u` to `v` and from `v` to `u`. If set to `1`, the graph is a
 [directed graph](https://en.wikipedia.org/wiki/Directed_graph): an edge from
-vertex `u` to vertex `v` is assymmetric and can only be used to construct a path
+node `u` to node `v` is assymmetric and can only be used to construct a path
 from `u` to `v` (a separate edge from `v` to `u` must be specified to compose a
 path in the reverse direction).
 
-#### `vertex.id`
+#### `node.id`
 
 Required: True  
 Type: Integer
 
-A unique integer identifier for a given vertex.
+A unique integer identifier for a given node.
 
-#### `vertex.label`
+#### `node.label`
 
 Required: False  
 Default: n/a  
 Type: String
 
-An optional, human-meaningful string description of the vertex. The string may
+An optional, human-meaningful string description of the node. The string may
 be used in log messages printed by Shadow.
 
-#### `vertex.country_code`
+#### `node.country_code`
 
 Required: False  
 Default: n/a  
 Type: String
 
-A code for the country in which the node represented by this vertex is located.
+A code for the country in which the node represented by this node is located.
 This code can be used to control the placement of hosts in the network: when
-attaching a specific host into the network, we ignore any vertex whose
+attaching a specific host into the network, we ignore any node whose
 `country_code` does not match the host's [`country_code_hint` host configuration
 value](shadow_config_spec.md#host_defaultscountry_code_hint) (if one is
 configured).
 
-#### `vertex.city_code`
+#### `node.city_code`
 
 Required: False  
 Default: n/a  
 Type: String
 
-A code for the city in which the node represented by this vertex is located.
+A code for the city in which the node represented by this node is located.
 This code can be used to control the placement of hosts in the network: when
-attaching a specific host into the network, we ignore any vertex whose
+attaching a specific host into the network, we ignore any node whose
 `city_code` does not match the host's [`city_code_hint` host configuration
 value](shadow_config_spec.md#host_defaultscity_code_hint) (if one is
 configured).
 
-#### `vertex.ip_address`
+#### `node.ip_address`
 
 Required: False  
 Default: n/a
 Type: String
 
-An IP address at which the node represented by this vertex is located. This
+An IP address at which the node represented by this node is located. This
 address can be used to control the placement of hosts in the network: after
-filtering vertices based on the city and country codes (as described above), we
+filtering nodes based on the city and country codes (as described above), we
 perform a [longest prefix
 match](https://en.wikipedia.org/wiki/Longest_prefix_match) on the remaining
-vertices by comparing the vertex `ip_address` with the host's [`ip_address_hint`
+nodes by comparing the node `ip_address` with the host's [`ip_address_hint`
 host configuration value](shadow_config_spec.md#host_defaultsip_address_hint)
-(if one is configured) and attach the host to the vertex with the closest match.
+(if one is configured) and attach the host to the node with the closest match.
 We assign the host the address specified in `ip_address_hint` as long as that
 address has not yet been assigned to another host, otherwise we choose a unique
 address nearby to the requested address.
 
-#### `vertex.bandwidth_down`
+#### `node.bandwidth_down`
 
 Required: True  
 Type: String
 
 A string defining the downstream (receive) bandwidth that will be allowed for
-any host attached to this vertex. Hosts may individually override this value in
+any host attached to this node. Hosts may individually override this value in
 [the Shadow config file](shadow_config_spec.md#hostshostnamebandwidth_down).
 The format of the string specifies the bandwidth and its unit as described in
 the [config documentation](shadow_config_spec.md), e.g., `10 Mbit`. Note that
-this bandwidth is allowed for every host that is attached to this vertex; it is
+this bandwidth is allowed for every host that is attached to this node; it is
 **not** the total bandwidth logically available at the node (which is not
 defined).
 
-#### `vertex.bandwidth_up`
+#### `node.bandwidth_up`
 
 Required: True  
 Type: String
 
 A string defining the upstream (send) bandwidth that will be allowed for any
-host attached to this vertex. Hosts may individually override this value in [the
+host attached to this node. Hosts may individually override this value in [the
 Shadow config file](shadow_config_spec.md#hostshostnamebandwidth_up). The
 format of the string specifies the bandwidth and its unit as described in the
 [config documentation](shadow_config_spec.md), e.g., `10 Mbit`. Note that
-this bandwidth is allowed for every host that is attached to this vertex; it is
+this bandwidth is allowed for every host that is attached to this node; it is
 **not** the total bandwidth logically available at the node (which is not
 defined).
 
@@ -161,8 +162,8 @@ defined).
 Required: True  
 Type: Integer
 
-The unique integer identifier of the first of two vertices of the edge. The
-vertex must exist in the graph. If the graph is directed, this vertex is treated
+The unique integer identifier of the first of two nodes of the edge. The
+node must exist in the graph. If the graph is directed, this node is treated
 as the source or start of the edge.
 
 #### `edge.target`
@@ -170,8 +171,8 @@ as the source or start of the edge.
 Required: True  
 Type: Integer
 
-The unique integer identifier of the second of two vertices of the edge. The
-vertex must exist in the graph. If the graph is directed, this vertex is treated
+The unique integer identifier of the second of two nodes of the edge. The
+node must exist in the graph. If the graph is directed, this node is treated
 as the target or end of the edge.
 
 #### `edge.label`
