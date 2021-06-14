@@ -7,7 +7,7 @@ date, or [open a pull request](https://github.com/shadow/shadow/pulls) if you
 can fix it.
 
  * The Shadow simulator
-   * [Design Overview](design_overview.md)
+   * [Design Overview](design_2x.md)
    * Installation Guide
      * [Supported Platforms](supported_platforms.md)
      * [Dependencies](install_dependencies.md)
