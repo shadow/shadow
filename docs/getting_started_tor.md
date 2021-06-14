@@ -9,7 +9,7 @@ This example requires that you have installed (or linked) a Tor executable in
 `~/.local/bin/tor` (see [the Tor install
 REAME)[https://github.com/torproject/tor/blob/main/README]). You also need to
 install (or link) a TGen executable in `~/.local/bin/tgen` (see [the TGen
-installation guide](https://shadow.github.io/docs/guide/tgen)).
+installation guide](https://github.com/shadow/tgen)).
 
 Once Shadow, Tor, and TGen are installed, you can quickly get started running a
 very simple Tor network:
@@ -24,6 +24,6 @@ After the experiment, have a look in the `shadow.data/host/*` directories to
 inspect the individual log files from the Tor relays and TGen clients.
 
 You can use the [tornettools
-toolkit](https://shadow.github.io/docs/guide/tornettools) to run larger, more
+toolkit](https://github.com/shadow/tornettools) to run larger, more
 complex Tor networks that are meant to more accurately resemble the
 characteristics and state of the public Tor network.
