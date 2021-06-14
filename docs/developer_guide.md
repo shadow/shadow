@@ -59,28 +59,35 @@ gdb --pid=PID
 > continue
 ```
 
-### Debugging plugins with gdb
+Note though, that GDB's `follow-fork-mode` setting should be left in its default
+setting of `parent`; see below.
 
-In its default mode of operation, Shadow uses ptrace to control its emulated
-processes. This means that GDB *cannot* attach to those processes. As long as
-GDB's `follow-fork-mode` is `parent` (which is currently the default), it will
-correctly attach to Shadow and its worker threads, but not attempt to attach to
-forked plugin processes.
+### Debugging virtual processes
 
-If a plugin process is crashing (e.g. being killed by a signal within the
-simulation), it is still possible to use gdb to help debug it by generating a
-core file, and using gdb to inspect it afterwards:
+As of Shadow 2.0, virtual processes in the simulation are implemented as native
+OS processes, with their syscalls interposed by Shadow. Since they are native
+processes, many normal tools for inspecting native processes can be used on
+those as well. e.g. `top` will show how much CPU and memory they are using.
+
+However, in its default mode of operation, Shadow uses ptrace to control these
+processes. Since Linux only allows a process to be ptraced by one other process
+at a time, gdb *cannot* attach to those processes.
+
+If a virtual process is crashing (e.g. being killed by a signal within the
+simulation), it is still possible to use gdb to help debug it by causing the
+native process to generate a core file, and then using gdb to inspect it
+afterwards:
 
 ```
 # Enable core dumps
 ulimit -c unlimited
 
-# Run the simulation in which a plugin is crashing
+# Run the simulation in which a process is crashing
 shadow shadow.config.xml
 
 # Tell gdb to inspect the core file. From within gdb you'll be able to
 # inspect the state of the process just before it was killed. 
-gdb <path-to-plugin-executable> <path-to-core-file>
+gdb <path-to-process-executable> <path-to-core-file>
 
 # It's often useful to look at the stack backtrace:
 > bt

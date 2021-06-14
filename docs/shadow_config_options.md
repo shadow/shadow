@@ -281,14 +281,14 @@ Pin each thread and any processes it executes to the same logical CPU Core to im
 Default: false  
 Type: Bool
 
-Send message to plugin telling it to stop spinning when a syscall blocks.
+Send message to managed process telling it to stop spinning when a syscall blocks.
 
 #### `experimental.use_legacy_working_dir`
 
 Default: false  
 Type: Bool
 
-Don't adjust the working directories of the plugins.
+Don't adjust the working directories of the virtual processes.
 
 #### `experimental.use_memory_manager`
 
