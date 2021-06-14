@@ -78,6 +78,10 @@ name = "test_mmap"
 path = "memory/test_mmap.rs"
 
 [[bin]]
+name = "test_unaligned"
+path = "memory/test_unaligned.rs"
+
+[[bin]]
 name = "test_eventfd"
 path = "eventfd/test_eventfd.rs"
 

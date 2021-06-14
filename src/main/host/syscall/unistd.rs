@@ -140,7 +140,7 @@ fn read_helper(
         // call the file's read(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
             posix_file.borrow_mut().read(
-                ctx.process.memory_mut().writer(TypedPluginPtr::new(buf_ptr, buf_size).unwrap()),
+                ctx.process.memory_mut().writer(TypedPluginPtr::new(buf_ptr, buf_size)),
                 offset,
                 event_queue,
             )
@@ -209,7 +209,7 @@ fn write_helper(
         // call the file's write(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
             posix_file.borrow_mut().write(
-                ctx.process.memory().reader(TypedPluginPtr::<u8>::new(buf_ptr, buf_size).unwrap()),
+                ctx.process.memory().reader(TypedPluginPtr::<u8>::new(buf_ptr, buf_size)),
                 offset,
                 event_queue,
             )
@@ -312,7 +312,7 @@ fn pipe_helper(ctx: &mut ThreadContext, fd_ptr: PluginPtr, flags: i32) -> Syscal
     let write_res = ctx
         .process
         .memory_mut()
-        .copy_to_ptr(TypedPluginPtr::new(fd_ptr.into(), 2)?, &fds);
+        .copy_to_ptr(TypedPluginPtr::new(fd_ptr.into(), 2), &fds);
 
     // Clean up in case of error
     match write_res {

@@ -152,7 +152,7 @@ impl ShmFile {
         memory_manager
             .copy_from_ptr(
                 dst,
-                TypedPluginPtr::new_u8(PluginPtr::from(interval.start), interval.len()),
+                TypedPluginPtr::new(PluginPtr::from(interval.start), interval.len()),
             )
             .unwrap()
     }
@@ -360,8 +360,7 @@ impl MemoryMapper {
             let path_buf_plugin_ptr = TypedPluginPtr::new(
                 thread.malloc_plugin_ptr(shm_path.len()).unwrap(),
                 shm_path.len(),
-            )
-            .unwrap();
+            );
             memory_manager
                 .copy_to_ptr(path_buf_plugin_ptr, shm_path.as_bytes())
                 .unwrap();
@@ -956,6 +955,15 @@ impl MemoryMapper {
     // Panics if called with zero-length `src`.
     fn get_mapped_ptr<T: Pod + Debug>(&self, src: TypedPluginPtr<T>) -> Option<*mut T> {
         assert!(src.len() > 0);
+
+        if usize::from(src.ptr()) % std::mem::align_of::<T>() != 0 {
+            // Creating a reference from an unaligned pointer is undefined
+            // behavior in Rust.  Instead of accessing such pointers directly,
+            // we fall back the memory *copier*, which will use a safely aligned
+            // intermediate buffer.
+            trace!("Can't map unaligned pointer {:?}", src);
+            return None;
+        }
 
         let (interval, region) = match self.regions.get(usize::from(src.ptr())) {
             Some((i, r)) => (i, r),

@@ -1,7 +1,7 @@
 use crate::cshadow as c;
 use crate::host::syscall_condition::SysCallCondition;
+use log::Level::Debug;
 use log::*;
-use nix::errno::Errno;
 use std::convert::From;
 use std::marker::PhantomData;
 use std::mem::size_of;
@@ -176,17 +176,30 @@ impl<T> std::fmt::Debug for TypedPluginPtr<T> {
 }
 
 impl<T> TypedPluginPtr<T> {
-    /// Creates a typed pointer if correctly aligned for `T`, or `None` otherwise.
-    pub fn new(ptr: PluginPtr, count: usize) -> Result<Self, Errno> {
-        // Don't create typed pointers with bad alignment.
-        if (u64::from(ptr) as *const T).align_offset(std::mem::align_of::<T>()) != 0 {
-            return Err(Errno::EFAULT);
+    /// Creates a typed pointer. Note though that the pointer *isn't* guaranteed
+    /// to be aligned for `T`.
+    pub fn new(ptr: PluginPtr, count: usize) -> Self {
+        if log_enabled!(Debug) && usize::from(ptr) % std::mem::align_of::<T>() != 0 {
+            // Linux allows unaligned pointers from user-space, being careful to
+            // avoid unaligned accesses that aren's supported by the CPU.
+            // https://www.kernel.org/doc/html/latest/core-api/unaligned-memory-access.html.
+            //
+            // We do the same (e.g. by avoiding direct dereference of such
+            // pointers even if mmap'd into shadow), but some bugs may slip
+            // through (e.g. by asking for a u8 pointer from the mapping code,
+            // but then casting it to some other type). Here we leave a debug
+            // message here as a sign-post that this could be the root cause of
+            // weirdness that happens afterwards.
+            debug!(
+                "Creating unaligned pointer {:?}. This is legal, but could trigger latent bugs.",
+                ptr
+            );
         }
-        Ok(TypedPluginPtr {
+        TypedPluginPtr {
             base: ptr,
             count,
             _phantom: PhantomData,
-        })
+        }
     }
 
     /// Raw plugin pointer.
@@ -199,23 +212,16 @@ impl<T> TypedPluginPtr<T> {
         self.count
     }
 
-    /// Cast to type `U`. Fails if the pointer isn't aligned for `U`, or if total size isn't a multiple of `sizeof<U>`.
+    /// Cast to type `U`. Fails if the total size isn't a multiple of `sizeof<U>`.
     pub fn cast<U>(&self) -> Option<TypedPluginPtr<U>> {
-        if (u64::from(self.base) as *const U).align_offset(std::mem::align_of::<U>()) != 0 {
-            return None;
-        }
         let count_bytes = self.count * size_of::<T>();
         if count_bytes % size_of::<U>() != 0 {
             return None;
         }
-        Some(TypedPluginPtr {
-            base: self.base,
-            count: count_bytes / size_of::<U>(),
-            _phantom: PhantomData,
-        })
+        Some(TypedPluginPtr::new(self.base, count_bytes / size_of::<U>()))
     }
 
-    /// Cast to u8. Infallible since always aligned.
+    /// Cast to u8. Infallible since size_of<u8> is 1.
     pub fn cast_u8(&self) -> TypedPluginPtr<u8> {
         self.cast::<u8>().unwrap()
     }
@@ -245,17 +251,6 @@ impl<T> TypedPluginPtr<T> {
                 },
             },
             count: excluded_end - included_start,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl TypedPluginPtr<u8> {
-    /// Creates a u8 typed pointer. Infallible since u8 is always aligned.
-    pub fn new_u8(ptr: PluginPtr, count: usize) -> Self {
-        TypedPluginPtr {
-            base: ptr,
-            count,
             _phantom: PhantomData,
         }
     }
