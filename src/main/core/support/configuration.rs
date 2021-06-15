@@ -8,7 +8,6 @@ use merge::Merge;
 use once_cell::sync::Lazy;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
-use std::convert::TryInto;
 use std::num::NonZeroU32;
 
 use super::simulation_time::{SIMTIME_ONE_NANOSECOND, SIMTIME_ONE_SECOND};
@@ -1202,7 +1201,7 @@ mod export {
             Some(w) => *w,
             None => {
                 // By default use 1 worker per host.
-                NonZeroU32::new(config.hosts.len().try_into().unwrap()).unwrap()
+                NonZeroU32::new(config_getNHosts(config)).unwrap()
             }
         }
     }
