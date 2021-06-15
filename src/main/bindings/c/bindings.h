@@ -201,6 +201,8 @@ void config_iterHosts(const struct ConfigOptions *config,
                       void (*f)(const char*, const struct ConfigOptions*, const struct HostOptions*, void*),
                       void *data);
 
+uint32_t config_getNHosts(const struct ConfigOptions *config);
+
 void hostoptions_freeString(char *string);
 
 unsigned int hostoptions_getQuantity(const struct HostOptions *host);
