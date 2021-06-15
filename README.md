@@ -21,7 +21,7 @@ Shadow directly executes **real applications**:
 - Shadow directly executes unmodified, real application code using native OS
   (Linux) processes.
 - Shadow co-opts the native processes into a discrete-event simulation by
-  interposing itself at the system call API.
+  interposing at the system call API.
 - The necessary systems calls are emulated such that the applications need not
   be aware that they are running in a Shadow simulation.
 
@@ -41,13 +41,13 @@ code on top of real OS kernels in real time, but are non-determinsitic and have
 limited scalability: time distortion can occur if emulated processes exceed an
 unknown computational threshold, leading to undefined behavior.
 
-Network simulators (e.g., [ns-3](https://www.nsnam.org)) offer more
-experimental control and scalability, but have limited realism because they run
-application abstractions in place of real application code.
+Network simulators (e.g., [ns-3](https://www.nsnam.org)) offer more experimental
+control and scalability, but have limited application-layer realism because they
+run application abstractions in place of real application code.
 
 Shadow offers a novel, hybrid emulation/simulation architecture: it directly
 executes real applications as native OS processes in order to faithfully
-reproduce application behavior while also co-opting the processes into a
+reproduce application-layer behavior while also co-opting the processes into a
 high-performance network simulation that can scale to large distributed systems
 with hundreds of thousands of processes.
 
@@ -57,11 +57,11 @@ Shadow implements **over 150 functions from the system call API**, but does not
 yet fully support all API features. Although applications that make _basic_ use
 of the supported system calls should work out of the box, those that use more
 _complex_ features or functions (e.g., `fork()`) may not yet function correctly
-when running it in Shadow. Extending support for the API is a work-in-progress.
+when running in Shadow. Extending support for the API is a work-in-progress.
 
 That being said, we are particularly motivated to run large-scale [Tor
-Network](https://www.torproject.org) simulations and are eager to add necessary
-functionality in support of this use-case.
+Network](https://www.torproject.org) simulations. This use-case is already
+fairly well-supported and we are eager to continue extending support.
 
 ## Quickstart
 
