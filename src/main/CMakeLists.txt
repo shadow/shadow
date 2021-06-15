@@ -206,6 +206,11 @@ set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/support/logger")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/shim")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")
 
+set(RUST_FEATURES "")
+if(SHADOW_USE_PERF_TIMERS STREQUAL ON)
+  set(RUST_FEATURES "${RUST_FEATURES} perf_timers")
+endif()
+
 include(ExternalProject)
 ## build the rust library
 ExternalProject_Add(
@@ -215,7 +220,7 @@ ExternalProject_Add(
     BUILD_ALWAYS 1
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build ${RUST_BUILD_FLAG} --all-targets --target-dir \"${CMAKE_CURRENT_BINARY_DIR}/target\""
+    BUILD_COMMAND bash -c "${CARGO_ENV_VARS} cargo build ${RUST_BUILD_FLAG} --all-targets --target-dir \"${CMAKE_CURRENT_BINARY_DIR}/target\" --features \"${RUST_FEATURES}\""
     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/target/debug/libshadow_rs.a ${CMAKE_CURRENT_BINARY_DIR}/target/release/libshadow_rs.a
     INSTALL_COMMAND ""
     LOG_BUILD OFF

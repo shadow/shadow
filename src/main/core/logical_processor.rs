@@ -1,16 +1,17 @@
 /*
-
 * The Shadow Simulator
 * Copyright (c) 2010-2011, Rob Jansen
 * See LICENSE for licensing information
 */
 use crate::cshadow;
-use crate::utility::perf_timer::PerfTimer;
+use crate::utility::notnull::*;
 use crossbeam::queue::SegQueue;
 use std::convert::TryFrom;
 use std::convert::TryInto;
-use std::sync::Mutex;
 use std::time::Duration;
+
+#[cfg(feature = "perf_timers")]
+use {crate::utility::perf_timer::PerfTimer, std::sync::Mutex};
 
 /// A set of `n` logical processors
 pub struct LogicalProcessors {
@@ -25,6 +26,7 @@ impl LogicalProcessors {
                 cpu_id: unsafe { cshadow::affinity_getGoodWorkerAffinity() },
                 ready_workers: SegQueue::new(),
                 done_workers: SegQueue::new(),
+                #[cfg(feature = "perf_timers")]
                 idle_timer: Mutex::new(PerfTimer::new()),
             });
         }
@@ -71,16 +73,27 @@ impl LogicalProcessors {
         self.lps[lpi].cpu_id
     }
 
+    #[cfg(feature = "perf_timers")]
     pub fn idle_timer_continue(&self, lpi: usize) {
         self.lps[lpi].idle_timer.lock().unwrap().start();
     }
+    #[cfg(not(feature = "perf_timers"))]
+    pub fn idle_timer_continue(&self, _lpi: usize) {}
 
+    #[cfg(feature = "perf_timers")]
     pub fn idle_timer_stop(&self, lpi: usize) {
         self.lps[lpi].idle_timer.lock().unwrap().stop();
     }
+    #[cfg(not(feature = "perf_timers"))]
+    pub fn idle_timer_stop(&self, _lpi: usize) {}
 
+    #[cfg(feature = "perf_timers")]
     pub fn idle_timer_elapsed(&self, lpi: usize) -> Duration {
         self.lps[lpi].idle_timer.lock().unwrap().elapsed()
+    }
+    #[cfg(not(feature = "perf_timers"))]
+    pub fn idle_timer_elapsed(&self, _lpi: usize) -> Duration {
+        Duration::new(0, 0)
     }
 }
 
@@ -88,6 +101,7 @@ pub struct LogicalProcessor {
     cpu_id: libc::c_int,
     ready_workers: SegQueue<usize>,
     done_workers: SegQueue<usize>,
+    #[cfg(feature = "perf_timers")]
     idle_timer: Mutex<PerfTimer>,
 }
 
@@ -102,7 +116,7 @@ mod export {
     }
     #[no_mangle]
     pub unsafe extern "C" fn lps_free(lps: *mut LogicalProcessors) {
-        unsafe { Box::from_raw(lps) };
+        unsafe { Box::from_raw(notnull_mut_debug(lps)) };
     }
     #[no_mangle]
     pub unsafe extern "C" fn lps_n(lps: *const LogicalProcessors) -> libc::c_int {
