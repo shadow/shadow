@@ -2,7 +2,7 @@
 
 ## set build parameters
 project(Shadow)
-set(SHADOW_VERSION_FULL 2.0.0-pre)
+set(SHADOW_VERSION_FULL 2.0.0-pre.1)
 
 ## This tells cmake to generate a database of compilation commands `compile_commands.json`,
 ## which is used by tools such as YouCompleteMe and include-what-you-use.
