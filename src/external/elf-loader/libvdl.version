@@ -1,9 +1,0 @@
-LIBVDL {
-global:
-	dl_lmid_new;
-	dl_lmid_delete;
-	dl_lmid_add_lib_remap;
-	dl_lmid_add_symbol_remap;
-	dl_lmid_add_callback;
-	dl_lmid_swap_tls;
-};

@@ -1,0 +1,27 @@
+general:
+  stop_time: 5
+network:
+  graph:
+    type: gml
+    inline: |
+      graph [
+        directed 0
+        node [
+          id 0
+          country_code "US"
+          bandwidth_down "81920 Kibit"
+          bandwidth_up "81920 Kibit"
+        ]
+        edge [
+          source 0
+          target 0
+          latency "50 ms"
+          packet_loss 0.0
+        ]
+      ]
+hosts:
+  testnode:
+    quantity: 10
+    processes:
+    - path: test-determinism
+      start_time: 1

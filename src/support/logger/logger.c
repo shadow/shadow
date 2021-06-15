@@ -1,9 +1,11 @@
 #include "support/logger/logger.h"
 
+#include <glib.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/param.h>
 #include <sys/time.h>
 
 static Logger* defaultLogger = NULL;
@@ -53,27 +55,74 @@ int64_t logger_elapsed_micros() {
     return logger_now_micros() - t0;
 }
 
-static void _logger_default_log(LogLevel level, const gchar* fileName,
-                                const gchar* functionName,
-                                const gint lineNumber, const gchar* format,
-                                va_list vargs) {
-    gchar* message = g_strdup_vprintf(format, vargs);
-    gchar* baseName = g_path_get_basename(fileName);
+size_t logger_elapsed_string(char* dst, size_t size) {
+    int64_t unaccounted_micros = logger_elapsed_micros();
 
-    int64_t elapsed_micros = logger_elapsed_micros();
-    struct timeval tv = {
-        .tv_sec = elapsed_micros / G_USEC_PER_SEC,
-        .tv_usec = elapsed_micros % G_USEC_PER_SEC,
-    };
-    struct tm tm;
-    gmtime_r(&tv.tv_sec, &tm);
-    gchar* timeString = g_strdup_printf("%02d:%02d:%02d.%06ld", tm.tm_hour,
-                                        tm.tm_min, tm.tm_sec, tv.tv_usec);
-    g_print("%s %s [%s:%i] [%s] %s\n", timeString, loglevel_toStr(level),
-            baseName, lineNumber, functionName, message);
-    g_free(message);
-    g_free(timeString);
-    g_free(baseName);
+    int hours = unaccounted_micros / (3600LL * G_USEC_PER_SEC);
+    unaccounted_micros %= (3600LL * G_USEC_PER_SEC);
+    int minutes = unaccounted_micros / (60 * G_USEC_PER_SEC);
+    unaccounted_micros %= (60 * G_USEC_PER_SEC);
+    int secs = unaccounted_micros / G_USEC_PER_SEC;
+    unaccounted_micros %= G_USEC_PER_SEC;
+    int micros = unaccounted_micros;
+
+    return snprintf(dst, size, "%02d:%02d:%02d.%06d", hours, minutes, secs, micros);
+}
+
+// Returns a pointer into `filename`, after all directories. Doesn't strip a final path separator.
+//
+// bar       -> bar
+// foo/bar   -> bar
+// /foo/bar  -> bar
+// /foo/bar/ -> bar/
+const char* logger_base_name(const char* filename) {
+    const char* rv = filename;
+    for (const char* pos = filename; *pos != '\0'; ++pos) {
+        if (*pos == '/' && *(pos + 1) != '\0') {
+            rv = pos + 1;
+        }
+    }
+    return rv;
+}
+
+void _logger_default_flush() {
+    fflush(stderr);
+}
+
+static void _logger_default_log(LogLevel level, const char* fileName, const char* functionName,
+                                const int lineNumber, const char* format, va_list vargs) {
+    static __thread bool in_logger = false;
+    if (in_logger) {
+        // Avoid recursing. We do this here rather than in logger_log so that
+        // specialized loggers could potentially do something better than just
+        // dropping the message.
+        return;
+    }
+    if (!logger_isEnabled(NULL, level)) {
+        return;
+    }
+    in_logger = true;
+
+    // Stack-allocated to avoid dynamic allocation.
+    char buf[200];
+    size_t offset = 0;
+
+    // Keep appending to string. These functions all ensure NULL-byte termination.
+    offset += logger_elapsed_string(&buf[offset], sizeof(buf) - offset);
+    offset = MIN(offset, sizeof(buf));
+
+    offset += snprintf(&buf[offset], sizeof(buf) - offset, " %s [%s:%i] [%s] ",
+                       loglevel_toStr(level), logger_base_name(fileName), lineNumber, functionName);
+    offset = MIN(offset, sizeof(buf));
+
+    offset += vsnprintf(&buf[offset], sizeof(buf) - offset, format, vargs);
+    offset = MIN(offset, sizeof(buf));
+
+    offset += fprintf(stderr, "%s\n", buf);
+    offset = MIN(offset, sizeof(buf));
+
+        _logger_default_flush();
+    in_logger = false;
 }
 
 void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
@@ -90,12 +139,30 @@ void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
     }
     va_end(vargs);
     if (level == LOGLEVEL_ERROR) {
-#ifdef DEBUG
-        // Dumps a core file (if the system is configured to do so), but may not
-        // clean up properly. e.g. `atexit` handlers won't be run.
-        abort();
-#else
-        exit(1);
-#endif
+        logger_flush(logger);
+    }
+}
+
+void logger_setLevel(Logger* logger, LogLevel level) {
+    if (!logger) {
+        // Not implemented for default logger.
+    } else {
+        logger->setLevel(logger, level);
+    }
+}
+
+bool logger_isEnabled(Logger* logger, LogLevel level) {
+    if (!logger) {
+        return level > LOGLEVEL_WARNING;
+    } else {
+        return logger->isEnabled(logger, level);
+    }
+}
+
+void logger_flush(Logger* logger) {
+    if (!logger) {
+        _logger_default_flush();
+    } else {
+        logger->flush(logger);
     }
 }

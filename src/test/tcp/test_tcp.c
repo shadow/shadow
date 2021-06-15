@@ -3,6 +3,7 @@
  * See LICENSE for licensing information
  */
 
+#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -25,7 +26,7 @@
 
 #include "test/test_glib_helpers.h"
 
-#define USAGE "USAGE: 'shd-test-tcp iomode type'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client' server_ip|'server')"
+#define USAGE "USAGE: '%s iomode type server_address server_port'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client'|'server')"
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 #define BUFFERSIZE 20000
 #define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
@@ -62,43 +63,6 @@ static void _mylog(const char* fileName, const int lineNum, const char* funcName
     fflush(stdout);
 }
 
-// Get the message queue id
-static int get_msgqueue() {
-    char *endptr;
-    long int message_queue;
-    char* message_queue_string = getenv(MESSAGE_QUEUE_ID_ENV_NAME);
-
-    if (!message_queue_string) {
-        MYLOG("Can't find message queue id in env");
-        exit(EXIT_FAILURE);
-    }
-
-    errno = 0;
-    message_queue = strtol(message_queue_string, &endptr, 10);
-    // Check for various possible errors
-    if ((errno == ERANGE && (message_queue == LONG_MAX || message_queue == LONG_MIN))
-        || (errno != 0 && message_queue == 0)
-        || endptr == message_queue_string) {
-        perror("strtol");
-        exit(EXIT_FAILURE);
-    }
-
-    return message_queue;
-}
-
-static void queue_send_u16(int message_queue, uint16_t i) {
-    IntegerMessage msg = {QUEUE_MTYPE, i};
-
-    assert_true_errno(msgsnd(message_queue, &msg, sizeof(msg.msg), 0) != -1);
-}
-
-static short queue_recv_u16(int message_queue) {
-    IntegerMessage msg;
-
-    assert_true_errno(msgrcv(message_queue, &msg, sizeof(msg.msg), QUEUE_MTYPE, 0) != -1);
-    return msg.msg;
-}
-
 /* fills buffer with size random characters */
 static void _fillcharbuf(char* buffer, int size) {
     for (int i = 0; i < size; i++) {
@@ -115,10 +79,11 @@ static int _wait_poll(int fd, waittype t) {
 
     MYLOG("waiting for io with poll()");
     int result = poll(&p, 1, -1);
+    long errnum = errno; // store errno before we make other syscalls that will overwrite it
     MYLOG("poll() returned %i", result);
 
     if(result < 0) {
-        MYLOG("error in poll(), error was: %s", strerror(errno));
+        MYLOG("error in poll(), error was: %s", strerror(errnum));
         return -1;
     } else if(result == 0) {
         MYLOG("poll() called with infinite timeout, but returned no events");
@@ -131,9 +96,10 @@ static int _wait_poll(int fd, waittype t) {
 
 static int _wait_epoll(int fd, waittype t) {
     int efd = epoll_create(1);
+    long errnum = errno; // store errno before we make other syscalls that will overwrite it
     MYLOG("epoll_create() returned %i", efd);
     if(efd < 0) {
-        MYLOG("error in epoll_create(), error was: %s", strerror(errno));
+        MYLOG("error in epoll_create(), error was: %s", strerror(errnum));
         return -1;
     }
 
@@ -142,9 +108,10 @@ static int _wait_epoll(int fd, waittype t) {
     e.events = (t == WAIT_READ) ? EPOLLIN : EPOLLOUT;
 
     int result = epoll_ctl(efd, EPOLL_CTL_ADD, fd, &e);
+    errnum = errno;
     MYLOG("epoll_ctl() op=EPOLL_CTL_ADD returned %i", result);
     if(result < 0) {
-        MYLOG("error in epoll_ctl() op=EPOLL_CTL_ADD, error was: %s", strerror(errno));
+        MYLOG("error in epoll_ctl() op=EPOLL_CTL_ADD, error was: %s", strerror(errnum));
         return -1;
     }
 
@@ -152,10 +119,11 @@ static int _wait_epoll(int fd, waittype t) {
 
     MYLOG("waiting for io with epoll()");
     result = epoll_wait(efd, &e, 1, -1);
+    errnum = errno;
     MYLOG("epoll_wait() returned %i", result);
 
     if(result < 0) {
-        MYLOG("error in epoll_wait(), error was: %s", strerror(errno));
+        MYLOG("error in epoll_wait(), error was: %s", strerror(errnum));
         return -1;
     } else if(result == 0) {
         MYLOG("epoll_wait() called with infinite timeout, but returned no events");
@@ -163,9 +131,10 @@ static int _wait_epoll(int fd, waittype t) {
     }
 
     result = epoll_ctl(efd, EPOLL_CTL_DEL, fd, NULL);
+    errnum = errno;
     MYLOG("epoll_ctl() op=EPOLL_CTL_DEL returned %i", result);
     if(result < 0) {
-        MYLOG("error in epoll_ctl() op=EPOLL_CTL_DEL, error was: %s", strerror(errno));
+        MYLOG("error in epoll_ctl() op=EPOLL_CTL_DEL, error was: %s", strerror(errnum));
         return -1;
     }
 
@@ -180,10 +149,11 @@ static int _wait_select(int fd, waittype t) {
 
     MYLOG("waiting for io with select()");
     int result = select(fd+1, (t == WAIT_READ) ? &s : NULL, (t == WAIT_WRITE) ? &s : NULL, NULL, NULL);
+    long errnum = errno; // store errno before we make other syscalls that will overwrite it
     MYLOG("select() returned %i", result);
 
     if(result < 0) {
-        MYLOG("error in select(), error was: %s", strerror(errno));
+        MYLOG("error in select(), error was: %s", strerror(errnum));
         return -1;
     } else if(result == 0) {
         MYLOG("select() called with infinite timeout, but returned no events");
@@ -194,26 +164,37 @@ static int _wait_select(int fd, waittype t) {
     }
 }
 
-static int _do_addr(const char* name, struct sockaddr_in* addrout, int message_queue) {
+static int _do_addr(const char* name, int port, struct sockaddr_in* addrout) {
     memset(addrout, 0, sizeof(struct sockaddr_in));
     addrout->sin_family = AF_INET;
     addrout->sin_addr.s_addr = htonl(INADDR_ANY);
-    addrout->sin_port = 0;
+    addrout->sin_port = htons(port);
 
     if(name) {
-        int port = queue_recv_u16(message_queue);
-        addrout->sin_port = htons(port);
-
         /* attempt to get the correct server ip address */
         struct addrinfo* info;
-        int result = getaddrinfo(name, NULL, NULL, &info);
+        struct addrinfo hints = {0};
+        hints.ai_family = AF_INET;
+
+        int result = getaddrinfo(name, NULL, &hints, &info);
+        long errnum = errno; // store errno before we make other syscalls that will overwrite it
         MYLOG("getaddrinfo() returned %i", result);
         if (result < 0) {
-            MYLOG("getaddrinfo() error was: %s", strerror(errno));
+            MYLOG("getaddrinfo() error was: %s", strerror(errnum));
+            return -1;
+        }
+
+        if (info->ai_family != AF_INET) {
+            MYLOG("getaddrinfo() returned the wrong family");
             return -1;
         }
 
         addrout->sin_addr.s_addr = ((struct sockaddr_in*) (info->ai_addr))->sin_addr.s_addr;
+
+        char debug_str[INET_ADDRSTRLEN] = {0};
+        inet_ntop(AF_INET, &(addrout->sin_addr), debug_str, sizeof(debug_str));
+        MYLOG("address is %s", debug_str);
+
         freeaddrinfo(info);
     }
 
@@ -223,17 +204,19 @@ static int _do_addr(const char* name, struct sockaddr_in* addrout, int message_q
 static int _do_socket(int type, int* fdout) {
     /* create a socket and get a socket descriptor */
     int sd = socket(AF_INET, type, 0);
+    long errnum = errno; // store errno before we make other syscalls that will overwrite it
     MYLOG("socket() returned %i", sd);
     if (sd < 0) {
-        MYLOG("socket() error was: %s", strerror(errno));
+        MYLOG("socket() error was: %s", strerror(errnum));
         return -1;
     }
 
     int yes = 1;
     int result = setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+    errnum = errno;
     MYLOG("setsockopt() returned %i", result);
     if(result < 0) {
-        MYLOG("setsockopt() error was: %s", strerror(errno));
+        MYLOG("setsockopt() error was: %s", strerror(errnum));
         return -1;
     }
 
@@ -248,15 +231,16 @@ static int _do_connect(int fd, struct sockaddr_in* serveraddr, iowait_func iowai
     /* connect to server, blocking until the connection is ready */
     while(1) {
         int result = connect(fd, (struct sockaddr *) serveraddr, sizeof(struct sockaddr_in));
+        long errnum = errno; // store errno before we make other syscalls that will overwrite it
         MYLOG("connect() returned %i", result);
-        if (result < 0 && iowait && errno == EINPROGRESS) {
+        if (result < 0 && iowait && errnum == EINPROGRESS) {
             if(iowait(fd, WAIT_WRITE) < 0) {
                 MYLOG("error waiting for connect()");
                 return -1;
             }
             continue;
-        } else if(result < 0) {
-            MYLOG("connect() error was: %s", strerror(errno));
+        } else if (result < 0) {
+            MYLOG("connect() error was %ld: %s", errnum, strerror(errnum));
             return -1;
         } else {
             break;
@@ -265,43 +249,44 @@ static int _do_connect(int fd, struct sockaddr_in* serveraddr, iowait_func iowai
     return 0;
 }
 
-static void send_port_in_queue(int fd, struct sockaddr_in* bindaddr, int message_queue){
-    socklen_t len = sizeof(*bindaddr);
+static int _do_serve(int fd, struct sockaddr_in* bindaddr, iowait_func iowait, int* clientsdout) {
+    // set SO_REUSEPORT so that we can reuse the port if held by a parent process (such as
+    // 'launch_with_unused_ports.py')
+    int yes = 1;
+    int result = setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &yes, sizeof(int));
+    MYLOG("setsockopt() returned %i", result);
 
-    assert_true_errno(getsockname(fd, (struct sockaddr *)bindaddr, &len) != -1);
-    queue_send_u16(message_queue, ntohs(bindaddr->sin_port));
-}
-
-static int _do_serve(int fd, struct sockaddr_in* bindaddr, iowait_func iowait, int* clientsdout, int message_queue) {
     /* bind the socket to the server port */
-    int result = bind(fd, (struct sockaddr *) bindaddr, sizeof(struct sockaddr_in));
-    send_port_in_queue(fd, bindaddr, message_queue);
+    result = bind(fd, (struct sockaddr *) bindaddr, sizeof(struct sockaddr_in));
+    long errnum = errno; // store errno before we make other syscalls that will overwrite it
 
     MYLOG("bind() returned %i", result);
     if (result < 0) {
-        MYLOG("bind() error was: %s", strerror(errno));
+        MYLOG("bind() error was: %s", strerror(errnum));
         return -1;
     }
 
     /* set as server socket that will listen for clients */
     result = listen(fd, 100);
+    errnum = errno;
     MYLOG("listen() returned %i", result);
     if (result == -1) {
-        MYLOG("listen() error was: %s", strerror(errno));
+        MYLOG("listen() error was: %s", strerror(errnum));
         return -1;
     }
 
     /* wait for an incoming connection */
     while(1) {
         result = accept(fd, NULL, NULL);
+        errnum = errno;
         MYLOG("accept() returned %i", result);
-        if (result < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        if (result < 0 && iowait && (errnum == EAGAIN || errnum == EWOULDBLOCK)) {
             if(iowait(fd, WAIT_READ) < 0) {
                 MYLOG("error waiting for accept()");
                 return -1;
             }
-        } else if(result < 0) {
-            MYLOG("accept() error was: %s", strerror(errno));
+        } else if (result < 0) {
+            MYLOG("accept() error was: %s", strerror(errnum));
             return -1;
         } else {
             break;
@@ -321,17 +306,18 @@ static int _do_send(int fd, char* buf, iowait_func iowait) {
     while((amount = BUFFERSIZE - offset) > 0) {
         MYLOG("trying to send %i more bytes", amount);
         ssize_t n = send(fd, &buf[offset], (size_t)amount, 0);
+        long errnum = errno; // store errno before we make other syscalls that will overwrite it
         MYLOG("send() returned %li", (long)n);
 
-        if(n < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        if (n < 0 && iowait && (errnum == EAGAIN || errnum == EWOULDBLOCK)) {
             if(iowait(fd, WAIT_WRITE) < 0) {
                 MYLOG("error waiting for send()");
                 return -1;
             }
-        } else if(n < 0) {
-            MYLOG("send() error was: %s", strerror(errno));
+        } else if (n < 0) {
+            MYLOG("send() error was: %s", strerror(errnum));
             return -1;
-        } else if(n > 0) {
+        } else if (n > 0) {
             MYLOG("sent %li more bytes", (long)n);
             offset += (int)n;
         } else {
@@ -356,17 +342,18 @@ static int _do_recv(int fd, char* buf, iowait_func iowait) {
     while((amount = BUFFERSIZE - offset) > 0) {
         MYLOG("expecting %i more bytes, waiting for data", amount);
         ssize_t n = recv(fd, &buf[offset], (size_t)amount, 0);
+        long errnum = errno; // store errno before we make other syscalls that will overwrite it
         MYLOG("recv() returned %li", (long)n);
 
-        if(n < 0 && iowait && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        if (n < 0 && iowait && (errnum == EAGAIN || errnum == EWOULDBLOCK)) {
             if(iowait(fd, WAIT_READ) < 0) {
                 MYLOG("error waiting for recv()");
                 return -1;
             }
-        } else if(n < 0) {
-            MYLOG("recv() error was: %s", strerror(errno));
+        } else if (n < 0) {
+            MYLOG("recv() error was: %s", strerror(errnum));
             return -1;
-        } else if(n > 0) {
+        } else if (n > 0) {
             MYLOG("got %li more bytes", (long)n);
             offset += (int)n;
         } else {
@@ -710,9 +697,32 @@ static int _test_iov_server(int clientfd)
     return 0;
 }
 
-static int _run_client(iowait_func iowait, const char* servername, const int use_iov, int message_queue) {
+static uint16_t _parse_port(const char* str, int* error) {
+    *error = 0;
+
+    char* endptr;
+    errno = 0;
+    long server_port_long = strtol(str, &endptr, 10);
+    // Check for various possible errors
+    if ((errno == ERANGE && (server_port_long == LONG_MAX || server_port_long == LONG_MIN)) ||
+        (errno != 0 && server_port_long == 0) || endptr == str) {
+        MYLOG("error, could not parse port number: %s", strerror(errno));
+        *error = 1;
+        return 0;
+    }
+
+    if (server_port_long < 0 || server_port_long > USHRT_MAX) {
+        MYLOG("error, %d is not a valid port", server_port_long);
+        *error = 1;
+        return 0;
+    }
+
+    return server_port_long;
+}
+
+static int _run_client(iowait_func iowait, const char* servername, int serverport, const int use_iov) {
     struct sockaddr_in serveraddr;
-    if(_do_addr(servername, &serveraddr, message_queue) < 0) {
+    if(_do_addr(servername, serverport, &serveraddr) < 0) {
         return -1;
     }
 
@@ -766,7 +776,7 @@ static int _run_client(iowait_func iowait, const char* servername, const int use
     return 0;
 }
 
-static int _run_server(iowait_func iowait, int use_iov, int message_queue) {
+static int _run_server(iowait_func iowait, const char *servername, int serverport, int use_iov) {
     int listensd;
     int type = iowait ? (SOCK_STREAM|SOCK_NONBLOCK) : SOCK_STREAM;
     if(_do_socket(type, &listensd) < 0) {
@@ -775,12 +785,12 @@ static int _run_server(iowait_func iowait, int use_iov, int message_queue) {
 
     /* setup the socket address info, client has outgoing connection to server */
     struct sockaddr_in bindaddr;
-    if(_do_addr(NULL, &bindaddr, message_queue) < 0) {
+    if(_do_addr(servername, serverport, &bindaddr) < 0) {
         return -1;
     }
 
     int clientsd;
-    if(_do_serve(listensd, &bindaddr, iowait, &clientsd, message_queue) < 0) {
+    if(_do_serve(listensd, &bindaddr, iowait, &clientsd) < 0) {
         return -1;
     }
 
@@ -812,18 +822,24 @@ static int _run_server(iowait_func iowait, int use_iov, int message_queue) {
 int main(int argc, char *argv[]) {
     MYLOG("########## tcp test starting ##########");
 
-    MYLOG("program started; %s", USAGE);
+    MYLOG("program started");
+    if (argv[0] != NULL) {
+        MYLOG(USAGE, argv[0]);
+    }
 
-    if(argc < 3) {
-        MYLOG("error, iomode and type not specified in args; see usage");
+    if(argc < 5) {
+        MYLOG("error, not enough args; see usage");
         return -1;
     }
 
     const char *io_mode = argv[1];
     const char *execution_mode = argv[2];
+    const char *server_addr = argv[3];
+    const char *server_port_str = argv[4];
+
     iowait_func wait = NULL;
     int use_iov = 0;
-    int message_queue = get_msgqueue();
+    uint16_t server_port = 0;
 
     if(strncasecmp(io_mode, "blocking", 8) == 0) {
         wait = NULL;
@@ -841,17 +857,20 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    int parse_error = 0;
+    server_port = _parse_port(server_port_str, &parse_error);
+    if (parse_error != 0) {
+        MYLOG("error, could not parse the server port '%s'; see usage", server_port_str);
+        return -1;
+    }
+
     int result = 0;
     if(strncasecmp(execution_mode, "client", 5) == 0) {
-        if(argc < 4) {
-            MYLOG("error, client mode also needs a server ip address; see usage");
-            return -1;
-        }
         MYLOG("running client in mode %s", io_mode);
-        result = _run_client(wait, argv[3], use_iov, message_queue);
+        result = _run_client(wait, server_addr, server_port, use_iov);
     } else if(strncasecmp(execution_mode, "server", 6) == 0) {
         MYLOG("running server in mode %s", io_mode);
-        result = _run_server(wait, use_iov, message_queue);
+        result = _run_server(wait, server_addr, server_port, use_iov);
     } else {
         MYLOG("error, invalid type specified; see usage");
         result = -1;

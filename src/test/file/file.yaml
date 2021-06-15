@@ -1,0 +1,14 @@
+general:
+  stop_time: 5
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    processes:
+    - path: test-file
+      # The LD_LIBRARY_PATH here points to where we put the patched libc binaries in
+      # our CI, to work around https://github.com/shadow/shadow/issues/892.  It should
+      # have no effect in environments where that directory doesn't exist.
+      environment: LD_LIBRARY_PATH=/opt/libc-interpose-centos7
+      start_time: 1

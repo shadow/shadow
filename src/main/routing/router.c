@@ -12,7 +12,6 @@
 #include <glib.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/network_interface.h"
 #include "main/routing/packet.h"
@@ -54,7 +53,7 @@ Router* router_new(QueueManagerMode queueMode, void* interface) {
     } else if(router->queueMode == QUEUE_MANAGER_CODEL) {
         router->queueHooks = routerqueuecodel_getHooks();
     } else {
-        error("Queue manager mode %i is undefined", (int)queueMode);
+        utility_panic("Queue manager mode %i is undefined", (int)queueMode);
     }
 
     utility_assert(router->queueHooks->new);
@@ -65,7 +64,7 @@ Router* router_new(QueueManagerMode queueMode, void* interface) {
 
     router->queueManager = router->queueHooks->new();
 
-    worker_countObject(OBJECT_TYPE_ROUTER, COUNTER_TYPE_NEW);
+    worker_count_allocation(Router);
     return router;
 }
 
@@ -76,7 +75,7 @@ static void _router_free(Router* router) {
 
     MAGIC_CLEAR(router);
     g_free(router);
-    worker_countObject(OBJECT_TYPE_ROUTER, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Router);
 }
 
 void router_ref(Router* router) {
@@ -93,15 +92,15 @@ void router_unref(Router* router) {
     }
 }
 
-void router_forward(Router* router, Packet* packet) {
+void router_forward(Router* router, Host* src, Packet* packet) {
     MAGIC_ASSERT(router);
     /* just immediately forward the sending task to the worker, who will compute the
      * path and the appropriate delays to the destination. The packet will arrive
      * at the destination's router after a delay equal to the network latency.  */
-    worker_sendPacket(packet);
+    worker_sendPacket(src, packet);
 }
 
-void router_enqueue(Router* router, Packet* packet) {
+void router_enqueue(Router* router, Host* host, Packet* packet) {
     MAGIC_ASSERT(router);
     utility_assert(packet);
 
@@ -117,7 +116,7 @@ void router_enqueue(Router* router, Packet* packet) {
 
     /* notify the netiface that we have a new packet so it can dequeue it. */
     if(!bufferedPacket && wasQueued) {
-        networkinterface_receivePackets(router->interface);
+        networkinterface_receivePackets(router->interface, host);
     }
 }
 

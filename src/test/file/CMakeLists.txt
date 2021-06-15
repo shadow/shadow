@@ -1,12 +1,10 @@
 include_directories(${GLIB_INCLUDES})
 link_libraries(${GLIB_LIBRARIES})
-
-## build the test as a dynamic executable that plugs into shadow
-add_shadow_plugin(shadow-plugin-test-file test_file.c)
-
-## create and install an executable that can run outside of shadow
 add_executable(test-file test_file.c)
+add_linux_tests(BASENAME file COMMAND test-file)
 
-## register the tests
-add_test(NAME file COMMAND test-file)
-add_test(NAME file-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d file.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/file.test.shadow.config.xml)
+# run using different rng seeds since we use mkstemp()
+add_shadow_tests(BASENAME file METHODS hybrid ARGS "--seed 0")
+add_shadow_tests(BASENAME file METHODS ptrace ARGS "--seed 1")
+# FIXME: Enable in all configurations. See https://github.com/shadow/shadow/issues/892
+add_shadow_tests(BASENAME file METHODS preload CONFIGURATIONS ilibc ARGS "--seed 2")

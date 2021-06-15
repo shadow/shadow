@@ -1,0 +1,11 @@
+general:
+  stop_time: 2
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    processes:
+    - path: ../target/debug/test_pthreads
+      args: --shadow-passing
+      start_time: 1

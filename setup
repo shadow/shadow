@@ -15,7 +15,7 @@ import logging
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
 
 BUILD_PREFIX="./build"
-INSTALL_PREFIX=os.path.expanduser("~/.shadow")
+INSTALL_PREFIX=os.path.expanduser("~/.local")
 
 def main():
     parser_main = argparse.ArgumentParser(
@@ -44,13 +44,13 @@ def main():
         help="append PATH to the list of paths searched for headers. useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
         metavar="PATH",
         action="append", dest="extra_includes",
-        default=[INSTALL_PREFIX+ "/include"])
+        default=[])
 
     parser_build.add_argument('-l', '--library',
         help="append PATH to the list of paths searched for libraries. useful if dependencies are installed to non-standard locations, or when compiling custom libraries.",
         metavar="PATH",
         action="append", dest="extra_libraries",
-        default=[INSTALL_PREFIX+ "/lib"])
+        default=[])
 
     parser_build.add_argument('-c', '--clean',
         help="force a full rebuild of Shadow by removing build cache",
@@ -60,6 +60,16 @@ def main():
     parser_build.add_argument('-g', '--debug',
         help="build in extra memory checks and debugging symbols when running Shadow",
         action="store_true", dest="do_debug",
+        default=False)
+
+    parser_build.add_argument('-C', '--coverage',
+        help="enable profiling data for code coverage reporting",
+        action="store_true", dest="do_coverage",
+        default=False)
+
+    parser_build.add_argument('--use-c-syscalls',
+        help="use only the C syscall handlers (disables Rust syscall handlers)",
+        action="store_true", dest="do_use_c_syscalls",
         default=False)
 
     parser_build.add_argument('--use-perf-timers',
@@ -76,7 +86,7 @@ def main():
         help="number of jobs to run simultaneously during the build",
         metavar="N", type=int,
         action="store", dest="njobs",
-        default=1)#multiprocessing.cpu_count())
+        default=multiprocessing.cpu_count())
 
     parser_build.add_argument('-o', '--profile',
         help="build in gprof profiling information when running Shadow",
@@ -114,11 +124,15 @@ def main():
     parser_test.set_defaults(func=test,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+    parser_test.add_argument('testname_regex',
+        help="run only the tests that match this regex", metavar="testname-regex", nargs="?")
+
     parser_test.add_argument('-j', '--jobs',
         help="number of tests to run simultaneously during testing",
         metavar="N", type=int,
         action="store", dest="njobs",
-        default=4)#multiprocessing.cpu_count())
+        # use a minimum of 4 jobs by default
+        default=max(4, multiprocessing.cpu_count()))
 
     parser_test.add_argument('-r', '--rerun-failed',
         help="Run only the tests that failed previously",
@@ -145,15 +159,22 @@ def main():
     parser_install.set_defaults(func=install,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+    # parse arguments after '--' separately
+    argv = sys.argv[1:]
+    remaining = []
+    if '--' in argv:
+        index = argv.index('--')
+        (argv, remaining) = (argv[:index], argv[index+1:])
+
     # get arguments, accessible with args.value
-    args = parser_main.parse_args()
+    args = parser_main.parse_args(argv)
     # run chosen command
-    r = args.func(args)
+    r = args.func(args, remaining)
 
     logging.debug("setup is returning code '{0}'".format(r))
     sys.exit(r)
 
-def build(args):
+def build(args, remaining):
     # get absolute paths
     if args.prefix is not None: args.prefix = getfullpath(args.prefix)
 
@@ -184,7 +205,14 @@ def build(args):
     if args.disable_tgen: cmake_cmd += " -DBUILD_TGEN=OFF"
     if args.do_valgrind: cmake_cmd += " -DLOADER_VALGRIND=ON"
     if args.do_werror: cmake_cmd += " -DSHADOW_WERROR=ON"
+    if args.do_use_c_syscalls: cmake_cmd += " -DSHADOW_USE_C_SYSCALLS=ON"
     if args.do_use_perf_timers: cmake_cmd += " -DSHADOW_USE_PERF_TIMERS=ON"
+
+    if args.do_coverage:
+        if not args.do_debug:
+            logging.warning("You usually want to enable --debug for coverage"
+                    + " builds")
+        cmake_cmd += " -DSHADOW_COVERAGE=ON"
 
     # we will run from build directory
     calledDirectory = os.getcwd()
@@ -233,7 +261,7 @@ def build(args):
     os.chdir(calledDirectory)
     return retcode
 
-def test(args):
+def test(args, remaining):
     testdir=getfullpath(BUILD_PREFIX)
 
     if not os.path.exists(testdir+'/CTestTestfile.cmake'):
@@ -245,22 +273,28 @@ def test(args):
     os.chdir(testdir)
 
     # test, wait for it to finish
-    testcmd = "ctest --output-on-failure -j{0} --timeout {1}".format(args.njobs, args.timeout)
+    testcmd = "ctest -j{0} --timeout {1}".format(args.njobs, args.timeout)
     if args.do_verbose:
         testcmd += " --verbose"
 
     if args.rerun_failed:
         testcmd += " --rerun-failed"
 
-    logging.info("calling \'"+testcmd+"\'")
-    retcode = subprocess.call(testcmd.strip().split())
+    if args.testname_regex is not None:
+        testcmd += " -R {}".format(args.testname_regex)
+
+    # pass the remaining arguments (the arguments after a '--') directly to ctest
+    testcmd = testcmd.strip().split() + remaining
+
+    logging.info("calling '{}'".format(' '.join(testcmd)))
+    retcode = subprocess.call(testcmd)
     logging.info(str(testcmd) + " returned " + str(retcode))
 
     # go back to where we came from
     os.chdir(calledDirectory)
     return retcode
 
-def install(args):
+def install(args, remaining):
     builddir=getfullpath(BUILD_PREFIX)
     if not os.path.exists(builddir):
         logging.error("please build before installing!")

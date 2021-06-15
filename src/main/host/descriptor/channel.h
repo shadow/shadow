@@ -7,6 +7,8 @@
 #ifndef SHD_CHANNEL_H_
 #define SHD_CHANNEL_H_
 
+#include "main/host/descriptor/descriptor_types.h"
+
 #include <glib.h>
 
 typedef enum _ChannelType ChannelType;
@@ -16,7 +18,7 @@ enum _ChannelType {
 
 typedef struct _Channel Channel;
 
-Channel* channel_new(gint handle, ChannelType type);
+Channel* channel_new(ChannelType type, LegacyDescriptorType dtype);
 void channel_setLinkedChannel(Channel* channel, Channel* linkedChannel);
 Channel* channel_getLinkedChannel(Channel* channel);
 

@@ -1,0 +1,11 @@
+general:
+  # Should be greater than NUM_SECONDS from test_threads_group_leader_exits.rs
+  stop_time: 10
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    processes:
+    - path: ../target/debug/test_threads_group_leader_exits
+      start_time: 1

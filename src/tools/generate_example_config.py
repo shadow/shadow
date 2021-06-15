@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import sys, networkx as nx
 from lxml import etree
@@ -22,7 +22,7 @@ def generate_shadow():
 
     e = etree.SubElement(root, "plugin")
     e.set("id", "tgen")
-    e.set("path", "~/.shadow/bin/tgen")
+    e.set("path", "~/.local/bin/tgen")
 
     e = etree.SubElement(root, "node")
     e.set("id", "server")

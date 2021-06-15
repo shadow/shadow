@@ -1,0 +1,33 @@
+general:
+  stop_time: 10
+network:
+  graph:
+    type: gml
+    inline: |
+      graph [
+        directed 0
+        node [
+          id 0
+          country_code "US"
+          bandwidth_down "81920 Kibit"
+          bandwidth_up "81920 Kibit"
+        ]
+        edge [
+          source 0
+          target 0
+          latency "50 ms"
+          packet_loss 0.0
+        ]
+      ]
+hosts:
+  peer:
+    quantity: 10
+    processes:
+    - path: test-phold
+      args: loglevel=info basename=peer quantity=10 msgload=1 cpuload=1 size=1
+        weightsfilepath=../../../weights.txt runtime=5
+      # The LD_LIBRARY_PATH here points to where we put the patched libc binaries in
+      # our CI, to work around https://github.com/shadow/shadow/issues/892.  It should
+      # have no effect in environments where that directory doesn't exist.
+      environment: LD_LIBRARY_PATH=/opt/libc-interpose-centos7
+      start_time: 1

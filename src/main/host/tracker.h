@@ -11,14 +11,12 @@
 #include <netinet/in.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/options.h"
 #include "main/host/protocol.h"
-#include "main/routing/packet.h"
+#include "main/host/tracker_types.h"
+#include "main/routing/packet.minimal.h"
 #include "support/logger/log_level.h"
 
-typedef struct _Tracker Tracker;
-
-Tracker* tracker_new(SimulationTime interval, LogLevel loglevel, LogInfoFlags loginfo);
+Tracker* tracker_new(Host* host, SimulationTime interval, LogLevel loglevel, LogInfoFlags loginfo);
 void tracker_free(Tracker* tracker);
 
 void tracker_addProcessingTime(Tracker* tracker, SimulationTime processingTime);
@@ -32,6 +30,9 @@ void tracker_updateSocketPeer(Tracker* tracker, gint handle, in_addr_t peerIP, i
 void tracker_updateSocketInputBuffer(Tracker* tracker, gint handle, gsize inputBufferLength, gsize inputBufferSize);
 void tracker_updateSocketOutputBuffer(Tracker* tracker, gint handle, gsize outputBufferLength, gsize outputBufferSize);
 void tracker_removeSocket(Tracker* tracker, gint handle);
-void tracker_heartbeat(Tracker* tracker, gpointer userData);
+void tracker_heartbeat(Tracker* tracker, Host* host);
+static inline void tracker_heartbeatTask(Host* host, gpointer tracker, gpointer userData) {
+    tracker_heartbeat(tracker, host);
+}
 
 #endif /* SHD_TRACKER_H_ */

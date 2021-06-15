@@ -11,7 +11,6 @@
 #include <string.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/options.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/protocol.h"
@@ -126,7 +125,7 @@ static void _socketstats_free(SocketStats* ss) {
     }
 }
 
-Tracker* tracker_new(SimulationTime interval, LogLevel loglevel, LogInfoFlags loginfo) {
+Tracker* tracker_new(Host* host, SimulationTime interval, LogLevel loglevel, LogInfoFlags loginfo) {
     Tracker* tracker = g_new0(Tracker, 1);
     MAGIC_INIT(tracker);
 
@@ -138,7 +137,7 @@ Tracker* tracker_new(SimulationTime interval, LogLevel loglevel, LogInfoFlags lo
     tracker->socketStats = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify)_socketstats_free);
 
     /* send an alive message, and start periodic heartbeats */
-    tracker_heartbeat(tracker, NULL);
+    tracker_heartbeat(tracker, host);
 
     return tracker;
 }
@@ -563,7 +562,7 @@ static void _tracker_logRAM(Tracker* tracker, LogLevel level, SimulationTime int
         tracker->allocatedBytesTotal, numptrs, tracker->numFailedFrees);
 }
 
-void tracker_heartbeat(Tracker* tracker, gpointer userData) {
+void tracker_heartbeat(Tracker* tracker, Host* host) {
     MAGIC_ASSERT(tracker);
 
     /* check to see if node info is being logged */
@@ -604,8 +603,7 @@ void tracker_heartbeat(Tracker* tracker, gpointer userData) {
 
     /* schedule the next heartbeat */
     tracker->lastHeartbeat = worker_getCurrentTime();
-    Task* heartbeatTask = task_new((TaskCallbackFunc)tracker_heartbeat,
-            tracker, NULL, NULL, NULL);
-    worker_scheduleTask(heartbeatTask, tracker->interval);
+    Task* heartbeatTask = task_new(tracker_heartbeatTask, tracker, NULL, NULL, NULL);
+    worker_scheduleTask(heartbeatTask, host, tracker->interval);
     task_unref(heartbeatTask);
 }

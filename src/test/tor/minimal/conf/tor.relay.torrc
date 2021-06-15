@@ -1,0 +1,3 @@
+ORPort 9111 IPv4Only
+DirPort 9112
+SocksPort 0

@@ -30,7 +30,13 @@ target_link_libraries(shadow-plugin-test-dynlink ${DL_LIBRARIES} ${GLIB_LIBRARIE
 
 ## register the test
 add_test(NAME dynlink COMMAND shadow-test-dynlink)
-add_test(NAME dynlink-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d dynlink.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/dynlink.test.shadow.config.xml)
+add_test(
+    NAME dynlink-shadow
+    COMMAND sh -c "\
+    ${yaml2xml} ${CMAKE_CURRENT_SOURCE_DIR}/dynlink.test.shadow.config.yaml --output - \
+    ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d dynlink.shadow.data - \
+    "
+)
 SET_TESTS_PROPERTIES(dynlink-shadow PROPERTIES ENVIRONMENT "LD_STATIC_TLS_EXTRA=102400")
 
 ##########################

@@ -12,9 +12,10 @@
 #include <stddef.h>
 #include <sys/types.h>
 
-#include "main/core/logger/shadow_logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
+#include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
 #include "main/core/worker.h"
@@ -24,12 +25,8 @@
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
-static int _maxConcurrency = -1;
-OPTION_EXPERIMENTAL_ENTRY("max-concurrency", 0, 0, G_OPTION_ARG_INT,
-                          &_maxConcurrency,
-                          "Maximum number of workers to allow to run at once. "
-                          "Set to -1 for no limit. [-1]",
-                          "N")
+static int _parallelism;
+ADD_CONFIG_HANDLER(config_getParallelism, _parallelism)
 
 struct _Scheduler {
     // Unowned back-pointer.
@@ -70,9 +67,9 @@ static void _scheduler_startHostsWorkerTaskFn(void* voidScheduler) {
         GQueue* myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
         if(myHosts) {
             guint nHosts = g_queue_get_length(myHosts);
-            message("starting to boot %u hosts", nHosts);
+            info("starting to boot %u hosts", nHosts);
             worker_bootHosts(myHosts);
-            message("%u hosts are booted", nHosts);
+            info("%u hosts are booted", nHosts);
         }
     }
 }
@@ -94,9 +91,6 @@ static void _scheduler_runEventsWorkerTaskFn(void* voidScheduler) {
 
     // We'll compute the global min time across all workers.
     worker_setMinEventTimeNextRound(minQTime);
-
-    // Clear all log messages we queued during this round.
-    shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
 }
 
 static void _scheduler_finishTaskFn(void* voidScheduler) {
@@ -132,9 +126,8 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
     // Unowned back-pointer
     scheduler->manager = manager;
 
-    scheduler->workerPool =
-        workerpool_new(manager, scheduler, /*nThreads=*/nWorkers,
-                       /*nConcurrent=*/_maxConcurrency);
+    scheduler->workerPool = workerpool_new(manager, scheduler, /*nThreads=*/nWorkers,
+                                           /*nParallel=*/_parallelism);
 
     scheduler->endTime = endTime;
     scheduler->currentRound.endTime = scheduler->endTime;// default to one single round
@@ -144,14 +137,8 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
 
     scheduler->random = random_new(schedulerSeed);
 
-    /* ensure we have sane default modes for the number of workers we are using */
-    if(nWorkers == 0) {
-        scheduler->policyType = SP_SERIAL_GLOBAL;
-    } else if(nWorkers > 0 && policyType == SP_SERIAL_GLOBAL) {
-        scheduler->policyType = SP_PARALLEL_HOST_STEAL;
-    } else {
-        scheduler->policyType = policyType;
-    }
+    utility_assert(nWorkers >= 1);
+    scheduler->policyType = policyType;
 
     /* create the configured policy to handle queues */
     switch(scheduler->policyType) {
@@ -160,14 +147,13 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
             break;
         }
         case SP_PARALLEL_HOST_STEAL: {
-            if (scheduler->policyType == SP_PARALLEL_HOST_STEAL &&
-                nWorkers > _maxConcurrency) {
+            if (nWorkers > _parallelism) {
                 // Proceeding will cause the scheduler to deadlock, since the
                 // work stealing scheduler threads spin-wait for each-other to
                 // finish.
-                error("Host stealing scheduler is incompatible with "
-                      "--max-concurrency > --workers");
-                abort();
+                error("Host stealing scheduler is incompatible with --worker_threads > "
+                      "--parallelism");
+                exit(1);
             }
             scheduler->policy = schedulerpolicyhoststeal_new();
             break;
@@ -184,18 +170,13 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
             scheduler->policy = schedulerpolicythreadperhost_new();
             break;
         }
-        case SP_SERIAL_GLOBAL:
-        default: {
-            scheduler->policy = schedulerpolicyglobalsingle_new();
-            break;
-        }
     }
     utility_assert(scheduler->policy);
 
     /* make sure our ref count is set before starting the threads */
     scheduler->referenceCount = 1;
 
-    message("main scheduler thread will operate with %u worker threads", nWorkers);
+    info("main scheduler thread will operate with %u worker threads", nWorkers);
 
     return scheduler;
 }
@@ -203,15 +184,14 @@ Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,
 void scheduler_shutdown(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
 
-    message("scheduler is shutting down now");
+    info("scheduler is shutting down now");
 
     /* this launches delete on all the plugins and should be called before
      * the engine is marked "killed" and workers are destroyed, so that
      * each plug-in is able to destroy/free its virtual nodes properly */
     g_hash_table_destroy(scheduler->hostIDToHostMap);
 
-    message("waiting for %d worker threads to finish",
-            workerpool_getNWorkers(scheduler->workerPool));
+    info("waiting for %d worker threads to finish", workerpool_getNWorkers(scheduler->workerPool));
     workerpool_joinAll(scheduler->workerPool);
 }
 
@@ -224,8 +204,7 @@ static void _scheduler_free(Scheduler* scheduler) {
 
     g_mutex_clear(&(scheduler->globalLock));
 
-    message("%d worker threads finished",
-            workerpool_getNWorkers(scheduler->workerPool));
+    info("%d worker threads finished", workerpool_getNWorkers(scheduler->workerPool));
     workerpool_free(scheduler->workerPool);
 
     MAGIC_CLEAR(scheduler);
@@ -357,29 +336,14 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
     g_hash_table_foreach(scheduler->hostIDToHostMap, (GHFunc)_scheduler_appendHostToQueue, hosts);
 
     int nWorkers = workerpool_getNWorkers(scheduler->workerPool);
-    if (nWorkers <= 1) {
-        /* either the main thread or the single worker gets everything */
-        pthread_t chosen;
-        if (nWorkers == 0) {
-            chosen = pthread_self();
-        } else {
-            chosen = workerpool_getThread(scheduler->workerPool, 0);
-        }
+    /* we need to shuffle the list of hosts to make sure they are randomly assigned */
+    _scheduler_shuffleQueue(scheduler, hosts);
 
-        /* assign *all* of the hosts to the chosen thread */
-        _scheduler_assignHostsToThread(scheduler, hosts, chosen, 0);
-        utility_assert(g_queue_is_empty(hosts));
-    } else {
-        /* we need to shuffle the list of hosts to make sure they are randomly assigned */
-        _scheduler_shuffleQueue(scheduler, hosts);
-
-        /* now that our host order has been randomized, assign them evenly to worker threads */
-        int workeri = 0;
-        while(!g_queue_is_empty(hosts)) {
-            pthread_t nextThread = workerpool_getThread(scheduler->workerPool,
-                                                        workeri++ % nWorkers);
-            _scheduler_assignHostsToThread(scheduler, hosts, nextThread, 1);
-        }
+    /* now that our host order has been randomized, assign them evenly to worker threads */
+    int workeri = 0;
+    while (!g_queue_is_empty(hosts)) {
+        pthread_t nextThread = workerpool_getThread(scheduler->workerPool, workeri++ % nWorkers);
+        _scheduler_assignHostsToThread(scheduler, hosts, nextThread, 1);
     }
 
     if(hosts) {
@@ -388,9 +352,9 @@ static void _scheduler_assignHosts(Scheduler* scheduler) {
     g_mutex_unlock(&scheduler->globalLock);
 }
 
-static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
+__attribute__((unused)) static void _scheduler_rebalanceHosts(Scheduler* scheduler) {
     MAGIC_ASSERT(scheduler);
-    error("Unimplemented");
+    utility_panic("Unimplemented");
 
     // WARNING if this is run, then all existing eventSequenceCounters
     // need to get set to the max of all existing counters to ensure order correctness

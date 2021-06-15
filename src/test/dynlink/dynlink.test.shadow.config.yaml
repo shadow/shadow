@@ -1,0 +1,11 @@
+general:
+  stop_time: 5
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    quantity: 1
+    processes:
+    - path: libshadow-plugin-test-dynlink.so
+      start_time: 1

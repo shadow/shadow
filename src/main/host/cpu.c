@@ -25,6 +25,7 @@ struct _CPU {
 
 CPU* cpu_new(guint64 frequencyKHz, guint64 rawFrequencyKHz, guint64 threshold, guint64 precision) {
     utility_assert(frequencyKHz > 0);
+    utility_assert(rawFrequencyKHz > 0);
     CPU* cpu = g_new0(CPU, 1);
     MAGIC_INIT(cpu);
 
@@ -33,16 +34,8 @@ CPU* cpu_new(guint64 frequencyKHz, guint64 rawFrequencyKHz, guint64 threshold, g
     cpu->precision = precision > 0 ? (precision * SIMTIME_ONE_MICROSECOND) : SIMTIME_INVALID;
     cpu->timeCPUAvailable = cpu->now = 0;
 
-    /* get the raw speed of the experiment machine */
-    if(!rawFrequencyKHz) {
-        warning("unable to determine raw CPU frequency, setting %lu KHz as a raw "
-                "estimate, and using delay ratio of 1.0 to the simulator host", cpu->frequencyKHz);
-        cpu->rawFrequencyKHz = cpu->frequencyKHz;
-        cpu->frequencyRatio = 1.0;
-    } else {
-        cpu->rawFrequencyKHz = rawFrequencyKHz;
-        cpu->frequencyRatio = (gdouble)((gdouble)cpu->rawFrequencyKHz) / ((gdouble)cpu->frequencyKHz);
-    }
+    cpu->rawFrequencyKHz = rawFrequencyKHz;
+    cpu->frequencyRatio = (gdouble)((gdouble)cpu->rawFrequencyKHz) / ((gdouble)cpu->frequencyKHz);
 
     return cpu;
 }

@@ -1,0 +1,39 @@
+general:
+  stop_time: 3600
+network:
+  use_shortest_path: false
+  graph:
+    type: gml
+    inline: |
+      graph [
+        directed 1
+        node [
+          id 0
+          label "poi-1"
+          country_code "US"
+          bandwidth_down "81920 Kibit"
+          bandwidth_up "81920 Kibit"
+        ]
+        edge [
+          source 0
+          target 0
+          latency "50 ms"
+          packet_loss 0.0
+        ]
+      ]
+hosts:
+  testclient:
+    quantity: 1
+    bandwidth_down: 8000 Kibit
+    processes:
+    - start_time: 1
+      args: client 5678
+      path: test-config-convert
+      environment: HELLO=WORLD;LD_PRELOAD=/tor/shim/path.so
+  testserver:
+    quantity: 1
+    processes:
+    - start_time: 1
+      args: server 5678
+      path: test-config-convert
+      environment: HELLO=WORLD

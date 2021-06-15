@@ -10,6 +10,7 @@
 
 // TODO put into a shd-types.h file
 typedef struct _Process Process;
+typedef struct _Host Host;
 
 /**
  * Simulation time in nanoseconds. Allows for a consistent representation
@@ -82,11 +83,6 @@ typedef guint64 EmulatedTime;
  */
 #define EMULATED_TIME_TO_SIMULATED_TIME(emtime)                                \
     ((SimulationTime)((emtime)-EMULATED_TIME_OFFSET))
-
-/**
- * The minimum file descriptor shadow returns to the plugin.
- */
-#define MIN_DESCRIPTOR 10
 
 /**
  * The start of our random port range in host order, used if application doesn't

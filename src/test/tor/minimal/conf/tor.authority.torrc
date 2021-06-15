@@ -1,0 +1,8 @@
+AuthoritativeDirectory 1
+V3AuthoritativeDirectory 1
+V3BandwidthsFile ../torflowauthority/v3bw
+ExitPolicy "reject *:*"
+TestingDirAuthVoteGuard 3FB0BD7827C760FE7F9DD810FCB10322D63AB4CF,FF197204099FA0E507FA46D41FED97D3337B4BAA
+TestingDirAuthVoteExit 4EBB385C80A2CA5D671E16F1C722FBFB5F176891,0A9B1B207FD13A6F117F95CAFA358EEE2234F19A
+TestingDirAuthVoteGuardIsStrict 1
+TestingDirAuthVoteExitIsStrict 1

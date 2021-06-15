@@ -1,30 +1,89 @@
 # The Shadow Simulator
 
-![](https://github.com/shadow/shadow/workflows/Tests/badge.svg)
+[![Shadow Tests](https://github.com/shadow/shadow/actions/workflows/run_tests.yml/badge.svg?branch=dev&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tests.yml?query=branch:dev+event:push)
+[![Tor Tests](https://github.com/shadow/shadow/actions/workflows/run_tor.yml/badge.svg?branch=dev&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tor.yml?query=branch:dev+event:push)
 
-Shadow is a unique discrete-event network simulator that runs real 
-applications like Tor and Bitcoin, and distributed systems of thousands of
-nodes on a single machine. Shadow combines the accuracy of emulation with the 
-efficiency and control of simulation, achieving the best of both approaches.
+## What is Shadow?
 
-Quick Setup (installs everything in `~/.shadow`):
+Shadow is a discrete-event network simulator that enables you to simulate
+distributed systems of network-connected processes in a **realistic** and
+**scalable** private network experiment using your laptop or desktop running
+Linux.
+
+Shadow experiments can be scientifically **controlled** and deterministically
+**replicated**, making it easier for you to reproduce bugs and eliminate
+confounding factors in your experiments.
+
+## How Does Shadow Work?
+
+Shadow directly executes **real applications**:
+
+- Shadow directly executes unmodified, real application code using native OS
+  (Linux) processes.
+- Shadow co-opts the native processes into a discrete-event simulation by
+  interposing at the system call API.
+- The necessary systems calls are emulated such that the applications need not
+  be aware that they are running in a Shadow simulation.
+
+Shadow connects the applications in a **simulated network**:
+
+- Shadow constructs a private, virtual network through which the managed
+  processes can communicate.
+- Shadow internally implements simulated versions of common network protocols
+  (e.g., TCP and UDP).
+- Shadow internally models network routing characteristics (e.g., path latency
+  and packet loss) using a configurable network graph.
+
+## Why is Shadow Needed?
+
+Network emulators (e.g., [mininet](http://mininet.org)) run real application
+code on top of real OS kernels in real time, but are non-determinsitic and have
+limited scalability: time distortion can occur if emulated processes exceed an
+unknown computational threshold, leading to undefined behavior.
+
+Network simulators (e.g., [ns-3](https://www.nsnam.org)) offer more experimental
+control and scalability, but have limited application-layer realism because they
+run application abstractions in place of real application code.
+
+Shadow offers a novel, hybrid emulation/simulation architecture: it directly
+executes real applications as native OS processes in order to faithfully
+reproduce application-layer behavior while also co-opting the processes into a
+high-performance network simulation that can scale to large distributed systems
+with hundreds of thousands of processes.
+
+## Caveats
+
+Shadow implements **over 150 functions from the system call API**, but does not
+yet fully support all API features. Although applications that make _basic_ use
+of the supported system calls should work out of the box, those that use more
+_complex_ features or functions (e.g., `fork()`) may not yet function correctly
+when running in Shadow. Extending support for the API is a work-in-progress.
+
+That being said, we are particularly motivated to run large-scale [Tor
+Network](https://www.torproject.org) simulations. This use-case is already
+fairly well-supported and we are eager to continue extending support.
+
+## Quickstart
+
+Build, test, and install Shadow into `~/.local`:
 ```
-$ ./setup build --clean --debug
+$ ./setup build --clean --test
+$ ./setup test
 $ ./setup install
 ```
 
-Detailed Documentation
-  + [docs/README.md](docs/README.md)
+## More Information
 
-Questions and Bug Reports:
-  + https://github.com/shadow/shadow/issues
-
-Shadow Plug-ins and Project Development:
-  + https://github.com/shadow
-        
 Homepage:
   + https://shadow.github.io
-    
-# Contributing
 
-See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
+Detailed Documentation:
+  + [Local user documentation in docs/README.md](docs/README.md)
+  + [Online user documentation](https://shadow.github.io/docs/guide)
+  + [Online developer documentation](https://shadow.github.io/docs/rust)
+
+Community Support:
+  + https://github.com/shadow/shadow/discussions
+
+Bug Reports:
+  + https://github.com/shadow/shadow/issues

@@ -1,15 +1,7 @@
-## build the test as a dynamic executable that plugs into shadow
-add_shadow_plugin(shadow-plugin-test-poll test_poll.c)
+add_linux_tests(BASENAME poll COMMAND sh -c "../target/debug/test_poll --libc-passing")
 
-## create and install an executable that can run outside of shadow
-add_executable(test-poll test_poll.c)
-
-## if the test needs any libraries, link them here
-target_link_libraries(shadow-plugin-test-poll ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
-
-## if the test needs any libraries, link them here
-target_link_libraries(test-poll ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
-
-## register the tests
-add_test(NAME poll COMMAND test-poll)
-add_test(NAME poll-shadow COMMAND ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d poll.shadow.data ${CMAKE_CURRENT_SOURCE_DIR}/poll.test.shadow.config.xml)
+# run using different rng seeds since we use mkstemp()
+add_shadow_tests(BASENAME poll METHODS hybrid ARGS "--seed 0")
+add_shadow_tests(BASENAME poll METHODS ptrace ARGS "--seed 1")
+# FIXME: Enable in all configurations. See https://github.com/shadow/shadow/issues/892
+add_shadow_tests(BASENAME poll METHODS preload CONFIGURATIONS ilibc ARGS "--seed 2")

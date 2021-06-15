@@ -136,7 +136,7 @@ void pcapwriter_writePacket(PCapWriter* pcap, PCapPacket* packet) {
     }
 }
 
-PCapWriter* pcapwriter_new(gchar* pcapDirectory, gchar* pcapFilename) {
+PCapWriter* pcapwriter_new(Host* host, gchar* pcapDirectory, gchar* pcapFilename) {
     PCapWriter* pcap = g_new0(PCapWriter, 1);
 
     /* open the PCAP file for writing */
@@ -155,7 +155,7 @@ PCapWriter* pcapwriter_new(gchar* pcapDirectory, gchar* pcapFilename) {
     if(pcapFilename) {
         g_string_append_printf(filename, "%s", pcapFilename);
     } else {
-        g_string_append_printf(filename, "%s", host_getName(worker_getActiveHost()));
+        g_string_append_printf(filename, "%s", host_getName(host));
     }
 
     if (!g_str_has_suffix(filename->str, ".pcap")) {

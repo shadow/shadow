@@ -1,0 +1,10 @@
+general:
+  stop_time: 5
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testclient:
+    processes:
+    - path: test-config-read-from-stdin
+      start_time: 1

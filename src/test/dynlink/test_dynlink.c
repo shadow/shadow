@@ -387,12 +387,12 @@ int test_dynlink_run() {
 }
 
 //#include <pthread.h>
-//void* thread_main(void* arg) {
+// void* thread_main(void* arg) {
 //    test_run();
 //    return NULL;
 //}
 //
-//int start_thread() {
+// int start_thread() {
 //    pthread_t manager_tid;
 //    pthread_attr_t manager_attr;
 //    size_t stack_size;
@@ -411,7 +411,7 @@ int test_dynlink_run() {
 //    return 0;
 //}
 //
-//int main(int argc, char* argv[]) {
+// int main(int argc, char* argv[]) {
 //     run in a thread to see if we can increase the thread stack size
 //     and if dlmopen would then succeed
 //     test result: nope, thread and thread stack size doesnt matter

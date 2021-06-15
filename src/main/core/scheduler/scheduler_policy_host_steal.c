@@ -5,12 +5,14 @@
 
 #include <glib.h>
 #include <pthread.h>
+#include <sched.h>
 #include <stdbool.h>
 #include <string.h>
 
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
+#include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
@@ -110,9 +112,10 @@ static void _hoststealthreaddata_free(HostStealThreadData* tdata) {
             g_timer_destroy(tdata->popIdleTime);
         }
 
-        message("scheduler thread data destroyed, total push wait time was %f seconds, "
-                "total pop wait time was %f seconds", totalPushWaitTime, totalPopWaitTime);
-#endif
+        info("scheduler thread data destroyed, total push wait time was %f seconds, "
+             "total pop wait time was %f seconds",
+             totalPushWaitTime, totalPopWaitTime);
+#endif        
         g_free(tdata);
     }
 }
@@ -198,7 +201,9 @@ static void _schedulerpolicyhoststeal_migrateHost(SchedulerPolicy* policy, Host*
          */
         utility_assert(tdata->runningHost != tdataNew->runningHost);
         /* migrate the TLS of all objects associated with this host */
-        host_migrate(host, &oldThread, &newThread);
+//        host_migrate(host, &oldThread, &newThread);
+        trace("Migrating host %s from thread %u to thread %u", host_getName(host), tdata->tnumber,
+              tdataNew->tnumber);
     }
     _schedulerpolicyhoststeal_addHost(policy, host, newThread);
 }
@@ -245,8 +250,9 @@ static void _schedulerpolicyhoststeal_push(SchedulerPolicy* policy, Event* event
 
     if(srcHost != dstHost && eventTime < barrier) {
         event_setTime(event, barrier);
-        info("Inter-host event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" "
-                "to ensure event causality", eventTime, barrier);
+        debug("Inter-host event time %" G_GUINT64_FORMAT " changed to %" G_GUINT64_FORMAT " "
+              "to ensure event causality",
+              eventTime, barrier);
     }
 
     g_rw_lock_reader_lock(&data->lock);
@@ -320,6 +326,10 @@ static Event* _schedulerpolicyhoststeal_popFromThread(SchedulerPolicy* policy, H
         if(nextEvent == NULL) {
             /* no more events on the runningHost, mark it as NULL so we get a new one */
             g_queue_push_tail(tdata->processedHosts, host);
+            /* detach all ptrace attachments for this host so it can be stolen next round */
+            worker_setActiveHost(host);
+            host_detachAllPlugins(host);
+            worker_setActiveHost(NULL);
             tdata->runningHost = NULL;
         }
 
@@ -408,10 +418,10 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
         g_mutex_unlock(&(stolenTdata->lock));
 
         /* Make sure the workload has been updated for this round.
-         * This boolean is preventing race conditions upon the start of each
-         * round, and since we don't expect it to take long for the other
-         * threads to run through the unprocessedHosts reset above, spinning is
-         * OK.
+         * This boolean is preventing race conditions upon the start of each round.
+         * Since we don't expect it to take long for the other threads to run
+         * through the unprocessed Hosts reset above, we spin rather than
+         * using a lock.
          *
          * We later ended up adding a `sched_yield` here to prevent deadlock
          * when using the realtime scheduler. This doesn't seem to hurt
@@ -506,7 +516,7 @@ static SimulationTime _schedulerpolicyhoststeal_getNextTime(SchedulerPolicy* pol
         g_queue_foreach(tdata->processedHosts, (GFunc)_schedulerpolicyhoststeal_findMinTime, &searchState);
     }
 
-    info("next event at time %"G_GUINT64_FORMAT, searchState.nextEventTime);
+    debug("next event at time %" G_GUINT64_FORMAT, searchState.nextEventTime);
 
     return searchState.nextEventTime;
 }

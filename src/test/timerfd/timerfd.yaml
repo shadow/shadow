@@ -1,0 +1,10 @@
+general:
+  stop_time: 15
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    processes:
+    - path: test-timerfd
+      start_time: 1

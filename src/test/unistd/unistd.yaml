@@ -1,0 +1,11 @@
+general:
+  stop_time: 5
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    processes:
+    - path: ../target/debug/test_unistd
+      args: shadowsys testnode shadowrelease shadowversion shadowmachine
+      start_time: 1

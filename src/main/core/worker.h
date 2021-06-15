@@ -9,27 +9,28 @@
 
 #include <glib.h>
 #include <netinet/in.h>
+#include <stdbool.h>
 
-#include "main/core/manager.h"
-#include "main/core/scheduler/scheduler.h"
-#include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
-#include "main/core/support/options.h"
-#include "main/core/work/task.h"
-#include "main/host/host.h"
-#include "main/routing/address.h"
-#include "main/routing/dns.h"
-#include "main/routing/packet.h"
-#include "main/routing/topology.h"
-#include "main/utility/count_down_latch.h"
-#include "support/logger/log_level.h"
-
-// A single worker thread.
-typedef struct _Worker Worker;
 // A pool of worker threads.
 typedef struct _WorkerPool WorkerPool;
 // Task to be executed on a worker thread.
 typedef void (*WorkerPoolTaskFn)(void*);
+
+#include "main/core/manager.h"
+#include "main/core/scheduler/scheduler.h"
+#include "main/core/support/definitions.h"
+#include "main/core/work/task.h"
+#include "main/host/host.h"
+#include "main/host/syscall_types.h"
+#include "main/host/thread.h"
+#include "main/routing/address.h"
+#include "main/routing/dns.h"
+#include "main/routing/packet.minimal.h"
+#include "main/routing/topology.h"
+#include "main/utility/count_down_latch.h"
+#include "support/logger/log_level.h"
+
+#include "main/bindings/c/bindings.h"
 
 // To be called by scheduler. Consumes `event`
 void worker_runEvent(Event* event);
@@ -72,22 +73,19 @@ void worker_setRoundEndTime(SimulationTime newRoundEndTime);
 int worker_getAffinity();
 DNS* worker_getDNS();
 Topology* worker_getTopology();
-Options* worker_getOptions();
-gboolean worker_scheduleTask(Task* task, SimulationTime nanoDelay);
-void worker_sendPacket(Packet* packet);
-gboolean worker_isAlive();
-
-void worker_countObject(ObjectType otype, CounterType ctype);
+const ConfigOptions* worker_getConfig();
+gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay);
+void worker_sendPacket(Host* src, Packet* packet);
+bool worker_isAlive(void);
 
 SimulationTime worker_getCurrentTime();
 EmulatedTime worker_getEmulatedTime();
 
-gboolean worker_isBootstrapActive();
+bool worker_isBootstrapActive(void);
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 
 gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID);
-gint worker_getThreadID();
 void worker_updateMinTimeJump(gdouble minPathLatency);
 void worker_setCurrentTime(SimulationTime time);
 gboolean worker_isFiltered(LogLevel level);
@@ -95,14 +93,30 @@ gboolean worker_isFiltered(LogLevel level);
 void worker_bootHosts(GQueue* hosts);
 void worker_freeHosts(GQueue* hosts);
 
-Host* worker_getActiveHost();
-void worker_setActiveHost(Host* host);
-Process* worker_getActiveProcess();
-void worker_setActiveProcess(Process* proc);
-
 void worker_incrementPluginError();
 
 Address* worker_resolveIPToAddress(in_addr_t ip);
 Address* worker_resolveNameToAddress(const gchar* name);
+
+// Implementation for counting allocated objects. Do not use this function directly.
+// Use worker_count_allocation instead from the call site.
+void __worker_increment_object_alloc_counter(const char* object_name);
+
+// Implementation for counting deallocated objects. Do not use this function directly.
+// Use worker_count_deallocation instead from the call site.
+void __worker_increment_object_dealloc_counter(const char* object_name);
+
+// Increment a counter for the allocation of the object with the given name.
+// This should be paired with an increment of the dealloc counter with the
+// same name, otherwise we print a warning that a memory leak was detected.
+#define worker_count_allocation(type) __worker_increment_object_alloc_counter(#type)
+
+// Increment a counter for the deallocation of the object with the given name.
+// This should be paired with an increment of the alloc counter with the
+// same name, otherwise we print a warning that a memory leak was detected.
+#define worker_count_deallocation(type) __worker_increment_object_dealloc_counter(#type)
+
+// Aggregate the given syscall counts in a worker syscall counter.
+void worker_add_syscall_counts(Counter* syscall_counts);
 
 #endif /* SHD_WORKER_H_ */

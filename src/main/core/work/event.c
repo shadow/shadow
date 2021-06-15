@@ -7,7 +7,6 @@
 
 #include <stddef.h>
 
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
 #include "main/host/host.h"
@@ -38,7 +37,7 @@ Event* event_new_(Task* task, SimulationTime time, gpointer srcHost, gpointer ds
     event->srcHostEventID = host_getNewEventID(srcHost);
     event->referenceCount = 1;
 
-    worker_countObject(OBJECT_TYPE_EVENT, COUNTER_TYPE_NEW);
+    worker_count_allocation(Event);
     return event;
 }
 
@@ -46,7 +45,7 @@ static void _event_free(Event* event) {
     task_unref(event->task);
     MAGIC_CLEAR(event);
     g_free(event);
-    worker_countObject(OBJECT_TYPE_EVENT, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Event);
 }
 
 void event_ref(Event* event) {
@@ -74,17 +73,17 @@ void event_execute(Event* event) {
 
     if(cpu_isBlocked(cpu)) {
         SimulationTime cpuDelay = cpu_getDelay(cpu);
-        debug("event blocked on CPU, rescheduled for %"G_GUINT64_FORMAT" nanoseconds from now", cpuDelay);
+        trace("event blocked on CPU, rescheduled for %"G_GUINT64_FORMAT" nanoseconds from now", cpuDelay);
 
         /* track the event delay time */
         tracker_addVirtualProcessingDelay(host_getTracker(event->dstHost), cpuDelay);
 
         /* this event is delayed due to cpu, so reschedule it to ourselves */
-        worker_scheduleTask(event->task, cpuDelay);
+        worker_scheduleTask(event->task, event->dstHost, cpuDelay);
     } else {
         /* cpu is not blocked, its ok to execute the event */
         host_continueExecutionTimer(event->dstHost);
-        task_execute(event->task);
+        task_execute(event->task, event->dstHost);
         host_stopExecutionTimer(event->dstHost);
     }
 

@@ -12,16 +12,16 @@
 #include <time.h>
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/host.h"
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
 struct _Timer {
-    Descriptor super;
+    LegacyDescriptor super;
 
     /* the absolute time the timer will next expire */
     SimulationTime nextExpireTime;
@@ -41,49 +41,44 @@ struct _Timer {
     MAGIC_DECLARE;
 };
 
-static void _timer_close(Timer* timer) {
-    MAGIC_ASSERT(timer);
-    timer->isClosed = TRUE;
-    descriptor_adjustStatus(&(timer->super), DS_ACTIVE, FALSE);
-    host_closeDescriptor(worker_getActiveHost(), timer->super.handle);
+static Timer* _timer_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
+    utility_assert(descriptor_getType(descriptor) == DT_TIMER);
+    return (Timer*)descriptor;
 }
 
-static void _timer_free(Timer* timer) {
+static gboolean _timer_close(LegacyDescriptor* descriptor, Host* host) {
+    Timer* timer = _timer_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(timer);
+    trace("timer fd %i closing now", timer->super.handle);
+    timer->isClosed = TRUE;
+    descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_ACTIVE, FALSE);
+    if (timer->super.handle > 0) {
+        return TRUE; // deregister from process
+    } else {
+        return FALSE; // we are not owned by a process
+    }
+}
+
+static void _timer_free(LegacyDescriptor* descriptor) {
+    Timer* timer = _timer_fromLegacyDescriptor(descriptor);
+    MAGIC_ASSERT(timer);
+    descriptor_clear((LegacyDescriptor*)timer);
     MAGIC_CLEAR(timer);
     g_free(timer);
-    worker_countObject(OBJECT_TYPE_TIMER, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Timer);
 }
 
 static DescriptorFunctionTable _timerFunctions = {
-    (DescriptorFunc) _timer_close,
-    (DescriptorFunc) _timer_free,
-    MAGIC_VALUE
-};
+    _timer_close, _timer_free, MAGIC_VALUE};
 
-Timer* timer_new(gint handle, gint clockid, gint flags) {
-    if(clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if(flags != 0 && flags != TFD_NONBLOCK && flags != TFD_CLOEXEC
-            && flags != (TFD_NONBLOCK|TFD_CLOEXEC)) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-//    if(!(flags&TFD_NONBLOCK)) {
-//        warning("Shadow does not support blocking timers, using TFD_NONBLOCK flag implicitly");
-//    }
-
+Timer* timer_new() {
     Timer* timer = g_new0(Timer, 1);
     MAGIC_INIT(timer);
 
-    descriptor_init(&(timer->super), DT_TIMER, &_timerFunctions, handle);
-    descriptor_adjustStatus(&(timer->super), DS_ACTIVE, TRUE);
+    descriptor_init(&(timer->super), DT_TIMER, &_timerFunctions);
+    descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_ACTIVE, TRUE);
 
-    worker_countObject(OBJECT_TYPE_TIMER, COUNTER_TYPE_NEW);
+    worker_count_allocation(Timer);
 
     return timer;
 }
@@ -126,8 +121,7 @@ gint timer_getTime(Timer* timer, struct itimerspec *curr_value) {
     MAGIC_ASSERT(timer);
 
     if(!curr_value) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
 
     /* returns relative time */
@@ -142,7 +136,7 @@ static void _timer_disarm(Timer* timer) {
     timer->nextExpireTime = 0;
     timer->expireInterval = 0;
     timer->minValidExpireID = timer->nextExpireID;
-    debug("timer fd %i disarmed", timer->super.handle);
+    trace("timer fd %i disarmed", timer->super.handle);
 }
 
 static SimulationTime _timer_timespecToSimTime(const struct timespec* config, gboolean configTimeIsEmulatedTime) {
@@ -154,7 +148,14 @@ static SimulationTime _timer_timespecToSimTime(const struct timespec* config, gb
         /* the time that was passed in represents an emulated time, so we need to adjust */
         EmulatedTime emNanoSecs = (EmulatedTime)(config->tv_sec * SIMTIME_ONE_SECOND);
         emNanoSecs += (EmulatedTime) config->tv_nsec;
-        simNanoSecs = EMULATED_TIME_TO_SIMULATED_TIME(emNanoSecs);
+        /* If the emulated time passed in by the plugin is before the time we use as the
+         * start of the simulation (i.e., EMULATED_TIME_OFFSET), then we use t=0 as 
+         * a proxy for "some time in the past". */
+        if(emNanoSecs >= EMULATED_TIME_OFFSET) {
+            simNanoSecs = EMULATED_TIME_TO_SIMULATED_TIME(emNanoSecs);
+        } else {
+            simNanoSecs = 0;
+        }
     } else {
         /* the config is a relative time, so we just use simtime directly */
         simNanoSecs = (SimulationTime)(config->tv_sec * SIMTIME_ONE_SECOND);
@@ -196,9 +197,9 @@ static void _timer_setCurrentInterval(Timer* timer, const struct timespec* confi
     timer->expireInterval = _timer_timespecToSimTime(config, FALSE);
 }
 
-static void _timer_expire(Timer* timer, gpointer data);
+static void _timer_expire(Host* host, gpointer voidTimer, gpointer data);
 
-static void _timer_scheduleNewExpireEvent(Timer* timer) {
+static void _timer_scheduleNewExpireEvent(Timer* timer, Host* host) {
     MAGIC_ASSERT(timer);
 
     /* callback to our own node */
@@ -206,8 +207,7 @@ static void _timer_scheduleNewExpireEvent(Timer* timer) {
 
     /* ref the timer storage in the callback event */
     descriptor_ref(timer);
-    Task* task = task_new((TaskCallbackFunc)_timer_expire,
-            timer, next, descriptor_unref, NULL);
+    Task* task = task_new(_timer_expire, timer, next, descriptor_unref, NULL);
 
     SimulationTime delay = timer->nextExpireTime - worker_getCurrentTime();
 
@@ -215,20 +215,24 @@ static void _timer_scheduleNewExpireEvent(Timer* timer) {
      * or disarmed the timer in the meantime. This prevents queueing the task indefinitely. */
     delay = MIN(delay, SIMTIME_ONE_SECOND);
 
-    worker_scheduleTask(task, delay);
+    trace("Scheduling timer expiration task for %"G_GUINT64_FORMAT" nanoseconds", delay);
+    worker_scheduleTask(task, host, delay);
     task_unref(task);
 
     timer->nextExpireID++;
     timer->numEventsScheduled++;
 }
 
-static void _timer_expire(Timer* timer, gpointer data) {
+static void _timer_expire(Host* host, gpointer voidTimer, gpointer data) {
+    Timer* timer = voidTimer;
     MAGIC_ASSERT(timer);
 
     /* this is a task callback event */
 
     guint expireID = GPOINTER_TO_UINT(data);
-    debug("timer fd %i expired; isClosed=%i expireID=%u minValidExpireID=%u", timer->super.handle, timer->isClosed, expireID, timer->minValidExpireID);
+    trace("timer fd %i expire check; isClosed=%i expireID=%u minValidExpireID=%u",
+          timer->super.handle, timer->isClosed, expireID,
+          timer->minValidExpireID);
 
     timer->numEventsScheduled--;
 
@@ -241,7 +245,7 @@ static void _timer_expire(Timer* timer, gpointer data) {
              * immediately on the next epoll_wait call. this behavior was
              * verified on linux. */
             timer->expireCountSinceLastSet++;
-            descriptor_adjustStatus(&(timer->super), DS_READABLE, TRUE);
+            descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_READABLE, TRUE);
 
             if(timer->expireInterval > 0) {
                 SimulationTime now = worker_getCurrentTime();
@@ -251,19 +255,19 @@ static void _timer_expire(Timer* timer, gpointer data) {
                      * to keep the periodic timer going. */
                     timer->nextExpireTime = now;
                 }
-                _timer_scheduleNewExpireEvent(timer);
+                _timer_scheduleNewExpireEvent(timer, host);
             } else {
                 /* the timer is now disarmed */
                 _timer_disarm(timer);
             }
         } else {
             /* it didn't expire yet, check again in another second */
-            _timer_scheduleNewExpireEvent(timer);
+            _timer_scheduleNewExpireEvent(timer, host);
         }
     }
 }
 
-static void _timer_arm(Timer* timer, const struct itimerspec *config, gint flags) {
+static void _timer_arm(Timer* timer, Host* host, const struct itimerspec* config, gint flags) {
     MAGIC_ASSERT(timer);
     utility_assert(config);
 
@@ -275,11 +279,10 @@ static void _timer_arm(Timer* timer, const struct itimerspec *config, gint flags
 
     SimulationTime now = worker_getCurrentTime();
     if(timer->nextExpireTime >= now) {
-        _timer_scheduleNewExpireEvent(timer);
+        _timer_scheduleNewExpireEvent(timer, host);
+        trace("timer fd %i armed to expire in %"G_GUINT64_FORMAT" nanos",
+                timer->super.handle, timer->nextExpireTime - now);
     }
-
-    debug("timer fd %i armed to expire in %"G_GUINT64_FORMAT" nanos",
-            timer->super.handle, timer->nextExpireTime - now);
 }
 
 static gboolean _timer_timeIsValid(const struct timespec* config) {
@@ -287,26 +290,31 @@ static gboolean _timer_timeIsValid(const struct timespec* config) {
     return (config->tv_nsec < 0 || config->tv_nsec >= SIMTIME_ONE_SECOND) ? FALSE : TRUE;
 }
 
-gint timer_setTime(Timer* timer, gint flags,
-                   const struct itimerspec *new_value,
-                   struct itimerspec *old_value) {
+gint timer_setTime(Timer* timer, Host* host, gint flags, const struct itimerspec* new_value,
+                   struct itimerspec* old_value) {
     MAGIC_ASSERT(timer);
 
     if(!new_value) {
-        errno = EFAULT;
-        return -1;
+        return -EFAULT;
     }
 
     if(!_timer_timeIsValid(&(new_value->it_value)) ||
             !_timer_timeIsValid(&(new_value->it_interval))) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
 
     if(flags != 0 && flags != TFD_TIMER_ABSTIME) {
-        errno = EINVAL;
-        return -1;
+        return -EINVAL;
     }
+
+    trace("Setting timer value to "
+          "%" G_GUINT64_FORMAT ".%09" G_GUINT64_FORMAT " seconds "
+          "and timer interval to "
+          "%" G_GUINT64_FORMAT ".%09" G_GUINT64_FORMAT " seconds "
+          "on timer fd %d",
+          new_value->it_value.tv_sec, new_value->it_value.tv_nsec,
+          new_value->it_interval.tv_sec, new_value->it_interval.tv_nsec,
+          timer->super.handle);
 
     /* first get the old value if requested */
     if(old_value) {
@@ -317,18 +325,18 @@ gint timer_setTime(Timer* timer, gint flags,
     /* always disarm to invalidate old expire events */
     _timer_disarm(timer);
 
+    /* settings were modified, reset expire count and readability */
+    timer->expireCountSinceLastSet = 0;
+    descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_READABLE, FALSE);
+
     /* now set the new times as requested */
     if(new_value->it_value.tv_sec > 0 || new_value->it_value.tv_nsec > 0) {
         /* the man page does not specify what to do if it_value says
          * to disarm the timer, but it_interval is a valid interval.
          * we verified on linux that intervals are only set when it_value
          * actually requests that we arm the timer, and ignored otherwise. */
-        _timer_arm(timer, new_value, flags);
+        _timer_arm(timer, host, new_value, flags);
     }
-
-    /* settings were modified, reset expire count and readability */
-    timer->expireCountSinceLastSet = 0;
-    descriptor_adjustStatus(&(timer->super), DS_READABLE, FALSE);
 
     return 0;
 }
@@ -339,20 +347,26 @@ ssize_t timer_read(Timer* timer, void *buf, size_t count) {
     if(timer->expireCountSinceLastSet > 0) {
         /* we have something to report, make sure the buf is big enough */
         if(count < sizeof(guint64)) {
-            errno = EINVAL;
-            return (ssize_t) -1;
+            return (ssize_t)-EINVAL;
         }
+
+        trace("Reading %" G_GUINT64_FORMAT " expirations from timer fd %d",
+              timer->expireCountSinceLastSet, timer->super.handle);
 
         memcpy(buf, &(timer->expireCountSinceLastSet), sizeof(guint64));
 
         /* reset the expire count since we reported it */
         timer->expireCountSinceLastSet = 0;
-        descriptor_adjustStatus(&(timer->super), DS_READABLE, FALSE);
+        descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_READABLE, FALSE);
 
         return (ssize_t) sizeof(guint64);
     } else {
         /* the timer has not yet expired, try again later */
-        errno = EAGAIN;
-        return (ssize_t) -1;
+        return (ssize_t)-EWOULDBLOCK;
     }
+}
+
+guint64 timer_getExpirationCount(Timer* timer) {
+    MAGIC_ASSERT(timer);
+    return timer->expireCountSinceLastSet;
 }

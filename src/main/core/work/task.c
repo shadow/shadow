@@ -6,7 +6,6 @@
 #include "main/core/work/task.h"
 
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/utility/utility.h"
 
@@ -36,7 +35,7 @@ Task* task_new(TaskCallbackFunc callback, gpointer callbackObject, gpointer call
 
     MAGIC_INIT(task);
 
-    worker_countObject(OBJECT_TYPE_TASK, COUNTER_TYPE_NEW);
+    worker_count_allocation(Task);
     return task;
 }
 
@@ -49,7 +48,7 @@ static void _task_free(Task* task) {
     }
     MAGIC_CLEAR(task);
     g_free(task);
-    worker_countObject(OBJECT_TYPE_TASK, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Task);
 }
 
 void task_ref(Task* task) {
@@ -65,7 +64,7 @@ void task_unref(Task* task) {
     }
 }
 
-void task_execute(Task* task) {
+void task_execute(Task* task, Host* host) {
     MAGIC_ASSERT(task);
-    task->execute(task->callbackObject, task->callbackArgument);
+    task->execute(host, task->callbackObject, task->callbackArgument);
 }

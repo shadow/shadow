@@ -1,0 +1,99 @@
+# Syntax reference:
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
+
+name: Lint Checks
+permissions: read-all
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    types: [opened, synchronize]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  lint-python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@master
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install flake8
+      - run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude src/external
+
+  lint-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Rustfmt check
+        run: |
+          (cd src/main && cargo fmt -- --check)
+          (cd src/test && cargo fmt -- --check)
+          (cd src/support/logger/rust_bindings && cargo fmt -- --check)
+
+  lint-cargo-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Cargo update check
+        run: |
+          # This will return an error if any versions of local crates in the Cargo.lock
+          # are out of date compared to the crate versions in Cargo.toml. This can fail
+          # if the Shadow version is bumped without using Cargo to update the lock file.
+          (cd src/main && cargo update --locked --workspace)
+          (cd src/test && cargo update --locked --workspace)
+          # the shadow logger bindings crate does not have a lockfile
+
+  lint-bindings:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
+    env:
+      CONTAINER: ubuntu:20.04
+      CC: clang
+      CXX: clang++
+      RUSTPROFILE: minimal
+    steps:
+      - name: Install git
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git
+      - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+      - name: Install dependencies
+        run: |
+          ci/container_scripts/install_deps.sh
+          ci/container_scripts/install_extra_deps.sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Install Rust packages
+        run: |
+          rustup component add rustfmt
+          # when updating these versions, also update the versions in "docs/developer_guide.md"
+          cargo install --force --version 0.18.0 cbindgen
+          cargo install --force --version 0.57.0 bindgen
+      - name: Check bindings (release)
+        run: |
+          rm -rf build && mkdir build
+          (cd build && cmake --target bindings -DCMAKE_BUILD_TYPE=Release .. && make bindings)
+          git diff --exit-code
+      - name: Check bindings (debug)
+        run: |
+          rm -rf build && mkdir build
+          (cd build && cmake --target bindings -DCMAKE_BUILD_TYPE=Debug .. && make bindings)
+          git diff --exit-code
+      - name: Details
+        if: failure()
+        run: |
+          cbindgen --version
+          bindgen --version
+          echo "If the bindings are different, you may want to check that your local cbindgen/bindgen versions match with the CI, and update the CI version numbers if necessary."

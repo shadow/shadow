@@ -4,10 +4,10 @@
  * See LICENSE for licensing information
  */
 
+#include <assert.h>
 #include <netinet/in.h>
 #include <stddef.h>
 
-#include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/routing/address.h"
@@ -16,6 +16,21 @@
 #include "main/utility/utility.h"
 #include "support/logger/log_level.h"
 #include "support/logger/logger.h"
+
+/* g_memdup() is deprecated due to a security issue and has been replaced
+ * by g_memdup2(), but not all of our supported platforms support this yet.
+ * https://gitlab.gnome.org/GNOME/glib/-/issues/2319
+ */
+
+#ifdef HAS_MEMDUP2
+#define compat_static_g_memdup g_memdup2
+#else
+#define compat_static_g_memdup(mem, byte_size)                                                     \
+    ({                                                                                             \
+        static_assert(byte_size < UINT_MAX, "g_memdup() overflow");                                \
+        g_memdup(mem, byte_size);                                                                  \
+    })
+#endif
 
 /* thread-safe structure representing a data/network packet */
 
@@ -71,27 +86,32 @@ const gchar* protocol_toString(ProtocolType type) {
     }
 }
 
-Packet* packet_new(gconstpointer payload, gsize payloadLength, guint hostID, guint64 packetID) {
+Packet* packet_new(Host* host) {
     Packet* packet = g_new0(Packet, 1);
     MAGIC_INIT(packet);
 
     packet->referenceCount = 1;
 
-    packet->hostID = hostID;
-    packet->packetID = packetID;
-
-    if(payload != NULL && payloadLength > 0) {
-        /* the payload starts with 1 ref, which we hold */
-        packet->payload = payload_new(payload, payloadLength);
-
-        /* application data needs a priority ordering for FIFO onto the wire */
-        packet->priority = host_getNextPacketPriority(worker_getActiveHost());
-    }
+    packet->hostID = host_getID(host);
+    packet->packetID = host_getNewPacketID(host);
 
     packet->orderedStatus = g_queue_new();
 
-    worker_countObject(OBJECT_TYPE_PACKET, COUNTER_TYPE_NEW);
+    worker_count_allocation(Packet);
     return packet;
+}
+
+void packet_setPayload(Packet* packet, Thread* thread, PluginVirtualPtr payload,
+                       gsize payloadLength) {
+    MAGIC_ASSERT(packet);
+    utility_assert(thread);
+    utility_assert(payload.val);
+    utility_assert(!packet->payload);
+
+    /* the payload starts with 1 ref, which we hold */
+    packet->payload = payload_new(thread, payload, payloadLength);
+    /* application data needs a priority ordering for FIFO onto the wire */
+    packet->priority = host_getNextPacketPriority(thread_getHost(thread));
 }
 
 /* copy everything except the payload.
@@ -125,17 +145,17 @@ Packet* packet_copy(Packet* packet) {
     if(packet->header) {
         switch (packet->protocol) {
             case PLOCAL: {
-                copy->header = g_memdup(packet->header, sizeof(PacketLocalHeader));
+                copy->header = compat_static_g_memdup(packet->header, sizeof(PacketLocalHeader));
                 break;
             }
 
             case PUDP: {
-                copy->header = g_memdup(packet->header, sizeof(PacketUDPHeader));
+                copy->header = compat_static_g_memdup(packet->header, sizeof(PacketUDPHeader));
                 break;
             }
 
             case PTCP: {
-                copy->header = g_memdup(packet->header, sizeof(PacketTCPHeader));
+                copy->header = compat_static_g_memdup(packet->header, sizeof(PacketTCPHeader));
 
                 PacketTCPHeader* packetHeader = (PacketTCPHeader*)packet->header;
                 PacketTCPHeader* copyHeader = (PacketTCPHeader*)copy->header;
@@ -150,13 +170,13 @@ Packet* packet_copy(Packet* packet) {
             }
 
             default: {
-                error("unrecognized protocol");
+                utility_panic("unrecognized protocol");
                 break;
             }
         }
     }
 
-    worker_countObject(OBJECT_TYPE_PACKET, COUNTER_TYPE_NEW);
+    worker_count_allocation(Packet);
     return copy;
 }
 
@@ -183,7 +203,7 @@ static void _packet_free(Packet* packet) {
     MAGIC_CLEAR(packet);
     g_free(packet);
 
-    worker_countObject(OBJECT_TYPE_PACKET, COUNTER_TYPE_FREE);
+    worker_count_deallocation(Packet);
 }
 
 void packet_ref(Packet* packet) {
@@ -302,7 +322,7 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACK
     header->timestampEcho = timestampEcho;
 }
 
-guint packet_getPayloadLength(Packet* packet) {
+guint packet_getPayloadLength(const Packet* packet) {
     MAGIC_ASSERT(packet);
     if(packet->payload) {
         return (guint)payload_getLength(packet->payload);
@@ -311,7 +331,7 @@ guint packet_getPayloadLength(Packet* packet) {
     }
 }
 
-gdouble packet_getPriority(Packet* packet) {
+gdouble packet_getPriority(const Packet* packet) {
     MAGIC_ASSERT(packet);
     return packet->priority;
 }
@@ -346,7 +366,7 @@ in_addr_t packet_getDestinationIP(Packet* packet) {
         }
 
         default: {
-            error("unrecognized protocol");
+            utility_panic("unrecognized protocol");
             break;
         }
     }
@@ -379,7 +399,7 @@ in_port_t packet_getDestinationPort(Packet* packet) {
         }
 
         default: {
-            error("unrecognized protocol");
+            utility_panic("unrecognized protocol");
             break;
         }
     }
@@ -411,7 +431,7 @@ in_addr_t packet_getSourceIP(Packet* packet) {
         }
 
         default: {
-            error("unrecognized protocol");
+            utility_panic("unrecognized protocol");
             break;
         }
     }
@@ -444,7 +464,7 @@ in_port_t packet_getSourcePort(Packet* packet) {
         }
 
         default: {
-            error("unrecognized protocol");
+            utility_panic("unrecognized protocol");
             break;
         }
     }
@@ -457,11 +477,23 @@ ProtocolType packet_getProtocol(Packet* packet) {
     return packet->protocol;
 }
 
-guint packet_copyPayload(Packet* packet, gsize payloadOffset, gpointer buffer, gsize bufferLength) {
+gssize packet_copyPayload(const Packet* packet, Thread* thread, gsize payloadOffset,
+                          PluginVirtualPtr buffer, gsize bufferLength) {
     MAGIC_ASSERT(packet);
 
     if(packet->payload) {
-        return (guint) payload_getData(packet->payload, payloadOffset, buffer, bufferLength);
+        return payload_getData(packet->payload, thread, payloadOffset, buffer, bufferLength);
+    } else {
+        return 0;
+    }
+}
+
+guint packet_copyPayloadShadow(Packet* packet, gsize payloadOffset, void* buffer,
+                               gsize bufferLength) {
+    MAGIC_ASSERT(packet);
+
+    if (packet->payload) {
+        return payload_getDataShadow(packet->payload, payloadOffset, buffer, bufferLength);
     } else {
         return 0;
     }
@@ -616,7 +648,7 @@ gchar* packet_toString(Packet* packet) {
         }
 
         default: {
-            error("unrecognized protocol");
+            utility_panic("unrecognized protocol");
             break;
         }
     }
@@ -650,11 +682,11 @@ void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) 
 
     packet->allStatus |= status;
 
-    gboolean skipDebug = worker_isFiltered(LOGLEVEL_DEBUG);
+    gboolean skipDebug = worker_isFiltered(LOGLEVEL_TRACE);
     if(!skipDebug) {
         g_queue_push_tail(packet->orderedStatus, GUINT_TO_POINTER(status));
         gchar* packetStr = packet_toString(packet);
-        message("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
+        info("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
         g_free(packetStr);
     }
 }

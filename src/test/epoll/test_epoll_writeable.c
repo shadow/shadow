@@ -16,6 +16,7 @@
 
 #define PORT_STR "22222"
 #define WRITE_SZ 65535
+#define SERVER_HOSTNAME_STR "server"
 
 static void _client(void) {
     printf("Start");
@@ -27,7 +28,7 @@ static void _client(void) {
 
    const char *port = PORT_STR;
    int rv;
-   if ((rv = getaddrinfo("testnode", port, &hints, &client_info)) < 0) {
+   if ((rv = getaddrinfo(SERVER_HOSTNAME_STR, port, &hints, &client_info)) < 0) {
        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
        exit(EXIT_FAILURE);
    }
@@ -35,6 +36,10 @@ static void _client(void) {
    int client_socket = socket(client_info->ai_family,
                               client_info->ai_socktype,
                               client_info->ai_protocol);
+   if(client_socket < 0) {
+       perror("socket");
+       exit(EXIT_FAILURE);
+   }
 
    if (connect(client_socket, client_info->ai_addr, client_info->ai_addrlen) <
        0) {
@@ -53,6 +58,7 @@ static void _client(void) {
        printf("Recvd %d\n", rc);
        recvd += rc;
    }
+   close(client_socket);
    printf("Exit");
 }
 
@@ -66,7 +72,7 @@ static int _server(void) {
    hints.ai_flags = AI_PASSIVE;
 
    const char *port = PORT_STR;
-   if ((rv = getaddrinfo(NULL, port, &hints, &info)) < 0) {
+   if ((rv = getaddrinfo(SERVER_HOSTNAME_STR, port, &hints, &info)) < 0) {
        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
        return EXIT_FAILURE;
    }
@@ -74,6 +80,11 @@ static int _server(void) {
    int server_socket = socket(info->ai_family,
                               info->ai_socktype,
                               info->ai_protocol);
+
+   if(server_socket < 0) {
+       perror("socket");
+       return EXIT_FAILURE;
+   }
 
    if (bind(server_socket, info->ai_addr, info->ai_addrlen) < 0) {
        perror("bind");
@@ -160,12 +171,15 @@ static int _server(void) {
       }
    }
 
+   close(client_socket);
+   close(server_socket);
+   close(epoll_fd);
    return EXIT_SUCCESS;
 }
 
 int main(int argc, char **argv) {
 
-   if (argc == 2 && strcmp(argv[1], "server") == 0) {
+   if (argc == 2 && strcmp(argv[1], "server_mode") == 0) {
       fprintf(stdout, "########## epoll-writeable test starting ##########\n");
       int rc = _server();
       if (rc) {

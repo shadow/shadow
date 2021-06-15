@@ -1,0 +1,78 @@
+# Syntax reference:
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
+
+name: Shadow Tests
+permissions: read-all
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    types: [opened, synchronize]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  shadow:
+    # there's only one job in the workflow, so we won't give it a name
+    name: ' '
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.container }}
+      # the default shm-size for ubuntu:18.04, but with the size increased from
+      # 65536k. github's default docker seccomp policy seems to disallow
+      # process_vm_readv and process_vm_writev; disable it altogether. See
+      # https://docs.docker.com/engine/security/seccomp/
+      options: '--shm-size="1g" --security-opt seccomp=unconfined'
+    strategy:
+      matrix:
+        container: ['ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:33', 'centos:7', 'centos:8']
+        cc: ['gcc', 'clang']
+        buildtype: ['debug', 'release']
+        include:
+          # Add a single configuration for testing the C syscall handlers
+          - container: 'ubuntu:20.04'
+            cc: 'clang'
+            buildtype: 'use-c-syscalls'
+    env:
+      CC: ${{ matrix.cc }}
+      CONTAINER: ${{ matrix.container }}
+      BUILDTYPE: ${{ matrix.buildtype }}
+      RUSTPROFILE: minimal
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          . ci/container_scripts/install_deps.sh
+          . ci/container_scripts/install_extra_deps.sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Build
+        run: . ci/container_scripts/build_and_install.sh
+
+      - name: Test
+        run: . ci/container_scripts/test.sh
+
+      - name: Upload shadow data directories
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: shadow-data-dirs
+          path: build/**/*.data/*
+
+      - name: Upload shadow log file
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: shadow-log-file
+          path: build/Testing/Temporary/*

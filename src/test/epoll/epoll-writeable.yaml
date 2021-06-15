@@ -1,0 +1,16 @@
+general:
+  stop_time: 60
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  server:
+    processes:
+    - path: test-epoll-writeable
+      args: server_mode
+      start_time: 1
+  client:
+    processes:
+    - path: test-epoll-writeable
+      args: client_mode
+      start_time: 10

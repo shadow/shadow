@@ -2,6 +2,7 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+#include "test/test_common.h"
 
 #include <errno.h>
 #include <netdb.h>
@@ -120,4 +121,9 @@ int common_get_connected_tcp_sockets(int* server_listener_fd_out, int* server_fd
     }
 
     return EXIT_SUCCESS;
+}
+
+bool running_in_shadow() {
+    // There is the same function in the Rust tests utils code
+    return getenv("SHADOW_SPAWNED") != NULL;
 }

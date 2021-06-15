@@ -1,0 +1,11 @@
+general:
+  stop_time: 5
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    quantity: 3
+    processes:
+    - path: test-signal
+      start_time: 1

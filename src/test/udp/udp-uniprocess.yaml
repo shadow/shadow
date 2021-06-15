@@ -1,0 +1,10 @@
+general:
+  stop_time: 5
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  node1:
+    processes:
+    - path: test-udp-uniprocess
+      start_time: 1

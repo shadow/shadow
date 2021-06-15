@@ -1,6 +1,3 @@
-## build rpth and elf-loader
-add_subdirectory(external)
-
 # Outside of external, inclusion of headers within the project should be
 # relative to this directory.
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
@@ -13,6 +10,7 @@ find_package(DL REQUIRED)
 find_package(M REQUIRED)
 find_package(IGRAPH REQUIRED)
 find_package(GLIB REQUIRED)
+find_package(PROCPS REQUIRED)
 
 ## pthreads
 set(CMAKE_THREAD_PREFER_PTHREAD 1)
@@ -22,12 +20,21 @@ message(STATUS "Using Threads library: ${CMAKE_THREAD_LIBS_INIT}")
 # Build support libraries.
 add_subdirectory(support)
 
+## build the shim
+add_subdirectory(shim)
+
 ## build the core simulator
 add_subdirectory(main)
-
-## build the library that will intercept system calls using LD_PRELOAD
-add_subdirectory(preload)
 
 if(SHADOW_TEST STREQUAL ON)
     add_subdirectory(test)
 endif(SHADOW_TEST STREQUAL ON)
+
+# A fake target that depends on all bindings.
+add_custom_target(bindings)
+add_dependencies(bindings bindings_main)
+add_dependencies(bindings bindings_logger)
+
+# Only re-generate bindings when explicititly requested, so that
+# our CI doesn't need to install the heavy bindgen dependency.
+set_property(TARGET bindings PROPERTY EXCLUDE_FROM_ALL true)

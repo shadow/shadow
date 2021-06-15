@@ -1,0 +1,111 @@
+[package]
+name = "shadow-tests"
+version = "2.0.0-pre"
+edition = "2018"
+publish = false
+
+[lib]
+name = "test_utils"
+path = "test_utils.rs"
+
+[[bin]]
+name = "test_sleep"
+path = "sleep/test_sleep.rs"
+#harness = false
+
+[[bin]]
+name = "test_socket"
+path = "socket/socket/test_socket.rs"
+
+[[bin]]
+name = "test_bind"
+path = "socket/bind/test_bind.rs"
+
+[[bin]]
+name = "test_listen"
+path = "socket/listen/test_listen.rs"
+
+[[bin]]
+name = "test_getsockname"
+path = "socket/getsockname/test_getsockname.rs"
+
+[[bin]]
+name = "test_accept"
+path = "socket/accept/test_accept.rs"
+
+[[bin]]
+name = "test_connect"
+path = "socket/connect/test_connect.rs"
+
+[[bin]]
+name = "test_getpeername"
+path = "socket/getpeername/test_getpeername.rs"
+
+[[bin]]
+name = "test_socketpair"
+path = "socket/socketpair/test_socketpair.rs"
+
+[[bin]]
+name = "test_shutdown"
+path = "socket/shutdown/test_shutdown.rs"
+
+[[bin]]
+name = "test_sendto_recvfrom"
+path = "socket/sendto_recvfrom/test_sendto_recvfrom.rs"
+
+[[bin]]
+name = "test_sockopt"
+path = "socket/sockopt/test_sockopt.rs"
+
+[[bin]]
+name = "test_ioctl"
+path = "socket/ioctl/test_ioctl.rs"
+
+[[bin]]
+name = "test_random"
+path = "random/test_random.rs"
+
+[[bin]]
+name = "test_unistd"
+path = "unistd/test_unistd.rs"
+
+[[bin]]
+name = "test_poll"
+path = "poll/test_poll.rs"
+
+[[bin]]
+name = "test_mmap"
+path = "memory/test_mmap.rs"
+
+[[bin]]
+name = "test_unaligned"
+path = "memory/test_unaligned.rs"
+
+[[bin]]
+name = "test_eventfd"
+path = "eventfd/test_eventfd.rs"
+
+[[bin]]
+name = "test_pipe"
+path = "pipe/test_pipe.rs"
+
+[[bin]]
+name = "test_pthreads"
+path = "threads/test_pthreads.rs"
+
+[[bin]]
+name = "test_threads_noexit"
+path = "threads/test_threads_noexit.rs"
+
+[[bin]]
+name = "test_threads_group_leader_exits"
+path = "threads/test_threads_group_leader_exits.rs"
+
+[[bin]]
+name = "test_ifaddrs"
+path = "ifaddrs/test_ifaddrs.rs"
+
+[dependencies]
+libc = "0.2"
+nix = "0.21.0"
+rand = { version="0.8.0", features=["small_rng"] }

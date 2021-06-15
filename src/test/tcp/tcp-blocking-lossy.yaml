@@ -1,0 +1,32 @@
+general:
+  stop_time: 300
+network:
+  graph:
+    type: gml
+    inline: |
+      graph [
+        directed 0
+        node [
+          id 0
+          country_code "US"
+          bandwidth_down "81920 Kibit"
+          bandwidth_up "81920 Kibit"
+        ]
+        edge [
+          source 0
+          target 0
+          latency "50 ms"
+          packet_loss 0.25
+        ]
+      ]
+hosts:
+  lossy.tcpserver.echo:
+    processes:
+    - path: test-tcp
+      args: blocking server 0.0.0.0 1234
+      start_time: 1
+  lossy.tcpclient.echo:
+    processes:
+    - path: test-tcp
+      args: blocking client lossy.tcpserver.echo 1234
+      start_time: 2

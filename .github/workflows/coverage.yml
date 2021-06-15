@@ -1,0 +1,79 @@
+# Syntax reference:
+# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions
+
+name: Coverage
+permissions: read-all
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    types: [opened, synchronize]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  codecov:
+    runs-on: ubuntu-latest
+    container:
+      image: 'ubuntu:20.04'
+      # the default shm-size for ubuntu:18.04, but with the size increased from
+      # 65536k. github's default docker seccomp policy seems to disallow
+      # process_vm_readv and process_vm_writev; disable it altogether. See
+      # https://docs.docker.com/engine/security/seccomp/
+      options: '--shm-size="1g" --security-opt seccomp=unconfined'
+    env:
+      CC: 'clang-12'
+      CONTAINER: 'ubuntu:20.04'
+      BUILDTYPE: 'coverage'
+      RUSTPROFILE: minimal
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          . ci/container_scripts/install_deps.sh
+          . ci/container_scripts/install_extra_deps.sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Build
+        run: . ci/container_scripts/build_and_install.sh
+
+      - name: Test
+        run: . ci/container_scripts/test.sh
+
+      - name: Generate coverage report
+        run: |
+          cargo install grcov
+          grcov ./build -s src/ -t lcov --llvm --branch --ignore-not-existing -o ./grcov.lcov.txt
+
+      - name: Upload coverage report to codecov
+        uses: codecov/codecov-action@v1
+        with:
+          name: coverage
+          file: grcov.lcov.txt
+          flags: tests
+          fail_ci_if_error: false
+
+      - name: Upload shadow data directories
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: shadow-data-dirs
+          path: build/**/*.data/*
+
+      - name: Upload shadow log file
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: shadow-log-file
+          path: build/Testing/Temporary/*

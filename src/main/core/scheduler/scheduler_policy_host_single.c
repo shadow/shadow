@@ -96,8 +96,9 @@ static void _hostsinglethreaddata_free(HostSingleThreadData* tdata) {
             g_timer_destroy(tdata->popIdleTime);
         }
 
-        message("scheduler thread data destroyed, total push wait time was %f seconds, "
-                "total pop wait time was %f seconds", totalPushWaitTime, totalPopWaitTime);
+        info("scheduler thread data destroyed, total push wait time was %f seconds, "
+             "total pop wait time was %f seconds",
+             totalPushWaitTime, totalPopWaitTime);
 #endif
         g_free(tdata);
     }
@@ -185,8 +186,9 @@ static void _schedulerpolicyhostsingle_push(SchedulerPolicy* policy, Event* even
 
     if(srcHost != dstHost && eventTime < barrier) {
         event_setTime(event, barrier);
-        info("Inter-host event time %"G_GUINT64_FORMAT" changed to %"G_GUINT64_FORMAT" "
-                "to ensure event causality", eventTime, barrier);
+        debug("Inter-host event time %" G_GUINT64_FORMAT " changed to %" G_GUINT64_FORMAT " "
+              "to ensure event causality",
+              eventTime, barrier);
     }
 
     /* we want to track how long this thread spends idle waiting to push the event */
@@ -313,7 +315,7 @@ static SimulationTime _schedulerpolicyhostsingle_getNextTime(SchedulerPolicy* po
         g_queue_foreach(tdata->unprocessedHosts, (GFunc)_schedulerpolicyhostsingle_findMinTime, &searchState);
         g_queue_foreach(tdata->processedHosts, (GFunc)_schedulerpolicyhostsingle_findMinTime, &searchState);
     }
-    info("next event at time %"G_GUINT64_FORMAT, searchState.nextEventTime);
+    debug("next event at time %" G_GUINT64_FORMAT, searchState.nextEventTime);
 
     return searchState.nextEventTime;
 }

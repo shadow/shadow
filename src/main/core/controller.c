@@ -11,19 +11,16 @@
 #if !defined __USE_LARGEFILE64
 #define __USE_LARGEFILE64
 #endif
+
 #include <errno.h>
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <stddef.h>
 #include <unistd.h>
 
-#include "main/core/logger/shadow_logger.h"
 #include "main/core/controller.h"
 #include "main/core/manager.h"
-#include "main/core/support/configuration.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/examples.h"
-#include "main/core/support/options.h"
 #include "main/host/host.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
@@ -35,8 +32,7 @@
 
 struct _Controller {
     /* general options and user configuration for the simulation */
-    Options* options;
-    Configuration* config;
+    ConfigOptions* config;
 
     /* tracks overall wall-clock runtime */
     GTimer* runTimer;
@@ -69,7 +65,7 @@ struct _Controller {
 };
 
 // TODO
-//static gboolean _controller_handleInterruptSignal(controller* controller) {
+// static gboolean _controller_handleInterruptSignal(controller* controller) {
 //  MAGIC_ASSERT(controller);
 //
 //  /* handle (SIGHUP, SIGTERM, SIGINT), shutdown cleanly */
@@ -80,8 +76,8 @@ struct _Controller {
 //  return FALSE;
 //}
 
-Controller* controller_new(Options* options) {
-    utility_assert(options);
+Controller* controller_new(ConfigOptions* config) {
+    utility_assert(config);
 
     /* Don't do anything in this function that will cause a log message. The
      * global engine is still NULL since we are creating it now, and logging
@@ -91,43 +87,39 @@ Controller* controller_new(Options* options) {
     Controller* controller = g_new0(Controller, 1);
     MAGIC_INIT(controller);
 
-    controller->options = options;
-    controller->random = random_new(options_getRandomSeed(options));
+    controller->config = config;
+    controller->random = random_new(config_getSeed(config));
 
-    gint minRunAhead = (SimulationTime)options_getMinRunAhead(options);
-    controller->minJumpTimeConfig = ((SimulationTime)minRunAhead) * SIMTIME_ONE_MILLISECOND;
+    controller->minJumpTimeConfig = config_getRunahead(config);
 
     /* these are only avail in glib >= 2.30
      * setup signal handlers for gracefully handling shutdowns */
-//  TODO
-//  g_unix_signal_add(SIGTERM, (GSourceFunc)_controller_handleInterruptSignal, controller);
-//  g_unix_signal_add(SIGHUP, (GSourceFunc)_controller_handleInterruptSignal, controller);
-//  g_unix_signal_add(SIGINT, (GSourceFunc)_controller_handleInterruptSignal, controller);
+    //  TODO
+    //  g_unix_signal_add(SIGTERM, (GSourceFunc)_controller_handleInterruptSignal, controller);
+    //  g_unix_signal_add(SIGHUP, (GSourceFunc)_controller_handleInterruptSignal, controller);
+    //  g_unix_signal_add(SIGINT, (GSourceFunc)_controller_handleInterruptSignal, controller);
 
-    message("simulation controller created");
+    info("simulation controller created");
     return controller;
 }
 
 void controller_free(Controller* controller) {
     MAGIC_ASSERT(controller);
 
-    if(controller->topology) {
+    if (controller->topology) {
         topology_free(controller->topology);
     }
-    if(controller->dns) {
+    if (controller->dns) {
         dns_free(controller->dns);
     }
-    if(controller->config) {
-        configuration_free(controller->config);
-    }
-    if(controller->random) {
+    if (controller->random) {
         random_free(controller->random);
     }
 
     MAGIC_CLEAR(controller);
     g_free(controller);
 
-    message("simulation controller destroyed");
+    info("simulation controller destroyed");
 }
 
 static SimulationTime _controller_getMinTimeJump(Controller* controller) {
@@ -135,10 +127,11 @@ static SimulationTime _controller_getMinTimeJump(Controller* controller) {
 
     /* use minimum network latency of our topology
      * if not yet computed, default to 10 milliseconds */
-    SimulationTime minJumpTime = controller->minJumpTime > 0 ? controller->minJumpTime : 10 * SIMTIME_ONE_MILLISECOND;
+    SimulationTime minJumpTime =
+        controller->minJumpTime > 0 ? controller->minJumpTime : 10 * SIMTIME_ONE_MILLISECOND;
 
     /* if the command line option was given, use that as lower bound */
-    if(controller->minJumpTimeConfig > 0 && minJumpTime < controller->minJumpTimeConfig) {
+    if (controller->minJumpTimeConfig > 0 && minJumpTime < controller->minJumpTimeConfig) {
         minJumpTime = controller->minJumpTimeConfig;
     }
 
@@ -147,85 +140,42 @@ static SimulationTime _controller_getMinTimeJump(Controller* controller) {
 
 void controller_updateMinTimeJump(Controller* controller, gdouble minPathLatency) {
     MAGIC_ASSERT(controller);
-    if(controller->nextMinJumpTime == 0 || minPathLatency < controller->nextMinJumpTime) {
+    if (controller->nextMinJumpTime == 0 || minPathLatency < controller->nextMinJumpTime) {
         utility_assert(minPathLatency > 0.0f);
         SimulationTime oldJumpMS = controller->nextMinJumpTime;
         controller->nextMinJumpTime = ((SimulationTime)minPathLatency) * SIMTIME_ONE_MILLISECOND;
-        info("updated topology minimum time jump from %"G_GUINT64_FORMAT" to %"G_GUINT64_FORMAT" nanoseconds; "
-             "the minimum config override is %s (%"G_GUINT64_FORMAT" nanoseconds)",
-                oldJumpMS, controller->nextMinJumpTime, controller->minJumpTimeConfig > 0 ? "set" : "not set",
-                controller->minJumpTimeConfig);
-    }
-}
-
-static void _controller_loadConfiguration(Controller* controller) {
-    MAGIC_ASSERT(controller);
-
-    /* parse built-in examples, or input files */
-    GString* file = NULL;
-    // add options_doRunTGenExample() option
-    if(options_doRunTestExample(controller->options)) {
-        /* parse a built-in example */
-        file = example_getTestContents();
-    } else {
-        /* parse Shadow XML config file */
-        const GString* fileName = options_getInputXMLFilename(controller->options);
-        file = utility_getFileContents(fileName->str);
-    }
-
-    if(file) {
-        controller->config = configuration_new(controller->options, file);
-        g_string_free(file, TRUE);
-    }
-
-    /* if there was an error parsing, bounce out */
-    if(controller->config) {
-        message("successfully parsed Shadow XML input!");
-    } else {
-        error("error parsing Shadow XML input!");
+        debug("updated topology minimum time jump from %" G_GUINT64_FORMAT " to %" G_GUINT64_FORMAT
+              " nanoseconds; "
+              "the minimum config override is %s (%" G_GUINT64_FORMAT " nanoseconds)",
+              oldJumpMS, controller->nextMinJumpTime,
+              controller->minJumpTimeConfig > 0 ? "set" : "not set", controller->minJumpTimeConfig);
     }
 }
 
 static gboolean _controller_loadTopology(Controller* controller) {
     MAGIC_ASSERT(controller);
 
-    ConfigurationTopologyElement* e = configuration_getTopologyElement(controller->config);
-    gchar* temporaryFilename = utility_getNewTemporaryFilename("shadow-topology-XXXXXX.graphml.xml");
+    gchar* temporaryFilename =
+        utility_getNewTemporaryFilename("shadow-topology-XXXXXX.gml");
 
-    /* igraph wants a path to a graphml file, prefer a path over cdata */
-    if(e->path.isSet) {
-        /* now make the configured path exist, pointing to the new file */
-        gint result = symlink(e->path.string->str, temporaryFilename);
-        if(result < 0) {
-            warning("Unable to create symlink at %s pointing to %s; symlink() returned %i error %i: %s",
-                    temporaryFilename, e->path.string->str,
-                    result, errno, g_strerror(errno));
-        } else {
-            /* that better not be a dangling link */
-            g_assert(g_file_test(temporaryFilename, G_FILE_TEST_IS_SYMLINK) &&
-                    g_file_test(temporaryFilename, G_FILE_TEST_IS_REGULAR));
+    char* topologyString = config_getNetworkGraph(controller->config);
 
-            message("new topology file '%s' now linked at '%s'",
-                    e->path.string->str, temporaryFilename);
-        }
-    } else {
-        utility_assert(e->cdata.isSet);
-        GError* error = NULL;
-
-        /* copy the cdata to the new temporary filename */
-        if(!g_file_set_contents(temporaryFilename, e->cdata.string->str,
-                (gssize)e->cdata.string->len, &error)) {
-            error("unable to write cdata topology to '%s': %s", temporaryFilename, error->message);
-            return FALSE;
-        }
+    /* write the topology to a temporary file */
+    GError* error = NULL;
+    if (!g_file_set_contents(temporaryFilename, topologyString, strlen(topologyString), &error)) {
+        utility_panic(
+            "unable to write the topology to '%s': %s", temporaryFilename, error->message);
     }
 
+    config_freeString(topologyString);
+
     /* initialize global routing model */
-    controller->topology = topology_new(temporaryFilename);
+    controller->topology = topology_new(temporaryFilename, config_getUseShortestPath(controller->config));
     g_unlink(temporaryFilename);
 
-    if(!controller->topology) {
-        critical("fatal error loading topology at path '%s', check your syntax and try again", temporaryFilename);
+    if (!controller->topology) {
+        error("fatal error loading topology at path '%s', check your syntax and try again",
+              temporaryFilename);
         g_free(temporaryFilename);
         return FALSE;
     }
@@ -241,12 +191,11 @@ static void _controller_initializeTimeWindows(Controller* controller) {
     MAGIC_ASSERT(controller);
 
     /* set simulation end time */
-    ConfigurationShadowElement* e = configuration_getShadowElement(controller->config);
-    controller->endTime = (SimulationTime) (SIMTIME_ONE_SECOND * e->stoptime.integer);
+    controller->endTime = config_getStopTime(controller->config);
 
     /* simulation mode depends on configured number of workers */
-    guint nWorkers = options_getNWorkerThreads(controller->options);
-    if(nWorkers > 0) {
+    guint nWorkers = config_getWorkers(controller->config);
+    if (nWorkers > 0) {
         /* multi threaded, manage the other workers */
         controller->executeWindowStart = 0;
         SimulationTime jump = _controller_getMinTimeJump(controller);
@@ -258,154 +207,141 @@ static void _controller_initializeTimeWindows(Controller* controller) {
         controller->executeWindowEnd = G_MAXUINT64;
     }
 
-    /* check if we run in unlimited bandwidth mode */
-    ConfigurationShadowElement* shadowElm = configuration_getShadowElement(controller->config);
-
-    if(shadowElm && shadowElm->bootstrapEndTime.isSet) {
-        controller->bootstrapEndTime = (SimulationTime) (SIMTIME_ONE_SECOND * shadowElm->bootstrapEndTime.integer);
-    } else {
-        controller->bootstrapEndTime = (SimulationTime) 0;
-    }
+    controller->bootstrapEndTime = config_getBootstrapEndTime(controller->config);
 }
 
-static void _controller_registerPluginCallback(ConfigurationPluginElement* pe, Controller* controller) {
-    utility_assert(pe);
-    MAGIC_ASSERT(controller);
-    utility_assert(pe->id.isSet && pe->id.string);
-    manager_addNewProgram(controller->manager, pe->id.string->str, pe->path.string->str,
-                        pe->startsymbol.isSet ? pe->startsymbol.string->str : NULL);
-}
+static void _controller_registerArgCallback(const char* arg, void* _argArray) {
+    GPtrArray* argArray = _argArray;
 
-static void _controller_registerPlugins(Controller* controller) {
-    MAGIC_ASSERT(controller);
+    char* copiedArg = strdup(arg);
+    utility_assert(copiedArg != NULL);
 
-    GQueue* plugins = configuration_getPluginElements(controller->config);
-    g_queue_foreach(plugins, (GFunc)_controller_registerPluginCallback, controller);
+    g_ptr_array_add(argArray, copiedArg);
 }
 
 typedef struct _ProcessCallbackArgs {
     Controller* controller;
-    HostParameters* hostParams;
+    const char* hostname;
 } ProcessCallbackArgs;
 
-static void _controller_registerProcessCallback(ConfigurationProcessElement* pe, ProcessCallbackArgs* args) {
-    utility_assert(pe && args);
-    MAGIC_ASSERT(args->controller);
-    utility_assert(pe->plugin.isSet && pe->plugin.string);
-    utility_assert(pe->arguments.isSet && pe->arguments.string);
+static void _controller_registerProcessCallback(const ProcessOptions* proc, void* _callbackArgs) {
+    ProcessCallbackArgs* callbackArgs = _callbackArgs;
 
-    manager_addNewVirtualProcess(args->controller->manager, args->hostParams->hostname, pe->plugin.string->str,
-                        pe->preload.isSet ? pe->preload.string->str : NULL,
-                        SIMTIME_ONE_SECOND * pe->starttime.integer,
-                        pe->stoptime.isSet ? SIMTIME_ONE_SECOND * pe->stoptime.integer : 0,
-                        pe->arguments.string->str);
+    char* plugin = processoptions_getPath(proc);
+    if (plugin == NULL) {
+        utility_panic("The process binary could not be found");
+    }
+
+    // build an argv array
+    GPtrArray* argArray = g_ptr_array_new();
+    g_ptr_array_add(argArray, strdup(plugin));
+
+    // iterate through the arguments and copy them to our array
+    processoptions_getArgs(proc, _controller_registerArgCallback, (void*)argArray);
+
+    // the last element of argv must be NULL
+    g_ptr_array_add(argArray, NULL);
+
+    // free the GLib array but keep the data
+    gchar** argv = (gchar**)g_ptr_array_free(argArray, FALSE);
+
+    guint64 quantity = processoptions_getQuantity(proc);
+
+    char* environment = processoptions_getEnvironment(proc);
+
+    for (guint64 i = 0; i < quantity; i++) {
+        manager_addNewVirtualProcess(callbackArgs->controller->manager, callbackArgs->hostname,
+                                     plugin, processoptions_getStartTime(proc),
+                                     processoptions_getStopTime(proc), argv, environment);
+    }
+
+    processoptions_freeString(environment);
+    processoptions_freeString(plugin);
+    g_strfreev(argv);
 }
 
-static void _controller_registerHostCallback(ConfigurationHostElement* he, Controller* controller) {
+static void _controller_registerHostCallback(const char* name, const ConfigOptions* config,
+                                             const HostOptions* host, void* _controller) {
+    Controller* controller = _controller;
+
     MAGIC_ASSERT(controller);
-    utility_assert(he);
-    utility_assert(he->id.isSet && he->id.string);
+    utility_assert(host);
 
-    guint64 quantity = he->quantity.isSet ? he->quantity.integer : 1;
+    guint managerCpuFreq = manager_getRawCPUFrequency(controller->manager);
 
-    for(guint64 i = 0; i < quantity; i++) {
+    guint64 quantity = hostoptions_getQuantity(host);
+
+    for (guint64 i = 0; i < quantity; i++) {
         HostParameters* params = g_new0(HostParameters, 1);
 
-        /* hostname and id params */
-        const gchar* hostNameBase = he->id.string->str;
-
-        GString* hostnameBuffer = g_string_new(hostNameBase);
-        if(quantity > 1) {
-            g_string_append_printf(hostnameBuffer, "%"G_GUINT64_FORMAT, i+1);
+        GString* hostnameBuffer = g_string_new(name);
+        if (quantity > 1) {
+            g_string_append_printf(hostnameBuffer, "%" G_GUINT64_FORMAT, i + 1);
         }
         params->hostname = hostnameBuffer->str;
 
-        /* cpu params - if they didnt specify a CPU frequency, use the manager machine frequency */
-        gint managerCPUFreq = manager_getRawCPUFrequency(controller->manager);
-        params->cpuFrequency = he->cpufrequency.isSet ? he->cpufrequency.integer : (managerCPUFreq > 0) ? (guint64)managerCPUFreq : 0;
-        if(params->cpuFrequency == 0) {
-            params->cpuFrequency = 2500000; // 2.5 GHz
-            debug("both configured and raw manager cpu frequencies unavailable, using 2500000 KHz");
-        }
+        params->cpuFrequency = MAX(0, managerCpuFreq);
+        params->cpuThreshold = 0;
+        params->cpuPrecision = 200;
 
-        gint defaultCPUThreshold = options_getCPUThreshold(controller->options);
-        params->cpuThreshold = defaultCPUThreshold > 0 ? defaultCPUThreshold : 0;
-        gint defaultCPUPrecision = options_getCPUPrecision(controller->options);
-        params->cpuPrecision = defaultCPUPrecision > 0 ? defaultCPUPrecision : 0;
+        params->logLevel = hostoptions_getLogLevel(host);
+        params->heartbeatLogLevel = hostoptions_getHeartbeatLogLevel(host);
+        params->heartbeatLogInfo = hostoptions_getHeartbeatLogInfo(host);
+        params->heartbeatInterval = hostoptions_getHeartbeatInterval(host);
 
-        params->logLevel = he->loglevel.isSet ?
-                loglevel_fromStr(he->loglevel.string->str) :
-                options_getLogLevel(controller->options);
+        params->pcapDir = hostoptions_getPcapDirectory(host);
 
-        params->heartbeatLogLevel = he->heartbeatloglevel.isSet ?
-                loglevel_fromStr(he->heartbeatloglevel.string->str) :
-                options_getHeartbeatLogLevel(controller->options);
+        params->ipHint = hostoptions_getIpAddressHint(host);
+        params->countrycodeHint = hostoptions_getCountryCodeHint(host);
+        params->citycodeHint = hostoptions_getCityCodeHint(host);
 
-        params->heartbeatInterval = he->heartbeatfrequency.isSet ?
-                (SimulationTime)(he->heartbeatfrequency.integer * SIMTIME_ONE_SECOND) :
-                options_getHeartbeatInterval(controller->options);
+        /* shadow uses values in KiB/s, but the config uses b/s */
+        /* TODO: use bits or bytes everywhere within Shadow (see also:
+         * _topology_findVertexAttributeStringBandwidth()) */
+        params->requestedBWDownKiBps = hostoptions_getBandwidthDown(host) / (8 * 1024);
+        params->requestedBWUpKiBps = hostoptions_getBandwidthUp(host) / (8 * 1024);
 
-        params->heartbeatLogInfo = he->heartbeatloginfo.isSet ?
-                options_toHeartbeatLogInfo(controller->options, he->heartbeatloginfo.string->str) :
-                options_getHeartbeatLogInfo(controller->options);
-
-        params->logPcap = (he->logpcap.isSet && !g_ascii_strcasecmp(he->logpcap.string->str, "true")) ? TRUE : FALSE;
-        params->pcapDir = he->pcapdir.isSet ? he->pcapdir.string->str : NULL;
-
-        /* socket buffer settings - if size is set manually, turn off autotuning */
-        params->recvBufSize = he->socketrecvbuffer.isSet ? he->socketrecvbuffer.integer :
-                options_getSocketReceiveBufferSize(controller->options);
-        params->autotuneRecvBuf = he->socketrecvbuffer.isSet ? FALSE :
-                options_doAutotuneReceiveBuffer(controller->options);
-
-        params->sendBufSize = he->socketsendbuffer.isSet ? he->socketsendbuffer.integer :
-                options_getSocketSendBufferSize(controller->options);
-        params->autotuneSendBuf = he->socketsendbuffer.isSet ? FALSE :
-                options_doAutotuneSendBuffer(controller->options);
-
-        params->interfaceBufSize = he->interfacebuffer.isSet ? he->interfacebuffer.integer :
-                options_getInterfaceBufferSize(controller->options);
-        params->qdisc = options_getQueuingDiscipline(controller->options);
-
-        /* requested attributes from shadow config */
-        params->ipHint = he->ipHint.isSet ? he->ipHint.string->str : NULL;
-        params->countrycodeHint = he->countrycodeHint.isSet ? he->countrycodeHint.string->str : NULL;
-        params->citycodeHint = he->citycodeHint.isSet ? he->citycodeHint.string->str : NULL;
-        params->geocodeHint = he->geocodeHint.isSet ? he->geocodeHint.string->str : NULL;
-        params->typeHint = he->typeHint.isSet ? he->typeHint.string->str : NULL;
-        params->requestedBWDownKiBps = he->bandwidthdown.isSet ? he->bandwidthdown.integer : 0;
-        params->requestedBWUpKiBps = he->bandwidthup.isSet ? he->bandwidthup.integer : 0;
+        /* some options come from the config options and not the host options */
+        params->sendBufSize = config_getSocketSendBuffer(config);
+        params->recvBufSize = config_getSocketRecvBuffer(config);
+        params->autotuneSendBuf = config_getSocketSendAutotune(config);
+        params->autotuneRecvBuf = config_getSocketRecvAutotune(config);
+        params->interfaceBufSize = config_getInterfaceBuffer(config);
+        params->qdisc = config_getInterfaceQdisc(config);
 
         manager_addNewVirtualHost(controller->manager, params);
 
         ProcessCallbackArgs processArgs;
         processArgs.controller = controller;
-        processArgs.hostParams = params;
+        processArgs.hostname = hostnameBuffer->str;
 
         /* now handle each virtual process the host will run */
-        g_queue_foreach(he->processes, (GFunc)_controller_registerProcessCallback, &processArgs);
+        hostoptions_iterProcesses(host, _controller_registerProcessCallback, (void*)&processArgs);
 
         /* cleanup for next pass through the loop */
         g_string_free(hostnameBuffer, TRUE);
+
+        hostoptions_freeString(params->pcapDir);
+        hostoptions_freeString(params->ipHint);
+        hostoptions_freeString(params->countrycodeHint);
+        hostoptions_freeString(params->citycodeHint);
+
         g_free(params);
     }
 }
 
 static void _controller_registerHosts(Controller* controller) {
     MAGIC_ASSERT(controller);
-    GQueue* hosts = configuration_getHostElements(controller->config);
-    g_queue_foreach(hosts, (GFunc)_controller_registerHostCallback, controller);
+    config_iterHosts(controller->config, _controller_registerHostCallback, (void*)controller);
 }
 
 gint controller_run(Controller* controller) {
     MAGIC_ASSERT(controller);
 
-    message("loading and initializing simulation data");
+    info("loading and initializing simulation data");
 
-    /* start loading and initializing simulation data */
-    _controller_loadConfiguration(controller);
     gboolean isSuccess = _controller_loadTopology(controller);
-    if(!isSuccess) {
+    if (!isSuccess) {
         return 1;
     }
 
@@ -415,22 +351,25 @@ gint controller_run(Controller* controller) {
      * they all have a consistent view of the simulation, topology, etc.
      * For now we only have one manager so send it everything. */
     guint managerSeed = random_nextUInt(controller->random);
-    controller->manager = manager_new(controller, controller->options, controller->endTime, controller->bootstrapEndTime,
-            managerSeed);
+    controller->manager = manager_new(controller, controller->config, controller->endTime,
+                                      controller->bootstrapEndTime, managerSeed);
 
-    message("registering plugins and hosts");
+    if (controller->manager == NULL) {
+        utility_panic("unable to create manager");
+    }
+
+    info("registering plugins and hosts");
 
     /* register the components needed by each manager.
      * this must be done after managers are available so we can send them messages */
-    _controller_registerPlugins(controller);
     _controller_registerHosts(controller);
 
-    message("running simulation");
+    info("running simulation");
 
-    /* dont buffer log messages in debug mode */
-    if(options_getLogLevel(controller->options) != LOGLEVEL_DEBUG) {
-        message("log message buffering is enabled for efficiency");
-        shadow_logger_setEnableBuffering(shadow_logger_getDefault(), TRUE);
+    /* dont buffer log messages in trace mode */
+    if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
+        info("log message buffering is enabled for efficiency");
+        shadow_logger_setEnableBuffering(TRUE);
     }
 
     /* start running each manager */
@@ -438,18 +377,20 @@ gint controller_run(Controller* controller) {
 
     /* only need to disable buffering if it was enabled, otherwise
      * don't log the message as it may confuse the user. */
-    if(options_getLogLevel(controller->options) != LOGLEVEL_DEBUG) {
-        message("log message buffering is disabled during cleanup");
-        shadow_logger_setEnableBuffering(shadow_logger_getDefault(), FALSE);
+    if (config_getLogLevel(controller->config) != LOGLEVEL_TRACE) {
+        info("log message buffering is disabled during cleanup");
+        shadow_logger_setEnableBuffering(FALSE);
     }
 
-    message("simulation finished, cleaning up now");
+    info("simulation finished, cleaning up now");
 
     return manager_free(controller->manager);
 }
 
-gboolean controller_managerFinishedCurrentRound(Controller* controller, SimulationTime minNextEventTime,
-        SimulationTime* executeWindowStart, SimulationTime* executeWindowEnd) {
+gboolean controller_managerFinishedCurrentRound(Controller* controller,
+                                                SimulationTime minNextEventTime,
+                                                SimulationTime* executeWindowStart,
+                                                SimulationTime* executeWindowEnd) {
     MAGIC_ASSERT(controller);
     utility_assert(executeWindowStart && executeWindowEnd);
 
@@ -465,7 +406,7 @@ gboolean controller_managerFinishedCurrentRound(Controller* controller, Simulati
 
     /* update the new window end as one interval past the new window start,
      * making sure we dont run over the experiment end time */
-    if(newEnd > controller->endTime) {
+    if (newEnd > controller->endTime) {
         newEnd = controller->endTime;
     }
 

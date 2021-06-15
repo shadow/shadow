@@ -3,21 +3,22 @@
  * See LICENSE for licensing information
  */
 
+#include <elf.h>
 #include <errno.h>
 #include <glib.h>
+#include <inttypes.h>
+#include <link.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stddef.h>
 #include <sys/resource.h>
 
-#include "main/core/logger/shadow_logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/core/controller.h"
+#include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
-#include "main/core/manager.h"
 #include "main/core/support/definitions.h"
-#include "main/core/support/object_counter.h"
-#include "main/core/support/options.h"
 #include "main/host/host.h"
 #include "main/host/network_interface.h"
 #include "main/routing/address.h"
@@ -27,28 +28,16 @@
 #include "main/utility/utility.h"
 #include "support/logger/logger.h"
 
-typedef struct {
-
-  /* the program name. */
-  gchar* name;
-
-  /* the path to the executable */
-  gchar* path;
-
-  /* the start symbol for the program */
-  gchar* startSymbol;
-  
-  MAGIC_DECLARE;
-} _ProgramMeta;
+#define PRELOAD_SHIM_LIB_STR "libshadow-shim.so"
 
 struct _Manager {
     Controller* controller;
 
     /* the worker object associated with the main thread of execution */
-//    Worker* mainWorker;
+    //    Worker* mainWorker;
 
     /* simulation cli options */
-    Options* options;
+    ConfigOptions* config;
     SimulationTime bootstrapEndTime;
 
     /* manager random source, init from controller random, used to init host randoms */
@@ -56,13 +45,14 @@ struct _Manager {
     guint rawFrequencyKHz;
 
     /* global object counters, we collect counts from workers at end of sim */
-    ObjectCounter* objectCounts;
+    Counter* object_counter_alloc;
+    Counter* object_counter_dealloc;
+
+    // Global syscall counter, we collect counts from workers at end of sim
+    Counter* syscall_counter;
 
     /* the parallel event/host/thread scheduler */
     Scheduler* scheduler;
-
-    /* the meta data for each program */
-    GHashTable* programMeta;
 
     GMutex lock;
     GMutex pluginInitLock;
@@ -78,6 +68,8 @@ struct _Manager {
     gchar* cwdPath;
     gchar* dataPath;
     gchar* hostsPath;
+
+    gchar* preloadShimPath;
 
     MAGIC_DECLARE;
 };
@@ -99,61 +91,65 @@ static Host* _manager_getHost(Manager* manager, GQuark hostID) {
     return scheduler_getHost(manager->scheduler, hostID);
 }
 
-/* XXX this really belongs in the configuration file */
-static SchedulerPolicyType _manager_getEventSchedulerPolicy(Manager* manager) {
-    const gchar* policyStr = options_getEventSchedulerPolicy(manager->options);
-    if (g_ascii_strcasecmp(policyStr, "host") == 0) {
-        return SP_PARALLEL_HOST_SINGLE;
-    } else if (g_ascii_strcasecmp(policyStr, "steal") == 0) {
-        return SP_PARALLEL_HOST_STEAL;
-    } else if (g_ascii_strcasecmp(policyStr, "thread") == 0) {
-        return SP_PARALLEL_THREAD_SINGLE;
-    } else if (g_ascii_strcasecmp(policyStr, "threadXthread") == 0) {
-        return SP_PARALLEL_THREAD_PERTHREAD;
-    } else if (g_ascii_strcasecmp(policyStr, "threadXhost") == 0) {
-        return SP_PARALLEL_THREAD_PERHOST;
-    } else {
-        error("unknown event scheduler policy '%s'; valid values are 'thread', 'host', 'threadXthread', or 'threadXhost'", policyStr);
-        return SP_SERIAL_GLOBAL;
+static gchar* _manager_getRPath() {
+    const ElfW(Dyn) *dyn = _DYNAMIC;
+    const ElfW(Dyn) *rpath = NULL;
+    const gchar *strtab = NULL;
+    for (; dyn->d_tag != DT_NULL; ++dyn) {
+        if (dyn->d_tag == DT_RPATH || dyn->d_tag == DT_RUNPATH) {
+            rpath = dyn;
+        } else if (dyn->d_tag == DT_STRTAB) {
+            strtab = (const gchar *) dyn->d_un.d_val;
+        }
     }
+    GString* rpathStrBuf = g_string_new(NULL );
+    if (strtab != NULL && rpath != NULL ) {
+        g_string_printf(rpathStrBuf, "%s", strtab + rpath->d_un.d_val);
+    }
+    return g_string_free(rpathStrBuf, FALSE);
 }
 
-_ProgramMeta* _program_meta_new(const gchar* name, const gchar* path, const gchar* startSymbol) {
-    if((name == NULL) || (path == NULL)) {
-        error("attempting to register a program with a null name and/or path");
+static gboolean _manager_isValidPathToPreloadLib(const gchar* path) {
+    if(path) {
+        gboolean isAbsolute = g_path_is_absolute(path);
+        gboolean exists = g_file_test(path, G_FILE_TEST_IS_REGULAR|G_FILE_TEST_EXISTS);
+        gboolean isShadowPreload = g_str_has_suffix(path, PRELOAD_SHIM_LIB_STR);
+
+        if(isAbsolute && exists && isShadowPreload) {
+            return TRUE;
+        }
     }
 
-    _ProgramMeta* meta = g_new0(_ProgramMeta, 1);
-    MAGIC_INIT(meta);
-
-    meta->name = g_strdup(name);
-    meta->path = g_strdup(path);
-
-    if(startSymbol != NULL) {
-        meta->startSymbol = g_strdup(startSymbol);
-    }
-
-    return meta;
+    return FALSE;
 }
 
-void _program_meta_free(gpointer data) {
-    _ProgramMeta* meta = (_ProgramMeta*)data;
-    MAGIC_ASSERT(meta);
+static gchar* _manager_scanRPathForPreloadShim(){
+    gchar* preloadArgValue = NULL;
 
-    if(meta->name) {
-        g_free(meta->name);
+    gchar* rpathStr = _manager_getRPath();
+    if(rpathStr != NULL) {
+        gchar** tokens = g_strsplit(rpathStr, ":", 0);
+
+        for(gint i = 0; tokens[i] != NULL; i++) {
+            GString* candidateBuffer = g_string_new(NULL);
+
+            /* rpath specifies directories, so look inside */
+            g_string_printf(candidateBuffer, "%s/%s", tokens[i], PRELOAD_SHIM_LIB_STR);
+            gchar* candidate = g_string_free(candidateBuffer, FALSE);
+
+            if(_manager_isValidPathToPreloadLib(candidate)) {
+                preloadArgValue = candidate;
+                break;
+            } else {
+                g_free(candidate);
+            }
+        }
+
+        g_strfreev(tokens);
     }
+    g_free(rpathStr);
 
-    if(meta->path) {
-        g_free(meta->path);
-    }
-
-    if(meta->startSymbol) {
-        g_free(meta->startSymbol);
-    }
-
-    MAGIC_CLEAR(meta);
-    g_free(meta);
+    return preloadArgValue;
 }
 
 static guint _manager_nextRandomUInt(Manager* manager) {
@@ -164,9 +160,9 @@ static guint _manager_nextRandomUInt(Manager* manager) {
     return r;
 }
 
-Manager* manager_new(Controller* controller, Options* options, SimulationTime endTime, SimulationTime unlimBWEndTime,
-        guint randomSeed) {
-    if(globalmanager != NULL) {
+Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTime endTime,
+                     SimulationTime unlimBWEndTime, guint randomSeed) {
+    if (globalmanager != NULL) {
         return NULL;
     }
 
@@ -178,42 +174,77 @@ Manager* manager_new(Controller* controller, Options* options, SimulationTime en
     g_mutex_init(&(manager->pluginInitLock));
 
     manager->controller = controller;
-    manager->options = options;
+    manager->config = config;
     manager->random = random_new(randomSeed);
-    manager->objectCounts = objectcounter_new();
     manager->bootstrapEndTime = unlimBWEndTime;
 
     manager->rawFrequencyKHz = utility_getRawCPUFrequency(CONFIG_CPU_MAX_FREQ_FILE);
-    if(manager->rawFrequencyKHz == 0) {
-        info("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
+    if (manager->rawFrequencyKHz == 0) {
+        debug("unable to read '%s' for copying", CONFIG_CPU_MAX_FREQ_FILE);
+        manager->rawFrequencyKHz = 2500000; // 2.5 GHz
+        trace("raw manager cpu frequency unavailable, using 2,500,000 KHz");
     }
 
-    /* we will store the plug-in program meta data */
-    manager->programMeta = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, _program_meta_free);
+    manager->preloadShimPath = _manager_scanRPathForPreloadShim();
+    if (manager->preloadShimPath != NULL) {
+        info("found %s at %s", PRELOAD_SHIM_LIB_STR, manager->preloadShimPath);
+    } else {
+        utility_panic("could not find %s in rpath", PRELOAD_SHIM_LIB_STR);
+    }
 
     /* the main scheduler may utilize multiple threads */
 
-    guint nWorkers = options_getNWorkerThreads(options);
-    SchedulerPolicyType policy = _manager_getEventSchedulerPolicy(manager);
+    guint nWorkers = config_getWorkers(config);
+    SchedulerPolicyType policy = config_getSchedulerPolicy(config);
     guint schedulerSeed = _manager_nextRandomUInt(manager);
     manager->scheduler =
         scheduler_new(manager, policy, nWorkers, schedulerSeed, endTime);
 
     manager->cwdPath = g_get_current_dir();
-    manager->dataPath = g_build_filename(manager->cwdPath, options_getDataOutputPath(options), NULL);
+
+    char* dataDirectory = config_getDataDirectory(config);
+
+    if (dataDirectory == NULL) {
+        // we shouldn't reach this, but panic anyways
+        utility_panic("Data directory was not set");
+    }
+
+    manager->dataPath = g_build_filename(manager->cwdPath, dataDirectory, NULL);
+    config_freeString(dataDirectory);
+
     manager->hostsPath = g_build_filename(manager->dataPath, "hosts", NULL);
 
-    if(g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
-        gboolean success = utility_removeAll(manager->dataPath);
-        utility_assert(success);
+    if (g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
+        utility_panic("data directory '%s' already exists", manager->dataPath);
     }
 
-    gchar* templateDataPath = g_build_filename(manager->cwdPath, options_getDataTemplatePath(options), NULL);
-    if(g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
-        gboolean success = utility_copyAll(templateDataPath, manager->dataPath);
-        utility_assert(success);
+    char* templateDirectory = config_getTemplateDirectory(config);
+
+    if (templateDirectory != NULL) {
+        gchar* templateDataPath = g_build_filename(manager->cwdPath, templateDirectory, NULL);
+        config_freeString(templateDirectory);
+
+        debug("Copying template directory %s to %s", templateDataPath, manager->dataPath);
+
+        if (!g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
+            utility_panic("data template directory '%s' does not exist", templateDataPath);
+        }
+
+        if (!utility_copyAll(templateDataPath, manager->dataPath)) {
+            utility_panic("could not copy the data template directory '%s'", templateDataPath);
+        }
+
+        g_free(templateDataPath);
+    } else {
+        /* provide a warning for backwards compatibility; can remove this sometime in the future */
+        gchar* compatTemplatePath =
+            g_build_filename(manager->cwdPath, "shadow.data.template", NULL);
+        if (g_file_test(compatTemplatePath, G_FILE_TEST_EXISTS)) {
+            warning("The directory 'shadow.data.template' exists, but '--data-template' was not "
+                    "set. Ignore this warning if this was intentional.");
+        }
+        g_free(compatTemplatePath);
     }
-    g_free(templateDataPath);
 
     /* now make sure the hosts path exists, as it may not have been in the template */
     g_mkdir_with_parents(manager->hostsPath, 0775);
@@ -228,20 +259,43 @@ gint manager_free(Manager* manager) {
     /* we will never execute inside the plugin again */
     manager->forceShadowContext = TRUE;
 
-    if(manager->scheduler) {
+    if (manager->scheduler) {
         /* stop all of the threads and release host resources first */
         scheduler_shutdown(manager->scheduler);
         /* now we are the last one holding a ref, free the sched */
         scheduler_unref(manager->scheduler);
     }
 
-    if(manager->objectCounts != NULL) {
-        message("%s", objectcounter_valuesToString(manager->objectCounts));
-        message("%s", objectcounter_diffsToString(manager->objectCounts));
-        objectcounter_free(manager->objectCounts);
+    if (manager->syscall_counter) {
+        char* str = counter_alloc_string(manager->syscall_counter);
+        info("Global syscall counts: %s", str);
+        counter_free_string(manager->syscall_counter, str);
+        counter_free(manager->syscall_counter);
     }
 
-    g_hash_table_destroy(manager->programMeta);
+    if (manager->object_counter_alloc && manager->object_counter_dealloc) {
+        char* str = counter_alloc_string(manager->object_counter_alloc);
+        info("Global allocated object counts: %s", str);
+        counter_free_string(manager->object_counter_alloc, str);
+
+        str = counter_alloc_string(manager->object_counter_dealloc);
+        info("Global deallocated object counts: %s", str);
+        counter_free_string(manager->object_counter_dealloc, str);
+
+        if (counter_equals_counter(
+                manager->object_counter_alloc, manager->object_counter_dealloc)) {
+            info("We allocated and deallocated the same number of objects :)");
+        } else {
+            /* don't change the formatting of this line as we search for it in test cases */
+            warning("Memory leak detected");
+        }
+    }
+    if (manager->object_counter_alloc) {
+        counter_free(manager->object_counter_alloc);
+    }
+    if (manager->object_counter_dealloc) {
+        counter_free(manager->object_counter_dealloc);
+    }
 
     g_mutex_clear(&(manager->lock));
     g_mutex_clear(&(manager->pluginInitLock));
@@ -255,8 +309,11 @@ gint manager_free(Manager* manager) {
     if (manager->hostsPath) {
         g_free(manager->hostsPath);
     }
-    if(manager->random) {
+    if (manager->random) {
         random_free(manager->random);
+    }
+    if (manager->preloadShimPath) {
+        g_free(manager->preloadShimPath);
     }
 
     MAGIC_CLEAR(manager);
@@ -279,21 +336,6 @@ guint manager_getRawCPUFrequency(Manager* manager) {
     return freq;
 }
 
-void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path, const gchar* startSymbol) {
-    MAGIC_ASSERT(manager);
-
-    /* store the path to the plugin and maybe the start symbol with the given
-     * name so that we can retrieve the path later when hosts' processes want
-     * to load it */
-    if(g_hash_table_lookup(manager->programMeta, name) != NULL) {
-        error("attempting to regiser 2 plugins with the same path."
-              "this should have been caught by the configuration parser.");
-    } else {
-        _ProgramMeta* meta = _program_meta_new(name, path, startSymbol);
-        g_hash_table_replace(manager->programMeta, g_strdup(name), meta);
-    }
-}
-
 void manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
     MAGIC_ASSERT(manager);
 
@@ -303,36 +345,118 @@ void manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
 
     Host* host = host_new(params);
     host_setup(host, manager_getDNS(manager), manager_getTopology(manager),
-            manager_getRawCPUFrequency(manager), manager_getHostsRootPath(manager));
+               manager_getRawCPUFrequency(manager), manager_getHostsRootPath(manager));
     scheduler_addHost(manager->scheduler, host);
 }
 
-void manager_addNewVirtualProcess(Manager* manager, gchar* hostName, gchar* pluginName, gchar* preloadName,
-        SimulationTime startTime, SimulationTime stopTime, gchar* arguments) {
+static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interposeMethod,
+                                     const gchar* preloadShimPath, const gchar* environment) {
+    MAGIC_ASSERT(manager);
+
+    /* start with an empty environment */
+    gchar** envv = g_environ_setenv(NULL, "SHADOW_SPAWNED", "TRUE", TRUE);
+
+    {
+        // Pass the (real) start time to the plugin, so that shim-side logging
+        // can log real time from the correct offset.
+        char* timestring = g_strdup_printf("%" PRId64, logger_get_global_start_time_micros());
+        envv = g_environ_setenv(envv, "SHADOW_LOG_START_TIME", timestring, TRUE);
+        g_free(timestring);
+    }
+
+    switch (interposeMethod) {
+        case INTERPOSE_METHOD_PTRACE:
+            envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PTRACE", 0);
+            break;
+        case INTERPOSE_METHOD_PRELOAD:
+            envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD", 0);
+            break;
+        case INTERPOSE_METHOD_HYBRID:
+            envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "HYBRID", 0);
+            break;
+    }
+
+    /* insert also the plugin preload entry if one exists.
+     * precendence here is:
+     *   - preload path of the shim
+     *   - preload values from LD_PRELOAD entries in the environment attribute of the shadow
+     * element*/
+    GPtrArray* ldPreloadArray = g_ptr_array_new();
+    debug("adding shim path %s", preloadShimPath ? preloadShimPath : "null");
+    g_ptr_array_add(ldPreloadArray, g_strdup(preloadShimPath));
+
+    /* now we also have to scan the other env variables that were given in the shadow conf file */
+
+    if (environment) {
+        /* entries are split by ';' */
+        gchar** envTokens = g_strsplit(environment, ";", 0);
+
+        for (gint i = 0; envTokens[i] != NULL; i++) {
+            /* each env entry is key=value, get 2 tokens max */
+            gchar** items = g_strsplit(envTokens[i], "=", 2);
+
+            gchar* key = items[0];
+            gchar* value = items[1];
+
+            if (key != NULL && value != NULL) {
+                /* check if the key is LD_PRELOAD */
+                if (!g_ascii_strncasecmp(key, "LD_PRELOAD", 10)) {
+                    /* append all LD_PRELOAD entries */
+                    debug("adding key path %s", value);
+                    g_ptr_array_add(ldPreloadArray, g_strdup(value));
+                } else {
+                    /* set the key=value pair, but don't overwrite any existing settings */
+                    envv = g_environ_setenv(envv, key, value, 0);
+                }
+            }
+
+            g_strfreev(items);
+        }
+
+        g_strfreev(envTokens);
+    }
+
+    /* must be NULL terminated for g_strjoinv */
+    g_ptr_array_add(ldPreloadArray, NULL);
+
+    gchar* ldPreloadVal = g_strjoinv(":", (gchar**)ldPreloadArray->pdata);
+    g_ptr_array_unref(ldPreloadArray);
+
+    /* now we can set the LD_PRELOAD environment */
+    envv = g_environ_setenv(envv, "LD_PRELOAD", ldPreloadVal, TRUE);
+
+    /* cleanup */
+    g_free(ldPreloadVal);
+
+    return envv;
+}
+
+void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar* pluginPath,
+                                  SimulationTime startTime, SimulationTime stopTime, gchar** argv,
+                                  char* environment) {
     MAGIC_ASSERT(manager);
 
     /* quarks are unique per process, so do the conversion here */
     GQuark hostID = g_quark_from_string(hostName);
 
-    _ProgramMeta* meta = g_hash_table_lookup(manager->programMeta, pluginName);
-    if(meta == NULL) {
-        error("plugin not found for name '%s'. this should be verified in the "
-              "config parser.", pluginName);
-    }
+    InterposeMethod interposeMethod = config_getInterposeMethod(manager->config);
 
-    _ProgramMeta* preload = NULL;
-    if(preloadName != NULL) {
-        preload = g_hash_table_lookup(manager->programMeta, preloadName);
-        if(preload == NULL) {
-            error("preload plugin not found for name '%s'. this should be verified in the config parser", preloadName);
-        }
-    }
+    /* ownership is passed to the host/process below, so we don't free these */
+    gchar** envv = _manager_generateEnvv(
+        manager, interposeMethod, manager->preloadShimPath, environment);
 
     Host* host = scheduler_getHost(manager->scheduler, hostID);
     host_continueExecutionTimer(host);
-    host_addApplication(host, startTime, stopTime, pluginName, meta->path, 
-                        meta->startSymbol, preloadName, 
-                        preload ? preload->path : NULL, arguments);
+
+    gchar* pluginName = g_path_get_basename(pluginPath);
+    if (pluginName == NULL) {
+        utility_panic("Could not get basename of plugin path");
+    }
+
+    host_addApplication(
+        host, startTime, stopTime, interposeMethod, pluginName, pluginPath, envv, argv);
+    g_free(pluginName);
+
     host_stopExecutionTimer(host);
 }
 
@@ -369,9 +493,9 @@ gdouble manager_getLatency(Manager* manager, GQuark sourceNodeID, GQuark destina
     return controller_getLatency(manager->controller, sourceAddress, destinationAddress);
 }
 
-Options* manager_getOptions(Manager* manager) {
+const ConfigOptions* manager_getConfig(Manager* manager) {
     MAGIC_ASSERT(manager);
-    return manager->options;
+    return manager->config;
 }
 
 gboolean manager_schedulerIsRunning(Manager* manager) {
@@ -391,22 +515,27 @@ void manager_updateMinTimeJump(Manager* manager, gdouble minPathLatency) {
 static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
     MAGIC_ASSERT(manager);
 
-    if(simClockNow > (manager->simClockLastHeartbeat + options_getHeartbeatInterval(manager->options))) {
+    SimulationTime heartbeatInterval = config_getHeartbeatInterval(manager->config);
+
+    if (simClockNow > (manager->simClockLastHeartbeat + heartbeatInterval)) {
         manager->simClockLastHeartbeat = simClockNow;
 
         struct rusage resources;
-        if(!getrusage(RUSAGE_SELF, &resources)) {
+        if (!getrusage(RUSAGE_SELF, &resources)) {
             /* success, convert the values */
-            gdouble maxMemory = ((gdouble)resources.ru_maxrss)/((gdouble)1048576.0f); // Kib->GiB
-            gdouble userTimeMinutes = ((gdouble)resources.ru_utime.tv_sec)/((gdouble)60.0f);
-            gdouble systemTimeMinutes = ((gdouble)resources.ru_stime.tv_sec)/((gdouble)60.0f);
+            gdouble maxMemory = ((gdouble)resources.ru_maxrss) / ((gdouble)1048576.0f); // Kib->GiB
+            gdouble userTimeMinutes = ((gdouble)resources.ru_utime.tv_sec) / ((gdouble)60.0f);
+            gdouble systemTimeMinutes = ((gdouble)resources.ru_stime.tv_sec) / ((gdouble)60.0f);
 
             /* log the usage results */
-            message("process resource usage at simtime %"G_GUINT64_FORMAT" reported by getrusage(): "
-                    "ru_maxrss=%03f GiB, ru_utime=%03f minutes, ru_stime=%03f minutes, ru_nvcsw=%li, ru_nivcsw=%li",
-                    simClockNow, maxMemory, userTimeMinutes, systemTimeMinutes, resources.ru_nvcsw, resources.ru_nivcsw);
+            info("process resource usage at simtime %" G_GUINT64_FORMAT " reported by getrusage(): "
+                 "ru_maxrss=%03f GiB, ru_utime=%03f minutes, ru_stime=%03f minutes, "
+                 "ru_nvcsw=%li, ru_nivcsw=%li",
+                 simClockNow, maxMemory, userTimeMinutes, systemTimeMinutes, resources.ru_nvcsw,
+                 resources.ru_nivcsw);
         } else {
-            warning("unable to print process resources usage: error %i in getrusage: %s", errno, g_strerror(errno));
+            warning("unable to print process resources usage: error %i in getrusage: %s", errno,
+                    g_strerror(errno));
         }
     }
 }
@@ -428,21 +557,15 @@ void manager_run(Manager* manager) {
         /* do some idle processing here if needed */
         _manager_heartbeat(manager, windowStart);
 
-        /* flush manager threads messages */
-        shadow_logger_flushRecords(shadow_logger_getDefault(), pthread_self());
-
-        /* let the logger know it can flush everything prior to this round */
-        shadow_logger_syncToDisk(shadow_logger_getDefault());
-
         /* wait for the workers to finish processing nodes before we update the
          * execution window
          */
         minNextEventTime = scheduler_awaitNextRound(manager->scheduler);
 
         /* we are in control now, the workers are waiting for the next round */
-        info("finished execution window [%" G_GUINT64_FORMAT
-             "--%" G_GUINT64_FORMAT "] next event at %" G_GUINT64_FORMAT,
-             windowStart, windowEnd, minNextEventTime);
+        debug("finished execution window [%" G_GUINT64_FORMAT "--%" G_GUINT64_FORMAT
+              "] next event at %" G_GUINT64_FORMAT,
+              windowStart, windowEnd, minNextEventTime);
 
         /* notify controller that we finished this round, and the time of our
          * next event in order to fast-forward our execute window if possible */
@@ -465,23 +588,71 @@ const gchar* manager_getHostsRootPath(Manager* manager) {
     return manager->hostsPath;
 }
 
-void manager_storeCounts(Manager* manager, ObjectCounter* objectCounter) {
-    MAGIC_ASSERT(manager);
+static void _manager_increment_object_counts(Manager* manager, Counter** mgr_obj_counts,
+                                             const char* obj_name) {
     _manager_lock(manager);
-    if(manager->objectCounts) {
-        objectcounter_incrementAll(globalmanager->objectCounts, objectCounter);
+    // This is created on the fly, so that if we did not enable counting mode
+    // then we don't need to create the counter object.
+    if (!*mgr_obj_counts) {
+        *mgr_obj_counts = counter_new();
     }
+    counter_add_value(*mgr_obj_counts, obj_name, 1);
     _manager_unlock(manager);
 }
 
-void manager_countObject(ObjectType otype, CounterType ctype) {
-    if(globalmanager) {
+void manager_increment_object_alloc_counter_global(const char* object_name) {
+    if (globalmanager) {
         MAGIC_ASSERT(globalmanager);
-        _manager_lock(globalmanager);
-        if(globalmanager->objectCounts) {
-            objectcounter_incrementOne(globalmanager->objectCounts, otype, ctype);
-        }
-        _manager_unlock(globalmanager);
+        _manager_increment_object_counts(
+            globalmanager, &globalmanager->object_counter_alloc, object_name);
+    }
+}
+
+void manager_increment_object_dealloc_counter_global(const char* object_name) {
+    if (globalmanager) {
+        MAGIC_ASSERT(globalmanager);
+        _manager_increment_object_counts(
+            globalmanager, &globalmanager->object_counter_dealloc, object_name);
+    }
+}
+
+static void _manager_add_object_counts(Manager* manager, Counter** mgr_obj_counts,
+                                       Counter* obj_counts) {
+    _manager_lock(manager);
+    // This is created on the fly, so that if we did not enable counting mode
+    // then we don't need to create the counter object.
+    if (!*mgr_obj_counts) {
+        *mgr_obj_counts = counter_new();
+    }
+    counter_add_counter(*mgr_obj_counts, obj_counts);
+    _manager_unlock(manager);
+}
+
+void manager_add_alloc_object_counts(Manager* manager, Counter* alloc_obj_counts) {
+    MAGIC_ASSERT(manager);
+    _manager_add_object_counts(manager, &manager->object_counter_alloc, alloc_obj_counts);
+}
+
+void manager_add_dealloc_object_counts(Manager* manager, Counter* dealloc_obj_counts) {
+    MAGIC_ASSERT(manager);
+    _manager_add_object_counts(manager, &manager->object_counter_dealloc, dealloc_obj_counts);
+}
+
+void manager_add_syscall_counts(Manager* manager, Counter* syscall_counts) {
+    MAGIC_ASSERT(manager);
+    _manager_lock(manager);
+    // This is created on the fly, so that if we did not enable counting mode
+    // then we don't need to create the counter object.
+    if (!manager->syscall_counter) {
+        manager->syscall_counter = counter_new();
+    }
+    counter_add_counter(manager->syscall_counter, syscall_counts);
+    _manager_unlock(manager);
+}
+
+void manager_add_syscall_counts_global(Counter* syscall_counts) {
+    if (globalmanager) {
+        manager_add_syscall_counts(globalmanager, syscall_counts);
     }
 }
 
