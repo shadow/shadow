@@ -1,6 +1,6 @@
-## Installing Dependencies
+# Installing Dependencies
 
-#### Required:
+### Required:
   + gcc, gcc-c++ (or clang, clang++)
   + python (version >= 3.6)
   + glib (version >= 2.32.0)
@@ -11,13 +11,13 @@
   + procps
   + cargo, rustc (version \~ latest)
 
-#### Recommended Python Modules (for helper/analysis scripts):
+### Recommended Python Modules (for helper/analysis scripts):
   + numpy, scipy, matplotlib, networkx, lxml, pyyaml
 
-#### Recommended System Tools:
+### Recommended System Tools:
   + git, dstat, htop, tmux
 
-### APT (Debian/Ubuntu):
+## APT (Debian/Ubuntu):
 
 ```bash
 # required dependencies
@@ -57,7 +57,7 @@ sudo apt-get install -y \
     tmux
 ```
 
-### YUM (Fedora/CentOS):
+## YUM (Fedora/CentOS):
 
 In more recent versions of Fedora and CentOS, `yum` can be exchanged for `dnf`
 in these commands. Before running these commands, please check any
@@ -107,7 +107,7 @@ sudo yum install -y \
     tmux
 ```
 
-#### CentOS 7
+### CentOS 7
 
 You must enable the EPEL repository using:
 
@@ -126,7 +126,7 @@ alternatives --install /usr/local/bin/cmake cmake /usr/bin/cmake3 20 \
     --family cmake
 ```
 
-#### CentOS 8
+### CentOS 8
 
 As procps-ng-devel, igraph, and igraph-devel are not available on CentOS 8, you
 must install them manually.

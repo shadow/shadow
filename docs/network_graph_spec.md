@@ -1,4 +1,4 @@
-### Network Graph Specification
+# Network Graph Specification
 
 The [network graph overview](network_graph_overview.md) provides a general
 summary of Shadow's use of a network graph to abstractly model network position
