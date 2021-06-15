@@ -31,7 +31,7 @@ impl LogicalProcessors {
         Self { lps }
     }
 
-    /// Add a worker to be run on `lpi`. Caller retains ownership of `worker`.
+    /// Add a worker to be run on `lpi`.
     pub fn ready_push(&self, lpi: usize, worker: usize) {
         self.lps[lpi].ready_workers.push(worker);
     }
@@ -52,7 +52,7 @@ impl LogicalProcessors {
     }
 
     /// Record that the `worker` previously returned by `lp_readyPopFor` has
-    /// completed its task. Starts idle timer.
+    /// completed its task.
     pub fn done_push(&self, lpi: usize, worker: usize) {
         self.lps[lpi].done_workers.push(worker);
     }

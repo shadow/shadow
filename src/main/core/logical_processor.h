@@ -37,8 +37,7 @@ void lps_idleTimerStop(const LogicalProcessors* lps, int lpi);
 #define lps_idleTimerStop(lps, lpi);
 #endif
 
-/* Add a worker to be run on `lpi`. Caller retains ownership of `worker`. Thread
- * safe. */
+/* Add a worker to be run on `lpi`.  Thread safe. */
 void lps_readyPush(const LogicalProcessors* lps, int lpi, int workerID);
 
 /* Get a worker ID to run on `lpi`. Returns -1 if there are no more workers to
@@ -46,7 +45,7 @@ void lps_readyPush(const LogicalProcessors* lps, int lpi, int workerID);
 int lps_popWorkerToRunOn(const LogicalProcessors* lps, int lpi);
 
 /* Record that the `worker` previously returned by `lp_readyPopFor` has
- * completed its task. Starts idle timer. Thread safe. */
+ * completed its task. Thread safe. */
 void lps_donePush(const LogicalProcessors* lps, int lpi, int workerID);
 
 /* Call after finishing running a task on all workers to mark all workers ready
