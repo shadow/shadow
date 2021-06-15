@@ -1,100 +1,116 @@
-#![allow(unsafe_op_in_unsafe_fn, dead_code, mutable_transmutes, non_camel_case_types, non_snake_case,
-         non_upper_case_globals, unused_assignments, unused_mut)]
-#![register_tool(c2rust)]
-#![feature(extern_types, register_tool)]
-
-use std::convert::TryFrom;
-use crossbeam::queue::SegQueue;
-
-extern "C" {
-    #[no_mangle]
-    fn affinity_getGoodWorkerAffinity() -> libc::c_int;
-}
-pub struct _LogicalProcessors {
-    lps: Vec<LogicalProcessor>,
-}
 /*
 
  * The Shadow Simulator
  * Copyright (c) 2010-2011, Rob Jansen
  * See LICENSE for licensing information
  */
-pub type LogicalProcessor = _LogicalProcessor;
-pub struct _LogicalProcessor {
-    cpuId: libc::c_int,
-    readyWorkers: SegQueue<libc::c_int>,
-    doneWorkers: SegQueue<libc::c_int>,
+use std::convert::TryFrom;
+use std::convert::TryInto;
+use crossbeam::queue::SegQueue;
+
+extern "C" {
+    fn affinity_getGoodWorkerAffinity() -> libc::c_int;
 }
-pub type LogicalProcessors = _LogicalProcessors;
-#[no_mangle]
-pub unsafe extern "C" fn lps_new(mut n: libc::c_int)
- -> *mut LogicalProcessors {
-    let mut lps = Box::new(_LogicalProcessors{ lps: Vec::new()});
-    for i in 0..n {
-        lps.lps.push(_LogicalProcessor{cpuId: affinity_getGoodWorkerAffinity(),
-                                      readyWorkers: SegQueue::new(),
-                                      doneWorkers: SegQueue::new(),});
+
+pub struct LogicalProcessors {
+    lps: Vec<LogicalProcessor>,
+}
+
+impl LogicalProcessors {
+    pub fn new(n: usize) -> Self {
+        let mut lps = Vec::new();
+        for _ in 0..n {
+            lps.push(LogicalProcessor{cpu_id: unsafe {affinity_getGoodWorkerAffinity()},
+                                        ready_workers: SegQueue::new(),
+                                        done_workers: SegQueue::new(),});
+        }
+        Self { lps }
     }
-    Box::into_raw(lps)
+
+    pub fn ready_push(&mut self, lpi: usize, worker: usize) {
+        self.lps[lpi].ready_workers.push(worker);
+    }
+
+    pub fn pop_worker_to_run_on(&mut self, lpi: usize) -> Option<usize> {
+        for i in 0..self.lps.len() {
+            // Start with workers that last ran on `lpi`; if none are available
+            // steal from another in round-robin order.
+            let from_lpi = (lpi + i) % self.lps.len();
+            let from_lp = &mut self.lps[from_lpi];
+            if let Some(worker) = from_lp.ready_workers.pop() {
+                return Some(worker)
+            }
+        }
+        return None
+    }
+
+    pub fn done_push(&mut self, lpi: usize, worker: usize) {
+        self.lps[lpi].done_workers.push(worker);
+    }
+
+    pub fn finish_task(&mut self) {
+        for lp in &mut self.lps {
+            std::mem::swap(&mut lp.ready_workers, &mut lp.done_workers);
+        };
+    }
+
+    pub fn cpu_id(&self, lpi: usize) -> libc::c_int {
+        self.lps[lpi].cpu_id
+    }
 }
-#[no_mangle]
-pub unsafe extern "C" fn lps_free(mut lps: *mut LogicalProcessors) {
-    Box::from_raw(lps);
+
+pub struct LogicalProcessor {
+    cpu_id: libc::c_int,
+    ready_workers: SegQueue<usize>,
+    done_workers: SegQueue<usize>,
 }
-#[no_mangle]
-pub unsafe extern "C" fn lps_n(mut lps: *mut LogicalProcessors)
- -> libc::c_int {
-    return (*lps).lps.len() as libc::c_int;
-}
-#[no_mangle]
-pub unsafe extern "C" fn lps_readyPush(mut lps: *mut LogicalProcessors,
-                                       mut lpi: libc::c_int,
-                                       mut worker: libc::c_int) {
-    let lps = lps.as_mut().unwrap();
-    let lp  = &mut lps.lps[usize::try_from(lpi).unwrap()];
-    lp.readyWorkers.push(worker);
-}
-#[no_mangle]
-pub unsafe extern "C" fn lps_popWorkerToRunOn(mut lps: *mut LogicalProcessors,
-                                              mut lpi: libc::c_int)
- -> libc::c_int {
-    let lps = lps.as_mut().unwrap();
-    let lpi = usize::try_from(lpi).unwrap();
-    let lp = &mut lps.lps[lpi];
-    for i in 0..lps.lps.len() {
-        // Start with workers that last ran on `lpi`; if none are available
-        // steal from another in round-robin order.
-        let mut fromLpi = (lpi + i) % lps.lps.len();
-        let mut fromLp = &mut lps.lps[fromLpi];
-        if let Some(worker) = fromLp.readyWorkers.pop() {
-            return worker
+
+mod export {
+    use super::*;
+
+    #[no_mangle]
+    pub extern "C" fn lps_new(n: libc::c_int)
+    -> *mut LogicalProcessors {
+        Box::into_raw(Box::new(LogicalProcessors::new(n.try_into().unwrap())))
+    }
+    #[no_mangle]
+    pub unsafe extern "C" fn lps_free(lps: *mut LogicalProcessors) {
+        unsafe{Box::from_raw(lps)};
+    }
+    #[no_mangle]
+    pub unsafe extern "C" fn lps_n(lps: *mut LogicalProcessors)
+    -> libc::c_int {
+        return unsafe{lps.as_mut()}.unwrap().lps.len() as libc::c_int;
+    }
+    #[no_mangle]
+    pub unsafe extern "C" fn lps_readyPush(lps: *mut LogicalProcessors,
+                                        lpi: libc::c_int,
+                                        worker: libc::c_int) {
+        unsafe{lps.as_mut()}.unwrap().ready_push(usize::try_from(lpi).unwrap(), usize::try_from(worker).unwrap());
+    }
+    #[no_mangle]
+    pub unsafe extern "C" fn lps_popWorkerToRunOn(lps: *mut LogicalProcessors,
+                                                lpi: libc::c_int)
+    -> libc::c_int {
+        match unsafe{lps.as_mut()}.unwrap().pop_worker_to_run_on(lpi.try_into().unwrap()) {
+            Some(w) => w.try_into().unwrap(),
+            None => -1,
         }
     }
-    return -1
-}
-#[no_mangle]
-pub unsafe extern "C" fn lps_donePush(mut lps: *mut LogicalProcessors,
-                                      mut lpi: libc::c_int,
-                                      mut worker: libc::c_int) {
-    let lps = lps.as_mut().unwrap();
-    let lp = &mut lps.lps[usize::try_from(lpi).unwrap()];
-    // Push to the *front* of the queue so that the last workers to run the
-    // current task, which are freshest in cache, are the first ones to run the
-    // next task.
-    lp.doneWorkers.push(worker);
-}
-#[no_mangle]
-pub unsafe extern "C" fn lps_finishTask(mut lps: *mut LogicalProcessors) {
-    for lp in &mut (*lps).lps {
-        std::mem::swap(&mut lp.readyWorkers, &mut lp.doneWorkers);
-    };
-}
-#[no_mangle]
-pub unsafe extern "C" fn lps_cpuId(mut lps: *mut LogicalProcessors,
-                                   mut lpi: libc::c_int) -> libc::c_int {
-    let lps = lps.as_mut().unwrap();
-    let lp = &mut lps.lps[usize::try_from(lpi).unwrap()];
-    // No synchronization needed since cpus are never mutated after
-    // construction.
-    return lp.cpuId;
+    #[no_mangle]
+    pub unsafe extern "C" fn lps_donePush(lps: *mut LogicalProcessors,
+                                        lpi: libc::c_int,
+                                        worker: libc::c_int) {
+        unsafe{lps.as_mut()}.unwrap().done_push(lpi.try_into().unwrap(), worker.try_into().unwrap());
+    }
+    #[no_mangle]
+    pub unsafe extern "C" fn lps_finishTask(lps: *mut LogicalProcessors) {
+        unsafe{lps.as_mut()}.unwrap().finish_task();
+    }
+    #[no_mangle]
+    pub unsafe extern "C" fn lps_cpuId(lps: *mut LogicalProcessors,
+                                    lpi: libc::c_int) -> libc::c_int {
+
+        unsafe{lps.as_mut()}.unwrap().cpu_id(lpi.try_into().unwrap())
+    }
 }
