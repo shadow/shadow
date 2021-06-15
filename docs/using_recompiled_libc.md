@@ -59,7 +59,7 @@ git clone https://github.com/sporksmith/glibc.git interposable-glibc
 cd interposable-glibc
 
 # Switch to the patched branch. interpose-syscalls-2.27 is based on 2.27.
-# interpose-syscalls is baed on 2.31 (dev).
+# interpose-syscalls is based on 2.31 (dev).
 git checkout origin/interpose-syscalls-2.27
 
 # Generate patches
