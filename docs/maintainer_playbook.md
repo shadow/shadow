@@ -1,6 +1,6 @@
-## Maintainer playbook
+# Maintainer playbook
 
-### Tagging Shadow releases
+## Tagging Shadow releases
 
 We use [Semantic Versioning](https://semver.org/), and increment version
 numbers with the [bumpversion](https://pypi.org/project/bumpversion/) tool.

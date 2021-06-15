@@ -1,6 +1,6 @@
-## Pull requests (PRs)
+# Pull requests (PRs)
 
-### Clean commits
+## Clean commits
 
 Ideally, every commit in history of the `main` branch should:
 
@@ -10,7 +10,7 @@ Ideally, every commit in history of the `main` branch should:
 * Build (`./setup build --test`).
 * Pass tests (`./setup test`).
 
-### Drafting a PR
+## Drafting a PR
 
 PRs should be split into smaller, more focused, changes when feasible.
 However, we also want to avoid polluting the history with commits that don't
@@ -28,7 +28,7 @@ Once done iterating, first consider using `git rebase -i --autosquash` to clean
 up your commit history, and then force pushing to update your PR.  Finally, take
 the pull request out of draft mode to signal that you're ready for review.
 
-### Responding to review feedback
+## Responding to review feedback
 
 *During* PR review, please do not rebase or force-push, since this makes it
 difficult to see what's changed between rounds of review. Consider using
@@ -37,7 +37,7 @@ can be appropriately squashed before the final merge. [git autofixup](
 https://github.com/torbiak/git-autofixup/) can also be useful for generating
 `--fixup` commits.
 
-### Merging
+## Merging
 
 When the PR is ready to be merged, the reviewer might ask you to `git rebase`
 and force push to clean up history, or might do it themselves.

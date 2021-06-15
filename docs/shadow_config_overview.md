@@ -32,12 +32,12 @@ expressed in units of seconds or larger.
 
 Acceptable units are:
 
-- "nanosecond" / "ns"
-- "microsecond" / "us" / "μs"
-- "millisecond" / "ms"
-- "second" / "sec" / "s"
-- "minute" / "min" / "m"
-- "hour" / "hr" / "h"
+- nanosecond / ns
+- microsecond / us / μs
+- millisecond / ms
+- second / sec / s
+- minute / min / m
+- hour / hr / h
 
 Examples: `30 s`, `2 hr`, `10 minutes`, `100 ms`
 
@@ -49,14 +49,14 @@ is invalid, but `30 Kbit` is valid).
 
 Acceptable unit *prefixes* are:
 
-- "kilo" / "K"
-- "kibi" / "Ki"
-- "mega" / "M"
-- "mebi" / "Mi"
-- "giga" / "G"
-- "gibi" / "Gi"
-- "tera" / "T"
-- "tebi" / "Ti"
+- kilo / K
+- kibi / Ki
+- mega / M
+- mebi / Mi
+- giga / G
+- gibi / Gi
+- tera / T
+- tebi / Ti
 
 Examples: `100 Mbit`, `100 Mbits`, `10 kilobits`, `128 bits`
 
@@ -66,13 +66,13 @@ Byte size values are expressed with the unit `byte` or `B`.
 
 Acceptable unit *prefixes* are:
 
-- "kilo" / "K"
-- "kibi" / "Ki"
-- "mega" / "M"
-- "mebi" / "Mi"
-- "giga" / "G"
-- "gibi" / "Gi"
-- "tera" / "T"
-- "tebi" / "Ti"
+- kilo / K
+- kibi / Ki
+- mega / M
+- mebi / Mi
+- giga / G
+- gibi / Gi
+- tera / T
+- tebi / Ti
 
 Examples: `20 B`, `100 MB`, `100 megabyte`, `10 kibibytes`, `30 MiB`, `1024 Mbytes`

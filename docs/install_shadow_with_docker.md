@@ -1,4 +1,4 @@
-## Run from the Dockerfile
+# Run from the Dockerfile
 
 1. Install docker from https://docs.docker.com/engine/install/.
 2. Build container:

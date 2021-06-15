@@ -190,7 +190,7 @@ The network graph can be specified in the GML format, or a built-in
 
 #### `network.graph.<path|inline>`
 
-*Required if `network.graph.type` is `gml`*  
+*Required if `network.graph.type` is "gml"*  
 Type: String
 
 If the network graph type is not a built-in network graph, the graph data can be
@@ -201,7 +201,7 @@ current user's home directory.
 
 #### `network.use_shortest_path`
 
-*Required*
+*Required*  
 Type: Bool
 
 When routing packets, follow the shortest path rather than following a direct
@@ -317,7 +317,7 @@ performance in most cases.
 
 #### `experimental.use_o_n_waitpid_workarounds`
 
-Default: false
+Default: false  
 Type: Bool
 
 Use performance workarounds for waitpid being O(n). Beneficial to disable if
@@ -440,7 +440,7 @@ e.g. wireshark).
 
 #### `hosts`
 
-*Required*
+*Required*  
 Type: Object
 
 The simulated hosts which execute processes. Each field corresponds to a host

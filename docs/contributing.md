@@ -1,4 +1,4 @@
-## Contributing
+# Contributing
 
 For trivial fixes (e.g. fixing typos or bugs spanning only a few
 lines), feel free to send a pull request with your changes.  For

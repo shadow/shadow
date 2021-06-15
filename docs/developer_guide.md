@@ -1,3 +1,5 @@
+# Debugging and profiling
+
 ## Building the C-Rust bindings
 
 When required, you can rebuild all of the C-Rust bindings by running:

@@ -1,4 +1,4 @@
-## Supported Platforms
+# Supported Platforms
 
 Shadow officially supports the following platforms:
 

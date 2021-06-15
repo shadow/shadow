@@ -15,7 +15,7 @@ scripts will either:
    Shadow, Shadow will raise an error for this unexpected field.
 2. Ignore it and output a warning.
 
-### Converting a configuration file to the Shadow 2.0 format
+## Converting a configuration file to the Shadow 2.0 format
 
 The following will create a new configuration file `my-shadow-config.yaml`.
 
@@ -35,7 +35,7 @@ use the
 option to use the Shadow 1.x working directory, but this is an experimental
 option and may be removed in the future.
 
-### Converting a network graph file to the Shadow 2.0 format
+## Converting a network graph file to the Shadow 2.0 format
 
 The following will create a new network graph file `my-shadow-topology.gml`.
 

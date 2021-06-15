@@ -1,6 +1,6 @@
-## Coding style
+# Coding style
 
-### Clang-format
+## Clang-format
 
 Our C code formatting style is defined in our
 [clang-format](https://clang.llvm.org/docs/ClangFormat.html) [configuration
@@ -31,9 +31,9 @@ Examples:
 (cd src/support/logger/rust_bindings && cargo fmt)
 ```
 
-### Including headers
+## Including headers
 
-#### Which headers to include
+### Which headers to include
 
 Every source and header file should directly include the headers that export
 all referenced symbols and macros.
@@ -53,7 +53,7 @@ This style is loosely based on that used in
 supported by the [include what you use](https://include-what-you-use.org/)
 tool.
 
-#### Inclusion style
+### Inclusion style
 
 Headers included from within the project should use quote-includes, and should
 use paths relative to `src/`. e.g. `#include "main/utility/byte_queue.h"`, not

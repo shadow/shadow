@@ -1,9 +1,9 @@
-## System Configs and Limits
+# System Configs and Limits
 
 Some Linux system configuration changes are needed to run large-scale Shadow
 simulations (more than about 1000 processes).
 
-#### Number of Open Files
+## Number of Open Files
 
 There is a default linux system limit on the number of open files. If each
 process in your Shadow virtual host opens many file or socket descriptors (if
@@ -11,7 +11,7 @@ you have many hosts, this is very likely to happen), you'll likely want to
 increase the limit so you application doesn't start getting errors when calling
 `open()` or `socket()`.
 
-###### System-wide Limits
+### System-wide Limits
 
 Check the _system-wide_ limits with:
 
@@ -35,7 +35,7 @@ echo "fs.file-max = 10485760" >> /etc/sysctl.conf
 sysctl -p
 ```
 
-###### User Limits
+### User Limits
 
 Check the maximum number of open file descriptors _currently allowed_ in your
 session:
@@ -61,13 +61,13 @@ You need to either log out and back in or reboot for the changes to take affect.
 You can watch `/proc/sys/fs/file-nr` and reduce the limit according to your
 usage, if you'd like.
 
-#### Number of Maps
+## Number of Maps
 
 There is a system limit on the number of `mmap()` mappings per process. Most
 users will not have to modify these settings. However, if an application running
 in Shadow makes extensive use of `mmap()`, you may need to increase the limit.
 
-###### Process Limit
+### Process Limit
 
 The process limit can be queried in these ways:
 
@@ -91,7 +91,7 @@ sudo echo "vm.max_map_count = 1073741824" >> /etc/sysctl.conf
 sudo sysctl -p
 ```
 
-#### For more information
+## For more information
 
 https://www.kernel.org/doc/Documentation/sysctl/fs.txt  
 https://www.kernel.org/doc/Documentation/sysctl/vm.txt

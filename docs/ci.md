@@ -1,6 +1,6 @@
-## Continuous integration tests
+# Continuous integration tests
 
-### On GitHub
+## On GitHub
 
 Our continuous integration tests build and test Shadow on every supported
 platform and configuration. GitHub runs these tests automatically when making
@@ -8,7 +8,7 @@ or modifying a pull request, in the [build and test
 workflow](../.github/workflows/build_shadow.yml). Pull requests without passing
 integration tests are blocked from merging.
 
-### Running locally
+## Running locally
 
 We also have scripts for running the continuous integration tests locally,
 inside Docker containers. This can be useful for debugging and for quickly
@@ -40,7 +40,7 @@ sudo ci/run.sh -i -o "ubuntu:18.04;clang;debug fedora:33;gcc;release"
 
 For additional options, run `ci/run.sh -h`.
 
-### Debugging locally
+## Debugging locally
 
 After a local run fails, you can use Docker to help debug it. If you previously
 ran the tests without the `-i` option, re-run with the `-i` option to rebuild

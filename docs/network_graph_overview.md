@@ -1,4 +1,4 @@
-### Network Graph Overview
+# Network Graph Overview
 
 Processes running in Shadow do not have access to the internet; instead,
 processes running on Shadow virtual hosts utilize an internal routing module to
@@ -14,7 +14,7 @@ routers (we do not run routing protocols like
 
 This page describes the routing module and how it can be configured.
 
-#### Graph
+## Graph
 
 Shadow represents a network topology over which processes can communicate using
 a [weighted graph](https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)).
@@ -32,7 +32,7 @@ Shadow requires that the network graph is
 there exists at least one _path_ (a series of one or more edges) between every
 pair of nodes.
 
-#### Behavior
+## Behavior
 
 The graph encodes network positioning and path characteristics as attributes on
 the nodes and edges. Shadow uses the connectivity graph along with the
@@ -50,7 +50,7 @@ The bandwidth of the virtual hosts and the end-to-end latency and packet loss
 for a shortest path between two virtual hosts are then enforced for all network
 communication.
 
-#### Important Notes
+## Important Notes
 
   - The network graph may be directed or undirected, as long as the graph is
     structured such that every node can reach every other node through a
@@ -62,14 +62,14 @@ communication.
     [use_shortest_path
     option](shadow_config_spec.md#networkuse_shortest_path) to `False`.
 
-### Network Graph Attributes
+## Network Graph Attributes
 
 We encode attributes on the nodes and edges that allow for configuring the
 simulated network characteristics. The attributes and their effect on the
 simulated network are described in more detail (alongside a simple example
 graph) on [the network graph specification page](network_graph_spec.md).
 
-### Using an Existing Graph
+## Using an Existing Graph
 
 We created a large network graph representing worldwide latencies and bandwidths
 as of 2018 using the [RIPE Atlas measurement platform](https://atlas.ripe.net).
@@ -86,7 +86,7 @@ advanced knowledge of RIPE Atlas and also require that you possess RIPE Atlas
 credits to conduct the measurements needed to create a new graph. We recommend
 using our existing graph linked above instead, which we may periodically update.
 
-### Creating Your Own Graph
+## Creating Your Own Graph
 
 The python module [networkx](http://networkx.github.io/) can be used to create
 and manipulate more complicated graphs.

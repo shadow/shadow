@@ -41,7 +41,7 @@ code on top of real OS kernels in real time, but are non-determinsitic and have
 limited scalability: time distortion can occur if emulated processes exceed an
 unknown computational threshold, leading to undefined behavior.
 
-Network simulators (e.g., [ns-3](https://www.nsnam.org) ) offer more
+Network simulators (e.g., [ns-3](https://www.nsnam.org)) offer more
 experimental control and scalability, but have limited realism because they run
 application abstractions in place of real application code.
 
