@@ -9,6 +9,7 @@ use crossbeam::queue::SegQueue;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 
+/// A set of `n` logical processors
 pub struct LogicalProcessors {
     lps: Vec<LogicalProcessor>,
 }
@@ -26,10 +27,13 @@ impl LogicalProcessors {
         Self { lps }
     }
 
+    /// Add a worker to be run on `lpi`. Caller retains ownership of `worker`. 
     pub fn ready_push(&mut self, lpi: usize, worker: usize) {
         self.lps[lpi].ready_workers.push(worker);
     }
 
+    /// Get a worker ID to run on `lpi`. Returns None if there are no more
+    /// workers to run.
     pub fn pop_worker_to_run_on(&mut self, lpi: usize) -> Option<usize> {
         for i in 0..self.lps.len() {
             // Start with workers that last ran on `lpi`; if none are available
@@ -43,16 +47,22 @@ impl LogicalProcessors {
         return None;
     }
 
+    /// Record that the `worker` previously returned by `lp_readyPopFor` has
+    /// completed its task. Starts idle timer.
     pub fn done_push(&mut self, lpi: usize, worker: usize) {
         self.lps[lpi].done_workers.push(worker);
     }
 
+    /// Call after finishing running a task on all workers to mark all workers ready
+    /// to run again.
     pub fn finish_task(&mut self) {
         for lp in &mut self.lps {
             std::mem::swap(&mut lp.ready_workers, &mut lp.done_workers);
         }
     }
 
+    /// Returns the cpu id that should be used with the `affinity_*` module to
+    /// run a thread on `lpi`
     pub fn cpu_id(&self, lpi: usize) -> libc::c_int {
         self.lps[lpi].cpu_id
     }
