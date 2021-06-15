@@ -20,17 +20,17 @@ LogicalProcessors* lps_new(int n);
 void lps_free(LogicalProcessors* lps);
 
 /* Number of logical processors. Thread safe. */
-int lps_n(LogicalProcessors* lps);
+int lps_n(const LogicalProcessors* lps);
 
 #ifdef USE_PERF_TIMERS
 /* Track idle time. Thread safe. */
-double lps_idleTimerElapsed(LogicalProcessors* lps, int lpi);
+double lps_idleTimerElapsed(const LogicalProcessors* lps, int lpi);
 
 /* Call to mark the processor idle. Thread safe. */
-void lps_idleTimerContinue(LogicalProcessors* lps, int lpi);
+void lps_idleTimerContinue(const LogicalProcessors* lps, int lpi);
 
 /* Call to mark the processor not-idle. Thread safe. */
-void lps_idleTimerStop(LogicalProcessors* lps, int lpi);
+void lps_idleTimerStop(const LogicalProcessors* lps, int lpi);
 #else
 // define macros that do nothing
 #define lps_idleTimerContinue(lps, lpi)
@@ -39,15 +39,15 @@ void lps_idleTimerStop(LogicalProcessors* lps, int lpi);
 
 /* Add a worker to be run on `lpi`. Caller retains ownership of `worker`. Thread
  * safe. */
-void lps_readyPush(LogicalProcessors* lps, int lpi, int workerID);
+void lps_readyPush(const LogicalProcessors* lps, int lpi, int workerID);
 
 /* Get a worker ID to run on `lpi`. Returns -1 if there are no more workers to
  * run. Thread safe. */
-int lps_popWorkerToRunOn(LogicalProcessors* lps, int lpi);
+int lps_popWorkerToRunOn(const LogicalProcessors* lps, int lpi);
 
 /* Record that the `worker` previously returned by `lp_readyPopFor` has
  * completed its task. Starts idle timer. Thread safe. */
-void lps_donePush(LogicalProcessors* lps, int lpi, int workerID);
+void lps_donePush(const LogicalProcessors* lps, int lpi, int workerID);
 
 /* Call after finishing running a task on all workers to mark all workers ready
  * to run again. NOT thread safe. */
@@ -55,4 +55,4 @@ void lps_finishTask(LogicalProcessors* lps);
 
 /* Returns the cpu id that should be used with the `affinity_*` module to run a
  * thread on `lpi` */
-int lps_cpuId(LogicalProcessors* lps, int lpi);
+int lps_cpuId(const LogicalProcessors* lps, int lpi);

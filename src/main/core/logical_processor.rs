@@ -5,9 +5,12 @@
 * See LICENSE for licensing information
 */
 use crate::cshadow;
+use crate::utility::perf_timer::PerfTimer;
 use crossbeam::queue::SegQueue;
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::sync::Mutex;
+use std::time::Duration;
 
 /// A set of `n` logical processors
 pub struct LogicalProcessors {
@@ -22,24 +25,25 @@ impl LogicalProcessors {
                 cpu_id: unsafe { cshadow::affinity_getGoodWorkerAffinity() },
                 ready_workers: SegQueue::new(),
                 done_workers: SegQueue::new(),
+                idle_timer: Mutex::new(PerfTimer::new()),
             });
         }
         Self { lps }
     }
 
-    /// Add a worker to be run on `lpi`. Caller retains ownership of `worker`. 
-    pub fn ready_push(&mut self, lpi: usize, worker: usize) {
+    /// Add a worker to be run on `lpi`. Caller retains ownership of `worker`.
+    pub fn ready_push(&self, lpi: usize, worker: usize) {
         self.lps[lpi].ready_workers.push(worker);
     }
 
     /// Get a worker ID to run on `lpi`. Returns None if there are no more
     /// workers to run.
-    pub fn pop_worker_to_run_on(&mut self, lpi: usize) -> Option<usize> {
+    pub fn pop_worker_to_run_on(&self, lpi: usize) -> Option<usize> {
         for i in 0..self.lps.len() {
             // Start with workers that last ran on `lpi`; if none are available
             // steal from another in round-robin order.
             let from_lpi = (lpi + i) % self.lps.len();
-            let from_lp = &mut self.lps[from_lpi];
+            let from_lp = &self.lps[from_lpi];
             if let Some(worker) = from_lp.ready_workers.pop() {
                 return Some(worker);
             }
@@ -49,7 +53,7 @@ impl LogicalProcessors {
 
     /// Record that the `worker` previously returned by `lp_readyPopFor` has
     /// completed its task. Starts idle timer.
-    pub fn done_push(&mut self, lpi: usize, worker: usize) {
+    pub fn done_push(&self, lpi: usize, worker: usize) {
         self.lps[lpi].done_workers.push(worker);
     }
 
@@ -66,15 +70,30 @@ impl LogicalProcessors {
     pub fn cpu_id(&self, lpi: usize) -> libc::c_int {
         self.lps[lpi].cpu_id
     }
+
+    pub fn idle_timer_continue(&self, lpi: usize) {
+        self.lps[lpi].idle_timer.lock().unwrap().start();
+    }
+
+    pub fn idle_timer_stop(&self, lpi: usize) {
+        self.lps[lpi].idle_timer.lock().unwrap().stop();
+    }
+
+    pub fn idle_timer_elapsed(&self, lpi: usize) -> Duration {
+        self.lps[lpi].idle_timer.lock().unwrap().elapsed()
+    }
 }
 
 pub struct LogicalProcessor {
     cpu_id: libc::c_int,
     ready_workers: SegQueue<usize>,
     done_workers: SegQueue<usize>,
+    idle_timer: Mutex<PerfTimer>,
 }
 
 mod export {
+    use libc::c_double;
+
     use super::*;
 
     #[no_mangle]
@@ -86,26 +105,26 @@ mod export {
         unsafe { Box::from_raw(lps) };
     }
     #[no_mangle]
-    pub unsafe extern "C" fn lps_n(lps: *mut LogicalProcessors) -> libc::c_int {
-        return unsafe { lps.as_mut() }.unwrap().lps.len() as libc::c_int;
+    pub unsafe extern "C" fn lps_n(lps: *const LogicalProcessors) -> libc::c_int {
+        return unsafe { lps.as_ref() }.unwrap().lps.len() as libc::c_int;
     }
     #[no_mangle]
     pub unsafe extern "C" fn lps_readyPush(
-        lps: *mut LogicalProcessors,
+        lps: *const LogicalProcessors,
         lpi: libc::c_int,
         worker: libc::c_int,
     ) {
-        unsafe { lps.as_mut() }.unwrap().ready_push(
+        unsafe { lps.as_ref() }.unwrap().ready_push(
             usize::try_from(lpi).unwrap(),
             usize::try_from(worker).unwrap(),
         );
     }
     #[no_mangle]
     pub unsafe extern "C" fn lps_popWorkerToRunOn(
-        lps: *mut LogicalProcessors,
+        lps: *const LogicalProcessors,
         lpi: libc::c_int,
     ) -> libc::c_int {
-        match unsafe { lps.as_mut() }
+        match unsafe { lps.as_ref() }
             .unwrap()
             .pop_worker_to_run_on(lpi.try_into().unwrap())
         {
@@ -115,11 +134,11 @@ mod export {
     }
     #[no_mangle]
     pub unsafe extern "C" fn lps_donePush(
-        lps: *mut LogicalProcessors,
+        lps: *const LogicalProcessors,
         lpi: libc::c_int,
         worker: libc::c_int,
     ) {
-        unsafe { lps.as_mut() }
+        unsafe { lps.as_ref() }
             .unwrap()
             .done_push(lpi.try_into().unwrap(), worker.try_into().unwrap());
     }
@@ -129,11 +148,36 @@ mod export {
     }
     #[no_mangle]
     pub unsafe extern "C" fn lps_cpuId(
-        lps: *mut LogicalProcessors,
+        lps: *const LogicalProcessors,
         lpi: libc::c_int,
     ) -> libc::c_int {
-        unsafe { lps.as_mut() }
+        unsafe { lps.as_ref() }
             .unwrap()
             .cpu_id(lpi.try_into().unwrap())
+    }
+    #[no_mangle]
+    pub unsafe extern "C" fn lps_idleTimerElapsed(
+        lps: *const LogicalProcessors,
+        lpi: libc::c_int,
+    ) -> c_double {
+        unsafe { lps.as_ref() }
+            .unwrap()
+            .idle_timer_elapsed(lpi.try_into().unwrap())
+            .as_secs_f64()
+    }
+    #[no_mangle]
+    pub unsafe extern "C" fn lps_idleTimerContinue(
+        lps: *const LogicalProcessors,
+        lpi: libc::c_int,
+    ) {
+        unsafe { lps.as_ref() }
+            .unwrap()
+            .idle_timer_continue(lpi.try_into().unwrap())
+    }
+    #[no_mangle]
+    pub unsafe extern "C" fn lps_idleTimerStop(lps: *const LogicalProcessors, lpi: libc::c_int) {
+        unsafe { lps.as_ref() }
+            .unwrap()
+            .idle_timer_stop(lpi.try_into().unwrap())
     }
 }

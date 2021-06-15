@@ -1372,6 +1372,18 @@ mod export {
     }
 
     #[no_mangle]
+    pub extern "C" fn config_getNHosts(config: *const ConfigOptions) -> u32 {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+
+        config
+            .hosts
+            .iter()
+            .map(|(_, host)| hostoptions_getQuantity(host))
+            .sum()
+    }
+
+    #[no_mangle]
     pub extern "C" fn hostoptions_freeString(string: *mut libc::c_char) {
         if !string.is_null() {
             unsafe { CString::from_raw(string) };

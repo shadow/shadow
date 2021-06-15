@@ -1151,10 +1151,10 @@ static void _topology_clearCache(Topology* top) {
     /* lock the read on the shortest path info */
     g_mutex_lock(&(top->topologyLock));
 #ifdef USE_PERF_TIMERS
-    message("path cache cleared, spent %f seconds computing %u shortest paths with dijkstra, "
-            "and %f seconds computing %u shortest self paths",
-            top->shortestPathTotalTime, top->shortestPathCount,
-            top->selfPathTotalTime, top->selfPathCount);
+    info("path cache cleared, spent %f seconds computing %u shortest paths with dijkstra, "
+         "and %f seconds computing %u shortest self paths",
+         top->shortestPathTotalTime, top->shortestPathCount, top->selfPathTotalTime,
+         top->selfPathCount);
 #else
     info("path cache cleared, computed %u shortest paths with dijkstra, "
          "and %u shortest self paths",

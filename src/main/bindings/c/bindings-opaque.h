@@ -50,6 +50,7 @@ typedef struct DescriptorTable DescriptorTable;
 
 typedef struct HostOptions HostOptions;
 
+// A set of `n` logical processors
 typedef struct LogicalProcessors LogicalProcessors;
 
 // Provides accessors for reading and writing another process's memory.

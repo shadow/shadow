@@ -49,6 +49,7 @@ typedef struct DescriptorTable DescriptorTable;
 
 typedef struct HostOptions HostOptions;
 
+// A set of `n` logical processors
 typedef struct LogicalProcessors LogicalProcessors;
 
 // Provides accessors for reading and writing another process's memory.
@@ -114,17 +115,23 @@ struct LogicalProcessors *lps_new(int n);
 
 void lps_free(struct LogicalProcessors *lps);
 
-int lps_n(struct LogicalProcessors *lps);
+int lps_n(const struct LogicalProcessors *lps);
 
-void lps_readyPush(struct LogicalProcessors *lps, int lpi, int worker);
+void lps_readyPush(const struct LogicalProcessors *lps, int lpi, int worker);
 
-int lps_popWorkerToRunOn(struct LogicalProcessors *lps, int lpi);
+int lps_popWorkerToRunOn(const struct LogicalProcessors *lps, int lpi);
 
-void lps_donePush(struct LogicalProcessors *lps, int lpi, int worker);
+void lps_donePush(const struct LogicalProcessors *lps, int lpi, int worker);
 
 void lps_finishTask(struct LogicalProcessors *lps);
 
-int lps_cpuId(struct LogicalProcessors *lps, int lpi);
+int lps_cpuId(const struct LogicalProcessors *lps, int lpi);
+
+double lps_idleTimerElapsed(const struct LogicalProcessors *lps, int lpi);
+
+void lps_idleTimerContinue(const struct LogicalProcessors *lps, int lpi);
+
+void lps_idleTimerStop(const struct LogicalProcessors *lps, int lpi);
 
 struct CliOptions *clioptions_parse(int argc, const char *const *argv);
 
