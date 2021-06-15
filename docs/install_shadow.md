@@ -1,6 +1,8 @@
 # Shadow Setup
 
-After building and testing Shadow, the install step is optional. If you do not wish to install Shadow, you can run it directly from the build directory (`./build/src/main/shadow`).
+After building and testing Shadow, the install step is optional. If you do not
+wish to install Shadow, you can run it directly from the build directory
+(`./build/src/main/shadow`).
 
 ```bash
 git clone https://github.com/shadow/shadow.git
@@ -29,16 +31,21 @@ shadow --help
 
 ## Uninstall Shadow
 
-After running `./setup install`, you can find the list of installed files in `./build/install_manifest.txt`. To uninstall Shadow, remove any files listed.
+After running `./setup install`, you can find the list of installed files in
+`./build/install_manifest.txt`. To uninstall Shadow, remove any files listed.
 
 ## Setup Notes
 
-  + All build output is generated out-of-source, by default to the `./build` directory.
-  + Use `./setup build --help` to see all build options; some useful build options are:  
+  + All build output is generated out-of-source, by default to the `./build`
+    directory.
+  + Use `./setup build --help` to see all build options; some useful build
+    options are:  
     + `-g` or `--debug` to build Shadow with debugging symbols
-    + `--include` and `--library` if you installed any dependencies in non-standard locations or somewhere other than `~/.local`.
+    + `--include` and `--library` if you installed any dependencies in
+      non-standard locations or somewhere other than `~/.local`.
     + `--prefix` if you want to install Shadow somewhere besides `~/.local`
-  + The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and `make` directly is also possible, but unsupported. For example:
+  + The `setup` script is a wrapper to `cmake` and `make`. Using `cmake` and
+    `make` directly is also possible, but unsupported. For example:
 
     ```bash
     # alternative installation method

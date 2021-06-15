@@ -106,8 +106,8 @@ cd ~ && git clone --depth=2 -b interpose-syscalls-2.17-centos7 https://github.co
 cd ~/glibc && git diff glibc-2.17-centos7 > ~/rpmbuild/SOURCES/use-syscall-function.patch
 ```
 
-Next you'll need to edit `~/rpmbuild/SPECS/glibc.spec` file to tell it to apply the patch.
-You'll need to add a line like:
+Next you'll need to edit `~/rpmbuild/SPECS/glibc.spec` file to tell it to apply
+the patch. You'll need to add a line like:
 
 ```
 PatchNNNN: use-syscall-function.patch
@@ -119,7 +119,8 @@ and another like:
 %patchNNNN -p1
 ```
 
-For more on editing the spec file, see <https://blog.packagecloud.io/eng/2015/04/20/working-with-source-rpms/#modifying-the-source-and-applying-patches>.
+For more on editing the spec file, see
+<https://blog.packagecloud.io/eng/2015/04/20/working-with-source-rpms/#modifying-the-source-and-applying-patches>.
 
 ```shell
 # (Re)unpack, patch, and build
@@ -128,7 +129,8 @@ cd ~/rpmbuild/SPECS && rpmbuild -ba glibc.spec
 
 ## Using the compiled libc
 
-The patched libc can be injected into a virtual process by setting `LD_LIBRARY_PATH` in each process's environment. e.g.:
+The patched libc can be injected into a virtual process by setting
+`LD_LIBRARY_PATH` in each process's environment. e.g.:
 
 ```
 ...

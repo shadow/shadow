@@ -5,8 +5,9 @@
 We use [Semantic Versioning](https://semver.org/), and increment version
 numbers with the [bumpversion](https://pypi.org/project/bumpversion/) tool.
 
-The following commands can be used to tag a new version of Shadow, after which an
-archive will be available on github's [releases page](https://github.com/shadow/shadow/releases).
+The following commands can be used to tag a new version of Shadow, after which
+an archive will be available on github's [releases
+page](https://github.com/shadow/shadow/releases).
 
 ```bash
 git checkout main
