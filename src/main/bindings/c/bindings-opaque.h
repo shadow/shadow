@@ -50,6 +50,8 @@ typedef struct DescriptorTable DescriptorTable;
 
 typedef struct HostOptions HostOptions;
 
+typedef struct LogicalProcessors LogicalProcessors;
+
 // Provides accessors for reading and writing another process's memory.
 // When in use, any operation that touches that process's memory must go
 // through the MemoryManager to ensure soundness. See MemoryManager::new.

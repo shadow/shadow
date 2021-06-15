@@ -4,13 +4,10 @@
 * Copyright (c) 2010-2011, Rob Jansen
 * See LICENSE for licensing information
 */
+use crate::cshadow;
 use crossbeam::queue::SegQueue;
 use std::convert::TryFrom;
 use std::convert::TryInto;
-
-extern "C" {
-    fn affinity_getGoodWorkerAffinity() -> libc::c_int;
-}
 
 pub struct LogicalProcessors {
     lps: Vec<LogicalProcessor>,
@@ -21,7 +18,7 @@ impl LogicalProcessors {
         let mut lps = Vec::new();
         for _ in 0..n {
             lps.push(LogicalProcessor {
-                cpu_id: unsafe { affinity_getGoodWorkerAffinity() },
+                cpu_id: unsafe { cshadow::affinity_getGoodWorkerAffinity() },
                 ready_workers: SegQueue::new(),
                 done_workers: SegQueue::new(),
             });

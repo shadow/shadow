@@ -1416,6 +1416,19 @@ extern "C" {
 extern "C" {
     pub fn worker_add_syscall_counts(syscall_counts: *mut Counter);
 }
+extern "C" {
+    pub fn affinity_getGoodWorkerAffinity() -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn affinity_initPlatformInfo() -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn affinity_setProcessAffinity(
+        pid: pid_t,
+        new_cpu_num: ::std::os::raw::c_int,
+        old_cpu_num: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Epoll {

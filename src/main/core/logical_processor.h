@@ -14,7 +14,6 @@
 /*
  * Logical processor on which a WorkerPool runs Worker threads.
  */
-typedef struct _LogicalProcessors LogicalProcessors;
 
 /* A set of `n` logical processors */
 LogicalProcessors* lps_new(int n);

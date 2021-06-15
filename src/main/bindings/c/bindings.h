@@ -49,6 +49,8 @@ typedef struct DescriptorTable DescriptorTable;
 
 typedef struct HostOptions HostOptions;
 
+typedef struct LogicalProcessors LogicalProcessors;
+
 // Provides accessors for reading and writing another process's memory.
 // When in use, any operation that touches that process's memory must go
 // through the MemoryManager to ensure soundness. See MemoryManager::new.
@@ -107,6 +109,22 @@ void shadow_logger_init(void);
 // soon as it's created.  The calling thread still isn't blocked on the
 // record actually being written, though.
 void shadow_logger_setEnableBuffering(int32_t buffering_enabled);
+
+struct LogicalProcessors *lps_new(int n);
+
+void lps_free(struct LogicalProcessors *lps);
+
+int lps_n(struct LogicalProcessors *lps);
+
+void lps_readyPush(struct LogicalProcessors *lps, int lpi, int worker);
+
+int lps_popWorkerToRunOn(struct LogicalProcessors *lps, int lpi);
+
+void lps_donePush(struct LogicalProcessors *lps, int lpi, int worker);
+
+void lps_finishTask(struct LogicalProcessors *lps);
+
+int lps_cpuId(struct LogicalProcessors *lps, int lpi);
 
 struct CliOptions *clioptions_parse(int argc, const char *const *argv);
 
