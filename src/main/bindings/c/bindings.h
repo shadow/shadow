@@ -49,6 +49,9 @@ typedef struct DescriptorTable DescriptorTable;
 
 typedef struct HostOptions HostOptions;
 
+// A set of `n` logical processors
+typedef struct LogicalProcessors LogicalProcessors;
+
 // Provides accessors for reading and writing another process's memory.
 // When in use, any operation that touches that process's memory must go
 // through the MemoryManager to ensure soundness. See MemoryManager::new.
@@ -107,6 +110,28 @@ void shadow_logger_init(void);
 // soon as it's created.  The calling thread still isn't blocked on the
 // record actually being written, though.
 void shadow_logger_setEnableBuffering(int32_t buffering_enabled);
+
+struct LogicalProcessors *lps_new(int n);
+
+void lps_free(struct LogicalProcessors *lps);
+
+int lps_n(const struct LogicalProcessors *lps);
+
+void lps_readyPush(const struct LogicalProcessors *lps, int lpi, int worker);
+
+int lps_popWorkerToRunOn(const struct LogicalProcessors *lps, int lpi);
+
+void lps_donePush(const struct LogicalProcessors *lps, int lpi, int worker);
+
+void lps_finishTask(struct LogicalProcessors *lps);
+
+int lps_cpuId(const struct LogicalProcessors *lps, int lpi);
+
+double lps_idleTimerElapsed(const struct LogicalProcessors *lps, int lpi);
+
+void lps_idleTimerContinue(const struct LogicalProcessors *lps, int lpi);
+
+void lps_idleTimerStop(const struct LogicalProcessors *lps, int lpi);
 
 struct CliOptions *clioptions_parse(int argc, const char *const *argv);
 
@@ -200,6 +225,8 @@ bool config_getUseShortestPath(const struct ConfigOptions *config);
 void config_iterHosts(const struct ConfigOptions *config,
                       void (*f)(const char*, const struct ConfigOptions*, const struct HostOptions*, void*),
                       void *data);
+
+uint32_t config_getNHosts(const struct ConfigOptions *config);
 
 void hostoptions_freeString(char *string);
 

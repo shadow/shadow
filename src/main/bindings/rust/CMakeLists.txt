@@ -29,6 +29,7 @@ add_custom_command(OUTPUT wrapper.rs
         # Needs Socket
         --blacklist-type "_?CompatSocket.*"
 
+        --whitelist-function "affinity_.*"
         --whitelist-function "thread_.*"
         --whitelist-function "descriptor_unref"
         --whitelist-function "descriptor_setHandle"

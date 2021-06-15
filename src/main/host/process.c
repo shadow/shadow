@@ -357,7 +357,7 @@ static void _process_check(Process* proc) {
     info("process '%s' has completed or is otherwise no longer running", process_getName(proc));
     _process_getAndLogReturnCode(proc);
 #ifdef USE_PERF_TIMERS
-    message(
+    info(
         "total runtime for process '%s' was %f seconds", process_getName(proc), proc->totalRunTime);
 #endif
 }
@@ -470,8 +470,7 @@ static void _process_start(Process* proc) {
 #ifdef USE_PERF_TIMERS
     gdouble elapsed = g_timer_elapsed(proc->cpuDelayTimer, NULL);
     _process_handleTimerResult(proc, elapsed);
-    message(
-        "process '%s' started in %f seconds", process_getName(proc), elapsed);
+    info("process '%s' started in %f seconds", process_getName(proc), elapsed);
 #else
     info("process '%s' started", process_getName(proc));
 #endif
@@ -589,8 +588,7 @@ void process_stop(Process* proc) {
     worker_setActiveProcess(NULL);
 
 #ifdef USE_PERF_TIMERS
-    message(
-        "process '%s' stopped in %f seconds", process_getName(proc), elapsed);
+    info("process '%s' stopped in %f seconds", process_getName(proc), elapsed);
 #else
     info("process '%s' stopped", process_getName(proc));
 #endif

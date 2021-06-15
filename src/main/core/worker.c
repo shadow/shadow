@@ -18,7 +18,6 @@
 #include <sys/types.h>
 
 #include "main/bindings/c/bindings.h"
-#include "main/core/logical_processor.h"
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/config_handlers.h"

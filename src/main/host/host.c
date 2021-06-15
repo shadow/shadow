@@ -280,8 +280,8 @@ void host_shutdown(Host* host) {
 #ifdef USE_PERF_TIMERS
     gdouble totalExecutionTime = g_timer_elapsed(host->executionTimer, NULL);
     g_timer_destroy(host->executionTimer);
-    message("host '%s' has been shut down, total execution time was %f seconds",
-            host->params.hostname, totalExecutionTime);
+    info("host '%s' has been shut down, total execution time was %f seconds", host->params.hostname,
+         totalExecutionTime);
 #else
     info("host '%s' has been shut down", host->params.hostname);
 #endif
