@@ -33,7 +33,7 @@ serde_yaml = "0.8"
 # Alternatively, just call libc's vsprintf directly when the unstable feature
 # `c_variadic` is stabilized, or if we decide to enable it anyway.
 # https://github.com/rust-lang/rust/issues/44930
-vsprintf = { git = "https://github.com/sporksmith/vsprintf", branch = "shadow-fork" }
+vsprintf = { git = "https://github.com/sporksmith/vsprintf", rev = "fa9a307e3043a972501b3157323ed8a9973ad45a" }
 
 [features]
 perf_timers = []
