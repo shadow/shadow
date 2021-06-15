@@ -7,7 +7,7 @@ before running this slightly more complex Tor simulation._
 
 This example requires that you have installed (or linked) a Tor executable in
 `~/.local/bin/tor` (see [the Tor install
-README)[https://github.com/torproject/tor/blob/main/README]). You also need to
+README](https://github.com/torproject/tor/blob/main/README)). You also need to
 install (or link) a TGen executable in `~/.local/bin/tgen` (see [the TGen
 installation guide](https://github.com/shadow/tgen)).
 
