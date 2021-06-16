@@ -29,9 +29,16 @@ endforeach()
 ## TEST 2 (Extended packet tests)
 
 ## TODO
-## We could also split the shadow.log file into a separate file for each host
+## We should also split the shadow.log file into a separate file for each host
 ## and then grep each file for "packet_add", and do diffs on the output of that.
 ## That way we could check the order of every packet event at every processing point.
+## For example:
+## for i in {1..10}
+## do
+##     cat shadow-a.log | grep "peer${i}:" | grep "packet_add" | cut -d' ' -f3- > peer${i}-a.log
+##     cat shadow-b.log | grep "peer${i}:" | grep "packet_add" | cut -d' ' -f3- > peer${i}-b.log
+##     diff --brief peer${i}-a.log peer${i}-b.log
+## done
 
 ## now let's run a phold test and compare the order of packet events
 foreach(METHOD ptrace hybrid)
