@@ -84,6 +84,9 @@ struct _EpollWatch {
     struct epoll_event event;
     /* current status of the underlying shadow descriptor */
     EpollWatchFlags flags;
+    /* The last time we reported an event on this watch.
+     * This is used to ensure fairness across watches when reporting events. */
+    SimulationTime last_reported_event_time;
     gint referenceCount;
     MAGIC_DECLARE;
 };
@@ -138,7 +141,18 @@ static gboolean _epollkey_equal(gconstpointer ptr_1, gconstpointer ptr_2) {
 static gint _epollwatch_compare(gconstpointer ptr_1, gconstpointer ptr_2) {
     const EpollWatch* watch_1 = ptr_1;
     const EpollWatch* watch_2 = ptr_2;
-    return (watch_1->id < watch_2->id) ? -1 : (watch_1->id > watch_2->id) ? 1 : 0;
+    /* Prioritize watches whose last events were reported longest ago. */
+    if(watch_1->last_reported_event_time < watch_2->last_reported_event_time) {
+        /* watch_1 was reported longest ago and should come first. */
+        return -1;
+    } else if(watch_1->last_reported_event_time > watch_2->last_reported_event_time) {
+        /* watch_2 was reported longest ago and should come first. */
+        return 1;
+    } else {
+        /* Both were previously reported at the same time (or never reported yet),
+         * so now we fall back to the deterministic unique id ordering. */
+        return (watch_1->id < watch_2->id) ? -1 : (watch_1->id > watch_2->id) ? 1 : 0;
+    }
 }
 
 /* forward declaration */
@@ -577,6 +591,9 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
             if(watch->flags & EWF_EDGETRIGGER) {
                 eventArray[eventIndex].events |= EPOLLET;
             }
+
+            /* Record that we are reporting the event now. */
+            watch->last_reported_event_time = worker_getCurrentTime();
 
             /* event was just collected, unset the change status */
             watch->flags &= ~EWF_READCHANGED;
