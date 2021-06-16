@@ -22,7 +22,7 @@ Shadow directly executes **real applications**:
   (Linux) processes.
 - Shadow co-opts the native processes into a discrete-event simulation by
   interposing at the system call API.
-- The necessary systems calls are emulated such that the applications need not
+- The necessary system calls are emulated such that the applications need not
   be aware that they are running in a Shadow simulation.
 
 Shadow connects the applications in a **simulated network**:
