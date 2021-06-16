@@ -139,7 +139,7 @@ pub struct GeneralOptions {
     seed: Option<u32>,
 
     /// How many parallel threads to use to run the simulation. Optimal
-    /// performance is usually obtained with `nproc`, or sometimes `nproc/2`
+    /// performance is usually obtained with `cores`, or sometimes `cores/2`
     /// with hyperthreading.
     #[clap(long, short = 'p', value_name = "cores")]
     #[clap(about = GENERAL_HELP.get("parallelism").unwrap())]
