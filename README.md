@@ -5,10 +5,10 @@
 
 ## What is Shadow?
 
-Shadow is a discrete-event network simulator that enables you to simulate
-distributed systems of network-connected processes in a **realistic** and
-**scalable** private network experiment using your laptop or desktop running
-Linux.
+Shadow is a discrete-event network simulator that directly executes real
+application code, enabling you to simulate distributed systems with thousands of
+network-connected processes in **realistic** and **scalable** private network
+experiments using your laptop or desktop running Linux.
 
 Shadow experiments can be scientifically **controlled** and deterministically
 **replicated**, making it easier for you to reproduce bugs and eliminate
@@ -61,7 +61,7 @@ when running in Shadow. Extending support for the API is a work-in-progress.
 
 That being said, we are particularly motivated to run large-scale [Tor
 Network](https://www.torproject.org) simulations. This use-case is already
-fairly well-supported and we are eager to continue extending support.
+fairly well-supported and we are eager to continue extending support for it.
 
 ## Quickstart
 
