@@ -20,7 +20,8 @@ extern "C" {
 
 struct IPCData;
 
-void ipcData_init(struct IPCData* ipc_data, ssize_t spin_max);
+void ipcData_initSocket(struct IPCData* ipc_data, ssize_t spin_max);
+void ipcData_initSemaphore(struct IPCData* ipc_data, ssize_t spin_max);
 
 size_t ipcData_nbytes();
 

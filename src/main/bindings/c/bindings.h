@@ -174,6 +174,8 @@ bool config_getUseCpuPinning(const struct ConfigOptions *config);
 
 enum InterposeMethod config_getInterposeMethod(const struct ConfigOptions *config);
 
+enum IpcMethod config_getIpcMethod(const struct ConfigOptions *config);
+
 bool config_getUseSchedFifo(const struct ConfigOptions *config);
 
 bool config_getUseOnWaitpidWorkarounds(const struct ConfigOptions *config);

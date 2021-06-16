@@ -20,6 +20,13 @@ typedef enum InterposeMethod {
   INTERPOSE_METHOD_HYBRID,
 } InterposeMethod;
 
+typedef enum IpcMethod {
+  // Unix-domain socket
+  IPC_METHOD_SOCKET,
+  // Semaphore + shared memory
+  IPC_METHOD_SEMAPHORE,
+} IpcMethod;
+
 typedef enum QDiscMode {
   Q_DISC_MODE_FIFO,
   Q_DISC_MODE_ROUND_ROBIN,

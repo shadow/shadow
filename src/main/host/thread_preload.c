@@ -137,7 +137,12 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv, const char* wo
 
     thread->ipc_blk = shmemallocator_globalAlloc(ipcData_nbytes());
     utility_assert(thread->ipc_blk.p);
-    ipcData_init(thread->ipc_blk.p, shimipc_spinMax());
+    switch (shimipc_getIpcMethod()) {
+        case IPC_METHOD_SOCKET: ipcData_initSocket(thread->ipc_blk.p, shimipc_spinMax()); break;
+        case IPC_METHOD_SEMAPHORE:
+            ipcData_initSemaphore(thread->ipc_blk.p, shimipc_spinMax());
+            break;
+    }
 
     ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&thread->ipc_blk);
 

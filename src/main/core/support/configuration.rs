@@ -280,6 +280,11 @@ pub struct ExperimentalOptions {
     #[clap(about = EXP_HELP.get("interpose_method").unwrap())]
     interpose_method: Option<InterposeMethod>,
 
+    /// Which interposition method to use
+    #[clap(long, value_name = "method")]
+    #[clap(about = EXP_HELP.get("ipc_method").unwrap())]
+    ipc_method: Option<IpcMethod>,
+
     /// If set, overrides the automatically calculated minimum time workers may run ahead when sending events between nodes
     #[clap(long, value_name = "seconds")]
     #[clap(about = EXP_HELP.get("runahead").unwrap())]
@@ -355,6 +360,7 @@ impl Default for ExperimentalOptions {
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),
             interpose_method: Some(InterposeMethod::Ptrace),
+            ipc_method: None,
             runahead: None,
             scheduler_policy: Some(SchedulerPolicy::Host),
             socket_send_buffer: Some(units::Bytes::new(131_072, units::SiPrefixUpper::Base)),
@@ -552,6 +558,24 @@ pub enum InterposeMethod {
 }
 
 impl std::str::FromStr for InterposeMethod {
+    type Err = serde_yaml::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_yaml::from_str(s)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[repr(C)]
+pub enum IpcMethod {
+    /// Unix-domain socket
+    Socket,
+    /// Semaphore + shared memory
+    Semaphore,
+}
+
+impl std::str::FromStr for IpcMethod {
     type Err = serde_yaml::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -1098,6 +1122,22 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.interpose_method.unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getIpcMethod(config: *const ConfigOptions) -> IpcMethod {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        match config.experimental.ipc_method {
+            Some(m) => m,
+            None => {
+                if config_getInterposeMethod(config) == InterposeMethod::Hybrid {
+                    IpcMethod::Semaphore
+                } else {
+                    IpcMethod::Socket
+                }
+            }
+        }
     }
 
     #[no_mangle]

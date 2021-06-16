@@ -1336,7 +1336,14 @@ Thread* threadptrace_new(Host* host, Process* process, int threadID) {
     ThreadPtrace* thread = (ThreadPtrace*)threadptraceonly_new(host, process, threadID);
 
     thread->ipcBlk = shmemallocator_globalAlloc(ipcData_nbytes());
-    ipcData_init(_threadptrace_ipcData(thread), shimipc_spinMax());
+    switch (shimipc_getIpcMethod()) {
+        case IPC_METHOD_SOCKET:
+            ipcData_initSocket(_threadptrace_ipcData(thread), shimipc_spinMax());
+            break;
+        case IPC_METHOD_SEMAPHORE:
+            ipcData_initSemaphore(_threadptrace_ipcData(thread), shimipc_spinMax());
+            break;
+    }
     thread->enableIpc = true;
 
     return _threadPtraceToThread(thread);
