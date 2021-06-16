@@ -31,8 +31,6 @@ struct _ThreadPreload {
 
     /* holds the event id for the most recent call from the plugin/shim */
     ShimEvent currentEvent;
-
-    GHashTable* ptr_to_block;
 };
 
 typedef struct _ShMemWriteBlock {
@@ -59,10 +57,6 @@ void threadpreload_free(Thread* base) {
 
     if (thread->base.sys) {
         syscallhandler_unref(thread->base.sys);
-    }
-
-    if (thread->ptr_to_block) {
-        g_hash_table_destroy(thread->ptr_to_block);
     }
 
     worker_count_deallocation(ThreadPreload);
@@ -375,7 +369,6 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                                   .getIPCBlock = _threadpreload_getIPCBlock,
                                   .getShMBlock = _threadpreload_getShMBlock,
                               }),
-        .ptr_to_block = g_hash_table_new(g_int64_hash, g_int64_equal),
     };
     thread->base.sys = syscallhandler_new(host, process, _threadPreloadToThread(thread));
 
