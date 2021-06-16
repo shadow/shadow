@@ -7,7 +7,7 @@ updates:
     directory: '/src/main'
     schedule:
       interval: 'daily'
-    target-branch: 'dev'
+    target-branch: 'main'
     labels:
       - 'Component: Build'
 
@@ -15,6 +15,6 @@ updates:
     directory: '/src/test'
     schedule:
       interval: 'daily'
-    target-branch: 'dev'
+    target-branch: 'main'
     labels:
       - 'Component: Build'

@@ -10,7 +10,7 @@ defaults:
 
 on:
   push:
-    branches: [dev]
+    branches: [main]
   pull_request:
     types: [opened, synchronize]
 

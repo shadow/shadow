@@ -1,7 +1,7 @@
 # The Shadow Simulator
 
-[![Shadow Tests](https://github.com/shadow/shadow/actions/workflows/run_tests.yml/badge.svg?branch=dev&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tests.yml?query=branch:dev+event:push)
-[![Tor Tests](https://github.com/shadow/shadow/actions/workflows/run_tor.yml/badge.svg?branch=dev&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tor.yml?query=branch:dev+event:push)
+[![Shadow Tests](https://github.com/shadow/shadow/actions/workflows/run_tests.yml/badge.svg?branch=main&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tests.yml?query=branch:main+event:push)
+[![Tor Tests](https://github.com/shadow/shadow/actions/workflows/run_tor.yml/badge.svg?branch=main&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tor.yml?query=branch:main+event:push)
 
 ## What is Shadow?
 

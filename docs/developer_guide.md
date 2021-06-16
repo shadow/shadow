@@ -26,7 +26,7 @@ cargo install --force --version 0.57.0 bindgen
 
 The versions of bindgen and cbindgen you install should match the [versions
 installed in the
-CI](https://github.com/shadow/shadow/blob/dev/.github/workflows/lint.yml).
+CI](https://github.com/shadow/shadow/blob/main/.github/workflows/lint.yml).
 
 ## Extra tests
 
