@@ -47,13 +47,14 @@ foreach(METHOD ptrace hybrid)
         SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml
         ARGS --use-cpu-pinning true --parallelism 2
         PROPERTIES RUN_SERIAL TRUE)
-    ## now compare the output
-    ## TODO enable this test and fix the remaining determinism issue
-    #add_test(NAME determinism2-shadow-${METHOD}-compare COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/determinism2_compare.cmake)
-    ## make sure the tests that produce output finish before we compare the output
-    ## And make sure the test-phold binary was already built, because the test uses it
-    ## TODO enable this at the same time as the above test is enabled
-    #set_tests_properties(determinism2-shadow-${METHOD}-compare PROPERTIES DEPENDS "determinism2a-shadow-${METHOD};determinism2b-shadow-${METHOD};test-phold")
+    ## Now compare the output
+    add_test(
+        NAME determinism2-shadow-${METHOD}-compare
+        COMMAND ${CMAKE_COMMAND} -D METHOD=${METHOD} -P ${CMAKE_CURRENT_SOURCE_DIR}/determinism2_compare.cmake)
+    ## Make sure the tests that produce output finish before we compare the output,
+    ## and make sure the test-phold binary was already built, because this test uses it.
+    set_tests_properties(determinism2-shadow-${METHOD}-compare
+        PROPERTIES DEPENDS "determinism2a-shadow-${METHOD};determinism2b-shadow-${METHOD};test-phold")
 endforeach()
 
 ## copy the file to the build test dir so that the relative path to it is correct
