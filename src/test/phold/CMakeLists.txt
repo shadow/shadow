@@ -3,39 +3,23 @@ add_executable(test-phold test_phold.c)
 target_link_libraries(test-phold ${M_LIBRARIES} ${RT_LIBRARIES} ${GLIB_LIBRARIES})
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/weights.txt ${CMAKE_CURRENT_BINARY_DIR}/weights.txt COPYONLY)
 
-# FIXME: Enable the preload tests in all configurations. See https://github.com/shadow/shadow/issues/892
-
 # We should run tests using --use-cpu-pinning in serial, otherwise all such tests will be
 # pinned to the same exact CPUs.
 add_shadow_tests(
     BASENAME phold-serial
-    METHODS hybrid ptrace
+    METHODS hybrid ptrace preload
     LOGLEVEL info
     ARGS --use-cpu-pinning true
     PROPERTIES RUN_SERIAL TRUE)
-add_shadow_tests(
-    BASENAME phold-serial
-    METHODS preload
-    LOGLEVEL info
-    ARGS --use-cpu-pinning true
-    PROPERTIES RUN_SERIAL TRUE
-    CONFIGURATIONS ilibc)
 
 # Due to --use-cpu-pinning, we run this in serial. Otherwise we should set the "PROCESSORS 2"
 # property since we use 2 workers here.
 add_shadow_tests(
     BASENAME phold-parallel
-    METHODS hybrid ptrace
+    METHODS hybrid ptrace preload
     LOGLEVEL info
     ARGS --use-cpu-pinning true --parallelism 2
     PROPERTIES RUN_SERIAL TRUE)
-add_shadow_tests(
-    BASENAME phold-parallel
-    METHODS preload
-    LOGLEVEL info
-    ARGS --use-cpu-pinning true --parallelism 2
-    PROPERTIES RUN_SERIAL TRUE
-    CONFIGURATIONS ilibc)
 
 # Run tests with the round-robin queueing discipline (the current default is fifo).
 # Ideally we'd want to test the different queueing displinces on a test that has a lot of
@@ -43,14 +27,7 @@ add_shadow_tests(
 # test that we have to that configuration.
 add_shadow_tests(
     BASENAME phold-rr-qdisc
-    METHODS hybrid ptrace
+    METHODS hybrid ptrace preload
     LOGLEVEL info
     ARGS --use-cpu-pinning true --interface-qdisc roundrobin
     PROPERTIES RUN_SERIAL TRUE)
-add_shadow_tests(
-    BASENAME phold-rr-qdisc
-    METHODS preload
-    LOGLEVEL info
-    ARGS --use-cpu-pinning true --interface-qdisc roundrobin
-    PROPERTIES RUN_SERIAL TRUE
-    CONFIGURATIONS ilibc)

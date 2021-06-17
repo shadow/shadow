@@ -15,16 +15,9 @@ else
 fi
 
 EXTRA_FLAGS=""
-if [ "$CONTAINER" = "centos:7" ]
-then
-    # On centos:7 we enable extra tests that currently require a patched libc.
-    # https://github.com/shadow/shadow/issues/892
-    CONFIG="ilibc"
-else
-    # On all other platforms, we run extra tests that we don't generally require (for
-    # example tests that require additional dependencies).
-    CONFIG="extra"
-fi
+# Run extra tests that we don't generally require (for
+# example tests that require additional dependencies).
+CONFIG="extra"
 
 # Array of flags to be passed on to setup script
 FLAGS=()
