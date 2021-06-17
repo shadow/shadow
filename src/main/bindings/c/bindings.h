@@ -180,6 +180,8 @@ bool config_getUseOnWaitpidWorkarounds(const struct ConfigOptions *config);
 
 bool config_getUseExplicitBlockMessage(const struct ConfigOptions *config);
 
+bool config_getUseSeccomp(const struct ConfigOptions *config);
+
 bool config_getUseSyscallCounters(const struct ConfigOptions *config);
 
 bool config_getUseObjectCounters(const struct ConfigOptions *config);

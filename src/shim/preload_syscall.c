@@ -12,19 +12,10 @@
 #include "shim/shim_syscall.h"
 #include "support/logger/logger.h"
 
-// Make sure we don't call any syscalls ourselves after this function is called, otherwise
-// the errno that we set here could get overwritten before we return to the plugin.
-static long shadow_retval_to_errno(long retval) {
-    // Linux reserves -1 through -4095 for errors. See
-    // https://sourceware.org/git/?p=glibc.git;a=blob;f=sysdeps/unix/sysv/linux/x86_64/sysdep.h;h=24d8b8ec20a55824a4806f8821ecba2622d0fe8e;hb=HEAD#l41
-    if (retval <= -1 && retval >= -4095) {
-        errno = -retval;
-        return -1;
-    }
-    return retval;
-}
-
-static long _vreal_syscall(long n, va_list args) {
+// Never inline, so that the seccomp filter can reliably whitelist a syscall from
+// this function.
+// TODO: Drop if/when we whitelist using /proc/self/maps
+long __attribute__((noinline)) shadow_vreal_raw_syscall(long n, va_list args) {
     long arg1 = va_arg(args, long);
     long arg2 = va_arg(args, long);
     long arg3 = va_arg(args, long);
@@ -46,21 +37,21 @@ static long _vreal_syscall(long n, va_list args) {
                          : "=a"(rv)
                          : "a"(n), "D"(arg1), "S"(arg2), "d"(arg3), "r"(r10), "r"(r8), "r"(r9)
                          : "rcx", "r11", "memory");
-    return shadow_retval_to_errno(rv);
+    return rv;
 }
 
 // Handle to the real syscall function, initialized once at load-time for
 // thread-safety.
-static long _real_syscall(long n, ...) {
+static long _shadow_real_raw_syscall(long n, ...) {
     va_list args;
     va_start(args, n);
-    long rv = _vreal_syscall(n, args);
+    long rv = shadow_vreal_raw_syscall(n, args);
     va_end(args);
     return rv;
 }
 
 // Only called from asm, so need to tell compiler not to discard.
-__attribute__((used)) static SysCallReg _shadow_syscall_event(const ShimEvent* syscall_event) {
+__attribute__((used)) static SysCallReg _shadow_raw_syscall_event(const ShimEvent* syscall_event) {
 
     ShMemBlock ipc_blk = shim_thisThreadEventIPCBlk();
 
@@ -99,23 +90,18 @@ __attribute__((used)) static SysCallReg _shadow_syscall_event(const ShimEvent* s
                 // Make the original syscall ourselves and use the result.
                 SysCallReg rv = res.event_data.syscall_complete.retval;
                 const SysCallReg* regs = syscall_event->event_data.syscall.syscall_args.args;
-                rv.as_i64 = _real_syscall(syscall_event->event_data.syscall.syscall_args.number,
-                                          regs[0].as_u64, regs[1].as_u64, regs[2].as_u64,
-                                          regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
+                rv.as_i64 = _shadow_real_raw_syscall(
+                    syscall_event->event_data.syscall.syscall_args.number, regs[0].as_u64,
+                    regs[1].as_u64, regs[2].as_u64, regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
                 return rv;
             }
             case SHD_SHIM_EVENT_SYSCALL: {
                 // Make the requested syscall ourselves and return the result
                 // to Shadow.
                 const SysCallReg* regs = res.event_data.syscall.syscall_args.args;
-                long syscall_rv = _real_syscall(res.event_data.syscall.syscall_args.number,
-                                                regs[0].as_u64, regs[1].as_u64, regs[2].as_u64,
-                                                regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
-                // Recover the true syscall return value from errno in the case
-                // of an error.
-                if (syscall_rv == -1) {
-                    syscall_rv = -errno;
-                }
+                long syscall_rv = _shadow_real_raw_syscall(
+                    res.event_data.syscall.syscall_args.number, regs[0].as_u64, regs[1].as_u64,
+                    regs[2].as_u64, regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
                 ShimEvent syscall_complete_event = {
                     .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
                     .event_data.syscall_complete.retval.as_i64 = syscall_rv,
@@ -143,7 +129,7 @@ __attribute__((used)) static SysCallReg _shadow_syscall_event(const ShimEvent* s
     }
 }
 
-static long _vshadow_syscall(long n, va_list args) {
+static long _vshadow_raw_syscall(long n, va_list args) {
     shim_disableInterposition();
     ShimEvent e = {
         .event_id = SHD_SHIM_EVENT_SYSCALL,
@@ -166,14 +152,14 @@ static long _vshadow_syscall(long n, va_list args) {
     // non-fatal signal.
     // TODO: Allocate dynamically and only do this until the MemoryManager is
     // initialized.
-    static __thread char new_stack[4096 * 2];
+    static __thread char new_stack[4096 * 10];
 
     void* old_stack;
     SysCallReg retval;
     asm volatile("movq %[EVENT], %%rdi\n"     /* set up syscall arg */
                  "movq %%rsp, %%rbx\n" /* save stack pointer to a callee-save register*/
                  "movq %[NEW_STACK], %%rsp\n" /* switch stack */
-                 "callq _shadow_syscall_event\n"
+                 "callq _shadow_raw_syscall_event\n"
                  "movq %%rbx, %%rsp\n" /* restore stack pointer */
                  "movq %%rax, %[RETVAL]\n"    /* save return value */
                  :                            /* outputs */
@@ -190,14 +176,13 @@ static long _vshadow_syscall(long n, va_list args) {
                  "rax", "rdi", "rdx", "rcx", "rsi", "r8", "r9", "r10", "r11");
 
     shim_enableInterposition();
-    return shadow_retval_to_errno(retval.as_i64);
+    return retval.as_i64;
 }
 
-long syscall(long n, ...) {
+// emulate a syscall *instruction*. i.e. doesn't rewrite the return val to errno.
+long shadow_vraw_syscall(long n, va_list args) {
     shim_ensure_init();
 
-    va_list(args);
-    va_start(args, n);
     long rv;
 
     if (shim_use_syscall_handler() && shim_syscall(n, &rv, args)) {
@@ -209,15 +194,42 @@ long syscall(long n, ...) {
         trace("Making syscall %ld indirectly; we ask shadow to handle it using the shmem IPC "
               "channel.",
               n);
-        rv = _vshadow_syscall(n, args);
+        rv = _vshadow_raw_syscall(n, args);
     } else {
         // The syscall is made directly; ptrace will get the syscall signal.
         trace("Making syscall %ld directly; we expect ptrace will interpose it, or it will be "
               "handled natively by the kernel.",
               n);
-        rv = _vreal_syscall(n, args);
+        rv = shadow_vreal_raw_syscall(n, args);
     }
 
+    return rv;
+}
+
+long shadow_raw_syscall(long n, ...) {
+    va_list(args);
+    va_start(args, n);
+    long rv = shadow_vraw_syscall(n, args);
     va_end(args);
     return rv;
+}
+
+// Make sure we don't call any syscalls ourselves after this function is called, otherwise
+// the errno that we set here could get overwritten before we return to the plugin.
+static long shadow_retval_to_errno(long retval) {
+    // Linux reserves -1 through -4095 for errors. See
+    // https://sourceware.org/git/?p=glibc.git;a=blob;f=sysdeps/unix/sysv/linux/x86_64/sysdep.h;h=24d8b8ec20a55824a4806f8821ecba2622d0fe8e;hb=HEAD#l41
+    if (retval <= -1 && retval >= -4095) {
+        errno = (int)-retval;
+        return -1;
+    }
+    return retval;
+}
+
+long syscall(long n, ...) {
+    va_list(args);
+    va_start(args, n);
+    long rv = shadow_vraw_syscall(n, args);
+    va_end(args);
+    return shadow_retval_to_errno(rv);
 }

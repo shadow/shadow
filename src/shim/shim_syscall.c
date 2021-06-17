@@ -78,8 +78,7 @@ bool shim_syscall(long syscall_num, long* rv, va_list args) {
                 *rv = 0;
             } else {
                 trace("found NULL timespec pointer in clock_gettime");
-                *rv = -1;
-                errno = EFAULT;
+                *rv = -EFAULT;
             }
 
             break;
