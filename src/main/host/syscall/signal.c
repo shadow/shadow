@@ -19,6 +19,8 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
+// Executes the specified kill syscall (kill, tkill, or tgkill).
+// `pid` and  `tid` should be the native ids of a managed process/thread.
 static SysCallReturn _syscallhandler_killHelper(SysCallHandler* sys, pid_t pid, pid_t tid, int sig,
                                                 long syscallnum) {
     pid_t my_tid = thread_getNativeTid(sys->thread);
@@ -35,11 +37,22 @@ static SysCallReturn _syscallhandler_killHelper(SysCallHandler* sys, pid_t pid, 
 
     long result = 0;
 
+    // We don't currently have a syscall result type for "execute the syscall
+    // natively with these modified parameters and use the result".
+    //
+    // We used to use thread_nativeSyscall here to execute the kill syscall from
+    // the calling process, and then return here. That has a tricky corner case
+    // in preload mode though - if the process signals itself, the signal
+    // handler will start executing, interrupting the communication with Shadow.
+    //
+    // There are several ways to work around this, but the simplest is to just
+    // make the syscall here and return the result.
+    // See https://github.com/shadow/shadow/issues/1455.
     switch (syscallnum) {
-        case SYS_kill: result = thread_nativeSyscall(sys->thread, SYS_kill, pid, sig); break;
-        case SYS_tkill: result = thread_nativeSyscall(sys->thread, SYS_tkill, tid, sig); break;
+        case SYS_kill: result = syscall(SYS_kill, pid, sig); break;
+        case SYS_tkill: result = syscall(SYS_tkill, tid, sig); break;
         case SYS_tgkill:
-            result = thread_nativeSyscall(sys->thread, SYS_tgkill, pid, tid, sig);
+            result = syscall(SYS_tgkill, pid, tid, sig);
             break;
         default: utility_panic("Invalid syscall number %li given", syscallnum); break;
     }
