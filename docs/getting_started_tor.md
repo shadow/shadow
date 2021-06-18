@@ -16,8 +16,7 @@ very simple Tor network:
 
 ```bash
 cd shadow/src/test/tor/minimal
-shadow --template-directory shadow.data.template tor-minimal.yaml > shadow.log
-./verify.sh
+./run.sh && ./verify.sh
 ```
 
 After the experiment, have a look in the `shadow.data/host/*` directories to
