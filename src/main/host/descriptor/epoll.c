@@ -251,13 +251,21 @@ static void _epoll_free(LegacyDescriptor* descriptor) {
 void epoll_clearWatchListeners(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
 
+    /* Iterate the hash table in a determinsitic order. */
+    GList* watch_list = g_hash_table_get_values(epoll->watching);
+    GList* next_item = NULL;
+
+    /* Prepare the list for deterministic iteration. */
+    if(watch_list != NULL) {
+        watch_list = g_list_sort(watch_list, _epollwatch_compare);
+        next_item = g_list_first(watch_list);
+    }
+
     /* make sure none of our watch descriptors notify us anymore */
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, epoll->watching);
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
-        EpollWatch* watch = value;
+    while(next_item != NULL) {
+        EpollWatch* watch = next_item->data;
         MAGIC_ASSERT(watch);
+
         statuslistener_setMonitorStatus(watch->listener, STATUS_NONE, SLF_NEVER);
 
         if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
@@ -265,6 +273,13 @@ void epoll_clearWatchListeners(Epoll* epoll) {
         } else if (watch->watchType == EWT_POSIX_FILE) {
             posixfile_removeListener(watch->watchObject.as_file, watch->listener);
         }
+
+        next_item = g_list_next(next_item);
+    }
+
+    /* Cleanup just the list but not the list values, which are owned by the hash table. */
+    if(watch_list) {
+        g_list_free(watch_list);
     }
 }
 
