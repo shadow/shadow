@@ -928,7 +928,7 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
     // First get the keys that need to be removed
     g_hash_table_iter_init(&iter, tcp->retransmit.queue);
 
-    while(g_hash_table_iter_next(&iter, &key, NULL)) {
+    while (g_hash_table_iter_next(&iter, &key, NULL)) {
         guint ackedSequence = GPOINTER_TO_INT(key);
         if(ackedSequence < sequence) {
             g_queue_insert_sorted(keys_sorted, key, _tcp_compare_sequence, NULL);
@@ -936,10 +936,10 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
     }
 
     // Now remove the packets in order
-    while(g_queue_get_length(keys_sorted) > 0) {
+    while (g_queue_get_length(keys_sorted) > 0) {
         key = g_queue_pop_head(keys_sorted);
         Packet* ackedPacket = g_hash_table_lookup(tcp->retransmit.queue, key);
-        if(ackedPacket) {
+        if (ackedPacket) {
             tcp->retransmit.queueLength -= packet_getPayloadLength(ackedPacket);
             packet_addDeliveryStatus(ackedPacket, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
             g_hash_table_remove(tcp->retransmit.queue, key);

@@ -142,10 +142,10 @@ static gint _epollwatch_compare(gconstpointer ptr_1, gconstpointer ptr_2) {
     const EpollWatch* watch_1 = ptr_1;
     const EpollWatch* watch_2 = ptr_2;
     /* Prioritize watches whose last events were reported longest ago. */
-    if(watch_1->last_reported_event_time < watch_2->last_reported_event_time) {
+    if (watch_1->last_reported_event_time < watch_2->last_reported_event_time) {
         /* watch_1 was reported longest ago and should come first. */
         return -1;
-    } else if(watch_1->last_reported_event_time > watch_2->last_reported_event_time) {
+    } else if (watch_1->last_reported_event_time > watch_2->last_reported_event_time) {
         /* watch_2 was reported longest ago and should come first. */
         return 1;
     } else {
@@ -256,13 +256,13 @@ void epoll_clearWatchListeners(Epoll* epoll) {
     GList* next_item = NULL;
 
     /* Prepare the list for deterministic iteration. */
-    if(watch_list != NULL) {
+    if (watch_list != NULL) {
         watch_list = g_list_sort(watch_list, _epollwatch_compare);
         next_item = g_list_first(watch_list);
     }
 
     /* make sure none of our watch descriptors notify us anymore */
-    while(next_item != NULL) {
+    while (next_item != NULL) {
         EpollWatch* watch = next_item->data;
         MAGIC_ASSERT(watch);
 
@@ -278,7 +278,7 @@ void epoll_clearWatchListeners(Epoll* epoll) {
     }
 
     /* Cleanup just the list but not the list values, which are owned by the hash table. */
-    if(watch_list) {
+    if (watch_list) {
         g_list_free(watch_list);
     }
 }
@@ -566,9 +566,9 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
      * overflow. the number of actual events is returned in nEvents. */
     gint eventIndex = 0;
 
-    /* 
+    /*
      * We need to guarantee that the events are returned in a determinstic order when the
-     * simulation is run multiple times, so we cannot use hash table iterator. 
+     * simulation is run multiple times, so we cannot use hash table iterator.
      * Using a list here has some potential performance implications:
      * - O(n) to loop the hash table and create the list of values
      * - O(n) to sort the list
@@ -582,13 +582,13 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
     GList* next_item = NULL;
 
     /* Prepare the list for deterministic iteration. */
-    if(ready_list != NULL) {
+    if (ready_list != NULL) {
         ready_list = g_list_sort(ready_list, _epollwatch_compare);
         next_item = g_list_first(ready_list);
     }
 
     /* Iterate the list. */
-    while((next_item != NULL) && (eventIndex < eventArrayLength)) {
+    while ((next_item != NULL) && (eventIndex < eventArrayLength)) {
         EpollWatch* watch = next_item->data;
         MAGIC_ASSERT(watch);
 
@@ -631,7 +631,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
     }
 
     /* Cleanup just the list but not the list values, which are owned by the hash table. */
-    if(ready_list) {
+    if (ready_list) {
         g_list_free(ready_list);
     }
 
