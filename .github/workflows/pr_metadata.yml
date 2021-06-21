@@ -4,6 +4,9 @@ name: "Pull Request Metadata"
 on:
 - pull_request_target
 
+permissions:
+  pull-requests: write
+
 jobs:
   Triage:
     runs-on: ubuntu-latest
