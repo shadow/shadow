@@ -16,7 +16,8 @@ jobs:
     - name: Assign Author
       # Add the author as an assignee of the PR
       # https://github.com/marketplace/actions/auto-author-assign
-      uses: toshimaru/auto-author-assign@v1.3.5
+      # before updating the version of this untrusted action, check the code manually
+      uses: toshimaru/auto-author-assign@084de2241839f0a3433adfd18d2906e8e786380e
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
     - name: Apply Labels
