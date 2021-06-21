@@ -244,6 +244,11 @@ pub struct ExperimentalOptions {
     #[clap(about = EXP_HELP.get("use_explicit_block_message").unwrap())]
     use_explicit_block_message: Option<bool>,
 
+    /// Use seccomp to trap syscalls. Default is true for preload mode, false otherwise.
+    #[clap(long, value_name = "bool")]
+    #[clap(about = EXP_HELP.get("use_seccomp").unwrap())]
+    use_seccomp: Option<bool>,
+
     /// Count the number of occurrences for individual syscalls
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_syscall_counters").unwrap())]
@@ -348,6 +353,7 @@ impl Default for ExperimentalOptions {
             use_sched_fifo: Some(false),
             use_o_n_waitpid_workarounds: Some(false),
             use_explicit_block_message: Some(false),
+            use_seccomp: None,
             use_syscall_counters: Some(false),
             use_object_counters: Some(true),
             preload_spin_max: Some(0),
@@ -1119,6 +1125,16 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_explicit_block_message.unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getUseSeccomp(config: *const ConfigOptions) -> bool {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        match config.experimental.use_seccomp {
+            Some(b) => b,
+            None => config_getInterposeMethod(config) == InterposeMethod::Preload,
+        }
     }
 
     #[no_mangle]

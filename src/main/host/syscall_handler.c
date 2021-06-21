@@ -367,6 +367,14 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(shadow_hostname_to_addr_ipv4);
         HANDLE(sendto);
         HANDLE(setsockopt);
+        HANDLE(rt_sigaction);
+#ifdef SYS_signal
+        HANDLE(signal);
+#endif
+#ifdef SYS_sigprocmask
+        HANDLE(sigprocmask);
+#endif
+        HANDLE(rt_sigprocmask);
         HANDLE(set_robust_list);
         HANDLE(set_tid_address);
         HANDLE(shutdown);
@@ -456,8 +464,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(removexattr);
         NATIVE(rename);
         NATIVE(rmdir);
-        NATIVE(rt_sigaction);
-        NATIVE(rt_sigprocmask);
         NATIVE(rt_sigreturn);
         NATIVE(setfsgid);
         NATIVE(setfsuid);

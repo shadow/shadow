@@ -10,6 +10,5 @@ add_shadow_tests(BASENAME clone METHODS hybrid ptrace)
 # the memory manager (really the MemoryMapper) enabled.
 add_shadow_tests(BASENAME clone-nomm METHODS hybrid ptrace ARGS --use-memory-manager=false)
 
-# FIXME: Enable in all configurations. See https://github.com/shadow/shadow/issues/892
-# FIXME: The interposed libc does not handle this either.
-#add_shadow_tests(BASENAME clone METHODS preload CONFIGURATIONS ilibc)
+# Preload mode doesn't support threads. https://github.com/shadow/shadow/issues/1454
+#add_shadow_tests(BASENAME clone METHODS preload)
