@@ -11,5 +11,10 @@
 SYSCALL_HANDLER(kill);
 SYSCALL_HANDLER(tgkill);
 SYSCALL_HANDLER(tkill);
+SYSCALL_HANDLER(sigaction);
+SYSCALL_HANDLER(rt_sigaction);
+SYSCALL_HANDLER(signal);
+SYSCALL_HANDLER(sigprocmask);
+SYSCALL_HANDLER(rt_sigprocmask);
 
 #endif
