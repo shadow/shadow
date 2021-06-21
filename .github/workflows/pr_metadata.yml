@@ -1,8 +1,10 @@
 # Auto-update metadata on pull requests
 # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
 name: "Pull Request Metadata"
+
 on:
-- pull_request_target
+  pull_request_target:
+    types: [opened]
 
 permissions:
   pull-requests: write
