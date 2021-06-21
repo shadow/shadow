@@ -1,0 +1,24 @@
+"Component: Build":
+- **/CMakeLists.txt
+- **/Cargo.toml
+- **/Cargo.lock
+
+"Component: Documentation":
+- **/*.md
+- docs/**/*
+
+"Component: Libraries":
+- src/shim/**/*
+- src/support/**/*
+
+"Component: Main":
+- src/main/**/*
+
+"Component: Testing":
+- src/test/**/*
+- .github/**/*.yml
+- !.github/pr_labeler_conf.yml
+- !.github/workflows/pr_metadata.yml
+
+"Component: Tools":
+- src/tools/**/*
