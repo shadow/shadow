@@ -724,6 +724,7 @@ fn default_some_info() -> Option<LogLevel> {
     Some(LogLevel::Info)
 }
 
+// when updating this graph, make sure to also update the copy in docs/shadow_config_spec.md
 const ONE_GBIT_SWITCH_GRAPH: &str = r#"graph [
   directed 0
   node [
