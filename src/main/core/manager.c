@@ -13,6 +13,7 @@
 #include <stddef.h>
 #include <sys/resource.h>
 
+#include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/controller.h"
 #include "main/core/manager.h"
@@ -26,7 +27,6 @@
 #include "main/routing/topology.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
-#include "lib/logger/logger.h"
 
 #define PRELOAD_SHIM_LIB_STR "libshadow-shim.so"
 

@@ -17,8 +17,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "main/shmem/shmem_util.h"
 #include "lib/logger/logger.h"
+#include "main/shmem/shmem_util.h"
 
 static const char* SHADOW_PREFIX = "shadow_shmemfile";
 static const char PID_DELIM = '-';

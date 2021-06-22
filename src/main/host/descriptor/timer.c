@@ -11,6 +11,7 @@
 #include <sys/timerfd.h>
 #include <time.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
@@ -18,7 +19,6 @@
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/host.h"
 #include "main/utility/utility.h"
-#include "lib/logger/logger.h"
 
 struct _Timer {
     LegacyDescriptor super;

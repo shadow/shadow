@@ -15,6 +15,8 @@
 // Must come after sys/ptrace.h
 #include <linux/ptrace.h>
 
+#include "lib/logger/logger.h"
+#include "lib/shim/ipc.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
@@ -23,8 +25,6 @@
 #include "main/host/thread_protected.h"
 #include "main/host/tsc.h"
 #include "main/utility/fork_proxy.h"
-#include "lib/shim/ipc.h"
-#include "lib/logger/logger.h"
 
 #define THREADPTRACE_TYPE_ID 3024
 

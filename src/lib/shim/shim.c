@@ -17,12 +17,12 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "lib/logger/logger.h"
 #include "lib/shim/ipc.h"
 #include "lib/shim/preload_syscall.h"
 #include "lib/shim/shim_event.h"
 #include "lib/shim/shim_logger.h"
 #include "lib/shim/shim_syscall.h"
-#include "lib/logger/logger.h"
 
 // Whether Shadow is using preload-based interposition.
 static bool _using_interpose_preload = false;

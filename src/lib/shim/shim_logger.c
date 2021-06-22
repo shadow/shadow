@@ -9,10 +9,10 @@
 #include <sys/time.h>
 #include <time.h>
 
-#include "lib/shim/shim.h"
-#include "lib/shim/shim_syscall.h"
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
+#include "lib/shim/shim.h"
+#include "lib/shim/shim_syscall.h"
 
 typedef struct _ShimLogger {
     Logger base;

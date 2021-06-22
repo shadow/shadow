@@ -8,14 +8,14 @@
 #include <netinet/in.h>
 #include <stddef.h>
 
+#include "lib/logger/log_level.h"
+#include "lib/logger/logger.h"
 #include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/routing/address.h"
 #include "main/routing/packet.h"
 #include "main/routing/payload.h"
 #include "main/utility/utility.h"
-#include "lib/logger/log_level.h"
-#include "lib/logger/logger.h"
 
 /* g_memdup() is deprecated due to a security issue and has been replaced
  * by g_memdup2(), but not all of our supported platforms support this yet.

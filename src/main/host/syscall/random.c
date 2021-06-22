@@ -7,11 +7,11 @@
 
 #include <errno.h>
 
+#include "lib/logger/logger.h"
 #include "main/host/host.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
 #include "main/utility/random.h"
-#include "lib/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
 // System Calls

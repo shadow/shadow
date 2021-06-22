@@ -9,12 +9,12 @@
 #include <stddef.h>
 #include <sys/eventfd.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/eventd.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
-#include "lib/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers

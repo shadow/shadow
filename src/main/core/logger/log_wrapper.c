@@ -1,7 +1,7 @@
 #include "main/core/logger/log_wrapper.h"
 
-#include "main/bindings/c/bindings.h"
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 
 static void _log(Logger* logger, LogLevel level, const char* fileName, const char* functionName,
                  const int lineNumber, const char* format, va_list vargs) {

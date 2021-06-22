@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/epoll.h>
 
+#include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/task.h"
@@ -20,7 +21,6 @@
 #include "main/host/process.h"
 #include "main/host/status_listener.h"
 #include "main/utility/utility.h"
-#include "lib/logger/logger.h"
 
 typedef enum _EpollWatchFlags EpollWatchFlags;
 enum _EpollWatchFlags {

@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/scheduler/scheduler_policy.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/event.h"
@@ -16,7 +17,6 @@
 #include "main/host/host.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
-#include "lib/logger/logger.h"
 
 typedef struct _HostStealQueueData HostStealQueueData;
 struct _HostStealQueueData {

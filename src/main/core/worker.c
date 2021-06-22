@@ -17,6 +17,8 @@
 #include <sys/syscall.h>
 #include <sys/types.h>
 
+#include "lib/logger/log_level.h"
+#include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
@@ -35,8 +37,6 @@
 #include "main/utility/count_down_latch.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
-#include "lib/logger/log_level.h"
-#include "lib/logger/logger.h"
 
 // Allow turning off object counting at run-time.
 static bool _use_object_counters = true;

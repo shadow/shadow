@@ -8,11 +8,11 @@
 #include <errno.h>
 #include <sys/sysinfo.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/worker.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
-#include "lib/logger/logger.h"
 
 SysCallReturn syscallhandler_sysinfo(SysCallHandler* sys, const SysCallArgs* args) {
     utility_assert(sys && args);

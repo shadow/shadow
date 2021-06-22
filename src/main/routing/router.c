@@ -11,6 +11,7 @@
 
 #include <glib.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/network_interface.h"
@@ -20,7 +21,6 @@
 #include "main/routing/router_queue_single.h"
 #include "main/routing/router_queue_static.h"
 #include "main/utility/utility.h"
-#include "lib/logger/logger.h"
 
 struct _Router {
     /* the algorithm we use to manage the router queue */

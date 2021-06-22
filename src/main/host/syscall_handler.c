@@ -13,6 +13,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "lib/logger/logger.h"
+#include "lib/shim/shim_event.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
@@ -46,8 +48,6 @@
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
-#include "lib/shim/shim_event.h"
-#include "lib/logger/logger.h"
 
 static bool _useMM = true;
 ADD_CONFIG_HANDLER(config_getUseMemoryManager, _useMM)

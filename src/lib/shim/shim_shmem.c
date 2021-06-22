@@ -5,9 +5,9 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "main/shmem/shmem_allocator.h"
 #include "lib/shim/ipc.h"
 #include "lib/shim/shim_event.h"
+#include "main/shmem/shmem_allocator.h"
 
 void shim_shmemHandleClone(const ShimEvent* ev) {
     assert(ev && ev->event_id == SHD_SHIM_EVENT_CLONE_REQ);

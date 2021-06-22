@@ -10,11 +10,11 @@
 #include <glib.h>
 #include <netinet/in.h>
 
+#include "lib/logger/log_level.h"
 #include "main/core/support/definitions.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker_types.h"
 #include "main/routing/packet.minimal.h"
-#include "lib/logger/log_level.h"
 
 Tracker* tracker_new(Host* host, SimulationTime interval, LogLevel loglevel, LogInfoFlags loginfo);
 void tracker_free(Tracker* tracker);

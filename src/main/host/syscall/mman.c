@@ -10,6 +10,7 @@
 #include <sys/mman.h>
 #include <sys/syscall.h>
 
+#include "lib/logger/logger.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/file.h"
 #include "main/host/process.h"
@@ -17,7 +18,6 @@
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
 #include "main/utility/utility.h"
-#include "lib/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers

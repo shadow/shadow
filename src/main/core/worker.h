@@ -16,6 +16,7 @@ typedef struct _WorkerPool WorkerPool;
 // Task to be executed on a worker thread.
 typedef void (*WorkerPoolTaskFn)(void*);
 
+#include "lib/logger/log_level.h"
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/support/definitions.h"
@@ -28,7 +29,6 @@ typedef void (*WorkerPoolTaskFn)(void*);
 #include "main/routing/packet.minimal.h"
 #include "main/routing/topology.h"
 #include "main/utility/count_down_latch.h"
-#include "lib/logger/log_level.h"
 
 #include "main/bindings/c/bindings.h"
 

@@ -12,6 +12,7 @@
 #include <stddef.h>
 #include <sys/types.h>
 
+#include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
@@ -23,7 +24,6 @@
 #include "main/utility/count_down_latch.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
-#include "lib/logger/logger.h"
 
 static int _parallelism;
 ADD_CONFIG_HANDLER(config_getParallelism, _parallelism)

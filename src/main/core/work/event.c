@@ -7,12 +7,12 @@
 
 #include <stddef.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
 #include "main/host/host.h"
 #include "main/host/tracker.h"
 #include "main/utility/utility.h"
-#include "lib/logger/logger.h"
 
 struct _Event {
     Host* srcHost;

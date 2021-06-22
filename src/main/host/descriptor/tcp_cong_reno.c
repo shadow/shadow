@@ -5,10 +5,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "lib/logger/logger.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/tcp_cong.h"
-#include "lib/logger/logger.h"
 
 typedef struct CAReno_ {
 
