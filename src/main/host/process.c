@@ -33,6 +33,7 @@
 #include <unistd.h>
 
 #include "glib/gprintf.h"
+#include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
@@ -58,7 +59,6 @@
 #include "main/routing/dns.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
 
 #include "main/host/thread_ptrace.h"
 

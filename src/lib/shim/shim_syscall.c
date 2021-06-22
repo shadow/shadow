@@ -11,10 +11,10 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include "lib/logger/logger.h"
+#include "lib/shim/shim.h"
+#include "lib/shim/shim_syscall.h"
 #include "main/core/support/definitions.h" // for SIMTIME definitions
-#include "shim/shim.h"
-#include "shim/shim_syscall.h"
-#include "support/logger/logger.h"
 
 // We store the simulation time using timespec to reduce the number of
 // conversions that we need to do while servicing syscalls.

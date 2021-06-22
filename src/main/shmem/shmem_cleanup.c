@@ -11,8 +11,8 @@
 #include <gmodule.h>
 #include <sys/mman.h>
 
+#include "lib/logger/logger.h"
 #include "shmem_file.h"
-#include "support/logger/logger.h"
 
 // On some platforms, including centos 7 and 8, procps is built with
 // WITH_SYSTEMD defined, but the header is missing that symbol definition. We

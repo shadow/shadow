@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/compat_socket.h"
@@ -25,7 +26,6 @@
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/thread.h"
-#include "support/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
 // Private Helpers

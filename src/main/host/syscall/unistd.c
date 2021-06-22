@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <sys/utsname.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
@@ -22,7 +23,6 @@
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/thread.h"
-#include "support/logger/logger.h"
 
 #ifndef O_DIRECT
 #define O_DIRECT 040000

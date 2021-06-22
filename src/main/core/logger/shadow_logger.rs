@@ -396,7 +396,7 @@ impl Log for ShadowLogger {
         if record.level() == Level::Error {
             // Unlike in Shadow's C code, we don't abort the program on Error
             // logs. In Rust the same purpose is filled with `panic` and
-            // `unwrap`. C callers will still exit or abort via the support/logger wrapper.
+            // `unwrap`. C callers will still exit or abort via the lib/logger wrapper.
             //
             // Flush *synchronously*, since we're likely about to crash one way or another.
             self.flush_sync();

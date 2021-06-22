@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
@@ -21,7 +22,6 @@
 #include "main/host/tracker.h"
 #include "main/routing/packet.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
 
 enum UDPState {
     UDPS_CLOSED, UDPS_ESTABLISHED,

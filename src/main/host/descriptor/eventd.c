@@ -9,11 +9,11 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
-#include "support/logger/logger.h"
 
 struct _EventD {
     LegacyDescriptor super;

@@ -28,7 +28,7 @@ Examples:
 ```bash
 (cd src/main && cargo fmt)
 (cd src/test && cargo fmt)
-(cd src/support/logger/rust_bindings && cargo fmt)
+(cd src/lib/logger/rust_bindings && cargo fmt)
 ```
 
 ## Including headers

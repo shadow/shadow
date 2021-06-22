@@ -6,8 +6,8 @@
 
 #include "main/utility/tagged_ptr.h"
 
+#include "lib/logger/logger.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
 
 // three low-order bits
 const uintptr_t TAG_MASK = (1 << 3) - 1;

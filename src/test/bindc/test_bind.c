@@ -15,9 +15,9 @@
 #include <unistd.h>
 #include <glib.h>
 
-#include "support/logger/logger.h"
-#include "test/test_glib_helpers.h"
+#include "lib/logger/logger.h"
 #include "test/test_common.h"
+#include "test/test_glib_helpers.h"
 
 static int _do_bind(int fd, in_addr_t address, in_port_t port) {
     struct sockaddr_in bindaddr;

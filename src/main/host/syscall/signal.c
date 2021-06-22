@@ -9,12 +9,12 @@
 #include <stdbool.h>
 #include <sys/syscall.h>
 
+#include "lib/logger/logger.h"
 #include "main/host/host.h"
 #include "main/host/shimipc.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
-#include "support/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers

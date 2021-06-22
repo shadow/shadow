@@ -8,12 +8,13 @@
 #include <netinet/in.h>
 #include <stddef.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
+#include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
-#include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/host.h"
 #include "main/host/network_interface.h"
@@ -28,7 +29,6 @@
 #include "main/utility/priority_queue.h"
 #include "main/utility/tagged_ptr.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
 
 typedef struct _NetworkInterfaceTokenBucket NetworkInterfaceTokenBucket;
 struct _NetworkInterfaceTokenBucket {

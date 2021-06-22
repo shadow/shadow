@@ -10,6 +10,8 @@
 #include <netinet/in.h>
 #include <string.h>
 
+#include "lib/logger/log_level.h"
+#include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/work/task.h"
 #include "main/core/worker.h"
@@ -18,8 +20,6 @@
 #include "main/routing/address.h"
 #include "main/routing/packet.h"
 #include "main/utility/utility.h"
-#include "support/logger/log_level.h"
-#include "support/logger/logger.h"
 
 typedef struct {
     gsize control;

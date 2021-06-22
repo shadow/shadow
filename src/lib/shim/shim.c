@@ -1,4 +1,4 @@
-#include "shim/shim.h"
+#include "lib/shim/shim.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -17,12 +17,12 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "shim/ipc.h"
-#include "shim/preload_syscall.h"
-#include "shim/shim_event.h"
-#include "shim/shim_logger.h"
-#include "shim/shim_syscall.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
+#include "lib/shim/ipc.h"
+#include "lib/shim/preload_syscall.h"
+#include "lib/shim/shim_event.h"
+#include "lib/shim/shim_logger.h"
+#include "lib/shim/shim_syscall.h"
 
 // Whether Shadow is using preload-based interposition.
 static bool _using_interpose_preload = false;

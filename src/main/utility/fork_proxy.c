@@ -7,8 +7,8 @@
 #include <sys/prctl.h>
 #include <unistd.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/worker.h"
-#include "support/logger/logger.h"
 
 struct _ForkProxy {
     pid_t (*do_fork_exec)(const char* file, char* const argv[], char* const envp[],

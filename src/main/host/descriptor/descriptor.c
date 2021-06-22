@@ -8,6 +8,7 @@
 
 #include <stddef.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/epoll.h"
@@ -16,7 +17,6 @@
 #include "main/host/process.h"
 #include "main/host/status_listener.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
 
 void descriptor_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
                      DescriptorFunctionTable* funcTable) {

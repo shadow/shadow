@@ -16,7 +16,7 @@ endif()
 include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
 
 ## link to the shim (rpath will not contain this path when shadow is installed)
-link_directories(${CMAKE_BINARY_DIR}/src/shim)
+link_directories(${CMAKE_BINARY_DIR}/src/lib/shim)
 
 ## compile defs and flags
 #add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOURCE
@@ -202,8 +202,8 @@ set(RUSTFLAGS "${RUSTFLAGS} -lshadow-c")
 set(RUSTFLAGS "${RUSTFLAGS} -lstdc++")
 # Manually add search-directories for our custom libraries.
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_CURRENT_BINARY_DIR}")
-set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/support/logger")
-set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/shim")
+set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/logger")
+set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/shim")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")
 
 set(RUST_FEATURES "")

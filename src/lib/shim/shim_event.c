@@ -1,4 +1,4 @@
-#include "shim/shim_event.h"
+#include "lib/shim/shim_event.h"
 #include "main/host/syscall_numbers.h"
 
 #include <unistd.h>

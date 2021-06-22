@@ -9,13 +9,13 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/worker.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread_ptrace.h"
 #include "main/routing/address.h"
 #include "main/shmem/shmem_allocator.h"
-#include "support/logger/logger.h"
 
 SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
                                                           const SysCallArgs* args) {

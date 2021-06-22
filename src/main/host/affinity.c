@@ -19,7 +19,7 @@
 #include <glib.h>
 #include <gmodule.h>
 
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 /*
  * One core has one or more logical CPUs.

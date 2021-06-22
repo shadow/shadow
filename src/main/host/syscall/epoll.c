@@ -7,12 +7,12 @@
 
 #include <errno.h>
 
+#include "lib/logger/logger.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/epoll.h"
 #include "main/host/process.h"
-#include "main/host/syscall_condition.h"
 #include "main/host/syscall/protected.h"
-#include "support/logger/logger.h"
+#include "main/host/syscall_condition.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers

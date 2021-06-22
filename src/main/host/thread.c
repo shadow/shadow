@@ -14,14 +14,14 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "lib/logger/logger.h"
+#include "lib/shim/shim_event.h"
 #include "main/core/worker.h"
 #include "main/host/affinity.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/thread_protected.h"
 #include "main/utility/syscall.h"
-#include "shim/shim_event.h"
-#include "support/logger/logger.h"
 
 Thread thread_create(Host* host, Process* process, int threadID, int type_id,
                      ThreadMethods methods) {

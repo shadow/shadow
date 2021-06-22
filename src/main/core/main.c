@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "igraph_version.h"
+#include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/controller.h"
 #include "main/core/logger/log_wrapper.h"
@@ -27,7 +28,6 @@
 #include "main/utility/disable_aslr.h"
 #include "main/utility/utility.h"
 #include "shd-config.h"
-#include "support/logger/logger.h"
 
 static bool _useSchedFifo = false;
 ADD_CONFIG_HANDLER(config_getUseSchedFifo, _useSchedFifo)

@@ -23,6 +23,7 @@
 #include <syscall.h>
 #include <unistd.h>
 
+#include "lib/logger/logger.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/host.h"
@@ -30,7 +31,6 @@
 #include "main/routing/dns.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
 
 #define OSFILE_INVALID -1
 
