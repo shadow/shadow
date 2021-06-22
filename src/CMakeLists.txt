@@ -20,9 +20,6 @@ message(STATUS "Using Threads library: ${CMAKE_THREAD_LIBS_INIT}")
 # Build support libraries.
 add_subdirectory(lib)
 
-## build the shim
-add_subdirectory(shim)
-
 ## build the core simulator
 add_subdirectory(main)
 

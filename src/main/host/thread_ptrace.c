@@ -23,7 +23,7 @@
 #include "main/host/thread_protected.h"
 #include "main/host/tsc.h"
 #include "main/utility/fork_proxy.h"
-#include "shim/ipc.h"
+#include "lib/shim/ipc.h"
 #include "lib/logger/logger.h"
 
 #define THREADPTRACE_TYPE_ID 3024

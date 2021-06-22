@@ -5,11 +5,11 @@
 
 #include "main/host/syscall/kernel_types.h"
 #include "main/shmem/shmem_allocator.h"
-#include "shim/ipc.h"
-#include "shim/shim.h"
-#include "shim/shim_event.h"
-#include "shim/shim_shmem.h"
-#include "shim/shim_syscall.h"
+#include "lib/shim/ipc.h"
+#include "lib/shim/shim.h"
+#include "lib/shim/shim_event.h"
+#include "lib/shim/shim_shmem.h"
+#include "lib/shim/shim_syscall.h"
 #include "lib/logger/logger.h"
 
 // Never inline, so that the seccomp filter can reliably whitelist a syscall from

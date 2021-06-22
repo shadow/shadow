@@ -23,8 +23,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "shim/shim.h"
-#include "shim/shim_event.h"
+#include "lib/shim/shim.h"
+#include "lib/shim/shim_event.h"
 #include "lib/logger/logger.h"
 
 // man 3 usleep

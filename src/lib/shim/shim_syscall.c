@@ -12,8 +12,8 @@
 #include <time.h>
 
 #include "main/core/support/definitions.h" // for SIMTIME definitions
-#include "shim/shim.h"
-#include "shim/shim_syscall.h"
+#include "lib/shim/shim.h"
+#include "lib/shim/shim_syscall.h"
 #include "lib/logger/logger.h"
 
 // We store the simulation time using timespec to reduce the number of

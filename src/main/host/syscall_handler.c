@@ -46,7 +46,7 @@
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
-#include "shim/shim_event.h"
+#include "lib/shim/shim_event.h"
 #include "lib/logger/logger.h"
 
 static bool _useMM = true;

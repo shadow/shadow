@@ -12,4 +12,4 @@ add_test(NAME test-getaddrinfo COMMAND test-getaddrinfo)
 add_test(NAME test-getaddrinfo-preload-libc COMMAND test-getaddrinfo)
 
 SET_TESTS_PROPERTIES(test-getaddrinfo-preload-libc
-    PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_BINARY_DIR}/src/shim/libshadow-shim.so")
+    PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_BINARY_DIR}/src/lib/shim/libshadow-shim.so")

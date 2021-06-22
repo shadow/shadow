@@ -8,8 +8,7 @@
 - "docs/**/*"
 
 "Component: Libraries":
-- "src/shim/**/*"
-- "src/support/**/*"
+- "src/lib/**/*"
 
 "Component: Main":
 - "src/main/**/*"

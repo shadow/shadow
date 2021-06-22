@@ -4,7 +4,7 @@
 #include <errno.h>
 #include <new>
 
-#include "shim/binary_spinning_sem.h"
+#include "lib/shim/binary_spinning_sem.h"
 
 struct IPCData {
     IPCData(ssize_t spin_max) : xfer_ctrl_to_plugin(spin_max), xfer_ctrl_to_shadow(spin_max) {}

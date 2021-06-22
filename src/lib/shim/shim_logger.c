@@ -1,4 +1,4 @@
-#include "shim/shim_logger.h"
+#include "lib/shim/shim_logger.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -9,8 +9,8 @@
 #include <sys/time.h>
 #include <time.h>
 
-#include "shim/shim.h"
-#include "shim/shim_syscall.h"
+#include "lib/shim/shim.h"
+#include "lib/shim/shim_syscall.h"
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
 
