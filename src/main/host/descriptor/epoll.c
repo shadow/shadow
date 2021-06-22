@@ -151,7 +151,8 @@ static gint _epollwatch_compare(gconstpointer ptr_1, gconstpointer ptr_2) {
     } else {
         /* Both were previously reported at the same time (or never reported yet),
          * so now we fall back to the deterministic unique id ordering. */
-        return (watch_1->id < watch_2->id) ? -1 : (watch_1->id > watch_2->id) ? 1 : 0;
+        utility_assert(watch_1->id != watch_2->id);
+        return (watch_1->id < watch_2->id) ? -1 : 1;
     }
 }
 
