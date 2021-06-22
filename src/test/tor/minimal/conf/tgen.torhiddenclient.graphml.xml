@@ -7,7 +7,7 @@
   <key attr.name="time" attr.type="string" for="node" id="d0" />
   <graph edgedefault="directed">
     <node id="start">
-      <data key="d5">hxsttdz4esasch5x.onion:80</data>
+      <data key="d5">r4aj4kaqf46mala2yykldkvwrrwjagab2qppuqtvgdxwh6spsulwu2qd.onion:80</data>
       <data key="d7">localhost:9000</data>
     </node>
     <node id="stream">
