@@ -252,7 +252,11 @@ static void _epoll_free(LegacyDescriptor* descriptor) {
 void epoll_clearWatchListeners(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
 
-    /* Iterate the hash table in a deterministic order. */
+    /* Iterate the hash table in a deterministic order.
+     * It might be better to maintain the watching values in a sorted structure so we
+     * don't have to re-sort every time this function is called. One option is:
+     * https://developer.gnome.org/glib/2.68/glib-Balanced-Binary-Trees.html
+     * We should probably check the performance before/after such a change. */
     GList* watch_list = g_hash_table_get_values(epoll->watching);
     GList* next_item = NULL;
 
@@ -575,9 +579,11 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
      * - O(n) to sort the list
      * - O(n) for our iteration of the list
      * We think that the ready list is typically small and so 3*O(n) will be small in practice.
-     * If this turns out not to be the case, we could consider maintaining a sorted list of the
-     * ready watch values alongside the epoll->ready hash table instead, which would allow us
-     * to reduce this function to 1*O(n) by avoiding creating and sorting the list here.
+     * If this turns out not to be the case, we could consider maintaining a sorted object of the
+     * ready watch values alongside the epoll->ready hash table instead, which may allow us
+     * to improve the performance of this function. One option is to use binary trees, e.g.,
+     * https://developer.gnome.org/glib/2.68/glib-Balanced-Binary-Trees.html
+     * We should test the performance before and after such a change.
      */
     GList* ready_list = g_hash_table_get_values(epoll->ready);
     GList* next_item = NULL;
