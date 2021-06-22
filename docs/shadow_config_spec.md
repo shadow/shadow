@@ -189,6 +189,26 @@ Type: "gml" OR "1\_gbit\_switch"
 The network graph can be specified in the GML format, or a built-in
 "1\_gbit\_switch" graph with a single network node can be used instead.
 
+The built-in "1\_gbit\_switch" graph contains the following:
+
+```text
+graph [
+  directed 0
+  node [
+    id 0
+    ip_address "0.0.0.0"
+    bandwidth_up "1 Gbit"
+    bandwidth_down "1 Gbit"
+  ]
+  edge [
+    source 0
+    target 0
+    latency "1 ms"
+    packet_loss 0.0
+  ]
+]
+```
+
 #### `network.graph.<path|inline>`
 
 *Required if `network.graph.type` is "gml"*  
