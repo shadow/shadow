@@ -22,9 +22,9 @@ uint64_t shim_syscall_get_simtime_nanos();
 // Returns false on failure, meaning we do not have the necessary information to
 // properly handle the syscall.
 //
-// If this function returns true, then either:
-// - the syscall succeeded, results are written to args as needed, and rv is set
-// - the syscall failed, rv and errno are set
+// If this function returns true, then the raw syscall result is returned
+// through `rv`.  e.g. for a syscall returning an error, it's the caller's
+// responsibility to set errno from `rv`.
 bool shim_syscall(long syscall_num, long* rv, va_list args);
 
 #endif // SRC_SHIM_SHIM_SYSCALL_H_

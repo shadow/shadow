@@ -1,0 +1,30 @@
+# Auto-update metadata on pull requests
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+name: "Pull Request Metadata"
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  Triage:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Assign Author
+      # Add the author as an assignee of the PR
+      # https://github.com/marketplace/actions/auto-author-assign
+      # before updating the version of this untrusted action, check the code manually
+      uses: toshimaru/auto-author-assign@084de2241839f0a3433adfd18d2906e8e786380e
+      with:
+        repo-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Apply Labels
+      # Add labels based on paths modified in PR
+      # https://github.com/actions/labeler
+      uses: actions/labeler@v3
+      with:
+        repo-token: "${{ secrets.GITHUB_TOKEN }}"
+        configuration-path: .github/pr_labeler_conf.yml
+        sync-labels: true
