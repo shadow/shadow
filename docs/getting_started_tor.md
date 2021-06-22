@@ -16,9 +16,16 @@ very simple Tor network:
 
 ```bash
 cd shadow/src/test/tor/minimal
-shadow --template-directory shadow.data.template tor-minimal.yaml > shadow.log
+./run.sh
 ./verify.sh
 ```
+
+The [`run.sh` script](../src/test/tor/minimal/run.sh) launches Shadow with a
+config that runs a minimal Tor network. The [`verify.sh`
+script](../src/test/tor/minimal/verify.sh) checks that all Tor processes
+bootstrapped correctly and that all TGen file transfer attempts succeeded. Note
+that these steps can also be launched as a test case using `./setup test --
+--build-config extra --label tor`.
 
 After the experiment, have a look in the `shadow.data/host/*` directories to
 inspect the individual log files from the Tor relays and TGen clients.
