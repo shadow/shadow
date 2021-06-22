@@ -252,7 +252,7 @@ static void _epoll_free(LegacyDescriptor* descriptor) {
 void epoll_clearWatchListeners(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
 
-    /* Iterate the hash table in a determinsitic order. */
+    /* Iterate the hash table in a deterministic order. */
     GList* watch_list = g_hash_table_get_values(epoll->watching);
     GList* next_item = NULL;
 
@@ -568,7 +568,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
     gint eventIndex = 0;
 
     /*
-     * We need to guarantee that the events are returned in a determinstic order when the
+     * We need to guarantee that the events are returned in a deterministic order when the
      * simulation is run multiple times, so we cannot use hash table iterator.
      * Using a list here has some potential performance implications:
      * - O(n) to loop the hash table and create the list of values
