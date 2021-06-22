@@ -20,7 +20,7 @@
 #include "main/routing/router_queue_single.h"
 #include "main/routing/router_queue_static.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 struct _Router {
     /* the algorithm we use to manage the router queue */

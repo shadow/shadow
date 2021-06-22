@@ -16,7 +16,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 #include "test/test_common.h"
 #include "test/test_glib_helpers.h"
 

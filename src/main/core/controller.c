@@ -27,8 +27,8 @@
 #include "main/routing/topology.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
-#include "support/logger/log_level.h"
-#include "support/logger/logger.h"
+#include "lib/logger/log_level.h"
+#include "lib/logger/logger.h"
 
 struct _Controller {
     /* general options and user configuration for the simulation */

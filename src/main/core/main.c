@@ -27,7 +27,7 @@
 #include "main/utility/disable_aslr.h"
 #include "main/utility/utility.h"
 #include "shd-config.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 static bool _useSchedFifo = false;
 ADD_CONFIG_HANDLER(config_getUseSchedFifo, _useSchedFifo)

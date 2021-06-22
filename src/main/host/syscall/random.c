@@ -11,7 +11,7 @@
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
 #include "main/utility/random.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
 // System Calls

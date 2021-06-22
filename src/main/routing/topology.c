@@ -21,7 +21,7 @@
 #include "main/routing/topology.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 struct _Topology {
     /* the imported igraph graph data - operations on it after initializations

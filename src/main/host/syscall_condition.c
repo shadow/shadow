@@ -16,7 +16,7 @@
 #include "main/host/status_listener.h"
 #include "main/host/thread.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 struct _SysCallCondition {
     // Specifies how the condition will signal when a status is reached

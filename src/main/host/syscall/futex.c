@@ -17,7 +17,7 @@
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall_condition.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers

@@ -15,7 +15,7 @@
 #include <unistd.h>
 #include <glib.h>
 
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 #include "test/test_glib_helpers.h"
 #include "test/test_common.h"
 

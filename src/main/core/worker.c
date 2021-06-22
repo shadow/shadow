@@ -35,8 +35,8 @@
 #include "main/utility/count_down_latch.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
-#include "support/logger/log_level.h"
-#include "support/logger/logger.h"
+#include "lib/logger/log_level.h"
+#include "lib/logger/logger.h"
 
 // Allow turning off object counting at run-time.
 static bool _use_object_counters = true;

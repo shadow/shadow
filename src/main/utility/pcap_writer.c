@@ -10,7 +10,7 @@
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/host.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 struct _PCapWriter {
     FILE *pcapFile;

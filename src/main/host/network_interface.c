@@ -28,7 +28,7 @@
 #include "main/utility/priority_queue.h"
 #include "main/utility/tagged_ptr.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 typedef struct _NetworkInterfaceTokenBucket NetworkInterfaceTokenBucket;
 struct _NetworkInterfaceTokenBucket {

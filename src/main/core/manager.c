@@ -26,7 +26,7 @@
 #include "main/routing/topology.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 #define PRELOAD_SHIM_LIB_STR "libshadow-shim.so"
 

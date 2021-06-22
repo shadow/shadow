@@ -28,7 +28,7 @@ typedef void (*WorkerPoolTaskFn)(void*);
 #include "main/routing/packet.minimal.h"
 #include "main/routing/topology.h"
 #include "main/utility/count_down_latch.h"
-#include "support/logger/log_level.h"
+#include "lib/logger/log_level.h"
 
 #include "main/bindings/c/bindings.h"
 

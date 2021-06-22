@@ -11,8 +11,8 @@
 
 #include "shim/shim.h"
 #include "shim/shim_syscall.h"
-#include "support/logger/log_level.h"
-#include "support/logger/logger.h"
+#include "lib/logger/log_level.h"
+#include "lib/logger/logger.h"
 
 typedef struct _ShimLogger {
     Logger base;

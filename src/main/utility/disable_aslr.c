@@ -5,7 +5,7 @@
 
 #include <sys/personality.h>
 
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 void disable_aslr() {
     int prev_persona = personality(ADDR_NO_RANDOMIZE);

@@ -30,7 +30,7 @@
 #include "main/routing/dns.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 #define OSFILE_INVALID -1
 

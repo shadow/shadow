@@ -13,7 +13,7 @@
 #include "main/host/host.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 typedef struct _ThreadPerHostQueueData ThreadPerHostQueueData;
 struct _ThreadPerHostQueueData {

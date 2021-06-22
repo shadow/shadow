@@ -11,7 +11,7 @@
 #include "main/shmem/buddy.h"
 #include "main/shmem/shmem_file.h"
 #include "main/shmem/shmem_util.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 #define SHD_SHMEM_ALLOCATOR_POOL_NBYTES SHD_BUDDY_POOL_MAX_NBYTES
 

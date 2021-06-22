@@ -47,7 +47,7 @@
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
 #include "shim/shim_event.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 static bool _useMM = true;
 ADD_CONFIG_HANDLER(config_getUseMemoryManager, _useMM)

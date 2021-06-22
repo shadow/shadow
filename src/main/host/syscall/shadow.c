@@ -15,7 +15,7 @@
 #include "main/host/thread_ptrace.h"
 #include "main/routing/address.h"
 #include "main/shmem/shmem_allocator.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
                                                           const SysCallArgs* args) {

@@ -17,7 +17,7 @@
 #include "main/shmem/shmem_allocator.h"
 #include "shim/ipc.h"
 #include "shim/shim_event.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 #define THREADPRELOAD_TYPE_ID 13357
 

@@ -14,7 +14,7 @@
 #include "main/host/protocol.h"
 #include "main/host/tracker_types.h"
 #include "main/routing/packet.minimal.h"
-#include "support/logger/log_level.h"
+#include "lib/logger/log_level.h"
 
 Tracker* tracker_new(Host* host, SimulationTime interval, LogLevel loglevel, LogInfoFlags loginfo);
 void tracker_free(Tracker* tracker);

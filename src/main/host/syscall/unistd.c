@@ -22,7 +22,7 @@
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/thread.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 #ifndef O_DIRECT
 #define O_DIRECT 040000

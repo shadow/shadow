@@ -18,7 +18,7 @@ find_package(Threads REQUIRED)
 message(STATUS "Using Threads library: ${CMAKE_THREAD_LIBS_INIT}")
 
 # Build support libraries.
-add_subdirectory(support)
+add_subdirectory(lib)
 
 ## build the shim
 add_subdirectory(shim)

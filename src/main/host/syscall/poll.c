@@ -17,7 +17,7 @@
 #include "main/host/status.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall_condition.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 #define NANOS_PER_MILLISEC 1000000
 #define MILLIS_PER_SEC 1000

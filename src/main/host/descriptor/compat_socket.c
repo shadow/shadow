@@ -10,7 +10,7 @@
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/host/descriptor/socket.h"
 #include "main/utility/tagged_ptr.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 static void compatsockettypes_assertValid(CompatSocketTypes type) {
     switch (type) {

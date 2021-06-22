@@ -28,7 +28,7 @@
 #include "main/routing/router.h"
 #include "main/routing/topology.h"
 #include "main/utility/random.h"
-#include "support/logger/log_level.h"
+#include "lib/logger/log_level.h"
 
 Host* host_new(HostParameters* params);
 void host_ref(Host* host);

@@ -17,7 +17,7 @@
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers

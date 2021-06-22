@@ -10,7 +10,7 @@
 #include "shim/shim_event.h"
 #include "shim/shim_shmem.h"
 #include "shim/shim_syscall.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 // Never inline, so that the seccomp filter can reliably whitelist a syscall from
 // this function.

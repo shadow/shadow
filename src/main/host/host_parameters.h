@@ -11,7 +11,7 @@
 
 #include "main/core/support/definitions.h"
 #include "main/host/tracker_types.h"
-#include "support/logger/log_level.h"
+#include "lib/logger/log_level.h"
 
 typedef struct _HostParameters HostParameters;
 struct _HostParameters {

@@ -202,7 +202,7 @@ set(RUSTFLAGS "${RUSTFLAGS} -lshadow-c")
 set(RUSTFLAGS "${RUSTFLAGS} -lstdc++")
 # Manually add search-directories for our custom libraries.
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_CURRENT_BINARY_DIR}")
-set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/support/logger")
+set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/logger")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/shim")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")
 

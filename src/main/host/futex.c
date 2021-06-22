@@ -13,7 +13,7 @@
 #include "main/core/worker.h"
 #include "main/host/syscall_types.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 struct _Futex {
     // The unique physical address that is used to refer to this futex

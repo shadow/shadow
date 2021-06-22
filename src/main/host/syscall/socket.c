@@ -25,7 +25,7 @@
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/thread.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 ///////////////////////////////////////////////////////////
 // Private Helpers

@@ -7,7 +7,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 // using assembly to support older compilers such as clang 3.4 in centos 7
 static __inline__ uint64_t rdtscp(uint32_t* aux) {

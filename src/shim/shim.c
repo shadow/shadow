@@ -22,7 +22,7 @@
 #include "shim/shim_event.h"
 #include "shim/shim_logger.h"
 #include "shim/shim_syscall.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 // Whether Shadow is using preload-based interposition.
 static bool _using_interpose_preload = false;

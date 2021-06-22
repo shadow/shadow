@@ -20,7 +20,7 @@
 #include "main/host/process.h"
 #include "main/host/status_listener.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 typedef enum _EpollWatchFlags EpollWatchFlags;
 enum _EpollWatchFlags {

@@ -21,7 +21,7 @@
 #include "main/host/thread_protected.h"
 #include "main/utility/syscall.h"
 #include "shim/shim_event.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 Thread thread_create(Host* host, Process* process, int threadID, int type_id,
                      ThreadMethods methods) {

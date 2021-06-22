@@ -16,7 +16,7 @@
 #include "main/host/process.h"
 #include "main/host/status_listener.h"
 #include "main/utility/utility.h"
-#include "support/logger/logger.h"
+#include "lib/logger/logger.h"
 
 void descriptor_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
                      DescriptorFunctionTable* funcTable) {
