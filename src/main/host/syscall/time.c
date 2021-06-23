@@ -53,7 +53,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
 
     if (requestToBlock && !wasBlocked) {
         /* We need to block for a while following the requested timeout. */
-        _syscallhandler_setListenTimeout(sys, req);
+        _syscallhandler_setListenTimeout(sys, req, TIMEOUT_RELATIVE);
 
         /* Block the thread, unblock when the timer expires. */
         return (SysCallReturn){

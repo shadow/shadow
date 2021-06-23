@@ -506,7 +506,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     } else if (_syscallhandler_wasBlocked(sys)) {
         /* We were but are no longer blocked on a syscall. Make
          * sure any previously used listener timeouts are ignored.*/
-        _syscallhandler_setListenTimeout(sys, NULL);
+        _syscallhandler_setListenTimeout(sys, NULL, TIMEOUT_RELATIVE);
         sys->blockedSyscallNR = -1;
     }
 

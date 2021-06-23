@@ -24,7 +24,8 @@
 ///////////////////////////////////////////////////////////
 
 static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, PluginPtr futexVPtr,
-                                                     int expectedVal, PluginPtr timeoutVPtr) {
+                                                     int expectedVal, PluginPtr timeoutVPtr,
+                                                     TimeoutType type) {
     // This is a new wait operation on the futex for this thread.
     // Check if a timeout was given in the syscall args.
     const struct timespec* timeout;
@@ -96,7 +97,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     Trigger trigger =
         (Trigger){.type = TRIGGER_FUTEX, .object = futex, .status = STATUS_FUTEX_WAKEUP};
     if (timeout) {
-        _syscallhandler_setListenTimeout(sys, timeout);
+        _syscallhandler_setListenTimeout(sys, timeout, type);
     }
     return (SysCallReturn){
         .state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, timeout ? sys->timer : NULL)};
@@ -154,12 +155,11 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
     }
 
-    int result = 0;
-
     switch (operation) {
         case FUTEX_WAIT: {
             trace("Handling FUTEX_WAIT operation %i", operation);
-            return _syscallhandler_futexWaitHelper(sys, uaddrptr, val, timeoutptr);
+            return _syscallhandler_futexWaitHelper(
+                sys, uaddrptr, val, timeoutptr, TIMEOUT_RELATIVE);
         }
 
         case FUTEX_WAKE: {
@@ -167,24 +167,36 @@ SysCallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
             return _syscallhandler_futexWakeHelper(sys, uaddrptr, val);
         }
 
+        case FUTEX_WAIT_BITSET: {
+            trace("Handling FUTEX_WAIT_BITSET operation %i bitset %d", operation, val3);
+            if (val3 == FUTEX_BITSET_MATCH_ANY) {
+                return _syscallhandler_futexWaitHelper(
+                    sys, uaddrptr, val, timeoutptr, TIMEOUT_ABSOLUTE);
+            }
+            // Other bitsets not yet handled.
+            break;
+        }
+        case FUTEX_WAKE_BITSET: {
+            trace("Handling FUTEX_WAKE_BITSET operation %i bitset %d", operation, val3);
+            if (val3 == FUTEX_BITSET_MATCH_ANY) {
+                return _syscallhandler_futexWakeHelper(sys, uaddrptr, val);
+            }
+            // Other bitsets not yet handled.
+            break;
+        }
+
         case FUTEX_FD:
         case FUTEX_REQUEUE:
         case FUTEX_WAKE_OP:
-        case FUTEX_WAIT_BITSET:
-        case FUTEX_WAKE_BITSET:
         case FUTEX_LOCK_PI:
         case FUTEX_TRYLOCK_PI:
         case FUTEX_UNLOCK_PI:
         case FUTEX_CMP_REQUEUE_PI:
-        case FUTEX_WAIT_REQUEUE_PI:
-        default: {
-            warning("We do not yet handle futex operation %i", operation);
-            result = -ENOSYS; // Invalid operation specified in futex_op
-            break; // return SYSCALL_DONE
-        }
+        case FUTEX_WAIT_REQUEUE_PI: break;
     }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
+    warning("Unhandled futex operation %i", operation);
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
 }
 
 SysCallReturn syscallhandler_get_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
