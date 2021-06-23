@@ -431,8 +431,14 @@ static void _shim_parent_init_seccomp() {
         .filter = filter,
     };
 
-    if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog)) {
-        panic("prctl: %s", strerror(errno));
+    // Re SECCOMP_FILTER_FLAG_SPEC_ALLOW: Without this flag, installing a
+    // seccomp filter sets the PR_SPEC_FORCE_DISABLE bit (see prctl(2)). This
+    // results in a significant performance penalty. Meanwhile Shadow is
+    // semi-cooperative with its virtual processes; it doesn't try to protect
+    // itself or the system from malicious code. Hence, it isn't worth paying
+    // this overhead.
+    if (syscall(SYS_seccomp, SECCOMP_SET_MODE_FILTER, SECCOMP_FILTER_FLAG_SPEC_ALLOW, &prog)) {
+        panic("seccomp: %s", strerror(errno));
     }
 }
 
