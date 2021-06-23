@@ -22,6 +22,11 @@
 #include "main/host/thread.h"
 #include "main/utility/utility.h"
 
+typedef enum {
+    TIMEOUT_ABSOLUTE,
+    TIMEOUT_RELATIVE,
+} TimeoutType;
+
 struct _SysCallHandler {
     /* We store pointers to the host, process, and thread that the syscall
      * handler is associated with. We typically need to makes calls into
@@ -82,8 +87,8 @@ struct _SysCallHandler {
     SysCallReturn syscallhandler_##s(                                          \
         SysCallHandler* sys, const SysCallArgs* args);
 
-void _syscallhandler_setListenTimeout(SysCallHandler* sys,
-                                      const struct timespec* timeout);
+void _syscallhandler_setListenTimeout(SysCallHandler* sys, const struct timespec* timeout,
+                                      TimeoutType type);
 void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
                                             gint timeout_ms);
 void _syscallhandler_setListenTimeoutNanos(SysCallHandler* sys, gint timeout_ns);

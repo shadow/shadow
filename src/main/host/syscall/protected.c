@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <sys/time.h>
+#include <sys/timerfd.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
@@ -16,8 +17,8 @@
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
 
-void _syscallhandler_setListenTimeout(SysCallHandler* sys,
-                                      const struct timespec* timeout) {
+void _syscallhandler_setListenTimeout(SysCallHandler* sys, const struct timespec* timeout,
+                                      TimeoutType type) {
     MAGIC_ASSERT(sys);
 
     /* Set a non-repeating (one-shot) timer to the given timeout.
@@ -27,7 +28,8 @@ void _syscallhandler_setListenTimeout(SysCallHandler* sys,
     };
 
     /* This causes us to lose the previous state of the timer. */
-    gint result = timer_setTime(sys->timer, sys->host, 0, &value, NULL);
+    gint result = timer_setTime(
+        sys->timer, sys->host, type == TIMEOUT_ABSOLUTE ? TFD_TIMER_ABSTIME : 0, &value, NULL);
 
     if (result != 0) {
         utility_panic("syscallhandler failed to set timeout to %lu.%09lu seconds",
@@ -40,7 +42,7 @@ void _syscallhandler_setListenTimeout(SysCallHandler* sys,
 void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
                                             gint timeout_ms) {
     struct timespec timeout = utility_timespecFromMillis((int64_t)timeout_ms);
-    _syscallhandler_setListenTimeout(sys, &timeout);
+    _syscallhandler_setListenTimeout(sys, &timeout, TIMEOUT_RELATIVE);
 }
 
 int _syscallhandler_isListenTimeoutPending(SysCallHandler* sys) {
