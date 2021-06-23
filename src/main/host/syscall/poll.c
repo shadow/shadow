@@ -145,7 +145,7 @@ static SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, PluginPtr f
 
             bool need_timer = timeout && (timeout->tv_sec > 0 || timeout->tv_nsec > 0);
             if (need_timer) {
-                _syscallhandler_setListenTimeout(sys, timeout);
+                _syscallhandler_setListenTimeout(sys, timeout, TIMEOUT_RELATIVE);
             }
 
             // Block on epoll, which is readable when any fds have events
