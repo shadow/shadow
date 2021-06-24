@@ -13,11 +13,15 @@
 "Component: Main":
 - "src/main/**/*"
 
+# Any change in src/test or any yml file changed in .github except pr labeler.
+# From https://github.com/actions/labeler:
+#  From a boolean logic perspective, top-level match objects are OR-ed together
+#  and individual match rules within an object are AND-ed. Combined with !
+#  negation, you can write complex matching rules.
 "Component: Testing":
-- "src/test/**/*"
-- ".github/**/*.yml"
-- "!.github/pr_labeler_conf.yml"
-- "!.github/workflows/pr_metadata.yml"
+- any: ["src/test/**/*"]
+  any: [".github/**/*.yml", "!.github/pr_labeler_conf.yml",
+        "!.github/workflows/pr_metadata.yml"]
 
 "Component: Tools":
 - "src/tools/**/*"
