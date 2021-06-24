@@ -20,7 +20,7 @@
 #  negation, you can write complex matching rules.
 "Component: Testing":
 - any: ["src/test/**/*"]
-  any: [".github/**/*.yml", "!.github/pr_labeler_conf.yml",
+- any: [".github/**/*.yml", "!.github/pr_labeler_conf.yml",
         "!.github/workflows/pr_metadata.yml"]
 
 "Component: Tools":
