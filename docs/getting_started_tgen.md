@@ -75,6 +75,13 @@ We can see that Shadow will be running 11 processes in total, and that those
 processes are configured using `graphml.xml` files (the configuration file
 format for TGen) as arguments.
 
+Each host directory is also the [working
+directory](https://en.wikipedia.org/wiki/Working_directory) for the host's
+processes, which is why we specified `../../../tgen.server.graphml.xml` as the
+path to the TGen configuration in our Shadow configuration file
+(`./shadow.data/hosts/server/../../../tgen.server.graphml.xml` →
+`./tgen.server.graphml.xml`).
+
 ### Configuring TGen
 
 Each TGen process requires an action-dependency graph in order to configure the
