@@ -9,19 +9,9 @@ package manager.
 
 Each client uses cURL to make an HTTP request to a basic Python HTTP server.
 
-`server.py`:
-
-```python
-import http.server
-
-httpd = http.server.HTTPServer(('', 80), http.server.SimpleHTTPRequestHandler)
-httpd.serve_forever()
-```
-
 Shadow requires a configuration file that specifies information about the
 network graph and the processes to run within the simulation. This example
-uses a built-in network graph for simplicity. Write this configuration file to
-the same directory as the `server.py` Python script above.
+uses a built-in network graph for simplicity.
 
 `shadow.yaml`:
 
@@ -41,7 +31,7 @@ hosts:
   server:
     processes:
     - path: /bin/python3
-      args: ../../../server.py
+      args: -m http.server 80
       start_time: 3s
   # three hosts with hostnames 'client1', 'client2', and 'client3'
   client:
@@ -99,9 +89,3 @@ $ cat shadow.data/hosts/client1/client1.curl.1000.stdout
 <h1>Directory listing for /</h1>
 ...
 ```
-
-Each host directory is also the [working
-directory](https://en.wikipedia.org/wiki/Working_directory) for the host's
-processes, which is why we specified `../../../server.py` as the path to the
-Python script in our Shadow configuration file
-(`./shadow.data/hosts/server/../../../server.py` → `./server.py`).
