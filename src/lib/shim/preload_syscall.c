@@ -152,7 +152,9 @@ static long _vshadow_raw_syscall(long n, va_list args) {
     // non-fatal signal.
     // TODO: Allocate dynamically and only do this until the MemoryManager is
     // initialized.
-    static __thread char new_stack[4096 * 10];
+    //
+    // C ABI requires 16-byte alignment for stack frames.
+    static __thread char new_stack[4096 * 10] __attribute__((aligned(16)));
 
     void* old_stack;
     SysCallReg retval;
@@ -176,6 +178,7 @@ static long _vshadow_raw_syscall(long n, va_list args) {
                  "rax", "rdi", "rdx", "rcx", "rsi", "r8", "r9", "r10", "r11");
 
     shim_enableInterposition();
+
     return retval.as_i64;
 }
 
