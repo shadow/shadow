@@ -865,7 +865,7 @@ mod export {
         match memory_manager.copy_from_ptr(dst, src) {
             Ok(_) => 0,
             Err(e) => {
-                trace!("Couldn't read {:?} into {:?}", src, dst);
+                trace!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
                 -(e as i32)
             }
         }
@@ -884,9 +884,9 @@ mod export {
         let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
         match memory_manager.copy_to_ptr(dst, src) {
             Ok(_) => 0,
-            Err(_) => {
-                trace!("Couldn't write {:?} into {:?}", dst, src);
-                nix::errno::Errno::EFAULT as i32
+            Err(e) => {
+                trace!("Couldn't write {:?} into {:?}: {:?}", src, dst, e);
+                -(e as i32)
             }
         }
     }
