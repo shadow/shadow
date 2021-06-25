@@ -732,7 +732,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 static void _process_free(Process* proc) {
     MAGIC_ASSERT(proc);
 
-    process_flushPtrs(proc);
+    process_freePtrsWithoutFlushing(proc);
     g_array_free(proc->memoryRefs, false);
 
     _process_terminate_threads(proc);
