@@ -34,7 +34,7 @@ bool shim_interpositionEnabled();
 bool shim_use_syscall_handler();
 
 // Returns the shmem block used for IPC, which may be uninitialized.
-ShMemBlock shim_thisThreadEventIPCBlk();
+struct IPCData* shim_thisThreadEventIPC();
 
 // Return the location of the time object in shared memory, or NULL if unavailable.
 struct timespec* shim_get_shared_time_location();

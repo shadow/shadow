@@ -53,22 +53,22 @@ static long _shadow_real_raw_syscall(long n, ...) {
 // Only called from asm, so need to tell compiler not to discard.
 __attribute__((used)) static SysCallReg _shadow_raw_syscall_event(const ShimEvent* syscall_event) {
 
-    ShMemBlock ipc_blk = shim_thisThreadEventIPCBlk();
+    struct IPCData* ipc = shim_thisThreadEventIPC();
 
     trace("sending syscall %ld event on %p", syscall_event->event_data.syscall.syscall_args.number,
-          ipc_blk.p);
+          ipc);
 
-    shimevent_sendEventToShadow(ipc_blk.p, syscall_event);
+    shimevent_sendEventToShadow(ipc, syscall_event);
     SysCallReg rv = {0};
 
     // By default we assume Shadow will return quickly, and so should spin
     // rather than letting the OS block this thread.
     bool spin = true;
     while (true) {
-        trace("waiting for event on %p", ipc_blk.p);
+        trace("waiting for event on %p", ipc);
         ShimEvent res = {0};
-        shimevent_recvEventFromShadow(ipc_blk.p, &res, spin);
-        trace("got response of type %d on %p", res.event_id, ipc_blk.p);
+        shimevent_recvEventFromShadow(ipc, &res, spin);
+        trace("got response of type %d on %p", res.event_id, ipc);
         // Reset spin-flag to true. (May have been set to false by a SHD_SHIM_EVENT_BLOCK in the
         // previous iteration)
         spin = true;
@@ -77,7 +77,7 @@ __attribute__((used)) static SysCallReg _shadow_raw_syscall_event(const ShimEven
                 // Loop again, this time relinquishing the CPU while waiting for the next message.
                 spin = false;
                 // Ack the message.
-                shimevent_sendEventToShadow(ipc_blk.p, &res);
+                shimevent_sendEventToShadow(ipc, &res);
                 break;
             }
             case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
@@ -106,20 +106,20 @@ __attribute__((used)) static SysCallReg _shadow_raw_syscall_event(const ShimEven
                     .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
                     .event_data.syscall_complete.retval.as_i64 = syscall_rv,
                 };
-                shimevent_sendEventToShadow(ipc_blk.p, &syscall_complete_event);
+                shimevent_sendEventToShadow(ipc, &syscall_complete_event);
                 break;
             }
             case SHD_SHIM_EVENT_CLONE_REQ:
                 shim_shmemHandleClone(&res);
-                shim_shmemNotifyComplete(ipc_blk.p);
+                shim_shmemNotifyComplete(ipc);
                 break;
             case SHD_SHIM_EVENT_CLONE_STRING_REQ:
                 shim_shmemHandleCloneString(&res);
-                shim_shmemNotifyComplete(ipc_blk.p);
+                shim_shmemNotifyComplete(ipc);
                 break;
             case SHD_SHIM_EVENT_WRITE_REQ:
                 shim_shmemHandleWrite(&res);
-                shim_shmemNotifyComplete(ipc_blk.p);
+                shim_shmemNotifyComplete(ipc);
                 break;
             default: {
                 panic("Got unexpected event %d", res.event_id);

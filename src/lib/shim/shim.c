@@ -7,6 +7,7 @@
 #include <linux/seccomp.h>
 #include <pthread.h>
 #include <search.h>
+#include <stdalign.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,8 +34,60 @@ static bool _using_interpose_ptrace = false;
 // Whether Shadow is using the shim-side syscall handler optimization.
 static bool _using_shim_syscall_handler = true;
 
+typedef struct ShimThreadLocalStorage {
+    alignas(16) char _bytes[1024];
+} ShimThreadLocalStorage;
+static ShimThreadLocalStorage _shim_tlss[100];
+static size_t _shim_tls_byte_offset = 0;
+
+// First thread, where global init will be performed, always gets index 0.
+static int _shim_current_tls_idx = 0;
+static int _shim_getCurrentTlsIdx() {
+    assert(_using_interpose_preload || _using_interpose_ptrace);
+    if (_using_interpose_ptrace) {
+        // Thread locals supported.
+        static int next_idx = 0;
+        static __thread int idx = -1;
+        if (idx == -1) {
+            idx = next_idx++;
+        }
+        return idx;
+    }
+    // Unsafe to use thread-locals. idx will be set explicitly through shim IPC.
+    return _shim_current_tls_idx;
+}
+
+typedef struct ShimThreadLocalVar {
+    size_t offset;
+    bool initd;
+} ShimThreadLocalVar;
+
+// Initialize storage and return whether it had already been initialized.
+void* stlv_ptr(ShimThreadLocalVar* v, size_t sz) {
+    int idx = _shim_getCurrentTlsIdx();
+    if (!v->initd) {
+        v->offset = _shim_tls_byte_offset;
+        _shim_tls_byte_offset += sz;
+
+        // Always leave aligned at 16 for simplicity.
+        // 16 is a safe alignment for any C primitive.
+        size_t overhang = _shim_tls_byte_offset % 16;
+        _shim_tls_byte_offset += (16 - overhang);
+
+        assert(_shim_tls_byte_offset  < sizeof(ShimThreadLocalStorage));
+        v->initd = true;
+    }
+    return &_shim_tlss[idx]._bytes[v->offset];
+}
+
 // This thread's IPC block, for communication with Shadow.
-static __thread ShMemBlock _shim_ipc_blk = {0};
+static ShMemBlock* _shim_ipcDataBlk() {
+    static ShimThreadLocalVar v = {0};
+    return stlv_ptr(&v, sizeof(ShMemBlock));
+}
+struct IPCData* shim_thisThreadEventIPC() {
+    return _shim_ipcDataBlk()->p;
+}
 
 // Per-thread state shared with Shadow.
 static __thread ShMemBlock _shim_shared_mem_blk = {0};
@@ -235,34 +288,32 @@ static void _shim_parent_init_ipc() {
     ShMemBlockSerialized ipc_blk_serialized = shmemblockserialized_fromString(ipc_blk_buf, &err);
     assert(!err);
 
-    _shim_ipc_blk = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
+    *_shim_ipcDataBlk() = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
+    assert(shim_thisThreadEventIPC());
 }
 
 static void _shim_child_init_ipc() {
     assert(_using_interpose_preload);
     assert(_using_interpose_ptrace);
 
-    // If we haven't initialized the ipc block yet (because this isn't the main thread,
-    // which is initialized in the global initialization via an environment variable), do so.
-    if (!_shim_ipc_blk.p) {
-        ShMemBlockSerialized ipc_blk_serialized;
-        int rv = shadow_get_ipc_blk(&ipc_blk_serialized);
-        if (rv != 0) {
-            panic("shadow_get_ipc_blk: %s", strerror(errno));
-            abort();
-        }
-        _shim_ipc_blk = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
-        assert(_shim_ipc_blk.p);
+    assert(!shim_thisThreadEventIPC());
+    ShMemBlockSerialized ipc_blk_serialized;
+    int rv = shadow_get_ipc_blk(&ipc_blk_serialized);
+    if (rv != 0) {
+        panic("shadow_get_ipc_blk: %s", strerror(errno));
+        abort();
     }
+    *_shim_ipcDataBlk() = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
+    assert(shim_thisThreadEventIPC());
 }
 
 static void _shim_ipc_wait_for_start_event() {
     assert(_using_interpose_preload);
-    assert(_shim_ipc_blk.p);
+    assert(shim_thisThreadEventIPC());
 
     ShimEvent event;
-    trace("waiting for start event on %p", _shim_ipc_blk.p);
-    shimevent_recvEventFromShadow(_shim_ipc_blk.p, &event, /* spin= */ true);
+    trace("waiting for start event on %p", shim_thisThreadEventIPC);
+    shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
     shim_syscall_set_simtime_nanos(event.event_data.start.simulation_nanos);
 }
@@ -548,17 +599,15 @@ __attribute__((destructor)) static void _shim_unload() {
 
     shim_disableInterposition();
 
-    ShMemBlock ipc_blk = shim_thisThreadEventIPCBlk();
+    struct IPCData* ipc = shim_thisThreadEventIPC();
     ShimEvent shim_event;
     shim_event.event_id = SHD_SHIM_EVENT_STOP;
-    trace("sending stop event on %p", ipc_blk.p);
-    shimevent_sendEventToShadow(ipc_blk.p, &shim_event);
+    trace("sending stop event on %p", ipc);
+    shimevent_sendEventToShadow(ipc, &shim_event);
 
     // Leave interposition disabled; shadow is waiting for
     // this process to die and won't listen to the shim pipe anymore.
 }
-
-ShMemBlock shim_thisThreadEventIPCBlk() { return _shim_ipc_blk; }
 
 struct timespec* shim_get_shared_time_location() {
     if (_shim_shared_mem == NULL) {
