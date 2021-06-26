@@ -99,7 +99,10 @@ static ShimSharedMem* _shim_shared_mem() {
 }
 
 // We disable syscall interposition when this is > 0.
-static __thread int _shim_disable_interposition = 0;
+static int* _shim_disable_interposition() {
+    static ShimThreadLocalVar v = {0};
+    return stlv_ptr(&v, sizeof(int));
+}
 
 static void _shim_set_allow_native_syscalls(bool is_allowed) {
     if (_shim_shared_mem()) {
@@ -113,7 +116,7 @@ static void _shim_set_allow_native_syscalls(bool is_allowed) {
 }
 
 bool shim_disableInterposition() {
-    if (++_shim_disable_interposition == 1) {
+    if (++*_shim_disable_interposition() == 1) {
         if (_using_interpose_ptrace && _using_interpose_preload) {
             _shim_set_allow_native_syscalls(true);
         }
@@ -125,7 +128,7 @@ bool shim_disableInterposition() {
 
 bool shim_enableInterposition() {
     assert(_shim_disable_interposition > 0);
-    if (--_shim_disable_interposition == 0) {
+    if (--*_shim_disable_interposition() == 0) {
         if (_using_interpose_ptrace && _using_interpose_preload) {
             _shim_set_allow_native_syscalls(false);
         }
@@ -136,7 +139,7 @@ bool shim_enableInterposition() {
 }
 
 bool shim_interpositionEnabled() {
-    return _using_interpose_preload && !_shim_disable_interposition;
+    return _using_interpose_preload && !*_shim_disable_interposition();
 }
 
 bool shim_use_syscall_handler() { return _using_shim_syscall_handler; }
