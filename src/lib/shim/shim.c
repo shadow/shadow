@@ -543,15 +543,16 @@ static void _shim_child_init_preload() {
 // This function should be called before any wrapped syscall. We also use the
 // constructor attribute to be completely sure that it's called before main.
 __attribute__((constructor)) void _shim_load() {
-    static __thread bool started_thread_init = false;
-    if (started_thread_init) {
+    static ShimThreadLocalVar started_thread_init_var = {0};
+    bool* started_thread_init = stlv_ptr(&started_thread_init_var, sizeof(*started_thread_init));
+    if (*started_thread_init) {
         // Avoid deadlock when _shim_global_init's syscalls caused this function to be
         // called recursively.  In the uninitialized state,
         // `shim_interpositionEnabled` returns false, allowing _shim_global_init's
         // syscalls to execute natively.
         return;
     }
-    started_thread_init = true;
+    *started_thread_init = true;
 
     // We must set the interposition type before calling
     // shim_disableInterposition.
