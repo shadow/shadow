@@ -43,18 +43,18 @@ static size_t _shim_tls_byte_offset = 0;
 // First thread, where global init will be performed, always gets index 0.
 static int _shim_current_tls_idx = 0;
 static int _shim_getCurrentTlsIdx() {
-    assert(_using_interpose_preload || _using_interpose_ptrace);
-    if (_using_interpose_ptrace) {
-        // Thread locals supported.
-        static int next_idx = 0;
-        static __thread int idx = -1;
-        if (idx == -1) {
-            idx = next_idx++;
-        }
-        return idx;
+    if (_using_interpose_preload && !_using_interpose_ptrace) {
+        // Unsafe to use thread-locals. idx will be set explicitly through shim IPC.
+        return _shim_current_tls_idx;
     }
-    // Unsafe to use thread-locals. idx will be set explicitly through shim IPC.
-    return _shim_current_tls_idx;
+
+    // Thread locals supported.
+    static int next_idx = 0;
+    static __thread int idx = -1;
+    if (idx == -1) {
+        idx = next_idx++;
+    }
+    return idx;
 }
 
 typedef struct ShimThreadLocalVar {
@@ -90,15 +90,20 @@ struct IPCData* shim_thisThreadEventIPC() {
 }
 
 // Per-thread state shared with Shadow.
-static __thread ShMemBlock _shim_shared_mem_blk = {0};
-static __thread ShimSharedMem* _shim_shared_mem = NULL;
+static ShMemBlock* _shim_shared_mem_blk() {
+    static ShimThreadLocalVar v = {0};
+    return stlv_ptr(&v, sizeof(ShMemBlock));
+}
+static ShimSharedMem* _shim_shared_mem() {
+    return _shim_shared_mem_blk()->p;
+}
 
 // We disable syscall interposition when this is > 0.
 static __thread int _shim_disable_interposition = 0;
 
 static void _shim_set_allow_native_syscalls(bool is_allowed) {
-    if (_shim_shared_mem) {
-        _shim_shared_mem->ptrace_allow_native_syscalls = is_allowed;
+    if (_shim_shared_mem()) {
+        _shim_shared_mem()->ptrace_allow_native_syscalls = is_allowed;
         trace("%s native-syscalls via shmem %p", is_allowed ? "allowing" : "disallowing",
               _shim_shared_mem);
     } else {
@@ -250,33 +255,23 @@ static void _shim_parent_init_shm() {
     bool err = false;
     ShMemBlockSerialized shm_blk_serialized = shmemblockserialized_fromString(shm_blk_buf, &err);
 
-    _shim_shared_mem_blk = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
-    _shim_shared_mem = _shim_shared_mem_blk.p;
-
-    if (!_shim_shared_mem) {
-        abort();
-    }
+    *_shim_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
+    assert(_shim_shared_mem());
 }
 
 static void _shim_child_init_shm() {
     assert(_using_interpose_ptrace);
 
-    // If we haven't initialized the shm block yet (because this isn't the main thread,
-    // which is initialized in the global initialization via an environment variable), do so.
-    if (!_shim_shared_mem) {
-        ShMemBlockSerialized shm_blk_serialized;
-        int rv = shadow_get_shm_blk(&shm_blk_serialized);
-        if (rv != 0) {
-            panic("shadow_get_shm_blk: %s", strerror(errno));
-            abort();
-        }
-
-        _shim_shared_mem_blk = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
-        _shim_shared_mem = _shim_shared_mem_blk.p;
-        if (!_shim_shared_mem) {
-            abort();
-        }
+    assert(!_shim_shared_mem());
+    ShMemBlockSerialized shm_blk_serialized;
+    int rv = shadow_get_shm_blk(&shm_blk_serialized);
+    if (rv != 0) {
+        panic("shadow_get_shm_blk: %s", strerror(errno));
+        abort();
     }
+
+    *_shim_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
+    assert(_shim_shared_mem());
 }
 
 static void _shim_parent_init_ipc() {
@@ -610,9 +605,9 @@ __attribute__((destructor)) static void _shim_unload() {
 }
 
 struct timespec* shim_get_shared_time_location() {
-    if (_shim_shared_mem == NULL) {
+    if (_shim_shared_mem() == NULL) {
         return NULL;
     } else {
-        return &_shim_shared_mem->sim_time;
+        return &_shim_shared_mem()->sim_time;
     }
 }
