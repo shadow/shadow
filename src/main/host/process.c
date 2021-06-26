@@ -189,6 +189,47 @@ static void _process_reapThread(Process* process, Thread* thread) {
     // See `set_tid_address(2)`.
     PluginVirtualPtr clear_child_tid_pvp = thread_getTidAddress(thread);
     if (clear_child_tid_pvp.val && g_hash_table_size(process->threads) > 1 && !process->isExiting) {
+        // Wait until the process is really dead. Today this is necessary in
+        // preload mode, since it only gets notified that a thread is *about to*
+        // exit. Eventually we might improve that to have threadpreload get
+        // notified about the actual thread death one way or another (see
+        // https://github.com/shadow/shadow/issues/1476), but even then it's not
+        // a bad idea to defensively have this check here.
+        while (1) {
+            pid_t pid = thread_getNativePid(thread);
+            pid_t tid = thread_getNativeTid(thread);
+            int rv = (int)syscall(SYS_tgkill, pid, tid, 0);
+            if (rv == -1 && errno == ESRCH) {
+                trace("Thread is done exiting, proceeding with cleanup");
+                break;
+            } else if (rv != 0) {
+                error("Unexpected tgkill rv:%d errno:%s", rv, g_strerror(errno));
+                break;
+            } else if (pid == tid) {
+                trace("%d.%d can still receive signals", pid, tid);
+
+                // Thread leader could be in a zombie state waiting for the other threads to exit.
+                gchar* filename = g_strdup_printf("/proc/%d/stat", pid);
+                gchar* contents = NULL;
+                gboolean rv = g_file_get_contents(filename, &contents, NULL, NULL);
+                g_free(filename);
+                if (!rv) {
+                    trace("tgl %d is fully dead", pid);
+                    break;
+                }
+                bool is_zombie = strstr(contents, ") Z") != NULL;
+                g_free(contents);
+                if (is_zombie) {
+                    trace("tgl %d is a zombie", pid);
+                    break;
+                }
+                // Still alive and in a non-zombie state; continue
+            }
+            debug("%d.%d still running; waiting for it to exit", pid, tid);
+            sched_yield();
+            // Check again
+        }
+
         pid_t* clear_child_tid =
             process_getWriteablePtr(process, clear_child_tid_pvp, sizeof(pid_t*));
         if (!clear_child_tid) {
