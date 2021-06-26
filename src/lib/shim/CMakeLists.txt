@@ -34,6 +34,7 @@ set(SHIM_FILES
   shim_logger.c
   shim_shmem.c
   shim_syscall.c
+  shim_tls.c
 )
 add_library(${SHIM_LIB} SHARED ${SHIM_FILES})
 set_target_properties(${SHIM_LIB} PROPERTIES LINK_FLAGS "-Wl,--no-as-needed")

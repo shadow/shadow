@@ -24,6 +24,7 @@
 #include "lib/shim/shim_event.h"
 #include "lib/shim/shim_logger.h"
 #include "lib/shim/shim_syscall.h"
+#include "lib/shim/shim_tls.h"
 
 // Whether Shadow is using preload-based interposition.
 static bool _using_interpose_preload = false;
@@ -34,56 +35,10 @@ static bool _using_interpose_ptrace = false;
 // Whether Shadow is using the shim-side syscall handler optimization.
 static bool _using_shim_syscall_handler = true;
 
-typedef struct ShimThreadLocalStorage {
-    alignas(16) char _bytes[1024];
-} ShimThreadLocalStorage;
-static ShimThreadLocalStorage _shim_tlss[100];
-static size_t _shim_tls_byte_offset = 0;
-
-// First thread, where global init will be performed, always gets index 0.
-static int _shim_current_tls_idx = 0;
-static int _shim_getCurrentTlsIdx() {
-    if (_using_interpose_preload && !_using_interpose_ptrace) {
-        // Unsafe to use thread-locals. idx will be set explicitly through shim IPC.
-        return _shim_current_tls_idx;
-    }
-
-    // Thread locals supported.
-    static int next_idx = 0;
-    static __thread int idx = -1;
-    if (idx == -1) {
-        idx = next_idx++;
-    }
-    return idx;
-}
-
-typedef struct ShimThreadLocalVar {
-    size_t offset;
-    bool initd;
-} ShimThreadLocalVar;
-
-// Initialize storage and return whether it had already been initialized.
-void* stlv_ptr(ShimThreadLocalVar* v, size_t sz) {
-    int idx = _shim_getCurrentTlsIdx();
-    if (!v->initd) {
-        v->offset = _shim_tls_byte_offset;
-        _shim_tls_byte_offset += sz;
-
-        // Always leave aligned at 16 for simplicity.
-        // 16 is a safe alignment for any C primitive.
-        size_t overhang = _shim_tls_byte_offset % 16;
-        _shim_tls_byte_offset += (16 - overhang);
-
-        assert(_shim_tls_byte_offset  < sizeof(ShimThreadLocalStorage));
-        v->initd = true;
-    }
-    return &_shim_tlss[idx]._bytes[v->offset];
-}
-
 // This thread's IPC block, for communication with Shadow.
 static ShMemBlock* _shim_ipcDataBlk() {
-    static ShimThreadLocalVar v = {0};
-    return stlv_ptr(&v, sizeof(ShMemBlock));
+    static ShimTlsVar v = {0};
+    return shimtlsvar_ptr(&v, sizeof(ShMemBlock));
 }
 struct IPCData* shim_thisThreadEventIPC() {
     return _shim_ipcDataBlk()->p;
@@ -91,8 +46,8 @@ struct IPCData* shim_thisThreadEventIPC() {
 
 // Per-thread state shared with Shadow.
 static ShMemBlock* _shim_shared_mem_blk() {
-    static ShimThreadLocalVar v = {0};
-    return stlv_ptr(&v, sizeof(ShMemBlock));
+    static ShimTlsVar v = {0};
+    return shimtlsvar_ptr(&v, sizeof(ShMemBlock));
 }
 static ShimSharedMem* _shim_shared_mem() {
     return _shim_shared_mem_blk()->p;
@@ -100,8 +55,8 @@ static ShimSharedMem* _shim_shared_mem() {
 
 // We disable syscall interposition when this is > 0.
 static int* _shim_disable_interposition() {
-    static ShimThreadLocalVar v = {0};
-    return stlv_ptr(&v, sizeof(int));
+    static ShimTlsVar v = {0};
+    return shimtlsvar_ptr(&v, sizeof(int));
 }
 
 static void _shim_set_allow_native_syscalls(bool is_allowed) {
@@ -148,6 +103,12 @@ bool shim_use_syscall_handler() { return _using_shim_syscall_handler; }
 // variables.  This is called before disabling interposition, so should be
 // careful not to make syscalls.
 static void _set_interpose_type() {
+    static bool initd = false;
+    if (initd) {
+        return;
+    }
+    initd = true;
+
     // If we're not running under Shadow, return. This can be useful
     // for testing the libc parts of the shim.
     if (!getenv("SHADOW_SPAWNED")) {
@@ -543,8 +504,19 @@ static void _shim_child_init_preload() {
 // This function should be called before any wrapped syscall. We also use the
 // constructor attribute to be completely sure that it's called before main.
 __attribute__((constructor)) void _shim_load() {
-    static ShimThreadLocalVar started_thread_init_var = {0};
-    bool* started_thread_init = stlv_ptr(&started_thread_init_var, sizeof(*started_thread_init));
+    static bool did_global_pre_init = false;
+    if (!did_global_pre_init) {
+        // Early init; must not make any syscalls.
+        did_global_pre_init = true;
+        _set_interpose_type();
+        _set_use_shim_syscall_handler();
+        shimtls_init(/*useNativeTls=*/_using_interpose_ptrace || !_using_interpose_preload);
+    }
+
+    // Now we can use thread-local storage.
+    static ShimTlsVar started_thread_init_var = {0};
+    bool* started_thread_init =
+        shimtlsvar_ptr(&started_thread_init_var, sizeof(*started_thread_init));
     if (*started_thread_init) {
         // Avoid deadlock when _shim_global_init's syscalls caused this function to be
         // called recursively.  In the uninitialized state,
@@ -554,10 +526,7 @@ __attribute__((constructor)) void _shim_load() {
     }
     *started_thread_init = true;
 
-    // We must set the interposition type before calling
-    // shim_disableInterposition.
-    _set_interpose_type();
-    _set_use_shim_syscall_handler();
+    // Ok from here to make syscalls; they will get executed natively.
 
     // Initialization tasks depend on interpose type and parent/child thread status.
     static bool did_global_init = false;
