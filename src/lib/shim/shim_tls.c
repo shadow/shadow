@@ -49,8 +49,8 @@ static int _currentTlsIdx() {
 
 // Initialize storage and return whether it had already been initialized.
 void* shimtlsvar_ptr(ShimTlsVar* v, size_t sz) {
-    if (!v->initd) {
-        v->offset = _nextByteOffset;
+    if (!v->_initd) {
+        v->_offset = _nextByteOffset;
         _nextByteOffset += sz;
 
         // Always leave aligned at 16 for simplicity.
@@ -59,7 +59,7 @@ void* shimtlsvar_ptr(ShimTlsVar* v, size_t sz) {
         _nextByteOffset += (16 - overhang);
 
         assert(_nextByteOffset < sizeof(ShimThreadLocalStorage));
-        v->initd = true;
+        v->_initd = true;
     }
-    return &_tlss[_currentTlsIdx()]._bytes[v->offset];
+    return &_tlss[_currentTlsIdx()]._bytes[v->_offset];
 }

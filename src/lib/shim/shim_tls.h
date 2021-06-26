@@ -17,13 +17,25 @@
 // manual TlsIdx management below.
 void shimtls_init(bool useNativeTls);
 
-// TODO: rename ShimTlsVar
+// A thread-local variable.
+//
+// Instances should have static storage type, and be zero-initialized. e.g.:
+//
+//     static ShimTlsVar v = {0};
+//
+// To get a pointer to the current thread's instance of the variable, use
+// `shimtlsvar_ptr`:
+//
+//     MyType* t = shimtlsvar_ptr(&v, sizeof(*t));
+//
 typedef struct ShimTlsVar {
-    size_t offset;
-    bool initd;
+    size_t _offset;
+    bool _initd;
 } ShimTlsVar;
 
-// Return pointer to this thread's instance of the given var.
+// Return pointer to this thread's instance of the given var. The pointer is
+// always align(16), and the data at that pointer is zero-initialized for each
+// thread.
 void* shimtlsvar_ptr(ShimTlsVar* v, size_t sz);
 
 // Take an unused TLS index, which can be used for a new thread.
