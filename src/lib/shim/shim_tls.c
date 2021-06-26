@@ -27,6 +27,7 @@ static bool _useNativeTls;
 
 static bool _initd = false;
 void shimtls_init(bool useNativeTls) {
+    assert(!_initd);
     _initd = true;
     _useNativeTls = useNativeTls;
 }
@@ -49,6 +50,7 @@ static int _currentTlsIdx() {
 
 // Initialize storage and return whether it had already been initialized.
 void* shimtlsvar_ptr(ShimTlsVar* v, size_t sz) {
+    assert(_initd);
     if (!v->_initd) {
         v->_offset = _nextByteOffset;
         _nextByteOffset += sz;
@@ -62,4 +64,32 @@ void* shimtlsvar_ptr(ShimTlsVar* v, size_t sz) {
         v->_initd = true;
     }
     return &_tlss[_currentTlsIdx()]._bytes[v->_offset];
+}
+
+// Take an unused TLS index, which can be used for a new thread.
+int shimtls_takeNextIdx() {
+    assert(_initd);
+    if (_useNativeTls) {
+        return 0;
+    }
+    static int next = 0;
+    assert(next < MAX_THREADS);
+    return next++;
+}
+
+// Use when switching threads.
+int shimtls_getCurrentIdx() {
+    assert(_initd);
+    if (_useNativeTls) {
+        return 0;
+    }
+    return _tlsIdx;
+
+}
+void shimtls_setCurrentIdx(int idx) {
+    assert(_initd);
+    if (_useNativeTls) {
+        return;
+    }
+    _tlsIdx = idx;
 }

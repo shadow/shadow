@@ -39,10 +39,16 @@ typedef struct ShimTlsVar {
 void* shimtlsvar_ptr(ShimTlsVar* v, size_t sz);
 
 // Take an unused TLS index, which can be used for a new thread.
-int shim_takeNextTlsIdx();
+int shimtls_takeNextIdx();
 
-// Use when switching threads.
-int shim_getCurrentTlsIdx();
-void shim_setCurrentTlsIdx();
+// Use when switching threads. Must be called before accessing any ShimTlsVars
+// in each new thread, or after switching threads.
+//
+// This has no effect if `useNativeTls` was set to true.
+void shimtls_setCurrentIdx(int idx);
+
+// Get the current thread idx, which should be treated as opaque. Always returns 0
+// if `useNativeTls` was set to true.
+int shimtls_getCurrentIdx();
 
 #endif

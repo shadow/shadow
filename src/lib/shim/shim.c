@@ -103,12 +103,6 @@ bool shim_use_syscall_handler() { return _using_shim_syscall_handler; }
 // variables.  This is called before disabling interposition, so should be
 // careful not to make syscalls.
 static void _set_interpose_type() {
-    static bool initd = false;
-    if (initd) {
-        return;
-    }
-    initd = true;
-
     // If we're not running under Shadow, return. This can be useful
     // for testing the libc parts of the shim.
     if (!getenv("SHADOW_SPAWNED")) {
@@ -511,6 +505,7 @@ __attribute__((constructor)) void _shim_load() {
         _set_interpose_type();
         _set_use_shim_syscall_handler();
         shimtls_init(/*useNativeTls=*/_using_interpose_ptrace || !_using_interpose_preload);
+        shimtls_setCurrentIdx(shimtls_takeNextIdx());
     }
 
     // Now we can use thread-local storage.
