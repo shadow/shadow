@@ -31,6 +31,10 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     const struct timespec* timeout;
     if (timeoutVPtr.val) {
         timeout = process_getReadablePtr(sys->process, timeoutVPtr, sizeof(*timeout));
+        if (!timeout) {
+            warning("Couldn't read timeout address %p", (void*)timeoutVPtr.val);
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        }
         // Bounds checking
         if (!(timeout->tv_nsec >= 0 && timeout->tv_nsec <= 999999999)) {
             trace("A futex timeout was given, but the nanos value is out of range");
@@ -44,6 +48,10 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     // threads from the same plugin at the same time, we do not use atomic ops.
     // `man 2 futex`: blocking via a futex is an atomic compare-and-block operation
     const uint32_t* futexVal = process_getReadablePtr(sys->process, futexVPtr, sizeof(uint32_t));
+    if (!futexVal) {
+        warning("Couldn't read futex address %p", (void*)futexVPtr.val);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
 
     trace(
         "Futex value is %" PRIu32 ", expected value is %" PRIu32, *futexVal, (uint32_t)expectedVal);
