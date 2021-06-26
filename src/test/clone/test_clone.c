@@ -52,15 +52,26 @@ static int _clone_minimal_thread(void* args) {
     _exit_thread(0);
 }
 
-static void _clone_minimal() {
-    // allocate some memory for the cloned thread.
-    uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
+static void _make_stack(void** top, void** bottom) {
+    *bottom = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
                           MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
-    assert_true_errno(stack != MAP_FAILED);
+    assert_true_errno(*bottom != MAP_FAILED);
+    *top = *bottom + CLONE_TEST_STACK_NBYTES;
 
-    // clone takes the "starting" address of the stack, which is the *top*.
-    uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
+    // Set up a guard page. This isn't strictly necessary, but in the case that
+    // this test somehow ends up overflowing the stack, will result in a more
+    // consistent and easier to debug failure, since accessing this page will
+    // always trigger a SEGV.
+    //
+    // e.g. without this, if the stack happened to be allocated adjacent to some
+    // other accessible memory, then overflowing the stack could silently
+    // corrupt that memory.
+    assert_nonneg_errno(mprotect(*bottom, 4096, PROT_NONE));
+}
 
+static void _clone_minimal() {
+    void *stack_top, *stack_bottom;
+    _make_stack(&stack_top, &stack_bottom);
     int child_tid = clone(_clone_minimal_thread, stack_top, CLONE_FLAGS, NULL, NULL, NULL);
     g_assert_cmpint(child_tid, >, 0);
 
@@ -78,7 +89,7 @@ static void _clone_minimal() {
 
     // Intentionally leak `stack`. In this test we can't reliably know when the
     // child thread is done with it.
-    // munmap(stack, CLONE_TEST_STACK_NBYTES);
+    // munmap(stack_bottom, CLONE_TEST_STACK_NBYTES);
 }
 
 // _clone_testCloneTids calls this upon cloning
@@ -90,13 +101,8 @@ static int _testCloneClearTidThread(void* args) {
 }
 
 static void _testCloneClearTid() {
-    // allocate some memory for the cloned thread.
-    uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
-                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
-    assert_true_errno(stack != MAP_FAILED);
-
-    // clone takes the "starting" address of the stack, which is the *top*.
-    uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
+    void *stack_top, *stack_bottom;
+    _make_stack(&stack_top, &stack_bottom);
 
     // Putting this on the stack ends up somehow tripping up gcc's
     // stack-smashing detection, so we put it on the heap instead.
@@ -125,7 +131,7 @@ static void _testCloneClearTid() {
 
     // Because we used CLONE_CHILD_CLEARTID to be notified of the child thread
     // exit, we can safely deallocate it's stack.
-    munmap(stack, CLONE_TEST_STACK_NBYTES);
+    munmap(stack_bottom, CLONE_TEST_STACK_NBYTES);
 }
 
 static int _clone_child_exits_after_leader_waitee_thread(void* args) {
@@ -152,13 +158,8 @@ static void _clone_child_exits_after_leader() {
 
     // Create "waitee" thread.
     {
-        // allocate some memory for the cloned thread.
-        uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
-                              MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
-        assert_true_errno(stack != MAP_FAILED);
-
-        // clone takes the "starting" address of the stack, which is the *top*.
-        uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
+        void *stack_top, *stack_bottom;
+        _make_stack(&stack_top, &stack_bottom);
 
         int child_tid = clone(_clone_child_exits_after_leader_waitee_thread, stack_top,
                               CLONE_FLAGS | CLONE_CHILD_CLEARTID, NULL, NULL, NULL, ctid);
@@ -173,13 +174,8 @@ static void _clone_child_exits_after_leader() {
     // this is a regression test for using the pid of a dead task (the thread
     // leader) for process_vm_writev.
     {
-        // allocate some memory for the cloned thread.
-        uint8_t* stack = mmap(NULL, CLONE_TEST_STACK_NBYTES, PROT_READ | PROT_WRITE,
-                              MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
-        assert_true_errno(stack != MAP_FAILED);
-
-        // clone takes the "starting" address of the stack, which is the *top*.
-        uint8_t* stack_top = stack + CLONE_TEST_STACK_NBYTES;
+        void *stack_top, *stack_bottom;
+        _make_stack(&stack_top, &stack_bottom);
 
         int child_tid = clone(_clone_child_exits_after_leader_waiter_thread, stack_top, CLONE_FLAGS,
                               ctid, NULL, NULL, NULL);
