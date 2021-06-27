@@ -12,11 +12,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// Global init. Must be called before accessing any ShimTlsVars.
-// If `useNativeTls` is set to false, then there's no need to do any of the
-// manual TlsIdx management below.
-void shimtls_init(bool useNativeTls);
-
 // A thread-local variable.
 //
 // Instances should have static storage type, and be zero-initialized. e.g.:
@@ -38,17 +33,9 @@ typedef struct ShimTlsVar {
 // thread.
 void* shimtlsvar_ptr(ShimTlsVar* v, size_t sz);
 
-// Take an unused TLS index, which can be used for a new thread.
-int shimtls_takeNextIdx();
+void shimtls_prepareClone(const void *childStackTopBound, const void *parentStackTopBound);
+void shimtls_cloneDone();
 
-// Use when switching threads. Must be called before accessing any ShimTlsVars
-// in each new thread, or after switching threads.
-//
-// This has no effect if `useNativeTls` was set to true.
-void shimtls_setCurrentIdx(int idx);
-
-// Get the current thread idx, which should be treated as opaque. Always returns 0
-// if `useNativeTls` was set to true.
-int shimtls_getCurrentIdx();
+#define GET_CURRENT_RSP(rsp) __asm__ ("movq %%rsp, %[RSP]" : [RSP] "=rm"(rsp))
 
 #endif

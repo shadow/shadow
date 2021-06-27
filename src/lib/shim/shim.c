@@ -504,8 +504,6 @@ __attribute__((constructor)) void _shim_load() {
         did_global_pre_init = true;
         _set_interpose_type();
         _set_use_shim_syscall_handler();
-        shimtls_init(/*useNativeTls=*/_using_interpose_ptrace || !_using_interpose_preload);
-        shimtls_setCurrentIdx(shimtls_takeNextIdx());
     }
 
     // Now we can use thread-local storage.
@@ -521,7 +519,6 @@ __attribute__((constructor)) void _shim_load() {
     }
     *started_thread_init = true;
 
-    // Ok from here to make syscalls; they will get executed natively.
 
     // Initialization tasks depend on interpose type and parent/child thread status.
     static bool did_global_init = false;

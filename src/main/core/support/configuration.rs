@@ -357,7 +357,8 @@ impl Default for ExperimentalOptions {
             use_syscall_counters: Some(false),
             use_object_counters: Some(true),
             preload_spin_max: Some(0),
-            use_memory_manager: Some(true),
+            // FIXME TEMP
+            use_memory_manager: Some(false),
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),
             interpose_method: Some(InterposeMethod::Ptrace),
