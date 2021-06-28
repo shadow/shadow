@@ -227,6 +227,11 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         trace("native syscall %ld " #s, args->number);                         \
         scr = (SysCallReturn){.state = SYSCALL_NATIVE};                        \
         break
+#define UNSUPPORTED(s)                                                                             \
+    case SYS_##s:                                                                                  \
+        error("Returning error ENOSYS for explicitly unsupported syscall %ld " #s, args->number);  \
+        scr = (SysCallReturn){.state = -ENOSYS};                                                   \
+        break
 
 #ifdef USE_C_SYSCALLS
 #define HANDLE_RUST(s) HANDLE(s)
@@ -367,12 +372,18 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(shadow_hostname_to_addr_ipv4);
         HANDLE(sendto);
         HANDLE(setsockopt);
+#ifdef SYS_sigaction
+        // Superseded by rt_sigaction in Linux 2.2
+        UNSUPPORTED(sigaction);
+#endif
         HANDLE(rt_sigaction);
 #ifdef SYS_signal
-        HANDLE(signal);
+        // Superseded by sigaction in glibc 2.0
+        UNSUPPORTED(signal);
 #endif
 #ifdef SYS_sigprocmask
-        HANDLE(sigprocmask);
+        // Superseded by rt_sigprocmask in Linux 2.2
+        UNSUPPORTED(sigprocmask);
 #endif
         HANDLE(rt_sigprocmask);
         HANDLE(set_robust_list);
