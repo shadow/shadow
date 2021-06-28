@@ -29,9 +29,16 @@ endforeach()
 ## TEST 2 (Extended packet tests)
 
 ## TODO
-## We could also split the shadow.log file into a separate file for each host
+## We should also split the shadow.log file into a separate file for each host
 ## and then grep each file for "packet_add", and do diffs on the output of that.
 ## That way we could check the order of every packet event at every processing point.
+## For example:
+## for i in {1..10}
+## do
+##     cat shadow-a.log | grep "peer${i}:" | grep "packet_add" | cut -d' ' -f3- > peer${i}-a.log
+##     cat shadow-b.log | grep "peer${i}:" | grep "packet_add" | cut -d' ' -f3- > peer${i}-b.log
+##     diff --brief peer${i}-a.log peer${i}-b.log
+## done
 
 ## now let's run a phold test and compare the order of packet events
 foreach(METHOD ptrace hybrid)
@@ -47,13 +54,14 @@ foreach(METHOD ptrace hybrid)
         SHADOW_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/determinism2.test.shadow.config.yaml
         ARGS --use-cpu-pinning true --parallelism 2
         PROPERTIES RUN_SERIAL TRUE)
-    ## now compare the output
-    ## TODO enable this test and fix the remaining determinism issue
-    #add_test(NAME determinism2-shadow-${METHOD}-compare COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/determinism2_compare.cmake)
-    ## make sure the tests that produce output finish before we compare the output
-    ## And make sure the test-phold binary was already built, because the test uses it
-    ## TODO enable this at the same time as the above test is enabled
-    #set_tests_properties(determinism2-shadow-${METHOD}-compare PROPERTIES DEPENDS "determinism2a-shadow-${METHOD};determinism2b-shadow-${METHOD};test-phold")
+    ## Now compare the output
+    add_test(
+        NAME determinism2-shadow-${METHOD}-compare
+        COMMAND ${CMAKE_COMMAND} -D METHOD=${METHOD} -P ${CMAKE_CURRENT_SOURCE_DIR}/determinism2_compare.cmake)
+    ## Make sure the tests that produce output finish before we compare the output,
+    ## and make sure the test-phold binary was already built, because this test uses it.
+    set_tests_properties(determinism2-shadow-${METHOD}-compare
+        PROPERTIES DEPENDS "determinism2a-shadow-${METHOD};determinism2b-shadow-${METHOD};test-phold")
 endforeach()
 
 ## copy the file to the build test dir so that the relative path to it is correct

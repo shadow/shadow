@@ -1,7 +1,14 @@
 macro(EXEC_DIFF_CHECK FILE1 FILE2)
-    execute_process(COMMAND ${CMAKE_COMMAND} -E compare_files ${FILE1} ${FILE2} RESULT_VARIABLE RESULT OUTPUT_VARIABLE OUTPUT)
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E compare_files ${FILE1} ${FILE2}
+        RESULT_VARIABLE RESULT
+        OUTPUT_VARIABLE STDOUTPUT
+        ERROR_VARIABLE STDERROR)
+    message(STATUS "Diff returned ${RESULT} for 'diff ${FILE1} ${FILE2}'")
     if(RESULT)
-        message(FATAL_ERROR "Error in diff: ${OUTPUT}")
+        message(STATUS "Diff stdout is: ${STDOUTPUT}")
+        message(STATUS "Diff stderr is: ${STDERROR}")
+        message(FATAL_ERROR "Differences found; test failed")
     endif()
 endmacro()
 foreach(LOOPIDX RANGE 1 10)

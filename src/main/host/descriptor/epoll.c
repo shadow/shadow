@@ -69,6 +69,9 @@ union _EpollWatchObject {
 
 typedef struct _EpollWatch EpollWatch;
 struct _EpollWatch {
+    /* A unique id for this watch relative to other watches in this epoll instance.
+     * This id encodes a total ordering of watches so they can be deterministically sorted. */
+    uint64_t id;
     /* the type of object we are watching (for example descriptor or file) */
     EpollWatchTypes watchType;
     /* the object we are watching for events */
@@ -81,6 +84,9 @@ struct _EpollWatch {
     struct epoll_event event;
     /* current status of the underlying shadow descriptor */
     EpollWatchFlags flags;
+    /* The last time we reported an event on this watch.
+     * This is used to ensure fairness across watches when reporting events. */
+    SimulationTime last_reported_event_time;
     gint referenceCount;
     MAGIC_DECLARE;
 };
@@ -104,6 +110,9 @@ struct _Epoll {
 
     /* holds the descriptors that we are watching that have events */
     GHashTable* ready;
+
+    /* A counter for sorting watches, for guaranteeing determinism when reporting events. */
+    uint64_t watch_id_counter;
 
     MAGIC_DECLARE;
 };
@@ -129,6 +138,24 @@ static gboolean _epollkey_equal(gconstpointer ptr_1, gconstpointer ptr_2) {
     return key_1->fd == key_2->fd && key_1->objectPtr == key_2->objectPtr;
 }
 
+static gint _epollwatch_compare(gconstpointer ptr_1, gconstpointer ptr_2) {
+    const EpollWatch* watch_1 = ptr_1;
+    const EpollWatch* watch_2 = ptr_2;
+    /* Prioritize watches whose last events were reported longest ago. */
+    if (watch_1->last_reported_event_time < watch_2->last_reported_event_time) {
+        /* watch_1 was reported longest ago and should come first. */
+        return -1;
+    } else if (watch_1->last_reported_event_time > watch_2->last_reported_event_time) {
+        /* watch_2 was reported longest ago and should come first. */
+        return 1;
+    } else {
+        /* Both were previously reported at the same time (or never reported yet),
+         * so now we fall back to the deterministic unique id ordering. */
+        utility_assert(watch_1->id != watch_2->id);
+        return (watch_1->id < watch_2->id) ? -1 : 1;
+    }
+}
+
 /* forward declaration */
 static void _epoll_descriptorStatusChanged(Epoll* epoll, const EpollKey* key);
 
@@ -137,6 +164,7 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
     EpollWatch* watch = g_new0(EpollWatch, 1);
     MAGIC_INIT(watch);
     utility_assert(event);
+    utility_assert(epoll);
 
     /* ref it for the EpollWatch, which also covers the listener reference
      * (which is freed below in _epollwatch_free) */
@@ -144,6 +172,7 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
         descriptor_ref(object.as_descriptor);
     }
 
+    watch->id = ++epoll->watch_id_counter;
     watch->watchType = type;
     watch->watchObject = object;
     watch->fd = fd;
@@ -223,13 +252,25 @@ static void _epoll_free(LegacyDescriptor* descriptor) {
 void epoll_clearWatchListeners(Epoll* epoll) {
     MAGIC_ASSERT(epoll);
 
+    /* Iterate the hash table in a deterministic order.
+     * It might be better to maintain the watching values in a sorted structure so we
+     * don't have to re-sort every time this function is called. One option is:
+     * https://developer.gnome.org/glib/2.68/glib-Balanced-Binary-Trees.html
+     * We should probably check the performance before/after such a change. */
+    GList* watch_list = g_hash_table_get_values(epoll->watching);
+    GList* next_item = NULL;
+
+    /* Prepare the list for deterministic iteration. */
+    if (watch_list != NULL) {
+        watch_list = g_list_sort(watch_list, _epollwatch_compare);
+        next_item = g_list_first(watch_list);
+    }
+
     /* make sure none of our watch descriptors notify us anymore */
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, epoll->watching);
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
-        EpollWatch* watch = value;
+    while (next_item != NULL) {
+        EpollWatch* watch = next_item->data;
         MAGIC_ASSERT(watch);
+
         statuslistener_setMonitorStatus(watch->listener, STATUS_NONE, SLF_NEVER);
 
         if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
@@ -237,6 +278,13 @@ void epoll_clearWatchListeners(Epoll* epoll) {
         } else if (watch->watchType == EWT_POSIX_FILE) {
             posixfile_removeListener(watch->watchObject.as_file, watch->listener);
         }
+
+        next_item = g_list_next(next_item);
+    }
+
+    /* Cleanup just the list but not the list values, which are owned by the hash table. */
+    if (watch_list) {
+        g_list_free(watch_list);
     }
 }
 
@@ -523,11 +571,32 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
      * overflow. the number of actual events is returned in nEvents. */
     gint eventIndex = 0;
 
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, epoll->ready);
-    while(g_hash_table_iter_next(&iter, &key, &value) && (eventIndex < eventArrayLength)) {
-        EpollWatch* watch = value;
+    /*
+     * We need to guarantee that the events are returned in a deterministic order when the
+     * simulation is run multiple times, so we cannot use hash table iterator.
+     * Using a list here has some potential performance implications:
+     * - O(n) to loop the hash table and create the list of values
+     * - O(n) to sort the list
+     * - O(n) for our iteration of the list
+     * We think that the ready list is typically small and so 3*O(n) will be small in practice.
+     * If this turns out not to be the case, we could consider maintaining a sorted object of the
+     * ready watch values alongside the epoll->ready hash table instead, which may allow us
+     * to improve the performance of this function. One option is to use binary trees, e.g.,
+     * https://developer.gnome.org/glib/2.68/glib-Balanced-Binary-Trees.html
+     * We should test the performance before and after such a change.
+     */
+    GList* ready_list = g_hash_table_get_values(epoll->ready);
+    GList* next_item = NULL;
+
+    /* Prepare the list for deterministic iteration. */
+    if (ready_list != NULL) {
+        ready_list = g_list_sort(ready_list, _epollwatch_compare);
+        next_item = g_list_first(ready_list);
+    }
+
+    /* Iterate the list. */
+    while ((next_item != NULL) && (eventIndex < eventArrayLength)) {
+        EpollWatch* watch = next_item->data;
         MAGIC_ASSERT(watch);
 
         if(_epollwatch_isReady(watch)) {
@@ -545,6 +614,9 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
                 eventArray[eventIndex].events |= EPOLLET;
             }
 
+            /* Record that we are reporting the event now. */
+            watch->last_reported_event_time = worker_getCurrentTime();
+
             /* event was just collected, unset the change status */
             watch->flags &= ~EWF_READCHANGED;
             watch->flags &= ~EWF_WRITECHANGED;
@@ -561,6 +633,13 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
                 watch->flags |= EWF_ONESHOT_REPORTED;
             }
         }
+
+        next_item = g_list_next(next_item);
+    }
+
+    /* Cleanup just the list but not the list values, which are owned by the hash table. */
+    if (ready_list) {
+        g_list_free(ready_list);
     }
 
     *nEvents = eventIndex;

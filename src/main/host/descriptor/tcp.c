@@ -910,24 +910,44 @@ static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
     }
 }
 
+static gint _tcp_compare_sequence(gconstpointer ptr_1, gconstpointer ptr_2, gpointer user_data) {
+    const guint seq_1 = GPOINTER_TO_INT(ptr_1);
+    const guint seq_2 = GPOINTER_TO_INT(ptr_2);
+    return (seq_1 < seq_2) ? -1 : (seq_1 > seq_2) ? 1 : 0;
+}
+
 /* remove all packets with a sequence number less than the sequence parameter */
 static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
     MAGIC_ASSERT(tcp);
 
+    // Clear the retrans packets in a deterministic order
+    GQueue* keys_sorted = g_queue_new();
     GHashTableIter iter;
-    gpointer key, value;
+    gpointer key;
+
+    // First get the keys that need to be removed
     g_hash_table_iter_init(&iter, tcp->retransmit.queue);
 
-    while(g_hash_table_iter_next(&iter, &key, &value)) {
+    while (g_hash_table_iter_next(&iter, &key, NULL)) {
         guint ackedSequence = GPOINTER_TO_INT(key);
-        Packet* ackedPacket = (Packet*)value;
-
         if(ackedSequence < sequence) {
-            tcp->retransmit.queueLength -= packet_getPayloadLength(ackedPacket);
-            packet_addDeliveryStatus(ackedPacket, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
-            g_hash_table_iter_remove(&iter);
+            g_queue_insert_sorted(keys_sorted, key, _tcp_compare_sequence, NULL);
         }
     }
+
+    // Now remove the packets in order
+    while (g_queue_get_length(keys_sorted) > 0) {
+        key = g_queue_pop_head(keys_sorted);
+        Packet* ackedPacket = g_hash_table_lookup(tcp->retransmit.queue, key);
+        if (ackedPacket) {
+            tcp->retransmit.queueLength -= packet_getPayloadLength(ackedPacket);
+            packet_addDeliveryStatus(ackedPacket, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
+            g_hash_table_remove(tcp->retransmit.queue, key);
+        }
+    }
+
+    // Cleanup
+    g_queue_free(keys_sorted);
 
     if(_tcp_getBufferSpaceOut(tcp) > 0) {
         descriptor_adjustStatus((LegacyDescriptor*)tcp, STATUS_DESCRIPTOR_WRITABLE, TRUE);
