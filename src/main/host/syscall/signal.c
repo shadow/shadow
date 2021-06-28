@@ -16,6 +16,38 @@
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
 
+// This should be compatible with the kernel's sigaction struct, which is what
+// the syscalls take in cases where the userspace wrappers take `struct
+// sigaction`. While a similar struct definition appears in the glibc source,
+// it's not exposed to users, so we duplicate it here. While in principle this
+// definition could change out from under us, it's more likely that the kernel
+// would introduce a new syscall number rather than breaking userspace programs
+// that still had the old definition.
+//
+// When reading/writing a userspace pointer, use kernel_sigaction_size to
+// calculate the true size. This is needed because the last field, `sa_mask`,
+// is actually variable size, and is specified with another parameter in the syscall.
+struct kernel_sigaction {
+    void* handler;
+    unsigned long sa_flags;
+    void (*sa_restorer)(void);
+    sigset_t sa_mask;
+};
+
+// Calculates the size of a corresponding `struct kernel_sigaction`. Returns 0
+// if the masksize is invalid.
+static size_t kernel_sigaction_size(size_t masksize) {
+    if (masksize < 4) {
+        warning("Got bad masksize: %zu < 4", masksize);
+    }
+    size_t sz = sizeof(struct kernel_sigaction) - sizeof(sigset_t) + masksize;
+    if (sz > sizeof(struct kernel_sigaction)) {
+        warning("Got bad sigaction size: %zu > %zu", sz, sizeof(struct kernel_sigaction));
+        return 0;
+    }
+    return sz;
+}
+
 ///////////////////////////////////////////////////////////
 // Helpers
 ///////////////////////////////////////////////////////////
@@ -126,76 +158,85 @@ SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args)
     return _syscallhandler_killHelper(sys, 0, native_tid, sig, SYS_tkill);
 }
 
-// Removes `signal` from the sigset_t pointed to by `maskPtr`, if present.
-// Returns 0 on success (including if the signal wasn't present), or a negative
-// errno on failure.
-static int _removeSignalFromSet(SysCallHandler* sys, PluginPtr maskPtr, int signal) {
-    sigset_t mask;
-    int rv = process_readPtr(sys->process, &mask, maskPtr, sizeof(mask));
-    if (rv < 0) {
-        trace("Error reading %p: %s", (void*)maskPtr.val, g_strerror(-rv));
-        return rv;
-    }
-    rv = sigismember(&mask, SIGSYS);
-    if (rv < 0) {
-        panic("sigismember: %s", g_strerror(errno));
-    }
-    if (!rv) {
-        trace("Signal %d wasn't in set", signal);
-        return 0;
-    }
-    trace("Clearing %d from sigprocmask(SIG_BLOCK) set", signal);
-    rv = sigdelset(&mask, SIGSYS);
-    if (rv < 0) {
-        panic("sigdelset: %s", g_strerror(errno));
-    }
-    rv = process_writePtr(sys->process, maskPtr, &mask, sizeof(mask));
-    if (rv < 0) {
-        trace("Error writing %p: %s", (void*)maskPtr.val, g_strerror(-rv));
-        return rv;
-    }
-    return 0;
-}
-
-SysCallReturn syscallhandler_sigaction(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+static SysCallReturn _sigaction(SysCallHandler* sys, int signum, PluginPtr actPtr,
+                                PluginPtr oldActPtr, size_t masksize) {
+    utility_assert(sys);
 
     if (!shimipc_getUseSeccomp()) {
         return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
+
     // Prevent interference with shim's SIGSYS handler.
 
-    int signum = (int)args->args[0].as_i64;
-    PluginPtr sigaction_ptr = args->args[1].as_ptr;
-    PluginPtr sa_mask_ptr = (PluginPtr){sigaction_ptr.val + offsetof(struct sigaction, sa_mask)};
+    if (!actPtr.val) {
+        // Just reading the action; allow to proceed natively.
+        return (SysCallReturn){.state = SYSCALL_NATIVE};
+    }
 
     if (signum == SIGSYS) {
         warning("Blocking `sigaction` for SIGSYS");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval = -ENOSYS};
     }
-    _removeSignalFromSet(sys, sa_mask_ptr, SIGSYS);
 
-    return (SysCallReturn){.state = SYSCALL_NATIVE};
+    size_t sz = kernel_sigaction_size(masksize);
+    if (!sz) {
+        warning("Bad masksize %zu", masksize);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
+    }
+
+    struct kernel_sigaction action = {0};
+    int rv = process_readPtr(sys->process, &action, actPtr, sz);
+    if (rv < 0) {
+        warning("Couldn't read action ptr %p", (void*)actPtr.val);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+    }
+
+    rv = sigismember(&action.sa_mask, SIGSYS);
+    if (rv < 0) {
+        panic("sigismember: %s", g_strerror(errno));
+    }
+    if (!rv) {
+        // SIGSYS not present; proceed natively.
+        return (SysCallReturn){.state = SYSCALL_NATIVE};
+    }
+
+    // We can't safely modify actPtr, particularly since it could be read-only memory.
+    // We need to set up our own struct and make the syscall using that.
+
+    AllocdMem_u8* modified_action_mem = allocdmem_new(sys->thread, sizeof(struct kernel_sigaction));
+    utility_assert(modified_action_mem);
+    PluginPtr modified_action_ptr = allocdmem_pluginPtr(modified_action_mem);
+    struct kernel_sigaction* modified_action =
+        process_getWriteablePtr(sys->process, modified_action_ptr, sizeof(struct kernel_sigaction));
+    utility_assert(modified_action);
+
+    *modified_action = action;
+    rv = sigdelset(&modified_action->sa_mask, SIGSYS);
+    if (rv < 0) {
+        panic("sigdelset: %s", g_strerror(errno));
+    }
+    process_flushPtrs(sys->process);
+
+    long result = thread_nativeSyscall(
+        sys->thread, SYS_rt_sigaction, signum, modified_action_ptr, oldActPtr, masksize);
+    trace(
+        "rt_sigaction returned %ld, error:%s", result, result >= 0 ? "none" : g_strerror(-result));
+
+    allocdmem_free(sys->thread, modified_action_mem);
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+}
+
+SysCallReturn syscallhandler_sigaction(SysCallHandler* sys, const SysCallArgs* args) {
+    utility_assert(sys && args);
+    return _sigaction(sys, /*signum=*/(int)args->args[0].as_i64, /*actPtr=*/args->args[1].as_ptr,
+                      /*oldActPtr=*/args->args[2].as_ptr, /*masksize=*/4);
 }
 
 SysCallReturn syscallhandler_rt_sigaction(SysCallHandler* sys, const SysCallArgs* args) {
     utility_assert(sys && args);
-    if (!shimipc_getUseSeccomp()) {
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
-    // Prevent interference with shim's SIGSYS handler.
-
-    int signum = (int)args->args[0].as_i64;
-    PluginPtr sigaction_ptr = args->args[1].as_ptr;
-    PluginPtr sa_mask_ptr = (PluginPtr){sigaction_ptr.val + offsetof(struct sigaction, sa_mask)};
-
-    if (signum == SIGSYS) {
-        warning("Blocking `rt_sigaction` for SIGSYS");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = -ENOSYS};
-    }
-    _removeSignalFromSet(sys, sa_mask_ptr, SIGSYS);
-
-    return (SysCallReturn){.state = SYSCALL_NATIVE};
+    return _sigaction(sys, /*signum=*/(int)args->args[0].as_i64, /*actPtr=*/args->args[1].as_ptr,
+                      /*oldActPtr=*/args->args[2].as_ptr, /*masksize=*/args->args[3].as_u64);
 }
 
 SysCallReturn syscallhandler_signal(SysCallHandler* sys, const SysCallArgs* args) {
@@ -214,40 +255,79 @@ SysCallReturn syscallhandler_signal(SysCallHandler* sys, const SysCallArgs* args
     return (SysCallReturn){.state = SYSCALL_NATIVE};
 }
 
-SysCallReturn syscallhandler_sigprocmask(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
+static SysCallReturn _sigprocmask(SysCallHandler* sys, int how, PluginPtr setPtr,
+                                  PluginPtr oldSetPtr, size_t sigsetsize) {
+    utility_assert(sys);
+
     if (!shimipc_getUseSeccomp()) {
         return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
+
     // Prevent interference with shim's SIGSYS handler.
 
-    int how = (int)args->args[0].as_i64;
-    PluginPtr maskPtr = args->args[1].as_ptr;
-
-    if (how == SIG_BLOCK || how == SIG_SETMASK) {
-        int rv = _removeSignalFromSet(sys, maskPtr, SIGSYS);
-        if (rv != 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
-        }
+    if (!setPtr.val) {
+        // Not writing; allow natively.
+        return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
-    return (SysCallReturn){.state = SYSCALL_NATIVE};
+    if (how != SIG_BLOCK) {
+        // Not blocking; allow natively.
+        return (SysCallReturn){.state = SYSCALL_NATIVE};
+    }
+
+    if (sigsetsize < 4 || sigsetsize > sizeof(sigset_t)) {
+        warning("Bad sigsetsize %zu", sigsetsize);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
+    }
+
+    sigset_t set = {0};
+    int rv = process_readPtr(sys->process, &set, setPtr, sigsetsize);
+    if (rv < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+    }
+
+    rv = sigismember(&set, SIGSYS);
+    if (rv < 0) {
+        panic("sigismember: %s", g_strerror(errno));
+    }
+    if (!rv) {
+        // SIGSYS not present; proceed natively.
+        return (SysCallReturn){.state = SYSCALL_NATIVE};
+    }
+
+    // Remove SIGSYS from set and execute syscall with modified set.
+
+    AllocdMem_u8* modified_set_mem = allocdmem_new(sys->thread, sizeof(sigset_t));
+    utility_assert(modified_set_mem);
+    PluginPtr modified_set_ptr = allocdmem_pluginPtr(modified_set_mem);
+    sigset_t* modified_set =
+        process_getWriteablePtr(sys->process, modified_set_ptr, sizeof(*modified_set));
+    utility_assert(modified_set);
+
+    *modified_set = set;
+    rv = sigdelset(modified_set, SIGSYS);
+    if (rv < 0) {
+        panic("sigdelset: %s", g_strerror(errno));
+    }
+    process_flushPtrs(sys->process);
+
+    long result = thread_nativeSyscall(
+        sys->thread, SYS_rt_sigprocmask, how, modified_set_ptr, oldSetPtr, sigsetsize);
+    trace("rt_sigprocmask returned %ld, error:%s", result,
+          result >= 0 ? "none" : g_strerror(-result));
+
+    allocdmem_free(sys->thread, modified_set_mem);
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+}
+
+SysCallReturn syscallhandler_sigprocmask(SysCallHandler* sys, const SysCallArgs* args) {
+    utility_assert(sys && args);
+    return _sigprocmask(sys, /*how=*/(int)args->args[0].as_i64, /*setPtr=*/args->args[1].as_ptr,
+                        /*oldSetPtr=*/args->args[2].as_ptr, /*sigsetsize=*/4);
 }
 
 SysCallReturn syscallhandler_rt_sigprocmask(SysCallHandler* sys, const SysCallArgs* args) {
     utility_assert(sys && args);
-    if (!shimipc_getUseSeccomp()) {
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
-    // Prevent interference with shim's SIGSYS handler.
-
-    int how = (int)args->args[0].as_i64;
-    PluginPtr maskPtr = args->args[1].as_ptr;
-
-    if (how == SIG_BLOCK || how == SIG_SETMASK) {
-        int rv = _removeSignalFromSet(sys, maskPtr, SIGSYS);
-        if (rv != 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
-        }
-    }
-    return (SysCallReturn){.state = SYSCALL_NATIVE};
+    return _sigprocmask(sys, /*how=*/(int)args->args[0].as_i64, /*setPtr=*/args->args[1].as_ptr,
+                        /*oldSetPtr=*/args->args[2].as_ptr, /*sigsetsize=*/args->args[3].as_u64);
 }
