@@ -3,9 +3,11 @@
  * See LICENSE for licensing information
  */
 
+#include <assert.h>
 #include <glib.h>
 #include <pthread.h>
 #include <sched.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -47,7 +49,7 @@ struct _HostStealThreadData {
     /* which worker thread this is */
     guint tnumber;
     GMutex lock;
-    bool isStealable;
+    atomic_bool isStealable;
 };
 
 typedef struct _HostStealPolicyData HostStealPolicyData;
@@ -85,6 +87,8 @@ static HostStealThreadData* _hoststealthreaddata_new() {
 #endif
     g_mutex_init(&(tdata->lock));
     tdata->runningHost = NULL;
+    atomic_init(&tdata->isStealable, false);
+    utility_assert(atomic_is_lock_free(&tdata->isStealable));
     return tdata;
 }
 
@@ -383,7 +387,7 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
         }
 
         /* we are now ready for other threads to steal our workload */
-        __atomic_store_n(&tdata->isStealable, true, __ATOMIC_RELEASE);
+        atomic_store_explicit(&tdata->isStealable, true, memory_order_release);
     }
     /* attempt to get an event from this thread's queue */
     Event* nextEvent = _schedulerpolicyhoststeal_popFromThread(policy, tdata, tdata->unprocessedHosts, barrier);
@@ -412,8 +416,7 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
             // They still have not initialized yet.
             // Make sure the atomic is set to false so we'll detect the flip to
             // true
-            __atomic_store_n(&stolenTdata->isStealable, false,
-                             __ATOMIC_RELEASE);
+            atomic_store_explicit(&stolenTdata->isStealable, false, memory_order_release);
         }
         g_mutex_unlock(&(stolenTdata->lock));
 
@@ -429,8 +432,7 @@ static Event* _schedulerpolicyhoststeal_pop(SchedulerPolicy* policy, SimulationT
          * the overhead of a syscall.
          */
         if (spinForInit) {
-            while (
-                !__atomic_load_n(&stolenTdata->isStealable, __ATOMIC_ACQUIRE)) {
+            while (!atomic_load_explicit(&stolenTdata->isStealable, memory_order_acquire)) {
                 sched_yield();
             };
         }
