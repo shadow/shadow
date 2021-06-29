@@ -10,9 +10,6 @@ install_packages () {
         ubuntu:*|debian:*)
             DEBIAN_FRONTEND=noninteractive apt-get install -y $@
             ;;
-        centos:7)
-            yum install -y $@
-            ;;
         centos:*)
             dnf install -y $@
             ;;
@@ -38,11 +35,6 @@ case "$CC" in
         esac
         ;;
     clang)
-        if [ "$CONTAINER" = "centos:7" ]
-        then
-            # centos 7's clang requires gcc
-            install_packages gcc gcc-c++
-        fi
         install_packages clang
         ;;
     clang-12)

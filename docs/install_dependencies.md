@@ -107,25 +107,6 @@ sudo yum install -y \
     tmux
 ```
 
-### CentOS 7
-
-You must enable the EPEL repository using:
-
-```bash
-yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-```
-
-Instead of installing `cmake`, you should instead install `cmake3`:
-
-```bash
-yum install -y cmake3
-alternatives --install /usr/local/bin/cmake cmake /usr/bin/cmake3 20 \
-    --slave /usr/local/bin/ctest ctest /usr/bin/ctest3 \
-    --slave /usr/local/bin/cpack cpack /usr/bin/cpack3 \
-    --slave /usr/local/bin/ccmake ccmake /usr/bin/ccmake3 \
-    --family cmake
-```
-
 ### CentOS 8
 
 As procps-ng-devel, igraph, and igraph-devel are not available on CentOS 8, you

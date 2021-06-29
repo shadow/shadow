@@ -33,8 +33,6 @@ can fix it.
    * Developer Guides
      * [Debugging and profiling](developer_guide.md)
      * [Continous integration tests](ci.md)
-     * [Using a recompiled libc](using_recompiled_libc.md) to get higher libc
-       API coverage using preload interposition.
  * The Shadow project
    * [Contributing](contributing.md)
      * [Coding style](coding_style.md)

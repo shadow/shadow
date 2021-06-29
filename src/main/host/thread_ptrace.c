@@ -28,12 +28,6 @@
 
 #define THREADPTRACE_TYPE_ID 3024
 
-// glibc in centos 7 does not include the following, but it does use a supported
-// kernel (3.10 > 3.8)
-#if !defined(PTRACE_O_EXITKILL)
-#define PTRACE_O_EXITKILL (1 << 20)
-#endif
-
 // Using PTRACE_O_TRACECLONE causes the `clone` syscall to fail on Ubuntu 18.04.
 // We instead add the CLONE_PTRACE flag to the clone syscall itself.
 //
