@@ -2490,6 +2490,12 @@ static void _tcp_free(LegacyDescriptor* descriptor) {
     g_hash_table_destroy(tcp->retransmit.queue);
     priorityqueue_free(tcp->retransmit.scheduledTimerExpirations);
 
+    if (tcp->partialUserDataPacket != NULL) {
+        packet_unref(tcp->partialUserDataPacket);
+        tcp->partialUserDataPacket = NULL;
+        tcp->partialOffset = 0;
+    }
+
     if(tcp->child) {
         MAGIC_ASSERT(tcp->child);
         MAGIC_ASSERT(tcp->child->parent);
