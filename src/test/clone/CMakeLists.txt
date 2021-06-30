@@ -10,5 +10,6 @@ add_shadow_tests(BASENAME clone METHODS hybrid ptrace)
 # the memory manager (really the MemoryMapper) enabled.
 add_shadow_tests(BASENAME clone-nomm METHODS hybrid ptrace ARGS --use-memory-manager=false)
 
-# Preload mode doesn't support threads. https://github.com/shadow/shadow/issues/1454
+# Preload mode doesn't support basic, raw clone. In particular it needs
+# working thread-local-storage, which this test doesn't implement.
 #add_shadow_tests(BASENAME clone METHODS preload)
