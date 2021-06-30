@@ -6,15 +6,12 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <x86intrin.h>
 
 #include "lib/logger/logger.h"
 
-// using assembly to support older compilers such as clang 3.4 in centos 7
-static __inline__ uint64_t rdtscp(uint32_t* aux) {
-    uint32_t hi, lo;
-    __asm__ __volatile__("rdtscp" : "=a"(lo), "=d"(hi), "=c"(*aux));
-    return ((uint64_t)hi) << 32 | lo;
-}
+// Use compiler intrinsic
+#define rdtscp __rdtscp
 
 // Assumes lhs >= rhs
 void _timespec_sub(struct timespec* res, const struct timespec* lhs,

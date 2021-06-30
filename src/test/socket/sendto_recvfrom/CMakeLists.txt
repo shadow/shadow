@@ -8,6 +8,8 @@ add_shadow_tests(BASENAME sendto-recvfrom METHODS hybrid ptrace preload)
 # on a laptop with SSD. Due to shadow's small `SYSCALL_IO_BUFSIZE` size of
 # 16 KiB, the 'test_nonblocking_tcp' test needs to make a lot of
 # sendto()/recvfrom() calls before an EAGAIN is returned.
+#
+# TODO: Revisit whether we need this since dropping support for Centos 7.
 set_property(TEST 
                 sendto-recvfrom-shadow-hybrid 
                 sendto-recvfrom-shadow-ptrace 
