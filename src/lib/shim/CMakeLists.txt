@@ -18,6 +18,7 @@ set(SHIM_HELPER_LIB shadow-shim-helper)
 set(SHIM_HELPER_FILES
   binary_spinning_sem.cc
   ipc.cc
+  shadow_sem.c
   shim_event.c
 )
 add_library(${SHIM_HELPER_LIB} STATIC ${SHIM_HELPER_FILES})
