@@ -7,6 +7,7 @@
 #include <linux/seccomp.h>
 #include <pthread.h>
 #include <search.h>
+#include <stdalign.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,9 +21,12 @@
 #include "lib/logger/logger.h"
 #include "lib/shim/ipc.h"
 #include "lib/shim/preload_syscall.h"
+#include "lib/shim/shadow_sem.h"
+#include "lib/shim/shadow_spinlock.h"
 #include "lib/shim/shim_event.h"
 #include "lib/shim/shim_logger.h"
 #include "lib/shim/shim_syscall.h"
+#include "lib/shim/shim_tls.h"
 
 // Whether Shadow is using preload-based interposition.
 static bool _using_interpose_preload = false;
@@ -34,18 +38,32 @@ static bool _using_interpose_ptrace = false;
 static bool _using_shim_syscall_handler = true;
 
 // This thread's IPC block, for communication with Shadow.
-static __thread ShMemBlock _shim_ipc_blk = {0};
+static ShMemBlock* _shim_ipcDataBlk() {
+    static ShimTlsVar v = {0};
+    return shimtlsvar_ptr(&v, sizeof(ShMemBlock));
+}
+struct IPCData* shim_thisThreadEventIPC() {
+    return _shim_ipcDataBlk()->p;
+}
 
 // Per-thread state shared with Shadow.
-static __thread ShMemBlock _shim_shared_mem_blk = {0};
-static __thread ShimSharedMem* _shim_shared_mem = NULL;
+static ShMemBlock* _shim_shared_mem_blk() {
+    static ShimTlsVar v = {0};
+    return shimtlsvar_ptr(&v, sizeof(ShMemBlock));
+}
+static ShimSharedMem* _shim_shared_mem() {
+    return _shim_shared_mem_blk()->p;
+}
 
 // We disable syscall interposition when this is > 0.
-static __thread int _shim_disable_interposition = 0;
+static int* _shim_disable_interposition() {
+    static ShimTlsVar v = {0};
+    return shimtlsvar_ptr(&v, sizeof(int));
+}
 
 static void _shim_set_allow_native_syscalls(bool is_allowed) {
-    if (_shim_shared_mem) {
-        _shim_shared_mem->ptrace_allow_native_syscalls = is_allowed;
+    if (_shim_shared_mem()) {
+        _shim_shared_mem()->ptrace_allow_native_syscalls = is_allowed;
         trace("%s native-syscalls via shmem %p", is_allowed ? "allowing" : "disallowing",
               _shim_shared_mem);
     } else {
@@ -54,8 +72,53 @@ static void _shim_set_allow_native_syscalls(bool is_allowed) {
     }
 }
 
+// Held from the time of starting to initialize _startThread, to being done with
+// it. i.e. ensure we don't try to start more than one thread at once.
+//
+// For example, this prevents the child thread, after having initialized itself
+// and released the parent via the childInitd semaphore, from starting another
+// clone itself until after the parent has woken up and released this lock.
+static shadow_spinlock_t _startThreadLock = SHADOW_SPINLOCK_STATICALLY_INITD;
+static struct {
+    ShMemBlock childIpcBlk;
+    shadow_sem_t childInitd;
+} _startThread;
+
+void shim_newThreadStart(ShMemBlockSerialized* block) {
+    if (shadow_spin_lock(&_startThreadLock)) {
+        panic("shadow_spin_lock: %s", strerror(errno));
+    };
+    if (shadow_sem_init(&_startThread.childInitd, 0, 0)) {
+        panic("shadow_sem_init: %s", strerror(errno));
+    }
+    _startThread.childIpcBlk = shmemserializer_globalBlockDeserialize(block);
+}
+
+void shim_newThreadChildInitd() {
+    if (shadow_sem_post(&_startThread.childInitd)) {
+        panic("shadow_sem_post: %s", strerror(errno));
+    }
+}
+
+void shim_newThreadFinish() {
+    // Wait for child to initialize itself.
+    while (shadow_sem_trywait(&_startThread.childInitd)) {
+        if (errno != EAGAIN) {
+            panic("shadow_sem_trywait: %s", strerror(errno));
+        }
+        if (shadow_real_raw_syscall(SYS_sched_yield)) {
+            panic("shadow_real_raw_syscall(SYS_sched_yield): %s", strerror(errno));
+        }
+    }
+
+    // Release the global clone lock.
+    if (shadow_spin_unlock(&_startThreadLock)) {
+        panic("shadow_spin_unlock: %s", strerror(errno));
+    }
+}
+
 bool shim_disableInterposition() {
-    if (++_shim_disable_interposition == 1) {
+    if (++*_shim_disable_interposition() == 1) {
         if (_using_interpose_ptrace && _using_interpose_preload) {
             _shim_set_allow_native_syscalls(true);
         }
@@ -67,7 +130,7 @@ bool shim_disableInterposition() {
 
 bool shim_enableInterposition() {
     assert(_shim_disable_interposition > 0);
-    if (--_shim_disable_interposition == 0) {
+    if (--*_shim_disable_interposition() == 0) {
         if (_using_interpose_ptrace && _using_interpose_preload) {
             _shim_set_allow_native_syscalls(false);
         }
@@ -78,7 +141,7 @@ bool shim_enableInterposition() {
 }
 
 bool shim_interpositionEnabled() {
-    return _using_interpose_preload && !_shim_disable_interposition;
+    return _using_interpose_preload && !*_shim_disable_interposition();
 }
 
 bool shim_use_syscall_handler() { return _using_shim_syscall_handler; }
@@ -197,33 +260,23 @@ static void _shim_parent_init_shm() {
     bool err = false;
     ShMemBlockSerialized shm_blk_serialized = shmemblockserialized_fromString(shm_blk_buf, &err);
 
-    _shim_shared_mem_blk = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
-    _shim_shared_mem = _shim_shared_mem_blk.p;
-
-    if (!_shim_shared_mem) {
-        abort();
-    }
+    *_shim_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
+    assert(_shim_shared_mem());
 }
 
 static void _shim_child_init_shm() {
     assert(_using_interpose_ptrace);
 
-    // If we haven't initialized the shm block yet (because this isn't the main thread,
-    // which is initialized in the global initialization via an environment variable), do so.
-    if (!_shim_shared_mem) {
-        ShMemBlockSerialized shm_blk_serialized;
-        int rv = shadow_get_shm_blk(&shm_blk_serialized);
-        if (rv != 0) {
-            panic("shadow_get_shm_blk: %s", strerror(errno));
-            abort();
-        }
-
-        _shim_shared_mem_blk = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
-        _shim_shared_mem = _shim_shared_mem_blk.p;
-        if (!_shim_shared_mem) {
-            abort();
-        }
+    assert(!_shim_shared_mem());
+    ShMemBlockSerialized shm_blk_serialized;
+    int rv = shadow_get_shm_blk(&shm_blk_serialized);
+    if (rv != 0) {
+        panic("shadow_get_shm_blk: %s", strerror(errno));
+        abort();
     }
+
+    *_shim_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
+    assert(_shim_shared_mem());
 }
 
 static void _shim_parent_init_ipc() {
@@ -235,34 +288,60 @@ static void _shim_parent_init_ipc() {
     ShMemBlockSerialized ipc_blk_serialized = shmemblockserialized_fromString(ipc_blk_buf, &err);
     assert(!err);
 
-    _shim_ipc_blk = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
+    *_shim_ipcDataBlk() = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
+    assert(shim_thisThreadEventIPC());
 }
 
 static void _shim_child_init_ipc() {
     assert(_using_interpose_preload);
     assert(_using_interpose_ptrace);
 
-    // If we haven't initialized the ipc block yet (because this isn't the main thread,
-    // which is initialized in the global initialization via an environment variable), do so.
-    if (!_shim_ipc_blk.p) {
-        ShMemBlockSerialized ipc_blk_serialized;
-        int rv = shadow_get_ipc_blk(&ipc_blk_serialized);
-        if (rv != 0) {
-            panic("shadow_get_ipc_blk: %s", strerror(errno));
-            abort();
-        }
-        _shim_ipc_blk = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
-        assert(_shim_ipc_blk.p);
+    assert(!shim_thisThreadEventIPC());
+    ShMemBlockSerialized ipc_blk_serialized;
+    int rv = shadow_get_ipc_blk(&ipc_blk_serialized);
+    if (rv != 0) {
+        panic("shadow_get_ipc_blk: %s", strerror(errno));
+        abort();
     }
+    *_shim_ipcDataBlk() = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
+    assert(shim_thisThreadEventIPC());
+}
+
+static void _shim_preload_only_child_init_ipc() {
+    assert(_using_interpose_preload);
+    assert(!_using_interpose_ptrace);
+
+    *_shim_ipcDataBlk() = _startThread.childIpcBlk;
+}
+
+static void _shim_preload_only_child_ipc_wait_for_start_event() {
+    assert(_using_interpose_preload);
+    assert(shim_thisThreadEventIPC());
+
+    ShimEvent event;
+    trace("waiting for start event on %p", shim_thisThreadEventIPC);
+
+    // We're returning control to the parent thread here, who is going to switch
+    // back to their own TLS.
+    struct IPCData* ipc = shim_thisThreadEventIPC();
+
+    // Releases parent thread, who switches back to their own TLS.  i.e. Don't
+    // use TLS between here and when we can switch back to our own after
+    // receiving the start event.
+    shim_newThreadChildInitd();
+
+    shimevent_recvEventFromShadow(ipc, &event, /* spin= */ true);
+    assert(event.event_id == SHD_SHIM_EVENT_START);
+    shim_syscall_set_simtime_nanos(event.event_data.start.simulation_nanos);
 }
 
 static void _shim_ipc_wait_for_start_event() {
     assert(_using_interpose_preload);
-    assert(_shim_ipc_blk.p);
+    assert(shim_thisThreadEventIPC());
 
     ShimEvent event;
-    trace("waiting for start event on %p", _shim_ipc_blk.p);
-    shimevent_recvEventFromShadow(_shim_ipc_blk.p, &event, /* spin= */ true);
+    trace("waiting for start event on %p", shim_thisThreadEventIPC);
+    shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
     shim_syscall_set_simtime_nanos(event.event_data.start.simulation_nanos);
 }
@@ -302,20 +381,45 @@ static void _shim_parent_init_ptrace() {
     }
 }
 
+// When emulating a clone syscall, we need to jump to just after the original
+// syscall instruction in the child thread. This stores that address.
+static ShimTlsVar _shim_clone_rip_var = {0};
+static void** _shim_clone_rip() {
+    return shimtlsvar_ptr(&_shim_clone_rip_var, sizeof(void*));
+}
+
+void* shim_take_clone_rip() {
+    void *ptr = *_shim_clone_rip();
+    *_shim_clone_rip() = NULL;
+    return ptr;
+}
+
 static void _handle_sigsys(int sig, siginfo_t* info, void* voidUcontext) {
     ucontext_t* ctx = (ucontext_t*)(voidUcontext);
     if (sig != SIGSYS) {
         abort();
     }
-    trace("Trapped syscall %lld", ctx->uc_mcontext.gregs[REG_RAX]);
+    greg_t* regs = ctx->uc_mcontext.gregs;
+    const int REG_N =  REG_RAX;
+    const int REG_ARG1 = REG_RDI;
+    const int REG_ARG2 = REG_RSI;
+    const int REG_ARG3 = REG_RDX;
+    const int REG_ARG4 = REG_R10;
+    const int REG_ARG5 = REG_R8;
+    const int REG_ARG6 = REG_R9;
+
+    trace("Trapped syscall %lld", regs[REG_N]);
+
+    if (regs[REG_N] == SYS_clone) {
+       assert(!*_shim_clone_rip());
+       *_shim_clone_rip() = (void*)regs[REG_RIP];
+    }
+
     // Make the syscall via the *the shim's* syscall function (which overrides
     // libc's).  It in turn will either emulate it or (if interposition is
-    // disabled), or make the call natively. In the latter case, the syscall
+    // disabled), make the call natively. In the latter case, the syscall
     // will be permitted to execute by the seccomp filter.
-    long rv = shadow_raw_syscall(ctx->uc_mcontext.gregs[REG_RAX], ctx->uc_mcontext.gregs[REG_RDI],
-                                 ctx->uc_mcontext.gregs[REG_RSI], ctx->uc_mcontext.gregs[REG_RDX],
-                                 ctx->uc_mcontext.gregs[REG_R10], ctx->uc_mcontext.gregs[REG_R8],
-                                 ctx->uc_mcontext.gregs[REG_R9]);
+    long rv = shadow_raw_syscall(regs[REG_N], regs[REG_ARG1], regs[REG_ARG2], regs[REG_ARG3], regs[REG_ARG4], regs[REG_ARG5], regs[REG_ARG6]);
     trace("Trapped syscall %lld returning %ld", ctx->uc_mcontext.gregs[REG_RAX], rv);
     ctx->uc_mcontext.gregs[REG_RAX] = rv;
 }
@@ -392,7 +496,7 @@ static void _shim_parent_init_seccomp() {
          * after ours.
          *
          * TODO: Consider using the actual bounds of this object file, from /proc/self/maps. */
-        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, ((long)shadow_vreal_raw_syscall) + 1000,
+        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, ((long)shadow_vreal_raw_syscall) + 2000,
                  /*true-skip=*/2, /*false-skip=*/0),
         BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)shadow_vreal_raw_syscall, /*true-skip=*/0,
                  /*false-skip=*/1),
@@ -481,8 +585,8 @@ static void _shim_child_init_ptrace() {
 static void _shim_child_init_preload() {
     shim_disableInterposition();
 
-    _shim_child_init_ipc();
-    _shim_ipc_wait_for_start_event();
+    _shim_preload_only_child_init_ipc();
+    _shim_preload_only_child_ipc_wait_for_start_event();
 
     shim_enableInterposition();
 }
@@ -490,22 +594,27 @@ static void _shim_child_init_preload() {
 // This function should be called before any wrapped syscall. We also use the
 // constructor attribute to be completely sure that it's called before main.
 __attribute__((constructor)) void _shim_load() {
-    static __thread bool started_thread_init = false;
-    if (started_thread_init) {
+    static bool did_global_pre_init = false;
+    if (!did_global_pre_init) {
+        // Early init; must not make any syscalls.
+        did_global_pre_init = true;
+        _set_interpose_type();
+        _set_use_shim_syscall_handler();
+    }
+
+    // Now we can use thread-local storage.
+    static ShimTlsVar started_thread_init_var = {0};
+    bool* started_thread_init =
+        shimtlsvar_ptr(&started_thread_init_var, sizeof(*started_thread_init));
+    if (*started_thread_init) {
         // Avoid deadlock when _shim_global_init's syscalls caused this function to be
         // called recursively.  In the uninitialized state,
         // `shim_interpositionEnabled` returns false, allowing _shim_global_init's
         // syscalls to execute natively.
         return;
     }
-    started_thread_init = true;
+    *started_thread_init = true;
 
-    // We must set the interposition type before calling
-    // shim_disableInterposition.
-    _set_interpose_type();
-    _set_use_shim_syscall_handler();
-
-    // Initialization tasks depend on interpose type and parent/child thread status.
     static bool did_global_init = false;
     if (!did_global_init) {
         if (_using_interpose_ptrace && _using_interpose_preload) {
@@ -544,22 +653,20 @@ __attribute__((destructor)) static void _shim_unload() {
 
     shim_disableInterposition();
 
-    ShMemBlock ipc_blk = shim_thisThreadEventIPCBlk();
+    struct IPCData* ipc = shim_thisThreadEventIPC();
     ShimEvent shim_event;
     shim_event.event_id = SHD_SHIM_EVENT_STOP;
-    trace("sending stop event on %p", ipc_blk.p);
-    shimevent_sendEventToShadow(ipc_blk.p, &shim_event);
+    trace("sending stop event on %p", ipc);
+    shimevent_sendEventToShadow(ipc, &shim_event);
 
     // Leave interposition disabled; shadow is waiting for
     // this process to die and won't listen to the shim pipe anymore.
 }
 
-ShMemBlock shim_thisThreadEventIPCBlk() { return _shim_ipc_blk; }
-
 struct timespec* shim_get_shared_time_location() {
-    if (_shim_shared_mem == NULL) {
+    if (_shim_shared_mem() == NULL) {
         return NULL;
     } else {
-        return &_shim_shared_mem->sim_time;
+        return &_shim_shared_mem()->sim_time;
     }
 }

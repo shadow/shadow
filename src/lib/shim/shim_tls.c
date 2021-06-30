@@ -1,12 +1,16 @@
 #include "lib/shim/shim_tls.h"
 
+#include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
 
 #include <assert.h>
 #include <stdalign.h>
 
-// XXX: Needs to be big enough for stack in _vshadow_raw_syscall until we get
-// rid of it.
+// Size of the thread-local stack in _vshadow_raw_syscall (4096*10) + an extra
+// kilobyte for the handful of other thread locals we use.  If the former
+// becomes a permanent fixture, we should make it a shared constant, but it
+// should eventually go away. In the meantime we catch at runtime if we try to
+// use more TLS than we've pre-reserved.
 #define BYTES_PER_THREAD (4096*10 + 1024)
 #define MAX_THREADS 100
 
@@ -16,36 +20,14 @@ typedef struct ShimThreadLocalStorage {
 } ShimThreadLocalStorage;
 
 // All TLSs. We could probably make this more dynamic if we need to.
-static ShimThreadLocalStorage _tlss[MAX_THREADS];
+//
+// If we ever decide we want to more permanently just depend on native thread
+// local storage, we could make this a single `__thread ShimThreadLocalStorage`
+// and get rid of or ignore the indexes.
+static ShimThreadLocalStorage _tlss[MAX_THREADS] = {0};
 
 int shimtls_getCurrentIdx();
 int shimtls_takeNextIdx();
-
-typedef struct {
-    bool active;
-    const void* parentStackTopBound;
-    int parentTlsIdx;
-    const void* childStackTopBound;
-    int childTlsIdx;
-    bool recursedInChild;
-} ShimTlsCloneState;
-static ShimTlsCloneState _cloneState;
-
-void shimtls_prepareClone(const void *childStackTopBound, const void *parentStackTopBound) {
-    assert(!_cloneState.active);
-    _cloneState = (ShimTlsCloneState) {
-        .active = true,
-        .parentStackTopBound = parentStackTopBound,
-        .parentTlsIdx = shimtls_getCurrentIdx(),
-        .childStackTopBound = childStackTopBound,
-        .childTlsIdx = shimtls_takeNextIdx(),
-        .recursedInChild = false,
-    };
-}
-void shimtls_cloneDone() {
-    assert(_cloneState.active);
-    _cloneState.active = false;
-}
 
 // Each ShimTlsVar is assigned an offset in the ShimThreadLocalStorage's.
 // This is the next free offset.
@@ -57,37 +39,21 @@ static int _tlsIdx = 0;
 // Take an unused TLS index, which can be used for a new thread.
 int shimtls_takeNextIdx() {
     static int next = 0;
-    assert(next < MAX_THREADS);
+    if (next >= MAX_THREADS) {
+        panic("Exceeded hard-coded limit of %d threads", MAX_THREADS);
+    }
     return next++;
 }
 
 // Use when switching threads.
 int shimtls_getCurrentIdx() {
+    // For now this is the one place we use native thread local storage.  If we
+    // do need to avoid depending on it, one possibility is to register the top
+    // of each thread's stack with this module, and then here check the current
+    // %RSP to determine which stack we're executing on. Leaving out that
+    // complexity (and log(n) lookup) until if and when we need it.
     static __thread bool idxInitd = false;
     static __thread int idx;
-    if (_cloneState.active) {
-        if (_cloneState.recursedInChild) {
-            void* rsp;
-            GET_CURRENT_RSP(rsp);
-            if (rsp > _cloneState.parentStackTopBound) {
-                // We're past the parent bound, so must be in the child stack.
-                return _cloneState.childTlsIdx;
-            } else if (rsp > _cloneState.childStackTopBound) {
-                // We're past the child top bound, so must be in the parent stack.
-                return _cloneState.parentTlsIdx;
-            } else if (_cloneState.parentStackTopBound < _cloneState.childStackTopBound) {
-                return _cloneState.parentTlsIdx;
-            } else {
-                return _cloneState.childTlsIdx;
-            }
-        }
-        _cloneState.recursedInChild = true;
-        if (!idxInitd) {
-            idx = _cloneState.childTlsIdx;
-            idxInitd = true;
-        }
-        _cloneState.recursedInChild = false;
-    }
     if (!idxInitd) {
         idx = shimtls_takeNextIdx();
         idxInitd = true;
@@ -107,6 +73,10 @@ void* shimtlsvar_ptr(ShimTlsVar* v, size_t sz) {
         _nextByteOffset += (16 - overhang);
 
         assert(_nextByteOffset < sizeof(ShimThreadLocalStorage));
+        if (_nextByteOffset >= sizeof(ShimThreadLocalStorage)) {
+            panic("Exceed hard-coded limit of %zu bytes of thread local storage",
+                  sizeof(ShimThreadLocalStorage));
+        }
         v->_initd = true;
     }
     return &_tlss[shimtls_getCurrentIdx()]._bytes[v->_offset];
