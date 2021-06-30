@@ -307,6 +307,7 @@ static void _handle_sigsys(int sig, siginfo_t* info, void* voidUcontext) {
     if (sig != SIGSYS) {
         abort();
     }
+    trace("Trapped syscall %lld", ctx->uc_mcontext.gregs[REG_RAX]);
     // Make the syscall via the *the shim's* syscall function (which overrides
     // libc's).  It in turn will either emulate it or (if interposition is
     // disabled), or make the call natively. In the latter case, the syscall
@@ -315,6 +316,7 @@ static void _handle_sigsys(int sig, siginfo_t* info, void* voidUcontext) {
                                  ctx->uc_mcontext.gregs[REG_RSI], ctx->uc_mcontext.gregs[REG_RDX],
                                  ctx->uc_mcontext.gregs[REG_R10], ctx->uc_mcontext.gregs[REG_R8],
                                  ctx->uc_mcontext.gregs[REG_R9]);
+    trace("Trapped syscall %lld returning %ld", ctx->uc_mcontext.gregs[REG_RAX], rv);
     ctx->uc_mcontext.gregs[REG_RAX] = rv;
 }
 
@@ -377,12 +379,6 @@ static void _shim_parent_init_seccomp() {
         /* Always allow sched_yield. Sometimes used in IPC with Shadow; emulating
          * would just add unnecessary overhead.  */
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, SYS_sched_yield, /*true-skip=*/0, /*false-skip=*/1),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
-
-        /* FIXME: TEMP Always allow futex. This will will end up causing deadlock
-         * if there's actually contention on a futex.  i.e. we'll need to get rid
-         * of this to be compatible with threaded virtual processes. */
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, SYS_futex, /*true-skip=*/0, /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 
         /* See if instruction pointer is within the shadow_vreal_raw_syscall fn. */
