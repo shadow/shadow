@@ -1,5 +1,5 @@
 # shadow build dir
-/build
+build
 # area for local temp files
 /local
 /install
