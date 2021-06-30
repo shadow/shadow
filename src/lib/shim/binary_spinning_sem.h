@@ -3,9 +3,10 @@
 
 #include <atomic>
 #include <cstddef>
-
 #include <pthread.h>
-#include <semaphore.h>
+#include <sys/types.h>
+
+#include "shadow_sem.h"
 
 // Intended to be private to the ipc module.
 
@@ -77,7 +78,13 @@ class BinarySpinningSem {
     BinarySpinningSem &operator=(const BinarySpinningSem &rhs) = delete;
 
   private:
-    sem_t _semaphore;
+    /* We use shadow_sem_t (which implements the same interface as sem_t) instead of sem_t
+     * to ensure that both sides of the IPC see the same definition. If we instead used sem_t,
+     * the shadow would see libc's sem_t implementation, while the shim would see the overridden
+     * definition, which is incompatible.
+     */
+    shadow_sem_t _semaphore;
+
     ssize_t _thresh;
 };
 
