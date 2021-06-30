@@ -158,8 +158,8 @@ SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args)
     return _syscallhandler_killHelper(sys, 0, native_tid, sig, SYS_tkill);
 }
 
-static SysCallReturn _sigaction(SysCallHandler* sys, int signum, PluginPtr actPtr,
-                                PluginPtr oldActPtr, size_t masksize) {
+static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr actPtr,
+                                   PluginPtr oldActPtr, size_t masksize) {
     utility_assert(sys);
 
     if (!shimipc_getUseSeccomp()) {
@@ -227,36 +227,14 @@ static SysCallReturn _sigaction(SysCallHandler* sys, int signum, PluginPtr actPt
     return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
 }
 
-SysCallReturn syscallhandler_sigaction(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
-    return _sigaction(sys, /*signum=*/(int)args->args[0].as_i64, /*actPtr=*/args->args[1].as_ptr,
-                      /*oldActPtr=*/args->args[2].as_ptr, /*masksize=*/4);
-}
-
 SysCallReturn syscallhandler_rt_sigaction(SysCallHandler* sys, const SysCallArgs* args) {
     utility_assert(sys && args);
-    return _sigaction(sys, /*signum=*/(int)args->args[0].as_i64, /*actPtr=*/args->args[1].as_ptr,
-                      /*oldActPtr=*/args->args[2].as_ptr, /*masksize=*/args->args[3].as_u64);
+    return _rt_sigaction(sys, /*signum=*/(int)args->args[0].as_i64, /*actPtr=*/args->args[1].as_ptr,
+                         /*oldActPtr=*/args->args[2].as_ptr, /*masksize=*/args->args[3].as_u64);
 }
 
-SysCallReturn syscallhandler_signal(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
-    if (!shimipc_getUseSeccomp()) {
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
-    // Prevent interference with shim's SIGSYS handler.
-
-    int signum = (int)args->args[0].as_i64;
-
-    if (signum == SIGSYS) {
-        warning("Blocking `signal` for SIGSYS");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = -ENOSYS};
-    }
-    return (SysCallReturn){.state = SYSCALL_NATIVE};
-}
-
-static SysCallReturn _sigprocmask(SysCallHandler* sys, int how, PluginPtr setPtr,
-                                  PluginPtr oldSetPtr, size_t sigsetsize) {
+static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr setPtr,
+                                     PluginPtr oldSetPtr, size_t sigsetsize) {
     utility_assert(sys);
 
     if (!shimipc_getUseSeccomp()) {
@@ -320,14 +298,8 @@ static SysCallReturn _sigprocmask(SysCallHandler* sys, int how, PluginPtr setPtr
     return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
 }
 
-SysCallReturn syscallhandler_sigprocmask(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_assert(sys && args);
-    return _sigprocmask(sys, /*how=*/(int)args->args[0].as_i64, /*setPtr=*/args->args[1].as_ptr,
-                        /*oldSetPtr=*/args->args[2].as_ptr, /*sigsetsize=*/4);
-}
-
 SysCallReturn syscallhandler_rt_sigprocmask(SysCallHandler* sys, const SysCallArgs* args) {
     utility_assert(sys && args);
-    return _sigprocmask(sys, /*how=*/(int)args->args[0].as_i64, /*setPtr=*/args->args[1].as_ptr,
-                        /*oldSetPtr=*/args->args[2].as_ptr, /*sigsetsize=*/args->args[3].as_u64);
+    return _rt_sigprocmask(sys, /*how=*/(int)args->args[0].as_i64, /*setPtr=*/args->args[1].as_ptr,
+                           /*oldSetPtr=*/args->args[2].as_ptr, /*sigsetsize=*/args->args[3].as_u64);
 }
