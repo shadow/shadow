@@ -1,6 +1,6 @@
 # Supported Platforms
 
-Shadow officially supports the following platforms:
+## Officially supported platforms
 
   + Ubuntu 18.04 and 20.04
   + Debian 10
@@ -20,3 +20,10 @@ We do not provide official support for other platforms. This means that we do
 not ensure that Shadow successfully builds and passes tests on other platforms.
 However, we will review pull requests that allow Shadow to build and run on
 unsupported platforms.
+
+## Known incompatible platforms
+
+ * CentOS 7: We rely on features of glibc that aren't available on CentOS 7. Shadow won't compile there
+ due to our use of C11 atomics, and threaded virtual processes running with
+ preload-based interposition will deadlock due to an incompatible implementation
+ of thread-local-storage.
