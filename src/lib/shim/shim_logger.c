@@ -99,7 +99,7 @@ void shimlogger_flush(Logger* base) {
 
 bool shimlogger_isEnabled(Logger* base, LogLevel level) {
     ShimLogger* logger = (ShimLogger*)base;
-    return level >= logger->level;
+    return level <= logger->level;
 }
 
 void shimlogger_setLevel(Logger* base, LogLevel level) {
