@@ -22,6 +22,10 @@ name = "test_bind"
 path = "socket/bind/test_bind.rs"
 
 [[bin]]
+name = "test_bind_in_new_process"
+path = "socket/bind/test_bind_in_new_process.rs"
+
+[[bin]]
 name = "test_listen"
 path = "socket/listen/test_listen.rs"
 

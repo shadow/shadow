@@ -1,0 +1,28 @@
+general:
+  stop_time: 5
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  # test when shadow has to stop the process (when it reaches its stop_time)
+  test-shadow-stop:
+    processes:
+    - path: ../../target/debug/test_bind_in_new_process
+      args: '10000000'
+      start_time: 1
+      stop_time: 2
+    # start the process a second time, which tries to bind to the same port
+    - path: ../../target/debug/test_bind_in_new_process
+      args: '10000000'
+      start_time: 3
+  # test when the process stops by itself (before it reaches its stop_time)
+  test-self-stop:
+    processes:
+    - path: ../../target/debug/test_bind_in_new_process
+      args: '0'
+      start_time: 1
+      stop_time: 2
+    # start the process a second time, which tries to bind to the same port
+    - path: ../../target/debug/test_bind_in_new_process
+      args: '0'
+      start_time: 3
