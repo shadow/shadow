@@ -328,6 +328,10 @@ struct DescriptorTable *descriptortable_new(void);
 // Free the table.
 void descriptortable_free(struct DescriptorTable *table);
 
+void descriptortable_iter(struct DescriptorTable *table,
+                          void (*f)(struct CompatDescriptor*, void*),
+                          void *data);
+
 // Store a descriptor object for later reference at the next available index
 // in the table. The chosen table index is stored in the descriptor object and
 // returned. The descriptor is guaranteed to be stored successfully.
