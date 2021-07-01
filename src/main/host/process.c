@@ -76,6 +76,7 @@ ADD_CONFIG_HANDLER(config_getUseLegacyWorkingDir, _use_legacy_working_dir)
 
 static gchar* _process_outputFileName(Process* proc, const char* type);
 static void _process_check(Process* proc);
+static void _disassociateCompatDescriptor(CompatDescriptor* compatDesc, Host* host);
 
 struct _Process {
     /* Host owning this process */
@@ -602,6 +603,10 @@ void process_continue(Process* proc, Thread* thread) {
     worker_setActiveThread(NULL);
 }
 
+static void _disassociateCompatDescriptorCallback(CompatDescriptor* compatDesc, void* host_void) {
+    _disassociateCompatDescriptor(compatDesc, host_void);
+}
+
 void process_stop(Process* proc) {
     MAGIC_ASSERT(proc);
 
@@ -625,6 +630,7 @@ void process_stop(Process* proc) {
 
     trace("Starting descriptor table shutdown hack");
     descriptortable_shutdownHelper(proc->descTable);
+    descriptortable_iter(proc->descTable, _disassociateCompatDescriptorCallback, (void*)proc->host);
 
     worker_setActiveProcess(NULL);
 
@@ -1068,6 +1074,25 @@ void process_freePtrsWithoutFlushing(Process* proc) {
 // Handle the descriptors owned by this process
 // ******************************************************
 
+static void _disassociateCompatDescriptor(CompatDescriptor* compatDesc, Host* host) {
+    if (compatDesc == NULL) {
+        return;
+    }
+
+    // sockets are only currently implemented as legacy descriptors
+    LegacyDescriptor* desc = compatdescriptor_asLegacy(compatDesc);
+
+    if (desc == NULL) {
+        return;
+    }
+
+    LegacyDescriptorType dType = descriptor_getType(desc);
+    if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
+        CompatSocket compat_socket = compatsocket_fromLegacySocket((Socket*)desc);
+        host_disassociateInterface(host, &compat_socket);
+    }
+}
+
 int process_registerCompatDescriptor(Process* proc, CompatDescriptor* compatDesc) {
     MAGIC_ASSERT(proc);
     utility_assert(compatDesc);
@@ -1076,7 +1101,9 @@ int process_registerCompatDescriptor(Process* proc, CompatDescriptor* compatDesc
 
 CompatDescriptor* process_deregisterCompatDescriptor(Process* proc, int handle) {
     MAGIC_ASSERT(proc);
-    return descriptortable_remove(proc->descTable, handle);
+    CompatDescriptor* compatDesc = descriptortable_remove(proc->descTable, handle);
+    _disassociateCompatDescriptor(compatDesc, proc->host);
+    return compatDesc;
 }
 
 const CompatDescriptor* process_getRegisteredCompatDescriptor(Process* proc, int handle) {
@@ -1099,14 +1126,10 @@ void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
     MAGIC_ASSERT(proc);
 
     if (desc) {
-        LegacyDescriptorType dType = descriptor_getType(desc);
-        if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
-            CompatSocket compat_socket = compatsocket_fromLegacySocket((Socket*)desc);
-            host_disassociateInterface(proc->host, &compat_socket);
-        }
-        descriptor_setOwnerProcess(desc, NULL);
         CompatDescriptor* compatDesc =
-            descriptortable_remove(proc->descTable, descriptor_getHandle(desc));
+            process_deregisterCompatDescriptor(proc, descriptor_getHandle(desc));
+
+        descriptor_setOwnerProcess(desc, NULL);
         compatdescriptor_free(compatDesc);
     }
 }

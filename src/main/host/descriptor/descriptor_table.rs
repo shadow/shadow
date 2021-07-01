@@ -122,7 +122,7 @@ impl DescriptorTable {
     /// freed. Otherwise the circular reference will prevent the free operation.
     /// TODO: remove this once the TCP layer is better designed.
     pub fn shutdown_helper(&mut self) {
-        for (_idx, descriptor) in self.descriptors.iter() {
+        for descriptor in self.descriptors.values() {
             match descriptor {
                 CompatDescriptor::New(_) => continue,
                 CompatDescriptor::Legacy(d) => unsafe {
@@ -149,6 +149,19 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn descriptortable_free(table: *mut DescriptorTable) {
         unsafe { Box::from_raw(notnull_mut_debug(table)) };
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn descriptortable_iter(
+        table: *mut DescriptorTable,
+        f: unsafe extern "C" fn(*mut CompatDescriptor, *mut libc::c_void),
+        data: *mut libc::c_void,
+    ) {
+        let table = unsafe { table.as_mut().unwrap() };
+
+        for desc in table.descriptors.values_mut() {
+            unsafe { f(desc as *mut _, data) };
+        }
     }
 
     /// Store a descriptor object for later reference at the next available index
