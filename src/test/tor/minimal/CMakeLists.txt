@@ -30,6 +30,6 @@ add_shadow_tests(BASENAME tor-minimal
                  POST_CMD "${CMAKE_CURRENT_SOURCE_DIR}/verify.sh"
                  PROPERTIES
                    TIMEOUT 180
+                   RUN_SERIAL TRUE
                    LABELS tor
-                   CONFIGURATIONS extra
-                   RUN_SERIAL TRUE)
+                   CONFIGURATIONS extra)
