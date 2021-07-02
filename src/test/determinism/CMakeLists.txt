@@ -5,7 +5,7 @@ add_executable(test-determinism test_determinism.c)
 target_link_libraries(test-determinism ${CMAKE_THREAD_LIBS_INIT})
 
 # preload doesn't support threads.
-foreach(METHOD ptrace hybrid)
+foreach(METHOD ptrace hybrid preload)
     ## We need to run twice to make sure the 'random' output is the same both times
     add_shadow_tests(
         BASENAME determinism1a
@@ -41,7 +41,7 @@ endforeach()
 ## done
 
 ## now let's run a phold test and compare the order of packet events
-foreach(METHOD ptrace hybrid)
+foreach(METHOD ptrace hybrid preload)
     add_shadow_tests(
         BASENAME determinism2a
         METHODS ${METHOD}

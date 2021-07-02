@@ -1,5 +1,5 @@
 add_linux_tests(BASENAME pthreads COMMAND sh -c "../target/debug/test_pthreads --libc-passing")
-add_shadow_tests(BASENAME pthreads METHODS hybrid ptrace)
+add_shadow_tests(BASENAME pthreads METHODS hybrid ptrace preload)
 
 add_linux_tests(BASENAME threads-noexit COMMAND sh -c "../target/debug/test_threads_noexit")
 add_shadow_tests(BASENAME threads-noexit METHODS hybrid ptrace CHECK_RETVAL FALSE)

@@ -36,7 +36,7 @@ int shadow_hostname_to_addr_ipv4(const char* name, size_t name_len, uint32_t* ad
                                  size_t addr_len);
 
 typedef enum {
-    // Next val: 11
+    // Next val: 13
     SHD_SHIM_EVENT_NULL = 0,
     SHD_SHIM_EVENT_START = 1,
     SHD_SHIM_EVENT_STOP = 2,
@@ -48,6 +48,8 @@ typedef enum {
     SHD_SHIM_EVENT_SHMEM_COMPLETE = 6,
     SHD_SHIM_EVENT_WRITE_REQ = 7,
     SHD_SHIM_EVENT_BLOCK = 10,
+    SHD_SHIM_EVENT_ADD_THREAD_REQ = 11,
+    SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES = 12,
 } ShimEventID;
 
 typedef struct _ShimEvent {
@@ -83,6 +85,10 @@ typedef struct _ShimEvent {
             PluginPtr plugin_ptr;
             size_t n;
         } shmem_blk;
+
+        struct {
+            ShMemBlockSerialized ipc_block;
+        } add_thread_req;
     } event_data;
 
 } ShimEvent;

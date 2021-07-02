@@ -1,5 +1,8 @@
-# this file is also used with rsync --exclude-from
-# in 'ci/run.sh', so avoid globs
-.git
-build
-src/main/target
+# .dockerignore doesn't treat a bare basename as unrooted. e.g. just `target` is
+# equivalent to `./target`; it won't match `./src/test/target`.
+#
+# This file is also used with rsync --exclude-from in 'ci/run.sh', but rsync
+# appears to accept a super-set of patterns recognized by dockerignore.
+**/.git
+**/build
+**/target

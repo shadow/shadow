@@ -11,4 +11,7 @@ long __attribute__((noinline)) shadow_vreal_raw_syscall(long n, va_list args);
 // decides whether to execute a real syscall or emulate.
 long shadow_raw_syscall(long n, ...);
 
+// Makes a raw syscall natively; never emulates.
+long shadow_real_raw_syscall(long n, ...);
+
 #endif

@@ -238,5 +238,10 @@ int main(int argc, char* argv[]) {
     fprintf(stdout, "_test_nameAddress() passed\n");
 
     fprintf(stdout, "########## determinism test passed! ##########\n");
+
+    // Work around https://github.com/shadow/shadow/issues/1476.
+    // FIXME: Shouldn't have to flush explicitly.
+    fflush(stdout);
+
     return EXIT_SUCCESS;
 }

@@ -34,9 +34,25 @@ bool shim_interpositionEnabled();
 bool shim_use_syscall_handler();
 
 // Returns the shmem block used for IPC, which may be uninitialized.
-ShMemBlock shim_thisThreadEventIPCBlk();
+struct IPCData* shim_thisThreadEventIPC();
 
 // Return the location of the time object in shared memory, or NULL if unavailable.
 struct timespec* shim_get_shared_time_location();
+
+// To be called in parent thread before making the `clone` syscall.
+// It sets up data for the new thread.
+void shim_newThreadStart(ShMemBlockSerialized* block);
+
+// To be called in parent thread after making the `clone` syscall.
+// It doesn't return until after the child has initialized itself.
+void shim_newThreadFinish();
+
+// To be called from a new *child* thread after clone, to notify
+// the parent thread that it is now initialized.
+void shim_newThreadChildInitd();
+
+// Gets and resets the instruction pointer to which the child should resume
+// execution after a clone syscall.
+void* shim_take_clone_rip();
 
 #endif // SHD_SHIM_SHIM_H_

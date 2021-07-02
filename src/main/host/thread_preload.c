@@ -1,11 +1,14 @@
+#include "main/host/thread_preload.h"
+
 #include <signal.h>
 #include <string.h>
-
 #include <errno.h>
 #include <fcntl.h>
 #include <glib.h>
+#include <sched.h>
 #include <search.h>
 #include <sys/prctl.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -15,7 +18,6 @@
 #include "lib/shim/shim_event.h"
 #include "main/core/worker.h"
 #include "main/host/shimipc.h"
-#include "main/host/thread_preload.h"
 #include "main/host/thread_protected.h"
 #include "main/shmem/shmem_allocator.h"
 
@@ -222,6 +224,17 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 return NULL;
             }
             case SHD_SHIM_EVENT_SYSCALL: {
+                // XXX hacky. Move to a syscall handler?
+                if (thread->currentEvent.event_data.syscall.syscall_args.number == SYS_exit) {
+                    // Tell thread to go ahead and make the exit syscall itself.
+                    shimevent_sendEventToPlugin(thread->ipc_data, &(ShimEvent){
+                        .event_id = SHD_SHIM_EVENT_SYSCALL_DO_NATIVE
+                    });
+                    // Clean up the thread.
+                    _threadpreload_cleanup(thread);
+                    return NULL;
+                }
+
                 SysCallReturn result = syscallhandler_make_syscall(
                     thread->base.sys, &thread->currentEvent.event_data.syscall.syscall_args);
 
@@ -249,7 +262,8 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                         .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
                         .event_data = {
                             .syscall_complete = {.retval = result.retval,
-                                                 .simulation_nanos = worker_getEmulatedTime()},
+                                                 .simulation_nanos = worker_getEmulatedTime(),
+                                                 },
 
                         }};
                 } else if (result.state == SYSCALL_NATIVE) {
@@ -341,6 +355,50 @@ _threadpreload_readPtrImpl(ThreadPreload* thread, PluginPtr plugin_src, size_t n
     return blk;
 }
 
+static int _threadpreload_clone(Thread* base, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
+                       PluginPtr ctid, unsigned long newtls, Thread** childp) {
+    ThreadPreload* thread = _threadToThreadPreload(base);
+
+    *childp = threadpreload_new(base->host, base->process, host_getNewProcessID(base->host));
+    ThreadPreload* child = _threadToThreadPreload(*childp);
+    child->ipc_blk = shmemallocator_globalAlloc(ipcData_nbytes());
+    utility_assert(child->ipc_blk.p);
+    child->ipc_data = child->ipc_blk.p;
+    ipcData_init(child->ipc_data, shimipc_spinMax());
+    ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&child->ipc_blk);
+
+    // Send an IPC block for the new thread to use.
+    shimevent_sendEventToPlugin(thread->ipc_data, &(ShimEvent){
+        .event_id = SHD_SHIM_EVENT_ADD_THREAD_REQ,
+        .event_data.add_thread_req = {
+            .ipc_block = ipc_blk_serial,
+        }
+    });
+    {
+        ShimEvent res;
+        shimevent_recvEventFromPlugin(thread->ipc_data, &res);
+        utility_assert(res.event_id == SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES);
+    }
+
+    // Create the new managed thread.
+    pid_t childNativeTid = thread_nativeSyscall(base, SYS_clone, flags, child_stack, ptid, ctid, newtls);
+    if (childNativeTid < 0) {
+        trace("native clone failed %d(%s)", childNativeTid, strerror(-childNativeTid));
+        thread_unref(*childp);
+        *childp = NULL;
+        return childNativeTid;
+    }
+    trace("native clone created tid %d", childNativeTid);
+    child->base.nativePid = base->nativePid;
+    child->base.nativeTid = childNativeTid;
+    
+    // Child is now ready to start.
+    child->currentEvent.event_id = SHD_SHIM_EVENT_START;
+    child->isRunning = 1;
+
+    return childNativeTid;
+}
+
 long threadpreload_nativeSyscall(Thread* base, long n, va_list args) {
     ThreadPreload* thread = _threadToThreadPreload(base);
     ShimEvent req = {
@@ -375,6 +433,7 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                                   .isRunning = threadpreload_isRunning,
                                   .free = threadpreload_free,
                                   .nativeSyscall = threadpreload_nativeSyscall,
+                                  .clone = _threadpreload_clone,
                                   .getIPCBlock = _threadpreload_getIPCBlock,
                                   .getShMBlock = _threadpreload_getShMBlock,
                               }),

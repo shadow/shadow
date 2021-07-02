@@ -13,6 +13,7 @@
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
 #include "lib/shim/shim_syscall.h"
+#include "lib/shim/shim_tls.h"
 
 typedef struct _ShimLogger {
     Logger base;
@@ -36,15 +37,18 @@ void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const ch
     if (!logger_isEnabled(base, level)) {
         return;
     }
-    static __thread bool in_logger = false;
+
+    static ShimTlsVar in_logger_var = {0};
+    bool* in_logger = shimtlsvar_ptr(&in_logger_var, sizeof(*in_logger));
+
     // Stack-allocated to avoid dynamic allocation.
     char buf[200];
     size_t offset = 0;
-    if (in_logger) {
+    if (*in_logger) {
         // Avoid recursion in logging around syscall handling.
         return;
     }
-    in_logger = true;
+    *in_logger = true;
     shim_disableInterposition();
 
     ShimLogger* logger = (ShimLogger*)base;
@@ -83,7 +87,7 @@ void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const ch
         fflush_unlocked(logger->file);
     }
     shim_enableInterposition();
-    in_logger = false;
+    *in_logger = false;
 }
 
 void shimlogger_destroy(Logger* logger) {
@@ -99,7 +103,7 @@ void shimlogger_flush(Logger* base) {
 
 bool shimlogger_isEnabled(Logger* base, LogLevel level) {
     ShimLogger* logger = (ShimLogger*)base;
-    return level >= logger->level;
+    return level <= logger->level;
 }
 
 void shimlogger_setLevel(Logger* base, LogLevel level) {
