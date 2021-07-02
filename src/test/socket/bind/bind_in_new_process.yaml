@@ -21,7 +21,6 @@ hosts:
     - path: ../../target/debug/test_bind_in_new_process
       args: '0'
       start_time: 1
-      stop_time: 2
     # start the process a second time, which tries to bind to the same port
     - path: ../../target/debug/test_bind_in_new_process
       args: '0'

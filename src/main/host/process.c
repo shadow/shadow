@@ -389,6 +389,10 @@ pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
     }
 }
 
+static void _disassociateCompatDescriptorCallback(CompatDescriptor* compatDesc, void* host_void) {
+    _disassociateCompatDescriptor(compatDesc, host_void);
+}
+
 static void _process_check(Process* proc) {
     MAGIC_ASSERT(proc);
 
@@ -402,6 +406,8 @@ static void _process_check(Process* proc) {
     info(
         "total runtime for process '%s' was %f seconds", process_getName(proc), proc->totalRunTime);
 #endif
+
+    descriptortable_iter(proc->descTable, _disassociateCompatDescriptorCallback, (void*)proc->host);
 }
 
 static void _process_check_thread(Process* proc, Thread* thread) {
@@ -603,10 +609,6 @@ void process_continue(Process* proc, Thread* thread) {
     worker_setActiveThread(NULL);
 }
 
-static void _disassociateCompatDescriptorCallback(CompatDescriptor* compatDesc, void* host_void) {
-    _disassociateCompatDescriptor(compatDesc, host_void);
-}
-
 void process_stop(Process* proc) {
     MAGIC_ASSERT(proc);
 
@@ -630,7 +632,6 @@ void process_stop(Process* proc) {
 
     trace("Starting descriptor table shutdown hack");
     descriptortable_shutdownHelper(proc->descTable);
-    descriptortable_iter(proc->descTable, _disassociateCompatDescriptorCallback, (void*)proc->host);
 
     worker_setActiveProcess(NULL);
 
