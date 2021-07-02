@@ -83,7 +83,7 @@ macro(add_shadow_tests)
          --log-level=${SHADOW_TEST_LOGLEVEL} \
          ${SHADOW_TEST_ARGS} \
          ${SHADOW_TEST_SHADOW_CONFIG} \
-         && (${SHADOW_TEST_POST_CMD}) \
+         && (cd ${SHADOW_TEST_NAME}.data && ${SHADOW_TEST_POST_CMD}) \
          "
       )
       

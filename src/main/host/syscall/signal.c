@@ -163,19 +163,24 @@ static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr ac
     utility_assert(sys);
 
     if (!shimipc_getUseSeccomp()) {
+        // No special handling needed.
         return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
 
     // Prevent interference with shim's SIGSYS handler.
 
     if (!actPtr.val) {
-        // Just reading the action; allow to proceed natively.
+        // Caller is just reading the action; allow to proceed natively.
         return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
 
     if (signum == SIGSYS) {
-        warning("Blocking `sigaction` for SIGSYS");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = -ENOSYS};
+        // Caller is trying to install their own handler for SIGSYS.  This would
+        // overwrite the shim's SIGSYS handler. `tor` will exit if we return an
+        // error though, so just return 0 without actually installing a new
+        // handler.
+        warning("Ignoring `sigaction` for SIGSYS");
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval = 0};
     }
 
     size_t sz = kernel_sigaction_size(masksize);

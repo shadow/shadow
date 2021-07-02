@@ -21,7 +21,7 @@ add_custom_target(tor-minimal-shadow-data-template ALL
                     ${CMAKE_CURRENT_BINARY_DIR}/shadow.data.template/hosts/hiddenserver/hs)
 
 add_shadow_tests(BASENAME tor-minimal
-                 METHODS ptrace
+                 METHODS ptrace preload
                  LOGLEVEL info
                  ARGS
                    --use-cpu-pinning true
@@ -30,6 +30,6 @@ add_shadow_tests(BASENAME tor-minimal
                  POST_CMD "${CMAKE_CURRENT_SOURCE_DIR}/verify.sh"
                  PROPERTIES
                    TIMEOUT 180
+                   RUN_SERIAL TRUE
                    LABELS tor
-                   CONFIGURATIONS extra
-                   RUN_SERIAL TRUE)
+                   CONFIGURATIONS extra)
