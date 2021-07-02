@@ -1,0 +1,12 @@
+[book]
+title = "The Shadow Simulator"
+language = "en"
+multilingual = false
+src = "../docs"
+
+[build]
+build-dir = "../build/guide"
+
+[output.html]
+git-repository-url = "https://github.com/shadow/shadow"
+additional-css = ["custom.css"]

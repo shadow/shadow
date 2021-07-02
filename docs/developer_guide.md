@@ -211,3 +211,11 @@ fi
 If you find non-deterministic behavior in your Shadow experiment, please
 consider helping to diagnose the problem by opening a [new
 issue](https://github.com/shadow/shadow/issues/new).
+
+### Building the Guide
+
+```bash
+cargo install mdbook
+(cd mdbook && mdbook build)
+firefox build/guide/index.html
+```

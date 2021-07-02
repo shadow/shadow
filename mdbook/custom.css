@@ -1,0 +1,9 @@
+/* don't "grey-out" draft pages in the sidebar */
+.chapter li {
+    color: var(--sidebar-fg);
+}
+
+/* set the cursor for draft pages in the sidebar */
+.chapter li div {
+    cursor: not-allowed;
+}
