@@ -1,10 +1,12 @@
-# Auto-update metadata on pull requests
+# Automatically add and check metadata on pull requests
 # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
 name: "Pull Request Metadata"
 
 on:
   pull_request_target:
-    types: [opened]
+    # We probably want [opened, synchronize, milestoned] here, but the 'milestoned'
+    # event trigger is not yet available on pull requests so we use best effort.
+    types: [opened, synchronize, reopened, assigned, edited, ready_for_review]
 
 permissions:
   pull-requests: write
@@ -28,3 +30,8 @@ jobs:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
         configuration-path: .github/pr_labeler_conf.yml
         sync-labels: true
+    - name: Check Milestone
+      # Check if a pull request is assigned a milestone
+      # https://github.com/siimon/milestone-check-action
+      # before updating the version of this untrusted action, check the code manually
+      uses: siimon/milestone-check-action@5ff17a53248d7aaa65b817458ee6106247625790
