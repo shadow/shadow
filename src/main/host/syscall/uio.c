@@ -52,6 +52,10 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd,
 
     /* Get the vector of pointers. */
     const struct iovec* iov = process_getReadablePtr(sys->process, iovPtr, iovlen * sizeof(*iov));
+    if (!iov) {
+        warning("Got unreadable pointer [%p..+%zu]", (void*)iovPtr.val, iovlen * sizeof(*iov));
+        return -EFAULT;
+    }
 
     /* Check that all of the buf pointers are valid. */
     for (unsigned long i = 0; i < iovlen; i++) {
