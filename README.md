@@ -3,6 +3,8 @@
 [![Shadow Tests](https://github.com/shadow/shadow/actions/workflows/run_tests.yml/badge.svg?branch=main&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tests.yml?query=branch:main+event:push)
 [![Tor Tests](https://github.com/shadow/shadow/actions/workflows/run_tor.yml/badge.svg?branch=main&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tor.yml?query=branch:main+event:push)
 
+<!--- ANCHOR: body (for mdbook) -->
+
 ## What is Shadow?
 
 Shadow is a discrete-event network simulator that directly executes real
@@ -75,15 +77,17 @@ $ ./setup install
 ## More Information
 
 Homepage:
-  + https://shadow.github.io
+- https://shadow.github.io
 
 Detailed Documentation:
-  + [Local user documentation in docs/README.md](docs/README.md)
-  + [Online user documentation](https://shadow.github.io/docs/guide)
-  + [Online developer documentation](https://shadow.github.io/docs/rust)
+- [Local user documentation in docs/README.md](docs/README.md)
+- [Online user documentation](https://shadow.github.io/docs/guide)
+- [Online developer documentation](https://shadow.github.io/docs/rust)
 
 Community Support:
-  + https://github.com/shadow/shadow/discussions
+- https://github.com/shadow/shadow/discussions
 
 Bug Reports:
-  + https://github.com/shadow/shadow/issues
+- https://github.com/shadow/shadow/issues
+
+<!--- ANCHOR_END: body (for mdbook) -->
