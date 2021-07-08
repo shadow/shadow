@@ -21,13 +21,15 @@ extern "C" {
 struct IPCData;
 
 void ipcData_init(struct IPCData* ipc_data, ssize_t spin_max);
+void ipcData_destroy(struct IPCData* ipc_data);
+void ipcData_registerPluginPid(struct IPCData* ipc_data, pid_t pid);
 
 size_t ipcData_nbytes();
 
 void shimevent_sendEventToShadow(struct IPCData *data, const ShimEvent* e);
 void shimevent_sendEventToPlugin(struct IPCData *data, const ShimEvent* e);
 void shimevent_recvEventFromShadow(struct IPCData* data, ShimEvent* e, bool spin);
-void shimevent_recvEventFromPlugin(struct IPCData *data, ShimEvent* e);
+void shimevent_recvEventFromPlugin(struct IPCData* data, ShimEvent* e);
 
 /*
  * If a message is ready, sets *e to it and returns 0. Otherwise returns -1

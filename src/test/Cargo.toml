@@ -9,6 +9,10 @@ name = "test_utils"
 path = "test_utils.rs"
 
 [[bin]]
+name = "test_exit"
+path = "exit/test_exit.rs"
+
+[[bin]]
 name = "test_sleep"
 path = "sleep/test_sleep.rs"
 #harness = false

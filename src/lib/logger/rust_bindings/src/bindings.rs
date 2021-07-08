@@ -3,14 +3,14 @@
 pub type va_list = __builtin_va_list;
 pub type size_t = ::std::os::raw::c_ulong;
 pub type __int64_t = ::std::os::raw::c_long;
-pub use self::_LogLevel as LogLevel;
 pub const _LogLevel_LOGLEVEL_UNSET: _LogLevel = 0;
 pub const _LogLevel_LOGLEVEL_ERROR: _LogLevel = 1;
 pub const _LogLevel_LOGLEVEL_WARNING: _LogLevel = 2;
 pub const _LogLevel_LOGLEVEL_INFO: _LogLevel = 3;
 pub const _LogLevel_LOGLEVEL_DEBUG: _LogLevel = 4;
 pub const _LogLevel_LOGLEVEL_TRACE: _LogLevel = 5;
-pub type _LogLevel = i32;
+pub type _LogLevel = ::std::os::raw::c_uint;
+pub use self::_LogLevel as LogLevel;
 pub type Logger = _Logger;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

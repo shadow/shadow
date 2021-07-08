@@ -51,17 +51,21 @@ static ThreadPreload* _threadToThreadPreload(Thread* thread) {
 
 static Thread* _threadPreloadToThread(ThreadPreload* thread) { return (Thread*)thread; }
 
-__attribute__((unused)) static void _threadpreload_auxFree(void* p, void* _) {
-    ShMemBlock* blk = (ShMemBlock*)p;
-    shmemallocator_globalFree(blk);
-    free(blk);
-}
-
 void threadpreload_free(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
     if (thread->base.sys) {
         syscallhandler_unref(thread->base.sys);
+    }
+
+    if (thread->ipc_data) {
+        ipcData_destroy(thread->ipc_data);
+        thread->ipc_data = NULL;
+    }
+
+    if (thread->ipc_blk.p) {
+        // FIXME: This appears to cause errors.
+        // shmemallocator_globalFree(&thread->ipc_blk);
     }
 
     worker_count_deallocation(ThreadPreload);
@@ -163,6 +167,7 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv, const char* wo
     g_free(argStr);
 
     pid_t child_pid = _threadpreload_fork_exec(thread, argv[0], argv, myenvv, workingDir);
+    ipcData_registerPluginPid(thread->ipc_data, child_pid);
 
     /* cleanup the dupd env*/
     if (myenvv) {
@@ -326,35 +331,6 @@ bool threadpreload_isRunning(Thread* base) {
     return thread->isRunning;
 }
 
-/*
- * Helper function, issues a clone/read request to the plugin.
- * The returned ShMemBlock is owned by the caller and needs to be freed.
- */
-__attribute__((unused)) static ShMemBlock
-_threadpreload_readPtrImpl(ThreadPreload* thread, PluginPtr plugin_src, size_t n, bool is_string) {
-    // Allocate a block for the clone
-    ShMemBlock blk = shmemallocator_globalAlloc(n);
-    utility_assert(blk.p && blk.nbytes == n);
-
-    ShimEvent req = {
-        .event_id = SHD_SHIM_EVENT_CLONE_REQ,
-    };
-
-    ShimEvent resp = {0};
-
-    req.event_id = is_string ? SHD_SHIM_EVENT_CLONE_STRING_REQ : SHD_SHIM_EVENT_CLONE_REQ;
-    req.event_data.shmem_blk.serial = shmemallocator_globalBlockSerialize(&blk);
-    req.event_data.shmem_blk.plugin_ptr = plugin_src;
-    req.event_data.shmem_blk.n = n;
-
-    shimevent_sendEventToPlugin(thread->ipc_data, &req);
-    shimevent_recvEventFromPlugin(thread->ipc_data, &resp);
-
-    utility_assert(resp.event_id == SHD_SHIM_EVENT_SHMEM_COMPLETE);
-
-    return blk;
-}
-
 static int _threadpreload_clone(Thread* base, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
                        PluginPtr ctid, unsigned long newtls, Thread** childp) {
     ThreadPreload* thread = _threadToThreadPreload(base);
@@ -365,6 +341,7 @@ static int _threadpreload_clone(Thread* base, unsigned long flags, PluginPtr chi
     utility_assert(child->ipc_blk.p);
     child->ipc_data = child->ipc_blk.p;
     ipcData_init(child->ipc_data, shimipc_spinMax());
+    ipcData_registerPluginPid(child->ipc_data, base->nativePid);
     ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&child->ipc_blk);
 
     // Send an IPC block for the new thread to use.
