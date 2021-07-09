@@ -105,29 +105,29 @@ int file_poll(File* file, struct pollfd* pfd);
 // Operations where the dir File* may be null
 // ******************************************
 
-int file_fstatat(File* dir, const char* pathname, struct stat* statbuf,
-                 int flags);
-int file_fchownat(File* dir, const char* pathname, uid_t owner, gid_t group,
-                  int flags);
-int file_fchmodat(File* dir, const char* pathname, mode_t mode, int flags);
-int file_futimesat(File* dir, const char* pathname,
-                   const struct timeval times[2]);
-int file_utimensat(File* dir, const char* pathname,
-                   const struct timespec times[2], int flags);
-int file_faccessat(File* dir, const char* pathname, int mode, int flags);
-int file_mkdirat(File* dir, const char* pathname, mode_t mode);
-int file_mknodat(File* dir, const char* pathname, mode_t mode, dev_t dev);
-int file_linkat(File* olddir, const char* oldpath, File* newdir,
-                const char* newpath, int flags);
-int file_unlinkat(File* dir, const char* pathname, int flags);
-int file_symlinkat(File* dir, const char* linkpath, const char* target);
-ssize_t file_readlinkat(File* dir, const char* pathname, char* buf,
-                        size_t bufsize);
-int file_renameat2(File* olddir, const char* oldpath, File* newdir,
-                   const char* newpath, unsigned int flags);
+int file_fstatat(File* dir, const char* pathname, struct stat* statbuf, int flags,
+                 const char* workingDir);
+int file_fchownat(File* dir, const char* pathname, uid_t owner, gid_t group, int flags,
+                  const char* workingDir);
+int file_fchmodat(File* dir, const char* pathname, mode_t mode, int flags, const char* workingDir);
+int file_futimesat(File* dir, const char* pathname, const struct timeval times[2],
+                   const char* workingDir);
+int file_utimensat(File* dir, const char* pathname, const struct timespec times[2], int flags,
+                   const char* workingDir);
+int file_faccessat(File* dir, const char* pathname, int mode, int flags, const char* workingDir);
+int file_mkdirat(File* dir, const char* pathname, mode_t mode, const char* workingDir);
+int file_mknodat(File* dir, const char* pathname, mode_t mode, dev_t dev, const char* workingDir);
+int file_linkat(File* olddir, const char* oldpath, File* newdir, const char* newpath, int flags,
+                const char* workingDir);
+int file_unlinkat(File* dir, const char* pathname, int flags, const char* workingDir);
+int file_symlinkat(File* dir, const char* linkpath, const char* target, const char* workingDir);
+ssize_t file_readlinkat(File* dir, const char* pathname, char* buf, size_t bufsize,
+                        const char* workingDir);
+int file_renameat2(File* olddir, const char* oldpath, File* newdir, const char* newpath,
+                   unsigned int flags, const char* workingDir);
 #ifdef SYS_statx
 int file_statx(File* dir, const char* pathname, int flags, unsigned int mask,
-               struct statx* statxbuf);
+               struct statx* statxbuf, const char* workingDir);
 #endif
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_FILE_H_ */

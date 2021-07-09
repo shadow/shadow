@@ -190,8 +190,7 @@ static char* _file_getConcatStr(const char* prefix, const char sep, const char* 
     return path;
 }
 
-static char* _file_getPath(File* file, File* dir, const char* pathname, const char* workingDir) {
-    MAGIC_ASSERT(file);
+static char* _file_getAbsolutePath(File* dir, const char* pathname, const char* workingDir) {
     utility_assert(pathname);
     utility_assert(workingDir);
     utility_assert(workingDir[0] == '/');
@@ -273,7 +272,7 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
 
     /* The default case is a regular file. We do this first so that we have
      * an absolute path to compare for special files. */
-    char* abspath = _file_getPath(file, dir, pathname, workingDir);
+    char* abspath = _file_getAbsolutePath(dir, pathname, workingDir);
 
     /* Handle special files. */
     if (utility_isRandomPath(abspath)) {
@@ -838,132 +837,313 @@ static inline int _file_getOSDirFD(File* dir) {
     }
 }
 
-int file_fstatat(File* dir, const char* pathname, struct stat* statbuf,
-                 int flags) {
-    trace("File %i fstatat os-backed file %i", dir ? _file_getFD(dir) : 0,
-          _file_getOSDirFD(dir));
+int file_fstatat(File* dir, const char* pathname, struct stat* statbuf, int flags,
+                 const char* workingDir) {
+    int osFd = _file_getOSDirFD(dir);
+    const char* pathnameTmp = pathname;
 
-    int result = fstatat(_file_getOSDirFD(dir), pathname, statbuf, flags);
+    trace("File %i fstatat os-backed file %i, flags %d", dir ? _file_getFD(dir) : -1, osFd, flags);
+
+    if (osFd == AT_FDCWD) {
+        osFd = -1;
+        pathnameTmp = _file_getAbsolutePath(NULL, pathname, workingDir);
+    }
+
+    int result = fstatat(osFd, pathnameTmp, statbuf, flags);
+
+    if (pathnameTmp != pathname) {
+        free((char*)pathnameTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
-int file_fchownat(File* dir, const char* pathname, uid_t owner, gid_t group,
-                  int flags) {
-    trace("File %i fchownat os-backed file %i", dir ? _file_getFD(dir) : 0,
-          _file_getOSDirFD(dir));
+int file_fchownat(File* dir, const char* pathname, uid_t owner, gid_t group, int flags,
+                  const char* workingDir) {
+    int osFd = _file_getOSDirFD(dir);
+    const char* pathnameTmp = pathname;
 
-    int result = fchownat(_file_getOSDirFD(dir), pathname, owner, group, flags);
+    trace("File %i fchownat os-backed file %i", dir ? _file_getFD(dir) : -1, osFd);
+
+    if (osFd == AT_FDCWD) {
+        osFd = -1;
+        pathnameTmp = _file_getAbsolutePath(NULL, pathname, workingDir);
+    }
+
+    int result = fchownat(osFd, pathnameTmp, owner, group, flags);
+
+    if (pathnameTmp != pathname) {
+        free((char*)pathnameTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
-int file_fchmodat(File* dir, const char* pathname, mode_t mode, int flags) {
-    trace("File %i fchmodat os-backed file %i", dir ? _file_getFD(dir) : 0,
-          _file_getOSDirFD(dir));
+int file_fchmodat(File* dir, const char* pathname, mode_t mode, int flags, const char* workingDir) {
+    int osFd = _file_getOSDirFD(dir);
+    const char* pathnameTmp = pathname;
 
-    int result = fchmodat(_file_getOSDirFD(dir), pathname, mode, flags);
+    trace("File %i fchmodat os-backed file %i", dir ? _file_getFD(dir) : -1, osFd);
+
+    if (osFd == AT_FDCWD) {
+        osFd = -1;
+        pathnameTmp = _file_getAbsolutePath(NULL, pathname, workingDir);
+    }
+
+    int result = fchmodat(osFd, pathnameTmp, mode, flags);
+
+    if (pathnameTmp != pathname) {
+        free((char*)pathnameTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
-int file_futimesat(File* dir, const char* pathname,
-                   const struct timeval times[2]) {
-    trace("File %i futimesat os-backed file %i", dir ? _file_getFD(dir) : 0,
-          _file_getOSDirFD(dir));
+int file_futimesat(File* dir, const char* pathname, const struct timeval times[2],
+                   const char* workingDir) {
+    int osFd = _file_getOSDirFD(dir);
+    const char* pathnameTmp = pathname;
 
-    int result = futimesat(_file_getOSDirFD(dir), pathname, times);
+    trace("File %i futimesat os-backed file %i", dir ? _file_getFD(dir) : -1, osFd);
+
+    if (osFd == AT_FDCWD) {
+        osFd = -1;
+        pathnameTmp = _file_getAbsolutePath(NULL, pathname, workingDir);
+    }
+
+    int result = futimesat(osFd, pathnameTmp, times);
+
+    if (pathnameTmp != pathname) {
+        free((char*)pathnameTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
-int file_utimensat(File* dir, const char* pathname,
-                   const struct timespec times[2], int flags) {
-    trace("File %i utimesat os-backed file %i", dir ? _file_getFD(dir) : 0,
-          _file_getOSDirFD(dir));
+int file_utimensat(File* dir, const char* pathname, const struct timespec times[2], int flags,
+                   const char* workingDir) {
+    int osFd = _file_getOSDirFD(dir);
+    const char* pathnameTmp = pathname;
 
-    int result = utimensat(_file_getOSDirFD(dir), pathname, times, flags);
+    trace("File %i utimesat os-backed file %i", dir ? _file_getFD(dir) : -1, osFd);
+
+    if (osFd == AT_FDCWD) {
+        osFd = -1;
+        pathnameTmp = _file_getAbsolutePath(NULL, pathname, workingDir);
+    }
+
+    int result = utimensat(osFd, pathnameTmp, times, flags);
+
+    if (pathnameTmp != pathname) {
+        free((char*)pathnameTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
-int file_faccessat(File* dir, const char* pathname, int mode, int flags) {
-    trace("File %i faccessat os-backed file %i", dir ? _file_getFD(dir) : 0,
-          _file_getOSDirFD(dir));
+int file_faccessat(File* dir, const char* pathname, int mode, int flags, const char* workingDir) {
+    int osFd = _file_getOSDirFD(dir);
+    const char* pathnameTmp = pathname;
 
-    int result = faccessat(_file_getOSDirFD(dir), pathname, mode, flags);
+    trace("File %i faccessat os-backed file %i", dir ? _file_getFD(dir) : -1, osFd);
+
+    if (osFd == AT_FDCWD) {
+        osFd = -1;
+        pathnameTmp = _file_getAbsolutePath(NULL, pathname, workingDir);
+    }
+
+    int result = faccessat(osFd, pathnameTmp, mode, flags);
+
+    if (pathnameTmp != pathname) {
+        free((char*)pathnameTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
-int file_mkdirat(File* dir, const char* pathname, mode_t mode) {
-    trace("File %i mkdirat os-backed file %i", dir ? _file_getFD(dir) : 0,
-          _file_getOSDirFD(dir));
+int file_mkdirat(File* dir, const char* pathname, mode_t mode, const char* workingDir) {
+    int osFd = _file_getOSDirFD(dir);
+    const char* pathnameTmp = pathname;
 
-    int result = mkdirat(_file_getOSDirFD(dir), pathname, mode);
+    trace("File %i mkdirat os-backed file %i", dir ? _file_getFD(dir) : -1, osFd);
+
+    if (osFd == AT_FDCWD) {
+        osFd = -1;
+        pathnameTmp = _file_getAbsolutePath(NULL, pathname, workingDir);
+    }
+
+    int result = mkdirat(osFd, pathnameTmp, mode);
+
+    if (pathnameTmp != pathname) {
+        free((char*)pathnameTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
-int file_mknodat(File* dir, const char* pathname, mode_t mode, dev_t dev) {
-    trace("File %i mknodat os-backed file %i", dir ? _file_getFD(dir) : 0,
-          _file_getOSDirFD(dir));
+int file_mknodat(File* dir, const char* pathname, mode_t mode, dev_t dev, const char* workingDir) {
+    int osFd = _file_getOSDirFD(dir);
+    const char* pathnameTmp = pathname;
 
-    int result = mknodat(_file_getOSDirFD(dir), pathname, mode, dev);
+    trace("File %i mknodat os-backed file %i", dir ? _file_getFD(dir) : -1, osFd);
+
+    if (osFd == AT_FDCWD) {
+        osFd = -1;
+        pathnameTmp = _file_getAbsolutePath(NULL, pathname, workingDir);
+    }
+
+    int result = mknodat(osFd, pathnameTmp, mode, dev);
+
+    if (pathnameTmp != pathname) {
+        free((char*)pathnameTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
-int file_linkat(File* olddir, const char* oldpath, File* newdir,
-                const char* newpath, int flags) {
-    int oldosdirfd = _file_getOSDirFD(olddir);
-    int newosdirfd = _file_getOSDirFD(newdir);
+int file_linkat(File* oldDir, const char* oldPath, File* newDir, const char* newPath, int flags,
+                const char* workingDir) {
+    int oldOsFd = _file_getOSDirFD(oldDir);
+    int newOsFd = _file_getOSDirFD(newDir);
+    const char* oldPathTmp = oldPath;
+    const char* newPathTmp = newPath;
 
-    trace("File %i linkat os-backed file %i", olddir ? _file_getFD(olddir) : 0,
-          oldosdirfd);
+    trace("Files %i, %i linkat os-backed files %i, %i", oldDir ? _file_getFD(oldDir) : -1,
+          newDir ? _file_getFD(newDir) : -1, oldOsFd, newOsFd);
 
-    int result = linkat(oldosdirfd, oldpath, newosdirfd, newpath, flags);
+    if (oldOsFd == AT_FDCWD) {
+        oldOsFd = -1;
+        oldPathTmp = _file_getAbsolutePath(NULL, oldPath, workingDir);
+    }
+    if (newOsFd == AT_FDCWD) {
+        newOsFd = -1;
+        newPathTmp = _file_getAbsolutePath(NULL, newPath, workingDir);
+    }
+
+    int result = linkat(oldOsFd, oldPathTmp, newOsFd, newPathTmp, flags);
+
+    if (oldPathTmp != oldPath) {
+        free((char*)oldPathTmp);
+    }
+    if (newPathTmp != newPath) {
+        free((char*)newPathTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
-int file_unlinkat(File* dir, const char* pathname, int flags) {
-    trace("File %i unlinkat os-backed file %i", dir ? _file_getFD(dir) : 0,
-          _file_getOSDirFD(dir));
+int file_unlinkat(File* dir, const char* pathname, int flags, const char* workingDir) {
+    int osFd = _file_getOSDirFD(dir);
+    const char* pathnameTmp = pathname;
 
-    int result = unlinkat(_file_getOSDirFD(dir), pathname, flags);
+    trace("File %i unlinkat os-backed file %i", dir ? _file_getFD(dir) : -1, osFd);
+
+    if (osFd == AT_FDCWD) {
+        osFd = -1;
+        pathnameTmp = _file_getAbsolutePath(NULL, pathname, workingDir);
+    }
+
+    int result = unlinkat(osFd, pathnameTmp, flags);
+
+    if (pathnameTmp != pathname) {
+        free((char*)pathnameTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
-int file_symlinkat(File* dir, const char* linkpath, const char* target) {
-    trace("File %i symlinkat os-backed file %i", dir ? _file_getFD(dir) : 0,
-          _file_getOSDirFD(dir));
+int file_symlinkat(File* dir, const char* linkpath, const char* target, const char* workingDir) {
+    int osFd = _file_getOSDirFD(dir);
+    const char* linkpathTmp = linkpath;
 
-    int result = symlinkat(target, _file_getOSDirFD(dir), linkpath);
+    trace("File %i symlinkat os-backed file %i", dir ? _file_getFD(dir) : -1, osFd);
+
+    if (osFd == AT_FDCWD) {
+        osFd = -1;
+        linkpathTmp = _file_getAbsolutePath(NULL, linkpath, workingDir);
+    }
+
+    int result = symlinkat(target, osFd, linkpathTmp);
+
+    if (linkpathTmp != linkpath) {
+        free((char*)linkpathTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
-ssize_t file_readlinkat(File* dir, const char* pathname, char* buf,
-                        size_t bufsize) {
-    trace("File %i readlinkat os-backed file %i", dir ? _file_getFD(dir) : 0,
-          _file_getOSDirFD(dir));
+ssize_t file_readlinkat(File* dir, const char* pathname, char* buf, size_t bufsize,
+                        const char* workingDir) {
+    int osFd = _file_getOSDirFD(dir);
+    const char* pathnameTmp = pathname;
 
-    ssize_t result = readlinkat(_file_getOSDirFD(dir), pathname, buf, bufsize);
+    trace("File %i readlinkat os-backed file %i", dir ? _file_getFD(dir) : -1, osFd);
+
+    if (osFd == AT_FDCWD) {
+        osFd = -1;
+        pathnameTmp = _file_getAbsolutePath(NULL, pathname, workingDir);
+    }
+
+    ssize_t result = readlinkat(osFd, pathnameTmp, buf, bufsize);
+
+    if (pathnameTmp != pathname) {
+        free((char*)pathnameTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
-int file_renameat2(File* olddir, const char* oldpath, File* newdir,
-                   const char* newpath, unsigned int flags) {
-    int oldosdirfd = _file_getOSDirFD(olddir);
-    int newosdirfd = _file_getOSDirFD(newdir);
+int file_renameat2(File* oldDir, const char* oldPath, File* newDir, const char* newPath,
+                   unsigned int flags, const char* workingDir) {
+    int oldOsFd = _file_getOSDirFD(oldDir);
+    int newOsFd = _file_getOSDirFD(newDir);
+    const char* oldPathTmp = oldPath;
+    const char* newPathTmp = newPath;
 
-    trace("File %i renameat2 os-backed file %i",
-          olddir ? _file_getFD(olddir) : 0, oldosdirfd);
+    trace("Files %i, %i renameat2 os-backed files %i, %i", oldDir ? _file_getFD(oldDir) : -1,
+          newDir ? _file_getFD(newDir) : -1, oldOsFd, newOsFd);
 
-    int result = (int)syscall(
-        SYS_renameat2, oldosdirfd, oldpath, newosdirfd, newpath, flags);
+    if (oldOsFd == AT_FDCWD) {
+        oldOsFd = -1;
+        oldPathTmp = _file_getAbsolutePath(NULL, oldPath, workingDir);
+    }
+
+    if (newOsFd == AT_FDCWD) {
+        newOsFd = -1;
+        newPathTmp = _file_getAbsolutePath(NULL, newPath, workingDir);
+    }
+
+    int result = (int)syscall(SYS_renameat2, oldOsFd, oldPathTmp, newOsFd, newPathTmp, flags);
+
+    if (oldPathTmp != oldPath) {
+        free((char*)oldPathTmp);
+    }
+    if (newPathTmp != newPath) {
+        free((char*)newPathTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 
 #ifdef SYS_statx
 int file_statx(File* dir, const char* pathname, int flags, unsigned int mask,
-               struct statx* statxbuf) {
-    trace("File %i statx os-backed file %i", dir ? _file_getFD(dir) : 0,
-          _file_getOSDirFD(dir));
+               struct statx* statxbuf, const char* workingDir) {
+    int osFd = _file_getOSDirFD(dir);
+    const char* pathnameTmp = pathname;
 
-    int result = (int)syscall(
-        SYS_statx, _file_getOSBackedFD(dir), pathname, flags, mask, statxbuf);
+    trace("File %i statx os-backed file %i", dir ? _file_getFD(dir) : -1, osFd);
+
+    if (osFd == AT_FDCWD) {
+        osFd = -1;
+        pathnameTmp = _file_getAbsolutePath(NULL, pathname, workingDir);
+    }
+
+    int result = syscall(SYS_statx, osFd, pathnameTmp, flags, mask, statxbuf);
+
+    if (pathnameTmp != pathname) {
+        free((char*)pathnameTmp);
+    }
+
     return (result < 0) ? -errno : result;
 }
 #endif

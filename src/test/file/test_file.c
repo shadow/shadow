@@ -93,6 +93,13 @@ static void _test_open_returns_lowest() {
     assert_nonneg_errno(close(fd4));
 }
 
+static void _test_openat() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    int fd;
+    assert_nonneg_errno(fd = openat(AT_FDCWD, adf.name, O_RDONLY));
+    close(fd); // not testing close yet so don't assert here
+}
+
 static void _test_close() {
     g_auto(AutoDeleteFile) adf = _create_auto_file();
     int fd;
@@ -264,6 +271,14 @@ static void _test_fstatat() {
 
     struct stat filestat = {0};
     assert_nonneg_errno(fstatat(this_dirfd, basename(adf.name), &filestat, 0));
+
+    g_assert_cmpint(filestat.st_mode & S_IXOTH, ==, 0);
+    g_assert_cmpint(filestat.st_mode & S_IWOTH, ==, 0);
+    g_assert_cmpint(filestat.st_mode & S_IROTH, ==, 0);
+
+    memset(&filestat, 0, sizeof(filestat));
+
+    assert_nonneg_errno(fstatat(AT_FDCWD, adf.name, &filestat, 0));
 
     g_assert_cmpint(filestat.st_mode & S_IXOTH, ==, 0);
     g_assert_cmpint(filestat.st_mode & S_IWOTH, ==, 0);
@@ -557,6 +572,7 @@ int main(int argc, char* argv[]) {
     // I.e., later tests use some of the functions tested in earlier tests.
     g_test_add_func("/file/open", _test_open);
     g_test_add_func("/file/open_returns_lowest", _test_open_returns_lowest);
+    g_test_add_func("/file/openat", _test_openat);
     g_test_add_func("/file/close", _test_close);
     g_test_add_func("/file/close_nonexistent", _test_close_nonexistent);
     g_test_add_func("/file/write", _test_write);
