@@ -107,9 +107,9 @@ sudo yum install -y \
     tmux
 ```
 
-### CentOS 8
+### CentOS Stream 8
 
-As procps-ng-devel, igraph, and igraph-devel are not available on CentOS 8, you
+As procps-ng-devel, igraph, and igraph-devel are not available on CentOS Stream 8, you
 must install them manually.
 
 ```bash

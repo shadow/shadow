@@ -73,8 +73,8 @@ case "$CONTAINER" in
     fedora:*)
         dnf install --best -y $RPM_PACKAGES $RPM_CI_PACKAGES
         ;;
-    centos:8)
-        # These packages aren't available on centos 8; we need to use centos 7's.
+    *centos:stream8)
+        # These packages aren't available on centos stream 8; we need to use centos 7's.
         dnf remove -y procps-ng procps-ng-devel
         dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-3.3.10-26.el7.x86_64.rpm
         dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-devel-3.3.10-26.el7.x86_64.rpm
