@@ -58,6 +58,11 @@ pub const QDiscMode_Q_DISC_MODE_ROUND_ROBIN: QDiscMode = 1;
 pub type QDiscMode = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct ChildPidWatcher {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct ConfigOptions {
     _unused: [u8; 0],
 }
@@ -1375,6 +1380,9 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_getTopology() -> *mut Topology;
+}
+extern "C" {
+    pub fn worker_getChildPidWatcher() -> *mut ChildPidWatcher;
 }
 extern "C" {
     pub fn worker_getConfig() -> *const ConfigOptions;

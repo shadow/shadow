@@ -36,6 +36,8 @@ struct _ThreadPreload {
 
     /* Typed pointer to ipc_blk.p */
     struct IPCData* ipc_data;
+
+    uint64_t notificationHandle;
 };
 
 typedef struct _ShMemWriteBlock {
@@ -56,6 +58,12 @@ void threadpreload_free(Thread* base) {
 
     if (thread->base.sys) {
         syscallhandler_unref(thread->base.sys);
+    }
+
+    if (thread->notificationHandle) {
+        childpidwatcher_unwatch(
+            worker_getChildPidWatcher(), base->nativePid, thread->notificationHandle);
+        thread->notificationHandle = 0;
     }
 
     if (thread->ipc_data) {
@@ -132,7 +140,7 @@ static void _threadpreload_cleanup(ThreadPreload* thread) {
     }
 }
 
-static void _markPluginExited(pid_t pid, int exit_status, void* voidIPC) {
+static void _markPluginExited(pid_t pid, void* voidIPC) {
     struct IPCData* ipc = voidIPC;
     ipcData_markPluginExited(ipc);
 }
@@ -172,7 +180,8 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv, const char* wo
     g_free(argStr);
 
     pid_t child_pid = _threadpreload_fork_exec(thread, argv[0], argv, myenvv, workingDir);
-    childpidwatcher_watch(child_pid, _markPluginExited, thread->ipc_data);
+    childpidwatcher_watch(
+        worker_getChildPidWatcher(), child_pid, _markPluginExited, thread->ipc_data);
 
     /* cleanup the dupd env*/
     if (myenvv) {
@@ -346,7 +355,8 @@ static int _threadpreload_clone(Thread* base, unsigned long flags, PluginPtr chi
     utility_assert(child->ipc_blk.p);
     child->ipc_data = child->ipc_blk.p;
     ipcData_init(child->ipc_data, shimipc_spinMax());
-    childpidwatcher_watch(base->nativePid, _markPluginExited, child->ipc_data);
+    childpidwatcher_watch(
+        worker_getChildPidWatcher(), base->nativePid, _markPluginExited, child->ipc_data);
     ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&child->ipc_blk);
 
     // Send an IPC block for the new thread to use.

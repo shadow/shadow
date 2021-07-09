@@ -19,7 +19,6 @@
 #include <netinet/tcp.h>
 #include <poll.h>
 #include <pthread.h>
-#include <semaphore.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -123,12 +122,8 @@ struct _Process {
     /* vector of environment variables passed to exec */
     gchar** envv;
 
-    sem_t returnCodeCollectedSem;
-    _Atomic bool didLogReturnCode;
-    // Written via a concurrent callback.  Only safe to access after
-    // successfully waiting on `returnCodeCollectedSem`, after which
-    // `didLogReturnCode` is set.
     gint returnCode;
+    gboolean didLogReturnCode;
 
     // int thread_id -> Thread*.
     GHashTable* threads;
@@ -184,15 +179,6 @@ guint process_getProcessID(Process* proc) {
 pid_t process_getNativePid(const Process* proc) {
     MAGIC_ASSERT(proc);
     return proc->nativePid;
-}
-
-static void _logReturnCodeCb(pid_t pid, int exit_status, void* voidProcess) {
-    Process* process = voidProcess;
-    process->returnCode = exit_status;
-    process->didLogReturnCode = true;
-    if (sem_post(&process->returnCodeCollectedSem)) {
-        panic("sem_post: %s", g_strerror(errno));
-    }
 }
 
 static void _process_reapThread(Process* process, Thread* thread) {
@@ -319,7 +305,26 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
 
 static void _process_getAndLogReturnCode(Process* proc) {
     if(!proc->didLogReturnCode) {
-        sem_wait(&proc->returnCodeCollectedSem);
+        // Return an error if we can't get real exit code.
+        proc->returnCode = EXIT_FAILURE;
+
+        int wstatus = 0;
+        int rv = waitpid(proc->nativePid, &wstatus, __WALL);
+        if (rv < 0) {
+            // Getting here is a bug, but since the process is exiting anyway
+            // not serious enough to merit `error`ing out.
+            warning("waitpid: %s", g_strerror(errno));
+        } else if (rv != proc->nativePid) {
+            warning("waitpid returned %d instead of the requested %d", rv, proc->nativePid);
+        } else {
+            if (WIFEXITED(wstatus)) {
+                proc->returnCode = WEXITSTATUS(wstatus);
+            } else if (WIFSIGNALED(wstatus)) {
+                proc->returnCode = return_code_for_signal(WTERMSIG(wstatus));
+            } else {
+                warning("Couldn't get exit status");
+            }
+        }
 
         // don't change the formatting of this string since some integration tests depend on it
         GString* mainResultString = g_string_new(NULL);
@@ -505,7 +510,6 @@ static void _process_start(Process* proc) {
     /* exec the process */
     thread_run(mainThread, proc->argv, proc->envv, proc->workingDir);
     proc->nativePid = thread_getNativePid(mainThread);
-    childpidwatcher_watch(proc->nativePid, _logReturnCodeCb, proc);
     proc->memoryManager = memorymanager_new(proc->nativePid);
 
 #ifdef USE_PERF_TIMERS
@@ -764,10 +768,6 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
 
     proc->memoryMutRef = NULL;
     proc->memoryRefs = g_array_new(FALSE, FALSE, sizeof(ProcessMemoryRef_u8*));
-
-    if (sem_init(&proc->returnCodeCollectedSem, /*pshared=*/0, /*value=*/0)) {
-        panic("sem_init: %s", g_strerror(errno));
-    }
 
     worker_count_allocation(Process);
 

@@ -30,6 +30,11 @@ typedef struct AllocdMem_u8 AllocdMem_u8;
 // A queue of byte chunks.
 typedef struct ByteQueue ByteQueue;
 
+// Utility for monitoring a set of child pid's, calling registered callbacks
+// when one exits or is killed. Starts a background thread, which is shut down
+// when the object is dropped.
+typedef struct ChildPidWatcher ChildPidWatcher;
+
 // Run real applications over simulated networks.
 typedef struct CliOptions CliOptions;
 
@@ -82,6 +87,8 @@ typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
 typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
+
+typedef uint64_t WatchHandle;
 
 // Flush Rust's log::logger().
 void rustlogger_flush(void);
@@ -540,6 +547,29 @@ void bytequeue_push(struct ByteQueue *bq, const unsigned char *src, size_t len);
 
 size_t bytequeue_pop(struct ByteQueue *bq, unsigned char *dst, size_t len);
 
+struct ChildPidWatcher *childpidwatcher_new(void);
+
+void childpidwatcher_free(struct ChildPidWatcher *watcher);
+
+// Call `callback` exactly once from another thread after the child `pid`
+// has exited, including if it has already exited. Does *not* reap the
+// child itself.
+//
+// The returned handle is guaranteed to be non-zero.
+//
+// Panics if `pid` doesn't exist.
+WatchHandle childpidwatcher_watch(const struct ChildPidWatcher *watcher,
+                                  pid_t pid,
+                                  void (*callback)(pid_t, void*),
+                                  void *data);
+
+// Unregisters a callback. After returning, the corresponding callback is
+// guaranteed either to have already run, or to never run. i.e. it's safe to
+// free data that the callback might otherwise access.
+//
+// Calling with pids or handles that no longer exist is safe.
+void childpidwatcher_unwatch(const struct ChildPidWatcher *watcher, pid_t pid, WatchHandle handle);
+
 struct Counter *counter_new(void);
 
 void counter_free(struct Counter *counter_ptr);
@@ -560,18 +590,5 @@ char *counter_alloc_string(struct Counter *counter);
 
 // Frees a string previously returned from counter_alloc_string.
 void counter_free_string(struct Counter *counter, char *ptr);
-
-// Call `callback` exactly once after the child `pid` has exited. All child
-// `pid`'s are eligible until if and when `childpidwatcher_unwatch` has
-// been called for them.
-//
-// No other code may capture the exit transition via `wait` etc. (But
-// catching e.g. ptrace stops is ok).
-void childpidwatcher_watch(pid_t pid,
-                           void (*callback)(pid_t, int32_t exit_status, void*),
-                           void *data);
-
-// Unregister interest in the given pid, recovering internal resources etc.
-void childpidwatcher_unwatch(pid_t pid);
 
 #endif /* main_bindings_h */
