@@ -132,6 +132,11 @@ static void _threadpreload_cleanup(ThreadPreload* thread) {
     }
 }
 
+static void _markPluginExited(pid_t pid, int exit_status, void* voidIPC) {
+    struct IPCData* ipc = voidIPC;
+    ipcData_markPluginExited(ipc);
+}
+
 pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv, const char* workingDir) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
@@ -167,7 +172,7 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv, const char* wo
     g_free(argStr);
 
     pid_t child_pid = _threadpreload_fork_exec(thread, argv[0], argv, myenvv, workingDir);
-    ipcData_registerPluginPid(thread->ipc_data, child_pid);
+    childpidwatcher_watch(child_pid, _markPluginExited, thread->ipc_data);
 
     /* cleanup the dupd env*/
     if (myenvv) {
@@ -341,7 +346,7 @@ static int _threadpreload_clone(Thread* base, unsigned long flags, PluginPtr chi
     utility_assert(child->ipc_blk.p);
     child->ipc_data = child->ipc_blk.p;
     ipcData_init(child->ipc_data, shimipc_spinMax());
-    ipcData_registerPluginPid(child->ipc_data, base->nativePid);
+    childpidwatcher_watch(base->nativePid, _markPluginExited, child->ipc_data);
     ShMemBlockSerialized ipc_blk_serial = shmemallocator_globalBlockSerialize(&child->ipc_blk);
 
     // Send an IPC block for the new thread to use.

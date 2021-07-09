@@ -59,6 +59,8 @@ add_custom_command(OUTPUT wrapper.rs
         --blacklist-function "syscallhandler_unref"
         --blacklist-function "syscallhandler_make_syscall"
 
+        --whitelist-function "return_code_for_signal"
+
         --whitelist-type "Host"
         --whitelist-type "PluginPtr"
         --whitelist-type "Status"

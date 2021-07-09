@@ -104,6 +104,9 @@ pub type SimulationTime = guint64;
 #[doc = " plus the EMULATION_TIME_OFFSET. This type allows us to explicitly"]
 #[doc = " distinguish each type of time in the code.,"]
 pub type EmulatedTime = guint64;
+extern "C" {
+    pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+}
 pub type LegacyDescriptor = [u64; 7usize];
 pub type DescriptorCloseFunc = ::std::option::Option<
     unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host) -> gboolean,

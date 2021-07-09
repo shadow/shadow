@@ -561,4 +561,17 @@ char *counter_alloc_string(struct Counter *counter);
 // Frees a string previously returned from counter_alloc_string.
 void counter_free_string(struct Counter *counter, char *ptr);
 
+// Call `callback` exactly once after the child `pid` has exited. All child
+// `pid`'s are eligible until if and when `childpidwatcher_unwatch` has
+// been called for them.
+//
+// No other code may capture the exit transition via `wait` etc. (But
+// catching e.g. ptrace stops is ok).
+void childpidwatcher_watch(pid_t pid,
+                           void (*callback)(pid_t, int32_t exit_status, void*),
+                           void *data);
+
+// Unregister interest in the given pid, recovering internal resources etc.
+void childpidwatcher_unwatch(pid_t pid);
+
 #endif /* main_bindings_h */

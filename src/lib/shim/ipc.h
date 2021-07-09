@@ -22,7 +22,15 @@ struct IPCData;
 
 void ipcData_init(struct IPCData* ipc_data, ssize_t spin_max);
 void ipcData_destroy(struct IPCData* ipc_data);
-void ipcData_registerPluginPid(struct IPCData* ipc_data, pid_t pid);
+
+// After calling this function, the next (or current) call to
+// `shimevent_recvEventFromPlugin` or `shimevent_tryRecvEventFromPlugin` will
+// return SHD_SHIM_EVENT_STOP.
+//
+// This function is thread-safe, and is safe to call at any point in this APIs
+// state-machine, e.g. even if the last method called was
+// `shimevent_sendEventToShadow`.
+void ipcData_markPluginExited(struct IPCData* ipc_data);
 
 size_t ipcData_nbytes();
 
