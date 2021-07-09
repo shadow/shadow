@@ -31,7 +31,7 @@ jobs:
       options: '--shm-size="1g" --security-opt seccomp=unconfined'
     strategy:
       matrix:
-        container: ['ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:33', 'centos:8']
+        container: ['ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:33', 'quay.io/centos/centos:stream8']
         cc: ['gcc', 'clang']
         buildtype: ['debug', 'release']
         include:
