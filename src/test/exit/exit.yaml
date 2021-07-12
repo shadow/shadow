@@ -1,0 +1,10 @@
+general:
+  stop_time: 10
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    processes:
+    - path: ../target/debug/test_exit
+      start_time: 1

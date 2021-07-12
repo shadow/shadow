@@ -73,6 +73,7 @@ void worker_setRoundEndTime(SimulationTime newRoundEndTime);
 int worker_getAffinity();
 DNS* worker_getDNS();
 Topology* worker_getTopology();
+ChildPidWatcher* worker_getChildPidWatcher();
 const ConfigOptions* worker_getConfig();
 gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay);
 void worker_sendPacket(Host* src, Packet* packet);

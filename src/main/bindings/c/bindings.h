@@ -30,6 +30,11 @@ typedef struct AllocdMem_u8 AllocdMem_u8;
 // A queue of byte chunks.
 typedef struct ByteQueue ByteQueue;
 
+// Utility for monitoring a set of child pid's, calling registered callbacks
+// when one exits or is killed. Starts a background thread, which is shut down
+// when the object is dropped.
+typedef struct ChildPidWatcher ChildPidWatcher;
+
 // Run real applications over simulated networks.
 typedef struct CliOptions CliOptions;
 
@@ -82,6 +87,8 @@ typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
 typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
+
+typedef uint64_t WatchHandle;
 
 // Flush Rust's log::logger().
 void rustlogger_flush(void);
@@ -539,6 +546,29 @@ bool bytequeue_isEmpty(struct ByteQueue *bq);
 void bytequeue_push(struct ByteQueue *bq, const unsigned char *src, size_t len);
 
 size_t bytequeue_pop(struct ByteQueue *bq, unsigned char *dst, size_t len);
+
+struct ChildPidWatcher *childpidwatcher_new(void);
+
+void childpidwatcher_free(struct ChildPidWatcher *watcher);
+
+// Call `callback` exactly once from another thread after the child `pid`
+// has exited, including if it has already exited. Does *not* reap the
+// child itself.
+//
+// The returned handle is guaranteed to be non-zero.
+//
+// Panics if `pid` doesn't exist.
+WatchHandle childpidwatcher_watch(const struct ChildPidWatcher *watcher,
+                                  pid_t pid,
+                                  void (*callback)(pid_t, void*),
+                                  void *data);
+
+// Unregisters a callback. After returning, the corresponding callback is
+// guaranteed either to have already run, or to never run. i.e. it's safe to
+// free data that the callback might otherwise access.
+//
+// Calling with pids or handles that no longer exist is safe.
+void childpidwatcher_unwatch(const struct ChildPidWatcher *watcher, pid_t pid, WatchHandle handle);
 
 struct Counter *counter_new(void);
 

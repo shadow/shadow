@@ -41,14 +41,14 @@ pub type sa_family_t = ::std::os::raw::c_ushort;
 pub type in_addr_t = u32;
 pub type in_port_t = u16;
 pub type WorkerPool = u8;
-pub use self::_LogLevel as LogLevel;
 pub const _LogLevel_LOGLEVEL_UNSET: _LogLevel = 0;
 pub const _LogLevel_LOGLEVEL_ERROR: _LogLevel = 1;
 pub const _LogLevel_LOGLEVEL_WARNING: _LogLevel = 2;
 pub const _LogLevel_LOGLEVEL_INFO: _LogLevel = 3;
 pub const _LogLevel_LOGLEVEL_DEBUG: _LogLevel = 4;
 pub const _LogLevel_LOGLEVEL_TRACE: _LogLevel = 5;
-pub type _LogLevel = i32;
+pub type _LogLevel = ::std::os::raw::c_uint;
+pub use self::_LogLevel as LogLevel;
 pub const InterposeMethod_INTERPOSE_METHOD_PTRACE: InterposeMethod = 0;
 pub const InterposeMethod_INTERPOSE_METHOD_PRELOAD: InterposeMethod = 1;
 pub const InterposeMethod_INTERPOSE_METHOD_HYBRID: InterposeMethod = 2;
@@ -56,6 +56,11 @@ pub type InterposeMethod = ::std::os::raw::c_uint;
 pub const QDiscMode_Q_DISC_MODE_FIFO: QDiscMode = 0;
 pub const QDiscMode_Q_DISC_MODE_ROUND_ROBIN: QDiscMode = 1;
 pub type QDiscMode = ::std::os::raw::c_uint;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ChildPidWatcher {
+    _unused: [u8; 0],
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ConfigOptions {
@@ -104,6 +109,9 @@ pub type SimulationTime = guint64;
 #[doc = " plus the EMULATION_TIME_OFFSET. This type allows us to explicitly"]
 #[doc = " distinguish each type of time in the code.,"]
 pub type EmulatedTime = guint64;
+extern "C" {
+    pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+}
 pub type LegacyDescriptor = [u64; 7usize];
 pub type DescriptorCloseFunc = ::std::option::Option<
     unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host) -> gboolean,
@@ -1372,6 +1380,9 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_getTopology() -> *mut Topology;
+}
+extern "C" {
+    pub fn worker_getChildPidWatcher() -> *mut ChildPidWatcher;
 }
 extern "C" {
     pub fn worker_getConfig() -> *const ConfigOptions;

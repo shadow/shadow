@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crate::cshadow as c;
 use crate::host::syscall_types::SyscallResult;
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
+use crate::utility::SyncSendPointer;
 
 pub mod descriptor_table;
 pub mod pipe;
@@ -14,26 +15,6 @@ trait IsSend: Send {}
 
 /// A trait we can use as a compile-time check to make sure that an object is Sync.
 trait IsSync: Sync {}
-
-/// A type that allows us to make a pointer Send + Sync since there is no way
-/// to add these traits to the pointer itself.
-#[derive(Clone, Copy, Debug)]
-pub struct SyncSendPointer<T>(*mut T);
-
-unsafe impl<T> Send for SyncSendPointer<T> {}
-unsafe impl<T> Sync for SyncSendPointer<T> {}
-
-impl<T> SyncSendPointer<T> {
-    /// Get the pointer.
-    pub fn ptr(&self) -> *mut T {
-        self.0
-    }
-
-    /// Get a mutable reference to the pointer.
-    pub fn ptr_ref(&mut self) -> &mut *mut T {
-        &mut self.0
-    }
-}
 
 bitflags::bitflags! {
     /// These are flags that can potentially be changed from the plugin (analagous to the Linux

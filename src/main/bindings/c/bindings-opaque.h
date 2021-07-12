@@ -31,6 +31,11 @@ typedef struct AllocdMem_u8 AllocdMem_u8;
 // A queue of byte chunks.
 typedef struct ByteQueue ByteQueue;
 
+// Utility for monitoring a set of child pid's, calling registered callbacks
+// when one exits or is killed. Starts a background thread, which is shut down
+// when the object is dropped.
+typedef struct ChildPidWatcher ChildPidWatcher;
+
 // Run real applications over simulated networks.
 typedef struct CliOptions CliOptions;
 

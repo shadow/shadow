@@ -380,6 +380,9 @@ Address* worker_resolveNameToAddress(const gchar* name) {
 }
 
 Topology* worker_getTopology() { return manager_getTopology(_worker_pool()->manager); }
+ChildPidWatcher* worker_getChildPidWatcher() {
+    return manager_childpidwatcher(_worker_pool()->manager);
+}
 
 const ConfigOptions* worker_getConfig() { return manager_getConfig(_worker_pool()->manager); }
 

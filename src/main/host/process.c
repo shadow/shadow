@@ -190,12 +190,9 @@ static void _process_reapThread(Process* process, Thread* thread) {
     // See `set_tid_address(2)`.
     PluginVirtualPtr clear_child_tid_pvp = thread_getTidAddress(thread);
     if (clear_child_tid_pvp.val && g_hash_table_size(process->threads) > 1 && !process->isExiting) {
-        // Wait until the process is really dead. Today this is necessary in
-        // preload mode, since it only gets notified that a thread is *about to*
-        // exit. Eventually we might improve that to have threadpreload get
-        // notified about the actual thread death one way or another (see
-        // https://github.com/shadow/shadow/issues/1476), but even then it's not
-        // a bad idea to defensively have this check here.
+        // Verify thread is really dead. This *should* no longer be needed, but doesn't
+        // hurt to defensively do anyway, since waking the futex before the thread has
+        // actually exited can (and has) led to difficult-to-track-down bugs.
         while (1) {
             pid_t pid = thread_getNativePid(thread);
             pid_t tid = thread_getNativeTid(thread);

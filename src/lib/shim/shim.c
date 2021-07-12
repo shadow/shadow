@@ -640,29 +640,6 @@ __attribute__((constructor)) void _shim_load() {
 
 void shim_ensure_init() { _shim_load(); }
 
-__attribute__((destructor)) static void _shim_unload() {
-    if (!_using_interpose_preload) {
-        // Nothing to tear down.
-        return;
-    }
-
-    if (_using_interpose_ptrace) {
-        // No need for explicit teardown; ptrace will detect the process exit.
-        return;
-    }
-
-    shim_disableInterposition();
-
-    struct IPCData* ipc = shim_thisThreadEventIPC();
-    ShimEvent shim_event;
-    shim_event.event_id = SHD_SHIM_EVENT_STOP;
-    trace("sending stop event on %p", ipc);
-    shimevent_sendEventToShadow(ipc, &shim_event);
-
-    // Leave interposition disabled; shadow is waiting for
-    // this process to die and won't listen to the shim pipe anymore.
-}
-
 struct timespec* shim_get_shared_time_location() {
     if (_shim_shared_mem() == NULL) {
         return NULL;

@@ -33,6 +33,8 @@
 struct _Manager {
     Controller* controller;
 
+    ChildPidWatcher* watcher;
+
     /* the worker object associated with the main thread of execution */
     //    Worker* mainWorker;
 
@@ -160,6 +162,8 @@ static guint _manager_nextRandomUInt(Manager* manager) {
     return r;
 }
 
+ChildPidWatcher* manager_childpidwatcher(Manager* manager) { return manager->watcher; }
+
 Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTime endTime,
                      SimulationTime unlimBWEndTime, guint randomSeed) {
     if (globalmanager != NULL) {
@@ -169,6 +173,8 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
     Manager* manager = g_new0(Manager, 1);
     MAGIC_INIT(manager);
     globalmanager = manager;
+
+    manager->watcher = childpidwatcher_new();
 
     g_mutex_init(&(manager->lock));
     g_mutex_init(&(manager->pluginInitLock));
@@ -258,6 +264,11 @@ gint manager_free(Manager* manager) {
 
     /* we will never execute inside the plugin again */
     manager->forceShadowContext = TRUE;
+
+    if (manager->watcher) {
+        childpidwatcher_free(manager->watcher);
+        manager->watcher = NULL;
+    }
 
     if (manager->scheduler) {
         /* stop all of the threads and release host resources first */

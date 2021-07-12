@@ -37,6 +37,8 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
                      SimulationTime bootstrapEndTime, guint randomSeed);
 gint manager_free(Manager* manager);
 
+ChildPidWatcher* manager_childpidwatcher(Manager* manager);
+
 gboolean manager_isForced(Manager* manager);
 guint manager_getRawCPUFrequency(Manager* manager);
 DNS* manager_getDNS(Manager* manager);
