@@ -1,3 +1,4 @@
+use nix::errno::Errno;
 use nix::sys::epoll::{
     epoll_create1, epoll_ctl, epoll_wait, EpollCreateFlags, EpollEvent, EpollFlags, EpollOp,
 };
@@ -116,7 +117,7 @@ impl ChildPidWatcher {
         while !done {
             let nevents = match epoll_wait(epoll, &mut events, -1) {
                 Ok(n) => n,
-                Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => {
+                Err(Errno::EINTR) => {
                     // Just try again.
                     continue;
                 }
@@ -141,7 +142,7 @@ impl ChildPidWatcher {
             debug_assert!(match res {
                 Ok(8) => true,
                 Ok(i) => panic!("Unexpected read size {}", i),
-                Err(nix::Error::Sys(nix::errno::Errno::EAGAIN)) => true,
+                Err(Errno::EAGAIN) => true,
                 Err(e) => panic!("Unexpected error {:?}", e),
             });
             // Run commands
