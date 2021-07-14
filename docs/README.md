@@ -8,6 +8,7 @@ can fix it.
 
  * The Shadow simulator
    * [Design Overview](design_2x.md)
+     * [Non-goal: Security](security.md)
    * Installation Guide
      * [Supported Platforms](supported_platforms.md)
      * [Dependencies](install_dependencies.md)
@@ -29,6 +30,8 @@ can fix it.
      * Configuring Your Own Network
        * [Network Graph Overview](network_graph_overview.md)
        * [Network Graph Specification](network_graph_spec.md)
+     * Performance Tuning
+       * [Disabling Side-channel Mitigations](sidechannels.md)
      * [Migrating Simulations from Shadow 1.x](migrating_from_1x.md)
    * Developer Guides
      * [Debugging and profiling](developer_guide.md)
