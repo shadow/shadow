@@ -3,7 +3,6 @@
 #include <assert.h>
 #include <cpuid.h>
 #include <errno.h>
-#include <glib.h>
 #include <inttypes.h>
 #include <string.h>
 #include <stdio.h>
@@ -145,41 +144,11 @@ Tsc Tsc_measure() {
     return tsc;
 }
 
-// FIXME: This isn't very efficient. Probably the right way to do this is to
-// just find some existing numeric routing for doing a 128-bit multiply.
 static void _Tsc_setRdtscCycles(const Tsc* tsc, struct user_regs_struct* regs,
                                 uint64_t nanos) {
-    const uint64_t maxCycles = UINT64_MAX;
-    const uint64_t maxSeconds = maxCycles / tsc->cyclesPerSecond;
-    // Unhandled: there's no way to represent the result in 64 bits.  A real
-    // processor would probably cope with this somehow (e.g. wrap around and
-    // carry on), but it's unlikely to be what we want in a simulation.
-    g_assert(nanos / 1000000000 < maxSeconds);
-
-    const uint64_t maxGigaCyclesAtOnce = UINT64_MAX;
-    const uint64_t maxNanosAtOnce = maxGigaCyclesAtOnce / tsc->cyclesPerSecond;
-
-    uint64_t gigaCyclesForMaxNanosAtOnce;
-    if (!g_uint64_checked_mul(&gigaCyclesForMaxNanosAtOnce,
-                              maxNanosAtOnce,
-                              tsc->cyclesPerSecond)) {
-        g_assert_not_reached();
-    }
-    uint64_t cyclesForMaxNanosAtOnce = gigaCyclesForMaxNanosAtOnce / 1000000000;
-
-    uint64_t accountedCycles = 0;
-    while (nanos > maxNanosAtOnce) {
-        nanos -= maxNanosAtOnce;
-        accountedCycles += cyclesForMaxNanosAtOnce;
-    }
-
-    uint64_t remainingGigaCycles;
-    if (!g_uint64_checked_mul(
-            &remainingGigaCycles, nanos, tsc->cyclesPerSecond)) {
-        g_assert_not_reached();
-    }
-    const uint64_t cycles =
-        accountedCycles + (remainingGigaCycles / 1000000000);
+    // Guaranteed not to overflow since the operands are both 64 bit.
+    __uint128_t gigaCycles = (__uint128_t)tsc->cyclesPerSecond * nanos; 
+    uint64_t cycles = gigaCycles / 1000000000;
     regs->rdx = (cycles >> 32) & 0xffffffff;
     regs->rax = cycles & 0xffffffff;
 }
