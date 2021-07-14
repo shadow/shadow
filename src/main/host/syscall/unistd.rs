@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 use log::*;
+use nix::errno::Errno;
 
 pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
@@ -147,7 +148,7 @@ fn read_helper(
         });
 
     // if the syscall would block and it's a blocking descriptor
-    if result == Err(nix::errno::EWOULDBLOCK.into()) && !file_flags.contains(FileFlags::NONBLOCK) {
+    if result == Err(Errno::EWOULDBLOCK.into()) && !file_flags.contains(FileFlags::NONBLOCK) {
         let trigger = Trigger::from_posix_file(posix_file, FileStatus::READABLE);
 
         return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
@@ -216,7 +217,7 @@ fn write_helper(
         });
 
     // if the syscall would block and it's a blocking descriptor
-    if result == Err(nix::errno::EWOULDBLOCK.into()) && !file_flags.contains(FileFlags::NONBLOCK) {
+    if result == Err(Errno::EWOULDBLOCK.into()) && !file_flags.contains(FileFlags::NONBLOCK) {
         let trigger = Trigger::from_posix_file(posix_file, FileStatus::WRITABLE);
 
         return Err(SyscallError::Cond(SysCallCondition::new(trigger)));

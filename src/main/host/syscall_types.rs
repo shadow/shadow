@@ -2,6 +2,7 @@ use crate::cshadow as c;
 use crate::host::syscall_condition::SysCallCondition;
 use log::Level::Debug;
 use log::*;
+use nix::errno::Errno;
 use std::convert::From;
 use std::marker::PhantomData;
 use std::mem::size_of;
@@ -317,18 +318,6 @@ impl From<SyscallResult> for c::SysCallReturn {
     }
 }
 
-impl From<nix::Error> for SyscallError {
-    fn from(e: nix::Error) -> Self {
-        let errno = e.as_errno();
-        let errno = errno.unwrap_or_else(|| {
-            let default = nix::errno::ENOTSUP;
-            warn!("Mapping err {} to {}", e, default);
-            default
-        });
-        SyscallError::Errno(errno)
-    }
-}
-
 impl From<nix::errno::Errno> for SyscallError {
     fn from(e: nix::errno::Errno) -> Self {
         SyscallError::Errno(e)
@@ -340,7 +329,7 @@ impl From<std::io::Error> for SyscallError {
         match std::io::Error::raw_os_error(&e) {
             Some(e) => SyscallError::Errno(nix::errno::from_i32(e)),
             None => {
-                let default = nix::errno::ENOTSUP;
+                let default = Errno::ENOTSUP;
                 warn!("Mapping error {} to {}", e, default);
                 SyscallError::Errno(default)
             }
