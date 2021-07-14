@@ -146,6 +146,7 @@ pub struct GeneralOptions {
     #[serde(default = "default_some_nz_1")]
     parallelism: Option<NonZeroU32>,
 
+    /// The simulated time that ends Shadow's high network bandwidth/reliability bootstrap period
     #[clap(long, value_name = "seconds")]
     #[clap(about = GENERAL_HELP.get("bootstrap_end_time").unwrap())]
     #[serde(default = "default_some_time_0")]

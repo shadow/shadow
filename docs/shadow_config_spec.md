@@ -97,6 +97,14 @@ General experiment settings.
 Default: "0 sec"  
 Type: String OR Integer
 
+The simulated time that ends Shadow's high network bandwidth/reliability
+bootstrap period.
+
+If the bootstrap end time is greater than 0, Shadow uses a simulation
+bootstrapping period where hosts have unrestricted network bandwidth and no
+packet drop. This can help to bootstrap large networks quickly when the network
+hosts have low network bandwidth or low network reliability.
+
 #### `general.data_directory`
 
 Default: "shadow.data"  
