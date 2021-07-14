@@ -114,7 +114,14 @@ impl ChildPidWatcher {
         let mut commands = Vec::new();
         let mut done = false;
         while !done {
-            let nevents = epoll_wait(epoll, &mut events, -1).unwrap();
+            let nevents = match epoll_wait(epoll, &mut events, -1) {
+                Ok(n) => n,
+                Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => {
+                    // Just try again.
+                    continue;
+                }
+                Err(e) => panic!("epoll_wait: {:?}", e),
+            };
 
             // We hold the lock the whole time we're processing events. While it'd
             // be nice to avoid holding it while executing callbacks (and therefor
