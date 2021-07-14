@@ -159,8 +159,7 @@ impl MemoryCopier {
         // Don't access another process's memory.
         assert_eq!(active_pid, self.pid);
 
-        let nread = nix::sys::uio::process_vm_readv(active_tid, &dsts, &srcs)
-            .map_err(|e| e.as_errno().unwrap())?;
+        let nread = nix::sys::uio::process_vm_readv(active_tid, &dsts, &srcs)?;
 
         Ok(nread)
     }
@@ -194,8 +193,7 @@ impl MemoryCopier {
         // Don't access another process's memory.
         assert_eq!(active_pid, self.pid);
 
-        let nwritten = nix::sys::uio::process_vm_writev(active_tid, &local, &remote)
-            .map_err(|e| e.as_errno().unwrap())?;
+        let nwritten = nix::sys::uio::process_vm_writev(active_tid, &local, &remote)?;
         // There shouldn't be any partial writes with a single remote iovec.
         assert_eq!(nwritten, towrite);
         Ok(())

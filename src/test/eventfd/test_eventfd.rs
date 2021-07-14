@@ -3,6 +3,7 @@
  * See LICENSE for licensing information
  */
 
+use nix::errno::Errno;
 use nix::sys::eventfd::EfdFlags;
 use nix::unistd::{close, read, write};
 use std::os::unix::io::RawFd;
@@ -112,7 +113,7 @@ fn check_read_eagain(efd: RawFd) -> Result<(), String> {
     let mut bytes: [u8; 8] = [0; 8];
 
     test_utils::result_assert(
-        read(efd, &mut bytes) == Err(nix::Error::Sys(nix::errno::Errno::EAGAIN)),
+        read(efd, &mut bytes) == Err(Errno::EAGAIN),
         &format!(
             "Reading empty counter did not block eventfd {} as expected",
             efd
@@ -137,7 +138,7 @@ fn check_write_einval(efd: RawFd, val: u64) -> Result<(), String> {
     let bytes: [u8; 8] = val.to_ne_bytes();
 
     test_utils::result_assert(
-        write(efd, &bytes) == Err(nix::Error::Sys(nix::errno::Errno::EINVAL)),
+        write(efd, &bytes) == Err(Errno::EINVAL),
         &format!(
             "Overflowing counter did not block eventfd {} as expected",
             efd

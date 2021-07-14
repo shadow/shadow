@@ -1,4 +1,5 @@
 use atomic_refcell::AtomicRefCell;
+use nix::errno::Errno;
 use std::sync::Arc;
 
 use crate::cshadow as c;
@@ -79,7 +80,7 @@ impl PipeFile {
 
         // the read would block if we could not write any bytes, but were asked to
         if usize::from(num_read) == 0 && bytes.stream_len_bp()? != 0 {
-            Err(nix::errno::EWOULDBLOCK.into())
+            Err(Errno::EWOULDBLOCK.into())
         } else {
             Ok(num_read.into())
         }
@@ -112,7 +113,7 @@ impl PipeFile {
 
         // the write would block if we could not write any bytes, but were asked to
         if usize::from(num_written) == 0 && bytes.stream_len_bp()? != 0 {
-            Err(nix::errno::EWOULDBLOCK.into())
+            Err(Errno::EWOULDBLOCK.into())
         } else {
             Ok(num_written.into())
         }

@@ -1,3 +1,4 @@
+use nix::errno::Errno;
 use nix::sys::epoll::{
     epoll_create1, epoll_ctl, epoll_wait, EpollCreateFlags, EpollEvent, EpollFlags, EpollOp,
 };
@@ -114,7 +115,14 @@ impl ChildPidWatcher {
         let mut commands = Vec::new();
         let mut done = false;
         while !done {
-            let nevents = epoll_wait(epoll, &mut events, -1).unwrap();
+            let nevents = match epoll_wait(epoll, &mut events, -1) {
+                Ok(n) => n,
+                Err(Errno::EINTR) => {
+                    // Just try again.
+                    continue;
+                }
+                Err(e) => panic!("epoll_wait: {:?}", e),
+            };
 
             // We hold the lock the whole time we're processing events. While it'd
             // be nice to avoid holding it while executing callbacks (and therefor
@@ -134,7 +142,7 @@ impl ChildPidWatcher {
             debug_assert!(match res {
                 Ok(8) => true,
                 Ok(i) => panic!("Unexpected read size {}", i),
-                Err(nix::Error::Sys(nix::errno::Errno::EAGAIN)) => true,
+                Err(Errno::EAGAIN) => true,
                 Err(e) => panic!("Unexpected error {:?}", e),
             });
             // Run commands
