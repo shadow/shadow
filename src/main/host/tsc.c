@@ -162,11 +162,17 @@ void Tsc_emulateRdtsc(const Tsc* tsc, struct user_regs_struct* regs,
 void Tsc_emulateRdtscp(const Tsc* tsc, struct user_regs_struct* regs,
                        uint64_t nanos) {
     _Tsc_setRdtscCycles(tsc, regs, nanos);
-    // FIXME: using the real instruction to put plausible data int rcx, but we
-    // probably want an emulated value. It's some metadata about the processor,
-    // including the processor ID.
-    unsigned int a;
-    rdtscp(&a);
-    regs->rcx = a;
+    // rcx is set to IA32_TSC_AUX. According to the Intel developer manual
+    // 17.17.2 "IA32_TSC_AUX Register and RDTSCP Support", "IA32_TSC_AUX
+    // provides a 32-bit field that is initialized by privileged software with a
+    // signature value (for example, a logical processor ID)." ... "User mode
+    // software can use RDTSCP to detect if CPU migration has occurred between
+    // successive reads of the TSC. It can also be used to adjust for per-CPU
+    // differences in TSC values in a NUMA system."
+    //
+    // For now we just hard-code an arbitrary constant, which should be fine for
+    // the stated purpose.
+    // `hex(int(random.random()*2**32))`
+    regs->rcx = 0x806eb479;
     regs->rip += 3;
 }
