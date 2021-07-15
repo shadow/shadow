@@ -12,92 +12,94 @@
 
 #include "lib/logger/logger.h"
 
-Tsc Tsc_init() {
+// Returns 0 on failure.
+static uint64_t _frequency_via_cpuid0x15() {
     unsigned int a = 0, b = 0, c = 0, d = 0;
     // Use the cpuid instruction (wrapped by __get_cpuid) to determine the clock
     // frequency. See "cpuid" in "Intel® 64 and IA-32 Architectures Software
     // Developer’s Manual Volume 2A".
 
-    // Since we don't have an efficient way of trapping and emulating cpuid
-    // to just dictate the perceived clock frequency to the managed program,
-    // we need to use cpuid ourselves to figure out the clock frequency, so that
-    // we can have the TSC tick at the expected rate when compared to the simulated
-    // time retrieved by other means (e.g. clock_gettime).
-
     if (!__get_cpuid(0x0, &a, &b, &c, &d)) {
+        // Should never happen.
         panic("cpuid");
     }
     const unsigned int max_level = a;
 
     if (max_level < 0x15) {
-        panic("cpuid 0x15 unsupported; can't get tsc frequency");
+        debug("cpuid 0x15 unsupported; can't get tsc frequency");
+        return 0;
     }
 
-    // cpuid 0x15 gives us
     if (!__get_cpuid(0x15, &a, &b, &c, &d)) {
-        panic("cpuid");
+        debug("cpuid 0x15 failed");
+        return 0;
     }
     // From "cpuid": "An unsigned integer which is the denominator of the
     // TSC/'core crystal clock' ratio."
     const unsigned int denominator = a;
-    if (!a) {
-        panic("Couldn't get frequency denominator");
+    if (!denominator) {
+        debug("cpuid 0x15 didn't give denominator");
+        return 0;
     }
     // From "cpuid": "An unsigned integer which is the numerator of the
     // TSC/'core crystal clock' ratio."
     const unsigned int numerator = b;
-    if (!a) {
-        panic("Couldn't get frequency numerator");
+    if (!numerator) {
+        debug("cpuid 0x15 didn't give numerator");
+        return 0;
     }
     // From "cpuid": "An unsigned integer which is the nominal frequency of the
     // core crystal clock in Hz."
     const unsigned int core = c;
-    if (core) {
-        Tsc tsc = {(uint64_t)core * numerator / denominator};
-        debug("Calculated %" PRIu64 " cyclesPerSecond via cpuid 15h", tsc.cyclesPerSecond);
-        return tsc;
+    if (!core) {
+        // From "cpuid": "If ECX is 0, the nominal core crystal clock frequency
+        // is not enumerated". Gee, thanks.
+        //
+        // "Intel® 64 and IA-32 ArchitecturesSoftware Developer’s Manual
+        // Volume 3B: System Programming Guide, Part 2", "18.18 COUNTING CLOCKS",
+        // gives a 2 row table for this case:
+
+        // 6th and 7th generation Intel® Core™ processors -> 24 MHz
+        //
+        // Next Generation Intel® Atom™ processors based on Goldmont
+        // Microarchitecture with CPUID signature 06_5CH -> 19.2 MHz.
+        //
+        // This probably *would* be the best way to proceed, but I'm not sure precisely
+        // what's meant by "CPUID signature 06_5CH".
+        //
+        // Fail and fall back to alternate method for now.
+        debug("cpuid 0x15 didn't give core frequency");
+        return 0;
     }
 
-    // From "cpuid": "If ECX is 0, the nominal core crystal clock frequency
-    // is not enumerated". Gee, thanks.
-    //
-    // "Intel® 64 and IA-32 ArchitecturesSoftware Developer’s Manual
-    // Volume 3B: System Programming Guide, Part 2", "18.18 COUNTING CLOCKS",
-    // gives a 2 row table for this case:
+    uint64_t freq = (uint64_t)core * numerator / denominator;
+    debug("Calculated %" PRIu64 " cyclesPerSecond via cpuid 15h", freq);
+    return freq;
+}
 
-    // 6th and 7th generation Intel® Core™ processors -> 24 MHz
-    //
-    // Next Generation Intel® Atom™ processors based on Goldmont
-    // Microarchitecture with CPUID signature 06_5CH -> 19.2 MHz.
-    //
-    // This probably *would* be the best way to proceed, but I'm not sure precisely
-    // what's meant by "CPUID signature 06_5CH".
-    //
-    // Instead, going back to the CPUID documentation, there's a way to get
-    // the "brand string", which includes the CPU base frequency. See "The
-    // Processor Brand String Method".
+// Returns 0 on failure.
+static uint64_t _frequency_via_brand_string() {
+    // While this *sounds* hacky at first glance, the cpuid docs provide a very
+    // precise specification for parsing the cpu frequency out of the brand
+    // string.
 
-    // For posterity; if we were able to determine we were in the 24 MHz case
-    // and not the 19.2 MHz case:
-#if 0
-    {
-        Tsc tsc = {(uint64_t)24000000*b/a};
-        debug("Calculated %" PRIu64 " cyclesPerSecond via cpuid 15h", tsc.cyclesPerSecond);
-        return tsc;
-    }
-#endif
+    unsigned int a = 0, b = 0, c = 0, d = 0;
 
     if (!__get_cpuid(0x80000000, &a, &b, &c, &d)) {
-        panic("cpuid");
+        debug("cpuid 0x80000000 failed");
+        return 0;
     }
     if (!(a & 0x80000000)) {
         // This *shouldn't* happen. The docs say this method is supported on
         // "all Intel 64 and IA-32 processors."
-        panic("Brand string method unsupported. Out of fallbacks for getting frequency.");
+        debug("Brand string method unsupported. Out of fallbacks for getting frequency.");
+        return 0;
     }
+
+    // We need to call cpuid 3 times, each time getting 4*4 bytes of the string.
     union {
-        uint32_t ints[3][4];
-        char chars[12 * 4];
+        uint32_t ints[3 /*calls*/][4 /*regs*/];
+        char chars[3 /*calls*/ * 4 /*regs*/ * sizeof(uint32_t)];
     } brand_string;
     for (int i = 0; i < 3; ++i) {
         if (!__get_cpuid(0x80000002 + i, &a, &b, &c, &d)) {
@@ -114,15 +116,15 @@ Tsc Tsc_init() {
     trace("Got brand string %s", brand_string.chars);
 
     // Docs say to reverse scan for a 'blank', last token should always be of
-    // form x.yz(MHz|GHz|THz).
+    // form x.yz[MGT]Hz.
 
     char* last_token = rindex(brand_string.chars, ' ');
     assert(last_token);
     assert(*last_token == ' ');
 
-    float frequency;
+    float base_frequency;
     char scale_c;
-    if (sscanf(last_token, " %f%cHz", &frequency, &scale_c) != 2) {
+    if (sscanf(last_token, " %f%cHz", &base_frequency, &scale_c) != 2) {
         panic("Couldn't parse %s", last_token);
     }
     uint64_t scale = 0;
@@ -136,9 +138,30 @@ Tsc Tsc_init() {
         panic("Unrecognized scale character %c", scale_c);
     }
 
-    Tsc tsc = {frequency * scale};
-    debug("Calculated %" PRIu64 " cyclesPerSecond via brand string", tsc.cyclesPerSecond);
-    return tsc;
+    uint64_t frequency = (uint64_t)(base_frequency * scale);
+    debug("Calculated %" PRIu64 " cyclesPerSecond via brand string", frequency);
+    return frequency;
+}
+
+Tsc Tsc_init() {
+    // Since we don't have an efficient way of trapping and emulating cpuid
+    // to just dictate the perceived clock frequency to the managed program,
+    // we need to use cpuid ourselves to figure out the clock frequency, so that
+    // we can have the TSC tick at the expected rate when compared to the simulated
+    // time retrieved by other means (e.g. clock_gettime).
+
+    uint64_t f = _frequency_via_cpuid0x15();
+    if (!f) {
+        f = _frequency_via_brand_string();
+    }
+    if (!f) {
+        // If this becomes an issue in practice, we could fall back to measuring
+        // empirically (and rounding for attempted determinism?), or just using
+        // a fixed constant.
+        panic("Couldn't get CPU frequency");
+    }
+
+    return (Tsc){.cyclesPerSecond = f};
 }
 
 static void _Tsc_setRdtscCycles(const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t nanos) {
