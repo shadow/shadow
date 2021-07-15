@@ -63,6 +63,10 @@ macro(add_shadow_tests)
    if(NOT DEFINED SHADOW_TEST_POST_CMD)
       set(SHADOW_TEST_POST_CMD "true")
    endif()
+
+   if(NOT DEFINED SHADOW_TEST_METHODS)
+      set(SHADOW_TEST_METHODS hybrid ptrace preload)   
+   endif()
    
    # If cpu pinning is not explicitly set, we disable it so we avoid pinning
    # multiple tests that should be running in parallel to the same exact CPUs.

@@ -7,7 +7,6 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/weights.txt ${CMAKE_CURRENT_BINARY_DI
 # pinned to the same exact CPUs.
 add_shadow_tests(
     BASENAME phold-serial
-    METHODS hybrid ptrace preload
     LOGLEVEL info
     ARGS --use-cpu-pinning true
     PROPERTIES RUN_SERIAL TRUE)
@@ -16,7 +15,6 @@ add_shadow_tests(
 # property since we use 2 workers here.
 add_shadow_tests(
     BASENAME phold-parallel
-    METHODS hybrid ptrace preload
     LOGLEVEL info
     ARGS --use-cpu-pinning true --parallelism 2
     PROPERTIES RUN_SERIAL TRUE)
@@ -27,7 +25,6 @@ add_shadow_tests(
 # test that we have to that configuration.
 add_shadow_tests(
     BASENAME phold-rr-qdisc
-    METHODS hybrid ptrace preload
     LOGLEVEL info
     ARGS --use-cpu-pinning true --interface-qdisc roundrobin
     PROPERTIES RUN_SERIAL TRUE)

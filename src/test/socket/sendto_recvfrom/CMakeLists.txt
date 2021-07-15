@@ -1,5 +1,5 @@
 add_linux_tests(BASENAME sendto-recvfrom COMMAND sh -c "../../target/debug/test_sendto_recvfrom --libc-passing")
-add_shadow_tests(BASENAME sendto-recvfrom METHODS hybrid ptrace preload)
+add_shadow_tests(BASENAME sendto-recvfrom)
 
 # This test fails in shadow (debug mode) on centos 7 in the GitHub CI. The
 # cause of failure seems to be that centos 7 is about twice as slow as the
