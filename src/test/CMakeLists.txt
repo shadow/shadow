@@ -65,7 +65,7 @@ macro(add_shadow_tests)
    endif()
 
    if(NOT DEFINED SHADOW_TEST_METHODS)
-      set(SHADOW_TEST_METHODS hybrid ptrace preload)   
+      set(SHADOW_TEST_METHODS ptrace preload)   
    endif()
 
    if(DEFINED SHADOW_TEST_SKIP_METHODS)

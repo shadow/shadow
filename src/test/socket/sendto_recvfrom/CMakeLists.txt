@@ -9,7 +9,6 @@ add_shadow_tests(BASENAME sendto-recvfrom)
 # 16 KiB, the 'test_nonblocking_tcp' test needs to make a lot of
 # sendto()/recvfrom() calls before an EAGAIN is returned.
 set_property(TEST 
-                sendto-recvfrom-shadow-hybrid 
                 sendto-recvfrom-shadow-ptrace 
                 sendto-recvfrom-shadow-preload 
             PROPERTY TIMEOUT 60)

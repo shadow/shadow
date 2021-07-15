@@ -21,7 +21,6 @@ add_custom_target(tor-minimal-shadow-data-template ALL
                     ${CMAKE_CURRENT_BINARY_DIR}/shadow.data.template/hosts/hiddenserver/hs)
 
 add_shadow_tests(BASENAME tor-minimal
-                 SKIP_METHODS hybrid
                  LOGLEVEL info
                  ARGS
                    --use-cpu-pinning true
