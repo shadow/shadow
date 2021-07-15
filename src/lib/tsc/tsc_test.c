@@ -1,40 +1,28 @@
 #include "lib/tsc/tsc.h"
 
+#include <cpuid.h>
 #include <glib.h>
 #include <inttypes.h>
 #include <locale.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <x86intrin.h>
 
-void measureGivesConsistentResults() {
-    Tsc baseline = Tsc_init();
-    // FIXME: this is a pretty loose consistency bound, but tighter bounds
-    // currently occasionally fail. The right thing to do is extract the
-    // nominal rate via cpuid, and have a test validating that is within the
-    // ballpark of the measured approach.
-    for (int i = 0; i < 100; ++i) {
-        Tsc test = Tsc_init();
-        int64_t milliPercentDiff =
-            llabs((int64_t)test.cyclesPerSecond - (int64_t)baseline.cyclesPerSecond) * 100L *
-            1000L / baseline.cyclesPerSecond;
-        /* 1.000% */
-        g_assert_cmpint(milliPercentDiff, <, 1000);
-    }
-    g_assert_true(TRUE);
-}
+#include "lib/logger/logger.h"
 
-static uint64_t _getEmulatedCycles(void (*emulate_fn)(const Tsc* tsc, struct user_regs_struct* regs,
-                                                      uint64_t nanos),
+static uint64_t _getEmulatedCycles(void (*emulate_fn)(const Tsc* tsc, uint64_t* rax, uint64_t* rdx,
+                                                      uint64_t* rip, uint64_t nanos),
                                    uint64_t cyclesPerSecond, int64_t nanos) {
-
     Tsc tsc = {.cyclesPerSecond = cyclesPerSecond};
-    struct user_regs_struct regs = {};
-    emulate_fn(&tsc, &regs, nanos);
-    return (regs.rdx << 32) | regs.rax;
+    uint64_t rax = 0, rdx = 0, rip = 0;
+    emulate_fn(&tsc, &rax, &rdx, &rip, nanos);
+    return (rdx << 32) | rax;
 }
 
 void emulateGivesExpectedCycles(void* unusedFixture, gconstpointer user_data) {
-    void (*emulate_fn)(const Tsc* tsc, struct user_regs_struct* regs, uint64_t nanos) = user_data;
+    void (*emulate_fn)(
+        const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rip, uint64_t nanos) = user_data;
     const uint64_t cyclesPerSecondForOneGHz = 1000000000;
 
     // Single ns granularity @ 1 GHz
@@ -61,19 +49,80 @@ void emulateGivesExpectedCycles(void* unusedFixture, gconstpointer user_data) {
                     ==, expectedCycles);
 }
 
+void closeToNativeRdtsc(void* unusedFixture, gconstpointer user_data) {
+    void (*emulate_fn)(
+        const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rip, uint64_t nanos) = user_data;
+
+    uint64_t native_t0 = __rdtsc();
+    sleep(1);
+    uint64_t native_t1 = __rdtsc();
+    uint64_t native_delta = native_t1 - native_t0;
+    trace("native_delta: %lu", native_delta);
+
+    Tsc tsc = Tsc_init();
+    uint64_t emulated_delta = _getEmulatedCycles(emulate_fn, tsc.cyclesPerSecond, 1000000000) -
+                              _getEmulatedCycles(emulate_fn, tsc.cyclesPerSecond, 0);
+    trace("emulated_delta: %lu", emulated_delta);
+
+    int64_t percentDiff =
+        llabs((int64_t)native_delta - (int64_t)emulated_delta) * 100L / native_delta;
+
+    // Just validate that it's within 10%. Use a loose bound here to avoid
+    // flakiness when testing on a high-load machine.
+    g_assert_cmpint(percentDiff, <, 10);
+}
+
+// Compatibility wrapper that ignores emulation of rcx register, allowing a single test function
+// to validate just the rax and rdx (timestamp) output of rdtscp.
+static void _emulateRdtscpWrapper(const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rip,
+                                  uint64_t nanos) {
+    uint64_t rcx;
+    Tsc_emulateRdtscp(tsc, rax, rdx, &rcx, rip, nanos);
+}
+
+static bool _hostHasInvariantTimer() {
+    // Intel manual 17.17.4 Invariant Time-Keeping:
+    // "If CPUID.15H:EBX[31:0] != 0 and CPUID.80000007H:EDX[InvariantTSC] = 1,
+    // the following linearity relationship holds between TSC and the ART
+    // hardware..."
+    unsigned int a = 0, b = 0, c = 0, d = 0;
+    if (!__get_cpuid(0x15, &a, &b, &c, &d)) {
+        warning("cpuid 0x15 failed");
+        return false;
+    }
+    if (!b) {
+        debug("cpuid.15h:EBX == 0; no invariant TSC");
+        return false;
+    }
+    if (!__get_cpuid(0x80000007, &a, &b, &c, &d)) {
+        warning("cpuid 0x0x80000007 failed");
+        return false;
+    }
+    if (!(d & (1 << 8))) {
+        warning("invariant tsc flag not set");
+        return false;
+    }
+    return true;
+}
+
 int main(int argc, char* argv[]) {
     g_test_init(&argc, &argv, NULL);
     g_test_set_nonfatal_assertions();
 
     // Define the tests.
 
-    // FIXME: flaky
-    // g_test_add_func("/tsc/measureGivesConsistentResults",
-    //                measureGivesConsistentResults);
+    // Can only meaningfully compare to the host tsc if the host cpu implements
+    // invariant tsc (rdtsc always at base cpu frequency).
+    if (_hostHasInvariantTimer()) {
+        g_test_add(
+            "/tsc/rdtscIsCloseToNative", void, &Tsc_emulateRdtsc, NULL, closeToNativeRdtsc, NULL);
+        g_test_add("/tsc/rdtscpIsCloseToNative", void, &_emulateRdtscpWrapper, NULL,
+                   closeToNativeRdtsc, NULL);
+    }
 
     g_test_add("/tsc/emulateRdtscGivesExpectedCycles", void, &Tsc_emulateRdtsc, NULL,
                emulateGivesExpectedCycles, NULL);
-    g_test_add("/tsc/emulateRdtscpGivesExpectedCycles", void, &Tsc_emulateRdtscp, NULL,
+    g_test_add("/tsc/emulateRdtscpGivesExpectedCycles", void, &_emulateRdtscpWrapper, NULL,
                emulateGivesExpectedCycles, NULL);
 
     return g_test_run();
