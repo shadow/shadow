@@ -53,23 +53,38 @@ void closeToNativeRdtsc(void* unusedFixture, gconstpointer user_data) {
     void (*emulate_fn)(
         const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rip, uint64_t nanos) = user_data;
 
-    uint64_t native_t0 = __rdtsc();
-    sleep(1);
-    uint64_t native_t1 = __rdtsc();
-    uint64_t native_delta = native_t1 - native_t0;
-    trace("native_delta: %lu", native_delta);
+    // This test is inherently flaky on high-load machines.
+    // Give multiple chances.
+    for (int i = 0; i < 10; ++i) {
+        const uint64_t micros_delta = 100000;
 
-    Tsc tsc = Tsc_init();
-    uint64_t emulated_delta = _getEmulatedCycles(emulate_fn, tsc.cyclesPerSecond, 1000000000) -
-                              _getEmulatedCycles(emulate_fn, tsc.cyclesPerSecond, 0);
-    trace("emulated_delta: %lu", emulated_delta);
+        uint64_t native_t0 = __rdtsc();
+        usleep(micros_delta);
+        uint64_t native_t1 = __rdtsc();
+        uint64_t native_delta = native_t1 - native_t0;
+        trace("native_delta: %lu", native_delta);
 
-    int64_t percentDiff =
-        llabs((int64_t)native_delta - (int64_t)emulated_delta) * 100L / native_delta;
+        Tsc tsc = Tsc_init();
+        uint64_t emulated_delta =
+            _getEmulatedCycles(emulate_fn, tsc.cyclesPerSecond, micros_delta * 1000) -
+            _getEmulatedCycles(emulate_fn, tsc.cyclesPerSecond, 0);
+        trace("emulated_delta: %lu", emulated_delta);
 
-    // Just validate that it's within 10%. Use a loose bound here to avoid
-    // flakiness when testing on a high-load machine.
-    g_assert_cmpint(percentDiff, <, 10);
+        int64_t milliPercentDiff =
+            llabs((int64_t)native_delta - (int64_t)emulated_delta) * 100L * 1000L / native_delta;
+        trace("milliPercentDiff %ld", milliPercentDiff);
+
+        // 1%
+        if (milliPercentDiff < 1000) {
+            // Test passes
+            return;
+        }
+
+        warning("milliPercentDiff: %ld: native:%lu emulated:%lu", milliPercentDiff, native_delta,
+                emulated_delta);
+    }
+    logger_flush(logger_getDefault());
+    g_test_fail();
 }
 
 // Compatibility wrapper that ignores emulation of rcx register, allowing a single test function
