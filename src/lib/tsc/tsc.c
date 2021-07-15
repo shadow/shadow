@@ -1,11 +1,11 @@
-#include "main/host/tsc.h"
+#include "lib/tsc/tsc.h"
 
 #include <assert.h>
 #include <cpuid.h>
 #include <errno.h>
 #include <inttypes.h>
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 #include <x86intrin.h>
@@ -16,7 +16,7 @@
 #define rdtscp __rdtscp
 
 Tsc Tsc_measure() {
-    unsigned int a=0,b=0,c=0,d=0;
+    unsigned int a = 0, b = 0, c = 0, d = 0;
     // Use the cpuid instruction (wrapped by __get_cpuid) to determine the clock
     // frequency. See "cpuid" in "Intel® 64 and IA-32 Architectures Software
     // Developer’s Manual Volume 2A".
@@ -36,7 +36,7 @@ Tsc Tsc_measure() {
         panic("cpuid 0x15 unsupported; can't get tsc frequency");
     }
 
-    // cpuid 0x15 gives us 
+    // cpuid 0x15 gives us
     if (!__get_cpuid(0x15, &a, &b, &c, &d)) {
         panic("cpuid");
     }
@@ -56,7 +56,7 @@ Tsc Tsc_measure() {
     // core crystal clock in Hz."
     unsigned int core = c;
     if (core) {
-        Tsc tsc = {(uint64_t)c*b/a};
+        Tsc tsc = {(uint64_t)c * b / a};
         debug("Calculated %" PRIu64 " cyclesPerSecond via cpuid 15h", tsc.cyclesPerSecond);
         return tsc;
     }
@@ -69,7 +69,7 @@ Tsc Tsc_measure() {
     // gives a 2 row table for this case:
 
     // 6th and 7th generation Intel® Core™ processors -> 24 MHz
-    // 
+    //
     // Next Generation Intel® Atom™ processors based on Goldmont
     // Microarchitecture with CPUID signature 06_5CH -> 19.2 MHz.
     //
@@ -89,7 +89,7 @@ Tsc Tsc_measure() {
         return tsc;
     }
 #endif
-    
+
     if (!__get_cpuid(0x80000000, &a, &b, &c, &d)) {
         panic("cpuid");
     }
@@ -100,7 +100,7 @@ Tsc Tsc_measure() {
     }
     union {
         uint32_t ints[3][4];
-        char chars[12*4];
+        char chars[12 * 4];
     } brand_string;
     for (int i = 0; i < 3; ++i) {
         if (!__get_cpuid(0x80000002 + i, &a, &b, &c, &d)) {
@@ -112,7 +112,7 @@ Tsc Tsc_measure() {
         brand_string.ints[i][3] = d;
     }
     // Guaranteed to be null terminated.
-    assert(brand_string.chars[sizeof(brand_string)-1] == '\0');
+    assert(brand_string.chars[sizeof(brand_string) - 1] == '\0');
 
     trace("Got brand string %s", brand_string.chars);
 
@@ -139,28 +139,25 @@ Tsc Tsc_measure() {
         panic("Unrecognized scale character %c", scale_c);
     }
 
-    Tsc tsc = {frequency*scale};
+    Tsc tsc = {frequency * scale};
     debug("Calculated %" PRIu64 " cyclesPerSecond via brand string", tsc.cyclesPerSecond);
     return tsc;
 }
 
-static void _Tsc_setRdtscCycles(const Tsc* tsc, struct user_regs_struct* regs,
-                                uint64_t nanos) {
+static void _Tsc_setRdtscCycles(const Tsc* tsc, struct user_regs_struct* regs, uint64_t nanos) {
     // Guaranteed not to overflow since the operands are both 64 bit.
-    __uint128_t gigaCycles = (__uint128_t)tsc->cyclesPerSecond * nanos; 
+    __uint128_t gigaCycles = (__uint128_t)tsc->cyclesPerSecond * nanos;
     uint64_t cycles = gigaCycles / 1000000000;
     regs->rdx = (cycles >> 32) & 0xffffffff;
     regs->rax = cycles & 0xffffffff;
 }
 
-void Tsc_emulateRdtsc(const Tsc* tsc, struct user_regs_struct* regs,
-                      uint64_t nanos) {
+void Tsc_emulateRdtsc(const Tsc* tsc, struct user_regs_struct* regs, uint64_t nanos) {
     _Tsc_setRdtscCycles(tsc, regs, nanos);
     regs->rip += 2;
 }
 
-void Tsc_emulateRdtscp(const Tsc* tsc, struct user_regs_struct* regs,
-                       uint64_t nanos) {
+void Tsc_emulateRdtscp(const Tsc* tsc, struct user_regs_struct* regs, uint64_t nanos) {
     _Tsc_setRdtscCycles(tsc, regs, nanos);
     // rcx is set to IA32_TSC_AUX. According to the Intel developer manual
     // 17.17.2 "IA32_TSC_AUX Register and RDTSCP Support", "IA32_TSC_AUX

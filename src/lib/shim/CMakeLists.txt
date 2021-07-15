@@ -41,7 +41,7 @@ set(SHIM_FILES
 add_library(${SHIM_LIB} SHARED ${SHIM_FILES})
 set_target_properties(${SHIM_LIB} PROPERTIES LINK_FLAGS "-Wl,--no-as-needed")
 target_compile_options(${SHIM_LIB} PRIVATE -pthread -D_GNU_SOURCE)
-target_link_libraries(${SHIM_LIB} ${SHIM_HELPER_LIB} shadow-shmem logger
+target_link_libraries(${SHIM_LIB} ${SHIM_HELPER_LIB} shadow-shmem shadow-tsc logger
   ${RT_LIBRARIES} ${GLIB_LIBRARIES} -pthread -ldl)
 install(TARGETS ${SHIM_LIB} DESTINATION lib)
 
