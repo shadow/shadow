@@ -5,9 +5,6 @@
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
 
-// Create a thread managed via ptrace and shim-ipc.
-Thread* threadptrace_new(Host* host, Process* process, gint threadID);
-
 // Create a thread managed via ptrace only.
 Thread* threadptraceonly_new(Host* host, Process* process, gint threadID);
 

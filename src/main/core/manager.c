@@ -382,9 +382,6 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
         case INTERPOSE_METHOD_PRELOAD:
             envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PRELOAD", 0);
             break;
-        case INTERPOSE_METHOD_HYBRID:
-            envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "HYBRID", 0);
-            break;
     }
 
     /* insert also the plugin preload entry if one exists.

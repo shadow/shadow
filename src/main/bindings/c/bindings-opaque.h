@@ -16,8 +16,6 @@ typedef enum InterposeMethod {
   // Use LD_PRELOAD to load a library that implements the libC interface which will
   // route syscalls to Shadow.
   INTERPOSE_METHOD_PRELOAD,
-  // Use both PRELOAD and PTRACE based interposition.
-  INTERPOSE_METHOD_HYBRID,
 } InterposeMethod;
 
 typedef enum QDiscMode {
