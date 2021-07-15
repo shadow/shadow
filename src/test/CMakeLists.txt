@@ -42,7 +42,7 @@ endmacro()
 ## example: add_shadow_tests(BASENAME bind METHODS ptrace preload LOGLEVEL debug ARGS --pin-cpus)
 ## will create two tests named bind-shadow-ptrace and bind-shadow-preload
 macro(add_shadow_tests)
-   cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG;CHECK_RETVAL;POST_CMD" "METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
+   cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG;CHECK_RETVAL;POST_CMD" "METHODS;SKIP_METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
 
    if(NOT DEFINED SHADOW_TEST_LOGLEVEL)
       if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
@@ -66,6 +66,10 @@ macro(add_shadow_tests)
 
    if(NOT DEFINED SHADOW_TEST_METHODS)
       set(SHADOW_TEST_METHODS hybrid ptrace preload)   
+   endif()
+
+   if(DEFINED SHADOW_TEST_SKIP_METHODS)
+      list(REMOVE_ITEM SHADOW_TEST_METHODS ${SHADOW_TEST_SKIP_METHODS})
    endif()
    
    # If cpu pinning is not explicitly set, we disable it so we avoid pinning
