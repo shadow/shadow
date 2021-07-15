@@ -15,7 +15,7 @@
 // Use compiler intrinsic
 #define rdtscp __rdtscp
 
-Tsc Tsc_measure() {
+Tsc Tsc_init() {
     unsigned int a = 0, b = 0, c = 0, d = 0;
     // Use the cpuid instruction (wrapped by __get_cpuid) to determine the clock
     // frequency. See "cpuid" in "Intel® 64 and IA-32 Architectures Software

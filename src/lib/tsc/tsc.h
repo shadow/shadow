@@ -14,10 +14,8 @@ typedef struct _Tsc {
     uint64_t cyclesPerSecond;
 } Tsc;
 
-// Initializes a Tsc heuristically by measuring on the host system. FIXME:
-// should be able to do this more efficiently and accurately by querying the
-// CPU.
-Tsc Tsc_measure();
+// Instantiate a TSC with the same frequency as the host system TSC.
+Tsc Tsc_init();
 
 // Updates `regs` to reflect the result of executing an rdtsc instruction at
 // time `nanos`.

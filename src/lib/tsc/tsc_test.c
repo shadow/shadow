@@ -7,13 +7,13 @@
 #include <stdlib.h>
 
 void measureGivesConsistentResults() {
-    Tsc baseline = Tsc_measure();
+    Tsc baseline = Tsc_init();
     // FIXME: this is a pretty loose consistency bound, but tighter bounds
     // currently occasionally fail. The right thing to do is extract the
     // nominal rate via cpuid, and have a test validating that is within the
     // ballpark of the measured approach.
     for (int i = 0; i < 100; ++i) {
-        Tsc test = Tsc_measure();
+        Tsc test = Tsc_init();
         int64_t milliPercentDiff =
             llabs((int64_t)test.cyclesPerSecond - (int64_t)baseline.cyclesPerSecond) * 100L *
             1000L / baseline.cyclesPerSecond;
