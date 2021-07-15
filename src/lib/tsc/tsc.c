@@ -12,9 +12,6 @@
 
 #include "lib/logger/logger.h"
 
-// Use compiler intrinsic
-#define rdtscp __rdtscp
-
 Tsc Tsc_init() {
     unsigned int a = 0, b = 0, c = 0, d = 0;
     // Use the cpuid instruction (wrapped by __get_cpuid) to determine the clock
@@ -54,9 +51,9 @@ Tsc Tsc_init() {
     }
     // From "cpuid": "An unsigned integer which is the nominal frequency of the
     // core crystal clock in Hz."
-    unsigned int core = c;
+    const unsigned int core = c;
     if (core) {
-        Tsc tsc = {(uint64_t)c * b / a};
+        Tsc tsc = {(uint64_t)core * numerator / denominator};
         debug("Calculated %" PRIu64 " cyclesPerSecond via cpuid 15h", tsc.cyclesPerSecond);
         return tsc;
     }
@@ -144,21 +141,32 @@ Tsc Tsc_init() {
     return tsc;
 }
 
-static void _Tsc_setRdtscCycles(const Tsc* tsc, struct user_regs_struct* regs, uint64_t nanos) {
+static void _Tsc_setRdtscCycles(const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t nanos) {
+    assert(tsc);
+    assert(rax);
+    assert(rdx);
     // Guaranteed not to overflow since the operands are both 64 bit.
     __uint128_t gigaCycles = (__uint128_t)tsc->cyclesPerSecond * nanos;
     uint64_t cycles = gigaCycles / 1000000000;
-    regs->rdx = (cycles >> 32) & 0xffffffff;
-    regs->rax = cycles & 0xffffffff;
+    *rdx = (cycles >> 32) & 0xffffffff;
+    *rax = cycles & 0xffffffff;
 }
 
-void Tsc_emulateRdtsc(const Tsc* tsc, struct user_regs_struct* regs, uint64_t nanos) {
-    _Tsc_setRdtscCycles(tsc, regs, nanos);
-    regs->rip += 2;
+void Tsc_emulateRdtsc(const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rip, uint64_t nanos) {
+    assert(tsc);
+    assert(rax);
+    assert(rdx);
+    _Tsc_setRdtscCycles(tsc, rax, rdx, nanos);
+    *rip += 2;
 }
 
-void Tsc_emulateRdtscp(const Tsc* tsc, struct user_regs_struct* regs, uint64_t nanos) {
-    _Tsc_setRdtscCycles(tsc, regs, nanos);
+void Tsc_emulateRdtscp(const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rcx, uint64_t* rip,
+                       uint64_t nanos) {
+    assert(tsc);
+    assert(rax);
+    assert(rdx);
+    assert(rcx);
+    _Tsc_setRdtscCycles(tsc, rax, rdx, nanos);
     // rcx is set to IA32_TSC_AUX. According to the Intel developer manual
     // 17.17.2 "IA32_TSC_AUX Register and RDTSCP Support", "IA32_TSC_AUX
     // provides a 32-bit field that is initialized by privileged software with a
@@ -170,6 +178,6 @@ void Tsc_emulateRdtscp(const Tsc* tsc, struct user_regs_struct* regs, uint64_t n
     // For now we just hard-code an arbitrary constant, which should be fine for
     // the stated purpose.
     // `hex(int(random.random()*2**32))`
-    regs->rcx = 0x806eb479;
-    regs->rip += 3;
+    *rcx = 0x806eb479;
+    *rip += 3;
 }
