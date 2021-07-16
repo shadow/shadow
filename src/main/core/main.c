@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/prctl.h>
 #include <sys/resource.h>
 #include <unistd.h>
 
@@ -55,6 +56,17 @@ static void _main_logEnvironment(gchar** argv, gchar** envv) {
                 trace("env: %s", envv[i]);
             }
         }
+    }
+}
+
+static void _check_mitigations() {
+    int state = prctl(PR_GET_SPECULATION_CTRL, PR_SPEC_STORE_BYPASS, 0, 0, 0);
+    if (state == -1) {
+        panic("prctl: %s", g_strerror(errno));
+    }
+    if (state & PR_SPEC_DISABLE) {
+        warning("Speculative Store Bypass sidechannel mitigation is enabled (perhaps by seccomp?). "
+                "This typically adds ~30%% performance overhead.");
     }
 }
 
@@ -273,6 +285,9 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     // one to ensure determinism in cases when an executable under simulation
     // branch on memory addresses.
     disable_aslr();
+
+    // Check sidechannel mitigations
+    _check_mitigations();
 
     gint returnCode = _main_helper(options, config, argv);
 
