@@ -68,7 +68,9 @@ static uint64_t _frequency_via_cpuid0x15() {
         // what's meant by "CPUID signature 06_5CH".
         //
         // Fail and fall back to alternate method for now.
-        debug("cpuid 0x15 didn't give core frequency");
+        debug("cpuid 0x15 didn't give core frequency. Frequency should be either %lu or %lu",
+              (uint64_t)24000000 * numerator / denominator,
+              (uint64_t)19200000 * numerator / denominator);
         return 0;
     }
 

@@ -1,6 +1,7 @@
 #include "lib/tsc/tsc.h"
 
 #include <cpuid.h>
+#include <errno.h>
 #include <glib.h>
 #include <inttypes.h>
 #include <locale.h>
@@ -49,39 +50,60 @@ void emulateGivesExpectedCycles(void* unusedFixture, gconstpointer user_data) {
                     ==, expectedCycles);
 }
 
+static struct timespec _timespecsub(const struct timespec* t1, const struct timespec* t2) {
+    struct timespec res;
+    res.tv_sec = t1->tv_sec - t2->tv_sec;
+    res.tv_nsec = t1->tv_nsec - t2->tv_nsec;
+    if (res.tv_nsec < 0) {
+        res.tv_nsec += 1000000000L;
+        --res.tv_sec;
+    }
+    return res;
+}
+
 void closeToNativeRdtsc(void* unusedFixture, gconstpointer user_data) {
     void (*emulate_fn)(
         const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rip, uint64_t nanos) = user_data;
 
+    Tsc tsc = Tsc_init();
+
+    // Use the monotonic timer.
+    clockid_t clk_id = CLOCK_MONOTONIC;
+
     // This test is inherently flaky on high-load machines.
     // Give multiple chances.
     for (int i = 0; i < 10; ++i) {
-        const uint64_t micros_delta = 100000;
+        struct timespec t0, t1;
+        if (clock_gettime(clk_id, &t0)) {
+            panic("clock_gettime: %s", strerror(errno));
+        }
+        uint64_t t0_cycles = __rdtsc();
 
-        uint64_t native_t0 = __rdtsc();
-        usleep(micros_delta);
-        uint64_t native_t1 = __rdtsc();
-        uint64_t native_delta = native_t1 - native_t0;
-        trace("native_delta: %lu", native_delta);
+        // Sleep for half of a second. We're not bothering to try accounting for
+        // the overhead of clock_gettime etc itself; using a relatively long
+        // interval helps amortize it.
+        usleep(500000);
 
-        Tsc tsc = Tsc_init();
-        uint64_t emulated_delta =
-            _getEmulatedCycles(emulate_fn, tsc.cyclesPerSecond, micros_delta * 1000) -
-            _getEmulatedCycles(emulate_fn, tsc.cyclesPerSecond, 0);
-        trace("emulated_delta: %lu", emulated_delta);
-
-        int64_t milliPercentDiff =
-            llabs((int64_t)native_delta - (int64_t)emulated_delta) * 100L * 1000L / native_delta;
-        trace("milliPercentDiff %ld", milliPercentDiff);
-
-        // 1%
-        if (milliPercentDiff < 1000) {
-            // Test passes
-            return;
+        uint64_t t1_cycles = __rdtsc();
+        if (clock_gettime(clk_id, &t1)) {
+            panic("clock_gettime: %s", strerror(errno));
         }
 
-        warning("milliPercentDiff: %ld: native:%lu emulated:%lu", milliPercentDiff, native_delta,
-                emulated_delta);
+        struct timespec delta = _timespecsub(&t1, &t0);
+        trace("Real dt: %ld.%09ld", delta.tv_sec, delta.tv_nsec);
+        uint64_t actual_dcycles = t1_cycles - t0_cycles;
+        trace("Real # cycles: %ld", actual_dcycles);
+
+        uint64_t emulated_dcycles = _getEmulatedCycles(emulate_fn, tsc.cyclesPerSecond,
+                                                       delta.tv_sec * 1000000000L + delta.tv_nsec) -
+                                    _getEmulatedCycles(emulate_fn, tsc.cyclesPerSecond, 0);
+        trace("Emulated # cycles: %lu", emulated_dcycles);
+        uint64_t ddcycles = llabs((int64_t)emulated_dcycles - (int64_t)actual_dcycles);
+        double percent_error = (double)ddcycles * 100 / actual_dcycles;
+        trace("ddcycles: %lu error:%f%%", ddcycles, percent_error);
+        if (percent_error < 1) {
+            return;
+        }
     }
     logger_flush(logger_getDefault());
     g_test_fail();
@@ -113,6 +135,7 @@ static bool _hostHasInvariantTimer() {
         warning("cpuid 0x0x80000007 failed");
         return false;
     }
+    trace("cpuid 0x80000007 returned edx:%x", d);
     if (!(d & (1 << 8))) {
         warning("invariant tsc flag not set");
         return false;
