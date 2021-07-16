@@ -250,6 +250,7 @@ static ShimSharedMem* _threadptrace_sharedMem(ThreadPtrace* thread) {
 static void _threadptrace_ensureStopped(ThreadPtrace* thread);
 static void _threadptrace_doAttach(ThreadPtrace* thread);
 static void _threadptrace_doDetach(ThreadPtrace* thread);
+static Thread* _threadptrace_new(Host* host, Process* process, int threadID);
 
 static ThreadPtrace* _threadToThreadPtrace(Thread* thread) {
     utility_assert(thread->type_id == THREADPTRACE_TYPE_ID);
@@ -1291,7 +1292,7 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
 
     *childp =
         thread->enableIpc
-            ? threadptrace_new(base->host, base->process, host_getNewProcessID(base->host))
+            ? _threadptrace_new(base->host, base->process, host_getNewProcessID(base->host))
             : threadptraceonly_new(base->host, base->process, host_getNewProcessID(base->host));
 
     ThreadPtrace* child = _threadToThreadPtrace(*childp);
@@ -1326,7 +1327,8 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
     return childNativeTid;
 }
 
-Thread* threadptrace_new(Host* host, Process* process, int threadID) {
+// Legacy entry point for "hybrid mode".
+static Thread* _threadptrace_new(Host* host, Process* process, int threadID) {
     ThreadPtrace* thread = (ThreadPtrace*)threadptraceonly_new(host, process, threadID);
 
     thread->ipcBlk = shmemallocator_globalAlloc(ipcData_nbytes());

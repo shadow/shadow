@@ -6,10 +6,7 @@ if [ "$BUILDTYPE" = "coverage" ]
 then
     # Preload tests are broken in coverage builds:
     # https://github.com/shadow/shadow/issues/867
-    #
-    # Hybrid mode is currently very slow, leading to timeouts in coverage builds.
-    # https://github.com/shadow/shadow/issues/1168
-    EXCLUDE="shadow-preload|shadow-hybrid"
+    EXCLUDE="shadow-preload"
 else
     EXCLUDE=""
 fi

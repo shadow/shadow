@@ -67,7 +67,7 @@ SysCallReturn syscallhandler_shadow_set_ptrace_allow_native_syscalls(SysCallHand
 
     InterposeMethod imethod = process_getInterposeMethod(sys->process);
 
-    if (imethod == INTERPOSE_METHOD_PTRACE || imethod == INTERPOSE_METHOD_HYBRID) {
+    if (imethod == INTERPOSE_METHOD_PTRACE) {
         bool is_allowed = args->args[0].as_i64;
         trace("shadow_set_ptrace_allow_native_syscalls is_allowed=%d", is_allowed);
 

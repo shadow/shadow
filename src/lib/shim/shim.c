@@ -163,12 +163,6 @@ static void _set_interpose_type() {
         _using_interpose_preload = true;
         return;
     }
-    if (!strcmp(interpose_method, "HYBRID")) {
-        // Uses library preloading to intercept syscalls, with a ptrace backstop.
-        _using_interpose_preload = true;
-        _using_interpose_ptrace = true;
-        return;
-    }
     if (!strcmp(interpose_method, "PTRACE")) {
         // From the shim's point of view, behave as if it's not running under
         // Shadow, and let all control happen via ptrace.
@@ -292,21 +286,6 @@ static void _shim_parent_init_ipc() {
     assert(shim_thisThreadEventIPC());
 }
 
-static void _shim_child_init_ipc() {
-    assert(_using_interpose_preload);
-    assert(_using_interpose_ptrace);
-
-    assert(!shim_thisThreadEventIPC());
-    ShMemBlockSerialized ipc_blk_serialized;
-    int rv = shadow_get_ipc_blk(&ipc_blk_serialized);
-    if (rv != 0) {
-        panic("shadow_get_ipc_blk: %s", strerror(errno));
-        abort();
-    }
-    *_shim_ipcDataBlk() = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
-    assert(shim_thisThreadEventIPC());
-}
-
 static void _shim_preload_only_child_init_ipc() {
     assert(_using_interpose_preload);
     assert(!_using_interpose_ptrace);
@@ -344,20 +323,6 @@ static void _shim_ipc_wait_for_start_event() {
     shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
     shim_syscall_set_simtime_nanos(event.event_data.start.simulation_nanos);
-}
-
-static void _shim_parent_init_hybrid() {
-    shim_disableInterposition();
-
-    // The shim logger internally disables interposition while logging, so we open the log
-    // file with interposition disabled too to get a native file descriptor.
-    _shim_parent_init_logging();
-    _shim_parent_init_shm();
-    _shim_parent_init_ipc();
-    _shim_parent_init_death_signal();
-    _shim_ipc_wait_for_start_event();
-
-    shim_enableInterposition();
 }
 
 static void _shim_parent_init_ptrace() {
@@ -558,16 +523,6 @@ static void _shim_parent_init_preload() {
     shim_enableInterposition();
 }
 
-static void _shim_child_init_hybrid() {
-    shim_disableInterposition();
-
-    _shim_child_init_shm();
-    _shim_child_init_ipc();
-    _shim_ipc_wait_for_start_event();
-
-    shim_enableInterposition();
-}
-
 static void _shim_child_init_ptrace() {
     // Disable interposition does not prevent ptrace interposition. We need to override
     // that here to correctly load the shm block.
@@ -617,9 +572,7 @@ __attribute__((constructor)) void _shim_load() {
 
     static bool did_global_init = false;
     if (!did_global_init) {
-        if (_using_interpose_ptrace && _using_interpose_preload) {
-            _shim_parent_init_hybrid();
-        } else if (_using_interpose_ptrace) {
+        if (_using_interpose_ptrace) {
             _shim_parent_init_ptrace();
         } else if (_using_interpose_preload) {
             _shim_parent_init_preload();
@@ -627,9 +580,7 @@ __attribute__((constructor)) void _shim_load() {
         did_global_init = true;
         trace("Finished shim parent init");
     } else {
-        if (_using_interpose_ptrace && _using_interpose_preload) {
-            _shim_child_init_hybrid();
-        } else if (_using_interpose_ptrace) {
+        if (_using_interpose_ptrace) {
             _shim_child_init_ptrace();
         } else if (_using_interpose_preload) {
             _shim_child_init_preload();

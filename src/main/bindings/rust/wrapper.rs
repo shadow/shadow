@@ -51,7 +51,6 @@ pub type _LogLevel = ::std::os::raw::c_uint;
 pub use self::_LogLevel as LogLevel;
 pub const InterposeMethod_INTERPOSE_METHOD_PTRACE: InterposeMethod = 0;
 pub const InterposeMethod_INTERPOSE_METHOD_PRELOAD: InterposeMethod = 1;
-pub const InterposeMethod_INTERPOSE_METHOD_HYBRID: InterposeMethod = 2;
 pub type InterposeMethod = ::std::os::raw::c_uint;
 pub const QDiscMode_Q_DISC_MODE_FIFO: QDiscMode = 0;
 pub const QDiscMode_Q_DISC_MODE_ROUND_ROBIN: QDiscMode = 1;

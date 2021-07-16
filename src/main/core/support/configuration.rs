@@ -554,8 +554,6 @@ pub enum InterposeMethod {
     /// Use LD_PRELOAD to load a library that implements the libC interface which will
     /// route syscalls to Shadow.
     Preload,
-    /// Use both PRELOAD and PTRACE based interposition.
-    Hybrid,
 }
 
 impl std::str::FromStr for InterposeMethod {
