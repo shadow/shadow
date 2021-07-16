@@ -72,20 +72,18 @@ void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const ch
     offset = MIN(offset, sizeof(buf) - 1); // Leave room for newline.
     buf[offset++] = '\n';
 
-    // We avoid locked IO here, since it can result in deadlock if Shadow
-    // forcibly stops this thread while that lock is still held. Interleaved
-    // writes shouldn't be a problem since Shadow only allows one plugin thread
-    // at a time to execute, and doesn't switch threads on file syscalls.
+    // We can't use `fwrite` here, since it internally uses locking
+    // making it definitely not async-signal-safe. (See signal-safety(7)).
     //
-    // This could be reverted to a normal `fwrite` if we end up having Shadow
-    // emulate syscalls inside the shim, since then Shadow would correctly
-    // block a thread on the fwrite-lock (if it's locked) and switch to one
-    // that's runnable.
-    fwrite_unlocked(buf, 1, offset, logger->file);
-
-    if (logger->level == LOGLEVEL_TRACE || level == LOGLEVEL_ERROR) {
-        fflush_unlocked(logger->file);
+    // `fwrite_unlocked` seems like it probably *ought* to be ok to use,
+    // but in practice seems to result in difficult-to-debug failures
+    // when running tor in preload+seccomp mode.
+    //
+    // `write` *is* guaranteed to be async-signal-safe.
+    if (write(fileno(logger->file), buf, offset) < 0) {
+        abort();
     }
+
     shim_enableInterposition();
     *in_logger = false;
 }
