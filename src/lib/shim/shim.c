@@ -27,6 +27,7 @@
 #include "lib/shim/shim_logger.h"
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
+#include "lib/tsc/tsc.h"
 
 // Whether Shadow is using preload-based interposition.
 static bool _using_interpose_preload = false;
@@ -507,6 +508,71 @@ static void _shim_parent_init_seccomp() {
     }
 }
 
+static void _handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
+    trace("Trapped sigsegv");
+    static bool tsc_initd = false;
+    static Tsc tsc;
+    if (!tsc_initd) {
+        trace("Initializing tsc");
+        tsc = Tsc_init();
+        tsc_initd = true;
+    }
+
+    ucontext_t* ctx = (ucontext_t*)(voidUcontext);
+    greg_t* regs = ctx->uc_mcontext.gregs;
+
+    unsigned char* insn = (unsigned char*)regs[REG_RIP];
+    if (isRdtsc(insn)) {
+        trace("Emulating rdtsc");
+        uint64_t rax, rdx;
+        uint64_t rip = regs[REG_RIP];
+        Tsc_emulateRdtsc(&tsc, &rax, &rdx, &rip, shim_syscall_get_simtime_nanos());
+        regs[REG_RDX] = rdx;
+        regs[REG_RAX] = rax;
+        regs[REG_RIP] = rip;
+        return;
+    }
+    if (isRdtscp(insn)) {
+        trace("Emulating rdtscp");
+        uint64_t rax, rdx, rcx;
+        uint64_t rip = regs[REG_RIP];
+        Tsc_emulateRdtscp(&tsc, &rax, &rdx, &rcx, &rip, shim_syscall_get_simtime_nanos());
+        regs[REG_RDX] = rdx;
+        regs[REG_RAX] = rax;
+        regs[REG_RCX] = rcx;
+        regs[REG_RIP] = rip;
+        return;
+    }
+    error("Unhandled sigsegv");
+
+    // We don't have the "normal" segv signal handler to fall back on, but the
+    // sigabrt handler typically does the same thing - dump core and exit with a
+    // failure.
+    raise(SIGABRT);
+}
+
+static void _shim_parent_init_rdtsc_emu() {
+    // Force a SEGV on any rdtsc or rdtscp instruction.
+    if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV) < 0) {
+        panic("pctl: %s", strerror(errno));
+    }
+
+    // Install our own handler to emulate.
+    if (sigaction(SIGSEGV,
+                  &(struct sigaction){
+                      .sa_sigaction = _handle_sigsegv,
+                      // SA_NODEFER: Allow recursive signal handling, to handle a syscall
+                      // being made during the handling of another. For example, we need this
+                      // to properly handle the case that we end up logging from the syscall
+                      // handler, and the IO syscalls themselves are trapped.
+                      // SA_SIGINFO: Required because we're specifying sa_sigaction.
+                      .sa_flags = SA_NODEFER | SA_SIGINFO,
+                  },
+                  NULL) < 0) {
+        panic("sigaction: %s", strerror(errno));
+    }
+}
+
 static void _shim_parent_init_preload() {
     shim_disableInterposition();
 
@@ -516,6 +582,7 @@ static void _shim_parent_init_preload() {
     _shim_parent_init_ipc();
     _shim_parent_init_death_signal();
     _shim_ipc_wait_for_start_event();
+    _shim_parent_init_rdtsc_emu();
     if (getenv("SHADOW_USE_SECCOMP") != NULL) {
         _shim_parent_init_seccomp();
     }

@@ -52,13 +52,6 @@ endif()
 
 add_library(shadow-remora STATIC host/descriptor/tcp_retransmit_tally.cc)
 
-add_library(shadow-tsc STATIC host/tsc.c)
-target_link_libraries(shadow-tsc ${GLIB_LIBRARIES} logger)
-
-add_executable(tsc_test host/tsc_test.c)
-target_link_libraries(tsc_test ${GLIB_LIBRARIES} shadow-tsc)
-add_test(NAME tsc_test COMMAND tsc_test)
-
 set(SHD_SHMEM_SRC
     shmem/buddy.c
     shmem/shmem_allocator.c
@@ -203,6 +196,7 @@ set(RUSTFLAGS "${RUSTFLAGS} -lstdc++")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_CURRENT_BINARY_DIR}")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/logger")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/shim")
+set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/tsc")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")
 
 set(RUST_FEATURES "")

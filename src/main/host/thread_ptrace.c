@@ -17,13 +17,13 @@
 
 #include "lib/logger/logger.h"
 #include "lib/shim/ipc.h"
+#include "lib/tsc/tsc.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
 #include "main/host/shimipc.h"
 #include "main/host/syscall_numbers.h"
 #include "main/host/thread_protected.h"
-#include "main/host/tsc.h"
 #include "main/utility/fork_proxy.h"
 
 #define THREADPTRACE_TYPE_ID 3024
@@ -450,14 +450,26 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
         if (process_readPtr(thread->base.process, buf, (PluginPtr){rip}, sizeof(buf)) == 0) {
             if (isRdtsc(buf)) {
                 trace("emulating rdtsc");
-                Tsc_emulateRdtsc(&thread->tsc, &thread->regs.value, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
+                uint64_t rax, rdx;
+                uint64_t rip = thread->regs.value.rip;
+                Tsc_emulateRdtsc(&thread->tsc, &rax, &rdx, &rip,
+                                 worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
+                thread->regs.value.rdx = rdx;
+                thread->regs.value.rax = rax;
+                thread->regs.value.rip = rip;
                 thread->regs.dirty = true;
                 return;
             }
             if (isRdtscp(buf)) {
                 trace("emulating rdtscp");
-                Tsc_emulateRdtscp(
-                    &thread->tsc, &thread->regs.value, worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
+                uint64_t rax, rdx, rcx;
+                uint64_t rip = thread->regs.value.rip;
+                Tsc_emulateRdtscp(&thread->tsc, &rax, &rdx, &rcx, &rip,
+                                  worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
+                thread->regs.value.rdx = rdx;
+                thread->regs.value.rax = rax;
+                thread->regs.value.rcx = rcx;
+                thread->regs.value.rip = rip;
                 thread->regs.dirty = true;
                 return;
             }

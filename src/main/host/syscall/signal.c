@@ -16,6 +16,40 @@
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
 
+// Signals for which the shim installs a signal handler. We don't let managed
+// code override the handler or change the disposition of these signals.
+//
+// SIGSYS: Used to catch and handle syscalls via seccomp.
+// SIGSEGV: Used to catch and handle usage of rdtsc and rdtscp.
+static int _shim_handled_signals[] = {SIGSYS, SIGSEGV};
+
+#ifndef ARRAY_LENGTH
+#define ARRAY_LENGTH(x) (sizeof(x) / sizeof((x)[0]))
+#endif
+
+static bool _sigset_includes_shim_handled_signal(const sigset_t* set) {
+    for (int i = 0; i < ARRAY_LENGTH(_shim_handled_signals); ++i) {
+        int signal = _shim_handled_signals[i];
+        int rv = sigismember(set, signal);
+        if (rv < 0) {
+            panic("sigismember: %s", g_strerror(errno));
+        }
+        if (rv) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void _sigset_remove_shim_handled_signals(sigset_t* set) {
+    for (int i = 0; i < ARRAY_LENGTH(_shim_handled_signals); ++i) {
+        int signal = _shim_handled_signals[i];
+        if (sigdelset(set, signal) < 0) {
+            panic("sigdelset: %s", g_strerror(errno));
+        }
+    }
+}
+
 // This should be compatible with the kernel's sigaction struct, which is what
 // the syscalls take in cases where the userspace wrappers take `struct
 // sigaction`. While a similar struct definition appears in the glibc source,
@@ -167,20 +201,19 @@ static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr ac
         return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
 
-    // Prevent interference with shim's SIGSYS handler.
+    // Prevent interference with shim's signal handlers.
 
     if (!actPtr.val) {
         // Caller is just reading the action; allow to proceed natively.
         return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
 
-    if (signum == SIGSYS) {
-        // Caller is trying to install their own handler for SIGSYS.  This would
-        // overwrite the shim's SIGSYS handler. `tor` will exit if we return an
-        // error though, so just return 0 without actually installing a new
-        // handler.
-        warning("Ignoring `sigaction` for SIGSYS");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = 0};
+    for (int i = 0; i < ARRAY_LENGTH(_shim_handled_signals); ++i) {
+        int shim_signal = _shim_handled_signals[i];
+        if (signum == shim_signal) {
+            warning("Ignoring `sigaction` for signal %d", shim_signal);
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval = 0};
+        }
     }
 
     size_t sz = kernel_sigaction_size(masksize);
@@ -196,11 +229,7 @@ static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr ac
         return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
     }
 
-    rv = sigismember(&action.sa_mask, SIGSYS);
-    if (rv < 0) {
-        panic("sigismember: %s", g_strerror(errno));
-    }
-    if (!rv) {
+    if (!_sigset_includes_shim_handled_signal(&action.sa_mask)) {
         // SIGSYS not present; proceed natively.
         return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
@@ -216,10 +245,7 @@ static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr ac
     utility_assert(modified_action);
 
     *modified_action = action;
-    rv = sigdelset(&modified_action->sa_mask, SIGSYS);
-    if (rv < 0) {
-        panic("sigdelset: %s", g_strerror(errno));
-    }
+    _sigset_remove_shim_handled_signals(&modified_action->sa_mask);
     process_flushPtrs(sys->process);
 
     long result = thread_nativeSyscall(
@@ -268,16 +294,11 @@ static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr set
         return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
     }
 
-    rv = sigismember(&set, SIGSYS);
-    if (rv < 0) {
-        panic("sigismember: %s", g_strerror(errno));
-    }
-    if (!rv) {
-        // SIGSYS not present; proceed natively.
+    if (!_sigset_includes_shim_handled_signal(&set)) {
         return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
 
-    // Remove SIGSYS from set and execute syscall with modified set.
+    // Remove handled signals from set and execute syscall with modified set.
 
     AllocdMem_u8* modified_set_mem = allocdmem_new(sys->thread, sizeof(sigset_t));
     utility_assert(modified_set_mem);
@@ -287,10 +308,7 @@ static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr set
     utility_assert(modified_set);
 
     *modified_set = set;
-    rv = sigdelset(modified_set, SIGSYS);
-    if (rv < 0) {
-        panic("sigdelset: %s", g_strerror(errno));
-    }
+    _sigset_remove_shim_handled_signals(modified_set);
     process_flushPtrs(sys->process);
 
     long result = thread_nativeSyscall(

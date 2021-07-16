@@ -14,25 +14,20 @@ typedef struct _Tsc {
     uint64_t cyclesPerSecond;
 } Tsc;
 
-// Initializes a Tsc heuristically by measuring on the host system. FIXME:
-// should be able to do this more efficiently and accurately by querying the
-// CPU.
-Tsc Tsc_measure();
+// Instantiate a TSC with the same frequency as the host system TSC.
+Tsc Tsc_init();
 
 // Updates `regs` to reflect the result of executing an rdtsc instruction at
 // time `nanos`.
-void Tsc_emulateRdtsc(const Tsc* tsc, struct user_regs_struct* regs,
-                      uint64_t nanos);
+void Tsc_emulateRdtsc(const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rip, uint64_t nanos);
 
 // Updates `regs` to reflect the result of executing an rdtscp instruction at
 // time `nanos`.
-void Tsc_emulateRdtscp(const Tsc* tsc, struct user_regs_struct* regs,
+void Tsc_emulateRdtscp(const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rcx, uint64_t* rip,
                        uint64_t nanos);
 
 // Whether `buf` begins with an rdtsc instruction.
-static inline bool isRdtsc(const uint8_t* buf) {
-    return buf[0] == 0x0f && buf[1] == 0x31;
-}
+static inline bool isRdtsc(const uint8_t* buf) { return buf[0] == 0x0f && buf[1] == 0x31; }
 
 // Whether `buf` begins with an rdtscp instruction.
 static inline bool isRdtscp(const uint8_t* buf) {
