@@ -1,0 +1,1 @@
+add_shadow_tests(BASENAME environment)

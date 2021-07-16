@@ -113,6 +113,10 @@ path = "threads/test_threads_group_leader_exits.rs"
 name = "test_ifaddrs"
 path = "ifaddrs/test_ifaddrs.rs"
 
+[[bin]]
+name = "test_env"
+path = "environment/test_env.rs"
+
 [dependencies]
 libc = "0.2"
 nix = "0.22.0"
