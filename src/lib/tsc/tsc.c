@@ -50,7 +50,7 @@ static uint64_t _frequency_via_cpuid0x15() {
     }
     // From "cpuid": "An unsigned integer which is the nominal frequency of the
     // core crystal clock in Hz."
-    const unsigned int core = c;
+    unsigned int core = c;
     if (!core) {
         // From "cpuid": "If ECX is 0, the nominal core crystal clock frequency
         // is not enumerated". Gee, thanks.
@@ -58,20 +58,39 @@ static uint64_t _frequency_via_cpuid0x15() {
         // "Intel® 64 and IA-32 ArchitecturesSoftware Developer’s Manual
         // Volume 3B: System Programming Guide, Part 2", "18.18 COUNTING CLOCKS",
         // gives a 2 row table for this case:
-
-        // 6th and 7th generation Intel® Core™ processors -> 24 MHz
         //
-        // Next Generation Intel® Atom™ processors based on Goldmont
-        // Microarchitecture with CPUID signature 06_5CH -> 19.2 MHz.
+        //   6th and 7th generation Intel® Core™ processors -> 24 MHz
         //
-        // This probably *would* be the best way to proceed, but I'm not sure precisely
-        // what's meant by "CPUID signature 06_5CH".
+        //   Next Generation Intel® Atom™ processors based on Goldmont
+        //   Microarchitecture with CPUID signature 06_5CH -> 19.2 MHz.
         //
-        // Fail and fall back to alternate method for now.
-        debug("cpuid 0x15 didn't give core frequency. Frequency should be either %lu or %lu",
-              (uint64_t)24000000 * numerator / denominator,
-              (uint64_t)19200000 * numerator / denominator);
-        return 0;
+        // I wasn't able to find a precise mapping from "06_5CH" to exactly a
+        // cpuid result in the Intel manual, but from
+        // https://en.wikichip.org/wiki/intel/cpuid, it appears to mean "family
+        // 0x6, extended model 0x5, model 0xc", as returned by cpuid 0x1.
+        //
+        // AFAICT from https://www.amd.com/system/files/TechDocs/25481.pdf, AMD
+        // processors don't support cpuid 0x15 at all, so we would've already
+        // bailed out earlier for those.
+        if (!__get_cpuid(0x1, &a, &b, &c, &d)) {
+            debug("cpuid 0x1 failed");
+            return 0;
+        }
+        // bits 11-8
+        unsigned int family_id = (a >> 8) & 0xf;
+        // bits 19-16
+        unsigned int extended_model_id = (a >> 16) & 0xf;
+        // bits 7-4
+        unsigned int model = (a >> 4) & 0xf;
+        trace("rax %u -> family_id:0x%x extended_model_id:0x%x model:0x%x", a, family_id,
+              extended_model_id, model);
+        if (family_id == 0x6 && extended_model_id == 0x5 && model == 0xc) {
+            trace("goldmont; using 19.2 MHz crystal frequency");
+            core = 19200000;
+        } else {
+            trace("non-goldmont; using 24 MHz crystal frequency");
+            core = 24000000;
+        }
     }
 
     uint64_t freq = (uint64_t)core * numerator / denominator;
