@@ -34,3 +34,25 @@ You can use the [tornettools
 toolkit](https://github.com/shadow/tornettools) to run larger, more
 complex Tor networks that are meant to more accurately resemble the
 characteristics and state of the public Tor network.
+
+## Determinism
+
+Shadow isn't able to natively intercept all sources entropy that tor uses via
+openssl, which results in non-deterministic results. If you'd like better
+determinism for your simulation, you can use the provided auxiliary library,
+libshadow_openssl_rng, whichoverride's some of openssl's RNG routines.
+
+To do so, add the full path to the library to the `LD_PRELOAD` in each tor
+process's `environment`.  If you've installed Shadow to the default location,
+the path should be `home/<username>/.local/lib/libshadow_openssl_rng.so`.
+
+```
+...
+hosts:
+  torclient:
+    processes:
+      - path: ~/.local/bin/tor
+        # Must provide absolute path. See #1523.
+        environment: 'LD_PRELOAD=/home/<username>/.local/lib/libshadow_openssl_rng.so'
+...
+```
