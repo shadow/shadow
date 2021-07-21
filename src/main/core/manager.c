@@ -460,9 +460,9 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
                     for (int i = 0; paths != NULL && paths[i] != NULL; i++) {
                         GString* pathBuf = g_string_new(NULL);
 
-                        if (!g_ascii_strncasecmp(paths[i], "~/", 2)) {
+                        if (g_str_has_prefix(paths[i], "~/")) {
                             g_string_printf(pathBuf, "%s%s", g_get_home_dir(), &paths[i][1]);
-                        } else if (!g_ascii_strncasecmp(paths[i], "~", 1)) {
+                        } else if (g_str_has_prefix(paths[i], "~")) {
                             g_string_printf(pathBuf, "/home/%s", &paths[i][1]);
                         } else {
                             g_string_printf(pathBuf, "%s", paths[i]);
