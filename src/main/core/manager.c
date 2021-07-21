@@ -410,12 +410,12 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
     GPtrArray* ldPreloadArray = g_ptr_array_new();
 
     if (manager->preloadShimPath != NULL) {
-        debug("adding required preload shim path %s", manager->preloadShimPath);
+        debug("adding Shadow preload shim path %s", manager->preloadShimPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadShimPath));
     }
 
     if (manager->preloadOpensslRngPath != NULL) {
-        debug("adding optional preload lib path %s", manager->preloadOpensslRngPath);
+        debug("adding Shadow preload lib path %s", manager->preloadOpensslRngPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadOpensslRngPath));
     }
 
@@ -435,9 +435,40 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
             if (key != NULL && value != NULL) {
                 /* check if the key is LD_PRELOAD */
                 if (!g_ascii_strncasecmp(key, "LD_PRELOAD", 10)) {
-                    /* append all LD_PRELOAD entries */
-                    debug("adding key path %s", value);
-                    g_ptr_array_add(ldPreloadArray, g_strdup(value));
+                    // Handle the list of entries, which could be separated by ' ' or ':'.
+                    GString* preloadBuf = g_string_new(value);
+
+                    // First replace all occurences of ' ' by ':'.
+                    // g_string_replace does what we want, but isn't available until glib 2.68.
+                    for (int i = 0; i < preloadBuf->len; i++) {
+                        if (preloadBuf->str[i] == ' ') {
+                            preloadBuf->str[i] = ':';
+                        }
+                    }
+
+                    // Now split by ':' to handle each preload path.
+                    gchar** paths = g_strsplit(preloadBuf->str, ":", 0);
+
+                    // Expand any paths that begin with '~'.
+                    for (int i = 0; paths != NULL && paths[i] != NULL; i++) {
+                        GString* pathBuf = g_string_new(NULL);
+
+                        if (!g_ascii_strncasecmp(paths[i], "~/", 2)) {
+                            g_string_printf(pathBuf, "%s%s", g_get_home_dir(), &paths[i][1]);
+                        } else if (!g_ascii_strncasecmp(paths[i], "~", 1)) {
+                            g_string_printf(pathBuf, "/home/%s", &paths[i][1]);
+                        } else {
+                            g_string_printf(pathBuf, "%s", paths[i]);
+                        }
+
+                        debug("adding Process preload lib path %s", pathBuf->str);
+                        g_ptr_array_add(ldPreloadArray, pathBuf->str);
+                        g_string_free(pathBuf, FALSE);
+                    }
+
+                    // Cleanup.
+                    g_strfreev(paths);
+                    g_string_free(preloadBuf, TRUE);
                 } else {
                     /* set the key=value pair, but don't overwrite any existing settings */
                     envv = g_environ_setenv(envv, key, value, 0);
@@ -457,6 +488,7 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
     g_ptr_array_unref(ldPreloadArray);
 
     /* now we can set the LD_PRELOAD environment */
+    debug("Setting process env LD_PRELOAD=%s", ldPreloadVal);
     envv = g_environ_setenv(envv, "LD_PRELOAD", ldPreloadVal, TRUE);
 
     /* cleanup */
