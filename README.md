@@ -10,7 +10,7 @@
 Shadow is a discrete-event network simulator that directly executes real
 application code, enabling you to simulate distributed systems with thousands of
 network-connected processes in **realistic** and **scalable** private network
-experiments using your laptop or desktop running Linux.
+experiments using your laptop, desktop, or server running Linux.
 
 Shadow experiments can be scientifically **controlled** and deterministically
 **replicated**, making it easier for you to reproduce bugs and eliminate
