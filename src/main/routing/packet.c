@@ -682,11 +682,10 @@ void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) 
 
     packet->allStatus |= status;
 
-    gboolean skipDebug = worker_isFiltered(LOGLEVEL_TRACE);
-    if(!skipDebug) {
+    if(!worker_isFiltered(LOGLEVEL_TRACE)) {
         g_queue_push_tail(packet->orderedStatus, GUINT_TO_POINTER(status));
         gchar* packetStr = packet_toString(packet);
-        info("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
+        trace("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
         g_free(packetStr);
     }
 }
