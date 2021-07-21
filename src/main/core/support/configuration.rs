@@ -260,6 +260,11 @@ pub struct ExperimentalOptions {
     #[clap(about = EXP_HELP.get("use_object_counters").unwrap())]
     use_object_counters: Option<bool>,
 
+    /// Preload our OpenSSL RNG library for all managed processes to mitigate non-deterministic use of OpenSSL.
+    #[clap(long, value_name = "bool")]
+    #[clap(about = EXP_HELP.get("use_openssl_rng_preload").unwrap())]
+    use_openssl_rng_preload: Option<bool>,
+
     /// Max number of iterations to busy-wait on IPC semaphore before blocking
     #[clap(long, value_name = "iterations")]
     #[clap(about = EXP_HELP.get("preload_spin_max").unwrap())]
@@ -357,6 +362,7 @@ impl Default for ExperimentalOptions {
             use_seccomp: None,
             use_syscall_counters: Some(false),
             use_object_counters: Some(true),
+            use_openssl_rng_preload: Some(true),
             preload_spin_max: Some(0),
             use_memory_manager: Some(true),
             use_shim_syscall_handler: Some(true),
@@ -1149,6 +1155,13 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_object_counters.unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getUseOpensslRNGPreload(config: *const ConfigOptions) -> bool {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        config.experimental.use_openssl_rng_preload.unwrap()
     }
 
     #[no_mangle]

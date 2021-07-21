@@ -59,6 +59,7 @@ hosts:
 - [`experimental.use_memory_manager`](#experimentaluse_memory_manager)
 - [`experimental.use_o_n_waitpid_workarounds`](#experimentaluse_o_n_waitpid_workarounds)
 - [`experimental.use_object_counters`](#experimentaluse_object_counters)
+- [`experimental.use_openssl_rng_preload`](#experimentaluse_openssl_rng_preload)
 - [`experimental.use_sched_fifo`](#experimentaluse_sched_fifo)
 - [`experimental.use_shim_syscall_handler`](#experimentaluse_shim_syscall_handler)
 - [`experimental.use_seccomp`](#experimentaluse_seccomp)
@@ -360,6 +361,14 @@ Type: Bool
 
 Count object allocations and deallocations. If disabled, we will not be able to
 detect object memory leaks.
+
+#### `experimental.use_openssl_rng_preload`
+
+Default: true  
+Type: Bool
+
+Preload our OpenSSL RNG library for all managed processes to mitigate
+non-deterministic use of OpenSSL.
 
 #### `experimental.use_sched_fifo`
 

@@ -19,6 +19,7 @@
 #include "main/core/manager.h"
 #include "main/core/scheduler/scheduler.h"
 #include "main/core/scheduler/scheduler_policy.h"
+#include "main/core/support/config_handlers.h"
 #include "main/core/support/definitions.h"
 #include "main/host/host.h"
 #include "main/host/network_interface.h"
@@ -30,6 +31,10 @@
 
 #define PRELOAD_SHIM_LIB_STR "libshadow-shim.so"
 #define PRELOAD_OPENSSL_RNG_LIB_STR "libshadow_openssl_rng.so"
+
+// Allow turning off openssl rng lib preloading at run-time.
+static bool _use_openssl_rng_preload = true;
+ADD_CONFIG_HANDLER(config_getUseOpensslRNGPreload, _use_openssl_rng_preload)
 
 struct _Manager {
     Controller* controller;
@@ -414,7 +419,9 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadShimPath));
     }
 
-    if (manager->preloadOpensslRngPath != NULL) {
+    if (!_use_openssl_rng_preload) {
+        debug("openssl rng preloading is disabled");
+    } else if (manager->preloadOpensslRngPath != NULL) {
         debug("adding Shadow preload lib path %s", manager->preloadOpensslRngPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadOpensslRngPath));
     }
