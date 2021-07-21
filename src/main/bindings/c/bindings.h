@@ -270,6 +270,9 @@ void processoptions_freeString(char *string);
 // Will return a NULL pointer if the path does not exist.
 char *processoptions_getPath(const struct ProcessOptions *proc);
 
+// Returns the path exactly as specified in the config. Caller must free returned string.
+char *processoptions_getRawPath(const struct ProcessOptions *proc);
+
 void processoptions_getArgs(const struct ProcessOptions *proc,
                             void (*f)(const char*, void*),
                             void *data);

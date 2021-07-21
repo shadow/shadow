@@ -1577,6 +1577,14 @@ mod export {
         }
     }
 
+    /// Returns the path exactly as specified in the config. Caller must free returned string.
+    #[no_mangle]
+    pub extern "C" fn processoptions_getRawPath(proc: *const ProcessOptions) -> *mut libc::c_char {
+        assert!(!proc.is_null());
+        let proc = unsafe { proc.as_ref().unwrap() };
+        CString::into_raw(CString::new(proc.path.to_string_lossy().as_bytes()).unwrap())
+    }
+
     #[no_mangle]
     pub extern "C" fn processoptions_getArgs(
         proc: *const ProcessOptions,
