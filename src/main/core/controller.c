@@ -229,7 +229,9 @@ static void _controller_registerProcessCallback(const ProcessOptions* proc, void
 
     char* plugin = processoptions_getPath(proc);
     if (plugin == NULL) {
-        utility_panic("The process binary could not be found");
+        error("For host '%s', couldn't find program path: '%s'", callbackArgs->hostname,
+              processoptions_getRawPath(proc));
+        exit(EXIT_FAILURE);
     }
 
     // build an argv array
