@@ -152,11 +152,15 @@ void logger_setLevel(Logger* logger, LogLevel level) {
 }
 
 bool logger_isEnabled(Logger* logger, LogLevel level) {
-    // Most logging frameworks log little/nothing unless explicitly enabled.
-    // That probably makes sense for a framework used across independent
-    // libraries and apps, but in our case verbose is a useful default,
-    // particularly in test programs.
-    return true;
+    if (!logger) {
+        // Most logging frameworks log little/nothing unless explicitly enabled.
+        // That probably makes sense for a framework used across independent
+        // libraries and apps, but in our case verbose is a useful default,
+        // particularly in test programs.
+        return true;
+    } else {
+        return logger->isEnabled(logger, level);
+    }
 }
 
 void logger_flush(Logger* logger) {
