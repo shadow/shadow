@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "log-bindings"
-version = "2.0.0-pre.3"
+version = "2.0.0-pre.4"
 
 [[package]]
 name = "memchr"
@@ -515,7 +515,7 @@ dependencies = [
 
 [[package]]
 name = "shadow-rs"
-version = "2.0.0-pre.3"
+version = "2.0.0-pre.4"
 dependencies = [
  "atomic_refcell",
  "bitflags",
