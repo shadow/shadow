@@ -379,7 +379,7 @@ void manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
 }
 
 static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interposeMethod,
-                                     const gchar* preloadShimPath, const gchar* environment) {
+                                     const gchar* environment) {
     MAGIC_ASSERT(manager);
 
     /* start with an empty environment */
@@ -405,11 +405,19 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
     /* insert also the plugin preload entry if one exists.
      * precendence here is:
      *   - preload path of the shim
-     *   - preload values from LD_PRELOAD entries in the environment attribute of the shadow
-     * element*/
+     *   - preload path of the openssl rng lib
+     *   - preload values from LD_PRELOAD entries in the environment process option */
     GPtrArray* ldPreloadArray = g_ptr_array_new();
-    debug("adding shim path %s", preloadShimPath ? preloadShimPath : "null");
-    g_ptr_array_add(ldPreloadArray, g_strdup(preloadShimPath));
+
+    if (manager->preloadShimPath != NULL) {
+        debug("adding required preload shim path %s", manager->preloadShimPath);
+        g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadShimPath));
+    }
+
+    if (manager->preloadOpensslRngPath != NULL) {
+        debug("adding optional preload lib path %s", manager->preloadOpensslRngPath);
+        g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadOpensslRngPath));
+    }
 
     /* now we also have to scan the other env variables that were given in the shadow conf file */
 
@@ -468,8 +476,7 @@ void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar
     InterposeMethod interposeMethod = config_getInterposeMethod(manager->config);
 
     /* ownership is passed to the host/process below, so we don't free these */
-    gchar** envv = _manager_generateEnvv(
-        manager, interposeMethod, manager->preloadShimPath, environment);
+    gchar** envv = _manager_generateEnvv(manager, interposeMethod, environment);
 
     Host* host = scheduler_getHost(manager->scheduler, hostID);
     host_continueExecutionTimer(host);
