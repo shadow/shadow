@@ -29,6 +29,7 @@
 #include "main/utility/utility.h"
 
 #define PRELOAD_SHIM_LIB_STR "libshadow-shim.so"
+#define PRELOAD_OPENSSL_RNG_LIB_STR "libshadow_openssl_rng.so"
 
 struct _Manager {
     Controller* controller;
@@ -71,7 +72,10 @@ struct _Manager {
     gchar* dataPath;
     gchar* hostsPath;
 
+    // Path to the shim that we preload for every managed process.
     gchar* preloadShimPath;
+    // Path to the openssl rng lib that we preload for requesting managed processes.
+    gchar* preloadOpensslRngPath;
 
     MAGIC_DECLARE;
 };
@@ -111,13 +115,13 @@ static gchar* _manager_getRPath() {
     return g_string_free(rpathStrBuf, FALSE);
 }
 
-static gboolean _manager_isValidPathToPreloadLib(const gchar* path) {
+static gboolean _manager_isValidPathToPreloadLib(const gchar* path, const gchar* libname) {
     if(path) {
         gboolean isAbsolute = g_path_is_absolute(path);
         gboolean exists = g_file_test(path, G_FILE_TEST_IS_REGULAR|G_FILE_TEST_EXISTS);
-        gboolean isShadowPreload = g_str_has_suffix(path, PRELOAD_SHIM_LIB_STR);
+        gboolean hasLibName = g_str_has_suffix(path, libname);
 
-        if(isAbsolute && exists && isShadowPreload) {
+        if (isAbsolute && exists && hasLibName) {
             return TRUE;
         }
     }
@@ -125,7 +129,7 @@ static gboolean _manager_isValidPathToPreloadLib(const gchar* path) {
     return FALSE;
 }
 
-static gchar* _manager_scanRPathForPreloadShim(){
+static gchar* _manager_scanRPathForLib(const gchar* libname) {
     gchar* preloadArgValue = NULL;
 
     gchar* rpathStr = _manager_getRPath();
@@ -136,10 +140,10 @@ static gchar* _manager_scanRPathForPreloadShim(){
             GString* candidateBuffer = g_string_new(NULL);
 
             /* rpath specifies directories, so look inside */
-            g_string_printf(candidateBuffer, "%s/%s", tokens[i], PRELOAD_SHIM_LIB_STR);
+            g_string_printf(candidateBuffer, "%s/%s", tokens[i], libname);
             gchar* candidate = g_string_free(candidateBuffer, FALSE);
 
-            if(_manager_isValidPathToPreloadLib(candidate)) {
+            if (_manager_isValidPathToPreloadLib(candidate, libname)) {
                 preloadArgValue = candidate;
                 break;
             } else {
@@ -191,11 +195,22 @@ Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTi
         trace("raw manager cpu frequency unavailable, using 2,500,000 KHz");
     }
 
-    manager->preloadShimPath = _manager_scanRPathForPreloadShim();
+    manager->preloadShimPath = _manager_scanRPathForLib(PRELOAD_SHIM_LIB_STR);
     if (manager->preloadShimPath != NULL) {
-        info("found %s at %s", PRELOAD_SHIM_LIB_STR, manager->preloadShimPath);
+        info("found required preload library %s at path %s", PRELOAD_SHIM_LIB_STR,
+             manager->preloadShimPath);
     } else {
-        utility_panic("could not find %s in rpath", PRELOAD_SHIM_LIB_STR);
+        // The shim is required, so panic if we can't find it.
+        utility_panic("could not find required preload library %s in rpath", PRELOAD_SHIM_LIB_STR);
+    }
+
+    manager->preloadOpensslRngPath = _manager_scanRPathForLib(PRELOAD_OPENSSL_RNG_LIB_STR);
+    if (manager->preloadOpensslRngPath != NULL) {
+        info("found optional preload library %s at path %s", PRELOAD_OPENSSL_RNG_LIB_STR,
+             manager->preloadOpensslRngPath);
+    } else {
+        // The Openssl Rng is optional and may not be used by and managed processes.
+        warning("could not find optional preload library %s in rpath", PRELOAD_OPENSSL_RNG_LIB_STR);
     }
 
     /* the main scheduler may utilize multiple threads */
@@ -325,6 +340,9 @@ gint manager_free(Manager* manager) {
     }
     if (manager->preloadShimPath) {
         g_free(manager->preloadShimPath);
+    }
+    if (manager->preloadOpensslRngPath) {
+        g_free(manager->preloadOpensslRngPath);
     }
 
     MAGIC_CLEAR(manager);

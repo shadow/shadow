@@ -15,8 +15,9 @@ endif()
 
 include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
 
-## link to the shim (rpath will not contain this path when shadow is installed)
+## link to preload libs (rpath will not contain these paths when shadow is installed)
 link_directories(${CMAKE_BINARY_DIR}/src/lib/shim)
+link_directories(${CMAKE_BINARY_DIR}/src/lib/openssl_preload)
 
 ## compile defs and flags
 #add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOURCE
@@ -196,6 +197,7 @@ set(RUSTFLAGS "${RUSTFLAGS} -lstdc++")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_CURRENT_BINARY_DIR}")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/logger")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/shim")
+set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/openssl_preload")
 set(RUSTFLAGS "${RUSTFLAGS} -L${CMAKE_BINARY_DIR}/src/lib/tsc")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")
 
