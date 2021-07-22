@@ -10,7 +10,7 @@ CONTAINERS=(
     ubuntu:18.04
     ubuntu:20.04
     debian:10-slim
-    fedora:33
+    fedora:34
     quay.io/centos/centos:stream8
     )
 
@@ -52,9 +52,9 @@ Run all default configurations, but restrict C compilers to gcc:
   $0 -C gcc
 
 Run all default configurations, but restrict C compilers to gcc,
-and containers to ubuntu:18.04 and fedora:33:
+and containers to ubuntu:18.04 and fedora:34:
 
-  $0 -C gcc -c "ubuntu:18.04 fedora:33"
+  $0 -C gcc -c "ubuntu:18.04 fedora:34"
 
 Set "extra" configurations to ubuntu:18.04;clang;coverage
 and debian:10-slim;gcc;coverage

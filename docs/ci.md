@@ -35,7 +35,7 @@ you'll want to only run some smaller set of configurations locally.
 To run only the configurations you specify, use the `-o` flag:
 
 ```{.bash}
-sudo ci/run.sh -i -o "ubuntu:18.04;clang;debug fedora:33;gcc;release"
+sudo ci/run.sh -i -o "ubuntu:18.04;clang;debug fedora:34;gcc;release"
 ```
 
 For additional options, run `ci/run.sh -h`.
