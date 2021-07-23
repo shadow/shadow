@@ -83,10 +83,9 @@ static int _getaddrinfo_service(in_port_t* port, const char* service,
     char* buf = malloc(1024);
     struct servent servent;
     struct servent* result;
-    int rv = 0;
-    int lookupres =
+    int rv =
         getservbyname_r(service, NULL, &servent, buf, 1024, &result);
-    if (lookupres != 0) {
+    if (rv != 0) {
         // According to getservbyname_r(3): "On error, they return one of the
         // positive error numbers listed in errors." The only one documented as
         // possibly being returned by getserbyname_r is ERANGE, indicating that
