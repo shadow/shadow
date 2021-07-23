@@ -61,6 +61,36 @@ You need to either log out and back in or reboot for the changes to take affect.
 You can watch `/proc/sys/fs/file-nr` and reduce the limit according to your
 usage, if you'd like.
 
+### systemd Limits
+
+systemd may place a limit on the number of tasks that a user can run in its
+slice. You can check to see if a limit is in place by running
+
+```
+$ systemctl status user-$UID.slice
+```
+
+Heere's a listing of an example response:
+
+```
+● user-1027.slice - User Slice of <user>
+   Loaded: loaded
+Transient: yes
+  Drop-In: /run/systemd/system/user-1027.slice.d
+           └─50-After-systemd-logind\x2eservice.conf, 50-After-systemd-user-sessions\x2eservice.conf, 50-Description.conf, 50-TasksMax.conf
+   Active: active since Wed 2020-05-06 21:20:08 EDT; 1 years 2 months ago
+    Tasks: 81 (limit: 12288)
+```
+
+The last line of the listing shows that this user has a task limit of 12288
+tasks.
+
+If this task limit is too small, it can be removed with the following command:
+
+```
+$ sudo systemctl set-property user-$UID.slice TasksMax=-1
+```
+
 ## Number of Maps
 
 There is a system limit on the number of `mmap()` mappings per process. Most
@@ -89,6 +119,45 @@ Set a new limit, make it persistent, apply it now:
 sudo sysctl -w vm.max_map_count=1073741824
 sudo echo "vm.max_map_count = 1073741824" >> /etc/sysctl.conf
 sudo sysctl -p
+```
+
+## Process / Thread Count Limits
+
+### System-Wide Limits
+
+The kernel may limit the max-pid value to a small value, which will limit the
+total number of possible processes running on the machine. This limit can be
+raised by the command
+
+```bash
+sudo sysctl -w kernel.pid_max=4194304
+sudo echo "kernel.pid_max = 4194394" >> /etc/sysctl.conf
+sudo sysctl -p
+```
+
+The kernel may also limit the total number of threads running on the machine.
+This limit can be raised, too.
+
+```bash
+sudo sysctl -w kernel.threads-max=4194304
+sudo echo "kernel.threads-max = 4194394" >> /etc/sysctl.conf
+sudo sysctl -p
+```
+
+The kernel may cap the `kernel.threads-max` value automatically so that, in the
+maximum limit, the memory consumed by kernel thread control structures do not
+consume more than approx. (1/8)th of system memory (see
+<https://stackoverflow.com/a/21926745>).
+
+### User Limits
+
+You may need to raise the number of maximum number of user processes allowed in
+`/etc/security/limits.conf`. For example, user limits can be removed with the
+lines:
+
+```
+rjansen soft nproc unlimited
+rjansen hard nproc unlimited
 ```
 
 ## For more information
