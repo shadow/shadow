@@ -394,10 +394,10 @@ mod tests {
         }
 
         // Child should be ready to be reaped.
-        assert_eq!(
-            waitpid(child, Some(WaitPidFlag::WNOHANG)).unwrap(),
-            WaitStatus::Exited(child, 42)
-        );
+        // TODO: use WNOHANG here if we go back to a pidfd-based implementation.
+        // With the current fd-based implementation we may be notified before kernel
+        // marks the child reapable.
+        assert_eq!(waitpid(child, None).unwrap(), WaitStatus::Exited(child, 42));
     }
 
     #[test]
@@ -445,10 +445,10 @@ mod tests {
         }
 
         // Child should be ready to be reaped.
-        assert_eq!(
-            waitpid(child, Some(WaitPidFlag::WNOHANG)).unwrap(),
-            WaitStatus::Exited(child, 42)
-        );
+        // TODO: use WNOHANG here if we go back to a pidfd-based implementation.
+        // With the current fd-based implementation we may be notified before kernel
+        // marks the child reapable.
+        assert_eq!(waitpid(child, None).unwrap(), WaitStatus::Exited(child, 42));
     }
 
     #[test]
@@ -484,10 +484,10 @@ mod tests {
         }
 
         // Child should be ready to be reaped.
-        assert_eq!(
-            waitpid(child, Some(WaitPidFlag::WNOHANG)).unwrap(),
-            WaitStatus::Exited(child, 42)
-        );
+        // TODO: use WNOHANG here if we go back to a pidfd-based implementation.
+        // With the current fd-based implementation we may be notified before kernel
+        // marks the child reapable.
+        assert_eq!(waitpid(child, None).unwrap(), WaitStatus::Exited(child, 42));
     }
 
     #[test]
@@ -539,10 +539,10 @@ mod tests {
         assert!(!*cb1_ran.0.lock().unwrap());
 
         // Child should be ready to be reaped.
-        assert_eq!(
-            waitpid(child, Some(WaitPidFlag::WNOHANG)).unwrap(),
-            WaitStatus::Exited(child, 42)
-        );
+        // TODO: use WNOHANG here if we go back to a pidfd-based implementation.
+        // With the current fd-based implementation we may be notified before kernel
+        // marks the child reapable.
+        assert_eq!(waitpid(child, None).unwrap(), WaitStatus::Exited(child, 42));
     }
 }
 
