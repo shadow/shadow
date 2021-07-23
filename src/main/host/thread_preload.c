@@ -95,6 +95,13 @@ static gchar** _add_shadow_pid_to_env(gchar** envp) {
 
 static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, char* const argv[],
                                       char* const envp[], const char* workingDir) {
+    // For childpidwatcher. We must create them O_CLOEXEC to prevent them from
+    // "leaking" into a concurrently forked child.
+    int pipefd[2];
+    if (pipe2(pipefd, O_CLOEXEC)) {
+        utility_panic("pipe2: %s", g_strerror(errno));
+    }
+
     // vfork has superior performance to fork with large workloads.
     pid_t pid = vfork();
 
@@ -111,6 +118,11 @@ static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, c
         case 0: {
             // child
 
+            // *Don't* close the write end of the pipe on exec.
+            if (fcntl(pipefd[1], F_SETFD, 0)) {
+                die_after_vfork();
+            }
+
             // Set the working directory
             if (chdir(workingDir) < 0) {
                 die_after_vfork();
@@ -124,10 +136,20 @@ static pid_t _threadpreload_fork_exec(ThreadPreload* thread, const char* file, c
             die_after_vfork();
         }
         default: // parent
-            debug("started process %s with PID %d", file, pid);
-            return pid;
             break;
     }
+
+    // *Must* close the write-end of the pipe, so that the child's copy is the
+    // last remaining one, allowing the read-end to be notified when the child
+    // exits.
+    if (close(pipefd[1])) {
+        utility_panic("close: %s", g_strerror(errno));
+    }
+
+    childpidwatcher_registerPid(worker_getChildPidWatcher(), pid, pipefd[0]);
+
+    debug("started process %s with PID %d", file, pid);
+    return pid;
 }
 
 static void _threadpreload_cleanup(ThreadPreload* thread) {
@@ -313,6 +335,8 @@ void threadpreload_handleProcessExit(Thread* base) {
     MAGIC_ASSERT(base);
     ThreadPreload* thread = _threadToThreadPreload(base);
     // TODO [rwails]: come back and make this logic more solid
+
+    childpidwatcher_unregisterPid(worker_getChildPidWatcher(), base->nativePid);
 
     /* make sure we cleanup circular refs */
     if (thread->base.sys) {
