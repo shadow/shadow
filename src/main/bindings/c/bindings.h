@@ -556,6 +556,28 @@ struct ChildPidWatcher *childpidwatcher_new(void);
 
 void childpidwatcher_free(struct ChildPidWatcher *watcher);
 
+int32_t childpidwatcher_forkWatchable(const struct ChildPidWatcher *watcher,
+                                      void (*child_fn)(void*),
+                                      void *child_fn_data);
+
+// Register interest in `pid`, and associate it with `read_fd`.
+//
+// `read_fd` should be the read end of a pipe, whose write end is owned
+// *solely* by `pid`, causing `read_fd` to become invalid when `pid` exits.
+// In a multi-threaded program care must be taken to prevent a concurrent
+// fork from leaking the write end of the pipe into other children. One way
+// to avoid this is to use O_CLOEXEC when creating the pipe, and then unset
+// O_CLOEXEC in the child before calling exec.
+//
+// Be sure to close the parent's write-end of the pipe.
+//
+// Takes ownership of `read_fd`, and will close it when appropriate.
+void childpidwatcher_registerPid(const struct ChildPidWatcher *watcher,
+                                 int32_t pid,
+                                 int32_t read_fd);
+
+void childpidwatcher_unregisterPid(const struct ChildPidWatcher *watcher, int32_t pid);
+
 // Call `callback` exactly once from another thread after the child `pid`
 // has exited, including if it has already exited. Does *not* reap the
 // child itself.
