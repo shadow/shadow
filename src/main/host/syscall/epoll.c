@@ -216,3 +216,15 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     /* Return the number of events that are ready. */
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = nEvents};
 }
+
+SysCallReturn syscallhandler_epoll_pwait(SysCallHandler* sys, const SysCallArgs* args) {
+    PluginPtr sigmask = args->args[4].as_ptr;
+
+    if (sigmask.val != 0) {
+        error("epoll_pwait called with non-null sigmask, which is not yet supported by shadow; "
+              "returning ENOSYS");
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+    }
+
+    return syscallhandler_epoll_wait(sys, args);
+}
