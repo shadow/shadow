@@ -70,7 +70,7 @@ slice. You can check to see if a limit is in place by running
 $ systemctl status user-$UID.slice
 ```
 
-Heere's a listing of an example response:
+Here's a listing of an example response:
 
 ```
 ● user-1027.slice - User Slice of <user>
@@ -131,7 +131,7 @@ raised by the command
 
 ```bash
 sudo sysctl -w kernel.pid_max=4194304
-sudo echo "kernel.pid_max = 4194394" >> /etc/sysctl.conf
+sudo echo "kernel.pid_max = 4194304" >> /etc/sysctl.conf
 sudo sysctl -p
 ```
 
@@ -140,7 +140,7 @@ This limit can be raised, too.
 
 ```bash
 sudo sysctl -w kernel.threads-max=4194304
-sudo echo "kernel.threads-max = 4194394" >> /etc/sysctl.conf
+sudo echo "kernel.threads-max = 4194304" >> /etc/sysctl.conf
 sudo sysctl -p
 ```
 
@@ -151,7 +151,7 @@ consume more than approx. (1/8)th of system memory (see
 
 ### User Limits
 
-You may need to raise the number of maximum number of user processes allowed in
+You may need to raise the maximum number of user processes allowed in
 `/etc/security/limits.conf`. For example, user limits can be removed with the
 lines:
 
