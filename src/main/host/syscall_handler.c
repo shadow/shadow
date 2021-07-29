@@ -281,6 +281,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(epoll_create);
         HANDLE(epoll_create1);
         HANDLE(epoll_ctl);
+        HANDLE(epoll_pwait);
         HANDLE(epoll_wait);
         HANDLE(eventfd);
         HANDLE(eventfd2);

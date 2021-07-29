@@ -11,6 +11,7 @@
 SYSCALL_HANDLER(epoll_create);
 SYSCALL_HANDLER(epoll_create1);
 SYSCALL_HANDLER(epoll_ctl);
+SYSCALL_HANDLER(epoll_pwait);
 SYSCALL_HANDLER(epoll_wait);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_EPOLL_H_ */
