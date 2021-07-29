@@ -33,7 +33,6 @@ hosts:
       args: ../../../conf/tgen.hiddenserver.graphml.xml
       start_time: 1
     - path: ~/.local/bin/tor
-      environment: 'LD_PRELOAD=../../../../../../lib/openssl_preload/libshadow_openssl_rng.so'
       args: --Address hiddenserver --Nickname hiddenserver
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
@@ -42,35 +41,30 @@ hosts:
       ip_address_hint: 100.0.0.1
     processes:
     - path: ~/.local/bin/tor
-      environment: 'LD_PRELOAD=../../../../../../lib/openssl_preload/libshadow_openssl_rng.so'
       args: --Address 4uthority --Nickname 4uthority
             --defaults-torrc torrc-defaults -f torrc
       start_time: 1
   exit1:
     processes:
     - path: ~/.local/bin/tor
-      environment: 'LD_PRELOAD=../../../../../../lib/openssl_preload/libshadow_openssl_rng.so'
       args: --Address exit1 --Nickname exit1
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   exit2:
     processes:
     - path: ~/.local/bin/tor
-      environment: 'LD_PRELOAD=../../../../../../lib/openssl_preload/libshadow_openssl_rng.so'
       args: --Address exit2 --Nickname exit2
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   relay1:
     processes:
     - path: ~/.local/bin/tor
-      environment: 'LD_PRELOAD=../../../../../../lib/openssl_preload/libshadow_openssl_rng.so'
       args: --Address relay1 --Nickname relay1
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   relay2:
     processes:
     - path: ~/.local/bin/tor
-      environment: 'LD_PRELOAD=../../../../../../lib/openssl_preload/libshadow_openssl_rng.so'
       args: --Address relay2 --Nickname relay2
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
@@ -82,7 +76,6 @@ hosts:
   torclient:
     processes:
     - path: ~/.local/bin/tor
-      environment: 'LD_PRELOAD=../../../../../../lib/openssl_preload/libshadow_openssl_rng.so'
       args: --Address torclient --Nickname torclient
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
@@ -92,7 +85,6 @@ hosts:
   torbridgeclient:
     processes:
     - path: ~/.local/bin/tor
-      environment: 'LD_PRELOAD=../../../../../../lib/openssl_preload/libshadow_openssl_rng.so'
       args: --Address torbridgeclient --Nickname torbridgeclient
             --UseBridges 1 --Bridge 100.0.0.1:9111
             --defaults-torrc torrc-defaults -f torrc
@@ -103,7 +95,6 @@ hosts:
   torhiddenclient:
     processes:
     - path: ~/.local/bin/tor
-      environment: 'LD_PRELOAD=../../../../../../lib/openssl_preload/libshadow_openssl_rng.so'
       args: --Address torhiddenclient --Nickname torhiddenclient
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
