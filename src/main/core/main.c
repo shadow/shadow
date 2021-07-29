@@ -59,6 +59,32 @@ static void _main_logEnvironment(gchar** argv, gchar** envv) {
     }
 }
 
+static int _raise_rlimit(int resource) {
+    char* debug_name = "?";
+
+    /* can add more as needed */
+    switch (resource) {
+        case RLIMIT_NOFILE: debug_name = "RLIMIT_NOFILE"; break;
+        case RLIMIT_NPROC: debug_name = "RLIMIT_NPROC"; break;
+    }
+
+    struct rlimit lim = {0};
+    if (getrlimit(resource, &lim) != 0) {
+        error(
+            "Could not get rlimit for resource %s (%d): %s", debug_name, resource, strerror(errno));
+        return -1;
+    }
+
+    lim.rlim_cur = lim.rlim_max;
+    if (setrlimit(resource, &lim) != 0) {
+        error("Could not update rlimit for resource %s (%d): %s", debug_name, resource,
+              strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
 static void _check_mitigations() {
     int state = prctl(PR_GET_SPECULATION_CTRL, PR_SPEC_STORE_BYPASS, 0, 0, 0);
     if (state == -1) {
@@ -256,14 +282,12 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     }
 
     /* raise fd soft limit to hard limit */
-    struct rlimit lim = {0};
-    if (getrlimit(RLIMIT_NOFILE, &lim) != 0) {
-        error("Could not get rlimit: %s", strerror(errno));
+    if (_raise_rlimit(RLIMIT_NOFILE)) {
         return EXIT_FAILURE;
     }
-    lim.rlim_cur = lim.rlim_max;
-    if (setrlimit(RLIMIT_NOFILE, &lim) != 0) {
-        error("Could not update rlimit: %s", strerror(errno));
+
+    /* raise number of processes/threads soft limit to hard limit */
+    if (_raise_rlimit(RLIMIT_NPROC)) {
         return EXIT_FAILURE;
     }
 
