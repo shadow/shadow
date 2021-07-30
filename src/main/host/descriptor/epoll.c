@@ -5,6 +5,7 @@
  */
 #include "main/host/descriptor/epoll.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <glib.h>
 #include <string.h>
@@ -136,6 +137,19 @@ static gboolean _epollkey_equal(gconstpointer ptr_1, gconstpointer ptr_2) {
     const EpollKey* key_1 = ptr_1;
     const EpollKey* key_2 = ptr_2;
     return key_1->fd == key_2->fd && key_1->objectPtr == key_2->objectPtr;
+}
+
+/* compare by the associated file descriptor */
+static gint _epollkey_compare(gconstpointer ptr_1, gconstpointer ptr_2) {
+    const EpollKey* key_1 = ptr_1;
+    const EpollKey* key_2 = ptr_2;
+
+    /* if the fds are the same but the objects are different, something went wrong */
+    if (key_1->fd == key_2->fd) {
+        assert(key_1->objectPtr == key_2->objectPtr);
+    }
+
+    return key_1->fd - key_2->fd;
 }
 
 static gint _epollwatch_compare(gconstpointer ptr_1, gconstpointer ptr_2) {
@@ -585,21 +599,26 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
      * https://developer.gnome.org/glib/2.68/glib-Balanced-Binary-Trees.html
      * We should test the performance before and after such a change.
      */
-    GList* ready_list = g_hash_table_get_values(epoll->ready);
-    GList* next_item = NULL;
+    GList* ready_list = g_hash_table_get_keys(epoll->ready);
+    GList* next_key = NULL;
 
     /* Prepare the list for deterministic iteration. */
     if (ready_list != NULL) {
-        ready_list = g_list_sort(ready_list, _epollwatch_compare);
-        next_item = g_list_first(ready_list);
+        ready_list = g_list_sort(ready_list, _epollkey_compare);
+        next_key = g_list_first(ready_list);
     }
 
+    GList* not_ready_list = NULL;
+
     /* Iterate the list. */
-    while ((next_item != NULL) && (eventIndex < eventArrayLength)) {
-        EpollWatch* watch = next_item->data;
+    while ((next_key != NULL) && (eventIndex < eventArrayLength)) {
+        EpollKey* key = next_key->data;
+        assert(key != NULL);
+
+        EpollWatch* watch = g_hash_table_lookup(epoll->ready, key);
         MAGIC_ASSERT(watch);
 
-        if(_epollwatch_isReady(watch)) {
+        if (_epollwatch_isReady(watch)) {
             /* report the event */
             eventArray[eventIndex] = watch->event;
             eventArray[eventIndex].events = 0;
@@ -632,9 +651,17 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
                 /* they collected the event, dont report any more */
                 watch->flags |= EWF_ONESHOT_REPORTED;
             }
+
+            /* record any that are no longer ready */
+            if (!_epollwatch_isReady(watch)) {
+                not_ready_list = g_list_append(not_ready_list, key);
+            }
+        } else {
+            error("epoll descriptor %d ready list has items that aren't ready",
+                  descriptor_getHandle(&epoll->super));
         }
 
-        next_item = g_list_next(next_item);
+        next_key = g_list_next(next_key);
     }
 
     /* Cleanup just the list but not the list values, which are owned by the hash table. */
@@ -645,6 +672,23 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
     *nEvents = eventIndex;
 
     trace("epoll descriptor %i collected %i events", descriptor_getHandle(&epoll->super), eventIndex);
+
+    next_key = NULL;
+    if (not_ready_list) {
+        next_key = g_list_first(not_ready_list);
+    }
+
+    /* We modified some watched objects above, so remove any that are no longer ready. */
+    while (next_key != NULL) {
+        EpollKey* key = next_key->data;
+        assert(g_hash_table_remove(epoll->ready, key));
+
+        next_key = g_list_next(next_key);
+    }
+
+    if (not_ready_list) {
+        g_list_free(not_ready_list);
+    }
 
     /* if we consumed all the events that we had to report,
      * then our parent descriptor can no longer read child epolls */
