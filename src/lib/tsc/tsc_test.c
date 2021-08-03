@@ -65,7 +65,7 @@ void closeToNativeRdtsc(void* unusedFixture, gconstpointer user_data) {
     void (*emulate_fn)(
         const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rip, uint64_t nanos) = user_data;
 
-    Tsc tsc = Tsc_init();
+    Tsc tsc = Tsc_create();
 
     // Use the monotonic timer.
     clockid_t clk_id = CLOCK_MONOTONIC;

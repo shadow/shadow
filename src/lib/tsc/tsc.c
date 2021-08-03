@@ -164,7 +164,7 @@ static uint64_t _frequency_via_brand_string() {
     return frequency;
 }
 
-Tsc Tsc_init() {
+Tsc Tsc_create() {
     // Since we don't have an efficient way of trapping and emulating cpuid
     // to just dictate the perceived clock frequency to the managed program,
     // we need to use cpuid ourselves to figure out the clock frequency, so that

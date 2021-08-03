@@ -15,7 +15,7 @@ typedef struct _Tsc {
 } Tsc;
 
 // Instantiate a TSC with the same frequency as the host system TSC.
-Tsc Tsc_init();
+Tsc Tsc_create();
 
 // Updates `regs` to reflect the result of executing an rdtsc instruction at
 // time `nanos`.
