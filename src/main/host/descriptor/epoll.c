@@ -681,7 +681,8 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
     /* We modified some watched objects above, so remove any that are no longer ready. */
     while (next_key != NULL) {
         EpollKey* key = next_key->data;
-        assert(g_hash_table_remove(epoll->ready, key));
+        gboolean removed = g_hash_table_remove(epoll->ready, key);
+        assert(removed);
 
         next_key = g_list_next(next_key);
     }
