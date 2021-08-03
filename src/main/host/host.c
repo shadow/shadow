@@ -165,15 +165,14 @@ void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, cons
 
     host->random = random_new(host->params.nodeSeed);
     host->cpu = cpu_new(host->params.cpuFrequency, (guint64)rawCPUFreq, host->params.cpuThreshold, host->params.cpuPrecision);
-    // A real tsc (Timestamp clock) doesn't necessarily tick at the CPU
-    // frequency, but it should serve as a "reasonable" rate.
-    //
-    // Alternatively we could try to use the host Tsc rate here (calling
-    // Tsc_nativeCyclesPerSecond), which would provide better consistency in the
-    // case that a managed process uses the tsc to measure wallclock time, but
-    // it's not implemented dependably for all supported CPUs.  e.g. see
-    // https://github.com/shadow/shadow/issues/1519.
-    host->tsc = Tsc_create(host->params.cpuFrequency);
+
+    uint64_t tsc_frequency = Tsc_nativeCyclesPerSecond();
+    if (!tsc_frequency) {
+        tsc_frequency = host->params.cpuFrequency;
+        warning("Couldn't find TSC frequency. rdtsc emulation won't scale accurately wrt "
+                "simulation time. For most applications this shouldn't matter.");
+    }
+    host->tsc = Tsc_create(tsc_frequency);
 
     // Table to track futexes used by processes/threads
     host->futexTable = futextable_new();

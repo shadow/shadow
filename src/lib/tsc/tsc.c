@@ -104,8 +104,12 @@ static uint64_t _frequency_via_cpuid0x15() {
     return freq;
 }
 
+// This isn't guaranteed to be the TSC frequency, but is close. Probably better
+// to just fail rather than returning something "close", but keeping this around
+// for future reference for now.
+//
 // Returns 0 on failure.
-static uint64_t _frequency_via_brand_string() {
+__attribute__((unused)) static uint64_t _frequency_via_brand_string() {
     // While this *sounds* hacky at first glance, the cpuid docs provide a very
     // precise specification for parsing the cpu frequency out of the brand
     // string.
@@ -119,7 +123,7 @@ static uint64_t _frequency_via_brand_string() {
     if (!(a & 0x80000000)) {
         // This *shouldn't* happen. The docs say this method is supported on
         // "all Intel 64 and IA-32 processors."
-        debug("Brand string method unsupported. Out of fallbacks for getting frequency.");
+        debug("Brand string method for getting TSC frequency unsupported.");
         return 0;
     }
 
@@ -152,7 +156,8 @@ static uint64_t _frequency_via_brand_string() {
     float base_frequency;
     char scale_c;
     if (sscanf(last_token, " %f%cHz", &base_frequency, &scale_c) != 2) {
-        panic("Couldn't parse %s", last_token);
+        error("Couldn't parse brand string token %s", last_token);
+        return 0;
     }
     uint64_t scale = 0;
     if (scale_c == 'M') {
@@ -162,7 +167,8 @@ static uint64_t _frequency_via_brand_string() {
     } else if (scale_c == 'T') {
         scale = 1000000000000ull;
     } else {
-        panic("Unrecognized scale character %c", scale_c);
+        error("Unrecognized brand string scale character %c", scale_c);
+        return 0;
     }
 
     uint64_t frequency = (uint64_t)(base_frequency * scale);
@@ -178,17 +184,13 @@ uint64_t Tsc_nativeCyclesPerSecond() {
     // time retrieved by other means (e.g. clock_gettime).
 
     uint64_t f = _frequency_via_cpuid0x15();
-    if (!f) {
-        f = _frequency_via_brand_string();
+    if (f) {
+        return f;
     }
-    if (!f) {
-        // If this becomes an issue in practice, we could fall back to measuring
-        // empirically (and rounding for attempted determinism?), or just using
-        // a fixed constant.
-        panic("Couldn't get CPU frequency");
-    }
-
-    return f;
+    // Potentially add other methods here for CPUs that don't support cpuid
+    // 0x15.
+    warning("Couldn't get CPU TSC frequency");
+    return 0;
 }
 
 Tsc Tsc_create(uint64_t cyclesPerSecond) {
