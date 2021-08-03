@@ -53,13 +53,16 @@ static uint64_t _frequency_via_cpuid0x15() {
     unsigned int core = c;
     if (!core) {
         // From "cpuid": "If ECX is 0, the nominal core crystal clock frequency
-        // is not enumerated". Gee, thanks.
+        // is not enumerated".
         //
-        // "Intel® 64 and IA-32 ArchitecturesSoftware Developer’s Manual
-        // Volume 3B: System Programming Guide, Part 2", "18.18 COUNTING CLOCKS",
-        // gives a 2 row table for this case:
+        // The June 2021 revision of "Intel® 64 and IA-32 Architectures Software
+        // Developer’s Manual Combined Volumes: 1, 2A, 2B, 2C, 2D, 3A, 3B, 3C,
+        // 3D and 4", section "18.7.3" has a 3 row table for this case:
         //
-        //   6th and 7th generation Intel® Core™ processors -> 24 MHz
+        //   Intel® Xeon® Processor Scalable Family with CPUID signature 06_55H
+        //   -> 25 MHz.
+        //
+        //   6th and 7th generation Intel® Core™ processors -> 24 MHz.
         //
         //   Next Generation Intel® Atom™ processors based on Goldmont
         //   Microarchitecture with CPUID signature 06_5CH -> 19.2 MHz.
@@ -84,11 +87,14 @@ static uint64_t _frequency_via_cpuid0x15() {
         unsigned int model = (a >> 4) & 0xf;
         trace("rax %u -> family_id:0x%x extended_model_id:0x%x model:0x%x", a, family_id,
               extended_model_id, model);
-        if (family_id == 0x6 && extended_model_id == 0x5 && model == 0xc) {
+        if (family_id == 0x6 && extended_model_id == 0x5 && model == 0x5) {
+            trace("xeon; using 25 MHz crystal frequency");
+            core = 25000000;
+        } else if (family_id == 0x6 && extended_model_id == 0x5 && model == 0xc) {
             trace("goldmont; using 19.2 MHz crystal frequency");
             core = 19200000;
         } else {
-            trace("non-goldmont; using 24 MHz crystal frequency");
+            trace("non-goldmont, non-xeon; using 24 MHz crystal frequency");
             core = 24000000;
         }
     }
