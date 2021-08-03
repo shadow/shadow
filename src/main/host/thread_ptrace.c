@@ -178,8 +178,6 @@ static StopReason _getStopReason(int wstatus) {
 typedef struct _ThreadPtrace {
     Thread base;
 
-    Tsc tsc;
-
     // Reason for the most recent transfer of control back to Shadow.
     ThreadPtraceChildState childState;
 
@@ -452,7 +450,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
                 trace("emulating rdtsc");
                 uint64_t rax, rdx;
                 uint64_t rip = thread->regs.value.rip;
-                Tsc_emulateRdtsc(&thread->tsc, &rax, &rdx, &rip,
+                Tsc_emulateRdtsc(host_getTsc(thread->base.host), &rax, &rdx, &rip,
                                  worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
                 thread->regs.value.rdx = rdx;
                 thread->regs.value.rax = rax;
@@ -464,7 +462,7 @@ static void _threadptrace_enterStateSignalled(ThreadPtrace* thread,
                 trace("emulating rdtscp");
                 uint64_t rax, rdx, rcx;
                 uint64_t rip = thread->regs.value.rip;
-                Tsc_emulateRdtscp(&thread->tsc, &rax, &rdx, &rcx, &rip,
+                Tsc_emulateRdtscp(host_getTsc(thread->base.host), &rax, &rdx, &rcx, &rip,
                                   worker_getCurrentTime() / SIMTIME_ONE_NANOSECOND);
                 thread->regs.value.rdx = rdx;
                 thread->regs.value.rax = rax;
@@ -1367,8 +1365,6 @@ Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
                                   .getIPCBlock = _threadptrace_getIPCBlock,
                                   .getShMBlock = _threadptrace_getShMBlock,
                               }),
-        // FIXME: This should the emulated CPU's frequency
-        .tsc = Tsc_create(2000000000UL),
         .childState = THREAD_PTRACE_CHILD_STATE_NONE,
     };
     thread->base.sys = syscallhandler_new(host, process, _threadPtraceToThread(thread));

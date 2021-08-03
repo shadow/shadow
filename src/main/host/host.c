@@ -19,6 +19,7 @@
 
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
+#include "lib/tsc/tsc.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
@@ -59,6 +60,7 @@ struct _Host {
     GHashTable* interfaces;
     Address* defaultAddress;
     CPU* cpu;
+    Tsc tsc;
 
     /* the virtual processes this host is running */
     GQueue* processes;
@@ -163,6 +165,15 @@ void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, cons
 
     host->random = random_new(host->params.nodeSeed);
     host->cpu = cpu_new(host->params.cpuFrequency, (guint64)rawCPUFreq, host->params.cpuThreshold, host->params.cpuPrecision);
+    // A real tsc (Timestamp clock) doesn't necessarily tick at the CPU
+    // frequency, but it should serve as a "reasonable" rate.
+    //
+    // Alternatively we could try to use the host Tsc rate here (calling
+    // Tsc_nativeCyclesPerSecond), which would provide better consistency in the
+    // case that a managed process uses the tsc to measure wallclock time, but
+    // it's not implemented dependably for all supported CPUs.  e.g. see
+    // https://github.com/shadow/shadow/issues/1519.
+    host->tsc = Tsc_create(host->params.cpuFrequency);
 
     // Table to track futexes used by processes/threads
     host->futexTable = futextable_new();
@@ -425,6 +436,11 @@ gboolean host_isEqual(Host* a, Host* b) {
 CPU* host_getCPU(Host* host) {
     MAGIC_ASSERT(host);
     return host->cpu;
+}
+
+Tsc* host_getTsc(Host* host) {
+    MAGIC_ASSERT(host);
+    return &host->tsc;
 }
 
 gchar* host_getName(Host* host) {
