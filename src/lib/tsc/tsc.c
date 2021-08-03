@@ -164,7 +164,7 @@ static uint64_t _frequency_via_brand_string() {
     return frequency;
 }
 
-Tsc Tsc_create() {
+uint64_t Tsc_nativeCyclesPerSecond() {
     // Since we don't have an efficient way of trapping and emulating cpuid
     // to just dictate the perceived clock frequency to the managed program,
     // we need to use cpuid ourselves to figure out the clock frequency, so that
@@ -182,7 +182,12 @@ Tsc Tsc_create() {
         panic("Couldn't get CPU frequency");
     }
 
-    return (Tsc){.cyclesPerSecond = f};
+    return f;
+}
+
+Tsc Tsc_create(uint64_t cyclesPerSecond) {
+    assert(cyclesPerSecond);
+    return (Tsc) { .cyclesPerSecond = cyclesPerSecond};
 }
 
 static void _Tsc_setRdtscCycles(const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t nanos) {

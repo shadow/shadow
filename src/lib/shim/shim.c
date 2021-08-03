@@ -514,7 +514,7 @@ static void _handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
     static Tsc tsc;
     if (!tsc_initd) {
         trace("Initializing tsc");
-        tsc = Tsc_create();
+        tsc = Tsc_create(Tsc_nativeCyclesPerSecond());
         tsc_initd = true;
     }
 

@@ -14,8 +14,16 @@ typedef struct _Tsc {
     uint64_t cyclesPerSecond;
 } Tsc;
 
-// Instantiate a TSC with the same frequency as the host system TSC.
-Tsc Tsc_create();
+// Returns the host system's native TSC rate, or 0 if it couldn't be found.
+//
+// WARNING: this is known to fail completely on some supported CPUs
+// (particularly AMD), and can return the wrong value for others. i.e. this
+// needs more work if we need to dependably get the host's TSC rate.
+// e.g. see https://github.com/shadow/shadow/issues/1519.
+uint64_t Tsc_nativeCyclesPerSecond();
+
+// Instantiate a TSC with the given clock rate.
+Tsc Tsc_create(uint64_t cyclesPerSecond);
 
 // Updates `regs` to reflect the result of executing an rdtsc instruction at
 // time `nanos`.

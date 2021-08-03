@@ -1368,7 +1368,7 @@ Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
                                   .getShMBlock = _threadptrace_getShMBlock,
                               }),
         // FIXME: This should the emulated CPU's frequency
-        .tsc = {.cyclesPerSecond = 2000000000UL},
+        .tsc = Tsc_create(2000000000UL),
         .childState = THREAD_PTRACE_CHILD_STATE_NONE,
     };
     thread->base.sys = syscallhandler_new(host, process, _threadPtraceToThread(thread));

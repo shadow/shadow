@@ -15,7 +15,7 @@
 static uint64_t _getEmulatedCycles(void (*emulate_fn)(const Tsc* tsc, uint64_t* rax, uint64_t* rdx,
                                                       uint64_t* rip, uint64_t nanos),
                                    uint64_t cyclesPerSecond, int64_t nanos) {
-    Tsc tsc = {.cyclesPerSecond = cyclesPerSecond};
+    Tsc tsc = Tsc_create(cyclesPerSecond);
     uint64_t rax = 0, rdx = 0, rip = 0;
     emulate_fn(&tsc, &rax, &rdx, &rip, nanos);
     return (rdx << 32) | rax;
@@ -65,7 +65,7 @@ void closeToNativeRdtsc(void* unusedFixture, gconstpointer user_data) {
     void (*emulate_fn)(
         const Tsc* tsc, uint64_t* rax, uint64_t* rdx, uint64_t* rip, uint64_t nanos) = user_data;
 
-    Tsc tsc = Tsc_create();
+    Tsc tsc = Tsc_create(Tsc_nativeCyclesPerSecond());
 
     // Use the monotonic timer.
     clockid_t clk_id = CLOCK_MONOTONIC;
