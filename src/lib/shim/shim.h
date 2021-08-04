@@ -17,15 +17,11 @@ void shim_ensure_init();
 
 // Disables syscall interposition for the current thread if it's enabled.
 // Every call to this function should be matched with a call to shim_enableInterposition().
-// Returns true if interposition was enabled before this call (and so this call caused it
-// to become disabled), or false if it was already disabled.
-bool shim_disableInterposition();
+void shim_disableInterposition();
 
 // Re-enabled syscall interposition for the current thread if it's disabled.
 // Every call to this function should be matched with a call to shim_disableInterposition().
-// Returns true if interposition was disabled before this call (and so this call caused it
-// to become enabled), or false if it was already enabled.
-bool shim_enableInterposition();
+void shim_enableInterposition();
 
 // Whether syscall interposition is currently enabled.
 bool shim_interpositionEnabled();

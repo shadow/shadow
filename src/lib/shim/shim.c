@@ -118,26 +118,22 @@ void shim_newThreadFinish() {
     }
 }
 
-bool shim_disableInterposition() {
+void shim_disableInterposition() {
     if (++*_shim_disable_interposition() == 1) {
-        if (_using_interpose_ptrace && _using_interpose_preload) {
+        if (_using_interpose_ptrace) {
+            // We can't prevent there being a ptrace-stop on a syscall, but we
+            // can signal Shadow to allow syscalls to execute natively.
             _shim_set_allow_native_syscalls(true);
         }
-        return true;
-    } else {
-        return false;
     }
 }
 
-bool shim_enableInterposition() {
+void shim_enableInterposition() {
     assert(_shim_disable_interposition > 0);
     if (--*_shim_disable_interposition() == 0) {
-        if (_using_interpose_ptrace && _using_interpose_preload) {
+        if (_using_interpose_ptrace) {
             _shim_set_allow_native_syscalls(false);
         }
-        return true;
-    } else {
-        return false;
     }
 }
 
@@ -324,23 +320,12 @@ static void _shim_ipc_wait_for_start_event() {
 }
 
 static void _shim_parent_init_ptrace() {
-    // In ptrace mode, shim_disableInterposition *doesn't* actually prevent ptrace from
-    // interposing. This means that the logger operations will later be interposed, so
-    // we want this open operation to be interposed too so we get a shadow file descriptor
-    // this will be valid on later logging operations.
+    shim_disableInterposition();
+
     _shim_parent_init_logging();
-
-    // Disable interposition does not prevent ptrace interposition. We need to override
-    // that here to correctly load the shm block.
-    if (shim_disableInterposition()) {
-        _shim_set_allow_native_syscalls(true);
-    }
-
     _shim_parent_init_shm();
 
-    if (shim_enableInterposition()) {
-        _shim_set_allow_native_syscalls(false);
-    }
+    shim_enableInterposition();
 }
 
 // When emulating a clone syscall, we need to jump to just after the original
@@ -591,17 +576,11 @@ static void _shim_parent_init_preload() {
 }
 
 static void _shim_child_init_ptrace() {
-    // Disable interposition does not prevent ptrace interposition. We need to override
-    // that here to correctly load the shm block.
-    if (shim_disableInterposition()) {
-        _shim_set_allow_native_syscalls(true);
-    }
+    shim_disableInterposition();
 
     _shim_child_init_shm();
 
-    if (shim_enableInterposition()) {
-        _shim_set_allow_native_syscalls(false);
-    }
+    shim_enableInterposition();
 }
 
 static void _shim_child_init_preload() {
