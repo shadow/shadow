@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 
 #include "lib/logger/log_level.h"
+#include "lib/tsc/tsc.h"
 #include "main/core/support/definitions.h"
 #include "main/host/cpu.h"
 #include "main/host/descriptor/compat_socket.h"
@@ -63,6 +64,7 @@ gint host_compare(gconstpointer a, gconstpointer b, gpointer user_data);
 GQuark host_getID(Host* host);
 gboolean host_isEqual(Host* a, Host* b);
 CPU* host_getCPU(Host* host);
+Tsc* host_getTsc(Host* host);
 gchar* host_getName(Host* host);
 Address* host_getDefaultAddress(Host* host);
 in_addr_t host_getDefaultIP(Host* host);

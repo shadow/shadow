@@ -19,6 +19,7 @@
 
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
+#include "lib/tsc/tsc.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
@@ -59,6 +60,7 @@ struct _Host {
     GHashTable* interfaces;
     Address* defaultAddress;
     CPU* cpu;
+    Tsc tsc;
 
     /* the virtual processes this host is running */
     GQueue* processes;
@@ -163,6 +165,14 @@ void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, cons
 
     host->random = random_new(host->params.nodeSeed);
     host->cpu = cpu_new(host->params.cpuFrequency, (guint64)rawCPUFreq, host->params.cpuThreshold, host->params.cpuPrecision);
+
+    uint64_t tsc_frequency = Tsc_nativeCyclesPerSecond();
+    if (!tsc_frequency) {
+        tsc_frequency = host->params.cpuFrequency;
+        warning("Couldn't find TSC frequency. rdtsc emulation won't scale accurately wrt "
+                "simulation time. For most applications this shouldn't matter.");
+    }
+    host->tsc = Tsc_create(tsc_frequency);
 
     // Table to track futexes used by processes/threads
     host->futexTable = futextable_new();
@@ -425,6 +435,11 @@ gboolean host_isEqual(Host* a, Host* b) {
 CPU* host_getCPU(Host* host) {
     MAGIC_ASSERT(host);
     return host->cpu;
+}
+
+Tsc* host_getTsc(Host* host) {
+    MAGIC_ASSERT(host);
+    return &host->tsc;
 }
 
 gchar* host_getName(Host* host) {

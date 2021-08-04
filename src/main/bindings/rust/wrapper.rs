@@ -139,6 +139,35 @@ extern "C" {
 pub type SysCallHandler = _SysCallHandler;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct _Tsc {
+    pub cyclesPerSecond: u64,
+}
+#[test]
+fn bindgen_test_layout__Tsc() {
+    assert_eq!(
+        ::std::mem::size_of::<_Tsc>(),
+        8usize,
+        concat!("Size of: ", stringify!(_Tsc))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_Tsc>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_Tsc))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Tsc>())).cyclesPerSecond as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Tsc),
+            "::",
+            stringify!(cyclesPerSecond)
+        )
+    );
+}
+pub type Tsc = _Tsc;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct _CPU {
     _unused: [u8; 0],
 }
@@ -1248,6 +1277,9 @@ extern "C" {
 }
 extern "C" {
     pub fn host_getCPU(host: *mut Host) -> *mut CPU;
+}
+extern "C" {
+    pub fn host_getTsc(host: *mut Host) -> *mut Tsc;
 }
 extern "C" {
     pub fn host_getName(host: *mut Host) -> *mut gchar;
