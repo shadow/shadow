@@ -188,7 +188,9 @@ static void _shim_parent_init_logging() {
         const char* logger_start_time_string = getenv("SHADOW_LOG_START_TIME");
         assert(logger_start_time_string);
         int64_t logger_start_time;
-        assert(sscanf(logger_start_time_string, "%" PRId64, &logger_start_time) == 1);
+        if (sscanf(logger_start_time_string, "%" PRId64, &logger_start_time) != 1) {
+            panic("Couldn't parse logger start time string %s", logger_start_time_string);
+        };
         logger_set_global_start_time_micros(logger_start_time);
     }
 
@@ -212,25 +214,20 @@ static void _verify_parent_pid_or_exit() {
     unsigned long long shadow_pid = 0;
     bool valid_parse_pid = false;
     const char* shadow_pid_str = getenv("SHADOW_PID");
-
-    if (shadow_pid_str) {
-        int rc = sscanf(shadow_pid_str, "%llu", &shadow_pid);
-
-        if (rc == 1) {
-            valid_parse_pid = true;
-        } else {
-            panic("SHADOW_PID does not contain an unsigned: %s", shadow_pid_str);
-        }
+    if (!shadow_pid_str) {
+        panic("SHADOW_PID not set");
     }
 
-    if (valid_parse_pid) {
-        if (getppid() == shadow_pid) { // Validate that Shadow is still alive.
-            trace("Plugin verified Shadow is still running as parent.");
-        } else {
-            panic("Shadow exited.");
-            exit(-1); // If Shadow's dead, we can just get out(?)
-        }
+    if (sscanf(shadow_pid_str, "%llu", &shadow_pid) != 1) {
+        panic("SHADOW_PID does not contain an unsigned: %s", shadow_pid_str);
     }
+
+    if (getppid() != shadow_pid) { // Validate that Shadow is still alive.
+        error("Shadow exited.");
+        exit(EXIT_FAILURE);
+    }
+
+    trace("Plugin verified Shadow is still running as parent.");
 }
 
 static void _shim_parent_init_death_signal() {
@@ -340,7 +337,6 @@ static void _shim_parent_init_ptrace() {
     }
 
     _shim_parent_init_shm();
-    _shim_parent_init_death_signal();
 
     if (shim_enableInterposition()) {
         _shim_set_allow_native_syscalls(false);
@@ -515,8 +511,7 @@ static void _handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
     if (!tsc_initd) {
         trace("Initializing tsc");
         uint64_t hz;
-        int rc = sscanf(getenv("SHADOW_TSC_HZ"), "%" PRIu64, &hz);
-        if (rc != 1) {
+        if (sscanf(getenv("SHADOW_TSC_HZ"), "%" PRIu64, &hz) != 1) {
             panic("Couldn't parse SHADOW_TSC_HZ %s", getenv("SHADOW_TSC_HZ"));
         }
         tsc = Tsc_create(hz);
