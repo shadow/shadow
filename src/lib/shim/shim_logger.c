@@ -42,7 +42,7 @@ void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const ch
     bool* in_logger = shimtlsvar_ptr(&in_logger_var, sizeof(*in_logger));
 
     // Stack-allocated to avoid dynamic allocation.
-    char buf[200];
+    char buf[2000];
     size_t offset = 0;
     if (*in_logger) {
         // Avoid recursion in logging around syscall handling.
