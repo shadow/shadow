@@ -79,16 +79,13 @@ void threadpreload_free(Thread* base) {
     worker_count_deallocation(ThreadPreload);
 }
 
-static gchar** _add_shadow_pid_to_env(gchar** envp) {
-
+static gchar** _add_u64_to_env(gchar** envp, const char* var, uint64_t x) {
     enum { BUF_NBYTES = 256 };
     char strbuf[BUF_NBYTES] = {0};
 
-    pid_t shadow_pid = getpid();
+    snprintf(strbuf, BUF_NBYTES, "%" PRIu64, x);
 
-    snprintf(strbuf, BUF_NBYTES, "%llu", (unsigned long long)shadow_pid);
-
-    envp = g_environ_setenv(envp, "SHADOW_PID", strbuf, TRUE);
+    envp = g_environ_setenv(envp, var, strbuf, TRUE);
 
     return envp;
 }
@@ -192,7 +189,11 @@ pid_t threadpreload_run(Thread* base, gchar** argv, gchar** envv, const char* wo
     }
 
     // set shadow's PID in the env so the child can run get_ppid
-    myenvv = _add_shadow_pid_to_env(myenvv);
+    myenvv = _add_u64_to_env(myenvv, "SHADOW_PID", getpid());
+
+    // Pass the TSC Hz to the shim, so that it can emulate rdtsc.
+    myenvv =
+        _add_u64_to_env(myenvv, "SHADOW_TSC_HZ", host_getTsc(thread->base.host)->cyclesPerSecond);
 
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr(argv);
