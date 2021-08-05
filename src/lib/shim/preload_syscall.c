@@ -233,7 +233,7 @@ long shadow_vraw_syscall(long n, va_list args) {
 
     long rv;
 
-    if (shim_use_syscall_handler() && shim_syscall(n, &rv, args)) {
+    if (shim_interpositionEnabled() && shim_use_syscall_handler() && shim_syscall(n, &rv, args)) {
         // No inter-process syscall needed, we handled it on the shim side! :)
         trace("Handled syscall %ld from the shim; we avoided inter-process overhead.", n);
         // rv was already set
