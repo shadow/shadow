@@ -50,14 +50,16 @@ struct _Logger {
 };
 
 // Not thread safe. The previously set logger, if any, will be destroyed.
-// `logger` may be NULL.
+// `logger` may be NULL, which will effectively disable logging.
 void logger_setDefault(Logger* logger);
 
+// Until overridden by logger_setDefault, returns a default logger that logs to
+// stderr, and is initially configured to log at LOGLEVEL_TRACE.
+//
 // May return NULL.
 Logger* logger_getDefault();
 
-// Thread safe. `logger` may be NULL, in which a hard coded default logger will be used, which
-// writes to stdout.
+// Thread safe. `logger` may be NULL, in which case nothing will be logged.
 //
 // Doesn't do dynamic memory allocation.
 //
@@ -69,8 +71,10 @@ __attribute__((__format__(__printf__, 6, 7))) void
 logger_log(Logger* logger, LogLevel level, const char* fileName, const char* functionName,
            const int lineNumber, const char* format, ...);
 
+// logger may be NULL.
 void logger_setLevel(Logger* logger, LogLevel level);
 
+// logger may be NULL, in which case `false` is returned.
 bool logger_isEnabled(Logger* logger, LogLevel level);
 
 // Returns an agreed-upon start time for logging purposes, as returned by
@@ -109,6 +113,6 @@ void logger_set_global_start_time_micros(int64_t);
 // /foo/bar/ -> bar/
 const char* logger_base_name(const char* filename);
 
-// Flush all logged output.
+// Flush all logged output. `logger` may be NULL.
 void logger_flush(Logger* logger);
 #endif
