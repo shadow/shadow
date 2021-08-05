@@ -601,7 +601,12 @@ __attribute__((constructor)) void _shim_load() {
     static bool did_global_pre_init = false;
     if (!did_global_pre_init) {
         // Early init; must not make any syscalls.
+
         did_global_pre_init = true;
+
+        // Avoid logging until we've set up the shim logger.
+        logger_setLevel(logger_getDefault(), LOGLEVEL_WARNING);
+
         _set_interpose_type();
         _set_use_shim_syscall_handler();
     }
