@@ -2,11 +2,13 @@
 
 #include <glib.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/param.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 // Process start time, initialized explicitly or on first use.
 static pthread_once_t _start_time_once = PTHREAD_ONCE_INIT;
@@ -76,7 +78,7 @@ const char* logger_base_name(const char* filename) {
 
 typedef struct {
     Logger base;
-    LogLevel level;
+    _Atomic LogLevel level;
 } StderrLogger;
 
 static void _stderrlogger_flush() {
@@ -99,21 +101,25 @@ static void _stderrlogger_log(Logger* logger, LogLevel level, const char* fileNa
     in_logger = true;
 
     // Stack-allocated to avoid dynamic allocation.
-    char buf[200];
+    char buf[2000];
     size_t offset = 0;
 
     // Keep appending to string. These functions all ensure NULL-byte termination.
     offset += logger_elapsed_string(&buf[offset], sizeof(buf) - offset);
     offset = MIN(offset, sizeof(buf));
 
-    offset += snprintf(&buf[offset], sizeof(buf) - offset, " %s [%s:%i] [%s] ",
+    offset += snprintf(&buf[offset], sizeof(buf) - offset - 1, " %s [%s:%i] [%s] ",
                        loglevel_toStr(level), logger_base_name(fileName), lineNumber, functionName);
     offset = MIN(offset, sizeof(buf));
 
-    offset += vsnprintf(&buf[offset], sizeof(buf) - offset, format, vargs);
+    offset += vsnprintf(&buf[offset], sizeof(buf) - offset - 1, format, vargs);
     offset = MIN(offset, sizeof(buf));
 
-    fprintf(stderr, "%s\n", buf);
+    buf[offset++] = '\n';
+
+    if (write(STDERR_FILENO, buf, offset) < 0) {
+        abort();
+    }
 
     in_logger = false;
 }

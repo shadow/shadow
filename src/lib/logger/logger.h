@@ -54,7 +54,8 @@ struct _Logger {
 void logger_setDefault(Logger* logger);
 
 // Until overridden by logger_setDefault, returns a default logger that logs to
-// stderr, and is initially configured to log at LOGLEVEL_TRACE.
+// stderr, is initially configured to log at LOGLEVEL_TRACE, and is thread-safe
+// and signal-safe.
 //
 // May return NULL.
 Logger* logger_getDefault();
