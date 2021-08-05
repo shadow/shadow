@@ -398,6 +398,12 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
         g_free(timestring);
     }
 
+    {
+        char* level_string = g_strdup_printf("%d", config_getLogLevel(manager->config));
+        envv = g_environ_setenv(envv, "SHADOW_LOG_LEVEL", level_string, TRUE);
+        g_free(level_string);
+    }
+
     switch (interposeMethod) {
         case INTERPOSE_METHOD_PTRACE:
             envv = g_environ_setenv(envv, "SHADOW_INTERPOSE_METHOD", "PTRACE", 0);

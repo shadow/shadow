@@ -185,7 +185,9 @@ static void _shim_parent_init_logging() {
     // Set logger start time from environment variable.
     {
         const char* logger_start_time_string = getenv("SHADOW_LOG_START_TIME");
-        assert(logger_start_time_string);
+        if (!logger_start_time_string) {
+            panic("Missing SHADOW_LOG_START_TIME");
+        }
         int64_t logger_start_time;
         if (sscanf(logger_start_time_string, "%" PRId64, &logger_start_time) != 1) {
             panic("Couldn't parse logger start time string %s", logger_start_time_string);
@@ -198,10 +200,22 @@ static void _shim_parent_init_logging() {
         const char* name = getenv("SHADOW_LOG_FILE");
         FILE* log_file = fopen(name, "w");
         if (log_file == NULL) {
-            perror("fopen");
-            abort();
+            panic("fopen: %s", strerror(errno));
         }
         logger_setDefault(shimlogger_new(log_file));
+    }
+
+    // Set log level
+    {
+        const char* level_string = getenv("SHADOW_LOG_LEVEL");
+        if (!level_string) {
+            panic("Missing SHADOW_LOG_LEVEL");
+        }
+        int level;
+        if (sscanf(level_string, "%d", &level) != 1) {
+            panic("Couldn't parse log level %s", level_string);
+        };
+        logger_setLevel(logger_getDefault(), level);
     }
 }
 
