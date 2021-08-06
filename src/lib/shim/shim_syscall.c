@@ -25,11 +25,6 @@ void shim_syscall_set_simtime_nanos(uint64_t simulation_nanos) {
     _cached_simulation_time.tv_nsec = simulation_nanos % SIMTIME_ONE_SECOND;
 }
 
-uint64_t shim_syscall_get_simtime_nanos() {
-    return (uint64_t)(_cached_simulation_time.tv_sec * SIMTIME_ONE_SECOND) +
-           _cached_simulation_time.tv_nsec;
-}
-
 static struct timespec* _shim_syscall_get_time() {
     // First try to get time from shared mem.
     struct timespec* simtime_ts = shim_get_shared_time_location();
@@ -53,6 +48,15 @@ static struct timespec* _shim_syscall_get_time() {
 #endif
 
     return simtime_ts;
+}
+
+uint64_t shim_syscall_get_simtime_nanos() {
+    struct timespec* ts = _shim_syscall_get_time();
+    if (!ts) {
+        return 0;
+    }
+
+    return (uint64_t)(ts->tv_sec * SIMTIME_ONE_SECOND) + ts->tv_nsec;
 }
 
 bool shim_syscall(long syscall_num, long* rv, va_list args) {

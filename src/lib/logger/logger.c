@@ -2,22 +2,13 @@
 
 #include <glib.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/param.h>
 #include <sys/time.h>
-
-static Logger* defaultLogger = NULL;
-
-void logger_setDefault(Logger* logger) {
-    if (defaultLogger != NULL) {
-        defaultLogger->destroy(defaultLogger);
-    }
-    defaultLogger = logger;
-}
-
-Logger* logger_getDefault() { return defaultLogger; }
+#include <unistd.h>
 
 // Process start time, initialized explicitly or on first use.
 static pthread_once_t _start_time_once = PTHREAD_ONCE_INIT;
@@ -85,12 +76,18 @@ const char* logger_base_name(const char* filename) {
     return rv;
 }
 
-void _logger_default_flush() {
+typedef struct {
+    Logger base;
+    _Atomic LogLevel level;
+} StderrLogger;
+
+static void _stderrlogger_flush() {
     fflush(stderr);
 }
 
-static void _logger_default_log(LogLevel level, const char* fileName, const char* functionName,
-                                const int lineNumber, const char* format, va_list vargs) {
+static void _stderrlogger_log(Logger* logger, LogLevel level, const char* fileName,
+                         const char* functionName, const int lineNumber, const char* format,
+                         va_list vargs) {
     static __thread bool in_logger = false;
     if (in_logger) {
         // Avoid recursing. We do this here rather than in logger_log so that
@@ -98,45 +95,81 @@ static void _logger_default_log(LogLevel level, const char* fileName, const char
         // dropping the message.
         return;
     }
-    if (!logger_isEnabled(NULL, level)) {
+    if (!logger_isEnabled(logger, level)) {
         return;
     }
     in_logger = true;
 
     // Stack-allocated to avoid dynamic allocation.
-    char buf[200];
+    char buf[2000];
     size_t offset = 0;
 
     // Keep appending to string. These functions all ensure NULL-byte termination.
     offset += logger_elapsed_string(&buf[offset], sizeof(buf) - offset);
     offset = MIN(offset, sizeof(buf));
 
-    offset += snprintf(&buf[offset], sizeof(buf) - offset, " %s [%s:%i] [%s] ",
+    offset += snprintf(&buf[offset], sizeof(buf) - offset - 1, " %s [%s:%i] [%s] ",
                        loglevel_toStr(level), logger_base_name(fileName), lineNumber, functionName);
     offset = MIN(offset, sizeof(buf));
 
-    offset += vsnprintf(&buf[offset], sizeof(buf) - offset, format, vargs);
+    offset += vsnprintf(&buf[offset], sizeof(buf) - offset - 1, format, vargs);
     offset = MIN(offset, sizeof(buf));
 
-    offset += fprintf(stderr, "%s\n", buf);
-    offset = MIN(offset, sizeof(buf));
+    buf[offset++] = '\n';
 
-        _logger_default_flush();
+    if (write(STDERR_FILENO, buf, offset) < 0) {
+        abort();
+    }
+
     in_logger = false;
 }
+
+static void _stderrlogger_destroy(Logger* logger) {
+    // Do nothing; Default logger is statically allocated.
+}
+
+static void _stderrlogger_setLevel(Logger* baseLogger, LogLevel level) {
+    StderrLogger* logger = (StderrLogger*)baseLogger;
+    logger->level = level;
+}
+
+static bool _stderrlogger_isEnabled(Logger* baseLogger, LogLevel level) {
+    StderrLogger* logger = (StderrLogger*)baseLogger;
+    return level <= logger->level;
+}
+
+static StderrLogger stderrLogger = {
+    .base = {
+        .destroy = _stderrlogger_destroy,
+        .flush = _stderrlogger_flush,
+        .isEnabled = _stderrlogger_isEnabled,
+        .log = _stderrlogger_log,
+        .setLevel = _stderrlogger_setLevel,
+    },
+    .level = LOGLEVEL_TRACE,
+};
+
+static Logger* defaultLogger = &stderrLogger.base;
+
+void logger_setDefault(Logger* logger) {
+    if (defaultLogger != NULL) {
+        defaultLogger->destroy(defaultLogger);
+    }
+    defaultLogger = logger;
+}
+
+Logger* logger_getDefault() { return defaultLogger; }
 
 void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
                 const gchar* functionName, const gint lineNumber,
                 const gchar* format, ...) {
+    if (!logger) {
+        return;
+    }
     va_list vargs;
     va_start(vargs, format);
-    if (!logger) {
-        _logger_default_log(level, fileName, functionName, lineNumber, format,
-                            vargs);
-    } else {
-        logger->log(logger, level, fileName, functionName, lineNumber, format,
-                    vargs);
-    }
+    logger->log(logger, level, fileName, functionName, lineNumber, format,
+                vargs);
     va_end(vargs);
     if (level == LOGLEVEL_ERROR) {
         logger_flush(logger);
@@ -145,28 +178,22 @@ void logger_log(Logger* logger, LogLevel level, const gchar* fileName,
 
 void logger_setLevel(Logger* logger, LogLevel level) {
     if (!logger) {
-        // Not implemented for default logger.
-    } else {
-        logger->setLevel(logger, level);
+        return;
     }
+    logger->setLevel(logger, level);
 }
 
 bool logger_isEnabled(Logger* logger, LogLevel level) {
     if (!logger) {
-        // Most logging frameworks log little/nothing unless explicitly enabled.
-        // That probably makes sense for a framework used across independent
-        // libraries and apps, but in our case verbose is a useful default,
-        // particularly in test programs.
-        return true;
-    } else {
-        return logger->isEnabled(logger, level);
+        return false;
     }
+
+    return logger->isEnabled(logger, level);
 }
 
 void logger_flush(Logger* logger) {
     if (!logger) {
-        _logger_default_flush();
-    } else {
-        logger->flush(logger);
+        return;
     }
+    logger->flush(logger);
 }
