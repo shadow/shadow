@@ -35,10 +35,9 @@ struct _SysCallHandler {
     Process* process;
     Thread* thread;
 
-    /* Timers are used to support the timerfd syscalls (man timerfd_create);
-     * they are types of descriptors on which we can listen for events.
-     * Here we use it to help us handling blocking syscalls that include a
-     * timeout after which we should stop blocking. */
+    /*
+     * Timer for when the current blocking syscall (if any) should unblock.
+     */
     Timer* timer;
     /* We use this epoll to service syscalls that need to block on the status
      * of multiple descriptors, like poll. */
