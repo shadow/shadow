@@ -28,20 +28,12 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
                                                      TimeoutType type) {
     // This is a new wait operation on the futex for this thread.
     // Check if a timeout was given in the syscall args.
-    const struct timespec* timeout;
+    struct timespec timeout = {0};
     if (timeoutVPtr.val) {
-        timeout = process_getReadablePtr(sys->process, timeoutVPtr, sizeof(*timeout));
-        if (!timeout) {
-            warning("Couldn't read timeout address %p", (void*)timeoutVPtr.val);
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        int rv = process_readTimespec(sys->process, &timeout, timeoutVPtr);
+        if (rv < 0) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
         }
-        // Bounds checking
-        if (!(timeout->tv_nsec >= 0 && timeout->tv_nsec <= 999999999)) {
-            trace("A futex timeout was given, but the nanos value is out of range");
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-        }
-    } else {
-        timeout = NULL;
     }
 
     // Normally, the load/compare is done atomically. Since Shadow does not run multiple
@@ -72,7 +64,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
         int result = 0;
 
         // We already blocked on wait, so this is either a timeout or wakeup
-        if (timeout && _syscallhandler_didListenTimeoutExpire(sys)) {
+        if (timeoutVPtr.val && _syscallhandler_didListenTimeoutExpire(sys)) {
             // Timeout while waiting for a wakeup
             trace("Futex %p timeout out while waiting", (void*)futexPPtr.val);
             result = -ETIMEDOUT;
@@ -101,14 +93,15 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     }
 
     // Now we need to block until another thread does a wake on the futex.
-    trace("Futex blocking for wakeup %s timeout", timeout ? "with" : "without");
+    trace("Futex blocking for wakeup %s timeout", timeoutVPtr.val ? "with" : "without");
     Trigger trigger =
         (Trigger){.type = TRIGGER_FUTEX, .object = futex, .status = STATUS_FUTEX_WAKEUP};
-    if (timeout) {
-        _syscallhandler_setListenTimeout(sys, timeout, type);
+    if (timeoutVPtr.val) {
+        _syscallhandler_setListenTimeout(sys, &timeout, type);
     }
     return (SysCallReturn){
-        .state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, timeout ? sys->timer : NULL)};
+        .state = SYSCALL_BLOCK,
+        .cond = syscallcondition_new(trigger, timeoutVPtr.val ? sys->timer : NULL)};
 }
 
 static SysCallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys, PluginPtr futexVPtr,

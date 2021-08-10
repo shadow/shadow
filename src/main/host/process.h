@@ -131,6 +131,14 @@ int process_getReadableString(Process* process, PluginPtr plugin_src, size_t n, 
 // -EFAULT if the string extends beyond the accessible address space.
 ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_t n);
 
+// Convenience function to read and validate a timespec.
+//
+// Returns:
+// 0 on success.
+// -EFAULT if `src` couldn't be read.
+// -EINVAL if `src` didn't contain a valid timespec.
+int process_readTimespec(Process* proc, struct timespec* ts, PluginVirtualPtr src);
+
 // Copy `n` bytes from `src` to `dst`. Returns 0 on success or EFAULT if any of
 // the specified range couldn't be accessed. The write is flushed immediately.
 int process_writePtr(Process* proc, PluginVirtualPtr dst, const void* src, size_t n);
