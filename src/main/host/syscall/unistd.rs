@@ -135,12 +135,12 @@ fn read_helper(
     offset: libc::off_t,
 ) -> SyscallResult {
     let posix_file = desc.get_file();
-    let file_flags = posix_file.get_flags();
+    let file_flags = posix_file.borrow().get_flags();
 
     let result =
         // call the file's read(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
-            posix_file.read(
+            posix_file.borrow_mut().read(
                 ctx.process.memory_mut().writer(TypedPluginPtr::new(buf_ptr, buf_size)),
                 offset,
                 event_queue,
@@ -204,12 +204,12 @@ fn write_helper(
     offset: libc::off_t,
 ) -> SyscallResult {
     let posix_file = desc.get_file();
-    let file_flags = posix_file.get_flags();
+    let file_flags = posix_file.borrow().get_flags();
 
     let result=
         // call the file's write(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
-            posix_file.write(
+            posix_file.borrow_mut().write(
                 ctx.process.memory().reader(TypedPluginPtr::<u8>::new(buf_ptr, buf_size)),
                 offset,
                 event_queue,

@@ -220,68 +220,28 @@ impl IsSend for PosixFile {}
 impl IsSync for PosixFile {}
 
 impl PosixFile {
-    pub fn close(&self, event_queue: &mut EventQueue) -> SyscallResult {
+    pub fn borrow(&self) -> PosixFileRef {
         match self {
-            Self::Pipe(f) => f.borrow_mut().close(event_queue),
+            Self::Pipe(ref f) => PosixFileRef::Pipe(f.borrow()),
         }
     }
 
-    pub fn read<W>(
-        &self,
-        bytes: W,
-        offset: libc::off_t,
-        event_queue: &mut EventQueue,
-    ) -> SyscallResult
-    where
-        W: std::io::Write + std::io::Seek,
-    {
+    pub fn try_borrow(&self) -> Result<PosixFileRef, atomic_refcell::BorrowError> {
+        Ok(match self {
+            Self::Pipe(ref f) => PosixFileRef::Pipe(f.try_borrow()?),
+        })
+    }
+
+    pub fn borrow_mut(&self) -> PosixFileRefMut {
         match self {
-            Self::Pipe(f) => f.borrow_mut().read(bytes, offset, event_queue),
+            Self::Pipe(ref f) => PosixFileRefMut::Pipe(f.borrow_mut()),
         }
     }
 
-    pub fn write<R>(
-        &self,
-        source: R,
-        offset: libc::off_t,
-        event_queue: &mut EventQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
-        match self {
-            Self::Pipe(f) => f.borrow_mut().write(source, offset, event_queue),
-        }
-    }
-
-    pub fn status(&self) -> FileStatus {
-        match self {
-            Self::Pipe(f) => f.borrow().status(),
-        }
-    }
-
-    pub fn get_flags(&self) -> FileFlags {
-        match self {
-            Self::Pipe(f) => f.borrow().get_flags(),
-        }
-    }
-
-    pub fn set_flags(&self, flags: FileFlags) {
-        match self {
-            Self::Pipe(f) => f.borrow_mut().set_flags(flags),
-        }
-    }
-
-    pub fn add_legacy_listener(&self, ptr: *mut c::StatusListener) {
-        match self {
-            Self::Pipe(f) => f.borrow_mut().add_legacy_listener(ptr),
-        }
-    }
-
-    pub fn remove_legacy_listener(&self, ptr: *mut c::StatusListener) {
-        match self {
-            Self::Pipe(f) => f.borrow_mut().remove_legacy_listener(ptr),
-        }
+    pub fn try_borrow_mut(&self) -> Result<PosixFileRefMut, atomic_refcell::BorrowMutError> {
+        Ok(match self {
+            Self::Pipe(ref f) => PosixFileRefMut::Pipe(f.try_borrow_mut()?),
+        })
     }
 
     pub fn canonical_handle(&self) -> usize {
@@ -296,6 +256,89 @@ impl std::fmt::Debug for PosixFile {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
         }
+
+        if let Ok(file) = self.try_borrow() {
+            write!(
+                f,
+                "(status: {:?}, flags: {:?})",
+                file.status(),
+                file.get_flags()
+            )
+        } else {
+            write!(f, "(already borrowed)")
+        }
+    }
+}
+
+pub enum PosixFileRef<'a> {
+    Pipe(atomic_refcell::AtomicRef<'a, pipe::PipeFile>),
+}
+
+pub enum PosixFileRefMut<'a> {
+    Pipe(atomic_refcell::AtomicRefMut<'a, pipe::PipeFile>),
+}
+
+impl PosixFileRef<'_> {
+    enum_passthrough!(self, (), Pipe;
+        pub fn status(&self) -> FileStatus
+    );
+    enum_passthrough!(self, (), Pipe;
+        pub fn get_flags(&self) -> FileFlags
+    );
+}
+
+impl PosixFileRefMut<'_> {
+    enum_passthrough!(self, (), Pipe;
+        pub fn status(&self) -> FileStatus
+    );
+    enum_passthrough!(self, (), Pipe;
+        pub fn get_flags(&self) -> FileFlags
+    );
+    enum_passthrough!(self, (event_queue), Pipe;
+        pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult
+    );
+    enum_passthrough!(self, (flags), Pipe;
+        pub fn set_flags(&mut self, flags: FileFlags)
+    );
+    enum_passthrough!(self, (ptr), Pipe;
+        pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener)
+    );
+    enum_passthrough!(self, (ptr), Pipe;
+        pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
+    );
+
+    enum_passthrough_generic!(self, (bytes, offset, event_queue), Pipe;
+        pub fn read<W>(&mut self, bytes: W, offset: libc::off_t, event_queue: &mut EventQueue) -> SyscallResult
+        where W: std::io::Write + std::io::Seek
+    );
+
+    enum_passthrough_generic!(self, (source, offset, event_queue), Pipe;
+        pub fn write<R>(&mut self, source: R, offset: libc::off_t, event_queue: &mut EventQueue) -> SyscallResult
+        where R: std::io::Read + std::io::Seek
+    );
+}
+
+impl std::fmt::Debug for PosixFileRef<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pipe(_) => write!(f, "Pipe")?,
+        }
+
+        write!(
+            f,
+            "(status: {:?}, flags: {:?})",
+            self.status(),
+            self.get_flags()
+        )
+    }
+}
+
+impl std::fmt::Debug for PosixFileRefMut<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pipe(_) => write!(f, "Pipe")?,
+        }
+
         write!(
             f,
             "(status: {:?}, flags: {:?})",
@@ -352,7 +395,7 @@ impl Descriptor {
         // this isn't subject to race conditions since we should never access descriptors
         // from multiple threads at the same time
         if Arc::<()>::strong_count(&self.open_count) == 1 {
-            Some(self.file.close(event_queue))
+            Some(self.file.borrow_mut().close(event_queue))
         } else {
             None
         }
@@ -510,7 +553,7 @@ mod export {
 
         let file = unsafe { &*file };
 
-        file.status().into()
+        file.borrow().status().into()
     }
 
     /// Add a status listener to the posix file object. This will increment the status
@@ -526,7 +569,7 @@ mod export {
 
         let file = unsafe { &*file };
 
-        file.add_legacy_listener(listener);
+        file.borrow_mut().add_legacy_listener(listener);
     }
 
     /// Remove a listener from the posix file object.
@@ -540,7 +583,7 @@ mod export {
 
         let file = unsafe { &*file };
 
-        file.remove_legacy_listener(listener);
+        file.borrow_mut().remove_legacy_listener(listener);
     }
 
     /// Get the canonical handle for a posix file object. Two posix file objects refer to the same

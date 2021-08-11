@@ -19,8 +19,11 @@ mod cshadow {
     include!("bindings/rust/wrapper.rs");
 }
 
+// modules with macros must be included before other modules
+#[macro_use]
+pub mod utility;
+
 pub mod core;
 pub mod host;
 pub mod routing;
 pub mod shmem;
-pub mod utility;
