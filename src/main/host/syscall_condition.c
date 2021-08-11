@@ -7,6 +7,7 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <sys/timerfd.h>
 
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
@@ -78,6 +79,24 @@ SysCallCondition* syscallcondition_new(Trigger trigger, Timer* timeout) {
     }
 
     return cond;
+}
+
+void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, EmulatedTime t) {
+    MAGIC_ASSERT(cond);
+
+    if (!cond->timeout) {
+        cond->timeout = timer_new();
+    }
+
+    struct itimerspec itimerspec = {0};
+    itimerspec.it_value.tv_sec = t / SIMTIME_ONE_SECOND;
+    t -= itimerspec.it_value.tv_sec * SIMTIME_ONE_SECOND;
+    itimerspec.it_value.tv_nsec = t / SIMTIME_ONE_NANOSECOND;
+
+    int rv = timer_setTime(cond->timeout, host, TFD_TIMER_ABSTIME, &itimerspec, NULL);
+    if (rv != 0) {
+        panic("timer_setTime: %s", strerror(-rv));
+    }
 }
 
 static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {

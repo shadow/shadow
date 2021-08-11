@@ -47,6 +47,8 @@ struct _Trigger {
  * The condition starts with a reference count of 1. */
 SysCallCondition* syscallcondition_new(Trigger trigger, Timer* timeout);
 
+void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, EmulatedTime t);
+
 /* Increment the reference count on the given condition. */
 void syscallcondition_ref(SysCallCondition* cond);
 
