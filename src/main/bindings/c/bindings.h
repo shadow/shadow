@@ -62,8 +62,8 @@ typedef struct LogicalProcessors LogicalProcessors;
 // through the MemoryManager to ensure soundness. See MemoryManager::new.
 typedef struct MemoryManager MemoryManager;
 
-// An opaque type used when passing `*const AtomicRefCell<File>` to C.
-typedef struct PosixFileArc PosixFileArc;
+// Represents a POSIX description, or a Linux "struct file".
+typedef struct PosixFile PosixFile;
 
 // A mutable reference to a slice of plugin memory. Implements DerefMut<[T]>,
 // allowing, e.g.:
@@ -395,28 +395,32 @@ void compatdescriptor_free(struct CompatDescriptor *descriptor);
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
 // posix file object. Otherwise returns NULL. The posix file object's ref count is not
 // modified, so the pointer must not outlive the lifetime of the compat descriptor.
-const struct PosixFileArc *compatdescriptor_borrowPosixFile(const struct CompatDescriptor *descriptor);
+const struct PosixFile *compatdescriptor_borrowPosixFile(const struct CompatDescriptor *descriptor);
 
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
 // posix file object. Otherwise returns NULL. The posix file object's ref count is
 // incremented, so the pointer must always later be passed to `posixfile_drop()`, otherwise
 // the memory will leak.
-const struct PosixFileArc *compatdescriptor_newRefPosixFile(const struct CompatDescriptor *descriptor);
+const struct PosixFile *compatdescriptor_newRefPosixFile(const struct CompatDescriptor *descriptor);
 
 // Decrement the ref count of the posix file object. The pointer must not be used after
 // calling this function.
-void posixfile_drop(const struct PosixFileArc *file);
+void posixfile_drop(const struct PosixFile *file);
 
 // Get the status of the posix file object.
-Status posixfile_getStatus(const struct PosixFileArc *file);
+Status posixfile_getStatus(const struct PosixFile *file);
 
 // Add a status listener to the posix file object. This will increment the status
 // listener's ref count, and will decrement the ref count when this status listener is
 // removed or when the posix file is freed/dropped.
-void posixfile_addListener(const struct PosixFileArc *file, StatusListener *listener);
+void posixfile_addListener(const struct PosixFile *file, StatusListener *listener);
 
 // Remove a listener from the posix file object.
-void posixfile_removeListener(const struct PosixFileArc *file, StatusListener *listener);
+void posixfile_removeListener(const struct PosixFile *file, StatusListener *listener);
+
+// Get the canonical handle for a posix file object. Two posix file objects refer to the same
+// underlying data if their handles are equal.
+uintptr_t posixfile_getCanonicalHandle(const struct PosixFile *file);
 
 // # Safety
 // * `thread` must point to a valid object.
