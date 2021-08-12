@@ -14,11 +14,13 @@ network:
     type: 1_gbit_switch
 hosts:
   server:
+    network_node_id: 0
     processes:
     - path: /usr/sbin/nginx
       args: -c ../../../nginx.conf -p .
       start_time: 1
   client:
+    network_node_id: 0
     quantity: 20
     processes:
     - path: /usr/bin/curl
@@ -66,17 +68,16 @@ hosts:
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
 - [`experimental.worker_threads`](#experimentalworker_threads)
 - [`host_defaults`](#host_defaults)
-- [`host_defaults.city_code_hint`](#host_defaultscity_code_hint)
-- [`host_defaults.country_code_hint`](#host_defaultscountry_code_hint)
 - [`host_defaults.heartbeat_interval`](#host_defaultsheartbeat_interval)
 - [`host_defaults.heartbeat_log_info`](#host_defaultsheartbeat_log_info)
 - [`host_defaults.heartbeat_log_level`](#host_defaultsheartbeat_log_level)
-- [`host_defaults.ip_address_hint`](#host_defaultsip_address_hint)
 - [`host_defaults.log_level`](#host_defaultslog_level)
 - [`host_defaults.pcap_directory`](#host_defaultspcap_directory)
 - [`hosts`](#hosts)
 - [`hosts.<hostname>.bandwidth_down`](#hostshostnamebandwidth_down)
 - [`hosts.<hostname>.bandwidth_up`](#hostshostnamebandwidth_up)
+- [`hosts.<hostname>.ip_addr`](#hostshostnameip_addr)
+- [`hosts.<hostname>.network_node_id`](#hostshostnamenetwork_node_id)
 - [`hosts.<hostname>.options`](#hostshostnameoptions)
 - [`hosts.<hostname>.quantity`](#hostshostnamequantity)
 - [`hosts.<hostname>.processes`](#hostshostnameprocesses)
@@ -193,7 +194,7 @@ network:
 #### `network.graph.type`
 
 *Required*  
-Type: "gml" OR "1\_gbit\_switch"
+Type: "gml" OR "gml\_lzma" OR "1\_gbit\_switch"
 
 The network graph can be specified in the GML format, or a built-in
 "1\_gbit\_switch" graph with a single network node can be used instead.
@@ -205,9 +206,8 @@ graph [
   directed 0
   node [
     id 0
-    ip_address "0.0.0.0"
-    bandwidth_up "1 Gbit"
-    bandwidth_down "1 Gbit"
+    host_bandwidth_up "1 Gbit"
+    host_bandwidth_down "1 Gbit"
   ]
   edge [
     source 0
@@ -231,12 +231,13 @@ current user's home directory.
 
 #### `network.use_shortest_path`
 
-*Required*  
+Default: true  
 Type: Bool
 
 When routing packets, follow the shortest path rather than following a direct
 edge between network nodes. If false, the network graph is required to be
-complete.
+complete (including self-loops) and to have exactly one edge between any two
+nodes.
 
 #### `experimental`
 
@@ -388,7 +389,7 @@ inter-process syscall with Shadow.
 
 #### `experimental.use_seccomp`
 
-Default: true iff experimental.interpose_method == preload.
+Default: true iff `experimental.interpose_method == preload`.
 Type: Bool
 
 Use seccomp to trap syscalls.
@@ -415,26 +416,6 @@ future.
 Default options for all hosts. These options can also be overridden for each
 host individually.
 
-#### `host_defaults.city_code_hint`
-
-Default: null  
-Type: String OR null
-
-City code hint for Shadow's name and routing system.
-
-This hint will be used to assign the host to a network node based on the city
-codes of nodes in the network graph.
-
-#### `host_defaults.country_code_hint`
-
-Default: null  
-Type: String OR null
-
-Country code hint for Shadow's name and routing system (ex: "US").
-
-This hint will be used to assign the host to a network node based on the country
-codes of nodes in the network graph.
-
 #### `host_defaults.heartbeat_interval`
 
 Default: "1 sec"  
@@ -455,16 +436,6 @@ Default: "info"
 Type: "error" OR "warning" OR "info" OR "debug" OR "trace"
 
 Log level at which to print host statistics.
-
-#### `host_defaults.ip_address_hint`
-
-Default: null  
-Type: String OR null
-
-IPv4 address hint for Shadow's name and routing system (ex: "100.0.0.1").
-
-This hint will be used to assign the host to a network node based on the IP
-values of nodes in the network graph.
 
 #### `host_defaults.log_level`
 
@@ -512,6 +483,24 @@ Upstream bandwidth capacity of the host.
 
 Overrides any default bandwidth values set in the assigned network graph
 node.
+
+#### `hosts.<hostname>.ip_addr`
+
+Default: null  
+Type: String OR null
+
+IP address to assign to the host.
+
+This IP address must not conflict with the address of any other host (two hosts
+must not have the same IP address). If this option is set,
+[`hosts.<hostname>.quantity`](#hostshostnamequantity) must be set to 1.
+
+#### `hosts.<hostname>.network_node_id`
+
+*Required*  
+Type: Integer
+
+Network graph node ID to assign the host to.
 
 #### `hosts.<hostname>.options`
 
