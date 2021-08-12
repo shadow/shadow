@@ -46,7 +46,8 @@ macro(add_shadow_tests)
 
    if(NOT DEFINED SHADOW_TEST_LOGLEVEL)
       if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-         set(SHADOW_TEST_LOGLEVEL "trace")
+         # trace log level causes us to generate a very large ctest log file
+         set(SHADOW_TEST_LOGLEVEL "debug")
       else()
          set(SHADOW_TEST_LOGLEVEL "info")
       endif()
