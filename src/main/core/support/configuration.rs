@@ -649,9 +649,10 @@ pub enum CustomGraph {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "type", rename_all = "lowercase")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum GraphOptions {
     Gml(CustomGraph),
+    GmlXz(CustomGraph),
     #[serde(rename = "1_gbit_switch")]
     OneGbitSwitch,
 }
@@ -1333,20 +1334,6 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_legacy_working_dir.unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_getNetworkGraph(config: *const ConfigOptions) -> *mut libc::c_char {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        let graph = match config.network.graph.as_ref().unwrap() {
-            GraphOptions::Gml(CustomGraph::Path(f)) => std::fs::read_to_string(f).unwrap(),
-            GraphOptions::Gml(CustomGraph::Inline(s)) => s.clone(),
-            GraphOptions::OneGbitSwitch => ONE_GBIT_SWITCH_GRAPH.to_string(),
-        };
-
-        CString::into_raw(CString::new(graph).unwrap())
     }
 
     #[no_mangle]

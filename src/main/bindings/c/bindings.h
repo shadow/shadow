@@ -317,8 +317,6 @@ enum QDiscMode config_getInterfaceQdisc(const struct ConfigOptions *config);
 
 bool config_getUseLegacyWorkingDir(const struct ConfigOptions *config);
 
-char *config_getNetworkGraph(const struct ConfigOptions *config);
-
 bool config_getUseShortestPath(const struct ConfigOptions *config);
 
 __attribute__((warn_unused_result))

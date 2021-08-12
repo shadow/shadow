@@ -461,11 +461,26 @@ impl<T: Eq + Hash + std::fmt::Display + Clone + Copy> RoutingInfo<T> {
     }
 }
 
+/// Read and decompress a file.
+fn read_xz(filename: &str) -> Result<String, Box<dyn Error>> {
+    let mut f = std::io::BufReader::new(std::fs::File::open(filename)?);
+
+    let mut decomp: Vec<u8> = Vec::new();
+    lzma_rs::xz_decompress(&mut f, &mut decomp)?;
+    decomp.shrink_to_fit();
+
+    Ok(String::from_utf8(decomp)?)
+}
+
 /// Get the network graph as a string.
 pub fn load_network_graph(graph_options: &GraphOptions) -> Result<String, Box<dyn Error>> {
     Ok(match graph_options {
         GraphOptions::Gml(CustomGraph::Path(f)) => std::fs::read_to_string(f)?,
         GraphOptions::Gml(CustomGraph::Inline(s)) => s.clone(),
+        GraphOptions::GmlXz(CustomGraph::Path(f)) => read_xz(f)?,
+        GraphOptions::GmlXz(CustomGraph::Inline(_)) => {
+            Err("We don't support inline compressed graphs")?
+        }
         GraphOptions::OneGbitSwitch => configuration::ONE_GBIT_SWITCH_GRAPH.to_string(),
     })
 }
