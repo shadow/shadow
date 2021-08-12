@@ -110,46 +110,34 @@ static gboolean _dns_isIPUnique(DNS* dns, in_addr_t ip) {
     return exists ? FALSE : TRUE;
 }
 
-static in_addr_t _dns_generateIP(DNS* dns) {
-    MAGIC_ASSERT(dns);
-
-    in_addr_t ip = htonl(++dns->ipAddressCounter);
-
-    while(_dns_isRestricted(dns, ip) || !_dns_isIPUnique(dns, ip)) {
-        ip = htonl(++dns->ipAddressCounter);
-    }
-
-    return ip;
-}
-
-Address* dns_register(DNS* dns, GQuark id, gchar* name, gchar* requestedIP) {
+Address* dns_register(DNS* dns, GQuark id, gchar* name, in_addr_t requestedIP) {
     MAGIC_ASSERT(dns);
     utility_assert(name);
 
     g_mutex_lock(&dns->lock);
 
-    in_addr_t ip = 0;
-    guint mac = ++dns->macAddressCounter;
     gboolean isLocal = FALSE;
 
-    /* if requestedIP is NULL, we should generate one ourselves */
-    if(requestedIP) {
-        ip = address_stringToIP(requestedIP);
-        /* restricted is OK if this is a localhost address, otherwise it must be unique */
-        if(ip == address_stringToIP("127.0.0.1")) {
-            isLocal = TRUE;
-        } else if(_dns_isRestricted(dns, ip) || !_dns_isIPUnique(dns, ip)) {
-            ip = _dns_generateIP(dns);
-        }
-    } else {
-        ip = _dns_generateIP(dns);
+    /* restricted is OK if this is a localhost address, otherwise it must be unique */
+    if (requestedIP == address_stringToIP("127.0.0.1")) {
+        isLocal = TRUE;
+    } else if (_dns_isRestricted(dns, requestedIP) || !_dns_isIPUnique(dns, requestedIP)) {
+        gchar* ipStr = address_ipToNewString(requestedIP);
+        warning("Invalid IP %s (restricted: %s, unique: %s)", ipStr,
+                _dns_isRestricted(dns, requestedIP) ? "true" : "false",
+                _dns_isIPUnique(dns, requestedIP) ? "true" : "false");
+        g_free(ipStr);
+        g_mutex_unlock(&dns->lock);
+        return NULL;
     }
 
-    Address* address = address_new(id, mac, (guint32) ip, name, isLocal);
+    guint mac = ++dns->macAddressCounter;
+    Address* address = address_new(id, mac, (guint32)requestedIP, name, isLocal);
 
     /* store the ip/name mappings */
-    if(!isLocal) {
-        g_hash_table_replace(dns->addressByIP, GUINT_TO_POINTER(address_toNetworkIP(address)), address);
+    if (!isLocal) {
+        g_hash_table_replace(
+            dns->addressByIP, GUINT_TO_POINTER(address_toNetworkIP(address)), address);
         address_ref(address);
         g_hash_table_replace(dns->addressByName, address_toHostName(address), address);
         address_ref(address);

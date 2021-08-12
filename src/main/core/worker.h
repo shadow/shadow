@@ -27,7 +27,6 @@ typedef void (*WorkerPoolTaskFn)(void*);
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/routing/packet.minimal.h"
-#include "main/routing/topology.h"
 #include "main/utility/count_down_latch.h"
 
 #include "main/bindings/c/bindings.h"
@@ -72,7 +71,6 @@ void worker_setRoundEndTime(SimulationTime newRoundEndTime);
 
 int worker_getAffinity();
 DNS* worker_getDNS();
-Topology* worker_getTopology();
 ChildPidWatcher* worker_getChildPidWatcher();
 const ConfigOptions* worker_getConfig();
 gboolean worker_scheduleTask(Task* task, Host* host, SimulationTime nanoDelay);
@@ -86,7 +84,13 @@ bool worker_isBootstrapActive(void);
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 
-gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID);
+gdouble worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress);
+gdouble worker_getLatency(GQuark sourceHostID, GQuark destinationHostID);
+gdouble worker_getReliabilityForAddresses(Address* sourceAddress, Address* destinationAddress);
+gdouble worker_getReliability(GQuark sourceHostID, GQuark destinationHostID);
+bool worker_isRoutable(Address* sourceAddress, Address* destinationAddress);
+void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAddress);
+
 void worker_updateMinTimeJump(gdouble minPathLatency);
 void worker_setCurrentTime(SimulationTime time);
 gboolean worker_isFiltered(LogLevel level);

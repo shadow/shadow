@@ -43,7 +43,6 @@
 #include "main/routing/dns.h"
 #include "main/routing/packet.h"
 #include "main/routing/router.h"
-#include "main/routing/topology.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
 
@@ -115,9 +114,6 @@ Host* host_new(HostParameters* params) {
     /* now dup the strings so we own them */
     utility_assert(params->hostname);
     host->params.hostname = g_strdup(params->hostname);
-    if(params->ipHint) host->params.ipHint = g_strdup(params->ipHint);
-    if(params->citycodeHint) host->params.citycodeHint = g_strdup(params->citycodeHint);
-    if(params->countrycodeHint) host->params.countrycodeHint = g_strdup(params->countrycodeHint);
     if(params->pcapDir) host->params.pcapDir = g_strdup(params->pcapDir);
 
     /* thread-level event communication with other nodes */
@@ -149,22 +145,31 @@ Host* host_new(HostParameters* params) {
 }
 
 /* this function is called by manager before the workers exist */
-void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, const gchar* hostRootPath) {
+void host_setup(Host* host, DNS* dns, guint rawCPUFreq, const gchar* hostRootPath) {
     MAGIC_ASSERT(host);
 
     /* get unique virtual address identifiers for each network interface */
-    Address* loopbackAddress = dns_register(dns, host->params.id, host->params.hostname, "127.0.0.1");
-    Address* ethernetAddress = dns_register(dns, host->params.id, host->params.hostname, host->params.ipHint);
+    Address* loopbackAddress =
+        dns_register(dns, host->params.id, host->params.hostname, htonl(INADDR_LOOPBACK));
+    Address* ethernetAddress =
+        dns_register(dns, host->params.id, host->params.hostname, host->params.ipAddr);
+
+    if (loopbackAddress == NULL || ethernetAddress == NULL) {
+        /* we should have caught this earlier when we were assigning IP addresses */
+        panic("Could not register address");
+    }
+
     host->defaultAddress = ethernetAddress;
     address_ref(host->defaultAddress);
 
-    if(!host->dataDirPath) {
+    if (!host->dataDirPath) {
         host->dataDirPath = g_build_filename(hostRootPath, host->params.hostname, NULL);
         g_mkdir_with_parents(host->dataDirPath, 0775);
     }
 
     host->random = random_new(host->params.nodeSeed);
-    host->cpu = cpu_new(host->params.cpuFrequency, (guint64)rawCPUFreq, host->params.cpuThreshold, host->params.cpuPrecision);
+    host->cpu = cpu_new(host->params.cpuFrequency, (guint64)rawCPUFreq, host->params.cpuThreshold,
+                        host->params.cpuPrecision);
 
     uint64_t tsc_frequency = Tsc_nativeCyclesPerSecond();
     if (!tsc_frequency) {
@@ -174,22 +179,12 @@ void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, cons
     }
     host->tsc = Tsc_create(tsc_frequency);
 
-    // Table to track futexes used by processes/threads
+    /* table to track futexes used by processes/threads */
     host->futexTable = futextable_new();
 
-    /* connect to topology and get the default bandwidth */
-    guint64 bwDownKiBps = 0, bwUpKiBps = 0;
-    topology_attach(topology, ethernetAddress, host->random, host->params.ipHint,
-                    host->params.citycodeHint, host->params.countrycodeHint, &bwDownKiBps,
-                    &bwUpKiBps);
-
-    /* prefer assigned bandwidth if available */
-    if(host->params.requestedBWDownKiBps) {
-        bwDownKiBps = host->params.requestedBWDownKiBps;
-    }
-    if(host->params.requestedBWUpKiBps) {
-        bwUpKiBps = host->params.requestedBWUpKiBps;
-    }
+    /* shadow uses values in KiB/s, but the config uses b/s */
+    guint64 bwDownKiBps = host->params.requestedBwDownBits / (8 * 1024);
+    guint64 bwUpKiBps = host->params.requestedBwUpBits / (8 * 1024);
 
     /* virtual addresses and interfaces for managing network I/O */
     NetworkInterface* loopback =
@@ -199,8 +194,10 @@ void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, cons
         networkinterface_new(host, ethernetAddress, bwDownKiBps, bwUpKiBps, host->params.pcapDir,
                              host->params.qdisc, host->params.interfaceBufSize);
 
-    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(ethernetAddress)), ethernet);
-    g_hash_table_replace(host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
+    g_hash_table_replace(
+        host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(ethernetAddress)), ethernet);
+    g_hash_table_replace(
+        host->interfaces, GUINT_TO_POINTER((guint)htonl(INADDR_LOOPBACK)), loopback);
 
     /* the upstream router that will queue packets until we can receive them.
      * this only applies the the ethernet interface, the loopback interface
@@ -244,11 +241,6 @@ void host_shutdown(Host* host) {
         g_queue_free(host->processes);
     }
 
-    if(host->defaultAddress) {
-        topology_detach(worker_getTopology(), host->defaultAddress);
-        //address_unref(host->defaultAddress);
-    }
-
     if(host->interfaces) {
         g_hash_table_destroy(host->interfaces);
     }
@@ -276,9 +268,6 @@ void host_shutdown(Host* host) {
         random_free(host->random);
     }
 
-    if(host->params.ipHint) g_free(host->params.ipHint);
-    if(host->params.citycodeHint) g_free(host->params.citycodeHint);
-    if(host->params.countrycodeHint) g_free(host->params.countrycodeHint);
     if(host->params.pcapDir) g_free(host->params.pcapDir);
 
     g_mutex_clear(&(host->lock));

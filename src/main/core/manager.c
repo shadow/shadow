@@ -25,7 +25,6 @@
 #include "main/host/network_interface.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
-#include "main/routing/topology.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
 
@@ -378,8 +377,9 @@ void manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
     params->nodeSeed = _manager_nextRandomUInt(manager);
 
     Host* host = host_new(params);
-    host_setup(host, manager_getDNS(manager), manager_getTopology(manager),
-               manager_getRawCPUFrequency(manager), manager_getHostsRootPath(manager));
+    host_setup(host, manager_getDNS(manager), manager_getRawCPUFrequency(manager),
+               manager_getHostsRootPath(manager));
+
     scheduler_addHost(manager->scheduler, host);
 }
 
@@ -543,32 +543,55 @@ DNS* manager_getDNS(Manager* manager) {
     return controller_getDNS(manager->controller);
 }
 
-Topology* manager_getTopology(Manager* manager) {
-    MAGIC_ASSERT(manager);
-    return controller_getTopology(manager->controller);
-}
-
 guint32 manager_getNodeBandwidthUp(Manager* manager, GQuark nodeID, in_addr_t ip) {
-    MAGIC_ASSERT(manager);
     Host* host = _manager_getHost(manager, nodeID);
     NetworkInterface* interface = host_lookupInterface(host, ip);
     return networkinterface_getSpeedUpKiBps(interface);
 }
 
 guint32 manager_getNodeBandwidthDown(Manager* manager, GQuark nodeID, in_addr_t ip) {
-    MAGIC_ASSERT(manager);
     Host* host = _manager_getHost(manager, nodeID);
     NetworkInterface* interface = host_lookupInterface(host, ip);
     return networkinterface_getSpeedDownKiBps(interface);
 }
 
-gdouble manager_getLatency(Manager* manager, GQuark sourceNodeID, GQuark destinationNodeID) {
+gdouble manager_getLatencyForAddresses(Manager* manager, Address* sourceAddress,
+                                       Address* destinationAddress) {
     MAGIC_ASSERT(manager);
-    Host* sourceNode = _manager_getHost(manager, sourceNodeID);
-    Host* destinationNode = _manager_getHost(manager, destinationNodeID);
-    Address* sourceAddress = host_getDefaultAddress(sourceNode);
-    Address* destinationAddress = host_getDefaultAddress(destinationNode);
     return controller_getLatency(manager->controller, sourceAddress, destinationAddress);
+}
+
+gdouble manager_getLatency(Manager* manager, GQuark sourceHostID, GQuark destinationHostID) {
+    Host* sourceHost = _manager_getHost(manager, sourceHostID);
+    Host* destinationHost = _manager_getHost(manager, destinationHostID);
+    Address* sourceAddress = host_getDefaultAddress(sourceHost);
+    Address* destinationAddress = host_getDefaultAddress(destinationHost);
+    return manager_getLatencyForAddresses(manager, sourceAddress, destinationAddress);
+}
+
+gfloat manager_getReliabilityForAddresses(Manager* manager, Address* sourceAddress,
+                                          Address* destinationAddress) {
+    MAGIC_ASSERT(manager);
+    return controller_getReliability(manager->controller, sourceAddress, destinationAddress);
+}
+
+gfloat manager_getReliability(Manager* manager, GQuark sourceHostID, GQuark destinationHostID) {
+    Host* sourceHost = _manager_getHost(manager, sourceHostID);
+    Host* destinationHost = _manager_getHost(manager, destinationHostID);
+    Address* sourceAddress = host_getDefaultAddress(sourceHost);
+    Address* destinationAddress = host_getDefaultAddress(destinationHost);
+    return manager_getReliabilityForAddresses(manager, sourceAddress, destinationAddress);
+}
+
+bool manager_isRoutable(Manager* manager, Address* sourceAddress, Address* destinationAddress) {
+    MAGIC_ASSERT(manager);
+    return controller_isRoutable(manager->controller, sourceAddress, destinationAddress);
+}
+
+void manager_incrementPacketCount(Manager* manager, Address* sourceAddress,
+                                  Address* destinationAddress) {
+    MAGIC_ASSERT(manager);
+    controller_incrementPacketCount(manager->controller, sourceAddress, destinationAddress);
 }
 
 const ConfigOptions* manager_getConfig(Manager* manager) {

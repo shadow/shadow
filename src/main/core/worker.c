@@ -33,7 +33,6 @@
 #include "main/routing/dns.h"
 #include "main/routing/packet.h"
 #include "main/routing/router.h"
-#include "main/routing/topology.h"
 #include "main/utility/count_down_latch.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
@@ -379,7 +378,6 @@ Address* worker_resolveNameToAddress(const gchar* name) {
     return dns_resolveNameToAddress(dns, name);
 }
 
-Topology* worker_getTopology() { return manager_getTopology(_worker_pool()->manager); }
 ChildPidWatcher* worker_getChildPidWatcher() {
     return manager_childpidwatcher(_worker_pool()->manager);
 }
@@ -539,7 +537,8 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
     gboolean bootstrapping = worker_isBootstrapActive();
 
     /* check if network reliability forces us to 'drop' the packet */
-    gdouble reliability = topology_getReliability(worker_getTopology(), srcAddress, dstAddress);
+    gdouble reliability = worker_getReliabilityForAddresses(srcAddress, dstAddress);
+
     Random* random = host_getRandom(srcHost);
     gdouble chance = random_nextDouble(random);
 
@@ -547,11 +546,11 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
      * control has problems responding to packet loss */
     if (bootstrapping || chance <= reliability || packet_getPayloadLength(packet) == 0) {
         /* the sender's packet will make it through, find latency */
-        gdouble latency = topology_getLatency(worker_getTopology(), srcAddress, dstAddress);
+        gfloat latency = worker_getLatencyForAddresses(srcAddress, dstAddress);
         SimulationTime delay = (SimulationTime)ceil(latency * SIMTIME_ONE_MILLISECOND);
         SimulationTime deliverTime = worker_getCurrentTime() + delay;
 
-        topology_incrementPathPacketCounter(worker_getTopology(), srcAddress, dstAddress);
+        worker_incrementPacketCount(srcAddress, dstAddress);
 
         /* TODO this should change for sending to remote manager (on a different machine)
          * this is the only place where tasks are sent between separate hosts */
@@ -620,8 +619,28 @@ guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip) {
     return manager_getNodeBandwidthDown(_worker_pool()->manager, nodeID, ip);
 }
 
-gdouble worker_getLatency(GQuark sourceNodeID, GQuark destinationNodeID) {
-    return manager_getLatency(_worker_pool()->manager, sourceNodeID, destinationNodeID);
+gdouble worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress) {
+    return manager_getLatencyForAddresses(_worker_pool()->manager, sourceAddress, destinationAddress);
+}
+
+gdouble worker_getLatency(GQuark sourceHostID, GQuark destinationHostID) {
+    return manager_getLatency(_worker_pool()->manager, sourceHostID, destinationHostID);
+}
+
+gdouble worker_getReliabilityForAddresses(Address* sourceAddress, Address* destinationAddress) {
+    return manager_getReliabilityForAddresses(_worker_pool()->manager, sourceAddress, destinationAddress);
+}
+
+gdouble worker_getReliability(GQuark sourceHostID, GQuark destinationHostID) {
+    return manager_getReliability(_worker_pool()->manager, sourceHostID, destinationHostID);
+}
+
+bool worker_isRoutable(Address* sourceAddress, Address* destinationAddress) {
+    return manager_isRoutable(_worker_pool()->manager, sourceAddress, destinationAddress);
+}
+
+void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAddress) {
+    manager_incrementPacketCount(_worker_pool()->manager, sourceAddress, destinationAddress);
 }
 
 void worker_updateMinTimeJump(gdouble minPathLatency) {

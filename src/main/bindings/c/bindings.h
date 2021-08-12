@@ -54,6 +54,9 @@ typedef struct DescriptorTable DescriptorTable;
 
 typedef struct HostOptions HostOptions;
 
+// Tool for assigning IP addresses to graph nodes.
+typedef struct IpAssignment_u32 IpAssignment_u32;
+
 // A set of `n` logical processors
 typedef struct LogicalProcessors LogicalProcessors;
 
@@ -61,6 +64,10 @@ typedef struct LogicalProcessors LogicalProcessors;
 // When in use, any operation that touches that process's memory must go
 // through the MemoryManager to ensure soundness. See MemoryManager::new.
 typedef struct MemoryManager MemoryManager;
+
+// A network graph containing the petgraph graph and a map from gml node ids to petgraph node
+// indexes.
+typedef struct NetworkGraph NetworkGraph;
 
 // Represents a POSIX description, or a Linux "struct file".
 typedef struct PosixFile PosixFile;
@@ -87,6 +94,9 @@ typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
 typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
+
+// Routing information for paths between nodes.
+typedef struct RoutingInfo_u32 RoutingInfo_u32;
 
 typedef uint64_t WatchHandle;
 
@@ -311,13 +321,18 @@ char *config_getNetworkGraph(const struct ConfigOptions *config);
 
 bool config_getUseShortestPath(const struct ConfigOptions *config);
 
-void config_iterHosts(const struct ConfigOptions *config,
-                      void (*f)(const char*, const struct ConfigOptions*, const struct HostOptions*, void*),
-                      void *data);
+__attribute__((warn_unused_result))
+int config_iterHosts(const struct ConfigOptions *config,
+                     int (*f)(const char*, const struct ConfigOptions*, const struct HostOptions*, void*),
+                     void *data);
 
 uint32_t config_getNHosts(const struct ConfigOptions *config);
 
 void hostoptions_freeString(char *string);
+
+unsigned int hostoptions_getNetworkNodeId(const struct HostOptions *host);
+
+int hostoptions_getIpAddr(const struct HostOptions *host, in_addr_t *addr);
 
 unsigned int hostoptions_getQuantity(const struct HostOptions *host);
 
@@ -331,19 +346,18 @@ SimulationTime hostoptions_getHeartbeatInterval(const struct HostOptions *host);
 
 char *hostoptions_getPcapDirectory(const struct HostOptions *host);
 
-char *hostoptions_getIpAddressHint(const struct HostOptions *host);
+// Get the downstream bandwidth of the host if it exists. A non-zero return value means that
+// the host did not have a downstream bandwidth and that `bandwidth_down` was not updated.
+int hostoptions_getBandwidthDown(const struct HostOptions *host, uint64_t *bandwidth_down);
 
-char *hostoptions_getCountryCodeHint(const struct HostOptions *host);
+// Get the upstream bandwidth of the host if it exists. A non-zero return value means that
+// the host did not have an upstream bandwidth and that `bandwidth_up` was not updated.
+int hostoptions_getBandwidthUp(const struct HostOptions *host, uint64_t *bandwidth_up);
 
-char *hostoptions_getCityCodeHint(const struct HostOptions *host);
-
-uint64_t hostoptions_getBandwidthDown(const struct HostOptions *host);
-
-uint64_t hostoptions_getBandwidthUp(const struct HostOptions *host);
-
-void hostoptions_iterProcesses(const struct HostOptions *host,
-                               void (*f)(const struct ProcessOptions*, void*),
-                               void *data);
+__attribute__((warn_unused_result))
+int hostoptions_iterProcesses(const struct HostOptions *host,
+                              int (*f)(const struct ProcessOptions*, void*),
+                              void *data);
 
 void processoptions_freeString(char *string);
 
@@ -621,5 +635,72 @@ SysCallReturn rustsyscallhandler_pwrite64(SysCallHandler *sys, const SysCallArgs
 SysCallReturn rustsyscallhandler_pipe(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_pipe2(SysCallHandler *sys, const SysCallArgs *args);
+
+struct NetworkGraph *networkgraph_load(const struct ConfigOptions *config);
+
+void networkgraph_free(struct NetworkGraph *graph);
+
+// Get the downstream bandwidth of the graph node if it exists. A non-zero return value means
+// that the node did not have a downstream bandwidth and that `bandwidth_down` was not updated.
+__attribute__((warn_unused_result))
+int networkgraph_nodeBandwidthDownBits(struct NetworkGraph *graph,
+                                       uint32_t node_id,
+                                       uint64_t *bandwidth_down);
+
+// Get the upstream bandwidth of the graph node if it exists. A non-zero return value means
+// that the node did not have an upstream bandwidth and that `bandwidth_up` was not updated.
+__attribute__((warn_unused_result))
+int networkgraph_nodeBandwidthUpBits(struct NetworkGraph *graph,
+                                     uint32_t node_id,
+                                     uint64_t *bandwidth_up);
+
+struct IpAssignment_u32 *ipassignment_new(void);
+
+void ipassignment_free(struct IpAssignment_u32 *ip_assignment);
+
+// Get an unused address and assign it to a node.
+__attribute__((warn_unused_result))
+int ipassignment_assignHost(struct IpAssignment_u32 *ip_assignment,
+                            uint32_t node_id,
+                            in_addr_t *ip_addr);
+
+// Assign an address to a node.
+__attribute__((warn_unused_result))
+int ipassignment_assignHostWithIp(struct IpAssignment_u32 *ip_assignment,
+                                  uint32_t node_id,
+                                  in_addr_t ip_addr);
+
+struct RoutingInfo_u32 *routinginfo_new(struct NetworkGraph *graph,
+                                        struct IpAssignment_u32 *ip_assignment,
+                                        bool use_shortest_paths);
+
+void routinginfo_free(struct RoutingInfo_u32 *routing_info);
+
+// Checks if the addresses are assigned to hosts, and if so it must be routable since the
+// graph is connected.
+bool routinginfo_isRoutable(const struct IpAssignment_u32 *ip_assignment,
+                            in_addr_t src,
+                            in_addr_t dst);
+
+// Get the packet latency from one host to another. The given addresses must be assigned to
+// hosts.
+uint64_t routinginfo_getLatencyNs(const struct RoutingInfo_u32 *routing_info,
+                                  const struct IpAssignment_u32 *ip_assignment,
+                                  in_addr_t src,
+                                  in_addr_t dst);
+
+// Get the packet reliability from one host to another. The given addresses must be assigned
+// to hosts.
+float routinginfo_getReliability(const struct RoutingInfo_u32 *routing_info,
+                                 const struct IpAssignment_u32 *ip_assignment,
+                                 in_addr_t src,
+                                 in_addr_t dst);
+
+// Increment the number of packets sent from one host to another. The given addresses must be
+// assigned to hosts.
+void routinginfo_incrementPacketCount(struct RoutingInfo_u32 *routing_info,
+                                      const struct IpAssignment_u32 *ip_assignment,
+                                      in_addr_t src,
+                                      in_addr_t dst);
 
 #endif /* main_bindings_h */

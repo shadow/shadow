@@ -420,21 +420,6 @@ pub struct HostDefaultOptions {
     #[clap(long, value_name = "path")]
     #[clap(about = HOST_HELP.get("pcap_directory").unwrap())]
     pub pcap_directory: Option<String>,
-
-    /// IPv4 address hint for Shadow's name and routing system (ex: "100.0.0.1")
-    #[clap(long, value_name = "ip")]
-    #[clap(about = HOST_HELP.get("ip_address_hint").unwrap())]
-    pub ip_address_hint: Option<String>,
-
-    /// Country code hint for Shadow's name and routing system (ex: "US")
-    #[clap(long, value_name = "country")]
-    #[clap(about = HOST_HELP.get("country_code_hint").unwrap())]
-    pub country_code_hint: Option<String>,
-
-    /// City code hint for Shadow's name and routing system
-    #[clap(long, value_name = "city")]
-    #[clap(about = HOST_HELP.get("city_code_hint").unwrap())]
-    pub city_code_hint: Option<String>,
 }
 
 impl HostDefaultOptions {
@@ -445,9 +430,6 @@ impl HostDefaultOptions {
             heartbeat_log_info: None,
             heartbeat_interval: None,
             pcap_directory: None,
-            ip_address_hint: None,
-            country_code_hint: None,
-            city_code_hint: None,
         }
     }
 
@@ -466,9 +448,6 @@ impl Default for HostDefaultOptions {
             heartbeat_log_info: Some(std::array::IntoIter::new([LogInfoFlag::Node]).collect()),
             heartbeat_interval: Some(units::Time::new(1, units::TimePrefixUpper::Sec)),
             pcap_directory: None,
-            ip_address_hint: None,
-            country_code_hint: None,
-            city_code_hint: None,
         }
     }
 }
@@ -503,7 +482,14 @@ pub struct ProcessOptions {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct HostOptions {
+    /// Network graph node ID to assign the host to
+    pub network_node_id: u32,
+
     pub processes: Vec<ProcessOptions>,
+
+    /// IP address to assign to the host
+    #[serde(default)]
+    pub ip_addr: Option<std::net::IpAddr>,
 
     /// Number of hosts to start
     #[serde(default)]
@@ -735,8 +721,8 @@ pub const ONE_GBIT_SWITCH_GRAPH: &str = r#"graph [
   node [
     id 0
     ip_address "0.0.0.0"
-    bandwidth_up "1 Gbit"
-    bandwidth_down "1 Gbit"
+    host_bandwidth_up "1 Gbit"
+    host_bandwidth_down "1 Gbit"
   ]
   edge [
     source 0
@@ -1372,6 +1358,7 @@ mod export {
     }
 
     #[no_mangle]
+    #[must_use]
     pub extern "C" fn config_iterHosts(
         config: *const ConfigOptions,
         f: unsafe extern "C" fn(
@@ -1379,16 +1366,16 @@ mod export {
             *const ConfigOptions,
             *const HostOptions,
             *mut libc::c_void,
-        ),
+        ) -> libc::c_int,
         data: *mut libc::c_void,
-    ) {
+    ) -> libc::c_int {
         assert!(!config.is_null());
         let config = unsafe { &*config };
 
         for (name, host) in &config.hosts {
             // bind the string to a local variable so it's not dropped before f() runs
             let name = CString::new(name.clone()).unwrap();
-            unsafe {
+            let rv = unsafe {
                 f(
                     name.as_c_str().as_ptr(),
                     config as *const _,
@@ -1396,7 +1383,12 @@ mod export {
                     data,
                 )
             };
+            if rv != 0 {
+                return rv;
+            }
         }
+
+        return 0;
     }
 
     #[no_mangle]
@@ -1415,6 +1407,34 @@ mod export {
     pub extern "C" fn hostoptions_freeString(string: *mut libc::c_char) {
         if !string.is_null() {
             unsafe { CString::from_raw(string) };
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn hostoptions_getNetworkNodeId(host: *const HostOptions) -> libc::c_uint {
+        assert!(!host.is_null());
+        let host = unsafe { &*host };
+
+        host.network_node_id
+    }
+
+    #[no_mangle]
+    pub extern "C" fn hostoptions_getIpAddr(
+        host: *const HostOptions,
+        addr: *mut libc::in_addr_t,
+    ) -> libc::c_int {
+        assert!(!host.is_null());
+        assert!(!addr.is_null());
+        let host = unsafe { &*host };
+        let addr = unsafe { &mut *addr };
+
+        match host.ip_addr {
+            Some(std::net::IpAddr::V4(x)) => {
+                *addr = u32::to_be(x.into());
+                0
+            }
+            Some(std::net::IpAddr::V6(_)) => unimplemented!(),
+            None => -1,
         }
     }
 
@@ -1494,75 +1514,67 @@ mod export {
         }
     }
 
+    /// Get the downstream bandwidth of the host if it exists. A non-zero return value means that
+    /// the host did not have a downstream bandwidth and that `bandwidth_down` was not updated.
     #[no_mangle]
-    pub extern "C" fn hostoptions_getIpAddressHint(host: *const HostOptions) -> *mut libc::c_char {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        match host.options.ip_address_hint.as_ref() {
-            Some(x) => CString::into_raw(CString::new(x.to_string()).unwrap()),
-            None => std::ptr::null_mut(),
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getCountryCodeHint(
+    pub extern "C" fn hostoptions_getBandwidthDown(
         host: *const HostOptions,
-    ) -> *mut libc::c_char {
+        bandwidth_down: *mut u64,
+    ) -> libc::c_int {
         assert!(!host.is_null());
+        assert!(!bandwidth_down.is_null());
         let host = unsafe { &*host };
-
-        match host.options.country_code_hint.as_ref() {
-            Some(x) => CString::into_raw(CString::new(x.to_string()).unwrap()),
-            None => std::ptr::null_mut(),
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getCityCodeHint(host: *const HostOptions) -> *mut libc::c_char {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        match host.options.city_code_hint.as_ref() {
-            Some(x) => CString::into_raw(CString::new(x.to_string()).unwrap()),
-            None => std::ptr::null_mut(),
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getBandwidthDown(host: *const HostOptions) -> u64 {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
+        let bandwidth_down = unsafe { &mut *bandwidth_down };
 
         match host.bandwidth_down {
-            Some(x) => x.convert(units::SiPrefixUpper::Base).unwrap().value(),
-            None => 0,
+            Some(x) => {
+                *bandwidth_down = x.convert(units::SiPrefixUpper::Base).unwrap().value();
+                return 0;
+            }
+            None => return -1,
         }
     }
 
+    /// Get the upstream bandwidth of the host if it exists. A non-zero return value means that
+    /// the host did not have an upstream bandwidth and that `bandwidth_up` was not updated.
     #[no_mangle]
-    pub extern "C" fn hostoptions_getBandwidthUp(host: *const HostOptions) -> u64 {
+    pub extern "C" fn hostoptions_getBandwidthUp(
+        host: *const HostOptions,
+        bandwidth_up: *mut u64,
+    ) -> libc::c_int {
         assert!(!host.is_null());
+        assert!(!bandwidth_up.is_null());
         let host = unsafe { &*host };
+        let bandwidth_up = unsafe { &mut *bandwidth_up };
 
         match host.bandwidth_up {
-            Some(x) => x.convert(units::SiPrefixUpper::Base).unwrap().value(),
-            None => 0,
+            Some(x) => {
+                *bandwidth_up = x.convert(units::SiPrefixUpper::Base).unwrap().value();
+                return 0;
+            }
+            None => return -1,
         }
     }
 
     #[no_mangle]
+    #[must_use]
     pub extern "C" fn hostoptions_iterProcesses(
         host: *const HostOptions,
-        f: unsafe extern "C" fn(*const ProcessOptions, *mut libc::c_void),
+        f: unsafe extern "C" fn(*const ProcessOptions, *mut libc::c_void) -> libc::c_int,
         data: *mut libc::c_void,
-    ) {
+    ) -> libc::c_int {
         assert!(!host.is_null());
         let host = unsafe { &*host };
 
         for proc in &host.processes {
-            unsafe { f(proc as *const _, data) };
+            let rv = unsafe { f(proc as *const _, data) };
+
+            if rv != 0 {
+                return rv;
+            }
         }
+
+        return 0;
     }
 
     #[no_mangle]
