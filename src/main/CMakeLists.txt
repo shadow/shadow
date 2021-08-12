@@ -145,8 +145,6 @@ set(shadow_srcs
     routing/router_queue_codel.c
     routing/router.c
     routing/dns.c
-    routing/path.c
-    routing/topology.c
 
     utility/async_priority_queue.c
     utility/count_down_latch.c
