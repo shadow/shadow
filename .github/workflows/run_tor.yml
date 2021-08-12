@@ -75,8 +75,8 @@ jobs:
           . ci/container_scripts/install_deps.sh
           . ci/container_scripts/install_extra_deps.sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          # dependencies for tor
-          DEBIAN_FRONTEND=noninteractive apt-get install -y automake libevent-dev libssl-dev zlib1g-dev
+          # dependencies for tor and tgen
+          DEBIAN_FRONTEND=noninteractive apt-get install -y automake libevent-dev libssl-dev zlib1g-dev libigraph-dev
           mkdir -p ~/.local/bin
 
       - name: Build tor
