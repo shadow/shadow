@@ -39,6 +39,7 @@ jobs:
           (cd src/main && cargo fmt -- --check)
           (cd src/test && cargo fmt -- --check)
           (cd src/lib/logger/rust_bindings && cargo fmt -- --check)
+          (cd src/lib/gml-parser && cargo fmt -- --check)
 
   lint-cargo-lock:
     runs-on: ubuntu-latest
