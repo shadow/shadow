@@ -28,6 +28,7 @@
     - [Migrating Simulations from Shadow 1.x](migrating_from_1x.md)
     - [Performance Tuning]()
         - [Disabling Side-channel Mitigations](sidechannels.md)
+        - [Parallel Simulations](parallel_sims.md)
 - [Developer Guides]()
     - [Debugging and profiling](developer_guide.md)
     - [Continous integration tests](ci.md)
