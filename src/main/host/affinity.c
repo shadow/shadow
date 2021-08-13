@@ -5,6 +5,7 @@
 #endif              // _GNU_SOURCE
 
 #include <assert.h>
+#include <errno.h>
 #include <pthread.h>
 #include <sched.h>
 #include <stdbool.h>
@@ -36,6 +37,7 @@ typedef struct _CPUInfo {
 } CPUInfo;
 
 typedef struct _PlatformCPUInfo {
+    cpu_set_t* initial_affinity;
     CPUInfo* p_cpus;
     size_t n_cpus;
     int max_cpu_num;
@@ -126,6 +128,12 @@ static int _cpuinfo_compare(const CPUInfo* lhs, const CPUInfo* rhs) {
            (lhs->logical_cpu_num < rhs->logical_cpu_num);
 }
 
+static bool _cpuIdxIsEligible(size_t idx) {
+    assert(idx < _global_platform_info.n_cpus);
+    return CPU_ISSET_S(_global_platform_info.p_cpus[idx].logical_cpu_num,
+                       _global_platform_info.n_cpus, _global_platform_info.initial_affinity);
+}
+
 /*
  * rwails: I tried using a priority queue here first, but since the priorities
  * change dynamically with each allocation, it doesn't work with out-of-the-box
@@ -136,11 +144,22 @@ const CPUInfo* _get_best_cpu() {
 
     assert(_global_platform_info.n_cpus > 0);
 
-    const CPUInfo* p_cpu_info = &_global_platform_info.p_cpus[0];
+    // Skip disabled
+    size_t idx = 0;
+    while (idx < _global_platform_info.n_cpus && !_cpuIdxIsEligible(idx)) {
+        trace("Skipping idx %zu (CPU %d)", idx, _global_platform_info.p_cpus[idx].logical_cpu_num);
+        ++idx;
+    }
 
-    for (size_t idx = 0; idx < _global_platform_info.n_cpus; ++idx) {
+    if (idx >= _global_platform_info.n_cpus) {
+        panic("No cpus assigned to this process");
+    }
+
+    const CPUInfo* p_cpu_info = &_global_platform_info.p_cpus[idx++];
+
+    for (; idx < _global_platform_info.n_cpus; ++idx) {
         const CPUInfo* rhs = &_global_platform_info.p_cpus[idx];
-        if (_cpuinfo_compare(p_cpu_info, rhs) == 1) {
+        if (_cpuIdxIsEligible(idx) && _cpuinfo_compare(p_cpu_info, rhs) == 1) {
             // In this case, rhs is preferred to lhs
             p_cpu_info = rhs;
         }
@@ -333,6 +352,17 @@ static void _global_platform_info_hash_tables_init() {
     }
 }
 
+static cpu_set_t* _getAffinity(size_t cpu_num) {
+    size_t cpu_set_size = CPU_ALLOC_SIZE(cpu_num);
+    cpu_set_t* cpu_set = CPU_ALLOC(cpu_num);
+
+    int rc = sched_getaffinity(0, cpu_set_size, cpu_set);
+    if (rc < 0) {
+        panic("sched_getaffinity: %s", strerror(errno));
+    }
+    return cpu_set;
+}
+
 int affinity_initPlatformInfo() {
 
     char* lscpu_contents = NULL;
@@ -351,6 +381,8 @@ int affinity_initPlatformInfo() {
         panic("Could not run `lscpu`, which is required for CPU pinning.");
         return -1;
     }
+
+    _global_platform_info.initial_affinity = _getAffinity(_global_platform_info.n_cpus);
 
     _global_platform_info_hash_tables_init();
 
