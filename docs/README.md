@@ -32,6 +32,7 @@ can fix it.
        * [Network Graph Specification](network_graph_spec.md)
      * Performance Tuning
        * [Disabling Side-channel Mitigations](sidechannels.md)
+       * [Parallel Simulations](parallel_sims.md)
      * [Migrating Simulations from Shadow 1.x](migrating_from_1x.md)
    * Developer Guides
      * [Debugging and profiling](developer_guide.md)
