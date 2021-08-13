@@ -61,8 +61,8 @@ typedef struct LogicalProcessors LogicalProcessors;
 // through the MemoryManager to ensure soundness. See MemoryManager::new.
 typedef struct MemoryManager MemoryManager;
 
-// An opaque type used when passing `*const AtomicRefCell<File>` to C.
-typedef struct PosixFileArc PosixFileArc;
+// Represents a POSIX description, or a Linux "struct file".
+typedef struct PosixFile PosixFile;
 
 // A mutable reference to a slice of plugin memory. Implements DerefMut<[T]>,
 // allowing, e.g.:

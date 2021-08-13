@@ -62,8 +62,8 @@ typedef struct LogicalProcessors LogicalProcessors;
 // through the MemoryManager to ensure soundness. See MemoryManager::new.
 typedef struct MemoryManager MemoryManager;
 
-// An opaque type used when passing `*const AtomicRefCell<File>` to C.
-typedef struct PosixFileArc PosixFileArc;
+// Represents a POSIX description, or a Linux "struct file".
+typedef struct PosixFile PosixFile;
 
 // A mutable reference to a slice of plugin memory. Implements DerefMut<[T]>,
 // allowing, e.g.:
@@ -89,6 +89,84 @@ typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 typedef struct ProcessOptions ProcessOptions;
 
 typedef uint64_t WatchHandle;
+
+struct ByteQueue *bytequeue_new(size_t chunk_size);
+
+void bytequeue_free(struct ByteQueue *bq_ptr);
+
+size_t bytequeue_len(struct ByteQueue *bq);
+
+bool bytequeue_isEmpty(struct ByteQueue *bq);
+
+void bytequeue_push(struct ByteQueue *bq, const unsigned char *src, size_t len);
+
+size_t bytequeue_pop(struct ByteQueue *bq, unsigned char *dst, size_t len);
+
+struct ChildPidWatcher *childpidwatcher_new(void);
+
+void childpidwatcher_free(struct ChildPidWatcher *watcher);
+
+int32_t childpidwatcher_forkWatchable(const struct ChildPidWatcher *watcher,
+                                      void (*child_fn)(void*),
+                                      void *child_fn_data);
+
+// Register interest in `pid`, and associate it with `read_fd`.
+//
+// `read_fd` should be the read end of a pipe, whose write end is owned
+// *solely* by `pid`, causing `read_fd` to become invalid when `pid` exits.
+// In a multi-threaded program care must be taken to prevent a concurrent
+// fork from leaking the write end of the pipe into other children. One way
+// to avoid this is to use O_CLOEXEC when creating the pipe, and then unset
+// O_CLOEXEC in the child before calling exec.
+//
+// Be sure to close the parent's write-end of the pipe.
+//
+// Takes ownership of `read_fd`, and will close it when appropriate.
+void childpidwatcher_registerPid(const struct ChildPidWatcher *watcher,
+                                 int32_t pid,
+                                 int32_t read_fd);
+
+void childpidwatcher_unregisterPid(const struct ChildPidWatcher *watcher, int32_t pid);
+
+// Call `callback` exactly once from another thread after the child `pid`
+// has exited, including if it has already exited. Does *not* reap the
+// child itself.
+//
+// The returned handle is guaranteed to be non-zero.
+//
+// Panics if `pid` doesn't exist.
+WatchHandle childpidwatcher_watch(const struct ChildPidWatcher *watcher,
+                                  pid_t pid,
+                                  void (*callback)(pid_t, void*),
+                                  void *data);
+
+// Unregisters a callback. After returning, the corresponding callback is
+// guaranteed either to have already run, or to never run. i.e. it's safe to
+// free data that the callback might otherwise access.
+//
+// Calling with pids or handles that no longer exist is safe.
+void childpidwatcher_unwatch(const struct ChildPidWatcher *watcher, pid_t pid, WatchHandle handle);
+
+struct Counter *counter_new(void);
+
+void counter_free(struct Counter *counter_ptr);
+
+int64_t counter_add_value(struct Counter *counter, const char *id, int64_t value);
+
+int64_t counter_sub_value(struct Counter *counter, const char *id, int64_t value);
+
+void counter_add_counter(struct Counter *counter, struct Counter *other);
+
+void counter_sub_counter(struct Counter *counter, struct Counter *other);
+
+bool counter_equals_counter(const struct Counter *counter, const struct Counter *other);
+
+// Creates a new string representation of the counter, e.g., for logging.
+// The returned string must be free'd by passing it to counter_free_string.
+char *counter_alloc_string(struct Counter *counter);
+
+// Frees a string previously returned from counter_alloc_string.
+void counter_free_string(struct Counter *counter, char *ptr);
 
 // Flush Rust's log::logger().
 void rustlogger_flush(void);
@@ -395,28 +473,32 @@ void compatdescriptor_free(struct CompatDescriptor *descriptor);
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
 // posix file object. Otherwise returns NULL. The posix file object's ref count is not
 // modified, so the pointer must not outlive the lifetime of the compat descriptor.
-const struct PosixFileArc *compatdescriptor_borrowPosixFile(const struct CompatDescriptor *descriptor);
+const struct PosixFile *compatdescriptor_borrowPosixFile(const struct CompatDescriptor *descriptor);
 
 // If the compat descriptor is a new descriptor, returns a pointer to the reference-counted
 // posix file object. Otherwise returns NULL. The posix file object's ref count is
 // incremented, so the pointer must always later be passed to `posixfile_drop()`, otherwise
 // the memory will leak.
-const struct PosixFileArc *compatdescriptor_newRefPosixFile(const struct CompatDescriptor *descriptor);
+const struct PosixFile *compatdescriptor_newRefPosixFile(const struct CompatDescriptor *descriptor);
 
 // Decrement the ref count of the posix file object. The pointer must not be used after
 // calling this function.
-void posixfile_drop(const struct PosixFileArc *file);
+void posixfile_drop(const struct PosixFile *file);
 
 // Get the status of the posix file object.
-Status posixfile_getStatus(const struct PosixFileArc *file);
+Status posixfile_getStatus(const struct PosixFile *file);
 
 // Add a status listener to the posix file object. This will increment the status
 // listener's ref count, and will decrement the ref count when this status listener is
 // removed or when the posix file is freed/dropped.
-void posixfile_addListener(const struct PosixFileArc *file, StatusListener *listener);
+void posixfile_addListener(const struct PosixFile *file, StatusListener *listener);
 
 // Remove a listener from the posix file object.
-void posixfile_removeListener(const struct PosixFileArc *file, StatusListener *listener);
+void posixfile_removeListener(const struct PosixFile *file, StatusListener *listener);
+
+// Get the canonical handle for a posix file object. Two posix file objects refer to the same
+// underlying data if their handles are equal.
+uintptr_t posixfile_getCanonicalHandle(const struct PosixFile *file);
 
 // # Safety
 // * `thread` must point to a valid object.
@@ -539,83 +621,5 @@ SysCallReturn rustsyscallhandler_pwrite64(SysCallHandler *sys, const SysCallArgs
 SysCallReturn rustsyscallhandler_pipe(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_pipe2(SysCallHandler *sys, const SysCallArgs *args);
-
-struct ByteQueue *bytequeue_new(size_t chunk_size);
-
-void bytequeue_free(struct ByteQueue *bq_ptr);
-
-size_t bytequeue_len(struct ByteQueue *bq);
-
-bool bytequeue_isEmpty(struct ByteQueue *bq);
-
-void bytequeue_push(struct ByteQueue *bq, const unsigned char *src, size_t len);
-
-size_t bytequeue_pop(struct ByteQueue *bq, unsigned char *dst, size_t len);
-
-struct ChildPidWatcher *childpidwatcher_new(void);
-
-void childpidwatcher_free(struct ChildPidWatcher *watcher);
-
-int32_t childpidwatcher_forkWatchable(const struct ChildPidWatcher *watcher,
-                                      void (*child_fn)(void*),
-                                      void *child_fn_data);
-
-// Register interest in `pid`, and associate it with `read_fd`.
-//
-// `read_fd` should be the read end of a pipe, whose write end is owned
-// *solely* by `pid`, causing `read_fd` to become invalid when `pid` exits.
-// In a multi-threaded program care must be taken to prevent a concurrent
-// fork from leaking the write end of the pipe into other children. One way
-// to avoid this is to use O_CLOEXEC when creating the pipe, and then unset
-// O_CLOEXEC in the child before calling exec.
-//
-// Be sure to close the parent's write-end of the pipe.
-//
-// Takes ownership of `read_fd`, and will close it when appropriate.
-void childpidwatcher_registerPid(const struct ChildPidWatcher *watcher,
-                                 int32_t pid,
-                                 int32_t read_fd);
-
-void childpidwatcher_unregisterPid(const struct ChildPidWatcher *watcher, int32_t pid);
-
-// Call `callback` exactly once from another thread after the child `pid`
-// has exited, including if it has already exited. Does *not* reap the
-// child itself.
-//
-// The returned handle is guaranteed to be non-zero.
-//
-// Panics if `pid` doesn't exist.
-WatchHandle childpidwatcher_watch(const struct ChildPidWatcher *watcher,
-                                  pid_t pid,
-                                  void (*callback)(pid_t, void*),
-                                  void *data);
-
-// Unregisters a callback. After returning, the corresponding callback is
-// guaranteed either to have already run, or to never run. i.e. it's safe to
-// free data that the callback might otherwise access.
-//
-// Calling with pids or handles that no longer exist is safe.
-void childpidwatcher_unwatch(const struct ChildPidWatcher *watcher, pid_t pid, WatchHandle handle);
-
-struct Counter *counter_new(void);
-
-void counter_free(struct Counter *counter_ptr);
-
-int64_t counter_add_value(struct Counter *counter, const char *id, int64_t value);
-
-int64_t counter_sub_value(struct Counter *counter, const char *id, int64_t value);
-
-void counter_add_counter(struct Counter *counter, struct Counter *other);
-
-void counter_sub_counter(struct Counter *counter, struct Counter *other);
-
-bool counter_equals_counter(const struct Counter *counter, const struct Counter *other);
-
-// Creates a new string representation of the counter, e.g., for logging.
-// The returned string must be free'd by passing it to counter_free_string.
-char *counter_alloc_string(struct Counter *counter);
-
-// Frees a string previously returned from counter_alloc_string.
-void counter_free_string(struct Counter *counter, char *ptr);
 
 #endif /* main_bindings_h */

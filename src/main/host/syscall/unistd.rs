@@ -277,19 +277,19 @@ fn pipe_helper(ctx: &mut ThreadContext, fd_ptr: PluginPtr, flags: i32) -> Syscal
 
     // reference-counted file object for read end of the pipe
     let reader = pipe::PipeFile::new(Arc::clone(&buffer), FileMode::READ, file_flags);
-    let reader = Arc::new(AtomicRefCell::new(PosixFile::Pipe(reader)));
+    let reader = Arc::new(AtomicRefCell::new(reader));
 
     // reference-counted file object for write end of the pipe
     let writer = pipe::PipeFile::new(Arc::clone(&buffer), FileMode::WRITE, file_flags);
-    let writer = Arc::new(AtomicRefCell::new(PosixFile::Pipe(writer)));
+    let writer = Arc::new(AtomicRefCell::new(writer));
 
     // set the file objects to listen for events on the buffer
     pipe::PipeFile::enable_notifications(&reader);
     pipe::PipeFile::enable_notifications(&writer);
 
     // file descriptors for the read and write file objects
-    let mut reader_desc = Descriptor::new(reader);
-    let mut writer_desc = Descriptor::new(writer);
+    let mut reader_desc = Descriptor::new(PosixFile::Pipe(reader));
+    let mut writer_desc = Descriptor::new(PosixFile::Pipe(writer));
 
     // set the file descriptor flags
     reader_desc.set_flags(descriptor_flags);

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{
-    FileFlags, FileMode, FileStatus, NewStatusListenerFilter, PosixFile, StatusEventSource,
+    FileFlags, FileMode, FileStatus, NewStatusListenerFilter, StatusEventSource,
 };
 use crate::host::syscall_types::SyscallResult;
 use crate::utility::byte_queue::ByteQueue;
@@ -119,37 +119,26 @@ impl PipeFile {
         }
     }
 
-    pub fn enable_notifications(arc: &Arc<AtomicRefCell<PosixFile>>) {
-        // we remove some of these later in this function
-        let monitoring = FileStatus::READABLE | FileStatus::WRITABLE;
-
+    pub fn enable_notifications(arc: &Arc<AtomicRefCell<Self>>) {
         let weak = Arc::downgrade(arc);
-        match *arc.borrow_mut() {
-            PosixFile::Pipe(ref mut f) => {
-                // remove any status flags that aren't relevant to us
-                let monitoring = f.filter_status(monitoring);
+        let pipe = &mut *arc.borrow_mut();
 
-                f._buffer_event_handle = Some(f.buffer.borrow_mut().add_listener(
-                    monitoring,
-                    NewStatusListenerFilter::Always,
-                    move |status, _changed, event_queue| {
-                        // if the file hasn't been dropped
-                        if let Some(file) = weak.upgrade() {
-                            let mut file = file.borrow_mut();
-                            match *file {
-                                PosixFile::Pipe(ref mut f) => {
-                                    f.copy_status(monitoring, status, event_queue)
-                                }
-                                #[allow(unreachable_patterns)]
-                                _ => unreachable!(),
-                            }
-                        }
-                    },
-                ));
-            }
-            #[allow(unreachable_patterns)]
-            _ => unreachable!(),
-        };
+        // remove any status flags that aren't relevant to us
+        let monitoring = pipe.filter_status(FileStatus::READABLE | FileStatus::WRITABLE);
+
+        let handle = pipe.buffer.borrow_mut().add_listener(
+            monitoring,
+            NewStatusListenerFilter::Always,
+            move |status, _changed, event_queue| {
+                // if the file hasn't been dropped
+                if let Some(pipe) = weak.upgrade() {
+                    pipe.borrow_mut()
+                        .copy_status(monitoring, status, event_queue)
+                }
+            },
+        );
+
+        pipe._buffer_event_handle = Some(handle);
     }
 
     pub fn add_listener(
