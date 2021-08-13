@@ -29,10 +29,11 @@ def latency_conversion(x):
 
 # original attribute name: (new attribute name, new attribute type, value transform fn)
 ATTR_CONVERSIONS = {
-    'bandwidthup': ('bandwidth_up', 'string', bandwidth_conversion),
-    'bandwidthdown': ('bandwidth_down', 'string', bandwidth_conversion),
+    'bandwidthup': ('host_bandwidth_up', 'string', bandwidth_conversion),
+    'bandwidthdown': ('host_bandwidth_down', 'string', bandwidth_conversion),
     'latency': ('latency', 'string', latency_conversion),
     'packetloss': ('packet_loss', None, None),
+    # shadow doesn't use 'country_code', etc anymore, but we still convert it for tornettools
     'countrycode': ('country_code', None, None),
     'citycode': ('city_code', None, None),
     'geocode': ('geo_code', None, None),
