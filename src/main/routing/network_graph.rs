@@ -4,7 +4,9 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::hash::Hash;
 
-use crate::core::support::configuration::{self, CustomGraph, GraphOptions};
+use crate::core::support::configuration::{
+    self, Compression, FileSource, GraphOptions, GraphSource,
+};
 use crate::core::support::{units, units::Unit};
 use crate::routing::petgraph_wrapper::GraphWrapper;
 
@@ -475,12 +477,15 @@ fn read_xz(filename: &str) -> Result<String, Box<dyn Error>> {
 /// Get the network graph as a string.
 pub fn load_network_graph(graph_options: &GraphOptions) -> Result<String, Box<dyn Error>> {
     Ok(match graph_options {
-        GraphOptions::Gml(CustomGraph::Path(f)) => std::fs::read_to_string(f)?,
-        GraphOptions::Gml(CustomGraph::Inline(s)) => s.clone(),
-        GraphOptions::GmlXz(CustomGraph::Path(f)) => read_xz(f)?,
-        GraphOptions::GmlXz(CustomGraph::Inline(_)) => {
-            Err("We don't support inline compressed graphs")?
-        }
+        GraphOptions::Gml(GraphSource::File(FileSource {
+            compression: None,
+            path: f,
+        })) => std::fs::read_to_string(f)?,
+        GraphOptions::Gml(GraphSource::File(FileSource {
+            compression: Some(Compression::Xz),
+            path: f,
+        })) => read_xz(f)?,
+        GraphOptions::Gml(GraphSource::Inline(s)) => s.clone(),
         GraphOptions::OneGbitSwitch => configuration::ONE_GBIT_SWITCH_GRAPH.to_string(),
     })
 }

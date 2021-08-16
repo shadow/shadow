@@ -642,17 +642,29 @@ impl std::str::FromStr for QDiscMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum CustomGraph {
-    Path(String),
+#[serde(rename_all = "snake_case")]
+pub enum Compression {
+    Xz,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FileSource {
+    pub path: String,
+    pub compression: Option<Compression>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphSource {
+    File(FileSource),
     Inline(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GraphOptions {
-    Gml(CustomGraph),
-    GmlXz(CustomGraph),
+    Gml(GraphSource),
     #[serde(rename = "1_gbit_switch")]
     OneGbitSwitch,
 }

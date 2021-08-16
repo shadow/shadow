@@ -2,8 +2,10 @@ general:
   stop_time: 5
 network:
   graph:
-    type: gml_xz
-    path: graph-compressed.gml.xz
+    type: gml
+    file:
+      path: graph-compressed.gml.xz
+      compression: xz
 hosts:
   testnode:
     network_node_id: 0
