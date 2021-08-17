@@ -10,6 +10,7 @@
 #include <sys/timerfd.h>
 
 #include "lib/logger/logger.h"
+#include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
@@ -458,3 +459,5 @@ void syscallcondition_cancel(SysCallCondition* cond) {
     _syscallcondition_cleanupListeners(cond);
     _syscallcondition_cleanupProc(cond);
 }
+
+Timer* syscallcondition_timeout(SysCallCondition* cond) { return cond->timeout; }

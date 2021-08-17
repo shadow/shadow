@@ -16,6 +16,8 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/descriptor/timer.h"
+#include "main/host/syscall_condition.h"
+#include "main/host/thread.h"
 
 void _syscallhandler_setListenTimeout(SysCallHandler* sys, const struct timespec* timeout,
                                       TimeoutType type) {
@@ -45,26 +47,47 @@ void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
     _syscallhandler_setListenTimeout(sys, &timeout, TIMEOUT_RELATIVE);
 }
 
-int _syscallhandler_isListenTimeoutPending(SysCallHandler* sys) {
+static const Timer* _syscallhandler_timeout(const SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
+
+    SysCallCondition* cond = thread_getSysCallCondition(sys->thread);
+    if (!cond) {
+        return NULL;
+    }
+
+    return syscallcondition_timeout(cond);
+}
+
+bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys) {
+    MAGIC_ASSERT(sys);
+
+    const Timer* timeout = _syscallhandler_timeout(sys);
+    if (!timeout) {
+        return false;
+    }
 
     struct itimerspec value = {0};
 
-    gint result = timer_getTime(sys->timer, &value);
+    gint result = timer_getTime(timeout, &value);
     utility_assert(result == 0);
 
     return value.it_value.tv_sec > 0 || value.it_value.tv_nsec > 0;
 }
 
-int _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys) {
+bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys) {
+    MAGIC_ASSERT(sys);
+
+    const Timer* timeout = _syscallhandler_timeout(sys);
+    if (!timeout) {
+        return false;
+    }
+
     /* Note that the timer is "readable" if it has a positive
      * expiration count; this call does not adjust the status. */
-    return timer_getExpirationCount(sys->timer) > 0;
+    return timer_getExpirationCount(timeout) > 0;
 }
 
-int _syscallhandler_wasBlocked(const SysCallHandler* sys) {
-    return sys->blockedSyscallNR >= 0;
-}
+bool _syscallhandler_wasBlocked(const SysCallHandler* sys) { return sys->blockedSyscallNR >= 0; }
 
 int _syscallhandler_validateDescriptor(LegacyDescriptor* descriptor,
                                        LegacyDescriptorType expectedType) {

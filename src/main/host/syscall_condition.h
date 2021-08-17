@@ -67,4 +67,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
  * clearing any references to the process an thread given in wait(). */
 void syscallcondition_cancel(SysCallCondition* cond);
 
+/* Get the timer for the condition, or NULL if there isn't one. */
+Timer* syscallcondition_timeout(SysCallCondition* cond);
+
 #endif /* SRC_MAIN_HOST_SYSCALL_CONDITION_H_ */

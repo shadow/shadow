@@ -13,6 +13,8 @@
  * handlers.
  */
 
+#include <stdbool.h>
+
 #include "main/host/descriptor/epoll.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
@@ -91,9 +93,9 @@ void _syscallhandler_setListenTimeout(SysCallHandler* sys, const struct timespec
 void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
                                             gint timeout_ms);
 void _syscallhandler_setListenTimeoutNanos(SysCallHandler* sys, gint timeout_ns);
-int _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
-int _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
-int _syscallhandler_wasBlocked(const SysCallHandler* sys);
+bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
+bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
+bool _syscallhandler_wasBlocked(const SysCallHandler* sys);
 int _syscallhandler_validateDescriptor(LegacyDescriptor* descriptor,
                                        LegacyDescriptorType expectedType);
 
