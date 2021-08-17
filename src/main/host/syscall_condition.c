@@ -33,7 +33,7 @@ struct _SysCallCondition {
     // The thread waiting for the signal
     Thread* thread;
     // If a task to deliver a signal has been scheduled
-    bool signalPending;
+    bool signalScheduled;
     // Memory tracking
     gint referenceCount;
     MAGIC_DECLARE;
@@ -311,8 +311,6 @@ static void _syscallcondition_signal(Host* host, void* obj, void* arg) {
     _syscallcondition_logListeningState(cond, "signaling while");
 #endif
 
-    cond->signalPending = false;
-
     // Always deliver the signal if the timeout expired.
     // Otherwise, only deliver the signal if the desc status is still valid.
     if (wasTimeout || _syscallcondition_statusIsValid(cond)) {
@@ -329,6 +327,12 @@ static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
                                                  bool wasTimeout) {
     MAGIC_ASSERT(cond);
 
+    if (cond->signalScheduled) {
+        // Deliver one signal even if condition is triggered multiple times or
+        // ways.
+        return;
+    }
+
     /* We deliver the signal via a task, to make sure whatever
      * code triggered our listener finishes its logic first before
      * we tell the process to run the plugin and potentially change
@@ -342,7 +346,7 @@ static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
     syscallcondition_ref(cond);
     task_unref(signalTask);
 
-    cond->signalPending = true;
+    cond->signalScheduled = true;
 }
 
 static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
@@ -353,10 +357,7 @@ static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
     _syscallcondition_logListeningState(cond, "status changed while");
 #endif
 
-    // Deliver one signal even if desc status changes many times.
-    if (!cond->signalPending) {
-        _syscallcondition_scheduleSignalTask(cond, false);
-    }
+    _syscallcondition_scheduleSignalTask(cond, false);
 }
 
 static void _syscallcondition_notifyTimeoutExpired(void* obj, void* arg) {
@@ -367,10 +368,7 @@ static void _syscallcondition_notifyTimeoutExpired(void* obj, void* arg) {
     _syscallcondition_logListeningState(cond, "timeout expired while");
 #endif
 
-    // Deliver one signal even if timeout status changes many times.
-    if (!cond->signalPending) {
-        _syscallcondition_scheduleSignalTask(cond, true);
-    }
+    _syscallcondition_scheduleSignalTask(cond, true);
 }
 
 void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
