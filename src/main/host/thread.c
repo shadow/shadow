@@ -97,8 +97,23 @@ void thread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.resume);
     _thread_syncAffinityWithWorker(thread);
-    _thread_cleanupSysCallCondition(thread);
-    thread->cond = thread->methods.resume(thread);
+
+    // Ensure the condition isn't triggered again, but don't clear it yet.
+    // Syscall handler can still access.
+    if (thread->cond) {
+        syscallcondition_cancel(thread->cond);
+    }
+
+    SysCallCondition* cond = thread->methods.resume(thread);
+
+    // Now we're done with old condition.
+    if (thread->cond) {
+        syscallcondition_unref(thread->cond);
+        thread->cond = NULL;
+    }
+
+    // Wait on new condition.
+    thread->cond = cond;
     if (thread->cond) {
         syscallcondition_waitNonblock(thread->cond, thread->process, thread);
     }
