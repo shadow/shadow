@@ -45,12 +45,13 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     int wasBlocked = _syscallhandler_wasBlocked(sys);
 
     if (requestToBlock && !wasBlocked) {
-        /* We need to block for a while following the requested timeout. */
-        _syscallhandler_setListenTimeout(sys, &req, TIMEOUT_RELATIVE);
+        SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE}, NULL);
+        syscallcondition_setTimeout(cond, sys->host,
+                                    worker_getEmulatedTime() + req.tv_sec * SIMTIME_ONE_SECOND +
+                                        req.tv_nsec * SIMTIME_ONE_NANOSECOND);
 
         /* Block the thread, unblock when the timer expires. */
-        return (SysCallReturn){
-            .state = SYSCALL_BLOCK, .cond = syscallcondition_new((Trigger){0}, sys->timer)};
+        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond};
     }
 
     /* If needed, verify that the timer expired correctly. */

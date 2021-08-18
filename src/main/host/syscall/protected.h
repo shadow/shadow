@@ -37,10 +37,6 @@ struct _SysCallHandler {
     Process* process;
     Thread* thread;
 
-    /*
-     * Timer for when the current blocking syscall (if any) should unblock.
-     */
-    Timer* timer;
     /* We use this epoll to service syscalls that need to block on the status
      * of multiple descriptors, like poll. */
     Epoll* epoll;
@@ -88,11 +84,6 @@ struct _SysCallHandler {
     SysCallReturn syscallhandler_##s(                                          \
         SysCallHandler* sys, const SysCallArgs* args);
 
-void _syscallhandler_setListenTimeout(SysCallHandler* sys, const struct timespec* timeout,
-                                      TimeoutType type);
-void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
-                                            gint timeout_ms);
-void _syscallhandler_setListenTimeoutNanos(SysCallHandler* sys, gint timeout_ns);
 bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
 bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
 bool _syscallhandler_wasBlocked(const SysCallHandler* sys);

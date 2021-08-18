@@ -19,34 +19,6 @@
 #include "main/host/syscall_condition.h"
 #include "main/host/thread.h"
 
-void _syscallhandler_setListenTimeout(SysCallHandler* sys, const struct timespec* timeout,
-                                      TimeoutType type) {
-    MAGIC_ASSERT(sys);
-
-    /* Set a non-repeating (one-shot) timer to the given timeout.
-     * A NULL timeout indicates we should turn off the timer. */
-    struct itimerspec value = {
-        .it_value = timeout ? *timeout : (struct timespec){0},
-    };
-
-    /* This causes us to lose the previous state of the timer. */
-    gint result = timer_setTime(
-        sys->timer, sys->host, type == TIMEOUT_ABSOLUTE ? TFD_TIMER_ABSTIME : 0, &value, NULL);
-
-    if (result != 0) {
-        utility_panic("syscallhandler failed to set timeout to %lu.%09lu seconds",
-                      (long unsigned int)value.it_value.tv_sec,
-                      (long unsigned int)value.it_value.tv_nsec);
-        utility_assert(result == 0);
-    }
-}
-
-void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
-                                            gint timeout_ms) {
-    struct timespec timeout = utility_timespecFromMillis((int64_t)timeout_ms);
-    _syscallhandler_setListenTimeout(sys, &timeout, TIMEOUT_RELATIVE);
-}
-
 static const Timer* _syscallhandler_timeout(const SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 

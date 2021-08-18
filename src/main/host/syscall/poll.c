@@ -143,20 +143,20 @@ static SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, PluginPtr f
             // Our epoll will tell us when we have events
             _syscallhandler_registerPollFDs(sys, fds, nfds);
 
-            bool need_timer = timeout && (timeout->tv_sec > 0 || timeout->tv_nsec > 0);
-            if (need_timer) {
-                _syscallhandler_setListenTimeout(sys, timeout, TIMEOUT_RELATIVE);
-            }
-
             // Block on epoll, which is readable when any fds have events
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
                                         .object = (LegacyDescriptor*)sys->epoll,
                                         .status = STATUS_DESCRIPTOR_READABLE};
+            SysCallCondition* cond = syscallcondition_new(trigger, NULL);
+            if (timeout && (timeout->tv_sec > 0 || timeout->tv_nsec > 0)) {
+                syscallcondition_setTimeout(cond, sys->host,
+                                            worker_getEmulatedTime() +
+                                                timeout->tv_sec * SIMTIME_ONE_SECOND +
+                                                timeout->tv_nsec * SIMTIME_ONE_NANOSECOND);
+            }
 
             // We either use our timer as a timeout, or no timeout
-            return (SysCallReturn){
-                .state = SYSCALL_BLOCK,
-                .cond = syscallcondition_new(trigger, need_timer ? sys->timer : NULL)};
+            return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond};
         }
     }
 
