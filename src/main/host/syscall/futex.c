@@ -96,7 +96,7 @@ static SysCallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys, Plugin
     trace("Futex blocking for wakeup %s timeout", timeoutVPtr.val ? "with" : "without");
     Trigger trigger =
         (Trigger){.type = TRIGGER_FUTEX, .object = futex, .status = STATUS_FUTEX_WAKEUP};
-    SysCallCondition* cond = syscallcondition_new(trigger, NULL);
+    SysCallCondition* cond = syscallcondition_new(trigger);
     if (timeoutVPtr.val) {
         syscallcondition_setTimeout(cond, sys->host,
                                     worker_getEmulatedTime() + timeout.tv_sec * SIMTIME_ONE_SECOND +

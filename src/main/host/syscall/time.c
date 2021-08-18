@@ -45,7 +45,7 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     int wasBlocked = _syscallhandler_wasBlocked(sys);
 
     if (requestToBlock && !wasBlocked) {
-        SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE}, NULL);
+        SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
         syscallcondition_setTimeout(cond, sys->host,
                                     worker_getEmulatedTime() + req.tv_sec * SIMTIME_ONE_SECOND +
                                         req.tv_nsec * SIMTIME_ONE_NANOSECOND);

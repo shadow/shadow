@@ -43,10 +43,12 @@ struct _Trigger {
 
 /* Create a new object that will cause a signal to be delivered to
  * a waiting process and thread, conditional upon the given trigger object
- * reaching the given status or the given timeout expiring.
+ * reaching the given status.
  * The condition starts with a reference count of 1. */
-SysCallCondition* syscallcondition_new(Trigger trigger, Timer* timeout);
+SysCallCondition* syscallcondition_new(Trigger trigger);
 
+/* Add a timeout to the condition. `t` is absolute emulated time, as returned by
+ * `worker_getEmulatedTime`. */
 void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, EmulatedTime t);
 
 /* Increment the reference count on the given condition. */

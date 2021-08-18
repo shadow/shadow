@@ -21,7 +21,7 @@ impl SysCallCondition {
     // implementation or wrapper.
     pub fn new(trigger: Trigger) -> Self {
         SysCallCondition {
-            c_ptr: unsafe { cshadow::syscallcondition_new(trigger.into(), std::ptr::null_mut()) },
+            c_ptr: unsafe { cshadow::syscallcondition_new(trigger.into()) },
         }
     }
 

@@ -21,7 +21,48 @@ pub type __uint32_t = ::std::os::raw::c_uint;
 pub type __int64_t = ::std::os::raw::c_long;
 pub type __uint64_t = ::std::os::raw::c_ulong;
 pub type __pid_t = ::std::os::raw::c_int;
+pub type __time_t = ::std::os::raw::c_long;
 pub type __ssize_t = ::std::os::raw::c_long;
+pub type __syscall_slong_t = ::std::os::raw::c_long;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct timespec {
+    pub tv_sec: __time_t,
+    pub tv_nsec: __syscall_slong_t,
+}
+#[test]
+fn bindgen_test_layout_timespec() {
+    assert_eq!(
+        ::std::mem::size_of::<timespec>(),
+        16usize,
+        concat!("Size of: ", stringify!(timespec))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<timespec>(),
+        8usize,
+        concat!("Alignment of ", stringify!(timespec))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<timespec>())).tv_sec as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(timespec),
+            "::",
+            stringify!(tv_sec)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<timespec>())).tv_nsec as *const _ as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(timespec),
+            "::",
+            stringify!(tv_nsec)
+        )
+    );
+}
 pub type pid_t = __pid_t;
 pub type gchar = ::std::os::raw::c_char;
 pub type gint = ::std::os::raw::c_int;
@@ -168,12 +209,6 @@ pub struct _CPU {
     _unused: [u8; 0],
 }
 pub type CPU = _CPU;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Timer {
-    _unused: [u8; 0],
-}
-pub type Timer = _Timer;
 pub type PluginVirtualPtr = _PluginVirtualPtr;
 pub type PluginPtr = _PluginVirtualPtr;
 pub type PluginPhysicalPtr = _PluginPhysicalPtr;
@@ -516,6 +551,9 @@ extern "C" {
     pub fn thread_getSysCallHandler(thread: *mut Thread) -> *mut SysCallHandler;
 }
 extern "C" {
+    pub fn thread_getSysCallCondition(thread: *mut Thread) -> *mut SysCallCondition;
+}
+extern "C" {
     pub fn process_new(
         host: *mut Host,
         processID: guint,
@@ -641,6 +679,13 @@ extern "C" {
         src: PluginVirtualPtr,
         n: size_t,
     ) -> ssize_t;
+}
+extern "C" {
+    pub fn process_readTimespec(
+        proc_: *mut Process,
+        ts: *mut timespec,
+        src: PluginVirtualPtr,
+    ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn process_writePtr(
@@ -1479,7 +1524,6 @@ pub struct _SysCallHandler {
     pub host: *mut Host,
     pub process: *mut Process,
     pub thread: *mut Thread,
-    pub timer: *mut Timer,
     pub epoll: *mut Epoll,
     pub blockedSyscallNR: ::std::os::raw::c_long,
     pub perfTimer: *mut GTimer,
@@ -1494,7 +1538,7 @@ pub struct _SysCallHandler {
 fn bindgen_test_layout__SysCallHandler() {
     assert_eq!(
         ::std::mem::size_of::<_SysCallHandler>(),
-        96usize,
+        88usize,
         concat!("Size of: ", stringify!(_SysCallHandler))
     );
     assert_eq!(
@@ -1533,18 +1577,8 @@ fn bindgen_test_layout__SysCallHandler() {
         )
     );
     assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).timer as *const _ as usize },
-        24usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_SysCallHandler),
-            "::",
-            stringify!(timer)
-        )
-    );
-    assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).epoll as *const _ as usize },
-        32usize,
+        24usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1556,7 +1590,7 @@ fn bindgen_test_layout__SysCallHandler() {
         unsafe {
             &(*(::std::ptr::null::<_SysCallHandler>())).blockedSyscallNR as *const _ as usize
         },
-        40usize,
+        32usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1566,7 +1600,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).perfTimer as *const _ as usize },
-        48usize,
+        40usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1578,7 +1612,7 @@ fn bindgen_test_layout__SysCallHandler() {
         unsafe {
             &(*(::std::ptr::null::<_SysCallHandler>())).perfSecondsCurrent as *const _ as usize
         },
-        56usize,
+        48usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1590,7 +1624,7 @@ fn bindgen_test_layout__SysCallHandler() {
         unsafe {
             &(*(::std::ptr::null::<_SysCallHandler>())).perfSecondsTotal as *const _ as usize
         },
-        64usize,
+        56usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1600,7 +1634,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).numSyscalls as *const _ as usize },
-        72usize,
+        64usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1610,7 +1644,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).syscall_counter as *const _ as usize },
-        80usize,
+        72usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1620,7 +1654,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).referenceCount as *const _ as usize },
-        88usize,
+        80usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1630,7 +1664,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).magic as *const _ as usize },
-        92usize,
+        84usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1831,7 +1865,7 @@ fn bindgen_test_layout__Trigger() {
     );
 }
 extern "C" {
-    pub fn syscallcondition_new(trigger: Trigger, timeout: *mut Timer) -> *mut SysCallCondition;
+    pub fn syscallcondition_new(trigger: Trigger) -> *mut SysCallCondition;
 }
 extern "C" {
     pub fn syscallcondition_unref(cond: *mut SysCallCondition);

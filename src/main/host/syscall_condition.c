@@ -40,11 +40,11 @@ struct _SysCallCondition {
     MAGIC_DECLARE;
 };
 
-SysCallCondition* syscallcondition_new(Trigger trigger, Timer* timeout) {
+SysCallCondition* syscallcondition_new(Trigger trigger) {
     SysCallCondition* cond = malloc(sizeof(*cond));
 
     *cond = (SysCallCondition){
-        .timeout = timeout, .trigger = trigger, .referenceCount = 1, MAGIC_INITIALIZER};
+        .timeout = NULL, .trigger = trigger, .referenceCount = 1, MAGIC_INITIALIZER};
 
     /* We now hold refs to these objects. */
     if (cond->timeout) {

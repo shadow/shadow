@@ -188,7 +188,7 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
                                         .object = (LegacyDescriptor*)epoll,
                                         .status = STATUS_DESCRIPTOR_READABLE};
-            SysCallCondition* cond = syscallcondition_new(trigger, NULL);
+            SysCallCondition* cond = syscallcondition_new(trigger);
 
             /* Set timeout, if provided. */
             if (timeout_ms > 0) {

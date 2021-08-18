@@ -147,7 +147,7 @@ static SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, PluginPtr f
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
                                         .object = (LegacyDescriptor*)sys->epoll,
                                         .status = STATUS_DESCRIPTOR_READABLE};
-            SysCallCondition* cond = syscallcondition_new(trigger, NULL);
+            SysCallCondition* cond = syscallcondition_new(trigger);
             if (timeout && (timeout->tv_sec > 0 || timeout->tv_nsec > 0)) {
                 syscallcondition_setTimeout(cond, sys->host,
                                             worker_getEmulatedTime() +
