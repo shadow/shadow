@@ -19,8 +19,6 @@ env:
 
 jobs:
   shadow:
-    # there's only one job in the workflow, so we won't give it a name
-    name: ' '
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.container }}
