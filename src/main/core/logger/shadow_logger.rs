@@ -1,4 +1,4 @@
-use crate::core::support::simulation_time::SimulationTime;
+use crate::core::support::emulated_time::{self, EmulatedTime};
 use crate::core::worker::Worker;
 use crate::host::host::HostInfo;
 use crossbeam::queue::ArrayQueue;
@@ -236,7 +236,8 @@ impl ShadowLogger {
                 )?;
             }
             write!(stdout, " [{}]", record.thread_name)?;
-            if let Some(sim_time) = record.sim_time {
+            if let Some(emu_time) = record.emu_time {
+                let sim_time = emu_time.duration_since(&emulated_time::SIMULATION_START);
                 let parts = TimeParts::from_nanos(sim_time.as_nanos());
                 write!(
                     stdout,
@@ -375,7 +376,7 @@ impl Log for ShadowLogger {
                 u64::try_from(c_log::logger_elapsed_micros()).unwrap()
             }),
 
-            sim_time: Worker::current_time(),
+            emu_time: Worker::current_time(),
             thread_name: THREAD_NAME
                 .try_with(|name| (*name).clone())
                 .unwrap_or_else(|_| get_thread_name()),
@@ -420,7 +421,7 @@ struct ShadowLogRecord {
     message: String,
     wall_time: Duration,
 
-    sim_time: Option<SimulationTime>,
+    emu_time: Option<EmulatedTime>,
     thread_name: String,
     host_info: Option<Arc<HostInfo>>,
 }

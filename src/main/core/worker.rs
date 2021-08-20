@@ -1,6 +1,7 @@
 use nix::unistd::Pid;
 use once_cell::unsync::OnceCell;
 
+use crate::core::support::emulated_time::EmulatedTime;
 use crate::core::support::simulation_time::SimulationTime;
 use crate::cshadow;
 use crate::host::host::Host;
@@ -29,9 +30,9 @@ struct ThreadInfo {
 }
 
 struct Clock {
-    now: Option<SimulationTime>,
-    last: Option<SimulationTime>,
-    barrier: Option<SimulationTime>,
+    now: Option<EmulatedTime>,
+    last: Option<EmulatedTime>,
+    barrier: Option<EmulatedTime>,
 }
 
 /// Worker context, containing 'global' information for the current thread.
@@ -50,7 +51,7 @@ pub struct Worker {
     active_thread_info: Option<ThreadInfo>,
 
     clock: Clock,
-    bootstrap_end_time: SimulationTime,
+    bootstrap_end_time: EmulatedTime,
 
     // A counter for all syscalls made by processes freed by this worker.
     syscall_counter: Counter,
@@ -73,7 +74,7 @@ impl Worker {
     pub unsafe fn new_for_this_thread(
         worker_pool: *mut cshadow::WorkerPool,
         worker_id: WorkerThreadID,
-        bootstrap_end_time: SimulationTime,
+        bootstrap_end_time: EmulatedTime,
     ) {
         WORKER.with(|worker| {
             let res = worker.set(RefCell::new(Self {
@@ -180,15 +181,15 @@ impl Worker {
         Worker::with(|w| w.active_thread_info.as_ref().map(|t| t.native_tid)).flatten()
     }
 
-    fn set_round_end_time(t: SimulationTime) {
+    fn set_round_end_time(t: EmulatedTime) {
         Worker::with_mut(|w| w.clock.barrier.replace(t)).unwrap();
     }
 
-    fn round_end_time() -> Option<SimulationTime> {
+    fn round_end_time() -> Option<EmulatedTime> {
         Worker::with(|w| w.clock.barrier).flatten()
     }
 
-    fn set_current_time(t: SimulationTime) {
+    fn set_current_time(t: EmulatedTime) {
         Worker::with_mut(|w| w.clock.now.replace(t)).unwrap();
     }
 
@@ -196,11 +197,11 @@ impl Worker {
         Worker::with_mut(|w| w.clock.now.take());
     }
 
-    pub fn current_time() -> Option<SimulationTime> {
+    pub fn current_time() -> Option<EmulatedTime> {
         Worker::with(|w| w.clock.now).flatten()
     }
 
-    fn set_last_event_time(t: SimulationTime) {
+    fn set_last_event_time(t: EmulatedTime) {
         Worker::with_mut(|w| w.clock.last.replace(t)).unwrap();
     }
 
@@ -245,7 +246,7 @@ mod export {
             Worker::new_for_this_thread(
                 notnull_mut(worker_pool),
                 WorkerThreadID(worker_id.try_into().unwrap()),
-                bootstrap_end_time,
+                EmulatedTime::from_abs_simtime(bootstrap_end_time),
             )
         }
     }
@@ -308,18 +309,20 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_setRoundEndTime(t: cshadow::SimulationTime) {
-        Worker::set_round_end_time(SimulationTime::from_c_simtime(t).unwrap());
+        Worker::set_round_end_time(EmulatedTime::from_abs_simtime(
+            SimulationTime::from_c_simtime(t).unwrap(),
+        ));
     }
 
     #[no_mangle]
     pub extern "C" fn _worker_getRoundEndTime() -> cshadow::SimulationTime {
-        SimulationTime::to_c_simtime(Worker::round_end_time())
+        SimulationTime::to_c_simtime(Worker::round_end_time().map(|t| t.to_abs_simtime()))
     }
 
     #[no_mangle]
     pub extern "C" fn worker_setCurrentTime(t: cshadow::SimulationTime) {
         if let Some(t) = SimulationTime::from_c_simtime(t) {
-            Worker::set_current_time(t);
+            Worker::set_current_time(EmulatedTime::from_abs_simtime(t));
         } else {
             Worker::clear_current_time();
         }
@@ -327,12 +330,14 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn worker_getCurrentTime() -> cshadow::SimulationTime {
-        SimulationTime::to_c_simtime(Worker::current_time())
+        SimulationTime::to_c_simtime(Worker::current_time().map(|t| t.to_abs_simtime()))
     }
 
     #[no_mangle]
     pub extern "C" fn _worker_setLastEventTime(t: cshadow::SimulationTime) {
-        Worker::set_last_event_time(SimulationTime::from_c_simtime(t).unwrap());
+        Worker::set_last_event_time(EmulatedTime::from_abs_simtime(
+            SimulationTime::from_c_simtime(t).unwrap(),
+        ));
     }
 
     #[no_mangle]
