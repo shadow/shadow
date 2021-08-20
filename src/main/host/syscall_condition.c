@@ -23,7 +23,7 @@
 struct _SysCallCondition {
     // Specifies how the condition will signal when a status is reached
     Trigger trigger;
-    // Non-null if the condition will signal upon a timeout firing
+    // Non-null if the condition will signal upon a timeout firing.
     Timer* timeout;
     // Non-null if we are listening for status updates on a trigger object
     StatusListener* triggerListener;
