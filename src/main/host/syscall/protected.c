@@ -19,7 +19,7 @@
 #include "main/host/syscall_condition.h"
 #include "main/host/thread.h"
 
-static const Timer* _syscallhandler_timeout(const SysCallHandler* sys) {
+static const Timer* _syscallhandler_getTimeout(const SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
     SysCallCondition* cond = thread_getSysCallCondition(sys->thread);
@@ -27,13 +27,13 @@ static const Timer* _syscallhandler_timeout(const SysCallHandler* sys) {
         return NULL;
     }
 
-    return syscallcondition_timeout(cond);
+    return syscallcondition_getTimeout(cond);
 }
 
 bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
-    const Timer* timeout = _syscallhandler_timeout(sys);
+    const Timer* timeout = _syscallhandler_getTimeout(sys);
     if (!timeout) {
         return false;
     }
@@ -49,7 +49,7 @@ bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys) {
 bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
-    const Timer* timeout = _syscallhandler_timeout(sys);
+    const Timer* timeout = _syscallhandler_getTimeout(sys);
     if (!timeout) {
         return false;
     }

@@ -47,7 +47,8 @@ struct _Trigger {
  * The condition starts with a reference count of 1. */
 SysCallCondition* syscallcondition_new(Trigger trigger);
 
-/* Add a timeout to the condition. `t` is absolute emulated time, as returned by
+/* Add a timeout to the condition. At time `t`, the conditition will be triggered
+ * if it hasn't already. `t` is absolute emulated time, as returned by
  * `worker_getEmulatedTime`. */
 void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, EmulatedTime t);
 
@@ -70,6 +71,6 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
 void syscallcondition_cancel(SysCallCondition* cond);
 
 /* Get the timer for the condition, or NULL if there isn't one. */
-Timer* syscallcondition_timeout(SysCallCondition* cond);
+Timer* syscallcondition_getTimeout(SysCallCondition* cond);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_CONDITION_H_ */

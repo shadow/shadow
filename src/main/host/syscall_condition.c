@@ -33,8 +33,10 @@ struct _SysCallCondition {
     Process* proc;
     // The thread waiting for the signal
     Thread* thread;
-    // If a task to deliver a signal has been scheduled
-    bool signalScheduled;
+    // Whether the condition has *ever* been triggered. Used to prevent multiple
+    // signals from a single condition, even if its triggered multiple times or
+    // ways.
+    bool signalTriggered;
     // Memory tracking
     gint referenceCount;
     MAGIC_DECLARE;
@@ -328,7 +330,7 @@ static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
                                                  bool wasTimeout) {
     MAGIC_ASSERT(cond);
 
-    if (cond->signalScheduled) {
+    if (cond->signalTriggered) {
         // Deliver one signal even if condition is triggered multiple times or
         // ways.
         return;
@@ -347,7 +349,7 @@ static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
     syscallcondition_ref(cond);
     task_unref(signalTask);
 
-    cond->signalScheduled = true;
+    cond->signalTriggered = true;
 }
 
 static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
@@ -460,4 +462,4 @@ void syscallcondition_cancel(SysCallCondition* cond) {
     _syscallcondition_cleanupProc(cond);
 }
 
-Timer* syscallcondition_timeout(SysCallCondition* cond) { return cond->timeout; }
+Timer* syscallcondition_getTimeout(SysCallCondition* cond) { return cond->timeout; }
