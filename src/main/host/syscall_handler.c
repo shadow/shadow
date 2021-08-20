@@ -69,11 +69,6 @@ SysCallHandler* syscallhandler_new(Host* host, Process* process,
         .thread = thread,
         .blockedSyscallNR = -1,
         .referenceCount = 1,
-        /* Here we create the timer directly and do not register
-         * with the process descriptor table because the descriptor
-         * is not being used to service a plugin syscall and it
-         * should not be tracked with an fd handle. */
-        .timer = timer_new(),
         // Like the timer above, we use an epoll object for servicing
         // some syscalls, and so we won't assign it a fd handle.
         .epoll = epoll_new(),
@@ -130,9 +125,6 @@ static void _syscallhandler_free(SysCallHandler* sys) {
         thread_unref(sys->thread);
     }
 
-    if (sys->timer) {
-        descriptor_unref(sys->timer);
-    }
     if (sys->epoll) {
         descriptor_unref(sys->epoll);
     }
@@ -515,10 +507,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         /* We are blocking: store the syscall number so we know
          * to expect the same syscall again when it unblocks. */
         sys->blockedSyscallNR = args->number;
-    } else if (_syscallhandler_wasBlocked(sys)) {
-        /* We were but are no longer blocked on a syscall. Make
-         * sure any previously used listener timeouts are ignored.*/
-        _syscallhandler_setListenTimeout(sys, NULL, TIMEOUT_RELATIVE);
+    } else {
         sys->blockedSyscallNR = -1;
     }
 

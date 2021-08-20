@@ -193,7 +193,7 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         /* We need to block until the descriptor is ready to write. */
         Trigger trigger = (Trigger){
             .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_READABLE};
-        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, NULL)};
+        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger)};
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
@@ -309,7 +309,7 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
         /* We need to block until the descriptor is ready to write. */
         Trigger trigger = (Trigger){
             .type = TRIGGER_DESCRIPTOR, .object = desc, .status = STATUS_DESCRIPTOR_WRITABLE};
-        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger, NULL)};
+        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = syscallcondition_new(trigger)};
     }
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};

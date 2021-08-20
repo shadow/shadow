@@ -83,7 +83,7 @@ Timer* timer_new() {
     return timer;
 }
 
-static void _timer_getCurrentTime(Timer* timer, struct timespec* out) {
+static void _timer_getCurrentTime(const Timer* timer, struct timespec* out) {
     MAGIC_ASSERT(timer);
     utility_assert(out);
 
@@ -103,7 +103,7 @@ static void _timer_getCurrentTime(Timer* timer, struct timespec* out) {
     }
 }
 
-static void _timer_getCurrentInterval(Timer* timer, struct timespec* out) {
+static void _timer_getCurrentInterval(const Timer* timer, struct timespec* out) {
     MAGIC_ASSERT(timer);
     utility_assert(out);
 
@@ -117,7 +117,7 @@ static void _timer_getCurrentInterval(Timer* timer, struct timespec* out) {
     }
 }
 
-gint timer_getTime(Timer* timer, struct itimerspec *curr_value) {
+gint timer_getTime(const Timer* timer, struct itimerspec* curr_value) {
     MAGIC_ASSERT(timer);
 
     if(!curr_value) {
@@ -366,7 +366,7 @@ ssize_t timer_read(Timer* timer, void *buf, size_t count) {
     }
 }
 
-guint64 timer_getExpirationCount(Timer* timer) {
+guint64 timer_getExpirationCount(const Timer* timer) {
     MAGIC_ASSERT(timer);
     return timer->expireCountSinceLastSet;
 }

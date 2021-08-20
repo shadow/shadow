@@ -183,21 +183,21 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
         } else {
             trace("No events are ready on epoll %i and we need to block", epfd);
 
-            /* We need to block, either for timeout_ms time if it's positive,
-             * or indefinitely if it's negative. */
-            if (timeout_ms > 0) {
-                _syscallhandler_setListenTimeoutMillis(sys, timeout_ms);
-            }
-
             /* Block on epoll status. An epoll descriptor is readable when it
-             * has events. We either use our timer as a timeout, or no timeout. */
+             * has events. */
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
                                         .object = (LegacyDescriptor*)epoll,
                                         .status = STATUS_DESCRIPTOR_READABLE};
+            SysCallCondition* cond = syscallcondition_new(trigger);
 
-            return (SysCallReturn){
-                .state = SYSCALL_BLOCK,
-                .cond = syscallcondition_new(trigger, (timeout_ms > 0) ? sys->timer : NULL)};
+            /* Set timeout, if provided. */
+            if (timeout_ms > 0) {
+                syscallcondition_setTimeout(
+                    cond, sys->host,
+                    worker_getEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND);
+            }
+
+            return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond};
         }
     }
 

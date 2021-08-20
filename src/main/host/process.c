@@ -987,6 +987,27 @@ ssize_t process_readString(Process* proc, char* str, PluginVirtualPtr src, size_
     return memorymanager_readString(proc->memoryManager, src, str, n);
 }
 
+int process_readTimespec(Process* proc, struct timespec* dst, PluginVirtualPtr src) {
+    MAGIC_ASSERT(proc);
+
+    // Disallow additional references while there's a mutable reference.
+    utility_assert(!proc->memoryMutRef);
+
+    int rv = memorymanager_readPtr(proc->memoryManager, dst, src, sizeof(*dst));
+    if (rv != 0) {
+        warning("Couldn't read timespec at address %p", (void*)src.val);
+        return rv;
+    }
+
+    if (dst->tv_nsec < 0 || dst->tv_nsec < 0 || dst->tv_nsec > 999999999) {
+        warning(
+            "Invalid timespec %ld.%09ld at address %p", dst->tv_sec, dst->tv_nsec, (void*)src.val);
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
 // Returns a writable pointer corresponding to the named region. The initial
 // contents of the returned memory are unspecified.
 //

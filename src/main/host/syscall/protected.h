@@ -13,6 +13,8 @@
  * handlers.
  */
 
+#include <stdbool.h>
+
 #include "main/host/descriptor/epoll.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
@@ -35,11 +37,6 @@ struct _SysCallHandler {
     Process* process;
     Thread* thread;
 
-    /* Timers are used to support the timerfd syscalls (man timerfd_create);
-     * they are types of descriptors on which we can listen for events.
-     * Here we use it to help us handling blocking syscalls that include a
-     * timeout after which we should stop blocking. */
-    Timer* timer;
     /* We use this epoll to service syscalls that need to block on the status
      * of multiple descriptors, like poll. */
     Epoll* epoll;
@@ -87,14 +84,9 @@ struct _SysCallHandler {
     SysCallReturn syscallhandler_##s(                                          \
         SysCallHandler* sys, const SysCallArgs* args);
 
-void _syscallhandler_setListenTimeout(SysCallHandler* sys, const struct timespec* timeout,
-                                      TimeoutType type);
-void _syscallhandler_setListenTimeoutMillis(SysCallHandler* sys,
-                                            gint timeout_ms);
-void _syscallhandler_setListenTimeoutNanos(SysCallHandler* sys, gint timeout_ns);
-int _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
-int _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
-int _syscallhandler_wasBlocked(const SysCallHandler* sys);
+bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
+bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
+bool _syscallhandler_wasBlocked(const SysCallHandler* sys);
 int _syscallhandler_validateDescriptor(LegacyDescriptor* descriptor,
                                        LegacyDescriptorType expectedType);
 

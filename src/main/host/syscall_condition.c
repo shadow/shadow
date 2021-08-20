@@ -7,8 +7,10 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <sys/timerfd.h>
 
 #include "lib/logger/logger.h"
+#include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"
@@ -31,18 +33,20 @@ struct _SysCallCondition {
     Process* proc;
     // The thread waiting for the signal
     Thread* thread;
-    // If a task to deliver a signal has been scheduled
-    bool signalPending;
+    // Whether the condition has *ever* been triggered. Used to prevent multiple
+    // signals from a single condition, even if its triggered multiple times or
+    // ways.
+    bool signalTriggered;
     // Memory tracking
     gint referenceCount;
     MAGIC_DECLARE;
 };
 
-SysCallCondition* syscallcondition_new(Trigger trigger, Timer* timeout) {
+SysCallCondition* syscallcondition_new(Trigger trigger) {
     SysCallCondition* cond = malloc(sizeof(*cond));
 
     *cond = (SysCallCondition){
-        .timeout = timeout, .trigger = trigger, .referenceCount = 1, MAGIC_INITIALIZER};
+        .timeout = NULL, .trigger = trigger, .referenceCount = 1, MAGIC_INITIALIZER};
 
     /* We now hold refs to these objects. */
     if (cond->timeout) {
@@ -78,6 +82,24 @@ SysCallCondition* syscallcondition_new(Trigger trigger, Timer* timeout) {
     }
 
     return cond;
+}
+
+void syscallcondition_setTimeout(SysCallCondition* cond, Host* host, EmulatedTime t) {
+    MAGIC_ASSERT(cond);
+
+    if (!cond->timeout) {
+        cond->timeout = timer_new();
+    }
+
+    struct itimerspec itimerspec = {0};
+    itimerspec.it_value.tv_sec = t / SIMTIME_ONE_SECOND;
+    t -= itimerspec.it_value.tv_sec * SIMTIME_ONE_SECOND;
+    itimerspec.it_value.tv_nsec = t / SIMTIME_ONE_NANOSECOND;
+
+    int rv = timer_setTime(cond->timeout, host, TFD_TIMER_ABSTIME, &itimerspec, NULL);
+    if (rv != 0) {
+        panic("timer_setTime: %s", strerror(-rv));
+    }
 }
 
 static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
@@ -292,8 +314,6 @@ static void _syscallcondition_signal(Host* host, void* obj, void* arg) {
     _syscallcondition_logListeningState(cond, "signaling while");
 #endif
 
-    cond->signalPending = false;
-
     // Always deliver the signal if the timeout expired.
     // Otherwise, only deliver the signal if the desc status is still valid.
     if (wasTimeout || _syscallcondition_statusIsValid(cond)) {
@@ -310,6 +330,12 @@ static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
                                                  bool wasTimeout) {
     MAGIC_ASSERT(cond);
 
+    if (cond->signalTriggered) {
+        // Deliver one signal even if condition is triggered multiple times or
+        // ways.
+        return;
+    }
+
     /* We deliver the signal via a task, to make sure whatever
      * code triggered our listener finishes its logic first before
      * we tell the process to run the plugin and potentially change
@@ -323,7 +349,7 @@ static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
     syscallcondition_ref(cond);
     task_unref(signalTask);
 
-    cond->signalPending = true;
+    cond->signalTriggered = true;
 }
 
 static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
@@ -334,10 +360,7 @@ static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
     _syscallcondition_logListeningState(cond, "status changed while");
 #endif
 
-    // Deliver one signal even if desc status changes many times.
-    if (!cond->signalPending) {
-        _syscallcondition_scheduleSignalTask(cond, false);
-    }
+    _syscallcondition_scheduleSignalTask(cond, false);
 }
 
 static void _syscallcondition_notifyTimeoutExpired(void* obj, void* arg) {
@@ -348,10 +371,7 @@ static void _syscallcondition_notifyTimeoutExpired(void* obj, void* arg) {
     _syscallcondition_logListeningState(cond, "timeout expired while");
 #endif
 
-    // Deliver one signal even if timeout status changes many times.
-    if (!cond->signalPending) {
-        _syscallcondition_scheduleSignalTask(cond, true);
-    }
+    _syscallcondition_scheduleSignalTask(cond, true);
 }
 
 void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
@@ -441,3 +461,5 @@ void syscallcondition_cancel(SysCallCondition* cond) {
     _syscallcondition_cleanupListeners(cond);
     _syscallcondition_cleanupProc(cond);
 }
+
+Timer* syscallcondition_getTimeout(SysCallCondition* cond) { return cond->timeout; }

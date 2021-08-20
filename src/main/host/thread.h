@@ -77,5 +77,6 @@ Process* thread_getProcess(Thread* thread);
 Host* thread_getHost(Thread* thread);
 // Get the syscallhandler for this thread.
 SysCallHandler* thread_getSysCallHandler(Thread* thread);
+SysCallCondition* thread_getSysCallCondition(Thread* thread);
 
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */

@@ -31,33 +31,27 @@ static EmulatedTime _syscallhandler_getEmulatedTime() {
 
 SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
                                        const SysCallArgs* args) {
-    /* Make sure they didn't pass a NULL pointer. */
-    if (!args->args[0].as_ptr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
     /* Grab the arg from the syscall register. */
-    const struct timespec* req =
-        process_getReadablePtr(sys->process, args->args[0].as_ptr, sizeof(*req));
-
-    /* Bounds checking. */
-    if (!(req->tv_nsec >= 0 && req->tv_nsec <= 999999999)) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    struct timespec req;
+    int rv = process_readTimespec(sys->process, &req, args->args[0].as_ptr);
+    if (rv < 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
     }
 
     /* Does the timeout request require us to block? */
-    int requestToBlock = req->tv_sec > 0 || req->tv_nsec > 0;
+    int requestToBlock = req.tv_sec > 0 || req.tv_nsec > 0;
 
     /* Did we already block? */
     int wasBlocked = _syscallhandler_wasBlocked(sys);
 
     if (requestToBlock && !wasBlocked) {
-        /* We need to block for a while following the requested timeout. */
-        _syscallhandler_setListenTimeout(sys, req, TIMEOUT_RELATIVE);
+        SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
+        syscallcondition_setTimeout(cond, sys->host,
+                                    worker_getEmulatedTime() + req.tv_sec * SIMTIME_ONE_SECOND +
+                                        req.tv_nsec * SIMTIME_ONE_NANOSECOND);
 
         /* Block the thread, unblock when the timer expires. */
-        return (SysCallReturn){
-            .state = SYSCALL_BLOCK, .cond = syscallcondition_new((Trigger){0}, sys->timer)};
+        return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond};
     }
 
     /* If needed, verify that the timer expired correctly. */
