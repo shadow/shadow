@@ -274,7 +274,6 @@ pub union _SysCallReg {
     pub as_i64: i64,
     pub as_u64: u64,
     pub as_ptr: PluginPtr,
-    _bindgen_union_align: u64,
 }
 #[test]
 fn bindgen_test_layout__SysCallReg() {
@@ -1762,7 +1761,6 @@ pub union _TriggerObject {
     pub as_descriptor: *mut LegacyDescriptor,
     pub as_file: *const PosixFile,
     pub as_futex: *mut Futex,
-    _bindgen_union_align: u64,
 }
 #[test]
 fn bindgen_test_layout__TriggerObject() {

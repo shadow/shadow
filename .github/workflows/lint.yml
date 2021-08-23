@@ -80,8 +80,8 @@ jobs:
         run: |
           rustup component add rustfmt
           # when updating these versions, also update the versions in "docs/developer_guide.md"
-          cargo install --force --version 0.18.0 cbindgen
-          cargo install --force --version 0.57.0 bindgen
+          cargo install --force --version 0.20.0 cbindgen
+          cargo install --force --version 0.59.1 bindgen
       - name: Check bindings (release)
         run: |
           rm -rf build && mkdir build
