@@ -63,6 +63,7 @@ pub struct ShadowEdge {
     pub source: u32,
     pub target: u32,
     pub latency: units::Time<units::TimePrefix>,
+    pub jitter: units::Time<units::TimePrefix>,
     pub packet_loss: f32,
 }
 
@@ -81,6 +82,14 @@ impl TryFrom<gml_parser::gml::Edge<'_>> for ShadowEdge {
                 .ok_or("Edge 'latency' is not a string")?
                 .parse()
                 .map_err(|e| format!("Edge 'latency' is not a valid unit: {}", e))?,
+            jitter: match gml_edge.other.remove("jitter") {
+                Some(x) => x
+                    .as_str()
+                    .ok_or("Edge 'jitter' is not a string")?
+                    .parse()
+                    .map_err(|e| format!("Edge 'jitter' is not a valid unit: {}", e))?,
+                None => units::Time::new(0, units::TimePrefix::Milli),
+            },
             packet_loss: match gml_edge.other.remove("packet_loss") {
                 Some(x) => x.as_float().ok_or("Edge 'packet_loss' is not a float")?,
                 None => 0.0,
