@@ -8,9 +8,8 @@ network:
         directed 0
         node [
           id 0
-          country_code "US"
-          bandwidth_down "81920 Kibit"
-          bandwidth_up "81920 Kibit"
+          host_bandwidth_down "81920 Kibit"
+          host_bandwidth_up "81920 Kibit"
         ]
         edge [
           source 0
@@ -21,11 +20,13 @@ network:
       ]
 hosts:
   lossless.tcpserver.echo:
+    network_node_id: 0
     processes:
     - path: test-tcp
       args: nonblocking-poll server 0.0.0.0 1234
       start_time: 1
   lossless.tcpclient.echo:
+    network_node_id: 0
     processes:
     - path: test-tcp
       args: nonblocking-poll client lossless.tcpserver.echo 1234

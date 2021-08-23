@@ -4,7 +4,6 @@
   + gcc, gcc-c++ (or clang, clang++)
   + python (version >= 3.6)
   + glib (version >= 2.32.0)
-  + igraph (version >= 0.5.4)
   + cmake (version >= 3.2)
   + make
   + xz-utils
@@ -27,8 +26,6 @@ sudo apt-get install -y \
     libc-dbg \
     libglib2.0-0 \
     libglib2.0-dev \
-    libigraph0-dev \
-    libigraph0v5 \
     libprocps-dev \
     make \
     python3 \
@@ -73,8 +70,6 @@ sudo dnf install -y \
     findutils \
     glib2 \
     glib2-devel \
-    igraph \
-    igraph-devel \
     make \
     procps-devel \
     python3 \
@@ -108,15 +103,12 @@ sudo dnf install -y \
 
 ### CentOS Stream 8
 
-As procps-ng-devel, igraph, and igraph-devel are not available on CentOS Stream 8, you
-must install them manually.
+As procps-ng-devel is not available on CentOS Stream 8, you must install it manually.
 
 ```bash
 dnf remove -y procps-ng procps-ng-devel
 dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-3.3.10-26.el7.x86_64.rpm
 dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-devel-3.3.10-26.el7.x86_64.rpm
-dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-0.7.1-12.el7.x86_64.rpm
-dnf install -y https://dl.fedoraproject.org/pub/archive/epel/7.7/x86_64/Packages/i/igraph-devel-0.7.1-12.el7.x86_64.rpm
 ```
 
 Due to [a bug](https://bugs.centos.org/view.php?id=18212) in the CentOS 8 CMake

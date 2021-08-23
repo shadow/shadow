@@ -5,6 +5,7 @@ network:
     type: 1_gbit_switch
 hosts:
   testclient:
+    network_node_id: 0
     processes:
     - path: test-config-read-from-stdin
       start_time: 1

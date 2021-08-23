@@ -13,7 +13,7 @@ if(HAS_MEMDUP2)
     add_compile_definitions(HAS_MEMDUP2)
 endif()
 
-include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${IGRAPH_INCLUDES} ${GLIB_INCLUDES})
+include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES})
 
 ## link to preload libs (rpath will not contain these paths when shadow is installed)
 link_directories(${CMAKE_BINARY_DIR}/src/lib/shim)
@@ -21,10 +21,6 @@ link_directories(${CMAKE_BINARY_DIR}/src/lib/openssl_preload)
 
 ## compile defs and flags
 #add_definitions(-D_SVID_SOURCE -D_XOPEN_SOURCE=600 -D_ISOC11_SOURCE) #-D_GNU_SOURCE
-## set the igraph version guesses
-add_definitions(-DIGRAPH_VERSION_MAJOR_GUESS=${IGRAPH_VERSION_MAJOR_GUESS})
-add_definitions(-DIGRAPH_VERSION_MINOR_GUESS=${IGRAPH_VERSION_MINOR_GUESS})
-add_definitions(-DIGRAPH_VERSION_PATCH_GUESS=${IGRAPH_VERSION_PATCH_GUESS})
 add_definitions(-D_GNU_SOURCE)
 add_cflags(-fPIC)
 #add_cflags(-Wno-unknown-attributes)
@@ -145,8 +141,6 @@ set(shadow_srcs
     routing/router_queue_codel.c
     routing/router.c
     routing/dns.c
-    routing/path.c
-    routing/topology.c
 
     utility/async_priority_queue.c
     utility/count_down_latch.c
@@ -161,7 +155,7 @@ set(shadow_srcs
 add_library(shadow-c STATIC ${shadow_srcs})
 target_link_libraries(shadow-c INTERFACE
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
-   ${IGRAPH_LIBRARIES} ${GLIB_LIBRARIES} ${PROCPS_LIBRARIES}
+   ${GLIB_LIBRARIES} ${PROCPS_LIBRARIES}
    shadow-shim-helper logger shadow-remora shadow-shmem shadow-tsc)
 
 # TODO: extract -L and -l flags from the output of

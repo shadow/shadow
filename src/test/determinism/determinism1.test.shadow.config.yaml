@@ -8,9 +8,8 @@ network:
         directed 0
         node [
           id 0
-          country_code "US"
-          bandwidth_down "81920 Kibit"
-          bandwidth_up "81920 Kibit"
+          host_bandwidth_down "81920 Kibit"
+          host_bandwidth_up "81920 Kibit"
         ]
         edge [
           source 0
@@ -21,6 +20,7 @@ network:
       ]
 hosts:
   testnode:
+    network_node_id: 0
     quantity: 10
     processes:
     - path: test-determinism

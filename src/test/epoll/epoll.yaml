@@ -5,6 +5,7 @@ network:
     type: 1_gbit_switch
 hosts:
   testnode:
+    network_node_id: 0
     processes:
     - path: test-epoll
       start_time: 1

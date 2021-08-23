@@ -18,11 +18,10 @@ struct _HostParameters {
     GQuark id;
     guint nodeSeed;
     gchar* hostname;
-    gchar* ipHint;
-    gchar* citycodeHint;
-    gchar* countrycodeHint;
-    guint64 requestedBWDownKiBps;
-    guint64 requestedBWUpKiBps;
+    guint nodeId;
+    in_addr_t ipAddr;
+    guint64 requestedBwDownBits;
+    guint64 requestedBwUpBits;
     guint64 cpuFrequency;
     guint64 cpuThreshold;
     guint64 cpuPrecision;

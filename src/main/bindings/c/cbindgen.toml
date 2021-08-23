@@ -25,6 +25,9 @@ includes = [
 prefix_with_name = true
 rename_variants = "ScreamingSnakeCase"
 
+[fn]
+must_use = "__attribute__((warn_unused_result))"
+
 [export]
 # Avoid exporting C types back through again.
 exclude = ["LogLevel", "PluginPtr", "SysCallReg", "SysCallArgs", "Process", "Host", "Thread"]

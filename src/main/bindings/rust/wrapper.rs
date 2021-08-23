@@ -944,11 +944,10 @@ pub struct _HostParameters {
     pub id: GQuark,
     pub nodeSeed: guint,
     pub hostname: *mut gchar,
-    pub ipHint: *mut gchar,
-    pub citycodeHint: *mut gchar,
-    pub countrycodeHint: *mut gchar,
-    pub requestedBWDownKiBps: guint64,
-    pub requestedBWUpKiBps: guint64,
+    pub nodeId: guint,
+    pub ipAddr: in_addr_t,
+    pub requestedBwDownBits: guint64,
+    pub requestedBwUpBits: guint64,
     pub cpuFrequency: guint64,
     pub cpuThreshold: guint64,
     pub cpuPrecision: guint64,
@@ -968,7 +967,7 @@ pub struct _HostParameters {
 fn bindgen_test_layout__HostParameters() {
     assert_eq!(
         ::std::mem::size_of::<_HostParameters>(),
-        160usize,
+        144usize,
         concat!("Size of: ", stringify!(_HostParameters))
     );
     assert_eq!(
@@ -1007,62 +1006,52 @@ fn bindgen_test_layout__HostParameters() {
         )
     );
     assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).ipHint as *const _ as usize },
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).nodeId as *const _ as usize },
         16usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
             "::",
-            stringify!(ipHint)
+            stringify!(nodeId)
         )
     );
     assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).citycodeHint as *const _ as usize },
+        unsafe { &(*(::std::ptr::null::<_HostParameters>())).ipAddr as *const _ as usize },
+        20usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_HostParameters),
+            "::",
+            stringify!(ipAddr)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<_HostParameters>())).requestedBwDownBits as *const _ as usize
+        },
         24usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
             "::",
-            stringify!(citycodeHint)
+            stringify!(requestedBwDownBits)
         )
     );
     assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_HostParameters>())).countrycodeHint as *const _ as usize },
+        unsafe {
+            &(*(::std::ptr::null::<_HostParameters>())).requestedBwUpBits as *const _ as usize
+        },
         32usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
             "::",
-            stringify!(countrycodeHint)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_HostParameters>())).requestedBWDownKiBps as *const _ as usize
-        },
-        40usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(requestedBWDownKiBps)
-        )
-    );
-    assert_eq!(
-        unsafe {
-            &(*(::std::ptr::null::<_HostParameters>())).requestedBWUpKiBps as *const _ as usize
-        },
-        48usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_HostParameters),
-            "::",
-            stringify!(requestedBWUpKiBps)
+            stringify!(requestedBwUpBits)
         )
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).cpuFrequency as *const _ as usize },
-        56usize,
+        40usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1072,7 +1061,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).cpuThreshold as *const _ as usize },
-        64usize,
+        48usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1082,7 +1071,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).cpuPrecision as *const _ as usize },
-        72usize,
+        56usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1094,7 +1083,7 @@ fn bindgen_test_layout__HostParameters() {
         unsafe {
             &(*(::std::ptr::null::<_HostParameters>())).heartbeatInterval as *const _ as usize
         },
-        80usize,
+        64usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1106,7 +1095,7 @@ fn bindgen_test_layout__HostParameters() {
         unsafe {
             &(*(::std::ptr::null::<_HostParameters>())).heartbeatLogLevel as *const _ as usize
         },
-        88usize,
+        72usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1118,7 +1107,7 @@ fn bindgen_test_layout__HostParameters() {
         unsafe {
             &(*(::std::ptr::null::<_HostParameters>())).heartbeatLogInfo as *const _ as usize
         },
-        92usize,
+        76usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1128,7 +1117,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).logLevel as *const _ as usize },
-        96usize,
+        80usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1138,7 +1127,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).pcapDir as *const _ as usize },
-        104usize,
+        88usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1148,7 +1137,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).qdisc as *const _ as usize },
-        112usize,
+        96usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1158,7 +1147,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).recvBufSize as *const _ as usize },
-        120usize,
+        104usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1168,7 +1157,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).autotuneRecvBuf as *const _ as usize },
-        128usize,
+        112usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1178,7 +1167,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).sendBufSize as *const _ as usize },
-        136usize,
+        120usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1188,7 +1177,7 @@ fn bindgen_test_layout__HostParameters() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_HostParameters>())).autotuneSendBuf as *const _ as usize },
-        144usize,
+        128usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1200,7 +1189,7 @@ fn bindgen_test_layout__HostParameters() {
         unsafe {
             &(*(::std::ptr::null::<_HostParameters>())).interfaceBufSize as *const _ as usize
         },
-        152usize,
+        136usize,
         concat!(
             "Offset of field: ",
             stringify!(_HostParameters),
@@ -1244,12 +1233,6 @@ pub struct _Random {
 }
 #[doc = " An opaque structure representing a random source."]
 pub type Random = _Random;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Topology {
-    _unused: [u8; 0],
-}
-pub type Topology = _Topology;
 extern "C" {
     pub fn host_new(params: *mut HostParameters) -> *mut Host;
 }
@@ -1269,7 +1252,6 @@ extern "C" {
     pub fn host_setup(
         host: *mut Host,
         dns: *mut DNS,
-        topology: *mut Topology,
         rawCPUFreq: guint,
         hostRootPath: *const gchar,
     );
@@ -1451,9 +1433,6 @@ extern "C" {
     pub fn worker_getDNS() -> *mut DNS;
 }
 extern "C" {
-    pub fn worker_getTopology() -> *mut Topology;
-}
-extern "C" {
     pub fn worker_getChildPidWatcher() -> *mut ChildPidWatcher;
 }
 extern "C" {
@@ -1479,7 +1458,32 @@ extern "C" {
     pub fn worker_getNodeBandwidthDown(nodeID: GQuark, ip: in_addr_t) -> guint32;
 }
 extern "C" {
-    pub fn worker_getLatency(sourceNodeID: GQuark, destinationNodeID: GQuark) -> gdouble;
+    pub fn worker_getLatencyForAddresses(
+        sourceAddress: *mut Address,
+        destinationAddress: *mut Address,
+    ) -> gdouble;
+}
+extern "C" {
+    pub fn worker_getLatency(sourceHostID: GQuark, destinationHostID: GQuark) -> gdouble;
+}
+extern "C" {
+    pub fn worker_getReliabilityForAddresses(
+        sourceAddress: *mut Address,
+        destinationAddress: *mut Address,
+    ) -> gdouble;
+}
+extern "C" {
+    pub fn worker_getReliability(sourceHostID: GQuark, destinationHostID: GQuark) -> gdouble;
+}
+extern "C" {
+    pub fn worker_isRoutable(sourceAddress: *mut Address, destinationAddress: *mut Address)
+        -> bool;
+}
+extern "C" {
+    pub fn worker_incrementPacketCount(
+        sourceAddress: *mut Address,
+        destinationAddress: *mut Address,
+    );
 }
 extern "C" {
     pub fn worker_updateMinTimeJump(minPathLatency: gdouble);

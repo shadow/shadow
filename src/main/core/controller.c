@@ -26,7 +26,6 @@
 #include "main/host/host.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
-#include "main/routing/topology.h"
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
 
@@ -41,7 +40,9 @@ struct _Controller {
     Random* random;
 
     /* global network connectivity info */
-    Topology* topology;
+    NetworkGraph* graph;
+    IpAssignment_u32* ipAssignment;
+    RoutingInfo_u32* routingInfo;
     DNS* dns;
 
     /* minimum allowed time jump when sending events between nodes */
@@ -106,14 +107,27 @@ Controller* controller_new(ConfigOptions* config) {
 void controller_free(Controller* controller) {
     MAGIC_ASSERT(controller);
 
-    if (controller->topology) {
-        topology_free(controller->topology);
+    if (controller->routingInfo) {
+        routinginfo_free(controller->routingInfo);
+        controller->routingInfo = NULL;
+    }
+    if (controller->ipAssignment) {
+        ipassignment_free(controller->ipAssignment);
+        controller->ipAssignment = NULL;
+    }
+    if (controller->graph) {
+        // this should have been freed earlier when we were done with it
+        warning("network graph was not properly freed");
+        networkgraph_free(controller->graph);
+        controller->graph = NULL;
     }
     if (controller->dns) {
         dns_free(controller->dns);
+        controller->dns = NULL;
     }
     if (controller->random) {
         random_free(controller->random);
+        controller->random = NULL;
     }
 
     MAGIC_CLEAR(controller);
@@ -152,35 +166,16 @@ void controller_updateMinTimeJump(Controller* controller, gdouble minPathLatency
     }
 }
 
-static gboolean _controller_loadTopology(Controller* controller) {
+static gboolean _controller_loadNetworkGraph(Controller* controller) {
     MAGIC_ASSERT(controller);
 
-    gchar* temporaryFilename =
-        utility_getNewTemporaryFilename("shadow-topology-XXXXXX.gml");
+    controller->graph = networkgraph_load(controller->config);
+    controller->ipAssignment = ipassignment_new();
 
-    char* topologyString = config_getNetworkGraph(controller->config);
-
-    /* write the topology to a temporary file */
-    GError* error = NULL;
-    if (!g_file_set_contents(temporaryFilename, topologyString, strlen(topologyString), &error)) {
-        utility_panic(
-            "unable to write the topology to '%s': %s", temporaryFilename, error->message);
-    }
-
-    config_freeString(topologyString);
-
-    /* initialize global routing model */
-    controller->topology = topology_new(temporaryFilename, config_getUseShortestPath(controller->config));
-    g_unlink(temporaryFilename);
-
-    if (!controller->topology) {
-        error("fatal error loading topology at path '%s', check your syntax and try again",
-              temporaryFilename);
-        g_free(temporaryFilename);
+    if (!controller->graph) {
+        error("fatal error loading graph, check your syntax and try again");
         return FALSE;
     }
-
-    g_free(temporaryFilename);
 
     /* initialize global DNS addressing */
     controller->dns = dns_new();
@@ -224,14 +219,15 @@ typedef struct _ProcessCallbackArgs {
     const char* hostname;
 } ProcessCallbackArgs;
 
-static void _controller_registerProcessCallback(const ProcessOptions* proc, void* _callbackArgs) {
+__attribute__((warn_unused_result))
+static int _controller_registerProcessCallback(const ProcessOptions* proc, void* _callbackArgs) {
     ProcessCallbackArgs* callbackArgs = _callbackArgs;
 
     char* plugin = processoptions_getPath(proc);
     if (plugin == NULL) {
         error("For host '%s', couldn't find program path: '%s'", callbackArgs->hostname,
               processoptions_getRawPath(proc));
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     // build an argv array
@@ -260,11 +256,20 @@ static void _controller_registerProcessCallback(const ProcessOptions* proc, void
     processoptions_freeString(environment);
     processoptions_freeString(plugin);
     g_strfreev(argv);
+
+    return 0;
 }
 
-static void _controller_registerHostCallback(const char* name, const ConfigOptions* config,
-                                             const HostOptions* host, void* _controller) {
-    Controller* controller = _controller;
+typedef struct RegisterHostCallbackOptions {
+    Controller* controller;
+    bool registerIfAddressSpecified;
+} RegisterHostCallbackOptions;
+
+__attribute__((warn_unused_result))
+static int _controller_registerHostCallback(const char* name, const ConfigOptions* config,
+                                            const HostOptions* host, void* _callbackOptions) {
+    RegisterHostCallbackOptions* callbackOptions = _callbackOptions;
+    Controller* controller = callbackOptions->controller;
 
     MAGIC_ASSERT(controller);
     utility_assert(host);
@@ -272,6 +277,19 @@ static void _controller_registerHostCallback(const char* name, const ConfigOptio
     guint managerCpuFreq = manager_getRawCPUFrequency(controller->manager);
 
     guint64 quantity = hostoptions_getQuantity(host);
+    in_addr_t ipAddr = 0;
+    bool ipAddrSet = (hostoptions_getIpAddr(host, &ipAddr) == 0);
+
+    if (ipAddrSet != callbackOptions->registerIfAddressSpecified) {
+        // skip this host
+        return 0;
+    }
+
+    // make sure we're not trying to set a single address for multiple hosts
+    if (ipAddrSet && quantity > 1) {
+        error("Host %s has an IP address set with a quantity %ld greater than 1", name, quantity);
+        return -1;
+    }
 
     for (guint64 i = 0; i < quantity; i++) {
         HostParameters* params = g_new0(HostParameters, 1);
@@ -280,28 +298,35 @@ static void _controller_registerHostCallback(const char* name, const ConfigOptio
         if (quantity > 1) {
             g_string_append_printf(hostnameBuffer, "%" G_GUINT64_FORMAT, i + 1);
         }
+
+        // the network graph node to assign the host to
+        uint graphNode = hostoptions_getNetworkNodeId(host);
+
+        if (ipAddrSet) {
+            if (ipassignment_assignHostWithIp(controller->ipAssignment, graphNode, ipAddr)) {
+                error("Could not register host %s", name);
+                return -1;
+            }
+        } else {
+            if (ipassignment_assignHost(controller->ipAssignment, graphNode, &ipAddr)) {
+                error("Could not register host %s", name);
+                return -1;
+            }
+        }
+
         params->hostname = hostnameBuffer->str;
 
         params->cpuFrequency = MAX(0, managerCpuFreq);
         params->cpuThreshold = 0;
         params->cpuPrecision = 200;
 
+        params->ipAddr = ipAddr;
+
         params->logLevel = hostoptions_getLogLevel(host);
         params->heartbeatLogLevel = hostoptions_getHeartbeatLogLevel(host);
         params->heartbeatLogInfo = hostoptions_getHeartbeatLogInfo(host);
         params->heartbeatInterval = hostoptions_getHeartbeatInterval(host);
-
         params->pcapDir = hostoptions_getPcapDirectory(host);
-
-        params->ipHint = hostoptions_getIpAddressHint(host);
-        params->countrycodeHint = hostoptions_getCountryCodeHint(host);
-        params->citycodeHint = hostoptions_getCityCodeHint(host);
-
-        /* shadow uses values in KiB/s, but the config uses b/s */
-        /* TODO: use bits or bytes everywhere within Shadow (see also:
-         * _topology_findVertexAttributeStringBandwidth()) */
-        params->requestedBWDownKiBps = hostoptions_getBandwidthDown(host) / (8 * 1024);
-        params->requestedBWUpKiBps = hostoptions_getBandwidthUp(host) / (8 * 1024);
 
         /* some options come from the config options and not the host options */
         params->sendBufSize = config_getSocketSendBuffer(config);
@@ -311,30 +336,83 @@ static void _controller_registerHostCallback(const char* name, const ConfigOptio
         params->interfaceBufSize = config_getInterfaceBuffer(config);
         params->qdisc = config_getInterfaceQdisc(config);
 
+        /* bandwidth values come from the host options and graph options */
+        bool foundBwDown = false;
+        bool foundBwUp = false;
+
+        foundBwDown |= (0 == networkgraph_nodeBandwidthDownBits(
+                                 controller->graph, graphNode, &params->requestedBwDownBits));
+        foundBwDown |= (0 == hostoptions_getBandwidthDown(host, &params->requestedBwDownBits));
+
+        foundBwUp |= (0 == networkgraph_nodeBandwidthUpBits(
+                               controller->graph, graphNode, &params->requestedBwUpBits));
+        foundBwUp |= (0 == hostoptions_getBandwidthUp(host, &params->requestedBwUpBits));
+
+        if (!foundBwDown) {
+            error("No downstream bandwidth provided for host %s", params->hostname);
+            return -1;
+        }
+
+        if (!foundBwUp) {
+            error("No upstream bandwidth provided for host %s", params->hostname);
+            return -1;
+        }
+
+        if (params->requestedBwDownBits == 0 || params->requestedBwUpBits == 0) {
+            error("Bandwidth for host %s must be non-zero", params->hostname);
+            return -1;
+        }
+
+        /* add the host */
         manager_addNewVirtualHost(controller->manager, params);
 
+        /* now handle each virtual process the host will run */
         ProcessCallbackArgs processArgs;
         processArgs.controller = controller;
         processArgs.hostname = hostnameBuffer->str;
-
-        /* now handle each virtual process the host will run */
-        hostoptions_iterProcesses(host, _controller_registerProcessCallback, (void*)&processArgs);
+        if (hostoptions_iterProcesses(
+                host, _controller_registerProcessCallback, (void*)&processArgs)) {
+            error("Could not register processes for host %s", name);
+            return -1;
+        }
 
         /* cleanup for next pass through the loop */
         g_string_free(hostnameBuffer, TRUE);
-
         hostoptions_freeString(params->pcapDir);
-        hostoptions_freeString(params->ipHint);
-        hostoptions_freeString(params->countrycodeHint);
-        hostoptions_freeString(params->citycodeHint);
-
         g_free(params);
     }
+
+    // no error
+    return 0;
 }
 
-static void _controller_registerHosts(Controller* controller) {
+__attribute__((warn_unused_result))
+static int _controller_registerHosts(Controller* controller) {
     MAGIC_ASSERT(controller);
-    config_iterHosts(controller->config, _controller_registerHostCallback, (void*)controller);
+
+    RegisterHostCallbackOptions options;
+
+    // register hosts that have a specific IP address
+    options = (RegisterHostCallbackOptions){
+        .controller = controller,
+        .registerIfAddressSpecified = true,
+    };
+    if (config_iterHosts(controller->config, _controller_registerHostCallback, (void*)&options)) {
+        error("Could not register hosts with specific IP addresses");
+        return -1;
+    }
+
+    // register remaining hosts
+    options = (RegisterHostCallbackOptions){
+        .controller = controller,
+        .registerIfAddressSpecified = false,
+    };
+    if (config_iterHosts(controller->config, _controller_registerHostCallback, (void*)&options)) {
+        error("Could not register remaining hosts");
+        return -1;
+    }
+
+    return 0;
 }
 
 gint controller_run(Controller* controller) {
@@ -342,7 +420,7 @@ gint controller_run(Controller* controller) {
 
     info("loading and initializing simulation data");
 
-    gboolean isSuccess = _controller_loadTopology(controller);
+    gboolean isSuccess = _controller_loadNetworkGraph(controller);
     if (!isSuccess) {
         return 1;
     }
@@ -364,7 +442,23 @@ gint controller_run(Controller* controller) {
 
     /* register the components needed by each manager.
      * this must be done after managers are available so we can send them messages */
-    _controller_registerHosts(controller);
+    if (_controller_registerHosts(controller)) {
+        error("Unable to register hosts");
+        return 1;
+    }
+
+    /* now that we know which graph nodes are in use, we can compute shortest paths */
+    bool useShortestPath = config_getUseShortestPath(controller->config);
+    controller->routingInfo =
+        routinginfo_new(controller->graph, controller->ipAssignment, useShortestPath);
+    if (controller->routingInfo == NULL) {
+        error("Unable to generate topology");
+        return 1;
+    }
+
+    /* we don't need the network graph anymore, so free it to save memory */
+    networkgraph_free(controller->graph);
+    controller->graph = NULL;
 
     info("running simulation");
 
@@ -425,15 +519,35 @@ gboolean controller_managerFinishedCurrentRound(Controller* controller,
 
 gdouble controller_getLatency(Controller* controller, Address* srcAddress, Address* dstAddress) {
     MAGIC_ASSERT(controller);
-    return topology_getLatency(controller->topology, srcAddress, dstAddress);
+    // shadow uses latency in milliseconds
+    return routinginfo_getLatencyNs(controller->routingInfo, controller->ipAssignment,
+                                    htonl(address_toHostIP(srcAddress)),
+                                    htonl(address_toHostIP(dstAddress))) /
+           1000000.0;
+}
+
+gfloat controller_getReliability(Controller* controller, Address* srcAddress, Address* dstAddress) {
+    MAGIC_ASSERT(controller);
+    return routinginfo_getReliability(controller->routingInfo, controller->ipAssignment,
+                                      htonl(address_toHostIP(srcAddress)),
+                                      htonl(address_toHostIP(dstAddress)));
+}
+
+bool controller_isRoutable(Controller* controller, Address* srcAddress, Address* dstAddress) {
+    MAGIC_ASSERT(controller);
+    return routinginfo_isRoutable(controller->ipAssignment, htonl(address_toHostIP(srcAddress)),
+                                  htonl(address_toHostIP(dstAddress)));
+}
+
+void controller_incrementPacketCount(Controller* controller, Address* srcAddress,
+                                     Address* dstAddress) {
+    MAGIC_ASSERT(controller);
+    routinginfo_incrementPacketCount(controller->routingInfo, controller->ipAssignment,
+                                     htonl(address_toHostIP(srcAddress)),
+                                     htonl(address_toHostIP(dstAddress)));
 }
 
 DNS* controller_getDNS(Controller* controller) {
     MAGIC_ASSERT(controller);
     return controller->dns;
-}
-
-Topology* controller_getTopology(Controller* controller) {
-    MAGIC_ASSERT(controller);
-    return controller->topology;
 }

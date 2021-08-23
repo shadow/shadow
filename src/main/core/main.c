@@ -18,7 +18,6 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-#include "igraph_version.h"
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/controller.h"
@@ -98,19 +97,9 @@ static void _check_mitigations() {
 
 static gint _main_helper(CliOptions* options, ConfigOptions* config, gchar* argv[]) {
     /* start off with some status messages */
-#if defined(IGRAPH_VERSION)
-    gint igraphMajor = -1, igraphMinor = -1, igraphPatch = -1;
-    igraph_version(NULL, &igraphMajor, &igraphMinor, &igraphPatch);
-
-    gchar* startupStr = g_strdup_printf("Starting %s with GLib v%u.%u.%u and IGraph v%i.%i.%i",
-            SHADOW_VERSION_STRING,
-            (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
-            igraphMajor, igraphMinor, igraphPatch);
-#else
-    gchar* startupStr = g_strdup_printf("Starting %s with GLib v%u.%u.%u (IGraph version not available)",
-            SHADOW_VERSION_STRING,
-            (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
-#endif
+    gchar* startupStr = g_strdup_printf("Starting %s with GLib v%u.%u.%u", SHADOW_VERSION_STRING,
+                                        (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION,
+                                        (guint)GLIB_MICRO_VERSION);
 
     info("%s", startupStr);
     /* avoid logging the message to stderr twice (only log if this is not a relaunch) */
