@@ -353,14 +353,26 @@ static void _global_platform_info_hash_tables_init() {
 }
 
 static cpu_set_t* _getAffinity(size_t cpu_num) {
-    size_t cpu_set_size = CPU_ALLOC_SIZE(cpu_num);
-    cpu_set_t* cpu_set = CPU_ALLOC(cpu_num);
-
-    int rc = sched_getaffinity(0, cpu_set_size, cpu_set);
-    if (rc < 0) {
-        panic("sched_getaffinity: %s", strerror(errno));
+    while (1) {
+        size_t cpu_set_size = CPU_ALLOC_SIZE(cpu_num);
+        cpu_set_t* cpu_set = CPU_ALLOC(cpu_num);
+        int rc = sched_getaffinity(0, cpu_set_size, cpu_set);
+        if (rc >= 0) {
+            return cpu_set;
+        }
+        if (errno != EINVAL) {
+            panic("sched_getaffinity: %s", strerror(errno));
+        }
+        debug("sched_getaffinity failed with size %zu; trying a larger buffer.", cpu_set_size);
+        // The kernel uses a larger cpu set. We have to dynamically probe until
+        // we allocate a large enough set. See "Handling systems with large CPU
+        // affinity masks" in sched_getaffinity(2).
+        //
+        // Currently not worth the complexity of memoizing the final set size,
+        // since this function is only called once per simulation.
+        CPU_FREE(cpu_set);
+        cpu_num *= 2;
     }
-    return cpu_set;
 }
 
 int affinity_initPlatformInfo() {
