@@ -30,11 +30,6 @@ XML_ATTRS_TO_YAML = {
     'starttime': 'start_time',
     'stoptime': 'stop_time',
     'arguments': 'args',
-    'iphint': 'ip_address_hint',
-    'citycodehint': 'city_code_hint',
-    'countrycodehint': 'country_code_hint',
-    'geocodehint': 'geo_code_hint',
-    'typehint': 'type_hint',
     'loglevel': 'log_level',
     'heartbeatloglevel': 'heartbeat_log_level',
     'heartbeatloginfo': 'heartbeat_log_info',
@@ -248,7 +243,10 @@ def shadow_dict_post_processing(shadow: Dict):
             host_options = {x: host[x] for x in host if x not in host_non_option_names}
             host_non_options = {x: host[x] for x in host if x in host_non_option_names}
 
-            host = host_non_options
+            # shadow no longer uses hints to assign hosts to graph nodes, and they must be specified manually
+            network_node_id = '<REQUIRES MANUAL ENTRY>'
+
+            host = {'network_node_id': network_node_id, **host_non_options}
             if len(host_options) != 0:
                 host['options'] = host_options
             shadow['hosts'][host_name] = host

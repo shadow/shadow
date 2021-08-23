@@ -12,7 +12,8 @@ add_test(
     NAME convert-config-run-shadow
     COMMAND sh -c "\
     rm -rf shadow.data \
-    && ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d shadow.data shadow.generated.yaml \
+    && sed 's/<REQUIRES MANUAL ENTRY>/0/g' shadow.generated.yaml \
+    | ${CMAKE_BINARY_DIR}/src/main/shadow -l debug -d shadow.data - \
     "
     CONFIGURATIONS extra
 )

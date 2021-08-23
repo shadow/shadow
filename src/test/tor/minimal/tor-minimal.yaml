@@ -8,10 +8,8 @@ network:
         directed 0
         node [
           id 0
-          ip_address "0.0.0.0"
-          country_code "US"
-          bandwidth_down "1 Gbit"
-          bandwidth_up "1 Gbit"
+          host_bandwidth_down "1 Gbit"
+          host_bandwidth_up "1 Gbit"
         ]
         edge [
           source 0
@@ -23,11 +21,13 @@ network:
       ]
 hosts:
   fileserver:
+    network_node_id: 0
     processes:
     - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.server.graphml.xml
       start_time: 1
   hiddenserver:
+    network_node_id: 0
     processes:
     - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.hiddenserver.graphml.xml
@@ -37,43 +37,49 @@ hosts:
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
   4uthority:
-    options:
-      ip_address_hint: 100.0.0.1
+    network_node_id: 0
+    ip_addr: 100.0.0.1
     processes:
     - path: ~/.local/bin/tor
       args: --Address 4uthority --Nickname 4uthority
             --defaults-torrc torrc-defaults -f torrc
       start_time: 1
   exit1:
+    network_node_id: 0
     processes:
     - path: ~/.local/bin/tor
       args: --Address exit1 --Nickname exit1
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   exit2:
+    network_node_id: 0
     processes:
     - path: ~/.local/bin/tor
       args: --Address exit2 --Nickname exit2
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   relay1:
+    network_node_id: 0
     processes:
     - path: ~/.local/bin/tor
       args: --Address relay1 --Nickname relay1
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   relay2:
+    network_node_id: 0
     processes:
     - path: ~/.local/bin/tor
       args: --Address relay2 --Nickname relay2
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
   client:
+    network_node_id: 0
     processes:
     - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.client.graphml.xml
       start_time: 600
   torclient:
+    network_node_id: 0
     processes:
     - path: ~/.local/bin/tor
       args: --Address torclient --Nickname torclient
@@ -83,6 +89,7 @@ hosts:
       args: ../../../conf/tgen.torclient.graphml.xml
       start_time: 1500
   torbridgeclient:
+    network_node_id: 0
     processes:
     - path: ~/.local/bin/tor
       args: --Address torbridgeclient --Nickname torbridgeclient
@@ -93,6 +100,7 @@ hosts:
       args: ../../../conf/tgen.torclient.graphml.xml
       start_time: 1500
   torhiddenclient:
+    network_node_id: 0
     processes:
     - path: ~/.local/bin/tor
       args: --Address torhiddenclient --Nickname torhiddenclient

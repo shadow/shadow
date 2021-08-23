@@ -15,7 +15,6 @@ typedef struct _Controller Controller;
 #include "main/core/support/definitions.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
-#include "main/routing/topology.h"
 
 Controller* controller_new(ConfigOptions*);
 void controller_free(Controller*);
@@ -27,9 +26,12 @@ gdouble controller_getRunTimeElapsed(Controller*);
 gboolean controller_managerFinishedCurrentRound(Controller*, SimulationTime, SimulationTime*,
                                                 SimulationTime*);
 gdouble controller_getLatency(Controller* controller, Address* srcAddress, Address* dstAddress);
+gfloat controller_getReliability(Controller* controller, Address* srcAddress, Address* dstAddress);
+bool controller_isRoutable(Controller* controller, Address* srcAddress, Address* dstAddress);
+void controller_incrementPacketCount(Controller* controller, Address* srcAddress,
+                                     Address* dstAddress);
 
 // TODO remove these eventually since they cant be shared accross remote managers
 DNS* controller_getDNS(Controller* controller);
-Topology* controller_getTopology(Controller* controller);
 
 #endif /* SHD_CONTROLLER_H_ */
