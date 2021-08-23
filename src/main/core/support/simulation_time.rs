@@ -1,9 +1,11 @@
 /*!
 Values for working with time in simulation units.
 
-In Rust we should use standard time types (for example from [`std::time`]), but
-when communicating with C we should convert to [`c::SimulationTime`]. This
-module contains some identically-named constants defined as C macros in
+In Rust, use `EmulatedTime` to represent an instant in time, or
+[`std::time::Duration`] to represent a time interval. Use `SimulationTime` only
+when interacting with C APIs that use [`c::SimulationTime`].
+
+This module contains some identically-named constants defined as C macros in
 `main/core/support/definitions.h`.
 */
 
