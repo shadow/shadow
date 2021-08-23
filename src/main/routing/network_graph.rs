@@ -473,8 +473,8 @@ impl<T: Eq + Hash + std::fmt::Display + Clone + Copy> RoutingInfo<T> {
 }
 
 /// Read and decompress a file.
-fn read_xz(filename: &str) -> Result<String, Box<dyn Error>> {
-    let mut f = std::io::BufReader::new(std::fs::File::open(filename)?);
+fn read_xz<P: AsRef<std::path::Path>>(path: P) -> Result<String, Box<dyn Error>> {
+    let mut f = std::io::BufReader::new(std::fs::File::open(path)?);
 
     let mut decomp: Vec<u8> = Vec::new();
     lzma_rs::xz_decompress(&mut f, &mut decomp)?;
@@ -489,11 +489,11 @@ pub fn load_network_graph(graph_options: &GraphOptions) -> Result<String, Box<dy
         GraphOptions::Gml(GraphSource::File(FileSource {
             compression: None,
             path: f,
-        })) => std::fs::read_to_string(f)?,
+        })) => std::fs::read_to_string(configuration::tilde_expansion(f))?,
         GraphOptions::Gml(GraphSource::File(FileSource {
             compression: Some(Compression::Xz),
             path: f,
-        })) => read_xz(f)?,
+        })) => read_xz(configuration::tilde_expansion(f))?,
         GraphOptions::Gml(GraphSource::Inline(s)) => s.clone(),
         GraphOptions::OneGbitSwitch => configuration::ONE_GBIT_SWITCH_GRAPH.to_string(),
     })
