@@ -405,7 +405,7 @@ macro_rules! unit_impl {
         where
             <T as FromStr>::Err: std::fmt::Debug + std::fmt::Display,
         {
-            type Err = Box<dyn std::error::Error>;
+            type Err = Box<dyn std::error::Error + Send + Sync>;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 static RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([+-]?[0-9\.]*)\s*(.*)$").unwrap());
