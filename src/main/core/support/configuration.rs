@@ -650,7 +650,9 @@ pub enum Compression {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FileSource {
+    /// The path to the file
     pub path: String,
+    /// The file's compression format
     pub compression: Option<Compression>,
 }
 
