@@ -3,10 +3,12 @@
 Shadow 2.0 has changed the formatting of its configuration and network graph files.
 The configuration format has changed from XML to YAML, and the network graph format
 has changed from GraphML to GML. Various options have been added, renamed, and
-removed. Shadow includes convenience scripts to convert these files to their new
-formats. These scripts are intended to aid in converting to the new formats, and
-you should manually compare the original file to the new converted file to make
-sure it includes all of the options you expect.
+removed. Shadow includes convenience scripts to aid in converting these files to their
+new formats, but the generated output of these scripts requires manual user
+intervention. For example, you will need to assign hosts to graph nodes manually by
+setting the `network_node_id` field for each host in the generated config. You should
+also manually compare the original file to the new converted file to make sure it
+includes all of the options you expect.
 
 When encountering a tag/attribute that is not supported by the new format, these
 scripts will either:

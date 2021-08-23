@@ -134,6 +134,7 @@ endmacro()
 
 add_subdirectory(bindc)
 add_subdirectory(clone)
+add_subdirectory(compressed-graph)
 add_subdirectory(config)
 add_subdirectory(cpp)
 add_subdirectory(determinism)

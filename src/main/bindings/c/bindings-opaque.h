@@ -53,6 +53,9 @@ typedef struct DescriptorTable DescriptorTable;
 
 typedef struct HostOptions HostOptions;
 
+// Tool for assigning IP addresses to graph nodes.
+typedef struct IpAssignment_u32 IpAssignment_u32;
+
 // A set of `n` logical processors
 typedef struct LogicalProcessors LogicalProcessors;
 
@@ -60,6 +63,10 @@ typedef struct LogicalProcessors LogicalProcessors;
 // When in use, any operation that touches that process's memory must go
 // through the MemoryManager to ensure soundness. See MemoryManager::new.
 typedef struct MemoryManager MemoryManager;
+
+// A network graph containing the petgraph graph and a map from gml node ids to petgraph node
+// indexes.
+typedef struct NetworkGraph NetworkGraph;
 
 // Represents a POSIX description, or a Linux "struct file".
 typedef struct PosixFile PosixFile;
@@ -86,5 +93,8 @@ typedef struct ProcessMemoryRefMut_u8 ProcessMemoryRefMut_u8;
 typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
+
+// Routing information for paths between nodes.
+typedef struct RoutingInfo_u32 RoutingInfo_u32;
 
 #endif /* main_opaque_bindings_h */

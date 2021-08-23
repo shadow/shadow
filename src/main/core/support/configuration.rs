@@ -27,66 +27,66 @@ const END_HELP_TEXT: &str = "\
 pub struct CliOptions {
     /// Path to the Shadow configuration file. Use '-' to read from stdin
     #[clap(required_unless_present_any(&["show-build-info", "shm-cleanup"]))]
-    config: Option<String>,
+    pub config: Option<String>,
 
     /// Pause to allow gdb to attach
     #[clap(long, short = 'g')]
-    gdb: bool,
+    pub gdb: bool,
 
     /// Exit after running shared memory cleanup routine
     #[clap(long, exclusive(true))]
-    shm_cleanup: bool,
+    pub shm_cleanup: bool,
 
     /// Exit after printing build information
     #[clap(long, exclusive(true))]
-    show_build_info: bool,
+    pub show_build_info: bool,
 
     /// Exit after printing the final configuration
     #[clap(long)]
-    show_config: bool,
+    pub show_config: bool,
 
     #[clap(flatten)]
-    general: GeneralOptions,
+    pub general: GeneralOptions,
 
     #[clap(flatten)]
-    network: NetworkOptions,
+    pub network: NetworkOptions,
 
     #[clap(flatten)]
-    host_defaults: HostDefaultOptions,
+    pub host_defaults: HostDefaultOptions,
 
     #[clap(flatten)]
-    experimental: ExperimentalOptions,
+    pub experimental: ExperimentalOptions,
 }
 
 /// Options contained in a configuration file.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigFileOptions {
-    general: GeneralOptions,
+    pub general: GeneralOptions,
 
-    network: NetworkOptions,
-
-    #[serde(default)]
-    host_defaults: HostDefaultOptions,
+    pub network: NetworkOptions,
 
     #[serde(default)]
-    experimental: ExperimentalOptions,
+    pub host_defaults: HostDefaultOptions,
+
+    #[serde(default)]
+    pub experimental: ExperimentalOptions,
 
     // we use a BTreeMap so that the hosts are sorted by their hostname (useful for determinism)
-    hosts: BTreeMap<String, HostOptions>,
+    pub hosts: BTreeMap<String, HostOptions>,
 }
 
 /// Shadow configuration options after processing command-line and configuration file options.
 #[derive(Debug, Clone)]
 pub struct ConfigOptions {
-    general: GeneralOptions,
+    pub general: GeneralOptions,
 
-    network: NetworkOptions,
+    pub network: NetworkOptions,
 
-    experimental: ExperimentalOptions,
+    pub experimental: ExperimentalOptions,
 
     // we use a BTreeMap so that the hosts are sorted by their hostname (useful for determinism)
-    hosts: BTreeMap<String, HostOptions>,
+    pub hosts: BTreeMap<String, HostOptions>,
 }
 
 impl ConfigOptions {
@@ -130,13 +130,13 @@ pub struct GeneralOptions {
     /// The simulated time at which simulated processes are sent a SIGKILL signal
     #[clap(long, value_name = "seconds")]
     #[clap(about = GENERAL_HELP.get("stop_time").unwrap())]
-    stop_time: Option<units::Time<units::TimePrefixUpper>>,
+    pub stop_time: Option<units::Time<units::TimePrefixUpper>>,
 
     /// Initialize randomness using seed N
     #[clap(long, value_name = "N")]
     #[clap(about = GENERAL_HELP.get("seed").unwrap())]
     #[serde(default = "default_some_1")]
-    seed: Option<u32>,
+    pub seed: Option<u32>,
 
     /// How many parallel threads to use to run the simulation. Optimal
     /// performance is usually obtained with `cores`, or sometimes `cores/2`
@@ -144,38 +144,38 @@ pub struct GeneralOptions {
     #[clap(long, short = 'p', value_name = "cores")]
     #[clap(about = GENERAL_HELP.get("parallelism").unwrap())]
     #[serde(default = "default_some_nz_1")]
-    parallelism: Option<NonZeroU32>,
+    pub parallelism: Option<NonZeroU32>,
 
     /// The simulated time that ends Shadow's high network bandwidth/reliability bootstrap period
     #[clap(long, value_name = "seconds")]
     #[clap(about = GENERAL_HELP.get("bootstrap_end_time").unwrap())]
     #[serde(default = "default_some_time_0")]
-    bootstrap_end_time: Option<units::Time<units::TimePrefixUpper>>,
+    pub bootstrap_end_time: Option<units::Time<units::TimePrefixUpper>>,
 
     /// Log level of output written on stdout. If Shadow was built in release mode, then log
     /// messages at level 'trace' will always be dropped
     #[clap(long, short = 'l', value_name = "level")]
     #[clap(about = GENERAL_HELP.get("log_level").unwrap())]
     #[serde(default = "default_some_info")]
-    log_level: Option<LogLevel>,
+    pub log_level: Option<LogLevel>,
 
     /// Interval at which to print heartbeat messages
     #[clap(long, value_name = "seconds")]
     #[clap(about = GENERAL_HELP.get("heartbeat_interval").unwrap())]
     #[serde(default = "default_some_time_1")]
-    heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
+    pub heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
 
     /// Path to store simulation output
     #[clap(long, short = 'd', value_name = "path")]
     #[clap(about = GENERAL_HELP.get("data_directory").unwrap())]
     #[serde(default = "default_data_directory")]
-    data_directory: Option<String>,
+    pub data_directory: Option<String>,
 
     /// Path to recursively copy during startup and use as the data-directory
     #[clap(long, short = 'e', value_name = "path")]
     #[clap(about = GENERAL_HELP.get("template_directory").unwrap())]
     #[serde(default)]
-    template_directory: Option<String>,
+    pub template_directory: Option<String>,
 }
 
 impl GeneralOptions {
@@ -196,17 +196,17 @@ static NETWORK_HELP: Lazy<std::collections::HashMap<String, String>> =
 #[derive(Debug, Clone, Clap, Serialize, Deserialize, Merge, JsonSchema)]
 #[clap(help_heading = "NETWORK (Override network options)")]
 #[serde(deny_unknown_fields)]
-struct NetworkOptions {
+pub struct NetworkOptions {
     /// The network topology graph
     #[clap(skip)]
-    graph: Option<GraphOptions>,
+    pub graph: Option<GraphOptions>,
 
     /// When routing packets, follow the shortest path rather than following a direct
     /// edge between nodes. If false, the network graph is required to be complete.
     #[serde(default = "default_some_true")]
     #[clap(long, value_name = "bool")]
     #[clap(about = NETWORK_HELP.get("use_shortest_path").unwrap())]
-    use_shortest_path: Option<bool>,
+    pub use_shortest_path: Option<bool>,
 }
 
 impl NetworkOptions {
@@ -231,34 +231,34 @@ pub struct ExperimentalOptions {
     /// Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7)
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_sched_fifo").unwrap())]
-    use_sched_fifo: Option<bool>,
+    pub use_sched_fifo: Option<bool>,
 
     /// Use performance workarounds for waitpid being O(n). Beneficial to disable if waitpid
     /// is patched to be O(1), if using one logical processor per host, or in some cases where
     /// it'd otherwise result in excessive detaching and reattaching
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_o_n_waitpid_workarounds").unwrap())]
-    use_o_n_waitpid_workarounds: Option<bool>,
+    pub use_o_n_waitpid_workarounds: Option<bool>,
 
     /// Send message to plugin telling it to stop spinning when a syscall blocks
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_explicit_block_message").unwrap())]
-    use_explicit_block_message: Option<bool>,
+    pub use_explicit_block_message: Option<bool>,
 
     /// Use seccomp to trap syscalls. Default is true for preload mode, false otherwise.
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_seccomp").unwrap())]
-    use_seccomp: Option<bool>,
+    pub use_seccomp: Option<bool>,
 
     /// Count the number of occurrences for individual syscalls
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_syscall_counters").unwrap())]
-    use_syscall_counters: Option<bool>,
+    pub use_syscall_counters: Option<bool>,
 
     /// Count object allocations and deallocations. If disabled, we will not be able to detect object memory leaks
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_object_counters").unwrap())]
-    use_object_counters: Option<bool>,
+    pub use_object_counters: Option<bool>,
 
     /// Preload our OpenSSL RNG library for all managed processes to mitigate non-deterministic use of OpenSSL.
     #[clap(long, value_name = "bool")]
@@ -268,68 +268,68 @@ pub struct ExperimentalOptions {
     /// Max number of iterations to busy-wait on IPC semaphore before blocking
     #[clap(long, value_name = "iterations")]
     #[clap(about = EXP_HELP.get("preload_spin_max").unwrap())]
-    preload_spin_max: Option<i32>,
+    pub preload_spin_max: Option<i32>,
 
     /// Use the MemoryManager. It can be useful to disable for debugging, but will hurt performance in
     /// most cases
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_memory_manager").unwrap())]
-    use_memory_manager: Option<bool>,
+    pub use_memory_manager: Option<bool>,
 
     /// Use shim-side syscall handler to force hot-path syscalls to be handled via an inter-process syscall with Shadow
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_shim_syscall_handler").unwrap())]
-    use_shim_syscall_handler: Option<bool>,
+    pub use_shim_syscall_handler: Option<bool>,
 
     /// Pin each thread and any processes it executes to the same logical CPU Core to improve cache affinity
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_cpu_pinning").unwrap())]
-    use_cpu_pinning: Option<bool>,
+    pub use_cpu_pinning: Option<bool>,
 
     /// Which interposition method to use
     #[clap(long, value_name = "method")]
     #[clap(about = EXP_HELP.get("interpose_method").unwrap())]
-    interpose_method: Option<InterposeMethod>,
+    pub interpose_method: Option<InterposeMethod>,
 
     /// If set, overrides the automatically calculated minimum time workers may run ahead when sending events between nodes
     #[clap(long, value_name = "seconds")]
     #[clap(about = EXP_HELP.get("runahead").unwrap())]
-    runahead: Option<units::Time<units::TimePrefix>>,
+    pub runahead: Option<units::Time<units::TimePrefix>>,
 
     /// The event scheduler's policy for thread synchronization
     #[clap(long, value_name = "policy")]
     #[clap(about = EXP_HELP.get("scheduler_policy").unwrap())]
-    scheduler_policy: Option<SchedulerPolicy>,
+    pub scheduler_policy: Option<SchedulerPolicy>,
 
     /// Initial size of the socket's send buffer
     #[clap(long, value_name = "bytes")]
     #[clap(about = EXP_HELP.get("socket_send_buffer").unwrap())]
-    socket_send_buffer: Option<units::Bytes<units::SiPrefixUpper>>,
+    pub socket_send_buffer: Option<units::Bytes<units::SiPrefixUpper>>,
 
     /// Enable send window autotuning
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("socket_send_autotune").unwrap())]
-    socket_send_autotune: Option<bool>,
+    pub socket_send_autotune: Option<bool>,
 
     /// Initial size of the socket's receive buffer
     #[clap(long, value_name = "bytes")]
     #[clap(about = EXP_HELP.get("socket_recv_buffer").unwrap())]
-    socket_recv_buffer: Option<units::Bytes<units::SiPrefixUpper>>,
+    pub socket_recv_buffer: Option<units::Bytes<units::SiPrefixUpper>>,
 
     /// Enable receive window autotuning
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("socket_recv_autotune").unwrap())]
-    socket_recv_autotune: Option<bool>,
+    pub socket_recv_autotune: Option<bool>,
 
     /// Size of the interface receive buffer that accepts incoming packets
     #[clap(long, value_name = "bytes")]
     #[clap(about = EXP_HELP.get("interface_buffer").unwrap())]
-    interface_buffer: Option<units::Bytes<units::SiPrefixUpper>>,
+    pub interface_buffer: Option<units::Bytes<units::SiPrefixUpper>>,
 
     /// The queueing discipline to use at the network interface
     #[clap(long, value_name = "mode")]
     #[clap(about = EXP_HELP.get("interface_qdisc").unwrap())]
-    interface_qdisc: Option<QDiscMode>,
+    pub interface_qdisc: Option<QDiscMode>,
 
     /// Create N worker threads. Note though, that `--parallelism` of them will
     /// be allowed to run simultaneously. If unset, will create a thread for
@@ -337,12 +337,12 @@ pub struct ExperimentalOptions {
     /// may change in the future.
     #[clap(long, value_name = "N")]
     #[clap(about = EXP_HELP.get("worker_threads").unwrap())]
-    worker_threads: Option<NonZeroU32>,
+    pub worker_threads: Option<NonZeroU32>,
 
     /// Don't adjust the working directories of the plugins
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_legacy_working_dir").unwrap())]
-    use_legacy_working_dir: Option<bool>,
+    pub use_legacy_working_dir: Option<bool>,
 }
 
 impl ExperimentalOptions {
@@ -395,46 +395,31 @@ pub struct HostDefaultOptions {
     #[clap(long = "host-log-level", name = "host-log-level")]
     #[clap(value_name = "level")]
     #[clap(about = HOST_HELP.get("log_level").unwrap())]
-    log_level: Option<LogLevel>,
+    pub log_level: Option<LogLevel>,
 
     /// Log level at which to print host statistics
     #[clap(long = "host-heartbeat-log-level", name = "host-heartbeat-log-level")]
     #[clap(value_name = "level")]
     #[clap(about = HOST_HELP.get("heartbeat_log_level").unwrap())]
-    heartbeat_log_level: Option<LogLevel>,
+    pub heartbeat_log_level: Option<LogLevel>,
 
     /// List of information to show in the host's heartbeat message
     #[clap(long = "host-heartbeat-log-info", name = "host-heartbeat-log-info")]
     #[clap(parse(try_from_str = parse_set_log_info_flags))]
     #[clap(value_name = "options")]
     #[clap(about = HOST_HELP.get("heartbeat_log_info").unwrap())]
-    heartbeat_log_info: Option<std::collections::HashSet<LogInfoFlag>>,
+    pub heartbeat_log_info: Option<std::collections::HashSet<LogInfoFlag>>,
 
     /// Amount of time between heartbeat messages for this host
     #[clap(long = "host-heartbeat-interval", name = "host-heartbeat-interval")]
     #[clap(value_name = "seconds")]
     #[clap(about = HOST_HELP.get("heartbeat_interval").unwrap())]
-    heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
+    pub heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
 
     /// Where to save the pcap files (relative to the host directory)
     #[clap(long, value_name = "path")]
     #[clap(about = HOST_HELP.get("pcap_directory").unwrap())]
-    pcap_directory: Option<String>,
-
-    /// IPv4 address hint for Shadow's name and routing system (ex: "100.0.0.1")
-    #[clap(long, value_name = "ip")]
-    #[clap(about = HOST_HELP.get("ip_address_hint").unwrap())]
-    ip_address_hint: Option<String>,
-
-    /// Country code hint for Shadow's name and routing system (ex: "US")
-    #[clap(long, value_name = "country")]
-    #[clap(about = HOST_HELP.get("country_code_hint").unwrap())]
-    country_code_hint: Option<String>,
-
-    /// City code hint for Shadow's name and routing system
-    #[clap(long, value_name = "city")]
-    #[clap(about = HOST_HELP.get("city_code_hint").unwrap())]
-    city_code_hint: Option<String>,
+    pub pcap_directory: Option<String>,
 }
 
 impl HostDefaultOptions {
@@ -445,9 +430,6 @@ impl HostDefaultOptions {
             heartbeat_log_info: None,
             heartbeat_interval: None,
             pcap_directory: None,
-            ip_address_hint: None,
-            country_code_hint: None,
-            city_code_hint: None,
         }
     }
 
@@ -466,9 +448,6 @@ impl Default for HostDefaultOptions {
             heartbeat_log_info: Some(std::array::IntoIter::new([LogInfoFlag::Node]).collect()),
             heartbeat_interval: Some(units::Time::new(1, units::TimePrefixUpper::Sec)),
             pcap_directory: None,
-            ip_address_hint: None,
-            country_code_hint: None,
-            city_code_hint: None,
         }
     }
 }
@@ -476,49 +455,56 @@ impl Default for HostDefaultOptions {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProcessOptions {
-    path: std::path::PathBuf,
+    pub path: std::path::PathBuf,
 
     /// Process arguments
     #[serde(default = "default_args_empty")]
-    args: ProcessArgs,
+    pub args: ProcessArgs,
 
     /// Environment variables passed when executing this process. Multiple variables can be
     /// specified by using a semicolon separator (ex: `ENV_A=1;ENV_B=2`)
     #[serde(default)]
-    environment: String,
+    pub environment: String,
 
     /// The number of replicas of this process to execute
     #[serde(default)]
-    quantity: Quantity,
+    pub quantity: Quantity,
 
     /// The simulated time at which to execute the process
     #[serde(default)]
-    start_time: units::Time<units::TimePrefixUpper>,
+    pub start_time: units::Time<units::TimePrefixUpper>,
 
     /// The simulated time at which to send a SIGKILL signal to the process
     #[serde(default)]
-    stop_time: Option<units::Time<units::TimePrefixUpper>>,
+    pub stop_time: Option<units::Time<units::TimePrefixUpper>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct HostOptions {
-    processes: Vec<ProcessOptions>,
+    /// Network graph node ID to assign the host to
+    pub network_node_id: u32,
+
+    pub processes: Vec<ProcessOptions>,
+
+    /// IP address to assign to the host
+    #[serde(default)]
+    pub ip_addr: Option<std::net::IpAddr>,
 
     /// Number of hosts to start
     #[serde(default)]
-    quantity: Quantity,
+    pub quantity: Quantity,
 
     /// Downstream bandwidth capacity of the host
     #[serde(default)]
-    bandwidth_down: Option<units::BitsPerSec<units::SiPrefixUpper>>,
+    pub bandwidth_down: Option<units::BitsPerSec<units::SiPrefixUpper>>,
 
     /// Upstream bandwidth capacity of the host
     #[serde(default)]
-    bandwidth_up: Option<units::BitsPerSec<units::SiPrefixUpper>>,
+    pub bandwidth_up: Option<units::BitsPerSec<units::SiPrefixUpper>>,
 
     #[serde(default = "HostDefaultOptions::new_empty")]
-    options: HostDefaultOptions,
+    pub options: HostDefaultOptions,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -606,7 +592,7 @@ fn default_data_directory() -> Option<String> {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, ArgEnum, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
-enum LogInfoFlag {
+pub enum LogInfoFlag {
     Node,
     Socket,
     Ram,
@@ -656,16 +642,29 @@ impl std::str::FromStr for QDiscMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-enum CustomGraph {
-    Path(String),
+#[serde(rename_all = "snake_case")]
+pub enum Compression {
+    Xz,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FileSource {
+    pub path: String,
+    pub compression: Option<Compression>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphSource {
+    File(FileSource),
     Inline(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "type", rename_all = "lowercase")]
-enum GraphOptions {
-    Gml(CustomGraph),
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum GraphOptions {
+    Gml(GraphSource),
     #[serde(rename = "1_gbit_switch")]
     OneGbitSwitch,
 }
@@ -730,13 +729,13 @@ fn default_some_info() -> Option<LogLevel> {
 }
 
 // when updating this graph, make sure to also update the copy in docs/shadow_config_spec.md
-const ONE_GBIT_SWITCH_GRAPH: &str = r#"graph [
+pub const ONE_GBIT_SWITCH_GRAPH: &str = r#"graph [
   directed 0
   node [
     id 0
     ip_address "0.0.0.0"
-    bandwidth_up "1 Gbit"
-    bandwidth_down "1 Gbit"
+    host_bandwidth_up "1 Gbit"
+    host_bandwidth_down "1 Gbit"
   ]
   edge [
     source 0
@@ -1350,20 +1349,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getNetworkGraph(config: *const ConfigOptions) -> *mut libc::c_char {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-
-        let graph = match config.network.graph.as_ref().unwrap() {
-            GraphOptions::Gml(CustomGraph::Path(f)) => std::fs::read_to_string(f).unwrap(),
-            GraphOptions::Gml(CustomGraph::Inline(s)) => s.clone(),
-            GraphOptions::OneGbitSwitch => ONE_GBIT_SWITCH_GRAPH.to_string(),
-        };
-
-        CString::into_raw(CString::new(graph).unwrap())
-    }
-
-    #[no_mangle]
     pub extern "C" fn config_getUseShortestPath(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
@@ -1372,6 +1357,7 @@ mod export {
     }
 
     #[no_mangle]
+    #[must_use]
     pub extern "C" fn config_iterHosts(
         config: *const ConfigOptions,
         f: unsafe extern "C" fn(
@@ -1379,16 +1365,16 @@ mod export {
             *const ConfigOptions,
             *const HostOptions,
             *mut libc::c_void,
-        ),
+        ) -> libc::c_int,
         data: *mut libc::c_void,
-    ) {
+    ) -> libc::c_int {
         assert!(!config.is_null());
         let config = unsafe { &*config };
 
         for (name, host) in &config.hosts {
             // bind the string to a local variable so it's not dropped before f() runs
             let name = CString::new(name.clone()).unwrap();
-            unsafe {
+            let rv = unsafe {
                 f(
                     name.as_c_str().as_ptr(),
                     config as *const _,
@@ -1396,7 +1382,12 @@ mod export {
                     data,
                 )
             };
+            if rv != 0 {
+                return rv;
+            }
         }
+
+        return 0;
     }
 
     #[no_mangle]
@@ -1415,6 +1406,34 @@ mod export {
     pub extern "C" fn hostoptions_freeString(string: *mut libc::c_char) {
         if !string.is_null() {
             unsafe { CString::from_raw(string) };
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn hostoptions_getNetworkNodeId(host: *const HostOptions) -> libc::c_uint {
+        assert!(!host.is_null());
+        let host = unsafe { &*host };
+
+        host.network_node_id
+    }
+
+    #[no_mangle]
+    pub extern "C" fn hostoptions_getIpAddr(
+        host: *const HostOptions,
+        addr: *mut libc::in_addr_t,
+    ) -> libc::c_int {
+        assert!(!host.is_null());
+        assert!(!addr.is_null());
+        let host = unsafe { &*host };
+        let addr = unsafe { &mut *addr };
+
+        match host.ip_addr {
+            Some(std::net::IpAddr::V4(x)) => {
+                *addr = u32::to_be(x.into());
+                0
+            }
+            Some(std::net::IpAddr::V6(_)) => unimplemented!(),
+            None => -1,
         }
     }
 
@@ -1494,75 +1513,67 @@ mod export {
         }
     }
 
+    /// Get the downstream bandwidth of the host if it exists. A non-zero return value means that
+    /// the host did not have a downstream bandwidth and that `bandwidth_down` was not updated.
     #[no_mangle]
-    pub extern "C" fn hostoptions_getIpAddressHint(host: *const HostOptions) -> *mut libc::c_char {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        match host.options.ip_address_hint.as_ref() {
-            Some(x) => CString::into_raw(CString::new(x.to_string()).unwrap()),
-            None => std::ptr::null_mut(),
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getCountryCodeHint(
+    pub extern "C" fn hostoptions_getBandwidthDown(
         host: *const HostOptions,
-    ) -> *mut libc::c_char {
+        bandwidth_down: *mut u64,
+    ) -> libc::c_int {
         assert!(!host.is_null());
+        assert!(!bandwidth_down.is_null());
         let host = unsafe { &*host };
-
-        match host.options.country_code_hint.as_ref() {
-            Some(x) => CString::into_raw(CString::new(x.to_string()).unwrap()),
-            None => std::ptr::null_mut(),
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getCityCodeHint(host: *const HostOptions) -> *mut libc::c_char {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        match host.options.city_code_hint.as_ref() {
-            Some(x) => CString::into_raw(CString::new(x.to_string()).unwrap()),
-            None => std::ptr::null_mut(),
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getBandwidthDown(host: *const HostOptions) -> u64 {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
+        let bandwidth_down = unsafe { &mut *bandwidth_down };
 
         match host.bandwidth_down {
-            Some(x) => x.convert(units::SiPrefixUpper::Base).unwrap().value(),
-            None => 0,
+            Some(x) => {
+                *bandwidth_down = x.convert(units::SiPrefixUpper::Base).unwrap().value();
+                return 0;
+            }
+            None => return -1,
         }
     }
 
+    /// Get the upstream bandwidth of the host if it exists. A non-zero return value means that
+    /// the host did not have an upstream bandwidth and that `bandwidth_up` was not updated.
     #[no_mangle]
-    pub extern "C" fn hostoptions_getBandwidthUp(host: *const HostOptions) -> u64 {
+    pub extern "C" fn hostoptions_getBandwidthUp(
+        host: *const HostOptions,
+        bandwidth_up: *mut u64,
+    ) -> libc::c_int {
         assert!(!host.is_null());
+        assert!(!bandwidth_up.is_null());
         let host = unsafe { &*host };
+        let bandwidth_up = unsafe { &mut *bandwidth_up };
 
         match host.bandwidth_up {
-            Some(x) => x.convert(units::SiPrefixUpper::Base).unwrap().value(),
-            None => 0,
+            Some(x) => {
+                *bandwidth_up = x.convert(units::SiPrefixUpper::Base).unwrap().value();
+                return 0;
+            }
+            None => return -1,
         }
     }
 
     #[no_mangle]
+    #[must_use]
     pub extern "C" fn hostoptions_iterProcesses(
         host: *const HostOptions,
-        f: unsafe extern "C" fn(*const ProcessOptions, *mut libc::c_void),
+        f: unsafe extern "C" fn(*const ProcessOptions, *mut libc::c_void) -> libc::c_int,
         data: *mut libc::c_void,
-    ) {
+    ) -> libc::c_int {
         assert!(!host.is_null());
         let host = unsafe { &*host };
 
         for proc in &host.processes {
-            unsafe { f(proc as *const _, data) };
+            let rv = unsafe { f(proc as *const _, data) };
+
+            if rv != 0 {
+                return rv;
+            }
         }
+
+        return 0;
     }
 
     #[no_mangle]

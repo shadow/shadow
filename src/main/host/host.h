@@ -28,7 +28,6 @@
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/routing/router.h"
-#include "main/routing/topology.h"
 #include "main/utility/random.h"
 
 Host* host_new(HostParameters* params);
@@ -47,7 +46,7 @@ void host_stopExecutionTimer(Host* host);
 #define host_stopExecutionTimer(host)
 #endif
 
-void host_setup(Host* host, DNS* dns, Topology* topology, guint rawCPUFreq, const gchar* hostRootPath);
+void host_setup(Host* host, DNS* dns, guint rawCPUFreq, const gchar* hostRootPath);
 void host_boot(Host* host);
 void host_shutdown(Host* host);
 

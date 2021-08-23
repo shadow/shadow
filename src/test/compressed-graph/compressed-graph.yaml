@@ -1,0 +1,14 @@
+general:
+  stop_time: 5
+network:
+  graph:
+    type: gml
+    file:
+      path: graph-compressed.gml.xz
+      compression: xz
+hosts:
+  testnode:
+    network_node_id: 0
+    processes:
+    - path: /bin/true
+      start_time: 1

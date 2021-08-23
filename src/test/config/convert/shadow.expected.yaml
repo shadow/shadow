@@ -11,8 +11,8 @@ network:
           id 0
           label "poi-1"
           country_code "US"
-          bandwidth_down "81920 Kibit"
-          bandwidth_up "81920 Kibit"
+          host_bandwidth_down "81920 Kibit"
+          host_bandwidth_up "81920 Kibit"
         ]
         edge [
           source 0
@@ -23,6 +23,7 @@ network:
       ]
 hosts:
   testclient:
+    network_node_id: <REQUIRES MANUAL ENTRY>
     quantity: 1
     bandwidth_down: 8000 Kibit
     processes:
@@ -31,6 +32,7 @@ hosts:
       path: test-config-convert
       environment: HELLO=WORLD;LD_PRELOAD=/tor/shim/path.so
   testserver:
+    network_node_id: <REQUIRES MANUAL ENTRY>
     quantity: 1
     processes:
     - start_time: 1

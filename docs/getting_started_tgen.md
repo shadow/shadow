@@ -47,8 +47,8 @@ network:
       graph [
         node [
           id 0
-          bandwidth_down "140 Mbit"
-          bandwidth_up "18 Mbit"
+          host_bandwidth_down "140 Mbit"
+          host_bandwidth_up "18 Mbit"
         ]
         edge [
           source 0
