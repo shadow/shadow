@@ -6,4 +6,4 @@ add_linux_tests(BASENAME epoll COMMAND test-epoll)
 add_shadow_tests(BASENAME epoll)
 
 add_executable(test-epoll-writeable test_epoll_writeable.c)
-add_shadow_tests(BASENAME epoll-writeable)
+add_shadow_tests(BASENAME epoll-writeable LOGLEVEL debug)
