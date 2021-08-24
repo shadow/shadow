@@ -420,6 +420,12 @@ static void _networkinterface_receivePacket(Host* host, NetworkInterface* interf
         g_free(key);
     }
 
+    /* record the packet before we process it, otherwise we may send more packets before we
+       record this one and the order will be incorrect */
+    if (interface->pcap) {
+        _networkinterface_capturePacket(interface, packet);
+    }
+
     /* if the socket closed, just drop the packet */
     if (socket.type != CST_NONE) {
         compatsocket_pushInPacket(&socket, host, packet);
@@ -435,9 +441,6 @@ static void _networkinterface_receivePacket(Host* host, NetworkInterface* interf
 
     /* count our bandwidth usage by interface, and by socket handle if possible */
     tracker_addInputBytes(host_getTracker(host), packet, socketHandle);
-    if (interface->pcap) {
-        _networkinterface_capturePacket(interface, packet);
-    }
 }
 
 static void _networkinterface_receivePacketTask(Host* host, gpointer voidInterface,
@@ -596,6 +599,11 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
 
         packet_addDeliveryStatus(packet, PDS_SND_INTERFACE_SENT);
 
+        /* record the packet early before we do anything else */
+        if(interface->pcap) {
+            _networkinterface_capturePacket(interface, packet);
+        }
+
         /* now actually send the packet somewhere */
         if(address_toNetworkIP(interface->address) == packet_getDestinationIP(packet)) {
             /* packet will arrive on our own interface, so it doesn't need to
@@ -621,9 +629,6 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
         }
 
         tracker_addOutputBytes(host_getTracker(src), packet, socketHandle);
-        if(interface->pcap) {
-            _networkinterface_capturePacket(interface, packet);
-        }
 
         /* sending side is done with its ref */
         packet_unref(packet);
