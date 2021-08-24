@@ -650,7 +650,9 @@ pub enum Compression {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FileSource {
+    /// The path to the file
     pub path: String,
+    /// The file's compression format
     pub compression: Option<Compression>,
 }
 
@@ -766,7 +768,7 @@ fn generate_help_strs(
     defaults
 }
 
-fn tilde_expansion(path: &str) -> std::path::PathBuf {
+pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
     // if the path begins with a "~"
     if let Some(x) = path.strip_prefix("~") {
         // get the tilde-prefix (everything before the first separator)

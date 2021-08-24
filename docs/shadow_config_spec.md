@@ -194,7 +194,7 @@ network:
 #### `network.graph.type`
 
 *Required*  
-Type: "gml" OR "gml\_lzma" OR "1\_gbit\_switch"
+Type: "gml" OR "1\_gbit\_switch"
 
 The network graph can be specified in the GML format, or a built-in
 "1\_gbit\_switch" graph with a single network node can be used instead.
@@ -218,16 +218,30 @@ graph [
 ]
 ```
 
-#### `network.graph.<path|inline>`
+#### `network.graph.<file|inline>`
 
 *Required if `network.graph.type` is "gml"*  
-Type: String
+Type: Object OR String
 
 If the network graph type is not a built-in network graph, the graph data can be
 specified as a path to an external file, or as an inline string.
 
-If a path is given and begins with `~/`, it will be considered relative to the
-current user's home directory.
+#### `network.graph.file.path`
+
+*Required*  
+Type: String
+
+The path to the file.
+
+If the path begins with `~/`, it will be considered relative to the current
+user's home directory.
+
+#### `network.graph.file.compression`
+
+Default: null  
+Type: "xz" OR null
+
+The file's compression format.
 
 #### `network.use_shortest_path`
 
