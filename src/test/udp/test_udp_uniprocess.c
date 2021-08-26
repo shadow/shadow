@@ -145,6 +145,5 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/udp_uniprocess/getaddrinfo", test_getaddrinfo);
     g_test_add_func("/udp_uniprocess/sendto_one_byte", test_sendto_one_byte);
     g_test_add_func("/udp_uniprocess/echo", test_echo);
-    g_test_run();
-    return EXIT_SUCCESS;
+    return g_test_run();
 }

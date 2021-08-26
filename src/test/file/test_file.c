@@ -597,7 +597,5 @@ int main(int argc, char* argv[]) {
     //    TODO: debug and fix iov test
     //    g_test_add_func("/file/iov", _test_iov);
 
-    g_test_run();
-
-    return 0;
+    return g_test_run();
 }
