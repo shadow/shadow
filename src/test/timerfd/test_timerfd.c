@@ -162,6 +162,5 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/timerfd/expired_pause", _test_expired_timer_pause);
     g_test_add_func("/timerfd/disarm", _test_disarm_timer);
 
-    g_test_run();
-    return 0;
+    return g_test_run();
 }

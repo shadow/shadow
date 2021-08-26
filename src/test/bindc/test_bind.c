@@ -254,6 +254,5 @@ int main(int argc, char* argv[]) {
     g_test_add_data_func("/bind/implicit_bind_stream_nonblock",
                          GUINT_TO_POINTER(SOCK_STREAM | SOCK_NONBLOCK),
                          &_test_implicit_bind);
-    g_test_run();
-    return EXIT_SUCCESS;
+    return g_test_run();
 }
