@@ -141,7 +141,7 @@ void shim_enableInterposition() {
 }
 
 bool shim_interpositionEnabled() {
-    return _using_interpose_preload && !*_shim_disable_interposition();
+    return !*_shim_disable_interposition();
 }
 
 bool shim_use_syscall_handler() { return _using_shim_syscall_handler; }
