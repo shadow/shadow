@@ -9,10 +9,11 @@ type SleepFn<'a> = (fn(u32), &'a str);
 type TimeFn<'a> = (fn() -> std::time::Duration, &'a str);
 
 fn main() {
-    let sleep_fns: [SleepFn; 3] = [
+    let sleep_fns: [SleepFn; 4] = [
         (sleep, "sleep"),
         (usleep, "usleep"),
         (nanosleep, "nanosleep"),
+        (clock_nanosleep, "clock_nanosleep"),
     ];
     let time_fns: [TimeFn; 2] = [
         (call_clock_gettime, "call_clock_gettime"),
@@ -73,6 +74,18 @@ fn nanosleep(seconds: u32) {
     let rv;
     unsafe {
         rv = libc::nanosleep(&stop, std::ptr::null_mut());
+    }
+    assert_eq!(rv, 0);
+}
+
+fn clock_nanosleep(seconds: u32) {
+    let stop = libc::timespec {
+        tv_sec: seconds as i64,
+        tv_nsec: 0,
+    };
+    let rv;
+    unsafe {
+        rv = libc::clock_nanosleep(libc::CLOCK_MONOTONIC, 0, &stop, std::ptr::null_mut());
     }
     assert_eq!(rv, 0);
 }
