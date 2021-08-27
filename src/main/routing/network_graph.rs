@@ -629,7 +629,13 @@ mod export {
         let config = unsafe { config.as_ref() }.unwrap();
 
         match load_network_graph(config.network.graph.as_ref().unwrap()) {
-            Ok(graph_str) => Box::into_raw(Box::new(NetworkGraph::parse(&graph_str).unwrap())),
+            Ok(graph_str) => match NetworkGraph::parse(&graph_str) {
+                Ok(graph) => Box::into_raw(Box::new(graph)),
+                Err(err) => {
+                    error!("{}", err);
+                    std::ptr::null_mut()
+                }
+            },
             Err(err) => {
                 error!("{}", err);
                 std::ptr::null_mut()
