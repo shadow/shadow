@@ -77,6 +77,11 @@ SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
     trace("syscallhandler_clock_gettime with %d %p", clk_id,
           GUINT_TO_POINTER(args->args[1].as_ptr.val));
 
+    if (clk_id == CLOCK_PROCESS_CPUTIME_ID || clk_id == CLOCK_THREAD_CPUTIME_ID) {
+        warning("Unsupported clock ID %d during gettime", clk_id);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+    }
+
     /* Make sure they didn't pass a NULL pointer. */
     if (!args->args[1].as_ptr.val) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
