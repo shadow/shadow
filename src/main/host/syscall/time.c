@@ -25,15 +25,22 @@ static EmulatedTime _syscallhandler_getEmulatedTime() {
     return worker_getEmulatedTime();
 }
 
-///////////////////////////////////////////////////////////
-// System Calls
-///////////////////////////////////////////////////////////
+static SysCallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clockid_t clock_id,
+                                                      int flags, PluginPtr request,
+                                                      PluginPtr remainder) {
+    if (clock_id == CLOCK_PROCESS_CPUTIME_ID || clock_id == CLOCK_THREAD_CPUTIME_ID) {
+        warning("Unsupported clock ID %d during nanosleep", clock_id);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+    }
 
-SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
-                                       const SysCallArgs* args) {
+    if (flags != 0) {
+        warning("Unsupported flag %d during nanosleep", flags);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+    }
+
     /* Grab the arg from the syscall register. */
     struct timespec req;
-    int rv = process_readTimespec(sys->process, &req, args->args[0].as_ptr);
+    int rv = process_readTimespec(sys->process, &req, request);
     if (rv < 0) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
     }
@@ -71,9 +78,30 @@ SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys,
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
 
+///////////////////////////////////////////////////////////
+// System Calls
+///////////////////////////////////////////////////////////
+
+SysCallReturn syscallhandler_nanosleep(SysCallHandler* sys, const SysCallArgs* args) {
+    PluginPtr req = args->args[0].as_ptr;
+    PluginPtr rem = args->args[1].as_ptr;
+    // from man 2 nanosleep:
+    //   OSIX.1 specifies that nanosleep() should measure time against the CLOCK_REALTIME clock.
+    //   However, Linux measures the time using the CLOCK_MONOTONIC clock.
+    return _syscallhandler_nanosleep_helper(sys, CLOCK_MONOTONIC, 0, req, rem);
+}
+
+SysCallReturn syscallhandler_clock_nanosleep(SysCallHandler* sys, const SysCallArgs* args) {
+    clockid_t clock_id = args->args[0].as_i64;
+    int flags = args->args[1].as_i64;
+    PluginPtr req = args->args[2].as_ptr;
+    PluginPtr rem = args->args[3].as_ptr;
+    return _syscallhandler_nanosleep_helper(sys, clock_id, flags, req, rem);
+}
+
 SysCallReturn syscallhandler_clock_gettime(SysCallHandler* sys,
                                            const SysCallArgs* args) {
-    clockid_t clk_id = args->args[0].as_u64;
+    clockid_t clk_id = args->args[0].as_i64;
     trace("syscallhandler_clock_gettime with %d %p", clk_id,
           GUINT_TO_POINTER(args->args[1].as_ptr.val));
 

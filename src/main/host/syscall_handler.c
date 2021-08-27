@@ -265,6 +265,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(bind);
         HANDLE(brk);
         HANDLE(clock_gettime);
+        HANDLE(clock_nanosleep);
         HANDLE(clone);
         HANDLE_RUST(close);
         HANDLE(connect);
