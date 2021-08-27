@@ -417,6 +417,11 @@ static int _syscallhandler_setSocketOptHelper(SysCallHandler* sys, Socket* sock,
             trace("setsockopt SO_KEEPALIVE not yet implemented");
             return 0;
         }
+        case SO_BROADCAST: {
+            // TODO implement this, pkg.go.dev/net uses it
+            trace("setsockopt SO_BROADCAST not yet implemented");
+            return 0;
+        }
         default: {
             warning("setsockopt on level SOL_SOCKET called with unsupported "
                     "option %i",
