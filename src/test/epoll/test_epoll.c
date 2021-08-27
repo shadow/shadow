@@ -232,7 +232,5 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/epoll/epoll_pipe_edgetrigger", _test_pipe_edgetrigger);
     // TODO: expand testing epoll on files, sockets, timerfd?
     // Note that the timerfd test already uses epoll extensively.
-    g_test_run();
-
-    return 0;
+    return g_test_run();
 }
