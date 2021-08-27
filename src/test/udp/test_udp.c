@@ -218,7 +218,7 @@ int main(int argc, char* argv[]) {
     };
 
     g_test_add_data_func("/udp/sendto_one_byte", &test_params, test_sendto_one_byte);
-    g_test_run();
+    int rv = g_test_run();
     g_strfreev(addr_parts);
-    return EXIT_SUCCESS;
+    return rv;
 }

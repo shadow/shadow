@@ -385,5 +385,5 @@ int main(int argc, char** argv) {
         g_test_add_func("/futex/wait_bitset", _futex_wait_bitset_test);
     }
 
-    g_test_run();
+    return g_test_run();
 }
