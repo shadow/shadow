@@ -152,9 +152,9 @@ static SimulationTime _controller_getMinTimeJump(Controller* controller) {
     return minJumpTime;
 }
 
-void controller_updateMinTimeJump(Controller* controller, gdouble minPathLatency) {
+void controller_updateMinTimeJumpNs(Controller* controller, uint64_t minPathLatencyNs) {
     MAGIC_ASSERT(controller);
-    SimulationTime minPathLatencySimTime = ((SimulationTime)minPathLatency) * SIMTIME_ONE_MILLISECOND;
+    SimulationTime minPathLatencySimTime = minPathLatencyNs * SIMTIME_ONE_NANOSECOND;
 
     if (controller->nextMinJumpTime == 0 || minPathLatencySimTime < controller->nextMinJumpTime) {
         utility_assert(minPathLatencySimTime > 0);
@@ -456,6 +456,9 @@ gint controller_run(Controller* controller) {
         error("Unable to generate topology");
         return 1;
     }
+
+    controller_updateMinTimeJumpNs(
+        controller, routinginfo_smallestLatencyNs(controller->routingInfo));
 
     /* we don't need the network graph anymore, so free it to save memory */
     networkgraph_free(controller->graph);
