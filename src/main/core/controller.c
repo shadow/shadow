@@ -197,7 +197,6 @@ static void _controller_initializeTimeWindows(Controller* controller) {
         controller->executeWindowStart = 0;
         SimulationTime jump = _controller_getMinTimeJump(controller);
         controller->executeWindowEnd = jump;
-        controller->nextMinJumpTime = jump;
     } else {
         /* single threaded, we are the only worker */
         controller->executeWindowStart = 0;
@@ -496,7 +495,9 @@ gboolean controller_managerFinishedCurrentRound(Controller* controller,
      * until they have all notified us that they are finished */
 
     /* update our detected min jump time */
-    controller->minJumpTime = controller->nextMinJumpTime;
+    if (controller->nextMinJumpTime != 0) {
+        controller->minJumpTime = controller->nextMinJumpTime;
+    }
 
     /* update the next interval window based on next event times */
     SimulationTime newStart = minNextEventTime;
