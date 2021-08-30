@@ -97,7 +97,7 @@ static void _check_mitigations() {
 
 static gint _main_helper(CliOptions* options, ConfigOptions* config, gchar* argv[]) {
     /* start off with some status messages */
-    gchar* startupStr = g_strdup_printf("Starting %s with GLib v%u.%u.%u", SHADOW_VERSION_STRING,
+    gchar* startupStr = g_strdup_printf("Starting Shadow %s with GLib v%u.%u.%u", SHADOW_VERSION_STRING,
                                         (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION,
                                         (guint)GLIB_MICRO_VERSION);
 
@@ -140,7 +140,7 @@ static gint _main_helper(CliOptions* options, ConfigOptions* config, gchar* argv
         shadowcontroller = NULL;
     }
 
-    info("%s simulation was shut down cleanly, returning code %i", SHADOW_VERSION_STRING,
+    info("Shadow %s simulation was shut down cleanly, returning code %i", SHADOW_VERSION_STRING,
          returnCode);
     return returnCode;
 }
@@ -183,7 +183,7 @@ gint main_runShadow(gint argc, gchar* argv[]) {
     }
 
     if (clioptions_getShowBuildInfo(options)) {
-        g_printerr("%s running GLib v%u.%u.%u and IGraph v%s\n%s\n%s\n", SHADOW_VERSION_STRING,
+        g_printerr("Shadow %s running GLib v%u.%u.%u and IGraph v%s\n%s\n%s\n", SHADOW_VERSION_STRING,
                    (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
 #if defined(IGRAPH_VERSION)
                    IGRAPH_VERSION,
