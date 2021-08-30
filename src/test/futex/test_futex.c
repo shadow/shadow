@@ -42,12 +42,16 @@ typedef struct {
 static void* _futex_wait_test_child(void* void_arg) {
     FutexWaitTestChildArg* arg = void_arg;
     atomic_store(&arg->child_started, true);
-    trace("Child about to wait");
-    assert_true_errno(!syscall(SYS_futex, &arg->futex, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0) ||
-                      (errno == EAGAIN && !running_in_shadow()));
+    do {
+        trace("Child about to wait");
+        long rv = syscall(SYS_futex, &arg->futex, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0);
+        if (rv != 0) {
+            // Failed to wait because futex is already available.
+            assert_errno_is(EAGAIN);
+            g_assert_cmpint(atomic_load(&arg->futex), ==, AVAILABLE);
+        }
+    } while (atomic_load(&arg->futex) != AVAILABLE);
     trace("Child returned from wait");
-    __sync_synchronize();
-    g_assert_cmpint(atomic_load(&arg->futex), ==, AVAILABLE);
     atomic_store(&arg->child_finished, true);
     trace("Child finished");
     return NULL;
@@ -162,12 +166,18 @@ typedef struct {
 static void* _futex_wait_bitset_test_child(void* void_arg) {
     FutexWaitBitsetTestChildArg* arg = void_arg;
     atomic_store(&arg->child_started, true);
-    trace("Child %d about to wait", arg->id);
-    assert_true_errno(
-        !syscall(SYS_futex, arg->futex, FUTEX_WAIT_BITSET, UNAVAILABLE, NULL, NULL, 1 << arg->id) ||
-        (errno == EAGAIN && !running_in_shadow()));
-    trace("Child %d returned from wait", arg->id);
-    g_assert_cmpint(atomic_load(arg->futex), ==, AVAILABLE);
+    do {
+        trace("Child %d about to wait", arg->id);
+        long rv = syscall(
+            SYS_futex, arg->futex, FUTEX_WAIT_BITSET, UNAVAILABLE, NULL, NULL, 1 << arg->id);
+        if (rv != 0) {
+            g_assert_cmpint(rv, ==, -1);
+            assert_errno_is(EAGAIN);
+            g_assert_cmpint(atomic_load(arg->futex), ==, AVAILABLE);
+        }
+        trace("Child %d returned from wait", arg->id);
+    } while (atomic_load(arg->futex) != AVAILABLE);
+    trace("Child %d done waiting", arg->id);
     atomic_store(&arg->child_finished, true);
     trace("Child finished");
     return NULL;
