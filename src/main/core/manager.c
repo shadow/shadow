@@ -604,15 +604,6 @@ gboolean manager_schedulerIsRunning(Manager* manager) {
     return scheduler_isRunning(manager->scheduler);
 }
 
-void manager_updateMinTimeJump(Manager* manager, gdouble minPathLatency) {
-    MAGIC_ASSERT(manager);
-    _manager_lock(manager);
-    /* this update will get applied at the next round update, so all threads
-     * running now still have a valid round window */
-    controller_updateMinTimeJump(manager->controller, minPathLatency);
-    _manager_unlock(manager);
-}
-
 static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
     MAGIC_ASSERT(manager);
 

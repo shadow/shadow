@@ -91,7 +91,6 @@ gdouble worker_getReliability(GQuark sourceHostID, GQuark destinationHostID);
 bool worker_isRoutable(Address* sourceAddress, Address* destinationAddress);
 void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAddress);
 
-void worker_updateMinTimeJump(gdouble minPathLatency);
 void worker_setCurrentTime(SimulationTime time);
 gboolean worker_isFiltered(LogLevel level);
 

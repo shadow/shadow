@@ -59,8 +59,6 @@ SimulationTime manager_getBootstrapEndTime(Manager* manager);
 void manager_incrementPluginError(Manager* manager);
 const gchar* manager_getHostsRootPath(Manager* manager);
 
-void manager_updateMinTimeJump(Manager* manager, gdouble minPathLatency);
-
 void manager_run(Manager*);
 gboolean manager_schedulerIsRunning(Manager* manager);
 

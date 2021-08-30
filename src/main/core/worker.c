@@ -643,10 +643,6 @@ void worker_incrementPacketCount(Address* sourceAddress, Address* destinationAdd
     manager_incrementPacketCount(_worker_pool()->manager, sourceAddress, destinationAddress);
 }
 
-void worker_updateMinTimeJump(gdouble minPathLatency) {
-    manager_updateMinTimeJump(_worker_pool()->manager, minPathLatency);
-}
-
 gboolean worker_isFiltered(LogLevel level) { return !logger_isEnabled(logger_getDefault(), level); }
 
 void worker_incrementPluginError() { manager_incrementPluginError(_worker_pool()->manager); }

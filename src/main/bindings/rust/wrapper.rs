@@ -1485,9 +1485,6 @@ extern "C" {
     );
 }
 extern "C" {
-    pub fn worker_updateMinTimeJump(minPathLatency: gdouble);
-}
-extern "C" {
     pub fn worker_isFiltered(level: LogLevel) -> gboolean;
 }
 extern "C" {

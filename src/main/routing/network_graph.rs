@@ -470,6 +470,10 @@ impl<T: Eq + Hash + std::fmt::Display + Clone + Copy> RoutingInfo<T> {
             );
         }
     }
+
+    pub fn get_smallest_latency_ns(&self) -> u64 {
+        self.paths.values().map(|x| x.latency_ns).min().unwrap()
+    }
 }
 
 /// Read and decompress a file.
@@ -882,5 +886,11 @@ mod export {
             .unwrap();
 
         routing_info.increment_packet_count(src, dst)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn routinginfo_smallestLatencyNs(routing_info: *mut RoutingInfo<u32>) -> u64 {
+        let routing_info = unsafe { routing_info.as_mut() }.unwrap();
+        routing_info.get_smallest_latency_ns()
     }
 }

@@ -152,16 +152,18 @@ static SimulationTime _controller_getMinTimeJump(Controller* controller) {
     return minJumpTime;
 }
 
-void controller_updateMinTimeJump(Controller* controller, gdouble minPathLatency) {
+void controller_updateMinTimeJumpNs(Controller* controller, uint64_t minPathLatencyNs) {
     MAGIC_ASSERT(controller);
-    if (controller->nextMinJumpTime == 0 || minPathLatency < controller->nextMinJumpTime) {
-        utility_assert(minPathLatency > 0.0f);
-        SimulationTime oldJumpMS = controller->nextMinJumpTime;
-        controller->nextMinJumpTime = ((SimulationTime)minPathLatency) * SIMTIME_ONE_MILLISECOND;
+    SimulationTime minPathLatencySimTime = minPathLatencyNs * SIMTIME_ONE_NANOSECOND;
+
+    if (controller->nextMinJumpTime == 0 || minPathLatencySimTime < controller->nextMinJumpTime) {
+        utility_assert(minPathLatencySimTime > 0);
+        SimulationTime oldJumpNs = controller->nextMinJumpTime;
+        controller->nextMinJumpTime = minPathLatencySimTime;
         debug("updated topology minimum time jump from %" G_GUINT64_FORMAT " to %" G_GUINT64_FORMAT
               " nanoseconds; "
               "the minimum config override is %s (%" G_GUINT64_FORMAT " nanoseconds)",
-              oldJumpMS, controller->nextMinJumpTime,
+              oldJumpNs, controller->nextMinJumpTime,
               controller->minJumpTimeConfig > 0 ? "set" : "not set", controller->minJumpTimeConfig);
     }
 }
@@ -195,7 +197,6 @@ static void _controller_initializeTimeWindows(Controller* controller) {
         controller->executeWindowStart = 0;
         SimulationTime jump = _controller_getMinTimeJump(controller);
         controller->executeWindowEnd = jump;
-        controller->nextMinJumpTime = jump;
     } else {
         /* single threaded, we are the only worker */
         controller->executeWindowStart = 0;
@@ -456,6 +457,9 @@ gint controller_run(Controller* controller) {
         return 1;
     }
 
+    controller_updateMinTimeJumpNs(
+        controller, routinginfo_smallestLatencyNs(controller->routingInfo));
+
     /* we don't need the network graph anymore, so free it to save memory */
     networkgraph_free(controller->graph);
     controller->graph = NULL;
@@ -494,7 +498,9 @@ gboolean controller_managerFinishedCurrentRound(Controller* controller,
      * until they have all notified us that they are finished */
 
     /* update our detected min jump time */
-    controller->minJumpTime = controller->nextMinJumpTime;
+    if (controller->nextMinJumpTime != 0) {
+        controller->minJumpTime = controller->nextMinJumpTime;
+    }
 
     /* update the next interval window based on next event times */
     SimulationTime newStart = minNextEventTime;
