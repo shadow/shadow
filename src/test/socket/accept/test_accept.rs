@@ -131,30 +131,8 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_correctness <sleep=true>"),
-                        move || {
-                            test_correctness(
-                                accept_fn,
-                                sock_flag,
-                                accept_flag,
-                                /* use_sleep= */ true,
-                            )
-                        },
+                        move || test_correctness(accept_fn, sock_flag, accept_flag),
                         set![TestEnv::Libc, TestEnv::Shadow],
-                    ),
-                    // while running in shadow, you currently need a sleep before calling accept()
-                    // to allow shadow to process events (specifically the event for the SYN packet
-                    // from connect())
-                    test_utils::ShadowTest::new(
-                        &append_args("test_correctness <sleep=false>"),
-                        move || {
-                            test_correctness(
-                                accept_fn,
-                                sock_flag,
-                                accept_flag,
-                                /* use_sleep= */ false,
-                            )
-                        },
-                        set![TestEnv::Libc],
                     ),
                 ];
 
@@ -734,7 +712,6 @@ fn test_correctness(
     accept_fn: AcceptFn,
     sock_flag: libc::c_int,
     accept_flag: libc::c_int,
-    use_sleep: bool,
 ) -> Result<(), String> {
     let fd_client = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM | sock_flag, 0) };
     let fd_server = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM | sock_flag, 0) };
@@ -785,14 +762,15 @@ fn test_correctness(
             std::mem::size_of_val(&server_addr) as u32,
         )
     };
+
     assert!(rv == 0 || (rv == -1 && test_utils::get_errno() == libc::EINPROGRESS));
 
     // shadow needs to run events, otherwise the accept call won't know it
     // has an incoming connection (SYN packet)
-    if use_sleep {
-        let rv = unsafe { libc::usleep(10000) };
-        assert_eq!(rv, 0);
-    }
+    // we assume that we're connected after the sleep to avoid depending on
+    // select()/poll() and getsockopt()
+    let rv = unsafe { libc::usleep(10000) };
+    assert_eq!(rv, 0);
 
     // accept() may mutate addr and addr_len
     let mut args = AcceptArguments {
