@@ -701,4 +701,6 @@ void routinginfo_incrementPacketCount(struct RoutingInfo_u32 *routing_info,
                                       in_addr_t src,
                                       in_addr_t dst);
 
+uint64_t routinginfo_smallestLatencyNs(struct RoutingInfo_u32 *routing_info);
+
 #endif /* main_bindings_h */
