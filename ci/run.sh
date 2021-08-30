@@ -98,7 +98,12 @@ run_one () {
     CC="$2"
     BUILDTYPE="$3"
 
-    TAG="shadow:${CONTAINER/:/-}-$CC-$BUILDTYPE"
+    # Replace the single ':' with a '-'
+    CONTAINER_FOR_TAG=${CONTAINER/:/-}
+    # Replace all forward slashes with '-'
+    CONTAINER_FOR_TAG="${CONTAINER_FOR_TAG//\//-}"
+
+    TAG="shadow:$CONTAINER_FOR_TAG-$CC-$BUILDTYPE"
 
     if [ "${BUILD_IMAGES}" == "1" ]; then
         echo "Building $TAG"
