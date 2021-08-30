@@ -271,11 +271,9 @@ static int _futex_wait(atomic_int* word) {
             break;
         }
         long res = syscall(SYS_futex, word, FUTEX_WAIT, val, NULL, NULL, 0);
-        if (res == -1 && errno != EAGAIN) {
-            char errbuf[32] = {0};
-            strerror_r(errno, errbuf, 32);
-            error("FUTEX_WAIT syscall failed: error %i: %s", errno, errbuf);
-            return EXIT_FAILURE;
+        if (res != 0) {
+            g_assert_cmpint(res,==,-1);
+            assert_errno_is(EAGAIN);
         }
     }
 
@@ -288,12 +286,7 @@ static int _futex_post(atomic_int* word) {
 
     if (prev_val == UNAVAILABLE) {
         long res = syscall(SYS_futex, word, FUTEX_WAKE, AVAILABLE, NULL, NULL, 0);
-        if (res == -1) {
-            char errbuf[32] = {0};
-            strerror_r(errno, errbuf, 32);
-            error("FUTEX_WAKE syscall failed: error %i: %s", errno, errbuf);
-            return EXIT_FAILURE;
-        }
+        assert_nonneg_errno(res);
     }
 
     return EXIT_SUCCESS;
