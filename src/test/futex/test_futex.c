@@ -7,6 +7,7 @@
 #include <glib.h>
 #include <linux/futex.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,36 +25,34 @@
 #define AVAILABLE 1
 
 // Spins until `c` becomes true.
-static void _wait_for_condition(bool* c) {
+static void _wait_for_condition(atomic_bool* c) {
     // Prevent reads from being done
-    while (!__atomic_load_n(c, __ATOMIC_ACQUIRE)) {
+    while (!atomic_load(c)) {
         // Wait a bit.
         usleep(1);
     }
 }
 
-// Set `c` to true.
-static void _set_condition(bool* c) { __atomic_store_n(c, true, __ATOMIC_RELEASE); }
-
-// Get `c`'s value.
-static bool _get_condition(bool* c) { return __atomic_load_n(c, __ATOMIC_ACQUIRE); }
-
 typedef struct {
-    bool child_started;
-    int futex;
-    bool child_finished;
+    atomic_int futex;
+    atomic_bool child_started;
+    atomic_bool child_finished;
 } FutexWaitTestChildArg;
 
 static void* _futex_wait_test_child(void* void_arg) {
     FutexWaitTestChildArg* arg = void_arg;
-    _set_condition(&arg->child_started);
-    trace("Child about to wait");
-    assert_true_errno(!syscall(SYS_futex, &arg->futex, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0) ||
-                      (errno == EAGAIN && !running_in_shadow()));
+    atomic_store(&arg->child_started, true);
+    do {
+        trace("Child about to wait");
+        long rv = syscall(SYS_futex, &arg->futex, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0);
+        if (rv != 0) {
+            // Failed to wait because futex is already available.
+            assert_errno_is(EAGAIN);
+            g_assert_cmpint(atomic_load(&arg->futex), ==, AVAILABLE);
+        }
+    } while (atomic_load(&arg->futex) != AVAILABLE);
     trace("Child returned from wait");
-    __sync_synchronize();
-    g_assert_cmpint(arg->futex, ==, AVAILABLE);
-    _set_condition(&arg->child_finished);
+    atomic_store(&arg->child_finished, true);
     trace("Child finished");
     return NULL;
 }
@@ -69,11 +68,11 @@ static void _futex_wait_test() {
     _wait_for_condition(&arg.child_started);
 
     // Verify that it *hasn't* woken yet.
-    g_assert_true(!_get_condition(&arg.child_finished));
+    g_assert_true(!atomic_load(&arg.child_finished));
 
     // Wake the child. There's no way to guarantee that the child is already asleep
     // on the mutex, so we need to loop.
-    int woken = 0;
+    long woken = 0;
     while (1) {
         trace("Waking child\n");
         woken = syscall(SYS_futex, &arg.futex, FUTEX_WAKE, 1, NULL, NULL, 0);
@@ -88,7 +87,7 @@ static void _futex_wait_test() {
     }
 
     // Flip the flag to let the child finish executing.
-    g_assert_true(__sync_bool_compare_and_swap(&arg.futex, UNAVAILABLE, AVAILABLE));
+    g_assert_cmpint(atomic_exchange(&arg.futex, AVAILABLE), ==, UNAVAILABLE);
 
     // The child may or may not have gone asleep since the previous wake-up. Wake it up.
     woken = syscall(SYS_futex, &arg.futex, FUTEX_WAKE, 1, NULL, NULL, 0);
@@ -158,29 +157,35 @@ static void _futex_wait_bitset_timeout_test() {
 }
 
 typedef struct {
-    bool child_started;
-    bool child_finished;
+    atomic_bool child_started;
+    atomic_bool child_finished;
     int id;
-    int* futex;
+    atomic_int* futex;
 } FutexWaitBitsetTestChildArg;
 
 static void* _futex_wait_bitset_test_child(void* void_arg) {
     FutexWaitBitsetTestChildArg* arg = void_arg;
-    _set_condition(&arg->child_started);
-    trace("Child %d about to wait", arg->id);
-    assert_true_errno(
-        !syscall(SYS_futex, arg->futex, FUTEX_WAIT_BITSET, UNAVAILABLE, NULL, NULL, 1 << arg->id) ||
-        (errno == EAGAIN && !running_in_shadow()));
-    trace("Child %d returned from wait", arg->id);
-    g_assert_cmpint(__atomic_load_n(arg->futex, __ATOMIC_ACQUIRE), ==, AVAILABLE);
-    _set_condition(&arg->child_finished);
+    atomic_store(&arg->child_started, true);
+    do {
+        trace("Child %d about to wait", arg->id);
+        long rv = syscall(
+            SYS_futex, arg->futex, FUTEX_WAIT_BITSET, UNAVAILABLE, NULL, NULL, 1 << arg->id);
+        if (rv != 0) {
+            g_assert_cmpint(rv, ==, -1);
+            assert_errno_is(EAGAIN);
+            g_assert_cmpint(atomic_load(arg->futex), ==, AVAILABLE);
+        }
+        trace("Child %d returned from wait", arg->id);
+    } while (atomic_load(arg->futex) != AVAILABLE);
+    trace("Child %d done waiting", arg->id);
+    atomic_store(&arg->child_finished, true);
     trace("Child finished");
     return NULL;
 }
 
 static void _futex_wait_bitset_test() {
     FutexWaitBitsetTestChildArg arg[5];
-    int futex = UNAVAILABLE;
+    atomic_int futex = UNAVAILABLE;
 
     // Get all 5 children waiting.
     for (int i = 0; i < 5; ++i) {
@@ -202,7 +207,7 @@ static void _futex_wait_bitset_test() {
 
     // Wake only #2. There's no way to guarantee that its already asleep on the
     // mutex, so we need to loop.
-    int woken = 0;
+    long woken = 0;
     while (1) {
         trace("Waking child\n");
         woken = syscall(SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, 1 << 2);
@@ -217,7 +222,7 @@ static void _futex_wait_bitset_test() {
     }
 
     // Release the futex.
-    __atomic_store_n(&futex, AVAILABLE, __ATOMIC_RELEASE);
+    atomic_store(&futex, AVAILABLE);
 
     // Ensure #2 is now awake.
     woken = syscall(SYS_futex, &futex, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, 1 << 2);
@@ -263,27 +268,22 @@ static void _futex_wait_bitset_test() {
 #define AVAILABLE 1
 
 // The futex word used to synchronize threads
-int futex_word1 = UNAVAILABLE; // initial state is unavailable
-int futex_word2 = AVAILABLE;   // initial state is available
+atomic_int futex_word1 = UNAVAILABLE; // initial state is unavailable
+atomic_int futex_word2 = AVAILABLE;   // initial state is available
 int is_child_finished = 0;
 void* child_result = NULL;
 
 // Acquire: wait for the futex pointed to by `word` to become 1, then set to 0
-static int _futex_wait(int* word) {
+static int _futex_wait(atomic_int* word) {
     while (1) {
-        // Args are: ptr, expected old val, desired new val
-        bool is_available = AVAILABLE == __sync_val_compare_and_swap(word, AVAILABLE, UNAVAILABLE);
-
-        if (is_available) {
+        int val = AVAILABLE;
+        if (atomic_compare_exchange_strong(word, &val, UNAVAILABLE)) {
             break;
-        } else {
-            int res = syscall(SYS_futex, word, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0);
-            if (res == -1 && errno != EAGAIN) {
-                char errbuf[32] = {0};
-                strerror_r(errno, errbuf, 32);
-                panic("FUTEX_WAIT syscall failed: error %i: %s", errno, errbuf);
-                return EXIT_FAILURE;
-            }
+        }
+        long res = syscall(SYS_futex, word, FUTEX_WAIT, val, NULL, NULL, 0);
+        if (res != 0) {
+            g_assert_cmpint(res,==,-1);
+            assert_errno_is(EAGAIN);
         }
     }
 
@@ -291,26 +291,21 @@ static int _futex_wait(int* word) {
 }
 
 // Release: if the futex pointed to by `word` is 0, set to 1 and wake blocked waiters
-static int _futex_post(int* word) {
-    bool is_posted = UNAVAILABLE == __sync_val_compare_and_swap(word, UNAVAILABLE, AVAILABLE);
+static int _futex_post(atomic_int* word) {
+    bool prev_val = atomic_exchange(word, AVAILABLE);
 
-    if (is_posted) {
-        int res = syscall(SYS_futex, word, FUTEX_WAKE, AVAILABLE, NULL, NULL, 0);
-        if (res == -1) {
-            char errbuf[32] = {0};
-            strerror_r(errno, errbuf, 32);
-            panic("FUTEX_WAKE syscall failed: error %i: %s", errno, errbuf);
-            return EXIT_FAILURE;
-        }
+    if (prev_val == UNAVAILABLE) {
+        long res = syscall(SYS_futex, word, FUTEX_WAKE, AVAILABLE, NULL, NULL, 0);
+        assert_nonneg_errno(res);
     }
 
     return EXIT_SUCCESS;
 }
 
-static int _run_futex_loop(int* word1, int* word2, int slow) {
-    int threadID = 0;
+static int _run_futex_loop(atomic_int* word1, atomic_int* word2, int slow) {
+    pid_t threadID = 0;
 #ifdef SYS_gettid
-    threadID = syscall(SYS_gettid);
+    threadID = (pid_t)syscall(SYS_gettid);
 #endif
 
     for (int j = 1; j <= NUM_LOOPS; j++) {
