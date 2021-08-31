@@ -11,7 +11,21 @@ general:
   stop_time: 2 min
 network:
   graph:
-    type: 1_gbit_switch
+    type: gml
+    inline: |
+      graph [
+        node [
+          id 0
+          host_bandwidth_down "140 Mbit"
+          host_bandwidth_up "18 Mbit"
+        ]
+        edge [
+          source 0
+          target 0
+          latency "50 ms"
+          packet_loss 0.01
+        ]
+      ]
 hosts:
   server:
     network_node_id: 0
@@ -392,7 +406,7 @@ non-deterministic use of OpenSSL.
 Default: false  
 Type: Bool
 
-Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7),
+Use the `SCHED_FIFO` scheduler. Requires `CAP_SYS_NICE`. See sched(7),
 capabilities(7).
 
 #### `experimental.use_shim_syscall_handler`
@@ -546,6 +560,18 @@ Default: ""
 Type: String OR Array of String
 
 Process arguments.
+
+The arguments can be specified as a string in a shell command-line format:
+
+```yaml
+args: "--user-agent 'Mozilla/5.0 (compatible; ...)' http://myserver:8080"
+```
+
+Or as an array of strings:
+
+```yaml
+args: ['--user-agent', 'Mozilla/5.0 (compatible; ...)', 'http://myserver:8080']
+```
 
 #### `hosts.<hostname>.processes[*].environment`
 
