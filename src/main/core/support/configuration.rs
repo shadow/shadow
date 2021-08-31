@@ -23,7 +23,8 @@ const END_HELP_TEXT: &str = "\
 
 /// Run real applications over simulated networks.
 #[derive(Debug, Clone, Clap)]
-#[clap(name = "Shadow", version = std::env!("SHADOW_VERSION"), after_help = END_HELP_TEXT)]
+#[clap(name = "Shadow", after_help = END_HELP_TEXT)]
+#[clap(version = std::option_env!("SHADOW_VERSION").unwrap_or(std::env!("CARGO_PKG_VERSION")))]
 pub struct CliOptions {
     /// Path to the Shadow configuration file. Use '-' to read from stdin
     #[clap(required_unless_present_any(&["show-build-info", "shm-cleanup"]))]
