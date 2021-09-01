@@ -82,14 +82,20 @@ static inline int _hash_table_lookup(GHashTable* htab, gpointer key_value) {
 
 /*
  * This function creates a total ordering in a list of CPUInfo structs.
+ *
+ * Return Values
+ * ----------------------------
+ *  0  if LHS == RHS
+ *  -1 if the LHS cpu is better
+ *  1  if the RHS cpu is better
  */
 static int _cpuinfo_compare(const CPUInfo* lhs, const CPUInfo* rhs) {
     assert(lhs && rhs);
 
     {
         // Always prefer a CPU with lower load
-        int cpu_load_lhs = _hash_table_lookup(_global_platform_info.core_loads, _cpu_key(lhs));
-        int cpu_load_rhs = _hash_table_lookup(_global_platform_info.core_loads, _cpu_key(rhs));
+        int cpu_load_lhs = _hash_table_lookup(_global_platform_info.cpu_loads, _cpu_key(lhs));
+        int cpu_load_rhs = _hash_table_lookup(_global_platform_info.cpu_loads, _cpu_key(rhs));
         if (cpu_load_lhs != cpu_load_rhs) {
             return cpu_load_lhs < cpu_load_rhs ? -1 : 1;
         }
@@ -105,7 +111,8 @@ static int _cpuinfo_compare(const CPUInfo* lhs, const CPUInfo* rhs) {
     }
 
     {
-        // If core loads are the same, prefer a *hotter* socket for locality
+        // If core loads are the same, prefer a more loaded socket for better
+        // locality
         int socket_load_lhs =
             _hash_table_lookup(_global_platform_info.socket_loads, _socket_key(lhs));
         int socket_load_rhs =
@@ -116,7 +123,8 @@ static int _cpuinfo_compare(const CPUInfo* lhs, const CPUInfo* rhs) {
     }
 
     {
-        // If socket heat is the same, prefer a hotter node for locality
+        // If socket loads are the same, prefer a more loaded node for better
+        // locality
         int node_load_lhs = _hash_table_lookup(_global_platform_info.node_loads, _node_key(lhs));
         int node_load_rhs = _hash_table_lookup(_global_platform_info.node_loads, _node_key(rhs));
         if (node_load_lhs != node_load_rhs) {
