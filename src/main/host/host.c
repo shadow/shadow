@@ -579,6 +579,12 @@ gboolean host_isInterfaceAvailable(Host* host, ProtocolType type,
     return isAvailable;
 }
 
+in_port_t _host_incrementPort(in_port_t port, in_port_t port_on_overflow) {
+    uint16_t val = ntohs(port);
+    val = (val == UINT16_MAX) ? ntohs(port_on_overflow) : val + 1;
+    return htons(val);
+}
+
 static in_port_t _host_getRandomPort(Host* host) {
     gdouble randomFraction = random_nextDouble(host->random);
     gdouble numPotentialPorts = (gdouble)(UINT16_MAX - MIN_RANDOM_PORT);
@@ -619,14 +625,14 @@ in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
      * to a linear search to make sure we get a free port if we have one.
      * but start from a random port instead of the min. */
     in_port_t start = _host_getRandomPort(host);
-    in_port_t next = (start == UINT16_MAX) ? MIN_RANDOM_PORT : start + 1;
+    in_port_t next = _host_incrementPort(start, htons(MIN_RANDOM_PORT));
     while(next != start) {
         /* this will check all interfaces in the case of INADDR_ANY */
         if (host_isInterfaceAvailable(
                 host, type, interfaceIP, next, peerIP, peerPort)) {
             return next;
         }
-        next = (next == UINT16_MAX) ? MIN_RANDOM_PORT : next + 1;
+        next = _host_incrementPort(next, htons(MIN_RANDOM_PORT));
     }
 
     gchar* peerIPStr = address_ipToNewString(peerIP);
