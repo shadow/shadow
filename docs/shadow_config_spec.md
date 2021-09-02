@@ -36,6 +36,8 @@ hosts:
   client:
     network_node_id: 0
     quantity: 20
+    options:
+      log_level: debug
     processes:
     - path: /usr/bin/curl
       args: server --silent
@@ -444,7 +446,8 @@ future.
 #### `host_defaults`
 
 Default options for all hosts. These options can also be overridden for each
-host individually.
+host individually in the host's [`hosts.<hostname>.options`](#hostshostnameoptions)
+section.
 
 #### `host_defaults.heartbeat_interval`
 
@@ -534,7 +537,17 @@ Network graph node ID to assign the host to.
 
 #### `hosts.<hostname>.options`
 
-See [`host_defaults`](#host_defaults).
+See [`host_defaults`](#host_defaults) for supported fields.
+
+Example:
+
+```yaml
+hosts:
+  client:
+    ...
+    options:
+      log_level: debug
+```
 
 #### `hosts.<hostname>.quantity`
 
