@@ -69,6 +69,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             test_short_addr,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
+        // don't test outside of shadow since the host will already have ports in use
+        test_utils::ShadowTest::new(
+            "test_all_ports_used",
+            test_all_ports_used,
+            set![TestEnv::Shadow],
+        ),
     ];
 
     // tests to repeat for different socket options
@@ -259,6 +265,70 @@ fn test_ipv4(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String> {
     };
 
     test_utils::run_and_close_fds(&[fd], || check_bind_call(&args, None))
+}
+
+// test binding to an unspecified port when all ports are already in use
+fn test_all_ports_used() -> Result<(), String> {
+    let mut fds_used = vec![];
+
+    fn inner(fds_used: &mut Vec<i32>) -> Result<(), String> {
+        // shadow will only assign ports >= 10_000 (MIN_RANDOM_PORT)
+        for port in 10_000..=u16::MAX {
+            let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
+            assert!(fd >= 0);
+
+            fds_used.push(fd);
+
+            let addr = libc::sockaddr_in {
+                sin_family: libc::AF_INET as u16,
+                sin_port: port.to_be(),
+                sin_addr: libc::in_addr {
+                    s_addr: libc::INADDR_LOOPBACK.to_be(),
+                },
+                sin_zero: [0; 8],
+            };
+
+            let args = BindArguments {
+                fd: fd,
+                addr: Some(LibcSockAddr::In(addr)),
+                addr_len: std::mem::size_of_val(&addr) as u32,
+            };
+
+            check_bind_call(&args, None).map_err(|e| format!("port {}: {}", port, e))?;
+        }
+
+        let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
+        assert!(fd >= 0);
+
+        fds_used.push(fd);
+
+        let addr = libc::sockaddr_in {
+            sin_family: libc::AF_INET as u16,
+            sin_port: 0u16.to_be(),
+            sin_addr: libc::in_addr {
+                s_addr: libc::INADDR_LOOPBACK.to_be(),
+            },
+            sin_zero: [0; 8],
+        };
+
+        let args = BindArguments {
+            fd: fd,
+            addr: Some(LibcSockAddr::In(addr)),
+            addr_len: std::mem::size_of_val(&addr) as u32,
+        };
+
+        // getting an unspecified port (port 0) should fail since all ports are in use
+        check_bind_call(&args, Some(libc::EADDRINUSE))
+    }
+
+    let rv = inner(&mut fds_used);
+
+    for fd in fds_used.into_iter() {
+        let rv_close = unsafe { libc::close(fd) };
+        assert_eq!(rv_close, 0, "Could not close fd {}", fd);
+    }
+
+    rv
 }
 
 // Docker does not support IPv6, so this test is not run
