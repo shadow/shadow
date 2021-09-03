@@ -33,10 +33,9 @@ struct _SysCallCondition {
     Process* proc;
     // The thread waiting for the signal
     Thread* thread;
-    // Whether the condition has *ever* been triggered. Used to prevent multiple
-    // signals from a single condition, even if its triggered multiple times or
-    // ways.
-    bool signalTriggered;
+    // Whether there is currently a signal triggered for the condition.
+    // Used to ensure there is only ever one signal scheduled at once.
+    bool signalPending;
     // Memory tracking
     gint referenceCount;
     MAGIC_DECLARE;
@@ -310,6 +309,11 @@ static void _syscallcondition_signal(Host* host, void* obj, void* arg) {
     bool wasTimeout = (bool)arg;
     MAGIC_ASSERT(cond);
 
+    // The signal callback is executing here and now. Setting to false allows
+    // the callback to be scheduled again if the condition isn't canceled
+    // (which it will be, if we decide to actually run the process below).
+    cond->signalPending = false;
+
 #ifdef DEBUG
     _syscallcondition_logListeningState(cond, "signaling while");
 #endif
@@ -323,6 +327,13 @@ static void _syscallcondition_signal(Host* host, void* obj, void* arg) {
 
         /* Deliver the signal to notify the process to continue. */
         process_continue(cond->proc, cond->thread);
+    } else {
+        // Spurious wakeup. Just return without running the process. The
+        // condition's listeners should still be installed, and now that we've
+        // flipped `signalPending`, they can schedule this signal again.
+#ifdef DEBUG
+        _syscallcondition_logListeningState(cond, "re-blocking");
+#endif
     }
 }
 
@@ -330,7 +341,7 @@ static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
                                                  bool wasTimeout) {
     MAGIC_ASSERT(cond);
 
-    if (cond->signalTriggered) {
+    if (cond->signalPending) {
         // Deliver one signal even if condition is triggered multiple times or
         // ways.
         return;
@@ -349,7 +360,7 @@ static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
     syscallcondition_ref(cond);
     task_unref(signalTask);
 
-    cond->signalTriggered = true;
+    cond->signalPending = true;
 }
 
 static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
