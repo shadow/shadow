@@ -186,13 +186,24 @@ void host_setup(Host* host, DNS* dns, guint rawCPUFreq, const gchar* hostRootPat
     guint64 bwDownKiBps = host->params.requestedBwDownBits / (8 * 1024);
     guint64 bwUpKiBps = host->params.requestedBwUpBits / (8 * 1024);
 
+    char* pcapDir = NULL;
+    if (host->params.pcapDir != NULL) {
+        if (g_path_is_absolute(host->params.pcapDir)) {
+            pcapDir = g_strdup(host->params.pcapDir);
+        } else {
+            pcapDir = g_build_path("/", host_getDataPath(host), host->params.pcapDir, NULL);
+        }
+    }
+
     /* virtual addresses and interfaces for managing network I/O */
     NetworkInterface* loopback =
-        networkinterface_new(host, loopbackAddress, G_MAXUINT32, G_MAXUINT32, host->params.pcapDir,
+        networkinterface_new(host, loopbackAddress, G_MAXUINT32, G_MAXUINT32, pcapDir,
                              host->params.qdisc, host->params.interfaceBufSize);
     NetworkInterface* ethernet =
-        networkinterface_new(host, ethernetAddress, bwDownKiBps, bwUpKiBps, host->params.pcapDir,
+        networkinterface_new(host, ethernetAddress, bwDownKiBps, bwUpKiBps, pcapDir,
                              host->params.qdisc, host->params.interfaceBufSize);
+
+    g_free(pcapDir);
 
     g_hash_table_replace(
         host->interfaces, GUINT_TO_POINTER((guint)address_toNetworkIP(ethernetAddress)), ethernet);
