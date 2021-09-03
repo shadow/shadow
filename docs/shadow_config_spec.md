@@ -485,7 +485,10 @@ Type: String OR null
 Where to save the pcap files (relative to the host directory).
 
 Logs all network input and output for this host in PCAP format (for viewing in
-e.g. wireshark).
+e.g. wireshark). The directory must already exist and be relative to the host
+directory, although absolute paths are also allowed. Example:
+`pcap_directory: '.'` will generate pcap files such as
+`shadow.data/hosts/myhost/myhost-11.0.0.1.pcap`.
 
 #### `hosts`
 
