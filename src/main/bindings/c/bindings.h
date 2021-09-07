@@ -98,6 +98,8 @@ typedef struct ProcessOptions ProcessOptions;
 // Routing information for paths between nodes.
 typedef struct RoutingInfo_u32 RoutingInfo_u32;
 
+typedef struct StatusBar_ShadowStatusBarState StatusBar_ShadowStatusBarState;
+
 typedef uint64_t WatchHandle;
 
 struct ByteQueue *bytequeue_new(size_t chunk_size);
@@ -177,6 +179,12 @@ char *counter_alloc_string(struct Counter *counter);
 
 // Frees a string previously returned from counter_alloc_string.
 void counter_free_string(struct Counter *counter, char *ptr);
+
+struct StatusBar_ShadowStatusBarState *statusBar_new(uint64_t end);
+
+void statusBar_free(struct StatusBar_ShadowStatusBarState *status_bar);
+
+void statusBar_update(const struct StatusBar_ShadowStatusBarState *status_bar, uint64_t current);
 
 // Flush Rust's log::logger().
 void rustlogger_flush(void);
@@ -312,6 +320,8 @@ uint64_t config_getInterfaceBuffer(const struct ConfigOptions *config);
 enum QDiscMode config_getInterfaceQdisc(const struct ConfigOptions *config);
 
 bool config_getUseLegacyWorkingDir(const struct ConfigOptions *config);
+
+bool config_getProgress(const struct ConfigOptions *config);
 
 bool config_getUseShortestPath(const struct ConfigOptions *config);
 
