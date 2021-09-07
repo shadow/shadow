@@ -227,9 +227,16 @@ set_target_properties(shadow-rs PROPERTIES IMPORTED_LOCATION_DEBUG ${CMAKE_CURRE
 set_target_properties(shadow-rs PROPERTIES IMPORTED_LOCATION_RELEASE ${CMAKE_CURRENT_BINARY_DIR}/target/release/libshadow_rs.a)
 add_dependencies(shadow-rs shadow-rust-project)
 
+## Allow circular dependencies between shadow-rs and shadow-c. Without
+#--start-group and --end-group, # the linker will drop object files in the first
+#listed library that aren't referenced from an # earlier dependency.
+## See https://gitlab.kitware.com/cmake/cmake/-/issues/21511#note_865669
+add_library(shadow-c-and-rs INTERFACE)
+target_link_libraries(shadow-c-and-rs INTERFACE "-Wl,--start-group" shadow-rs shadow-c "-Wl,--end-group")
+
 ## specify the main shadow executable, build, link, and install
 add_executable(shadow main.c)
-target_link_libraries(shadow shadow-c shadow-rs)
+target_link_libraries(shadow shadow-c-and-rs)
 install(TARGETS shadow DESTINATION bin)
 
 ## shadow needs to find libs after install
