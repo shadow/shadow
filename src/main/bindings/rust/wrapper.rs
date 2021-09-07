@@ -1674,6 +1674,18 @@ fn bindgen_test_layout__SysCallHandler() {
     );
 }
 extern "C" {
+    pub fn syscallhandler_fcntl(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_fcntl64(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
     pub fn syscallhandler_close(
         sys: *mut SysCallHandler,
         args: *const SysCallArgs,

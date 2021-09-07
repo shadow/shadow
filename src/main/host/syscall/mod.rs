@@ -1,6 +1,7 @@
 use crate::cshadow as c;
 use crate::host::descriptor::{CompatDescriptor, FileStatus, PosixFile};
 
+pub mod fcntl;
 pub mod unistd;
 
 pub struct Trigger(c::Trigger);
