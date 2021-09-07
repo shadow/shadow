@@ -42,7 +42,7 @@ endmacro()
 ## example: add_shadow_tests(BASENAME bind METHODS ptrace preload LOGLEVEL debug ARGS --pin-cpus)
 ## will create two tests named bind-shadow-ptrace and bind-shadow-preload
 macro(add_shadow_tests)
-   cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG;CHECK_RETVAL;POST_CMD" "METHODS;SKIP_METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
+   cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG;CHECK_RETVAL;POST_CMD;EXPECT_ERROR" "METHODS;SKIP_METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
 
    if(NOT DEFINED SHADOW_TEST_LOGLEVEL)
       if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
@@ -60,8 +60,14 @@ macro(add_shadow_tests)
       set(SHADOW_TEST_CHECK_RETVAL TRUE)
    endif()
 
-   if(NOT DEFINED SHADOW_TEST_POST_CMD)
-      set(SHADOW_TEST_POST_CMD "true")
+   if(NOT DEFINED SHADOW_TEST_EXPECT_ERROR)
+      set(SHADOW_TEST_EXPECT_ERROR FALSE)
+   endif()
+
+   if(SHADOW_TEST_EXPECT_ERROR)
+      set(INVERT_ERROR_CODE "!")
+   else()
+      set(INVERT_ERROR_CODE "")
    endif()
 
    if(NOT DEFINED SHADOW_TEST_METHODS)
@@ -82,16 +88,22 @@ macro(add_shadow_tests)
 
    foreach(SHADOW_TEST_METHOD ${SHADOW_TEST_METHODS})
       set(SHADOW_TEST_NAME ${SHADOW_TEST_BASENAME}-shadow-${SHADOW_TEST_METHOD})
-      
+
+      if(DEFINED SHADOW_TEST_POST_CMD)
+         set(POST_CMD "cd ${SHADOW_TEST_NAME}.data && ${SHADOW_TEST_POST_CMD}")
+      else()
+         set(POST_CMD "true")
+      endif()
+
       set(SHADOW_TEST_COMMAND sh -c "\
          rm -rf ${SHADOW_TEST_NAME}.data \
-         && ${CMAKE_BINARY_DIR}/src/main/shadow \
+         && ${INVERT_ERROR_CODE} ${CMAKE_BINARY_DIR}/src/main/shadow \
          --data-directory=${SHADOW_TEST_NAME}.data \
          --interpose-method=${SHADOW_TEST_METHOD} \
          --log-level=${SHADOW_TEST_LOGLEVEL} \
          ${SHADOW_TEST_ARGS} \
          ${SHADOW_TEST_SHADOW_CONFIG} \
-         && (cd ${SHADOW_TEST_NAME}.data && ${SHADOW_TEST_POST_CMD}) \
+         && (${POST_CMD}) \
          "
       )
       

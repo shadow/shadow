@@ -1,0 +1,14 @@
+general:
+  stop_time: 5
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  myhost:
+    network_node_id: 0
+    processes:
+    - path: /bin/true
+  myhost:
+    network_node_id: 0
+    processes:
+    - path: /bin/true
