@@ -365,7 +365,10 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
         }
 
         /* add the host */
-        manager_addNewVirtualHost(controller->manager, params);
+        if (manager_addNewVirtualHost(controller->manager, params)) {
+            warning("Could not add the host %s", hostnameBuffer->str);
+            return -1;
+        }
 
         /* now handle each virtual process the host will run */
         ProcessCallbackArgs processArgs;
@@ -373,7 +376,7 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
         processArgs.hostname = hostnameBuffer->str;
         if (hostoptions_iterProcesses(
                 host, _controller_registerProcessCallback, (void*)&processArgs)) {
-            error("Could not register processes for host %s", name);
+            error("Could not register processes for host %s", hostnameBuffer->str);
             return -1;
         }
 

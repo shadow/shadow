@@ -65,7 +65,7 @@ gboolean manager_schedulerIsRunning(Manager* manager);
 /* info received from controller to set up the simulation */
 void manager_addNewProgram(Manager* manager, const gchar* name, const gchar* path,
                            const gchar* startSymbol);
-void manager_addNewVirtualHost(Manager* manager, HostParameters* params);
+int manager_addNewVirtualHost(Manager* manager, HostParameters* params);
 void manager_addNewVirtualProcess(Manager* manager, const gchar* hostName, gchar* pluginName,
                                   SimulationTime startTime, SimulationTime stopTime, gchar** argv,
                                   char* environment);

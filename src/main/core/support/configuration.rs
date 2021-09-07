@@ -60,7 +60,7 @@ pub struct CliOptions {
 }
 
 /// Options contained in a configuration file.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigFileOptions {
     pub general: GeneralOptions,
@@ -74,6 +74,8 @@ pub struct ConfigFileOptions {
     pub experimental: ExperimentalOptions,
 
     // we use a BTreeMap so that the hosts are sorted by their hostname (useful for determinism)
+    // note: serde 'with' is incompatible with 'derive(JsonSchema)': https://github.com/GREsau/schemars/issues/89
+    #[serde(with = "serde_with::rust::maps_duplicate_key_is_error")]
     pub hosts: BTreeMap<String, HostOptions>,
 }
 

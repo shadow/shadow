@@ -369,7 +369,7 @@ guint manager_getRawCPUFrequency(Manager* manager) {
     return freq;
 }
 
-void manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
+int manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
     MAGIC_ASSERT(manager);
 
     /* quarks are unique per manager process, so do the conversion here */
@@ -380,7 +380,7 @@ void manager_addNewVirtualHost(Manager* manager, HostParameters* params) {
     host_setup(host, manager_getDNS(manager), manager_getRawCPUFrequency(manager),
                manager_getHostsRootPath(manager));
 
-    scheduler_addHost(manager->scheduler, host);
+    return scheduler_addHost(manager->scheduler, host);
 }
 
 static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interposeMethod,
