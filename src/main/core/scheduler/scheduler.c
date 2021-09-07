@@ -254,7 +254,7 @@ gboolean scheduler_push(Scheduler* scheduler, Event* event, Host* sender, Host* 
     return TRUE;
 }
 
-void scheduler_addHost(Scheduler* scheduler, Host* host) {
+int scheduler_addHost(Scheduler* scheduler, Host* host) {
     MAGIC_ASSERT(scheduler);
 
     /* this function should only be executed during the initActions phase in
@@ -263,7 +263,15 @@ void scheduler_addHost(Scheduler* scheduler, Host* host) {
     /* save the host */
     GQuark hostID = host_getID(host);
     gpointer hostIDKey = GUINT_TO_POINTER(hostID);
+
+    if (g_hash_table_contains(scheduler->hostIDToHostMap, hostIDKey)) {
+        // the host ID is derived from the hostname, so duplicate host IDs means duplicate hostnames
+        error("Cannot have two hosts with the same name '%s'", host_getName(host));
+        return -1;
+    }
+
     g_hash_table_replace(scheduler->hostIDToHostMap, hostIDKey, host);
+    return 0;
 }
 
 Host* scheduler_getHost(Scheduler* scheduler, GQuark hostID) {

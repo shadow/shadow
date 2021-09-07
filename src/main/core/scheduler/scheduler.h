@@ -34,7 +34,7 @@ void scheduler_finish(Scheduler*);
 gboolean scheduler_push(Scheduler*, Event*, Host* sender, Host* receiver);
 Event* scheduler_pop(Scheduler*);
 
-void scheduler_addHost(Scheduler*, Host*);
+int scheduler_addHost(Scheduler*, Host*);
 Host* scheduler_getHost(Scheduler*, GQuark);
 SchedulerPolicyType scheduler_getPolicy(Scheduler*);
 gboolean scheduler_isRunning(Scheduler* scheduler);
