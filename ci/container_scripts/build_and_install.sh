@@ -25,9 +25,6 @@ case "$BUILDTYPE" in
     "debug")
         OPTIONS="--debug"
         ;;
-    "use-c-syscalls")
-        OPTIONS="--debug --use-c-syscalls"
-        ;;
     "coverage")
         OPTIONS="--debug --coverage"
         ;;
