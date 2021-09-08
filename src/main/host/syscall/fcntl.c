@@ -206,10 +206,3 @@ SysCallReturn syscallhandler_fcntl(SysCallHandler* sys,
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = result};
 }
-
-SysCallReturn syscallhandler_fcntl64(SysCallHandler* sys, const SysCallArgs* args) {
-    // Our fcntl supports the flock64 struct when any of the F_GETLK64, F_SETLK64, and F_SETLKW64
-    // commands are specified, so we can just use our fcntl handler directly.
-    trace("fcntl64 called, forwarding to fcntl handler");
-    return syscallhandler_fcntl(sys, args);
-}

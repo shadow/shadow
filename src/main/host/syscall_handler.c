@@ -225,16 +225,12 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
         scr = (SysCallReturn){.state = -ENOSYS};                                                   \
         break
 
-#ifdef USE_C_SYSCALLS
-#define HANDLE_RUST(s) HANDLE(s)
-#else
 #define HANDLE_RUST(s)                                                         \
     case SYS_##s:                                                              \
         _syscallhandler_pre_syscall(sys, args->number, #s);                    \
         scr = rustsyscallhandler_##s(sys, args);                               \
         _syscallhandler_post_syscall(sys, args->number, #s, &scr);             \
         break
-#endif
 
 SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args) {

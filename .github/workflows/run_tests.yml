@@ -32,11 +32,6 @@ jobs:
         container: ['ubuntu:18.04', 'ubuntu:20.04', 'debian:10-slim', 'fedora:34', 'quay.io/centos/centos:stream8']
         cc: ['gcc', 'clang']
         buildtype: ['debug', 'release']
-        include:
-          # Add a single configuration for testing the C syscall handlers
-          - container: 'ubuntu:20.04'
-            cc: 'clang'
-            buildtype: 'use-c-syscalls'
     env:
       CC: ${{ matrix.cc }}
       CONTAINER: ${{ matrix.container }}
