@@ -32,51 +32,6 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SysCallReturn _syscallhandler_pipeHelper(SysCallHandler* sys,
-                                                PluginPtr pipefdPtr,
-                                                gint flags) {
-    if (flags & O_DIRECT) {
-        warning("We don't currently support pipes in 'O_DIRECT' mode.");
-        return (SysCallReturn){
-            .state = SYSCALL_DONE, .retval.as_i64 = -ENOTSUP};
-    }
-
-    /* Make sure they didn't pass a NULL pointer. */
-    if (!pipefdPtr.val) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
-    /* A pipe descriptor is simulated with our Channel object, where
-     * one side is readonly, the other is writeonly. */
-    Channel* pipeReader = channel_new(CT_READONLY, DT_PIPE);
-    Channel* pipeWriter = channel_new(CT_WRITEONLY, DT_PIPE);
-    channel_setLinkedChannel(pipeReader, pipeWriter);
-    channel_setLinkedChannel(pipeWriter, pipeReader);
-
-    /* Set any options that were given. */
-    if (flags & O_NONBLOCK) {
-        descriptor_addFlags((LegacyDescriptor*)pipeReader, O_NONBLOCK);
-        descriptor_addFlags((LegacyDescriptor*)pipeWriter, O_NONBLOCK);
-    }
-    if (flags & O_CLOEXEC) {
-        descriptor_addFlags((LegacyDescriptor*)pipeReader, O_CLOEXEC);
-        descriptor_addFlags((LegacyDescriptor*)pipeWriter, O_CLOEXEC);
-    }
-
-    /* Return the pipe fds to the caller. */
-    size_t sizeNeeded = sizeof(int) * 2;
-    gint* pipefd = process_getWriteablePtr(sys->process, pipefdPtr, sizeNeeded);
-
-    pipefd[0] =
-        process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)pipeReader);
-    pipefd[1] =
-        process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)pipeWriter);
-
-    trace("Created pipe reader fd %i and writer fd %i", pipefd[0], pipefd[1]);
-
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-}
-
 static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
                                                 PluginPtr bufPtr,
                                                 size_t bufSize, off_t offset) {
@@ -325,17 +280,6 @@ SysCallReturn syscallhandler_dup(SysCallHandler* sys,
 
     int handle = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)newFile);
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = handle};
-}
-
-SysCallReturn syscallhandler_pipe2(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
-    return _syscallhandler_pipeHelper(
-        sys, args->args[0].as_ptr, args->args[1].as_i64);
-}
-
-SysCallReturn syscallhandler_pipe(SysCallHandler* sys,
-                                  const SysCallArgs* args) {
-    return _syscallhandler_pipeHelper(sys, args->args[0].as_ptr, 0);
 }
 
 SysCallReturn syscallhandler_read(SysCallHandler* sys,
