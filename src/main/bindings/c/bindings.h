@@ -618,6 +618,10 @@ SysCallReturn memorymanager_handleMprotect(struct MemoryManager *memory_manager,
                                            uintptr_t size,
                                            int32_t prot);
 
+SysCallReturn rustsyscallhandler_fcntl(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_fcntl64(SysCallHandler *sys, const SysCallArgs *args);
+
 SysCallReturn rustsyscallhandler_close(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_dup(SysCallHandler *sys, const SysCallArgs *args);

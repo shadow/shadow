@@ -287,9 +287,9 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(fchmodat);
         HANDLE(fchown);
         HANDLE(fchownat);
-        HANDLE(fcntl);
+        HANDLE_RUST(fcntl);
 #ifdef SYS_fcntl64
-        HANDLE(fcntl64);
+        HANDLE_RUST(fcntl64);
 #endif
         HANDLE(fdatasync);
         HANDLE(fgetxattr);

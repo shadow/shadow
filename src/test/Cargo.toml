@@ -117,6 +117,10 @@ path = "ifaddrs/test_ifaddrs.rs"
 name = "test_env"
 path = "environment/test_env.rs"
 
+[[bin]]
+name = "test_signal_resched"
+path = "regression/test_signal_resched.rs"
+
 [dependencies]
 libc = "0.2"
 nix = "0.22.1"

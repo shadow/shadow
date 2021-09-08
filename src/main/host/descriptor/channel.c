@@ -126,8 +126,8 @@ static gssize channel_sendUserData(Transport* transport, Thread* thread, PluginV
         result = -EPIPE;
     }
 
-    /* our end cant write anymore if they returned error */
-    if(result <= (gssize)0) {
+    /* our end cant write anymore if they returned error (other than the source being inaccessible) */
+    if(result <= (gssize)0 && result != -EFAULT) {
         descriptor_adjustStatus((LegacyDescriptor*)channel, STATUS_DESCRIPTOR_WRITABLE, FALSE);
     }
 
@@ -176,6 +176,12 @@ static gssize channel_receiveUserData(Transport* transport, Thread* thread, Plug
     if(channel->bufferLength <= 0) {
         descriptor_adjustStatus((LegacyDescriptor*)channel, STATUS_DESCRIPTOR_READABLE, FALSE);
     }
+
+    /* The linked channel is now writable. */
+    utility_assert(channel->linkedChannel);
+    utility_assert(channel->bufferLength < channel->bufferSize);
+    descriptor_adjustStatus(
+        (LegacyDescriptor*)channel->linkedChannel, STATUS_DESCRIPTOR_WRITABLE, TRUE);
 
     return (gssize)numCopied;
 }
