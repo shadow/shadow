@@ -5,7 +5,11 @@
 
 // Don't forget to whitelist functions/types/vars in CMakeLists.txt
 
+#include "main/core/controller.h"
+#include "main/core/logger/log_wrapper.h"
+#include "main/core/main.h"
 #include "main/core/scheduler/scheduler_policy_type.h"
+#include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
 #include "main/host/affinity.h"
 #include "main/host/descriptor/descriptor.h"
@@ -18,4 +22,5 @@
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"
+#include "main/shmem/shmem_cleanup.h"
 #include "main/utility/utility.h"

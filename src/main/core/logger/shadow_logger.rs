@@ -431,23 +431,18 @@ enum LoggerCommand {
     Flush(Option<Sender<()>>),
 }
 
+pub fn set_buffering_enabled(buffering_enabled: bool) {
+    SHADOW_LOGGER.set_buffering_enabled(buffering_enabled);
+}
+
 mod export {
     use super::*;
-
-    /// Creates a ShadowLogger and installs it as the default logger for Rust's
-    /// `log` crate. The returned pointer is never deallocated, since loggers
-    /// registered with the `log` crate are required to live for the life of the
-    /// program.
-    #[no_mangle]
-    pub unsafe extern "C" fn shadow_logger_init() -> () {
-        init().unwrap()
-    }
 
     /// When disabled, the logger thread is notified to write each record as
     /// soon as it's created.  The calling thread still isn't blocked on the
     /// record actually being written, though.
     #[no_mangle]
     pub unsafe extern "C" fn shadow_logger_setEnableBuffering(buffering_enabled: i32) {
-        SHADOW_LOGGER.set_buffering_enabled(buffering_enabled != 0)
+        set_buffering_enabled(buffering_enabled != 0)
     }
 }

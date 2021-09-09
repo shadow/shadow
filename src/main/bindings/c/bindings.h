@@ -195,12 +195,6 @@ void rustlogger_log(LogLevel level,
                     const char *format,
                     void *va_list);
 
-// Creates a ShadowLogger and installs it as the default logger for Rust's
-// `log` crate. The returned pointer is never deallocated, since loggers
-// registered with the `log` crate are required to live for the life of the
-// program.
-void shadow_logger_init(void);
-
 // When disabled, the logger thread is notified to write each record as
 // soon as it's created.  The calling thread still isn't blocked on the
 // record actually being written, though.
@@ -227,6 +221,8 @@ double lps_idleTimerElapsed(const struct LogicalProcessors *lps, int lpi);
 void lps_idleTimerContinue(const struct LogicalProcessors *lps, int lpi);
 
 void lps_idleTimerStop(const struct LogicalProcessors *lps, int lpi);
+
+int main_runShadow(int argc, const char *const *argv);
 
 struct CliOptions *clioptions_parse(int argc, const char *const *argv);
 
