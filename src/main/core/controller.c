@@ -31,7 +31,7 @@
 
 struct _Controller {
     /* general options and user configuration for the simulation */
-    ConfigOptions* config;
+    const ConfigOptions* config;
 
     /* tracks overall wall-clock runtime */
     GTimer* runTimer;
@@ -77,7 +77,7 @@ struct _Controller {
 //  return FALSE;
 //}
 
-Controller* controller_new(ConfigOptions* config) {
+Controller* controller_new(const ConfigOptions* config) {
     utility_assert(config);
 
     /* Don't do anything in this function that will cause a log message. The

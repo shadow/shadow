@@ -44,7 +44,7 @@ struct _Manager {
     //    Worker* mainWorker;
 
     /* simulation cli options */
-    ConfigOptions* config;
+    const ConfigOptions* config;
     SimulationTime bootstrapEndTime;
 
     /* manager random source, init from controller random, used to init host randoms */
@@ -172,7 +172,7 @@ static guint _manager_nextRandomUInt(Manager* manager) {
 
 ChildPidWatcher* manager_childpidwatcher(Manager* manager) { return manager->watcher; }
 
-Manager* manager_new(Controller* controller, ConfigOptions* config, SimulationTime endTime,
+Manager* manager_new(Controller* controller, const ConfigOptions* config, SimulationTime endTime,
                      SimulationTime unlimBWEndTime, guint randomSeed) {
     if (globalmanager != NULL) {
         return NULL;
