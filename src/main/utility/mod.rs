@@ -7,8 +7,10 @@ pub mod notnull;
 pub mod perf_timer;
 pub mod pod;
 pub mod proc_maps;
+pub mod status_bar;
 pub mod stream_len;
 pub mod syscall;
+pub mod time;
 
 /// A type that allows us to make a pointer Send + Sync since there is no way
 /// to add these traits to the pointer itself.

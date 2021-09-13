@@ -346,6 +346,11 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_legacy_working_dir").unwrap())]
     pub use_legacy_working_dir: Option<bool>,
+
+    /// Show the simulation progress at the bottom of the terminal
+    #[clap(long, value_name = "bool")]
+    #[clap(about = EXP_HELP.get("progress").unwrap())]
+    pub progress: Option<bool>,
 }
 
 impl ExperimentalOptions {
@@ -381,6 +386,7 @@ impl Default for ExperimentalOptions {
             interface_qdisc: Some(QDiscMode::Fifo),
             worker_threads: None,
             use_legacy_working_dir: Some(false),
+            progress: Some(false),
         }
     }
 }
@@ -1351,6 +1357,13 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_legacy_working_dir.unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getProgress(config: *const ConfigOptions) -> bool {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        config.experimental.progress.unwrap()
     }
 
     #[no_mangle]

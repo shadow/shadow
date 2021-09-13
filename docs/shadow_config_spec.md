@@ -67,6 +67,7 @@ hosts:
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
 - [`experimental.interpose_method`](#experimentalinterpose_method)
 - [`experimental.preload_spin_max`](#experimentalpreload_spin_max)
+- [`experimental.progress`](#experimentalprogress)
 - [`experimental.runahead`](#experimentalrunahead)
 - [`experimental.scheduler_policy`](#experimentalscheduler_policy)
 - [`experimental.socket_recv_autotune`](#experimentalsocket_recv_autotune)
@@ -303,6 +304,13 @@ Default: 0
 Type: Integer
 
 Max number of iterations to busy-wait on IPC semaphore before blocking.
+
+#### `experimental.progress`
+
+Default: false  
+Type: Bool
+
+Show the simulation progress at the bottom of the terminal.
 
 #### `experimental.runahead`
 

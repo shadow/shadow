@@ -81,6 +81,8 @@ struct _Manager {
     // Path to the openssl rng lib that we preload for requesting managed processes.
     gchar* preloadOpensslRngPath;
 
+    StatusBar_ShadowStatusBarState* statusBar;
+
     MAGIC_DECLARE;
 };
 
@@ -274,6 +276,14 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
     /* now make sure the hosts path exists, as it may not have been in the template */
     g_mkdir_with_parents(manager->hostsPath, 0775);
 
+    if (config_getProgress(config)) {
+        if (isatty(STDERR_FILENO) == 1) {
+            manager->statusBar = statusBar_new(endTime);
+        } else {
+            warning("Status/progress bar will not be enabled since stderr is not a tty");
+        }
+    }
+
     return manager;
 }
 
@@ -347,6 +357,10 @@ gint manager_free(Manager* manager) {
     }
     if (manager->preloadOpensslRngPath) {
         g_free(manager->preloadOpensslRngPath);
+    }
+
+    if (manager->statusBar) {
+        statusBar_free(manager->statusBar);
     }
 
     MAGIC_CLEAR(manager);
@@ -653,6 +667,10 @@ void manager_run(Manager* manager) {
          * execution window
          */
         minNextEventTime = scheduler_awaitNextRound(manager->scheduler);
+
+        if (manager->statusBar != NULL) {
+            statusBar_update(manager->statusBar, windowEnd);
+        }
 
         /* we are in control now, the workers are waiting for the next round */
         debug("finished execution window [%" G_GUINT64_FORMAT "--%" G_GUINT64_FORMAT
