@@ -1042,7 +1042,7 @@ SysCallReturn syscallhandler_getsockopt(SysCallHandler* sys,
             break;
         }
         default:
-            warning("getsockopt called with unsupported level %i", level);
+            warning("getsockopt called with unsupported level %i with opt %i", level, optname);
             errcode = -ENOPROTOOPT;
             break;
     }
@@ -1154,7 +1154,7 @@ SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
             break;
         }
         default:
-            warning("setsockopt called with unsupported level %i", level);
+            warning("setsockopt called with unsupported level %i with opt %i", level, optname);
             errcode = -ENOPROTOOPT;
     }
 
