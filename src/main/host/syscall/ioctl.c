@@ -63,33 +63,63 @@ static int _syscallhandler_ioctlTCPHelper(SysCallHandler* sys, TCP* tcp, int fd,
 
     switch (request) {
         case SIOCINQ: { // equivalent to FIONREAD
-            int* lenout = process_getWriteablePtr(sys->process, argPtr, sizeof(int));
-            *lenout = (int)tcp_getInputBufferLength(tcp);
+            int lenout = tcp_getInputBufferLength(tcp);
+            int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
+
+            if (rv != 0) {
+                utility_assert(rv < 0);
+                result = rv;
+                break;
+            }
+
             result = 0;
             break;
         }
 
         case SIOCOUTQ: { // equivalent to TIOCOUTQ
-            int* lenout = process_getWriteablePtr(sys->process, argPtr, sizeof(int));
-            *lenout = (int)tcp_getOutputBufferLength(tcp);
+            int lenout = tcp_getOutputBufferLength(tcp);
+            int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
+
+            if (rv != 0) {
+                utility_assert(rv < 0);
+                result = rv;
+                break;
+            }
+
             result = 0;
             break;
         }
 
         case SIOCOUTQNSD: {
-            int* lenout = process_getWriteablePtr(sys->process, argPtr, sizeof(int));
-            *lenout = (int)tcp_getNotSentBytes(tcp);
+            int lenout = tcp_getNotSentBytes(tcp);
+            int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
+
+            if (rv != 0) {
+                utility_assert(rv < 0);
+                result = rv;
+                break;
+            }
+
             result = 0;
             break;
         }
 
         case FIONBIO: {
-            const int* val = process_getReadablePtr(sys->process, argPtr, sizeof(int));
-            if (*val == 0) {
+            int val = 0;
+            int rv = process_readPtr(sys->process, &val, argPtr, sizeof(int));
+
+            if (rv != 0) {
+                utility_assert(rv < 0);
+                result = rv;
+                break;
+            }
+
+            if (val == 0) {
                 descriptor_removeFlags((LegacyDescriptor*)tcp, O_NONBLOCK);
             } else {
                 descriptor_addFlags((LegacyDescriptor*)tcp, O_NONBLOCK);
             }
+
             result = 0;
             break;
         }
@@ -125,26 +155,49 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
 
     switch (request) {
         case SIOCINQ: { // equivalent to FIONREAD
-            int* lenout = process_getWriteablePtr(sys->process, argPtr, sizeof(int));
-            *lenout = (int)socket_getInputBufferLength((Socket*)udp);
+            int lenout = socket_getInputBufferLength((Socket*)udp);
+            int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
+
+            if (rv != 0) {
+                utility_assert(rv < 0);
+                result = rv;
+                break;
+            }
+
             result = 0;
             break;
         }
 
         case SIOCOUTQ: { // equivalent to TIOCOUTQ
-            int* lenout = process_getWriteablePtr(sys->process, argPtr, sizeof(int));
-            *lenout = socket_getOutputBufferLength((Socket*)udp);
+            int lenout = socket_getOutputBufferLength((Socket*)udp);
+            int rv = process_writePtr(sys->process, argPtr, &lenout, sizeof(int));
+
+            if (rv != 0) {
+                utility_assert(rv < 0);
+                result = rv;
+                break;
+            }
+
             result = 0;
             break;
         }
 
         case FIONBIO: {
-            const int* val = process_getReadablePtr(sys->process, argPtr, sizeof(int));
-            if (*val == 0) {
+            int val = 0;
+            int rv = process_readPtr(sys->process, &val, argPtr, sizeof(int));
+
+            if (rv != 0) {
+                utility_assert(rv < 0);
+                result = rv;
+                break;
+            }
+
+            if (val == 0) {
                 descriptor_removeFlags((LegacyDescriptor*)udp, O_NONBLOCK);
             } else {
                 descriptor_addFlags((LegacyDescriptor*)udp, O_NONBLOCK);
             }
+
             result = 0;
             break;
         }
@@ -180,12 +233,21 @@ static int _syscallhandler_ioctlEventDHelper(SysCallHandler* sys, EventD* eventd
 
     switch (request) {
         case FIONBIO: {
-            const int* val = process_getReadablePtr(sys->process, argPtr, sizeof(int));
-            if (*val == 0) {
+            int val = 0;
+            int rv = process_readPtr(sys->process, &val, argPtr, sizeof(int));
+
+            if (rv != 0) {
+                utility_assert(rv < 0);
+                result = rv;
+                break;
+            }
+
+            if (val == 0) {
                 descriptor_removeFlags((LegacyDescriptor*)eventd, O_NONBLOCK);
             } else {
                 descriptor_addFlags((LegacyDescriptor*)eventd, O_NONBLOCK);
             }
+
             result = 0;
             break;
         }
