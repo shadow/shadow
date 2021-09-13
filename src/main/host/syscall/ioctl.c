@@ -11,6 +11,7 @@
 
 #include "lib/logger/logger.h"
 #include "main/host/descriptor/descriptor.h"
+#include "main/host/descriptor/eventd.h"
 #include "main/host/descriptor/file.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
@@ -173,6 +174,32 @@ static int _syscallhandler_ioctlUDPHelper(SysCallHandler* sys, UDP* udp, int fd,
     return result;
 }
 
+static int _syscallhandler_ioctlEventDHelper(SysCallHandler* sys, EventD* eventd, int fd,
+                                             unsigned long request, PluginPtr argPtr) {
+    int result = -EINVAL;
+
+    switch (request) {
+        case FIONBIO: {
+            const int* val = process_getReadablePtr(sys->process, argPtr, sizeof(int));
+            if (*val == 0) {
+                descriptor_removeFlags((LegacyDescriptor*)eventd, O_NONBLOCK);
+            } else {
+                descriptor_addFlags((LegacyDescriptor*)eventd, O_NONBLOCK);
+            }
+            result = 0;
+            break;
+        }
+
+        default: {
+            result = -EINVAL;
+            warning("We do not yet handle ioctl request %lu on eventfd %i", request, fd);
+            break;
+        }
+    }
+
+    return result;
+}
+
 ///////////////////////////////////////////////////////////
 // System Calls
 ///////////////////////////////////////////////////////////
@@ -200,6 +227,8 @@ SysCallReturn syscallhandler_ioctl(SysCallHandler* sys,
         result = _syscallhandler_ioctlTCPHelper(sys, (TCP*)desc, fd, request, argPtr);
     } else if (dtype == DT_UDPSOCKET) {
         result = _syscallhandler_ioctlUDPHelper(sys, (UDP*)desc, fd, request, argPtr);
+    } else if (dtype == DT_EVENTD) {
+        result = _syscallhandler_ioctlEventDHelper(sys, (EventD*)desc, fd, request, argPtr);
     } else {
         warning(
             "We do not support ioctl request %lu on descriptor %i of type %i", request, fd, dtype);

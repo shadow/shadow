@@ -28,7 +28,12 @@ fn main() -> Result<(), String> {
         ),
         test_utils::ShadowTest::new(
             "test_eventfd_read_write_nonblock",
-            test_eventfd_read_write_nonblock,
+            || test_eventfd_read_write_nonblock(/* use_ioctl_fionbio = */ false),
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_eventfd_read_write_nonblock_fionbio",
+            || test_eventfd_read_write_nonblock(/* use_ioctl_fionbio = */ true),
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
@@ -148,20 +153,34 @@ fn check_write_einval(efd: RawFd, val: u64) -> Result<(), String> {
     Ok(())
 }
 
-fn test_eventfd_read_write_nonblock() -> Result<(), String> {
+/// Test reading/writing to a non-blocking eventfd. The eventfd can be set as non-blocking
+/// using either an eventfd flag, or using an FIONBIO ioctl.
+fn test_eventfd_read_write_nonblock(use_ioctl_fionbio: bool) -> Result<(), String> {
     // Initialize eventfd with initial value of 2
     let init_val = 2;
-    let flag = EfdFlags::EFD_NONBLOCK;
+
+    let flag = if use_ioctl_fionbio {
+        // we will set it as non-blocking later
+        EfdFlags::empty()
+    } else {
+        EfdFlags::EFD_NONBLOCK
+    };
     let efd: RawFd = call_eventfd(init_val, flag)?;
 
     test_utils::result_assert(
-        efd > 0,
+        efd >= 0,
         &format!(
             "Unexpected retval {} from eventfd with flag {}",
             efd,
             flag.bits()
         ),
     )?;
+
+    if use_ioctl_fionbio {
+        // set as non-blocking
+        let val: libc::c_int = 1;
+        assert_eq!(0, unsafe { libc::ioctl(efd, libc::FIONBIO, &val) });
+    }
 
     test_utils::run_and_close_fds(&[efd], || {
         // Make sure the initval of 2 was set correctly
