@@ -4,6 +4,6 @@
  * See LICENSE for licensing information
  */
 
-#include "main/core/main.h"
+#include "main/bindings/c/bindings.h"
 
-int main(int argc, char* argv[]) { return main_runShadow(argc, argv); }
+int main(int argc, char* argv[]) { return main_runShadow(argc, (const char**)argv); }

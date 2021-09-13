@@ -7,17 +7,9 @@
 #ifndef SHD_MAIN_H_
 #define SHD_MAIN_H_
 
-#include <glib.h>
-
-/**
- * Main entry point for the simulator. Initializes logging, configuration,
- * allocates initial memory structures, launches thread pool, runs simulation.
- *
- * @param argc argument count
- * @param argv argument vector
- *
- * @returns an integer return code
- */
-gint main_runShadow(gint argc, gchar* argv[]);
+bool main_sidechannelMitigationsEnabled();
+int main_checkGlibVersion();
+void main_printBuildInfo();
+void main_logBuildInfo();
 
 #endif /* SHD_MAIN_H_ */
