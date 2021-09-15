@@ -582,30 +582,20 @@ static void _threadptrace_updateChildState(ThreadPtrace* thread, StopReason reas
     return;
 }
 
-static pid_t _waitpid_spin(pid_t pid, int *wstatus, int options) {
-    int count = 0;
-    pid_t rv = 0;
-    // First do non-blocking waits.
-    do {
-        // Give the plugin a chance to run before polling it. This improves
-        // performance substantially when using --set-sched-fifo together with
-        // --pin-cpus. Otherwise the plugin will never get a chance to run
-        // until we spin THREADPTRACE_MAX_SPIN times and make the blocking
-        // `waitpid` call.
-        sched_yield();
-        rv = waitpid(pid, wstatus, options|WNOHANG|WAITPID_COMMON_OPTIONS);
-    } while (rv == 0 && count++ < THREADPTRACE_MAX_SPIN);
-
-    // If we haven't gotten an answer yet, make a blocking call.
-    if (rv == 0) {
-        rv = waitpid(pid, wstatus, options|WAITPID_COMMON_OPTIONS);
-    }
-
-    return rv;
-}
-
 // Waits for a ptrace or shim event.
 static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
+    if (!thread->enableIpc) {
+        int wstatus;
+        pid_t pid = waitpid(thread->base.nativeTid, &wstatus, WAITPID_COMMON_OPTIONS);
+        if (pid < 0) {
+            utility_panic("waitpid: %s", strerror(errno));
+        }
+        if (pid != thread->base.nativeTid) {
+            utility_panic("waitpid: expected %d, got %d", thread->base.nativeTid, pid);
+        }
+        return _getStopReason(wstatus);
+    }
+
     // Only used for an shim-event-stop; lifted out of the loop so we don't
     // re-initialize on every iteration.
     StopReason event_stop = {
@@ -817,7 +807,7 @@ static void _threadptrace_doAttach(ThreadPtrace* thread) {
         abort();
     }
     int wstatus;
-    if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
+    if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
         utility_panic("waitpid: %s", g_strerror(errno));
         abort();
     }
@@ -1175,7 +1165,7 @@ static void _threadptrace_ensureStopped(ThreadPtrace* thread) {
 
     while (1) {
         int wstatus;
-        if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
+        if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
             utility_panic("waitpid: %s", g_strerror(errno));
             abort();
         }
@@ -1247,7 +1237,7 @@ static long threadptrace_nativeSyscall(Thread* base, long n, va_list args) {
             abort();
         }
         int wstatus;
-        if (_waitpid_spin(thread->base.nativeTid, &wstatus, 0) < 0) {
+        if (waitpid(thread->base.nativeTid, &wstatus, 0) < 0) {
             utility_panic("waitpid: %s", g_strerror(errno));
             abort();
         }
@@ -1315,7 +1305,7 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
     // for that stop, which puts the child into the
     // THREAD_PTRACE_CHILD_STATE_TRACE_ME state.
     int wstatus;
-    if (_waitpid_spin(childNativeTid, &wstatus, 0) < 0) {
+    if (waitpid(childNativeTid, &wstatus, 0) < 0) {
         utility_panic("waitpid: %s", g_strerror(errno));
         abort();
     }
