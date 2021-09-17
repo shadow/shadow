@@ -246,6 +246,7 @@ SysCallReturn syscallhandler_close(SysCallHandler* sys,
     if (descriptor && !errorCode) {
         trace("Closing descriptor %i", descriptor_getHandle(descriptor));
         descriptor_close(descriptor, sys->host);
+        process_deregisterLegacyDescriptor(sys->process, descriptor);
         return (SysCallReturn){.state = SYSCALL_DONE};
     }
 

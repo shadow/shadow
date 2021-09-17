@@ -122,9 +122,6 @@ void descriptor_close(LegacyDescriptor* descriptor, Host* host) {
     descriptor_adjustStatus(descriptor, STATUS_DESCRIPTOR_CLOSED, TRUE);
 
     descriptor->funcTable->close(descriptor, host);
-    if (descriptor->ownerProcess) {
-        process_deregisterLegacyDescriptor(descriptor->ownerProcess, descriptor);
-    }
 }
 
 gint descriptor_compare(const LegacyDescriptor* foo, const LegacyDescriptor* bar, gpointer user_data) {

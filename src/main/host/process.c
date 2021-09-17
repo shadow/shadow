@@ -817,10 +817,12 @@ static void _process_free(Process* proc) {
      * will release it's ref. We also need to release our proc ref. */
     if (proc->stderrFile) {
         descriptor_close((LegacyDescriptor*)proc->stderrFile, proc->host);
+        process_deregisterLegacyDescriptor(proc, (LegacyDescriptor*)proc->stderrFile);
         descriptor_unref((LegacyDescriptor*)proc->stderrFile);
     }
     if (proc->stdoutFile) {
         descriptor_close((LegacyDescriptor*)proc->stdoutFile, proc->host);
+        process_deregisterLegacyDescriptor(proc, (LegacyDescriptor*)proc->stdoutFile);
         descriptor_unref((LegacyDescriptor*)proc->stdoutFile);
     }
 

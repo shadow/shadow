@@ -72,6 +72,7 @@ static SysCallReturn _syscallhandler_openHelper(SysCallHandler* sys,
     if (errcode < 0) {
         /* This will remove the descriptor entry and unref/free the File. */
         descriptor_close((LegacyDescriptor*)filed, sys->host);
+        process_deregisterLegacyDescriptor(sys->process, (LegacyDescriptor*)filed);
     } else {
         utility_assert(errcode == handle);
     }
