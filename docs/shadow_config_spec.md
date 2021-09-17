@@ -293,7 +293,7 @@ The queueing discipline to use at the network interface.
 
 #### `experimental.interpose_method`
 
-Default: "ptrace"  
+Default: "preload"  
 Type: "ptrace" OR "preload"
 
 Which interposition method to use.
