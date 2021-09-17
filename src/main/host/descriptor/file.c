@@ -133,6 +133,7 @@ static void _file_free(LegacyDescriptor* desc) {
 
 static DescriptorFunctionTable _fileFunctions = (DescriptorFunctionTable){
     .close = _file_close,
+    .cleanup = NULL,
     .free = _file_free,
 };
 

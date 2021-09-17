@@ -247,10 +247,16 @@ gint udp_shutdown(UDP* udp, gint how) {
 }
 
 /* we implement the socket interface, this describes our function suite */
-SocketFunctionTable udp_functions = {
-    _udp_close,           _udp_free,          _udp_sendUserData,
-    _udp_receiveUserData, _udp_processPacket, _udp_isFamilySupported,
-    _udp_connectToPeer,   _udp_dropPacket,    MAGIC_VALUE};
+SocketFunctionTable udp_functions = {_udp_close,
+                                     NULL,
+                                     _udp_free,
+                                     _udp_sendUserData,
+                                     _udp_receiveUserData,
+                                     _udp_processPacket,
+                                     _udp_isFamilySupported,
+                                     _udp_connectToPeer,
+                                     _udp_dropPacket,
+                                     MAGIC_VALUE};
 
 UDP* udp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
     UDP* udp = g_new0(UDP, 1);

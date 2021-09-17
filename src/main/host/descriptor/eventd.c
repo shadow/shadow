@@ -57,7 +57,7 @@ static void _eventd_free(LegacyDescriptor* descriptor) {
     worker_count_deallocation(EventD);
 }
 
-static DescriptorFunctionTable _eventdFunctions = {_eventd_close, _eventd_free, MAGIC_VALUE};
+static DescriptorFunctionTable _eventdFunctions = {_eventd_close, NULL, _eventd_free, MAGIC_VALUE};
 
 static void _eventd_updateStatus(EventD* eventd) {
     // Set the descriptor as readable if we have a non-zero counter.

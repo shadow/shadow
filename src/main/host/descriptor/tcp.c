@@ -292,6 +292,13 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, in_addr_t peerIP, in_port_
 
 static void _tcpchild_free(TCPChild* child) {
     MAGIC_ASSERT(child);
+    MAGIC_ASSERT(child->parent);
+    MAGIC_ASSERT(child->parent->server);
+
+    /* remove parents reference to child, if it exists */
+    if (child->parent->server->children) {
+        g_hash_table_remove(child->parent->server->children, &(child->key));
+    }
 
     descriptor_unref(child->parent);
 
@@ -303,7 +310,8 @@ static TCPServer* _tcpserver_new(gint backlog) {
     TCPServer* server = g_new0(TCPServer, 1);
     MAGIC_INIT(server);
 
-    server->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify) descriptor_unref);
+    // store weak references to children
+    server->children = g_hash_table_new_full(g_int_hash, g_int_equal, NULL, (GDestroyNotify) descriptor_unrefWeak);
     server->pending = g_queue_new();
     server->pendingMaxLength = backlog;
 
@@ -1935,7 +1943,7 @@ static void _tcp_processPacket(Socket* socket, Host* host, Packet* packet) {
 
                 /* multiplexed TCP was initialized with a ref of 1, which the host table consumes.
                  * so we need another ref for the children table */
-                descriptor_ref(multiplexed);
+                descriptor_refWeak(multiplexed);
                 g_hash_table_replace(tcp->server->children, &(multiplexed->child->key), multiplexed);
 
                 multiplexed->receive.start = header->sequence;
@@ -2481,6 +2489,17 @@ static gssize _tcp_receiveUserData(Transport* transport, Thread* thread, PluginV
     return totalCopied;
 }
 
+static void _tcp_cleanup(LegacyDescriptor* descriptor) {
+    TCP* tcp = _tcp_fromLegacyDescriptor(descriptor);
+    MAGIC_ASSERT(tcp);
+
+    // if we have a parent, we should break any references between it and us
+    if (tcp->child) {
+        _tcpchild_free(tcp->child);
+        tcp->child = NULL;
+    }
+}
+
 static void _tcp_free(LegacyDescriptor* descriptor) {
     TCP* tcp = _tcp_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(tcp);
@@ -2496,17 +2515,9 @@ static void _tcp_free(LegacyDescriptor* descriptor) {
         tcp->partialOffset = 0;
     }
 
-    if(tcp->child) {
-        MAGIC_ASSERT(tcp->child);
-        MAGIC_ASSERT(tcp->child->parent);
-        MAGIC_ASSERT(tcp->child->parent->server);
-
-        /* remove parents reference to child, if it exists */
-        if(tcp->child->parent->server->children) {
-            g_hash_table_remove(tcp->child->parent->server->children, &(tcp->child->key));
-        }
-
+    if (tcp->child) {
         _tcpchild_free(tcp->child);
+        tcp->child = NULL;
     }
 
     if(tcp->server) {
@@ -2606,10 +2617,16 @@ gint tcp_shutdown(TCP* tcp, Host* host, gint how) {
 }
 
 /* we implement the socket interface, this describes our function suite */
-SocketFunctionTable tcp_functions = {
-    _tcp_close,           _tcp_free,          _tcp_sendUserData,
-    _tcp_receiveUserData, _tcp_processPacket, _tcp_isFamilySupported,
-    _tcp_connectToPeer,   _tcp_dropPacket,    MAGIC_VALUE};
+SocketFunctionTable tcp_functions = {_tcp_close,
+                                     _tcp_cleanup,
+                                     _tcp_free,
+                                     _tcp_sendUserData,
+                                     _tcp_receiveUserData,
+                                     _tcp_processPacket,
+                                     _tcp_isFamilySupported,
+                                     _tcp_connectToPeer,
+                                     _tcp_dropPacket,
+                                     MAGIC_VALUE};
 
 TCP* tcp_new(Host* host, guint receiveBufferSize, guint sendBufferSize) {
     TCP* tcp = g_new0(TCP, 1);

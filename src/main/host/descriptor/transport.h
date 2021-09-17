@@ -27,6 +27,7 @@ typedef gssize (*TransportReceiveFunc)(Transport* transport, Thread* thread,
 
 struct _TransportFunctionTable {
     DescriptorCloseFunc close;
+    DescriptorCleanupFunc cleanup;
     DescriptorFreeFunc free;
     TransportSendFunc send;
     TransportReceiveFunc receive;

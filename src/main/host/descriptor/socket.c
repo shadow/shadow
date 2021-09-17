@@ -29,6 +29,16 @@ static Socket* _socket_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     return (Socket*)descriptor;
 }
 
+static void _socket_cleanup(LegacyDescriptor* descriptor) {
+    Socket* socket = _socket_fromLegacyDescriptor(descriptor);
+    MAGIC_ASSERT(socket);
+    MAGIC_ASSERT(socket->vtable);
+
+    if (socket->vtable->cleanup) {
+        socket->vtable->cleanup(descriptor);
+    }
+}
+
 static void _socket_free(LegacyDescriptor* descriptor) {
     Socket* socket = _socket_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(socket);
@@ -95,8 +105,8 @@ static gssize _socket_receiveUserData(Transport* transport, Thread* thread, Plug
 }
 
 TransportFunctionTable socket_functions = {
-    _socket_close, _socket_free, _socket_sendUserData, _socket_receiveUserData,
-    MAGIC_VALUE};
+    _socket_close,        _socket_cleanup,         _socket_free,
+    _socket_sendUserData, _socket_receiveUserData, MAGIC_VALUE};
 
 void socket_init(Socket* socket, Host* host, SocketFunctionTable* vtable, LegacyDescriptorType type,
                  guint receiveBufferSize, guint sendBufferSize) {

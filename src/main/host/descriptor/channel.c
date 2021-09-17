@@ -187,8 +187,7 @@ static gssize channel_receiveUserData(Transport* transport, Thread* thread, Plug
 }
 
 TransportFunctionTable channel_functions = {
-    channel_close, channel_free, channel_sendUserData, channel_receiveUserData,
-    MAGIC_VALUE};
+    channel_close, NULL, channel_free, channel_sendUserData, channel_receiveUserData, MAGIC_VALUE};
 
 Channel* channel_new(ChannelType type, LegacyDescriptorType dtype) {
     Channel* channel = g_new0(Channel, 1);

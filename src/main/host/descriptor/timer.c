@@ -69,7 +69,7 @@ static void _timer_free(LegacyDescriptor* descriptor) {
 }
 
 static DescriptorFunctionTable _timerFunctions = {
-    _timer_close, _timer_free, MAGIC_VALUE};
+    _timer_close, NULL, _timer_free, MAGIC_VALUE};
 
 Timer* timer_new() {
     Timer* timer = g_new0(Timer, 1);

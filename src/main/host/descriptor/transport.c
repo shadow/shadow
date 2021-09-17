@@ -21,6 +21,16 @@ static Transport* _transport_fromLegacyDescriptor(LegacyDescriptor* descriptor) 
     return (Transport*)descriptor;
 }
 
+static void _transport_cleanup(LegacyDescriptor* descriptor) {
+    Transport* transport = _transport_fromLegacyDescriptor(descriptor);
+    MAGIC_ASSERT(transport);
+    MAGIC_ASSERT(transport->vtable);
+
+    if (transport->vtable->cleanup) {
+        transport->vtable->cleanup(descriptor);
+    }
+}
+
 static void _transport_free(LegacyDescriptor* descriptor) {
     Transport* transport = _transport_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(transport);
@@ -41,7 +51,7 @@ static gboolean _transport_close(LegacyDescriptor* descriptor, Host* host) {
 }
 
 DescriptorFunctionTable transport_functions = {
-    _transport_close, _transport_free, MAGIC_VALUE};
+    _transport_close, _transport_cleanup, _transport_free, MAGIC_VALUE};
 
 void transport_init(Transport* transport, TransportFunctionTable* vtable,
                     LegacyDescriptorType type) {

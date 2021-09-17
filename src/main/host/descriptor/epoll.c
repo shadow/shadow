@@ -318,7 +318,7 @@ static gboolean _epoll_close(LegacyDescriptor* descriptor, Host* host) {
 }
 
 DescriptorFunctionTable epollFunctions = {
-    _epoll_close, _epoll_free, MAGIC_VALUE};
+    _epoll_close, NULL, _epoll_free, MAGIC_VALUE};
 
 Epoll* epoll_new() {
     Epoll* epoll = g_new0(Epoll, 1);
