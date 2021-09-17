@@ -452,9 +452,13 @@ impl CompatDescriptor {
 
     /// Update the handle.
     /// This is a no-op for non-legacy descriptors.
-    pub fn set_handle(&mut self, handle: u32) {
+    pub fn set_handle(&mut self, handle: Option<u32>) {
         if let CompatDescriptor::Legacy(d) = self {
-            unsafe { c::descriptor_setHandle(d.ptr(), handle.try_into().unwrap()) }
+            let handle = match handle {
+                Some(x) => x.try_into().unwrap(),
+                None => -1,
+            };
+            unsafe { c::descriptor_setHandle(d.ptr(), handle) }
         }
         // new descriptor types don't store their file handle, so do nothing
     }

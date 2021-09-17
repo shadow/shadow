@@ -49,7 +49,7 @@ impl DescriptorTable {
             idx
         };
 
-        descriptor.set_handle(idx);
+        descriptor.set_handle(Some(idx));
         let prev = self.descriptors.insert(idx, descriptor);
         debug_assert!(prev.is_none(), "Already a descriptor at {}", idx);
 
@@ -81,7 +81,7 @@ impl DescriptorTable {
         self.available_indices.insert(idx);
         self.trim_tail();
         if let Some(descriptor) = &mut maybe_descriptor {
-            descriptor.set_handle(0);
+            descriptor.set_handle(None);
         }
         maybe_descriptor
     }
@@ -98,7 +98,7 @@ impl DescriptorTable {
         index: u32,
         mut descriptor: CompatDescriptor,
     ) -> Option<CompatDescriptor> {
-        descriptor.set_handle(index);
+        descriptor.set_handle(Some(index));
 
         // We ensure the index is no longer in `self.available_indices`. We *don't* ensure
         // `self.next_index` is > `index`, since that'd require adding the indices in between to
@@ -108,7 +108,7 @@ impl DescriptorTable {
 
         if let Some(mut prev) = self.descriptors.insert(index, descriptor) {
             trace!("Overwriting index {}", index);
-            prev.set_handle(0);
+            prev.set_handle(None);
             Some(prev)
         } else {
             trace!("Setting to unused index {}", index);
