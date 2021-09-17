@@ -431,6 +431,7 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
     utility_assert(fileName != NULL);
 
     File* stdfile = file_new();
+    descriptor_setOwnerProcess((LegacyDescriptor*)stdfile, proc);
 
     CompatDescriptor* compatDesc = compatdescriptor_fromLegacy((LegacyDescriptor*)stdfile);
     descriptortable_set(proc->descTable, fd, compatDesc);
