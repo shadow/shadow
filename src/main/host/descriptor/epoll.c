@@ -217,13 +217,15 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
 static void _epollwatch_free(EpollWatch* watch) {
     MAGIC_ASSERT(watch);
 
-    statuslistener_unref(watch->listener);
-
     if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
+        descriptor_removeListener(watch->watchObject.as_descriptor, watch->listener);
         descriptor_unref(watch->watchObject.as_descriptor);
     } else if (watch->watchType == EWT_POSIX_FILE) {
+        posixfile_removeListener(watch->watchObject.as_file, watch->listener);
         posixfile_drop(watch->watchObject.as_file);
     }
+
+    statuslistener_unref(watch->listener);
 
     MAGIC_CLEAR(watch);
     g_free(watch);
