@@ -658,7 +658,8 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
              * servers have to wait for all children to close.
              * children need to notify their parents when closing.
              */
-            if(!tcp->server || g_hash_table_size(tcp->server->children) <= 0) {
+            if (!tcp->server || !tcp->server->children ||
+                g_hash_table_size(tcp->server->children) <= 0) {
                 if(tcp->child && tcp->child->parent) {
                     TCP* parent = tcp->child->parent;
                     utility_assert(parent->server);

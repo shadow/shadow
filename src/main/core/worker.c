@@ -472,7 +472,9 @@ void worker_runEvent(Event* event) {
     worker_setCurrentTime(SIMTIME_INVALID);
 }
 
-void worker_finish(GQueue* hosts) {
+void worker_finish(GQueue* hosts, SimulationTime time) {
+    worker_setCurrentTime(time);
+
     if (hosts) {
         guint nHosts = g_queue_get_length(hosts);
         info("starting to shut down %u hosts", nHosts);
@@ -480,6 +482,9 @@ void worker_finish(GQueue* hosts) {
         g_queue_foreach(hosts, (GFunc)_worker_shutdownHost, NULL);
         info("%u hosts are shut down", nHosts);
     }
+
+    _worker_setLastEventTime(worker_getCurrentTime());
+    worker_setCurrentTime(SIMTIME_INVALID);
 
     /* cleanup is all done, send counters to manager */
     WorkerPool* pool = _worker_pool();

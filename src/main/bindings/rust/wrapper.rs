@@ -1056,6 +1056,9 @@ extern "C" {
     pub fn descriptor_unref(data: gpointer);
 }
 extern "C" {
+    pub fn descriptor_close(descriptor: *mut LegacyDescriptor, host: *mut Host);
+}
+extern "C" {
     pub fn descriptor_setHandle(descriptor: *mut LegacyDescriptor, handle: gint);
 }
 extern "C" {

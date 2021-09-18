@@ -31,6 +31,7 @@ add_custom_command(OUTPUT wrapper.rs
 
         --whitelist-function "affinity_.*"
         --whitelist-function "thread_.*"
+        --whitelist-function "descriptor_close"
         --whitelist-function "descriptor_unref"
         --whitelist-function "descriptor_setHandle"
         --whitelist-function "descriptor_shutdownHelper"

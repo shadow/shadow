@@ -458,6 +458,9 @@ void descriptortable_set(struct DescriptorTable *table,
 // TODO: remove this once the TCP layer is better designed.
 void descriptortable_shutdownHelper(struct DescriptorTable *table);
 
+// Close all descriptors. The `host` option is a legacy option for legacy descriptors.
+void descriptortable_removeAndCloseAll(struct DescriptorTable *table, Host *host);
+
 // The new compat descriptor takes ownership of the reference to the legacy descriptor and
 // does not increment its ref count, but will decrement the ref count when this compat
 // descriptor is freed/dropped.

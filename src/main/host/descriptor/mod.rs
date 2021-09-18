@@ -462,6 +462,17 @@ impl CompatDescriptor {
         }
         // new descriptor types don't store their file handle, so do nothing
     }
+
+    /// Close the descriptor. The `host` option is a legacy option for legacy descriptors.
+    pub fn close(self, host: *mut c::Host, event_queue: &mut EventQueue) -> Option<SyscallResult> {
+        match self {
+            Self::New(desc) => desc.close(event_queue),
+            Self::Legacy(desc) => {
+                unsafe { c::descriptor_close(desc.ptr(), host) };
+                Some(Ok(0.into()))
+            }
+        }
+    }
 }
 
 mod export {
