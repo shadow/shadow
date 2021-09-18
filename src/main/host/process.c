@@ -1119,7 +1119,6 @@ int process_registerCompatDescriptor(Process* proc, CompatDescriptor* compatDesc
 CompatDescriptor* process_deregisterCompatDescriptor(Process* proc, int handle) {
     MAGIC_ASSERT(proc);
     CompatDescriptor* compatDesc = descriptortable_remove(proc->descTable, handle);
-    _disassociateCompatDescriptor(compatDesc, proc->host);
     return compatDesc;
 }
 

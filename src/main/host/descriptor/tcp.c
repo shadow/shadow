@@ -670,6 +670,8 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
                     /* if i was the server's last child and its waiting to close, close it */
                     if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
                         /* this will unbind from the network interface and free socket */
+                        CompatSocket compat_socket = compatsocket_fromLegacySocket(&parent->super);
+                        host_disassociateInterface(host, &compat_socket);
                         LegacyDescriptor* parentDesc = (LegacyDescriptor*)parent;
                         process_deregisterLegacyDescriptor(
                             descriptor_getOwnerProcess(parentDesc), parentDesc);
@@ -677,6 +679,8 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
                 }
 
                 /* this will unbind from the network interface and free socket */
+                CompatSocket compat_socket = compatsocket_fromLegacySocket(&tcp->super);
+                host_disassociateInterface(host, &compat_socket);
                 LegacyDescriptor* desc = (LegacyDescriptor*)tcp;
                 process_deregisterLegacyDescriptor(
                     descriptor_getOwnerProcess(desc), desc);

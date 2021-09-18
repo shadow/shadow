@@ -233,6 +233,10 @@ static gboolean _udp_close(LegacyDescriptor* descriptor, Host* host) {
     MAGIC_ASSERT(udp);
     /* Deregister us from the process upon return. */
     _udp_setState(udp, UDPS_CLOSED);
+
+    CompatSocket compat_socket = compatsocket_fromLegacySocket(&udp->super);
+    host_disassociateInterface(host, &compat_socket);
+
     return TRUE;
 }
 
