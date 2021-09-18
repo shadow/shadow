@@ -98,7 +98,7 @@ static void _file_closeHelper(File* file) {
     }
 }
 
-static gboolean _file_close(LegacyDescriptor* desc, Host* host) {
+static void _file_close(LegacyDescriptor* desc, Host* host) {
     File* file = _file_descriptorToFile(desc);
 
     trace("Closing file %i with os-backed file %i", _file_getFD(file),
@@ -106,10 +106,6 @@ static gboolean _file_close(LegacyDescriptor* desc, Host* host) {
 
     /* Make sure we mimic the close on the OS-backed file now. */
     _file_closeHelper(file);
-
-    /* tell the host to stop tracking us, and unref the descriptor.
-     * this should trigger _file_free in most cases. */
-    return TRUE;
 }
 
 static void _file_free(LegacyDescriptor* desc) {

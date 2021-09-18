@@ -228,16 +228,13 @@ static void _udp_free(LegacyDescriptor* descriptor) {
     worker_count_deallocation(UDP);
 }
 
-static gboolean _udp_close(LegacyDescriptor* descriptor, Host* host) {
+static void _udp_close(LegacyDescriptor* descriptor, Host* host) {
     UDP* udp = _udp_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(udp);
-    /* Deregister us from the process upon return. */
     _udp_setState(udp, UDPS_CLOSED);
 
     CompatSocket compat_socket = compatsocket_fromLegacySocket(&udp->super);
     host_disassociateInterface(host, &compat_socket);
-
-    return TRUE;
 }
 
 gint udp_shutdown(UDP* udp, gint how) {

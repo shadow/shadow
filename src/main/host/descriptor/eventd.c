@@ -30,7 +30,7 @@ static EventD* _eventfd_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     return (EventD*)descriptor;
 }
 
-static gboolean _eventd_close(LegacyDescriptor* descriptor, Host* host) {
+static void _eventd_close(LegacyDescriptor* descriptor, Host* host) {
     EventD* eventd = _eventfd_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(eventd);
 
@@ -38,12 +38,6 @@ static gboolean _eventd_close(LegacyDescriptor* descriptor, Host* host) {
 
     eventd->is_closed = true;
     descriptor_adjustStatus(&(eventd->super), STATUS_DESCRIPTOR_ACTIVE, FALSE);
-
-    if (eventd->super.handle > 0) {
-        return TRUE; // deregister from process
-    } else {
-        return FALSE; // we are not owned by a process
-    }
 }
 
 static void _eventd_free(LegacyDescriptor* descriptor) {

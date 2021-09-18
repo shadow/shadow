@@ -672,18 +672,12 @@ static void _tcp_setState(TCP* tcp, Host* host, enum TCPState state) {
                         /* this will unbind from the network interface and free socket */
                         CompatSocket compat_socket = compatsocket_fromLegacySocket(&parent->super);
                         host_disassociateInterface(host, &compat_socket);
-                        LegacyDescriptor* parentDesc = (LegacyDescriptor*)parent;
-                        process_deregisterLegacyDescriptor(
-                            descriptor_getOwnerProcess(parentDesc), parentDesc);
                     }
                 }
 
                 /* this will unbind from the network interface and free socket */
                 CompatSocket compat_socket = compatsocket_fromLegacySocket(&tcp->super);
                 host_disassociateInterface(host, &compat_socket);
-                LegacyDescriptor* desc = (LegacyDescriptor*)tcp;
-                process_deregisterLegacyDescriptor(
-                    descriptor_getOwnerProcess(desc), desc);
             }
             break;
         }
@@ -2538,7 +2532,7 @@ static void _tcp_free(LegacyDescriptor* descriptor) {
     worker_count_deallocation(TCP);
 }
 
-static gboolean _tcp_close(LegacyDescriptor* descriptor, Host* host) {
+static void _tcp_close(LegacyDescriptor* descriptor, Host* host) {
     TCP* tcp = _tcp_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(tcp);
 
@@ -2556,7 +2550,7 @@ static gboolean _tcp_close(LegacyDescriptor* descriptor, Host* host) {
         case TCPS_LISTEN:
         case TCPS_SYNSENT: {
             _tcp_setState(tcp, host, TCPS_CLOSED);
-            return FALSE;
+            return;
         }
 
         case TCPS_SYNRECEIVED:
@@ -2568,7 +2562,7 @@ static gboolean _tcp_close(LegacyDescriptor* descriptor, Host* host) {
                 /* we still have data. send that first, and then finish with fin */
                 tcp->flags |= TCPF_SHOULD_SEND_WR_FIN;
             }
-            break;
+            return;
         }
 
         case TCPS_FINWAIT1:
@@ -2577,18 +2571,16 @@ static gboolean _tcp_close(LegacyDescriptor* descriptor, Host* host) {
         case TCPS_TIMEWAIT:
         case TCPS_LASTACK: {
             /* close was already called, do nothing */
-            return FALSE;
+            return;
         }
 
         default: {
             /* if we didnt start connection yet, we still want to make sure
              * we set the state to closed so we unbind the socket */
             _tcp_setState(tcp, host, TCPS_CLOSED);
-            return FALSE;
+            return;
         }
     }
-
-    return FALSE;
 }
 
 gint tcp_shutdown(TCP* tcp, Host* host, gint how) {

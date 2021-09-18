@@ -77,7 +77,7 @@ static void _socket_free(LegacyDescriptor* descriptor) {
     socket->vtable->free((LegacyDescriptor*)socket);
 }
 
-static gboolean _socket_close(LegacyDescriptor* descriptor, Host* host) {
+static void _socket_close(LegacyDescriptor* descriptor, Host* host) {
     Socket* socket = _socket_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
@@ -85,7 +85,7 @@ static gboolean _socket_close(LegacyDescriptor* descriptor, Host* host) {
     Tracker* tracker = host_getTracker(host);
     tracker_removeSocket(tracker, descriptor_getHandle(descriptor));
 
-    return socket->vtable->close((LegacyDescriptor*)socket, host);
+    socket->vtable->close((LegacyDescriptor*)socket, host);
 }
 
 static gssize _socket_sendUserData(Transport* transport, Thread* thread, PluginVirtualPtr buffer,

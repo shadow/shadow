@@ -38,7 +38,7 @@ static Channel* _channel_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     return (Channel*)descriptor;
 }
 
-static gboolean channel_close(LegacyDescriptor* descriptor, Host* host) {
+static void channel_close(LegacyDescriptor* descriptor, Host* host) {
     Channel* channel = _channel_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(channel);
     /* tell our link that we are done */
@@ -52,9 +52,6 @@ static gboolean channel_close(LegacyDescriptor* descriptor, Host* host) {
         descriptor_unref(&channel->linkedChannel->super.super);
         channel->linkedChannel = NULL;
     }
-
-    /* host can stop monitoring us for changes */
-    return TRUE;
 }
 
 static void channel_free(LegacyDescriptor* descriptor) {

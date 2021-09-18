@@ -28,11 +28,7 @@ typedef struct _LegacyDescriptor LegacyDescriptor;
 typedef struct _DescriptorFunctionTable DescriptorFunctionTable;
 
 /* required functions */
-
-/* Returns TRUE if the descriptor should be deregistered from the owning
- * process upon return from the function, FALSE if the child will handle
- * deregistration on its own. */
-typedef gboolean (*DescriptorCloseFunc)(LegacyDescriptor* descriptor, Host* host);
+typedef void (*DescriptorCloseFunc)(LegacyDescriptor* descriptor, Host* host);
 typedef void (*DescriptorCleanupFunc)(LegacyDescriptor* descriptor);
 typedef void (*DescriptorFreeFunc)(LegacyDescriptor* descriptor);
 

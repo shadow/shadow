@@ -120,7 +120,9 @@ void descriptor_close(LegacyDescriptor* descriptor, Host* host) {
     MAGIC_ASSERT(descriptor->funcTable);
     trace("Descriptor %i calling vtable close now", descriptor->handle);
     descriptor_adjustStatus(descriptor, STATUS_DESCRIPTOR_CLOSED, TRUE);
-    if (descriptor->funcTable->close(descriptor, host) && descriptor->ownerProcess) {
+
+    descriptor->funcTable->close(descriptor, host);
+    if (descriptor->ownerProcess) {
         process_deregisterLegacyDescriptor(descriptor->ownerProcess, descriptor);
     }
 }

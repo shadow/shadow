@@ -488,9 +488,8 @@ extern "C" {
     pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
 }
 pub type LegacyDescriptor = [u64; 7usize];
-pub type DescriptorCloseFunc = ::std::option::Option<
-    unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host) -> gboolean,
->;
+pub type DescriptorCloseFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host)>;
 pub type DescriptorCleanupFunc =
     ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
 pub type DescriptorFreeFunc =

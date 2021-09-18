@@ -43,11 +43,11 @@ static void _transport_free(LegacyDescriptor* descriptor) {
     transport->vtable->free(descriptor);
 }
 
-static gboolean _transport_close(LegacyDescriptor* descriptor, Host* host) {
+static void _transport_close(LegacyDescriptor* descriptor, Host* host) {
     Transport* transport = _transport_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(transport);
     MAGIC_ASSERT(transport->vtable);
-    return transport->vtable->close(descriptor, host);
+    transport->vtable->close(descriptor, host);
 }
 
 DescriptorFunctionTable transport_functions = {

@@ -46,17 +46,12 @@ static Timer* _timer_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     return (Timer*)descriptor;
 }
 
-static gboolean _timer_close(LegacyDescriptor* descriptor, Host* host) {
+static void _timer_close(LegacyDescriptor* descriptor, Host* host) {
     Timer* timer = _timer_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(timer);
     trace("timer fd %i closing now", timer->super.handle);
     timer->isClosed = TRUE;
     descriptor_adjustStatus(&(timer->super), STATUS_DESCRIPTOR_ACTIVE, FALSE);
-    if (timer->super.handle > 0) {
-        return TRUE; // deregister from process
-    } else {
-        return FALSE; // we are not owned by a process
-    }
 }
 
 static void _timer_free(LegacyDescriptor* descriptor) {
