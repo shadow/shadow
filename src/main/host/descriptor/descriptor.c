@@ -286,11 +286,7 @@ void descriptor_removeFlags(LegacyDescriptor* descriptor, gint flags) {
 void descriptor_shutdownHelper(LegacyDescriptor* legacyDesc) {
     MAGIC_ASSERT(legacyDesc);
 
-    if (legacyDesc->type == DT_TCPSOCKET) {
-        /* tcp servers and their children holds refs to each other. make
-         * sure they all get freed by removing the refs in one direction */
-        tcp_clearAllChildrenIfServer((TCP*)legacyDesc);
-    } else if (legacyDesc->type == DT_UNIXSOCKET || legacyDesc->type == DT_PIPE) {
+    if (legacyDesc->type == DT_UNIXSOCKET || legacyDesc->type == DT_PIPE) {
         /* we need to correctly update the linked channel refs */
         channel_setLinkedChannel((Channel*)legacyDesc, NULL);
     } else if (legacyDesc->type == DT_EPOLL) {
