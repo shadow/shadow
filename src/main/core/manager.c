@@ -29,7 +29,12 @@
 #include "main/utility/utility.h"
 
 #define PRELOAD_SHIM_LIB_STR "libshadow-shim.so"
+#define PRELOAD_SYSCALLS_LIB_STR "libshadow_syscalls.so"
 #define PRELOAD_OPENSSL_RNG_LIB_STR "libshadow_openssl_rng.so"
+
+// Allow turning off syscall preloading at run-time.
+static bool _use_syscalls_preload = true;
+ADD_CONFIG_HANDLER(config_getUseSyscallsPreload, _use_syscalls_preload)
 
 // Allow turning off openssl rng lib preloading at run-time.
 static bool _use_openssl_rng_preload = true;
@@ -78,6 +83,8 @@ struct _Manager {
 
     // Path to the shim that we preload for every managed process.
     gchar* preloadShimPath;
+    // Path to the syscalls lib that we preload for managed processes.
+    gchar* preloadSyscallsPath;
     // Path to the openssl rng lib that we preload for requesting managed processes.
     gchar* preloadOpensslRngPath;
 
@@ -212,6 +219,15 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
     } else {
         // The shim is required, so panic if we can't find it.
         utility_panic("could not find required preload library %s in rpath", PRELOAD_SHIM_LIB_STR);
+    }
+
+    manager->preloadSyscallsPath = _manager_scanRPathForLib(PRELOAD_SYSCALLS_LIB_STR);
+    if (manager->preloadSyscallsPath != NULL) {
+        info("found optional preload library %s at path %s", PRELOAD_SYSCALLS_LIB_STR,
+             manager->preloadSyscallsPath);
+    } else {
+        // The syscalls preload is optional and may not be used by and managed processes.
+        warning("could not find optional preload library %s in rpath", PRELOAD_SYSCALLS_LIB_STR);
     }
 
     manager->preloadOpensslRngPath = _manager_scanRPathForLib(PRELOAD_OPENSSL_RNG_LIB_STR);
@@ -374,6 +390,9 @@ gint manager_free(Manager* manager) {
     if (manager->preloadShimPath) {
         g_free(manager->preloadShimPath);
     }
+    if (manager->preloadSyscallsPath) {
+        g_free(manager->preloadSyscallsPath);
+    }
     if (manager->preloadOpensslRngPath) {
         g_free(manager->preloadOpensslRngPath);
     }
@@ -449,6 +468,7 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
     /* insert also the plugin preload entry if one exists.
      * precendence here is:
      *   - preload path of the shim
+     *   - preload path of the syscalls lib
      *   - preload path of the openssl rng lib
      *   - preload values from LD_PRELOAD entries in the environment process option */
     GPtrArray* ldPreloadArray = g_ptr_array_new();
@@ -456,6 +476,13 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
     if (manager->preloadShimPath != NULL) {
         debug("adding Shadow preload shim path %s", manager->preloadShimPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadShimPath));
+    }
+
+    if (!_use_syscalls_preload) {
+        debug("syscalls preloading is disabled");
+    } else if (manager->preloadSyscallsPath != NULL) {
+        debug("adding Shadow preload lib path %s", manager->preloadSyscallsPath);
+        g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadSyscallsPath));
     }
 
     if (!_use_openssl_rng_preload) {

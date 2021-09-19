@@ -30,7 +30,6 @@ target_link_libraries(${SHIM_HELPER_LIB} INTERFACE shadow-shmem)
 set(SHIM_LIB shadow-shim)
 set(SHIM_FILES
   preload_libraries.c
-  preload_syscalls.c
   preload_syscall.c
   shim.c
   shim_logger.c
