@@ -39,9 +39,6 @@ typedef struct CliOptions CliOptions;
 
 typedef struct CompatDescriptor CompatDescriptor;
 
-// Options contained in a configuration file.
-typedef struct ConfigFileOptions ConfigFileOptions;
-
 // Shadow configuration options after processing command-line and configuration file options.
 typedef struct ConfigOptions ConfigOptions;
 

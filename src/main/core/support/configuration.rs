@@ -923,38 +923,6 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn clioptions_parse(
-        argc: libc::c_int,
-        argv: *const *const libc::c_char,
-    ) -> *mut CliOptions {
-        assert!(!argv.is_null());
-
-        let args = (0..argc).map(|x| unsafe { CStr::from_ptr(*argv.add(x as usize)) });
-        let args = args.map(|x| OsStr::from_bytes(x.to_bytes()));
-
-        let opts = CliOptions::try_parse_from(args);
-        let opts = match opts {
-            Ok(x) => x,
-            Err(e) => {
-                if e.use_stderr() {
-                    eprintln!("{}", e);
-                } else {
-                    println!("{}", e);
-                }
-                return std::ptr::null_mut();
-            }
-        };
-
-        Box::into_raw(Box::new(opts))
-    }
-
-    #[no_mangle]
-    pub extern "C" fn clioptions_free(options: *mut CliOptions) {
-        assert!(!options.is_null());
-        unsafe { Box::from_raw(options) };
-    }
-
-    #[no_mangle]
     pub extern "C" fn clioptions_freeString(string: *mut libc::c_char) {
         if !string.is_null() {
             unsafe { CString::from_raw(string) };
@@ -998,58 +966,6 @@ mod export {
             Some(s) => CString::into_raw(CString::new(s.clone()).unwrap()),
             None => std::ptr::null_mut(),
         }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn configfile_parse(filename: *const libc::c_char) -> *mut ConfigFileOptions {
-        assert!(!filename.is_null());
-        let filename = OsStr::from_bytes(unsafe { CStr::from_ptr(filename).to_bytes() });
-
-        let file = match std::fs::File::open(filename) {
-            Ok(x) => x,
-            Err(e) => {
-                eprintln!("Could not open config file {:?}: {}", filename, e);
-                return std::ptr::null_mut();
-            }
-        };
-
-        let config: ConfigFileOptions = match serde_yaml::from_reader(file) {
-            Ok(x) => x,
-            Err(e) => {
-                eprintln!("Could not parse yaml: {}", e);
-                return std::ptr::null_mut();
-            }
-        };
-
-        Box::into_raw(Box::new(config))
-    }
-
-    #[no_mangle]
-    pub extern "C" fn configfile_free(config: *mut ConfigFileOptions) {
-        assert!(!config.is_null());
-        unsafe { Box::from_raw(config) };
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_new(
-        config_file: *const ConfigFileOptions,
-        options: *const CliOptions,
-    ) -> *mut ConfigOptions {
-        assert!(!config_file.is_null());
-        assert!(!options.is_null());
-
-        let config_file = unsafe { &*config_file };
-        let options = unsafe { &*options };
-
-        let config = ConfigOptions::new(config_file.clone(), options.clone());
-
-        Box::into_raw(Box::new(config))
-    }
-
-    #[no_mangle]
-    pub extern "C" fn config_free(config: *mut ConfigOptions) {
-        assert!(!config.is_null());
-        unsafe { Box::from_raw(config) };
     }
 
     #[no_mangle]

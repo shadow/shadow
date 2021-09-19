@@ -40,9 +40,6 @@ typedef struct CliOptions CliOptions;
 
 typedef struct CompatDescriptor CompatDescriptor;
 
-// Options contained in a configuration file.
-typedef struct ConfigFileOptions ConfigFileOptions;
-
 // Shadow configuration options after processing command-line and configuration file options.
 typedef struct ConfigOptions ConfigOptions;
 
@@ -232,10 +229,6 @@ void lps_idleTimerStop(const struct LogicalProcessors *lps, int lpi);
 
 int main_runShadow(int argc, const char *const *argv);
 
-struct CliOptions *clioptions_parse(int argc, const char *const *argv);
-
-void clioptions_free(struct CliOptions *options);
-
 void clioptions_freeString(char *string);
 
 bool clioptions_getGdb(const struct CliOptions *options);
@@ -247,15 +240,6 @@ bool clioptions_getShowBuildInfo(const struct CliOptions *options);
 bool clioptions_getShowConfig(const struct CliOptions *options);
 
 char *clioptions_getConfig(const struct CliOptions *options);
-
-struct ConfigFileOptions *configfile_parse(const char *filename);
-
-void configfile_free(struct ConfigFileOptions *config);
-
-struct ConfigOptions *config_new(const struct ConfigFileOptions *config_file,
-                                 const struct CliOptions *options);
-
-void config_free(struct ConfigOptions *config);
 
 void config_freeString(char *string);
 
