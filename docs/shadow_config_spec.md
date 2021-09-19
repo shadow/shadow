@@ -85,6 +85,7 @@ hosts:
 - [`experimental.use_shim_syscall_handler`](#experimentaluse_shim_syscall_handler)
 - [`experimental.use_seccomp`](#experimentaluse_seccomp)
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
+- [`experimental.use_syscalls_preload`](#experimentaluse_syscalls_preload)
 - [`experimental.worker_threads`](#experimentalworker_threads)
 - [`host_defaults`](#host_defaults)
 - [`host_defaults.heartbeat_interval`](#host_defaultsheartbeat_interval)
@@ -440,6 +441,14 @@ Default: false
 Type: Bool
 
 Count the number of occurrences for individual syscalls.
+
+#### `experimental.use_syscalls_preload`
+
+Default: true  
+Type: Bool
+
+Preload our syscalls library for all managed processes for fast syscall
+interposition when possible.
 
 #### `experimental.worker_threads`
 
