@@ -25,19 +25,28 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     )?;
 
     // parse the options from the command line
-    let options = CliOptions::try_parse_from(args.clone())
-        .map_err(|e| anyhow::Error::msg(e.to_string()))
-        .context("Could not parse command-line options")?;
+    let options = match CliOptions::try_parse_from(args.clone()) {
+        Ok(x) => x,
+        Err(e) => {
+            if e.use_stderr() {
+                eprint!("{}", e);
+                std::process::exit(1);
+            } else {
+                print!("{}", e);
+                std::process::exit(0);
+            }
+        }
+    };
 
     if options.show_build_info {
         unsafe { c::main_printBuildInfo() };
-        return Ok(());
+        std::process::exit(0);
     }
 
     if options.shm_cleanup {
         // clean up any orphaned shared memory
         unsafe { c::shmemcleanup_tryCleanup() };
-        return Ok(());
+        std::process::exit(0);
     }
 
     // read from stdin if the config filename is given as '-'
