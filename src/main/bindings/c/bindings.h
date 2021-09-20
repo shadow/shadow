@@ -269,7 +269,7 @@ bool config_getUseSyscallCounters(const struct ConfigOptions *config);
 
 bool config_getUseObjectCounters(const struct ConfigOptions *config);
 
-bool config_getUseSyscallsPreload(const struct ConfigOptions *config);
+bool config_getUseLibcPreload(const struct ConfigOptions *config);
 
 bool config_getUseOpensslRNGPreload(const struct ConfigOptions *config);
 

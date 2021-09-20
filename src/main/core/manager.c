@@ -29,12 +29,12 @@
 #include "main/utility/utility.h"
 
 #define PRELOAD_SHIM_LIB_STR "libshadow-shim.so"
-#define PRELOAD_SYSCALLS_LIB_STR "libshadow_syscalls.so"
+#define PRELOAD_LIBC_LIB_STR "libshadow_libc.so"
 #define PRELOAD_OPENSSL_RNG_LIB_STR "libshadow_openssl_rng.so"
 
 // Allow turning off syscall preloading at run-time.
-static bool _use_syscalls_preload = true;
-ADD_CONFIG_HANDLER(config_getUseSyscallsPreload, _use_syscalls_preload)
+static bool _use_libc_preload = true;
+ADD_CONFIG_HANDLER(config_getUseLibcPreload, _use_libc_preload)
 
 // Allow turning off openssl rng lib preloading at run-time.
 static bool _use_openssl_rng_preload = true;
@@ -83,8 +83,8 @@ struct _Manager {
 
     // Path to the shim that we preload for every managed process.
     gchar* preloadShimPath;
-    // Path to the syscalls lib that we preload for managed processes.
-    gchar* preloadSyscallsPath;
+    // Path to the libc lib that we preload for managed processes.
+    gchar* preloadLibcPath;
     // Path to the openssl rng lib that we preload for requesting managed processes.
     gchar* preloadOpensslRngPath;
 
@@ -221,13 +221,13 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
         utility_panic("could not find required preload library %s in rpath", PRELOAD_SHIM_LIB_STR);
     }
 
-    manager->preloadSyscallsPath = _manager_scanRPathForLib(PRELOAD_SYSCALLS_LIB_STR);
-    if (manager->preloadSyscallsPath != NULL) {
-        info("found optional preload library %s at path %s", PRELOAD_SYSCALLS_LIB_STR,
-             manager->preloadSyscallsPath);
+    manager->preloadLibcPath = _manager_scanRPathForLib(PRELOAD_LIBC_LIB_STR);
+    if (manager->preloadLibcPath != NULL) {
+        info("found optional preload library %s at path %s", PRELOAD_LIBC_LIB_STR,
+             manager->preloadLibcPath);
     } else {
-        // The syscalls preload is optional and may not be used by and managed processes.
-        warning("could not find optional preload library %s in rpath", PRELOAD_SYSCALLS_LIB_STR);
+        // The libc preload is optional and may not be used by and managed processes.
+        warning("could not find optional preload library %s in rpath", PRELOAD_LIBC_LIB_STR);
     }
 
     manager->preloadOpensslRngPath = _manager_scanRPathForLib(PRELOAD_OPENSSL_RNG_LIB_STR);
@@ -390,8 +390,8 @@ gint manager_free(Manager* manager) {
     if (manager->preloadShimPath) {
         g_free(manager->preloadShimPath);
     }
-    if (manager->preloadSyscallsPath) {
-        g_free(manager->preloadSyscallsPath);
+    if (manager->preloadLibcPath) {
+        g_free(manager->preloadLibcPath);
     }
     if (manager->preloadOpensslRngPath) {
         g_free(manager->preloadOpensslRngPath);
@@ -478,11 +478,11 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadShimPath));
     }
 
-    if (!_use_syscalls_preload) {
-        debug("syscalls preloading is disabled");
-    } else if (manager->preloadSyscallsPath != NULL) {
-        debug("adding Shadow preload lib path %s", manager->preloadSyscallsPath);
-        g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadSyscallsPath));
+    if (!_use_libc_preload) {
+        debug("libc preloading is disabled");
+    } else if (manager->preloadLibcPath != NULL) {
+        debug("adding Shadow preload lib path %s", manager->preloadLibcPath);
+        g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadLibcPath));
     }
 
     if (!_use_openssl_rng_preload) {

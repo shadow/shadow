@@ -3,9 +3,9 @@
 # much as possible interposing via the seccomp method which is slightly less
 # efficient. Preloading means we can prevent mode transitions and executions of
 # the seccomp filter.
-add_library(shadow_syscalls SHARED libcalls.c syscalls.c)
+add_library(shadow_libc SHARED libcalls.c syscalls.c)
 # Disable the builtin execve, exit, and fork functions in this compilation unit
 # which have different call signatures than the functions in syscalls.c.
-target_compile_options(shadow_syscalls PRIVATE -D_GNU_SOURCE -fPIC 
+target_compile_options(shadow_libc PRIVATE -D_GNU_SOURCE -fPIC 
     -fno-builtin-execve -fno-builtin-exit -fno-builtin-fork)
-install(TARGETS shadow_syscalls DESTINATION lib)
+install(TARGETS shadow_libc DESTINATION lib)

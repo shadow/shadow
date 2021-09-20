@@ -77,6 +77,7 @@ hosts:
 - [`experimental.use_cpu_pinning`](#experimentaluse_cpu_pinning)
 - [`experimental.use_explicit_block_message`](#experimentaluse_explicit_block_message)
 - [`experimental.use_legacy_working_dir`](#experimentaluse_legacy_working_dir)
+- [`experimental.use_libc_preload`](#experimentaluse_libc_preload)
 - [`experimental.use_memory_manager`](#experimentaluse_memory_manager)
 - [`experimental.use_o_n_waitpid_workarounds`](#experimentaluse_o_n_waitpid_workarounds)
 - [`experimental.use_object_counters`](#experimentaluse_object_counters)
@@ -85,7 +86,6 @@ hosts:
 - [`experimental.use_shim_syscall_handler`](#experimentaluse_shim_syscall_handler)
 - [`experimental.use_seccomp`](#experimentaluse_seccomp)
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
-- [`experimental.use_syscalls_preload`](#experimentaluse_syscalls_preload)
 - [`experimental.worker_threads`](#experimentalworker_threads)
 - [`host_defaults`](#host_defaults)
 - [`host_defaults.heartbeat_interval`](#host_defaultsheartbeat_interval)
@@ -379,6 +379,14 @@ Type: Bool
 
 Don't adjust the working directories of the virtual processes.
 
+#### `experimental.use_libc_preload`
+
+Default: true  
+Type: Bool
+
+Preload our libc library for all managed processes for fast syscall
+interposition when possible.
+
 #### `experimental.use_memory_manager`
 
 Default: true  
@@ -441,14 +449,6 @@ Default: false
 Type: Bool
 
 Count the number of occurrences for individual syscalls.
-
-#### `experimental.use_syscalls_preload`
-
-Default: true  
-Type: Bool
-
-Preload our syscalls library for all managed processes for fast syscall
-interposition when possible.
 
 #### `experimental.worker_threads`
 
