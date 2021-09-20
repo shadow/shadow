@@ -1112,8 +1112,23 @@ void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
     MAGIC_ASSERT(proc);
 
     if (desc) {
-        CompatDescriptor* compatDesc =
-            process_deregisterCompatDescriptor(proc, descriptor_getHandle(desc));
+        int handle = descriptor_getHandle(desc);
+
+        if (handle < 0) {
+            warning("Attempted to deregister a descriptor with handle %d", handle);
+            return;
+        }
+
+        CompatDescriptor* compatDesc = process_deregisterCompatDescriptor(proc, handle);
+
+        if (!compatDesc) {
+            error("Could not deregister a descriptor with handle %d", handle);
+            return;
+        }
+
+        if (compatdescriptor_asLegacy(compatDesc) != desc) {
+            panic("Deregistered the wrong descriptor with handle %d", handle);
+        }
 
         descriptor_setOwnerProcess(desc, NULL);
         compatdescriptor_free(compatDesc);

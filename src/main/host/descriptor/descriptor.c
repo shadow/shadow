@@ -69,8 +69,12 @@ void descriptor_ref(gpointer data) {
     LegacyDescriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
+    // should not increment the strong count when there are only weak references left
+    utility_assert(descriptor->refCountStrong > 0);
+
     (descriptor->refCountStrong)++;
-    trace("Descriptor %i ref++ to %i", descriptor->handle, descriptor->refCountStrong);
+    trace("Descriptor %i strong_ref++ to %i (weak_ref=%i)", descriptor->handle,
+          descriptor->refCountStrong, descriptor->refCountWeak);
 }
 
 void descriptor_unref(gpointer data) {
@@ -78,20 +82,34 @@ void descriptor_unref(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     (descriptor->refCountStrong)--;
-    trace("Descriptor %i ref-- to %i", descriptor->handle, descriptor->refCountStrong);
+    trace("Descriptor %i strong_ref-- to %i (weak_ref=%i)", descriptor->handle,
+          descriptor->refCountStrong, descriptor->refCountWeak);
 
     utility_assert(descriptor->refCountStrong >= 0);
-    if (descriptor->refCountStrong == 0 && descriptor->refCountWeak == 0) {
-        _descriptor_cleanup(descriptor);
-        _descriptor_free(descriptor);
-    } else if (descriptor->refCountStrong == 0) {
+
+    if (descriptor->refCountStrong > 0) {
+        // there are strong references, so do nothing
+        return;
+    }
+
+    if (descriptor->refCountWeak > 0) {
+        // this was the last strong reference, but there are weak references, so cleanup only
+        trace("Descriptor %i kept alive by weak count of %d", descriptor->handle,
+              descriptor->refCountWeak);
+
         // create a temporary weak reference to prevent the _descriptor_cleanup() from calling
         // descriptor_unrefWeak() and running the _descriptor_free() while still running the
         // _descriptor_cleanup()
         descriptor_refWeak(descriptor);
         _descriptor_cleanup(descriptor);
         descriptor_unrefWeak(descriptor);
+
+        return;
     }
+
+    // this was the last strong reference and no weak references, so cleanup and free
+    _descriptor_cleanup(descriptor);
+    _descriptor_free(descriptor);
 }
 
 void descriptor_refWeak(gpointer data) {
@@ -99,7 +117,8 @@ void descriptor_refWeak(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     (descriptor->refCountWeak)++;
-    trace("Descriptor %i weak_ref++ to %i", descriptor->handle, descriptor->refCountWeak);
+    trace("Descriptor %i weak_ref++ to %i (strong_ref=%i)", descriptor->handle,
+          descriptor->refCountWeak, descriptor->refCountStrong);
 }
 
 void descriptor_unrefWeak(gpointer data) {
@@ -107,12 +126,19 @@ void descriptor_unrefWeak(gpointer data) {
     MAGIC_ASSERT(descriptor);
 
     (descriptor->refCountWeak)--;
-    trace("Descriptor %i weak_ref-- to %i", descriptor->handle, descriptor->refCountWeak);
+    trace("Descriptor %i weak_ref-- to %i (strong_ref=%i)", descriptor->handle,
+          descriptor->refCountWeak, descriptor->refCountStrong);
 
     utility_assert(descriptor->refCountWeak >= 0);
-    if (descriptor->refCountStrong == 0 && descriptor->refCountWeak == 0) {
-        _descriptor_free(descriptor);
+
+    if (descriptor->refCountStrong > 0 || descriptor->refCountWeak > 0) {
+        // there are references (strong or weak), so do nothing
+        return;
     }
+
+    // this was the last weak reference and no strong references, so we should free
+    // _descriptor_cleanup() should have been called earlier when the strong count reached 0
+    _descriptor_free(descriptor);
 }
 
 void descriptor_close(LegacyDescriptor* descriptor, Host* host) {
