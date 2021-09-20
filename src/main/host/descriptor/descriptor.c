@@ -144,6 +144,13 @@ void descriptor_unrefWeak(gpointer data) {
 void descriptor_close(LegacyDescriptor* descriptor, Host* host) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
+
+    // if it's already closed, exit early
+    if ((descriptor_getStatus(descriptor) & STATUS_DESCRIPTOR_CLOSED) != 0) {
+        warning("Attempting to close an already-closed descriptor");
+        return;
+    }
+
     trace("Descriptor %i calling vtable close now", descriptor->handle);
     descriptor_adjustStatus(descriptor, STATUS_DESCRIPTOR_CLOSED, TRUE);
 

@@ -1,5 +1,8 @@
 use crate::cshadow as c;
 use crate::host::descriptor::{CompatDescriptor, FileStatus, PosixFile};
+use crate::host::process::Process;
+
+use std::convert::TryInto;
 
 pub mod fcntl;
 pub mod unistd;
@@ -50,21 +53,16 @@ impl c::SysCallReturn {
     }
 }
 
-/// Returns a pointer to the `CompatDescriptor` for the fd. The pointer will never be NULL.
+/// Returns the `CompatDescriptor` for the fd if it exists, otherwise returns EBADF.
 pub fn get_descriptor(
-    fd: libc::c_int,
-    process: *mut c::Process,
-) -> Result<*const CompatDescriptor, nix::errno::Errno> {
+    process: &Process,
+    fd: impl TryInto<u32>,
+) -> Result<&CompatDescriptor, nix::errno::Errno> {
     // check that fd is within bounds
-    if fd < 0 {
-        return Err(nix::errno::Errno::EBADF);
-    }
+    let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
 
-    // check that the fd exists
-    let desc = unsafe { c::process_getRegisteredCompatDescriptor(process, fd) };
-    if desc.is_null() {
-        return Err(nix::errno::Errno::EBADF);
+    match process.get_descriptor(fd) {
+        Some(desc) => Ok(desc),
+        None => Err(nix::errno::Errno::EBADF),
     }
-
-    Ok(desc)
 }
