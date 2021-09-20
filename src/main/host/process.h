@@ -89,18 +89,8 @@ pid_t process_getNativePid(const Process* proc);
  * - If we don't find a matching thread, return 0. */
 pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID);
 
-/* Handle all of the descriptors owned by this process. Deregistering a CompatDescriptor returns
- * an owned reference to that CompatDescriptor, and you must drop it manually when finished. */
-int process_registerCompatDescriptor(Process* proc, CompatDescriptor* compatDesc);
-CompatDescriptor* process_deregisterCompatDescriptor(Process* proc, int handle);
-const CompatDescriptor* process_getRegisteredCompatDescriptor(Process* proc, int handle);
-
-/* Handle only the legacy descriptors owned by this process. Unlike the deregister method for the
- * CompatDescriptor, you do not need to manually unref the LegacyDescriptor as it's done
- * automatically. */
-int process_registerLegacyDescriptor(Process* proc, LegacyDescriptor* desc);
-void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc);
-LegacyDescriptor* process_getRegisteredLegacyDescriptor(Process* proc, int handle);
+/* This should only be called from the rust 'Process' object. */
+DescriptorTable* process_getDescriptorTable(Process* proc);
 
 // Convert a virtual ptr in the plugin address space to a globally unique physical ptr
 PluginPhysicalPtr process_getPhysicalAddress(Process* proc, PluginVirtualPtr vPtr);
