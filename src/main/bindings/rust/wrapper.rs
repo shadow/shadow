@@ -488,9 +488,10 @@ extern "C" {
     pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
 }
 pub type LegacyDescriptor = [u64; 7usize];
-pub type DescriptorCloseFunc = ::std::option::Option<
-    unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host) -> gboolean,
->;
+pub type DescriptorCloseFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host)>;
+pub type DescriptorCleanupFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
 pub type DescriptorFreeFunc =
     ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
 pub type SysCallHandler = _SysCallHandler;
@@ -1055,6 +1056,9 @@ extern "C" {
     pub fn descriptor_unref(data: gpointer);
 }
 extern "C" {
+    pub fn descriptor_close(descriptor: *mut LegacyDescriptor, host: *mut Host);
+}
+extern "C" {
     pub fn descriptor_setHandle(descriptor: *mut LegacyDescriptor, handle: gint);
 }
 extern "C" {
@@ -1086,6 +1090,7 @@ pub type TransportReceiveFunc = ::std::option::Option<
 #[derive(Debug, Copy, Clone)]
 pub struct _TransportFunctionTable {
     pub close: DescriptorCloseFunc,
+    pub cleanup: DescriptorCleanupFunc,
     pub free: DescriptorFreeFunc,
     pub send: TransportSendFunc,
     pub receive: TransportReceiveFunc,
@@ -1095,7 +1100,7 @@ pub struct _TransportFunctionTable {
 fn bindgen_test_layout__TransportFunctionTable() {
     assert_eq!(
         ::std::mem::size_of::<_TransportFunctionTable>(),
-        40usize,
+        48usize,
         concat!("Size of: ", stringify!(_TransportFunctionTable))
     );
     assert_eq!(
@@ -1114,8 +1119,18 @@ fn bindgen_test_layout__TransportFunctionTable() {
         )
     );
     assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).free as *const _ as usize },
+        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).cleanup as *const _ as usize },
         8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_TransportFunctionTable),
+            "::",
+            stringify!(cleanup)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).free as *const _ as usize },
+        16usize,
         concat!(
             "Offset of field: ",
             stringify!(_TransportFunctionTable),
@@ -1125,7 +1140,7 @@ fn bindgen_test_layout__TransportFunctionTable() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).send as *const _ as usize },
-        16usize,
+        24usize,
         concat!(
             "Offset of field: ",
             stringify!(_TransportFunctionTable),
@@ -1135,7 +1150,7 @@ fn bindgen_test_layout__TransportFunctionTable() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).receive as *const _ as usize },
-        24usize,
+        32usize,
         concat!(
             "Offset of field: ",
             stringify!(_TransportFunctionTable),
@@ -1145,7 +1160,7 @@ fn bindgen_test_layout__TransportFunctionTable() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_TransportFunctionTable>())).magic as *const _ as usize },
-        32usize,
+        40usize,
         concat!(
             "Offset of field: ",
             stringify!(_TransportFunctionTable),

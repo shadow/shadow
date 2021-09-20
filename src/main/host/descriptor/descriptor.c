@@ -29,7 +29,8 @@ void descriptor_init(LegacyDescriptor* descriptor, LegacyDescriptorType type,
     descriptor->handle = -1;
     descriptor->listeners = g_hash_table_new_full(
         g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)statuslistener_unref);
-    descriptor->referenceCount = 1;
+    descriptor->refCountStrong = 1;
+    descriptor->refCountWeak = 0;
 
     trace("Descriptor %i has been initialized now", descriptor->handle);
 
@@ -42,6 +43,16 @@ void descriptor_clear(LegacyDescriptor* descriptor) {
         g_hash_table_destroy(descriptor->listeners);
     }
     MAGIC_CLEAR(descriptor);
+}
+
+static void _descriptor_cleanup(LegacyDescriptor* descriptor) {
+    MAGIC_ASSERT(descriptor);
+    MAGIC_ASSERT(descriptor->funcTable);
+
+    if (descriptor->funcTable->cleanup) {
+        trace("Descriptor %i calling vtable cleanup now", descriptor->handle);
+        descriptor->funcTable->cleanup(descriptor);
+    }
 }
 
 static void _descriptor_free(LegacyDescriptor* descriptor) {
@@ -58,24 +69,76 @@ void descriptor_ref(gpointer data) {
     LegacyDescriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
-    (descriptor->referenceCount)++;
-    trace("Descriptor %i ref++ to %i", descriptor->handle,
-          descriptor->referenceCount);
+    // should not increment the strong count when there are only weak references left
+    utility_assert(descriptor->refCountStrong > 0);
+
+    (descriptor->refCountStrong)++;
+    trace("Descriptor %i strong_ref++ to %i (weak_ref=%i)", descriptor->handle,
+          descriptor->refCountStrong, descriptor->refCountWeak);
 }
 
 void descriptor_unref(gpointer data) {
     LegacyDescriptor* descriptor = data;
     MAGIC_ASSERT(descriptor);
 
-    (descriptor->referenceCount)--;
-    trace("Descriptor %i ref-- to %i", descriptor->handle,
-          descriptor->referenceCount);
+    (descriptor->refCountStrong)--;
+    trace("Descriptor %i strong_ref-- to %i (weak_ref=%i)", descriptor->handle,
+          descriptor->refCountStrong, descriptor->refCountWeak);
 
-    utility_assert(descriptor->referenceCount >= 0);
-    if(descriptor->referenceCount == 0) {
-        gint handle = descriptor->handle;
-        _descriptor_free(descriptor);
+    utility_assert(descriptor->refCountStrong >= 0);
+
+    if (descriptor->refCountStrong > 0) {
+        // there are strong references, so do nothing
+        return;
     }
+
+    if (descriptor->refCountWeak > 0) {
+        // this was the last strong reference, but there are weak references, so cleanup only
+        trace("Descriptor %i kept alive by weak count of %d", descriptor->handle,
+              descriptor->refCountWeak);
+
+        // create a temporary weak reference to prevent the _descriptor_cleanup() from calling
+        // descriptor_unrefWeak() and running the _descriptor_free() while still running the
+        // _descriptor_cleanup()
+        descriptor_refWeak(descriptor);
+        _descriptor_cleanup(descriptor);
+        descriptor_unrefWeak(descriptor);
+
+        return;
+    }
+
+    // this was the last strong reference and no weak references, so cleanup and free
+    _descriptor_cleanup(descriptor);
+    _descriptor_free(descriptor);
+}
+
+void descriptor_refWeak(gpointer data) {
+    LegacyDescriptor* descriptor = data;
+    MAGIC_ASSERT(descriptor);
+
+    (descriptor->refCountWeak)++;
+    trace("Descriptor %i weak_ref++ to %i (strong_ref=%i)", descriptor->handle,
+          descriptor->refCountWeak, descriptor->refCountStrong);
+}
+
+void descriptor_unrefWeak(gpointer data) {
+    LegacyDescriptor* descriptor = data;
+    MAGIC_ASSERT(descriptor);
+
+    (descriptor->refCountWeak)--;
+    trace("Descriptor %i weak_ref-- to %i (strong_ref=%i)", descriptor->handle,
+          descriptor->refCountWeak, descriptor->refCountStrong);
+
+    utility_assert(descriptor->refCountWeak >= 0);
+
+    if (descriptor->refCountStrong > 0 || descriptor->refCountWeak > 0) {
+        // there are references (strong or weak), so do nothing
+        return;
+    }
+
+    // this was the last weak reference and no strong references, so we should free
+    // _descriptor_cleanup() should have been called earlier when the strong count reached 0
+    _descriptor_free(descriptor);
 }
 
 void descriptor_close(LegacyDescriptor* descriptor, Host* host) {
@@ -83,9 +146,8 @@ void descriptor_close(LegacyDescriptor* descriptor, Host* host) {
     MAGIC_ASSERT(descriptor->funcTable);
     trace("Descriptor %i calling vtable close now", descriptor->handle);
     descriptor_adjustStatus(descriptor, STATUS_DESCRIPTOR_CLOSED, TRUE);
-    if (descriptor->funcTable->close(descriptor, host) && descriptor->ownerProcess) {
-        process_deregisterLegacyDescriptor(descriptor->ownerProcess, descriptor);
-    }
+
+    descriptor->funcTable->close(descriptor, host);
 }
 
 gint descriptor_compare(const LegacyDescriptor* foo, const LegacyDescriptor* bar, gpointer user_data) {
@@ -249,11 +311,7 @@ void descriptor_removeFlags(LegacyDescriptor* descriptor, gint flags) {
 void descriptor_shutdownHelper(LegacyDescriptor* legacyDesc) {
     MAGIC_ASSERT(legacyDesc);
 
-    if (legacyDesc->type == DT_TCPSOCKET) {
-        /* tcp servers and their children holds refs to each other. make
-         * sure they all get freed by removing the refs in one direction */
-        tcp_clearAllChildrenIfServer((TCP*)legacyDesc);
-    } else if (legacyDesc->type == DT_UNIXSOCKET || legacyDesc->type == DT_PIPE) {
+    if (legacyDesc->type == DT_UNIXSOCKET || legacyDesc->type == DT_PIPE) {
         /* we need to correctly update the linked channel refs */
         channel_setLinkedChannel((Channel*)legacyDesc, NULL);
     } else if (legacyDesc->type == DT_EPOLL) {

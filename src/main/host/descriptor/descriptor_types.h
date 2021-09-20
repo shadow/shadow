@@ -28,11 +28,8 @@ typedef struct _LegacyDescriptor LegacyDescriptor;
 typedef struct _DescriptorFunctionTable DescriptorFunctionTable;
 
 /* required functions */
-
-/* Returns TRUE if the descriptor should be deregistered from the owning
- * process upon return from the function, FALSE if the child will handle
- * deregistration on its own. */
-typedef gboolean (*DescriptorCloseFunc)(LegacyDescriptor* descriptor, Host* host);
+typedef void (*DescriptorCloseFunc)(LegacyDescriptor* descriptor, Host* host);
+typedef void (*DescriptorCleanupFunc)(LegacyDescriptor* descriptor);
 typedef void (*DescriptorFreeFunc)(LegacyDescriptor* descriptor);
 
 /*
@@ -41,6 +38,7 @@ typedef void (*DescriptorFreeFunc)(LegacyDescriptor* descriptor);
  */
 struct _DescriptorFunctionTable {
     DescriptorCloseFunc close;
+    DescriptorCleanupFunc cleanup;
     DescriptorFreeFunc free;
     MAGIC_DECLARE;
 };
@@ -52,7 +50,8 @@ struct _LegacyDescriptor {
     LegacyDescriptorType type;
     Status status;
     GHashTable* listeners;
-    gint referenceCount;
+    gint refCountStrong;
+    gint refCountWeak;
     gint flags;
     // Since this structure is shared with Rust, we should always include the magic struct
     // member so that the struct is always the same size regardless of compile-time options.

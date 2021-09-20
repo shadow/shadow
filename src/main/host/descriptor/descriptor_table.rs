@@ -49,7 +49,7 @@ impl DescriptorTable {
             idx
         };
 
-        descriptor.set_handle(idx);
+        descriptor.set_handle(Some(idx));
         let prev = self.descriptors.insert(idx, descriptor);
         debug_assert!(prev.is_none(), "Already a descriptor at {}", idx);
 
@@ -81,7 +81,7 @@ impl DescriptorTable {
         self.available_indices.insert(idx);
         self.trim_tail();
         if let Some(descriptor) = &mut maybe_descriptor {
-            descriptor.set_handle(0);
+            descriptor.set_handle(None);
         }
         maybe_descriptor
     }
@@ -98,7 +98,7 @@ impl DescriptorTable {
         index: u32,
         mut descriptor: CompatDescriptor,
     ) -> Option<CompatDescriptor> {
-        descriptor.set_handle(index);
+        descriptor.set_handle(Some(index));
 
         // We ensure the index is no longer in `self.available_indices`. We *don't* ensure
         // `self.next_index` is > `index`, since that'd require adding the indices in between to
@@ -108,7 +108,7 @@ impl DescriptorTable {
 
         if let Some(mut prev) = self.descriptors.insert(index, descriptor) {
             trace!("Overwriting index {}", index);
-            prev.set_handle(0);
+            prev.set_handle(None);
             Some(prev)
         } else {
             trace!("Setting to unused index {}", index);
@@ -131,10 +131,22 @@ impl DescriptorTable {
             };
         }
     }
+
+    /// Remove and return all descriptors.
+    pub fn remove_all<'a>(&mut self) -> impl Iterator<Item = CompatDescriptor> {
+        // reset the descriptor table
+        let mut old_self = std::mem::replace(self, Self::new());
+        // return the old descriptors
+        for desc in old_self.descriptors.values_mut() {
+            desc.set_handle(None);
+        }
+        old_self.descriptors.into_values()
+    }
 }
 
 mod export {
     use super::*;
+    use crate::host::descriptor::EventQueue;
     use libc::c_int;
 
     /// Create an object that can be used to store all descriptors created by a
@@ -193,7 +205,6 @@ mod export {
         let table = unsafe { table.as_mut().unwrap() };
         match table.remove(index.try_into().unwrap()) {
             Some(d) => CompatDescriptor::into_raw(Box::new(d)),
-
             None => std::ptr::null_mut(),
         }
     }
@@ -244,5 +255,20 @@ mod export {
     pub unsafe extern "C" fn descriptortable_shutdownHelper(table: *mut DescriptorTable) {
         let table = unsafe { table.as_mut().unwrap() };
         table.shutdown_helper();
+    }
+
+    /// Close all descriptors. The `host` option is a legacy option for legacy descriptors.
+    #[no_mangle]
+    pub unsafe extern "C" fn descriptortable_removeAndCloseAll(
+        table: *mut DescriptorTable,
+        host: *mut cshadow::Host,
+    ) {
+        let table = unsafe { table.as_mut().unwrap() };
+
+        EventQueue::queue_and_run(|event_queue| {
+            for desc in table.remove_all() {
+                desc.close(host, event_queue);
+            }
+        });
     }
 }

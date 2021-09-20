@@ -452,11 +452,26 @@ impl CompatDescriptor {
 
     /// Update the handle.
     /// This is a no-op for non-legacy descriptors.
-    pub fn set_handle(&mut self, handle: u32) {
+    pub fn set_handle(&mut self, handle: Option<u32>) {
         if let CompatDescriptor::Legacy(d) = self {
-            unsafe { c::descriptor_setHandle(d.ptr(), handle.try_into().unwrap()) }
+            let handle = match handle {
+                Some(x) => x.try_into().unwrap(),
+                None => -1,
+            };
+            unsafe { c::descriptor_setHandle(d.ptr(), handle) }
         }
         // new descriptor types don't store their file handle, so do nothing
+    }
+
+    /// Close the descriptor. The `host` option is a legacy option for legacy descriptors.
+    pub fn close(self, host: *mut c::Host, event_queue: &mut EventQueue) -> Option<SyscallResult> {
+        match self {
+            Self::New(desc) => desc.close(event_queue),
+            Self::Legacy(desc) => {
+                unsafe { c::descriptor_close(desc.ptr(), host) };
+                Some(Ok(0.into()))
+            }
+        }
     }
 }
 

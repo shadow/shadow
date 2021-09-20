@@ -76,7 +76,6 @@ ADD_CONFIG_HANDLER(config_getUseLegacyWorkingDir, _use_legacy_working_dir)
 
 static gchar* _process_outputFileName(Process* proc, const char* type);
 static void _process_check(Process* proc);
-static void _disassociateCompatDescriptor(CompatDescriptor* compatDesc, Host* host);
 
 struct _Process {
     /* Host owning this process */
@@ -386,10 +385,6 @@ pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
     }
 }
 
-static void _disassociateCompatDescriptorCallback(CompatDescriptor* compatDesc, void* host_void) {
-    _disassociateCompatDescriptor(compatDesc, host_void);
-}
-
 static void _process_check(Process* proc) {
     MAGIC_ASSERT(proc);
 
@@ -404,7 +399,8 @@ static void _process_check(Process* proc) {
         "total runtime for process '%s' was %f seconds", process_getName(proc), proc->totalRunTime);
 #endif
 
-    descriptortable_iter(proc->descTable, _disassociateCompatDescriptorCallback, (void*)proc->host);
+    descriptortable_shutdownHelper(proc->descTable);
+    descriptortable_removeAndCloseAll(proc->descTable, proc->host);
 }
 
 static void _process_check_thread(Process* proc, Thread* thread) {
@@ -431,6 +427,7 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
     utility_assert(fileName != NULL);
 
     File* stdfile = file_new();
+    descriptor_setOwnerProcess((LegacyDescriptor*)stdfile, proc);
 
     CompatDescriptor* compatDesc = compatdescriptor_fromLegacy((LegacyDescriptor*)stdfile);
     descriptortable_set(proc->descTable, fd, compatDesc);
@@ -626,9 +623,6 @@ void process_stop(Process* proc) {
     _process_handleTimerResult(proc, elapsed);
 #endif
 
-    trace("Starting descriptor table shutdown hack");
-    descriptortable_shutdownHelper(proc->descTable);
-
     worker_setActiveProcess(NULL);
 
 #ifdef USE_PERF_TIMERS
@@ -811,15 +805,10 @@ static void _process_free(Process* proc) {
     g_timer_destroy(proc->cpuDelayTimer);
 #endif
 
-    /* Free the stdio files before the descriptor table.
-     * Closing the descriptors will remove them from the table and the table
-     * will release it's ref. We also need to release our proc ref. */
     if (proc->stderrFile) {
-        descriptor_close((LegacyDescriptor*)proc->stderrFile, proc->host);
         descriptor_unref((LegacyDescriptor*)proc->stderrFile);
     }
     if (proc->stdoutFile) {
-        descriptor_close((LegacyDescriptor*)proc->stdoutFile, proc->host);
         descriptor_unref((LegacyDescriptor*)proc->stdoutFile);
     }
 
@@ -1091,25 +1080,6 @@ void process_freePtrsWithoutFlushing(Process* proc) {
 // Handle the descriptors owned by this process
 // ******************************************************
 
-static void _disassociateCompatDescriptor(CompatDescriptor* compatDesc, Host* host) {
-    if (compatDesc == NULL) {
-        return;
-    }
-
-    // sockets are only currently implemented as legacy descriptors
-    LegacyDescriptor* desc = compatdescriptor_asLegacy(compatDesc);
-
-    if (desc == NULL) {
-        return;
-    }
-
-    LegacyDescriptorType dType = descriptor_getType(desc);
-    if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
-        CompatSocket compat_socket = compatsocket_fromLegacySocket((Socket*)desc);
-        host_disassociateInterface(host, &compat_socket);
-    }
-}
-
 int process_registerCompatDescriptor(Process* proc, CompatDescriptor* compatDesc) {
     MAGIC_ASSERT(proc);
     utility_assert(compatDesc);
@@ -1119,7 +1089,6 @@ int process_registerCompatDescriptor(Process* proc, CompatDescriptor* compatDesc
 CompatDescriptor* process_deregisterCompatDescriptor(Process* proc, int handle) {
     MAGIC_ASSERT(proc);
     CompatDescriptor* compatDesc = descriptortable_remove(proc->descTable, handle);
-    _disassociateCompatDescriptor(compatDesc, proc->host);
     return compatDesc;
 }
 
@@ -1143,8 +1112,23 @@ void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
     MAGIC_ASSERT(proc);
 
     if (desc) {
-        CompatDescriptor* compatDesc =
-            process_deregisterCompatDescriptor(proc, descriptor_getHandle(desc));
+        int handle = descriptor_getHandle(desc);
+
+        if (handle < 0) {
+            warning("Attempted to deregister a descriptor with handle %d", handle);
+            return;
+        }
+
+        CompatDescriptor* compatDesc = process_deregisterCompatDescriptor(proc, handle);
+
+        if (!compatDesc) {
+            error("Could not deregister a descriptor with handle %d", handle);
+            return;
+        }
+
+        if (compatdescriptor_asLegacy(compatDesc) != desc) {
+            panic("Deregistered the wrong descriptor with handle %d", handle);
+        }
 
         descriptor_setOwnerProcess(desc, NULL);
         compatdescriptor_free(compatDesc);

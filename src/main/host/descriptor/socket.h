@@ -28,6 +28,7 @@ typedef void (*SocketDropFunc)(Socket* socket, Host* host, Packet* packet);
 
 struct _SocketFunctionTable {
     DescriptorCloseFunc close;
+    DescriptorCleanupFunc cleanup;
     DescriptorFreeFunc free;
     TransportSendFunc send;
     TransportReceiveFunc receive;

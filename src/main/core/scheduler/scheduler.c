@@ -111,7 +111,7 @@ static void _scheduler_finishTaskFn(void* voidScheduler) {
     if(scheduler->policy->getAssignedHosts) {
         myHosts = scheduler->policy->getAssignedHosts(scheduler->policy);
     }
-    worker_finish(myHosts);
+    worker_finish(myHosts, scheduler->endTime);
 }
 
 Scheduler* scheduler_new(Manager* manager, SchedulerPolicyType policyType,

@@ -23,6 +23,8 @@ void descriptor_clear(LegacyDescriptor* descriptor);
 
 void descriptor_ref(gpointer data);
 void descriptor_unref(gpointer data);
+void descriptor_refWeak(gpointer data);
+void descriptor_unrefWeak(gpointer data);
 void descriptor_close(LegacyDescriptor* descriptor, Host* host);
 gint descriptor_compare(const LegacyDescriptor* foo, const LegacyDescriptor* bar, gpointer user_data);
 

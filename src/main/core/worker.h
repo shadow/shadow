@@ -34,7 +34,7 @@ typedef void (*WorkerPoolTaskFn)(void*);
 // To be called by scheduler. Consumes `event`
 void worker_runEvent(Event* event);
 // To be called by worker thread
-void worker_finish(GQueue* hosts);
+void worker_finish(GQueue* hosts, SimulationTime time);
 
 // Create a workerpool with `nThreads` threads, allowing up to `nConcurrent` to
 // run at a time.

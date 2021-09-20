@@ -217,13 +217,15 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
 static void _epollwatch_free(EpollWatch* watch) {
     MAGIC_ASSERT(watch);
 
-    statuslistener_unref(watch->listener);
-
     if (watch->watchType == EWT_LEGACY_DESCRIPTOR) {
+        descriptor_removeListener(watch->watchObject.as_descriptor, watch->listener);
         descriptor_unref(watch->watchObject.as_descriptor);
     } else if (watch->watchType == EWT_POSIX_FILE) {
+        posixfile_removeListener(watch->watchObject.as_file, watch->listener);
         posixfile_drop(watch->watchObject.as_file);
     }
+
+    statuslistener_unref(watch->listener);
 
     MAGIC_CLEAR(watch);
     g_free(watch);
@@ -310,15 +312,14 @@ void epoll_reset(Epoll* epoll) {
     g_hash_table_remove_all(epoll->watching);
 }
 
-static gboolean _epoll_close(LegacyDescriptor* descriptor, Host* host) {
+static void _epoll_close(LegacyDescriptor* descriptor, Host* host) {
     Epoll* epoll = _epoll_fromLegacyDescriptor(descriptor);
     MAGIC_ASSERT(epoll);
     epoll_clearWatchListeners(epoll);
-    return TRUE;
 }
 
 DescriptorFunctionTable epollFunctions = {
-    _epoll_close, _epoll_free, MAGIC_VALUE};
+    _epoll_close, NULL, _epoll_free, MAGIC_VALUE};
 
 Epoll* epoll_new() {
     Epoll* epoll = g_new0(Epoll, 1);
