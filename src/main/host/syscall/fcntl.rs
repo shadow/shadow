@@ -13,11 +13,9 @@ fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let cmd: i32 = args.args[1].into();
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = unsafe { &*syscall::get_descriptor(fd, ctx.process.raw_mut())? };
-
-    // if it's a legacy descriptor, use the C syscall handler instead
-    let desc = match desc {
+    let desc = match syscall::get_descriptor(ctx.process, fd)? {
         CompatDescriptor::New(d) => d,
+        // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => {
             return unsafe {
                 cshadow::syscallhandler_fcntl(

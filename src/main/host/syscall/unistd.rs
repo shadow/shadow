@@ -10,6 +10,7 @@ use crate::host::syscall_types::{PluginPtr, SysCallArgs, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::event_queue::EventQueue;
 
+use std::convert::{TryFrom, TryInto};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
@@ -21,72 +22,56 @@ pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
 
     trace!("Trying to close fd {}", fd);
 
-    // scope used to make sure that desc cannot be used after deregistering it
-    {
-        // get the descriptor, or return early if it doesn't exist
-        let desc = unsafe { &*syscall::get_descriptor(fd, ctx.process.raw_mut())? };
-
-        // if it's a legacy descriptor, use the C syscall handler instead
-        if let CompatDescriptor::Legacy(_) = desc {
-            return unsafe {
-                c::syscallhandler_close(ctx.thread.csyscallhandler(), args as *const c::SysCallArgs)
-            }
-            .into();
-        }
-    }
+    let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
 
     // according to "man 2 close", in Linux any errors that may occur will happen after the fd is
-    // released, so we should always deregister the descriptor
-    let desc = unsafe { c::process_deregisterCompatDescriptor(ctx.process.raw_mut(), fd) };
-    let desc = CompatDescriptor::from_raw(desc).unwrap();
-    let desc = match *desc {
-        CompatDescriptor::New(d) => d,
-        _ => unreachable!(),
-    };
+    // released, so we should always deregister the descriptor even if there's an error while
+    // closing
+    let desc = ctx
+        .process
+        .deregister_descriptor(fd)
+        .ok_or(nix::errno::Errno::EBADF)?;
 
-    let result = EventQueue::queue_and_run(|event_queue| desc.close(event_queue));
-
-    if let Some(result) = result {
-        result.into()
-    } else {
-        Ok(0.into())
-    }
+    // if there are still valid descriptors to the posix file, close() will do nothing
+    // and return None
+    EventQueue::queue_and_run(|event_queue| desc.close(ctx.host.chost(), event_queue))
+        .unwrap_or(Ok(0.into()))
 }
 
 pub fn dup(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = unsafe { &*syscall::get_descriptor(fd, ctx.process.raw_mut())? };
-
-    match desc {
-        CompatDescriptor::New(desc) => dup_helper(ctx, fd, desc),
+    let desc = match syscall::get_descriptor(ctx.process, fd)? {
+        CompatDescriptor::New(desc) => desc,
         // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
-            c::syscallhandler_dup(ctx.thread.csyscallhandler(), args as *const c::SysCallArgs)
-                .into()
+            return c::syscallhandler_dup(
+                ctx.thread.csyscallhandler(),
+                args as *const c::SysCallArgs,
+            )
+            .into();
         },
-    }
+    };
+
+    // duplicate the descriptor
+    let new_desc = CompatDescriptor::New(dup_helper(desc, None));
+    let new_fd = ctx.process.register_descriptor(new_desc);
+
+    // return the new fd
+    Ok(libc::c_int::try_from(new_fd).unwrap().into())
 }
 
-pub fn dup_helper(ctx: &mut ThreadContext, fd: libc::c_int, desc: &Descriptor) -> SyscallResult {
-    trace!("Duping fd {} ({:?})", fd, desc);
-
+pub fn dup_helper(desc: &Descriptor, flags: Option<DescriptorFlags>) -> Descriptor {
     // clone the descriptor (but not the flags)
     let mut new_desc = desc.clone();
     new_desc.set_flags(DescriptorFlags::empty());
 
-    // register the descriptor
-    let new_desc = CompatDescriptor::New(new_desc);
-    let new_fd = unsafe {
-        c::process_registerCompatDescriptor(
-            ctx.process.raw_mut(),
-            CompatDescriptor::into_raw(Box::new(new_desc)),
-        )
-    };
+    if let Some(flags) = flags {
+        new_desc.set_flags(flags);
+    }
 
-    // return the new fd
-    Ok(new_fd.into())
+    new_desc
 }
 
 pub fn read(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
@@ -96,10 +81,11 @@ pub fn read(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let offset = 0;
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = unsafe { &*syscall::get_descriptor(fd, ctx.process.raw_mut())? };
-
-    match desc {
-        CompatDescriptor::New(desc) => read_helper(ctx, fd, desc, buf_ptr, buf_size, offset),
+    match syscall::get_descriptor(ctx.process, fd)? {
+        CompatDescriptor::New(desc) => {
+            let file = desc.get_file().clone();
+            read_helper(ctx, fd, &file, buf_ptr, buf_size, offset)
+        }
         // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
             c::syscallhandler_read(ctx.thread.csyscallhandler(), args as *const SysCallArgs).into()
@@ -114,10 +100,11 @@ pub fn pread64(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let offset = libc::off_t::from(args.get(3));
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = unsafe { &*syscall::get_descriptor(fd, ctx.process.raw_mut())? };
-
-    match desc {
-        CompatDescriptor::New(desc) => read_helper(ctx, fd, desc, buf_ptr, buf_size, offset),
+    match syscall::get_descriptor(ctx.process, fd)? {
+        CompatDescriptor::New(desc) => {
+            let file = desc.get_file().clone();
+            read_helper(ctx, fd, &file, buf_ptr, buf_size, offset)
+        }
         // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
             c::syscallhandler_pread64(ctx.thread.csyscallhandler(), args as *const c::SysCallArgs)
@@ -129,12 +116,11 @@ pub fn pread64(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
 fn read_helper(
     ctx: &mut ThreadContext,
     _fd: libc::c_int,
-    desc: &Descriptor,
+    posix_file: &PosixFile,
     buf_ptr: PluginPtr,
     buf_size: libc::size_t,
     offset: libc::off_t,
 ) -> SyscallResult {
-    let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
     let result =
@@ -164,10 +150,11 @@ pub fn write(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let offset = 0;
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = unsafe { &*syscall::get_descriptor(fd, ctx.process.raw_mut())? };
-
-    match desc {
-        CompatDescriptor::New(desc) => write_helper(ctx, fd, desc, buf_ptr, buf_size, offset),
+    match syscall::get_descriptor(ctx.process, fd)? {
+        CompatDescriptor::New(desc) => {
+            let file = desc.get_file().clone();
+            write_helper(ctx, fd, &file, buf_ptr, buf_size, offset)
+        }
         // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
             c::syscallhandler_write(ctx.thread.csyscallhandler(), args as *const c::SysCallArgs)
@@ -183,10 +170,11 @@ pub fn pwrite64(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let offset = libc::off_t::from(args.get(3));
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = unsafe { &*syscall::get_descriptor(fd, ctx.process.raw_mut())? };
-
-    match desc {
-        CompatDescriptor::New(desc) => write_helper(ctx, fd, desc, buf_ptr, buf_size, offset),
+    match syscall::get_descriptor(ctx.process, fd)? {
+        CompatDescriptor::New(desc) => {
+            let file = desc.get_file().clone();
+            write_helper(ctx, fd, &file, buf_ptr, buf_size, offset)
+        }
         // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => unsafe {
             c::syscallhandler_pwrite64(ctx.thread.csyscallhandler(), args as *const SysCallArgs)
@@ -198,15 +186,14 @@ pub fn pwrite64(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
 fn write_helper(
     ctx: &mut ThreadContext,
     _fd: libc::c_int,
-    desc: &Descriptor,
+    posix_file: &PosixFile,
     buf_ptr: PluginPtr,
     buf_size: libc::size_t,
     offset: libc::off_t,
 ) -> SyscallResult {
-    let posix_file = desc.get_file();
     let file_flags = posix_file.borrow().get_flags();
 
-    let result=
+    let result =
         // call the file's write(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
             posix_file.borrow_mut().write(

@@ -227,32 +227,6 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SysCallReturn syscallhandler_close(SysCallHandler* sys,
-                                   const SysCallArgs* args) {
-    gint fd = args->args[0].as_i64;
-    gint errorCode = 0;
-
-    trace("Trying to close fd %i", fd);
-
-    /* Check that fd is within bounds. */
-    if (fd < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EBADF};
-    }
-
-    /* Check if this is a virtual Shadow descriptor. */
-    LegacyDescriptor* descriptor = process_getRegisteredLegacyDescriptor(sys->process, fd);
-    errorCode = _syscallhandler_validateDescriptor(descriptor, DT_NONE);
-
-    if (descriptor && !errorCode) {
-        trace("Closing descriptor %i", descriptor_getHandle(descriptor));
-        descriptor_close(descriptor, sys->host);
-        process_deregisterLegacyDescriptor(sys->process, descriptor);
-        return (SysCallReturn){.state = SYSCALL_DONE};
-    }
-
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = errorCode};
-}
-
 SysCallReturn syscallhandler_dup(SysCallHandler* sys,
                                  const SysCallArgs* args) {
     gint fd = args->args[0].as_i64;
