@@ -1080,78 +1080,10 @@ void process_freePtrsWithoutFlushing(Process* proc) {
 // Handle the descriptors owned by this process
 // ******************************************************
 
-int process_registerCompatDescriptor(Process* proc, CompatDescriptor* compatDesc) {
+/* This should only be called from the rust 'Process' object. */
+DescriptorTable* process_getDescriptorTable(Process* proc) {
     MAGIC_ASSERT(proc);
-    utility_assert(compatDesc);
-    return descriptortable_add(proc->descTable, compatDesc);
-}
-
-CompatDescriptor* process_deregisterCompatDescriptor(Process* proc, int handle) {
-    MAGIC_ASSERT(proc);
-    CompatDescriptor* compatDesc = descriptortable_remove(proc->descTable, handle);
-    return compatDesc;
-}
-
-const CompatDescriptor* process_getRegisteredCompatDescriptor(Process* proc, int handle) {
-    MAGIC_ASSERT(proc);
-    const CompatDescriptor* compatDesc = descriptortable_get(proc->descTable, handle);
-    return compatDesc;
-}
-
-int process_registerLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
-    MAGIC_ASSERT(proc);
-    utility_assert(desc);
-
-    descriptor_setOwnerProcess(desc, proc);
-    CompatDescriptor* compatDesc = compatdescriptor_fromLegacy(desc);
-
-    return process_registerCompatDescriptor(proc, compatDesc);
-}
-
-void process_deregisterLegacyDescriptor(Process* proc, LegacyDescriptor* desc) {
-    MAGIC_ASSERT(proc);
-
-    if (desc) {
-        int handle = descriptor_getHandle(desc);
-
-        if (handle < 0) {
-            warning("Attempted to deregister a descriptor with handle %d", handle);
-            return;
-        }
-
-        CompatDescriptor* compatDesc = process_deregisterCompatDescriptor(proc, handle);
-
-        if (!compatDesc) {
-            error("Could not deregister a descriptor with handle %d", handle);
-            return;
-        }
-
-        if (compatdescriptor_asLegacy(compatDesc) != desc) {
-            panic("Deregistered the wrong descriptor with handle %d", handle);
-        }
-
-        descriptor_setOwnerProcess(desc, NULL);
-        compatdescriptor_free(compatDesc);
-    }
-}
-
-LegacyDescriptor* process_getRegisteredLegacyDescriptor(Process* proc, int handle) {
-    MAGIC_ASSERT(proc);
-
-    const CompatDescriptor* compatDesc = process_getRegisteredCompatDescriptor(proc, handle);
-    if (compatDesc == NULL) {
-        return NULL;
-    }
-
-    // will return NULL if the descriptor is valid but is not a legacy descriptor
-    LegacyDescriptor* legacyDesc = compatdescriptor_asLegacy(compatDesc);
-
-    if (legacyDesc == NULL) {
-        warning("A descriptor exists for fd=%d, but it is not a legacy descriptor. Returning NULL.",
-                handle);
-    }
-
-    return legacyDesc;
+    return proc->descTable;
 }
 
 bool process_parseArgStr(const char* commandLine, int* argc, char*** argv, char** error) {

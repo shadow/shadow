@@ -420,29 +420,6 @@ struct DescriptorTable *descriptortable_new(void);
 // Free the table.
 void descriptortable_free(struct DescriptorTable *table);
 
-void descriptortable_iter(struct DescriptorTable *table,
-                          void (*f)(struct CompatDescriptor*, void*),
-                          void *data);
-
-// Store a descriptor object for later reference at the next available index
-// in the table. The chosen table index is stored in the descriptor object and
-// returned. The descriptor is guaranteed to be stored successfully.
-//
-// The table takes ownership of the descriptor, invalidating the caller's pointer.
-int descriptortable_add(struct DescriptorTable *table, struct CompatDescriptor *descriptor);
-
-// Stop storing the descriptor so that it can no longer be referenced. The table
-// index that was used to store the descriptor is cleared from the descriptor
-// and may be assigned to new descriptors that are later added to the table.
-//
-// Returns an owned pointer to the CompatDescriptor if the descriptor was found
-// in the table and removed, and NULL otherwise.
-struct CompatDescriptor *descriptortable_remove(struct DescriptorTable *table, int index);
-
-// Returns the descriptor at the given table index, or NULL if we are not
-// storing a descriptor at the given index.
-const struct CompatDescriptor *descriptortable_get(const struct DescriptorTable *table, int index);
-
 // Store the given descriptor at given index. Any previous descriptor that was
 // stored there will be removed and its table index will be cleared. This
 // unrefs any existing descriptor stored at index as in remove(), and consumes
@@ -610,6 +587,28 @@ SysCallReturn memorymanager_handleMprotect(struct MemoryManager *memory_manager,
                                            PluginPtr addr,
                                            uintptr_t size,
                                            int32_t prot);
+
+// Register a `CompatDescriptor`. This takes ownership of the descriptor and you must not
+// access it after.
+int process_registerCompatDescriptor(Process *proc, struct CompatDescriptor *desc);
+
+// Deregistering a `CompatDescriptor` returns an owned reference to that `CompatDescriptor`,
+// and you must drop it manually when finished.
+struct CompatDescriptor *process_deregisterCompatDescriptor(Process *proc, int handle);
+
+// Get a temporary reference to a descriptor.
+const struct CompatDescriptor *process_getRegisteredCompatDescriptor(Process *proc, int handle);
+
+// Register a `LegacyDescriptor`. This takes ownership of the descriptor and you must
+// increment the ref count if you are to hold a reference to this descriptor.
+int process_registerLegacyDescriptor(Process *proc, LegacyDescriptor *desc);
+
+// Unlike the deregister method for the `CompatDescriptor`, you do not need to manually
+// unref the LegacyDescriptor as it's done automatically.
+void process_deregisterLegacyDescriptor(Process *proc, LegacyDescriptor *desc);
+
+// Get a temporary reference to a legacy descriptor.
+LegacyDescriptor *process_getRegisteredLegacyDescriptor(Process *proc, int handle);
 
 SysCallReturn rustsyscallhandler_fcntl(SysCallHandler *sys, const SysCallArgs *args);
 
