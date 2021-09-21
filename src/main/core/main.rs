@@ -243,14 +243,18 @@ mod export {
 
         if let Err(e) = result {
             // log the full error, its context, and its backtrace if enabled
-            for line in format!("{:?}", e).split("\n") {
-                log::error!("{}", line);
-            }
-            log::logger().flush();
+            if log::log_enabled!(log::Level::Error) {
+                for line in format!("{:?}", e).split("\n") {
+                    log::error!("{}", line);
+                }
+                log::logger().flush();
 
-            // print the short error
-            eprintln!("** Shadow did not complete successfully: {}", e);
-            eprintln!("** See the log for details");
+                // print the short error
+                eprintln!("** Shadow did not complete successfully: {}", e);
+                eprintln!("** See the log for details");
+            } else {
+                eprintln!("{:?}", e);
+            }
 
             return 1;
         }
