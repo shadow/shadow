@@ -163,20 +163,22 @@ mod export {
         unsafe { Box::from_raw(notnull_mut_debug(table)) };
     }
 
-    /// Store the given descriptor at given index. Any previous descriptor that was
-    /// stored there will be removed and its table index will be cleared. This
-    /// unrefs any existing descriptor stored at index as in remove(), and consumes
-    /// a ref to the existing descriptor as in add().
+    /// Store the given descriptor at the given index. Any previous descriptor that was
+    /// stored there will be returned. This consumes a ref to the given descriptor as in
+    /// add(), and any returned descriptor must be freed manually.
     #[no_mangle]
     pub unsafe extern "C" fn descriptortable_set(
         table: *mut DescriptorTable,
         index: c_int,
         descriptor: *mut CompatDescriptor,
-    ) {
+    ) -> *mut CompatDescriptor {
         let table = unsafe { table.as_mut().unwrap() };
         let descriptor = CompatDescriptor::from_raw(descriptor);
-        // Let returned value drop, if any.
-        table.set(index.try_into().unwrap(), *descriptor.unwrap());
+
+        match table.set(index.try_into().unwrap(), *descriptor.unwrap()) {
+            Some(d) => CompatDescriptor::into_raw(Box::new(d)),
+            None => std::ptr::null_mut(),
+        }
     }
 
     /// This is a helper function that handles some corner cases where some

@@ -420,13 +420,12 @@ struct DescriptorTable *descriptortable_new(void);
 // Free the table.
 void descriptortable_free(struct DescriptorTable *table);
 
-// Store the given descriptor at given index. Any previous descriptor that was
-// stored there will be removed and its table index will be cleared. This
-// unrefs any existing descriptor stored at index as in remove(), and consumes
-// a ref to the existing descriptor as in add().
-void descriptortable_set(struct DescriptorTable *table,
-                         int index,
-                         struct CompatDescriptor *descriptor);
+// Store the given descriptor at the given index. Any previous descriptor that was
+// stored there will be returned. This consumes a ref to the given descriptor as in
+// add(), and any returned descriptor must be freed manually.
+struct CompatDescriptor *descriptortable_set(struct DescriptorTable *table,
+                                             int index,
+                                             struct CompatDescriptor *descriptor);
 
 // This is a helper function that handles some corner cases where some
 // descriptors are linked to each other and we must remove that link in
