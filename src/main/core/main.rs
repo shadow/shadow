@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::ffi::{CStr, OsStr};
 use std::os::unix::ffi::OsStrExt;
 
@@ -216,14 +217,14 @@ fn log_environment<'a>(args: Vec<&'a OsStr>) {
         log::info!("arg: {}", arg.to_string_lossy());
     }
 
-    for (key, value) in std::env::vars() {
-        let level = match key.as_str() {
+    for (key, value) in std::env::vars_os() {
+        let level = match key.to_string_lossy().borrow() {
             "LD_PRELOAD" | "SHADOW_SPAWNED" | "LD_STATIC_TLS_EXTRA" | "G_DEBUG" | "G_SLICE" => {
                 log::Level::Info
             }
             _ => log::Level::Trace,
         };
-        log::log!(level, "env: {}={}", key, value);
+        log::log!(level, "env: {:?}={:?}", key, value);
     }
 }
 
