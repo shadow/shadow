@@ -29,12 +29,14 @@ network:
 hosts:
   # a host with the hostname 'server'
   server:
+    network_node_id: 0
     processes:
     - path: /bin/python3
       args: -m http.server 80
       start_time: 3s
   # three hosts with hostnames 'client1', 'client2', and 'client3'
   client:
+    network_node_id: 0
     quantity: 3
     processes:
     - path: /bin/curl
