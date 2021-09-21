@@ -59,11 +59,13 @@ network:
       ]
 hosts:
   server:
+    network_node_id: 0
     processes:
     - path: ~/.local/bin/tgen
       args: ../../../tgen.server.graphml.xml
       start_time: 1s
   client:
+    network_node_id: 0
     quantity: 10
     processes:
     - path: ~/.local/bin/tgen
