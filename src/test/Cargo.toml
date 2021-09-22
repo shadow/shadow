@@ -121,6 +121,10 @@ path = "environment/test_env.rs"
 name = "test_signal_resched"
 path = "regression/test_signal_resched.rs"
 
+[[bin]]
+name = "test_dup"
+path = "dup/test_dup.rs"
+
 [dependencies]
 libc = "0.2"
 nix = "0.22.1"

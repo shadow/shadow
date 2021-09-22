@@ -400,6 +400,15 @@ impl Descriptor {
             None
         }
     }
+
+    /// Duplicate the descriptor, with both descriptors pointing to the same `PosixFile`. In
+    /// Linux, the descriptor flags aren't typically copied to the new descriptor, so we
+    /// explicitly require a flags value to avoid confusion.
+    pub fn dup(&self, flags: DescriptorFlags) -> Self {
+        let mut new_desc = self.clone();
+        new_desc.set_flags(flags);
+        new_desc
+    }
 }
 
 /// Represents an owned reference to a legacy descriptor. Will decrement the descriptor's ref

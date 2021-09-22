@@ -617,6 +617,10 @@ SysCallReturn rustsyscallhandler_close(SysCallHandler *sys, const SysCallArgs *a
 
 SysCallReturn rustsyscallhandler_dup(SysCallHandler *sys, const SysCallArgs *args);
 
+SysCallReturn rustsyscallhandler_dup2(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_dup3(SysCallHandler *sys, const SysCallArgs *args);
+
 SysCallReturn rustsyscallhandler_read(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_pread64(SysCallHandler *sys, const SysCallArgs *args);
