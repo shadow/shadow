@@ -725,6 +725,14 @@ static void _epoll_descriptorStatusChanged(Epoll* epoll, const EpollKey* key) {
                 /* this calls unref on the watch if its in the table */
                 g_hash_table_remove(epoll->ready, key);
             }
+
+            /* if it's closed, then remove it from the watching list */
+            if (watch->flags & EWF_CLOSED) {
+                /* unref gets called on the watch when it is removed from these tables */
+                g_hash_table_remove(epoll->watching, key);
+                /* we should have removed it from the ready list earlier */
+                utility_assert(!g_hash_table_contains(epoll->ready, key));
+            }
         }
     }
 
