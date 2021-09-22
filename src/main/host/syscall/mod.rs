@@ -1,5 +1,5 @@
 use crate::cshadow as c;
-use crate::host::descriptor::{CompatDescriptor, FileStatus, PosixFile};
+use crate::host::descriptor::{CompatDescriptor, FileState, PosixFile};
 use crate::host::process::Process;
 
 use std::convert::TryInto;
@@ -22,7 +22,7 @@ impl From<Trigger> for c::Trigger {
 }
 
 impl Trigger {
-    pub fn from_posix_file(file: &PosixFile, status: FileStatus) -> Self {
+    pub fn from_posix_file(file: &PosixFile, status: FileState) -> Self {
         let file_ptr = Box::into_raw(Box::new(file.clone()));
 
         Self(c::Trigger {

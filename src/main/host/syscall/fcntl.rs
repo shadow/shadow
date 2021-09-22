@@ -1,6 +1,6 @@
 use crate::cshadow;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
-use crate::host::descriptor::{CompatDescriptor, FileFlags};
+use crate::host::descriptor::{CompatDescriptor, FileStatus};
 use crate::host::syscall;
 use crate::host::syscall_types::SyscallResult;
 use crate::host::syscall_types::{SysCallArgs, SysCallReg};
@@ -29,12 +29,12 @@ fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
 
     Ok(match cmd {
         libc::F_GETFL => {
-            let flags = desc.get_file().borrow().get_flags();
-            SysCallReg::from(flags.bits())
+            let status = desc.get_file().borrow().get_status();
+            SysCallReg::from(status.bits())
         }
         libc::F_SETFL => {
-            let flags = FileFlags::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
-            desc.get_file().borrow_mut().set_flags(flags);
+            let status = FileStatus::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
+            desc.get_file().borrow_mut().set_status(status);
             SysCallReg::from(0)
         }
         _ => Err(Errno::EINVAL)?,

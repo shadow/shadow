@@ -466,7 +466,7 @@ const struct PosixFile *compatdescriptor_newRefPosixFile(const struct CompatDesc
 // calling this function.
 void posixfile_drop(const struct PosixFile *file);
 
-// Get the status of the posix file object.
+// Get the state of the posix file object.
 Status posixfile_getStatus(const struct PosixFile *file);
 
 // Add a status listener to the posix file object. This will increment the status

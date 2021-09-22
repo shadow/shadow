@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{
-    FileFlags, FileMode, FileStatus, NewStatusListenerFilter, StatusEventSource,
+    FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
 };
 use crate::host::syscall_types::SyscallResult;
 use crate::utility::byte_queue::ByteQueue;
@@ -13,44 +13,44 @@ use crate::utility::stream_len::StreamLen;
 
 pub struct PipeFile {
     buffer: Arc<AtomicRefCell<SharedBuf>>,
-    event_source: StatusEventSource,
-    status: FileStatus,
+    event_source: StateEventSource,
+    state: FileState,
     mode: FileMode,
-    flags: FileFlags,
+    status: FileStatus,
     // we only store this so that the handle is dropped when we are
-    _buffer_event_handle: Option<Handle<(FileStatus, FileStatus)>>,
+    _buffer_event_handle: Option<Handle<(FileState, FileState)>>,
 }
 
 impl PipeFile {
-    pub fn new(buffer: Arc<AtomicRefCell<SharedBuf>>, mode: FileMode, flags: FileFlags) -> Self {
+    pub fn new(buffer: Arc<AtomicRefCell<SharedBuf>>, mode: FileMode, status: FileStatus) -> Self {
         let mut rv = Self {
             buffer,
-            event_source: StatusEventSource::new(),
-            status: FileStatus::ACTIVE,
+            event_source: StateEventSource::new(),
+            state: FileState::ACTIVE,
             mode,
-            flags,
+            status,
             _buffer_event_handle: None,
         };
 
-        rv.status
-            .insert(rv.filter_status(rv.buffer.borrow_mut().status()));
+        rv.state
+            .insert(rv.filter_state(rv.buffer.borrow_mut().state()));
 
         rv
     }
 
-    pub fn get_flags(&self) -> FileFlags {
-        self.flags
+    pub fn get_status(&self) -> FileStatus {
+        self.status
     }
 
-    pub fn set_flags(&mut self, flags: FileFlags) {
-        self.flags = flags;
+    pub fn set_status(&mut self, status: FileStatus) {
+        self.status = status;
     }
 
     pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
         // set the closed flag and remove the active flag
-        self.copy_status(
-            FileStatus::CLOSED | FileStatus::ACTIVE,
-            FileStatus::CLOSED,
+        self.copy_state(
+            FileState::CLOSED | FileState::ACTIVE,
+            FileState::CLOSED,
             event_queue,
         );
         Ok(0.into())
@@ -123,17 +123,16 @@ impl PipeFile {
         let weak = Arc::downgrade(arc);
         let pipe = &mut *arc.borrow_mut();
 
-        // remove any status flags that aren't relevant to us
-        let monitoring = pipe.filter_status(FileStatus::READABLE | FileStatus::WRITABLE);
+        // remove any state flags that aren't relevant to us
+        let monitoring = pipe.filter_state(FileState::READABLE | FileState::WRITABLE);
 
         let handle = pipe.buffer.borrow_mut().add_listener(
             monitoring,
-            NewStatusListenerFilter::Always,
-            move |status, _changed, event_queue| {
+            StateListenerFilter::Always,
+            move |state, _changed, event_queue| {
                 // if the file hasn't been dropped
                 if let Some(pipe) = weak.upgrade() {
-                    pipe.borrow_mut()
-                        .copy_status(monitoring, status, event_queue)
+                    pipe.borrow_mut().copy_state(monitoring, state, event_queue)
                 }
             },
         );
@@ -143,10 +142,10 @@ impl PipeFile {
 
     pub fn add_listener(
         &mut self,
-        monitoring: FileStatus,
-        filter: NewStatusListenerFilter,
-        notify_fn: impl Fn(FileStatus, FileStatus, &mut EventQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileStatus, FileStatus)> {
+        monitoring: FileState,
+        filter: StateListenerFilter,
+        notify_fn: impl Fn(FileState, FileState, &mut EventQueue) + Send + Sync + 'static,
+    ) -> Handle<(FileState, FileState)> {
         self.event_source
             .add_listener(monitoring, filter, notify_fn)
     }
@@ -159,55 +158,55 @@ impl PipeFile {
         self.event_source.remove_legacy_listener(ptr);
     }
 
-    pub fn status(&self) -> FileStatus {
-        self.status
+    pub fn state(&self) -> FileState {
+        self.state
     }
 
-    fn filter_status(&self, mut status: FileStatus) -> FileStatus {
+    fn filter_state(&self, mut state: FileState) -> FileState {
         // if not open for reading, remove the readable flag
         if !self.mode.contains(FileMode::READ) {
-            status.remove(FileStatus::READABLE);
+            state.remove(FileState::READABLE);
         }
 
         // if not open for writing, remove the writable flag
         if !self.mode.contains(FileMode::WRITE) {
-            status.remove(FileStatus::WRITABLE);
+            state.remove(FileState::WRITABLE);
         }
 
-        status
+        state
     }
 
-    fn copy_status(&mut self, mask: FileStatus, status: FileStatus, event_queue: &mut EventQueue) {
-        let old_status = self.status;
+    fn copy_state(&mut self, mask: FileState, state: FileState, event_queue: &mut EventQueue) {
+        let old_state = self.state;
 
         // remove any flags that aren't relevant
-        let status = self.filter_status(status);
+        let state = self.filter_state(state);
 
         // remove the masked flags, then copy the masked flags
-        self.status.remove(mask);
-        self.status.insert(status & mask);
+        self.state.remove(mask);
+        self.state.insert(state & mask);
 
-        self.handle_status_change(old_status, event_queue);
+        self.handle_state_change(old_state, event_queue);
     }
 
-    fn handle_status_change(&mut self, old_status: FileStatus, event_queue: &mut EventQueue) {
-        let statuses_changed = self.status ^ old_status;
+    fn handle_state_change(&mut self, old_state: FileState, event_queue: &mut EventQueue) {
+        let states_changed = self.state ^ old_state;
 
         // if nothing changed
-        if statuses_changed.is_empty() {
+        if states_changed.is_empty() {
             return;
         }
 
         self.event_source
-            .notify_listeners(self.status, statuses_changed, event_queue);
+            .notify_listeners(self.state, states_changed, event_queue);
     }
 }
 
 pub struct SharedBuf {
     queue: ByteQueue,
     max_len: usize,
-    status: FileStatus,
-    event_source: StatusEventSource,
+    state: FileState,
+    event_source: StateEventSource,
 }
 
 impl SharedBuf {
@@ -215,8 +214,8 @@ impl SharedBuf {
         Self {
             queue: ByteQueue::new(8192),
             max_len: c::CONFIG_PIPE_BUFFER_SIZE as usize,
-            status: FileStatus::WRITABLE,
-            event_source: StatusEventSource::new(),
+            state: FileState::WRITABLE,
+            event_source: StateEventSource::new(),
         }
     }
 
@@ -236,14 +235,10 @@ impl SharedBuf {
         let num = self.queue.pop(bytes)?;
 
         // readable if not empty
-        self.adjust_status(FileStatus::READABLE, !self.is_empty(), event_queue);
+        self.adjust_state(FileState::READABLE, !self.is_empty(), event_queue);
 
         // writable if space is available
-        self.adjust_status(
-            FileStatus::WRITABLE,
-            self.space_available() > 0,
-            event_queue,
-        );
+        self.adjust_state(FileState::WRITABLE, self.space_available() > 0, event_queue);
 
         Ok(num.into())
     }
@@ -255,53 +250,44 @@ impl SharedBuf {
     ) -> SyscallResult {
         let written = self.queue.push(bytes.take(self.space_available() as u64))?;
 
-        self.adjust_status(FileStatus::READABLE, !self.is_empty(), event_queue);
-        self.adjust_status(
-            FileStatus::WRITABLE,
-            self.space_available() > 0,
-            event_queue,
-        );
+        self.adjust_state(FileState::READABLE, !self.is_empty(), event_queue);
+        self.adjust_state(FileState::WRITABLE, self.space_available() > 0, event_queue);
 
         Ok(written.into())
     }
 
     pub fn add_listener(
         &mut self,
-        monitoring: FileStatus,
-        filter: NewStatusListenerFilter,
-        notify_fn: impl Fn(FileStatus, FileStatus, &mut EventQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileStatus, FileStatus)> {
+        monitoring: FileState,
+        filter: StateListenerFilter,
+        notify_fn: impl Fn(FileState, FileState, &mut EventQueue) + Send + Sync + 'static,
+    ) -> Handle<(FileState, FileState)> {
         self.event_source
             .add_listener(monitoring, filter, notify_fn)
     }
 
-    pub fn status(&self) -> FileStatus {
-        self.status
+    pub fn state(&self) -> FileState {
+        self.state
     }
 
-    fn adjust_status(
-        &mut self,
-        status: FileStatus,
-        do_set_bits: bool,
-        event_queue: &mut EventQueue,
-    ) {
-        let old_status = self.status;
+    fn adjust_state(&mut self, state: FileState, do_set_bits: bool, event_queue: &mut EventQueue) {
+        let old_state = self.state;
 
         // add or remove the flags
-        self.status.set(status, do_set_bits);
+        self.state.set(state, do_set_bits);
 
-        self.handle_status_change(old_status, event_queue);
+        self.handle_state_change(old_state, event_queue);
     }
 
-    fn handle_status_change(&mut self, old_status: FileStatus, event_queue: &mut EventQueue) {
-        let statuses_changed = self.status ^ old_status;
+    fn handle_state_change(&mut self, old_state: FileState, event_queue: &mut EventQueue) {
+        let states_changed = self.state ^ old_state;
 
         // if nothing changed
-        if statuses_changed.is_empty() {
+        if states_changed.is_empty() {
             return;
         }
 
         self.event_source
-            .notify_listeners(self.status, statuses_changed, event_queue);
+            .notify_listeners(self.state, states_changed, event_queue);
     }
 }
