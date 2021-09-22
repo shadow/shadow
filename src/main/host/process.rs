@@ -112,6 +112,13 @@ impl Process {
         desc_table.get(fd)
     }
 
+    /// Get a mutable reference to the descriptor with the given fd handle.
+    pub fn get_descriptor_mut(&mut self, fd: u32) -> Option<&mut CompatDescriptor> {
+        let desc_table =
+            unsafe { cshadow::process_getDescriptorTable(self.cprocess).as_mut() }.unwrap();
+        desc_table.get_mut(fd)
+    }
+
     pub fn native_pid(&self) -> Pid {
         let pid = unsafe { cshadow::process_getNativePid(self.cprocess) };
         Pid::from_raw(pid)

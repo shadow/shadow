@@ -66,3 +66,17 @@ pub fn get_descriptor(
         None => Err(nix::errno::Errno::EBADF),
     }
 }
+
+/// Returns the `CompatDescriptor` for the fd if it exists, otherwise returns EBADF.
+pub fn get_descriptor_mut(
+    process: &mut Process,
+    fd: impl TryInto<u32>,
+) -> Result<&mut CompatDescriptor, nix::errno::Errno> {
+    // check that fd is within bounds
+    let fd: u32 = fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+
+    match process.get_descriptor_mut(fd) {
+        Some(desc) => Ok(desc),
+        None => Err(nix::errno::Errno::EBADF),
+    }
+}

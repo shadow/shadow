@@ -91,6 +91,11 @@ impl DescriptorTable {
         self.descriptors.get(&idx)
     }
 
+    /// Get the descriptor at `idx`, if any.
+    pub fn get_mut(&mut self, idx: u32) -> Option<&mut CompatDescriptor> {
+        self.descriptors.get_mut(&idx)
+    }
+
     /// Insert a descriptor at `index`. If a descriptor is already present at
     /// that index, it is unregistered from that index and returned.
     pub fn set(
