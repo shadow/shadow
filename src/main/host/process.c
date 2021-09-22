@@ -430,7 +430,10 @@ static File* _process_openStdIOFileHelper(Process* proc, int fd, gchar* fileName
     descriptor_setOwnerProcess((LegacyDescriptor*)stdfile, proc);
 
     CompatDescriptor* compatDesc = compatdescriptor_fromLegacy((LegacyDescriptor*)stdfile);
-    descriptortable_set(proc->descTable, fd, compatDesc);
+    CompatDescriptor* replacedDesc = descriptortable_set(proc->descTable, fd, compatDesc);
+
+    // assume the fd was not previously in use
+    utility_assert(replacedDesc == NULL);
 
     char* cwd = getcwd(NULL, 0);
     if (!cwd) {
