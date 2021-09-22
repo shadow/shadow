@@ -23,7 +23,7 @@ bitflags::bitflags! {
     /// are not stored anywhere. Many of these can be represented in different ways, for example:
     /// `O_NONBLOCK`, `SOCK_NONBLOCK`, `EFD_NONBLOCK`, `GRND_NONBLOCK`, etc, and not all have the
     /// same value.
-    pub struct FileFlags: libc::c_int {
+    pub struct FileStatus: libc::c_int {
         const NONBLOCK = libc::O_NONBLOCK;
         const APPEND = libc::O_APPEND;
         const ASYNC = libc::O_ASYNC;
@@ -45,9 +45,9 @@ bitflags::bitflags! {
 }
 
 bitflags::bitflags! {
-    pub struct FileStatus: libc::c_int {
+    pub struct FileState: libc::c_int {
         /// Has been initialized and it is now OK to unblock any plugin waiting
-        /// on a particular status.
+        /// on a particular state.
         const ACTIVE = c::_Status_STATUS_DESCRIPTOR_ACTIVE;
         /// Can be read, i.e. there is data waiting for user.
         const READABLE = c::_Status_STATUS_DESCRIPTOR_READABLE;
@@ -60,21 +60,21 @@ bitflags::bitflags! {
     }
 }
 
-impl From<c::Status> for FileStatus {
+impl From<c::Status> for FileState {
     fn from(status: c::Status) -> Self {
         // if any unexpected bits were present, then it's an error
         Self::from_bits(status).unwrap()
     }
 }
 
-impl From<FileStatus> for c::Status {
-    fn from(status: FileStatus) -> Self {
-        status.bits()
+impl From<FileState> for c::Status {
+    fn from(state: FileState) -> Self {
+        state.bits()
     }
 }
 
 #[derive(Clone, Debug)]
-pub enum NewStatusListenerFilter {
+pub enum StateListenerFilter {
     Never,
     OffToOn,
     OnToOff,
@@ -83,9 +83,9 @@ pub enum NewStatusListenerFilter {
 
 /// A wrapper for a `*mut c::StatusListener` that increments its ref count when created,
 /// and decrements when dropped.
-struct LegacyStatusListener(SyncSendPointer<c::StatusListener>);
+struct LegacyListener(SyncSendPointer<c::StatusListener>);
 
-impl LegacyStatusListener {
+impl LegacyListener {
     fn new(ptr: *mut c::StatusListener) -> Self {
         assert!(!ptr.is_null());
         unsafe { c::statuslistener_ref(ptr) };
@@ -97,7 +97,7 @@ impl LegacyStatusListener {
     }
 }
 
-impl Drop for LegacyStatusListener {
+impl Drop for LegacyListener {
     fn drop(&mut self) {
         unsafe { c::statuslistener_unref(self.0.ptr()) };
     }
@@ -105,7 +105,7 @@ impl Drop for LegacyStatusListener {
 
 /// Stores event listener handles so that `c::StatusListener` objects can subscribe to events.
 struct LegacyListenerHelper {
-    handle_map: std::collections::HashMap<usize, Handle<(FileStatus, FileStatus)>>,
+    handle_map: std::collections::HashMap<usize, Handle<(FileState, FileState)>>,
 }
 
 impl LegacyListenerHelper {
@@ -118,7 +118,7 @@ impl LegacyListenerHelper {
     fn add_listener(
         &mut self,
         ptr: *mut c::StatusListener,
-        event_source: &mut EventSource<(FileStatus, FileStatus)>,
+        event_source: &mut EventSource<(FileState, FileState)>,
     ) {
         assert!(!ptr.is_null());
 
@@ -128,10 +128,10 @@ impl LegacyListenerHelper {
         }
 
         // this will ref the pointer and unref it when the closure is dropped
-        let ptr_wrapper = LegacyStatusListener::new(ptr);
+        let ptr_wrapper = LegacyListener::new(ptr);
 
-        let handle = event_source.add_listener(move |(status, changed), _event_queue| unsafe {
-            c::statuslistener_onStatusChanged(ptr_wrapper.ptr(), status.into(), changed.into())
+        let handle = event_source.add_listener(move |(state, changed), _event_queue| unsafe {
+            c::statuslistener_onStatusChanged(ptr_wrapper.ptr(), state.into(), changed.into())
         });
 
         // use a usize as the key so we don't accidentally deref the pointer
@@ -144,14 +144,14 @@ impl LegacyListenerHelper {
     }
 }
 
-/// A specified event source that passes a status and the changed bits to the function, but only if
+/// A specified event source that passes a state and the changed bits to the function, but only if
 /// the monitored bits have changed and if the change the filter is satisfied.
-struct StatusEventSource {
-    inner: EventSource<(FileStatus, FileStatus)>,
+struct StateEventSource {
+    inner: EventSource<(FileState, FileState)>,
     legacy_helper: LegacyListenerHelper,
 }
 
-impl StatusEventSource {
+impl StateEventSource {
     pub fn new() -> Self {
         Self {
             inner: EventSource::new(),
@@ -161,33 +161,33 @@ impl StatusEventSource {
 
     pub fn add_listener(
         &mut self,
-        monitoring: FileStatus,
-        filter: NewStatusListenerFilter,
-        notify_fn: impl Fn(FileStatus, FileStatus, &mut EventQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileStatus, FileStatus)> {
+        monitoring: FileState,
+        filter: StateListenerFilter,
+        notify_fn: impl Fn(FileState, FileState, &mut EventQueue) + Send + Sync + 'static,
+    ) -> Handle<(FileState, FileState)> {
         self.inner
-            .add_listener(move |(status, changed), event_queue| {
+            .add_listener(move |(state, changed), event_queue| {
                 // true if any of the bits we're monitoring have changed
                 let flipped = monitoring.intersects(changed);
 
                 // true if any of the bits we're monitoring are set
-                let on = monitoring.intersects(status);
+                let on = monitoring.intersects(state);
 
                 let notify = match filter {
                     // at least one monitored bit is on, and at least one has changed
-                    NewStatusListenerFilter::OffToOn => flipped && on,
+                    StateListenerFilter::OffToOn => flipped && on,
                     // all monitored bits are off, and at least one has changed
-                    NewStatusListenerFilter::OnToOff => flipped && !on,
+                    StateListenerFilter::OnToOff => flipped && !on,
                     // at least one monitored bit has changed
-                    NewStatusListenerFilter::Always => flipped,
-                    NewStatusListenerFilter::Never => false,
+                    StateListenerFilter::Always => flipped,
+                    StateListenerFilter::Never => false,
                 };
 
                 if !notify {
                     return;
                 }
 
-                (notify_fn)(status, changed, event_queue)
+                (notify_fn)(state, changed, event_queue)
             })
     }
 
@@ -201,11 +201,11 @@ impl StatusEventSource {
 
     pub fn notify_listeners(
         &mut self,
-        status: FileStatus,
-        changed: FileStatus,
+        state: FileState,
+        changed: FileState,
         event_queue: &mut EventQueue,
     ) {
-        self.inner.notify_listeners((status, changed), event_queue)
+        self.inner.notify_listeners((state, changed), event_queue)
     }
 }
 
@@ -260,9 +260,9 @@ impl std::fmt::Debug for PosixFile {
         if let Ok(file) = self.try_borrow() {
             write!(
                 f,
-                "(status: {:?}, flags: {:?})",
-                file.status(),
-                file.get_flags()
+                "(state: {:?}, status: {:?})",
+                file.state(),
+                file.get_status()
             )
         } else {
             write!(f, "(already borrowed)")
@@ -280,25 +280,25 @@ pub enum PosixFileRefMut<'a> {
 
 impl PosixFileRef<'_> {
     enum_passthrough!(self, (), Pipe;
-        pub fn status(&self) -> FileStatus
+        pub fn state(&self) -> FileState
     );
     enum_passthrough!(self, (), Pipe;
-        pub fn get_flags(&self) -> FileFlags
+        pub fn get_status(&self) -> FileStatus
     );
 }
 
 impl PosixFileRefMut<'_> {
     enum_passthrough!(self, (), Pipe;
-        pub fn status(&self) -> FileStatus
+        pub fn state(&self) -> FileState
     );
     enum_passthrough!(self, (), Pipe;
-        pub fn get_flags(&self) -> FileFlags
+        pub fn get_status(&self) -> FileStatus
     );
     enum_passthrough!(self, (event_queue), Pipe;
         pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult
     );
-    enum_passthrough!(self, (flags), Pipe;
-        pub fn set_flags(&mut self, flags: FileFlags)
+    enum_passthrough!(self, (status), Pipe;
+        pub fn set_status(&mut self, status: FileStatus)
     );
     enum_passthrough!(self, (ptr), Pipe;
         pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener)
@@ -326,9 +326,9 @@ impl std::fmt::Debug for PosixFileRef<'_> {
 
         write!(
             f,
-            "(status: {:?}, flags: {:?})",
-            self.status(),
-            self.get_flags()
+            "(state: {:?}, status: {:?})",
+            self.state(),
+            self.get_status()
         )
     }
 }
@@ -341,9 +341,9 @@ impl std::fmt::Debug for PosixFileRefMut<'_> {
 
         write!(
             f,
-            "(status: {:?}, flags: {:?})",
-            self.status(),
-            self.get_flags()
+            "(state: {:?}, status: {:?})",
+            self.state(),
+            self.get_status()
         )
     }
 }
@@ -560,7 +560,7 @@ mod export {
         unsafe { Box::from_raw(file as *mut PosixFile) };
     }
 
-    /// Get the status of the posix file object.
+    /// Get the state of the posix file object.
     #[allow(unused_variables)]
     #[no_mangle]
     pub extern "C" fn posixfile_getStatus(file: *const PosixFile) -> c::Status {
@@ -568,7 +568,7 @@ mod export {
 
         let file = unsafe { &*file };
 
-        file.borrow().status().into()
+        file.borrow().state().into()
     }
 
     /// Add a status listener to the posix file object. This will increment the status

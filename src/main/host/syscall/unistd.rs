@@ -2,7 +2,7 @@ use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::{
-    CompatDescriptor, Descriptor, DescriptorFlags, FileFlags, FileMode, FileStatus, PosixFile,
+    CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, PosixFile,
 };
 use crate::host::syscall::{self, Trigger};
 use crate::host::syscall_condition::SysCallCondition;
@@ -121,7 +121,7 @@ fn read_helper(
     buf_size: libc::size_t,
     offset: libc::off_t,
 ) -> SyscallResult {
-    let file_flags = posix_file.borrow().get_flags();
+    let file_status = posix_file.borrow().get_status();
 
     let result =
         // call the file's read(), and run any resulting events
@@ -134,8 +134,8 @@ fn read_helper(
         });
 
     // if the syscall would block and it's a blocking descriptor
-    if result == Err(Errno::EWOULDBLOCK.into()) && !file_flags.contains(FileFlags::NONBLOCK) {
-        let trigger = Trigger::from_posix_file(posix_file, FileStatus::READABLE);
+    if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
+        let trigger = Trigger::from_posix_file(posix_file, FileState::READABLE);
 
         return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
     }
@@ -191,7 +191,7 @@ fn write_helper(
     buf_size: libc::size_t,
     offset: libc::off_t,
 ) -> SyscallResult {
-    let file_flags = posix_file.borrow().get_flags();
+    let file_status = posix_file.borrow().get_status();
 
     let result =
         // call the file's write(), and run any resulting events
@@ -204,8 +204,8 @@ fn write_helper(
         });
 
     // if the syscall would block and it's a blocking descriptor
-    if result == Err(Errno::EWOULDBLOCK.into()) && !file_flags.contains(FileFlags::NONBLOCK) {
-        let trigger = Trigger::from_posix_file(posix_file, FileStatus::WRITABLE);
+    if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
+        let trigger = Trigger::from_posix_file(posix_file, FileState::WRITABLE);
 
         return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
     };
@@ -232,14 +232,14 @@ fn pipe_helper(ctx: &mut ThreadContext, fd_ptr: PluginPtr, flags: i32) -> Syscal
         return Err(nix::errno::Errno::EFAULT.into());
     }
 
-    let mut file_flags = FileFlags::empty();
+    let mut file_flags = FileStatus::empty();
     let mut descriptor_flags = DescriptorFlags::empty();
 
     // keep track of which flags we use
     let mut remaining_flags = flags;
 
     if flags & libc::O_NONBLOCK != 0 {
-        file_flags.insert(FileFlags::NONBLOCK);
+        file_flags.insert(FileStatus::NONBLOCK);
         remaining_flags &= !libc::O_NONBLOCK;
     }
 
