@@ -46,6 +46,10 @@ impl PipeFile {
         self.status = status;
     }
 
+    pub fn mode(&self) -> FileMode {
+        self.mode
+    }
+
     pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
         // set the closed flag and remove the active flag
         self.copy_state(

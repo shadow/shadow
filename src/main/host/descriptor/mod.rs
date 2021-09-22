@@ -1,4 +1,5 @@
 use atomic_refcell::AtomicRefCell;
+use nix::fcntl::OFlag;
 use std::convert::TryInto;
 use std::sync::Arc;
 
@@ -32,6 +33,19 @@ bitflags::bitflags! {
     }
 }
 
+impl FileStatus {
+    pub fn as_o_flags(&self) -> OFlag {
+        OFlag::from_bits(self.bits()).unwrap()
+    }
+
+    /// Returns a tuple of the `FileStatus` and any remaining flags.
+    pub fn from_o_flags(flags: OFlag) -> (Self, OFlag) {
+        let status = Self::from_bits_truncate(flags.bits());
+        let remaining = flags.bits() & !status.bits();
+        (status, OFlag::from_bits(remaining).unwrap())
+    }
+}
+
 bitflags::bitflags! {
     /// These are flags that should generally not change (analagous to the Linux `filp->f_mode`).
     /// Since the plugin will never see these values and they're not exposed by the kernel, we
@@ -41,6 +55,44 @@ bitflags::bitflags! {
     pub struct FileMode: u32 {
         const READ = 0b00000001;
         const WRITE = 0b00000010;
+    }
+}
+
+impl FileMode {
+    /// Returns an empty `Err` if the file mode is not valid (neither read nor write).
+    pub fn as_o_flags(&self) -> Result<OFlag, ()> {
+        if self.contains(Self::READ | Self::WRITE) {
+            return Ok(OFlag::O_RDWR);
+        }
+        if self.contains(Self::READ) {
+            return Ok(OFlag::O_RDONLY);
+        }
+        if self.contains(Self::WRITE) {
+            return Ok(OFlag::O_WRONLY);
+        }
+        // O_RDONLY is 0, so we should indicate this state with an error rather
+        // than returning 0
+        return Err(());
+    }
+
+    /// Returns a tuple of the `FileMode` and any remaining flags, or an empty `Err` if
+    /// the flags aren't valid (for example specifying both `O_RDWR` and `O_WRONLY`).
+    pub fn from_o_flags(flags: OFlag) -> Result<(Self, OFlag), ()> {
+        // O_RDONLY is 0, so 'flags.contains(OFlag::O_RDONLY)' is always true
+        let has_rdwr = flags.contains(OFlag::O_RDWR);
+        let has_wronly = flags.contains(OFlag::O_WRONLY);
+
+        if has_rdwr && has_wronly {
+            return Err(());
+        }
+
+        if has_rdwr {
+            return Ok((Self::READ | Self::WRITE, flags - OFlag::O_RDWR));
+        } else if has_wronly {
+            return Ok((Self::WRITE, flags - OFlag::O_WRONLY));
+        } else {
+            return Ok((Self::READ, flags - OFlag::O_RDONLY));
+        }
     }
 }
 
@@ -283,6 +335,9 @@ impl PosixFileRef<'_> {
         pub fn state(&self) -> FileState
     );
     enum_passthrough!(self, (), Pipe;
+        pub fn mode(&self) -> FileMode
+    );
+    enum_passthrough!(self, (), Pipe;
         pub fn get_status(&self) -> FileStatus
     );
 }
@@ -290,6 +345,9 @@ impl PosixFileRef<'_> {
 impl PosixFileRefMut<'_> {
     enum_passthrough!(self, (), Pipe;
         pub fn state(&self) -> FileState
+    );
+    enum_passthrough!(self, (), Pipe;
+        pub fn mode(&self) -> FileMode
     );
     enum_passthrough!(self, (), Pipe;
         pub fn get_status(&self) -> FileStatus
@@ -351,8 +409,31 @@ impl std::fmt::Debug for PosixFileRefMut<'_> {
 bitflags::bitflags! {
     // Linux only supports a single descriptor flag:
     // https://www.gnu.org/software/libc/manual/html_node/Descriptor-Flags.html
-    pub struct DescriptorFlags: u32 {
-        const CLOEXEC = libc::FD_CLOEXEC as u32;
+    pub struct DescriptorFlags: libc::c_int {
+        const CLOEXEC = libc::FD_CLOEXEC;
+    }
+}
+
+impl DescriptorFlags {
+    pub fn as_o_flags(&self) -> OFlag {
+        let mut flags = OFlag::empty();
+        if self.contains(Self::CLOEXEC) {
+            flags.insert(OFlag::O_CLOEXEC);
+        }
+        return flags;
+    }
+
+    /// Returns a tuple of the `DescriptorFlags` and any remaining flags.
+    pub fn from_o_flags(flags: OFlag) -> (Self, OFlag) {
+        let mut remaining = flags;
+        let mut flags = Self::empty();
+
+        if remaining.contains(OFlag::O_CLOEXEC) {
+            remaining.remove(OFlag::O_CLOEXEC);
+            flags.insert(Self::CLOEXEC);
+        }
+
+        (flags, remaining)
     }
 }
 
@@ -703,5 +784,47 @@ mod tests {
             let roundtripped_debug = format!("{:?}", roundtripped);
             assert_eq!(orig_debug, roundtripped_debug);
         }
+    }
+
+    #[test]
+    fn test_file_mode_o_flags() {
+        // test from O flags to FileMode
+        assert_eq!(
+            FileMode::from_o_flags(OFlag::O_WRONLY),
+            Ok((FileMode::WRITE, OFlag::empty()))
+        );
+        assert_eq!(
+            FileMode::from_o_flags(OFlag::O_RDWR),
+            Ok((FileMode::READ | FileMode::WRITE, OFlag::empty()))
+        );
+        assert_eq!(
+            FileMode::from_o_flags(OFlag::O_RDONLY),
+            Ok((FileMode::READ, OFlag::empty()))
+        );
+        assert_eq!(
+            FileMode::from_o_flags(OFlag::empty()),
+            Ok((FileMode::READ, OFlag::empty()))
+        );
+        assert_eq!(
+            FileMode::from_o_flags(OFlag::O_RDWR | OFlag::O_WRONLY),
+            Err(())
+        );
+        assert_eq!(
+            FileMode::from_o_flags(OFlag::O_RDWR | OFlag::O_RDONLY),
+            Ok((FileMode::READ | FileMode::WRITE, OFlag::empty()))
+        );
+        assert_eq!(
+            FileMode::from_o_flags(OFlag::O_WRONLY | OFlag::O_RDONLY),
+            Ok((FileMode::WRITE, OFlag::empty()))
+        );
+
+        // test from FileMode to O flags
+        assert_eq!(FileMode::as_o_flags(&FileMode::empty()), Err(()));
+        assert_eq!(FileMode::as_o_flags(&FileMode::READ), Ok(OFlag::O_RDONLY));
+        assert_eq!(FileMode::as_o_flags(&FileMode::WRITE), Ok(OFlag::O_WRONLY));
+        assert_eq!(
+            FileMode::as_o_flags(&(FileMode::READ | FileMode::WRITE)),
+            Ok(OFlag::O_RDWR)
+        );
     }
 }
