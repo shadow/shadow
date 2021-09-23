@@ -240,7 +240,14 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
         utility_panic("Data directory was not set");
     }
 
-    manager->dataPath = g_build_filename(manager->cwdPath, dataDirectory, NULL);
+    if (dataDirectory[0] != '/') {
+        // Relative path
+        manager->dataPath = g_build_filename(manager->cwdPath, dataDirectory, NULL);
+    } else {
+        // Absolute path
+        manager->dataPath = g_build_filename(dataDirectory, NULL);
+    }
+
     config_freeString(dataDirectory);
 
     manager->hostsPath = g_build_filename(manager->dataPath, "hosts", NULL);
