@@ -356,6 +356,8 @@ impl std::convert::From<&ShadowEdge> for PathProperties {
     }
 }
 
+pub struct IpPreviouslyAssignedError;
+
 /// Tool for assigning IP addresses to graph nodes.
 #[derive(Debug)]
 pub struct IpAssignment<T: Copy + Eq + Hash + std::fmt::Display> {
@@ -387,14 +389,14 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> IpAssignment<T> {
     }
 
     /// Assign an address to a node.
-    pub fn assign_ip(&mut self, node_id: T, ip_addr: std::net::IpAddr) -> Result<(), String> {
+    pub fn assign_ip(
+        &mut self,
+        node_id: T,
+        ip_addr: std::net::IpAddr,
+    ) -> Result<(), IpPreviouslyAssignedError> {
         let entry = self.map.entry(ip_addr.clone());
-        if let Entry::Occupied(entry) = &entry {
-            let prev_node_id = entry.get();
-            return Err(format!(
-                "IP {} assigned to both nodes {} and {}",
-                ip_addr, prev_node_id, node_id
-            ));
+        if let Entry::Occupied(_) = &entry {
+            return Err(IpPreviouslyAssignedError);
         }
         entry.or_insert(node_id);
         Ok(())
@@ -742,8 +744,8 @@ mod export {
 
         match ip_assignment.assign_ip(node_id, ip_addr) {
             Ok(()) => return 0,
-            Err(e) => {
-                error!("{}", e);
+            Err(IpPreviouslyAssignedError) => {
+                error!("IP {} was assigned to multiple hosts", ip_addr,);
                 return -1;
             }
         }
