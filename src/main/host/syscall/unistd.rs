@@ -55,23 +55,98 @@ pub fn dup(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     };
 
     // duplicate the descriptor
-    let new_desc = CompatDescriptor::New(dup_helper(desc, None));
+    let new_desc = CompatDescriptor::New(desc.dup(DescriptorFlags::empty()));
     let new_fd = ctx.process.register_descriptor(new_desc);
 
     // return the new fd
     Ok(libc::c_int::try_from(new_fd).unwrap().into())
 }
 
-pub fn dup_helper(desc: &Descriptor, flags: Option<DescriptorFlags>) -> Descriptor {
-    // clone the descriptor (but not the flags)
-    let mut new_desc = desc.clone();
-    new_desc.set_flags(DescriptorFlags::empty());
+pub fn dup2(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    let old_fd = libc::c_int::from(args.get(0));
+    let new_fd = libc::c_int::from(args.get(1));
 
-    if let Some(flags) = flags {
-        new_desc.set_flags(flags);
+    // get the descriptor, or return early if it doesn't exist
+    let desc = match syscall::get_descriptor(ctx.process, old_fd)? {
+        CompatDescriptor::New(desc) => desc,
+        // we don't support dup2 for legacy descriptors
+        CompatDescriptor::Legacy(_) => {
+            warn!(
+                "dup2() is not supported for legacy descriptors (fd={})",
+                old_fd
+            );
+            return Err(nix::errno::Errno::ENOSYS.into());
+        }
+    };
+
+    // from 'man 2 dup2': "If oldfd is a valid file descriptor, and newfd has the same
+    // value as oldfd, then dup2() does nothing, and returns newfd"
+    if old_fd == new_fd {
+        return Ok(new_fd.into());
     }
 
-    new_desc
+    let new_fd: u32 = new_fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+
+    // duplicate the descriptor
+    let new_desc = CompatDescriptor::New(desc.dup(DescriptorFlags::empty()));
+    let replaced_desc = ctx.process.register_descriptor_with_fd(new_desc, new_fd);
+
+    // close the replaced descriptor
+    if let Some(replaced_desc) = replaced_desc {
+        // from 'man 2 dup2': "If newfd was open, any errors that would have been reported at
+        // close(2) time are lost"
+        EventQueue::queue_and_run(|event_queue| replaced_desc.close(ctx.host.chost(), event_queue));
+    }
+
+    // return the new fd
+    Ok(libc::c_int::try_from(new_fd).unwrap().into())
+}
+
+pub fn dup3(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    let old_fd = libc::c_int::from(args.get(0));
+    let new_fd = libc::c_int::from(args.get(1));
+    let flags = libc::c_int::from(args.get(2));
+
+    // get the descriptor, or return early if it doesn't exist
+    let desc = match syscall::get_descriptor(ctx.process, old_fd)? {
+        CompatDescriptor::New(desc) => desc,
+        // we don't support dup3 for legacy descriptors
+        CompatDescriptor::Legacy(_) => {
+            warn!(
+                "dup3() is not supported for legacy descriptors (fd={})",
+                old_fd
+            );
+            return Err(nix::errno::Errno::ENOSYS.into());
+        }
+    };
+
+    // from 'man 2 dup3': "If oldfd equals newfd, then dup3() fails with the error EINVAL"
+    if old_fd == new_fd {
+        return Err(nix::errno::Errno::EINVAL.into());
+    }
+
+    let new_fd: u32 = new_fd.try_into().map_err(|_| nix::errno::Errno::EBADF)?;
+
+    // dup3 only supports the O_CLOEXEC flag
+    let flags = match flags {
+        libc::O_CLOEXEC => DescriptorFlags::CLOEXEC,
+        0 => DescriptorFlags::empty(),
+        _ => return Err(nix::errno::Errno::EINVAL.into()),
+    };
+
+    // duplicate the descriptor
+    let new_desc = CompatDescriptor::New(desc.dup(flags));
+    let replaced_desc = ctx.process.register_descriptor_with_fd(new_desc, new_fd);
+
+    // close the replaced descriptor
+    if let Some(replaced_desc) = replaced_desc {
+        // from 'man 2 dup3': "If newfd was open, any errors that would have been reported at
+        // close(2) time are lost"
+        EventQueue::queue_and_run(|event_queue| replaced_desc.close(ctx.host.chost(), event_queue));
+    }
+
+    // return the new fd
+    Ok(libc::c_int::try_from(new_fd).unwrap().into())
 }
 
 pub fn read(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
@@ -336,6 +411,24 @@ mod export {
     ) -> c::SysCallReturn {
         let mut objs = unsafe { ThreadContextObjs::from_syscallhandler(notnull_mut_debug(sys)) };
         dup(&mut objs.borrow(), unsafe { args.as_ref().unwrap() }).into()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn rustsyscallhandler_dup2(
+        sys: *mut c::SysCallHandler,
+        args: *const c::SysCallArgs,
+    ) -> c::SysCallReturn {
+        let mut objs = unsafe { ThreadContextObjs::from_syscallhandler(notnull_mut_debug(sys)) };
+        dup2(&mut objs.borrow(), unsafe { args.as_ref().unwrap() }).into()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn rustsyscallhandler_dup3(
+        sys: *mut c::SysCallHandler,
+        args: *const c::SysCallArgs,
+    ) -> c::SysCallReturn {
+        let mut objs = unsafe { ThreadContextObjs::from_syscallhandler(notnull_mut_debug(sys)) };
+        dup3(&mut objs.borrow(), unsafe { args.as_ref().unwrap() }).into()
     }
 
     #[no_mangle]
