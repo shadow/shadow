@@ -50,6 +50,10 @@ impl PipeFile {
         self.mode
     }
 
+    pub fn max_size(&self) -> usize {
+        self.buffer.borrow().max_len()
+    }
+
     pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
         // set the closed flag and remove the active flag
         self.copy_state(
@@ -225,6 +229,10 @@ impl SharedBuf {
 
     pub fn is_empty(&self) -> bool {
         self.queue.len() == 0
+    }
+
+    pub fn max_len(&self) -> usize {
+        self.max_len
     }
 
     pub fn space_available(&self) -> usize {

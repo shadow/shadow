@@ -1,6 +1,6 @@
 use crate::cshadow;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
-use crate::host::descriptor::{CompatDescriptor, DescriptorFlags, FileStatus};
+use crate::host::descriptor::{CompatDescriptor, DescriptorFlags, FileStatus, PosixFile};
 use crate::host::syscall;
 use crate::host::syscall_types::SyscallResult;
 use crate::host::syscall_types::{SysCallArgs, SysCallReg};
@@ -92,6 +92,15 @@ fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
                 .process
                 .register_descriptor_with_min_fd(new_desc, min_fd);
             SysCallReg::from(i32::try_from(new_fd).unwrap())
+        }
+        libc::F_GETPIPE_SZ =>
+        {
+            #[allow(irrefutable_let_patterns)]
+            if let PosixFile::Pipe(pipe) = desc.get_file() {
+                SysCallReg::from(i32::try_from(pipe.borrow().max_size()).unwrap())
+            } else {
+                Err(Errno::EINVAL)?
+            }
         }
         _ => Err(Errno::EINVAL)?,
     })
