@@ -59,40 +59,39 @@ bitflags::bitflags! {
 }
 
 impl FileMode {
-    /// Returns an empty `Err` if the file mode is not valid (neither read nor write).
-    pub fn as_o_flags(&self) -> Result<OFlag, ()> {
-        if self.contains(Self::READ | Self::WRITE) {
-            return Ok(OFlag::O_RDWR);
+    pub fn as_o_flags(&self) -> OFlag {
+        const READ_AND_WRITE: FileMode = FileMode::READ.union(FileMode::WRITE);
+        const EMPTY: FileMode = FileMode::empty();
+
+        // https://www.gnu.org/software/libc/manual/html_node/Access-Modes.html
+        match *self {
+            READ_AND_WRITE => OFlag::O_RDWR,
+            Self::READ => OFlag::O_RDONLY,
+            Self::WRITE => OFlag::O_WRONLY,
+            // a linux-specific flag
+            EMPTY => OFlag::O_PATH,
+            _ => panic!("Invalid file mode flags"),
         }
-        if self.contains(Self::READ) {
-            return Ok(OFlag::O_RDONLY);
-        }
-        if self.contains(Self::WRITE) {
-            return Ok(OFlag::O_WRONLY);
-        }
-        // O_RDONLY is 0, so we should indicate this state with an error rather
-        // than returning 0
-        return Err(());
     }
 
     /// Returns a tuple of the `FileMode` and any remaining flags, or an empty `Err` if
     /// the flags aren't valid (for example specifying both `O_RDWR` and `O_WRONLY`).
     pub fn from_o_flags(flags: OFlag) -> Result<(Self, OFlag), ()> {
-        // O_RDONLY is 0, so 'flags.contains(OFlag::O_RDONLY)' is always true
-        let has_rdwr = flags.contains(OFlag::O_RDWR);
-        let has_wronly = flags.contains(OFlag::O_WRONLY);
+        // apply the access mode mask (the O_PATH flag is not contained within the access
+        // mode mask, so we need to add it separately)
+        let mode = flags & (OFlag::O_ACCMODE | OFlag::O_PATH);
+        let remaining = flags - (OFlag::O_ACCMODE | OFlag::O_PATH);
 
-        if has_rdwr && has_wronly {
-            return Err(());
-        }
+        // https://www.gnu.org/software/libc/manual/html_node/Access-Modes.html
+        let mode = match mode {
+            OFlag::O_RDONLY => FileMode::READ,
+            OFlag::O_WRONLY => FileMode::WRITE,
+            OFlag::O_RDWR => FileMode::READ | FileMode::WRITE,
+            OFlag::O_PATH => FileMode::empty(),
+            _ => return Err(()),
+        };
 
-        if has_rdwr {
-            return Ok((Self::READ | Self::WRITE, flags - OFlag::O_RDWR));
-        } else if has_wronly {
-            return Ok((Self::WRITE, flags - OFlag::O_WRONLY));
-        } else {
-            return Ok((Self::READ, flags - OFlag::O_RDONLY));
-        }
+        Ok((mode, remaining))
     }
 }
 
@@ -790,6 +789,10 @@ mod tests {
     fn test_file_mode_o_flags() {
         // test from O flags to FileMode
         assert_eq!(
+            FileMode::from_o_flags(OFlag::O_PATH),
+            Ok((FileMode::empty(), OFlag::empty()))
+        );
+        assert_eq!(
             FileMode::from_o_flags(OFlag::O_WRONLY),
             Ok((FileMode::WRITE, OFlag::empty()))
         );
@@ -817,14 +820,22 @@ mod tests {
             FileMode::from_o_flags(OFlag::O_WRONLY | OFlag::O_RDONLY),
             Ok((FileMode::WRITE, OFlag::empty()))
         );
+        assert_eq!(
+            FileMode::from_o_flags(OFlag::O_PATH | OFlag::O_WRONLY),
+            Err(())
+        );
+        assert_eq!(
+            FileMode::from_o_flags(OFlag::O_WRONLY | OFlag::O_CLOEXEC),
+            Ok((FileMode::WRITE, OFlag::O_CLOEXEC))
+        );
 
         // test from FileMode to O flags
-        assert_eq!(FileMode::as_o_flags(&FileMode::empty()), Err(()));
-        assert_eq!(FileMode::as_o_flags(&FileMode::READ), Ok(OFlag::O_RDONLY));
-        assert_eq!(FileMode::as_o_flags(&FileMode::WRITE), Ok(OFlag::O_WRONLY));
+        assert_eq!(FileMode::as_o_flags(&FileMode::empty()), OFlag::O_PATH);
+        assert_eq!(FileMode::as_o_flags(&FileMode::READ), OFlag::O_RDONLY);
+        assert_eq!(FileMode::as_o_flags(&FileMode::WRITE), OFlag::O_WRONLY);
         assert_eq!(
             FileMode::as_o_flags(&(FileMode::READ | FileMode::WRITE)),
-            Ok(OFlag::O_RDWR)
+            OFlag::O_RDWR
         );
     }
 }
