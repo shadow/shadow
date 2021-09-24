@@ -6,6 +6,7 @@ use crate::host::syscall_types::SyscallResult;
 use crate::host::syscall_types::{SysCallArgs, SysCallReg};
 use log::*;
 use nix::errno::Errno;
+use nix::fcntl::OFlag;
 use std::os::unix::prelude::RawFd;
 
 fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
@@ -29,11 +30,33 @@ fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
 
     Ok(match cmd {
         libc::F_GETFL => {
-            let status = desc.get_file().borrow().get_status();
-            SysCallReg::from(status.bits())
+            let file = desc.get_file().borrow();
+            // combine the file status and access mode flags
+            let flags = file.get_status().as_o_flags() | file.mode().as_o_flags().unwrap();
+            SysCallReg::from(flags.bits())
         }
         libc::F_SETFL => {
-            let status = FileStatus::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
+            let mut status = OFlag::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
+            // remove access mode flags
+            status.remove(OFlag::O_RDONLY | OFlag::O_WRONLY | OFlag::O_RDWR);
+            // remove file creation flags
+            status.remove(
+                OFlag::O_CLOEXEC
+                    | OFlag::O_CREAT
+                    | OFlag::O_DIRECTORY
+                    | OFlag::O_EXCL
+                    | OFlag::O_NOCTTY
+                    | OFlag::O_NOFOLLOW
+                    | OFlag::O_TMPFILE
+                    | OFlag::O_TRUNC,
+            );
+            let (status, remaining) = FileStatus::from_o_flags(status);
+
+            // check if there are flags that we don't support
+            if !remaining.is_empty() {
+                return Err(Errno::EINVAL.into());
+            }
+
             desc.get_file().borrow_mut().set_status(status);
             SysCallReg::from(0)
         }
