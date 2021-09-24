@@ -68,7 +68,14 @@ impl Process {
     pub fn register_descriptor(&mut self, desc: CompatDescriptor) -> u32 {
         let desc_table =
             unsafe { cshadow::process_getDescriptorTable(self.cprocess).as_mut() }.unwrap();
-        desc_table.add(desc)
+        desc_table.add(desc, 0)
+    }
+
+    /// Register a descriptor and return its fd handle.
+    pub fn register_descriptor_with_min_fd(&mut self, desc: CompatDescriptor, min_fd: u32) -> u32 {
+        let desc_table =
+            unsafe { cshadow::process_getDescriptorTable(self.cprocess).as_mut() }.unwrap();
+        desc_table.add(desc, min_fd)
     }
 
     /// Register a descriptor with a given fd handle and return the descriptor that it replaced.

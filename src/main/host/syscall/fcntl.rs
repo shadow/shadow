@@ -7,6 +7,7 @@ use crate::host::syscall_types::{SysCallArgs, SysCallReg};
 use log::*;
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
+use std::convert::{TryFrom, TryInto};
 use std::os::unix::prelude::RawFd;
 
 fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
@@ -71,6 +72,26 @@ fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
             let flags = DescriptorFlags::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
             desc.set_flags(flags);
             SysCallReg::from(0)
+        }
+        libc::F_DUPFD => {
+            let min_fd: i32 = args.args[2].into();
+            let min_fd: u32 = min_fd.try_into().map_err(|_| nix::errno::Errno::EINVAL)?;
+
+            let new_desc = CompatDescriptor::New(desc.dup(DescriptorFlags::empty()));
+            let new_fd = ctx
+                .process
+                .register_descriptor_with_min_fd(new_desc, min_fd);
+            SysCallReg::from(i32::try_from(new_fd).unwrap())
+        }
+        libc::F_DUPFD_CLOEXEC => {
+            let min_fd: i32 = args.args[2].into();
+            let min_fd: u32 = min_fd.try_into().map_err(|_| nix::errno::Errno::EINVAL)?;
+
+            let new_desc = CompatDescriptor::New(desc.dup(DescriptorFlags::CLOEXEC));
+            let new_fd = ctx
+                .process
+                .register_descriptor_with_min_fd(new_desc, min_fd);
+            SysCallReg::from(i32::try_from(new_fd).unwrap())
         }
         _ => Err(Errno::EINVAL)?,
     })
