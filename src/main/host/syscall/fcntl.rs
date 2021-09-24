@@ -32,13 +32,13 @@ fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         libc::F_GETFL => {
             let file = desc.get_file().borrow();
             // combine the file status and access mode flags
-            let flags = file.get_status().as_o_flags() | file.mode().as_o_flags().unwrap();
+            let flags = file.get_status().as_o_flags() | file.mode().as_o_flags();
             SysCallReg::from(flags.bits())
         }
         libc::F_SETFL => {
             let mut status = OFlag::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
             // remove access mode flags
-            status.remove(OFlag::O_RDONLY | OFlag::O_WRONLY | OFlag::O_RDWR);
+            status.remove(OFlag::O_RDONLY | OFlag::O_WRONLY | OFlag::O_RDWR | OFlag::O_PATH);
             // remove file creation flags
             status.remove(
                 OFlag::O_CLOEXEC
