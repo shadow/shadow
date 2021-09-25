@@ -12,6 +12,8 @@ enum DupFn {
     Dup,
     Dup2,
     Dup3,
+    Fcntl,
+    FcntlCloExec,
 }
 
 fn main() -> Result<(), String> {
@@ -46,9 +48,20 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new("test_dup", test_dup, set![TestEnv::Libc, TestEnv::Shadow]),
         test_utils::ShadowTest::new("test_dup2", test_dup2, set![TestEnv::Libc, TestEnv::Shadow]),
         test_utils::ShadowTest::new("test_dup3", test_dup3, set![TestEnv::Libc, TestEnv::Shadow]),
+        test_utils::ShadowTest::new(
+            "test_fcntl",
+            test_fcntl,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
     ];
 
-    for dup_fn in &[DupFn::Dup, DupFn::Dup2, DupFn::Dup3] {
+    for dup_fn in &[
+        DupFn::Dup,
+        DupFn::Dup2,
+        DupFn::Dup3,
+        DupFn::Fcntl,
+        DupFn::FcntlCloExec,
+    ] {
         tests.extend([test_utils::ShadowTest::new(
             &format!("test_dup <dup_fn={:?}>", dup_fn),
             move || test_dup_io(dup_fn),
@@ -111,6 +124,51 @@ fn test_dup3() -> Result<(), String> {
     })
 }
 
+fn test_fcntl() -> Result<(), String> {
+    for command in &[libc::F_DUPFD, libc::F_DUPFD_CLOEXEC] {
+        let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
+        let min_fd = 1000;
+        assert!(min_fd != read_fd && min_fd != write_fd);
+
+        test_utils::run_and_close_fds(&[write_fd, read_fd], || -> Result<(), String> {
+            let write_fd_dup_1 =
+                check_system_call!(|| unsafe { libc::fcntl(write_fd, *command, min_fd) }, &[])
+                    .unwrap();
+            assert_eq!(write_fd_dup_1, min_fd);
+
+            let write_fd_dup_2 =
+                check_system_call!(|| unsafe { libc::fcntl(write_fd, *command, min_fd) }, &[])
+                    .unwrap();
+            assert_eq!(write_fd_dup_2, min_fd + 1);
+
+            let write_fd_dup_3 =
+                check_system_call!(|| unsafe { libc::fcntl(write_fd, *command, 0) }, &[]).unwrap();
+            assert!(write_fd_dup_3 < min_fd);
+
+            assert_eq!(unsafe { libc::close(write_fd_dup_1) }, 0);
+            assert_eq!(unsafe { libc::close(write_fd_dup_2) }, 0);
+            assert_eq!(unsafe { libc::close(write_fd_dup_3) }, 0);
+
+            check_system_call!(
+                || unsafe { libc::fcntl(-1, libc::F_DUPFD, min_fd) },
+                &[libc::EBADF]
+            )?;
+            check_system_call!(
+                || unsafe { libc::fcntl(5000, libc::F_DUPFD, min_fd) },
+                &[libc::EBADF]
+            )?;
+            check_system_call!(
+                || unsafe { libc::fcntl(write_fd, libc::F_DUPFD, -1) },
+                &[libc::EINVAL]
+            )?;
+
+            Ok(())
+        })?
+    }
+
+    Ok(())
+}
+
 fn test_dup_io(dup_fn: &DupFn) -> Result<(), String> {
     let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
 
@@ -135,6 +193,10 @@ fn test_dup_io(dup_fn: &DupFn) -> Result<(), String> {
                 DupFn::Dup => unsafe { libc::dup(write_fd) },
                 DupFn::Dup2 => unsafe { libc::dup2(write_fd, 1000) },
                 DupFn::Dup3 => unsafe { libc::dup3(write_fd, 1000, libc::O_CLOEXEC) },
+                DupFn::Fcntl => unsafe { libc::fcntl(write_fd, libc::F_DUPFD, 1000) },
+                DupFn::FcntlCloExec => unsafe {
+                    libc::fcntl(write_fd, libc::F_DUPFD_CLOEXEC, 1000)
+                },
             },
             &[]
         )?;

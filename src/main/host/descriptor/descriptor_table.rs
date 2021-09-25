@@ -27,8 +27,8 @@ impl DescriptorTable {
     }
 
     /// Add the descriptor at an unused index, and return the index.
-    pub fn add(&mut self, mut descriptor: CompatDescriptor) -> u32 {
-        let idx = if let Some(idx) = self.available_indices.iter().next() {
+    pub fn add(&mut self, mut descriptor: CompatDescriptor, min_index: u32) -> u32 {
+        let idx = if let Some(idx) = self.available_indices.range(min_index..).next() {
             // Un-borrow from `available_indices`.
             let idx = *idx;
             // Take from `available_indices`
@@ -36,16 +36,27 @@ impl DescriptorTable {
             self.available_indices.remove(&idx);
             idx
         } else {
+            // Start our search at either the next likely available index or the minimum index,
+            // whichever is larger.
+            let mut idx = std::cmp::max(self.next_index, min_index);
+
+            // Only update next_index if we started at it, otherwise there may be other
+            // available indexes lower than idx.
+            let should_update_next_index = idx == self.next_index;
+
             // Skip past any indexes that are in use. This can happen after
             // calling `set` with a value greater than `next_index`.
-            while self.descriptors.contains_key(&self.next_index) {
-                trace!("Skipping past in-use index {}", self.next_index);
-                self.next_index += 1;
+            while self.descriptors.contains_key(&idx) {
+                trace!("Skipping past in-use index {}", idx);
+                idx += 1;
             }
+
+            if should_update_next_index {
+                self.next_index = idx + 1;
+            }
+
             // Take the next index.
-            let idx = self.next_index;
             trace!("Using index {}", idx);
-            self.next_index += 1;
             idx
         };
 
@@ -89,6 +100,11 @@ impl DescriptorTable {
     /// Get the descriptor at `idx`, if any.
     pub fn get(&self, idx: u32) -> Option<&CompatDescriptor> {
         self.descriptors.get(&idx)
+    }
+
+    /// Get the descriptor at `idx`, if any.
+    pub fn get_mut(&mut self, idx: u32) -> Option<&mut CompatDescriptor> {
+        self.descriptors.get_mut(&idx)
     }
 
     /// Insert a descriptor at `index`. If a descriptor is already present at

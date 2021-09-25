@@ -1,12 +1,13 @@
 use crate::cshadow;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
-use crate::host::descriptor::{CompatDescriptor, FileStatus};
+use crate::host::descriptor::{CompatDescriptor, DescriptorFlags, FileStatus, PosixFile};
 use crate::host::syscall;
 use crate::host::syscall_types::SyscallResult;
 use crate::host::syscall_types::{SysCallArgs, SysCallReg};
 use log::*;
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
+use std::convert::{TryFrom, TryInto};
 use std::os::unix::prelude::RawFd;
 
 fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
@@ -14,7 +15,7 @@ fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let cmd: i32 = args.args[1].into();
 
     // get the descriptor, or return early if it doesn't exist
-    let desc = match syscall::get_descriptor(ctx.process, fd)? {
+    let desc = match syscall::get_descriptor_mut(ctx.process, fd)? {
         CompatDescriptor::New(d) => d,
         // if it's a legacy descriptor, use the C syscall handler instead
         CompatDescriptor::Legacy(_) => {
@@ -59,6 +60,47 @@ fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
 
             desc.get_file().borrow_mut().set_status(status);
             SysCallReg::from(0)
+        }
+        libc::F_GETFD => {
+            let flags = desc.get_flags().bits();
+            // the only descriptor flag supported by Linux is FD_CLOEXEC, so let's make sure
+            // we're returning the correct value
+            debug_assert!(flags == 0 || flags == libc::FD_CLOEXEC);
+            SysCallReg::from(flags)
+        }
+        libc::F_SETFD => {
+            let flags = DescriptorFlags::from_bits(i32::from(args.args[2])).ok_or(Errno::EINVAL)?;
+            desc.set_flags(flags);
+            SysCallReg::from(0)
+        }
+        libc::F_DUPFD => {
+            let min_fd: i32 = args.args[2].into();
+            let min_fd: u32 = min_fd.try_into().map_err(|_| nix::errno::Errno::EINVAL)?;
+
+            let new_desc = CompatDescriptor::New(desc.dup(DescriptorFlags::empty()));
+            let new_fd = ctx
+                .process
+                .register_descriptor_with_min_fd(new_desc, min_fd);
+            SysCallReg::from(i32::try_from(new_fd).unwrap())
+        }
+        libc::F_DUPFD_CLOEXEC => {
+            let min_fd: i32 = args.args[2].into();
+            let min_fd: u32 = min_fd.try_into().map_err(|_| nix::errno::Errno::EINVAL)?;
+
+            let new_desc = CompatDescriptor::New(desc.dup(DescriptorFlags::CLOEXEC));
+            let new_fd = ctx
+                .process
+                .register_descriptor_with_min_fd(new_desc, min_fd);
+            SysCallReg::from(i32::try_from(new_fd).unwrap())
+        }
+        libc::F_GETPIPE_SZ =>
+        {
+            #[allow(irrefutable_let_patterns)]
+            if let PosixFile::Pipe(pipe) = desc.get_file() {
+                SysCallReg::from(i32::try_from(pipe.borrow().max_size()).unwrap())
+            } else {
+                Err(Errno::EINVAL)?
+            }
         }
         _ => Err(Errno::EINVAL)?,
     })

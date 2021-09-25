@@ -61,6 +61,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             test_read_from_write_end,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
+        test_utils::ShadowTest::new(
+            "test_get_size",
+            test_get_size,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
     ];
 
     tests
@@ -292,6 +297,26 @@ fn test_read_from_write_end() -> Result<(), String> {
             },
             &[libc::EBADF]
         )?;
+
+        Ok(())
+    })
+}
+
+fn test_get_size() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(|| { unsafe { libc::pipe(fds.as_mut_ptr()) } }, &[])?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        let size = test_utils::check_system_call!(
+            || unsafe { libc::fcntl(read_fd, libc::F_GETPIPE_SZ) },
+            &[]
+        )?;
+        assert!(size > 0);
 
         Ok(())
     })
