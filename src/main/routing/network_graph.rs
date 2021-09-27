@@ -646,6 +646,14 @@ mod export {
         unsafe { Box::from_raw(graph) };
     }
 
+    /// Check if the node exists in the graph.
+    #[no_mangle]
+    #[must_use]
+    pub extern "C" fn networkgraph_nodeExists(graph: *mut NetworkGraph, node_id: u32) -> bool {
+        let graph = unsafe { graph.as_ref() }.unwrap();
+        graph.node_id_to_index(node_id).is_some()
+    }
+
     /// Get the downstream bandwidth of the graph node if it exists. A non-zero return value means
     /// that the node did not have a downstream bandwidth and that `bandwidth_down` was not updated.
     #[no_mangle]

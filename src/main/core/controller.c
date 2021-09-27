@@ -303,6 +303,11 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
         // the network graph node to assign the host to
         uint graphNode = hostoptions_getNetworkNodeId(host);
 
+        if (!networkgraph_nodeExists(controller->graph, graphNode)) {
+            error("The node id %u for host %s does not exist", graphNode, name);
+            return -1;
+        }
+
         if (ipAddrSet) {
             if (ipassignment_assignHostWithIp(controller->ipAssignment, graphNode, ipAddr)) {
                 error("Could not register host %s", name);
