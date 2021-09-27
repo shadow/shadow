@@ -61,6 +61,9 @@ communication.
     shortest path algorithm as a performance optimization by setting the
     [use_shortest_path
     option](shadow_config_spec.md#networkuse_shortest_path) to `False`.
+  - Each node in the graph must have a self-loop (an edge from the node to
+    itself). This edge will be used for communication between two hosts
+    attached to the same node, regardless of if a shorter path exists.
 
 ## Network Graph Attributes
 

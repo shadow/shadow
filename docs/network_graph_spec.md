@@ -142,7 +142,8 @@ Type: String
 The latency that will be added to packets traversing this edge. This value is
 used as a weight while running Dijkstra's shortest path algorithm. The format of
 the string specifies the latency and its unit, e.g., `10 ms`. If a unit is not
-specified, it will be assumed that it is in the base unit of "seconds".
+specified, it will be assumed that it is in the base unit of "seconds". The
+latency must not be 0.
 
 #### `edge.jitter`
 
