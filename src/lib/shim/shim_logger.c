@@ -12,7 +12,7 @@
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
-#include "lib/shim/shim_syscall.h"
+#include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_tls.h"
 
 typedef struct _ShimLogger {
@@ -22,7 +22,7 @@ typedef struct _ShimLogger {
 } ShimLogger;
 
 static size_t _simulation_nanos_string(char* dst, size_t size) {
-    uint64_t simulation_nanos = shim_syscall_get_simtime_nanos();
+    uint64_t simulation_nanos = shim_sys_get_simtime_nanos();
     const long nanos_per_sec = 1000000000l;
     time_t seconds = simulation_nanos / nanos_per_sec;
     uint64_t nanos = simulation_nanos % nanos_per_sec;

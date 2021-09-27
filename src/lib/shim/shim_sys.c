@@ -13,19 +13,19 @@
 
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
-#include "lib/shim/shim_syscall.h"
+#include "lib/shim/shim_sys.h"
 #include "main/core/support/definitions.h" // for SIMTIME definitions
 
 // We store the simulation time using timespec to reduce the number of
 // conversions that we need to do while servicing syscalls.
 static struct timespec _cached_simulation_time = {0};
 
-void shim_syscall_set_simtime_nanos(uint64_t simulation_nanos) {
+void shim_sys_set_simtime_nanos(uint64_t simulation_nanos) {
     _cached_simulation_time.tv_sec = simulation_nanos / SIMTIME_ONE_SECOND;
     _cached_simulation_time.tv_nsec = simulation_nanos % SIMTIME_ONE_SECOND;
 }
 
-static struct timespec* _shim_syscall_get_time() {
+static struct timespec* _shim_sys_get_time() {
     // First try to get time from shared mem.
     struct timespec* simtime_ts = shim_get_shared_time_location();
 
@@ -50,8 +50,8 @@ static struct timespec* _shim_syscall_get_time() {
     return simtime_ts;
 }
 
-uint64_t shim_syscall_get_simtime_nanos() {
-    struct timespec* ts = _shim_syscall_get_time();
+uint64_t shim_sys_get_simtime_nanos() {
+    struct timespec* ts = _shim_sys_get_time();
     if (!ts) {
         return 0;
     }
@@ -59,7 +59,7 @@ uint64_t shim_syscall_get_simtime_nanos() {
     return (uint64_t)(ts->tv_sec * SIMTIME_ONE_SECOND) + ts->tv_nsec;
 }
 
-bool shim_syscall_handle_locally(long syscall_num, long* rv, va_list args) {
+bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
     // This function is called on every syscall operation so be careful not to doing
     // anything too expensive outside of the switch cases.
     struct timespec* simtime_ts;
@@ -67,7 +67,7 @@ bool shim_syscall_handle_locally(long syscall_num, long* rv, va_list args) {
     switch (syscall_num) {
         case SYS_clock_gettime: {
             // We can handle it if the time is available.
-            if (!(simtime_ts = _shim_syscall_get_time())) {
+            if (!(simtime_ts = _shim_sys_get_time())) {
                 return false;
             }
 
@@ -90,7 +90,7 @@ bool shim_syscall_handle_locally(long syscall_num, long* rv, va_list args) {
 
         case SYS_time: {
             // We can handle it if the time is available.
-            if (!(simtime_ts = _shim_syscall_get_time())) {
+            if (!(simtime_ts = _shim_sys_get_time())) {
                 return false;
             }
 
@@ -109,7 +109,7 @@ bool shim_syscall_handle_locally(long syscall_num, long* rv, va_list args) {
 
         case SYS_gettimeofday: {
             // We can handle it if the time is available.
-            if (!(simtime_ts = _shim_syscall_get_time())) {
+            if (!(simtime_ts = _shim_sys_get_time())) {
                 return false;
             }
 

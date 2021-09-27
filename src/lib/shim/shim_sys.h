@@ -1,5 +1,5 @@
-#ifndef SRC_SHIM_SHIM_SYSCALL_H_
-#define SRC_SHIM_SHIM_SYSCALL_H_
+#ifndef SRC_LIB_SHIM_SHIM_SYS_H_
+#define SRC_LIB_SHIM_SHIM_SYS_H_
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -11,10 +11,10 @@
 // Caches the current simulation time to avoid invoking syscalls to get it.
 // Not thread safe, but doesn't matter since Shadow only permits
 // one thread at a time to run anyway.
-void shim_syscall_set_simtime_nanos(uint64_t simulation_nanos);
+void shim_sys_set_simtime_nanos(uint64_t simulation_nanos);
 
 // Returns the current cached simulation time, or 0 if it has not yet been set.
-uint64_t shim_syscall_get_simtime_nanos();
+uint64_t shim_sys_get_simtime_nanos();
 
 // Attempt to service a syscall using shared memory if available.
 //
@@ -25,6 +25,6 @@ uint64_t shim_syscall_get_simtime_nanos();
 // If this function returns true, then the raw syscall result is returned
 // through `rv`.  e.g. for a syscall returning an error, it's the caller's
 // responsibility to set errno from `rv`.
-bool shim_syscall_handle_locally(long syscall_num, long* rv, va_list args);
+bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args);
 
-#endif // SRC_SHIM_SHIM_SYSCALL_H_
+#endif // SRC_LIB_SHIM_SHIM_SYS_H_

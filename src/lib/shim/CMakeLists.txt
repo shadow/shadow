@@ -35,7 +35,7 @@ set(SHIM_FILES
   shim_api.c
   shim_logger.c
   shim_shmem.c
-  shim_syscall.c
+  shim_sys.c
   shim_tls.c
 )
 add_library(${SHIM_LIB} SHARED ${SHIM_FILES})

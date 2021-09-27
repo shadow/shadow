@@ -25,7 +25,7 @@
 #include "lib/shim/shadow_spinlock.h"
 #include "lib/shim/shim_event.h"
 #include "lib/shim/shim_logger.h"
-#include "lib/shim/shim_syscall.h"
+#include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_tls.h"
 #include "lib/tsc/tsc.h"
 
@@ -322,7 +322,7 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
 
     shimevent_recvEventFromShadow(ipc, &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
-    shim_syscall_set_simtime_nanos(event.event_data.start.simulation_nanos);
+    shim_sys_set_simtime_nanos(event.event_data.start.simulation_nanos);
 }
 
 static void _shim_ipc_wait_for_start_event() {
@@ -333,7 +333,7 @@ static void _shim_ipc_wait_for_start_event() {
     trace("waiting for start event on %p", shim_thisThreadEventIPC);
     shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
-    shim_syscall_set_simtime_nanos(event.event_data.start.simulation_nanos);
+    shim_sys_set_simtime_nanos(event.event_data.start.simulation_nanos);
 }
 
 static void _shim_parent_init_ptrace() {
@@ -528,7 +528,7 @@ static void _handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
         trace("Emulating rdtsc");
         uint64_t rax, rdx;
         uint64_t rip = regs[REG_RIP];
-        Tsc_emulateRdtsc(&tsc, &rax, &rdx, &rip, shim_syscall_get_simtime_nanos());
+        Tsc_emulateRdtsc(&tsc, &rax, &rdx, &rip, shim_sys_get_simtime_nanos());
         regs[REG_RDX] = rdx;
         regs[REG_RAX] = rax;
         regs[REG_RIP] = rip;
@@ -538,7 +538,7 @@ static void _handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
         trace("Emulating rdtscp");
         uint64_t rax, rdx, rcx;
         uint64_t rip = regs[REG_RIP];
-        Tsc_emulateRdtscp(&tsc, &rax, &rdx, &rcx, &rip, shim_syscall_get_simtime_nanos());
+        Tsc_emulateRdtscp(&tsc, &rax, &rdx, &rcx, &rip, shim_sys_get_simtime_nanos());
         regs[REG_RDX] = rdx;
         regs[REG_RAX] = rax;
         regs[REG_RCX] = rcx;

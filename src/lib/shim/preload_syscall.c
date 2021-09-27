@@ -9,7 +9,7 @@
 #include "lib/shim/shim.h"
 #include "lib/shim/shim_event.h"
 #include "lib/shim/shim_shmem.h"
-#include "lib/shim/shim_syscall.h"
+#include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_tls.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/shmem/shmem_allocator.h"
@@ -121,7 +121,7 @@ __attribute__((used)) static SysCallReg _shim_emulated_syscall_event(const ShimE
             case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
                 // Use provided result.
                 SysCallReg rv = res.event_data.syscall_complete.retval;
-                shim_syscall_set_simtime_nanos(res.event_data.syscall_complete.simulation_nanos);
+                shim_sys_set_simtime_nanos(res.event_data.syscall_complete.simulation_nanos);
                 return rv;
             }
             case SHD_SHIM_EVENT_SYSCALL_DO_NATIVE: {
@@ -241,7 +241,7 @@ long shim_syscallv(long n, va_list args) {
     long rv;
 
     if (shim_interpositionEnabled() && shim_use_syscall_handler() && 
-            shim_syscall_handle_locally(n, &rv, args)) {
+            shim_sys_handle_syscall_locally(n, &rv, args)) {
         // No inter-process syscall needed, we handled it on the shim side! :)
         trace("Handled syscall %ld from the shim; we avoided inter-process overhead.", n);
         // rv was already set
