@@ -240,9 +240,19 @@ static int _controller_registerProcessCallback(const ProcessOptions* proc, void*
     char* environment = processoptions_getEnvironment(proc);
 
     for (guint64 i = 0; i < quantity; i++) {
+        SimulationTime startTime = processoptions_getStartTime(proc);
+        SimulationTime stopTime = processoptions_getStopTime(proc);
+
+        if (stopTime != 0 && startTime >= stopTime) {
+            error("Process '%s' for host '%s' has a stop time of %ld ms that is not later than the "
+                  "start time of %ld ms",
+                  plugin, callbackArgs->hostname, stopTime / SIMTIME_ONE_MILLISECOND,
+                  startTime / SIMTIME_ONE_MILLISECOND);
+            return -1;
+        }
+
         manager_addNewVirtualProcess(callbackArgs->controller->manager, callbackArgs->hostname,
-                                     plugin, processoptions_getStartTime(proc),
-                                     processoptions_getStopTime(proc), argv, environment);
+                                     plugin, startTime, stopTime, argv, environment);
     }
 
     processoptions_freeString(environment);

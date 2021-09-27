@@ -719,6 +719,7 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
     proc->cpuDelayTimer = g_timer_new();
 #endif
 
+    utility_assert(stopTime == 0 || stopTime > startTime);
     proc->startTime = startTime;
     proc->stopTime = stopTime;
 
