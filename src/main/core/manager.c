@@ -253,7 +253,9 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
     manager->hostsPath = g_build_filename(manager->dataPath, "hosts", NULL);
 
     if (g_file_test(manager->dataPath, G_FILE_TEST_EXISTS)) {
-        utility_panic("data directory '%s' already exists", manager->dataPath);
+        error("data directory '%s' already exists", manager->dataPath);
+        manager_free(manager);
+        return NULL;
     }
 
     char* templateDirectory = config_getTemplateDirectory(config);
@@ -265,7 +267,10 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
         debug("Copying template directory %s to %s", templateDataPath, manager->dataPath);
 
         if (!g_file_test(templateDataPath, G_FILE_TEST_EXISTS)) {
-            utility_panic("data template directory '%s' does not exist", templateDataPath);
+            error("data template directory '%s' does not exists", templateDataPath);
+            g_free(templateDataPath);
+            manager_free(manager);
+            return NULL;
         }
 
         if (!utility_copyAll(templateDataPath, manager->dataPath)) {

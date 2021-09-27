@@ -439,7 +439,8 @@ gint controller_run(Controller* controller) {
                                       controller->bootstrapEndTime, managerSeed);
 
     if (controller->manager == NULL) {
-        utility_panic("unable to create manager");
+        error("Unable to create manager");
+        return 1;
     }
 
     info("registering plugins and hosts");
