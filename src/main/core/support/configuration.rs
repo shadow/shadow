@@ -498,7 +498,7 @@ pub struct HostOptions {
 
     /// IP address to assign to the host
     #[serde(default)]
-    pub ip_addr: Option<std::net::IpAddr>,
+    pub ip_addr: Option<std::net::Ipv4Addr>,
 
     /// Number of hosts to start
     #[serde(default)]
@@ -1361,11 +1361,10 @@ mod export {
         let addr = unsafe { &mut *addr };
 
         match host.ip_addr {
-            Some(std::net::IpAddr::V4(x)) => {
+            Some(x) => {
                 *addr = u32::to_be(x.into());
                 0
             }
-            Some(std::net::IpAddr::V6(_)) => unimplemented!(),
             None => -1,
         }
     }
