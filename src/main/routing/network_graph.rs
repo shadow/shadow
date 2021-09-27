@@ -212,7 +212,7 @@ impl NetworkGraph {
         assert_eq!(paths.len(), nodes.len().pow(2));
 
         debug!(
-            "Finished dijkstra: {} seconds, {} entries",
+            "Finished computing shortest paths: {} seconds, {} entries",
             (std::time::Instant::now() - start).as_secs(),
             paths.len()
         );
@@ -224,12 +224,24 @@ impl NetworkGraph {
         &self,
         nodes: &[NodeIndex],
     ) -> Result<HashMap<(NodeIndex, NodeIndex), PathProperties>, Box<dyn Error>> {
-        nodes
+        let start = std::time::Instant::now();
+
+        let paths: HashMap<_, _> = nodes
             .iter()
             .flat_map(|src| nodes.iter().map(move |dst| (src.clone(), dst.clone())))
             // we require the graph to be connected with exactly one edge between any two nodes
             .map(|(src, dst)| Ok(((src, dst), self.get_edge_weight(&src, &dst)?.into())))
-            .collect()
+            .collect::<Result<_, Box<dyn Error>>>()?;
+
+        assert_eq!(paths.len(), nodes.len().pow(2));
+
+        debug!(
+            "Finished computing direct paths: {} seconds, {} entries",
+            (std::time::Instant::now() - start).as_secs(),
+            paths.len()
+        );
+
+        Ok(paths)
     }
 
     /// Get the weight for the edge between two nodes. Returns an error if there
