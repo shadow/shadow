@@ -1,6 +1,6 @@
 #include "lib/shim/shim_event.h"
 
-#include "lib/shim/preload_syscall.h"
+#include "lib/shim/shim_syscall.h"
 #include "main/host/syscall_numbers.h"
 
 #include <unistd.h>

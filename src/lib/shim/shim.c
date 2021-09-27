@@ -20,12 +20,12 @@
 
 #include "lib/logger/logger.h"
 #include "lib/shim/ipc.h"
-#include "lib/shim/preload_syscall.h"
 #include "lib/shim/shadow_sem.h"
 #include "lib/shim/shadow_spinlock.h"
 #include "lib/shim/shim_event.h"
 #include "lib/shim/shim_logger.h"
 #include "lib/shim/shim_sys.h"
+#include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
 #include "lib/tsc/tsc.h"
 

@@ -4,7 +4,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-#include "lib/shim/preload_syscall.h"
+#include "lib/shim/shim_syscall.h"
 
 int shadow_spin_init(shadow_spinlock_t *lock) {
     assert(lock);

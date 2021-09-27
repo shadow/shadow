@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <stdarg.h>
 
-#include "lib/shim/preload_syscall.h"
+#include "lib/shim/shim_syscall.h"
 
 // Make sure we don't call any syscalls ourselves after this function is called, otherwise
 // the errno that we set here could get overwritten before we return to the plugin.
