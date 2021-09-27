@@ -12,7 +12,6 @@ use crate::routing::petgraph_wrapper::GraphWrapper;
 
 use log::*;
 use petgraph::graph::NodeIndex;
-use petgraph::visit::EdgeRef;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// A graph node.
@@ -177,7 +176,7 @@ impl NetworkGraph {
     pub fn compute_shortest_paths(
         &self,
         nodes: &[NodeIndex],
-    ) -> HashMap<(NodeIndex, NodeIndex), PathProperties> {
+    ) -> Result<HashMap<(NodeIndex, NodeIndex), PathProperties>, Box<dyn Error>> {
         let start = std::time::Instant::now();
 
         // calculate shortest paths
@@ -201,112 +200,87 @@ impl NetworkGraph {
             })
             .collect();
 
-        // make sure the shortest path includes at least one edge
+        // use the self-loop for paths from a node to itself
         for node in nodes {
             // the dijkstra shortest path from node -> node will always be 0
             assert_eq!(paths[&(*node, *node)], PathProperties::default());
 
-            // function for finding the shortest path weight between two specific nodes
-            let get_shortest_path = |src, dst| {
-                // we may already have a known value if the node is in `nodes`
-                if let Some(val) = paths.get(&(src, dst)) {
-                    // returned cached value
-                    val.clone()
-                } else {
-                    // compute shortest path
-                    let weights: HashMap<_, PathProperties> = match &self.graph {
-                        GraphWrapper::Directed(graph) => {
-                            petgraph::algo::dijkstra(&graph, src, Some(dst), |e| e.weight().into())
-                        }
-                        GraphWrapper::Undirected(graph) => {
-                            petgraph::algo::dijkstra(&graph, src, Some(dst), |e| e.weight().into())
-                        }
-                    };
-                    // return the one that we're interested in
-                    weights[&dst]
-                }
-            };
-
-            // get a new path for node -> node that includes at least one edge
-            let new_path = match &self.graph {
-                GraphWrapper::Directed(graph) => graph
-                    .edges(*node)
-                    // add the edge path and the shortest path back to the original node
-                    .map(|e| {
-                        PathProperties::from(e.weight()) + get_shortest_path(e.target(), *node)
-                    })
-                    .min_by(|w_1, w_2| PathProperties::partial_cmp(w_1, w_2).unwrap())
-                    .unwrap(),
-                GraphWrapper::Undirected(graph) => graph
-                    .edges(*node)
-                    // add the edge path and the shortest path back to the original node
-                    .map(|e| {
-                        PathProperties::from(e.weight()) + get_shortest_path(e.target(), *node)
-                    })
-                    .min_by(|w_1, w_2| PathProperties::partial_cmp(w_1, w_2).unwrap())
-                    .unwrap(),
-            };
-
-            // if there is a self-loop, 'e.target()' will be 'node'
-            // and 'get_shortest_path_weight(e.target(), *node)' will be
-            // 'PathProperties::default()', so the new path will only include the self-loop
-
-            paths.insert((*node, *node), new_path);
+            // there must be a single self-loop for each node
+            paths.insert((*node, *node), self.get_edge_weight(node, node)?.into());
         }
 
         assert_eq!(paths.len(), nodes.len().pow(2));
 
         debug!(
-            "Finished dijkstra: {} seconds, {} entries",
+            "Finished computing shortest paths: {} seconds, {} entries",
             (std::time::Instant::now() - start).as_secs(),
             paths.len()
         );
 
-        paths
+        Ok(paths)
     }
 
     pub fn get_direct_paths(
         &self,
         nodes: &[NodeIndex],
     ) -> Result<HashMap<(NodeIndex, NodeIndex), PathProperties>, Box<dyn Error>> {
-        nodes
+        let start = std::time::Instant::now();
+
+        let paths: HashMap<_, _> = nodes
             .iter()
             .flat_map(|src| nodes.iter().map(move |dst| (src.clone(), dst.clone())))
-            .map(|(src, dst)| {
-                let src_id = self.node_index_to_id(src).unwrap();
-                let dst_id = self.node_index_to_id(dst).unwrap();
-                match &self.graph {
-                    GraphWrapper::Directed(graph) => {
-                        // we require the graph to be connected with exactly one edge between any two nodes
-                        let mut edges = graph.edges_connecting(src, dst);
-                        let edge = edges
-                            .next()
-                            .ok_or(format!("No edge connecting {} to {}", src_id, dst_id))?;
-                        if edges.count() != 0 {
-                            Err(format!(
-                                "More than one edge connecting {} to {}",
-                                src_id, dst_id
-                            ))?
-                        }
-                        Ok(((src, dst), edge.weight().into()))
-                    }
-                    GraphWrapper::Undirected(graph) => {
-                        // we require the graph to be connected with exactly one edge between any two nodes
-                        let mut edges = graph.edges_connecting(src, dst);
-                        let edge = edges
-                            .next()
-                            .ok_or(format!("No edge connecting {} to {}", src_id, dst_id))?;
-                        if edges.count() != 0 {
-                            Err(format!(
-                                "More than one edge connecting {} to {}",
-                                src_id, dst_id
-                            ))?
-                        }
-                        Ok(((src, dst), edge.weight().into()))
-                    }
+            // we require the graph to be connected with exactly one edge between any two nodes
+            .map(|(src, dst)| Ok(((src, dst), self.get_edge_weight(&src, &dst)?.into())))
+            .collect::<Result<_, Box<dyn Error>>>()?;
+
+        assert_eq!(paths.len(), nodes.len().pow(2));
+
+        debug!(
+            "Finished computing direct paths: {} seconds, {} entries",
+            (std::time::Instant::now() - start).as_secs(),
+            paths.len()
+        );
+
+        Ok(paths)
+    }
+
+    /// Get the weight for the edge between two nodes. Returns an error if there
+    /// is not exactly one edge between them.
+    fn get_edge_weight(
+        &self,
+        src: &NodeIndex,
+        dst: &NodeIndex,
+    ) -> Result<&ShadowEdge, Box<dyn Error>> {
+        let src_id = self.node_index_to_id(*src).unwrap();
+        let dst_id = self.node_index_to_id(*dst).unwrap();
+        match &self.graph {
+            GraphWrapper::Directed(graph) => {
+                let mut edges = graph.edges_connecting(*src, *dst);
+                let edge = edges
+                    .next()
+                    .ok_or(format!("No edge connecting node {} to {}", src_id, dst_id))?;
+                if edges.count() != 0 {
+                    Err(format!(
+                        "More than one edge connecting node {} to {}",
+                        src_id, dst_id
+                    ))?
                 }
-            })
-            .collect()
+                Ok(edge.weight())
+            }
+            GraphWrapper::Undirected(graph) => {
+                let mut edges = graph.edges_connecting(*src, *dst);
+                let edge = edges
+                    .next()
+                    .ok_or(format!("No edge connecting node {} to {}", src_id, dst_id))?;
+                if edges.count() != 0 {
+                    Err(format!(
+                        "More than one edge connecting node {} to {}",
+                        src_id, dst_id
+                    ))?
+                }
+                Ok(edge.weight())
+            }
+        }
     }
 }
 
@@ -570,6 +544,21 @@ mod tests {
                   ]
                   edge [
                     source 0
+                    target 0
+                    latency "3333 ns"
+                  ]
+                  edge [
+                    source 1
+                    target 1
+                    latency "5555 ns"
+                  ]
+                  edge [
+                    source 2
+                    target 2
+                    latency "7777 ns"
+                  ]
+                  edge [
+                    source 0
                     target 1
                     latency "3 ns"
                   ]
@@ -596,30 +585,32 @@ mod tests {
             let node_1 = *graph.node_id_to_index(1).unwrap();
             let node_2 = *graph.node_id_to_index(2).unwrap();
 
-            let shortest_paths = graph.compute_shortest_paths(&[node_0, node_1, node_2]);
+            let shortest_paths = graph
+                .compute_shortest_paths(&[node_0, node_1, node_2])
+                .unwrap();
 
             let lookup_latency = |a, b| shortest_paths.get(&(a, b)).unwrap().latency_ns;
 
             if *directed {
-                assert_eq!(lookup_latency(node_0, node_0), 8);
+                assert_eq!(lookup_latency(node_0, node_0), 3333);
                 assert_eq!(lookup_latency(node_0, node_1), 3);
                 assert_eq!(lookup_latency(node_0, node_2), 7);
                 assert_eq!(lookup_latency(node_1, node_0), 5);
-                assert_eq!(lookup_latency(node_1, node_1), 8);
+                assert_eq!(lookup_latency(node_1, node_1), 5555);
                 assert_eq!(lookup_latency(node_1, node_2), 12);
                 assert_eq!(lookup_latency(node_2, node_0), 16);
                 assert_eq!(lookup_latency(node_2, node_1), 11);
-                assert_eq!(lookup_latency(node_2, node_2), 23);
+                assert_eq!(lookup_latency(node_2, node_2), 7777);
             } else {
-                assert_eq!(lookup_latency(node_0, node_0), 6);
+                assert_eq!(lookup_latency(node_0, node_0), 3333);
                 assert_eq!(lookup_latency(node_0, node_1), 3);
                 assert_eq!(lookup_latency(node_0, node_2), 7);
                 assert_eq!(lookup_latency(node_1, node_0), 3);
-                assert_eq!(lookup_latency(node_1, node_1), 6);
+                assert_eq!(lookup_latency(node_1, node_1), 5555);
                 assert_eq!(lookup_latency(node_1, node_2), 10);
                 assert_eq!(lookup_latency(node_2, node_0), 7);
                 assert_eq!(lookup_latency(node_2, node_1), 10);
-                assert_eq!(lookup_latency(node_2, node_2), 14);
+                assert_eq!(lookup_latency(node_2, node_2), 7777);
             }
         }
     }
@@ -773,11 +764,13 @@ mod export {
         };
 
         let paths = if use_shortest_paths {
-            graph
-                .compute_shortest_paths(&nodes[..])
-                .into_iter()
-                .map(to_ids)
-                .collect()
+            match graph.compute_shortest_paths(&nodes[..]) {
+                Ok(x) => x.into_iter().map(to_ids).collect(),
+                Err(e) => {
+                    error!("{}", e);
+                    return std::ptr::null_mut();
+                }
+            }
         } else {
             match graph.get_direct_paths(&nodes[..]) {
                 Ok(x) => x.into_iter().map(to_ids).collect(),
