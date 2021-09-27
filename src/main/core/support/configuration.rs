@@ -744,7 +744,6 @@ pub const ONE_GBIT_SWITCH_GRAPH: &str = r#"graph [
   directed 0
   node [
     id 0
-    ip_address "0.0.0.0"
     host_bandwidth_up "1 Gbit"
     host_bandwidth_down "1 Gbit"
   ]
