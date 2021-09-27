@@ -6,7 +6,7 @@
 #include <assert.h>
 #include <stdalign.h>
 
-// Size of the thread-local stack in _vshadow_raw_syscall (4096*10) + an extra
+// Size of the thread-local stack in _shim_emulated_syscallv (4096*10) + an extra
 // kilobyte for the handful of other thread locals we use.  If the former
 // becomes a permanent fixture, we should make it a shared constant, but it
 // should eventually go away. In the meantime we catch at runtime if we try to

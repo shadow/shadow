@@ -3,15 +3,25 @@
 
 #include <stdarg.h>
 
-// The function the shim uses to execute a bare syscall instruction.
-// Similar to libc's `syscall`, but *doesn't* remap return values to errno.
-long __attribute__((noinline)) shadow_vreal_raw_syscall(long n, va_list args);
+// Ask the shim to handle a syscall. Internally decides whether to execute a
+// native syscall or to emulate the syscall through Shadow.
+long shim_syscall(long n, ...);
 
-// Make a raw syscall (without remapping return val to errno). Internally
-// decides whether to execute a real syscall or emulate.
-long shadow_raw_syscall(long n, ...);
+// Same as `shim_syscall()`, but accepts a variable argument list.
+long shim_syscallv(long n, va_list args);
 
-// Makes a raw syscall natively; never emulates.
-long shadow_real_raw_syscall(long n, ...);
+// Force the native execution of a syscall instruction (using asm so it can't be
+// intercepted).
+long shim_native_syscall(long n, ...);
+
+// Same as `shim_native_syscall()`, but accepts a variable argument list.
+// We disable inlining so seccomp can allow syscalls made from this function.
+long __attribute__((noinline)) shim_native_syscallv(long n, va_list args);
+
+// Force the emulation of the syscall through Shadow.
+long shim_emulated_syscall(long n, ...);
+
+// Same as `shim_emulated_syscall()`, but accepts a variable argument list.
+long shim_emulated_syscallv(long n, va_list args);
 
 #endif

@@ -25,6 +25,6 @@ uint64_t shim_syscall_get_simtime_nanos();
 // If this function returns true, then the raw syscall result is returned
 // through `rv`.  e.g. for a syscall returning an error, it's the caller's
 // responsibility to set errno from `rv`.
-bool shim_syscall(long syscall_num, long* rv, va_list args);
+bool shim_syscall_handle_locally(long syscall_num, long* rv, va_list args);
 
 #endif // SRC_SHIM_SHIM_SYSCALL_H_

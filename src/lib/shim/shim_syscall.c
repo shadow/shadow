@@ -59,7 +59,7 @@ uint64_t shim_syscall_get_simtime_nanos() {
     return (uint64_t)(ts->tv_sec * SIMTIME_ONE_SECOND) + ts->tv_nsec;
 }
 
-bool shim_syscall(long syscall_num, long* rv, va_list args) {
+bool shim_syscall_handle_locally(long syscall_num, long* rv, va_list args) {
     // This function is called on every syscall operation so be careful not to doing
     // anything too expensive outside of the switch cases.
     struct timespec* simtime_ts;

@@ -23,7 +23,7 @@ int shadow_spin_lock(shadow_spinlock_t* lock) {
             break;
         }
         // Always make the real syscall
-        shadow_real_raw_syscall(SYS_sched_yield);
+        shim_native_syscall(SYS_sched_yield);
     }
     return 0;
 }

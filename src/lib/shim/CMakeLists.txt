@@ -32,6 +32,7 @@ set(SHIM_FILES
   preload_libraries.c
   preload_syscall.c
   shim.c
+  shim_api.c
   shim_logger.c
   shim_shmem.c
   shim_syscall.c

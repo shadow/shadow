@@ -110,8 +110,8 @@ void shim_newThreadFinish() {
         if (errno != EAGAIN) {
             panic("shadow_sem_trywait: %s", strerror(errno));
         }
-        if (shadow_real_raw_syscall(SYS_sched_yield)) {
-            panic("shadow_real_raw_syscall(SYS_sched_yield): %s", strerror(errno));
+        if (shim_native_syscall(SYS_sched_yield)) {
+            panic("shim_native_syscall(SYS_sched_yield): %s", strerror(errno));
         }
     }
 
@@ -383,7 +383,7 @@ static void _handle_sigsys(int sig, siginfo_t* info, void* voidUcontext) {
     // libc's).  It in turn will either emulate it or (if interposition is
     // disabled), make the call natively. In the latter case, the syscall
     // will be permitted to execute by the seccomp filter.
-    long rv = shadow_raw_syscall(regs[REG_N], regs[REG_ARG1], regs[REG_ARG2], regs[REG_ARG3], regs[REG_ARG4], regs[REG_ARG5], regs[REG_ARG6]);
+    long rv = shim_syscall(regs[REG_N], regs[REG_ARG1], regs[REG_ARG2], regs[REG_ARG3], regs[REG_ARG4], regs[REG_ARG5], regs[REG_ARG6]);
     trace("Trapped syscall %lld returning %ld", ctx->uc_mcontext.gregs[REG_RAX], rv);
     ctx->uc_mcontext.gregs[REG_RAX] = rv;
 }
@@ -449,27 +449,27 @@ static void _shim_parent_init_seccomp() {
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, SYS_sched_yield, /*true-skip=*/0, /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 
-        /* See if instruction pointer is within the shadow_vreal_raw_syscall fn. */
+        /* See if instruction pointer is within the shim_native_syscallv fn. */
         /* accumulator := instruction_pointer */
         BPF_STMT(BPF_LD + BPF_W + BPF_ABS, offsetof(struct seccomp_data, instruction_pointer)),
-        /* If it's in `shadow_vreal_raw_syscall`, allow. We don't know the end address, but it
+        /* If it's in `shim_native_syscallv`, allow. We don't know the end address, but it
          * should be safe-ish to check if it's within a kilobyte or so. We know there are no
          * other syscall instructions within this library, so the only problem would be if
-         * shadow_vreal_raw_syscall ended up at the very end of the library object, and a syscall
+         * shim_native_syscallv ended up at the very end of the library object, and a syscall
          * ended up being made from the very beginning of another library object, loaded just
          * after ours.
          *
          * TODO: Consider using the actual bounds of this object file, from /proc/self/maps. */
-        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, ((long)shadow_vreal_raw_syscall) + 2000,
+        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, ((long)shim_native_syscallv) + 2000,
                  /*true-skip=*/2, /*false-skip=*/0),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)shadow_vreal_raw_syscall, /*true-skip=*/0,
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)shim_native_syscallv, /*true-skip=*/0,
                  /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 
     /* This block was intended to whitelist reads and writes to a socket
      * used to communicate with Shadow. It turns out to be unnecessary though,
      * because the functions we're using are already wrapped, and so go through
-     * shadow_vreal_raw_syscall, and so end up already being whitelisted above based on that.
+     * shim_native_syscallv, and so end up already being whitelisted above based on that.
      * (Also ended up switching back to shared-mem-based IPC instead of a socket).
      *
      * Keeping the code around for now in case we end up needing it or something similar.
