@@ -274,10 +274,7 @@ static long shadow_retval_to_errno(long retval) {
     return retval;
 }
 
-long syscall(long n, ...) {
-    va_list(args);
-    va_start(args, n);
+long shim_syscallv(long n, va_list args) {
     long rv = shadow_vraw_syscall(n, args);
-    va_end(args);
     return shadow_retval_to_errno(rv);
 }
