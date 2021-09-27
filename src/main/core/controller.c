@@ -190,18 +190,9 @@ static void _controller_initializeTimeWindows(Controller* controller) {
     /* set simulation end time */
     controller->endTime = config_getStopTime(controller->config);
 
-    /* simulation mode depends on configured number of workers */
-    guint nWorkers = config_getWorkers(controller->config);
-    if (nWorkers > 0) {
-        /* multi threaded, manage the other workers */
-        controller->executeWindowStart = 0;
-        SimulationTime jump = _controller_getMinTimeJump(controller);
-        controller->executeWindowEnd = jump;
-    } else {
-        /* single threaded, we are the only worker */
-        controller->executeWindowStart = 0;
-        controller->executeWindowEnd = G_MAXUINT64;
-    }
+    controller->executeWindowStart = 0;
+    SimulationTime jump = _controller_getMinTimeJump(controller);
+    controller->executeWindowEnd = jump;
 
     controller->bootstrapEndTime = config_getBootstrapEndTime(controller->config);
 }
