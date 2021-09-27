@@ -99,6 +99,10 @@ impl TryFrom<gml_parser::gml::Edge<'_>> for ShadowEdge {
             Err("Edge 'packet_loss' is not in the range [0,1]")?;
         }
 
+        if rv.latency.value() == 0 {
+            Err("Edge 'latency' must not be 0")?;
+        }
+
         Ok(rv)
     }
 }
