@@ -3,9 +3,14 @@
 
 #include <stdarg.h>
 
+/// This module defines functions that can be called by external (preloaded)
+/// libraries that are linked to the shim. Those libraries should only call
+/// functions defined here after including this header file.
+
 // The entry point for handling an intercepted syscall. This function remaps the
 // return value into errno upon error so that errno will be set correctly upon
-// returning control to the managed process.
+// returning control to the managed process. Be careful not to do something that
+// would overwrite errno after this function returns.
 long shim_api_syscall(long n, ...);
 
 // Same as `shim_api_syscall()`, but allows a variable arguments list.

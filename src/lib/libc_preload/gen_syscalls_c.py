@@ -46,7 +46,7 @@ header = \
 #include "interpose.h"
 '''
 
-with open('syscalls.c', 'w') as outf:
+with open('syscall_wrappers.c', 'w') as outf:
     print(header, file=outf)
 
     print('// clang-format off', file=outf)
