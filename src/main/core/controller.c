@@ -437,6 +437,11 @@ gint controller_run(Controller* controller) {
 
     _controller_initializeTimeWindows(controller);
 
+    if (config_getNHosts(controller->config) == 0) {
+        error("No hosts were provided in the config file");
+        return 1;
+    }
+
     /* the controller will be responsible for distributing the actions to the managers so that
      * they all have a consistent view of the simulation, topology, etc.
      * For now we only have one manager so send it everything. */
