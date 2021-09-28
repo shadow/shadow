@@ -451,8 +451,8 @@ impl<T: Eq + Hash + std::fmt::Display + Clone + Copy> RoutingInfo<T> {
         }
     }
 
-    pub fn get_smallest_latency_ns(&self) -> u64 {
-        self.paths.values().map(|x| x.latency_ns).min().unwrap()
+    pub fn get_smallest_latency_ns(&self) -> Option<u64> {
+        self.paths.values().map(|x| x.latency_ns).min()
     }
 }
 
@@ -898,6 +898,6 @@ mod export {
     #[no_mangle]
     pub extern "C" fn routinginfo_smallestLatencyNs(routing_info: *mut RoutingInfo<u32>) -> u64 {
         let routing_info = unsafe { routing_info.as_mut() }.unwrap();
-        routing_info.get_smallest_latency_ns()
+        routing_info.get_smallest_latency_ns().unwrap()
     }
 }
