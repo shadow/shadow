@@ -51,14 +51,42 @@ fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
                     | OFlag::O_TMPFILE
                     | OFlag::O_TRUNC,
             );
+
+            let mut file = desc.get_file().borrow_mut();
+            let old_flags = file.get_status().as_o_flags();
+
+            // fcntl(2): "On Linux, this command can change only the O_APPEND, O_ASYNC, O_DIRECT,
+            // O_NOATIME, and O_NONBLOCK flags"
+            let update_mask = OFlag::O_APPEND
+                | OFlag::O_ASYNC
+                | OFlag::O_DIRECT
+                | OFlag::O_NOATIME
+                | OFlag::O_NONBLOCK;
+
+            // The proper way for the process to update its flags is to:
+            //   int flags = fcntl(fd, F_GETFL);
+            //   flags = flags | O_NONBLOCK; // add O_NONBLOCK
+            //   fcntl(fd, F_SETFL, flags);
+            // So if there are flags that we can't update, we should assume they are leftover
+            // from the F_GETFL and we shouldn't return an error. This includes `O_DSYNC` and
+            // `O_SYNC`, which fcntl(2) says:
+            //   "It is not possible to use F_SETFL to change the state of the O_DSYNC and O_SYNC
+            //   flags. Attempts to change the state of these flags are silently ignored."
+            // In other words, the following code should always be valid:
+            //   int flags = fcntl(fd, F_GETFL);
+            //   fcntl(fd, F_SETFL, flags); // set to the current existing flags
+
+            // keep the old flags that we can't change, and use the new flags that we can change
+            let status = (old_flags & !update_mask) | (status & update_mask);
+
             let (status, remaining) = FileStatus::from_o_flags(status);
 
-            // check if there are flags that we don't support
+            // check if there are flags that we don't support but Linux does
             if !remaining.is_empty() {
                 return Err(Errno::EINVAL.into());
             }
 
-            desc.get_file().borrow_mut().set_status(status);
+            file.set_status(status);
             SysCallReg::from(0)
         }
         libc::F_GETFD => {
