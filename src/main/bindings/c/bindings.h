@@ -637,6 +637,11 @@ struct NetworkGraph *networkgraph_load(const struct ConfigOptions *config);
 
 void networkgraph_free(struct NetworkGraph *graph);
 
+// Check if the node exists in the graph.
+__attribute__((warn_unused_result))
+bool networkgraph_nodeExists(struct NetworkGraph *graph,
+                             uint32_t node_id);
+
 // Get the downstream bandwidth of the graph node if it exists. A non-zero return value means
 // that the node did not have a downstream bandwidth and that `bandwidth_down` was not updated.
 __attribute__((warn_unused_result))

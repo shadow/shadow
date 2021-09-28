@@ -498,7 +498,7 @@ pub struct HostOptions {
 
     /// IP address to assign to the host
     #[serde(default)]
-    pub ip_addr: Option<std::net::IpAddr>,
+    pub ip_addr: Option<std::net::Ipv4Addr>,
 
     /// Number of hosts to start
     #[serde(default)]
@@ -744,7 +744,6 @@ pub const ONE_GBIT_SWITCH_GRAPH: &str = r#"graph [
   directed 0
   node [
     id 0
-    ip_address "0.0.0.0"
     host_bandwidth_up "1 Gbit"
     host_bandwidth_down "1 Gbit"
   ]
@@ -1362,11 +1361,10 @@ mod export {
         let addr = unsafe { &mut *addr };
 
         match host.ip_addr {
-            Some(std::net::IpAddr::V4(x)) => {
+            Some(x) => {
                 *addr = u32::to_be(x.into());
                 0
             }
-            Some(std::net::IpAddr::V6(_)) => unimplemented!(),
             None => -1,
         }
     }

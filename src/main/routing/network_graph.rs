@@ -99,6 +99,10 @@ impl TryFrom<gml_parser::gml::Edge<'_>> for ShadowEdge {
             Err("Edge 'packet_loss' is not in the range [0,1]")?;
         }
 
+        if rv.latency.value() == 0 {
+            Err("Edge 'latency' must not be 0")?;
+        }
+
         Ok(rv)
     }
 }
@@ -447,8 +451,8 @@ impl<T: Eq + Hash + std::fmt::Display + Clone + Copy> RoutingInfo<T> {
         }
     }
 
-    pub fn get_smallest_latency_ns(&self) -> u64 {
-        self.paths.values().map(|x| x.latency_ns).min().unwrap()
+    pub fn get_smallest_latency_ns(&self) -> Option<u64> {
+        self.paths.values().map(|x| x.latency_ns).min()
     }
 }
 
@@ -644,6 +648,14 @@ mod export {
     pub extern "C" fn networkgraph_free(graph: *mut NetworkGraph) {
         assert!(!graph.is_null());
         unsafe { Box::from_raw(graph) };
+    }
+
+    /// Check if the node exists in the graph.
+    #[no_mangle]
+    #[must_use]
+    pub extern "C" fn networkgraph_nodeExists(graph: *mut NetworkGraph, node_id: u32) -> bool {
+        let graph = unsafe { graph.as_ref() }.unwrap();
+        graph.node_id_to_index(node_id).is_some()
     }
 
     /// Get the downstream bandwidth of the graph node if it exists. A non-zero return value means
@@ -886,6 +898,6 @@ mod export {
     #[no_mangle]
     pub extern "C" fn routinginfo_smallestLatencyNs(routing_info: *mut RoutingInfo<u32>) -> u64 {
         let routing_info = unsafe { routing_info.as_mut() }.unwrap();
-        routing_info.get_smallest_latency_ns()
+        routing_info.get_smallest_latency_ns().unwrap()
     }
 }

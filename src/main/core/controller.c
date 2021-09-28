@@ -190,18 +190,9 @@ static void _controller_initializeTimeWindows(Controller* controller) {
     /* set simulation end time */
     controller->endTime = config_getStopTime(controller->config);
 
-    /* simulation mode depends on configured number of workers */
-    guint nWorkers = config_getWorkers(controller->config);
-    if (nWorkers > 0) {
-        /* multi threaded, manage the other workers */
-        controller->executeWindowStart = 0;
-        SimulationTime jump = _controller_getMinTimeJump(controller);
-        controller->executeWindowEnd = jump;
-    } else {
-        /* single threaded, we are the only worker */
-        controller->executeWindowStart = 0;
-        controller->executeWindowEnd = G_MAXUINT64;
-    }
+    controller->executeWindowStart = 0;
+    SimulationTime jump = _controller_getMinTimeJump(controller);
+    controller->executeWindowEnd = jump;
 
     controller->bootstrapEndTime = config_getBootstrapEndTime(controller->config);
 }
@@ -249,9 +240,19 @@ static int _controller_registerProcessCallback(const ProcessOptions* proc, void*
     char* environment = processoptions_getEnvironment(proc);
 
     for (guint64 i = 0; i < quantity; i++) {
+        SimulationTime startTime = processoptions_getStartTime(proc);
+        SimulationTime stopTime = processoptions_getStopTime(proc);
+
+        if (stopTime != 0 && startTime >= stopTime) {
+            error("Process '%s' for host '%s' has a stop time of %ld ms that is not later than the "
+                  "start time of %ld ms",
+                  plugin, callbackArgs->hostname, stopTime / SIMTIME_ONE_MILLISECOND,
+                  startTime / SIMTIME_ONE_MILLISECOND);
+            return -1;
+        }
+
         manager_addNewVirtualProcess(callbackArgs->controller->manager, callbackArgs->hostname,
-                                     plugin, processoptions_getStartTime(proc),
-                                     processoptions_getStopTime(proc), argv, environment);
+                                     plugin, startTime, stopTime, argv, environment);
     }
 
     processoptions_freeString(environment);
@@ -302,6 +303,11 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
 
         // the network graph node to assign the host to
         uint graphNode = hostoptions_getNetworkNodeId(host);
+
+        if (!networkgraph_nodeExists(controller->graph, graphNode)) {
+            error("The node id %u for host %s does not exist", graphNode, name);
+            return -1;
+        }
 
         if (ipAddrSet) {
             if (ipassignment_assignHostWithIp(controller->ipAssignment, graphNode, ipAddr)) {
@@ -431,6 +437,11 @@ gint controller_run(Controller* controller) {
 
     _controller_initializeTimeWindows(controller);
 
+    if (config_getNHosts(controller->config) == 0) {
+        error("No hosts were provided in the config file");
+        return 1;
+    }
+
     /* the controller will be responsible for distributing the actions to the managers so that
      * they all have a consistent view of the simulation, topology, etc.
      * For now we only have one manager so send it everything. */
@@ -439,7 +450,8 @@ gint controller_run(Controller* controller) {
                                       controller->bootstrapEndTime, managerSeed);
 
     if (controller->manager == NULL) {
-        utility_panic("unable to create manager");
+        error("Unable to create manager");
+        return 1;
     }
 
     info("registering plugins and hosts");
