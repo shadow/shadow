@@ -224,8 +224,7 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
 
     manager->preloadLibcPath = _manager_scanRPathForLib(PRELOAD_LIBC_LIB_STR);
     if (manager->preloadLibcPath != NULL) {
-        info("found preload library %s at path %s", PRELOAD_LIBC_LIB_STR,
-             manager->preloadLibcPath);
+        info("found preload library %s at path %s", PRELOAD_LIBC_LIB_STR, manager->preloadLibcPath);
     } else {
         // The libc preload is optional and may not be used by and managed processes.
         warning("could not find preload library %s in rpath", PRELOAD_LIBC_LIB_STR);
@@ -493,7 +492,7 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
         need_dummy_preload = false;
     }
 
-    if(need_dummy_preload) {
+    if (need_dummy_preload) {
         debug("adding Shadow preload lib path %s", manager->preloadDummyPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadDummyPath));
     }

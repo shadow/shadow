@@ -70,7 +70,7 @@ int usleep(useconds_t usec) {
 // man 3 sleep
 unsigned int sleep(unsigned int seconds) {
     struct timespec req = {.tv_sec = seconds};
-    struct timespec rem = { 0 };
+    struct timespec rem = {0};
 
     if (nanosleep(&req, &rem) == 0) {
         return 0;
@@ -86,7 +86,7 @@ int gethostname(char* name, size_t len) {
         return -1;
     }
     strncpy(name, utsname.nodename, len);
-    if (len == 0 || name[len-1] != '\0') {
+    if (len == 0 || name[len - 1] != '\0') {
         errno = ENAMETOOLONG;
         return -1;
     }
@@ -94,30 +94,24 @@ int gethostname(char* name, size_t len) {
 }
 
 // man 3 getaddrinfo
-int getaddrinfo(const char* node, const char* service,
-                const struct addrinfo* hints, struct addrinfo** res) {
+int getaddrinfo(const char* node, const char* service, const struct addrinfo* hints,
+                struct addrinfo** res) {
     return shim_api_getaddrinfo(node, service, hints, res);
 }
 
 // man 3 freeaddrinfo
-void freeaddrinfo(struct addrinfo* res) {
-    return shim_api_freeaddrinfo(res);
-}
+void freeaddrinfo(struct addrinfo* res) { return shim_api_freeaddrinfo(res); }
 
 // man 3 getifaddrs
-int getifaddrs(struct ifaddrs** ifap) {
-    return shim_api_getifaddrs(ifap);
-}
+int getifaddrs(struct ifaddrs** ifap) { return shim_api_getifaddrs(ifap); }
 
 // man 3 freeifaddrs
-void freeifaddrs(struct ifaddrs* ifa) {
-    return shim_api_freeifaddrs(ifa);
-}
+void freeifaddrs(struct ifaddrs* ifa) { return shim_api_freeifaddrs(ifa); }
 
 static void _convert_stat_to_stat64(struct stat* s, struct stat64* s64) {
     memset(s64, 0, sizeof(*s64));
 
-    #define COPY_X(x) s64->x = s->x
+#define COPY_X(x) s64->x = s->x
     COPY_X(st_dev);
     COPY_X(st_ino);
     COPY_X(st_nlink);
@@ -131,13 +125,13 @@ static void _convert_stat_to_stat64(struct stat* s, struct stat64* s64) {
     COPY_X(st_atim);
     COPY_X(st_mtim);
     COPY_X(st_ctim);
-    #undef COPY_X
+#undef COPY_X
 }
 
 static void _convert_statfs_to_statfs64(struct statfs* s, struct statfs64* s64) {
     memset(s64, 0, sizeof(*s64));
 
-    #define COPY_X(x) s64->x = s->x
+#define COPY_X(x) s64->x = s->x
     COPY_X(f_type);
     COPY_X(f_bsize);
     COPY_X(f_blocks);
@@ -149,7 +143,7 @@ static void _convert_statfs_to_statfs64(struct statfs* s, struct statfs64* s64) 
     COPY_X(f_namelen);
     COPY_X(f_frsize);
     COPY_X(f_flags);
-    #undef COPY_X
+#undef COPY_X
 }
 
 // Some platforms define fstat and fstatfs as macros. We should call 'syscall()' directly since

@@ -24,8 +24,8 @@ long shim_api_syscall(long n, ...);
 long shim_api_syscallv(long n, va_list args);
 
 // Shim implementation of `man 3 getaddrinfo`.
-int shim_api_getaddrinfo(const char* node, const char* service,
-                const struct addrinfo* hints, struct addrinfo** res);
+int shim_api_getaddrinfo(const char* node, const char* service, const struct addrinfo* hints,
+                         struct addrinfo** res);
 
 // Shim implementation of `man 3 freeaddrinfo`.
 void shim_api_freeaddrinfo(struct addrinfo* res);

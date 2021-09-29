@@ -383,7 +383,8 @@ static void _handle_sigsys(int sig, siginfo_t* info, void* voidUcontext) {
     // libc's).  It in turn will either emulate it or (if interposition is
     // disabled), make the call natively. In the latter case, the syscall
     // will be permitted to execute by the seccomp filter.
-    long rv = shim_syscall(regs[REG_N], regs[REG_ARG1], regs[REG_ARG2], regs[REG_ARG3], regs[REG_ARG4], regs[REG_ARG5], regs[REG_ARG6]);
+    long rv = shim_syscall(regs[REG_N], regs[REG_ARG1], regs[REG_ARG2], regs[REG_ARG3],
+                           regs[REG_ARG4], regs[REG_ARG5], regs[REG_ARG6]);
     trace("Trapped syscall %lld returning %ld", ctx->uc_mcontext.gregs[REG_RAX], rv);
     ctx->uc_mcontext.gregs[REG_RAX] = rv;
 }

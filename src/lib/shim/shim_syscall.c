@@ -47,18 +47,18 @@ long __attribute__((noinline)) shim_native_syscallv(long n, va_list args) {
         register long r10 __asm__("r10") = arg4;
         register long r8 __asm__("r8") = arg5;
         register long r9 __asm__("r9") = (long)clone_rip;
-        __asm__ __volatile__(
-            "syscall\n"
-            "cmp $0, %%rax\n"
-            "jne shim_native_syscallv_out\n"
-            "jmp *%%r9\n"
-            "shim_native_syscallv_out:\n"
-                            : "=a"(rv)
-                            : "a"(n), "D"(arg1), "S"(arg2), "d"(arg3), "r"(r10), "r"(r8), "r"(r9), [ CLONE_RIP ] "rm"(&clone_rip)
-                            : "rcx", "r11", "memory");
+        __asm__ __volatile__("syscall\n"
+                             "cmp $0, %%rax\n"
+                             "jne shim_native_syscallv_out\n"
+                             "jmp *%%r9\n"
+                             "shim_native_syscallv_out:\n"
+                             : "=a"(rv)
+                             : "a"(n), "D"(arg1), "S"(arg2), "d"(arg3), "r"(r10), "r"(r8),
+                               "r"(r9), [CLONE_RIP] "rm"(&clone_rip)
+                             : "rcx", "r11", "memory");
         // Wait for child to initialize itself.
         shim_newThreadFinish();
-        return  rv;
+        return rv;
     }
 
     // r8, r9, and r10 aren't supported as register-constraints in
@@ -88,7 +88,8 @@ long shim_native_syscall(long n, ...) {
 }
 
 // Only called from asm, so need to tell compiler not to discard.
-__attribute__((used)) static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
+__attribute__((used)) static SysCallReg
+_shim_emulated_syscall_event(const ShimEvent* syscall_event) {
 
     struct IPCData* ipc = shim_thisThreadEventIPC();
 
@@ -161,9 +162,10 @@ __attribute__((used)) static SysCallReg _shim_emulated_syscall_event(const ShimE
                 break;
             case SHD_SHIM_EVENT_ADD_THREAD_REQ: {
                 shim_newThreadStart(&res.event_data.add_thread_req.ipc_block);
-                shimevent_sendEventToShadow(ipc, &(ShimEvent){
-                    .event_id=SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES,
-                });
+                shimevent_sendEventToShadow(
+                    ipc, &(ShimEvent){
+                             .event_id = SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES,
+                         });
                 break;
             }
             default: {
@@ -197,24 +199,24 @@ long shim_emulated_syscallv(long n, va_list args) {
     // non-fatal signal. No need to be stingy with the size here, since pages
     // that are never used should never get allocated by the OS.
     static ShimTlsVar new_stack_var = {0};
-    const size_t stack_sz = 4096*10;
+    const size_t stack_sz = 4096 * 10;
     char* new_stack = shimtlsvar_ptr(&new_stack_var, stack_sz);
     // C ABI requires 16-byte alignment for stack frames
     assert(((uintptr_t)new_stack % 16) == 0);
     void* old_stack;
     SysCallReg retval;
     asm volatile("movq %[EVENT], %%rdi\n"     /* set up syscall arg */
-                 "movq %%rsp, %%rbx\n" /* save stack pointer to a callee-save register*/
+                 "movq %%rsp, %%rbx\n"        /* save stack pointer to a callee-save register*/
                  "movq %[NEW_STACK], %%rsp\n" /* switch stack */
                  "callq _shim_emulated_syscall_event\n"
-                 "movq %%rbx, %%rsp\n" /* restore stack pointer */
-                 "movq %%rax, %[RETVAL]\n"    /* save return value */
-                 :                            /* outputs */
-                 [ RETVAL ] "=rm"(retval)
+                 "movq %%rbx, %%rsp\n"     /* restore stack pointer */
+                 "movq %%rax, %[RETVAL]\n" /* save return value */
+                 :                         /* outputs */
+                 [RETVAL] "=rm"(retval)
                  : /* inputs */
                  /* Must be a register, since a memory operand would be relative to the stack.
                     Note that we need to point to the *top* of the stack. */
-                 [ NEW_STACK ] "r"(&new_stack[stack_sz]), [ EVENT ] "rm"(&e)
+                 [NEW_STACK] "r"(&new_stack[stack_sz]), [EVENT] "rm"(&e)
                  : /* clobbers */
                  "memory",
                  /* used to save rsp */
@@ -240,8 +242,8 @@ long shim_syscallv(long n, va_list args) {
 
     long rv;
 
-    if (shim_interpositionEnabled() && shim_use_syscall_handler() && 
-            shim_sys_handle_syscall_locally(n, &rv, args)) {
+    if (shim_interpositionEnabled() && shim_use_syscall_handler() &&
+        shim_sys_handle_syscall_locally(n, &rv, args)) {
         // No inter-process syscall needed, we handled it on the shim side! :)
         trace("Handled syscall %ld from the shim; we avoided inter-process overhead.", n);
         // rv was already set
@@ -253,7 +255,8 @@ long shim_syscallv(long n, va_list args) {
         rv = shim_emulated_syscallv(n, args);
     } else {
         // The syscall is made directly; ptrace or seccomp will get the syscall signal.
-        trace("Making syscall %ld directly; we expect ptrace or seccomp will interpose it, or it will be "
+        trace("Making syscall %ld directly; we expect ptrace or seccomp will interpose it, or it "
+              "will be "
               "handled natively by the kernel.",
               n);
         rv = shim_native_syscallv(n, args);
