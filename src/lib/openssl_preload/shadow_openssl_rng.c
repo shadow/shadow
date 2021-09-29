@@ -24,10 +24,12 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include "lib/shim/shim_api.h"
+
 static int _getRandomBytes(unsigned char* buf, int numBytes) {
     // shadow interposes this and will fill the buffer for us
     // return 1 on success, 0 otherwise
-    return (numBytes == syscall(SYS_getrandom, buf, (size_t)numBytes, 0)) ? 1 : 0;
+    return (numBytes == shim_api_syscall(SYS_getrandom, buf, (size_t)numBytes, 0)) ? 1 : 0;
 }
 
 int RAND_DRBG_generate(void *drbg,
