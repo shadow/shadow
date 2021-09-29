@@ -28,11 +28,11 @@
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
 
-#define PRELOAD_SHIM_LIB_STR "libshadow-shim.so"
+#define PRELOAD_DUMMY_LIB_STR "libshadow_dummy.so"
 #define PRELOAD_LIBC_LIB_STR "libshadow_libc.so"
 #define PRELOAD_OPENSSL_RNG_LIB_STR "libshadow_openssl_rng.so"
 
-// Allow turning off syscall preloading at run-time.
+// Allow turning off libc preloading at run-time.
 static bool _use_libc_preload = true;
 ADD_CONFIG_HANDLER(config_getUseLibcPreload, _use_libc_preload)
 
@@ -81,11 +81,12 @@ struct _Manager {
     gchar* dataPath;
     gchar* hostsPath;
 
-    // Path to the shim that we preload for every managed process.
-    gchar* preloadShimPath;
+    // Path to the dummy lib that we preload for managed processes (if no other
+    // lib is preloaded).
+    gchar* preloadDummyPath;
     // Path to the libc lib that we preload for managed processes.
     gchar* preloadLibcPath;
-    // Path to the openssl rng lib that we preload for requesting managed processes.
+    // Path to the openssl rng lib that we preload for managed processes.
     gchar* preloadOpensslRngPath;
 
     StatusBar_ShadowStatusBarState* statusBar;
@@ -212,31 +213,31 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
         trace("raw manager cpu frequency unavailable, using 2,500,000 KHz");
     }
 
-    manager->preloadShimPath = _manager_scanRPathForLib(PRELOAD_SHIM_LIB_STR);
-    if (manager->preloadShimPath != NULL) {
-        info("found required preload library %s at path %s", PRELOAD_SHIM_LIB_STR,
-             manager->preloadShimPath);
+    manager->preloadDummyPath = _manager_scanRPathForLib(PRELOAD_DUMMY_LIB_STR);
+    if (manager->preloadDummyPath != NULL) {
+        info("found preload library %s at path %s", PRELOAD_DUMMY_LIB_STR,
+             manager->preloadDummyPath);
     } else {
-        // The shim is required, so panic if we can't find it.
-        utility_panic("could not find required preload library %s in rpath", PRELOAD_SHIM_LIB_STR);
+        // The dummy preload is only used if we have no other preloads configured.
+        warning("could not find preload library %s in rpath", PRELOAD_DUMMY_LIB_STR);
     }
 
     manager->preloadLibcPath = _manager_scanRPathForLib(PRELOAD_LIBC_LIB_STR);
     if (manager->preloadLibcPath != NULL) {
-        info("found optional preload library %s at path %s", PRELOAD_LIBC_LIB_STR,
+        info("found preload library %s at path %s", PRELOAD_LIBC_LIB_STR,
              manager->preloadLibcPath);
     } else {
         // The libc preload is optional and may not be used by and managed processes.
-        warning("could not find optional preload library %s in rpath", PRELOAD_LIBC_LIB_STR);
+        warning("could not find preload library %s in rpath", PRELOAD_LIBC_LIB_STR);
     }
 
     manager->preloadOpensslRngPath = _manager_scanRPathForLib(PRELOAD_OPENSSL_RNG_LIB_STR);
     if (manager->preloadOpensslRngPath != NULL) {
-        info("found optional preload library %s at path %s", PRELOAD_OPENSSL_RNG_LIB_STR,
+        info("found preload library %s at path %s", PRELOAD_OPENSSL_RNG_LIB_STR,
              manager->preloadOpensslRngPath);
     } else {
         // The Openssl Rng is optional and may not be used by and managed processes.
-        warning("could not find optional preload library %s in rpath", PRELOAD_OPENSSL_RNG_LIB_STR);
+        warning("could not find preload library %s in rpath", PRELOAD_OPENSSL_RNG_LIB_STR);
     }
 
     /* the main scheduler may utilize multiple threads */
@@ -387,8 +388,8 @@ gint manager_free(Manager* manager) {
     if (manager->random) {
         random_free(manager->random);
     }
-    if (manager->preloadShimPath) {
-        g_free(manager->preloadShimPath);
+    if (manager->preloadDummyPath) {
+        g_free(manager->preloadDummyPath);
     }
     if (manager->preloadLibcPath) {
         g_free(manager->preloadLibcPath);
@@ -473,16 +474,15 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
      *   - preload values from LD_PRELOAD entries in the environment process option */
     GPtrArray* ldPreloadArray = g_ptr_array_new();
 
-    if (manager->preloadShimPath != NULL) {
-        debug("adding Shadow preload shim path %s", manager->preloadShimPath);
-        g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadShimPath));
-    }
+    // Track if we need to preload the dummy lib.
+    bool need_dummy_preload = true;
 
     if (!_use_libc_preload) {
         debug("libc preloading is disabled");
     } else if (manager->preloadLibcPath != NULL) {
         debug("adding Shadow preload lib path %s", manager->preloadLibcPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadLibcPath));
+        need_dummy_preload = false;
     }
 
     if (!_use_openssl_rng_preload) {
@@ -490,6 +490,12 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
     } else if (manager->preloadOpensslRngPath != NULL) {
         debug("adding Shadow preload lib path %s", manager->preloadOpensslRngPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadOpensslRngPath));
+        need_dummy_preload = false;
+    }
+
+    if(need_dummy_preload) {
+        debug("adding Shadow preload lib path %s", manager->preloadDummyPath);
+        g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadDummyPath));
     }
 
     /* now we also have to scan the other env variables that were given in the shadow conf file */
