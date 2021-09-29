@@ -1,3 +1,8 @@
+/*
+ * The Shadow Simulator
+ * See LICENSE for licensing information
+ */
+
 #include <errno.h>
 #include <stdarg.h>
 

@@ -1,65 +1,24 @@
-// Defines higher-level functions C library functions: those that are
-// documented in man section 3. (See `man man`).
-//
-// Throughout: we set errno=ENOTSUP if we hit unimplemented code paths.
-
+/*
+ * The Shadow Simulator
+ * See LICENSE for licensing information
+ */
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <glib.h>
-#include <ifaddrs.h>
-#include <net/if.h>
 #include <netdb.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/statfs.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
-#include <sys/utsname.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
 #include "lib/shim/shim_event.h"
-
-// man 3 usleep
-int usleep(useconds_t usec) {
-    struct timespec req, rem;
-    req.tv_sec = usec / 1000000;
-    const long remaining_usec = usec - req.tv_sec * 1000000;
-    req.tv_nsec = remaining_usec * 1000;
-
-    return nanosleep(&req, &rem);
-}
-
-// man 3 sleep
-unsigned int sleep(unsigned int seconds) {
-    struct timespec req = {.tv_sec = seconds};
-    struct timespec rem = { 0 };
-
-    if (nanosleep(&req, &rem) == 0) {
-        return 0;
-    }
-
-    return rem.tv_sec;
-}
-
-// man send
-ssize_t send(int sockfd, const void* buf, size_t len, int flags) {
-    // An equivalent syscall is available
-    return sendto(sockfd, buf, len, flags, NULL, 0);
-}
-
-// man recv
-ssize_t recv(int sockfd, void* buf, size_t len, int flags) {
-    // An equivalent syscall is available
-    return recvfrom(sockfd, buf, len, flags, NULL, NULL);
-}
 
 // Sets `port` to the port specified by `service`, according to the criteria in
 // getaddrinfo(3). Returns 0 on success or the appropriate getaddrinfo error on
@@ -287,8 +246,7 @@ static bool _syscall_hostname_to_addr_ipv4(const char* node, uint32_t* addr) {
     }
 }
 
-// man 3 getaddrinfo
-int getaddrinfo(const char* node, const char* service,
+int shim_api_getaddrinfo(const char* node, const char* service,
                 const struct addrinfo* hints, struct addrinfo** res) {
     // Quoted text is from the man page.
 
@@ -471,7 +429,7 @@ int getaddrinfo(const char* node, const char* service,
     return 0;
 }
 
-void freeaddrinfo(struct addrinfo* res) {
+void shim_api_freeaddrinfo(struct addrinfo* res) {
     while (res != NULL) {
         struct addrinfo* next = res->ai_next;
         assert(res->ai_addr != NULL);
@@ -481,174 +439,4 @@ void freeaddrinfo(struct addrinfo* res) {
         free(res);
         res = next;
     }
-}
-
-int gethostname(char* name, size_t len) {
-    struct utsname utsname;
-    if (uname(&utsname) < 0) {
-        return -1;
-    }
-    strncpy(name, utsname.nodename, len);
-    if (len == 0 || name[len-1] != '\0') {
-        errno = ENAMETOOLONG;
-        return -1;
-    }
-    return 0;
-}
-
-static void _convert_stat_to_stat64(struct stat* s, struct stat64* s64) {
-    memset(s64, 0, sizeof(*s64));
-
-    #define COPY_X(x) s64->x = s->x
-    COPY_X(st_dev);
-    COPY_X(st_ino);
-    COPY_X(st_nlink);
-    COPY_X(st_mode);
-    COPY_X(st_uid);
-    COPY_X(st_gid);
-    COPY_X(st_rdev);
-    COPY_X(st_size);
-    COPY_X(st_blksize);
-    COPY_X(st_blocks);
-    COPY_X(st_atim);
-    COPY_X(st_mtim);
-    COPY_X(st_ctim);
-    #undef COPY_X
-}
-
-static void _convert_statfs_to_statfs64(struct statfs* s, struct statfs64* s64) {
-    memset(s64, 0, sizeof(*s64));
-
-    #define COPY_X(x) s64->x = s->x
-    COPY_X(f_type);
-    COPY_X(f_bsize);
-    COPY_X(f_blocks);
-    COPY_X(f_bfree);
-    COPY_X(f_bavail);
-    COPY_X(f_files);
-    COPY_X(f_ffree);
-    COPY_X(f_fsid);
-    COPY_X(f_namelen);
-    COPY_X(f_frsize);
-    COPY_X(f_flags);
-    #undef COPY_X
-}
-
-// Some platforms define fstat and fstatfs as macros. We should call 'syscall()' directly since
-// calling for example 'fstat()' will not necessarily call shadow's 'fstat()' wrapper defined in
-// 'preload_syscalls.c'.
-
-int fstat64(int a, struct stat64* b) {
-    struct stat s;
-    int rv = syscall(SYS_fstat, a, &s);
-    _convert_stat_to_stat64(&s, b);
-    return rv;
-}
-
-int fstatfs64(int a, struct statfs64* b) {
-    struct statfs s;
-    int rv = syscall(SYS_fstatfs, a, &s);
-    _convert_statfs_to_statfs64(&s, b);
-    return rv;
-}
-
-int __fxstat(int ver, int a, struct stat* b) {
-    // on x86_64 with a modern kernel, glibc should use the same stat struct as the kernel, so check
-    // that this function was indeed called with the expected stat struct
-    if (ver != 1 /* _STAT_VER_KERNEL for x86_64 */) {
-        panic("__fxstat called with unexpected ver of %d", ver);
-        errno = EINVAL;
-        return -1;
-    }
-
-    return syscall(SYS_fstat, a, b);
-}
-
-int __fxstat64(int ver, int a, struct stat64* b) {
-    // on x86_64 with a modern kernel, glibc should use the same stat struct as the kernel, so check
-    // that this function was indeed called with the expected stat struct
-    if (ver != 1 /* _STAT_VER_KERNEL for x86_64 */) {
-        panic("__fxstat64 called with unexpected ver of %d", ver);
-        errno = EINVAL;
-        return -1;
-    }
-
-    struct stat s;
-    int rv = syscall(SYS_fstat, a, &s);
-    _convert_stat_to_stat64(&s, b);
-    return rv;
-}
-
-int getifaddrs(struct ifaddrs** ifap) {
-    if (!ifap) {
-        errno = EFAULT;
-        return -1;
-    }
-
-    /* we always have loopback */
-    struct ifaddrs* i = calloc(1, sizeof(struct ifaddrs));
-    i->ifa_flags = (IFF_UP | IFF_RUNNING | IFF_LOOPBACK);
-    i->ifa_name = strdup("lo");
-
-    i->ifa_addr = calloc(1, sizeof(struct sockaddr));
-    i->ifa_addr->sa_family = AF_INET;
-
-    struct in_addr addr_buf;
-    if (inet_pton(AF_INET, "127.0.0.1", &addr_buf) == 1) {
-        ((struct sockaddr_in*)i->ifa_addr)->sin_addr = addr_buf;
-    } else {
-        errno = EADDRNOTAVAIL;
-        return -1;
-    }
-
-    /* get the hostname so we can use it to lookup the default net address */
-    char hostname_buf[HOST_NAME_MAX] = {};
-    if (gethostname(hostname_buf, HOST_NAME_MAX) == 0) {
-        struct addrinfo hints = {.ai_family = AF_INET, .ai_socktype = SOCK_STREAM};
-        struct addrinfo* host_ai;
-
-        /* lookup the default net address for the host */
-        if (getaddrinfo(hostname_buf, NULL, &hints, &host_ai) == 0) {
-            struct ifaddrs* j = calloc(1, sizeof(struct ifaddrs));
-            j->ifa_flags = (IFF_UP | IFF_RUNNING);
-            j->ifa_name = strdup("eth0");
-
-            j->ifa_addr = calloc(1, sizeof(struct sockaddr));
-            memcpy(j->ifa_addr, host_ai->ai_addr, (unsigned long)host_ai->ai_addrlen);
-
-            i->ifa_next = j;
-
-            freeaddrinfo(host_ai);
-        }
-    }
-
-    *ifap = i;
-    return 0;
-}
-
-void freeifaddrs(struct ifaddrs* ifa) {
-    struct ifaddrs* iter = ifa;
-    while (iter != NULL) {
-        struct ifaddrs* next = iter->ifa_next;
-        if (iter->ifa_addr) {
-            free(iter->ifa_addr);
-        }
-        if (iter->ifa_name) {
-            free(iter->ifa_name);
-        }
-        free(iter);
-        iter = next;
-    }
-}
-
-// man 3 localtime
-struct tm* localtime(const time_t* timep) {
-    // Return time relative to UTC rather than the locale where shadow is being run.
-    return gmtime(timep);
-}
-
-// man 3 localtime_r
-struct tm* localtime_r(const time_t* timep, struct tm* result) {
-    // Return time relative to UTC rather than the locale where shadow is being run.
-    return gmtime_r(timep, result);
 }
