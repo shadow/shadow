@@ -8,7 +8,7 @@ add_library(shadow_libc SHARED libcall_wrappers.c syscall_wrappers.c libc_impls.
 # Disable the builtin execve, exit, and fork functions in this compilation unit
 # which have different call signatures than the functions in syscalls.c.
 target_compile_options(shadow_libc PRIVATE -D_GNU_SOURCE -fPIC 
-    -fno-builtin-execve -fno-builtin-exit -fno-builtin-fork)
+    -fno-builtin-execve -fno-builtin-exit -fno-builtin-fork -fno-builtin-vfork)
 
 # Link to the shim so we can forward intercepted syscalls and libcalls there.
 target_link_libraries(shadow_libc shadow-shim)
