@@ -123,7 +123,13 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
 static SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, PluginPtr fds_ptr, nfds_t nfds,
                                                 const struct timespec* timeout) {
     // Get the pollfd struct in our memory so we can read from and write to it.
-    struct pollfd* fds = process_getMutablePtr(sys->process, fds_ptr, nfds * sizeof(*fds));
+    struct pollfd* fds = NULL;
+    if (nfds > 0) {
+        fds = process_getMutablePtr(sys->process, fds_ptr, nfds * sizeof(*fds));
+        if (!fds) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        }
+    }
 
     // Check if any of the fds have events now
     int num_ready = _syscallhandler_getPollEvents(sys, fds, nfds);
@@ -172,9 +178,6 @@ static int _syscallhandler_checkPollArgs(PluginPtr fds_ptr, nfds_t nfds) {
     if (nfds > INT_MAX) {
         trace("nfds was out of range [0, INT_MAX], returning EINVAL");
         return -EINVAL;
-    } else if (!fds_ptr.val) {
-        trace("fd array was null, returning EFAULT");
-        return -EFAULT;
     } else {
         return 0;
     }
@@ -190,10 +193,6 @@ SysCallReturn syscallhandler_poll(SysCallHandler* sys, const SysCallArgs* args) 
     int timeout_millis = args->args[2].as_i64;
 
     trace("poll was called with nfds=%lu and timeout=%d", nfds, timeout_millis);
-
-    if (nfds == 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-    }
 
     int result = _syscallhandler_checkPollArgs(fds_ptr, nfds);
     if (result != 0) {
@@ -212,10 +211,6 @@ SysCallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args)
     PluginPtr ts_timeout_ptr = args->args[2].as_ptr; // const struct timespec*
 
     trace("ppoll was called with nfds=%lu and timeout_ptr=%p", nfds, (void*)ts_timeout_ptr.val);
-
-    if (nfds == 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
-    }
 
     int result = _syscallhandler_checkPollArgs(fds_ptr, nfds);
     if (result != 0) {
