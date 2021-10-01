@@ -4,7 +4,7 @@ use std::os::unix::ffi::OsStrExt;
 
 use anyhow::{self, Context};
 use clap::Clap;
-use nix::sys::{personality, signal};
+use nix::sys::{personality, resource, signal};
 
 use crate::core::logger::log_wrapper::c_to_rust_log_level;
 use crate::core::logger::shadow_logger;
@@ -106,10 +106,10 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     }
 
     // raise fd soft limit to hard limit
-    raise_rlimit(libc::RLIMIT_NOFILE).context("Could not raise fd limit")?;
+    raise_rlimit(resource::Resource::RLIMIT_NOFILE).context("Could not raise fd limit")?;
 
     // raise number of processes/threads soft limit to hard limit
-    raise_rlimit(libc::RLIMIT_NPROC).context("Could not raise proc limit")?;
+    raise_rlimit(resource::Resource::RLIMIT_NPROC).context("Could not raise proc limit")?;
 
     if config.experimental.use_sched_fifo.unwrap() {
         set_sched_fifo().context("Could not set real-time scheduler mode to SCHED_FIFO")?;
@@ -188,21 +188,9 @@ fn set_sched_fifo() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn raise_rlimit(resource: libc::__rlimit_resource_t) -> anyhow::Result<()> {
-    // TODO: replace the libc code with the nix code once the following PR is in a released version:
-    // https://github.com/nix-rust/nix/pull/1302
-    /*
-    fn raise_rlimit(resource: resource::Resource) -> anyhow::Result<()> {
+fn raise_rlimit(resource: resource::Resource) -> anyhow::Result<()> {
     let (_soft_limit, hard_limit) = resource::getrlimit(resource)?;
     resource::setrlimit(resource, hard_limit, hard_limit)?;
-    */
-
-    let mut limit: libc::rlimit = unsafe { std::mem::zeroed() };
-    nix::errno::Errno::result(unsafe { libc::getrlimit(resource, &mut limit as *mut _) })?;
-
-    limit.rlim_cur = limit.rlim_max;
-    nix::errno::Errno::result(unsafe { libc::setrlimit(resource, &limit as *const _) })?;
-
     Ok(())
 }
 
