@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::MetadataExt;
 
 use clap::ArgEnum;
 use clap::Clap;
@@ -1523,14 +1524,31 @@ mod export {
 
         let expanded = tilde_expansion(&proc.path.to_str().unwrap());
 
-        match expanded.canonicalize() {
-            Ok(path) => CString::into_raw(CString::new(path.to_str().unwrap()).unwrap()),
+        let path = match expanded.canonicalize() {
+            Ok(path) => path,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 log::warn!("Unable to find {:?}", &expanded);
-                std::ptr::null_mut()
+                return std::ptr::null_mut();
             }
             Err(_) => panic!(),
+        };
+
+        let metadata = std::fs::metadata(&path).unwrap();
+
+        if !metadata.is_file() {
+            log::warn!("The path {:?} is not a file", &path);
+            return std::ptr::null_mut();
         }
+
+        // this mask doesn't guarantee that we can execute the file (the file might have S_IXUSR
+        // but be owned by a different user), but it should catch most errors
+        let mask = libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH;
+        if (metadata.mode() & mask) == 0 {
+            log::warn!("The path {:?} is not executable", &path);
+            return std::ptr::null_mut();
+        }
+
+        CString::into_raw(CString::new(path.to_str().unwrap()).unwrap())
     }
 
     /// Returns the path exactly as specified in the config. Caller must free returned string.
