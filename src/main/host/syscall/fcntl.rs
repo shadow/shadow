@@ -127,10 +127,10 @@ fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
             if let PosixFile::Pipe(pipe) = desc.get_file() {
                 SysCallReg::from(i32::try_from(pipe.borrow().max_size()).unwrap())
             } else {
-                Err(Errno::EINVAL)?
+                return Err(Errno::EINVAL.into());
             }
         }
-        _ => Err(Errno::EINVAL)?,
+        _ => return Err(Errno::EINVAL.into()),
     })
 }
 

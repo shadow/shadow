@@ -96,11 +96,11 @@ impl TryFrom<gml_parser::gml::Edge<'_>> for ShadowEdge {
         };
 
         if rv.packet_loss < 0f32 || rv.packet_loss > 1f32 {
-            Err("Edge 'packet_loss' is not in the range [0,1]")?;
+            return Err("Edge 'packet_loss' is not in the range [0,1]".into());
         }
 
         if rv.latency.value() == 0 {
-            Err("Edge 'latency' must not be 0")?;
+            return Err("Edge 'latency' must not be 0".into());
         }
 
         Ok(rv)
@@ -264,10 +264,11 @@ impl NetworkGraph {
                     .next()
                     .ok_or(format!("No edge connecting node {} to {}", src_id, dst_id))?;
                 if edges.count() != 0 {
-                    Err(format!(
+                    return Err(format!(
                         "More than one edge connecting node {} to {}",
                         src_id, dst_id
-                    ))?
+                    )
+                    .into());
                 }
                 Ok(edge.weight())
             }
@@ -277,10 +278,11 @@ impl NetworkGraph {
                     .next()
                     .ok_or(format!("No edge connecting node {} to {}", src_id, dst_id))?;
                 if edges.count() != 0 {
-                    Err(format!(
+                    return Err(format!(
                         "More than one edge connecting node {} to {}",
                         src_id, dst_id
-                    ))?
+                    )
+                    .into());
                 }
                 Ok(edge.weight())
             }
