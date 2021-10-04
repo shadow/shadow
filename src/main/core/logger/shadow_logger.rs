@@ -225,9 +225,9 @@ impl ShadowLogger {
             } else {
                 write!(stdout, "n/a")?;
             }
-            write!(
+            writeln!(
                 stdout,
-                "] [{module}] {msg}\n",
+                "] [{module}] {msg}",
                 module = record.module_path.unwrap_or("n/a"),
                 msg = record.message
             )?;
