@@ -770,7 +770,7 @@ fn generate_help_strs(
     for (name, obj) in &schema.schema.object.as_ref().unwrap().properties {
         if let Some(meta) = obj.clone().into_object().metadata {
             let description = meta.description.or(Some("".to_string())).unwrap();
-            let space = if description.len() > 0 { " " } else { "" };
+            let space = if !description.is_empty() { " " } else { "" };
             match meta.default {
                 Some(default) => defaults.insert(
                     name.clone(),
@@ -806,7 +806,7 @@ pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
 /// Parses a string as a list of arguments following the shell's parsing rules. This
 /// uses `g_shell_parse_argv()` for parsing.
 fn parse_string_as_args(args_str: &OsStr) -> Result<Vec<OsString>, String> {
-    if args_str.len() == 0 {
+    if args_str.is_empty() {
         return Ok(Vec::new());
     }
 
@@ -886,7 +886,7 @@ mod tests {
         let arg_str: OsString = arg_str.into();
         let err_str = parse_string_as_args(&arg_str).unwrap_err();
 
-        assert!(err_str.len() != 0);
+        assert!(!err_str.is_empty());
     }
 
     #[test]
