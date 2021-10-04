@@ -637,7 +637,7 @@ fn parse_set_log_info_flags(
     s: &str,
 ) -> Result<std::collections::HashSet<LogInfoFlag>, serde_yaml::Error> {
     let flags: Result<std::collections::HashSet<LogInfoFlag>, _> =
-        s.split(",").map(|x| x.trim().parse()).collect();
+        s.split(',').map(|x| x.trim().parse()).collect();
     Ok(flags?)
 }
 
@@ -785,9 +785,9 @@ fn generate_help_strs(
 
 pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
     // if the path begins with a "~"
-    if let Some(x) = path.strip_prefix("~") {
+    if let Some(x) = path.strip_prefix('~') {
         // get the tilde-prefix (everything before the first separator)
-        let mut parts = x.splitn(2, "/");
+        let mut parts = x.splitn(2, '/');
         let (tilde_prefix, remainder) = (parts.next().unwrap(), parts.next().unwrap_or(""));
         assert!(parts.next().is_none());
         // we only support expansion for our own home directory

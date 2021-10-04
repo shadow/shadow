@@ -233,7 +233,7 @@ mod export {
         if let Err(e) = result {
             // log the full error, its context, and its backtrace if enabled
             if log::log_enabled!(log::Level::Error) {
-                for line in format!("{:?}", e).split("\n") {
+                for line in format!("{:?}", e).split('\n') {
                     log::error!("{}", line);
                 }
                 log::logger().flush();
