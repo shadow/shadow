@@ -151,7 +151,7 @@ impl ShadowStatusBarState {
     pub fn new(end: EmulatedTime) -> Self {
         Self {
             start: std::time::Instant::now(),
-            current: emulated_time::SIMULATION_START.clone(),
+            current: emulated_time::SIMULATION_START,
             end,
         }
     }

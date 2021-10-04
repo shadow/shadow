@@ -232,7 +232,7 @@ impl NetworkGraph {
 
         let paths: HashMap<_, _> = nodes
             .iter()
-            .flat_map(|src| nodes.iter().map(move |dst| (src.clone(), dst.clone())))
+            .flat_map(|src| nodes.iter().map(move |dst| (*src, *dst)))
             // we require the graph to be connected with exactly one edge between any two nodes
             .map(|(src, dst)| Ok(((src, dst), self.get_edge_weight(&src, &dst)?.into())))
             .collect::<Result<_, Box<dyn Error>>>()?;
@@ -374,7 +374,7 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> IpAssignment<T> {
         node_id: T,
         ip_addr: std::net::IpAddr,
     ) -> Result<(), IpPreviouslyAssignedError> {
-        let entry = self.map.entry(ip_addr.clone());
+        let entry = self.map.entry(ip_addr);
         if let Entry::Occupied(_) = &entry {
             return Err(IpPreviouslyAssignedError);
         }
@@ -396,7 +396,7 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> IpAssignment<T> {
         match addr {
             std::net::IpAddr::V4(mut x) => loop {
                 // increment the address
-                x = std::net::Ipv4Addr::from(u32::from(x.clone()) + 1);
+                x = std::net::Ipv4Addr::from(u32::from(x) + 1);
                 match x.octets()[3] {
                     // if the address ends in ".0" or ".255" (broadcast), try the next
                     0 | 255 => {}
