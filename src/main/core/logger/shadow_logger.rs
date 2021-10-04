@@ -26,7 +26,7 @@ const SYNC_FLUSH_QD_LINES_THRESHOLD: usize = 10 * ASYNC_FLUSH_QD_LINES_THRESHOLD
 /// Logging thread flushes at least this often.
 const MIN_FLUSH_FREQUENCY: Duration = Duration::from_secs(10);
 
-static SHADOW_LOGGER: Lazy<ShadowLogger> = Lazy::new(|| ShadowLogger::new());
+static SHADOW_LOGGER: Lazy<ShadowLogger> = Lazy::new(ShadowLogger::new);
 
 /// Initialize the Shadow logger.
 pub fn init() -> Result<(), SetLoggerError> {
