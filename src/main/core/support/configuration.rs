@@ -638,7 +638,7 @@ fn parse_set_log_info_flags(
 ) -> Result<std::collections::HashSet<LogInfoFlag>, serde_yaml::Error> {
     let flags: Result<std::collections::HashSet<LogInfoFlag>, _> =
         s.split(',').map(|x| x.trim().parse()).collect();
-    Ok(flags?)
+    flags
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, ArgEnum, Serialize, Deserialize, JsonSchema)]
