@@ -134,7 +134,7 @@ impl Display for Counter {
         // Sort the counts so our string is consistent.
         // Use reverse on vals to get the heaviest hitters first, but sort keys normally.
         item_vec.sort_by(|&(key_a, val_a), &(key_b, val_b)| {
-            val_a.cmp(&val_b).reverse().then(key_a.cmp(&key_b))
+            val_a.cmp(val_b).reverse().then(key_a.cmp(key_b))
         });
 
         // Create a string representation of the counts by iterating over the items.

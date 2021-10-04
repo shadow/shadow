@@ -794,7 +794,7 @@ pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
         // (nothing between the "~" and the separator)
         if tilde_prefix.is_empty() {
             if let Ok(ref home) = std::env::var("HOME") {
-                return [&home, remainder].iter().collect::<std::path::PathBuf>();
+                return [home, remainder].iter().collect::<std::path::PathBuf>();
             }
         }
     }
@@ -1535,7 +1535,7 @@ mod export {
         assert!(!proc.is_null());
         let proc = unsafe { &*proc };
 
-        let expanded = tilde_expansion(&proc.path.to_str().unwrap());
+        let expanded = tilde_expansion(proc.path.to_str().unwrap());
 
         let path = match expanded.canonicalize() {
             Ok(path) => path,

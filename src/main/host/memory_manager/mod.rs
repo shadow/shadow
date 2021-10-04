@@ -163,7 +163,7 @@ where
 
     fn deref(&self) -> &Self::Target {
         match &self.0 {
-            CopiedOrMapped::Copied(v) => &v,
+            CopiedOrMapped::Copied(v) => v,
             CopiedOrMapped::Mapped(s) => s,
         }
     }
@@ -223,7 +223,7 @@ impl<'a, T: Debug + Pod> ProcessMemoryRefMut<'a, T> {
                     ptr.len(),
                     usize::from(ptr.ptr())
                 );
-                unsafe { copier.copy_to_ptr(*ptr, &v)? };
+                unsafe { copier.copy_to_ptr(*ptr, v)? };
             }
             CopiedOrMappedMut::Mapped(_) => (),
         };
