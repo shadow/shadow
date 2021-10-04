@@ -361,8 +361,8 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> IpAssignment<T> {
         loop {
             let ip_addr = Self::increment_address(&self.last_assigned_addr);
             self.last_assigned_addr = ip_addr;
-            if !self.map.contains_key(&ip_addr) {
-                self.map.insert(ip_addr, node_id);
+            if let std::collections::hash_map::Entry::Vacant(e) = self.map.entry(ip_addr) {
+                e.insert(node_id);
                 break ip_addr;
             }
         }
