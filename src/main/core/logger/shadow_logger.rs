@@ -120,13 +120,13 @@ fn get_thread_name() -> String {
 impl ShadowLogger {
     fn new() -> ShadowLogger {
         let (sender, receiver) = std::sync::mpsc::channel();
-        let logger = ShadowLogger {
+
+        ShadowLogger {
             records: ArrayQueue::new(SYNC_FLUSH_QD_LINES_THRESHOLD),
             command_sender: Mutex::new(sender),
             command_receiver: Mutex::new(receiver),
             buffering_enabled: RwLock::new(false),
-        };
-        logger
+        }
     }
 
     // Function executed by the logger's helper thread, onto which we offload as
