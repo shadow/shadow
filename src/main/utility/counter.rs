@@ -100,8 +100,8 @@ impl Counter {
             Some(val) => {
                 // Update and return the existing value without allocating new key.
                 match op {
-                    CounterOperation::Add => *val = *val + value,
-                    CounterOperation::Sub => *val = *val - value,
+                    CounterOperation::Add => *val += value,
+                    CounterOperation::Sub => *val -= value,
                     CounterOperation::Set => *val = value,
                 }
                 // Remove the key if the value reached 0.
