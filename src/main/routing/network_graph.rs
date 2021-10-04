@@ -675,9 +675,9 @@ mod export {
         match graph.graph().node_weight(*node).unwrap().bandwidth_down {
             Some(x) => {
                 *bandwidth_down = x.convert(units::SiPrefixUpper::Base).unwrap().value();
-                return 0;
+                0
             }
-            None => return -1,
+            None => -1,
         }
     }
 
@@ -698,9 +698,9 @@ mod export {
         match graph.graph().node_weight(*node).unwrap().bandwidth_up {
             Some(x) => {
                 *bandwidth_up = x.convert(units::SiPrefixUpper::Base).unwrap().value();
-                return 0;
+                0
             }
-            None => return -1,
+            None => -1,
         }
     }
 
@@ -731,7 +731,7 @@ mod export {
             _ => unimplemented!("Assigned a host to an IPv6 address, but not supported from C"),
         };
 
-        return 0;
+        0
     }
 
     /// Assign an address to a node.
@@ -746,10 +746,10 @@ mod export {
         let ip_addr = std::net::IpAddr::V4(u32::from_be(ip_addr).into());
 
         match ip_assignment.assign_ip(node_id, ip_addr) {
-            Ok(()) => return 0,
+            Ok(()) => 0,
             Err(IpPreviouslyAssignedError) => {
                 error!("IP {} was assigned to multiple hosts", ip_addr,);
-                return -1;
+                -1
             }
         }
     }
@@ -829,7 +829,7 @@ mod export {
         }
 
         // the network graph is required to be a connected graph, so they must be routable
-        return true;
+        true
     }
 
     /// Get the packet latency from one host to another. The given addresses must be assigned to

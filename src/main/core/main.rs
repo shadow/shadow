@@ -249,6 +249,6 @@ mod export {
         }
 
         eprintln!("** Shadow completed successfully");
-        return 0;
+        0
     }
 }

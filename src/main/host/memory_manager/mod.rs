@@ -905,7 +905,7 @@ mod export {
             Ok(mr) => Box::into_raw(Box::new(mr)),
             Err(e) => {
                 warn!("Failed to get memory ref: {:?}", e);
-                return std::ptr::null_mut();
+                std::ptr::null_mut()
             }
         }
     }

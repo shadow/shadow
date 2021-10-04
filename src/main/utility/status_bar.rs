@@ -166,7 +166,7 @@ nix::ioctl_read_bad!(_tiocgwinsz, libc::TIOCGWINSZ, libc::winsize);
 fn tiocgwinsz() -> nix::Result<libc::winsize> {
     let mut win_size: libc::winsize = unsafe { std::mem::zeroed() };
     unsafe { _tiocgwinsz(0, &mut win_size)? };
-    return Ok(win_size);
+    Ok(win_size)
 }
 
 mod export {

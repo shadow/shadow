@@ -1334,7 +1334,7 @@ mod export {
             }
         }
 
-        return 0;
+        0
     }
 
     #[no_mangle]
@@ -1474,9 +1474,9 @@ mod export {
         match host.bandwidth_down {
             Some(x) => {
                 *bandwidth_down = x.convert(units::SiPrefixUpper::Base).unwrap().value();
-                return 0;
+                0
             }
-            None => return -1,
+            None => -1,
         }
     }
 
@@ -1495,9 +1495,9 @@ mod export {
         match host.bandwidth_up {
             Some(x) => {
                 *bandwidth_up = x.convert(units::SiPrefixUpper::Base).unwrap().value();
-                return 0;
+                0
             }
-            None => return -1,
+            None => -1,
         }
     }
 
@@ -1519,7 +1519,7 @@ mod export {
             }
         }
 
-        return 0;
+        0
     }
 
     #[no_mangle]

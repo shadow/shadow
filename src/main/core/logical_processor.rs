@@ -50,7 +50,7 @@ impl LogicalProcessors {
                 return Some(worker);
             }
         }
-        return None;
+        None
     }
 
     /// Record that the `worker` previously returned by `lp_readyPopFor` has
