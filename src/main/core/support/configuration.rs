@@ -104,7 +104,7 @@ impl ConfigOptions {
         config_file.experimental = options.experimental.with_defaults(config_file.experimental);
 
         // copy the host defaults to all of the hosts
-        for (_, host) in &mut config_file.hosts {
+        for host in config_file.hosts.values_mut() {
             host.options = host
                 .options
                 .clone()
