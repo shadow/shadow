@@ -1433,13 +1433,16 @@ extern "C" {
     pub fn worker_getNodeBandwidthDown(nodeID: GQuark, ip: in_addr_t) -> guint32;
 }
 extern "C" {
+    pub fn workerpool_updateMinTimeJump(pool: *mut WorkerPool, time: SimulationTime);
+}
+extern "C" {
     pub fn worker_getLatencyForAddresses(
         sourceAddress: *mut Address,
         destinationAddress: *mut Address,
-    ) -> gdouble;
+    ) -> SimulationTime;
 }
 extern "C" {
-    pub fn worker_getLatency(sourceHostID: GQuark, destinationHostID: GQuark) -> gdouble;
+    pub fn worker_getLatency(sourceHostID: GQuark, destinationHostID: GQuark) -> SimulationTime;
 }
 extern "C" {
     pub fn worker_getReliabilityForAddresses(
@@ -1502,6 +1505,9 @@ extern "C" {
 }
 extern "C" {
     pub fn worker_setActiveThread(thread: *mut Thread);
+}
+extern "C" {
+    pub fn worker_updateMinTimeJump(t: SimulationTime);
 }
 extern "C" {
     pub fn process_registerCompatDescriptor(

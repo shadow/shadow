@@ -48,6 +48,10 @@ struct _Controller {
     /* minimum allowed time jump when sending events between nodes */
     SimulationTime minJumpTimeConfig;
     SimulationTime minJumpTime;
+    bool isJumpTimeDynamic;
+
+    /* the next min jump time is updated by workers, so needs to be locked */
+    GRWLock nextMinJumpTimeLock;
     SimulationTime nextMinJumpTime;
 
     /* start of current window of execution */
@@ -92,9 +96,12 @@ Controller* controller_new(const ConfigOptions* config) {
     controller->random = random_new(config_getSeed(config));
 
     controller->minJumpTimeConfig = config_getRunahead(config);
+    controller->isJumpTimeDynamic = config_getUseDynamicMinJumpTime(config);
 
     controller->endTime = config_getStopTime(config);
     controller->bootstrapEndTime = config_getBootstrapEndTime(config);
+
+    g_rw_lock_init(&controller->nextMinJumpTimeLock);
 
     /* these are only avail in glib >= 2.30
      * setup signal handlers for gracefully handling shutdowns */
@@ -133,6 +140,8 @@ void controller_free(Controller* controller) {
         controller->random = NULL;
     }
 
+    g_rw_lock_clear(&controller->nextMinJumpTimeLock);
+
     MAGIC_CLEAR(controller);
     g_free(controller);
 
@@ -142,32 +151,28 @@ void controller_free(Controller* controller) {
 static SimulationTime _controller_getMinTimeJump(Controller* controller) {
     MAGIC_ASSERT(controller);
 
-    /* use minimum network latency of our topology
-     * if not yet computed, default to 10 milliseconds */
-    SimulationTime minJumpTime =
-        controller->minJumpTime > 0 ? controller->minJumpTime : 10 * SIMTIME_ONE_MILLISECOND;
-
-    /* if the command line option was given, use that as lower bound */
-    if (controller->minJumpTimeConfig > 0 && minJumpTime < controller->minJumpTimeConfig) {
-        minJumpTime = controller->minJumpTimeConfig;
-    }
-
-    return minJumpTime;
+    utility_assert(controller->minJumpTime > 0);
+    return MAX(controller->minJumpTime, controller->minJumpTimeConfig);
 }
 
-static void _controller_updateMinTimeJumpNs(Controller* controller, uint64_t minPathLatencyNs) {
+void controller_updateMinTimeJump(Controller* controller, SimulationTime minPathLatency) {
     MAGIC_ASSERT(controller);
-    SimulationTime minPathLatencySimTime = minPathLatencyNs * SIMTIME_ONE_NANOSECOND;
 
-    if (controller->nextMinJumpTime == 0 || minPathLatencySimTime < controller->nextMinJumpTime) {
-        utility_assert(minPathLatencySimTime > 0);
-        SimulationTime oldJumpNs =
-            controller->nextMinJumpTime > 0 ? controller->nextMinJumpTime : controller->minJumpTime;
-        controller->nextMinJumpTime = minPathLatencySimTime;
-        info("minimum time jump for next scheduling round updated from %" G_GUINT64_FORMAT " to %"
-             G_GUINT64_FORMAT " ns; the minimum config override is %s (%" G_GUINT64_FORMAT " ns)",
-             oldJumpNs, controller->nextMinJumpTime,
-             controller->minJumpTimeConfig > 0 ? "set" : "not set", controller->minJumpTimeConfig);
+    if (controller->isJumpTimeDynamic) {
+        g_rw_lock_writer_lock(&controller->nextMinJumpTimeLock);
+        if (controller->nextMinJumpTime == 0 || minPathLatency < controller->nextMinJumpTime) {
+            utility_assert(minPathLatency > 0);
+            SimulationTime oldJumpNs = controller->nextMinJumpTime > 0 ? controller->nextMinJumpTime
+                                                                       : controller->minJumpTime;
+            controller->nextMinJumpTime = minPathLatency;
+            info("minimum time jump for next scheduling round updated from %" G_GUINT64_FORMAT
+                 " to %" G_GUINT64_FORMAT
+                 " ns; the minimum config override is %s (%" G_GUINT64_FORMAT " ns)",
+                 oldJumpNs, controller->nextMinJumpTime,
+                 controller->minJumpTimeConfig > 0 ? "set" : "not set",
+                 controller->minJumpTimeConfig);
+        }
+        g_rw_lock_writer_unlock(&controller->nextMinJumpTimeLock);
     }
 }
 
@@ -433,8 +438,6 @@ gint controller_run(Controller* controller) {
         return 1;
     }
 
-    _controller_initializeTimeWindows(controller);
-
     if (config_getNHosts(controller->config) == 0) {
         error("No hosts were provided in the config file");
         return 1;
@@ -470,12 +473,15 @@ gint controller_run(Controller* controller) {
         return 1;
     }
 
-    _controller_updateMinTimeJumpNs(
-        controller, routinginfo_smallestLatencyNs(controller->routingInfo));
+    controller->minJumpTime =
+        routinginfo_smallestLatencyNs(controller->routingInfo) * SIMTIME_ONE_NANOSECOND;
+    info("using an initial minimum time jump of %" G_GUINT64_FORMAT " ns", controller->minJumpTime);
 
     /* we don't need the network graph anymore, so free it to save memory */
     networkgraph_free(controller->graph);
     controller->graph = NULL;
+
+    _controller_initializeTimeWindows(controller);
 
     info("running simulation");
 
@@ -511,9 +517,11 @@ gboolean controller_managerFinishedCurrentRound(Controller* controller,
      * until they have all notified us that they are finished */
 
     /* update our detected min jump time */
+    g_rw_lock_reader_lock(&controller->nextMinJumpTimeLock);
     if (controller->nextMinJumpTime != 0) {
         controller->minJumpTime = controller->nextMinJumpTime;
     }
+    g_rw_lock_reader_unlock(&controller->nextMinJumpTimeLock);
 
     /* update the next interval window based on next event times */
     SimulationTime newStart = minNextEventTime;
@@ -536,13 +544,15 @@ gboolean controller_managerFinishedCurrentRound(Controller* controller,
     return newStart < newEnd ? TRUE : FALSE;
 }
 
-gdouble controller_getLatency(Controller* controller, Address* srcAddress, Address* dstAddress) {
+SimulationTime controller_getLatency(Controller* controller, Address* srcAddress,
+                                     Address* dstAddress) {
     MAGIC_ASSERT(controller);
-    // shadow uses latency in milliseconds
-    return routinginfo_getLatencyNs(controller->routingInfo, controller->ipAssignment,
-                                    htonl(address_toHostIP(srcAddress)),
-                                    htonl(address_toHostIP(dstAddress))) /
-           1000000.0;
+
+    uint64_t latencyNs = routinginfo_getLatencyNs(controller->routingInfo, controller->ipAssignment,
+                                                  htonl(address_toHostIP(srcAddress)),
+                                                  htonl(address_toHostIP(dstAddress)));
+
+    return latencyNs * SIMTIME_ONE_NANOSECOND;
 }
 
 gfloat controller_getReliability(Controller* controller, Address* srcAddress, Address* dstAddress) {

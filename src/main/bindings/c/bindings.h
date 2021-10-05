@@ -253,6 +253,8 @@ SimulationTime config_getHeartbeatInterval(const struct ConfigOptions *config);
 
 SimulationTime config_getRunahead(const struct ConfigOptions *config);
 
+bool config_getUseDynamicMinJumpTime(const struct ConfigOptions *config);
+
 bool config_getUseCpuPinning(const struct ConfigOptions *config);
 
 enum InterposeMethod config_getInterposeMethod(const struct ConfigOptions *config);
@@ -405,6 +407,8 @@ SimulationTime _worker_getRoundEndTime(void);
 void worker_setCurrentTime(SimulationTime t);
 
 SimulationTime worker_getCurrentTime(void);
+
+void worker_updateMinTimeJump(SimulationTime t);
 
 void _worker_setLastEventTime(SimulationTime t);
 

@@ -24,7 +24,9 @@ gdouble controller_getRunTimeElapsed(Controller*);
 
 gboolean controller_managerFinishedCurrentRound(Controller*, SimulationTime, SimulationTime*,
                                                 SimulationTime*);
-gdouble controller_getLatency(Controller* controller, Address* srcAddress, Address* dstAddress);
+void controller_updateMinTimeJump(Controller* controller, SimulationTime minPathLatency);
+SimulationTime controller_getLatency(Controller* controller, Address* srcAddress,
+                                     Address* dstAddress);
 gfloat controller_getReliability(Controller* controller, Address* srcAddress, Address* dstAddress);
 bool controller_isRoutable(Controller* controller, Address* srcAddress, Address* dstAddress);
 void controller_incrementPacketCount(Controller* controller, Address* srcAddress,

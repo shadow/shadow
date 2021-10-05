@@ -305,6 +305,11 @@ pub struct ExperimentalOptions {
     #[clap(about = EXP_HELP.get("runahead").unwrap())]
     pub runahead: Option<units::Time<units::TimePrefix>>,
 
+    /// Update the minimum jump time dynamically throughout the simulation.
+    #[clap(long, value_name = "bool")]
+    #[clap(about = EXP_HELP.get("use_dynamic_min_jump_time").unwrap())]
+    pub use_dynamic_min_jump_time: Option<bool>,
+
     /// The event scheduler's policy for thread synchronization
     #[clap(long, value_name = "policy")]
     #[clap(about = EXP_HELP.get("scheduler_policy").unwrap())]
@@ -400,6 +405,7 @@ impl Default for ExperimentalOptions {
             use_cpu_pinning: Some(true),
             interpose_method: Some(InterposeMethod::Preload),
             runahead: None,
+            use_dynamic_min_jump_time: Some(false),
             scheduler_policy: Some(SchedulerPolicy::Host),
             socket_send_buffer: Some(units::Bytes::new(131_072, units::SiPrefixUpper::Base)),
             socket_send_autotune: Some(true),
@@ -1018,6 +1024,13 @@ mod export {
             // shadow uses a value of 0 as "not set" instead of SIMTIME_INVALID
             None => 0,
         }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getUseDynamicMinJumpTime(config: *const ConfigOptions) -> bool {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        config.experimental.use_dynamic_min_jump_time.unwrap()
     }
 
     #[no_mangle]

@@ -14,6 +14,7 @@ use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
 use std::cell::RefCell;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(u32);
@@ -53,6 +54,10 @@ pub struct Worker {
     clock: Clock,
     bootstrap_end_time: EmulatedTime,
 
+    // This value is not the minimum latency of the simulation, but just a saved copy of this
+    // worker's minimum latency.
+    min_latency_cache: Option<Duration>,
+
     // A counter for all syscalls made by processes freed by this worker.
     syscall_counter: Counter,
     // A counter for objects allocated by this worker.
@@ -88,6 +93,7 @@ impl Worker {
                     barrier: None,
                 },
                 bootstrap_end_time,
+                min_latency_cache: None,
                 object_alloc_counter: Counter::new(),
                 object_dealloc_counter: Counter::new(),
                 syscall_counter: Counter::new(),
@@ -203,6 +209,31 @@ impl Worker {
 
     fn set_last_event_time(t: EmulatedTime) {
         Worker::with_mut(|w| w.clock.last.replace(t)).unwrap();
+    }
+
+    pub fn update_min_time_jump(t: Duration) {
+        assert!(!t.is_zero());
+
+        let updated = Worker::with_mut(|w| {
+            if w.min_latency_cache.is_none() || t < w.min_latency_cache.unwrap() {
+                w.min_latency_cache = Some(t);
+                return true;
+            }
+            false
+        })
+        .unwrap();
+
+        if updated {
+            Worker::with(|w| {
+                unsafe {
+                    cshadow::workerpool_updateMinTimeJump(
+                        w.worker_pool,
+                        SimulationTime::to_c_simtime(Some(t.into())),
+                    )
+                };
+            })
+            .unwrap();
+        }
     }
 
     // Runs `f` with a shared reference to the current thread's Worker. Returns
@@ -331,6 +362,11 @@ mod export {
     #[no_mangle]
     pub extern "C" fn worker_getCurrentTime() -> cshadow::SimulationTime {
         SimulationTime::to_c_simtime(Worker::current_time().map(|t| t.to_abs_simtime()))
+    }
+
+    #[no_mangle]
+    pub extern "C" fn worker_updateMinTimeJump(t: cshadow::SimulationTime) {
+        Worker::update_min_time_jump(*SimulationTime::from_c_simtime(t).unwrap());
     }
 
     #[no_mangle]
