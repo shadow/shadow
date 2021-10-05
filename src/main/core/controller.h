@@ -20,7 +20,6 @@ Controller* controller_new(const ConfigOptions*);
 void controller_free(Controller*);
 gint controller_run(Controller*);
 
-void controller_updateMinTimeJumpNs(Controller*, uint64_t);
 gdouble controller_getRunTimeElapsed(Controller*);
 
 gboolean controller_managerFinishedCurrentRound(Controller*, SimulationTime, SimulationTime*,

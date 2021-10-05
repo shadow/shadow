@@ -152,7 +152,7 @@ static SimulationTime _controller_getMinTimeJump(Controller* controller) {
     return minJumpTime;
 }
 
-void controller_updateMinTimeJumpNs(Controller* controller, uint64_t minPathLatencyNs) {
+static void _controller_updateMinTimeJumpNs(Controller* controller, uint64_t minPathLatencyNs) {
     MAGIC_ASSERT(controller);
     SimulationTime minPathLatencySimTime = minPathLatencyNs * SIMTIME_ONE_NANOSECOND;
 
@@ -472,7 +472,7 @@ gint controller_run(Controller* controller) {
         return 1;
     }
 
-    controller_updateMinTimeJumpNs(
+    _controller_updateMinTimeJumpNs(
         controller, routinginfo_smallestLatencyNs(controller->routingInfo));
 
     /* we don't need the network graph anymore, so free it to save memory */
