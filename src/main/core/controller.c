@@ -93,6 +93,9 @@ Controller* controller_new(const ConfigOptions* config) {
 
     controller->minJumpTimeConfig = config_getRunahead(config);
 
+    controller->endTime = config_getStopTime(config);
+    controller->bootstrapEndTime = config_getBootstrapEndTime(config);
+
     /* these are only avail in glib >= 2.30
      * setup signal handlers for gracefully handling shutdowns */
     //  TODO
@@ -187,14 +190,9 @@ static gboolean _controller_loadNetworkGraph(Controller* controller) {
 static void _controller_initializeTimeWindows(Controller* controller) {
     MAGIC_ASSERT(controller);
 
-    /* set simulation end time */
-    controller->endTime = config_getStopTime(controller->config);
-
     controller->executeWindowStart = 0;
     SimulationTime jump = _controller_getMinTimeJump(controller);
     controller->executeWindowEnd = jump;
-
-    controller->bootstrapEndTime = config_getBootstrapEndTime(controller->config);
 }
 
 static void _controller_registerArgCallback(const char* arg, void* _argArray) {
