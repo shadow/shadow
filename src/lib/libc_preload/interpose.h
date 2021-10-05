@@ -1,3 +1,8 @@
+/*
+ * The Shadow Simulator
+ * See LICENSE for licensing information
+ */
+
 // To get the SYS_xxx defs. Do not include other headers in the same file where
 // interpose.h is included in order to avoid conflicts.
 #include <sys/syscall.h>

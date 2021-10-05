@@ -32,15 +32,15 @@ for line in data.splitlines():
     syscalls[str(name)] = [num, str(entry)]
 
 header = \
-'''// This file is generated with the 'generate_syscalls_c.py' script and in
-// general SHOULD NOT be edited manually.
-//
-// This file contains a symbol for every system call (i.e., in man section 2;
-// see `man man`). Those that contain syscall wrapper functions in libc will be
-// intercepted and redirected to `syscall()`.
-//
-// NOTE: defining a syscall here does not always mean it's handled by Shadow.
-// See `src/main/host/syscall_handler.c` for a list of syscalls Shadow handles.
+'''/// This file is generated with the 'gen_syscall_wrappers_c.py' script and in
+/// general SHOULD NOT be edited manually.
+///
+/// This file contains a symbol for every system call (i.e., in man section 2;
+/// see `man man`). Those for which a syscall wrapper function exists in libc
+/// will be intercepted and redirected to `syscall()`.
+///
+/// NOTE: defining a syscall here does not always mean it's handled by Shadow.
+/// See `src/main/host/syscall_handler.c` for the syscalls that Shadow handles.
 
 // To get the INTERPOSE defs. Do not include other headers to avoid conflicts.
 #include "interpose.h"

@@ -8,15 +8,28 @@
 
 #include "lib/shim/shim_api.h"
 
-/// The purpose of the injector library is to inject the shim into the process
-/// space of each managed process, since the shim is needed for interaction with
-/// Shadow. (Technically, the shim will already be injected if there are other
-/// preloaded libraries that link to it, but this library provides a minimally
-/// invasive way to inject the shim without preloading other symbols.)
+/// The purpose of the injector library is to facilitate connecting Shadow to
+/// each of the managed processes that it runs. This interaction is controlled
+/// using a shim. We have two main goals:
 ///
-/// One goal is to ensure the shim is injected, so we link to it and call one
-/// shim function in a constructor. The other goal is to be minimally invasive,
-/// so let's not define any other symbols here.
+///   1. Inject the shim into the managaged process space.
+///   2. Be minimally invasive, i.e., do not unnecessarily intercept functions
+///      called by the managed process.
+///
+/// We accomplish the first goal by preloading the injector lib, which links to
+/// the shim and calls a shim function in a constructor (to ensure that the shim
+/// does get loaded). We accomplish the second goal by defining no other
+/// functions in this injector lib, which decouples shim injection from function
+/// interception.
+///
+/// Notes:
+///
+///   - We do not preload the shim directly because it does not meet the second
+///   goal of being minimally invasive.
+///   - Technically, the shim will already be injected if there are other
+/// preloaded libraries that link to it. But the injector library enables a
+/// minimally invasive way to inject the shim that works even if those other
+/// libraries are not preloaded.
 
 // A constructor is used to load the shim as soon as possible.
 __attribute__((constructor, used)) void _injector_load() {
@@ -25,3 +38,5 @@ __attribute__((constructor, used)) void _injector_load() {
     shim_api_syscall(SYS_time, NULL);
     return;
 }
+
+// Do NOT define other symbols.

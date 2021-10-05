@@ -1,6 +1,10 @@
-// This file contains a symbol for some libc library calls (i.e., in man section 3;
-// see `man man`). Some of them are redirected to the equivalent syscall, and some
-// of them need to be handled specially for Shadow.
+/*
+ * The Shadow Simulator
+ * See LICENSE for licensing information
+ */
+
+/// This file contains a symbol for some libc library calls (i.e., in man
+/// section 3; see `man man`) that we can redirect to an equivalent syscall.
 
 // To get the INTERPOSE defs. Do not include other headers to avoid conflicts.
 #include "interpose.h"

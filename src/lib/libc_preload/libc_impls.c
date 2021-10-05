@@ -1,3 +1,16 @@
+/*
+ * The Shadow Simulator
+ * See LICENSE for licensing information
+ */
+
+/// This file contains functions from libc that we want to interpose but that
+/// require a bit more code than the minimal syscall and libcall wrappers.
+/// Because we do not include interpose.h here, we are free to include other
+/// header files as needed. However, we should limit the implementations here as
+/// much as possible to very basic logic such as function redirections. Any
+/// substantial implementations should be provided in the shim instead, and made
+/// available through shim_api.h.
+
 #include <assert.h>
 #include <errno.h>
 #include <netdb.h>
@@ -14,14 +27,6 @@
 #include <unistd.h>
 
 #include "lib/shim/shim_api.h"
-
-/// This file contains functions from libc that we want to interpose but that
-/// require a bit more code than the minimal syscall and libcall wrappers.
-/// Because we do not include interpose.h here, we are free to include other
-/// header files as needed. However, we should limit the implementations here as
-/// much as possible to very basic logic such as function redirections. Any
-/// substantial implementations should be provided in the shim instead, and made
-/// available through shim_api.h.
 
 // man 2 syscall
 // This function drives all of our wrappers over to the shim.
