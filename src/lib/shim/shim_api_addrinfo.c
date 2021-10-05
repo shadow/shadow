@@ -1,65 +1,24 @@
-// Defines higher-level functions C library functions: those that are
-// documented in man section 3. (See `man man`).
-//
-// Throughout: we set errno=ENOTSUP if we hit unimplemented code paths.
-
+/*
+ * The Shadow Simulator
+ * See LICENSE for licensing information
+ */
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <glib.h>
-#include <ifaddrs.h>
-#include <net/if.h>
 #include <netdb.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/statfs.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
-#include <sys/utsname.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
 #include "lib/shim/shim_event.h"
-
-// man 3 usleep
-int usleep(useconds_t usec) {
-    struct timespec req, rem;
-    req.tv_sec = usec / 1000000;
-    const long remaining_usec = usec - req.tv_sec * 1000000;
-    req.tv_nsec = remaining_usec * 1000;
-
-    return nanosleep(&req, &rem);
-}
-
-// man 3 sleep
-unsigned int sleep(unsigned int seconds) {
-    struct timespec req = {.tv_sec = seconds};
-    struct timespec rem = { 0 };
-
-    if (nanosleep(&req, &rem) == 0) {
-        return 0;
-    }
-
-    return rem.tv_sec;
-}
-
-// man send
-ssize_t send(int sockfd, const void* buf, size_t len, int flags) {
-    // An equivalent syscall is available
-    return sendto(sockfd, buf, len, flags, NULL, 0);
-}
-
-// man recv
-ssize_t recv(int sockfd, void* buf, size_t len, int flags) {
-    // An equivalent syscall is available
-    return recvfrom(sockfd, buf, len, flags, NULL, NULL);
-}
 
 // Sets `port` to the port specified by `service`, according to the criteria in
 // getaddrinfo(3). Returns 0 on success or the appropriate getaddrinfo error on
@@ -83,8 +42,7 @@ static int _getaddrinfo_service(in_port_t* port, const char* service,
     char* buf = malloc(1024);
     struct servent servent;
     struct servent* result;
-    int rv =
-        getservbyname_r(service, NULL, &servent, buf, 1024, &result);
+    int rv = getservbyname_r(service, NULL, &servent, buf, 1024, &result);
     if (rv != 0) {
         // According to getservbyname_r(3): "On error, they return one of the
         // positive error numbers listed in errors." The only one documented as
@@ -116,9 +74,8 @@ static int _getaddrinfo_service(in_port_t* port, const char* service,
 // Creates an `addrinfo` pointing to `addr`, and adds it to the linked list
 // specified by `head` and `tail`. An empty list can be passed in by setting
 // `*head` and `*tail` to NULL.
-static void _getaddrinfo_append(struct addrinfo** head, struct addrinfo** tail,
-                                int socktype, struct sockaddr* addr,
-                                socklen_t addrlen) {
+static void _getaddrinfo_append(struct addrinfo** head, struct addrinfo** tail, int socktype,
+                                struct sockaddr* addr, socklen_t addrlen) {
     int protocol = 0;
     if (socktype == SOCK_DGRAM) {
         protocol = IPPROTO_UDP;
@@ -149,40 +106,30 @@ static void _getaddrinfo_append(struct addrinfo** head, struct addrinfo** tail,
 
 // IPv4 wrapper for _getaddrinfo_append. Appends an entry for the address and
 // port for each requested socket type.
-static void _getaddrinfo_appendv4(struct addrinfo** head,
-                                  struct addrinfo** tail, bool add_tcp,
-                                  bool add_udp, bool add_raw, uint32_t s_addr,
-                                  in_port_t port) {
+static void _getaddrinfo_appendv4(struct addrinfo** head, struct addrinfo** tail, bool add_tcp,
+                                  bool add_udp, bool add_raw, uint32_t s_addr, in_port_t port) {
     if (add_tcp) {
         struct sockaddr_in* sai = malloc(sizeof(*sai));
-        *sai = (struct sockaddr_in){
-            .sin_family = AF_INET, .sin_port = port, .sin_addr = {s_addr}};
-        _getaddrinfo_append(
-            head, tail, SOCK_STREAM, (struct sockaddr*)sai, sizeof(*sai));
+        *sai = (struct sockaddr_in){.sin_family = AF_INET, .sin_port = port, .sin_addr = {s_addr}};
+        _getaddrinfo_append(head, tail, SOCK_STREAM, (struct sockaddr*)sai, sizeof(*sai));
     }
     if (add_udp) {
         struct sockaddr_in* sai = malloc(sizeof(*sai));
-        *sai = (struct sockaddr_in){
-            .sin_family = AF_INET, .sin_port = port, .sin_addr = {s_addr}};
-        _getaddrinfo_append(
-            head, tail, SOCK_DGRAM, (struct sockaddr*)sai, sizeof(*sai));
+        *sai = (struct sockaddr_in){.sin_family = AF_INET, .sin_port = port, .sin_addr = {s_addr}};
+        _getaddrinfo_append(head, tail, SOCK_DGRAM, (struct sockaddr*)sai, sizeof(*sai));
     }
     if (add_raw) {
         struct sockaddr_in* sai = malloc(sizeof(*sai));
-        *sai = (struct sockaddr_in){
-            .sin_family = AF_INET, .sin_port = port, .sin_addr = {s_addr}};
-        _getaddrinfo_append(
-            head, tail, SOCK_RAW, (struct sockaddr*)sai, sizeof(*sai));
+        *sai = (struct sockaddr_in){.sin_family = AF_INET, .sin_port = port, .sin_addr = {s_addr}};
+        _getaddrinfo_append(head, tail, SOCK_RAW, (struct sockaddr*)sai, sizeof(*sai));
     }
 }
 
 // Looks for matching IPv4 addresses in /etc/hosts and them to the list
 // specified by `head` and `tail`.
-static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
-                                                 struct addrinfo** tail,
-                                                 const char* node, bool add_tcp,
-                                                 bool add_udp, bool add_raw,
-                                                 in_port_t port) {
+static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head, struct addrinfo** tail,
+                                                 const char* node, bool add_tcp, bool add_udp,
+                                                 bool add_raw, in_port_t port) {
     // TODO: Parse hosts file once and keep it in an efficiently-searchable
     // in-memory format.
     GError* error = NULL;
@@ -206,9 +153,7 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
         gchar* escaped_node = g_regex_escape_string(node, -1);
         // Build a regex to match an IPv4 address entry for the given `node` in
         // /etc/hosts. See HOSTS(5) for format specification.
-        int rv =
-            asprintf(&pattern, "^(\\d+\\.\\d+\\.\\d+\\.\\d+)[^#\n]*\\b%s\\b",
-                     escaped_node);
+        int rv = asprintf(&pattern, "^(\\d+\\.\\d+\\.\\d+\\.\\d+)[^#\n]*\\b%s\\b", escaped_node);
         g_free(escaped_node);
         if (rv < 0) {
             panic("asprintf failed: %d", rv);
@@ -244,8 +189,7 @@ static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head,
         if (rv != 1) {
             panic("Bad address in /etc/hosts: %s\n", address_string);
         } else {
-            _getaddrinfo_appendv4(
-                head, tail, add_tcp, add_udp, add_raw, addr, port);
+            _getaddrinfo_appendv4(head, tail, add_tcp, add_udp, add_raw, addr, port);
         }
         g_free(address_string);
     }
@@ -287,9 +231,8 @@ static bool _syscall_hostname_to_addr_ipv4(const char* node, uint32_t* addr) {
     }
 }
 
-// man 3 getaddrinfo
-int getaddrinfo(const char* node, const char* service,
-                const struct addrinfo* hints, struct addrinfo** res) {
+int shim_api_getaddrinfo(const char* node, const char* service, const struct addrinfo* hints,
+                         struct addrinfo** res) {
     // Quoted text is from the man page.
 
     // "Either node or service, but not both, may be NULL."
@@ -301,11 +244,10 @@ int getaddrinfo(const char* node, const char* service,
     // "Specifying  hints  as  NULL  is  equivalent  to setting ai_socktype and
     // ai_protocol to 0; ai_family to AF_UNSPEC; and ai_flags to (AI_V4MAPPED |
     // AI_ADDRCONFIG).
-    static const struct addrinfo default_hints = {
-        .ai_socktype = 0,
-        .ai_protocol = 0,
-        .ai_family = AF_UNSPEC,
-        .ai_flags = AI_V4MAPPED | AI_ADDRCONFIG};
+    static const struct addrinfo default_hints = {.ai_socktype = 0,
+                                                  .ai_protocol = 0,
+                                                  .ai_family = AF_UNSPEC,
+                                                  .ai_flags = AI_V4MAPPED | AI_ADDRCONFIG};
     if (hints == NULL) {
         hints = &default_hints;
     }
@@ -327,15 +269,12 @@ int getaddrinfo(const char* node, const char* service,
     // Experimentally, glibc doesn't pay attention to which protocols are
     // specified for the given port in /etc/services; it returns all protocols
     // that are compatible with `hints`. We do the same for compatibility.
-    bool add_tcp =
-        (hints->ai_socktype == 0 || hints->ai_socktype == SOCK_STREAM) &&
-        (hints->ai_protocol == 0 || hints->ai_protocol == IPPROTO_TCP);
-    bool add_udp =
-        (hints->ai_socktype == 0 || hints->ai_socktype == SOCK_DGRAM) &&
-        (hints->ai_protocol == 0 || hints->ai_protocol == IPPROTO_UDP);
+    bool add_tcp = (hints->ai_socktype == 0 || hints->ai_socktype == SOCK_STREAM) &&
+                   (hints->ai_protocol == 0 || hints->ai_protocol == IPPROTO_TCP);
+    bool add_udp = (hints->ai_socktype == 0 || hints->ai_socktype == SOCK_DGRAM) &&
+                   (hints->ai_protocol == 0 || hints->ai_protocol == IPPROTO_UDP);
     bool add_raw =
-        (hints->ai_socktype == 0 || hints->ai_socktype == SOCK_RAW) &&
-        (hints->ai_protocol == 0);
+        (hints->ai_socktype == 0 || hints->ai_socktype == SOCK_RAW) && (hints->ai_protocol == 0);
 
     // "If hints.ai_flags includes the AI_ADDRCONFIG flag, then IPv4 addresses
     // are returned in the list pointed to by  res  only  if  the local  system
@@ -354,14 +293,12 @@ int getaddrinfo(const char* node, const char* service,
     //
     // Here we constrain which protocols to consider, so that we can not bother
     // doing lookups for other protocols.
-    const bool add_ipv4 =
-        hints->ai_family == AF_UNSPEC ||
-        (hints->ai_family == AF_INET &&
-         !((hints->ai_flags & AI_ADDRCONFIG) && !system_has_an_ipv4_address));
-    const bool add_ipv6 =
-        hints->ai_family == AF_UNSPEC ||
-        (hints->ai_family == AF_INET6 &&
-         !((hints->ai_flags & AI_ADDRCONFIG) && !system_has_an_ipv6_address));
+    const bool add_ipv4 = hints->ai_family == AF_UNSPEC ||
+                          (hints->ai_family == AF_INET &&
+                           !((hints->ai_flags & AI_ADDRCONFIG) && !system_has_an_ipv4_address));
+    const bool add_ipv6 = hints->ai_family == AF_UNSPEC ||
+                          (hints->ai_family == AF_INET6 &&
+                           !((hints->ai_flags & AI_ADDRCONFIG) && !system_has_an_ipv6_address));
 
     // "EAI_ADDRFAMILY: The specified network host does not have any network
     // addresses in the requested address family."
@@ -384,8 +321,8 @@ int getaddrinfo(const char* node, const char* service,
             // (INADDR_ANY for IPv4 addresses, IN6ADDR_ANY_INIT for IPv6
             // address)."
             if (add_ipv4) {
-                _getaddrinfo_appendv4(res, &tail, add_tcp, add_udp, add_raw,
-                                      ntohl(INADDR_ANY), port);
+                _getaddrinfo_appendv4(
+                    res, &tail, add_tcp, add_udp, add_raw, ntohl(INADDR_ANY), port);
             }
             if (add_ipv6) {
                 // TODO: IPv6
@@ -398,8 +335,8 @@ int getaddrinfo(const char* node, const char* service,
             // (INADDR_LOOP‐ BACK  for  IPv4  addresses, IN6ADDR_LOOPBACK_INIT
             // for IPv6 address);"
             if (add_ipv4) {
-                _getaddrinfo_appendv4(res, &tail, add_tcp, add_udp, add_raw,
-                                      ntohl(INADDR_LOOPBACK), port);
+                _getaddrinfo_appendv4(
+                    res, &tail, add_tcp, add_udp, add_raw, ntohl(INADDR_LOOPBACK), port);
             }
             if (add_ipv6) {
                 // TODO: IPv6
@@ -416,8 +353,7 @@ int getaddrinfo(const char* node, const char* service,
     if (add_ipv4) {
         uint32_t addr;
         if (inet_pton(AF_INET, node, &addr) == 1) {
-            _getaddrinfo_appendv4(
-                res, &tail, add_tcp, add_udp, add_raw, addr, port);
+            _getaddrinfo_appendv4(res, &tail, add_tcp, add_udp, add_raw, addr, port);
         }
     }
     // If we successfully parsed as a numeric address, there's no need to
@@ -471,7 +407,7 @@ int getaddrinfo(const char* node, const char* service,
     return 0;
 }
 
-void freeaddrinfo(struct addrinfo* res) {
+void shim_api_freeaddrinfo(struct addrinfo* res) {
     while (res != NULL) {
         struct addrinfo* next = res->ai_next;
         assert(res->ai_addr != NULL);
@@ -481,174 +417,4 @@ void freeaddrinfo(struct addrinfo* res) {
         free(res);
         res = next;
     }
-}
-
-int gethostname(char* name, size_t len) {
-    struct utsname utsname;
-    if (uname(&utsname) < 0) {
-        return -1;
-    }
-    strncpy(name, utsname.nodename, len);
-    if (len == 0 || name[len-1] != '\0') {
-        errno = ENAMETOOLONG;
-        return -1;
-    }
-    return 0;
-}
-
-static void _convert_stat_to_stat64(struct stat* s, struct stat64* s64) {
-    memset(s64, 0, sizeof(*s64));
-
-    #define COPY_X(x) s64->x = s->x
-    COPY_X(st_dev);
-    COPY_X(st_ino);
-    COPY_X(st_nlink);
-    COPY_X(st_mode);
-    COPY_X(st_uid);
-    COPY_X(st_gid);
-    COPY_X(st_rdev);
-    COPY_X(st_size);
-    COPY_X(st_blksize);
-    COPY_X(st_blocks);
-    COPY_X(st_atim);
-    COPY_X(st_mtim);
-    COPY_X(st_ctim);
-    #undef COPY_X
-}
-
-static void _convert_statfs_to_statfs64(struct statfs* s, struct statfs64* s64) {
-    memset(s64, 0, sizeof(*s64));
-
-    #define COPY_X(x) s64->x = s->x
-    COPY_X(f_type);
-    COPY_X(f_bsize);
-    COPY_X(f_blocks);
-    COPY_X(f_bfree);
-    COPY_X(f_bavail);
-    COPY_X(f_files);
-    COPY_X(f_ffree);
-    COPY_X(f_fsid);
-    COPY_X(f_namelen);
-    COPY_X(f_frsize);
-    COPY_X(f_flags);
-    #undef COPY_X
-}
-
-// Some platforms define fstat and fstatfs as macros. We should call 'syscall()' directly since
-// calling for example 'fstat()' will not necessarily call shadow's 'fstat()' wrapper defined in
-// 'preload_syscalls.c'.
-
-int fstat64(int a, struct stat64* b) {
-    struct stat s;
-    int rv = syscall(SYS_fstat, a, &s);
-    _convert_stat_to_stat64(&s, b);
-    return rv;
-}
-
-int fstatfs64(int a, struct statfs64* b) {
-    struct statfs s;
-    int rv = syscall(SYS_fstatfs, a, &s);
-    _convert_statfs_to_statfs64(&s, b);
-    return rv;
-}
-
-int __fxstat(int ver, int a, struct stat* b) {
-    // on x86_64 with a modern kernel, glibc should use the same stat struct as the kernel, so check
-    // that this function was indeed called with the expected stat struct
-    if (ver != 1 /* _STAT_VER_KERNEL for x86_64 */) {
-        panic("__fxstat called with unexpected ver of %d", ver);
-        errno = EINVAL;
-        return -1;
-    }
-
-    return syscall(SYS_fstat, a, b);
-}
-
-int __fxstat64(int ver, int a, struct stat64* b) {
-    // on x86_64 with a modern kernel, glibc should use the same stat struct as the kernel, so check
-    // that this function was indeed called with the expected stat struct
-    if (ver != 1 /* _STAT_VER_KERNEL for x86_64 */) {
-        panic("__fxstat64 called with unexpected ver of %d", ver);
-        errno = EINVAL;
-        return -1;
-    }
-
-    struct stat s;
-    int rv = syscall(SYS_fstat, a, &s);
-    _convert_stat_to_stat64(&s, b);
-    return rv;
-}
-
-int getifaddrs(struct ifaddrs** ifap) {
-    if (!ifap) {
-        errno = EFAULT;
-        return -1;
-    }
-
-    /* we always have loopback */
-    struct ifaddrs* i = calloc(1, sizeof(struct ifaddrs));
-    i->ifa_flags = (IFF_UP | IFF_RUNNING | IFF_LOOPBACK);
-    i->ifa_name = strdup("lo");
-
-    i->ifa_addr = calloc(1, sizeof(struct sockaddr));
-    i->ifa_addr->sa_family = AF_INET;
-
-    struct in_addr addr_buf;
-    if (inet_pton(AF_INET, "127.0.0.1", &addr_buf) == 1) {
-        ((struct sockaddr_in*)i->ifa_addr)->sin_addr = addr_buf;
-    } else {
-        errno = EADDRNOTAVAIL;
-        return -1;
-    }
-
-    /* get the hostname so we can use it to lookup the default net address */
-    char hostname_buf[HOST_NAME_MAX] = {};
-    if (gethostname(hostname_buf, HOST_NAME_MAX) == 0) {
-        struct addrinfo hints = {.ai_family = AF_INET, .ai_socktype = SOCK_STREAM};
-        struct addrinfo* host_ai;
-
-        /* lookup the default net address for the host */
-        if (getaddrinfo(hostname_buf, NULL, &hints, &host_ai) == 0) {
-            struct ifaddrs* j = calloc(1, sizeof(struct ifaddrs));
-            j->ifa_flags = (IFF_UP | IFF_RUNNING);
-            j->ifa_name = strdup("eth0");
-
-            j->ifa_addr = calloc(1, sizeof(struct sockaddr));
-            memcpy(j->ifa_addr, host_ai->ai_addr, (unsigned long)host_ai->ai_addrlen);
-
-            i->ifa_next = j;
-
-            freeaddrinfo(host_ai);
-        }
-    }
-
-    *ifap = i;
-    return 0;
-}
-
-void freeifaddrs(struct ifaddrs* ifa) {
-    struct ifaddrs* iter = ifa;
-    while (iter != NULL) {
-        struct ifaddrs* next = iter->ifa_next;
-        if (iter->ifa_addr) {
-            free(iter->ifa_addr);
-        }
-        if (iter->ifa_name) {
-            free(iter->ifa_name);
-        }
-        free(iter);
-        iter = next;
-    }
-}
-
-// man 3 localtime
-struct tm* localtime(const time_t* timep) {
-    // Return time relative to UTC rather than the locale where shadow is being run.
-    return gmtime(timep);
-}
-
-// man 3 localtime_r
-struct tm* localtime_r(const time_t* timep, struct tm* result) {
-    // Return time relative to UTC rather than the locale where shadow is being run.
-    return gmtime_r(timep, result);
 }

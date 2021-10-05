@@ -4,7 +4,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-#include "lib/shim/preload_syscall.h"
+#include "lib/shim/shim_syscall.h"
 
 int shadow_spin_init(shadow_spinlock_t *lock) {
     assert(lock);
@@ -23,7 +23,7 @@ int shadow_spin_lock(shadow_spinlock_t* lock) {
             break;
         }
         // Always make the real syscall
-        shadow_real_raw_syscall(SYS_sched_yield);
+        shim_native_syscall(SYS_sched_yield);
     }
     return 0;
 }

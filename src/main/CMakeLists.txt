@@ -17,6 +17,8 @@ include_directories(${RT_INCLUDES} ${DL_INCLUDES} ${M_INCLUDES} ${GLIB_INCLUDES}
 
 ## link to preload libs (rpath will not contain these paths when shadow is installed)
 link_directories(${CMAKE_BINARY_DIR}/src/lib/shim)
+link_directories(${CMAKE_BINARY_DIR}/src/lib/injector_preload)
+link_directories(${CMAKE_BINARY_DIR}/src/lib/libc_preload)
 link_directories(${CMAKE_BINARY_DIR}/src/lib/openssl_preload)
 
 ## compile defs and flags

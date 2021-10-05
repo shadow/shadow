@@ -1,30 +1,27 @@
-#ifndef SRC_SHIM_SHIM_SYSCALL_H_
-#define SRC_SHIM_SHIM_SYSCALL_H_
+#ifndef PRELOAD_SYSCALL_H
+#define PRELOAD_SYSCALL_H
 
 #include <stdarg.h>
-#include <stdbool.h>
 
-/// This module allows us to short-circuit syscalls that can be handled directly
-/// in the shim without needing to perform a more expensive inter-pocess syscall
-/// operation with shadow.
+// Ask the shim to handle a syscall. Internally decides whether to execute a
+// native syscall or to emulate the syscall through Shadow.
+long shim_syscall(long n, ...);
 
-// Caches the current simulation time to avoid invoking syscalls to get it.
-// Not thread safe, but doesn't matter since Shadow only permits
-// one thread at a time to run anyway.
-void shim_syscall_set_simtime_nanos(uint64_t simulation_nanos);
+// Same as `shim_syscall()`, but accepts a variable argument list.
+long shim_syscallv(long n, va_list args);
 
-// Returns the current cached simulation time, or 0 if it has not yet been set.
-uint64_t shim_syscall_get_simtime_nanos();
+// Force the native execution of a syscall instruction (using asm so it can't be
+// intercepted).
+long shim_native_syscall(long n, ...);
 
-// Attempt to service a syscall using shared memory if available.
-//
-// Returns true on success, meaning we indeed handled the syscall.
-// Returns false on failure, meaning we do not have the necessary information to
-// properly handle the syscall.
-//
-// If this function returns true, then the raw syscall result is returned
-// through `rv`.  e.g. for a syscall returning an error, it's the caller's
-// responsibility to set errno from `rv`.
-bool shim_syscall(long syscall_num, long* rv, va_list args);
+// Same as `shim_native_syscall()`, but accepts a variable argument list.
+// We disable inlining so seccomp can allow syscalls made from this function.
+long __attribute__((noinline)) shim_native_syscallv(long n, va_list args);
 
-#endif // SRC_SHIM_SHIM_SYSCALL_H_
+// Force the emulation of the syscall through Shadow.
+long shim_emulated_syscall(long n, ...);
+
+// Same as `shim_emulated_syscall()`, but accepts a variable argument list.
+long shim_emulated_syscallv(long n, va_list args);
+
+#endif

@@ -28,8 +28,13 @@
 #include "main/utility/random.h"
 #include "main/utility/utility.h"
 
-#define PRELOAD_SHIM_LIB_STR "libshadow-shim.so"
+#define PRELOAD_INJECTOR_LIB_STR "libshadow_injector.so"
+#define PRELOAD_LIBC_LIB_STR "libshadow_libc.so"
 #define PRELOAD_OPENSSL_RNG_LIB_STR "libshadow_openssl_rng.so"
+
+// Allow turning off libc preloading at run-time.
+static bool _use_libc_preload = true;
+ADD_CONFIG_HANDLER(config_getUseLibcPreload, _use_libc_preload)
 
 // Allow turning off openssl rng lib preloading at run-time.
 static bool _use_openssl_rng_preload = true;
@@ -76,9 +81,12 @@ struct _Manager {
     gchar* dataPath;
     gchar* hostsPath;
 
-    // Path to the shim that we preload for every managed process.
-    gchar* preloadShimPath;
-    // Path to the openssl rng lib that we preload for requesting managed processes.
+    // Path to the injector lib that we preload for managed processes (if no other
+    // lib is preloaded).
+    gchar* preloadInjectorPath;
+    // Path to the libc lib that we preload for managed processes.
+    gchar* preloadLibcPath;
+    // Path to the openssl rng lib that we preload for managed processes.
     gchar* preloadOpensslRngPath;
 
     StatusBar_ShadowStatusBarState* statusBar;
@@ -168,6 +176,19 @@ static gchar* _manager_scanRPathForLib(const gchar* libname) {
     return preloadArgValue;
 }
 
+static gchar* _manager_getRequiredPreloadPath(const gchar* libname) {
+    gchar* libpath = _manager_scanRPathForLib(libname);
+
+    if (libpath != NULL) {
+        info("Found required preload library %s at path %s.", libname, libpath);
+    } else {
+        // This is a panic because the preload path is not input by the user.
+        utility_panic("Could not find required preload library %s in rpath.", libname);
+    }
+
+    return libpath;
+}
+
 static guint _manager_nextRandomUInt(Manager* manager) {
     MAGIC_ASSERT(manager);
     _manager_lock(manager);
@@ -205,22 +226,23 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
         trace("raw manager cpu frequency unavailable, using 2,500,000 KHz");
     }
 
-    manager->preloadShimPath = _manager_scanRPathForLib(PRELOAD_SHIM_LIB_STR);
-    if (manager->preloadShimPath != NULL) {
-        info("found required preload library %s at path %s", PRELOAD_SHIM_LIB_STR,
-             manager->preloadShimPath);
+    // We always preload the injector lib to ensure that the shim is loaded into
+    // the managed processes.
+    manager->preloadInjectorPath = _manager_getRequiredPreloadPath(PRELOAD_INJECTOR_LIB_STR);
+
+    // Only required if option is enabled.
+    if (_use_libc_preload) {
+        manager->preloadLibcPath = _manager_getRequiredPreloadPath(PRELOAD_LIBC_LIB_STR);
     } else {
-        // The shim is required, so panic if we can't find it.
-        utility_panic("could not find required preload library %s in rpath", PRELOAD_SHIM_LIB_STR);
+        info("Preloading the libc library is disabled.");
     }
 
-    manager->preloadOpensslRngPath = _manager_scanRPathForLib(PRELOAD_OPENSSL_RNG_LIB_STR);
-    if (manager->preloadOpensslRngPath != NULL) {
-        info("found optional preload library %s at path %s", PRELOAD_OPENSSL_RNG_LIB_STR,
-             manager->preloadOpensslRngPath);
+    // Only required if option is enabled.
+    if (_use_openssl_rng_preload) {
+        manager->preloadOpensslRngPath =
+            _manager_getRequiredPreloadPath(PRELOAD_OPENSSL_RNG_LIB_STR);
     } else {
-        // The Openssl Rng is optional and may not be used by and managed processes.
-        warning("could not find optional preload library %s in rpath", PRELOAD_OPENSSL_RNG_LIB_STR);
+        info("Preloading the openssl rng library is disabled.");
     }
 
     /* the main scheduler may utilize multiple threads */
@@ -371,8 +393,11 @@ gint manager_free(Manager* manager) {
     if (manager->random) {
         random_free(manager->random);
     }
-    if (manager->preloadShimPath) {
-        g_free(manager->preloadShimPath);
+    if (manager->preloadInjectorPath) {
+        g_free(manager->preloadInjectorPath);
+    }
+    if (manager->preloadLibcPath) {
+        g_free(manager->preloadLibcPath);
     }
     if (manager->preloadOpensslRngPath) {
         g_free(manager->preloadOpensslRngPath);
@@ -448,20 +473,22 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
 
     /* insert also the plugin preload entry if one exists.
      * precendence here is:
-     *   - preload path of the shim
+     *   - preload path of the injector
+     *   - preload path of the libc lib
      *   - preload path of the openssl rng lib
      *   - preload values from LD_PRELOAD entries in the environment process option */
     GPtrArray* ldPreloadArray = g_ptr_array_new();
 
-    if (manager->preloadShimPath != NULL) {
-        debug("adding Shadow preload shim path %s", manager->preloadShimPath);
-        g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadShimPath));
+    debug("Adding Shadow injector lib path %s", manager->preloadInjectorPath);
+    g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadInjectorPath));
+
+    if (_use_libc_preload) {
+        debug("Adding Shadow libc lib path %s", manager->preloadLibcPath);
+        g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadLibcPath));
     }
 
-    if (!_use_openssl_rng_preload) {
-        debug("openssl rng preloading is disabled");
-    } else if (manager->preloadOpensslRngPath != NULL) {
-        debug("adding Shadow preload lib path %s", manager->preloadOpensslRngPath);
+    if (_use_openssl_rng_preload) {
+        debug("Adding Shadow openssl rng lib path %s", manager->preloadOpensslRngPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadOpensslRngPath));
     }
 

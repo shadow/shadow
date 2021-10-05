@@ -1,138 +1,274 @@
-/*
- * The Shadow Simulator
- * See LICENSE for licensing information
- */
-
+#include <alloca.h>
 #include <assert.h>
 #include <errno.h>
-#include <stdarg.h>
-#include <stdbool.h>
+#include <stdlib.h>
 #include <sys/syscall.h>
-#include <sys/time.h>
-#include <time.h>
 
 #include "lib/logger/logger.h"
+#include "lib/shim/ipc.h"
 #include "lib/shim/shim.h"
-#include "lib/shim/shim_syscall.h"
-#include "main/core/support/definitions.h" // for SIMTIME definitions
+#include "lib/shim/shim_event.h"
+#include "lib/shim/shim_shmem.h"
+#include "lib/shim/shim_sys.h"
+#include "lib/shim/shim_tls.h"
+#include "main/host/syscall/kernel_types.h"
+#include "main/shmem/shmem_allocator.h"
 
-// We store the simulation time using timespec to reduce the number of
-// conversions that we need to do while servicing syscalls.
-static struct timespec _cached_simulation_time = {0};
+// Never inline, so that the seccomp filter can reliably whitelist a syscall from
+// this function.
+// TODO: Drop if/when we whitelist using /proc/self/maps
+long __attribute__((noinline)) shim_native_syscallv(long n, va_list args) {
+    long arg1 = va_arg(args, long);
+    long arg2 = va_arg(args, long);
+    long arg3 = va_arg(args, long);
+    long arg4 = va_arg(args, long);
+    long arg5 = va_arg(args, long);
+    long arg6 = va_arg(args, long);
+    long rv;
 
-void shim_syscall_set_simtime_nanos(uint64_t simulation_nanos) {
-    _cached_simulation_time.tv_sec = simulation_nanos / SIMTIME_ONE_SECOND;
-    _cached_simulation_time.tv_nsec = simulation_nanos % SIMTIME_ONE_SECOND;
+    // When interposing a clone syscall, we can't return in the new child thread.
+    // Instead we *jump* to just after the original syscall instruction, using
+    // the RIP saved in our SIGSYS signal handler.
+    //
+    // TODO: it'd be cleaner for this to be a separate, dedicated, function.
+    // However right now the actual clone syscall instruction *must* be executed
+    // from this function to pass the seccomp filter.
+    void* clone_rip = NULL;
+    if (n == SYS_clone && (clone_rip = shim_take_clone_rip()) != NULL) {
+        // Make the clone syscall, and then in the child thread immediately jump
+        // to the instruction after the original clone syscall instruction.
+        //
+        // Note that from the child thread's point of view, many of the general purpose
+        // registers will have different values than they had in the parent thread just-before.
+        // I can't find any documentation on whether the child thread is allowed to make
+        // any assumptions about the state of such registers, but glibc's implementation
+        // of the clone library function doesn't. If we had to, we could save and restore
+        // the other registers in the same way as we are the RIP register.
+        register long r10 __asm__("r10") = arg4;
+        register long r8 __asm__("r8") = arg5;
+        register long r9 __asm__("r9") = (long)clone_rip;
+        __asm__ __volatile__("syscall\n"
+                             "cmp $0, %%rax\n"
+                             "jne shim_native_syscallv_out\n"
+                             "jmp *%%r9\n"
+                             "shim_native_syscallv_out:\n"
+                             : "=a"(rv)
+                             : "a"(n), "D"(arg1), "S"(arg2), "d"(arg3), "r"(r10), "r"(r8),
+                               "r"(r9), [CLONE_RIP] "rm"(&clone_rip)
+                             : "rcx", "r11", "memory");
+        // Wait for child to initialize itself.
+        shim_newThreadFinish();
+        return rv;
+    }
+
+    // r8, r9, and r10 aren't supported as register-constraints in
+    // extended asm templates. We have to use [local register
+    // variables](https://gcc.gnu.org/onlinedocs/gcc/Local-Register-Variables.html)
+    // instead. Calling any functions in between the register assignment and the
+    // asm template could clobber these registers, which is why we don't do the
+    // assignment directly above.
+    register long r10 __asm__("r10") = arg4;
+    register long r8 __asm__("r8") = arg5;
+    register long r9 __asm__("r9") = arg6;
+    __asm__ __volatile__("syscall"
+                         : "=a"(rv)
+                         : "a"(n), "D"(arg1), "S"(arg2), "d"(arg3), "r"(r10), "r"(r8), "r"(r9)
+                         : "rcx", "r11", "memory");
+    return rv;
 }
 
-static struct timespec* _shim_syscall_get_time() {
-    // First try to get time from shared mem.
-    struct timespec* simtime_ts = shim_get_shared_time_location();
+// Handle to the real syscall function, initialized once at load-time for
+// thread-safety.
+long shim_native_syscall(long n, ...) {
+    va_list args;
+    va_start(args, n);
+    long rv = shim_native_syscallv(n, args);
+    va_end(args);
+    return rv;
+}
 
-    // If that's unavailable, check if the time has been cached before.
-    if (simtime_ts == NULL) {
-        simtime_ts = &_cached_simulation_time;
+// Only called from asm, so need to tell compiler not to discard.
+__attribute__((used)) static SysCallReg
+_shim_emulated_syscall_event(const ShimEvent* syscall_event) {
+
+    struct IPCData* ipc = shim_thisThreadEventIPC();
+
+    trace("sending syscall %ld event on %p", syscall_event->event_data.syscall.syscall_args.number,
+          ipc);
+
+    shimevent_sendEventToShadow(ipc, syscall_event);
+    SysCallReg rv = {0};
+
+    // By default we assume Shadow will return quickly, and so should spin
+    // rather than letting the OS block this thread.
+    bool spin = true;
+    while (true) {
+        trace("waiting for event on %p", ipc);
+        ShimEvent res = {0};
+        shimevent_recvEventFromShadow(ipc, &res, spin);
+        trace("got response of type %d on %p", res.event_id, ipc);
+
+        // Reset spin-flag to true. (May have been set to false by a SHD_SHIM_EVENT_BLOCK in the
+        // previous iteration)
+        spin = true;
+        switch (res.event_id) {
+            case SHD_SHIM_EVENT_BLOCK: {
+                // Loop again, this time relinquishing the CPU while waiting for the next message.
+                spin = false;
+                // Ack the message.
+                shimevent_sendEventToShadow(ipc, &res);
+                break;
+            }
+            case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
+                // Use provided result.
+                SysCallReg rv = res.event_data.syscall_complete.retval;
+                shim_sys_set_simtime_nanos(res.event_data.syscall_complete.simulation_nanos);
+                return rv;
+            }
+            case SHD_SHIM_EVENT_SYSCALL_DO_NATIVE: {
+                // Make the original syscall ourselves and use the result.
+                SysCallReg rv = res.event_data.syscall_complete.retval;
+                const SysCallReg* regs = syscall_event->event_data.syscall.syscall_args.args;
+                rv.as_i64 = shim_native_syscall(
+                    syscall_event->event_data.syscall.syscall_args.number, regs[0].as_u64,
+                    regs[1].as_u64, regs[2].as_u64, regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
+                return rv;
+            }
+            case SHD_SHIM_EVENT_SYSCALL: {
+                // Make the requested syscall ourselves and return the result
+                // to Shadow.
+                const SysCallReg* regs = res.event_data.syscall.syscall_args.args;
+                long syscall_rv = shim_native_syscall(
+                    res.event_data.syscall.syscall_args.number, regs[0].as_u64, regs[1].as_u64,
+                    regs[2].as_u64, regs[3].as_u64, regs[4].as_u64, regs[5].as_u64);
+                ShimEvent syscall_complete_event = {
+                    .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                    .event_data.syscall_complete.retval.as_i64 = syscall_rv,
+                };
+                shimevent_sendEventToShadow(ipc, &syscall_complete_event);
+                break;
+            }
+            case SHD_SHIM_EVENT_CLONE_REQ:
+                shim_shmemHandleClone(&res);
+                shim_shmemNotifyComplete(ipc);
+                break;
+            case SHD_SHIM_EVENT_CLONE_STRING_REQ:
+                shim_shmemHandleCloneString(&res);
+                shim_shmemNotifyComplete(ipc);
+                break;
+            case SHD_SHIM_EVENT_WRITE_REQ:
+                shim_shmemHandleWrite(&res);
+                shim_shmemNotifyComplete(ipc);
+                break;
+            case SHD_SHIM_EVENT_ADD_THREAD_REQ: {
+                shim_newThreadStart(&res.event_data.add_thread_req.ipc_block);
+                shimevent_sendEventToShadow(
+                    ipc, &(ShimEvent){
+                             .event_id = SHD_SHIM_EVENT_ADD_THREAD_PARENT_RES,
+                         });
+                break;
+            }
+            default: {
+                panic("Got unexpected event %d", res.event_id);
+                abort();
+            }
+        }
+    }
+}
+
+long shim_emulated_syscallv(long n, va_list args) {
+    shim_disableInterposition();
+    ShimEvent e = {
+        .event_id = SHD_SHIM_EVENT_SYSCALL,
+        .event_data.syscall.syscall_args.number = n,
+    };
+    SysCallReg* regs = e.event_data.syscall.syscall_args.args;
+    for (int i = 0; i < 6; ++i) {
+        regs[i].as_u64 = va_arg(args, uint64_t);
     }
 
-    // If the time is not set, then we fail.
-    if (simtime_ts->tv_sec == 0 && simtime_ts->tv_nsec == 0) {
-        return NULL;
-    }
+    /* On the first syscall, Shadow will remap the stack region of memory. In
+     * preload-mode, this process is actively involved in that operation, with
+     * several messages back and forth. To do that processing, we must use a
+     * stack region *other* than the one being remapped. We handle this by
+     * switching to a small dedicated stack, making the call, and then switching
+     * back.
+     */
 
-#ifdef DEBUG
-    if (simtime_ts == &_cached_simulation_time) {
-        trace("simtime is available in the shim using cached time");
+    // Needs to be big enough to run signal handlers in case Shadow delivers a
+    // non-fatal signal. No need to be stingy with the size here, since pages
+    // that are never used should never get allocated by the OS.
+    static ShimTlsVar new_stack_var = {0};
+    const size_t stack_sz = 4096 * 10;
+    char* new_stack = shimtlsvar_ptr(&new_stack_var, stack_sz);
+    // C ABI requires 16-byte alignment for stack frames
+    assert(((uintptr_t)new_stack % 16) == 0);
+    void* old_stack;
+    SysCallReg retval;
+    asm volatile("movq %[EVENT], %%rdi\n"     /* set up syscall arg */
+                 "movq %%rsp, %%rbx\n"        /* save stack pointer to a callee-save register*/
+                 "movq %[NEW_STACK], %%rsp\n" /* switch stack */
+                 "callq _shim_emulated_syscall_event\n"
+                 "movq %%rbx, %%rsp\n"     /* restore stack pointer */
+                 "movq %%rax, %[RETVAL]\n" /* save return value */
+                 :                         /* outputs */
+                 [RETVAL] "=rm"(retval)
+                 : /* inputs */
+                 /* Must be a register, since a memory operand would be relative to the stack.
+                    Note that we need to point to the *top* of the stack. */
+                 [NEW_STACK] "r"(&new_stack[stack_sz]), [EVENT] "rm"(&e)
+                 : /* clobbers */
+                 "memory",
+                 /* used to save rsp */
+                 "rbx",
+                 /* All caller-saved registers not already used above */
+                 "rax", "rdi", "rdx", "rcx", "rsi", "r8", "r9", "r10", "r11");
+
+    shim_enableInterposition();
+
+    return retval.as_i64;
+}
+
+long shim_emulated_syscall(long n, ...) {
+    va_list(args);
+    va_start(args, n);
+    long rv = shim_emulated_syscallv(n, args);
+    va_end(args);
+    return rv;
+}
+
+long shim_syscallv(long n, va_list args) {
+    shim_ensure_init();
+
+    long rv;
+
+    if (shim_interpositionEnabled() && shim_use_syscall_handler() &&
+        shim_sys_handle_syscall_locally(n, &rv, args)) {
+        // No inter-process syscall needed, we handled it on the shim side! :)
+        trace("Handled syscall %ld from the shim; we avoided inter-process overhead.", n);
+        // rv was already set
+    } else if (shim_interpositionEnabled() && shim_thisThreadEventIPC()) {
+        // The syscall is made using the shmem IPC channel.
+        trace("Making syscall %ld indirectly; we ask shadow to handle it using the shmem IPC "
+              "channel.",
+              n);
+        rv = shim_emulated_syscallv(n, args);
     } else {
-        trace("simtime is available in the shim using shared memory");
+        // The syscall is made directly; ptrace or seccomp will get the syscall signal.
+        trace("Making syscall %ld directly; we expect ptrace or seccomp will interpose it, or it "
+              "will be "
+              "handled natively by the kernel.",
+              n);
+        rv = shim_native_syscallv(n, args);
     }
-#endif
 
-    return simtime_ts;
+    return rv;
 }
 
-uint64_t shim_syscall_get_simtime_nanos() {
-    struct timespec* ts = _shim_syscall_get_time();
-    if (!ts) {
-        return 0;
-    }
-
-    return (uint64_t)(ts->tv_sec * SIMTIME_ONE_SECOND) + ts->tv_nsec;
-}
-
-bool shim_syscall(long syscall_num, long* rv, va_list args) {
-    // This function is called on every syscall operation so be careful not to doing
-    // anything too expensive outside of the switch cases.
-    struct timespec* simtime_ts;
-
-    switch (syscall_num) {
-        case SYS_clock_gettime: {
-            // We can handle it if the time is available.
-            if (!(simtime_ts = _shim_syscall_get_time())) {
-                return false;
-            }
-
-            trace("servicing syscall %ld:clock_gettime from the shim", syscall_num);
-
-            clockid_t clk_id = va_arg(args, clockid_t);
-            struct timespec* tp = va_arg(args, struct timespec*);
-
-            if (tp) {
-                *tp = *simtime_ts;
-                trace("clock_gettime() successfully copied time");
-                *rv = 0;
-            } else {
-                trace("found NULL timespec pointer in clock_gettime");
-                *rv = -EFAULT;
-            }
-
-            break;
-        }
-
-        case SYS_time: {
-            // We can handle it if the time is available.
-            if (!(simtime_ts = _shim_syscall_get_time())) {
-                return false;
-            }
-
-            trace("servicing syscall %ld:time from the shim", syscall_num);
-
-            time_t* tp = va_arg(args, time_t*);
-
-            if (tp) {
-                *tp = simtime_ts->tv_sec;
-                trace("time() successfully copied time");
-            }
-            *rv = simtime_ts->tv_sec;
-
-            break;
-        }
-
-        case SYS_gettimeofday: {
-            // We can handle it if the time is available.
-            if (!(simtime_ts = _shim_syscall_get_time())) {
-                return false;
-            }
-
-            trace("servicing syscall %ld:gettimeofday from the shim", syscall_num);
-
-            struct timeval* tp = va_arg(args, struct timeval*);
-
-            if (tp) {
-                tp->tv_sec = simtime_ts->tv_sec;
-                tp->tv_usec = simtime_ts->tv_nsec / SIMTIME_ONE_MICROSECOND;
-                trace("gettimeofday() successfully copied time");
-            }
-            *rv = 0;
-
-            break;
-        }
-
-        default: {
-            // the syscall was not handled
-            return false;
-        }
-    }
-
-    // the syscall was handled
-    return true;
+long shim_syscall(long n, ...) {
+    va_list(args);
+    va_start(args, n);
+    long rv = shim_syscallv(n, args);
+    va_end(args);
+    return rv;
 }

@@ -264,6 +264,11 @@ pub struct ExperimentalOptions {
     #[clap(about = EXP_HELP.get("use_object_counters").unwrap())]
     pub use_object_counters: Option<bool>,
 
+    /// Preload our libc library for all managed processes for fast syscall interposition when possible.
+    #[clap(long, value_name = "bool")]
+    #[clap(about = EXP_HELP.get("use_libc_preload").unwrap())]
+    use_libc_preload: Option<bool>,
+
     /// Preload our OpenSSL RNG library for all managed processes to mitigate non-deterministic use of OpenSSL.
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("use_openssl_rng_preload").unwrap())]
@@ -371,6 +376,7 @@ impl Default for ExperimentalOptions {
             use_seccomp: None,
             use_syscall_counters: Some(false),
             use_object_counters: Some(true),
+            use_libc_preload: Some(true),
             use_openssl_rng_preload: Some(true),
             preload_spin_max: Some(0),
             use_memory_manager: Some(true),
@@ -1081,6 +1087,13 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_object_counters.unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getUseLibcPreload(config: *const ConfigOptions) -> bool {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        config.experimental.use_libc_preload.unwrap()
     }
 
     #[no_mangle]

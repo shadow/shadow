@@ -20,8 +20,8 @@ You may need to install bindgen, cbindgen, and clang:
 
 ```bash
 apt install -y clang
-cargo install --force --version 0.18.0 cbindgen
-cargo install --force --version 0.57.0 bindgen
+cargo install --force --version 0.20.0 cbindgen
+cargo install --force --version 0.59.1 bindgen
 ```
 
 The versions of bindgen and cbindgen you install should match the [versions

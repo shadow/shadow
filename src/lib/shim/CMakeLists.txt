@@ -24,17 +24,19 @@ set(SHIM_HELPER_FILES
 )
 add_library(${SHIM_HELPER_LIB} STATIC ${SHIM_HELPER_FILES})
 # -D_GNU_SOURCE enables some additional features in libc, such at RTLD_NEXT.
+# -fPIC enables linking the static compile unit with a shared object library
 target_compile_options(${SHIM_HELPER_LIB} PRIVATE -D_GNU_SOURCE -fPIC)
 target_link_libraries(${SHIM_HELPER_LIB} INTERFACE shadow-shmem)
 
 set(SHIM_LIB shadow-shim)
 set(SHIM_FILES
-  preload_libraries.c
-  preload_syscalls.c
-  preload_syscall.c
   shim.c
+  shim_api_addrinfo.c
+  shim_api_ifaddrs.c
+  shim_api_syscall.c
   shim_logger.c
   shim_shmem.c
+  shim_sys.c
   shim_syscall.c
   shim_tls.c
 )
