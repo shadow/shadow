@@ -76,7 +76,10 @@ void event_execute(Event* event) {
         trace("event blocked on CPU, rescheduled for %"G_GUINT64_FORMAT" nanoseconds from now", cpuDelay);
 
         /* track the event delay time */
-        tracker_addVirtualProcessingDelay(host_getTracker(event->dstHost), cpuDelay);
+        Tracker* tracker = host_getTracker(event->dstHost);
+        if (tracker != NULL) {
+            tracker_addVirtualProcessingDelay(tracker, cpuDelay);
+        }
 
         /* this event is delayed due to cpu, so reschedule it to ourselves */
         worker_scheduleTask(event->task, event->dstHost, cpuDelay);

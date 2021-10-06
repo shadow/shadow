@@ -309,6 +309,12 @@ bool config_getUseLegacyWorkingDir(const struct ConfigOptions *config);
 
 bool config_getProgress(const struct ConfigOptions *config);
 
+LogLevel config_getHostHeartbeatLogLevel(const struct ConfigOptions *config);
+
+LogInfoFlags config_getHostHeartbeatLogInfo(const struct ConfigOptions *config);
+
+SimulationTime config_getHostHeartbeatInterval(const struct ConfigOptions *config);
+
 bool config_getUseShortestPath(const struct ConfigOptions *config);
 
 __attribute__((warn_unused_result))
@@ -327,12 +333,6 @@ int hostoptions_getIpAddr(const struct HostOptions *host, in_addr_t *addr);
 unsigned int hostoptions_getQuantity(const struct HostOptions *host);
 
 LogLevel hostoptions_getLogLevel(const struct HostOptions *host);
-
-LogLevel hostoptions_getHeartbeatLogLevel(const struct HostOptions *host);
-
-LogInfoFlags hostoptions_getHeartbeatLogInfo(const struct HostOptions *host);
-
-SimulationTime hostoptions_getHeartbeatInterval(const struct HostOptions *host);
 
 char *hostoptions_getPcapDirectory(const struct HostOptions *host);
 

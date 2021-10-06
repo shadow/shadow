@@ -669,7 +669,8 @@ static void _manager_heartbeat(Manager* manager, SimulationTime simClockNow) {
 
     SimulationTime heartbeatInterval = config_getHeartbeatInterval(manager->config);
 
-    if (simClockNow > (manager->simClockLastHeartbeat + heartbeatInterval)) {
+    if (heartbeatInterval != SIMTIME_INVALID &&
+        simClockNow > (manager->simClockLastHeartbeat + heartbeatInterval)) {
         manager->simClockLastHeartbeat = simClockNow;
 
         struct rusage resources;

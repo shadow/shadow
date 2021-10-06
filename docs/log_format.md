@@ -1,5 +1,11 @@
 # Format of Shadow Log Messages
 
+| ❗ Warning                                                                  |
+|-----------------------------------------------------------------------------|
+| The format of the log messages is not<br>stable and may change at any time. |
+
+<br>
+
 ## Log Line Prefix
 
 Shadow produces simulator log messages in the following format:
@@ -51,7 +57,7 @@ the frequency can be changed using the `--heartbeat-frequency` option to Shadow
 (see `shadow --help`).
 
 There are currently three [heartbeat statistic
-subsystems](shadow_config_spec.md#host_defaultsheartbeat_log_info): `node`,
+subsystems](shadow_config_spec.md#experimentalhost_heartbeat_log_info): `node`,
 `socket`, and `ram`. For each subsystem that is enabled, Shadow will print a
 'header' message followed by regular message every frequency interval. The
 'header' messages generally describe the statistics that are printed in the

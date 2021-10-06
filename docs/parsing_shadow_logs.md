@@ -1,11 +1,20 @@
 # Parsing Shadow Log Messages
 
+| ❗ Warning                                                                                                  |
+|-------------------------------------------------------------------------------------------------------------|
+| The heartbeat/tracker log messages are considered experimental<br>and may change or be removed at any time. |
+
+<br>
+
 Shadow logs simulator heartbeat messages that contain useful system information
 for each virtual host in the experiment. For example, Shadow logs the number of
 bytes sent/received, number of bytes allocated/deallocated, CPU usage, etc. You
 can parse these heartbeat log messages to get insight into the simulation.
 Details of these heartbeat messages can be found
-[here](log_format.md#heartbeat-messages).
+[here](log_format.md#heartbeat-messages), and they can be enabled by setting the
+experimental
+[`experimental.host_heartbeat_interval`](shadow_config_spec.md#experimentalhost_heartbeat_interval)
+configuration option.
  
 ## Example Simulation Data
 
