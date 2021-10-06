@@ -32,9 +32,8 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
-                                                PluginPtr bufPtr,
-                                                size_t bufSize, off_t offset) {
+static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
+                                                size_t bufSize, off_t offset, bool doPread) {
     trace(
         "trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
 
@@ -73,7 +72,8 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
     ssize_t result = 0;
     switch (dType) {
         case DT_FILE:
-            if (offset == 0) {
+            if (!doPread) {
+                utility_assert(offset == 0);
                 result = file_read((File*)desc, sys->host,
                                    process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
                                    sizeNeeded);
@@ -84,18 +84,33 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
             }
             break;
         case DT_EVENTD:
-            result =
-                eventd_read((EventD*)desc,
-                            process_getWriteablePtr(sys->process, bufPtr, sizeNeeded), sizeNeeded);
+            if (doPread) {
+                result = -ESPIPE;
+            } else {
+                utility_assert(offset == 0);
+                result = eventd_read((EventD*)desc,
+                                     process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
+                                     sizeNeeded);
+            }
             break;
         case DT_TIMER:
-            result =
-                timer_read((Timer*)desc, process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
-                           sizeNeeded);
+            if (doPread) {
+                result = -ESPIPE;
+            } else {
+                utility_assert(offset == 0);
+                result = timer_read((Timer*)desc,
+                                    process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
+                                    sizeNeeded);
+            }
             break;
         case DT_PIPE:
-            result = transport_receiveUserData(
-                (Transport*)desc, sys->thread, bufPtr, sizeNeeded, NULL, NULL);
+            if (doPread) {
+                result = -ESPIPE;
+            } else {
+                utility_assert(offset == 0);
+                result = transport_receiveUserData(
+                    (Transport*)desc, sys->thread, bufPtr, sizeNeeded, NULL, NULL);
+            }
             break;
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:
@@ -130,9 +145,8 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd,
         .state = SYSCALL_DONE, .retval.as_i64 = (int64_t)result};
 }
 
-static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
-                                                 PluginPtr bufPtr,
-                                                 size_t bufSize, off_t offset) {
+static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, PluginPtr bufPtr,
+                                                 size_t bufSize, off_t offset, bool doPwrite) {
     trace("trying to write %zu bytes on fd %i at offset %li", bufSize, fd,
           offset);
 
@@ -171,7 +185,8 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
     ssize_t result = 0;
     switch (dType) {
         case DT_FILE:
-            if (offset == 0) {
+            if (!doPwrite) {
+                utility_assert(offset == 0);
                 result = file_write((File*)desc,
                                     process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
                                     sizeNeeded);
@@ -182,14 +197,24 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd,
             }
             break;
         case DT_EVENTD:
-            result =
-                eventd_write((EventD*)desc,
-                             process_getReadablePtr(sys->process, bufPtr, sizeNeeded), sizeNeeded);
+            if (doPwrite) {
+                result = -ESPIPE;
+            } else {
+                utility_assert(offset == 0);
+                result = eventd_write((EventD*)desc,
+                                      process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
+                                      sizeNeeded);
+            }
             break;
         case DT_TIMER: result = -EINVAL; break;
         case DT_PIPE:
-            result =
-                transport_sendUserData((Transport*)desc, sys->thread, bufPtr, sizeNeeded, 0, 0);
+            if (doPwrite) {
+                result = -ESPIPE;
+            } else {
+                utility_assert(offset == 0);
+                result =
+                    transport_sendUserData((Transport*)desc, sys->thread, bufPtr, sizeNeeded, 0, 0);
+            }
             break;
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:
@@ -259,30 +284,26 @@ SysCallReturn syscallhandler_dup(SysCallHandler* sys,
 
 SysCallReturn syscallhandler_read(SysCallHandler* sys,
                                   const SysCallArgs* args) {
-    return _syscallhandler_readHelper(sys, args->args[0].as_i64,
-                                      args->args[1].as_ptr,
-                                      args->args[2].as_u64, 0);
+    return _syscallhandler_readHelper(
+        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0, false);
 }
 
 SysCallReturn syscallhandler_pread64(SysCallHandler* sys,
                                      const SysCallArgs* args) {
-    return _syscallhandler_readHelper(
-        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
-        args->args[3].as_i64);
+    return _syscallhandler_readHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
+                                      args->args[2].as_u64, args->args[3].as_i64, true);
 }
 
 SysCallReturn syscallhandler_write(SysCallHandler* sys,
                                    const SysCallArgs* args) {
-    return _syscallhandler_writeHelper(sys, args->args[0].as_i64,
-                                       args->args[1].as_ptr,
-                                       args->args[2].as_u64, 0);
+    return _syscallhandler_writeHelper(
+        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0, false);
 }
 
 SysCallReturn syscallhandler_pwrite64(SysCallHandler* sys,
                                       const SysCallArgs* args) {
-    return _syscallhandler_writeHelper(
-        sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64,
-        args->args[3].as_i64);
+    return _syscallhandler_writeHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
+                                       args->args[2].as_u64, args->args[3].as_i64, true);
 }
 
 SysCallReturn syscallhandler_exit_group(SysCallHandler* sys, const SysCallArgs* args) {
