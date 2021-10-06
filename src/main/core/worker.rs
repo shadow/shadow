@@ -200,7 +200,7 @@ impl Worker {
     }
 
     fn clear_current_time() {
-        Worker::with_mut(|w| w.clock.now.take());
+        Worker::with_mut(|w| w.clock.now.take()).unwrap();
     }
 
     pub fn current_time() -> Option<EmulatedTime> {
@@ -238,6 +238,7 @@ impl Worker {
 
     // Runs `f` with a shared reference to the current thread's Worker. Returns
     // None if this thread has no Worker object.
+    #[must_use]
     fn with<F, O>(f: F) -> Option<O>
     where
         F: FnOnce(&Worker) -> O,
@@ -250,6 +251,7 @@ impl Worker {
 
     // Runs `f` with a mutable reference to the current thread's Worker. Returns
     // None if this thread has no Worker object.
+    #[must_use]
     fn with_mut<F, O>(f: F) -> Option<O>
     where
         F: FnOnce(&mut Worker) -> O,
