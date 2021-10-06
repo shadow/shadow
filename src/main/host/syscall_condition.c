@@ -225,7 +225,7 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond,
     GString* string = g_string_new(NULL);
 
     g_string_append_printf(string, "Process %s thread %p %s listening for ",
-                           process_getName(cond->proc), cond->thread,
+                           cond->proc ? process_getName(cond->proc) : "NULL", cond->thread,
                            listenVerb);
 
     if (cond->trigger.object.as_pointer) {
@@ -317,6 +317,17 @@ static void _syscallcondition_signal(Host* host, void* obj, void* arg) {
 #ifdef DEBUG
     _syscallcondition_logListeningState(cond, "signaling while");
 #endif
+
+    if (!cond->proc || !cond->thread) {
+        utility_assert(!cond->proc);
+        utility_assert(!cond->thread);
+        utility_assert(!cond->timeoutListener);
+        utility_assert(!cond->triggerListener);
+#ifdef DEBUG
+        _syscallcondition_logListeningState(cond, "ignored (already cleaned up)");
+#endif
+        return;
+    }
 
     // Always deliver the signal if the timeout expired.
     // Otherwise, only deliver the signal if the desc status is still valid.
