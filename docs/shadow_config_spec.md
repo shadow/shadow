@@ -63,6 +63,9 @@ hosts:
 - [`network.graph.file.compression`](#networkgraphfilecompression)
 - [`network.use_shortest_path`](#networkuse_shortest_path)
 - [`experimental`](#experimental)
+- [`experimental.host_heartbeat_interval`](#experimentalhost_heartbeat_interval)
+- [`experimental.host_heartbeat_log_info`](#experimentalhost_heartbeat_log_info)
+- [`experimental.host_heartbeat_log_level`](#experimentalhost_heartbeat_log_level)
 - [`experimental.interface_buffer`](#experimentalinterface_buffer)
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
 - [`experimental.interpose_method`](#experimentalinterpose_method)
@@ -88,9 +91,6 @@ hosts:
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
 - [`experimental.worker_threads`](#experimentalworker_threads)
 - [`host_defaults`](#host_defaults)
-- [`host_defaults.heartbeat_interval`](#host_defaultsheartbeat_interval)
-- [`host_defaults.heartbeat_log_info`](#host_defaultsheartbeat_log_info)
-- [`host_defaults.heartbeat_log_level`](#host_defaultsheartbeat_log_level)
 - [`host_defaults.log_level`](#host_defaultslog_level)
 - [`host_defaults.pcap_directory`](#host_defaultspcap_directory)
 - [`hosts`](#hosts)
@@ -277,6 +277,27 @@ nodes.
 
 Experimental experiment settings. Unstable and may change or be removed at any
 time, regardless of Shadow version.
+
+#### `experimental.host_heartbeat_interval`
+
+Default: "1 sec"  
+Type: String OR Integer
+
+Amount of time between heartbeat messages for this host.
+
+#### `experimental.host_heartbeat_log_info`
+
+Default: ["node"]  
+Type: Array of ("node" OR "socket" OR "ram")
+
+List of information to show in the host's heartbeat message.
+
+#### `experimental.host_heartbeat_log_level`
+
+Default: "info"  
+Type: "error" OR "warning" OR "info" OR "debug" OR "trace"
+
+Log level at which to print host statistics.
 
 #### `experimental.interface_buffer`
 
@@ -465,27 +486,6 @@ future.
 Default options for all hosts. These options can also be overridden for each
 host individually in the host's [`hosts.<hostname>.options`](#hostshostnameoptions)
 section.
-
-#### `host_defaults.heartbeat_interval`
-
-Default: "1 sec"  
-Type: String OR Integer
-
-Amount of time between heartbeat messages for this host.
-
-#### `host_defaults.heartbeat_log_info`
-
-Default: ["node"]  
-Type: Array of ("node" OR "socket" OR "ram")
-
-List of information to show in the host's heartbeat message.
-
-#### `host_defaults.heartbeat_log_level`
-
-Default: "info"  
-Type: "error" OR "warning" OR "info" OR "debug" OR "trace"
-
-Log level at which to print host statistics.
 
 #### `host_defaults.log_level`
 

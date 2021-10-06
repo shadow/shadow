@@ -357,6 +357,22 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "bool")]
     #[clap(about = EXP_HELP.get("progress").unwrap())]
     pub progress: Option<bool>,
+
+    /// Log level at which to print host statistics
+    #[clap(long, value_name = "level")]
+    #[clap(about = EXP_HELP.get("host_heartbeat_log_level").unwrap())]
+    pub host_heartbeat_log_level: Option<LogLevel>,
+
+    /// List of information to show in the host's heartbeat message
+    #[clap(parse(try_from_str = parse_set_log_info_flags))]
+    #[clap(long, value_name = "options")]
+    #[clap(about = EXP_HELP.get("host_heartbeat_log_info").unwrap())]
+    pub host_heartbeat_log_info: Option<std::collections::HashSet<LogInfoFlag>>,
+
+    /// Amount of time between heartbeat messages for this host
+    #[clap(long, value_name = "seconds")]
+    #[clap(about = EXP_HELP.get("host_heartbeat_interval").unwrap())]
+    pub host_heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
 }
 
 impl ExperimentalOptions {
@@ -394,6 +410,9 @@ impl Default for ExperimentalOptions {
             worker_threads: None,
             use_legacy_working_dir: Some(false),
             progress: Some(false),
+            host_heartbeat_log_level: Some(LogLevel::Info),
+            host_heartbeat_log_info: Some(std::array::IntoIter::new([LogInfoFlag::Node]).collect()),
+            host_heartbeat_interval: Some(units::Time::new(1, units::TimePrefixUpper::Sec)),
         }
     }
 }
@@ -413,25 +432,6 @@ pub struct HostDefaultOptions {
     #[clap(about = HOST_HELP.get("log_level").unwrap())]
     pub log_level: Option<LogLevel>,
 
-    /// Log level at which to print host statistics
-    #[clap(long = "host-heartbeat-log-level", name = "host-heartbeat-log-level")]
-    #[clap(value_name = "level")]
-    #[clap(about = HOST_HELP.get("heartbeat_log_level").unwrap())]
-    pub heartbeat_log_level: Option<LogLevel>,
-
-    /// List of information to show in the host's heartbeat message
-    #[clap(long = "host-heartbeat-log-info", name = "host-heartbeat-log-info")]
-    #[clap(parse(try_from_str = parse_set_log_info_flags))]
-    #[clap(value_name = "options")]
-    #[clap(about = HOST_HELP.get("heartbeat_log_info").unwrap())]
-    pub heartbeat_log_info: Option<std::collections::HashSet<LogInfoFlag>>,
-
-    /// Amount of time between heartbeat messages for this host
-    #[clap(long = "host-heartbeat-interval", name = "host-heartbeat-interval")]
-    #[clap(value_name = "seconds")]
-    #[clap(about = HOST_HELP.get("heartbeat_interval").unwrap())]
-    pub heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
-
     /// Where to save the pcap files (relative to the host directory)
     #[clap(long, value_name = "path")]
     #[clap(about = HOST_HELP.get("pcap_directory").unwrap())]
@@ -442,9 +442,6 @@ impl HostDefaultOptions {
     pub fn new_empty() -> Self {
         Self {
             log_level: None,
-            heartbeat_log_level: None,
-            heartbeat_log_info: None,
-            heartbeat_interval: None,
             pcap_directory: None,
         }
     }
@@ -460,9 +457,6 @@ impl Default for HostDefaultOptions {
     fn default() -> Self {
         Self {
             log_level: None,
-            heartbeat_log_level: Some(LogLevel::Info),
-            heartbeat_log_info: Some(std::array::IntoIter::new([LogInfoFlag::Node]).collect()),
-            heartbeat_interval: Some(units::Time::new(1, units::TimePrefixUpper::Sec)),
             pcap_directory: None,
         }
     }
@@ -736,7 +730,7 @@ fn default_some_nz_1() -> Option<NonZeroU32> {
     Some(std::num::NonZeroU32::new(1).unwrap())
 }
 
-/// Helper function for serde default `Some(0)` values.
+/// Helper function for serde default `Some(1 sec)` values.
 fn default_some_time_1() -> Option<units::Time<units::TimePrefixUpper>> {
     Some(units::Time::new(1, units::TimePrefixUpper::Sec))
 }
@@ -1296,6 +1290,57 @@ mod export {
     }
 
     #[no_mangle]
+    pub extern "C" fn config_getHostHeartbeatLogLevel(
+        config: *const ConfigOptions,
+    ) -> c_log::LogLevel {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+
+        match &config.experimental.host_heartbeat_log_level {
+            Some(x) => x.to_c_loglevel(),
+            None => c_log::_LogLevel_LOGLEVEL_UNSET,
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getHostHeartbeatLogInfo(
+        config: *const ConfigOptions,
+    ) -> c::LogInfoFlags {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+
+        let mut flags = 0;
+
+        for f in config
+            .experimental
+            .host_heartbeat_log_info
+            .as_ref()
+            .unwrap()
+        {
+            flags |= f.to_c_loginfoflag();
+        }
+
+        flags
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getHostHeartbeatInterval(
+        config: *const ConfigOptions,
+    ) -> c::SimulationTime {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+
+        config
+            .experimental
+            .host_heartbeat_interval
+            .unwrap()
+            .convert(units::TimePrefixUpper::Sec)
+            .unwrap()
+            .value()
+            * SIMTIME_ONE_SECOND
+    }
+
+    #[no_mangle]
     pub extern "C" fn config_getUseShortestPath(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
@@ -1400,49 +1445,6 @@ mod export {
             Some(x) => x.to_c_loglevel(),
             None => c_log::_LogLevel_LOGLEVEL_UNSET,
         }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getHeartbeatLogLevel(
-        host: *const HostOptions,
-    ) -> c_log::LogLevel {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        match &host.options.heartbeat_log_level {
-            Some(x) => x.to_c_loglevel(),
-            None => c_log::_LogLevel_LOGLEVEL_UNSET,
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getHeartbeatLogInfo(host: *const HostOptions) -> c::LogInfoFlags {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        let mut flags = 0;
-
-        for f in host.options.heartbeat_log_info.as_ref().unwrap() {
-            flags |= f.to_c_loginfoflag();
-        }
-
-        flags
-    }
-
-    #[no_mangle]
-    pub extern "C" fn hostoptions_getHeartbeatInterval(
-        host: *const HostOptions,
-    ) -> c::SimulationTime {
-        assert!(!host.is_null());
-        let host = unsafe { &*host };
-
-        host.options
-            .heartbeat_interval
-            .unwrap()
-            .convert(units::TimePrefixUpper::Sec)
-            .unwrap()
-            .value()
-            * SIMTIME_ONE_SECOND
     }
 
     #[no_mangle]
