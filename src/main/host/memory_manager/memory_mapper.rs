@@ -135,7 +135,7 @@ impl ShmFile {
         region: &Region,
         interval: &Interval,
     ) {
-        if interval.len() == 0 {
+        if interval.is_empty() {
             return;
         }
         assert!(!region.shadow_base.is_null());

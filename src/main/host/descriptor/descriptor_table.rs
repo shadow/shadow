@@ -70,11 +70,7 @@ impl DescriptorTable {
     // Call after inserting to `available_indices`, to free any that are contiguous
     // with `next_index`.
     fn trim_tail(&mut self) {
-        loop {
-            let last_in_available = match self.available_indices.iter().next_back() {
-                Some(i) => *i,
-                None => break,
-            };
+        while let Some(last_in_available) = self.available_indices.iter().next_back().copied() {
             if (last_in_available + 1) == self.next_index {
                 // Last entry in available_indices is adjacent to next_index.
                 // We can merge them, freeing an entry in `available_indices`.

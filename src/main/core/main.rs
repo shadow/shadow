@@ -141,14 +141,17 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
         pause_for_gdb_attach().context("Could not pause shadow to allow gdb to attach")?;
     }
 
-    // allocate and initialize our main simulation driver
-    let controller = unsafe { c::controller_new(&config as *const _) };
-    assert!(!controller.is_null());
+    // scope is used to make sure we don't use 'controller' after it's freed
+    let rv = {
+        // allocate and initialize our main simulation driver
+        let controller = unsafe { c::controller_new(&config as *const _) };
+        assert!(!controller.is_null());
 
-    // run the simulation
-    let rv = unsafe { c::controller_run(controller) };
-    unsafe { c::controller_free(controller) };
-    std::mem::drop(controller);
+        // run the simulation
+        let rv = unsafe { c::controller_run(controller) };
+        unsafe { c::controller_free(controller) };
+        rv
+    };
 
     if rv != 0 {
         return Err(anyhow::anyhow!("Controller exited with code {}", rv));
@@ -233,7 +236,7 @@ mod export {
         if let Err(e) = result {
             // log the full error, its context, and its backtrace if enabled
             if log::log_enabled!(log::Level::Error) {
-                for line in format!("{:?}", e).split("\n") {
+                for line in format!("{:?}", e).split('\n') {
                     log::error!("{}", line);
                 }
                 log::logger().flush();
@@ -249,6 +252,6 @@ mod export {
         }
 
         eprintln!("** Shadow completed successfully");
-        return 0;
+        0
     }
 }
