@@ -1,5 +1,11 @@
 # Parsing Shadow Log Messages
 
+| ❗ Warning                                                                                                  |
+|-------------------------------------------------------------------------------------------------------------|
+| The heartbeat/tracker log messages are considered experimental<br>and may change or be removed at any time. |
+
+<br>
+
 Shadow logs simulator heartbeat messages that contain useful system information
 for each virtual host in the experiment. For example, Shadow logs the number of
 bytes sent/received, number of bytes allocated/deallocated, CPU usage, etc. You

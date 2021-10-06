@@ -1,5 +1,11 @@
 # Format of Shadow Log Messages
 
+| ❗ Warning                                                                  |
+|-----------------------------------------------------------------------------|
+| The format of the log messages is not<br>stable and may change at any time. |
+
+<br>
+
 ## Log Line Prefix
 
 Shadow produces simulator log messages in the following format:
