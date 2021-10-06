@@ -10,6 +10,7 @@ CONTAINERS=(
     ubuntu:18.04
     ubuntu:20.04
     debian:10-slim
+    debian:11-slim
     fedora:34
     quay.io/centos/centos:stream8
     )
@@ -57,13 +58,13 @@ and containers to ubuntu:18.04 and fedora:34:
   $0 -C gcc -c "ubuntu:18.04 fedora:34"
 
 Set "extra" configurations to ubuntu:18.04;clang;coverage
-and debian:10-slim;gcc;coverage
+and debian:11-slim;gcc;coverage
 
-  $0 -e "ubuntu:18.04;clang;coverage debian:10-slim;gcc;coverage"
+  $0 -e "ubuntu:18.04;clang;coverage debian:11-slim;gcc;coverage"
 
 Set *only* configurations to run:
 
-  $0 -o "ubuntu:18.04;clang;coverage debian:10-slim;gcc;coverage"
+  $0 -o "ubuntu:18.04;clang;coverage debian:11-slim;gcc;coverage"
 EOF
 }
 

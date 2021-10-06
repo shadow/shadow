@@ -3,7 +3,7 @@
 ## Officially supported platforms
 
   + Ubuntu 18.04 and 20.04
-  + Debian 10
+  + Debian 10 and 11
   + Fedora 34
   + CentOS Stream 8
 
