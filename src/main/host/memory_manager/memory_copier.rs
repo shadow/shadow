@@ -159,7 +159,7 @@ impl MemoryCopier {
         // Don't access another process's memory.
         assert_eq!(active_pid, self.pid);
 
-        let nread = nix::sys::uio::process_vm_readv(active_tid, &dsts, &srcs)?;
+        let nread = nix::sys::uio::process_vm_readv(active_tid, dsts, srcs)?;
 
         Ok(nread)
     }

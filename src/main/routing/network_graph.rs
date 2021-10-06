@@ -96,11 +96,11 @@ impl TryFrom<gml_parser::gml::Edge<'_>> for ShadowEdge {
         };
 
         if rv.packet_loss < 0f32 || rv.packet_loss > 1f32 {
-            Err("Edge 'packet_loss' is not in the range [0,1]")?;
+            return Err("Edge 'packet_loss' is not in the range [0,1]".into());
         }
 
         if rv.latency.value() == 0 {
-            Err("Edge 'latency' must not be 0")?;
+            return Err("Edge 'latency' must not be 0".into());
         }
 
         Ok(rv)
@@ -232,7 +232,7 @@ impl NetworkGraph {
 
         let paths: HashMap<_, _> = nodes
             .iter()
-            .flat_map(|src| nodes.iter().map(move |dst| (src.clone(), dst.clone())))
+            .flat_map(|src| nodes.iter().map(move |dst| (*src, *dst)))
             // we require the graph to be connected with exactly one edge between any two nodes
             .map(|(src, dst)| Ok(((src, dst), self.get_edge_weight(&src, &dst)?.into())))
             .collect::<Result<_, Box<dyn Error>>>()?;
@@ -264,10 +264,11 @@ impl NetworkGraph {
                     .next()
                     .ok_or(format!("No edge connecting node {} to {}", src_id, dst_id))?;
                 if edges.count() != 0 {
-                    Err(format!(
+                    return Err(format!(
                         "More than one edge connecting node {} to {}",
                         src_id, dst_id
-                    ))?
+                    )
+                    .into());
                 }
                 Ok(edge.weight())
             }
@@ -277,10 +278,11 @@ impl NetworkGraph {
                     .next()
                     .ok_or(format!("No edge connecting node {} to {}", src_id, dst_id))?;
                 if edges.count() != 0 {
-                    Err(format!(
+                    return Err(format!(
                         "More than one edge connecting node {} to {}",
                         src_id, dst_id
-                    ))?
+                    )
+                    .into());
                 }
                 Ok(edge.weight())
             }
@@ -359,8 +361,8 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> IpAssignment<T> {
         loop {
             let ip_addr = Self::increment_address(&self.last_assigned_addr);
             self.last_assigned_addr = ip_addr;
-            if !self.map.contains_key(&ip_addr) {
-                self.map.insert(ip_addr, node_id);
+            if let std::collections::hash_map::Entry::Vacant(e) = self.map.entry(ip_addr) {
+                e.insert(node_id);
                 break ip_addr;
             }
         }
@@ -372,7 +374,7 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> IpAssignment<T> {
         node_id: T,
         ip_addr: std::net::IpAddr,
     ) -> Result<(), IpPreviouslyAssignedError> {
-        let entry = self.map.entry(ip_addr.clone());
+        let entry = self.map.entry(ip_addr);
         if let Entry::Occupied(_) = &entry {
             return Err(IpPreviouslyAssignedError);
         }
@@ -394,7 +396,7 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> IpAssignment<T> {
         match addr {
             std::net::IpAddr::V4(mut x) => loop {
                 // increment the address
-                x = std::net::Ipv4Addr::from(u32::from(x.clone()) + 1);
+                x = std::net::Ipv4Addr::from(u32::from(x) + 1);
                 match x.octets()[3] {
                     // if the address ends in ".0" or ".255" (broadcast), try the next
                     0 | 255 => {}
@@ -675,9 +677,9 @@ mod export {
         match graph.graph().node_weight(*node).unwrap().bandwidth_down {
             Some(x) => {
                 *bandwidth_down = x.convert(units::SiPrefixUpper::Base).unwrap().value();
-                return 0;
+                0
             }
-            None => return -1,
+            None => -1,
         }
     }
 
@@ -698,9 +700,9 @@ mod export {
         match graph.graph().node_weight(*node).unwrap().bandwidth_up {
             Some(x) => {
                 *bandwidth_up = x.convert(units::SiPrefixUpper::Base).unwrap().value();
-                return 0;
+                0
             }
-            None => return -1,
+            None => -1,
         }
     }
 
@@ -731,7 +733,7 @@ mod export {
             _ => unimplemented!("Assigned a host to an IPv6 address, but not supported from C"),
         };
 
-        return 0;
+        0
     }
 
     /// Assign an address to a node.
@@ -746,10 +748,10 @@ mod export {
         let ip_addr = std::net::IpAddr::V4(u32::from_be(ip_addr).into());
 
         match ip_assignment.assign_ip(node_id, ip_addr) {
-            Ok(()) => return 0,
+            Ok(()) => 0,
             Err(IpPreviouslyAssignedError) => {
                 error!("IP {} was assigned to multiple hosts", ip_addr,);
-                return -1;
+                -1
             }
         }
     }
@@ -829,7 +831,7 @@ mod export {
         }
 
         // the network graph is required to be a connected graph, so they must be routable
-        return true;
+        true
     }
 
     /// Get the packet latency from one host to another. The given addresses must be assigned to

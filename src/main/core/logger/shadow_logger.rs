@@ -26,7 +26,7 @@ const SYNC_FLUSH_QD_LINES_THRESHOLD: usize = 10 * ASYNC_FLUSH_QD_LINES_THRESHOLD
 /// Logging thread flushes at least this often.
 const MIN_FLUSH_FREQUENCY: Duration = Duration::from_secs(10);
 
-static SHADOW_LOGGER: Lazy<ShadowLogger> = Lazy::new(|| ShadowLogger::new());
+static SHADOW_LOGGER: Lazy<ShadowLogger> = Lazy::new(ShadowLogger::new);
 
 /// Initialize the Shadow logger.
 pub fn init() -> Result<(), SetLoggerError> {
@@ -120,13 +120,13 @@ fn get_thread_name() -> String {
 impl ShadowLogger {
     fn new() -> ShadowLogger {
         let (sender, receiver) = std::sync::mpsc::channel();
-        let logger = ShadowLogger {
+
+        ShadowLogger {
             records: ArrayQueue::new(SYNC_FLUSH_QD_LINES_THRESHOLD),
             command_sender: Mutex::new(sender),
             command_receiver: Mutex::new(receiver),
             buffering_enabled: RwLock::new(false),
-        };
-        logger
+        }
     }
 
     // Function executed by the logger's helper thread, onto which we offload as
@@ -225,9 +225,9 @@ impl ShadowLogger {
             } else {
                 write!(stdout, "n/a")?;
             }
-            write!(
+            writeln!(
                 stdout,
-                "] [{module}] {msg}\n",
+                "] [{module}] {msg}",
                 module = record.module_path.unwrap_or("n/a"),
                 msg = record.message
             )?;

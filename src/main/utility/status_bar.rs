@@ -151,7 +151,7 @@ impl ShadowStatusBarState {
     pub fn new(end: EmulatedTime) -> Self {
         Self {
             start: std::time::Instant::now(),
-            current: emulated_time::SIMULATION_START.clone(),
+            current: emulated_time::SIMULATION_START,
             end,
         }
     }
@@ -166,7 +166,7 @@ nix::ioctl_read_bad!(_tiocgwinsz, libc::TIOCGWINSZ, libc::winsize);
 fn tiocgwinsz() -> nix::Result<libc::winsize> {
     let mut win_size: libc::winsize = unsafe { std::mem::zeroed() };
     unsafe { _tiocgwinsz(0, &mut win_size)? };
-    return Ok(win_size);
+    Ok(win_size)
 }
 
 mod export {

@@ -82,7 +82,7 @@ impl ByteQueue {
 
             if written == 0 {
                 // End of the reader
-                if head.len() == 0 {
+                if head.is_empty() {
                     // We created an empty head but ended up not reading any
                     // data into it.
                     self.chunks.pop_front();

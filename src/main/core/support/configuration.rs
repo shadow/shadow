@@ -104,7 +104,7 @@ impl ConfigOptions {
         config_file.experimental = options.experimental.with_defaults(config_file.experimental);
 
         // copy the host defaults to all of the hosts
-        for (_, host) in &mut config_file.hosts {
+        for host in config_file.hosts.values_mut() {
             host.options = host
                 .options
                 .clone()
@@ -637,8 +637,8 @@ fn parse_set_log_info_flags(
     s: &str,
 ) -> Result<std::collections::HashSet<LogInfoFlag>, serde_yaml::Error> {
     let flags: Result<std::collections::HashSet<LogInfoFlag>, _> =
-        s.split(",").map(|x| x.trim().parse()).collect();
-    Ok(flags?)
+        s.split(',').map(|x| x.trim().parse()).collect();
+    flags
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, ArgEnum, Serialize, Deserialize, JsonSchema)]
@@ -770,7 +770,7 @@ fn generate_help_strs(
     for (name, obj) in &schema.schema.object.as_ref().unwrap().properties {
         if let Some(meta) = obj.clone().into_object().metadata {
             let description = meta.description.or(Some("".to_string())).unwrap();
-            let space = if description.len() > 0 { " " } else { "" };
+            let space = if !description.is_empty() { " " } else { "" };
             match meta.default {
                 Some(default) => defaults.insert(
                     name.clone(),
@@ -785,16 +785,16 @@ fn generate_help_strs(
 
 pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
     // if the path begins with a "~"
-    if let Some(x) = path.strip_prefix("~") {
+    if let Some(x) = path.strip_prefix('~') {
         // get the tilde-prefix (everything before the first separator)
-        let mut parts = x.splitn(2, "/");
+        let mut parts = x.splitn(2, '/');
         let (tilde_prefix, remainder) = (parts.next().unwrap(), parts.next().unwrap_or(""));
         assert!(parts.next().is_none());
         // we only support expansion for our own home directory
         // (nothing between the "~" and the separator)
         if tilde_prefix.is_empty() {
             if let Ok(ref home) = std::env::var("HOME") {
-                return [&home, remainder].iter().collect::<std::path::PathBuf>();
+                return [home, remainder].iter().collect::<std::path::PathBuf>();
             }
         }
     }
@@ -806,7 +806,7 @@ pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
 /// Parses a string as a list of arguments following the shell's parsing rules. This
 /// uses `g_shell_parse_argv()` for parsing.
 fn parse_string_as_args(args_str: &OsStr) -> Result<Vec<OsString>, String> {
-    if args_str.len() == 0 {
+    if args_str.is_empty() {
         return Ok(Vec::new());
     }
 
@@ -886,7 +886,7 @@ mod tests {
         let arg_str: OsString = arg_str.into();
         let err_str = parse_string_as_args(&arg_str).unwrap_err();
 
-        assert!(err_str.len() != 0);
+        assert!(!err_str.is_empty());
     }
 
     #[test]
@@ -1334,7 +1334,7 @@ mod export {
             }
         }
 
-        return 0;
+        0
     }
 
     #[no_mangle]
@@ -1474,9 +1474,9 @@ mod export {
         match host.bandwidth_down {
             Some(x) => {
                 *bandwidth_down = x.convert(units::SiPrefixUpper::Base).unwrap().value();
-                return 0;
+                0
             }
-            None => return -1,
+            None => -1,
         }
     }
 
@@ -1495,9 +1495,9 @@ mod export {
         match host.bandwidth_up {
             Some(x) => {
                 *bandwidth_up = x.convert(units::SiPrefixUpper::Base).unwrap().value();
-                return 0;
+                0
             }
-            None => return -1,
+            None => -1,
         }
     }
 
@@ -1519,7 +1519,7 @@ mod export {
             }
         }
 
-        return 0;
+        0
     }
 
     #[no_mangle]
@@ -1535,7 +1535,7 @@ mod export {
         assert!(!proc.is_null());
         let proc = unsafe { &*proc };
 
-        let expanded = tilde_expansion(&proc.path.to_str().unwrap());
+        let expanded = tilde_expansion(proc.path.to_str().unwrap());
 
         let path = match expanded.canonicalize() {
             Ok(path) => path,

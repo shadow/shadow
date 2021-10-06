@@ -419,7 +419,7 @@ impl DescriptorFlags {
         if self.contains(Self::CLOEXEC) {
             flags.insert(OFlag::O_CLOEXEC);
         }
-        return flags;
+        flags
     }
 
     /// Returns a tuple of the `DescriptorFlags` and any remaining flags.

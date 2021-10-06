@@ -286,7 +286,7 @@ mod export {
                            handle);
                 std::ptr::null_mut()
             }
-            None => return std::ptr::null_mut(),
+            None => std::ptr::null_mut(),
         }
     }
 }
