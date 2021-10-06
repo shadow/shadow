@@ -280,7 +280,7 @@ time, regardless of Shadow version.
 
 #### `experimental.host_heartbeat_interval`
 
-Default: "1 sec"  
+Default: null  
 Type: String OR Integer OR null
 
 Amount of time between heartbeat messages for this host.

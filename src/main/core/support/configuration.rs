@@ -412,7 +412,7 @@ impl Default for ExperimentalOptions {
             progress: Some(false),
             host_heartbeat_log_level: Some(LogLevel::Info),
             host_heartbeat_log_info: Some(std::array::IntoIter::new([LogInfoFlag::Node]).collect()),
-            host_heartbeat_interval: Some(units::Time::new(1, units::TimePrefixUpper::Sec)),
+            host_heartbeat_interval: None,
         }
     }
 }
