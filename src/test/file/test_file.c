@@ -123,7 +123,31 @@ static void _test_write() {
     assert_nonneg_errno(fd = open(adf.name, O_WRONLY));
     assert_nonneg_errno(rv = write(fd, wbuf, sizeof(wbuf)));
     g_assert_cmpint(rv, ==, sizeof(wbuf));
-    assert_nonneg_errno(rv = write(fd, "asdf", 0)); // check that 0 bytes is allowed
+
+    // Position should be updated
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+
+    // check that 0 bytes is allowed
+    assert_nonneg_errno(rv = write(fd, "asdf", 0));
+    g_assert_cmpint(rv, ==, 0);
+    assert_nonneg_errno(close(fd));
+}
+
+static void _test_pwrite() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    const char wbuf[] = "test file write";
+    int fd, rv;
+    assert_nonneg_errno(fd = open(adf.name, O_WRONLY));
+    assert_nonneg_errno(rv = pwrite(fd, wbuf, sizeof(wbuf), 0));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+
+    // Should still be at position 0
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, 0);
+
+    // check that 0 bytes is allowed
+    assert_nonneg_errno(rv = write(fd, "asdf", 0));
     g_assert_cmpint(rv, ==, 0);
     assert_nonneg_errno(close(fd));
 }
@@ -138,6 +162,54 @@ static void _test_read() {
     assert_nonneg_errno(rv = read(fd, rbuf, sizeof(wbuf)));
     g_assert_cmpint(rv, ==, sizeof(wbuf));
     g_assert_cmpstr(rbuf, ==, wbuf);
+
+    // Position should be updated
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+
+    assert_nonneg_errno(close(fd));
+}
+
+static void _test_pread() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+    const char wbuf[] = "0123456789";
+    char rbuf[sizeof(wbuf)] = {0};
+    int fd, rv;
+    _set_contents(&adf, wbuf, sizeof(wbuf));
+    assert_nonneg_errno(fd = open(adf.name, O_RDONLY));
+
+    assert_nonneg_errno(rv = pread(fd, rbuf, sizeof(wbuf), 0));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+    g_assert_cmpstr(rbuf, ==, wbuf);
+
+    // Should still be at position 0
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, 0);
+
+    // pread from non-zero offset
+    memset(rbuf, 0, sizeof(rbuf));
+    assert_nonneg_errno(rv = pread(fd, rbuf, 2, 2));
+    g_assert_cmpint(rv, ==, 2);
+    g_assert_cmpstr(rbuf, ==, "23");
+
+    // Should still be at position 0
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, 0);
+
+    // Seek to end
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_END));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+
+    // Reading earlier offset should work the same
+    memset(rbuf, 0, sizeof(rbuf));
+    assert_nonneg_errno(rv = pread(fd, rbuf, 2, 2));
+    g_assert_cmpint(rv, ==, 2);
+    g_assert_cmpstr(rbuf, ==, "23");
+
+    // Should still be at EOF
+    assert_nonneg_errno(rv = lseek(fd, 0, SEEK_CUR));
+    g_assert_cmpint(rv, ==, sizeof(wbuf));
+
     assert_nonneg_errno(close(fd));
 }
 
@@ -576,7 +648,9 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/file/close", _test_close);
     g_test_add_func("/file/close_nonexistent", _test_close_nonexistent);
     g_test_add_func("/file/write", _test_write);
+    g_test_add_func("/file/pwrite", _test_pwrite);
     g_test_add_func("/file/read", _test_read);
+    g_test_add_func("/file/pread", _test_pread);
     g_test_add_func("/file/lseek", _test_lseek);
     g_test_add_func("/file/fopen", _test_fopen);
     g_test_add_func("/file/fclose", _test_fclose);
