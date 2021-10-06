@@ -440,7 +440,10 @@ static void _networkinterface_receivePacket(Host* host, NetworkInterface* interf
     }
 
     /* count our bandwidth usage by interface, and by socket handle if possible */
-    tracker_addInputBytes(host_getTracker(host), packet, socketHandle);
+    Tracker* tracker = host_getTracker(host);
+    if (tracker != NULL) {
+        tracker_addInputBytes(tracker, packet, socketHandle);
+    }
 }
 
 static void _networkinterface_receivePacketTask(Host* host, gpointer voidInterface,
@@ -628,7 +631,10 @@ static void _networkinterface_sendPackets(NetworkInterface* interface, Host* src
             _networkinterface_scheduleNextRefillIfNeeded(interface, src);
         }
 
-        tracker_addOutputBytes(host_getTracker(src), packet, socketHandle);
+        Tracker* tracker = host_getTracker(src);
+        if (tracker != NULL) {
+            tracker_addOutputBytes(tracker, packet, socketHandle);
+        }
 
         /* sending side is done with its ref */
         packet_unref(packet);

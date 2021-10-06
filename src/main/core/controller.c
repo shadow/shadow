@@ -330,12 +330,12 @@ static int _controller_registerHostCallback(const char* name, const ConfigOption
         params->ipAddr = ipAddr;
 
         params->logLevel = hostoptions_getLogLevel(host);
-        params->heartbeatLogLevel = hostoptions_getHeartbeatLogLevel(host);
-        params->heartbeatLogInfo = hostoptions_getHeartbeatLogInfo(host);
-        params->heartbeatInterval = hostoptions_getHeartbeatInterval(host);
         params->pcapDir = hostoptions_getPcapDirectory(host);
 
         /* some options come from the config options and not the host options */
+        params->heartbeatLogLevel = config_getHostHeartbeatLogLevel(config);
+        params->heartbeatLogInfo = config_getHostHeartbeatLogInfo(config);
+        params->heartbeatInterval = config_getHostHeartbeatInterval(config);
         params->sendBufSize = config_getSocketSendBuffer(config);
         params->recvBufSize = config_getSocketRecvBuffer(config);
         params->autotuneSendBuf = config_getSocketSendAutotune(config);

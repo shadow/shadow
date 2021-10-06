@@ -297,7 +297,10 @@ static void _process_terminate_threads(Process* proc) {
 static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
     SimulationTime delay = (SimulationTime) (elapsedTimeSec * SIMTIME_ONE_SECOND);
     cpu_addDelay(host_getCPU(proc->host), delay);
-    tracker_addProcessingTime(host_getTracker(proc->host), delay);
+    Tracker* tracker = host_getTracker(proc->host);
+    if (tracker != NULL) {
+        tracker_addProcessingTime(tracker, delay);
+    }
     proc->totalRunTime += elapsedTimeSec;
 }
 #endif
