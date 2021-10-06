@@ -137,7 +137,7 @@ Path to store simulation output.
 #### `general.heartbeat_interval`
 
 Default: "1 sec"  
-Type: String OR Integer
+Type: String OR Integer OR null
 
 Interval at which to print heartbeat messages.
 
@@ -281,7 +281,7 @@ time, regardless of Shadow version.
 #### `experimental.host_heartbeat_interval`
 
 Default: "1 sec"  
-Type: String OR Integer
+Type: String OR Integer OR null
 
 Amount of time between heartbeat messages for this host.
 

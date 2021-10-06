@@ -83,7 +83,9 @@ static void _socket_close(LegacyDescriptor* descriptor, Host* host) {
     MAGIC_ASSERT(socket->vtable);
 
     Tracker* tracker = host_getTracker(host);
-    tracker_removeSocket(tracker, descriptor_getHandle(descriptor));
+    if (tracker != NULL) {
+        tracker_removeSocket(tracker, descriptor_getHandle(descriptor));
+    }
 
     socket->vtable->close((LegacyDescriptor*)socket, host);
 }
@@ -127,8 +129,11 @@ void socket_init(Socket* socket, Host* host, SocketFunctionTable* vtable, Legacy
     socket->outputBufferSize = sendBufferSize;
 
     Tracker* tracker = host_getTracker(host);
-    LegacyDescriptor* descriptor = (LegacyDescriptor *)socket;
-    tracker_addSocket(tracker, descriptor->handle, socket->protocol, socket->inputBufferSize, socket->outputBufferSize);
+    if (tracker != NULL) {
+        LegacyDescriptor* descriptor = (LegacyDescriptor*)socket;
+        tracker_addSocket(tracker, descriptor->handle, socket->protocol, socket->inputBufferSize,
+                          socket->outputBufferSize);
+    }
 }
 
 ProtocolType socket_getProtocol(Socket* socket) {
@@ -150,8 +155,10 @@ gint socket_connectToPeer(Socket* socket, Host* host, in_addr_t ip, in_port_t po
     MAGIC_ASSERT(socket->vtable);
 
     Tracker* tracker = host_getTracker(host);
-    LegacyDescriptor* descriptor = (LegacyDescriptor *)socket;
-    tracker_updateSocketPeer(tracker, descriptor->handle, ip, ntohs(port));
+    if (tracker != NULL) {
+        LegacyDescriptor* descriptor = (LegacyDescriptor*)socket;
+        tracker_updateSocketPeer(tracker, descriptor->handle, ip, ntohs(port));
+    }
 
     return socket->vtable->connectToPeer(socket, host, ip, port, family);
 }
@@ -355,8 +362,11 @@ gboolean socket_addToInputBuffer(Socket* socket, Host* host, Packet* packet) {
 
     /* update the tracker input buffer stats */
     Tracker* tracker = host_getTracker(host);
-    LegacyDescriptor* descriptor = (LegacyDescriptor *)socket;
-    tracker_updateSocketInputBuffer(tracker, descriptor->handle, socket->inputBufferLength, socket->inputBufferSize);
+    if (tracker != NULL) {
+        LegacyDescriptor* descriptor = (LegacyDescriptor*)socket;
+        tracker_updateSocketInputBuffer(
+            tracker, descriptor->handle, socket->inputBufferLength, socket->inputBufferSize);
+    }
 
     /* we just added a packet, so we are readable */
     if(socket->inputBufferLength > 0) {
@@ -383,8 +393,11 @@ Packet* socket_removeFromInputBuffer(Socket* socket, Host* host) {
 
         /* update the tracker input buffer stats */
         Tracker* tracker = host_getTracker(host);
-        LegacyDescriptor* descriptor = (LegacyDescriptor *)socket;
-        tracker_updateSocketInputBuffer(tracker, descriptor->handle, socket->inputBufferLength, socket->inputBufferSize);
+        if (tracker != NULL) {
+            LegacyDescriptor* descriptor = (LegacyDescriptor*)socket;
+            tracker_updateSocketInputBuffer(
+                tracker, descriptor->handle, socket->inputBufferLength, socket->inputBufferSize);
+        }
 
         /* we are not readable if we are now empty */
         if(socket->inputBufferLength <= 0) {
@@ -430,8 +443,11 @@ gboolean socket_addToOutputBuffer(Socket* socket, Host* host, Packet* packet) {
 
     /* update the tracker input buffer stats */
     Tracker* tracker = host_getTracker(host);
-    LegacyDescriptor* descriptor = (LegacyDescriptor *)socket;
-    tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
+    if (tracker != NULL) {
+        LegacyDescriptor* descriptor = (LegacyDescriptor*)socket;
+        tracker_updateSocketOutputBuffer(
+            tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
+    }
 
     /* we just added a packet, we are no longer writable if full */
     if(_socket_getOutputBufferSpaceIncludingTCP(socket) <= 0) {
@@ -466,8 +482,11 @@ Packet* socket_removeFromOutputBuffer(Socket* socket, Host* host) {
 
         /* update the tracker input buffer stats */
         Tracker* tracker = host_getTracker(host);
-        LegacyDescriptor* descriptor = (LegacyDescriptor *)socket;
-        tracker_updateSocketOutputBuffer(tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
+        if (tracker != NULL) {
+            LegacyDescriptor* descriptor = (LegacyDescriptor*)socket;
+            tracker_updateSocketOutputBuffer(
+                tracker, descriptor->handle, socket->outputBufferLength, socket->outputBufferSize);
+        }
 
         /* we are writable if we now have space */
         if(_socket_getOutputBufferSpaceIncludingTCP(socket) > 0) {

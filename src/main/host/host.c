@@ -348,8 +348,10 @@ void host_boot(Host* host) {
     MAGIC_ASSERT(host);
 
     /* must be done after the default IP exists so tracker_heartbeat works */
-    host->tracker = tracker_new(host, host->params.heartbeatInterval,
-                                host->params.heartbeatLogLevel, host->params.heartbeatLogInfo);
+    if (host->params.heartbeatInterval != SIMTIME_INVALID) {
+        host->tracker = tracker_new(host, host->params.heartbeatInterval,
+                                    host->params.heartbeatLogLevel, host->params.heartbeatLogInfo);
+    }
 
     /* start refilling the token buckets for all interfaces */
     GHashTableIter iter;

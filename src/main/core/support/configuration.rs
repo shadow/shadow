@@ -11,7 +11,7 @@ use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroU32;
 
-use super::simulation_time::{SIMTIME_ONE_NANOSECOND, SIMTIME_ONE_SECOND};
+use super::simulation_time::{SIMTIME_INVALID, SIMTIME_ONE_NANOSECOND, SIMTIME_ONE_SECOND};
 use super::units::{self, Unit};
 use crate::cshadow as c;
 use log_bindings as c_log;
@@ -1003,14 +1003,10 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
 
-        config
-            .general
-            .heartbeat_interval
-            .unwrap()
-            .convert(units::TimePrefixUpper::Sec)
-            .unwrap()
-            .value()
-            * SIMTIME_ONE_SECOND
+        match config.general.heartbeat_interval {
+            Some(x) => x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND,
+            None => SIMTIME_INVALID,
+        }
     }
 
     #[no_mangle]
@@ -1330,14 +1326,10 @@ mod export {
         assert!(!config.is_null());
         let config = unsafe { &*config };
 
-        config
-            .experimental
-            .host_heartbeat_interval
-            .unwrap()
-            .convert(units::TimePrefixUpper::Sec)
-            .unwrap()
-            .value()
-            * SIMTIME_ONE_SECOND
+        match config.experimental.host_heartbeat_interval {
+            Some(x) => x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND,
+            None => SIMTIME_INVALID,
+        }
     }
 
     #[no_mangle]
