@@ -45,18 +45,18 @@ struct _Controller {
     RoutingInfo_u32* routingInfo;
     DNS* dns;
 
-    /* minimum allowed time jump when sending events between nodes */
-    SimulationTime minJumpTimeConfig;
-    SimulationTime minJumpTime;
-    bool isJumpTimeDynamic;
+    /* minimum allowed runahead when sending events between nodes */
+    SimulationTime minRunaheadConfig;
+    SimulationTime minRunahead;
+    bool isRunaheadDynamic;
 
-    /* the next min jump time is updated by workers, so needs to be locked */
-    GRWLock nextMinJumpTimeLock;
-    SimulationTime nextMinJumpTime;
+    /* the next min runahead time is updated by workers, so needs to be locked */
+    GRWLock nextMinRunaheadLock;
+    SimulationTime nextMinRunahead;
 
     /* start of current window of execution */
     SimulationTime executeWindowStart;
-    /* end of current window of execution (start + min_time_jump) */
+    /* end of current window of execution (start + min_runahead) */
     SimulationTime executeWindowEnd;
     /* the simulator should attempt to end immediately after this time */
     SimulationTime endTime;
@@ -95,13 +95,13 @@ Controller* controller_new(const ConfigOptions* config) {
     controller->config = config;
     controller->random = random_new(config_getSeed(config));
 
-    controller->minJumpTimeConfig = config_getRunahead(config);
-    controller->isJumpTimeDynamic = config_getUseDynamicMinJumpTime(config);
+    controller->minRunaheadConfig = config_getRunahead(config);
+    controller->isRunaheadDynamic = config_getUseDynamicRunahead(config);
 
     controller->endTime = config_getStopTime(config);
     controller->bootstrapEndTime = config_getBootstrapEndTime(config);
 
-    g_rw_lock_init(&controller->nextMinJumpTimeLock);
+    g_rw_lock_init(&controller->nextMinRunaheadLock);
 
     /* these are only avail in glib >= 2.30
      * setup signal handlers for gracefully handling shutdowns */
@@ -140,7 +140,7 @@ void controller_free(Controller* controller) {
         controller->random = NULL;
     }
 
-    g_rw_lock_clear(&controller->nextMinJumpTimeLock);
+    g_rw_lock_clear(&controller->nextMinRunaheadLock);
 
     MAGIC_CLEAR(controller);
     g_free(controller);
@@ -148,31 +148,31 @@ void controller_free(Controller* controller) {
     info("simulation controller destroyed");
 }
 
-static SimulationTime _controller_getMinTimeJump(Controller* controller) {
+static SimulationTime _controller_getMinRunahead(Controller* controller) {
     MAGIC_ASSERT(controller);
 
-    utility_assert(controller->minJumpTime > 0);
-    return MAX(controller->minJumpTime, controller->minJumpTimeConfig);
+    utility_assert(controller->minRunahead > 0);
+    return MAX(controller->minRunahead, controller->minRunaheadConfig);
 }
 
-void controller_updateMinTimeJump(Controller* controller, SimulationTime minPathLatency) {
+void controller_updateMinRunahead(Controller* controller, SimulationTime minPathLatency) {
     MAGIC_ASSERT(controller);
 
-    if (controller->isJumpTimeDynamic) {
-        g_rw_lock_writer_lock(&controller->nextMinJumpTimeLock);
-        if (controller->nextMinJumpTime == 0 || minPathLatency < controller->nextMinJumpTime) {
+    if (controller->isRunaheadDynamic) {
+        g_rw_lock_writer_lock(&controller->nextMinRunaheadLock);
+        if (controller->nextMinRunahead == 0 || minPathLatency < controller->nextMinRunahead) {
             utility_assert(minPathLatency > 0);
-            SimulationTime oldJumpNs = controller->nextMinJumpTime > 0 ? controller->nextMinJumpTime
-                                                                       : controller->minJumpTime;
-            controller->nextMinJumpTime = minPathLatency;
-            info("minimum time jump for next scheduling round updated from %" G_GUINT64_FORMAT
+            SimulationTime oldJumpNs = controller->nextMinRunahead > 0 ? controller->nextMinRunahead
+                                                                       : controller->minRunahead;
+            controller->nextMinRunahead = minPathLatency;
+            info("minimum time runahead for next scheduling round updated from %" G_GUINT64_FORMAT
                  " to %" G_GUINT64_FORMAT
                  " ns; the minimum config override is %s (%" G_GUINT64_FORMAT " ns)",
-                 oldJumpNs, controller->nextMinJumpTime,
-                 controller->minJumpTimeConfig > 0 ? "set" : "not set",
-                 controller->minJumpTimeConfig);
+                 oldJumpNs, controller->nextMinRunahead,
+                 controller->minRunaheadConfig > 0 ? "set" : "not set",
+                 controller->minRunaheadConfig);
         }
-        g_rw_lock_writer_unlock(&controller->nextMinJumpTimeLock);
+        g_rw_lock_writer_unlock(&controller->nextMinRunaheadLock);
     }
 }
 
@@ -196,8 +196,8 @@ static void _controller_initializeTimeWindows(Controller* controller) {
     MAGIC_ASSERT(controller);
 
     controller->executeWindowStart = 0;
-    SimulationTime jump = _controller_getMinTimeJump(controller);
-    controller->executeWindowEnd = jump;
+    SimulationTime duration = _controller_getMinRunahead(controller);
+    controller->executeWindowEnd = duration;
 }
 
 static void _controller_registerArgCallback(const char* arg, void* _argArray) {
@@ -473,9 +473,12 @@ gint controller_run(Controller* controller) {
         return 1;
     }
 
-    controller->minJumpTime =
+    /* The initial minimum runahead is set to the smallest latency between nodes. If dynamic
+     * runahead is enabled, this minimum runahead may increase or decrease after the first packet
+     * has been sent. Otherwise, this minimum runahead will be used for the entire simulation. */
+    controller->minRunahead =
         routinginfo_smallestLatencyNs(controller->routingInfo) * SIMTIME_ONE_NANOSECOND;
-    info("using an initial minimum time jump of %" G_GUINT64_FORMAT " ns", controller->minJumpTime);
+    info("using an initial minimum runahead of %" G_GUINT64_FORMAT " ns", controller->minRunahead);
 
     /* we don't need the network graph anymore, so free it to save memory */
     networkgraph_free(controller->graph);
@@ -516,16 +519,16 @@ gboolean controller_managerFinishedCurrentRound(Controller* controller,
     /* TODO: once we get multiple managers, we have to block them here
      * until they have all notified us that they are finished */
 
-    /* update our detected min jump time */
-    g_rw_lock_reader_lock(&controller->nextMinJumpTimeLock);
-    if (controller->nextMinJumpTime != 0) {
-        controller->minJumpTime = controller->nextMinJumpTime;
+    /* update our detected min runahead time */
+    g_rw_lock_reader_lock(&controller->nextMinRunaheadLock);
+    if (controller->nextMinRunahead != 0) {
+        controller->minRunahead = controller->nextMinRunahead;
     }
-    g_rw_lock_reader_unlock(&controller->nextMinJumpTimeLock);
+    g_rw_lock_reader_unlock(&controller->nextMinRunaheadLock);
 
     /* update the next interval window based on next event times */
     SimulationTime newStart = minNextEventTime;
-    SimulationTime newEnd = minNextEventTime + _controller_getMinTimeJump(controller);
+    SimulationTime newEnd = minNextEventTime + _controller_getMinRunahead(controller);
 
     /* update the new window end as one interval past the new window start,
      * making sure we dont run over the experiment end time */

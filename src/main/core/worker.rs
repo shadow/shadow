@@ -211,7 +211,7 @@ impl Worker {
         Worker::with_mut(|w| w.clock.last.replace(t)).unwrap();
     }
 
-    pub fn update_min_time_jump(t: Duration) {
+    pub fn update_min_runahead(t: Duration) {
         assert!(!t.is_zero());
 
         let updated = Worker::with_mut(|w| {
@@ -226,7 +226,7 @@ impl Worker {
         if updated {
             Worker::with(|w| {
                 unsafe {
-                    cshadow::workerpool_updateMinTimeJump(
+                    cshadow::workerpool_updateMinRunahead(
                         w.worker_pool,
                         SimulationTime::to_c_simtime(Some(t.into())),
                     )
@@ -367,8 +367,8 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_updateMinTimeJump(t: cshadow::SimulationTime) {
-        Worker::update_min_time_jump(*SimulationTime::from_c_simtime(t).unwrap());
+    pub extern "C" fn worker_updateMinRunahead(t: cshadow::SimulationTime) {
+        Worker::update_min_runahead(*SimulationTime::from_c_simtime(t).unwrap());
     }
 
     #[no_mangle]

@@ -615,9 +615,9 @@ guint32 manager_getNodeBandwidthDown(Manager* manager, GQuark nodeID, in_addr_t 
     return networkinterface_getSpeedDownKiBps(interface);
 }
 
-void manager_updateMinTimeJump(Manager* manager, SimulationTime time) {
+void manager_updateMinRunahead(Manager* manager, SimulationTime time) {
     MAGIC_ASSERT(manager);
-    return controller_updateMinTimeJump(manager->controller, time);
+    return controller_updateMinRunahead(manager->controller, time);
 }
 
 SimulationTime manager_getLatencyForAddresses(Manager* manager, Address* sourceAddress,

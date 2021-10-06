@@ -43,7 +43,7 @@ guint manager_getRawCPUFrequency(Manager* manager);
 DNS* manager_getDNS(Manager* manager);
 guint32 manager_getNodeBandwidthUp(Manager* manager, GQuark nodeID, in_addr_t ip);
 guint32 manager_getNodeBandwidthDown(Manager* manager, GQuark nodeID, in_addr_t ip);
-void manager_updateMinTimeJump(Manager* manager, SimulationTime time);
+void manager_updateMinRunahead(Manager* manager, SimulationTime time);
 SimulationTime manager_getLatencyForAddresses(Manager* manager, Address* sourceAddress,
                                               Address* destinationAddress);
 SimulationTime manager_getLatency(Manager* manager, GQuark sourceHostID, GQuark destinationHostID);

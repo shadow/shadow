@@ -1433,7 +1433,7 @@ extern "C" {
     pub fn worker_getNodeBandwidthDown(nodeID: GQuark, ip: in_addr_t) -> guint32;
 }
 extern "C" {
-    pub fn workerpool_updateMinTimeJump(pool: *mut WorkerPool, time: SimulationTime);
+    pub fn workerpool_updateMinRunahead(pool: *mut WorkerPool, time: SimulationTime);
 }
 extern "C" {
     pub fn worker_getLatencyForAddresses(
@@ -1507,7 +1507,7 @@ extern "C" {
     pub fn worker_setActiveThread(thread: *mut Thread);
 }
 extern "C" {
-    pub fn worker_updateMinTimeJump(t: SimulationTime);
+    pub fn worker_updateMinRunahead(t: SimulationTime);
 }
 extern "C" {
     pub fn process_registerCompatDescriptor(

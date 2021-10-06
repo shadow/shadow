@@ -24,7 +24,7 @@ gdouble controller_getRunTimeElapsed(Controller*);
 
 gboolean controller_managerFinishedCurrentRound(Controller*, SimulationTime, SimulationTime*,
                                                 SimulationTime*);
-void controller_updateMinTimeJump(Controller* controller, SimulationTime minPathLatency);
+void controller_updateMinRunahead(Controller* controller, SimulationTime minPathLatency);
 SimulationTime controller_getLatency(Controller* controller, Address* srcAddress,
                                      Address* dstAddress);
 gfloat controller_getReliability(Controller* controller, Address* srcAddress, Address* dstAddress);

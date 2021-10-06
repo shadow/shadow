@@ -84,7 +84,7 @@ bool worker_isBootstrapActive(void);
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 
-void workerpool_updateMinTimeJump(WorkerPool* pool, SimulationTime time);
+void workerpool_updateMinRunahead(WorkerPool* pool, SimulationTime time);
 SimulationTime worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress);
 SimulationTime worker_getLatency(GQuark sourceHostID, GQuark destinationHostID);
 gdouble worker_getReliabilityForAddresses(Address* sourceAddress, Address* destinationAddress);
