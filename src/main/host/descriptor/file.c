@@ -387,9 +387,8 @@ ssize_t file_pread(File* file, Host* host, void* buf, size_t bufSize, off_t offs
         return (ssize_t)bufSize;
     }
 
-    trace("File %i will pread %zu bytes from os-backed file %i at path '%s'",
-          _file_getFD(file), bufSize, _file_getOSBackedFD(file),
-          file->osfile.abspath);
+    trace("File %i will pread %zu bytes from os-backed file %i offset %ld at path '%s'",
+          _file_getFD(file), bufSize, _file_getOSBackedFD(file), offset, file->osfile.abspath);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -468,9 +467,8 @@ ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset) {
         return -EBADF;
     }
 
-    trace("File %i will pwrite %zu bytes to os-backed file %i at path '%s'",
-          _file_getFD(file), bufSize, _file_getOSBackedFD(file),
-          file->osfile.abspath);
+    trace("File %i will pwrite %zu bytes to os-backed file %i offset %ld at path '%s'",
+          _file_getFD(file), bufSize, _file_getOSBackedFD(file), offset, file->osfile.abspath);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
