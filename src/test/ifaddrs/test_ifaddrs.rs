@@ -16,7 +16,7 @@ fn main() {
     let mut ip_vec = vec![];
     for ifaddr in addrs {
         if let Some(nix::sys::socket::SockAddr::Inet(address)) = ifaddr.address {
-            let address_str = address.to_str();
+            let address_str = address.to_string();
             let ip = address_str.split(":").collect::<Vec<&str>>()[0];
             println!(
                 "found ifaddr interface {} address {}",
