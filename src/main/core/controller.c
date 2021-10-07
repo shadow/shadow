@@ -157,22 +157,41 @@ static SimulationTime _controller_getMinRunahead(Controller* controller) {
 
 void controller_updateMinRunahead(Controller* controller, SimulationTime minPathLatency) {
     MAGIC_ASSERT(controller);
+    utility_assert(minPathLatency > 0);
 
-    if (controller->isRunaheadDynamic) {
+    if (!controller->isRunaheadDynamic) {
+        return;
+    }
+
+    // an initial check with only a read lock
+    g_rw_lock_reader_lock(&controller->nextMinRunaheadLock);
+    if (controller->nextMinRunahead == 0 || minPathLatency < controller->nextMinRunahead) {
+        g_rw_lock_reader_unlock(&controller->nextMinRunaheadLock);
+
+        // if we updated the min runahead or not
+        bool updated = false;
+        SimulationTime oldRunahead = 0;
+
+        // check the same condition again, but with a write lock
         g_rw_lock_writer_lock(&controller->nextMinRunaheadLock);
         if (controller->nextMinRunahead == 0 || minPathLatency < controller->nextMinRunahead) {
-            utility_assert(minPathLatency > 0);
-            SimulationTime oldJumpNs = controller->nextMinRunahead > 0 ? controller->nextMinRunahead
-                                                                       : controller->minRunahead;
+            oldRunahead = controller->nextMinRunahead > 0 ? controller->nextMinRunahead
+                                                          : controller->minRunahead;
             controller->nextMinRunahead = minPathLatency;
+            updated = true;
+        }
+        g_rw_lock_writer_unlock(&controller->nextMinRunaheadLock);
+
+        if (updated) {
+            // these info messages may appear out-of-order in the log
             info("minimum time runahead for next scheduling round updated from %" G_GUINT64_FORMAT
                  " to %" G_GUINT64_FORMAT
                  " ns; the minimum config override is %s (%" G_GUINT64_FORMAT " ns)",
-                 oldJumpNs, controller->nextMinRunahead,
-                 controller->minRunaheadConfig > 0 ? "set" : "not set",
+                 oldRunahead, minPathLatency, controller->minRunaheadConfig > 0 ? "set" : "not set",
                  controller->minRunaheadConfig);
         }
-        g_rw_lock_writer_unlock(&controller->nextMinRunaheadLock);
+    } else {
+        g_rw_lock_reader_unlock(&controller->nextMinRunaheadLock);
     }
 }
 
