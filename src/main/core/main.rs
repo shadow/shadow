@@ -119,8 +119,10 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     // Disable address space layout randomization of processes forked from this
     // one to improve determinism in cases when an executable under simulation
     // branch on memory addresses.
-    disable_aslr().context("Could not disable plugin address space layout randomization")?;
-    log::debug!("ASLR disabled for processes forked from this parent process");
+    match disable_aslr() {
+        Ok(()) => log::debug!("ASLR disabled for processes forked from this parent process"),
+        Err(e) => log::warn!("Could not disable address space layout randomization. This may affect determinism: {:?}", e),
+    };
 
     // check sidechannel mitigations
     if unsafe { c::main_sidechannelMitigationsEnabled() } {
