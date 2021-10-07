@@ -12,30 +12,27 @@ use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
 
 pub struct PipeFile {
-    buffer: Arc<AtomicRefCell<SharedBuf>>,
+    buffer: Option<Arc<AtomicRefCell<SharedBuf>>>,
     event_source: StateEventSource,
     state: FileState,
     mode: FileMode,
     status: FileStatus,
     // we only store this so that the handle is dropped when we are
-    _buffer_event_handle: Option<Handle<(FileState, FileState)>>,
+    buffer_event_handle: Option<Handle<(FileState, FileState)>>,
 }
 
 impl PipeFile {
-    pub fn new(buffer: Arc<AtomicRefCell<SharedBuf>>, mode: FileMode, status: FileStatus) -> Self {
-        let mut rv = Self {
-            buffer,
+    /// Create a new [`PipeFile`]. The new pipe must be initialized using
+    /// [`PipeFile::connect_to_buffer`] before any of its methods are called.
+    pub fn new(mode: FileMode, status: FileStatus) -> Self {
+        Self {
+            buffer: None,
             event_source: StateEventSource::new(),
             state: FileState::ACTIVE,
             mode,
             status,
-            _buffer_event_handle: None,
-        };
-
-        rv.state
-            .insert(rv.filter_state(rv.buffer.borrow_mut().state()));
-
-        rv
+            buffer_event_handle: None,
+        }
     }
 
     pub fn get_status(&self) -> FileStatus {
@@ -51,16 +48,32 @@ impl PipeFile {
     }
 
     pub fn max_size(&self) -> usize {
-        self.buffer.borrow().max_len()
+        self.buffer.as_ref().unwrap().borrow().max_len()
     }
 
     pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
-        // set the closed flag and remove the active flag
+        // drop the event listener handle so that we stop receiving new events
+        self.buffer_event_handle.take().unwrap().stop_listening();
+
+        // if open for writing, inform the buffer that there is one fewer writers
+        if self.mode.contains(FileMode::WRITE) {
+            self.buffer
+                .as_ref()
+                .unwrap()
+                .borrow_mut()
+                .remove_writer(event_queue);
+        }
+
+        // no need to hold on to the buffer anymore
+        self.buffer = None;
+
+        // set the closed flag and remove the active, readable, and writable flags
         self.copy_state(
-            FileState::CLOSED | FileState::ACTIVE,
+            FileState::CLOSED | FileState::ACTIVE | FileState::READABLE | FileState::WRITABLE,
             FileState::CLOSED,
             event_queue,
         );
+
         Ok(0.into())
     }
 
@@ -84,10 +97,21 @@ impl PipeFile {
         }
 
         let mut bytes = bytes;
-        let num_read = self.buffer.borrow_mut().read(&mut bytes, event_queue)?;
+        let num_read = self
+            .buffer
+            .as_ref()
+            .unwrap()
+            .borrow_mut()
+            .read(&mut bytes, event_queue)?;
 
-        // the read would block if we could not write any bytes, but were asked to
-        if usize::from(num_read) == 0 && bytes.stream_len_bp()? != 0 {
+        // the read would block if all:
+        //  1. we could not read any bytes
+        //  2. we were asked to read >0 bytes
+        //  3. there are open descriptors that refer to the write end of the pipe
+        if usize::from(num_read) == 0
+            && bytes.stream_len_bp()? != 0
+            && self.buffer.as_ref().unwrap().borrow().num_writers > 0
+        {
             Err(Errno::EWOULDBLOCK.into())
         } else {
             Ok(num_read.into())
@@ -116,6 +140,8 @@ impl PipeFile {
         let mut bytes = bytes;
         let num_written = self
             .buffer
+            .as_ref()
+            .unwrap()
             .borrow_mut()
             .write(bytes.by_ref(), event_queue)?;
 
@@ -127,25 +153,50 @@ impl PipeFile {
         }
     }
 
-    pub fn enable_notifications(arc: &Arc<AtomicRefCell<Self>>) {
+    pub fn connect_to_buffer(
+        arc: &Arc<AtomicRefCell<Self>>,
+        buffer: Arc<AtomicRefCell<SharedBuf>>,
+        event_queue: &mut EventQueue,
+    ) {
         let weak = Arc::downgrade(arc);
         let pipe = &mut *arc.borrow_mut();
+
+        pipe.buffer = Some(buffer);
+
+        if pipe.mode.contains(FileMode::WRITE) {
+            pipe.buffer
+                .as_ref()
+                .unwrap()
+                .borrow_mut()
+                .add_writer(event_queue);
+        }
 
         // remove any state flags that aren't relevant to us
         let monitoring = pipe.filter_state(FileState::READABLE | FileState::WRITABLE);
 
-        let handle = pipe.buffer.borrow_mut().add_listener(
+        let handle = pipe.buffer.as_ref().unwrap().borrow_mut().add_listener(
             monitoring,
             StateListenerFilter::Always,
             move |state, _changed, event_queue| {
                 // if the file hasn't been dropped
                 if let Some(pipe) = weak.upgrade() {
-                    pipe.borrow_mut().copy_state(monitoring, state, event_queue)
+                    let mut pipe = pipe.borrow_mut();
+
+                    // if the pipe is already closed, do nothing
+                    if pipe.state.contains(FileState::CLOSED) {
+                        return;
+                    }
+
+                    pipe.copy_state(monitoring, state, event_queue);
                 }
             },
         );
 
-        pipe._buffer_event_handle = Some(handle);
+        pipe.buffer_event_handle = Some(handle);
+
+        // update the pipe file's initial state based on the buffer's state
+        let buffer_state = pipe.buffer.as_ref().unwrap().borrow_mut().state();
+        pipe.state.insert(pipe.filter_state(buffer_state));
     }
 
     pub fn add_listener(
@@ -214,6 +265,7 @@ pub struct SharedBuf {
     queue: ByteQueue,
     max_len: usize,
     state: FileState,
+    num_writers: u16,
     event_source: StateEventSource,
 }
 
@@ -223,6 +275,7 @@ impl SharedBuf {
             queue: ByteQueue::new(8192),
             max_len: c::CONFIG_PIPE_BUFFER_SIZE as usize,
             state: FileState::WRITABLE,
+            num_writers: 0,
             event_source: StateEventSource::new(),
         }
     }
@@ -239,18 +292,23 @@ impl SharedBuf {
         self.max_len - self.queue.len()
     }
 
+    pub fn add_writer(&mut self, event_queue: &mut EventQueue) {
+        self.num_writers += 1;
+        self.refresh_state(event_queue);
+    }
+
+    pub fn remove_writer(&mut self, event_queue: &mut EventQueue) {
+        self.num_writers -= 1;
+        self.refresh_state(event_queue);
+    }
+
     pub fn read<W: std::io::Write>(
         &mut self,
         bytes: W,
         event_queue: &mut EventQueue,
     ) -> SyscallResult {
         let num = self.queue.pop(bytes)?;
-
-        // readable if not empty
-        self.adjust_state(FileState::READABLE, !self.is_empty(), event_queue);
-
-        // writable if space is available
-        self.adjust_state(FileState::WRITABLE, self.space_available() > 0, event_queue);
+        self.refresh_state(event_queue);
 
         Ok(num.into())
     }
@@ -261,9 +319,7 @@ impl SharedBuf {
         event_queue: &mut EventQueue,
     ) -> SyscallResult {
         let written = self.queue.push(bytes.take(self.space_available() as u64))?;
-
-        self.adjust_state(FileState::READABLE, !self.is_empty(), event_queue);
-        self.adjust_state(FileState::WRITABLE, self.space_available() > 0, event_queue);
+        self.refresh_state(event_queue);
 
         Ok(written.into())
     }
@@ -280,6 +336,14 @@ impl SharedBuf {
 
     pub fn state(&self) -> FileState {
         self.state
+    }
+
+    fn refresh_state(&mut self, event_queue: &mut EventQueue) {
+        let readable = !self.is_empty() || self.num_writers == 0;
+        let writable = self.space_available() > 0;
+
+        self.adjust_state(FileState::READABLE, readable, event_queue);
+        self.adjust_state(FileState::WRITABLE, writable, event_queue);
     }
 
     fn adjust_state(&mut self, state: FileState, do_set_bits: bool, event_queue: &mut EventQueue) {
