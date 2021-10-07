@@ -396,12 +396,13 @@ static guint _tcp_calculateRTT(TCP* tcp, Host* host) {
         GQuark sourceID = (GQuark)address_getID(srcAddress);
         GQuark destinationID = (GQuark)address_getID(dstAddress);
 
-        /* get latency in milliseconds */
-        gdouble srcLatency = worker_getLatency(sourceID, destinationID);
-        gdouble dstLatency = worker_getLatency(destinationID, sourceID);
+        /* these sim time values are a duration and not an absolute time */
+        SimulationTime srcLatency = worker_getLatency(sourceID, destinationID);
+        SimulationTime dstLatency = worker_getLatency(destinationID, sourceID);
 
-        guint sendLatency = (guint) ceil(srcLatency);
-        guint receiveLatency = (guint) ceil(dstLatency);
+        /* find latency in milliseconds */
+        guint sendLatency = (guint)ceil((gdouble)srcLatency / SIMTIME_ONE_MILLISECOND);
+        guint receiveLatency = (guint)ceil((gdouble)dstLatency / SIMTIME_ONE_MILLISECOND);
 
         if(sendLatency == 0 || receiveLatency == 0) {
             utility_panic("need nonzero latency to set buffer sizes, "

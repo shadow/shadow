@@ -84,8 +84,9 @@ bool worker_isBootstrapActive(void);
 guint32 worker_getNodeBandwidthUp(GQuark nodeID, in_addr_t ip);
 guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip);
 
-gdouble worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress);
-gdouble worker_getLatency(GQuark sourceHostID, GQuark destinationHostID);
+void workerpool_updateMinRunahead(WorkerPool* pool, SimulationTime time);
+SimulationTime worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress);
+SimulationTime worker_getLatency(GQuark sourceHostID, GQuark destinationHostID);
 gdouble worker_getReliabilityForAddresses(Address* sourceAddress, Address* destinationAddress);
 gdouble worker_getReliability(GQuark sourceHostID, GQuark destinationHostID);
 bool worker_isRoutable(Address* sourceAddress, Address* destinationAddress);

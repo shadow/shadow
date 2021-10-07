@@ -78,6 +78,7 @@ hosts:
 - [`experimental.socket_send_autotune`](#experimentalsocket_send_autotune)
 - [`experimental.socket_send_buffer`](#experimentalsocket_send_buffer)
 - [`experimental.use_cpu_pinning`](#experimentaluse_cpu_pinning)
+- [`experimental.use_dynamic_runahead`](#experimentaluse_dynamic_runahead)
 - [`experimental.use_explicit_block_message`](#experimentaluse_explicit_block_message)
 - [`experimental.use_legacy_working_dir`](#experimentaluse_legacy_working_dir)
 - [`experimental.use_libc_preload`](#experimentaluse_libc_preload)
@@ -384,6 +385,13 @@ Type: Bool
 
 Pin each thread and any processes it executes to the same logical CPU Core to
 improve cache affinity.
+
+#### `experimental.use_dynamic_runahead`
+
+Default: false  
+Type: Bool
+
+Update the minimum runahead dynamically throughout the simulation.
 
 #### `experimental.use_explicit_block_message`
 

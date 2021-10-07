@@ -615,13 +615,18 @@ guint32 manager_getNodeBandwidthDown(Manager* manager, GQuark nodeID, in_addr_t 
     return networkinterface_getSpeedDownKiBps(interface);
 }
 
-gdouble manager_getLatencyForAddresses(Manager* manager, Address* sourceAddress,
-                                       Address* destinationAddress) {
+void manager_updateMinRunahead(Manager* manager, SimulationTime time) {
+    MAGIC_ASSERT(manager);
+    return controller_updateMinRunahead(manager->controller, time);
+}
+
+SimulationTime manager_getLatencyForAddresses(Manager* manager, Address* sourceAddress,
+                                              Address* destinationAddress) {
     MAGIC_ASSERT(manager);
     return controller_getLatency(manager->controller, sourceAddress, destinationAddress);
 }
 
-gdouble manager_getLatency(Manager* manager, GQuark sourceHostID, GQuark destinationHostID) {
+SimulationTime manager_getLatency(Manager* manager, GQuark sourceHostID, GQuark destinationHostID) {
     Host* sourceHost = _manager_getHost(manager, sourceHostID);
     Host* destinationHost = _manager_getHost(manager, destinationHostID);
     Address* sourceAddress = host_getDefaultAddress(sourceHost);

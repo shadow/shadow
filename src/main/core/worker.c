@@ -551,8 +551,8 @@ void worker_sendPacket(Host* srcHost, Packet* packet) {
      * control has problems responding to packet loss */
     if (bootstrapping || chance <= reliability || packet_getPayloadLength(packet) == 0) {
         /* the sender's packet will make it through, find latency */
-        gfloat latency = worker_getLatencyForAddresses(srcAddress, dstAddress);
-        SimulationTime delay = (SimulationTime)ceil(latency * SIMTIME_ONE_MILLISECOND);
+        SimulationTime delay = worker_getLatencyForAddresses(srcAddress, dstAddress);
+        worker_updateMinRunahead(delay);
         SimulationTime deliverTime = worker_getCurrentTime() + delay;
 
         worker_incrementPacketCount(srcAddress, dstAddress);
@@ -624,11 +624,16 @@ guint32 worker_getNodeBandwidthDown(GQuark nodeID, in_addr_t ip) {
     return manager_getNodeBandwidthDown(_worker_pool()->manager, nodeID, ip);
 }
 
-gdouble worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress) {
-    return manager_getLatencyForAddresses(_worker_pool()->manager, sourceAddress, destinationAddress);
+void workerpool_updateMinRunahead(WorkerPool* pool, SimulationTime time) {
+    manager_updateMinRunahead(pool->manager, time);
 }
 
-gdouble worker_getLatency(GQuark sourceHostID, GQuark destinationHostID) {
+SimulationTime worker_getLatencyForAddresses(Address* sourceAddress, Address* destinationAddress) {
+    return manager_getLatencyForAddresses(
+        _worker_pool()->manager, sourceAddress, destinationAddress);
+}
+
+SimulationTime worker_getLatency(GQuark sourceHostID, GQuark destinationHostID) {
     return manager_getLatency(_worker_pool()->manager, sourceHostID, destinationHostID);
 }
 
