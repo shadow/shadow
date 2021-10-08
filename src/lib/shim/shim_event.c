@@ -1,13 +1,6 @@
 #include <unistd.h>
 
 #include "lib/shim/shim_event.h"
-#include "lib/shim/shim_syscall.h"
-#include "main/host/syscall_numbers.h"
-
-int shadow_hostname_to_addr_ipv4(const char* name, size_t name_len, uint32_t* addr,
-                                 size_t addr_len) {
-    return shim_native_syscall(SYS_shadow_hostname_to_addr_ipv4, name, name_len, addr, addr_len);
-}
 
 static inline void shim_determinedSend(int sock_fd, const void* ptr,
                                        size_t nbytes) {

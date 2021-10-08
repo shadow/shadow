@@ -21,11 +21,6 @@ typedef struct _ShimSharedMem {
     struct timespec sim_time;
 } ShimSharedMem;
 
-// Asks shadow to find the ipv4 `addr` associated with hostname `name`.
-// Return 0 if an address was found and written to addr. Returns -1 and sets errno on failure.
-int shadow_hostname_to_addr_ipv4(const char* name, size_t name_len, uint32_t* addr,
-                                 size_t addr_len);
-
 typedef enum {
     // Next val: 13
     SHD_SHIM_EVENT_NULL = 0,

@@ -18,7 +18,8 @@
 
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
-#include "lib/shim/shim_event.h"
+#include "lib/shim/shim_syscall.h"
+#include "main/host/syscall_numbers.h" // For SYS_shadow_hostname_to_addr_ipv4
 
 // Sets `port` to the port specified by `service`, according to the criteria in
 // getaddrinfo(3). Returns 0 on success or the appropriate getaddrinfo error on
@@ -211,10 +212,15 @@ static bool _syscall_hostname_to_addr_ipv4(const char* node, uint32_t* addr) {
         return false;
     }
 
+    // Resolve the hostname (find the ipv4 `addr` associated with hostname `name`) using a custom
+    // syscall that Shadow handles internally. We want to execute natively in ptrace mode so ptrace
+    // can intercept it, but we want to send to Shadow through shmem in preload mode. Let
+    // shim_syscall figure it out.
     trace("Performing custom shadow syscall SYS_shadow_hostname_to_addr_ipv4 for name %s", node);
+    int rv =
+        shim_syscall(SYS_shadow_hostname_to_addr_ipv4, node, strlen(node), addr, sizeof(*addr));
 
-    // Resolve the hostname using a custom syscall that shadow handles
-    if (shadow_hostname_to_addr_ipv4(node, strlen(node), addr, sizeof(*addr)) == 0) {
+    if (rv == 0) {
 #ifdef DEBUG
         char addr_str_buf[INET_ADDRSTRLEN] = {0};
         if (inet_ntop(AF_INET, (struct in_addr*)addr, addr_str_buf, INET_ADDRSTRLEN)) {
