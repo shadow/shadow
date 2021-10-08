@@ -28,6 +28,7 @@
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
 #include "lib/tsc/tsc.h"
+#include "main/host/syscall_numbers.h" // for SYS_shadow_* defs
 
 // Whether Shadow is using preload-based interposition.
 static bool _using_interpose_preload = false;
@@ -71,7 +72,8 @@ static void _shim_set_allow_native_syscalls(bool is_allowed) {
         trace("%s native-syscalls via shmem %p", is_allowed ? "allowing" : "disallowing",
               _shim_shared_mem);
     } else {
-        shadow_set_ptrace_allow_native_syscalls(is_allowed);
+        // Ptrace will intercept the native syscall and handle this from within Shadow.
+        shim_native_syscall(SYS_shadow_set_ptrace_allow_native_syscalls, is_allowed);
         trace("%s native-syscalls via custom syscall", is_allowed ? "allowing" : "disallowing");
     }
 }
@@ -274,7 +276,9 @@ static void _shim_child_init_shm() {
 
     assert(!_shim_shared_mem());
     ShMemBlockSerialized shm_blk_serialized;
-    int rv = shadow_get_shm_blk(&shm_blk_serialized);
+
+    // We execute this natively and ptrace will intercept and handle from within Shadow.
+    int rv = shim_native_syscall(SYS_shadow_get_shm_blk, &shm_blk_serialized);
     if (rv != 0) {
         panic("shadow_get_shm_blk: %s", strerror(errno));
         abort();
