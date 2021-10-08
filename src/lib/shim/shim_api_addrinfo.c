@@ -11,6 +11,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -207,9 +208,17 @@ out:
 
 // Ask shadow to provide an ipv4 addr for a node using a custom syscall.
 // Returns true if we got a valid address from shadow, false otherwise.
-static bool _syscall_hostname_to_addr_ipv4(const char* node, uint32_t* addr) {
+static bool _shim_api_hostname_to_addr_ipv4(const char* node, uint32_t* addr) {
     if (!node || !addr) {
         return false;
+    }
+
+    // Skip the Shadow syscall for localhost lookups.
+    if (strcasecmp(node, "localhost") == 0) {
+        // Loopback address in network order.
+        *addr = htonl(INADDR_LOOPBACK);
+        trace("handled localhost getaddrinfo() lookup locally");
+        return true;
     }
 
     // Resolve the hostname (find the ipv4 `addr` associated with hostname `name`) using a custom
@@ -391,9 +400,10 @@ int shim_api_getaddrinfo(const char* node, const char* service, const struct add
         // TODO: look for IPv6 addresses in /etc/hosts.
     }
     if (add_ipv4) {
-        // Try a Shadow syscall first to avoid scanning the /etc/hosts file.
+        // Try first to avoid scanning the /etc/hosts file.
         uint32_t addr;
-        if (_syscall_hostname_to_addr_ipv4(node, &addr)) {
+        if (_shim_api_hostname_to_addr_ipv4(node, &addr)) {
+            // We got the address we needed.
             _getaddrinfo_appendv4(res, &tail, add_tcp, add_udp, add_raw, addr, port);
         } else {
             // Fall back to scanning /etc/hosts.
