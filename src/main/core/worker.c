@@ -404,13 +404,10 @@ void* _worker_run(void* voidWorkerThreadInfo) {
 
     // Set thread name
     {
-        GString* name = g_string_new(NULL);
-        g_string_printf(name, "worker-%i", threadID);
-        int rv = pthread_setname_np(pthread_self(), name->str);
+        int rv = pthread_setname_np(pthread_self(), "shadow-worker");
         if (rv != 0) {
-            warning("unable to set name of worker thread to '%s': %s", name->str, g_strerror(rv));
+            warning("unable to set name of worker thread: %s", g_strerror(rv));
         }
-        g_string_free(name, TRUE);
     }
 
     LogicalProcessors* lps = workerPool->logicalProcessors;
