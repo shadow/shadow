@@ -256,8 +256,7 @@ long shim_syscallv(long n, va_list args) {
     } else {
         // The syscall is made directly; ptrace or seccomp will get the syscall signal.
         trace("Making syscall %ld directly; we expect ptrace or seccomp will interpose it, or it "
-              "will be "
-              "handled natively by the kernel.",
+              "will be handled natively by the kernel.",
               n);
         rv = shim_native_syscallv(n, args);
     }
