@@ -66,6 +66,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             test_get_size,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
+        test_utils::ShadowTest::new(
+            "test_read_after_write_close",
+            test_read_after_write_close,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
     ];
 
     tests
@@ -320,4 +325,41 @@ fn test_get_size() -> Result<(), String> {
 
         Ok(())
     })
+}
+
+fn test_read_after_write_close() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK) } },
+        &[]
+    )?;
+
+    assert!(fds[0] > 0, "fds[0] not set");
+    assert!(fds[1] > 0, "fds[1] not set");
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[read_fd], || {
+        let mut buf = vec![0u8; 10];
+
+        test_utils::run_and_close_fds(&[write_fd], || {
+            assert_eq!(
+                nix::unistd::read(read_fd, &mut buf).unwrap_err(),
+                nix::errno::Errno::EWOULDBLOCK
+            );
+
+            nix::unistd::write(write_fd, &[1, 2, 3]).unwrap();
+            assert_eq!(nix::unistd::read(read_fd, &mut buf).unwrap(), 3);
+            assert_eq!(
+                nix::unistd::read(read_fd, &mut buf).unwrap_err(),
+                nix::errno::Errno::EWOULDBLOCK
+            );
+        });
+
+        // the write fd is closed, so reading should return 0
+        assert_eq!(nix::unistd::read(read_fd, &mut buf).unwrap(), 0);
+        assert_eq!(nix::unistd::read(read_fd, &mut buf).unwrap(), 0);
+    });
+
+    Ok(())
 }
