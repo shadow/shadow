@@ -6,8 +6,10 @@
 #include "main/host/syscall/shadow.h"
 
 #include <errno.h>
+#include <netdb.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <strings.h>
 
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
@@ -39,8 +41,23 @@ SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = rv};
     }
 
-    trace("Looking up name %s", name);
-    Address* address = worker_resolveNameToAddress(name);
+    if (strcasecmp(name, "localhost") == 0) {
+        // Loopback address in network order.
+        uint32_t* addr = process_getWriteablePtr(sys->process, addr_ptr, addr_len);
+        *addr = htonl(INADDR_LOOPBACK);
+        trace("Returning loopback address for localhost");
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    }
+
+    Address* address;
+
+    if (strncasecmp(name, host_getName(sys->host), MIN(name_len, NI_MAXHOST)) == 0) {
+        trace("Using default address for my own hostname %s", name);
+        address = host_getDefaultAddress(sys->host);
+    } else {
+        trace("Looking up name %s", name);
+        address = worker_resolveNameToAddress(name);
+    }
 
     if (address) {
         trace("Found address %s for name %s", address_toString(address), name);
