@@ -87,6 +87,7 @@ pub struct ShadowLogger {
 
 thread_local!(static SENDER: RefCell<Option<Sender<LoggerCommand>>> = RefCell::new(None));
 thread_local!(static THREAD_NAME: Lazy<String> = Lazy::new(|| { get_thread_name() }));
+thread_local!(static THREAD_ID: Lazy<nix::unistd::Pid> = Lazy::new(|| { nix::unistd::gettid() }));
 
 fn get_thread_name() -> String {
     let mut thread_name = Vec::<i8>::with_capacity(16);
@@ -112,9 +113,8 @@ fn get_thread_name() -> String {
     // /proc/self/task/[tid]/comm. We're probably in a bad state anyway if that
     // happens, but try to recover anyway.
 
-    // Fall back on raw tid.
-    let tid = unsafe { libc::syscall(libc::SYS_gettid) };
-    format!("tid={}", tid)
+    // Empty string
+    String::new()
 }
 
 impl ShadowLogger {
@@ -185,7 +185,7 @@ impl ShadowLogger {
                     parts.nanos / 1000
                 )?;
             }
-            write!(stdout, " [{}]", record.thread_name)?;
+            write!(stdout, " [{}:{}]", record.thread_id, record.thread_name)?;
             if let Some(emu_time) = record.emu_time {
                 let sim_time = emu_time.duration_since(&emulated_time::SIMULATION_START);
                 let parts = TimeParts::from_nanos(sim_time.as_nanos());
@@ -330,6 +330,9 @@ impl Log for ShadowLogger {
             thread_name: THREAD_NAME
                 .try_with(|name| (*name).clone())
                 .unwrap_or_else(|_| get_thread_name()),
+            thread_id: THREAD_ID
+                .try_with(|id| **id)
+                .unwrap_or_else(|_| nix::unistd::gettid()),
             host_info,
         };
 
@@ -373,6 +376,7 @@ struct ShadowLogRecord {
 
     emu_time: Option<EmulatedTime>,
     thread_name: String,
+    thread_id: nix::unistd::Pid,
     host_info: Option<Arc<HostInfo>>,
 }
 
