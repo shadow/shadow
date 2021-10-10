@@ -47,8 +47,4 @@ void shim_newThreadFinish();
 // the parent thread that it is now initialized.
 void shim_newThreadChildInitd();
 
-// Gets and resets the instruction pointer to which the child should resume
-// execution after a clone syscall.
-void* shim_take_clone_rip();
-
 #endif // SHD_SHIM_SHIM_H_
