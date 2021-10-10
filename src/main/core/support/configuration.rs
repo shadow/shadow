@@ -404,7 +404,7 @@ impl Default for ExperimentalOptions {
             use_shim_syscall_handler: Some(true),
             use_cpu_pinning: Some(true),
             interpose_method: Some(InterposeMethod::Preload),
-            runahead: None,
+            runahead: Some(units::Time::new(1, units::TimePrefix::Milli)),
             use_dynamic_runahead: Some(false),
             scheduler_policy: Some(SchedulerPolicy::Host),
             socket_send_buffer: Some(units::Bytes::new(131_072, units::SiPrefixUpper::Base)),
