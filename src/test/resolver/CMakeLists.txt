@@ -8,8 +8,5 @@ add_executable(test-getaddrinfo test_getaddrinfo.c)
 target_link_libraries(test-getaddrinfo ${GLIB_LIBRARIES})
 
 ## register the tests
-add_test(NAME test-getaddrinfo COMMAND test-getaddrinfo)
-add_test(NAME test-getaddrinfo-preload-libc COMMAND test-getaddrinfo)
-
-SET_TESTS_PROPERTIES(test-getaddrinfo-preload-libc
-    PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_BINARY_DIR}/src/lib/shim/libshadow-shim.so")
+add_linux_tests(BASENAME getaddrinfo COMMAND test-getaddrinfo)
+add_shadow_tests(BASENAME getaddrinfo)

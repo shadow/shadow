@@ -337,7 +337,7 @@ Show the simulation progress at the bottom of the terminal.
 
 #### `experimental.runahead`
 
-Default: null  
+Default: "1 ms"  
 Type: String OR null
 
 If set, overrides the automatically calculated minimum time workers may run
