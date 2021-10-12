@@ -11,12 +11,15 @@
 Shadow produces simulator log messages in the following format:
 
 ```text
-real-time [thread-name] virtual-time [loglevel] [hostname:ip] [src-file:line-number] [function-name] MESSAGE
+real-time [thread-id:thread-name] virtual-time [loglevel] [hostname:ip] [src-file:line-number] [function-name] MESSAGE
 ```
 
 - `real-time`:  
   the wall clock time since the start of the experiment, represented as
   `hours:minutes:seconds`
+- `thread-id`:  
+  the thread id (as returned by `gettid`) of the system thread that generated
+  the message.
 - `thread-name`:  
   the name of the system thread that generated the message
 - `virtual-time`:  
