@@ -35,6 +35,8 @@ set(SHIM_FILES
   shim_api_ifaddrs.c
   shim_api_syscall.c
   shim_logger.c
+  shim_rdtsc.c
+  shim_seccomp.c
   shim_shmem.c
   shim_sys.c
   shim_syscall.c

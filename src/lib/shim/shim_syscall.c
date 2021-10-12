@@ -8,6 +8,7 @@
 #include "lib/shim/ipc.h"
 #include "lib/shim/shim.h"
 #include "lib/shim/shim_event.h"
+#include "lib/shim/shim_seccomp.h"
 #include "lib/shim/shim_shmem.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_tls.h"
@@ -34,7 +35,7 @@ long __attribute__((noinline)) shim_native_syscallv(long n, va_list args) {
     // However right now the actual clone syscall instruction *must* be executed
     // from this function to pass the seccomp filter.
     void* clone_rip = NULL;
-    if (n == SYS_clone && (clone_rip = shim_take_clone_rip()) != NULL) {
+    if (n == SYS_clone && (clone_rip = shim_seccomp_take_clone_rip()) != NULL) {
         // Make the clone syscall, and then in the child thread immediately jump
         // to the instruction after the original clone syscall instruction.
         //
