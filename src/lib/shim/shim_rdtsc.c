@@ -7,11 +7,14 @@
 #include <signal.h>
 #include <string.h>
 #include <sys/prctl.h>
+#include <sys/syscall.h>
 #include <sys/ucontext.h>
 
 #include "lib/logger/logger.h"
+#include "lib/shim/shim.h"
 #include "lib/shim/shim_logger.h"
 #include "lib/shim/shim_sys.h"
+#include "lib/shim/shim_syscall.h"
 #include "lib/tsc/tsc.h"
 
 static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
@@ -55,10 +58,13 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
     }
     error("Unhandled sigsegv");
 
-    // We don't have the "normal" segv signal handler to fall back on, but the
-    // sigabrt handler typically does the same thing - dump core and exit with a
-    // failure.
-    raise(SIGABRT);
+    // Uninstall the SIGSEGV handler to avoid recursion, then die with a SIGSEGV.
+    shim_disableInterposition();
+    sigaction(SIGSEGV, &(struct sigaction){.sa_handler = SIG_DFL}, NULL);
+    raise(SIGSEGV);
+
+    // Ensure death.
+    abort();
 }
 
 void shim_rdtsc_init() {
@@ -71,12 +77,11 @@ void shim_rdtsc_init() {
     if (sigaction(SIGSEGV,
                   &(struct sigaction){
                       .sa_sigaction = _shim_rdtsc_handle_sigsegv,
-                      // SA_NODEFER: Allow recursive signal handling, to handle a syscall
-                      // being made during the handling of another. For example, we need this
-                      // to properly handle the case that we end up logging from the syscall
-                      // handler, and the IO syscalls themselves are trapped.
+                      // SA_NODEFER: Handle recursive SIGSEGVs, so that it can
+                      // "rethrow" the SIGSEGV and in case of a bug in the
+                      // handler.
                       // SA_SIGINFO: Required because we're specifying sa_sigaction.
-                      .sa_flags = SA_NODEFER | SA_SIGINFO,
+                      .sa_flags = SA_SIGINFO | SA_NODEFER,
                   },
                   NULL) < 0) {
         panic("sigaction: %s", strerror(errno));

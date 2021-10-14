@@ -242,6 +242,7 @@ static ShMemBlock* _threadpreload_getShMBlock(Thread* base) {
 SysCallCondition* threadpreload_resume(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
+    utility_assert(thread->isRunning);
     utility_assert(thread->currentEvent.event_id != SHD_SHIM_EVENT_NULL);
 
     // Flush any pending writes, e.g. from a previous thread that exited without flushing.
@@ -277,8 +278,20 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                     return NULL;
                 }
 
+                // Some syscall handlers can result in death of the thread,
+                // which unrefs the handler in cleanup. We keep an extra
+                // reference to it during the call to prevent it from
+                // disappearing while it's still referenced on the call stack.
+                SysCallHandler* handler = thread->base.sys;
+                syscallhandler_ref(handler);
                 SysCallReturn result = syscallhandler_make_syscall(
-                    thread->base.sys, &thread->currentEvent.event_data.syscall.syscall_args);
+                    handler, &thread->currentEvent.event_data.syscall.syscall_args);
+                syscallhandler_unref(handler);
+                handler = NULL;
+
+                if (!thread->isRunning) {
+                    return NULL;
+                }
 
                 // Flush any writes the syscallhandler made.
                 process_flushPtrs(thread->base.process);
@@ -326,6 +339,7 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 break;
             }
         }
+        utility_assert(thread->isRunning);
 
         /* previous event was handled, wait for next one */
         _threadpreload_waitForNextEvent(thread);
@@ -433,6 +447,12 @@ long threadpreload_nativeSyscall(Thread* base, long n, va_list args) {
 
     ShimEvent resp = {0};
     shimevent_recvEventFromPlugin(thread->ipc_data, &resp);
+    if (resp.event_id == SHD_SHIM_EVENT_STOP) {
+        trace("Plugin exited while executing native syscall %ld", n);
+        _threadpreload_cleanup(thread);
+        // We have to return *something* here. Probably doesn't matter much what.
+        return -ESRCH;
+    }
     utility_assert(resp.event_id == SHD_SHIM_EVENT_SYSCALL_COMPLETE);
     return resp.event_data.syscall_complete.retval.as_i64;
 }
