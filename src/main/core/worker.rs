@@ -12,7 +12,7 @@ use crate::host::thread::ThreadId;
 use crate::host::thread::{CThread, Thread};
 use crate::utility::counter::Counter;
 use crate::utility::notnull::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -56,7 +56,7 @@ pub struct Worker {
 
     // This value is not the minimum latency of the simulation, but just a saved copy of this
     // worker's minimum latency.
-    min_latency_cache: Option<Duration>,
+    min_latency_cache: Cell<Option<Duration>>,
 
     // A counter for all syscalls made by processes freed by this worker.
     syscall_counter: Counter,
@@ -93,7 +93,7 @@ impl Worker {
                     barrier: None,
                 },
                 bootstrap_end_time,
-                min_latency_cache: None,
+                min_latency_cache: Cell::new(None),
                 object_alloc_counter: Counter::new(),
                 object_dealloc_counter: Counter::new(),
                 syscall_counter: Counter::new(),
@@ -214,26 +214,19 @@ impl Worker {
     pub fn update_min_runahead(t: Duration) {
         assert!(!t.is_zero());
 
-        let updated = Worker::with_mut(|w| {
-            if w.min_latency_cache.is_none() || t < w.min_latency_cache.unwrap() {
-                w.min_latency_cache = Some(t);
-                return true;
-            }
-            false
-        })
-        .unwrap();
-
-        if updated {
-            Worker::with(|w| {
+        Worker::with(|w| {
+            let min_latency_cache = w.min_latency_cache.get();
+            if min_latency_cache.is_none() || t < min_latency_cache.unwrap() {
+                w.min_latency_cache.set(Some(t));
                 unsafe {
                     cshadow::workerpool_updateMinRunahead(
                         w.worker_pool,
                         SimulationTime::to_c_simtime(Some(t.into())),
                     )
                 };
-            })
-            .unwrap();
-        }
+            }
+        })
+        .unwrap();
     }
 
     // Runs `f` with a shared reference to the current thread's Worker. Returns
