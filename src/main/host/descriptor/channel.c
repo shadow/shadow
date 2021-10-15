@@ -89,7 +89,7 @@ static gssize channel_linkedWrite(Channel* channel, Thread* thread, PluginVirtua
     }
 
     /* accept some data from the other end of the pipe */
-    bytequeue_push(channel->buffer, readablePtr, copyLength);
+    bytequeue_pushStream(channel->buffer, readablePtr, copyLength);
     channel->bufferLength += copyLength;
 
     /* we just got some data in our buffer */

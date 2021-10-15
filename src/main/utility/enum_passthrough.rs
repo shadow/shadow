@@ -51,3 +51,24 @@ macro_rules! enum_passthrough_generic {
         }
     };
 }
+
+/** Like [`enum_passthrough!`], but calls `into()` on the return value. For example:
+
+```rust
+enum_passthrough_into!(self, (event_queue), Pipe, Socket;
+    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult
+);
+```
+**/
+
+macro_rules! enum_passthrough_into {
+    ($self:ident, $args2:tt, $($variant:ident),+; $v:vis fn $name:ident $args:tt $(-> $($rv:tt)+)?) => {
+        $v fn $name $args $(-> $($rv)+)? {
+            match $self {
+                $(
+                Self::$variant(x) => x.$name $args2.into(),
+                )*
+            }
+        }
+    };
+}

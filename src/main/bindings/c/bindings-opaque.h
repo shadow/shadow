@@ -26,7 +26,16 @@ typedef enum QDiscMode {
 // Memory allocated by Shadow, in a remote address space.
 typedef struct AllocdMem_u8 AllocdMem_u8;
 
-// A queue of byte chunks.
+// A queue of bytes that supports reading and writing stream and/or packet data.
+//
+// Both stream and packet data can be pushed onto the buffer and their order will be preserved.
+// Data is stored internally as a linked list of chunks. Each chunk stores either stream or packet
+// data. Consecutive stream data may be merged into a single chunk, but consecutive packets will
+// always be contained in their own chunks.
+//
+// To avoid memory copies when moving bytes from one `ByteQueue` to another, you can use
+// `pop_chunk()` to remove a chunk from the queue, and use `push_chunk()` to add it to another
+// queue.
 typedef struct ByteQueue ByteQueue;
 
 // Utility for monitoring a set of child pid's, calling registered callbacks

@@ -1,5 +1,6 @@
 use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
+use std::convert::{TryFrom, TryInto};
 use std::sync::Arc;
 
 use crate::cshadow as c;
@@ -289,7 +290,7 @@ impl SharedBuf {
     }
 
     pub fn space_available(&self) -> usize {
-        self.max_len - self.queue.len()
+        self.max_len - usize::try_from(self.queue.len()).unwrap()
     }
 
     pub fn add_writer(&mut self, event_queue: &mut EventQueue) {
@@ -307,7 +308,7 @@ impl SharedBuf {
         bytes: W,
         event_queue: &mut EventQueue,
     ) -> SyscallResult {
-        let num = self.queue.pop(bytes)?;
+        let (num, _chunk_type) = self.queue.pop(bytes)?;
         self.refresh_state(event_queue);
 
         Ok(num.into())
@@ -318,7 +319,9 @@ impl SharedBuf {
         bytes: R,
         event_queue: &mut EventQueue,
     ) -> SyscallResult {
-        let written = self.queue.push(bytes.take(self.space_available() as u64))?;
+        let written = self
+            .queue
+            .push_stream(bytes.take(self.space_available().try_into().unwrap()))?;
         self.refresh_state(event_queue);
 
         Ok(written.into())

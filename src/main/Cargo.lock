@@ -110,6 +110,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
+name = "bytes"
+version = "1.1.0"
+source = "git+https://github.com/stevenengler/bytes?rev=871c7a18482186c91dbe2a2d9be20cc2c636fb02#871c7a18482186c91dbe2a2d9be20cc2c636fb02"
+
+[[package]]
 name = "cc"
 version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -816,6 +821,7 @@ dependencies = [
  "anyhow",
  "atomic_refcell",
  "bitflags",
+ "bytes",
  "clap",
  "crossbeam",
  "gml-parser",
