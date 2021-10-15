@@ -7,14 +7,50 @@
 #include <signal.h>
 #include <string.h>
 #include <sys/prctl.h>
+#include <sys/syscall.h>
 #include <sys/ucontext.h>
 
 #include "lib/logger/logger.h"
+#include "lib/shim/shim.h"
 #include "lib/shim/shim_logger.h"
 #include "lib/shim/shim_sys.h"
+#include "lib/shim/shim_syscall.h"
+#include "lib/shim/shim_tls.h"
 #include "lib/tsc/tsc.h"
 
+_Noreturn static void _shim_rdtsc_die_with_sigsegv() {
+    shim_disableInterposition();
+    if (sigaction(SIGSEGV, &(struct sigaction){.sa_handler = SIG_DFL}, NULL) != 0) {
+        panic("sigaction: %s", strerror(errno));
+    }
+    raise(SIGSEGV);
+    panic("Unexpectedly survived SIGSEGV");
+}
+
 static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
+    shim_disableInterposition();
+
+    // Detect recursion. Unfortunately there's still potential for infinite
+    // recursion here if there's a SEGV in this handling itself. We could avoid
+    // that by using SA_RESETHAND with `sigaction` to have the system reset the
+    // signal disposition every time this handler is invoked, but that doesn't
+    // work well with threads when `CLONE_SIGHAND` is in use. OTOH the infinite
+    // recursion should still ultimately result in a SIGSEGV - just with an
+    // annoyingly large stacktrace.
+    //
+    // Maybe something to revisit when we fully virtualize and implement signal
+    // handling; e.g. we could always clear CLONE_SIGHAND in `clone` calls, so
+    // that we can control signal dispositions independently for each thread
+    // (while emulating the CLONE_SIGHAND behavior for the managed process
+    // itself).
+    static ShimTlsVar in_handler_storage = {0};
+    bool* in_handler = shimtlsvar_ptr(&in_handler_storage, sizeof(*in_handler));
+    if (*in_handler) {
+        error("Recursive sigsegv");
+        _shim_rdtsc_die_with_sigsegv();
+    }
+    *in_handler = true;
+
     trace("Trapped sigsegv");
     static bool tsc_initd = false;
     static Tsc tsc;
@@ -40,9 +76,7 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
         regs[REG_RDX] = rdx;
         regs[REG_RAX] = rax;
         regs[REG_RIP] = rip;
-        return;
-    }
-    if (isRdtscp(insn)) {
+    } else if (isRdtscp(insn)) {
         trace("Emulating rdtscp");
         uint64_t rax, rdx, rcx;
         uint64_t rip = regs[REG_RIP];
@@ -51,14 +85,12 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
         regs[REG_RAX] = rax;
         regs[REG_RCX] = rcx;
         regs[REG_RIP] = rip;
-        return;
+    } else {
+        error("Unhandled sigsegv");
+        _shim_rdtsc_die_with_sigsegv();
     }
-    error("Unhandled sigsegv");
-
-    // We don't have the "normal" segv signal handler to fall back on, but the
-    // sigabrt handler typically does the same thing - dump core and exit with a
-    // failure.
-    raise(SIGABRT);
+    *in_handler = false;
+    shim_enableInterposition();
 }
 
 void shim_rdtsc_init() {
@@ -71,12 +103,12 @@ void shim_rdtsc_init() {
     if (sigaction(SIGSEGV,
                   &(struct sigaction){
                       .sa_sigaction = _shim_rdtsc_handle_sigsegv,
-                      // SA_NODEFER: Allow recursive signal handling, to handle a syscall
-                      // being made during the handling of another. For example, we need this
-                      // to properly handle the case that we end up logging from the syscall
-                      // handler, and the IO syscalls themselves are trapped.
-                      // SA_SIGINFO: Required because we're specifying sa_sigaction.
-                      .sa_flags = SA_NODEFER | SA_SIGINFO,
+                      // SA_NODEFER: Handle recursive SIGSEGVs, so that it can
+                      // "rethrow" the SIGSEGV and in case of a bug in the
+                      // handler.
+                      // SA_SIGINFO: Required because we're specifying
+                      // sa_sigaction.
+                      .sa_flags = SA_SIGINFO | SA_NODEFER,
                   },
                   NULL) < 0) {
         panic("sigaction: %s", strerror(errno));
