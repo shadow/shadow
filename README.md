@@ -80,9 +80,8 @@ Homepage:
 - https://shadow.github.io
 
 Detailed Documentation:
-- [Local user documentation in docs/README.md](docs/README.md)
-- [Online user documentation](https://shadow.github.io/docs/guide)
-- [Online developer documentation](https://shadow.github.io/docs/rust)
+- [User documentation](https://shadow.github.io/docs/guide)
+- [Developer documentation](https://shadow.github.io/docs/rust)
 
 Community Support:
 - https://github.com/shadow/shadow/discussions
