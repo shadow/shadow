@@ -17,7 +17,30 @@
 #include "lib/shim/shim_syscall.h"
 #include "lib/tsc/tsc.h"
 
+static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext);
+
+static void _shim_rdtsc_install_oneshot_sigsegv_handler() {
+    if (sigaction(SIGSEGV,
+                  &(struct sigaction){
+                      .sa_sigaction = _shim_rdtsc_handle_sigsegv,
+                      // SA_NODEFER: Handle recursive SIGSEGVs, so that it can
+                      // "rethrow" the SIGSEGV and in case of a bug in the
+                      // handler.
+                      // SA_RESETHAND: Restore the default action before
+                      // invoking the handler, so that a SIGSEGV in the handler
+                      // itself crashes instead of recursing.
+                      // SA_SIGINFO: Required because we're specifying
+                      // sa_sigaction.
+                      .sa_flags = SA_SIGINFO | SA_NODEFER | SA_RESETHAND,
+                  },
+                  NULL) < 0) {
+        panic("sigaction: %s", strerror(errno));
+    }
+}
+
 static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
+    shim_disableInterposition();
+
     trace("Trapped sigsegv");
     static bool tsc_initd = false;
     static Tsc tsc;
@@ -43,9 +66,7 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
         regs[REG_RDX] = rdx;
         regs[REG_RAX] = rax;
         regs[REG_RIP] = rip;
-        return;
-    }
-    if (isRdtscp(insn)) {
+    } else if (isRdtscp(insn)) {
         trace("Emulating rdtscp");
         uint64_t rax, rdx, rcx;
         uint64_t rip = regs[REG_RIP];
@@ -54,17 +75,13 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
         regs[REG_RAX] = rax;
         regs[REG_RCX] = rcx;
         regs[REG_RIP] = rip;
-        return;
+    } else {
+        error("Unhandled sigsegv");
+        raise(SIGSEGV);
+        panic("Unexpectedly survived SIGSEGV");
     }
-    error("Unhandled sigsegv");
-
-    // Uninstall the SIGSEGV handler to avoid recursion, then die with a SIGSEGV.
-    shim_disableInterposition();
-    sigaction(SIGSEGV, &(struct sigaction){.sa_handler = SIG_DFL}, NULL);
-    raise(SIGSEGV);
-
-    // Ensure death.
-    abort();
+    _shim_rdtsc_install_oneshot_sigsegv_handler();
+    shim_enableInterposition();
 }
 
 void shim_rdtsc_init() {
@@ -74,16 +91,5 @@ void shim_rdtsc_init() {
     }
 
     // Install our own handler to emulate.
-    if (sigaction(SIGSEGV,
-                  &(struct sigaction){
-                      .sa_sigaction = _shim_rdtsc_handle_sigsegv,
-                      // SA_NODEFER: Handle recursive SIGSEGVs, so that it can
-                      // "rethrow" the SIGSEGV and in case of a bug in the
-                      // handler.
-                      // SA_SIGINFO: Required because we're specifying sa_sigaction.
-                      .sa_flags = SA_SIGINFO | SA_NODEFER,
-                  },
-                  NULL) < 0) {
-        panic("sigaction: %s", strerror(errno));
-    }
+    _shim_rdtsc_install_oneshot_sigsegv_handler();
 }
