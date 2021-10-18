@@ -39,11 +39,28 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Get month
+        id: get-month
+        run: |
+          echo "::set-output name=month::$(/bin/date -u "+%Y%m")"
+
       - name: Install dependencies
         run: |
           . ci/container_scripts/install_deps.sh
           . ci/container_scripts/install_extra_deps.sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Restore cargo registry cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          # invalidate the cache once per month
+          key: cargo-registry-${{ steps.get-month.outputs.month }}
+          restore-keys: |
+            cargo-registry-
 
       - name: Build
         run: . ci/container_scripts/build_and_install.sh

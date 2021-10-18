@@ -69,6 +69,11 @@ jobs:
           ref: 47d5eb385195
           persist-credentials: false
 
+      - name: Get month
+        id: get-month
+        run: |
+          echo "::set-output name=month::$(/bin/date -u "+%Y%m")"
+
       - name: Install dependencies
         run: |
           cd shadow
@@ -78,6 +83,18 @@ jobs:
           # dependencies for tor and tgen
           DEBIAN_FRONTEND=noninteractive apt-get install -y automake libevent-dev libssl-dev zlib1g-dev libigraph-dev
           mkdir -p ~/.local/bin
+
+      - name: Restore cargo registry cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          # invalidate the cache once per month
+          key: cargo-registry-${{ steps.get-month.outputs.month }}
+          restore-keys: |
+            cargo-registry-
 
       - name: Build tor
         run: |
