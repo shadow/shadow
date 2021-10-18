@@ -4,7 +4,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 
 use clap::ArgEnum;
-use clap::Clap;
+use clap::Parser;
 use merge::Merge;
 use once_cell::sync::Lazy;
 use schemars::{schema_for, JsonSchema};
@@ -23,7 +23,7 @@ const END_HELP_TEXT: &str = "\
     case-sensitive.";
 
 /// Run real applications over simulated networks.
-#[derive(Debug, Clone, Clap)]
+#[derive(Debug, Clone, Parser)]
 #[clap(name = "Shadow", after_help = END_HELP_TEXT)]
 #[clap(version = std::option_env!("SHADOW_VERSION").unwrap_or(std::env!("CARGO_PKG_VERSION")))]
 pub struct CliOptions {
@@ -127,7 +127,7 @@ static GENERAL_HELP: Lazy<std::collections::HashMap<String, String>> =
 
 // these must all be Option types since they aren't required by the CLI, even if they're
 // required in the configuration file
-#[derive(Debug, Clone, Clap, Serialize, Deserialize, Merge, JsonSchema)]
+#[derive(Debug, Clone, Parser, Serialize, Deserialize, Merge, JsonSchema)]
 #[clap(help_heading = "GENERAL (Override configuration file options)")]
 #[serde(deny_unknown_fields)]
 pub struct GeneralOptions {
@@ -197,7 +197,7 @@ static NETWORK_HELP: Lazy<std::collections::HashMap<String, String>> =
 
 // these must all be Option types since they aren't required by the CLI, even if they're
 // required in the configuration file
-#[derive(Debug, Clone, Clap, Serialize, Deserialize, Merge, JsonSchema)]
+#[derive(Debug, Clone, Parser, Serialize, Deserialize, Merge, JsonSchema)]
 #[clap(help_heading = "NETWORK (Override network options)")]
 #[serde(deny_unknown_fields)]
 pub struct NetworkOptions {
@@ -226,7 +226,7 @@ impl NetworkOptions {
 static EXP_HELP: Lazy<std::collections::HashMap<String, String>> =
     Lazy::new(|| generate_help_strs(schema_for!(ExperimentalOptions)));
 
-#[derive(Debug, Clone, Clap, Serialize, Deserialize, Merge, JsonSchema)]
+#[derive(Debug, Clone, Parser, Serialize, Deserialize, Merge, JsonSchema)]
 #[clap(
     help_heading = "EXPERIMENTAL (Unstable and may change or be removed at any time, regardless of Shadow version)"
 )]
@@ -428,7 +428,7 @@ impl Default for ExperimentalOptions {
 static HOST_HELP: Lazy<std::collections::HashMap<String, String>> =
     Lazy::new(|| generate_help_strs(schema_for!(HostDefaultOptions)));
 
-#[derive(Debug, Clone, Clap, Serialize, Deserialize, Merge, JsonSchema)]
+#[derive(Debug, Clone, Parser, Serialize, Deserialize, Merge, JsonSchema)]
 #[clap(help_heading = "HOST DEFAULTS (Default options for hosts)")]
 #[serde(default, deny_unknown_fields)]
 pub struct HostDefaultOptions {
