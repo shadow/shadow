@@ -96,11 +96,23 @@ jobs:
           restore-keys: |
             cargo-registry-
 
-      - name: Build tor
+      - name: Restore tor build cache
+        id: restore-tor-build-cache
+        uses: actions/cache@v2
+        with:
+          path: tor
+          key: tor-build-${{ matrix.container }}-${{ matrix.tor }}
+
+      - name: Configure tor
+        if: steps.restore-tor-build-cache.outputs.cache-hit != 'true'
         run: |
           cd tor
           ./autogen.sh
           ./configure --disable-asciidoc --disable-unittests
+
+      - name: Build tor
+        run: |
+          cd tor
           make -j$(nproc)
           ln -s $(pwd)/src/app/tor ~/.local/bin/tor
 
