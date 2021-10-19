@@ -3,7 +3,7 @@ use std::ffi::{CStr, OsStr};
 use std::os::unix::ffi::OsStrExt;
 
 use anyhow::{self, Context};
-use clap::Clap;
+use clap::Parser;
 use nix::sys::{personality, resource, signal};
 
 use crate::core::logger::log_wrapper::c_to_rust_log_level;
