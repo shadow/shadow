@@ -34,7 +34,7 @@ jobs:
           - 'ubuntu:20.04'
           - 'debian:10-slim'
           - 'debian:11-slim'
-          - 'fedora:34'
+          - 'fedora:35'
           - 'quay.io/centos/centos:stream8'
         cc: ['gcc', 'clang']
         buildtype: ['debug', 'release']
