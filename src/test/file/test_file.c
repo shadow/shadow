@@ -477,14 +477,24 @@ __attribute__((unused)) static void _test_iov() {
     int filed;
     assert_nonneg_errno(filed = fileno(file));
 
-    struct iovec iov[UIO_MAXIOV];
+    struct iovec iov[UIO_MAXIOV+1];
 
     int rv = 0;
     int expected_errno = 0;
     int expected_rv = 0;
 
+#pragma GCC diagnostic push
+#if defined(__GNUC__) && __GNUC__ >= 11
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
+#if defined(__has_warning)
+#if __has_warning("-Wstringop-overflow")
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
+#endif
     g_assert_cmpint(readv(filed, iov, -1), ==, -1);
     assert_errno_is(EINVAL);
+#pragma GCC diagnostic pop
 
     g_assert_cmpint(readv(filed, iov, UIO_MAXIOV+1), ==, -1);
     assert_errno_is(EINVAL);
