@@ -8,6 +8,7 @@
   + make
   + xz-utils
   + procps
+  + lscpu
   + cargo, rustc (version \~ latest)
 
 ### Recommended Python Modules (for helper/analysis scripts):
@@ -31,6 +32,7 @@ sudo apt-get install -y \
     python3 \
     python3-pip \
     xz-utils \
+    util-linux \
     gcc \
     g++
 
@@ -78,6 +80,7 @@ sudo dnf install -y \
     xz-devel \
     yum-utils \
     diffutils \
+    util-linux \
     gcc \
     gcc-c++
 
