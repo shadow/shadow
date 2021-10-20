@@ -413,7 +413,7 @@ dependencies = [
 
 [[package]]
 name = "log-bindings"
-version = "2.0.0-pre.4"
+version = "2.0.0"
 
 [[package]]
 name = "lzma-rs"
@@ -811,7 +811,7 @@ dependencies = [
 
 [[package]]
 name = "shadow-rs"
-version = "2.0.0-pre.4"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "atomic_refcell",
