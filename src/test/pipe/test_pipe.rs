@@ -71,6 +71,41 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             test_read_after_write_close,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
+        test_utils::ShadowTest::new(
+            "test_o_direct_large_packet",
+            test_o_direct_large_packet,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_o_direct_read_fd",
+            test_o_direct_read_fd,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_o_direct_write_fd",
+            test_o_direct_write_fd,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_o_direct_stream_to_packet_mode_empty",
+            test_o_direct_stream_to_packet_mode_empty,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_o_direct_packet_to_stream_mode_empty",
+            test_o_direct_packet_to_stream_mode_empty,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_o_direct_stream_to_packet_mode_nonempty",
+            test_o_direct_stream_to_packet_mode_nonempty,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_o_direct_packet_to_stream_mode_nonempty",
+            test_o_direct_packet_to_stream_mode_nonempty,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
     ];
 
     tests
@@ -362,4 +397,318 @@ fn test_read_after_write_close() -> Result<(), String> {
     });
 
     Ok(())
+}
+
+// when writing large packets, they should be broken up into PIPE_BUF-sized packets
+fn test_o_direct_large_packet() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK | libc::O_DIRECT) } },
+        &[]
+    )?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        // write a packet with length 1.5 * PIPE_BUF
+        let packet = vec![0; libc::PIPE_BUF + (libc::PIPE_BUF / 2)];
+        let len = nix::unistd::write(write_fd, &packet).unwrap();
+        assert_eq!(len, packet.len());
+
+        let mut in_buf = vec![0u8; packet.len()];
+
+        // read one packet of size 1 * PIPE_BUF
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, libc::PIPE_BUF);
+
+        // read one packet of size 0.5 * PIPE_BUF
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, libc::PIPE_BUF / 2);
+
+        // no packets left
+        assert_eq!(
+            nix::unistd::read(read_fd, &mut in_buf).err(),
+            Some(nix::errno::Errno::EWOULDBLOCK)
+        );
+    });
+
+    Ok(())
+}
+
+// setting the O_DIRECT flag on the read fd has no effect
+fn test_o_direct_read_fd() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK) } },
+        &[]
+    )?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        // change only the read fd to O_DIRECT
+        assert_eq!(
+            unsafe { libc::fcntl(read_fd, libc::F_SETFL, libc::O_NONBLOCK | libc::O_DIRECT) },
+            0
+        );
+
+        nix::unistd::write(write_fd, &[1, 2]).unwrap();
+        nix::unistd::write(write_fd, &[3, 4, 5]).unwrap();
+
+        let mut in_buf = vec![0u8; 5];
+
+        // reads all 5 bytes at once (stream mode)
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 5);
+
+        // no packets left
+        assert_eq!(
+            nix::unistd::read(read_fd, &mut in_buf).err(),
+            Some(nix::errno::Errno::EWOULDBLOCK)
+        );
+    });
+
+    Ok(())
+}
+
+// setting the O_DIRECT flag on the write fd causes future writes to be in packet mode
+fn test_o_direct_write_fd() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK) } },
+        &[]
+    )?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        // change only the write fd to O_DIRECT
+        assert_eq!(
+            unsafe { libc::fcntl(write_fd, libc::F_SETFL, libc::O_NONBLOCK | libc::O_DIRECT) },
+            0
+        );
+
+        nix::unistd::write(write_fd, &[1, 2]).unwrap();
+        nix::unistd::write(write_fd, &[3, 4, 5]).unwrap();
+
+        let mut in_buf = vec![0u8; 5];
+
+        // reads only 2 bytes (packet mode)
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 2);
+
+        // reads only 3 bytes (packet mode)
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 3);
+
+        // no packets left
+        assert_eq!(
+            nix::unistd::read(read_fd, &mut in_buf).err(),
+            Some(nix::errno::Errno::EWOULDBLOCK)
+        );
+    });
+
+    Ok(())
+}
+
+fn test_o_direct_stream_to_packet_mode_empty() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK) } },
+        &[]
+    )?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        // write 5 bytes in stream mode
+        nix::unistd::write(write_fd, &[1, 2, 3, 4, 5]).unwrap();
+
+        // switch to packet mode
+        test_utils::check_system_call!(
+            || unsafe { libc::fcntl(write_fd, libc::F_SETFL, libc::O_NONBLOCK | libc::O_DIRECT) },
+            &[]
+        )?;
+
+        let mut in_buf = [0u8; 3];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 3);
+
+        let mut in_buf = [0u8; 2];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 2);
+
+        // make sure the pipe is empty
+        let mut in_buf = [0u8; 1];
+        assert_eq!(
+            nix::unistd::read(read_fd, &mut in_buf).err(),
+            Some(nix::errno::Errno::EWOULDBLOCK)
+        );
+
+        // write 5 bytes in packet mode
+        nix::unistd::write(write_fd, &[1, 2, 3, 4, 5]).unwrap();
+
+        let mut in_buf = [0u8; 3];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 3);
+
+        let mut in_buf = [0u8; 2];
+        assert_eq!(
+            nix::unistd::read(read_fd, &mut in_buf).err(),
+            Some(nix::errno::Errno::EWOULDBLOCK)
+        );
+
+        Ok(())
+    })
+}
+
+fn test_o_direct_packet_to_stream_mode_empty() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK | libc::O_DIRECT) } },
+        &[]
+    )?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        // write 5 bytes in packet mode
+        nix::unistd::write(write_fd, &[1, 2, 3, 4, 5]).unwrap();
+
+        // switch to stream mode
+        test_utils::check_system_call!(
+            || unsafe { libc::fcntl(write_fd, libc::F_SETFL, libc::O_NONBLOCK) },
+            &[]
+        )?;
+
+        let mut in_buf = [0u8; 3];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 3);
+
+        // make sure the pipe is empty
+        let mut in_buf = [0u8; 1];
+        assert_eq!(
+            nix::unistd::read(read_fd, &mut in_buf).err(),
+            Some(nix::errno::Errno::EWOULDBLOCK)
+        );
+
+        // write 5 bytes in stream mode
+        nix::unistd::write(write_fd, &[1, 2, 3, 4, 5]).unwrap();
+
+        let mut in_buf = [0u8; 3];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 3);
+
+        let mut in_buf = [0u8; 2];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 2);
+
+        Ok(())
+    })
+}
+
+fn test_o_direct_stream_to_packet_mode_nonempty() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK) } },
+        &[]
+    )?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        // write 5 bytes in stream mode
+        nix::unistd::write(write_fd, &[1, 2, 3, 4, 5]).unwrap();
+
+        // switch to packet mode
+        test_utils::check_system_call!(
+            || unsafe { libc::fcntl(write_fd, libc::F_SETFL, libc::O_NONBLOCK | libc::O_DIRECT) },
+            &[]
+        )?;
+
+        let mut in_buf = [0u8; 3];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 3);
+
+        // write 5 bytes in stream mode
+        nix::unistd::write(write_fd, &[1, 2, 3, 4, 5]).unwrap();
+
+        let mut in_buf = [0u8; 2];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 2);
+
+        let mut in_buf = [0u8; 3];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 3);
+
+        let mut in_buf = [0u8; 2];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 2);
+
+        Ok(())
+    })
+}
+
+fn test_o_direct_packet_to_stream_mode_nonempty() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK | libc::O_DIRECT) } },
+        &[]
+    )?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        // write 5 bytes in packet mode
+        nix::unistd::write(write_fd, &[1, 2, 3]).unwrap();
+        nix::unistd::write(write_fd, &[4, 5]).unwrap();
+
+        // switch to stream mode
+        test_utils::check_system_call!(
+            || unsafe { libc::fcntl(write_fd, libc::F_SETFL, libc::O_NONBLOCK) },
+            &[]
+        )?;
+
+        let mut in_buf = [0u8; 3];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 3);
+
+        // write 5 bytes in stream mode
+        nix::unistd::write(write_fd, &[1, 2, 3, 4, 5]).unwrap();
+
+        let mut in_buf = [0u8; 2];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 2);
+
+        let mut in_buf = [0u8; 3];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 3);
+
+        let mut in_buf = [0u8; 2];
+        let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
+        assert_eq!(len, 2);
+
+        Ok(())
+    })
 }

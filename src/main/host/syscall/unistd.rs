@@ -318,6 +318,11 @@ fn pipe_helper(ctx: &mut ThreadContext, fd_ptr: PluginPtr, flags: i32) -> Syscal
         remaining_flags &= !libc::O_NONBLOCK;
     }
 
+    if flags & libc::O_DIRECT != 0 {
+        file_flags.insert(FileStatus::DIRECT);
+        remaining_flags &= !libc::O_DIRECT;
+    }
+
     if flags & libc::O_CLOEXEC != 0 {
         descriptor_flags.insert(DescriptorFlags::CLOEXEC);
         remaining_flags &= !libc::O_CLOEXEC;
@@ -325,11 +330,6 @@ fn pipe_helper(ctx: &mut ThreadContext, fd_ptr: PluginPtr, flags: i32) -> Syscal
 
     // the user requested flags that we don't support
     if remaining_flags != 0 {
-        // exit early if the O_DIRECT flag was set
-        if remaining_flags & libc::O_DIRECT != 0 {
-            warn!("We don't currently support pipes in 'O_DIRECT' mode");
-            return Err(nix::errno::Errno::EOPNOTSUPP.into());
-        }
         warn!("Ignoring pipe flags");
     }
 
