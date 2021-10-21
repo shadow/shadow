@@ -28,11 +28,11 @@ Use `cat /proc/sys/fs/file-nr` to find:
 Change the limits, persistent across reboots, and apply now:
 
 ```bash
-sysctl -w fs.nr_open=10485760
-echo "fs.nr_open = 10485760" >> /etc/sysctl.conf
-sysctl -w fs.file-max=10485760
-echo "fs.file-max = 10485760" >> /etc/sysctl.conf
-sysctl -p
+sudo sysctl -w fs.nr_open=10485760
+echo "fs.nr_open = 10485760" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -w fs.file-max=10485760
+echo "fs.file-max = 10485760" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
 ```
 
 ### User Limits
@@ -117,7 +117,7 @@ Set a new limit, make it persistent, apply it now:
 
 ```bash
 sudo sysctl -w vm.max_map_count=1073741824
-sudo echo "vm.max_map_count = 1073741824" >> /etc/sysctl.conf
+echo "vm.max_map_count = 1073741824" | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 ```
 
@@ -131,7 +131,7 @@ raised by the command
 
 ```bash
 sudo sysctl -w kernel.pid_max=4194304
-sudo echo "kernel.pid_max = 4194304" >> /etc/sysctl.conf
+echo "kernel.pid_max = 4194304" | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 ```
 
@@ -140,7 +140,7 @@ This limit can be raised, too.
 
 ```bash
 sudo sysctl -w kernel.threads-max=4194304
-sudo echo "kernel.threads-max = 4194304" >> /etc/sysctl.conf
+echo "kernel.threads-max = 4194304" | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 ```
 
