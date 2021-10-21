@@ -15,6 +15,7 @@ APT_PACKAGES="
   python3
   python3-pip
   xz-utils
+  util-linux
   "
 
 # packages that are only required for our CI environment
@@ -37,6 +38,7 @@ RPM_PACKAGES="
   yum-utils
   diffutils
   libarchive
+  util-linux
   "
 
 # packages that are only required for our CI environment
