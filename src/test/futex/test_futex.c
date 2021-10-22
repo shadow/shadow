@@ -203,7 +203,7 @@ static void _futex_wait_bitset_test() {
     }
 
     // Wait a bit until they're (hopefully) all blocked on the futex.
-    usleep(1);
+    usleep(10000);
 
     // Wake only #2. There's no way to guarantee that its already asleep on the
     // mutex, so we need to loop.
@@ -233,6 +233,8 @@ static void _futex_wait_bitset_test() {
     _wait_for_condition(&arg[2].child_finished);
 
     // The other children should still be sleeping.
+    // FIXME: There is a race condition here since the thread might not have
+    // gone to sleep before the futex was released.
     g_assert_false(arg[0].child_finished);
     g_assert_false(arg[1].child_finished);
     g_assert_false(arg[3].child_finished);
