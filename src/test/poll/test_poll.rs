@@ -3,7 +3,6 @@
  * See LICENSE for licensing information
  */
 
-use std::convert::TryInto;
 use std::time::Duration;
 use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;

@@ -3,8 +3,6 @@
  * See LICENSE for licensing information
  */
 
-use std::convert::TryFrom;
-
 type SleepFn<'a> = (fn(u32), &'a str);
 type TimeFn<'a> = (fn() -> std::time::Duration, &'a str);
 

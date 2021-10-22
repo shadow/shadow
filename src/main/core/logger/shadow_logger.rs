@@ -7,7 +7,6 @@ use log::{Level, Log, Metadata, Record, SetLoggerError};
 use log_bindings as c_log;
 use once_cell::sync::Lazy;
 use std::cell::RefCell;
-use std::convert::TryFrom;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 use std::sync::{Mutex, RwLock};

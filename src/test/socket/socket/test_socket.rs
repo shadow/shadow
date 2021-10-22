@@ -3,8 +3,6 @@
  * See LICENSE for licensing information
  */
 
-use std::convert::TryFrom;
-
 enum Cond<'a, T> {
     Any,
     Only(&'a [T]),

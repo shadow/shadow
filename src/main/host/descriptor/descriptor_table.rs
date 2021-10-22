@@ -3,7 +3,6 @@ use crate::cshadow;
 use crate::utility::notnull::*;
 use log::*;
 use std::collections::{BTreeSet, HashMap};
-use std::convert::TryInto;
 
 /// Table of (file) descriptors. Typically owned by a Process.
 pub struct DescriptorTable {

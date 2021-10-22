@@ -6,8 +6,6 @@
 use crate::cshadow;
 use crate::utility::notnull::*;
 use crossbeam::queue::SegQueue;
-use std::convert::TryFrom;
-use std::convert::TryInto;
 use std::time::Duration;
 
 #[cfg(feature = "perf_timers")]

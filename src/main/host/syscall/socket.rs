@@ -12,7 +12,6 @@ use crate::host::syscall_types::{PluginPtr, SysCallArgs, TypedPluginPtr};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::event_queue::EventQueue;
 
-use std::convert::{TryFrom, TryInto};
 use std::sync::Arc;
 
 use log::*;

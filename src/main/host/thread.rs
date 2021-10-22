@@ -4,7 +4,6 @@ use super::syscall_types::{PluginPtr, SysCallReg};
 use crate::cshadow as c;
 use crate::utility::syscall;
 use nix::unistd::Pid;
-use std::convert::TryInto;
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub struct ThreadId(u32);

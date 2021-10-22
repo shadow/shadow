@@ -1,7 +1,5 @@
 use crate::get_errno;
 
-use std::convert::TryInto;
-
 /// A container for different types of socket addresses.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SockAddr {

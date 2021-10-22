@@ -1,5 +1,3 @@
-use std::convert::TryFrom;
-
 /// Helper for formatting times.
 #[derive(Debug, Eq, PartialEq)]
 pub struct TimeParts {
