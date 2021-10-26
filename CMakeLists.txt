@@ -113,7 +113,6 @@ message(STATUS "Building Shadow ${SHADOW_VERSION_STRING_CONF}")
 ## setup shadow options
 option(SHADOW_PROFILE "build with profile settings (default: OFF)" OFF)
 option(SHADOW_TEST "build tests (default: OFF)" OFF)
-option(SHADOW_EXPORT "export service libraries and headers (default: OFF)" OFF)
 option(SHADOW_WERROR "turn compiler warnings into errors. (default: OFF)" OFF)
 option(SHADOW_COVERAGE "enable code-coverage instrumentation. (default: OFF)" OFF)
 option(SHADOW_USE_PERF_TIMERS "compile in timers for tracking the run time of various internal operations. (default: OFF)" OFF)
@@ -124,7 +123,6 @@ MESSAGE(STATUS "----------------------------------------------------------------
 MESSAGE(STATUS "Current settings: (change with '$ cmake -D<OPTION>=<ON|OFF>')")
 MESSAGE(STATUS "SHADOW_PROFILE=${SHADOW_PROFILE}")
 MESSAGE(STATUS "SHADOW_TEST=${SHADOW_TEST}")
-MESSAGE(STATUS "SHADOW_EXPORT=${SHADOW_EXPORT}")
 MESSAGE(STATUS "SHADOW_WERROR=${SHADOW_WERROR}")
 MESSAGE(STATUS "SHADOW_COVERAGE=${SHADOW_COVERAGE}")
 MESSAGE(STATUS "SHADOW_USE_PERF_TIMERS=${SHADOW_USE_PERF_TIMERS}")
@@ -194,11 +192,6 @@ if(SHADOW_PROFILE STREQUAL ON)
     add_definitions(-DDEBUG)
     ## see src/main/CMakeLists.txt, where we add the -pg flags
 endif(SHADOW_PROFILE STREQUAL ON)
-
-if(SHADOW_EXPORT STREQUAL ON)
-    ## the actual work happens in the CMakeLists files in each plug-in directory
-    MESSAGE(STATUS "will export Shadow plug-in service libraries and headers")
-endif(SHADOW_EXPORT STREQUAL ON)
 
 #if(POLICY  CMP0026)
 #    cmake_policy(SET  CMP0026  OLD)
