@@ -157,6 +157,27 @@ impl std::fmt::Debug for c::SysCallReg {
     }
 }
 
+/// A trait to prevent type inference during function calls. Useful when you have a type that wraps
+/// a pointer (like [`TypedPluginPtr`]) and you don't want Rust to infer the type of pointer during
+/// creation.  Instead, the caller must specify the generic type.
+///
+/// Example:
+///
+/// ```
+/// let x: TypedPluginPtr<u8>;
+///
+/// // normally the `<u8>` wouldn't be required since Rust would infer it from the type of `x`, but
+/// // for this function using [`NoTypeInference`], the `<u8>` is required and must match
+/// x = TypedPluginPtr::new::<u8>(...);
+/// ```
+pub trait NoTypeInference {
+    type This;
+}
+
+impl<T> NoTypeInference for T {
+    type This = T;
+}
+
 /// Wrapper around a PluginPtr that encapsulates its type, size, and current
 /// position.
 #[derive(Copy, Clone)]
@@ -179,7 +200,10 @@ impl<T> std::fmt::Debug for TypedPluginPtr<T> {
 impl<T> TypedPluginPtr<T> {
     /// Creates a typed pointer. Note though that the pointer *isn't* guaranteed
     /// to be aligned for `T`.
-    pub fn new(ptr: PluginPtr, count: usize) -> Self {
+    pub fn new<U>(ptr: PluginPtr, count: usize) -> Self
+    where
+        U: NoTypeInference<This = T>,
+    {
         if log_enabled!(Debug) && usize::from(ptr) % std::mem::align_of::<T>() != 0 {
             // Linux allows unaligned pointers from user-space, being careful to
             // avoid unaligned accesses that aren's supported by the CPU.
@@ -219,7 +243,10 @@ impl<T> TypedPluginPtr<T> {
         if count_bytes % size_of::<U>() != 0 {
             return None;
         }
-        Some(TypedPluginPtr::new(self.base, count_bytes / size_of::<U>()))
+        Some(TypedPluginPtr::new::<U>(
+            self.base,
+            count_bytes / size_of::<U>(),
+        ))
     }
 
     /// Cast to u8. Infallible since size_of<u8> is 1.

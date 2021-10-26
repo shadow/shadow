@@ -152,7 +152,7 @@ impl ShmFile {
         memory_manager
             .copy_from_ptr(
                 dst,
-                TypedPluginPtr::new(PluginPtr::from(interval.start), interval.len()),
+                TypedPluginPtr::new::<u8>(PluginPtr::from(interval.start), interval.len()),
             )
             .unwrap()
     }
@@ -357,7 +357,7 @@ impl MemoryMapper {
         let shm_path = format!("/proc/{}/fd/{}\0", process::id(), shm_file.as_raw_fd());
 
         let shm_plugin_fd = {
-            let path_buf_plugin_ptr = TypedPluginPtr::new(
+            let path_buf_plugin_ptr = TypedPluginPtr::new::<u8>(
                 thread.malloc_plugin_ptr(shm_path.len()).unwrap(),
                 shm_path.len(),
             );
