@@ -360,33 +360,38 @@ fn pipe_helper(ctx: &mut ThreadContext, fd_ptr: PluginPtr, flags: i32) -> Syscal
     writer_desc.set_flags(descriptor_flags);
 
     // register the file descriptors
-    let fds = unsafe {
-        [
-            c::process_registerCompatDescriptor(
-                ctx.process.raw_mut(),
-                CompatDescriptor::into_raw(Box::new(CompatDescriptor::New(reader_desc))),
-            ),
-            c::process_registerCompatDescriptor(
-                ctx.process.raw_mut(),
-                CompatDescriptor::into_raw(Box::new(CompatDescriptor::New(writer_desc))),
-            ),
-        ]
-    };
+    let read_fd = ctx
+        .process
+        .register_descriptor(CompatDescriptor::New(reader_desc));
+    let write_fd = ctx
+        .process
+        .register_descriptor(CompatDescriptor::New(writer_desc));
 
-    // Try to write them to the caller
+    // try to write them to the caller
+    let fds = [
+        i32::try_from(read_fd).unwrap(),
+        i32::try_from(write_fd).unwrap(),
+    ];
     let write_res = ctx
         .process
         .memory_mut()
         .copy_to_ptr(TypedPluginPtr::new::<libc::c_int>(fd_ptr.into(), 2), &fds);
 
-    // Clean up in case of error
+    // clean up in case of error
     match write_res {
         Ok(_) => Ok(0.into()),
         Err(e) => {
-            unsafe {
-                c::process_deregisterCompatDescriptor(ctx.process.raw_mut(), fds[0]);
-                c::process_deregisterCompatDescriptor(ctx.process.raw_mut(), fds[1]);
-            };
+            EventQueue::queue_and_run(|event_queue| {
+                // ignore any errors when closing
+                ctx.process
+                    .deregister_descriptor(read_fd)
+                    .unwrap()
+                    .close(ctx.host.chost(), event_queue);
+                ctx.process
+                    .deregister_descriptor(write_fd)
+                    .unwrap()
+                    .close(ctx.host.chost(), event_queue);
+            });
             Err(e.into())
         }
     }
