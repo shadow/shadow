@@ -18,6 +18,7 @@ pub struct PipeFile {
     state: FileState,
     mode: FileMode,
     status: FileStatus,
+    write_mode: WriteMode,
     // we only store this so that the handle is dropped when we are
     buffer_event_handle: Option<Handle<(FileState, FileState)>>,
 }
@@ -32,6 +33,7 @@ impl PipeFile {
             state: FileState::ACTIVE,
             mode,
             status,
+            write_mode: WriteMode::Stream,
             buffer_event_handle: None,
         }
     }
@@ -139,12 +141,24 @@ impl PipeFile {
         }
 
         let mut bytes = bytes;
-        let num_written = self
-            .buffer
-            .as_ref()
-            .unwrap()
-            .borrow_mut()
-            .write(bytes.by_ref(), event_queue)?;
+        let mut buffer = self.buffer.as_ref().unwrap().borrow_mut();
+
+        if self.write_mode == WriteMode::Packet && !self.status.contains(FileStatus::DIRECT) {
+            // switch to stream mode immediately, regardless of whether the buffer is empty or not
+            self.write_mode = WriteMode::Stream;
+        } else if self.write_mode == WriteMode::Stream && self.status.contains(FileStatus::DIRECT) {
+            // in linux, it seems that pipes only switch to packet mode when a new page is added to
+            // the buffer, so we simulate that behaviour for when the first page is added (when the
+            // buffer is empty)
+            if buffer.is_empty() {
+                self.write_mode = WriteMode::Packet;
+            }
+        }
+
+        let num_written = match self.write_mode {
+            WriteMode::Packet => buffer.write_packet(bytes.by_ref(), event_queue)?,
+            WriteMode::Stream => buffer.write_stream(bytes.by_ref(), event_queue)?,
+        };
 
         // the write would block if we could not write any bytes, but were asked to
         if usize::from(num_written) == 0 && bytes.stream_len_bp()? != 0 {
@@ -262,6 +276,12 @@ impl PipeFile {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum WriteMode {
+    Stream,
+    Packet,
+}
+
 pub struct SharedBuf {
     queue: ByteQueue,
     max_len: usize,
@@ -314,7 +334,7 @@ impl SharedBuf {
         Ok(num.into())
     }
 
-    pub fn write<R: std::io::Read>(
+    pub fn write_stream<R: std::io::Read>(
         &mut self,
         bytes: R,
         event_queue: &mut EventQueue,
@@ -325,6 +345,33 @@ impl SharedBuf {
         self.refresh_state(event_queue);
 
         Ok(written.into())
+    }
+
+    pub fn write_packet<R: std::io::Read + std::io::Seek>(
+        &mut self,
+        mut bytes: R,
+        event_queue: &mut EventQueue,
+    ) -> SyscallResult {
+        let size = bytes.stream_len_bp().unwrap();
+
+        if size > self.space_available().try_into().unwrap() {
+            return Err(Errno::EAGAIN.into());
+        }
+
+        let mut bytes_remaining = size;
+
+        // pipes don't support 0-length packets
+        while bytes_remaining > 0 {
+            // split the packet up into PIPE_BUF-sized packets
+            let bytes_to_write = std::cmp::min(bytes_remaining, libc::PIPE_BUF as u64);
+            self.queue
+                .push_packet(bytes.by_ref(), bytes_to_write.try_into().unwrap())?;
+            bytes_remaining -= bytes_to_write;
+        }
+
+        self.refresh_state(event_queue);
+
+        Ok(size.into())
     }
 
     pub fn add_listener(
