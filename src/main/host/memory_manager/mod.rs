@@ -580,7 +580,13 @@ impl MemoryManager {
     ) -> SyscallResult {
         let addr = thread.native_mmap(addr, length, prot, flags, fd, offset)?;
         if let Some(mm) = &mut self.memory_mapper {
-            mm.handle_mmap_result(thread, TypedPluginPtr::new(addr, length), prot, flags, fd);
+            mm.handle_mmap_result(
+                thread,
+                TypedPluginPtr::new::<u8>(addr, length),
+                prot,
+                flags,
+                fd,
+            );
         }
         Ok(addr.into())
     }
@@ -683,7 +689,7 @@ where
         );
 
         Self {
-            ptr: TypedPluginPtr::<T>::new(ptr, len),
+            ptr: TypedPluginPtr::new::<T>(ptr, len),
             freed: false,
         }
     }
@@ -805,7 +811,7 @@ mod export {
     ) -> *mut ProcessMemoryRef<'a, u8> {
         let memory_manager = unsafe { memory_manager.as_ref().unwrap() };
         let plugin_src: PluginPtr = plugin_src.into();
-        let memory_ref = memory_manager.memory_ref(TypedPluginPtr::new(plugin_src.into(), n));
+        let memory_ref = memory_manager.memory_ref(TypedPluginPtr::new::<u8>(plugin_src.into(), n));
         match memory_ref {
             Ok(mr) => Box::into_raw(Box::new(mr)),
             Err(e) => {
@@ -822,7 +828,8 @@ mod export {
         n: usize,
     ) -> *mut ProcessMemoryRef<'a, u8> {
         let memory_manager = unsafe { memory_manager.as_ref().unwrap() };
-        match memory_manager.memory_ref_prefix(TypedPluginPtr::new(PluginPtr::from(plugin_src), n))
+        match memory_manager
+            .memory_ref_prefix(TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n))
         {
             Ok(mr) => Box::into_raw(Box::new(mr)),
             Err(e) => {
@@ -843,7 +850,7 @@ mod export {
         let buf =
             unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(strbuf) as *mut u8, maxlen) };
         let cstr = match memory_manager
-            .copy_str_from_ptr(buf, TypedPluginPtr::new(PluginPtr::from(ptr), maxlen))
+            .copy_str_from_ptr(buf, TypedPluginPtr::new::<u8>(PluginPtr::from(ptr), maxlen))
         {
             Ok(cstr) => cstr,
             Err(e) => return -(e as libc::ssize_t),
@@ -860,7 +867,7 @@ mod export {
         n: usize,
     ) -> i32 {
         let memory_manager = unsafe { memory_manager.as_ref().unwrap() };
-        let src = TypedPluginPtr::new(src.into(), n);
+        let src = TypedPluginPtr::new::<u8>(src.into(), n);
         let dst = unsafe { std::slice::from_raw_parts_mut(notnull_mut_debug(dst) as *mut u8, n) };
         match memory_manager.copy_from_ptr(dst, src) {
             Ok(_) => 0,
@@ -880,7 +887,7 @@ mod export {
         n: usize,
     ) -> i32 {
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let dst = TypedPluginPtr::new(dst.into(), n);
+        let dst = TypedPluginPtr::new::<u8>(dst.into(), n);
         let src = unsafe { std::slice::from_raw_parts(notnull_debug(src) as *const u8, n) };
         match memory_manager.copy_to_ptr(dst, src) {
             Ok(_) => 0,
@@ -899,7 +906,7 @@ mod export {
         n: usize,
     ) -> *mut ProcessMemoryRefMut<'a, u8> {
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let plugin_src = TypedPluginPtr::<u8>::new(PluginPtr::from(plugin_src), n);
+        let plugin_src = TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n);
         let memory_ref = memory_manager.memory_ref_mut_uninit(plugin_src);
         match memory_ref {
             Ok(mr) => Box::into_raw(Box::new(mr)),
@@ -918,7 +925,7 @@ mod export {
         n: usize,
     ) -> *mut ProcessMemoryRefMut<'a, u8> {
         let memory_manager = unsafe { memory_manager.as_mut().unwrap() };
-        let plugin_src = TypedPluginPtr::<u8>::new(PluginPtr::from(plugin_src), n);
+        let plugin_src = TypedPluginPtr::new::<u8>(PluginPtr::from(plugin_src), n);
         let memory_ref = memory_manager.memory_ref_mut(plugin_src);
         match memory_ref {
             Ok(mr) => Box::into_raw(Box::new(mr)),
