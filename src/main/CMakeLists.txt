@@ -49,6 +49,11 @@ else()
     set(RUST_BUILD_FLAG "--release")
 endif()
 
+if(SHADOW_COVERAGE STREQUAL ON)
+    # https://github.com/shadow/shadow/issues/1236
+    set(RUSTFLAGS "${RUSTFLAGS} --remap-path-prefix \"=${CMAKE_CURRENT_SOURCE_DIR}/\"")
+endif()
+
 add_library(shadow-remora STATIC host/descriptor/tcp_retransmit_tally.cc)
 
 set(SHD_SHMEM_SRC
