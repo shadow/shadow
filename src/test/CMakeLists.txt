@@ -8,6 +8,11 @@ add_definitions(-fPIC -g3 -DDEBUG -D_GNU_SOURCE)
 ## ensure that the Host LLVM plugin is built first
 #get_property(LLVMHoistGlobalsPATH TARGET LLVMHoistGlobals PROPERTY LOCATION)
 
+if(SHADOW_COVERAGE STREQUAL ON)
+    # https://github.com/shadow/shadow/issues/1236
+    set(RUSTFLAGS "${RUSTFLAGS} --remap-path-prefix \"=${CMAKE_CURRENT_SOURCE_DIR}/\"")
+endif()
+
 include(ExternalProject)
 
 ## always build tests with the debug profile, even when shadow is built in release mode
