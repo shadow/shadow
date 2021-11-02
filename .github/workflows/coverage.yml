@@ -74,10 +74,10 @@ jobs:
           grcov ./build -s src/ -t lcov --llvm --branch --ignore-not-existing -o ./grcov.lcov.txt
 
       - name: Upload coverage report to codecov
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v2
         with:
           name: coverage
-          file: grcov.lcov.txt
+          files: grcov.lcov.txt
           flags: tests
           fail_ci_if_error: false
 
