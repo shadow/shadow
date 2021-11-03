@@ -260,150 +260,91 @@ impl StateEventSource {
     }
 }
 
+pub trait ReadSeek: std::io::Read + std::io::Seek {
+    fn as_read(&mut self) -> &mut dyn std::io::Read;
+    fn as_seek(&mut self) -> &mut dyn std::io::Seek;
+}
+
+pub trait WriteSeek: std::io::Write + std::io::Seek {
+    fn as_write(&mut self) -> &mut dyn std::io::Write;
+    fn as_seek(&mut self) -> &mut dyn std::io::Seek;
+}
+
+impl<T> ReadSeek for T
+where
+    T: std::io::Read + std::io::Seek,
+{
+    fn as_read(&mut self) -> &mut dyn std::io::Read {
+        self
+    }
+    fn as_seek(&mut self) -> &mut dyn std::io::Seek {
+        self
+    }
+}
+
+impl<T> WriteSeek for T
+where
+    T: std::io::Write + std::io::Seek,
+{
+    fn as_write(&mut self) -> &mut dyn std::io::Write {
+        self
+    }
+    fn as_seek(&mut self) -> &mut dyn std::io::Seek {
+        self
+    }
+}
+
+pub trait File: std::fmt::Debug + 'static {
+    fn state(&self) -> FileState;
+    fn mode(&self) -> FileMode;
+    fn get_status(&self) -> FileStatus;
+    fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult;
+    fn set_status(&mut self, status: FileStatus);
+    fn add_listener(
+        &mut self,
+        monitoring: FileState,
+        filter: StateListenerFilter,
+        notify_fn: Box<dyn Fn(FileState, FileState, &mut EventQueue) + Send + Sync + 'static>,
+    ) -> Handle<(FileState, FileState)>;
+    fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener);
+    fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener);
+
+    fn read(
+        &mut self,
+        bytes: &mut dyn WriteSeek,
+        offset: libc::off_t,
+        event_queue: &mut EventQueue,
+    ) -> SyscallResult;
+
+    fn write(
+        &mut self,
+        source: &mut dyn ReadSeek,
+        offset: libc::off_t,
+        event_queue: &mut EventQueue,
+    ) -> SyscallResult;
+
+    // to support downcasting to a concrete type
+    fn as_any(&self) -> &dyn std::any::Any;
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+
+    fn as_socket(&self) -> Option<&dyn Socket> {
+        None
+    }
+    fn as_socket_mut(&mut self) -> Option<&mut dyn Socket> {
+        None
+    }
+}
+
+// TODO
+// you can convert from a file borrow to a socket borrow using:
+// let socket = AtomicRef::filter_map(desc.get_file().borrow(), |x| x.as_socket()).unwrap();
+pub trait Socket: File {
+    fn as_file(&self) -> &dyn File;
+    fn as_file_mut(&mut self) -> &mut dyn File;
+}
+
 /// Represents a POSIX description, or a Linux "struct file".
-#[derive(Clone)]
-pub enum PosixFile {
-    Pipe(Arc<AtomicRefCell<pipe::PipeFile>>),
-}
-
-// will not compile if `PosixFile` is not Send + Sync
-impl IsSend for PosixFile {}
-impl IsSync for PosixFile {}
-
-impl PosixFile {
-    pub fn borrow(&self) -> PosixFileRef {
-        match self {
-            Self::Pipe(ref f) => PosixFileRef::Pipe(f.borrow()),
-        }
-    }
-
-    pub fn try_borrow(&self) -> Result<PosixFileRef, atomic_refcell::BorrowError> {
-        Ok(match self {
-            Self::Pipe(ref f) => PosixFileRef::Pipe(f.try_borrow()?),
-        })
-    }
-
-    pub fn borrow_mut(&self) -> PosixFileRefMut {
-        match self {
-            Self::Pipe(ref f) => PosixFileRefMut::Pipe(f.borrow_mut()),
-        }
-    }
-
-    pub fn try_borrow_mut(&self) -> Result<PosixFileRefMut, atomic_refcell::BorrowMutError> {
-        Ok(match self {
-            Self::Pipe(ref f) => PosixFileRefMut::Pipe(f.try_borrow_mut()?),
-        })
-    }
-
-    pub fn canonical_handle(&self) -> usize {
-        match self {
-            Self::Pipe(f) => Arc::as_ptr(f) as usize,
-        }
-    }
-}
-
-impl std::fmt::Debug for PosixFile {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Pipe(_) => write!(f, "Pipe")?,
-        }
-
-        if let Ok(file) = self.try_borrow() {
-            write!(
-                f,
-                "(state: {:?}, status: {:?})",
-                file.state(),
-                file.get_status()
-            )
-        } else {
-            write!(f, "(already borrowed)")
-        }
-    }
-}
-
-pub enum PosixFileRef<'a> {
-    Pipe(atomic_refcell::AtomicRef<'a, pipe::PipeFile>),
-}
-
-pub enum PosixFileRefMut<'a> {
-    Pipe(atomic_refcell::AtomicRefMut<'a, pipe::PipeFile>),
-}
-
-impl PosixFileRef<'_> {
-    enum_passthrough!(self, (), Pipe;
-        pub fn state(&self) -> FileState
-    );
-    enum_passthrough!(self, (), Pipe;
-        pub fn mode(&self) -> FileMode
-    );
-    enum_passthrough!(self, (), Pipe;
-        pub fn get_status(&self) -> FileStatus
-    );
-}
-
-impl PosixFileRefMut<'_> {
-    enum_passthrough!(self, (), Pipe;
-        pub fn state(&self) -> FileState
-    );
-    enum_passthrough!(self, (), Pipe;
-        pub fn mode(&self) -> FileMode
-    );
-    enum_passthrough!(self, (), Pipe;
-        pub fn get_status(&self) -> FileStatus
-    );
-    enum_passthrough!(self, (event_queue), Pipe;
-        pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult
-    );
-    enum_passthrough!(self, (status), Pipe;
-        pub fn set_status(&mut self, status: FileStatus)
-    );
-    enum_passthrough!(self, (ptr), Pipe;
-        pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener)
-    );
-    enum_passthrough!(self, (ptr), Pipe;
-        pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
-    );
-
-    enum_passthrough_generic!(self, (bytes, offset, event_queue), Pipe;
-        pub fn read<W>(&mut self, bytes: W, offset: libc::off_t, event_queue: &mut EventQueue) -> SyscallResult
-        where W: std::io::Write + std::io::Seek
-    );
-
-    enum_passthrough_generic!(self, (source, offset, event_queue), Pipe;
-        pub fn write<R>(&mut self, source: R, offset: libc::off_t, event_queue: &mut EventQueue) -> SyscallResult
-        where R: std::io::Read + std::io::Seek
-    );
-}
-
-impl std::fmt::Debug for PosixFileRef<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Pipe(_) => write!(f, "Pipe")?,
-        }
-
-        write!(
-            f,
-            "(state: {:?}, status: {:?})",
-            self.state(),
-            self.get_status()
-        )
-    }
-}
-
-impl std::fmt::Debug for PosixFileRefMut<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Pipe(_) => write!(f, "Pipe")?,
-        }
-
-        write!(
-            f,
-            "(state: {:?}, status: {:?})",
-            self.state(),
-            self.get_status()
-        )
-    }
-}
+pub type PosixFile = Arc<AtomicRefCell<dyn File + Send + Sync>>;
 
 bitflags::bitflags! {
     // Linux only supports a single descriptor flag:
@@ -698,7 +639,7 @@ mod export {
 
         let file = unsafe { &*file };
 
-        file.canonical_handle()
+        Arc::as_ptr(file) as *const () as usize
     }
 }
 

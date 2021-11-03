@@ -7,7 +7,7 @@ pub trait StreamLen {
 
 impl<T> StreamLen for T
 where
-    T: Seek,
+    T: Seek + ?Sized,
 {
     fn stream_len_bp(&mut self) -> std::io::Result<u64> {
         let current = self.seek(SeekFrom::Current(0))?;

@@ -64,8 +64,9 @@ impl ByteQueue {
         BytesMut::from_iter(std::iter::repeat(0).take(size))
     }
 
-    /// Push stream data onto the queue. The data may be merged into the previous stream chunk.
-    pub fn push_stream<R: Read>(&mut self, mut src: R) -> std::io::Result<u64> {
+    /// Push stream data onto the queue. The data may be merged into the previous stream chunk. To
+    /// read the entirety of `src`, set `size` to `None`.
+    pub fn push_stream(&mut self, src: &mut dyn Read, size: Option<usize>) -> std::io::Result<u64> {
         let mut total_copied = 0;
 
         loop {
@@ -77,7 +78,11 @@ impl ByteQueue {
             };
             assert_eq!(unused.len(), unused.capacity());
 
-            let copied = src.read(&mut unused)?;
+            let max = match size {
+                Some(x) => std::cmp::min(x - total_copied as usize, unused.len()),
+                None => unused.len(),
+            };
+            let copied = src.read(&mut unused[..max])?;
             let bytes = unused.split_to(copied);
 
             total_copied += u64::try_from(bytes.len()).unwrap();
@@ -123,7 +128,7 @@ impl ByteQueue {
 
     /// Push packet data onto the queue in a single chunk. Exactly `size` bytes will be read into
     /// the packet.
-    pub fn push_packet<R: Read>(&mut self, mut src: R, size: usize) -> std::io::Result<()> {
+    pub fn push_packet(&mut self, src: &mut dyn Read, size: usize) -> std::io::Result<()> {
         // we may need somewhere to store a new buffer
         let mut new_buf;
 
@@ -166,7 +171,7 @@ impl ByteQueue {
     /// all data from the queue, you must call this method until the returned chunk type is `None`.
     /// Zero-length packets may be returned. If packet data is returned but `dst` did not have
     /// enough space, the remaining bytes in the packet will be dropped.
-    pub fn pop<W: Write>(&mut self, dst: W) -> std::io::Result<(u64, Option<ChunkType>)> {
+    pub fn pop(&mut self, dst: &mut dyn Write) -> std::io::Result<(u64, Option<ChunkType>)> {
         // peek the front to see what kind of data is next
         match self.bytes.front() {
             Some(x) => match x.chunk_type {
@@ -177,7 +182,7 @@ impl ByteQueue {
         }
     }
 
-    fn pop_stream<W: Write>(&mut self, mut dst: W) -> std::io::Result<u64> {
+    fn pop_stream(&mut self, dst: &mut dyn Write) -> std::io::Result<u64> {
         let mut total_copied = 0;
         assert_ne!(
             self.bytes.len(),
@@ -211,7 +216,7 @@ impl ByteQueue {
         Ok(total_copied)
     }
 
-    fn pop_packet<W: Write>(&mut self, mut dst: W) -> std::io::Result<u64> {
+    fn pop_packet(&mut self, dst: &mut dyn Write) -> std::io::Result<u64> {
         let mut chunk = self
             .bytes
             .pop_front()
@@ -392,8 +397,8 @@ mod export {
         assert!(!bq.is_null());
         assert!(!src.is_null());
         let bq = unsafe { &mut *bq };
-        let src = unsafe { slice::from_raw_parts(src, len) };
-        bq.push_stream(src).unwrap();
+        let mut src = unsafe { slice::from_raw_parts(src, len) };
+        bq.push_stream(&mut src, Some(len)).unwrap();
     }
 
     #[no_mangle]
@@ -405,8 +410,9 @@ mod export {
         assert!(!bq.is_null());
         assert!(!src.is_null());
         let bq = unsafe { &mut *bq };
-        let src = unsafe { slice::from_raw_parts(src, len) };
-        bq.push_packet(src, src.len()).unwrap();
+        let mut src = unsafe { slice::from_raw_parts(src, len) };
+        let len = src.len();
+        bq.push_packet(&mut src, len).unwrap();
     }
 
     #[no_mangle]
@@ -418,8 +424,8 @@ mod export {
         assert!(!bq.is_null());
         assert!(!dst.is_null());
         let bq = unsafe { &mut *bq };
-        let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
-        let (count, _chunk_type) = bq.pop(dst).unwrap();
+        let mut dst = unsafe { slice::from_raw_parts_mut(dst, len) };
+        let (count, _chunk_type) = bq.pop(&mut dst).unwrap();
         count.try_into().unwrap()
     }
 }
@@ -438,9 +444,9 @@ mod tests {
         let mut dst1 = [0; 8];
         let mut dst2 = [0; 10];
 
-        bq.push_stream(&src1[..]).unwrap();
-        bq.push_stream(&[][..]).unwrap();
-        bq.push_stream(&src2[..]).unwrap();
+        bq.push_stream(&mut &src1[..], None).unwrap();
+        bq.push_stream(&mut &[][..], None).unwrap();
+        bq.push_stream(&mut &src2[..], None).unwrap();
 
         assert_eq!(bq.len() as usize, src1.len() + src2.len());
         // ceiling division
@@ -450,8 +456,8 @@ mod tests {
         );
         assert_eq!(bq.total_allocations as usize, bq.bytes.len());
 
-        assert_eq!(8, bq.pop(&mut dst1[..]).unwrap().0);
-        assert_eq!(8, bq.pop(&mut dst2[..]).unwrap().0);
+        assert_eq!(8, bq.pop(&mut &mut dst1[..]).unwrap().0);
+        assert_eq!(8, bq.pop(&mut &mut dst2[..]).unwrap().0);
 
         assert_eq!(dst1, [1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(dst2, [9, 10, 11, 12, 13, 51, 52, 53, 0, 0]);
@@ -467,17 +473,17 @@ mod tests {
         let mut dst1 = [0; 8];
         let mut dst2 = [0; 10];
 
-        bq.push_packet(&src1[..], src1.len()).unwrap();
-        bq.push_packet(&[][..], 0).unwrap();
-        bq.push_packet(&src2[..], src2.len()).unwrap();
+        bq.push_packet(&mut &src1[..], src1.len()).unwrap();
+        bq.push_packet(&mut &[][..], 0).unwrap();
+        bq.push_packet(&mut &src2[..], src2.len()).unwrap();
 
         assert_eq!(bq.len() as usize, src1.len() + src2.len());
         assert_eq!(bq.bytes.len(), 3);
         assert_eq!(bq.total_allocations, 3);
 
-        assert_eq!(8, bq.pop(&mut dst1[..]).unwrap().0);
-        assert_eq!(0, bq.pop(&mut dst2[..]).unwrap().0);
-        assert_eq!(3, bq.pop(&mut dst2[..]).unwrap().0);
+        assert_eq!(8, bq.pop(&mut &mut dst1[..]).unwrap().0);
+        assert_eq!(0, bq.pop(&mut &mut dst2[..]).unwrap().0);
+        assert_eq!(3, bq.pop(&mut &mut dst2[..]).unwrap().0);
 
         assert_eq!(dst1, [1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(dst2, [51, 52, 53, 0, 0, 0, 0, 0, 0, 0]);
@@ -488,9 +494,9 @@ mod tests {
     fn test_bytequeue_combined_1() {
         let mut bq = ByteQueue::new(10);
 
-        bq.push_stream(&[1, 2, 3][..]).unwrap();
-        bq.push_packet(&[4, 5, 6][..], 3).unwrap();
-        bq.push_stream(&[7, 8, 9][..]).unwrap();
+        bq.push_stream(&mut &[1, 2, 3][..], None).unwrap();
+        bq.push_packet(&mut &[4, 5, 6][..], 3).unwrap();
+        bq.push_stream(&mut &[7, 8, 9][..], None).unwrap();
 
         assert_eq!(bq.len() as usize, 9);
         assert_eq!(bq.bytes.len(), 3);
@@ -498,13 +504,22 @@ mod tests {
 
         let mut buf = [0; 20];
 
-        assert_eq!(bq.pop(&mut buf[..]).unwrap(), (3, Some(ChunkType::Stream)));
+        assert_eq!(
+            bq.pop(&mut &mut buf[..]).unwrap(),
+            (3, Some(ChunkType::Stream))
+        );
         assert_eq!(buf[..3], [1, 2, 3]);
 
-        assert_eq!(bq.pop(&mut buf[..]).unwrap(), (3, Some(ChunkType::Packet)));
+        assert_eq!(
+            bq.pop(&mut &mut buf[..]).unwrap(),
+            (3, Some(ChunkType::Packet))
+        );
         assert_eq!(buf[..3], [4, 5, 6]);
 
-        assert_eq!(bq.pop(&mut buf[..]).unwrap(), (3, Some(ChunkType::Stream)));
+        assert_eq!(
+            bq.pop(&mut &mut buf[..]).unwrap(),
+            (3, Some(ChunkType::Stream))
+        );
         assert_eq!(buf[..3], [7, 8, 9]);
 
         assert!(bq.is_empty());
@@ -514,39 +529,57 @@ mod tests {
     fn test_bytequeue_combined_2() {
         let mut bq = ByteQueue::new(5);
 
-        bq.push_stream(&[1, 2, 3, 4][..]).unwrap();
-        bq.push_stream(&[5][..]).unwrap();
-        bq.push_stream(&[6][..]).unwrap();
-        bq.push_packet(&[7, 8, 9, 10, 11, 12, 13, 14][..], 8)
+        bq.push_stream(&mut &[1, 2, 3, 4][..], None).unwrap();
+        bq.push_stream(&mut &[5][..], None).unwrap();
+        bq.push_stream(&mut &[6][..], None).unwrap();
+        bq.push_packet(&mut &[7, 8, 9, 10, 11, 12, 13, 14][..], 8)
             .unwrap();
-        bq.push_stream(&[15, 16, 17][..]).unwrap();
+        bq.push_stream(&mut &[15, 16, 17][..], None).unwrap();
         bq.push_chunk(
             Bytes::from_static(&[100, 101, 102, 103, 104, 105]),
             ChunkType::Packet,
         );
-        bq.push_packet(&[][..], 0).unwrap();
-        bq.push_stream(&[18][..]).unwrap();
-        bq.push_stream(&[19][..]).unwrap();
-        bq.push_stream(&[20, 21][..]).unwrap();
+        bq.push_packet(&mut &[][..], 0).unwrap();
+        bq.push_stream(&mut &[18][..], None).unwrap();
+        bq.push_stream(&mut &[19][..], None).unwrap();
+        bq.push_stream(&mut &[20, 21][..], None).unwrap();
 
         let mut buf = [0; 20];
 
-        assert_eq!(bq.pop(&mut buf[..3]).unwrap(), (3, Some(ChunkType::Stream)));
+        assert_eq!(
+            bq.pop(&mut &mut buf[..3]).unwrap(),
+            (3, Some(ChunkType::Stream))
+        );
         assert_eq!(buf[..3], [1, 2, 3]);
 
-        assert_eq!(bq.pop(&mut buf[..5]).unwrap(), (3, Some(ChunkType::Stream)));
+        assert_eq!(
+            bq.pop(&mut &mut buf[..5]).unwrap(),
+            (3, Some(ChunkType::Stream))
+        );
         assert_eq!(buf[..3], [4, 5, 6]);
 
-        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (4, Some(ChunkType::Packet)));
+        assert_eq!(
+            bq.pop(&mut &mut buf[..4]).unwrap(),
+            (4, Some(ChunkType::Packet))
+        );
         assert_eq!(buf[..4], [7, 8, 9, 10]);
 
-        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (3, Some(ChunkType::Stream)));
+        assert_eq!(
+            bq.pop(&mut &mut buf[..4]).unwrap(),
+            (3, Some(ChunkType::Stream))
+        );
         assert_eq!(buf[..3], [15, 16, 17]);
 
-        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (4, Some(ChunkType::Packet)));
+        assert_eq!(
+            bq.pop(&mut &mut buf[..4]).unwrap(),
+            (4, Some(ChunkType::Packet))
+        );
         assert_eq!(buf[..4], [100, 101, 102, 103]);
 
-        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (0, Some(ChunkType::Packet)));
+        assert_eq!(
+            bq.pop(&mut &mut buf[..4]).unwrap(),
+            (0, Some(ChunkType::Packet))
+        );
 
         assert_eq!(bq.pop_chunk(4), Some(([18][..].into(), ChunkType::Stream)));
 
@@ -556,7 +589,7 @@ mod tests {
         );
 
         assert_eq!(bq.pop_chunk(8), None);
-        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (0, None));
+        assert_eq!(bq.pop(&mut &mut buf[..4]).unwrap(), (0, None));
         assert!(bq.is_empty());
     }
 }

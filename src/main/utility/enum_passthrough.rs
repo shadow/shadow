@@ -40,6 +40,7 @@ enum_passthrough_generic!(self, (bytes, offset, event_queue), Pipe, Socket;
 );
 ```
 **/
+#[allow(unused_macros)]
 macro_rules! enum_passthrough_generic {
     ($self:ident, $args2:tt, $($variant:ident),+; $v:vis fn $name:ident <$($generics:ident),+> $args:tt $(-> $($rv:tt)+)?) => {
         $v fn $name <$($generics)+> $args $(-> $($rv)+)? {

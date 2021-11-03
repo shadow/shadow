@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{
-    FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
+    File, FileMode, FileState, FileStatus, ReadSeek, StateEventSource, StateListenerFilter,
 };
 use crate::host::syscall_types::SyscallResult;
 use crate::utility::byte_queue::ByteQueue;
@@ -38,134 +38,8 @@ impl PipeFile {
         }
     }
 
-    pub fn get_status(&self) -> FileStatus {
-        self.status
-    }
-
-    pub fn set_status(&mut self, status: FileStatus) {
-        self.status = status;
-    }
-
-    pub fn mode(&self) -> FileMode {
-        self.mode
-    }
-
     pub fn max_size(&self) -> usize {
         self.buffer.as_ref().unwrap().borrow().max_len()
-    }
-
-    pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
-        // drop the event listener handle so that we stop receiving new events
-        self.buffer_event_handle.take().unwrap().stop_listening();
-
-        // if open for writing, inform the buffer that there is one fewer writers
-        if self.mode.contains(FileMode::WRITE) {
-            self.buffer
-                .as_ref()
-                .unwrap()
-                .borrow_mut()
-                .remove_writer(event_queue);
-        }
-
-        // no need to hold on to the buffer anymore
-        self.buffer = None;
-
-        // set the closed flag and remove the active, readable, and writable flags
-        self.copy_state(
-            FileState::CLOSED | FileState::ACTIVE | FileState::READABLE | FileState::WRITABLE,
-            FileState::CLOSED,
-            event_queue,
-        );
-
-        Ok(0.into())
-    }
-
-    pub fn read<W>(
-        &mut self,
-        bytes: W,
-        offset: libc::off_t,
-        event_queue: &mut EventQueue,
-    ) -> SyscallResult
-    where
-        W: std::io::Write + std::io::Seek,
-    {
-        // pipes don't support seeking
-        if offset != 0 {
-            return Err(nix::errno::Errno::ESPIPE.into());
-        }
-
-        // if the file is not open for reading, return EBADF
-        if !self.mode.contains(FileMode::READ) {
-            return Err(nix::errno::Errno::EBADF.into());
-        }
-
-        let mut bytes = bytes;
-        let num_read = self
-            .buffer
-            .as_ref()
-            .unwrap()
-            .borrow_mut()
-            .read(&mut bytes, event_queue)?;
-
-        // the read would block if all:
-        //  1. we could not read any bytes
-        //  2. we were asked to read >0 bytes
-        //  3. there are open descriptors that refer to the write end of the pipe
-        if usize::from(num_read) == 0
-            && bytes.stream_len_bp()? != 0
-            && self.buffer.as_ref().unwrap().borrow().num_writers > 0
-        {
-            Err(Errno::EWOULDBLOCK.into())
-        } else {
-            Ok(num_read.into())
-        }
-    }
-
-    pub fn write<R>(
-        &mut self,
-        bytes: R,
-        offset: libc::off_t,
-        event_queue: &mut EventQueue,
-    ) -> SyscallResult
-    where
-        R: std::io::Read + std::io::Seek,
-    {
-        // pipes don't support seeking
-        if offset != 0 {
-            return Err(nix::errno::Errno::ESPIPE.into());
-        }
-
-        // if the file is not open for writing, return EBADF
-        if !self.mode.contains(FileMode::WRITE) {
-            return Err(nix::errno::Errno::EBADF.into());
-        }
-
-        let mut bytes = bytes;
-        let mut buffer = self.buffer.as_ref().unwrap().borrow_mut();
-
-        if self.write_mode == WriteMode::Packet && !self.status.contains(FileStatus::DIRECT) {
-            // switch to stream mode immediately, regardless of whether the buffer is empty or not
-            self.write_mode = WriteMode::Stream;
-        } else if self.write_mode == WriteMode::Stream && self.status.contains(FileStatus::DIRECT) {
-            // in linux, it seems that pipes only switch to packet mode when a new page is added to
-            // the buffer, so we simulate that behaviour for when the first page is added (when the
-            // buffer is empty)
-            if buffer.is_empty() {
-                self.write_mode = WriteMode::Packet;
-            }
-        }
-
-        let num_written = match self.write_mode {
-            WriteMode::Packet => buffer.write_packet(bytes.by_ref(), event_queue)?,
-            WriteMode::Stream => buffer.write_stream(bytes.by_ref(), event_queue)?,
-        };
-
-        // the write would block if we could not write any bytes, but were asked to
-        if usize::from(num_written) == 0 && bytes.stream_len_bp()? != 0 {
-            Err(Errno::EWOULDBLOCK.into())
-        } else {
-            Ok(num_written.into())
-        }
     }
 
     pub fn connect_to_buffer(
@@ -214,28 +88,6 @@ impl PipeFile {
         pipe.state.insert(pipe.filter_state(buffer_state));
     }
 
-    pub fn add_listener(
-        &mut self,
-        monitoring: FileState,
-        filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut EventQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileState, FileState)> {
-        self.event_source
-            .add_listener(monitoring, filter, notify_fn)
-    }
-
-    pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
-        self.event_source.add_legacy_listener(ptr);
-    }
-
-    pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
-        self.event_source.remove_legacy_listener(ptr);
-    }
-
-    pub fn state(&self) -> FileState {
-        self.state
-    }
-
     fn filter_state(&self, mut state: FileState) -> FileState {
         // if not open for reading, remove the readable flag
         if !self.mode.contains(FileMode::READ) {
@@ -273,6 +125,166 @@ impl PipeFile {
 
         self.event_source
             .notify_listeners(self.state, states_changed, event_queue);
+    }
+}
+
+impl File for PipeFile {
+    fn get_status(&self) -> FileStatus {
+        self.status
+    }
+
+    fn set_status(&mut self, status: FileStatus) {
+        self.status = status;
+    }
+
+    fn mode(&self) -> FileMode {
+        self.mode
+    }
+
+    fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult {
+        // drop the event listener handle so that we stop receiving new events
+        self.buffer_event_handle.take().unwrap().stop_listening();
+
+        // if open for writing, inform the buffer that there is one fewer writers
+        if self.mode.contains(FileMode::WRITE) {
+            self.buffer
+                .as_ref()
+                .unwrap()
+                .borrow_mut()
+                .remove_writer(event_queue);
+        }
+
+        // no need to hold on to the buffer anymore
+        self.buffer = None;
+
+        // set the closed flag and remove the active, readable, and writable flags
+        self.copy_state(
+            FileState::CLOSED | FileState::ACTIVE | FileState::READABLE | FileState::WRITABLE,
+            FileState::CLOSED,
+            event_queue,
+        );
+
+        Ok(0.into())
+    }
+
+    fn read(
+        &mut self,
+        bytes: &mut dyn super::WriteSeek,
+        offset: libc::off_t,
+        event_queue: &mut EventQueue,
+    ) -> SyscallResult {
+        // pipes don't support seeking
+        if offset != 0 {
+            return Err(nix::errno::Errno::ESPIPE.into());
+        }
+
+        // if the file is not open for reading, return EBADF
+        if !self.mode.contains(FileMode::READ) {
+            return Err(nix::errno::Errno::EBADF.into());
+        }
+
+        let num_read = self
+            .buffer
+            .as_ref()
+            .unwrap()
+            .borrow_mut()
+            .read(bytes.as_write(), event_queue)?;
+
+        // the read would block if all:
+        //  1. we could not read any bytes
+        //  2. we were asked to read >0 bytes
+        //  3. there are open descriptors that refer to the write end of the pipe
+        if usize::from(num_read) == 0
+            && bytes.as_seek().stream_len_bp()? != 0
+            && self.buffer.as_ref().unwrap().borrow().num_writers > 0
+        {
+            Err(Errno::EWOULDBLOCK.into())
+        } else {
+            Ok(num_read.into())
+        }
+    }
+
+    fn write(
+        &mut self,
+        bytes: &mut dyn super::ReadSeek,
+        offset: libc::off_t,
+        event_queue: &mut EventQueue,
+    ) -> SyscallResult {
+        // pipes don't support seeking
+        if offset != 0 {
+            return Err(nix::errno::Errno::ESPIPE.into());
+        }
+
+        // if the file is not open for writing, return EBADF
+        if !self.mode.contains(FileMode::WRITE) {
+            return Err(nix::errno::Errno::EBADF.into());
+        }
+
+        let mut buffer = self.buffer.as_ref().unwrap().borrow_mut();
+
+        if self.write_mode == WriteMode::Packet && !self.status.contains(FileStatus::DIRECT) {
+            // switch to stream mode immediately, regardless of whether the buffer is empty or not
+            self.write_mode = WriteMode::Stream;
+        } else if self.write_mode == WriteMode::Stream && self.status.contains(FileStatus::DIRECT) {
+            // in linux, it seems that pipes only switch to packet mode when a new page is added to
+            // the buffer, so we simulate that behaviour for when the first page is added (when the
+            // buffer is empty)
+            if buffer.is_empty() {
+                self.write_mode = WriteMode::Packet;
+            }
+        }
+
+        let num_written = match self.write_mode {
+            WriteMode::Packet => buffer.write_packet(bytes, event_queue)?,
+            WriteMode::Stream => buffer.write_stream(bytes.as_read(), event_queue)?,
+        };
+
+        // the write would block if we could not write any bytes, but were asked to
+        if usize::from(num_written) == 0 && bytes.stream_len_bp()? != 0 {
+            Err(Errno::EWOULDBLOCK.into())
+        } else {
+            Ok(num_written.into())
+        }
+    }
+
+    fn add_listener(
+        &mut self,
+        monitoring: FileState,
+        filter: StateListenerFilter,
+        notify_fn: Box<dyn Fn(FileState, FileState, &mut EventQueue) + Send + Sync + 'static>,
+    ) -> Handle<(FileState, FileState)> {
+        self.event_source
+            .add_listener(monitoring, filter, notify_fn)
+    }
+
+    fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+        self.event_source.add_legacy_listener(ptr);
+    }
+
+    fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener) {
+        self.event_source.remove_legacy_listener(ptr);
+    }
+
+    fn state(&self) -> FileState {
+        self.state
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl std::fmt::Debug for PipeFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Pipe (state: {:?}, status: {:?})",
+            self.state, self.status
+        )
     }
 }
 
@@ -323,9 +335,9 @@ impl SharedBuf {
         self.refresh_state(event_queue);
     }
 
-    pub fn read<W: std::io::Write>(
+    pub fn read(
         &mut self,
-        bytes: W,
+        bytes: &mut dyn std::io::Write,
         event_queue: &mut EventQueue,
     ) -> SyscallResult {
         let (num, _chunk_type) = self.queue.pop(bytes)?;
@@ -334,22 +346,22 @@ impl SharedBuf {
         Ok(num.into())
     }
 
-    pub fn write_stream<R: std::io::Read>(
+    pub fn write_stream(
         &mut self,
-        bytes: R,
+        bytes: &mut dyn std::io::Read,
         event_queue: &mut EventQueue,
     ) -> SyscallResult {
         let written = self
             .queue
-            .push_stream(bytes.take(self.space_available().try_into().unwrap()))?;
+            .push_stream(bytes, self.space_available().try_into().unwrap())?;
         self.refresh_state(event_queue);
 
         Ok(written.into())
     }
 
-    pub fn write_packet<R: std::io::Read + std::io::Seek>(
+    pub fn write_packet(
         &mut self,
-        mut bytes: R,
+        bytes: &mut dyn ReadSeek,
         event_queue: &mut EventQueue,
     ) -> SyscallResult {
         let size = bytes.stream_len_bp().unwrap();
@@ -365,7 +377,7 @@ impl SharedBuf {
             // split the packet up into PIPE_BUF-sized packets
             let bytes_to_write = std::cmp::min(bytes_remaining, libc::PIPE_BUF as u64);
             self.queue
-                .push_packet(bytes.by_ref(), bytes_to_write.try_into().unwrap())?;
+                .push_packet(bytes.as_read(), bytes_to_write.try_into().unwrap())?;
             bytes_remaining -= bytes_to_write;
         }
 

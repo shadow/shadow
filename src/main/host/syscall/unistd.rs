@@ -202,7 +202,7 @@ fn read_helper(
         // call the file's read(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
             posix_file.borrow_mut().read(
-                ctx.process.memory_mut().writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
+                &mut ctx.process.memory_mut().writer(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
                 offset,
                 event_queue,
             )
@@ -272,7 +272,7 @@ fn write_helper(
         // call the file's write(), and run any resulting events
         EventQueue::queue_and_run(|event_queue| {
             posix_file.borrow_mut().write(
-                ctx.process.memory().reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
+                &mut ctx.process.memory().reader(TypedPluginPtr::new::<u8>(buf_ptr, buf_size)),
                 offset,
                 event_queue,
             )
@@ -352,8 +352,8 @@ fn pipe_helper(ctx: &mut ThreadContext, fd_ptr: PluginPtr, flags: i32) -> Syscal
     });
 
     // file descriptors for the read and write file objects
-    let mut reader_desc = Descriptor::new(PosixFile::Pipe(reader));
-    let mut writer_desc = Descriptor::new(PosixFile::Pipe(writer));
+    let mut reader_desc = Descriptor::new(reader);
+    let mut writer_desc = Descriptor::new(writer);
 
     // set the file descriptor flags
     reader_desc.set_flags(descriptor_flags);
