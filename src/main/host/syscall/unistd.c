@@ -13,7 +13,6 @@
 #include "main/core/worker.h"
 #include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/descriptor/eventd.h"
 #include "main/host/descriptor/file.h"
 #include "main/host/descriptor/timer.h"
 #include "main/host/host.h"
@@ -81,16 +80,6 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
                 result = file_pread((File*)desc, sys->host,
                                     process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
                                     sizeNeeded, offset);
-            }
-            break;
-        case DT_EVENTD:
-            if (doPread) {
-                result = -ESPIPE;
-            } else {
-                utility_assert(offset == 0);
-                result = eventd_read((EventD*)desc,
-                                     process_getWriteablePtr(sys->process, bufPtr, sizeNeeded),
-                                     sizeNeeded);
             }
             break;
         case DT_TIMER:
@@ -194,16 +183,6 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
                 result = file_pwrite((File*)desc,
                                      process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
                                      sizeNeeded, offset);
-            }
-            break;
-        case DT_EVENTD:
-            if (doPwrite) {
-                result = -ESPIPE;
-            } else {
-                utility_assert(offset == 0);
-                result = eventd_write((EventD*)desc,
-                                      process_getReadablePtr(sys->process, bufPtr, sizeNeeded),
-                                      sizeNeeded);
             }
             break;
         case DT_TIMER: result = -EINVAL; break;

@@ -24,7 +24,6 @@
 #include "main/host/process.h"
 #include "main/host/syscall/clone.h"
 #include "main/host/syscall/epoll.h"
-#include "main/host/syscall/eventfd.h"
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
@@ -273,8 +272,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(epoll_ctl);
         HANDLE(epoll_pwait);
         HANDLE(epoll_wait);
-        HANDLE(eventfd);
-        HANDLE(eventfd2);
+        HANDLE_RUST(eventfd);
+        HANDLE_RUST(eventfd2);
         HANDLE(execve);
         HANDLE(exit_group);
         HANDLE(faccessat);
