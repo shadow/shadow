@@ -630,6 +630,8 @@ SysCallReturn rustsyscallhandler_fcntl(SysCallHandler *sys, const SysCallArgs *a
 
 SysCallReturn rustsyscallhandler_fcntl64(SysCallHandler *sys, const SysCallArgs *args);
 
+SysCallReturn rustsyscallhandler_ioctl(SysCallHandler *sys, const SysCallArgs *args);
+
 SysCallReturn rustsyscallhandler_close(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_dup(SysCallHandler *sys, const SysCallArgs *args);

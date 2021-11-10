@@ -4,7 +4,8 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use crate::cshadow as c;
-use crate::host::syscall_types::SyscallResult;
+use crate::host::memory_manager::MemoryManager;
+use crate::host::syscall_types::{PluginPtr, SyscallResult};
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
 use crate::utility::SyncSendPointer;
 
@@ -356,6 +357,9 @@ impl PosixFileRefMut<'_> {
     );
     enum_passthrough!(self, (status), Pipe;
         pub fn set_status(&mut self, status: FileStatus)
+    );
+    enum_passthrough!(self, (request, arg_ptr, memory_manager), Pipe;
+        pub fn ioctl(&mut self, request: u64, arg_ptr: PluginPtr, memory_manager: &mut MemoryManager) -> SyscallResult
     );
     enum_passthrough!(self, (ptr), Pipe;
         pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener)
