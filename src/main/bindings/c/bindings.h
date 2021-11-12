@@ -112,9 +112,9 @@ struct ByteQueue *bytequeue_new(uintptr_t default_chunk_size);
 
 void bytequeue_free(struct ByteQueue *bq_ptr);
 
-uint64_t bytequeue_len(struct ByteQueue *bq);
+uint64_t bytequeue_numBytes(struct ByteQueue *bq);
 
-bool bytequeue_isEmpty(struct ByteQueue *bq);
+bool bytequeue_hasBytes(struct ByteQueue *bq);
 
 void bytequeue_pushStream(struct ByteQueue *bq, const unsigned char *src, size_t len);
 

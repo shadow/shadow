@@ -151,7 +151,7 @@ impl PipeFile {
             // in linux, it seems that pipes only switch to packet mode when a new page is added to
             // the buffer, so we simulate that behaviour for when the first page is added (when the
             // buffer is empty)
-            if buffer.is_empty() {
+            if !buffer.has_data() {
                 self.write_mode = WriteMode::Packet;
             }
         }
@@ -312,8 +312,8 @@ impl SharedBuf {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.queue.len() == 0
+    pub fn has_data(&self) -> bool {
+        self.queue.has_chunks()
     }
 
     pub fn max_len(&self) -> usize {
@@ -321,7 +321,7 @@ impl SharedBuf {
     }
 
     pub fn space_available(&self) -> usize {
-        self.max_len - usize::try_from(self.queue.len()).unwrap()
+        self.max_len - usize::try_from(self.queue.num_bytes()).unwrap()
     }
 
     pub fn add_writer(&mut self, event_queue: &mut EventQueue) {
@@ -400,7 +400,7 @@ impl SharedBuf {
     }
 
     fn refresh_state(&mut self, event_queue: &mut EventQueue) {
-        let readable = !self.is_empty() || self.num_writers == 0;
+        let readable = self.has_data() || self.num_writers == 0;
         let writable = self.space_available() > 0;
 
         self.adjust_state(FileState::READABLE, readable, event_queue);

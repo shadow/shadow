@@ -46,12 +46,20 @@ impl ByteQueue {
         }
     }
 
-    pub fn len(&self) -> u64 {
+    /// The number of bytes in the queue. If the queue has 0 bytes, it does not mean that the queue
+    /// is empty since there may be 0-length packets in the queue.
+    pub fn num_bytes(&self) -> u64 {
         self.length
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    /// Returns true if the queue has bytes.
+    pub fn has_bytes(&self) -> bool {
+        self.num_bytes() > 0
+    }
+
+    /// Returns true if the queue has data/chunks, which may include packets with 0 bytes.
+    pub fn has_chunks(&self) -> bool {
+        self.bytes.len() > 0
     }
 
     #[must_use]
@@ -268,7 +276,7 @@ impl std::ops::Drop for ByteQueue {
     fn drop(&mut self) {
         // check that the length is consistent with the number of remaining bytes
         assert_eq!(
-            self.len(),
+            self.num_bytes(),
             self.bytes
                 .iter()
                 .map(|x| u64::try_from(x.data.len()).unwrap())
@@ -370,17 +378,17 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn bytequeue_len(bq: *mut ByteQueue) -> u64 {
+    pub extern "C" fn bytequeue_numBytes(bq: *mut ByteQueue) -> u64 {
         assert!(!bq.is_null());
         let bq = unsafe { &mut *bq };
-        bq.len()
+        bq.num_bytes()
     }
 
     #[no_mangle]
-    pub extern "C" fn bytequeue_isEmpty(bq: *mut ByteQueue) -> bool {
+    pub extern "C" fn bytequeue_hasBytes(bq: *mut ByteQueue) -> bool {
         assert!(!bq.is_null());
         let bq = unsafe { &mut *bq };
-        bq.is_empty()
+        bq.has_bytes()
     }
 
     #[no_mangle]
@@ -442,7 +450,7 @@ mod tests {
         bq.push_stream(&[][..]).unwrap();
         bq.push_stream(&src2[..]).unwrap();
 
-        assert_eq!(bq.len() as usize, src1.len() + src2.len());
+        assert_eq!(bq.num_bytes() as usize, src1.len() + src2.len());
         // ceiling division
         assert_eq!(
             bq.bytes.len(),
@@ -455,7 +463,7 @@ mod tests {
 
         assert_eq!(dst1, [1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(dst2, [9, 10, 11, 12, 13, 51, 52, 53, 0, 0]);
-        assert_eq!(bq.len(), 0);
+        assert_eq!(bq.num_bytes(), 0);
     }
 
     #[test]
@@ -471,7 +479,7 @@ mod tests {
         bq.push_packet(&[][..], 0).unwrap();
         bq.push_packet(&src2[..], src2.len()).unwrap();
 
-        assert_eq!(bq.len() as usize, src1.len() + src2.len());
+        assert_eq!(bq.num_bytes() as usize, src1.len() + src2.len());
         assert_eq!(bq.bytes.len(), 3);
         assert_eq!(bq.total_allocations, 3);
 
@@ -481,7 +489,7 @@ mod tests {
 
         assert_eq!(dst1, [1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(dst2, [51, 52, 53, 0, 0, 0, 0, 0, 0, 0]);
-        assert_eq!(bq.len(), 0);
+        assert_eq!(bq.num_bytes(), 0);
     }
 
     #[test]
@@ -492,7 +500,7 @@ mod tests {
         bq.push_packet(&[4, 5, 6][..], 3).unwrap();
         bq.push_stream(&[7, 8, 9][..]).unwrap();
 
-        assert_eq!(bq.len() as usize, 9);
+        assert_eq!(bq.num_bytes() as usize, 9);
         assert_eq!(bq.bytes.len(), 3);
         assert_eq!(bq.total_allocations, 1);
 
@@ -507,7 +515,7 @@ mod tests {
         assert_eq!(bq.pop(&mut buf[..]).unwrap(), (3, Some(ChunkType::Stream)));
         assert_eq!(buf[..3], [7, 8, 9]);
 
-        assert!(bq.is_empty());
+        assert!(!bq.has_bytes());
     }
 
     #[test]
@@ -557,6 +565,6 @@ mod tests {
 
         assert_eq!(bq.pop_chunk(8), None);
         assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (0, None));
-        assert!(bq.is_empty());
+        assert!(!bq.has_bytes());
     }
 }
