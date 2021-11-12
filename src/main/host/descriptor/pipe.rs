@@ -20,7 +20,6 @@ pub struct PipeFile {
     mode: FileMode,
     status: FileStatus,
     write_mode: WriteMode,
-    // we only store this so that the handle is dropped when we are
     buffer_event_handle: Option<Handle<(FileState, FileState)>>,
 }
 
@@ -302,10 +301,11 @@ pub struct SharedBuf {
 }
 
 impl SharedBuf {
-    pub fn new() -> Self {
+    pub fn new(max_len: usize) -> Self {
+        assert_ne!(max_len, 0);
         Self {
-            queue: ByteQueue::new(8192),
-            max_len: c::CONFIG_PIPE_BUFFER_SIZE as usize,
+            queue: ByteQueue::new(4096),
+            max_len,
             state: FileState::WRITABLE,
             num_writers: 0,
             event_source: StateEventSource::new(),
