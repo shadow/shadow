@@ -85,7 +85,7 @@ static SysCallReturn _syscallhandler_eventfdHelper(SysCallHandler* sys, unsigned
 ///////////////////////////////////////////////////////////
 
 SysCallReturn syscallhandler_eventfd(SysCallHandler* sys, const SysCallArgs* args) {
-    return _syscallhandler_eventfdHelper(sys, args->args[0].as_u64, args->args[1].as_i64);
+    return _syscallhandler_eventfdHelper(sys, args->args[0].as_u64, 0);
 }
 
 SysCallReturn syscallhandler_eventfd2(SysCallHandler* sys, const SysCallArgs* args) {

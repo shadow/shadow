@@ -11,6 +11,14 @@ than using seccomp to interpose, so we should use preloading whenever possible.
 # See also https://github.com/torvalds/linux/tree/master/arch/x86/entry/syscalls
 syscall_tbl = 'https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/entry/syscalls/syscall_64.tbl'
 
+# libc wrappers which use a different syscall
+remap = {}
+remap['eventfd'] = 'eventfd2' # libc eventfd() calls SYS_eventfd2
+
+# syscalls we should not generate C wrappers for
+skip = []
+skip.append('eventfd2') # libc doesn't have an eventfd2() wrapper
+
 with urllib.request.urlopen(syscall_tbl) as response:
     data = response.read().decode("utf-8")
 
@@ -53,8 +61,14 @@ with open('syscall_wrappers.c', 'w') as outf:
 
     for name in sorted(syscalls.keys()):
         num, entry = syscalls[name]
-        print(f'#ifdef SYS_{name} // kernel entry: num={num} func={entry}', file=outf)
-        print(f'INTERPOSE({name});', file=outf)
-        print('#endif', file=outf)
+        if name in skip:
+            print(f'// Skipping SYS_{name}', file=outf)
+        else:
+            print(f'#ifdef SYS_{name} // kernel entry: num={num} func={entry}', file=outf)
+            if name in remap:
+                print(f'INTERPOSE_REMAP({name}, {remap[name]});', file=outf)
+            else:
+                print(f'INTERPOSE({name});', file=outf)
+            print('#endif', file=outf)
 
     print('// clang-format on', file=outf)

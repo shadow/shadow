@@ -138,11 +138,9 @@ INTERPOSE(epoll_pwait2);
 INTERPOSE(epoll_wait);
 #endif
 #ifdef SYS_eventfd // kernel entry: num=284 func=sys_eventfd
-INTERPOSE(eventfd);
+INTERPOSE_REMAP(eventfd, eventfd2);
 #endif
-#ifdef SYS_eventfd2 // kernel entry: num=290 func=sys_eventfd2
-INTERPOSE(eventfd2);
-#endif
+// Skipping SYS_eventfd2
 #ifdef SYS_execve // kernel entry: num=59 func=sys_execve
 INTERPOSE(execve);
 #endif
