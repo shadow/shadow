@@ -7,7 +7,7 @@ use bytes::{Bytes, BytesMut};
 
 use std::collections::LinkedList;
 use std::convert::{TryFrom, TryInto};
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::iter::FromIterator;
 
 /// A queue of bytes that supports reading and writing stream and/or packet data.
@@ -200,7 +200,22 @@ impl ByteQueue {
                 None => break,
             };
 
-            let copied = dst.write(bytes.as_ref())?;
+            let copied = match dst.write(bytes.as_ref()) {
+                Ok(x) => x,
+                // may have been interrupted due to a signal, so try again
+                Err(e) if e.kind() == ErrorKind::Interrupted => continue,
+                Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                    // only return an error if no bytes have been copied yet
+                    if total_copied == 0 {
+                        return Err(e);
+                    }
+                    // no bytes could be written this iteration
+                    0
+                }
+                // a partial write may have occurred in previous iterations
+                Err(e) => return Err(e),
+            };
+
             let _ = bytes.split_to(copied);
 
             if copied == 0 {
@@ -233,7 +248,20 @@ impl ByteQueue {
         let mut total_copied = 0u64;
 
         loop {
-            let copied = dst.write(bytes.as_ref())?;
+            let copied = match dst.write(bytes.as_ref()) {
+                Ok(x) => x,
+                // may have been interrupted due to a signal, so try again
+                Err(e) if e.kind() == ErrorKind::Interrupted => continue,
+                // `WouldBlock` typically means "try again later", but we don't support that
+                // behaviour since a packet may have been partially copied already
+                Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                    panic!("Non-blocking writers aren't supported for packets")
+                }
+                // a partial write may have occurred in previous iterations, and the remainder of
+                // the packet will be dropped
+                Err(e) => return Err(e),
+            };
+
             let _ = bytes.split_to(copied);
 
             if copied == 0 {
