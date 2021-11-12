@@ -4,7 +4,9 @@ use crate::host::process::Process;
 
 use std::convert::TryInto;
 
+pub mod eventfd;
 pub mod fcntl;
+pub mod ioctl;
 pub mod unistd;
 
 pub struct Trigger(c::Trigger);

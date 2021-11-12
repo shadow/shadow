@@ -93,7 +93,6 @@ set(shadow_srcs
     host/descriptor/descriptor.c
     host/status_listener.c
     host/descriptor/compat_socket.c
-    host/descriptor/eventd.c
     host/descriptor/epoll.c
     host/descriptor/file.c
     host/descriptor/socket.c
@@ -113,7 +112,6 @@ set(shadow_srcs
     host/syscall/protected.c
     host/syscall/clone.c
     host/syscall/epoll.c
-    host/syscall/eventfd.c
     host/syscall/fcntl.c
     host/syscall/file.c
     host/syscall/fileat.c

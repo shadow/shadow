@@ -7,7 +7,8 @@ use crate::cshadow as c;
 use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
 };
-use crate::host::syscall_types::SyscallResult;
+use crate::host::memory_manager::MemoryManager;
+use crate::host::syscall_types::{PluginPtr, SyscallResult};
 use crate::utility::byte_queue::ByteQueue;
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
@@ -166,6 +167,16 @@ impl PipeFile {
         } else {
             Ok(num_written.into())
         }
+    }
+
+    pub fn ioctl(
+        &mut self,
+        request: u64,
+        _arg_ptr: PluginPtr,
+        _memory_manager: &mut MemoryManager,
+    ) -> SyscallResult {
+        log::warn!("We do not yet handle ioctl request {} on pipes", request);
+        Err(Errno::EINVAL.into())
     }
 
     pub fn connect_to_buffer(

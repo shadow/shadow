@@ -24,12 +24,10 @@
 #include "main/host/process.h"
 #include "main/host/syscall/clone.h"
 #include "main/host/syscall/epoll.h"
-#include "main/host/syscall/eventfd.h"
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
 #include "main/host/syscall/futex.h"
-#include "main/host/syscall/ioctl.h"
 #include "main/host/syscall/mman.h"
 #include "main/host/syscall/poll.h"
 #include "main/host/syscall/process.h"
@@ -274,8 +272,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(epoll_ctl);
         HANDLE(epoll_pwait);
         HANDLE(epoll_wait);
-        HANDLE(eventfd);
-        HANDLE(eventfd2);
+        HANDLE_RUST(eventfd);
+        HANDLE_RUST(eventfd2);
         HANDLE(execve);
         HANDLE(exit_group);
         HANDLE(faccessat);
@@ -312,7 +310,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(getsockname);
         HANDLE(getsockopt);
         HANDLE(gettimeofday);
-        HANDLE(ioctl);
+        HANDLE_RUST(ioctl);
         HANDLE(kill);
         HANDLE(linkat);
         HANDLE(listen);

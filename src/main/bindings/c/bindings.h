@@ -626,9 +626,15 @@ void process_deregisterLegacyDescriptor(Process *proc, LegacyDescriptor *desc);
 // Get a temporary reference to a legacy descriptor.
 LegacyDescriptor *process_getRegisteredLegacyDescriptor(Process *proc, int handle);
 
+SysCallReturn rustsyscallhandler_eventfd(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_eventfd2(SysCallHandler *sys, const SysCallArgs *args);
+
 SysCallReturn rustsyscallhandler_fcntl(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_fcntl64(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_ioctl(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_close(SysCallHandler *sys, const SysCallArgs *args);
 
