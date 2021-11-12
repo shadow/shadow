@@ -227,6 +227,9 @@ impl ByteQueue {
         assert_eq!(chunk.chunk_type, ChunkType::Packet);
         let bytes = &mut chunk.data;
 
+        // decrease the length now in case we return early
+        self.length -= u64::try_from(bytes.len()).unwrap();
+
         let mut total_copied = 0u64;
 
         loop {
@@ -240,7 +243,6 @@ impl ByteQueue {
             total_copied += u64::try_from(copied).unwrap();
         }
 
-        self.length -= total_copied + u64::try_from(bytes.len()).unwrap();
         Ok(total_copied)
     }
 
@@ -566,5 +568,33 @@ mod tests {
         assert_eq!(bq.pop_chunk(8), None);
         assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (0, None));
         assert!(!bq.has_bytes());
+    }
+
+    #[test]
+    fn test_bytequeue_fallible_writer() {
+        struct TestWriter;
+
+        impl std::io::Write for TestWriter {
+            fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::ErrorKind::BrokenPipe.into())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let mut bq = ByteQueue::new(10);
+
+        bq.push_packet(&[4, 5, 6][..], 3).unwrap();
+        bq.push_stream(&[1, 2, 3][..]).unwrap();
+
+        let mut writer = TestWriter {};
+
+        // the remainder of the packet will be dropped, so length will decrease by 3 bytes
+        bq.pop(&mut writer).unwrap_err();
+        // no stream data will be dropped, so length will not decrease
+        bq.pop(&mut writer).unwrap_err();
+
+        assert_eq!(bq.num_bytes(), 3);
     }
 }
