@@ -8,7 +8,7 @@ use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
 };
 use crate::host::memory_manager::MemoryManager;
-use crate::host::syscall_types::{PluginPtr, SyscallResult};
+use crate::host::syscall_types::{PluginPtr, SyscallError, SyscallResult};
 use crate::utility::byte_queue::ByteQueue;
 use crate::utility::event_queue::{EventQueue, Handle};
 use crate::utility::stream_len::StreamLen;
@@ -20,7 +20,6 @@ pub struct PipeFile {
     mode: FileMode,
     status: FileStatus,
     write_mode: WriteMode,
-    // we only store this so that the handle is dropped when we are
     buffer_event_handle: Option<Handle<(FileState, FileState)>>,
 }
 
@@ -83,7 +82,7 @@ impl PipeFile {
 
     pub fn read<W>(
         &mut self,
-        bytes: W,
+        mut bytes: W,
         offset: libc::off_t,
         event_queue: &mut EventQueue,
     ) -> SyscallResult
@@ -100,7 +99,6 @@ impl PipeFile {
             return Err(nix::errno::Errno::EBADF.into());
         }
 
-        let mut bytes = bytes;
         let num_read = self
             .buffer
             .as_ref()
@@ -124,7 +122,7 @@ impl PipeFile {
 
     pub fn write<R>(
         &mut self,
-        bytes: R,
+        mut bytes: R,
         offset: libc::off_t,
         event_queue: &mut EventQueue,
     ) -> SyscallResult
@@ -141,7 +139,6 @@ impl PipeFile {
             return Err(nix::errno::Errno::EBADF.into());
         }
 
-        let mut bytes = bytes;
         let mut buffer = self.buffer.as_ref().unwrap().borrow_mut();
 
         if self.write_mode == WriteMode::Packet && !self.status.contains(FileStatus::DIRECT) {
@@ -151,21 +148,42 @@ impl PipeFile {
             // in linux, it seems that pipes only switch to packet mode when a new page is added to
             // the buffer, so we simulate that behaviour for when the first page is added (when the
             // buffer is empty)
-            if buffer.is_empty() {
+            if !buffer.has_data() {
                 self.write_mode = WriteMode::Packet;
             }
         }
 
-        let num_written = match self.write_mode {
-            WriteMode::Packet => buffer.write_packet(bytes.by_ref(), event_queue)?,
-            WriteMode::Stream => buffer.write_stream(bytes.by_ref(), event_queue)?,
-        };
+        let len = bytes.stream_len_bp()? as usize;
 
-        // the write would block if we could not write any bytes, but were asked to
-        if usize::from(num_written) == 0 && bytes.stream_len_bp()? != 0 {
-            Err(Errno::EWOULDBLOCK.into())
-        } else {
-            Ok(num_written.into())
+        match self.write_mode {
+            WriteMode::Stream => buffer.write_stream(bytes.by_ref(), len, event_queue),
+            WriteMode::Packet => {
+                let mut num_written = 0;
+
+                loop {
+                    // the number of remaining bytes to write
+                    let bytes_remaining = len - num_written;
+
+                    // if there are no more bytes to write (pipes don't support 0-length packets)
+                    if bytes_remaining == 0 {
+                        break Ok(num_written.into());
+                    }
+
+                    // split the packet up into PIPE_BUF-sized packets
+                    let bytes_to_write = std::cmp::min(bytes_remaining, libc::PIPE_BUF);
+
+                    if let Err(e) = buffer.write_packet(bytes.by_ref(), bytes_to_write, event_queue)
+                    {
+                        // if we've already written bytes, return those instead of an error
+                        if num_written > 0 {
+                            break Ok(num_written.into());
+                        }
+                        break Err(e);
+                    }
+
+                    num_written += bytes_to_write;
+                }
+            }
         }
     }
 
@@ -302,18 +320,19 @@ pub struct SharedBuf {
 }
 
 impl SharedBuf {
-    pub fn new() -> Self {
+    pub fn new(max_len: usize) -> Self {
+        assert_ne!(max_len, 0);
         Self {
-            queue: ByteQueue::new(8192),
-            max_len: c::CONFIG_PIPE_BUFFER_SIZE as usize,
+            queue: ByteQueue::new(4096),
+            max_len,
             state: FileState::WRITABLE,
             num_writers: 0,
             event_source: StateEventSource::new(),
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.queue.len() == 0
+    pub fn has_data(&self) -> bool {
+        self.queue.has_chunks()
     }
 
     pub fn max_len(&self) -> usize {
@@ -321,7 +340,7 @@ impl SharedBuf {
     }
 
     pub fn space_available(&self) -> usize {
-        self.max_len - usize::try_from(self.queue.len()).unwrap()
+        self.max_len - usize::try_from(self.queue.num_bytes()).unwrap()
     }
 
     pub fn add_writer(&mut self, event_queue: &mut EventQueue) {
@@ -348,8 +367,17 @@ impl SharedBuf {
     pub fn write_stream<R: std::io::Read>(
         &mut self,
         bytes: R,
+        len: usize,
         event_queue: &mut EventQueue,
     ) -> SyscallResult {
+        if len == 0 {
+            return Ok(0.into());
+        }
+
+        if self.space_available() == 0 {
+            return Err(Errno::EAGAIN.into());
+        }
+
         let written = self
             .queue
             .push_stream(bytes.take(self.space_available().try_into().unwrap()))?;
@@ -358,31 +386,20 @@ impl SharedBuf {
         Ok(written.into())
     }
 
-    pub fn write_packet<R: std::io::Read + std::io::Seek>(
+    pub fn write_packet<R: std::io::Read>(
         &mut self,
         mut bytes: R,
+        len: usize,
         event_queue: &mut EventQueue,
-    ) -> SyscallResult {
-        let size = bytes.stream_len_bp().unwrap();
-
-        if size > self.space_available().try_into().unwrap() {
+    ) -> Result<(), SyscallError> {
+        if len > self.space_available() {
             return Err(Errno::EAGAIN.into());
         }
 
-        let mut bytes_remaining = size;
-
-        // pipes don't support 0-length packets
-        while bytes_remaining > 0 {
-            // split the packet up into PIPE_BUF-sized packets
-            let bytes_to_write = std::cmp::min(bytes_remaining, libc::PIPE_BUF as u64);
-            self.queue
-                .push_packet(bytes.by_ref(), bytes_to_write.try_into().unwrap())?;
-            bytes_remaining -= bytes_to_write;
-        }
-
+        self.queue.push_packet(bytes.by_ref(), len)?;
         self.refresh_state(event_queue);
 
-        Ok(size.into())
+        Ok(())
     }
 
     pub fn add_listener(
@@ -400,7 +417,7 @@ impl SharedBuf {
     }
 
     fn refresh_state(&mut self, event_queue: &mut EventQueue) {
-        let readable = !self.is_empty() || self.num_writers == 0;
+        let readable = self.has_data() || self.num_writers == 0;
         let writable = self.space_available() > 0;
 
         self.adjust_state(FileState::READABLE, readable, event_queue);

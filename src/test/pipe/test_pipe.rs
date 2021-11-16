@@ -106,6 +106,16 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             test_o_direct_packet_to_stream_mode_nonempty,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
+        test_utils::ShadowTest::new(
+            "test_o_direct_full_buffer_1",
+            test_o_direct_full_buffer_1,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_o_direct_full_buffer_2",
+            test_o_direct_full_buffer_2,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
     ];
 
     tests
@@ -708,6 +718,76 @@ fn test_o_direct_packet_to_stream_mode_nonempty() -> Result<(), String> {
         let mut in_buf = [0u8; 2];
         let len = nix::unistd::read(read_fd, &mut in_buf).unwrap();
         assert_eq!(len, 2);
+
+        Ok(())
+    })
+}
+
+fn test_o_direct_full_buffer_1() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK | libc::O_DIRECT) } },
+        &[]
+    )?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        use nix::fcntl::FcntlArg;
+
+        // get the pipe capacity
+        let capacity = nix::fcntl::fcntl(read_fd, FcntlArg::F_GETPIPE_SZ).unwrap() as usize;
+
+        // fill most of the pipe, with more than PIPE_BUF space remaining
+        let buffer = vec![0u8; capacity - (libc::PIPE_BUF * 2)];
+        let rv = nix::unistd::write(write_fd, &buffer).unwrap();
+        assert_eq!(rv, buffer.len());
+
+        // write a packet that would overflow the pipe, and there is more than PIPE_BUF space
+        // remaining in the pipe
+        let buffer = vec![0u8; libc::PIPE_BUF * 4];
+        let rv = nix::unistd::write(write_fd, &buffer).unwrap();
+
+        // a partial packet is written
+        assert!(rv < buffer.len());
+
+        Ok(())
+    })
+}
+
+fn test_o_direct_full_buffer_2() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK | libc::O_DIRECT) } },
+        &[]
+    )?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    let (read_fd, write_fd) = (fds[0], fds[1]);
+
+    test_utils::run_and_close_fds(&[write_fd, read_fd], || {
+        use nix::fcntl::FcntlArg;
+
+        // get the pipe capacity
+        let capacity = nix::fcntl::fcntl(read_fd, FcntlArg::F_GETPIPE_SZ).unwrap() as usize;
+
+        // fill most of the pipe, with less than PIPE_BUF space remaining
+        let buffer = vec![0u8; capacity - (libc::PIPE_BUF / 2)];
+        let rv = nix::unistd::write(write_fd, &buffer).unwrap();
+        assert_eq!(rv, buffer.len());
+
+        // write a packet that would overflow the pipe, but there is less than PIPE_BUF space
+        // remaining in the pipe
+        let buffer = vec![0u8; libc::PIPE_BUF * 4];
+        let rv = nix::unistd::write(write_fd, &buffer).err().unwrap();
+
+        // no partial packet is written
+        assert_eq!(rv, nix::errno::Errno::EWOULDBLOCK);
 
         Ok(())
     })

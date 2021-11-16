@@ -334,7 +334,7 @@ fn pipe_helper(ctx: &mut ThreadContext, fd_ptr: PluginPtr, flags: i32) -> Syscal
     }
 
     // reference-counted buffer for the pipe
-    let buffer = pipe::SharedBuf::new();
+    let buffer = pipe::SharedBuf::new(c::CONFIG_PIPE_BUFFER_SIZE.try_into().unwrap());
     let buffer = Arc::new(AtomicRefCell::new(buffer));
 
     // reference-counted file object for read end of the pipe
