@@ -12,6 +12,7 @@ use crate::utility::SyncSendPointer;
 pub mod descriptor_table;
 pub mod eventfd;
 pub mod pipe;
+pub mod shared_buf;
 
 /// A trait we can use as a compile-time check to make sure that an object is Send.
 trait IsSend: Send {}

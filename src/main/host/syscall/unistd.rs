@@ -1,6 +1,7 @@
 use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::pipe;
+use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::{
     CompatDescriptor, Descriptor, DescriptorFlags, FileMode, FileState, FileStatus, PosixFile,
 };
@@ -334,7 +335,7 @@ fn pipe_helper(ctx: &mut ThreadContext, fd_ptr: PluginPtr, flags: i32) -> Syscal
     }
 
     // reference-counted buffer for the pipe
-    let buffer = pipe::SharedBuf::new(c::CONFIG_PIPE_BUFFER_SIZE.try_into().unwrap());
+    let buffer = SharedBuf::new(c::CONFIG_PIPE_BUFFER_SIZE.try_into().unwrap());
     let buffer = Arc::new(AtomicRefCell::new(buffer));
 
     // reference-counted file object for read end of the pipe
