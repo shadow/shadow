@@ -112,7 +112,7 @@ impl PipeFile {
         //  3. there are open descriptors that refer to the write end of the pipe
         if usize::from(num_read) == 0
             && bytes.stream_len_bp()? != 0
-            && self.buffer.as_ref().unwrap().borrow().num_writers > 0
+            && self.buffer.as_ref().unwrap().borrow().num_writers() > 0
         {
             Err(Errno::EWOULDBLOCK.into())
         } else {
@@ -353,6 +353,10 @@ impl SharedBuf {
         self.refresh_state(event_queue);
     }
 
+    pub fn num_writers(&self) -> u16 {
+        self.num_writers
+    }
+
     pub fn read<W: std::io::Write>(
         &mut self,
         bytes: W,
@@ -417,7 +421,7 @@ impl SharedBuf {
     }
 
     fn refresh_state(&mut self, event_queue: &mut EventQueue) {
-        let readable = self.has_data() || self.num_writers == 0;
+        let readable = self.has_data() || self.num_writers() == 0;
         let writable = self.space_available() > 0;
 
         self.adjust_state(FileState::READABLE, readable, event_queue);
