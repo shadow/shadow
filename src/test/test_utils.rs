@@ -7,6 +7,7 @@
 
 use std::collections::HashSet;
 use std::fmt;
+use std::io::Write;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TestEnvironment {
@@ -65,6 +66,7 @@ where
 
     for test in tests {
         print!("Testing {}...", test.name());
+        std::io::stdout().flush().unwrap();
 
         match test.run() {
             Err(failure) => {
