@@ -147,7 +147,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     ];
 
     for &method in init_methods.iter() {
-        let passing = if method == SocketInitMethod::Inet {
+        let passing = if method != SocketInitMethod::Unix {
             set![TestEnv::Libc, TestEnv::Shadow]
         } else {
             set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
