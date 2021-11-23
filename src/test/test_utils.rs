@@ -9,6 +9,8 @@ use std::collections::HashSet;
 use std::fmt;
 use std::io::Write;
 
+pub mod socket_utils;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TestEnvironment {
     Shadow,
