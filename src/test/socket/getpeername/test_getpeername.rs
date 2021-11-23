@@ -3,12 +3,15 @@
  * See LICENSE for licensing information
  */
 
+use test_utils::socket_utils::{
+    autobind_helper, socket_init_helper, stream_connect_helper, SockAddr, SocketInitMethod,
+};
 use test_utils::TestEnvironment as TestEnv;
 use test_utils::{set, AsMutPtr};
 
 struct GetpeernameArguments {
     fd: libc::c_int,
-    addr: Option<libc::sockaddr_in>, // if None, a null pointer should be used
+    addr: Option<SockAddr>, // if None, a null pointer should be used
     addr_len: Option<libc::socklen_t>, // if None, a null pointer should be used
 }
 
@@ -40,7 +43,9 @@ fn main() -> Result<(), String> {
 }
 
 fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
-    let tests: Vec<test_utils::ShadowTest<_, _>> = vec![
+    let mut tests: Vec<test_utils::ShadowTest<_, _>> = vec![];
+
+    tests.extend(vec![
         test_utils::ShadowTest::new(
             "test_invalid_fd",
             test_invalid_fd,
@@ -57,96 +62,159 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new(
-            "test_non_connected_fd",
-            test_non_connected_fd,
+            "test_short_len_inet",
+            test_short_len_inet,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
-        test_utils::ShadowTest::new(
-            "test_null_addr",
-            test_null_addr,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_null_len",
-            test_null_len,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_short_len",
-            test_short_len,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_zero_len",
-            test_zero_len,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_listening_socket",
-            test_listening_socket,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_after_close",
-            test_after_close,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_unbound_dgram_socket",
-            test_unbound_dgram_socket,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_bound_dgram_socket",
-            test_bound_dgram_socket,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_connected_dgram_socket",
-            test_connected_dgram_socket,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_connected_before_accepted",
-            test_connected_before_accepted,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_connected_socket",
-            test_connected_socket,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_accepted_socket",
-            test_accepted_socket,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_sockname_peername",
-            test_sockname_peername,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
+    ]);
+
+    let domains = [libc::AF_INET, libc::AF_UNIX];
+
+    for &domain in domains.iter() {
+        // add details to the test names to avoid duplicates
+        let append_args = |s| format!("{} <domain={:?}>", s, domain);
+
+        let passing = if domain != libc::AF_UNIX {
+            set![TestEnv::Libc, TestEnv::Shadow]
+        } else {
+            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
+        };
+
+        // only inet/inet6 dgram sockets can be connected to a non-existent address
+        if [libc::AF_INET, libc::AF_INET6].contains(&domain) {
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_connected_dgram_socket"),
+                move || test_connected_dgram_socket(domain),
+                passing.clone(),
+            )]);
+        }
+
+        let sock_types = match domain {
+            libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
+            libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
+            _ => unimplemented!(),
+        };
+
+        for &sock_type in sock_types.iter() {
+            // add details to the test names to avoid duplicates
+            let append_args = |s| format!("{} <domain={:?}, sock_type={}>", s, domain, sock_type);
+
+            tests.extend(vec![
+                test_utils::ShadowTest::new(
+                    &append_args("test_non_connected_fd"),
+                    move || test_non_connected_fd(domain, sock_type),
+                    passing.clone(),
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_unbound_socket"),
+                    move || test_unbound_socket(domain, sock_type),
+                    passing.clone(),
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_bound_socket"),
+                    move || test_bound_socket(domain, sock_type),
+                    passing.clone(),
+                ),
+            ]);
+
+            // if a connection-based socket
+            if [libc::SOCK_STREAM, libc::SOCK_SEQPACKET].contains(&sock_type) {
+                tests.extend(vec![
+                    test_utils::ShadowTest::new(
+                        &append_args("test_listening_socket"),
+                        move || test_listening_socket(domain, sock_type),
+                        passing.clone(),
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_connected_before_accepted"),
+                        move || test_connected_before_accepted(domain, sock_type),
+                        passing.clone(),
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_sockname_peername"),
+                        move || test_sockname_peername(domain, sock_type),
+                        passing.clone(),
+                    ),
+                ]);
+            }
+        }
+    }
+
+    let init_methods = [
+        SocketInitMethod::Inet,
+        SocketInitMethod::Unix,
+        SocketInitMethod::UnixSocketpair,
     ];
+
+    for &method in init_methods.iter() {
+        let passing = if method == SocketInitMethod::Inet {
+            set![TestEnv::Libc, TestEnv::Shadow]
+        } else {
+            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
+        };
+
+        let sock_types = match method.domain() {
+            libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
+            libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
+            _ => unimplemented!(),
+        };
+
+        for &sock_type in sock_types.iter() {
+            // add details to the test names to avoid duplicates
+            let append_args =
+                |s| format!("{} <init_method={:?}, sock_type={}>", s, method, sock_type);
+
+            tests.extend(vec![
+                test_utils::ShadowTest::new(
+                    &append_args("test_null_addr"),
+                    move || test_null_addr(method, sock_type),
+                    passing.clone(),
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_null_len"),
+                    move || test_null_len(method, sock_type),
+                    passing.clone(),
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_zero_len"),
+                    move || test_zero_len(method, sock_type),
+                    passing.clone(),
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_after_close"),
+                    move || test_after_close(method, sock_type),
+                    passing.clone(),
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_connected_socket"),
+                    move || test_connected_socket(method, sock_type),
+                    passing.clone(),
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_peer_socket <bind_client=false>"),
+                    move || test_peer_socket(method, sock_type, false),
+                    passing.clone(),
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_peer_socket <bind_client=true>"),
+                    move || test_peer_socket(method, sock_type, true),
+                    passing.clone(),
+                ),
+            ]);
+        }
+    }
 
     tests
 }
 
 /// Test getpeername using an argument that cannot be a fd.
 fn test_invalid_fd() -> Result<(), String> {
-    // fill the sockaddr with dummy data
-    let addr = libc::sockaddr_in {
-        sin_family: 123u16,
-        sin_port: 456u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 789u32.to_be(),
-        },
-        sin_zero: [1; 8],
-    };
+    let addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
         fd: -1,
-        addr: Some(addr),
+        addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
@@ -155,20 +223,12 @@ fn test_invalid_fd() -> Result<(), String> {
 
 /// Test getpeername using an argument that could be a fd, but is not.
 fn test_non_existent_fd() -> Result<(), String> {
-    // fill the sockaddr with dummy data
-    let addr = libc::sockaddr_in {
-        sin_family: 123u16,
-        sin_port: 456u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 789u32.to_be(),
-        },
-        sin_zero: [1; 8],
-    };
+    let addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
         fd: 8934,
-        addr: Some(addr),
+        addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
@@ -177,20 +237,12 @@ fn test_non_existent_fd() -> Result<(), String> {
 
 /// Test getpeername using a valid fd that is not a socket.
 fn test_non_socket_fd() -> Result<(), String> {
-    // fill the sockaddr with dummy data
-    let addr = libc::sockaddr_in {
-        sin_family: 123u16,
-        sin_port: 456u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 789u32.to_be(),
-        },
-        sin_zero: [1; 8],
-    };
+    let addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
         fd: 0, // assume the fd 0 is already open and is not a socket
-        addr: Some(addr),
+        addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
@@ -198,24 +250,16 @@ fn test_non_socket_fd() -> Result<(), String> {
 }
 
 /// Test getpeername using a valid fd, but that is not connected to a peer.
-fn test_non_connected_fd() -> Result<(), String> {
-    let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
+fn test_non_connected_fd(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type, 0) };
     assert!(fd >= 0);
 
-    // fill the sockaddr with dummy data
-    let addr = libc::sockaddr_in {
-        sin_family: 123u16,
-        sin_port: 456u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 789u32.to_be(),
-        },
-        sin_zero: [1; 8],
-    };
+    let addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
         fd: fd,
-        addr: Some(addr),
+        addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
@@ -224,85 +268,10 @@ fn test_non_connected_fd() -> Result<(), String> {
     })
 }
 
-/// A helper function to start a server on one fd and connect another fd to it. Returns the accepted fd.
-fn connect_helper(fd_client: libc::c_int, fd_server: libc::c_int) -> libc::c_int {
-    // the server address
-    let mut server_addr = libc::sockaddr_in {
-        sin_family: libc::AF_INET as u16,
-        sin_port: 0u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: libc::INADDR_LOOPBACK.to_be(),
-        },
-        sin_zero: [0; 8],
-    };
-
-    // bind on the server address
-    {
-        let rv = unsafe {
-            libc::bind(
-                fd_server,
-                &server_addr as *const libc::sockaddr_in as *const libc::sockaddr,
-                std::mem::size_of_val(&server_addr) as u32,
-            )
-        };
-        assert_eq!(rv, 0);
-    }
-
-    // get the assigned port number
-    {
-        let mut server_addr_size = std::mem::size_of_val(&server_addr) as u32;
-        let rv = unsafe {
-            libc::getsockname(
-                fd_server,
-                &mut server_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
-                &mut server_addr_size as *mut libc::socklen_t,
-            )
-        };
-        assert_eq!(rv, 0);
-        assert_eq!(server_addr_size, std::mem::size_of_val(&server_addr) as u32);
-    }
-
-    // listen for connections
-    {
-        let rv = unsafe { libc::listen(fd_server, 10) };
-        assert_eq!(rv, 0);
-    }
-
-    // connect to the server address
-    {
-        let rv = unsafe {
-            libc::connect(
-                fd_client,
-                &server_addr as *const libc::sockaddr_in as *const libc::sockaddr,
-                std::mem::size_of_val(&server_addr) as u32,
-            )
-        };
-        assert_eq!(rv, 0);
-    }
-
-    // shadow needs to run events, otherwise the accept call won't know it
-    // has an incoming connection (SYN packet)
-    {
-        let rv = unsafe { libc::usleep(10000) };
-        assert_eq!(rv, 0);
-    }
-
-    // accept the connection
-    let fd = unsafe { libc::accept(fd_server, std::ptr::null_mut(), std::ptr::null_mut()) };
-    assert!(fd >= 0);
-
-    fd
-}
-
 /// Test getpeername using a valid fd, but with a NULL address.
-fn test_null_addr() -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_accepted = connect_helper(fd_client, fd_server);
+fn test_null_addr(method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+    let (fd_client, fd_peer) =
+        socket_init_helper(method, sock_type, 0, /* bind_client= */ false);
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
@@ -311,57 +280,43 @@ fn test_null_addr() -> Result<(), String> {
         addr_len: Some(5),
     };
 
-    test_utils::run_and_close_fds(&[fd_server, fd_client, fd_accepted], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
         check_getpeername_call(&mut args, Some(libc::EFAULT))
     })
 }
 
 /// Test getpeername using a valid fd and address, a NULL address length.
-fn test_null_len() -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
+fn test_null_len(method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+    let (fd_client, fd_peer) =
+        socket_init_helper(method, sock_type, 0, /* bind_client= */ false);
 
-    // connect the client fd to the server
-    let fd_accepted = connect_helper(fd_client, fd_server);
-
-    // fill the sockaddr with dummy data
-    let addr = libc::sockaddr_in {
-        sin_family: 123u16,
-        sin_port: 456u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 789u32.to_be(),
-        },
-        sin_zero: [1; 8],
-    };
+    let addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
         fd: fd_client,
-        addr: Some(addr),
+        addr: Some(SockAddr::Generic(addr)),
         addr_len: None,
     };
 
-    test_utils::run_and_close_fds(&[fd_server, fd_client, fd_accepted], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
         check_getpeername_call(&mut args, Some(libc::EFAULT))
     })
 }
 
-/// Test getpeername using a valid fd and address, but an address length that is too small.
-fn test_short_len() -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_accepted = connect_helper(fd_client, fd_server);
+/// Test getpeername using a valid TCP socket and address, but an address length that is too small.
+fn test_short_len_inet() -> Result<(), String> {
+    let (fd_client, fd_peer) = socket_init_helper(
+        SocketInitMethod::Inet,
+        libc::SOCK_STREAM,
+        0,
+        /* bind_client= */ false,
+    );
 
     // the sockaddr that we expect to have after calling getpeername()
     let expected_addr = libc::sockaddr_in {
         sin_family: libc::AF_INET as u16,
-        // we don't know the port
+        // we don't know the port (we'll skip checking this value later)
         sin_port: 0u16.to_be(),
         sin_addr: libc::in_addr {
             s_addr: libc::INADDR_LOOPBACK.to_be(),
@@ -383,12 +338,12 @@ fn test_short_len() -> Result<(), String> {
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
         fd: fd_client,
-        addr: Some(addr),
+        addr: Some(SockAddr::Inet(addr)),
         addr_len: Some((std::mem::size_of_val(&addr) - 1) as u32),
     };
 
     // if the buffer was too small, the returned data will be truncated but we won't get an error
-    test_utils::run_and_close_fds(&[fd_server, fd_client, fd_accepted], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
         check_getpeername_call(&mut args, None)
     })?;
 
@@ -400,35 +355,28 @@ fn test_short_len() -> Result<(), String> {
     )?;
 
     // check that the returned address is expected
-    sockaddr_check_equal(
-        &args.addr.unwrap(),
+    inet_sockaddr_check_equal(
+        args.addr.unwrap().as_inet().unwrap(),
         &expected_addr,
         /* ignore_port= */ true,
     )?;
 
     // check that the port is valid
-    test_utils::result_assert(args.addr.unwrap().sin_port > 0, "Unexpected port")
+    test_utils::result_assert(
+        args.addr.unwrap().as_inet().unwrap().sin_port > 0,
+        "Unexpected port",
+    )
 }
 
 /// Test getpeername using a valid fd and address, but an address length of 0.
-fn test_zero_len() -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_accepted = connect_helper(fd_client, fd_server);
+fn test_zero_len(method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+    let (fd_client, fd_peer) =
+        socket_init_helper(method, sock_type, 0, /* bind_client= */ false);
 
     // fill the sockaddr with dummy data
-    let addr = libc::sockaddr_in {
-        sin_family: 123u16,
-        sin_port: 456u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 789u32.to_be(),
-        },
-        sin_zero: [1; 8],
-    };
+    let addr: Vec<u8> = (0..(std::mem::size_of::<libc::sockaddr_storage>() as u8)).collect();
+    let addr: libc::sockaddr_storage =
+        unsafe { std::ptr::read_unaligned(addr.as_ptr() as *const _) };
 
     // the sockaddr that we expect to have after calling getpeername();
     let expected_addr = addr;
@@ -436,71 +384,76 @@ fn test_zero_len() -> Result<(), String> {
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
         fd: fd_client,
-        addr: Some(addr),
+        addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(0u32),
     };
 
     // if the buffer was too small, the returned data will be truncated but we won't get an error
-    test_utils::run_and_close_fds(&[fd_server, fd_client, fd_accepted], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
         check_getpeername_call(&mut args, None)
     })?;
 
+    // the expected length of the client socket address
+    let expected_addr_len = match method {
+        SocketInitMethod::Inet => std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
+        // address family + null byte + 5-byte abstract address (see unix(7))
+        SocketInitMethod::Unix => 2 + 1 + 5,
+        // address family
+        SocketInitMethod::UnixSocketpair => 2,
+    };
+
     // check that the returned length is expected
     test_utils::result_assert_eq(
-        args.addr_len.unwrap() as usize,
-        std::mem::size_of_val(&addr),
+        args.addr_len.unwrap(),
+        expected_addr_len,
         "Unexpected addr length",
     )?;
 
     // check that the returned address is expected
-    sockaddr_check_equal(
-        &args.addr.unwrap(),
+    test_utils::result_assert_eq(
+        args.addr.unwrap().as_generic().unwrap(),
         &expected_addr,
-        /* ignore_port= */ false,
+        "Address was changed",
     )
 }
 
 /// Test getpeername on a listening socket.
-fn test_listening_socket() -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
+fn test_listening_socket(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd_client = unsafe { libc::socket(domain, sock_type, 0) };
+    let fd_server = unsafe { libc::socket(domain, sock_type, 0) };
     assert!(fd_client >= 0);
     assert!(fd_server >= 0);
 
-    // connect the client fd to the server
-    let fd_accepted = connect_helper(fd_client, fd_server);
+    // bind the server socket to some unused address
+    let (server_addr, server_addr_len) = autobind_helper(fd_server, domain);
 
-    // fill the sockaddr with dummy data
-    let addr = libc::sockaddr_in {
-        sin_family: 123u16,
-        sin_port: 456u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 789u32.to_be(),
-        },
-        sin_zero: [1; 8],
-    };
+    // connect the client to the server and get the accepted socket
+    let fd_peer = stream_connect_helper(
+        fd_client,
+        fd_server,
+        server_addr,
+        server_addr_len,
+        /* flags= */ 0,
+    );
+
+    let addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
         fd: fd_server,
-        addr: Some(addr),
-        addr_len: Some((std::mem::size_of_val(&addr) - 1) as u32),
+        addr: Some(SockAddr::Generic(addr)),
+        addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
-    test_utils::run_and_close_fds(&[fd_server, fd_client, fd_accepted], || {
+    test_utils::run_and_close_fds(&[fd_server, fd_client, fd_peer], || {
         check_getpeername_call(&mut args, Some(libc::ENOTCONN))
     })
 }
 
 /// Test getpeername after closing the socket.
-fn test_after_close() -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_accepted = connect_helper(fd_client, fd_server);
+fn test_after_close(method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+    let (fd_client, fd_peer) =
+        socket_init_helper(method, sock_type, 0, /* bind_client= */ false);
 
     // close the socket
     {
@@ -508,47 +461,31 @@ fn test_after_close() -> Result<(), String> {
         assert_eq!(rv, 0);
     }
 
-    // fill the sockaddr with dummy data
-    let addr = libc::sockaddr_in {
-        sin_family: 123u16,
-        sin_port: 456u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 789u32.to_be(),
-        },
-        sin_zero: [1; 8],
-    };
+    let addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
         fd: fd_client,
-        addr: Some(addr),
+        addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
-    test_utils::run_and_close_fds(&[fd_server, fd_accepted], || {
+    test_utils::run_and_close_fds(&[fd_peer], || {
         check_getpeername_call(&mut args, Some(libc::EBADF))
     })
 }
 
-/// Test getpeername using an unbound datagram socket.
-fn test_unbound_dgram_socket() -> Result<(), String> {
-    let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
+/// Test getpeername using an unbound socket.
+fn test_unbound_socket(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type, 0) };
     assert!(fd >= 0);
 
-    // fill the sockaddr with dummy data
-    let addr = libc::sockaddr_in {
-        sin_family: 123u16,
-        sin_port: 456u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 789u32.to_be(),
-        },
-        sin_zero: [1; 8],
-    };
+    let addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
         fd: fd,
-        addr: Some(addr),
+        addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
@@ -557,46 +494,20 @@ fn test_unbound_dgram_socket() -> Result<(), String> {
     })
 }
 
-/// Test getpeername using a bound datagram socket.
-fn test_bound_dgram_socket() -> Result<(), String> {
-    let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
+/// Test getpeername using a bound socket.
+fn test_bound_socket(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type, 0) };
     assert!(fd >= 0);
 
-    // bind on some address
-    {
-        let bind_addr = libc::sockaddr_in {
-            sin_family: libc::AF_INET as u16,
-            sin_port: 0u16.to_be(),
-            sin_addr: libc::in_addr {
-                s_addr: libc::INADDR_LOOPBACK.to_be(),
-            },
-            sin_zero: [0; 8],
-        };
+    // bind on some unused address
+    autobind_helper(fd, domain);
 
-        let rv = unsafe {
-            libc::bind(
-                fd,
-                &bind_addr as *const libc::sockaddr_in as *const libc::sockaddr,
-                std::mem::size_of_val(&bind_addr) as u32,
-            )
-        };
-        assert_eq!(rv, 0);
-    }
-
-    // fill the sockaddr with dummy data
-    let addr = libc::sockaddr_in {
-        sin_family: 123u16,
-        sin_port: 456u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 789u32.to_be(),
-        },
-        sin_zero: [1; 8],
-    };
+    let addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
         fd: fd,
-        addr: Some(addr),
+        addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
@@ -605,50 +516,51 @@ fn test_bound_dgram_socket() -> Result<(), String> {
     })
 }
 
-/// Test getpeername using a "connected" datagram socket.
-fn test_connected_dgram_socket() -> Result<(), String> {
-    let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
+/// Test getpeername using a datagram socket "connected" to a non-existent address.
+fn test_connected_dgram_socket(domain: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, libc::SOCK_DGRAM, 0) };
     assert!(fd >= 0);
 
     // some server address
-    let bind_addr = libc::sockaddr_in {
-        sin_family: libc::AF_INET as u16,
-        sin_port: 11111u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: libc::INADDR_LOOPBACK.to_be(),
-        },
-        sin_zero: [0; 8],
+    let (bind_addr, bind_addr_len) = match domain {
+        libc::AF_INET => {
+            let addr = libc::sockaddr_in {
+                sin_family: libc::AF_INET as u16,
+                // arbitrary port number
+                sin_port: 11111u16.to_be(),
+                sin_addr: libc::in_addr {
+                    s_addr: libc::INADDR_LOOPBACK.to_be(),
+                },
+                sin_zero: [0; 8],
+            };
+            (SockAddr::Inet(addr), std::mem::size_of_val(&addr) as u32)
+        }
+        libc::AF_UNIX => {
+            let mut addr = libc::sockaddr_un {
+                sun_family: libc::AF_UNIX as u16,
+                sun_path: [0; 108],
+            };
+            // arbitrary abstract socket name
+            addr.sun_path[1] = 4;
+            addr.sun_path[2] = 7;
+            (SockAddr::Unix(addr), 2 + 1 + 2) // address family + null byte + 2 characters
+        }
+        _ => unimplemented!(),
     };
 
     // connect to the address
     {
-        let rv = unsafe {
-            libc::connect(
-                fd,
-                &bind_addr as *const libc::sockaddr_in as *const libc::sockaddr,
-                std::mem::size_of_val(&bind_addr) as u32,
-            )
-        };
+        let rv = unsafe { libc::connect(fd, bind_addr.as_ptr(), bind_addr_len) };
         assert_eq!(rv, 0);
     }
 
-    // the sockaddr that we expect to have after calling getpeername()
-    let expected_addr = bind_addr;
-
-    // fill the sockaddr with dummy data
-    let addr = libc::sockaddr_in {
-        sin_family: 123u16,
-        sin_port: 456u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 789u32.to_be(),
-        },
-        sin_zero: [1; 8],
-    };
+    // an empty sockaddr
+    let addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
 
     // getpeername() may mutate addr and addr_len
     let mut args = GetpeernameArguments {
         fd: fd,
-        addr: Some(addr),
+        addr: Some(SockAddr::Generic(addr)),
         addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
@@ -656,61 +568,30 @@ fn test_connected_dgram_socket() -> Result<(), String> {
 
     // check that the returned length is expected
     test_utils::result_assert_eq(
-        args.addr_len.unwrap() as usize,
-        std::mem::size_of_val(&addr),
+        args.addr_len.unwrap(),
+        bind_addr_len,
         "Unexpected addr length",
     )?;
 
     // check that the returned address is expected
-    sockaddr_check_equal(
-        &args.addr.unwrap(),
-        &expected_addr,
-        /* ignore_port= */ false,
+    test_utils::result_assert_eq(
+        &args.addr.unwrap().as_slice()[..bind_addr_len as usize],
+        &bind_addr.as_slice()[..bind_addr_len as usize],
+        "Unexpected address",
     )
 }
 
 /// Test getpeername on a socket that has connected but not yet been accepted.
-fn test_connected_before_accepted() -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
+fn test_connected_before_accepted(
+    domain: libc::c_int,
+    sock_type: libc::c_int,
+) -> Result<(), String> {
+    let fd_client = unsafe { libc::socket(domain, sock_type, 0) };
+    let fd_server = unsafe { libc::socket(domain, sock_type, 0) };
     assert!(fd_client >= 0);
     assert!(fd_server >= 0);
 
-    // the server address
-    let mut server_addr = libc::sockaddr_in {
-        sin_family: libc::AF_INET as u16,
-        sin_port: 0u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: libc::INADDR_LOOPBACK.to_be(),
-        },
-        sin_zero: [0; 8],
-    };
-
-    // bind on the server address
-    {
-        let rv = unsafe {
-            libc::bind(
-                fd_server,
-                &server_addr as *const libc::sockaddr_in as *const libc::sockaddr,
-                std::mem::size_of_val(&server_addr) as u32,
-            )
-        };
-        assert_eq!(rv, 0);
-    }
-
-    // get the assigned port number
-    {
-        let mut server_addr_size = std::mem::size_of_val(&server_addr) as u32;
-        let rv = unsafe {
-            libc::getsockname(
-                fd_server,
-                &mut server_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
-                &mut server_addr_size as *mut libc::socklen_t,
-            )
-        };
-        assert_eq!(rv, 0);
-        assert_eq!(server_addr_size, std::mem::size_of_val(&server_addr) as u32);
-    }
+    let (server_addr, server_addr_len) = autobind_helper(fd_server, domain);
 
     // listen for connections
     {
@@ -720,32 +601,18 @@ fn test_connected_before_accepted() -> Result<(), String> {
 
     // connect to the server address
     {
-        let rv = unsafe {
-            libc::connect(
-                fd_client,
-                &server_addr as *const libc::sockaddr_in as *const libc::sockaddr,
-                std::mem::size_of_val(&server_addr) as u32,
-            )
-        };
+        let rv = unsafe { libc::connect(fd_client, server_addr.as_ptr(), server_addr_len) };
         assert_eq!(rv, 0);
     }
 
-    // the sockaddr that we expect to have after calling getpeername()
-    let expected_addr = server_addr;
+    // an empty sockaddr
+    let addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
 
     // client socket arguments for getpeername()
     let mut args = GetpeernameArguments {
         fd: fd_client,
-        // fill the sockaddr with dummy data
-        addr: Some(libc::sockaddr_in {
-            sin_family: 123u16,
-            sin_port: 456u16.to_be(),
-            sin_addr: libc::in_addr {
-                s_addr: 789u32.to_be(),
-            },
-            sin_zero: [1; 8],
-        }),
-        addr_len: Some(std::mem::size_of::<libc::sockaddr_in>() as u32),
+        addr: Some(SockAddr::Generic(addr)),
+        addr_len: Some(std::mem::size_of_val(&addr) as u32),
     };
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
@@ -754,137 +621,266 @@ fn test_connected_before_accepted() -> Result<(), String> {
 
     // check that the returned length is expected
     test_utils::result_assert_eq(
-        args.addr_len.unwrap() as usize,
-        std::mem::size_of_val(&args.addr.unwrap()),
+        args.addr_len.unwrap(),
+        server_addr_len,
         "Unexpected addr length",
     )?;
 
     // check that the returned server address is expected
-    sockaddr_check_equal(
-        &args.addr.unwrap(),
-        &expected_addr,
-        /* ignore_port= */ false,
+    test_utils::result_assert_eq(
+        &args.addr.unwrap().as_slice()[..server_addr_len as usize],
+        &server_addr.as_slice()[..server_addr_len as usize],
+        "Unexpected address",
     )?;
 
     Ok(())
 }
 
 /// Test getpeername using a socket connected on loopback.
-fn test_connected_socket() -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
+fn test_connected_socket(method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+    let (fd_client, fd_peer) =
+        socket_init_helper(method, sock_type, 0, /* bind_client= */ false);
 
-    // connect the client fd to the server
-    let fd_accepted = connect_helper(fd_client, fd_server);
-
-    // the sockaddr that we expect to have after calling getpeername()
-    let expected_addr = libc::sockaddr_in {
-        sin_family: libc::AF_INET as u16,
-        // we don't know the port
-        sin_port: 0u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: libc::INADDR_LOOPBACK.to_be(),
-        },
-        sin_zero: [0; 8],
+    // fill the sockaddr with dummy data
+    let addr = match method.domain() {
+        libc::AF_INET => SockAddr::dummy_init_inet(),
+        libc::AF_UNIX => SockAddr::dummy_init_unix(),
+        _ => unimplemented!(),
     };
 
     // client arguments for getpeername()
     let mut args = GetpeernameArguments {
         fd: fd_client,
         // fill the sockaddr with dummy data
-        addr: Some(libc::sockaddr_in {
-            sin_family: 123u16,
-            sin_port: 456u16.to_be(),
-            sin_addr: libc::in_addr {
-                s_addr: 789u32.to_be(),
-            },
-            sin_zero: [1; 8],
-        }),
-        addr_len: Some(std::mem::size_of::<libc::sockaddr_in>() as u32),
+        addr: Some(addr),
+        addr_len: Some(addr.ptr_size()),
     };
 
-    test_utils::run_and_close_fds(&[fd_client, fd_server, fd_accepted], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
         check_getpeername_call(&mut args, None)
     })?;
 
-    // check that the returned length is expected
-    test_utils::result_assert_eq(
-        args.addr_len.unwrap() as usize,
-        std::mem::size_of_val(&args.addr.unwrap()),
-        "Unexpected addr length",
-    )?;
+    // check the returned address
+    match method {
+        SocketInitMethod::Inet => {
+            // check that the returned length is expected
+            test_utils::result_assert_eq(
+                args.addr_len.unwrap() as usize,
+                std::mem::size_of::<libc::sockaddr_in>(),
+                "Unexpected addr length",
+            )?;
 
-    // check that the returned client address is expected
-    sockaddr_check_equal(
-        &args.addr.unwrap(),
-        &expected_addr,
-        /* ignore_port= */ true,
-    )?;
+            // check that the returned client address is expected
+            inet_sockaddr_check_equal(
+                args.addr.unwrap().as_inet().unwrap(),
+                &libc::sockaddr_in {
+                    sin_family: libc::AF_INET as u16,
+                    // we don't know the port
+                    sin_port: 0u16.to_be(),
+                    sin_addr: libc::in_addr {
+                        s_addr: libc::INADDR_LOOPBACK.to_be(),
+                    },
+                    sin_zero: [0; 8],
+                },
+                /* ignore_port= */ true,
+            )?;
 
-    // check that the port is valid
-    test_utils::result_assert(args.addr.unwrap().sin_port > 0, "Unexpected port")?;
+            // check that the port is valid
+            test_utils::result_assert(
+                args.addr.unwrap().as_inet().unwrap().sin_port > 0,
+                "Unexpected port",
+            )?;
+        }
+        SocketInitMethod::Unix => {
+            // check that the returned length is expected
+            test_utils::result_assert_eq(
+                args.addr_len.unwrap(),
+                // address family + null byte + 5-byte abstract address (see unix(7))
+                2 + 1 + 5,
+                "Unexpected addr length",
+            )?;
+
+            test_utils::result_assert_eq(
+                args.addr.unwrap().as_unix().unwrap().sun_family,
+                libc::AF_UNIX as u16,
+                "Address family was not AF_UNIX",
+            )?;
+
+            test_utils::result_assert_eq(
+                args.addr.unwrap().as_unix().unwrap().sun_path[0],
+                0,
+                "Abstract socket name did not begin with null byte",
+            )?;
+
+            // unix sockets that are auto-bound have names with 5 bytes on linux; see unix(7)
+            test_utils::result_assert(
+                !args.addr.unwrap().as_unix().unwrap().sun_path[1..6]
+                    .iter()
+                    .all(|&x| x == 0),
+                "Abstract socket name was empty",
+            )?;
+        }
+        SocketInitMethod::UnixSocketpair => {
+            // check that the returned length is expected
+            test_utils::result_assert_eq(
+                args.addr_len.unwrap(),
+                // address family
+                2,
+                "Unexpected addr length",
+            )?;
+
+            test_utils::result_assert_eq(
+                args.addr.unwrap().as_unix().unwrap().sun_family,
+                libc::AF_UNIX as u16,
+                "Address family was not AF_UNIX",
+            )?;
+        }
+    }
 
     Ok(())
 }
 
-/// Test getpeername using the server's accepted socket.
-fn test_accepted_socket() -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
+/// Test getpeername using the peer's socket (the accepted socket for connection-based sockets).
+fn test_peer_socket(
+    method: SocketInitMethod,
+    sock_type: libc::c_int,
+    bind_client: bool,
+) -> Result<(), String> {
+    let (fd_client, fd_peer) = socket_init_helper(method, sock_type, 0, bind_client);
+
+    // fill the sockaddr with dummy data
+    let addr = match method.domain() {
+        libc::AF_INET => SockAddr::dummy_init_inet(),
+        libc::AF_UNIX => SockAddr::dummy_init_unix(),
+        _ => unimplemented!(),
+    };
+
+    // client arguments for getpeername()
+    let mut args = GetpeernameArguments {
+        fd: fd_peer,
+        addr: Some(addr),
+        addr_len: Some(addr.ptr_size()),
+    };
+
+    let expected_errno =
+        if sock_type == libc::SOCK_DGRAM && method != SocketInitMethod::UnixSocketpair {
+            Some(libc::ENOTCONN)
+        } else {
+            None
+        };
+
+    test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
+        check_getpeername_call(&mut args, expected_errno)
+    })?;
+
+    // if the getpeername call failed (as expected)
+    if expected_errno.is_some() {
+        return Ok(());
+    }
+
+    // check the returned address
+    match (method, bind_client) {
+        (SocketInitMethod::Inet, _) => {
+            // check that the returned length is expected
+            test_utils::result_assert_eq(
+                args.addr_len.unwrap() as usize,
+                std::mem::size_of::<libc::sockaddr_in>(),
+                "Unexpected addr length",
+            )?;
+
+            // check that the returned client address is expected
+            inet_sockaddr_check_equal(
+                args.addr.unwrap().as_inet().unwrap(),
+                &libc::sockaddr_in {
+                    sin_family: libc::AF_INET as u16,
+                    // we don't know the port
+                    sin_port: 0u16.to_be(),
+                    sin_addr: libc::in_addr {
+                        s_addr: libc::INADDR_LOOPBACK.to_be(),
+                    },
+                    sin_zero: [0; 8],
+                },
+                /* ignore_port= */ true,
+            )?;
+
+            // check that the port is valid
+            test_utils::result_assert(
+                args.addr.unwrap().as_inet().unwrap().sin_port > 0,
+                "Unexpected port",
+            )?;
+        }
+        (SocketInitMethod::Unix, true) => {
+            // check that the returned length is expected
+            test_utils::result_assert_eq(
+                args.addr_len.unwrap(),
+                // address family + null byte + 5-byte abstract address (see unix(7))
+                2 + 1 + 5,
+                "Unexpected addr length",
+            )?;
+
+            test_utils::result_assert_eq(
+                args.addr.unwrap().as_unix().unwrap().sun_family,
+                libc::AF_UNIX as u16,
+                "Address family was not AF_UNIX",
+            )?;
+
+            test_utils::result_assert_eq(
+                args.addr.unwrap().as_unix().unwrap().sun_path[0],
+                0,
+                "Abstract socket name did not begin with null byte",
+            )?;
+
+            // unix sockets that are auto-bound have names with 5 bytes on linux; see unix(7)
+            test_utils::result_assert(
+                !args.addr.unwrap().as_unix().unwrap().sun_path[1..6]
+                    .iter()
+                    .all(|&x| x == 0),
+                "Abstract socket name was empty",
+            )?;
+        }
+        (SocketInitMethod::UnixSocketpair, _) | (SocketInitMethod::Unix, false) => {
+            // check that the returned length is expected
+            test_utils::result_assert_eq(
+                args.addr_len.unwrap(),
+                // address family
+                2,
+                "Unexpected addr length",
+            )?;
+
+            test_utils::result_assert_eq(
+                args.addr.unwrap().as_unix().unwrap().sun_family,
+                libc::AF_UNIX as u16,
+                "Address family was not AF_UNIX",
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Test that getpeername and getsockname return the same results for connection-oriented sockets.
+fn test_sockname_peername(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd_client = unsafe { libc::socket(domain, sock_type, 0) };
+    let fd_server = unsafe { libc::socket(domain, sock_type, 0) };
     assert!(fd_client >= 0);
     assert!(fd_server >= 0);
 
-    // connect the client fd to the server
-    let fd_accepted = connect_helper(fd_client, fd_server);
+    // bind the server socket to some unused address
+    let (server_addr, server_addr_len) = autobind_helper(fd_server, domain);
 
-    // the sockaddr that we expect to have after calling getpeername()
-    let expected_addr = libc::sockaddr_in {
-        sin_family: libc::AF_INET as u16,
-        // we don't know the port
-        sin_port: 0u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: libc::INADDR_LOOPBACK.to_be(),
-        },
-        sin_zero: [0; 8],
-    };
+    // connect the client to the server and get the accepted socket
+    let fd_peer = stream_connect_helper(
+        fd_client,
+        fd_server,
+        server_addr,
+        server_addr_len,
+        /* flags= */ 0,
+    );
 
-    // accepted socket arguments for getpeername()
-    let mut args = GetpeernameArguments {
-        fd: fd_accepted,
-        // fill the sockaddr with dummy data
-        addr: Some(libc::sockaddr_in {
-            sin_family: 123u16,
-            sin_port: 456u16.to_be(),
-            sin_addr: libc::in_addr {
-                s_addr: 789u32.to_be(),
-            },
-            sin_zero: [1; 8],
-        }),
-        addr_len: Some(std::mem::size_of::<libc::sockaddr_in>() as u32),
-    };
-
-    test_utils::run_and_close_fds(&[fd_client, fd_server, fd_accepted], || {
-        check_getpeername_call(&mut args, None)
-    })?;
-
-    // check that the returned length is expected
-    test_utils::result_assert_eq(
-        args.addr_len.unwrap() as usize,
-        std::mem::size_of_val(&args.addr.unwrap()),
-        "Unexpected addr length",
-    )?;
-
-    // check that the returned server address is expected
-    sockaddr_check_equal(
-        &args.addr.unwrap(),
-        &expected_addr,
-        /* ignore_port= */ true,
-    )?;
-
-    // check that the port is valid
-    test_utils::result_assert(args.addr.unwrap().sin_port > 0, "Unexpected port")?;
+    // compare getsockname on the first argument to getpeername on the second
+    compare_sockname_peername(fd_client, fd_peer)?;
+    compare_sockname_peername(fd_peer, fd_client)?;
+    compare_sockname_peername(fd_server, fd_client)?;
 
     Ok(())
 }
@@ -894,76 +890,61 @@ fn compare_sockname_peername(
     fd_sockname: libc::c_int,
     fd_peername: libc::c_int,
 ) -> Result<(), String> {
-    let mut sockname_addr = libc::sockaddr_in {
-        sin_family: 123u16,
-        sin_port: 456u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 789u32.to_be(),
-        },
-        sin_zero: [1; 8],
-    };
+    // fill the sockaddr with dummy data
+    let sockname_addr: Vec<u8> =
+        (0..(std::mem::size_of::<libc::sockaddr_storage>() as u8)).collect();
+    let mut sockname_addr: libc::sockaddr_storage =
+        unsafe { std::ptr::read_unaligned(sockname_addr.as_ptr() as *const _) };
+
+    let mut sockname_len = std::mem::size_of_val(&sockname_addr) as u32;
 
     {
-        let mut size = std::mem::size_of_val(&sockname_addr) as u32;
         let rv = unsafe {
             libc::getsockname(
                 fd_sockname,
-                &mut sockname_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
-                &mut size as *mut libc::socklen_t,
+                &mut sockname_addr as *mut libc::sockaddr_storage as *mut libc::sockaddr,
+                &mut sockname_len as *mut libc::socklen_t,
             )
         };
         assert_eq!(rv, 0);
-        assert_eq!(size, std::mem::size_of_val(&sockname_addr) as u32);
+        assert!(sockname_len <= std::mem::size_of_val(&sockname_addr) as u32);
     }
 
-    let mut peername_addr = libc::sockaddr_in {
-        sin_family: 321u16,
-        sin_port: 654u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: 987u32.to_be(),
-        },
-        sin_zero: [2; 8],
-    };
+    // fill the sockaddr with dummy data
+    let peername_addr: Vec<u8> = (0..(std::mem::size_of::<libc::sockaddr_storage>() as u8))
+        .rev()
+        .collect();
+    let mut peername_addr: libc::sockaddr_storage =
+        unsafe { std::ptr::read_unaligned(peername_addr.as_ptr() as *const _) };
+
+    let mut peername_len = std::mem::size_of_val(&peername_addr) as u32;
 
     {
-        let mut size = std::mem::size_of_val(&peername_addr) as u32;
         let rv = unsafe {
             libc::getpeername(
                 fd_peername,
-                &mut peername_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
-                &mut size as *mut libc::socklen_t,
+                &mut peername_addr as *mut libc::sockaddr_storage as *mut libc::sockaddr,
+                &mut peername_len as *mut libc::socklen_t,
             )
         };
         assert_eq!(rv, 0);
-        assert_eq!(size, std::mem::size_of_val(&peername_addr) as u32);
+        assert!(peername_len <= std::mem::size_of_val(&peername_addr) as u32);
     }
 
-    sockaddr_check_equal(
-        &sockname_addr,
-        &peername_addr,
-        /* ignore_port= */ false,
-    )
-}
+    let sockname_addr = SockAddr::Generic(sockname_addr);
+    let peername_addr = SockAddr::Generic(peername_addr);
 
-/// Test that getpeername and getsockname return the same results for client/server sockets.
-fn test_sockname_peername() -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_accepted = connect_helper(fd_client, fd_server);
-
-    // compare getsockname on the first argument to getpeername on the second
-    compare_sockname_peername(fd_client, fd_accepted)?;
-    compare_sockname_peername(fd_accepted, fd_client)?;
-    compare_sockname_peername(fd_server, fd_client)?;
+    // check that they are the same
+    assert_eq!(sockname_len, peername_len);
+    assert_eq!(
+        sockname_addr.as_slice()[..(sockname_len as usize)],
+        peername_addr.as_slice()[..(peername_len as usize)]
+    );
 
     Ok(())
 }
 
-fn sockaddr_check_equal(
+fn inet_sockaddr_check_equal(
     a: &libc::sockaddr_in,
     b: &libc::sockaddr_in,
     ignore_port: bool,
@@ -981,20 +962,19 @@ fn check_getpeername_call(
     args: &mut GetpeernameArguments,
     expected_errno: Option<libc::c_int>,
 ) -> Result<(), String> {
+    let (addr_ptr, addr_max_len) = match args.addr {
+        Some(ref mut x) => (x.as_mut_ptr(), x.ptr_size()),
+        None => (std::ptr::null_mut(), 0),
+    };
+
     // if the pointers will be non-null, make sure the length is not greater than the actual data size
     // so that we don't segfault
     if args.addr.is_some() && args.addr_len.is_some() {
-        assert!(args.addr_len.unwrap() as usize <= std::mem::size_of_val(&args.addr.unwrap()));
+        assert!(args.addr_len.unwrap() <= addr_max_len);
     }
 
     // will modify args.addr and args.addr_len
-    let rv = unsafe {
-        libc::getpeername(
-            args.fd,
-            args.addr.as_mut_ptr() as *mut libc::sockaddr,
-            args.addr_len.as_mut_ptr(),
-        )
-    };
+    let rv = unsafe { libc::getpeername(args.fd, addr_ptr, args.addr_len.as_mut_ptr()) };
 
     let errno = test_utils::get_errno();
 
