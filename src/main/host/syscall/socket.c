@@ -834,6 +834,8 @@ SysCallReturn syscallhandler_connect(SysCallHandler* sys,
             return (SysCallReturn){
                 .state = SYSCALL_DONE, .retval.as_i64 = errcode};
         }
+    } else {
+        socket_setPeerName(socket_desc, peerAddr, peerPort);
     }
 
     /* Now we are ready to connect. */
