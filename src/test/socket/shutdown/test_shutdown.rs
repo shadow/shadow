@@ -890,7 +890,7 @@ fn test_write_after_peer_shutdown(
 fn test_tcp_fin_correctness(domain: libc::c_int, flag: libc::c_int) -> Result<(), String> {
     let (fd_client, fd_server) = setup_stream_sockets(domain, flag);
 
-    test_utils::run_and_close_fds(&[], || {
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         const NUM_BYTES: usize = 120000;
         let buf = [0u8; NUM_BYTES];
 
