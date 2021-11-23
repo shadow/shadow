@@ -1810,6 +1810,88 @@ extern "C" {
         args: *const SysCallArgs,
     ) -> SysCallReturn;
 }
+extern "C" {
+    pub fn syscallhandler_accept(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_accept4(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_bind(sys: *mut SysCallHandler, args: *const SysCallArgs)
+        -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_connect(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_getpeername(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_getsockname(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_getsockopt(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_listen(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_recvfrom(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_sendto(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_setsockopt(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_shutdown(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_socket(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
+extern "C" {
+    pub fn syscallhandler_socketpair(
+        sys: *mut SysCallHandler,
+        args: *const SysCallArgs,
+    ) -> SysCallReturn;
+}
 pub use self::_TriggerType as TriggerType;
 pub const _TriggerType_TRIGGER_NONE: _TriggerType = 0;
 pub const _TriggerType_TRIGGER_DESCRIPTOR: _TriggerType = 1;

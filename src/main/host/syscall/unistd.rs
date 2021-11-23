@@ -197,6 +197,23 @@ fn read_helper(
     buf_size: libc::size_t,
     offset: libc::off_t,
 ) -> SyscallResult {
+    // if it's a socket, call recvfrom() instead
+    if let PosixFile::Socket(ref socket) = posix_file {
+        if offset != 0 {
+            // sockets don't support offsets
+            return Err(Errno::ESPIPE.into());
+        }
+        return super::socket::recvfrom_helper(
+            ctx,
+            socket,
+            buf_ptr,
+            buf_size,
+            0,
+            PluginPtr::null(),
+            PluginPtr::null(),
+        );
+    }
+
     let file_status = posix_file.borrow().get_status();
 
     let result =
@@ -267,6 +284,23 @@ fn write_helper(
     buf_size: libc::size_t,
     offset: libc::off_t,
 ) -> SyscallResult {
+    // if it's a socket, call recvfrom() instead
+    if let PosixFile::Socket(ref socket) = posix_file {
+        if offset != 0 {
+            // sockets don't support offsets
+            return Err(Errno::ESPIPE.into());
+        }
+        return super::socket::sendto_helper(
+            ctx,
+            socket,
+            buf_ptr,
+            buf_size,
+            0,
+            PluginPtr::null(),
+            0,
+        );
+    }
+
     let file_status = posix_file.borrow().get_status();
 
     let result =

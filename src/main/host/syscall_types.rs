@@ -13,6 +13,10 @@ pub struct PluginPtr {
 }
 
 impl PluginPtr {
+    pub fn null() -> Self {
+        0usize.into()
+    }
+
     pub fn is_null(&self) -> bool {
         self.ptr.val == 0
     }
@@ -247,6 +251,10 @@ impl<T> TypedPluginPtr<T> {
     /// Number of items pointed to.
     pub fn len(&self) -> usize {
         self.count
+    }
+
+    pub fn is_null(&self) -> bool {
+        self.base.is_null()
     }
 
     /// Cast to type `U`. Fails if the total size isn't a multiple of `sizeof<U>`.
