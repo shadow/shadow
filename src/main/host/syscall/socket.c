@@ -14,7 +14,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
-#include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
@@ -68,7 +67,7 @@ static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
     }
 
     LegacyDescriptorType type = descriptor_getType(desc);
-    if (type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_UNIXSOCKET) {
+    if (type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
         debug("descriptor %i with type %i is not a socket", sockfd, (int)type);
         return -ENOTSOCK;
     }
@@ -917,25 +916,17 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
     struct sockaddr saddr = {0};
     size_t slen = 0;
 
-    if (descriptor_getType((LegacyDescriptor*)socket_desc) == DT_UNIXSOCKET) {
-        // TODO currently handles socketpair, but will need to be extended
-        // in order to support traditional UNIX sockets
-        struct sockaddr_un* unix_addr = (struct sockaddr_un*)&saddr;
-        unix_addr->sun_family = AF_UNIX;
-        slen = sizeof(unix_addr->sun_family);
-    } else {
-        struct sockaddr_in* inet_addr = (struct sockaddr_in*)&saddr;
-        inet_addr->sin_family = AF_INET;
+    struct sockaddr_in* inet_addr = (struct sockaddr_in*)&saddr;
+    inet_addr->sin_family = AF_INET;
 
-        gboolean hasName =
-            socket_getPeerName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
-        if (!hasName) {
-            debug("Socket %i has no peer name.", sockfd);
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
-        }
-
-        slen = sizeof(*inet_addr);
+    gboolean hasName =
+        socket_getPeerName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
+    if (!hasName) {
+        debug("Socket %i has no peer name.", sockfd);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
     }
+
+    slen = sizeof(*inet_addr);
 
     /* Use helper to write out the result. */
     return _syscallhandler_getnameHelper(
@@ -962,32 +953,24 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
     struct sockaddr saddr = {0};
     size_t slen = 0;
 
-    if (descriptor_getType((LegacyDescriptor*)socket_desc) == DT_UNIXSOCKET) {
-        // TODO currently handles socketpair, but will need to be extended
-        // in order to support traditional UNIX sockets
-        struct sockaddr_un* unix_addr = (struct sockaddr_un*)&saddr;
-        unix_addr->sun_family = AF_UNIX;
-        slen = sizeof(unix_addr->sun_family);
-    } else {
-        struct sockaddr_in* inet_addr = (struct sockaddr_in*)&saddr;
-        inet_addr->sin_family = AF_INET;
+    struct sockaddr_in* inet_addr = (struct sockaddr_in*)&saddr;
+    inet_addr->sin_family = AF_INET;
 
-        gboolean hasName =
-            socket_getSocketName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
-        /* If !hasName, leave sin_addr and sin_port at their default 0 values. */
+    gboolean hasName =
+        socket_getSocketName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
+    /* If !hasName, leave sin_addr and sin_port at their default 0 values. */
 
-        /* If we are bound to INADDR_ANY, we should instead return the address used
-         * to communicate with the connected peer (if we have one). */
-        if (inet_addr->sin_addr.s_addr == htonl(INADDR_ANY)) {
-            in_addr_t peerIP = 0;
-            if (socket_getPeerName(socket_desc, &peerIP, NULL) &&
-                peerIP != htonl(INADDR_LOOPBACK)) {
-                inet_addr->sin_addr.s_addr = host_getDefaultIP(sys->host);
-            }
+    /* If we are bound to INADDR_ANY, we should instead return the address used
+     * to communicate with the connected peer (if we have one). */
+    if (inet_addr->sin_addr.s_addr == htonl(INADDR_ANY)) {
+        in_addr_t peerIP = 0;
+        if (socket_getPeerName(socket_desc, &peerIP, NULL) &&
+            peerIP != htonl(INADDR_LOOPBACK)) {
+            inet_addr->sin_addr.s_addr = host_getDefaultIP(sys->host);
         }
-
-        slen = sizeof(*inet_addr);
     }
+
+    slen = sizeof(*inet_addr);
 
     /* Use helper to write out the result. */
     return _syscallhandler_getnameHelper(
