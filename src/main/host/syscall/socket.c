@@ -513,8 +513,18 @@ SysCallReturn _syscallhandler_recvfromHelper(SysCallHandler* sys, int sockfd,
     /* check if they wanted to know where we got the data from */
     if (retval > 0 && srcAddrPtr.val) {
         trace("address info is requested in recv on socket %i", sockfd);
-        _syscallhandler_getnameHelper(
-            sys, (struct sockaddr*)&inet_addr, sizeof(inet_addr), srcAddrPtr, addrlenPtr);
+
+        /* only write an address for UDP sockets */
+        if (descriptor_getType(desc) == DT_UDPSOCKET) {
+            _syscallhandler_getnameHelper(
+                sys, (struct sockaddr*)&inet_addr, sizeof(inet_addr), srcAddrPtr, addrlenPtr);
+        } else {
+            /* set the address length as 0 */
+            socklen_t addrlen = 0;
+            if (process_writePtr(sys->process, addrlenPtr, &addrlen, sizeof(addrlen)) != 0) {
+                return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+            }
+        }
     }
 
     return (SysCallReturn){
