@@ -8,24 +8,27 @@ use std::hash::Hasher;
 use rand::RngCore;
 use rand::SeedableRng;
 
+use test_utils::socket_utils::{autobind_helper, socket_init_helper, SockAddr, SocketInitMethod};
 use test_utils::TestEnvironment as TestEnv;
-use test_utils::{set, AsMutPtr, AsPtr};
+use test_utils::{set, AsMutPtr};
 
+#[derive(Debug)]
 struct SendtoArguments<'a> {
     fd: libc::c_int,
     buf: Option<&'a [u8]>,
     len: libc::size_t,
     flags: libc::c_int,
-    addr: Option<libc::sockaddr_in>,
+    addr: Option<SockAddr>,
     addr_len: libc::socklen_t,
 }
 
+#[derive(Debug)]
 struct RecvfromArguments<'a> {
     fd: libc::c_int,
     buf: Option<&'a mut [u8]>,
     len: libc::size_t,
     flags: libc::c_int,
-    addr: Option<libc::sockaddr_in>,
+    addr: Option<SockAddr>,
     addr_len: Option<libc::socklen_t>,
 }
 
@@ -83,156 +86,213 @@ fn main() -> Result<(), String> {
 }
 
 fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
-    let mut tests: Vec<test_utils::ShadowTest<_, _>> = vec![
-        test_utils::ShadowTest::new(
-            "test_invalid_fd",
-            test_invalid_fd,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_non_existent_fd",
-            test_non_existent_fd,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_non_socket_fd",
-            test_non_socket_fd,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_not_connected_tcp",
-            test_not_connected_tcp,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_not_connected_udp",
-            test_not_connected_udp,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_null_buf <tcp>",
-            || test_null_buf(libc::SOCK_STREAM),
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_null_buf <udp>",
-            || test_null_buf(libc::SOCK_DGRAM),
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_zero_len_buf <tcp>",
-            || test_zero_len_buf(libc::SOCK_STREAM),
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_zero_len_buf <udp>",
-            || test_zero_len_buf(libc::SOCK_DGRAM),
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_nonblocking_tcp",
-            test_nonblocking_tcp,
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_invalid_flag <tcp>",
-            || test_invalid_flag(libc::SOCK_STREAM),
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_invalid_flag <udp>",
-            || test_invalid_flag(libc::SOCK_DGRAM),
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_flag_dontwait <tcp>",
-            || test_flag_dontwait(libc::SOCK_STREAM),
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-        test_utils::ShadowTest::new(
-            "test_flag_dontwait <udp>",
-            || test_flag_dontwait(libc::SOCK_DGRAM),
-            set![TestEnv::Libc, TestEnv::Shadow],
-        ),
-    ];
+    let mut tests: Vec<test_utils::ShadowTest<_, _>> = vec![];
 
-    let domains = [libc::AF_INET];
-    let flags = [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC];
+    let domains = [libc::AF_INET, libc::AF_UNIX];
 
     for &domain in domains.iter() {
+        // add details to the test names to avoid duplicates
+        let append_args = |s| format!("{} <domain={:?}>", s, domain);
+
+        let passing = if domain != libc::AF_UNIX {
+            set![TestEnv::Libc, TestEnv::Shadow]
+        } else {
+            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
+        };
+
+        tests.extend(vec![
+            test_utils::ShadowTest::new(
+                &append_args("test_invalid_fd"),
+                move || test_invalid_fd(domain),
+                passing.clone(),
+            ),
+            test_utils::ShadowTest::new(
+                &append_args("test_non_existent_fd"),
+                move || test_non_existent_fd(domain),
+                passing.clone(),
+            ),
+            test_utils::ShadowTest::new(
+                &append_args("test_non_socket_fd"),
+                move || test_non_socket_fd(domain),
+                passing.clone(),
+            ),
+            test_utils::ShadowTest::new(
+                &append_args("test_large_buf_udp"),
+                test_large_buf_udp,
+                passing.clone(),
+            ),
+        ]);
+
+        let sock_types = match domain {
+            libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
+            libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
+            _ => unimplemented!(),
+        };
+
+        for &sock_type in sock_types.iter() {
+            // add details to the test names to avoid duplicates
+            let append_args = |s| format!("{} <domain={:?}, sock_type={}>", s, domain, sock_type);
+
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_not_connected"),
+                move || test_not_connected(domain, sock_type),
+                passing.clone(),
+            )]);
+        }
+    }
+
+    let init_methods = [
+        SocketInitMethod::Inet,
+        SocketInitMethod::Unix,
+        SocketInitMethod::UnixSocketpair,
+    ];
+
+    for &method in init_methods.iter() {
+        // add details to the test names to avoid duplicates
+        let append_args = |s| format!("{} <init_method={:?}>", s, method);
+
+        let passing = if method == SocketInitMethod::Inet {
+            set![TestEnv::Libc, TestEnv::Shadow]
+        } else {
+            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
+        };
+
+        let sock_types = match method.domain() {
+            libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
+            libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
+            _ => unimplemented!(),
+        };
+
+        for &sock_type in sock_types.iter() {
+            // add details to the test names to avoid duplicates
+            let append_args =
+                |s| format!("{} <init_method={:?}, sock_type={}>", s, method, sock_type);
+
+            tests.extend(vec![
+                test_utils::ShadowTest::new(
+                    &append_args("test_null_buf"),
+                    move || test_null_buf(method, sock_type),
+                    passing.clone(),
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_zero_len_buf"),
+                    move || test_zero_len_buf(method, sock_type),
+                    passing.clone(),
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_invalid_flag"),
+                    move || test_invalid_flag(method, sock_type),
+                    passing.clone(),
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_flag_dontwait"),
+                    move || test_flag_dontwait(method, sock_type),
+                    passing.clone(),
+                ),
+            ]);
+        }
+
+        tests.extend(vec![test_utils::ShadowTest::new(
+            &append_args("test_nonblocking_stream"),
+            move || test_nonblocking_stream(method),
+            passing.clone(),
+        )]);
+    }
+
+    let flags = [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC];
+
+    for &method in init_methods.iter() {
+        let passing = if method == SocketInitMethod::Inet {
+            set![TestEnv::Libc, TestEnv::Shadow]
+        } else {
+            set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
+        };
+
         for &flag in flags.iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <domain={},flag={}>", s, domain, flag);
+            let append_args = |s| format!("{} <init_method={:?}, flag={}>", s, method, flag);
 
-            let more_tests: Vec<test_utils::ShadowTest<_, _>> = vec![
-                test_utils::ShadowTest::new(
-                    &append_args("test_null_addr <tcp>"),
-                    move || test_null_addr(domain, libc::SOCK_STREAM, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
-                    &append_args("test_null_addr <udp>"),
-                    move || test_null_addr(domain, libc::SOCK_DGRAM, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
-                    &append_args("test_null_addr_not_connected_udp"),
-                    move || test_null_addr_not_connected_udp(domain, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
-                    &append_args("test_null_addr_len <tcp>"),
-                    move || test_null_addr_len(domain, libc::SOCK_STREAM, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
-                    &append_args("test_null_addr_len <udp>"),
-                    move || test_null_addr_len(domain, libc::SOCK_DGRAM, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
-                    &append_args("test_null_both <tcp>"),
-                    move || test_null_both(domain, libc::SOCK_STREAM, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
-                    &append_args("test_null_both <udp>"),
-                    move || test_null_both(domain, libc::SOCK_DGRAM, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
-                    &append_args("test_recv_addr_udp"),
-                    move || test_recv_addr_udp(domain, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
-                    &append_args("test_nonnull_addr_tcp"),
-                    move || test_nonnull_addr_tcp(domain, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
-                    &append_args("test_large_buf_tcp"),
-                    move || test_large_buf_tcp(domain, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
-                    &append_args("test_large_buf_udp"),
-                    move || test_large_buf_udp(domain, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
-                    &append_args("test_short_recv_buf_udp"),
-                    move || test_short_recv_buf_udp(domain, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-                test_utils::ShadowTest::new(
-                    &append_args("test_msg_order_udp"),
-                    move || test_msg_order_udp(domain, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                ),
-            ];
+            let sock_types = match method.domain() {
+                libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
+                libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
+                _ => unimplemented!(),
+            };
 
-            tests.extend(more_tests);
+            for &sock_type in sock_types.iter() {
+                // add details to the test names to avoid duplicates
+                let append_args = |s| {
+                    format!(
+                        "{} <init_method={:?}, flag={}, sock_type={}>",
+                        s, method, flag, sock_type
+                    )
+                };
+
+                tests.extend(vec![
+                    test_utils::ShadowTest::new(
+                        &append_args("test_null_addr"),
+                        move || test_null_addr(method, sock_type, flag),
+                        passing.clone(),
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_null_addr_len"),
+                        move || test_null_addr_len(method, sock_type, flag),
+                        passing.clone(),
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_null_both"),
+                        move || test_null_both(method, sock_type, flag),
+                        passing.clone(),
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_nonnull_addr"),
+                        move || test_nonnull_addr(method, sock_type, flag),
+                        passing.clone(),
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_recv_addr <bind_client=false>"),
+                        move || test_recv_addr(method, sock_type, flag, false),
+                        passing.clone(),
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_recv_addr <bind_client=true>"),
+                        move || test_recv_addr(method, sock_type, flag, true),
+                        passing.clone(),
+                    ),
+                ]);
+
+                // if non-blocking
+                if flag & libc::SOCK_NONBLOCK != 0 {
+                    tests.extend(vec![test_utils::ShadowTest::new(
+                        &append_args("test_large_buf"),
+                        move || test_large_buf(method, sock_type, flag),
+                        passing.clone(),
+                    )]);
+                }
+
+                // if a message-based socket
+                if [libc::SOCK_DGRAM, libc::SOCK_SEQPACKET].contains(&sock_type) {
+                    tests.extend(vec![
+                        test_utils::ShadowTest::new(
+                            &append_args("test_short_recv_buf_dgram"),
+                            move || test_short_recv_buf_dgram(method, sock_type, flag),
+                            passing.clone(),
+                        ),
+                        test_utils::ShadowTest::new(
+                            &append_args("test_msg_order_dgram"),
+                            move || test_msg_order_dgram(method, sock_type, flag),
+                            passing.clone(),
+                        ),
+                    ]);
+                }
+            }
+
+            if method != SocketInitMethod::UnixSocketpair {
+                tests.extend(vec![test_utils::ShadowTest::new(
+                    &append_args("test_null_addr_not_connected_dgram"),
+                    move || test_null_addr_not_connected_dgram(method, flag),
+                    passing.clone(),
+                )]);
+            }
         }
     }
 
@@ -240,66 +300,61 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
 }
 
 /// Test sendto() and recvfrom() using an argument that cannot be a fd.
-fn test_invalid_fd() -> Result<(), String> {
+fn test_invalid_fd(domain: libc::c_int) -> Result<(), String> {
     // expect both sendto() and recvfrom() to return EBADF
-    fd_test_helper(-1, &[libc::EBADF], &[libc::EBADF])
+    fd_test_helper(-1, domain, &[libc::EBADF], &[libc::EBADF])
 }
 
 /// Test sendto() and recvfrom() using an argument that could be a fd, but is not.
-fn test_non_existent_fd() -> Result<(), String> {
+fn test_non_existent_fd(domain: libc::c_int) -> Result<(), String> {
     // expect both sendto() and recvfrom() to return EBADF
-    fd_test_helper(8934, &[libc::EBADF], &[libc::EBADF])
+    fd_test_helper(8934, domain, &[libc::EBADF], &[libc::EBADF])
 }
 
 /// Test sendto() and recvfrom() using a valid fd that is not a socket.
-fn test_non_socket_fd() -> Result<(), String> {
+fn test_non_socket_fd(domain: libc::c_int) -> Result<(), String> {
     // expect both sendto() and recvfrom() to return ENOTSOCK
-    fd_test_helper(0, &[libc::ENOTSOCK], &[libc::ENOTSOCK])
+    fd_test_helper(0, domain, &[libc::ENOTSOCK], &[libc::ENOTSOCK])
 }
 
-/// Test sendto() and recvfrom() using a TCP socket that is not conneected, but using a
-/// non-null address argument.
-fn test_not_connected_tcp() -> Result<(), String> {
-    let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM | libc::SOCK_NONBLOCK, 0) };
+/// Test sendto() and recvfrom() using a socket that is not conneected, but using a non-null address
+/// argument.
+fn test_not_connected(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type | libc::SOCK_NONBLOCK, 0) };
     assert!(fd >= 0);
 
+    let expected_sendto_errs = match (domain, sock_type) {
+        // may return EPIPE on Linux, see "BUGS" in sendto(2)
+        (libc::AF_INET, libc::SOCK_STREAM) => &[libc::ENOTCONN, libc::EPIPE][..],
+        (libc::AF_INET, libc::SOCK_DGRAM) => &[][..],
+        (libc::AF_UNIX, libc::SOCK_STREAM) => &[libc::EOPNOTSUPP][..],
+        (libc::AF_UNIX, libc::SOCK_DGRAM) => &[libc::ECONNREFUSED][..],
+        (libc::AF_UNIX, libc::SOCK_SEQPACKET) => &[libc::ENOTCONN][..],
+        _ => unimplemented!(),
+    };
+
+    let expected_recvfrom_errs = match (domain, sock_type) {
+        (libc::AF_INET, libc::SOCK_STREAM) => &[libc::ENOTCONN][..],
+        (libc::AF_INET, libc::SOCK_DGRAM) => &[libc::EAGAIN],
+        (libc::AF_UNIX, libc::SOCK_STREAM) => &[libc::EINVAL][..],
+        (libc::AF_UNIX, libc::SOCK_DGRAM) => &[libc::EAGAIN],
+        (libc::AF_UNIX, libc::SOCK_SEQPACKET) => &[libc::ENOTCONN][..],
+        _ => unimplemented!(),
+    };
+
     test_utils::run_and_close_fds(&[fd], || {
-        // expect sendto() to return ENOTCONN (or EPIPE on Linux, see "BUGS" in "man 2 sendto")
-        // and recvfrom() to return ENOTCONN
-        fd_test_helper(fd, &[libc::ENOTCONN, libc::EPIPE], &[libc::ENOTCONN])
+        fd_test_helper(fd, domain, expected_sendto_errs, expected_recvfrom_errs)
     })
 }
 
-/// Test sendto() and recvfrom() using a UDP socket that is not conneected, but using a
-/// non-null address argument.
-fn test_not_connected_udp() -> Result<(), String> {
-    let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM | libc::SOCK_NONBLOCK, 0) };
-    assert!(fd >= 0);
-
-    // expect sendto() to write successfully, but recvfrom() to return EAGAIN
-    test_utils::run_and_close_fds(&[fd], || fd_test_helper(fd, &[], &[libc::EAGAIN]))
-}
-
 /// Test sendto() and recvfrom() using a null buffer, and non-zero buffer length.
-fn test_null_buf(sock_type: libc::c_int) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, sock_type | libc::SOCK_NONBLOCK, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, sock_type | libc::SOCK_NONBLOCK, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_server = match sock_type {
-        libc::SOCK_STREAM => {
-            let fd_accepted = tcp_connect_helper(fd_client, fd_server, libc::SOCK_NONBLOCK);
-            unsafe { libc::close(fd_server) };
-            fd_accepted
-        }
-        libc::SOCK_DGRAM => {
-            udp_connect_helper(fd_client, fd_server, /* connect= */ true);
-            fd_server
-        }
-        _ => unreachable!(),
-    };
+fn test_null_buf(init_method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+    let (fd_client, fd_server) = socket_init_helper(
+        init_method,
+        sock_type,
+        libc::SOCK_NONBLOCK,
+        /* bind_client = */ false,
+    );
 
     let sendto_buf: Vec<u8> = vec![1, 2, 3];
 
@@ -348,25 +403,13 @@ fn test_null_buf(sock_type: libc::c_int) -> Result<(), String> {
 }
 
 /// Test sendto() and recvfrom() using a buffer length of zero, and a non-null buffer.
-fn test_zero_len_buf(sock_type: libc::c_int) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, sock_type | libc::SOCK_NONBLOCK, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, sock_type | libc::SOCK_NONBLOCK, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_server = match sock_type {
-        libc::SOCK_STREAM => {
-            let fd_accepted = tcp_connect_helper(fd_client, fd_server, libc::SOCK_NONBLOCK);
-            unsafe { libc::close(fd_server) };
-            fd_accepted
-        }
-        libc::SOCK_DGRAM => {
-            udp_connect_helper(fd_client, fd_server, /* connect= */ true);
-            fd_server
-        }
-        _ => unreachable!(),
-    };
+fn test_zero_len_buf(init_method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+    let (fd_client, fd_server) = socket_init_helper(
+        init_method,
+        sock_type,
+        libc::SOCK_NONBLOCK,
+        /* bind_client = */ false,
+    );
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         // send 0 bytes; no errors expected
@@ -375,12 +418,12 @@ fn test_zero_len_buf(sock_type: libc::c_int) -> Result<(), String> {
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
 
-        // receive 0 bytes; an EAGAIN error expected only if TCP
-        // UDP can receive messages of 0 bytes
+        // receive 0 bytes; an EAGAIN error expected only if a stream socket
+        // dgram sockets can receive messages of 0 bytes
         let e = match sock_type {
             libc::SOCK_STREAM => vec![libc::EAGAIN],
-            libc::SOCK_DGRAM => vec![],
-            _ => unreachable!(),
+            libc::SOCK_DGRAM | libc::SOCK_SEQPACKET => vec![],
+            _ => unimplemented!(),
         };
         simple_recvfrom_helper(fd_server, &mut vec![], &e, true)?;
 
@@ -397,21 +440,93 @@ fn test_zero_len_buf(sock_type: libc::c_int) -> Result<(), String> {
     })
 }
 
-/// Test sendto() and recvfrom() using a non-blocking TCP socket.
-fn test_nonblocking_tcp() -> Result<(), String> {
-    let fd_client =
-        unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM | libc::SOCK_NONBLOCK, 0) };
-    let fd_server =
-        unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM | libc::SOCK_NONBLOCK, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
+/// Test sendto() and recvfrom() using an unused flag.
+fn test_invalid_flag(init_method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+    let (fd_client, fd_server) = socket_init_helper(
+        init_method,
+        sock_type,
+        libc::SOCK_NONBLOCK,
+        /* bind_client = */ false,
+    );
 
-    // connect the client fd to the server
-    let fd_accepted = tcp_connect_helper(fd_client, fd_server, libc::SOCK_NONBLOCK);
+    let sendto_buf: Vec<u8> = vec![1, 2, 3];
+    let mut recvfrom_buf: Vec<u8> = vec![1, 2, 3];
 
-    test_utils::run_and_close_fds(&[fd_client, fd_server, fd_accepted], || {
+    let sendto_args = SendtoArguments {
+        fd: fd_client,
+        len: sendto_buf.len(),
+        buf: Some(&sendto_buf),
+        flags: 1 << 31, // an unused flag
+        ..Default::default()
+    };
+
+    let mut recvfrom_args = RecvfromArguments {
+        fd: fd_server,
+        len: recvfrom_buf.len(),
+        buf: Some(&mut recvfrom_buf),
+        flags: 1 << 31, // an unused flag
+        ..Default::default()
+    };
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        // try to send 3 bytes; no error expected
+        let expected_err = match init_method.domain() {
+            libc::AF_INET => vec![],
+            libc::AF_UNIX => vec![],
+            _ => unimplemented!(),
+        };
+        check_sendto_call(&sendto_args, &expected_err, true)?;
+
+        // shadow needs to run events
+        assert_eq!(unsafe { libc::usleep(100) }, 0);
+
+        // try to read 3 bytes; no error expected
+        let expected_err = match init_method.domain() {
+            libc::AF_INET => vec![],
+            libc::AF_UNIX => vec![],
+            _ => unimplemented!(),
+        };
+        check_recvfrom_call(&mut recvfrom_args, &expected_err, true)?;
+
+        Ok(())
+    })
+}
+
+/// Test sendto() and recvfrom() using the `MSG_DONTWAIT` flag.
+fn test_flag_dontwait(init_method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+    let (fd_client, fd_server) =
+        socket_init_helper(init_method, sock_type, 0, /* bind_client = */ false);
+
+    let mut buf_10_bytes: Vec<u8> = vec![1u8; 10];
+
+    let mut recvfrom_args = RecvfromArguments {
+        fd: fd_client,
+        len: buf_10_bytes.len(),
+        buf: Some(&mut buf_10_bytes),
+        flags: libc::MSG_DONTWAIT,
+        ..Default::default()
+    };
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         // try to read 10 bytes; an EAGAIN error expected
-        simple_recvfrom_helper(fd_accepted, &mut vec![0u8; 10], &[libc::EAGAIN], true)?;
+        check_recvfrom_call(&mut recvfrom_args, &[libc::EAGAIN], true)?;
+
+        Ok(())
+    })
+}
+
+/// Test sendto() and recvfrom() using a non-blocking stream socket.
+fn test_nonblocking_stream(init_method: SocketInitMethod) -> Result<(), String> {
+    let (fd_client, fd_peer) = socket_init_helper(
+        init_method,
+        libc::SOCK_STREAM,
+        libc::SOCK_NONBLOCK,
+        /* bind_client = */ false,
+    );
+
+    test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
+        // try to read 10 bytes; an EAGAIN error expected
+        simple_recvfrom_helper(fd_peer, &mut vec![0u8; 10], &[libc::EAGAIN], true)?;
 
         // send 10 bytes; no errors expected
         simple_sendto_helper(fd_client, &vec![1u8; 10], &[], true)?;
@@ -420,10 +535,10 @@ fn test_nonblocking_tcp() -> Result<(), String> {
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
 
         // read 10 bytes into a 20 byte buffer; no errors expected
-        simple_recvfrom_helper(fd_accepted, &mut vec![0u8; 20], &[], false)?;
+        simple_recvfrom_helper(fd_peer, &mut vec![0u8; 20], &[], false)?;
 
         // try to read 10 bytes; an EAGAIN error expected
-        simple_recvfrom_helper(fd_accepted, &mut vec![0u8; 10], &[libc::EAGAIN], false)?;
+        simple_recvfrom_helper(fd_peer, &mut vec![0u8; 10], &[libc::EAGAIN], false)?;
 
         let mut send_hash = std::collections::hash_map::DefaultHasher::new();
         let mut recv_hash = std::collections::hash_map::DefaultHasher::new();
@@ -471,7 +586,7 @@ fn test_nonblocking_tcp() -> Result<(), String> {
         loop {
             let rv = unsafe {
                 libc::recvfrom(
-                    fd_accepted,
+                    fd_peer,
                     recv_buf.as_mut_ptr() as *mut core::ffi::c_void,
                     recv_buf.len(),
                     0,
@@ -512,123 +627,14 @@ fn test_nonblocking_tcp() -> Result<(), String> {
     })
 }
 
-/// Test sendto() and recvfrom() using an unused flag.
-fn test_invalid_flag(sock_type: libc::c_int) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, sock_type | libc::SOCK_NONBLOCK, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, sock_type | libc::SOCK_NONBLOCK, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_server = match sock_type {
-        libc::SOCK_STREAM => {
-            let fd_accepted = tcp_connect_helper(fd_client, fd_server, libc::SOCK_NONBLOCK);
-            unsafe { libc::close(fd_server) };
-            fd_accepted
-        }
-        libc::SOCK_DGRAM => {
-            udp_connect_helper(fd_client, fd_server, /* connect= */ true);
-            fd_server
-        }
-        _ => unreachable!(),
-    };
-
-    let sendto_buf: Vec<u8> = vec![1, 2, 3];
-    let mut recvfrom_buf: Vec<u8> = vec![1, 2, 3];
-
-    let sendto_args = SendtoArguments {
-        fd: fd_client,
-        len: sendto_buf.len(),
-        buf: Some(&sendto_buf),
-        flags: 1 << 31, // an unused flag
-        ..Default::default()
-    };
-
-    let mut recvfrom_args = RecvfromArguments {
-        fd: fd_server,
-        len: recvfrom_buf.len(),
-        buf: Some(&mut recvfrom_buf),
-        flags: 1 << 31, // an unused flag
-        ..Default::default()
-    };
-
-    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
-        // try to send 3 bytes; no error expected
-        check_sendto_call(&sendto_args, &[], true)?;
-
-        // shadow needs to run events
-        assert_eq!(unsafe { libc::usleep(100) }, 0);
-
-        // try to read 3 bytes; no error expected
-        check_recvfrom_call(&mut recvfrom_args, &[], true)?;
-
-        Ok(())
-    })
-}
-
-/// Test sendto() and recvfrom() using the `MSG_DONTWAIT` flag.
-fn test_flag_dontwait(sock_type: libc::c_int) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(libc::AF_INET, sock_type, 0) };
-    let fd_server = unsafe { libc::socket(libc::AF_INET, sock_type, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_server = match sock_type {
-        libc::SOCK_STREAM => {
-            let fd_accepted = tcp_connect_helper(fd_client, fd_server, 0);
-            unsafe { libc::close(fd_server) };
-            fd_accepted
-        }
-        libc::SOCK_DGRAM => {
-            udp_connect_helper(fd_client, fd_server, /* connect= */ true);
-            fd_server
-        }
-        _ => unreachable!(),
-    };
-
-    let mut buf_10_bytes: Vec<u8> = vec![1u8; 10];
-
-    let mut recvfrom_args = RecvfromArguments {
-        fd: fd_client,
-        len: buf_10_bytes.len(),
-        buf: Some(&mut buf_10_bytes),
-        flags: libc::MSG_DONTWAIT,
-        ..Default::default()
-    };
-
-    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
-        // try to read 10 bytes; an EAGAIN error expected
-        check_recvfrom_call(&mut recvfrom_args, &[libc::EAGAIN], true)?;
-
-        Ok(())
-    })
-}
-
 /// Test sendto() and recvfrom() using a null sockaddr, and non-zero or null sockaddr length.
 fn test_null_addr(
-    domain: libc::c_int,
+    init_method: SocketInitMethod,
     sock_type: libc::c_int,
     flag: libc::c_int,
 ) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(domain, sock_type | flag, 0) };
-    let fd_server = unsafe { libc::socket(domain, sock_type | flag, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_server = match sock_type {
-        libc::SOCK_STREAM => {
-            let fd_accepted = tcp_connect_helper(fd_client, fd_server, flag);
-            unsafe { libc::close(fd_server) };
-            fd_accepted
-        }
-        libc::SOCK_DGRAM => {
-            udp_connect_helper(fd_client, fd_server, /* connect= */ true);
-            fd_server
-        }
-        _ => unreachable!(),
-    };
+    let (fd_client, fd_server) =
+        socket_init_helper(init_method, sock_type, flag, /* bind_client = */ false);
 
     let sendto_buf: Vec<u8> = vec![1, 2, 3];
     let mut recvfrom_buf: Vec<u8> = vec![1, 2, 3];
@@ -665,16 +671,18 @@ fn test_null_addr(
     })
 }
 
-/// Test sendto() and recvfrom() using a UDP socket that is not conneected, while using a
+/// Test sendto() and recvfrom() using a dgram socket that is not connected, while using a
 /// null address argument.
-fn test_null_addr_not_connected_udp(domain: libc::c_int, flag: libc::c_int) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(domain, libc::SOCK_DGRAM | flag, 0) };
-    let fd_server = unsafe { libc::socket(domain, libc::SOCK_DGRAM | flag, 0) };
+fn test_null_addr_not_connected_dgram(
+    init_method: SocketInitMethod,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let fd_client = unsafe { libc::socket(init_method.domain(), libc::SOCK_DGRAM | flag, 0) };
+    let fd_server = unsafe { libc::socket(init_method.domain(), libc::SOCK_DGRAM | flag, 0) };
     assert!(fd_client >= 0);
     assert!(fd_server >= 0);
 
-    // bind the server fd, but don't connect the client fd to the server
-    let server_addr = udp_connect_helper(fd_client, fd_server, /* connect= */ false);
+    let (server_addr, server_addr_len) = autobind_helper(fd_server, init_method.domain());
 
     let sendto_buf: Vec<u8> = vec![1, 2, 3];
     let mut recvfrom_buf: Vec<u8> = vec![1, 2, 3];
@@ -694,7 +702,7 @@ fn test_null_addr_not_connected_udp(domain: libc::c_int, flag: libc::c_int) -> R
         buf: Some(&sendto_buf),
         flags: 0,
         addr: Some(server_addr),
-        addr_len: std::mem::size_of_val(&server_addr) as u32,
+        addr_len: server_addr_len,
     };
 
     let mut recvfrom_args = RecvfromArguments {
@@ -707,8 +715,13 @@ fn test_null_addr_not_connected_udp(domain: libc::c_int, flag: libc::c_int) -> R
     };
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
-        // send 3 bytes using a null sockaddr; an EDESTADDRREQ error expected
-        check_sendto_call(&sendto_args_1, &[libc::EDESTADDRREQ], true)?;
+        // send 3 bytes using a null sockaddr
+        let expected_err = match init_method.domain() {
+            libc::AF_INET => vec![libc::EDESTADDRREQ],
+            libc::AF_UNIX => vec![libc::ENOTCONN],
+            _ => unimplemented!(),
+        };
+        check_sendto_call(&sendto_args_1, &expected_err, true)?;
 
         // send 3 bytes using a non-null sockaddr; no error expected
         check_sendto_call(&sendto_args_2, &[], true)?;
@@ -725,36 +738,33 @@ fn test_null_addr_not_connected_udp(domain: libc::c_int, flag: libc::c_int) -> R
 
 /// Test recvfrom() using a null sockaddr length, and non-null sockaddr.
 fn test_null_addr_len(
-    domain: libc::c_int,
+    init_method: SocketInitMethod,
     sock_type: libc::c_int,
     flag: libc::c_int,
 ) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(domain, sock_type | flag, 0) };
-    let fd_server = unsafe { libc::socket(domain, sock_type | flag, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
+    let (fd_client, fd_server) =
+        socket_init_helper(init_method, sock_type, flag, /* bind_client = */ false);
 
-    // connect the client fd to the server
-    let fd_server = match sock_type {
-        libc::SOCK_STREAM => {
-            let fd_accepted = tcp_connect_helper(fd_client, fd_server, flag);
-            unsafe { libc::close(fd_server) };
-            fd_accepted
+    let addr = match init_method.domain() {
+        libc::AF_INET => SockAddr::Inet(libc::sockaddr_in {
+            sin_family: libc::AF_INET as u16,
+            sin_port: 11111u16.to_be(),
+            sin_addr: libc::in_addr {
+                s_addr: libc::INADDR_LOOPBACK.to_be(),
+            },
+            sin_zero: [0; 8],
+        }),
+        libc::AF_UNIX => {
+            let mut addr = libc::sockaddr_un {
+                sun_family: libc::AF_UNIX as u16,
+                sun_path: [0; 108],
+            };
+            // arbitrary abstract socket name
+            addr.sun_path[1] = 4;
+            addr.sun_path[2] = 7;
+            SockAddr::Unix(addr)
         }
-        libc::SOCK_DGRAM => {
-            udp_connect_helper(fd_client, fd_server, /* connect= */ true);
-            fd_server
-        }
-        _ => unreachable!(),
-    };
-
-    let addr = libc::sockaddr_in {
-        sin_family: libc::AF_INET as u16,
-        sin_port: 11111u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: libc::INADDR_LOOPBACK.to_be(),
-        },
-        sin_zero: [0; 8],
+        _ => unimplemented!(),
     };
 
     let mut recvfrom_buf: Vec<u8> = vec![1, 2, 3];
@@ -784,28 +794,12 @@ fn test_null_addr_len(
 
 /// Test recvfrom() using a null sockaddr and a null sockaddr length.
 fn test_null_both(
-    domain: libc::c_int,
+    init_method: SocketInitMethod,
     sock_type: libc::c_int,
     flag: libc::c_int,
 ) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(domain, sock_type | flag, 0) };
-    let fd_server = unsafe { libc::socket(domain, sock_type | flag, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_server = match sock_type {
-        libc::SOCK_STREAM => {
-            let fd_accepted = tcp_connect_helper(fd_client, fd_server, flag);
-            unsafe { libc::close(fd_server) };
-            fd_accepted
-        }
-        libc::SOCK_DGRAM => {
-            udp_connect_helper(fd_client, fd_server, /* connect= */ true);
-            fd_server
-        }
-        _ => unreachable!(),
-    };
+    let (fd_client, fd_server) =
+        socket_init_helper(init_method, sock_type, flag, /* bind_client = */ false);
 
     let mut recvfrom_buf: Vec<u8> = vec![1, 2, 3];
 
@@ -832,23 +826,77 @@ fn test_null_both(
     })
 }
 
-/// Test recvfrom() using a UDP socket and verify that the returned sockaddr is correct.
-fn test_recv_addr_udp(domain: libc::c_int, flag: libc::c_int) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(domain, libc::SOCK_DGRAM | flag, 0) };
-    let fd_server = unsafe { libc::socket(domain, libc::SOCK_DGRAM | flag, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
+/// Test sendto() using a connected socket, but also with a different non-null destination address.
+fn test_nonnull_addr(
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_server) =
+        socket_init_helper(init_method, sock_type, flag, /* bind_client = */ false);
 
-    // connect the client fd to the server
-    udp_connect_helper(fd_client, fd_server, /* connect= */ true);
-
-    let mut client_addr = libc::sockaddr_in {
-        sin_family: 0u16,
-        sin_port: 0u16.to_be(),
-        sin_addr: libc::in_addr { s_addr: 0 },
-        sin_zero: [0; 8],
+    let (addr, addr_len) = match init_method.domain() {
+        libc::AF_INET => {
+            let addr = libc::sockaddr_in {
+                sin_family: libc::AF_INET as u16,
+                sin_port: 11111u16.to_be(),
+                sin_addr: libc::in_addr {
+                    s_addr: libc::INADDR_LOOPBACK.to_be(),
+                },
+                sin_zero: [0; 8],
+            };
+            (SockAddr::Inet(addr), std::mem::size_of_val(&addr) as u32)
+        }
+        libc::AF_UNIX => {
+            let mut addr = libc::sockaddr_un {
+                sun_family: libc::AF_UNIX as u16,
+                sun_path: [0; 108],
+            };
+            // arbitrary abstract socket name
+            addr.sun_path[1] = 4;
+            addr.sun_path[2] = 7;
+            (SockAddr::Unix(addr), 2 + 1 + 2) // address family + null byte + 2 characters
+        }
+        _ => unimplemented!(),
     };
-    let mut client_addr_len = std::mem::size_of_val(&client_addr);
+
+    let sendto_buf: Vec<u8> = vec![1, 2, 3];
+
+    let sendto_args = SendtoArguments {
+        fd: fd_client,
+        len: sendto_buf.len(),
+        buf: Some(&sendto_buf),
+        flags: 0,
+        addr: Some(addr),
+        addr_len: addr_len,
+    };
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        // some configurations seem to ignore the destination address for connected sockets
+        let expected_err = match (init_method.domain(), sock_type) {
+            (libc::AF_INET, _) => vec![],
+            (libc::AF_UNIX, libc::SOCK_STREAM) => vec![libc::EISCONN],
+            (libc::AF_UNIX, libc::SOCK_DGRAM) => vec![libc::ECONNREFUSED],
+            (libc::AF_UNIX, libc::SOCK_SEQPACKET) => vec![],
+            _ => unimplemented!(),
+        };
+
+        check_sendto_call(&sendto_args, &expected_err, true)?;
+        Ok(())
+    })
+}
+
+/// Test recvfrom() using a socket and verify that the returned sockaddr is correct.
+fn test_recv_addr(
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+    bind_client: bool,
+) -> Result<(), String> {
+    let (fd_client, fd_server) = socket_init_helper(init_method, sock_type, flag, bind_client);
+
+    let mut client_addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+    let mut client_addr_len = std::mem::size_of_val(&client_addr) as libc::socklen_t;
 
     // get the sockaddr of the client fd
     assert_eq!(
@@ -863,12 +911,7 @@ fn test_recv_addr_udp(domain: libc::c_int, flag: libc::c_int) -> Result<(), Stri
     );
 
     // an empty sockaddr
-    let recvfrom_addr = libc::sockaddr_in {
-        sin_family: 0u16,
-        sin_port: 0u16.to_be(),
-        sin_addr: libc::in_addr { s_addr: 0 },
-        sin_zero: [0; 8],
-    };
+    let recvfrom_addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
 
     let mut buf: Vec<u8> = vec![1, 2, 3];
 
@@ -877,139 +920,63 @@ fn test_recv_addr_udp(domain: libc::c_int, flag: libc::c_int) -> Result<(), Stri
         len: buf.len(),
         buf: Some(&mut buf),
         flags: 0,
-        addr: Some(recvfrom_addr),
+        addr: Some(SockAddr::Generic(recvfrom_addr)),
         addr_len: Some(std::mem::size_of_val(&recvfrom_addr) as u32),
     };
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
-        // send 3 bytes; no error expected
+        // send 3 bytes to the server; no error expected
         simple_sendto_helper(fd_client, &vec![1, 2, 3], &[], true)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
 
-        // read 3 bytes; no error expected
+        // read 3 bytes at the server; no error expected
         check_recvfrom_call(&mut recvfrom_args, &[], true)?;
 
-        // check that the returned sockaddr equals the client sockaddr
-        test_utils::result_assert_eq(
-            recvfrom_args.addr.unwrap().sin_family,
-            client_addr.sin_family,
-            "Address family does not match",
-        )?;
-        test_utils::result_assert_eq(
-            recvfrom_args.addr.unwrap().sin_port,
-            client_addr.sin_port,
-            "Address port does not match",
-        )?;
-        test_utils::result_assert_eq(
-            recvfrom_args.addr.unwrap().sin_addr.s_addr,
-            client_addr.sin_addr.s_addr,
-            "Address s_addr does not match",
-        )?;
+        // validate the returned socket address
+        match (init_method, sock_type, bind_client) {
+            // check that the returned sockaddr equals the client sockaddr
+            (SocketInitMethod::Inet, libc::SOCK_DGRAM, _) | (SocketInitMethod::Unix, _, true) => {
+                test_utils::result_assert_eq(
+                    recvfrom_args.addr_len.unwrap(),
+                    client_addr_len,
+                    "Address lengths did not match",
+                )?;
+                test_utils::result_assert_eq(
+                    recvfrom_args.addr.unwrap(),
+                    SockAddr::Generic(client_addr),
+                    "Addresses did not match",
+                )?;
+            }
+            // all others should just set the address length as 0
+            _ => {
+                test_utils::result_assert_eq(
+                    recvfrom_args.addr_len.unwrap(),
+                    0,
+                    "Address length was not zero",
+                )?;
+                test_utils::result_assert_eq(
+                    recvfrom_args.addr.unwrap(),
+                    SockAddr::Generic(unsafe { std::mem::zeroed() }),
+                    "Address was unexpectedly changed",
+                )?;
+            }
+        }
 
         Ok(())
     })
 }
 
-/// Test sendto() using a connected socket, but also with a different non-null destination address.
-fn test_nonnull_addr_tcp(domain: libc::c_int, flag: libc::c_int) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(domain, libc::SOCK_STREAM | flag, 0) };
-    let fd_server = unsafe { libc::socket(domain, libc::SOCK_STREAM | flag, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_accepted = tcp_connect_helper(fd_client, fd_server, flag);
-
-    let addr = libc::sockaddr_in {
-        sin_family: libc::AF_INET as u16,
-        sin_port: 11111u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: libc::INADDR_LOOPBACK.to_be(),
-        },
-        sin_zero: [0; 8],
-    };
-
-    let sendto_buf: Vec<u8> = vec![1, 2, 3];
-
-    let sendto_args = SendtoArguments {
-        fd: fd_client,
-        len: sendto_buf.len(),
-        buf: Some(&sendto_buf),
-        flags: 0,
-        addr: Some(addr),
-        addr_len: std::mem::size_of_val(&addr) as u32,
-    };
-
-    test_utils::run_and_close_fds(&[fd_client, fd_server, fd_accepted], || {
-        // the man page for sendto says this may return EISCONN,
-        // but this doesn't seem to be the case for glibc
-        check_sendto_call(&sendto_args, &[], true)?;
-        Ok(())
-    })
-}
-/// Test sendto() and recvfrom() for TCP sockets using large buffers (10^6 bytes).
-fn test_large_buf_tcp(domain: libc::c_int, flag: libc::c_int) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(domain, libc::SOCK_STREAM | flag, 0) };
-    let fd_server = unsafe { libc::socket(domain, libc::SOCK_STREAM | flag, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    let fd_accepted = tcp_connect_helper(fd_client, fd_server, flag);
-
-    test_utils::run_and_close_fds(&[fd_client, fd_server, fd_accepted], || {
-        // try to send 1_000_000 bytes, but may send fewer; no error expected
-        simple_sendto_helper(fd_client, &vec![1u8; 1_000_000], &[], false)?;
-
-        // shadow needs to run events
-        assert_eq!(unsafe { libc::usleep(10000) }, 0);
-
-        // try to read 1_000_000 bytes, but may read fewer; no error expected
-        simple_recvfrom_helper(fd_accepted, &mut vec![0u8; 1_000_000], &[], false)?;
-
-        Ok(())
-    })
-}
-
-/// Test sendto() and recvfrom() for UDP sockets just above the message limit of 65507 bytes.
-fn test_large_buf_udp(domain: libc::c_int, flag: libc::c_int) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(domain, libc::SOCK_DGRAM | flag, 0) };
-    let fd_server = unsafe { libc::socket(domain, libc::SOCK_DGRAM | flag, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    udp_connect_helper(fd_client, fd_server, /* connect= */ true);
-
-    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
-        // try sending a buffer slightly too large; an EMSGSIZE error is expected
-        simple_sendto_helper(fd_client, &vec![1u8; 65_508], &[libc::EMSGSIZE], true)?;
-
-        // try sending a buffer at the max size; no error expected
-        simple_sendto_helper(fd_client, &vec![1u8; 65_507], &[], true)?;
-
-        // shadow needs to run events
-        assert_eq!(unsafe { libc::usleep(10000) }, 0);
-
-        // try receiving using a large buffer; no error expected
-        let received_bytes = simple_recvfrom_helper(fd_server, &mut vec![0u8; 65_508], &[], false)?;
-
-        test_utils::result_assert_eq(received_bytes, 65_507, "Unexpected number of bytes read")
-    })
-}
-
-/// Test recvfrom() using a UDP socket with a buffer that is too small to contain all of
+/// Test recvfrom() using a dgram socket with a buffer that is too small to contain all of
 /// received the data.
-fn test_short_recv_buf_udp(domain: libc::c_int, flag: libc::c_int) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(domain, libc::SOCK_DGRAM | flag, 0) };
-    let fd_server = unsafe { libc::socket(domain, libc::SOCK_DGRAM | flag, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
-
-    // connect the client fd to the server
-    udp_connect_helper(fd_client, fd_server, /* connect= */ true);
+fn test_short_recv_buf_dgram(
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_server) =
+        socket_init_helper(init_method, sock_type, flag, /* bind_client = */ false);
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         // send 2000 bytes; no error expected
@@ -1025,18 +992,17 @@ fn test_short_recv_buf_udp(domain: libc::c_int, flag: libc::c_int) -> Result<(),
     })
 }
 
-/// Test sendto() and recvfrom() using a UDP socket and make sure that all sent
+/// Test sendto() and recvfrom() using a dgram socket and make sure that all sent
 /// messages are received as expected.
-fn test_msg_order_udp(domain: libc::c_int, flag: libc::c_int) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(domain, libc::SOCK_DGRAM | flag, 0) };
-    let fd_server = unsafe { libc::socket(domain, libc::SOCK_DGRAM | flag, 0) };
-    assert!(fd_client >= 0);
-    assert!(fd_server >= 0);
+fn test_msg_order_dgram(
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_server) =
+        socket_init_helper(init_method, sock_type, flag, /* bind_client = */ false);
 
-    // connect the client fd to the server
-    udp_connect_helper(fd_client, fd_server, /* connect= */ true);
-
-    // read and write UDP messages and see if something unexpected happens
+    // read and write messages and see if something unexpected happens
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         // send 1000 bytes; no error expected
         simple_sendto_helper(fd_client, &vec![1u8; 1000], &[], true)?;
@@ -1077,23 +1043,104 @@ fn test_msg_order_udp(domain: libc::c_int, flag: libc::c_int) -> Result<(), Stri
     })
 }
 
+/// Test sendto() and recvfrom() for sockets using large buffers (10^6 bytes).
+fn test_large_buf(
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_peer) =
+        socket_init_helper(init_method, sock_type, flag, /* bind_client = */ false);
+
+    test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
+        // try to send 1_000_000 bytes, but may send fewer
+        let expected_err = match (init_method.domain(), sock_type) {
+            (_, libc::SOCK_DGRAM) => &[libc::EMSGSIZE][..],
+            (_, libc::SOCK_SEQPACKET) => &[libc::EMSGSIZE][..],
+            _ => &[],
+        };
+        simple_sendto_helper(fd_client, &vec![1u8; 1_000_000], &expected_err, false)?;
+
+        // shadow needs to run events
+        assert_eq!(unsafe { libc::usleep(10000) }, 0);
+
+        // try to read 1_000_000 bytes, but may read fewer
+        let expected_err = match (init_method.domain(), sock_type) {
+            (_, libc::SOCK_DGRAM) => &[libc::EAGAIN][..],
+            (_, libc::SOCK_SEQPACKET) => &[libc::EAGAIN][..],
+            _ => &[],
+        };
+        simple_recvfrom_helper(fd_peer, &mut vec![0u8; 1_000_000], &expected_err, false)?;
+
+        Ok(())
+    })
+}
+
+/// Test sendto() and recvfrom() for UDP sockets just above the message limit of 65507 bytes.
+fn test_large_buf_udp() -> Result<(), String> {
+    let (fd_client, fd_server) = socket_init_helper(
+        SocketInitMethod::Inet,
+        libc::SOCK_DGRAM,
+        libc::SOCK_NONBLOCK,
+        /* bind_client = */ false,
+    );
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        // try sending a buffer slightly too large; an EMSGSIZE error is expected
+        simple_sendto_helper(fd_client, &vec![1u8; 65_508], &[libc::EMSGSIZE], true)?;
+
+        // try sending a buffer at the max size; no error expected
+        simple_sendto_helper(fd_client, &vec![1u8; 65_507], &[], true)?;
+
+        // shadow needs to run events
+        assert_eq!(unsafe { libc::usleep(10000) }, 0);
+
+        // try receiving using a large buffer; no error expected
+        let received_bytes = simple_recvfrom_helper(fd_server, &mut vec![0u8; 65_508], &[], false)?;
+
+        test_utils::result_assert_eq(received_bytes, 65_507, "Unexpected number of bytes read")
+    })
+}
+
 /// A helper function to call sendto() and recvfrom() with valid values
 /// and a user-provided fd.
 fn fd_test_helper(
     fd: libc::c_int,
+    domain: libc::c_int,
     sendto_errnos: &[libc::c_int],
     recvfrom_errnos: &[libc::c_int],
 ) -> Result<(), String> {
     let sendto_buf: Vec<u8> = vec![1, 2, 3];
     let mut recvfrom_buf: Vec<u8> = vec![1, 2, 3];
 
-    let addr = libc::sockaddr_in {
-        sin_family: libc::AF_INET as u16,
-        sin_port: 11111u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: libc::INADDR_LOOPBACK.to_be(),
-        },
-        sin_zero: [0; 8],
+    let (addr, len) = match domain {
+        libc::AF_INET => (
+            SockAddr::Inet(libc::sockaddr_in {
+                sin_family: libc::AF_INET as u16,
+                sin_port: 11111u16.to_be(),
+                sin_addr: libc::in_addr {
+                    s_addr: libc::INADDR_LOOPBACK.to_be(),
+                },
+                sin_zero: [0; 8],
+            }),
+            std::mem::size_of::<libc::sockaddr_in>() as u32,
+        ),
+        libc::AF_UNIX => {
+            let mut path = [0i8; 108];
+            path[1] = 3;
+            path[2] = 63;
+            path[3] = 103;
+            path[4] = -124;
+            path[5] = 107;
+            (
+                SockAddr::Unix(libc::sockaddr_un {
+                    sun_family: libc::AF_UNIX as u16,
+                    sun_path: path,
+                }),
+                2 + 1 + 5, // address family + null byte + 5 characters
+            )
+        }
+        _ => unimplemented!(),
     };
 
     let sendto_args = SendtoArguments {
@@ -1102,7 +1149,7 @@ fn fd_test_helper(
         buf: Some(&sendto_buf),
         flags: 0,
         addr: Some(addr),
-        addr_len: std::mem::size_of_val(&addr) as u32,
+        addr_len: len,
     };
 
     let mut recvfrom_args = RecvfromArguments {
@@ -1111,7 +1158,7 @@ fn fd_test_helper(
         buf: Some(&mut recvfrom_buf),
         flags: 0,
         addr: Some(addr),
-        addr_len: Some(std::mem::size_of_val(&addr) as u32),
+        addr_len: Some(len),
     };
 
     check_sendto_call(&sendto_args, sendto_errnos, true)?;
@@ -1122,139 +1169,6 @@ fn fd_test_helper(
     check_recvfrom_call(&mut recvfrom_args, recvfrom_errnos, true)?;
 
     Ok(())
-}
-
-/// A helper function for TCP sockets to start a server on one fd and connect another fd
-/// to it. Returns the accepted fd.
-fn tcp_connect_helper(
-    fd_client: libc::c_int,
-    fd_server: libc::c_int,
-    flags: libc::c_int,
-) -> libc::c_int {
-    // the server address
-    let mut server_addr = libc::sockaddr_in {
-        sin_family: libc::AF_INET as u16,
-        sin_port: 0u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: libc::INADDR_LOOPBACK.to_be(),
-        },
-        sin_zero: [0; 8],
-    };
-
-    // bind on the server address
-    {
-        let rv = unsafe {
-            libc::bind(
-                fd_server,
-                &server_addr as *const libc::sockaddr_in as *const libc::sockaddr,
-                std::mem::size_of_val(&server_addr) as u32,
-            )
-        };
-        assert_eq!(rv, 0);
-    }
-
-    // get the assigned port number
-    {
-        let mut server_addr_size = std::mem::size_of_val(&server_addr) as u32;
-        let rv = unsafe {
-            libc::getsockname(
-                fd_server,
-                &mut server_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
-                &mut server_addr_size as *mut libc::socklen_t,
-            )
-        };
-        assert_eq!(rv, 0);
-        assert_eq!(server_addr_size, std::mem::size_of_val(&server_addr) as u32);
-    }
-
-    // listen for connections
-    {
-        let rv = unsafe { libc::listen(fd_server, 10) };
-        assert_eq!(rv, 0);
-    }
-
-    // connect to the server address
-    {
-        let rv = unsafe {
-            libc::connect(
-                fd_client,
-                &server_addr as *const libc::sockaddr_in as *const libc::sockaddr,
-                std::mem::size_of_val(&server_addr) as u32,
-            )
-        };
-        assert!(rv == 0 || (rv == -1 && test_utils::get_errno() == libc::EINPROGRESS));
-    }
-
-    // shadow needs to run events, otherwise the accept call won't know it
-    // has an incoming connection (SYN packet)
-    {
-        let rv = unsafe { libc::usleep(10000) };
-        assert_eq!(rv, 0);
-    }
-
-    // accept the connection
-    let fd = unsafe { libc::accept4(fd_server, std::ptr::null_mut(), std::ptr::null_mut(), flags) };
-    assert!(fd >= 0);
-
-    fd
-}
-
-/// A helper function for UDP sockets to bind the server fd and optionally connect
-/// the client fd to the server fd. Returns the address that the server is bound to.
-fn udp_connect_helper(
-    fd_client: libc::c_int,
-    fd_server: libc::c_int,
-    connect: bool,
-) -> libc::sockaddr_in {
-    // the server address
-    let mut server_addr = libc::sockaddr_in {
-        sin_family: libc::AF_INET as u16,
-        sin_port: 0u16.to_be(),
-        sin_addr: libc::in_addr {
-            s_addr: libc::INADDR_LOOPBACK.to_be(),
-        },
-        sin_zero: [0; 8],
-    };
-
-    // bind on the server address
-    {
-        let rv = unsafe {
-            libc::bind(
-                fd_server,
-                &server_addr as *const libc::sockaddr_in as *const libc::sockaddr,
-                std::mem::size_of_val(&server_addr) as u32,
-            )
-        };
-        assert_eq!(rv, 0);
-    }
-
-    // get the assigned port number
-    {
-        let mut server_addr_size = std::mem::size_of_val(&server_addr) as u32;
-        let rv = unsafe {
-            libc::getsockname(
-                fd_server,
-                &mut server_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
-                &mut server_addr_size as *mut libc::socklen_t,
-            )
-        };
-        assert_eq!(rv, 0);
-        assert_eq!(server_addr_size, std::mem::size_of_val(&server_addr) as u32);
-    }
-
-    // connect to the server address
-    if connect {
-        let rv = unsafe {
-            libc::connect(
-                fd_client,
-                &server_addr as *const libc::sockaddr_in as *const libc::sockaddr,
-                std::mem::size_of_val(&server_addr) as u32,
-            )
-        };
-        assert_eq!(rv, 0);
-    }
-
-    server_addr
 }
 
 /// Call `sendto()` with a provided fd and buffer and check that the result is as
@@ -1304,13 +1218,18 @@ fn check_sendto_call(
     expected_errnos: &[libc::c_int],
     verify_num_bytes: bool,
 ) -> Result<libc::ssize_t, String> {
+    let (addr_ptr, addr_max_len) = match args.addr {
+        Some(ref x) => (x.as_ptr(), x.ptr_size()),
+        None => (std::ptr::null(), 0),
+    };
+
     // if the pointers will be non-null, make sure the length is not greater than the actual data size
     // so that we don't segfault
     if args.buf.is_some() {
         assert!(args.len as usize <= args.buf.unwrap().len());
     }
     if args.addr.is_some() {
-        assert!(args.addr_len as usize <= std::mem::size_of_val(&args.addr.unwrap()));
+        assert!(args.addr_len <= addr_max_len);
     }
 
     let buf_ptr = match args.buf {
@@ -1325,7 +1244,7 @@ fn check_sendto_call(
                 buf_ptr as *const core::ffi::c_void,
                 args.len,
                 args.flags,
-                args.addr.as_ptr() as *const libc::sockaddr,
+                addr_ptr,
                 args.addr_len,
             )
         },
@@ -1351,13 +1270,18 @@ fn check_recvfrom_call(
     expected_errnos: &[libc::c_int],
     verify_num_bytes: bool,
 ) -> Result<libc::ssize_t, String> {
+    let (addr_ptr, addr_max_len) = match args.addr {
+        Some(ref mut x) => (x.as_mut_ptr(), x.ptr_size()),
+        None => (std::ptr::null_mut(), 0),
+    };
+
     // if the pointers will be non-null, make sure the length is not greater than the actual data size
     // so that we don't segfault
     if args.buf.is_some() {
         assert!(args.len as usize <= args.buf.as_ref().unwrap().len());
     }
     if args.addr.is_some() && args.addr_len.is_some() {
-        assert!(args.addr_len.unwrap() as usize <= std::mem::size_of_val(&args.addr.unwrap()));
+        assert!(args.addr_len.unwrap() <= addr_max_len);
     }
 
     let buf_ptr = match &mut args.buf {
@@ -1372,7 +1296,7 @@ fn check_recvfrom_call(
                 buf_ptr as *mut core::ffi::c_void,
                 args.len,
                 args.flags,
-                args.addr.as_mut_ptr() as *mut libc::sockaddr,
+                addr_ptr,
                 args.addr_len.as_mut_ptr(),
             )
         },
