@@ -56,7 +56,6 @@
 #include "main/host/tracker.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
-#include "main/utility/random.h"
 #include "main/utility/utility.h"
 
 #include "main/host/thread_ptrace.h"

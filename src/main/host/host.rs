@@ -97,6 +97,12 @@ impl Host {
         crate::core::logger::log_wrapper::c_to_rust_log_level(level).map(|l| l.to_level_filter())
     }
 
+    pub fn random(&mut self) -> &mut impl rand::Rng {
+        let ptr = unsafe { cshadow::host_getRandom(self.chost) };
+        let random = unsafe { ptr.as_mut() }.unwrap();
+        &mut random.0
+    }
+
     pub fn chost(&self) -> *mut cshadow::Host {
         self.chost
     }

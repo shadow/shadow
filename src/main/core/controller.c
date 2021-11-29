@@ -26,7 +26,6 @@
 #include "main/host/host.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
-#include "main/utility/random.h"
 #include "main/utility/utility.h"
 
 struct _Controller {
@@ -465,7 +464,7 @@ gint controller_run(Controller* controller) {
     /* the controller will be responsible for distributing the actions to the managers so that
      * they all have a consistent view of the simulation, topology, etc.
      * For now we only have one manager so send it everything. */
-    guint managerSeed = random_nextUInt(controller->random);
+    guint managerSeed = random_nextU32(controller->random);
     controller->manager = manager_new(controller, controller->config, controller->endTime,
                                       controller->bootstrapEndTime, managerSeed);
 

@@ -11,6 +11,7 @@ pub mod notnull;
 pub mod perf_timer;
 pub mod pod;
 pub mod proc_maps;
+pub mod random;
 pub mod status_bar;
 pub mod stream_len;
 pub mod syscall;

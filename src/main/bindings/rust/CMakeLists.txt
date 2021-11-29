@@ -92,6 +92,7 @@ add_custom_command(OUTPUT wrapper.rs
         --opaque-type "ConfigOptions"
         --opaque-type "Logger"
         --opaque-type "DescriptorTable"
+        --opaque-type "Random"
         --blacklist-type "Logger"
         --blacklist-type "CompatDescriptor"
         --whitelist-type "WorkerC"
@@ -104,6 +105,7 @@ add_custom_command(OUTPUT wrapper.rs
         --raw-line "use crate::host::descriptor::PosixFile;"
         --raw-line "use crate::host::descriptor::descriptor_table::DescriptorTable;"
         --raw-line "use crate::core::support::configuration::ConfigOptions;"
+        --raw-line "use crate::utility::random::Random;"
         --raw-line "use log_bindings::Logger;"
 
         # used to generate #[must_use] annotations

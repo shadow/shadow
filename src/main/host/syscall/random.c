@@ -11,7 +11,6 @@
 #include "main/host/host.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/thread.h"
-#include "main/utility/random.h"
 
 ///////////////////////////////////////////////////////////
 // System Calls
@@ -38,6 +37,6 @@ SysCallReturn syscallhandler_getrandom(SysCallHandler* sys, const SysCallArgs* a
     utility_assert(rng != NULL);
 
     // We always get the number of bytes we requested.
-    random_nextNBytes(rng, buf, count);
+    random_nextNBytes(rng, (unsigned char*)buf, count);
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = count};
 }

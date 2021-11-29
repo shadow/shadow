@@ -42,7 +42,6 @@
 #include "main/routing/dns.h"
 #include "main/routing/packet.h"
 #include "main/routing/router.h"
-#include "main/utility/random.h"
 #include "main/utility/utility.h"
 
 struct _Host {
