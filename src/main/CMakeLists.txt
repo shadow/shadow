@@ -89,7 +89,6 @@ set(shadow_srcs
     core/manager.c
     core/worker.c
 
-    host/descriptor/channel.c
     host/descriptor/descriptor.c
     host/status_listener.c
     host/descriptor/compat_socket.c

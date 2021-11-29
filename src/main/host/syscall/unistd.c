@@ -11,7 +11,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
-#include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/file.h"
 #include "main/host/descriptor/timer.h"
@@ -92,21 +91,11 @@ static SysCallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, Plu
                                     sizeNeeded);
             }
             break;
-        case DT_PIPE:
-            if (doPread) {
-                result = -ESPIPE;
-            } else {
-                utility_assert(offset == 0);
-                result = transport_receiveUserData(
-                    (Transport*)desc, sys->thread, bufPtr, sizeNeeded, NULL, NULL);
-            }
-            break;
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:
             // We already diverted these to the socket handler above.
             utility_assert(0);
             break;
-        case DT_UNIXSOCKET:
         case DT_EPOLL:
         default:
             warning("write() not yet implemented for descriptor type %i",
@@ -186,21 +175,11 @@ static SysCallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, Pl
             }
             break;
         case DT_TIMER: result = -EINVAL; break;
-        case DT_PIPE:
-            if (doPwrite) {
-                result = -ESPIPE;
-            } else {
-                utility_assert(offset == 0);
-                result =
-                    transport_sendUserData((Transport*)desc, sys->thread, bufPtr, sizeNeeded, 0, 0);
-            }
-            break;
         case DT_TCPSOCKET:
         case DT_UDPSOCKET:
             // We already diverted these to the socket handler above.
             utility_assert(0);
             break;
-        case DT_UNIXSOCKET:
         case DT_EPOLL:
         default:
             warning("write(%d) not yet implemented for descriptor type %i", fd, (int)dType);

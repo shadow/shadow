@@ -10,7 +10,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
-#include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/epoll.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/host.h"
@@ -318,10 +317,7 @@ void descriptor_removeFlags(LegacyDescriptor* descriptor, gint flags) {
 void descriptor_shutdownHelper(LegacyDescriptor* legacyDesc) {
     MAGIC_ASSERT(legacyDesc);
 
-    if (legacyDesc->type == DT_UNIXSOCKET || legacyDesc->type == DT_PIPE) {
-        /* we need to correctly update the linked channel refs */
-        channel_setLinkedChannel((Channel*)legacyDesc, NULL);
-    } else if (legacyDesc->type == DT_EPOLL) {
+    if (legacyDesc->type == DT_EPOLL) {
         epoll_clearWatchListeners((Epoll*)legacyDesc);
     }
 }

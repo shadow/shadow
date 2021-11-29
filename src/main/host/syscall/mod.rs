@@ -7,6 +7,7 @@ use std::convert::TryInto;
 pub mod eventfd;
 pub mod fcntl;
 pub mod ioctl;
+pub mod socket;
 pub mod unistd;
 
 pub struct Trigger(c::Trigger);
@@ -24,8 +25,8 @@ impl From<Trigger> for c::Trigger {
 }
 
 impl Trigger {
-    pub fn from_posix_file(file: &PosixFile, status: FileState) -> Self {
-        let file_ptr = Box::into_raw(Box::new(file.clone()));
+    pub fn from_posix_file(file: PosixFile, status: FileState) -> Self {
+        let file_ptr = Box::into_raw(Box::new(file));
 
         Self(c::Trigger {
             type_: c::_TriggerType_TRIGGER_POSIX_FILE,

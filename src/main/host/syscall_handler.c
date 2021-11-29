@@ -301,13 +301,13 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(futimesat);
         HANDLE(getdents);
         HANDLE(getdents64);
-        HANDLE(getpeername);
+        HANDLE_RUST(getpeername);
         HANDLE(getpid);
         HANDLE(getppid);
         HANDLE(gettid);
         HANDLE(getrandom);
         HANDLE(get_robust_list);
-        HANDLE(getsockname);
+        HANDLE_RUST(getsockname);
         HANDLE(getsockopt);
         HANDLE(gettimeofday);
         HANDLE_RUST(ioctl);
@@ -353,14 +353,14 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(readahead);
         HANDLE(readlinkat);
         HANDLE(readv);
-        HANDLE(recvfrom);
+        HANDLE_RUST(recvfrom);
         HANDLE(renameat);
         HANDLE(renameat2);
         HANDLE(shadow_set_ptrace_allow_native_syscalls);
         HANDLE(shadow_get_ipc_blk);
         HANDLE(shadow_get_shm_blk);
         HANDLE(shadow_hostname_to_addr_ipv4);
-        HANDLE(sendto);
+        HANDLE_RUST(sendto);
         HANDLE(setsockopt);
 #ifdef SYS_sigaction
         // Superseded by rt_sigaction in Linux 2.2
@@ -380,7 +380,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(set_tid_address);
         HANDLE(shutdown);
         HANDLE(socket);
-        HANDLE(socketpair);
+        HANDLE_RUST(socketpair);
 #ifdef SYS_statx
         HANDLE(statx);
 #endif
