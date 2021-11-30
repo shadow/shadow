@@ -1,7 +1,8 @@
-use atomic_refcell::AtomicRefCell;
-use nix::fcntl::OFlag;
 use std::convert::TryInto;
 use std::sync::Arc;
+
+use atomic_refcell::AtomicRefCell;
+use nix::fcntl::OFlag;
 
 use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
@@ -9,10 +10,13 @@ use crate::host::syscall_types::{PluginPtr, SyscallResult};
 use crate::utility::event_queue::{EventQueue, EventSource, Handle};
 use crate::utility::SyncSendPointer;
 
+use socket::{SocketFile, SocketFileRef, SocketFileRefMut};
+
 pub mod descriptor_table;
 pub mod eventfd;
 pub mod pipe;
 pub mod shared_buf;
+pub mod socket;
 
 /// A trait we can use as a compile-time check to make sure that an object is Send.
 trait IsSend: Send {}
@@ -268,6 +272,7 @@ impl StateEventSource {
 pub enum PosixFile {
     Pipe(Arc<AtomicRefCell<pipe::PipeFile>>),
     EventFd(Arc<AtomicRefCell<eventfd::EventFdFile>>),
+    Socket(SocketFile),
 }
 
 // will not compile if `PosixFile` is not Send + Sync
@@ -279,6 +284,7 @@ impl PosixFile {
         match self {
             Self::Pipe(ref f) => PosixFileRef::Pipe(f.borrow()),
             Self::EventFd(ref f) => PosixFileRef::EventFd(f.borrow()),
+            Self::Socket(ref f) => PosixFileRef::Socket(f.borrow()),
         }
     }
 
@@ -286,6 +292,7 @@ impl PosixFile {
         Ok(match self {
             Self::Pipe(ref f) => PosixFileRef::Pipe(f.try_borrow()?),
             Self::EventFd(ref f) => PosixFileRef::EventFd(f.try_borrow()?),
+            Self::Socket(ref f) => PosixFileRef::Socket(f.try_borrow()?),
         })
     }
 
@@ -293,6 +300,7 @@ impl PosixFile {
         match self {
             Self::Pipe(ref f) => PosixFileRefMut::Pipe(f.borrow_mut()),
             Self::EventFd(ref f) => PosixFileRefMut::EventFd(f.borrow_mut()),
+            Self::Socket(ref f) => PosixFileRefMut::Socket(f.borrow_mut()),
         }
     }
 
@@ -300,6 +308,7 @@ impl PosixFile {
         Ok(match self {
             Self::Pipe(ref f) => PosixFileRefMut::Pipe(f.try_borrow_mut()?),
             Self::EventFd(ref f) => PosixFileRefMut::EventFd(f.try_borrow_mut()?),
+            Self::Socket(ref f) => PosixFileRefMut::Socket(f.try_borrow_mut()?),
         })
     }
 
@@ -307,6 +316,7 @@ impl PosixFile {
         match self {
             Self::Pipe(f) => Arc::as_ptr(f) as usize,
             Self::EventFd(f) => Arc::as_ptr(f) as usize,
+            Self::Socket(ref f) => f.canonical_handle(),
         }
     }
 }
@@ -316,6 +326,7 @@ impl std::fmt::Debug for PosixFile {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
             Self::EventFd(_) => write!(f, "EventFd")?,
+            Self::Socket(_) => write!(f, "Socket")?,
         }
 
         if let Ok(file) = self.try_borrow() {
@@ -334,57 +345,59 @@ impl std::fmt::Debug for PosixFile {
 pub enum PosixFileRef<'a> {
     Pipe(atomic_refcell::AtomicRef<'a, pipe::PipeFile>),
     EventFd(atomic_refcell::AtomicRef<'a, eventfd::EventFdFile>),
+    Socket(SocketFileRef<'a>),
 }
 
 pub enum PosixFileRefMut<'a> {
     Pipe(atomic_refcell::AtomicRefMut<'a, pipe::PipeFile>),
     EventFd(atomic_refcell::AtomicRefMut<'a, eventfd::EventFdFile>),
+    Socket(SocketFileRefMut<'a>),
 }
 
 impl PosixFileRef<'_> {
-    enum_passthrough!(self, (), Pipe, EventFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn state(&self) -> FileState
     );
-    enum_passthrough!(self, (), Pipe, EventFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn mode(&self) -> FileMode
     );
-    enum_passthrough!(self, (), Pipe, EventFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn get_status(&self) -> FileStatus
     );
 }
 
 impl PosixFileRefMut<'_> {
-    enum_passthrough!(self, (), Pipe, EventFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn state(&self) -> FileState
     );
-    enum_passthrough!(self, (), Pipe, EventFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn mode(&self) -> FileMode
     );
-    enum_passthrough!(self, (), Pipe, EventFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket;
         pub fn get_status(&self) -> FileStatus
     );
-    enum_passthrough!(self, (event_queue), Pipe, EventFd;
+    enum_passthrough!(self, (event_queue), Pipe, EventFd, Socket;
         pub fn close(&mut self, event_queue: &mut EventQueue) -> SyscallResult
     );
-    enum_passthrough!(self, (status), Pipe, EventFd;
+    enum_passthrough!(self, (status), Pipe, EventFd, Socket;
         pub fn set_status(&mut self, status: FileStatus)
     );
-    enum_passthrough!(self, (request, arg_ptr, memory_manager), Pipe, EventFd;
+    enum_passthrough!(self, (request, arg_ptr, memory_manager), Pipe, EventFd, Socket;
         pub fn ioctl(&mut self, request: u64, arg_ptr: PluginPtr, memory_manager: &mut MemoryManager) -> SyscallResult
     );
-    enum_passthrough!(self, (ptr), Pipe, EventFd;
+    enum_passthrough!(self, (ptr), Pipe, EventFd, Socket;
         pub fn add_legacy_listener(&mut self, ptr: *mut c::StatusListener)
     );
-    enum_passthrough!(self, (ptr), Pipe, EventFd;
+    enum_passthrough!(self, (ptr), Pipe, EventFd, Socket;
         pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
     );
 
-    enum_passthrough_generic!(self, (bytes, offset, event_queue), Pipe, EventFd;
+    enum_passthrough_generic!(self, (bytes, offset, event_queue), Pipe, EventFd, Socket;
         pub fn read<W>(&mut self, bytes: W, offset: libc::off_t, event_queue: &mut EventQueue) -> SyscallResult
         where W: std::io::Write + std::io::Seek
     );
 
-    enum_passthrough_generic!(self, (source, offset, event_queue), Pipe, EventFd;
+    enum_passthrough_generic!(self, (source, offset, event_queue), Pipe, EventFd, Socket;
         pub fn write<R>(&mut self, source: R, offset: libc::off_t, event_queue: &mut EventQueue) -> SyscallResult
         where R: std::io::Read + std::io::Seek
     );
@@ -395,6 +408,7 @@ impl std::fmt::Debug for PosixFileRef<'_> {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
             Self::EventFd(_) => write!(f, "EventFd")?,
+            Self::Socket(_) => write!(f, "Socket")?,
         }
 
         write!(
@@ -411,6 +425,7 @@ impl std::fmt::Debug for PosixFileRefMut<'_> {
         match self {
             Self::Pipe(_) => write!(f, "Pipe")?,
             Self::EventFd(_) => write!(f, "EventFd")?,
+            Self::Socket(_) => write!(f, "Socket")?,
         }
 
         write!(

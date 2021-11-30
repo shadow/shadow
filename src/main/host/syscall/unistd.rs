@@ -197,6 +197,23 @@ fn read_helper(
     buf_size: libc::size_t,
     offset: libc::off_t,
 ) -> SyscallResult {
+    // if it's a socket, call recvfrom() instead
+    if let PosixFile::Socket(ref socket) = posix_file {
+        if offset != 0 {
+            // sockets don't support offsets
+            return Err(Errno::ESPIPE.into());
+        }
+        return super::socket::recvfrom_helper(
+            ctx,
+            socket,
+            buf_ptr,
+            buf_size,
+            0,
+            PluginPtr::null(),
+            PluginPtr::null(),
+        );
+    }
+
     let file_status = posix_file.borrow().get_status();
 
     let result =
@@ -211,7 +228,7 @@ fn read_helper(
 
     // if the syscall would block and it's a blocking descriptor
     if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-        let trigger = Trigger::from_posix_file(posix_file, FileState::READABLE);
+        let trigger = Trigger::from_posix_file(posix_file.clone(), FileState::READABLE);
 
         return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
     }
@@ -267,6 +284,23 @@ fn write_helper(
     buf_size: libc::size_t,
     offset: libc::off_t,
 ) -> SyscallResult {
+    // if it's a socket, call recvfrom() instead
+    if let PosixFile::Socket(ref socket) = posix_file {
+        if offset != 0 {
+            // sockets don't support offsets
+            return Err(Errno::ESPIPE.into());
+        }
+        return super::socket::sendto_helper(
+            ctx,
+            socket,
+            buf_ptr,
+            buf_size,
+            0,
+            PluginPtr::null(),
+            0,
+        );
+    }
+
     let file_status = posix_file.borrow().get_status();
 
     let result =
@@ -281,7 +315,7 @@ fn write_helper(
 
     // if the syscall would block and it's a blocking descriptor
     if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-        let trigger = Trigger::from_posix_file(posix_file, FileState::WRITABLE);
+        let trigger = Trigger::from_posix_file(posix_file.clone(), FileState::WRITABLE);
 
         return Err(SyscallError::Cond(SysCallCondition::new(trigger)));
     };

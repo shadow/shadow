@@ -14,7 +14,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
-#include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
@@ -68,7 +67,7 @@ static int _syscallhandler_validateSocketHelper(SysCallHandler* sys, int sockfd,
     }
 
     LegacyDescriptorType type = descriptor_getType(desc);
-    if (type != DT_TCPSOCKET && type != DT_UDPSOCKET && type != DT_UNIXSOCKET) {
+    if (type != DT_TCPSOCKET && type != DT_UDPSOCKET) {
         debug("descriptor %i with type %i is not a socket", sockfd, (int)type);
         return -ENOTSOCK;
     }
@@ -917,25 +916,17 @@ SysCallReturn syscallhandler_getpeername(SysCallHandler* sys,
     struct sockaddr saddr = {0};
     size_t slen = 0;
 
-    if (descriptor_getType((LegacyDescriptor*)socket_desc) == DT_UNIXSOCKET) {
-        // TODO currently handles socketpair, but will need to be extended
-        // in order to support traditional UNIX sockets
-        struct sockaddr_un* unix_addr = (struct sockaddr_un*)&saddr;
-        unix_addr->sun_family = AF_UNIX;
-        slen = sizeof(unix_addr->sun_family);
-    } else {
-        struct sockaddr_in* inet_addr = (struct sockaddr_in*)&saddr;
-        inet_addr->sin_family = AF_INET;
+    struct sockaddr_in* inet_addr = (struct sockaddr_in*)&saddr;
+    inet_addr->sin_family = AF_INET;
 
-        gboolean hasName =
-            socket_getPeerName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
-        if (!hasName) {
-            debug("Socket %i has no peer name.", sockfd);
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
-        }
-
-        slen = sizeof(*inet_addr);
+    gboolean hasName =
+        socket_getPeerName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
+    if (!hasName) {
+        debug("Socket %i has no peer name.", sockfd);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
     }
+
+    slen = sizeof(*inet_addr);
 
     /* Use helper to write out the result. */
     return _syscallhandler_getnameHelper(
@@ -962,32 +953,24 @@ SysCallReturn syscallhandler_getsockname(SysCallHandler* sys,
     struct sockaddr saddr = {0};
     size_t slen = 0;
 
-    if (descriptor_getType((LegacyDescriptor*)socket_desc) == DT_UNIXSOCKET) {
-        // TODO currently handles socketpair, but will need to be extended
-        // in order to support traditional UNIX sockets
-        struct sockaddr_un* unix_addr = (struct sockaddr_un*)&saddr;
-        unix_addr->sun_family = AF_UNIX;
-        slen = sizeof(unix_addr->sun_family);
-    } else {
-        struct sockaddr_in* inet_addr = (struct sockaddr_in*)&saddr;
-        inet_addr->sin_family = AF_INET;
+    struct sockaddr_in* inet_addr = (struct sockaddr_in*)&saddr;
+    inet_addr->sin_family = AF_INET;
 
-        gboolean hasName =
-            socket_getSocketName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
-        /* If !hasName, leave sin_addr and sin_port at their default 0 values. */
+    gboolean hasName =
+        socket_getSocketName(socket_desc, &inet_addr->sin_addr.s_addr, &inet_addr->sin_port);
+    /* If !hasName, leave sin_addr and sin_port at their default 0 values. */
 
-        /* If we are bound to INADDR_ANY, we should instead return the address used
-         * to communicate with the connected peer (if we have one). */
-        if (inet_addr->sin_addr.s_addr == htonl(INADDR_ANY)) {
-            in_addr_t peerIP = 0;
-            if (socket_getPeerName(socket_desc, &peerIP, NULL) &&
-                peerIP != htonl(INADDR_LOOPBACK)) {
-                inet_addr->sin_addr.s_addr = host_getDefaultIP(sys->host);
-            }
+    /* If we are bound to INADDR_ANY, we should instead return the address used
+     * to communicate with the connected peer (if we have one). */
+    if (inet_addr->sin_addr.s_addr == htonl(INADDR_ANY)) {
+        in_addr_t peerIP = 0;
+        if (socket_getPeerName(socket_desc, &peerIP, NULL) &&
+            peerIP != htonl(INADDR_LOOPBACK)) {
+            inet_addr->sin_addr.s_addr = host_getDefaultIP(sys->host);
         }
-
-        slen = sizeof(*inet_addr);
     }
+
+    slen = sizeof(*inet_addr);
 
     /* Use helper to write out the result. */
     return _syscallhandler_getnameHelper(
@@ -1279,66 +1262,4 @@ SysCallReturn syscallhandler_socket(SysCallHandler* sys,
     trace("socket() returning fd %i", sockfd);
 
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = sockfd};
-}
-
-SysCallReturn syscallhandler_socketpair(SysCallHandler* sys, const SysCallArgs* args) {
-    int domain = args->args[0].as_i64;
-    int type = args->args[1].as_i64;
-    int protocol = args->args[2].as_i64;
-    PluginPtr fdsPtr = args->args[3].as_ptr; // int [2]
-
-    trace("trying to create new socketpair");
-
-    /* Null pointer is invalid. */
-    if (!fdsPtr.val) {
-        trace("Null pointer is invalid.");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-    }
-
-    /* Only AF_UNIX (i.e., AF_LOCAL) is supported. */
-    if (domain != AF_UNIX) {
-        trace("Domain %d not supported", domain);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EOPNOTSUPP};
-    }
-
-    /* Remove the two possible flags to get the type. */
-    int type_no_flags = type & ~(SOCK_NONBLOCK | SOCK_CLOEXEC);
-
-    /* The below are warnings so the Shadow user knows that we don't support
-     * everything that Linux supports. */
-    if (type_no_flags != SOCK_STREAM && type_no_flags != SOCK_DGRAM) {
-        warning("unsupported socket type \"%i\", we only support SOCK_STREAM and SOCK_DGRAM",
-                type_no_flags);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
-    } else if (protocol != 0) {
-        warning("unsupported socket protocol \"%i\", we only support default protocol 0", protocol);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EPROTONOSUPPORT};
-    }
-
-    /* TODO: should we actually be running TCP/UDP internally (i.e., using already connected TCP/UDP
-     * sockets here) instead? */
-    Channel* socketA = channel_new(CT_NONE, DT_UNIXSOCKET);
-    Channel* socketB = channel_new(CT_NONE, DT_UNIXSOCKET);
-    channel_setLinkedChannel(socketA, socketB);
-    channel_setLinkedChannel(socketB, socketA);
-
-    /* Set any options that were given. */
-    if (type & SOCK_NONBLOCK) {
-        descriptor_addFlags((LegacyDescriptor*)socketA, O_NONBLOCK);
-        descriptor_addFlags((LegacyDescriptor*)socketB, O_NONBLOCK);
-    }
-    if (type & SOCK_CLOEXEC) {
-        descriptor_addFlags((LegacyDescriptor*)socketA, O_CLOEXEC);
-        descriptor_addFlags((LegacyDescriptor*)socketB, O_CLOEXEC);
-    }
-
-    /* Return the socket fds to the caller. */
-    int* sockfd = process_getWriteablePtr(sys->process, fdsPtr, 2 * sizeof(int));
-
-    sockfd[0] = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)socketA);
-    sockfd[1] = process_registerLegacyDescriptor(sys->process, (LegacyDescriptor*)socketB);
-
-    trace("Created socketpair with fd %i and fd %i", sockfd[0], sockfd[1]);
-
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }

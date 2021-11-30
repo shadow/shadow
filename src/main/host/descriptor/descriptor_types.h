@@ -16,8 +16,6 @@ enum _LegacyDescriptorType {
     DT_NONE,
     DT_TCPSOCKET,
     DT_UDPSOCKET,
-    DT_PIPE,
-    DT_UNIXSOCKET,
     DT_EPOLL,
     DT_EVENTD,
     DT_TIMER,

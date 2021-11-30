@@ -15,9 +15,7 @@
 
 static Transport* _transport_fromLegacyDescriptor(LegacyDescriptor* descriptor) {
     utility_assert(descriptor_getType(descriptor) == DT_TCPSOCKET ||
-                   descriptor_getType(descriptor) == DT_UDPSOCKET ||
-                   descriptor_getType(descriptor) == DT_UNIXSOCKET ||
-                   descriptor_getType(descriptor) == DT_PIPE);
+                   descriptor_getType(descriptor) == DT_UDPSOCKET);
     return (Transport*)descriptor;
 }
 

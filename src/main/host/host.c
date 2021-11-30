@@ -23,7 +23,6 @@
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/cpu.h"
-#include "main/host/descriptor/channel.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/epoll.h"

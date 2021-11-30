@@ -636,6 +636,16 @@ SysCallReturn rustsyscallhandler_fcntl64(SysCallHandler *sys, const SysCallArgs 
 
 SysCallReturn rustsyscallhandler_ioctl(SysCallHandler *sys, const SysCallArgs *args);
 
+SysCallReturn rustsyscallhandler_sendto(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_recvfrom(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_getsockname(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_getpeername(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn rustsyscallhandler_socketpair(SysCallHandler *sys, const SysCallArgs *args);
+
 SysCallReturn rustsyscallhandler_close(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_dup(SysCallHandler *sys, const SysCallArgs *args);

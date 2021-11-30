@@ -151,7 +151,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         // add details to the test names to avoid duplicates
         let append_args = |s| format!("{} <init_method={:?}>", s, method);
 
-        let passing = if method == SocketInitMethod::Inet {
+        let passing = if method != SocketInitMethod::Unix {
             set![TestEnv::Libc, TestEnv::Shadow]
         } else {
             set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets
@@ -202,7 +202,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     let flags = [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC];
 
     for &method in init_methods.iter() {
-        let passing = if method == SocketInitMethod::Inet {
+        let passing = if method != SocketInitMethod::Unix {
             set![TestEnv::Libc, TestEnv::Shadow]
         } else {
             set![TestEnv::Libc] // TODO: enable once we support socket() for unix sockets

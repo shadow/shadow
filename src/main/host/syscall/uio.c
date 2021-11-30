@@ -145,11 +145,6 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                     utility_assert(0);
                     break;
                 }
-                case DT_PIPE: {
-                    result = transport_receiveUserData(
-                        (Transport*)desc, sys->thread, bufPtr, bufSize, NULL, NULL);
-                    break;
-                }
                 case DT_TCPSOCKET:
                 case DT_UDPSOCKET: {
                     SysCallReturn scr = _syscallhandler_recvfromHelper(
@@ -159,7 +154,6 @@ _syscallhandler_readvHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                     break;
                 }
                 case DT_TIMER:
-                case DT_UNIXSOCKET:
                 case DT_EPOLL:
                 default: {
                     warning(
@@ -262,11 +256,6 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                     utility_assert(0);
                     break;
                 }
-                case DT_PIPE: {
-                    result = transport_sendUserData(
-                        (Transport*)desc, sys->thread, bufPtr, bufSize, 0, 0);
-                    break;
-                }
                 case DT_TCPSOCKET:
                 case DT_UDPSOCKET: {
                     SysCallReturn scr = _syscallhandler_sendtoHelper(
@@ -275,7 +264,6 @@ _syscallhandler_writevHelper(SysCallHandler* sys, int fd, PluginPtr iovPtr,
                     break;
                 }
                 case DT_TIMER:
-                case DT_UNIXSOCKET:
                 case DT_EPOLL:
                 default: {
                     warning(

@@ -20,6 +20,7 @@
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/ioctl.h"
 #include "main/host/syscall/unistd.h"
+#include "main/host/syscall/socket.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_types.h"
 #include "main/host/thread.h"

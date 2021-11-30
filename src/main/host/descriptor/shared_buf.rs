@@ -92,6 +92,11 @@ impl SharedBuf {
         len: usize,
         event_queue: &mut EventQueue,
     ) -> Result<(), SyscallError> {
+        if len > self.max_len() {
+            // the socket could never send this packet, even if the buffer was empty
+            return Err(Errno::EMSGSIZE.into());
+        }
+
         if len > self.space_available() {
             return Err(Errno::EAGAIN.into());
         }
