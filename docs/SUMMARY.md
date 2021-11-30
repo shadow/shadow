@@ -29,6 +29,8 @@
     - [Performance Tuning]()
         - [Disabling Side-channel Mitigations](sidechannels.md)
         - [Parallel Simulations](parallel_sims.md)
+    - [Application and Library-Specific Notes]()
+        - [libopenblas](libopenblas.md)
 - [Developer Guides]()
     - [Debugging and profiling](developer_guide.md)
     - [Continous integration tests](ci.md)
