@@ -30,10 +30,10 @@ can fix it.
      * Configuring Your Own Network
        * [Network Graph Overview](network_graph_overview.md)
        * [Network Graph Specification](network_graph_spec.md)
+     * [Migrating Simulations from Shadow 1.x](migrating_from_1x.md)
      * Performance Tuning
        * [Disabling Side-channel Mitigations](sidechannels.md)
        * [Parallel Simulations](parallel_sims.md)
-     * [Migrating Simulations from Shadow 1.x](migrating_from_1x.md)
    * Developer Guides
      * [Debugging and profiling](developer_guide.md)
      * [Continous integration tests](ci.md)
