@@ -19,6 +19,72 @@ use log::*;
 use nix::errno::Errno;
 use nix::sys::socket::MsgFlags;
 
+pub fn socket(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    let domain = libc::c_int::from(args.get(0));
+    let socket_type = libc::c_int::from(args.get(1));
+    let protocol = libc::c_int::from(args.get(2));
+
+    // remove any flags from the socket type
+    let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
+    let socket_type = socket_type & !flags;
+
+    // if it's not a unix socket, use the C syscall handler instead
+    if domain != libc::AF_UNIX {
+        return unsafe {
+            c::syscallhandler_socket(ctx.thread.csyscallhandler(), args as *const c::SysCallArgs)
+                .into()
+        };
+    }
+
+    let mut file_flags = FileStatus::empty();
+    let mut descriptor_flags = DescriptorFlags::empty();
+
+    if flags & libc::SOCK_NONBLOCK != 0 {
+        file_flags.insert(FileStatus::NONBLOCK);
+    }
+
+    if flags & libc::SOCK_CLOEXEC != 0 {
+        descriptor_flags.insert(DescriptorFlags::CLOEXEC);
+    }
+
+    let socket = match domain {
+        libc::AF_UNIX => {
+            let socket_type = match UnixSocketType::try_from(socket_type) {
+                Ok(x) => x,
+                Err(e) => {
+                    warn!("{}", e);
+                    return Err(Errno::EPROTONOSUPPORT.into());
+                }
+            };
+
+            // unix sockets don't support any protocols
+            if protocol != 0 {
+                warn!(
+                    "Unsupported socket protocol {}, we only support default protocol 0",
+                    protocol
+                );
+                return Err(Errno::EPROTONOSUPPORT.into());
+            }
+
+            SocketFile::Unix(UnixSocketFile::new(
+                FileMode::READ | FileMode::WRITE,
+                file_flags,
+                socket_type,
+            ))
+        }
+        _ => return Err(Errno::EAFNOSUPPORT.into()),
+    };
+
+    let mut desc = Descriptor::new(PosixFile::Socket(socket));
+    desc.set_flags(descriptor_flags);
+
+    let fd = ctx.process.register_descriptor(CompatDescriptor::New(desc));
+
+    debug!("Created socket fd {}", fd);
+
+    Ok(fd.into())
+}
+
 pub fn sendto(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd: libc::c_int = args.get(0).into();
     let buf_ptr: PluginPtr = args.get(1).into();
@@ -529,6 +595,15 @@ mod export {
     use crate::utility::notnull::notnull_mut_debug;
 
     use super::*;
+
+    #[no_mangle]
+    pub extern "C" fn rustsyscallhandler_socket(
+        sys: *mut c::SysCallHandler,
+        args: *const c::SysCallArgs,
+    ) -> c::SysCallReturn {
+        let mut objs = unsafe { ThreadContextObjs::from_syscallhandler(notnull_mut_debug(sys)) };
+        socket(&mut objs.borrow(), unsafe { args.as_ref().unwrap() }).into()
+    }
 
     #[no_mangle]
     pub extern "C" fn rustsyscallhandler_sendto(

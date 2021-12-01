@@ -654,6 +654,8 @@ SysCallReturn rustsyscallhandler_fcntl64(SysCallHandler *sys, const SysCallArgs 
 
 SysCallReturn rustsyscallhandler_ioctl(SysCallHandler *sys, const SysCallArgs *args);
 
+SysCallReturn rustsyscallhandler_socket(SysCallHandler *sys, const SysCallArgs *args);
+
 SysCallReturn rustsyscallhandler_sendto(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_recvfrom(SysCallHandler *sys, const SysCallArgs *args);

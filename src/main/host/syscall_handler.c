@@ -379,7 +379,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(set_robust_list);
         HANDLE(set_tid_address);
         HANDLE(shutdown);
-        HANDLE(socket);
+        HANDLE_RUST(socket);
         HANDLE_RUST(socketpair);
 #ifdef SYS_statx
         HANDLE(statx);
