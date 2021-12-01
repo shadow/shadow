@@ -6,6 +6,7 @@ use nix::errno::Errno;
 
 use crate::cshadow as c;
 use crate::host::descriptor::shared_buf::SharedBuf;
+use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter, SyscallResult,
 };
@@ -27,6 +28,7 @@ pub struct UnixSocketFile {
     socket_type: UnixSocketType,
     peer_addr: Option<nix::sys::socket::UnixAddr>,
     bound_addr: Option<nix::sys::socket::UnixAddr>,
+    namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
     send_buffer_event_handle: Option<Handle<(FileState, FileState)>>,
     recv_buffer_event_handle: Option<Handle<(FileState, FileState)>>,
 }
@@ -36,6 +38,7 @@ impl UnixSocketFile {
         mode: FileMode,
         status: FileStatus,
         socket_type: UnixSocketType,
+        namespace: &Arc<AtomicRefCell<AbstractUnixNamespace>>,
     ) -> Arc<AtomicRefCell<Self>> {
         // must be able to both read and write to the socket
         assert!(mode.contains(FileMode::READ) && mode.contains(FileMode::WRITE));
@@ -54,6 +57,7 @@ impl UnixSocketFile {
             socket_type,
             peer_addr: None,
             bound_addr: None,
+            namespace: Arc::clone(namespace),
             send_buffer_event_handle: None,
             recv_buffer_event_handle: None,
         };
@@ -154,6 +158,53 @@ impl UnixSocketFile {
             FileState::CLOSED,
             event_queue,
         );
+
+        Ok(0.into())
+    }
+
+    pub fn bind(
+        socket: &Arc<AtomicRefCell<Self>>,
+        addr: Option<&nix::sys::socket::SockAddr>,
+        rng: impl rand::Rng,
+    ) -> SyscallResult {
+        // if already bound
+        if socket.borrow().bound_addr.is_some() {
+            return Err(Errno::EINVAL.into());
+        }
+
+        // get the unix address
+        let addr = match addr {
+            Some(nix::sys::socket::SockAddr::Unix(x)) => x,
+            _ => {
+                log::warn!(
+                    "Attempted to bind unix socket to non-unix address {:?}",
+                    addr
+                );
+                return Err(Errno::EINVAL.into());
+            }
+        };
+
+        // bind the socket
+        if let Some(name) = addr.as_abstract() {
+            // if given an abstract socket address
+            let namespace = Arc::clone(&socket.borrow().namespace);
+            if AbstractUnixNamespace::bind(&namespace, name.to_vec(), socket).is_err() {
+                // address is in use
+                return Err(Errno::EADDRINUSE.into());
+            }
+        } else if addr.path_len() == 0 {
+            // if given an "unnamed" address
+            let namespace = Arc::clone(&socket.borrow().namespace);
+            if AbstractUnixNamespace::autobind(&namespace, socket, rng).is_err() {
+                // no autobind addresses remaining
+                return Err(Errno::EADDRINUSE.into());
+            }
+        } else {
+            log::warn!("Only abstract names are supported for unix sockets");
+            return Err(Errno::ENOTSUP.into());
+        }
+
+        socket.borrow_mut().bound_addr = Some(*addr);
 
         Ok(0.into())
     }

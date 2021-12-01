@@ -256,7 +256,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     switch (args->number) {
         HANDLE(accept);
         HANDLE(accept4);
-        HANDLE(bind);
+        HANDLE_RUST(bind);
         HANDLE(brk);
         HANDLE(clock_gettime);
         HANDLE(clock_nanosleep);

@@ -70,6 +70,7 @@ pub fn socket(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
                 FileMode::READ | FileMode::WRITE,
                 file_flags,
                 socket_type,
+                ctx.host.abstract_unix_namespace(),
             ))
         }
         _ => return Err(Errno::EAFNOSUPPORT.into()),
@@ -83,6 +84,38 @@ pub fn socket(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     debug!("Created socket fd {}", fd);
 
     Ok(fd.into())
+}
+
+pub fn bind(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    let fd: libc::c_int = args.get(0).into();
+    let addr_ptr: PluginPtr = args.get(1).into();
+    let addr_len: libc::socklen_t = args.get(2).into();
+
+    // get the descriptor, or return early if it doesn't exist
+    let desc = match syscall::get_descriptor(ctx.process, fd)? {
+        CompatDescriptor::New(desc) => desc,
+        // if it's a legacy descriptor, use the C syscall handler instead
+        CompatDescriptor::Legacy(_) => {
+            return unsafe {
+                c::syscallhandler_bind(ctx.thread.csyscallhandler(), args as *const c::SysCallArgs)
+                    .into()
+            }
+        }
+    };
+
+    let posix_file = desc.get_file().clone();
+
+    // get the socket for the descriptor
+    let socket = match posix_file {
+        PosixFile::Socket(ref x) => x,
+        _ => return Err(Errno::ENOTSOCK.into()),
+    };
+
+    let addr = read_sockaddr(ctx.process, addr_ptr, addr_len)?;
+
+    debug!("Attempting to bind fd {} to {:?}", fd, addr);
+
+    SocketFile::bind(socket, addr.as_ref(), ctx.host.random())
 }
 
 pub fn sendto(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
@@ -393,8 +426,18 @@ pub fn socketpair(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult 
         descriptor_flags.insert(DescriptorFlags::CLOEXEC);
     }
 
-    let socket_1 = UnixSocketFile::new(FileMode::READ | FileMode::WRITE, file_flags, socket_type);
-    let socket_2 = UnixSocketFile::new(FileMode::READ | FileMode::WRITE, file_flags, socket_type);
+    let socket_1 = UnixSocketFile::new(
+        FileMode::READ | FileMode::WRITE,
+        file_flags,
+        socket_type,
+        ctx.host.abstract_unix_namespace(),
+    );
+    let socket_2 = UnixSocketFile::new(
+        FileMode::READ | FileMode::WRITE,
+        file_flags,
+        socket_type,
+        ctx.host.abstract_unix_namespace(),
+    );
 
     // link the sockets together
     EventQueue::queue_and_run(|event_queue| {
@@ -603,6 +646,15 @@ mod export {
     ) -> c::SysCallReturn {
         let mut objs = unsafe { ThreadContextObjs::from_syscallhandler(notnull_mut_debug(sys)) };
         socket(&mut objs.borrow(), unsafe { args.as_ref().unwrap() }).into()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn rustsyscallhandler_bind(
+        sys: *mut c::SysCallHandler,
+        args: *const c::SysCallArgs,
+    ) -> c::SysCallReturn {
+        let mut objs = unsafe { ThreadContextObjs::from_syscallhandler(notnull_mut_debug(sys)) };
+        bind(&mut objs.borrow(), unsafe { args.as_ref().unwrap() }).into()
     }
 
     #[no_mangle]

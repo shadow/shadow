@@ -50,6 +50,16 @@ impl SocketFile {
             Self::Unix(f) => Arc::as_ptr(f) as usize,
         }
     }
+
+    pub fn bind(
+        socket: &Self,
+        addr: Option<&nix::sys::socket::SockAddr>,
+        rng: impl rand::Rng,
+    ) -> SyscallResult {
+        match socket {
+            Self::Unix(socket) => UnixSocketFile::bind(socket, addr, rng),
+        }
+    }
 }
 
 impl std::fmt::Debug for SocketFile {
