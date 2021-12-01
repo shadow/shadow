@@ -28,7 +28,6 @@
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/routing/router.h"
-#include "main/utility/random.h"
 
 Host* host_new(HostParameters* params);
 void host_ref(Host* host);

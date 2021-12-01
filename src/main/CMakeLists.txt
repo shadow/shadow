@@ -151,7 +151,6 @@ set(shadow_srcs
     utility/fork_proxy.c
     utility/pcap_writer.c
     utility/priority_queue.c
-    utility/random.c
     utility/tagged_ptr.c
     utility/utility.c
 )

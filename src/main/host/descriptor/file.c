@@ -29,7 +29,6 @@
 #include "main/host/host.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/routing/dns.h"
-#include "main/utility/random.h"
 #include "main/utility/utility.h"
 
 #define OSFILE_INVALID -1

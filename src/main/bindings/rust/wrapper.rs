@@ -3,6 +3,7 @@ use crate::host::descriptor::CompatDescriptor;
 use crate::host::descriptor::PosixFile;
 use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::core::support::configuration::ConfigOptions;
+use crate::utility::random::Random;
 use log_bindings::Logger;
 
 pub const CONFIG_PIPE_BUFFER_SIZE: u32 = 65536;
@@ -1235,13 +1236,6 @@ pub struct _NetworkInterface {
     _unused: [u8; 0],
 }
 pub type NetworkInterface = _NetworkInterface;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _Random {
-    _unused: [u8; 0],
-}
-#[doc = " An opaque structure representing a random source."]
-pub type Random = _Random;
 extern "C" {
     pub fn host_new(params: *mut HostParameters) -> *mut Host;
 }

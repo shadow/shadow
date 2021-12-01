@@ -101,6 +101,8 @@ typedef struct ProcessMemoryRef_u8 ProcessMemoryRef_u8;
 
 typedef struct ProcessOptions ProcessOptions;
 
+typedef struct Random Random;
+
 // Routing information for paths between nodes.
 typedef struct RoutingInfo_u32 RoutingInfo_u32;
 
@@ -187,6 +189,22 @@ char *counter_alloc_string(struct Counter *counter);
 
 // Frees a string previously returned from counter_alloc_string.
 void counter_free_string(struct Counter *counter, char *ptr);
+
+struct Random *random_new(uint64_t seed);
+
+void random_free(struct Random *rng);
+
+// Returns a pseudo-random integer in the range \[0, [`libc::RAND_MAX`]\].
+uint32_t random_rand(struct Random *rng);
+
+// Returns a pseudo-random float in the range \[0, 1).
+double random_nextDouble(struct Random *rng);
+
+// Returns a pseudo-random integer in the range \[0, [`u32::MAX`]\].
+uint32_t random_nextU32(struct Random *rng);
+
+// Fills the buffer with pseudo-random bytes.
+void random_nextNBytes(struct Random *rng, uint8_t *buf, uintptr_t len);
 
 struct StatusBar_ShadowStatusBarState *statusBar_new(uint64_t end);
 

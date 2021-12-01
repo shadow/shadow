@@ -25,7 +25,6 @@
 #include "main/host/network_interface.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
-#include "main/utility/random.h"
 #include "main/utility/utility.h"
 
 #define PRELOAD_INJECTOR_LIB_STR "libshadow_injector.so"
@@ -192,7 +191,7 @@ static gchar* _manager_getRequiredPreloadPath(const gchar* libname) {
 static guint _manager_nextRandomUInt(Manager* manager) {
     MAGIC_ASSERT(manager);
     _manager_lock(manager);
-    guint r = random_nextUInt(manager->random);
+    guint r = random_nextU32(manager->random);
     _manager_unlock(manager);
     return r;
 }

@@ -34,7 +34,6 @@
 #include "main/routing/packet.h"
 #include "main/routing/router.h"
 #include "main/utility/count_down_latch.h"
-#include "main/utility/random.h"
 #include "main/utility/utility.h"
 
 // Allow turning off object counting at run-time.

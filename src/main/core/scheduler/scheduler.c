@@ -22,7 +22,6 @@
 #include "main/core/worker.h"
 #include "main/host/host.h"
 #include "main/utility/count_down_latch.h"
-#include "main/utility/random.h"
 #include "main/utility/utility.h"
 
 static int _parallelism;
@@ -304,10 +303,6 @@ static void _scheduler_shuffleQueue(Scheduler* scheduler, GQueue* queue) {
         gdouble randomFraction = random_nextDouble(scheduler->random);
         gdouble maxRange = (gdouble) length-i;
         guint j = (guint)floor(randomFraction * maxRange);
-        /* handle edge case if we got 1.0 as a double */
-        if(j == length-i) {
-            j--;
-        }
 
         gpointer temp = array[i];
         array[i] = array[i+j];
