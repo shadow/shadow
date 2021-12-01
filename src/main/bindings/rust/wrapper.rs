@@ -5,6 +5,10 @@ use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::core::support::configuration::ConfigOptions;
 use crate::utility::random::Random;
 use log_bindings::Logger;
+use std::sync::Arc;
+use atomic_refcell::AtomicRefCell;
+use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
+type Arc_AtomicRefCell_AbstractUnixNamespace = Arc<AtomicRefCell<AbstractUnixNamespace>>;
 
 pub const CONFIG_PIPE_BUFFER_SIZE: u32 = 65536;
 pub const SYSCALL_IO_BUFSIZE: u32 = 10485760;
@@ -1370,6 +1374,11 @@ extern "C" {
         peerIP: in_addr_t,
         peerPort: in_port_t,
     ) -> in_port_t;
+}
+extern "C" {
+    pub fn host_getAbstractUnixNamespace(
+        host: *mut Host,
+    ) -> *mut Arc_AtomicRefCell_AbstractUnixNamespace;
 }
 extern "C" {
     pub fn host_getFutexTable(host: *mut Host) -> *mut FutexTable;

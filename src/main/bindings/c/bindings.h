@@ -27,6 +27,8 @@
 // Memory allocated by Shadow, in a remote address space.
 typedef struct AllocdMem_u8 AllocdMem_u8;
 
+typedef struct Arc_AtomicRefCell_AbstractUnixNamespace Arc_AtomicRefCell_AbstractUnixNamespace;
+
 // A queue of bytes that supports reading and writing stream and/or packet data.
 //
 // Both stream and packet data can be pushed onto the buffer and their order will be preserved.
@@ -471,6 +473,10 @@ void descriptortable_shutdownHelper(struct DescriptorTable *table);
 
 // Close all descriptors. The `host` option is a legacy option for legacy descriptors.
 void descriptortable_removeAndCloseAll(struct DescriptorTable *table, Host *host);
+
+struct Arc_AtomicRefCell_AbstractUnixNamespace *abstractunixnamespace_new(void);
+
+void abstractunixnamespace_free(struct Arc_AtomicRefCell_AbstractUnixNamespace *ns);
 
 // The new compat descriptor takes ownership of the reference to the legacy descriptor and
 // does not increment its ref count, but will decrement the ref count when this compat

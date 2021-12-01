@@ -12,6 +12,7 @@ use unix::UnixSocketFile;
 
 use nix::sys::socket::SockAddr;
 
+pub mod abstract_unix_ns;
 pub mod unix;
 
 #[derive(Clone)]

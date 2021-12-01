@@ -70,8 +70,8 @@ struct _Host {
     guint64 eventIDCounter;
     guint64 packetIDCounter;
 
-    /* map path to ports for unix sockets */
-    GHashTable* unixPathToPortMap;
+    /* map abstract socket addresses to unix sockets */
+    Arc_AtomicRefCell_AbstractUnixNamespace* abstractUnixNamespace;
 
     /* map address to futex objects */
     FutexTable* futexTable;
@@ -119,9 +119,6 @@ Host* host_new(HostParameters* params) {
 
     host->interfaces = g_hash_table_new_full(g_direct_hash, g_direct_equal,
             NULL, (GDestroyNotify) networkinterface_free);
-
-    /* TODO: deprecated, used to support UNIX sockets. */
-    host->unixPathToPortMap = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
     /* applications this node will run */
     host->processes = g_queue_new();
@@ -176,6 +173,8 @@ void host_setup(Host* host, DNS* dns, guint rawCPUFreq, const gchar* hostRootPat
                 "simulation time. For most applications this shouldn't matter.");
     }
     host->tsc = Tsc_create(tsc_frequency);
+
+    host->abstractUnixNamespace = abstractunixnamespace_new();
 
     /* table to track futexes used by processes/threads */
     host->futexTable = futextable_new();
@@ -258,8 +257,8 @@ void host_shutdown(Host* host) {
         router_unref(host->router);
     }
 
-    if(host->unixPathToPortMap) {
-        g_hash_table_destroy(host->unixPathToPortMap);
+    if (host->abstractUnixNamespace) {
+        abstractunixnamespace_free(host->abstractUnixNamespace);
     }
 
     if (host->futexTable) {
@@ -670,6 +669,10 @@ gdouble host_getNextPacketPriority(Host* host) {
 const gchar* host_getDataPath(Host* host) {
     MAGIC_ASSERT(host);
     return host->dataDirPath;
+}
+
+Arc_AtomicRefCell_AbstractUnixNamespace* host_getAbstractUnixNamespace(Host* host) {
+    return host->abstractUnixNamespace;
 }
 
 FutexTable* host_getFutexTable(Host* host) { return host->futexTable; }

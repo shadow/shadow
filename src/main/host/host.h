@@ -94,6 +94,7 @@ in_port_t host_getRandomFreePort(Host* host, ProtocolType type,
                                  in_addr_t interfaceIP, in_addr_t peerIP,
                                  in_port_t peerPort);
 
+Arc_AtomicRefCell_AbstractUnixNamespace* host_getAbstractUnixNamespace(Host* host);
 FutexTable* host_getFutexTable(Host* host);
 
 // converts a virtual (shadow) tid into the native tid

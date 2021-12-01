@@ -3,6 +3,9 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use crate::cshadow;
+use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
+
+use atomic_refcell::AtomicRefCell;
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub struct HostId(u32);
@@ -90,6 +93,12 @@ impl Host {
         use std::net;
         let addr = unsafe { cshadow::host_getDefaultIP(self.chost) };
         net::IpAddr::V4(net::Ipv4Addr::from(addr.to_le_bytes()))
+    }
+
+    pub fn abstract_unix_namespace(&self) -> &Arc<AtomicRefCell<AbstractUnixNamespace>> {
+        let ptr = unsafe { cshadow::host_getAbstractUnixNamespace(self.chost) };
+        assert!(!ptr.is_null());
+        unsafe { &*ptr }
     }
 
     pub fn log_level(&self) -> Option<log::LevelFilter> {

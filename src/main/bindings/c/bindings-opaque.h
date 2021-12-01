@@ -26,6 +26,8 @@ typedef enum QDiscMode {
 // Memory allocated by Shadow, in a remote address space.
 typedef struct AllocdMem_u8 AllocdMem_u8;
 
+typedef struct Arc_AtomicRefCell_AbstractUnixNamespace Arc_AtomicRefCell_AbstractUnixNamespace;
+
 // A queue of bytes that supports reading and writing stream and/or packet data.
 //
 // Both stream and packet data can be pushed onto the buffer and their order will be preserved.
