@@ -200,7 +200,7 @@ impl UnixSocketFile {
                 return Err(Errno::EADDRINUSE.into());
             }
         } else {
-            log::warn!("Only abstract names are supported for unix sockets");
+            log::warn!("Only abstract names are currently supported for unix sockets");
             return Err(Errno::ENOTSUP.into());
         }
 
@@ -253,29 +253,61 @@ impl UnixSocketFile {
             return Err(nix::errno::Errno::EBADF.into());
         }
 
+        let addr = match addr {
+            Some(nix::sys::socket::SockAddr::Unix(x)) => Some(x),
+            None => None,
+            _ => return Err(Errno::EINVAL.into()),
+        };
+
+        // returns either the send buffer, or None if we should look up the send buffer from the
+        // socket address
         let send_buffer = match (&self.send_buffer, addr) {
             // already connected but a destination address was given
             (Some(send_buffer), Some(_addr)) => match self.socket_type {
                 UnixSocketType::Stream => return Err(Errno::EISCONN.into()),
-                UnixSocketType::SeqPacket => send_buffer,
-                UnixSocketType::Dgram => {
-                    // TODO: need to properly look up the socket once we support named sockets
+                // linux seems to ignore the destination address for connected seq packet sockets
+                UnixSocketType::SeqPacket => Some(send_buffer),
+                UnixSocketType::Dgram => None,
+            },
+            // already connected and no destination address was given
+            (Some(send_buffer), None) => Some(send_buffer),
+            // not connected but a destination address was given
+            (None, Some(_addr)) => match self.socket_type {
+                UnixSocketType::Stream => return Err(Errno::EOPNOTSUPP.into()),
+                UnixSocketType::SeqPacket => return Err(Errno::ENOTCONN.into()),
+                UnixSocketType::Dgram => None,
+            },
+            // not connected and no destination address given
+            (None, None) => return Err(Errno::ENOTCONN.into()),
+        };
+
+        // a variable for storing an Arc of the recv buffer if needed
+        let mut _buf_arc_storage;
+
+        // either use the existing send buffer, or look up the send buffer from the address
+        let send_buffer = match send_buffer {
+            Some(x) => x,
+            None => {
+                // if an abstract address
+                if let Some(name) = addr.unwrap().as_abstract() {
+                    // look up the socket from the address name
+                    match self.namespace.borrow().lookup(name) {
+                        // socket was found with the given name
+                        Some(recv_socket) => {
+                            // store an Arc of the recv buffer
+                            _buf_arc_storage = Arc::clone(recv_socket.borrow().recv_buffer());
+                            &_buf_arc_storage
+                        }
+                        // no socket has the given name
+                        None => return Err(Errno::ECONNREFUSED.into()),
+                    }
+                } else {
                     log::warn!(
-                        "Sending to non-null addresses from unix sockets is not yet supported"
+                        "Sending to pathname addresses from unix sockets is not yet supported"
                     );
                     return Err(Errno::ECONNREFUSED.into());
                 }
-            },
-            // already connected and no destination address was given
-            (Some(send_buffer), None) => send_buffer,
-            // not connected but a destination address was given
-            (None, Some(_addr)) => {
-                // TODO: need to properly look up the socket once we support named sockets
-                log::warn!("Sending to non-null addresses from unix sockets is not yet supported");
-                return Err(Errno::ECONNREFUSED.into());
             }
-            // not connected and no destination address given
-            (None, None) => return Err(Errno::ENOTCONN.into()),
         };
 
         let mut send_buffer = send_buffer.borrow_mut();

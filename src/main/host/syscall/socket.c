@@ -632,7 +632,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
              * TODO: Can they can piggy back a connect() on sendto() if they
              * provide an address for the connection? */
             return (SysCallReturn){
-                .state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
+                .state = SYSCALL_DONE, .retval.as_i64 = -EPIPE};
         } else if (errcode == 0) {
             /* They connected, but never read the success code with a second
              * call to connect(). That's OK, proceed to send as usual. */
