@@ -256,7 +256,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
     switch (args->number) {
         HANDLE(accept);
         HANDLE(accept4);
-        HANDLE(bind);
+        HANDLE_RUST(bind);
         HANDLE(brk);
         HANDLE(clock_gettime);
         HANDLE(clock_nanosleep);
@@ -379,7 +379,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(set_robust_list);
         HANDLE(set_tid_address);
         HANDLE(shutdown);
-        HANDLE(socket);
+        HANDLE_RUST(socket);
         HANDLE_RUST(socketpair);
 #ifdef SYS_statx
         HANDLE(statx);

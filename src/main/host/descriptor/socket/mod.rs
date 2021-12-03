@@ -12,6 +12,7 @@ use unix::UnixSocketFile;
 
 use nix::sys::socket::SockAddr;
 
+pub mod abstract_unix_ns;
 pub mod unix;
 
 #[derive(Clone)]
@@ -47,6 +48,16 @@ impl SocketFile {
     pub fn canonical_handle(&self) -> usize {
         match self {
             Self::Unix(f) => Arc::as_ptr(f) as usize,
+        }
+    }
+
+    pub fn bind(
+        socket: &Self,
+        addr: Option<&nix::sys::socket::SockAddr>,
+        rng: impl rand::Rng,
+    ) -> SyscallResult {
+        match socket {
+            Self::Unix(socket) => UnixSocketFile::bind(socket, addr, rng),
         }
     }
 }

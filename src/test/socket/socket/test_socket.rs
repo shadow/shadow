@@ -246,7 +246,7 @@ fn main() -> Result<(), String> {
 
 fn get_passing_tests() -> Vec<(SocketFn, SocketArguments)> {
     // the different arguments to try (including invalid args)
-    let domains = [libc::AF_INET, 0xABBA];
+    let domains = [libc::AF_INET, libc::AF_UNIX, 0xABBA];
     let sock_types = [libc::SOCK_STREAM, libc::SOCK_DGRAM];
     let flags = [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC];
     let protocols = [0, libc::IPPROTO_TCP, libc::IPPROTO_UDP];

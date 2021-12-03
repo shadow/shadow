@@ -632,7 +632,7 @@ SysCallReturn _syscallhandler_sendtoHelper(SysCallHandler* sys, int sockfd,
              * TODO: Can they can piggy back a connect() on sendto() if they
              * provide an address for the connection? */
             return (SysCallReturn){
-                .state = SYSCALL_DONE, .retval.as_i64 = -ENOTCONN};
+                .state = SYSCALL_DONE, .retval.as_i64 = -EPIPE};
         } else if (errcode == 0) {
             /* They connected, but never read the success code with a second
              * call to connect(). That's OK, proceed to send as usual. */
@@ -725,6 +725,12 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
 
+    const struct sockaddr* addr = process_getReadablePtr(sys->process, addrPtr, addrlen);
+    if (addr == NULL) {
+        debug("Invalid bind address pointer");
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+    }
+
     /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
     // size_t unix_len = sizeof(struct sockaddr_un); // if sa_family==AF_UNIX
     size_t inet_len = sizeof(struct sockaddr_in);
@@ -732,15 +738,6 @@ SysCallReturn syscallhandler_bind(SysCallHandler* sys,
         debug("supplied address is not large enough for a inet address");
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
     }
-
-    /* Make sure the addr PluginPtr is not NULL. */
-    if (!addrPtr.val) {
-        debug("binding to a NULL address is invalid");
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
-    }
-
-    const struct sockaddr* addr = process_getReadablePtr(sys->process, addrPtr, addrlen);
-    utility_assert(addr);
 
     /* TODO: we assume AF_INET here, change this when we support AF_UNIX */
     if (addr->sa_family != AF_INET) {

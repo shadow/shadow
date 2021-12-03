@@ -6,6 +6,7 @@ use nix::errno::Errno;
 
 use crate::cshadow as c;
 use crate::host::descriptor::shared_buf::SharedBuf;
+use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter, SyscallResult,
 };
@@ -27,6 +28,7 @@ pub struct UnixSocketFile {
     socket_type: UnixSocketType,
     peer_addr: Option<nix::sys::socket::UnixAddr>,
     bound_addr: Option<nix::sys::socket::UnixAddr>,
+    namespace: Arc<AtomicRefCell<AbstractUnixNamespace>>,
     send_buffer_event_handle: Option<Handle<(FileState, FileState)>>,
     recv_buffer_event_handle: Option<Handle<(FileState, FileState)>>,
 }
@@ -36,6 +38,7 @@ impl UnixSocketFile {
         mode: FileMode,
         status: FileStatus,
         socket_type: UnixSocketType,
+        namespace: &Arc<AtomicRefCell<AbstractUnixNamespace>>,
     ) -> Arc<AtomicRefCell<Self>> {
         // must be able to both read and write to the socket
         assert!(mode.contains(FileMode::READ) && mode.contains(FileMode::WRITE));
@@ -54,6 +57,7 @@ impl UnixSocketFile {
             socket_type,
             peer_addr: None,
             bound_addr: None,
+            namespace: Arc::clone(namespace),
             send_buffer_event_handle: None,
             recv_buffer_event_handle: None,
         };
@@ -158,6 +162,53 @@ impl UnixSocketFile {
         Ok(0.into())
     }
 
+    pub fn bind(
+        socket: &Arc<AtomicRefCell<Self>>,
+        addr: Option<&nix::sys::socket::SockAddr>,
+        rng: impl rand::Rng,
+    ) -> SyscallResult {
+        // if already bound
+        if socket.borrow().bound_addr.is_some() {
+            return Err(Errno::EINVAL.into());
+        }
+
+        // get the unix address
+        let addr = match addr {
+            Some(nix::sys::socket::SockAddr::Unix(x)) => x,
+            _ => {
+                log::warn!(
+                    "Attempted to bind unix socket to non-unix address {:?}",
+                    addr
+                );
+                return Err(Errno::EINVAL.into());
+            }
+        };
+
+        // bind the socket
+        if let Some(name) = addr.as_abstract() {
+            // if given an abstract socket address
+            let namespace = Arc::clone(&socket.borrow().namespace);
+            if AbstractUnixNamespace::bind(&namespace, name.to_vec(), socket).is_err() {
+                // address is in use
+                return Err(Errno::EADDRINUSE.into());
+            }
+        } else if addr.path_len() == 0 {
+            // if given an "unnamed" address
+            let namespace = Arc::clone(&socket.borrow().namespace);
+            if AbstractUnixNamespace::autobind(&namespace, socket, rng).is_err() {
+                // no autobind addresses remaining
+                return Err(Errno::EADDRINUSE.into());
+            }
+        } else {
+            log::warn!("Only abstract names are currently supported for unix sockets");
+            return Err(Errno::ENOTSUP.into());
+        }
+
+        socket.borrow_mut().bound_addr = Some(*addr);
+
+        Ok(0.into())
+    }
+
     pub fn read<W>(
         &mut self,
         mut _bytes: W,
@@ -202,29 +253,61 @@ impl UnixSocketFile {
             return Err(nix::errno::Errno::EBADF.into());
         }
 
+        let addr = match addr {
+            Some(nix::sys::socket::SockAddr::Unix(x)) => Some(x),
+            None => None,
+            _ => return Err(Errno::EINVAL.into()),
+        };
+
+        // returns either the send buffer, or None if we should look up the send buffer from the
+        // socket address
         let send_buffer = match (&self.send_buffer, addr) {
             // already connected but a destination address was given
             (Some(send_buffer), Some(_addr)) => match self.socket_type {
                 UnixSocketType::Stream => return Err(Errno::EISCONN.into()),
-                UnixSocketType::SeqPacket => send_buffer,
-                UnixSocketType::Dgram => {
-                    // TODO: need to properly look up the socket once we support named sockets
+                // linux seems to ignore the destination address for connected seq packet sockets
+                UnixSocketType::SeqPacket => Some(send_buffer),
+                UnixSocketType::Dgram => None,
+            },
+            // already connected and no destination address was given
+            (Some(send_buffer), None) => Some(send_buffer),
+            // not connected but a destination address was given
+            (None, Some(_addr)) => match self.socket_type {
+                UnixSocketType::Stream => return Err(Errno::EOPNOTSUPP.into()),
+                UnixSocketType::SeqPacket => return Err(Errno::ENOTCONN.into()),
+                UnixSocketType::Dgram => None,
+            },
+            // not connected and no destination address given
+            (None, None) => return Err(Errno::ENOTCONN.into()),
+        };
+
+        // a variable for storing an Arc of the recv buffer if needed
+        let mut _buf_arc_storage;
+
+        // either use the existing send buffer, or look up the send buffer from the address
+        let send_buffer = match send_buffer {
+            Some(x) => x,
+            None => {
+                // if an abstract address
+                if let Some(name) = addr.unwrap().as_abstract() {
+                    // look up the socket from the address name
+                    match self.namespace.borrow().lookup(name) {
+                        // socket was found with the given name
+                        Some(recv_socket) => {
+                            // store an Arc of the recv buffer
+                            _buf_arc_storage = Arc::clone(recv_socket.borrow().recv_buffer());
+                            &_buf_arc_storage
+                        }
+                        // no socket has the given name
+                        None => return Err(Errno::ECONNREFUSED.into()),
+                    }
+                } else {
                     log::warn!(
-                        "Sending to non-null addresses from unix sockets is not yet supported"
+                        "Sending to pathname addresses from unix sockets is not yet supported"
                     );
                     return Err(Errno::ECONNREFUSED.into());
                 }
-            },
-            // already connected and no destination address was given
-            (Some(send_buffer), None) => send_buffer,
-            // not connected but a destination address was given
-            (None, Some(_addr)) => {
-                // TODO: need to properly look up the socket once we support named sockets
-                log::warn!("Sending to non-null addresses from unix sockets is not yet supported");
-                return Err(Errno::ECONNREFUSED.into());
             }
-            // not connected and no destination address given
-            (None, None) => return Err(Errno::ENOTCONN.into()),
         };
 
         let mut send_buffer = send_buffer.borrow_mut();

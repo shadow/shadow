@@ -209,9 +209,6 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         };
 
         for &flag in flags.iter() {
-            // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <init_method={:?}, flag={}>", s, method, flag);
-
             let sock_types = match method.domain() {
                 libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
                 libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
@@ -284,14 +281,14 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         ),
                     ]);
                 }
-            }
 
-            if method != SocketInitMethod::UnixSocketpair {
-                tests.extend(vec![test_utils::ShadowTest::new(
-                    &append_args("test_null_addr_not_connected_dgram"),
-                    move || test_null_addr_not_connected_dgram(method, flag),
-                    passing.clone(),
-                )]);
+                if method != SocketInitMethod::UnixSocketpair {
+                    tests.extend(vec![test_utils::ShadowTest::new(
+                        &append_args("test_null_addr_not_connected"),
+                        move || test_null_addr_not_connected(method, sock_type, flag),
+                        set![TestEnv::Libc, TestEnv::Shadow],
+                    )]);
+                }
             }
         }
     }
@@ -671,14 +668,15 @@ fn test_null_addr(
     })
 }
 
-/// Test sendto() and recvfrom() using a dgram socket that is not connected, while using a
-/// null address argument.
-fn test_null_addr_not_connected_dgram(
+/// Test sendto() and recvfrom() using a socket that is not connected, while using a null address
+/// argument.
+fn test_null_addr_not_connected(
     init_method: SocketInitMethod,
+    sock_type: libc::c_int,
     flag: libc::c_int,
 ) -> Result<(), String> {
-    let fd_client = unsafe { libc::socket(init_method.domain(), libc::SOCK_DGRAM | flag, 0) };
-    let fd_server = unsafe { libc::socket(init_method.domain(), libc::SOCK_DGRAM | flag, 0) };
+    let fd_client = unsafe { libc::socket(init_method.domain(), sock_type | flag, 0) };
+    let fd_server = unsafe { libc::socket(init_method.domain(), sock_type | flag, 0) };
     assert!(fd_client >= 0);
     assert!(fd_server >= 0);
 
@@ -716,21 +714,33 @@ fn test_null_addr_not_connected_dgram(
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         // send 3 bytes using a null sockaddr
-        let expected_err = match init_method.domain() {
-            libc::AF_INET => vec![libc::EDESTADDRREQ],
-            libc::AF_UNIX => vec![libc::ENOTCONN],
+        let expected_err = match (init_method.domain(), sock_type) {
+            (libc::AF_INET, libc::SOCK_DGRAM) => vec![libc::EDESTADDRREQ],
+            (libc::AF_INET, _) => vec![libc::EPIPE],
+            (libc::AF_UNIX, _) => vec![libc::ENOTCONN],
             _ => unimplemented!(),
         };
         check_sendto_call(&sendto_args_1, &expected_err, true)?;
 
-        // send 3 bytes using a non-null sockaddr; no error expected
-        check_sendto_call(&sendto_args_2, &[], true)?;
+        // send 3 bytes using a non-null sockaddr; no error expected for dgram sockets
+        let expected_err = match (init_method.domain(), sock_type) {
+            (_, libc::SOCK_DGRAM) => vec![],
+            (libc::AF_UNIX, libc::SOCK_STREAM) => vec![libc::EOPNOTSUPP],
+            (libc::AF_UNIX, libc::SOCK_SEQPACKET) => vec![libc::ENOTCONN],
+            _ => vec![libc::EPIPE],
+        };
+        check_sendto_call(&sendto_args_2, &expected_err, true)?;
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
 
-        // read 3 bytes using a null sockaddr; no error expected
-        check_recvfrom_call(&mut recvfrom_args, &[], true)?;
+        // read 3 bytes using a null sockaddr; no error expected for dgram sockets
+        let expected_err = match (init_method.domain(), sock_type) {
+            (_, libc::SOCK_DGRAM) => vec![],
+            (libc::AF_UNIX, libc::SOCK_STREAM) => vec![libc::EINVAL],
+            _ => vec![libc::ENOTCONN],
+        };
+        check_recvfrom_call(&mut recvfrom_args, &expected_err, true)?;
 
         Ok(())
     })
