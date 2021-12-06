@@ -125,14 +125,16 @@ macro(add_shadow_tests)
          )
       endif()
 
+      # check that we didn't leak any reference-counted objects
+      set(FAIL_REGEX "Memory leak detected")
+
       # need to check the test's return code, not just shadow's (see shadow/shadow#902)
       if(SHADOW_TEST_CHECK_RETVAL)
-         set_property(TEST ${SHADOW_TEST_NAME} PROPERTY FAIL_REGULAR_EXPRESSION "main error code '.*' for process")
+         list(APPEND FAIL_REGEX "main error code '.*' for process")
       endif()
       set_property(TEST ${SHADOW_TEST_NAME} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1;G_DEBUG=fatal-criticals")
 
-      # check that we didn't leak any reference-counted objects
-      set_property(TEST ${SHADOW_TEST_NAME} PROPERTY FAIL_REGULAR_EXPRESSION "Memory leak detected")
+      set_property(TEST ${SHADOW_TEST_NAME} PROPERTY FAIL_REGULAR_EXPRESSION ${FAIL_REGEX})
 
       if(DEFINED SHADOW_TEST_PROPERTIES)
          set_tests_properties(${SHADOW_TEST_NAME} PROPERTIES ${SHADOW_TEST_PROPERTIES})
