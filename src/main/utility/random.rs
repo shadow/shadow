@@ -13,21 +13,9 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn random_new(seed: u64) -> *mut Random {
-        let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
-
-        // From https://docs.rs/rand/0.8.4/rand/rngs/struct.SmallRng.html:
-        //
-        // > SmallRng is not a good choice when: [...] Seeds with many zeros are provided. In such
-        // > cases, it takes SmallRng about 10 samples to produce 0 and 1 bits with equal
-        // > probability.
-        //
-        // SmallRng on x86_64 uses Xoshiro256PlusPlus as of version 0.8, so this should apply to us.
-        //
-        // Since shadow usually uses small seeds, we should throw away 10 samples.
-        for _ in 0..10 {
-            rng.next_u64();
-        }
-
+        // Xoshiro256PlusPlus is not ideal when a seed with many zeros is used, but
+        // 'seed_from_u64()' uses SplitMix64 to derive the actual seed, so we are okay here.
+        let rng = Xoshiro256PlusPlus::seed_from_u64(seed);
         Box::into_raw(Box::new(Random(rng)))
     }
 
