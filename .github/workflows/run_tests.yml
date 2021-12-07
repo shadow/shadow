@@ -38,6 +38,10 @@ jobs:
           - 'quay.io/centos/centos:stream8'
         cc: ['gcc', 'clang']
         buildtype: ['debug', 'release']
+        exclude:
+          # https://github.com/shadow/shadow/issues/1741
+          - container: 'quay.io/centos/centos:stream8'
+            cc: clang
     env:
       CC: ${{ matrix.cc }}
       CONTAINER: ${{ matrix.container }}
