@@ -286,7 +286,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     tests.extend(vec![test_utils::ShadowTest::new(
                         &append_args("test_null_addr_not_connected"),
                         move || test_null_addr_not_connected(method, sock_type, flag),
-                        set![TestEnv::Libc, TestEnv::Shadow],
+                        passing.clone(),
                     )]);
                 }
             }
