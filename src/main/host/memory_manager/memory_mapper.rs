@@ -1,4 +1,4 @@
-use crate::host::memory_manager::{page_size, MemoryCopier, MemoryManager};
+use crate::host::memory_manager::{page_size, MemoryManager};
 use crate::host::syscall_types::{PluginPtr, SyscallResult, TypedPluginPtr};
 use crate::host::thread::Thread;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
@@ -64,7 +64,6 @@ fn log_regions<It: Iterator<Item = (Interval, Region)>>(level: log::Level, regio
 /// MemoryMapper via its `handle_*` methods.
 #[derive(Debug)]
 pub struct MemoryMapper {
-    memory_copier: MemoryCopier,
     shm_file: ShmFile,
     regions: IntervalMap<Region>,
 
@@ -329,8 +328,6 @@ impl Drop for MemoryMapper {
 
 impl MemoryMapper {
     pub fn new(memory_manager: &mut MemoryManager, thread: &mut impl Thread) -> MemoryMapper {
-        let memory_copier = MemoryCopier::new(thread.system_pid());
-
         let shm_path = format!(
             "/dev/shm/shadow_memory_manager_{}_{}_{}",
             process::id(),
@@ -383,7 +380,6 @@ impl MemoryMapper {
         map_stack(memory_manager, thread, &mut shm_file, &mut regions);
 
         MemoryMapper {
-            memory_copier,
             shm_file,
             regions,
             misses_by_path: RefCell::new(HashMap::new()),
