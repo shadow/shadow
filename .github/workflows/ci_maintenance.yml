@@ -1,5 +1,6 @@
 name: CI Maintenance
-permissions: read-all
+permissions:
+  issues: write
 
 on:
   schedule:
