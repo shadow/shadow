@@ -26,7 +26,7 @@ log-bindings = { path = "../lib/logger/rust_bindings" }
 lzma-rs = "0.2"
 merge = "0.1"
 nix = "0.23.0"
-once_cell = "1.8"
+once_cell = "1.9"
 petgraph = "0.6"
 rand = "0.8.0"
 rand_chacha = "0.3.1"
