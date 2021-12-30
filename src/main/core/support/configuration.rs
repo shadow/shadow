@@ -417,7 +417,7 @@ impl Default for ExperimentalOptions {
             use_legacy_working_dir: Some(false),
             progress: Some(false),
             host_heartbeat_log_level: Some(LogLevel::Info),
-            host_heartbeat_log_info: Some(std::array::IntoIter::new([LogInfoFlag::Node]).collect()),
+            host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),
             host_heartbeat_interval: None,
         }
     }
