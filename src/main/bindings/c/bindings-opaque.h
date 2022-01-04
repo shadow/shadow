@@ -45,7 +45,6 @@ typedef struct ByteQueue ByteQueue;
 // when the object is dropped.
 typedef struct ChildPidWatcher ChildPidWatcher;
 
-// Run real applications over simulated networks.
 typedef struct CliOptions CliOptions;
 
 typedef struct CompatDescriptor CompatDescriptor;
