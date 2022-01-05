@@ -116,7 +116,7 @@ pub fn gml<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Gml, E> {
         result_str_to_nom(
             input,
             Err("The 'directed' key must only be specified once"),
-            ErrorKind::ParseTo,
+            ErrorKind::Fail,
         )?;
     }
     let directed = match directed.get(0) {
@@ -132,7 +132,7 @@ pub fn gml<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Gml, E> {
         result_str_to_nom(
             input,
             Err("Duplicate keys are not supported"),
-            ErrorKind::ParseTo,
+            ErrorKind::Fail,
         )?;
     }
 
@@ -162,7 +162,7 @@ fn node<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Node, E> {
         result_str_to_nom(
             input,
             Err("Duplicate keys are not supported"),
-            ErrorKind::ParseTo,
+            ErrorKind::Fail,
         )?;
     }
 
@@ -170,7 +170,7 @@ fn node<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Node, E> {
 
     let id = match key_values.remove("id") {
         Some(Value::Int(x)) => Some(x as u32),
-        Some(_) => result_str_to_nom(input, Err("Incorrect 'id' type"), ErrorKind::ParseTo)?,
+        Some(_) => result_str_to_nom(input, Err("Incorrect 'id' type"), ErrorKind::Fail)?,
         None => None,
     };
 
@@ -190,7 +190,7 @@ fn edge<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Edge, E> {
         result_str_to_nom(
             input,
             Err("Duplicate keys are not supported"),
-            ErrorKind::ParseTo,
+            ErrorKind::Fail,
         )?;
     }
 
@@ -198,13 +198,13 @@ fn edge<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Edge, E> {
 
     let source = match key_values.remove("source") {
         Some(Value::Int(x)) => x,
-        Some(_) => result_str_to_nom(input, Err("Incorrect 'source' type"), ErrorKind::ParseTo)?,
+        Some(_) => result_str_to_nom(input, Err("Incorrect 'source' type"), ErrorKind::Fail)?,
         None => result_str_to_nom(input, Err("'source' doesn't exist"), ErrorKind::NoneOf)?,
     };
 
     let target = match key_values.remove("target") {
         Some(Value::Int(x)) => x,
-        Some(_) => result_str_to_nom(input, Err("Incorrect 'target' type"), ErrorKind::ParseTo)?,
+        Some(_) => result_str_to_nom(input, Err("Incorrect 'target' type"), ErrorKind::Fail)?,
         None => result_str_to_nom(input, Err("'target' doesn't exist"), ErrorKind::NoneOf)?,
     };
 
@@ -265,8 +265,8 @@ fn int_as_bool<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, bool, 
     let (input, value) = value(input)?;
 
     let value = match value {
-        Value::Int(x) => result_str_to_nom(input, int_to_bool(x), ErrorKind::ParseTo)?,
-        _ => result_str_to_nom(input, Err("Value was not an integer"), ErrorKind::ParseTo)?,
+        Value::Int(x) => result_str_to_nom(input, int_to_bool(x), ErrorKind::Fail)?,
+        _ => result_str_to_nom(input, Err("Value was not an integer"), ErrorKind::Fail)?,
     };
 
     Ok((input, value))

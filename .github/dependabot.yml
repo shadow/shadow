@@ -20,3 +20,12 @@ updates:
     milestone: 24 # "Code health and maintenance"
     labels:
       - 'Component: Build'
+
+  - package-ecosystem: 'cargo'
+    directory: '/src/lib/gml-parser'
+    schedule:
+      interval: 'daily'
+    target-branch: 'main'
+    milestone: 24 # "Code health and maintenance"
+    labels:
+      - 'Component: Build'
