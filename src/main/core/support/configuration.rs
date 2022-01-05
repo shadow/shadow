@@ -136,12 +136,12 @@ static GENERAL_HELP: Lazy<std::collections::HashMap<String, String>> =
 pub struct GeneralOptions {
     /// The simulated time at which simulated processes are sent a SIGKILL signal
     #[clap(long, value_name = "seconds")]
-    #[clap(help = GENERAL_HELP.get("stop_time").unwrap())]
+    #[clap(help = GENERAL_HELP.get("stop_time").unwrap().as_str())]
     pub stop_time: Option<units::Time<units::TimePrefixUpper>>,
 
     /// Initialize randomness using seed N
     #[clap(long, value_name = "N")]
-    #[clap(help = GENERAL_HELP.get("seed").unwrap())]
+    #[clap(help = GENERAL_HELP.get("seed").unwrap().as_str())]
     #[serde(default = "default_some_1")]
     pub seed: Option<u32>,
 
@@ -149,38 +149,38 @@ pub struct GeneralOptions {
     /// performance is usually obtained with `cores`, or sometimes `cores/2`
     /// with hyperthreading.
     #[clap(long, short = 'p', value_name = "cores")]
-    #[clap(help = GENERAL_HELP.get("parallelism").unwrap())]
+    #[clap(help = GENERAL_HELP.get("parallelism").unwrap().as_str())]
     #[serde(default = "default_some_nz_1")]
     pub parallelism: Option<NonZeroU32>,
 
     /// The simulated time that ends Shadow's high network bandwidth/reliability bootstrap period
     #[clap(long, value_name = "seconds")]
-    #[clap(help = GENERAL_HELP.get("bootstrap_end_time").unwrap())]
+    #[clap(help = GENERAL_HELP.get("bootstrap_end_time").unwrap().as_str())]
     #[serde(default = "default_some_time_0")]
     pub bootstrap_end_time: Option<units::Time<units::TimePrefixUpper>>,
 
     /// Log level of output written on stdout. If Shadow was built in release mode, then log
     /// messages at level 'trace' will always be dropped
     #[clap(long, short = 'l', value_name = "level")]
-    #[clap(help = GENERAL_HELP.get("log_level").unwrap())]
+    #[clap(help = GENERAL_HELP.get("log_level").unwrap().as_str())]
     #[serde(default = "default_some_info")]
     pub log_level: Option<LogLevel>,
 
     /// Interval at which to print heartbeat messages
     #[clap(long, value_name = "seconds")]
-    #[clap(help = GENERAL_HELP.get("heartbeat_interval").unwrap())]
+    #[clap(help = GENERAL_HELP.get("heartbeat_interval").unwrap().as_str())]
     #[serde(default = "default_some_time_1")]
     pub heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
 
     /// Path to store simulation output
     #[clap(long, short = 'd', value_name = "path")]
-    #[clap(help = GENERAL_HELP.get("data_directory").unwrap())]
+    #[clap(help = GENERAL_HELP.get("data_directory").unwrap().as_str())]
     #[serde(default = "default_data_directory")]
     pub data_directory: Option<String>,
 
     /// Path to recursively copy during startup and use as the data-directory
     #[clap(long, short = 'e', value_name = "path")]
-    #[clap(help = GENERAL_HELP.get("template_directory").unwrap())]
+    #[clap(help = GENERAL_HELP.get("template_directory").unwrap().as_str())]
     #[serde(default)]
     pub template_directory: Option<String>,
 }
@@ -212,7 +212,7 @@ pub struct NetworkOptions {
     /// edge between nodes. If false, the network graph is required to be complete.
     #[serde(default = "default_some_true")]
     #[clap(long, value_name = "bool")]
-    #[clap(help = NETWORK_HELP.get("use_shortest_path").unwrap())]
+    #[clap(help = NETWORK_HELP.get("use_shortest_path").unwrap().as_str())]
     pub use_shortest_path: Option<bool>,
 }
 
@@ -237,115 +237,115 @@ static EXP_HELP: Lazy<std::collections::HashMap<String, String>> =
 pub struct ExperimentalOptions {
     /// Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7)
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_sched_fifo").unwrap())]
+    #[clap(help = EXP_HELP.get("use_sched_fifo").unwrap().as_str())]
     pub use_sched_fifo: Option<bool>,
 
     /// Use performance workarounds for waitpid being O(n). Beneficial to disable if waitpid
     /// is patched to be O(1), if using one logical processor per host, or in some cases where
     /// it'd otherwise result in excessive detaching and reattaching
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_o_n_waitpid_workarounds").unwrap())]
+    #[clap(help = EXP_HELP.get("use_o_n_waitpid_workarounds").unwrap().as_str())]
     pub use_o_n_waitpid_workarounds: Option<bool>,
 
     /// Send message to plugin telling it to stop spinning when a syscall blocks
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_explicit_block_message").unwrap())]
+    #[clap(help = EXP_HELP.get("use_explicit_block_message").unwrap().as_str())]
     pub use_explicit_block_message: Option<bool>,
 
     /// Use seccomp to trap syscalls. Default is true for preload mode, false otherwise.
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_seccomp").unwrap())]
+    #[clap(help = EXP_HELP.get("use_seccomp").unwrap().as_str())]
     pub use_seccomp: Option<bool>,
 
     /// Count the number of occurrences for individual syscalls
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_syscall_counters").unwrap())]
+    #[clap(help = EXP_HELP.get("use_syscall_counters").unwrap().as_str())]
     pub use_syscall_counters: Option<bool>,
 
     /// Count object allocations and deallocations. If disabled, we will not be able to detect object memory leaks
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_object_counters").unwrap())]
+    #[clap(help = EXP_HELP.get("use_object_counters").unwrap().as_str())]
     pub use_object_counters: Option<bool>,
 
     /// Preload our libc library for all managed processes for fast syscall interposition when possible.
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_libc_preload").unwrap())]
+    #[clap(help = EXP_HELP.get("use_libc_preload").unwrap().as_str())]
     use_libc_preload: Option<bool>,
 
     /// Preload our OpenSSL RNG library for all managed processes to mitigate non-deterministic use of OpenSSL.
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_openssl_rng_preload").unwrap())]
+    #[clap(help = EXP_HELP.get("use_openssl_rng_preload").unwrap().as_str())]
     use_openssl_rng_preload: Option<bool>,
 
     /// Max number of iterations to busy-wait on IPC semaphore before blocking
     #[clap(long, value_name = "iterations")]
-    #[clap(help = EXP_HELP.get("preload_spin_max").unwrap())]
+    #[clap(help = EXP_HELP.get("preload_spin_max").unwrap().as_str())]
     pub preload_spin_max: Option<i32>,
 
     /// Use the MemoryManager. It can be useful to disable for debugging, but will hurt performance in
     /// most cases
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_memory_manager").unwrap())]
+    #[clap(help = EXP_HELP.get("use_memory_manager").unwrap().as_str())]
     pub use_memory_manager: Option<bool>,
 
     /// Use shim-side syscall handler to force hot-path syscalls to be handled via an inter-process syscall with Shadow
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_shim_syscall_handler").unwrap())]
+    #[clap(help = EXP_HELP.get("use_shim_syscall_handler").unwrap().as_str())]
     pub use_shim_syscall_handler: Option<bool>,
 
     /// Pin each thread and any processes it executes to the same logical CPU Core to improve cache affinity
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_cpu_pinning").unwrap())]
+    #[clap(help = EXP_HELP.get("use_cpu_pinning").unwrap().as_str())]
     pub use_cpu_pinning: Option<bool>,
 
     /// Which interposition method to use
     #[clap(long, value_name = "method")]
-    #[clap(help = EXP_HELP.get("interpose_method").unwrap())]
+    #[clap(help = EXP_HELP.get("interpose_method").unwrap().as_str())]
     pub interpose_method: Option<InterposeMethod>,
 
     /// If set, overrides the automatically calculated minimum time workers may run ahead when sending events between nodes
     #[clap(long, value_name = "seconds")]
-    #[clap(help = EXP_HELP.get("runahead").unwrap())]
+    #[clap(help = EXP_HELP.get("runahead").unwrap().as_str())]
     pub runahead: Option<units::Time<units::TimePrefix>>,
 
     /// Update the minimum runahead dynamically throughout the simulation.
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_dynamic_runahead").unwrap())]
+    #[clap(help = EXP_HELP.get("use_dynamic_runahead").unwrap().as_str())]
     pub use_dynamic_runahead: Option<bool>,
 
     /// The event scheduler's policy for thread synchronization
     #[clap(long, value_name = "policy")]
-    #[clap(help = EXP_HELP.get("scheduler_policy").unwrap())]
+    #[clap(help = EXP_HELP.get("scheduler_policy").unwrap().as_str())]
     pub scheduler_policy: Option<SchedulerPolicy>,
 
     /// Initial size of the socket's send buffer
     #[clap(long, value_name = "bytes")]
-    #[clap(help = EXP_HELP.get("socket_send_buffer").unwrap())]
+    #[clap(help = EXP_HELP.get("socket_send_buffer").unwrap().as_str())]
     pub socket_send_buffer: Option<units::Bytes<units::SiPrefixUpper>>,
 
     /// Enable send window autotuning
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("socket_send_autotune").unwrap())]
+    #[clap(help = EXP_HELP.get("socket_send_autotune").unwrap().as_str())]
     pub socket_send_autotune: Option<bool>,
 
     /// Initial size of the socket's receive buffer
     #[clap(long, value_name = "bytes")]
-    #[clap(help = EXP_HELP.get("socket_recv_buffer").unwrap())]
+    #[clap(help = EXP_HELP.get("socket_recv_buffer").unwrap().as_str())]
     pub socket_recv_buffer: Option<units::Bytes<units::SiPrefixUpper>>,
 
     /// Enable receive window autotuning
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("socket_recv_autotune").unwrap())]
+    #[clap(help = EXP_HELP.get("socket_recv_autotune").unwrap().as_str())]
     pub socket_recv_autotune: Option<bool>,
 
     /// Size of the interface receive buffer that accepts incoming packets
     #[clap(long, value_name = "bytes")]
-    #[clap(help = EXP_HELP.get("interface_buffer").unwrap())]
+    #[clap(help = EXP_HELP.get("interface_buffer").unwrap().as_str())]
     pub interface_buffer: Option<units::Bytes<units::SiPrefixUpper>>,
 
     /// The queueing discipline to use at the network interface
     #[clap(long, value_name = "mode")]
-    #[clap(help = EXP_HELP.get("interface_qdisc").unwrap())]
+    #[clap(help = EXP_HELP.get("interface_qdisc").unwrap().as_str())]
     pub interface_qdisc: Option<QDiscMode>,
 
     /// Create N worker threads. Note though, that `--parallelism` of them will
@@ -353,33 +353,33 @@ pub struct ExperimentalOptions {
     /// each simulated Host. This is to work around limitations in ptrace, and
     /// may change in the future.
     #[clap(long, value_name = "N")]
-    #[clap(help = EXP_HELP.get("worker_threads").unwrap())]
+    #[clap(help = EXP_HELP.get("worker_threads").unwrap().as_str())]
     pub worker_threads: Option<NonZeroU32>,
 
     /// Don't adjust the working directories of the plugins
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_legacy_working_dir").unwrap())]
+    #[clap(help = EXP_HELP.get("use_legacy_working_dir").unwrap().as_str())]
     pub use_legacy_working_dir: Option<bool>,
 
     /// Show the simulation progress at the bottom of the terminal
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("progress").unwrap())]
+    #[clap(help = EXP_HELP.get("progress").unwrap().as_str())]
     pub progress: Option<bool>,
 
     /// Log level at which to print host statistics
     #[clap(long, value_name = "level")]
-    #[clap(help = EXP_HELP.get("host_heartbeat_log_level").unwrap())]
+    #[clap(help = EXP_HELP.get("host_heartbeat_log_level").unwrap().as_str())]
     pub host_heartbeat_log_level: Option<LogLevel>,
 
     /// List of information to show in the host's heartbeat message
     #[clap(parse(try_from_str = parse_set_log_info_flags))]
     #[clap(long, value_name = "options")]
-    #[clap(help = EXP_HELP.get("host_heartbeat_log_info").unwrap())]
+    #[clap(help = EXP_HELP.get("host_heartbeat_log_info").unwrap().as_str())]
     pub host_heartbeat_log_info: Option<std::collections::HashSet<LogInfoFlag>>,
 
     /// Amount of time between heartbeat messages for this host
     #[clap(long, value_name = "seconds")]
-    #[clap(help = EXP_HELP.get("host_heartbeat_interval").unwrap())]
+    #[clap(help = EXP_HELP.get("host_heartbeat_interval").unwrap().as_str())]
     pub host_heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
 }
 
@@ -438,12 +438,12 @@ pub struct HostDefaultOptions {
     /// Log level at which to print node messages
     #[clap(long = "host-log-level", name = "host-log-level")]
     #[clap(value_name = "level")]
-    #[clap(help = HOST_HELP.get("log_level").unwrap())]
+    #[clap(help = HOST_HELP.get("log_level").unwrap().as_str())]
     pub log_level: Option<LogLevel>,
 
     /// Where to save the pcap files (relative to the host directory)
     #[clap(long, value_name = "path")]
-    #[clap(help = HOST_HELP.get("pcap_directory").unwrap())]
+    #[clap(help = HOST_HELP.get("pcap_directory").unwrap().as_str())]
     pub pcap_directory: Option<String>,
 }
 
