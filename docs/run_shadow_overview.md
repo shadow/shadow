@@ -18,3 +18,6 @@ limitations to be aware of:
    fork and exec.
  - Applications should not use or expect signals.
  - Shadow does not support IPv6.
+ - Applications should not use busy-waiting, including the use of busy loops
+   that rely on network events, events in other threads, or on the current
+   time.

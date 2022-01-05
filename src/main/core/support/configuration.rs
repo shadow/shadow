@@ -16,15 +16,18 @@ use super::units::{self, Unit};
 use crate::cshadow as c;
 use log_bindings as c_log;
 
+const START_HELP_TEXT: &str = "\
+    Run real applications over simulated networks.\n\n\
+    For documentation, visit https://shadow.github.io/docs/guide";
+
 const END_HELP_TEXT: &str = "\
     If units are not specified, all values are assumed to be given in their base \
     unit (seconds, bytes, bits, etc). Units can optionally be specified (for \
     example: '1024 B', '1024 bytes', '1 KiB', '1 kibibyte', etc) and are \
     case-sensitive.";
 
-/// Run real applications over simulated networks.
 #[derive(Debug, Clone, Parser)]
-#[clap(name = "Shadow", after_help = END_HELP_TEXT)]
+#[clap(name = "Shadow", about = START_HELP_TEXT, after_help = END_HELP_TEXT)]
 #[clap(version = std::option_env!("SHADOW_VERSION").unwrap_or(std::env!("CARGO_PKG_VERSION")))]
 pub struct CliOptions {
     /// Path to the Shadow configuration file. Use '-' to read from stdin
