@@ -8,6 +8,9 @@ updates:
     schedule:
       interval: 'daily'
     target-branch: 'main'
+    # don't auto-rebase, otherwise dependabot will rebase several PRs at once
+    # and create many hours of unnecessary workflow runs
+    rebase-strategy: 'disabled'
     milestone: 24 # "Code health and maintenance"
     labels:
       - 'Component: Build'
@@ -17,6 +20,9 @@ updates:
     schedule:
       interval: 'daily'
     target-branch: 'main'
+    # don't auto-rebase, otherwise dependabot will rebase several PRs at once
+    # and create many hours of unnecessary workflow runs
+    rebase-strategy: 'disabled'
     milestone: 24 # "Code health and maintenance"
     labels:
       - 'Component: Build'
@@ -26,6 +32,9 @@ updates:
     schedule:
       interval: 'daily'
     target-branch: 'main'
+    # don't auto-rebase, otherwise dependabot will rebase several PRs at once
+    # and create many hours of unnecessary workflow runs
+    rebase-strategy: 'disabled'
     milestone: 24 # "Code health and maintenance"
     labels:
       - 'Component: Build'
