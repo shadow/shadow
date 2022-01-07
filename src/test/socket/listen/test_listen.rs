@@ -108,7 +108,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     test_utils::ShadowTest::new(
                         &append_args("test_listen_twice"),
                         move || test_listen_twice(sock_type, flag, bind),
-                        set![TestEnv::Libc],
+                        set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_after_close"),

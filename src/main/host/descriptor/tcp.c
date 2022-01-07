@@ -1431,7 +1431,7 @@ gboolean tcp_isValidListener(TCP* tcp) {
  */
 gboolean tcp_isListeningAllowed(TCP* tcp) {
     MAGIC_ASSERT(tcp);
-    if(tcp->state == TCPCS_NONE && tcp->flags == TCPF_NONE) {
+    if ((tcp->state == TCPS_CLOSED || tcp->state == TCPS_LISTEN) && tcp->flags == TCPF_NONE) {
         return TRUE;
     } else {
         return FALSE;
