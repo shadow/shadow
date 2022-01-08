@@ -196,6 +196,9 @@ long shim_emulated_syscallv(long n, va_list args) {
      * back.
      */
 
+    // TODO: Do this once instead of on every syscall.
+    // https://github.com/shadow/shadow/issues/1846
+
     // Needs to be big enough to run signal handlers in case Shadow delivers a
     // non-fatal signal. No need to be stingy with the size here, since pages
     // that are never used should never get allocated by the OS.

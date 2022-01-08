@@ -28,6 +28,13 @@
 #include "lib/shim/shim_tls.h"
 #include "main/host/syscall_numbers.h" // for SYS_shadow_* defs
 
+// Definition is sometimes missing in the userspace headers. We could include
+// the kernel signal header, but it has definitions that conflict with the
+// userspace headers.
+#ifndef SS_AUTODISARM
+#define SS_AUTODISARM (1U << 31)
+#endif
+
 // Whether Shadow is using preload-based interposition.
 static bool _using_interpose_preload = false;
 
@@ -178,6 +185,34 @@ static void _set_use_shim_syscall_handler() {
         _using_shim_syscall_handler = false;
     } else {
         _using_shim_syscall_handler = true;
+    }
+}
+
+// Any signal handlers that the shim itself installs should be configured to
+// use this stack, using the `SA_ONSTACK` flag in the call to `sigaction`. This
+// prevents corrupting the stack in the presence of user-space threads, such as
+// goroutines.
+// See https://github.com/shadow/shadow/issues/1549.
+static void _shim_init_signal_stack() {
+    // When changing this, adjust BYTES_PER_THREAD in shim_tls.c as well.
+    const size_t stack_sz = 4096 * 10;
+
+    static ShimTlsVar new_stack_var = {0};
+    void* new_stack = shimtlsvar_ptr(&new_stack_var, stack_sz);
+
+    stack_t stack_descriptor = {
+        .ss_sp = new_stack,
+        .ss_size = stack_sz,
+        // Clear the alternate stack settings on entry to signal handler, and
+        // restore it on exit.  Otherwise a signal handler invoked while another
+        // is running on the same thread would clobber the first handler's stack.
+        // Instead we want the second handler to push a new frame on the alt
+        // stack that's already installed.
+        .ss_flags = SS_AUTODISARM,
+    };
+
+    if (sigaltstack(&stack_descriptor, NULL) != 0) {
+        panic("sigaltstack: %s", strerror(errno));
     }
 }
 
@@ -362,6 +397,7 @@ static void _shim_parent_init_preload() {
     // file with interposition disabled too to get a native file descriptor.
     _shim_parent_init_logging();
     _shim_parent_init_ipc();
+    _shim_init_signal_stack();
     _shim_parent_init_death_signal();
     _shim_ipc_wait_for_start_event();
     _shim_parent_init_rdtsc_emu();
@@ -384,6 +420,7 @@ static void _shim_child_init_preload() {
     shim_disableInterposition();
 
     _shim_preload_only_child_init_ipc();
+    _shim_init_signal_stack();
     _shim_preload_only_child_ipc_wait_for_start_event();
 
     shim_enableInterposition();
