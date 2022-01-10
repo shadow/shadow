@@ -61,7 +61,7 @@ esac
 
 if [ "${BUILDTYPE:-}" = coverage ]
 then
-    RUST_TOOLCHAIN=nightly-2021-08-23
+    RUST_TOOLCHAIN=nightly-2022-01-09
 else
     RUST_TOOLCHAIN=stable
 fi
