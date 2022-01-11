@@ -352,7 +352,7 @@ static void _shim_parent_init_seccomp() {
 }
 
 static void _shim_parent_init_rdtsc_emu() {
-    shim_rdtsc_init();
+    //shim_rdtsc_init();
 }
 
 static void _shim_parent_init_preload() {

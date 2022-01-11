@@ -205,7 +205,8 @@ long shim_emulated_syscallv(long n, va_list args) {
     // C ABI requires 16-byte alignment for stack frames
     assert(((uintptr_t)new_stack % 16) == 0);
     void* old_stack;
-    SysCallReg retval;
+    SysCallReg retval = _shim_emulated_syscall_event(&e);
+#if 0
     asm volatile("movq %[EVENT], %%rdi\n"     /* set up syscall arg */
                  "movq %%rsp, %%rbx\n"        /* save stack pointer to a callee-save register*/
                  "movq %[NEW_STACK], %%rsp\n" /* switch stack */
@@ -224,6 +225,8 @@ long shim_emulated_syscallv(long n, va_list args) {
                  "rbx",
                  /* All caller-saved registers not already used above */
                  "rax", "rdi", "rdx", "rcx", "rsi", "r8", "r9", "r10", "r11");
+#endif
+
 
     shim_enableInterposition();
 

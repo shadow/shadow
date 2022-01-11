@@ -485,6 +485,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(unlink);
         NATIVE(utime);
         NATIVE(utimes);
+        NATIVE(sched_yield);
 
         default:
             warning(

@@ -66,7 +66,23 @@ static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcon
     ctx->uc_mcontext.gregs[REG_RAX] = rv;
 }
 
+#ifndef SS_AUTODISARM
+#define SS_AUTODISARM (1U << 31)
+#endif
+
 void shim_seccomp_init() {
+    static ShimTlsVar new_stack_var = {0};
+    const size_t stack_sz = 4096 * 10;
+    char* new_stack = shimtlsvar_ptr(&new_stack_var, stack_sz);
+    stack_t stack_descriptor = {
+      .ss_sp = new_stack,
+      .ss_size = stack_sz,
+      .ss_flags = SS_AUTODISARM,
+    };
+    if (sigaltstack(&stack_descriptor, NULL) != 0) {
+        panic("sigaltstack: %s", strerror(errno));
+    }
+
     // Install signal sigsys signal handler, which will receive syscalls that
     // get stopped by the seccomp filter. Shadow's emulation of signal-related
     // system calls will prevent this action from later being overridden by the
@@ -80,7 +96,7 @@ void shim_seccomp_init() {
                       // to properly handle the case that we end up logging from the syscall
                       // handler, and the IO syscalls themselves are trapped.
                       // SA_SIGINFO: Required because we're specifying sa_sigaction.
-                      .sa_flags = SA_NODEFER | SA_SIGINFO,
+                      .sa_flags = SA_NODEFER | SA_SIGINFO | SA_ONSTACK,
                   },
                   &old_action) < 0) {
         panic("sigaction: %s", strerror(errno));

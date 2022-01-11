@@ -11,7 +11,7 @@
 // becomes a permanent fixture, we should make it a shared constant, but it
 // should eventually go away. In the meantime we catch at runtime if we try to
 // use more TLS than we've pre-reserved.
-#define BYTES_PER_THREAD (4096*10 + 1024)
+#define BYTES_PER_THREAD (4096*20 + 1024)
 #define MAX_THREADS 100
 
 // Stores the TLS for a single thread.
