@@ -1,6 +1,29 @@
+# Milestones
+
+* MS1: Enough to support golang's signal-based preemptive scheduling. In
+  particular, support the sample program in #1549.
+  * `rt_sigaction` syscall: Used to set a signal handler, particularly for `SIGURG`. Example: `rt_sigaction(SIGURG, {sa_handler=0x46e360, sa_mask=~[RTMIN RT_1], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_SIGINFO, sa_restorer=0x7fafd720a3c0}, NULL, 8)`
+  * `sigaltstack` syscall: Used to configure an alternate stack on which to run
+    signal handlers. Experimentally, a simple golang program configures its
+    handlers to use an alt stack. It calls this call to set up the flag, and
+    uses the `SA_ONSTACK` flag in the individual calls to `rt_sigaction`. It
+    *might* work without actually switching stacks, but I suspect it has
+    something to do with not breaking its user space threads, and should be
+    easy to implement.
+  * `tgkill` syscall needs to deliver a signal to the configured signal
+    handler.
+  * Configure signal mask via `rt_sigprocmask`.
+* Beyond minimum, but worth doing in the near term (because easy to implement,
+  likely to be used, or both).
+  * Allow configuration and use of alternate signal handler stack
+    (`sigaltstack`).
+* 
+  * Realtime signals.
+  * fd-based signal APIs.
+
 # Signals
 
-## Relevant syscalls
+## Relevant syscalls and how to handle them
 
 * `kill(2)`. Send a signal to a *process* or *process group*. For each targeted
   process set the bit in the "process-signal pending bitfield", then iterate
@@ -21,7 +44,7 @@
   shim-side code will need to take into account when restarting an interrupted
   system call.
 
-* `sigaltstack(2)`
+* `sigaltstack(2)`: 
 * `signal(2)`
 * `signalfd(2)`
 * `sigpending(2)`: Returns the set of signals pending for the thread (union of
