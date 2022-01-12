@@ -88,7 +88,7 @@ struct _Manager {
     // Path to the openssl rng lib that we preload for managed processes.
     gchar* preloadOpensslRngPath;
 
-    StatusBar_ShadowStatusBarState* statusBar;
+    StatusLogger_ShadowStatusBarState* statusLogger;
 
     time_t timeOfLastUsageCheck;
     bool checkFdUsage;
@@ -315,9 +315,9 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
 
     if (config_getProgress(config)) {
         if (isatty(STDERR_FILENO) == 1) {
-            manager->statusBar = statusBar_new(endTime);
+            manager->statusLogger = statusBar_new(endTime);
         } else {
-            warning("Status/progress bar will not be enabled since stderr is not a tty");
+            manager->statusLogger = statusPrinter_new(endTime);
         }
     }
 
@@ -402,8 +402,8 @@ gint manager_free(Manager* manager) {
         g_free(manager->preloadOpensslRngPath);
     }
 
-    if (manager->statusBar) {
-        statusBar_free(manager->statusBar);
+    if (manager->statusLogger) {
+        statusLogger_free(manager->statusLogger);
     }
 
     MAGIC_CLEAR(manager);
@@ -776,8 +776,8 @@ void manager_run(Manager* manager) {
          */
         minNextEventTime = scheduler_awaitNextRound(manager->scheduler);
 
-        if (manager->statusBar != NULL) {
-            statusBar_update(manager->statusBar, windowEnd);
+        if (manager->statusLogger != NULL) {
+            statusLogger_update(manager->statusLogger, windowEnd);
         }
 
         /* we are in control now, the workers are waiting for the next round */

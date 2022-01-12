@@ -107,7 +107,7 @@ typedef struct Random Random;
 // Routing information for paths between nodes.
 typedef struct RoutingInfo_u32 RoutingInfo_u32;
 
-typedef struct StatusBar_ShadowStatusBarState StatusBar_ShadowStatusBarState;
+typedef struct StatusLogger_ShadowStatusBarState StatusLogger_ShadowStatusBarState;
 
 typedef uint64_t WatchHandle;
 
@@ -207,11 +207,14 @@ uint32_t random_nextU32(struct Random *rng);
 // Fills the buffer with pseudo-random bytes.
 void random_nextNBytes(struct Random *rng, uint8_t *buf, uintptr_t len);
 
-struct StatusBar_ShadowStatusBarState *statusBar_new(uint64_t end);
+struct StatusLogger_ShadowStatusBarState *statusBar_new(uint64_t end);
 
-void statusBar_free(struct StatusBar_ShadowStatusBarState *status_bar);
+struct StatusLogger_ShadowStatusBarState *statusPrinter_new(uint64_t end);
 
-void statusBar_update(const struct StatusBar_ShadowStatusBarState *status_bar, uint64_t current);
+void statusLogger_free(struct StatusLogger_ShadowStatusBarState *status_logger);
+
+void statusLogger_update(const struct StatusLogger_ShadowStatusBarState *status_logger,
+                         uint64_t current);
 
 // Flush Rust's log::logger().
 void rustlogger_flush(void);

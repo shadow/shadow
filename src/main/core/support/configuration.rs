@@ -361,7 +361,7 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_legacy_working_dir").unwrap().as_str())]
     pub use_legacy_working_dir: Option<bool>,
 
-    /// Show the simulation progress at the bottom of the terminal
+    /// Show the simulation progress
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("progress").unwrap().as_str())]
     pub progress: Option<bool>,

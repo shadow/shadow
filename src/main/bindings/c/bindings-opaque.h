@@ -106,6 +106,6 @@ typedef struct Random Random;
 // Routing information for paths between nodes.
 typedef struct RoutingInfo_u32 RoutingInfo_u32;
 
-typedef struct StatusBar_ShadowStatusBarState StatusBar_ShadowStatusBarState;
+typedef struct StatusLogger_ShadowStatusBarState StatusLogger_ShadowStatusBarState;
 
 #endif /* main_opaque_bindings_h */

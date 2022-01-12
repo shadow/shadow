@@ -236,33 +236,70 @@ fn tiocgwinsz() -> nix::Result<libc::winsize> {
 mod export {
     use super::*;
 
+    pub enum StatusLogger<T: StatusBarState> {
+        Printer(StatusPrinter<T>),
+        Bar(StatusBar<T>),
+    }
+
+    impl<T: 'static + StatusBarState> StatusLogger<T> {
+        pub fn mutate_state(&self, f: impl FnOnce(&mut T)) {
+            match self {
+                Self::Printer(x) => x.mutate_state(f),
+                Self::Bar(x) => x.mutate_state(f),
+            }
+        }
+
+        pub fn stop(&mut self) {
+            match self {
+                Self::Printer(x) => x.stop(),
+                Self::Bar(x) => x.stop(),
+            }
+        }
+    }
+
     #[no_mangle]
-    pub unsafe extern "C" fn statusBar_new(end: u64) -> *mut StatusBar<ShadowStatusBarState> {
+    pub unsafe extern "C" fn statusBar_new(end: u64) -> *mut StatusLogger<ShadowStatusBarState> {
         let end = SimulationTime::from_c_simtime(end).unwrap();
         let end = EmulatedTime::from_abs_simtime(end);
         let state = ShadowStatusBarState::new(end);
 
         let redraw_interval = Duration::from_millis(1000);
-        Box::into_raw(Box::new(StatusBar::new(state, redraw_interval)))
+        Box::into_raw(Box::new(StatusLogger::Bar(StatusBar::new(
+            state,
+            redraw_interval,
+        ))))
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn statusBar_free(status_bar: *mut StatusBar<ShadowStatusBarState>) {
-        assert!(!status_bar.is_null());
-        let mut status_bar = unsafe { Box::from_raw(status_bar) };
-        status_bar.stop();
+    pub unsafe extern "C" fn statusPrinter_new(
+        end: u64,
+    ) -> *mut StatusLogger<ShadowStatusBarState> {
+        let end = SimulationTime::from_c_simtime(end).unwrap();
+        let end = EmulatedTime::from_abs_simtime(end);
+        let state = ShadowStatusBarState::new(end);
+
+        Box::into_raw(Box::new(StatusLogger::Printer(StatusPrinter::new(state))))
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn statusBar_update(
-        status_bar: *const StatusBar<ShadowStatusBarState>,
+    pub unsafe extern "C" fn statusLogger_free(
+        status_logger: *mut StatusLogger<ShadowStatusBarState>,
+    ) {
+        assert!(!status_logger.is_null());
+        let mut status_logger = unsafe { Box::from_raw(status_logger) };
+        status_logger.stop();
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn statusLogger_update(
+        status_logger: *const StatusLogger<ShadowStatusBarState>,
         current: u64,
     ) {
-        let status_bar = unsafe { status_bar.as_ref() }.unwrap();
+        let status_logger = unsafe { status_logger.as_ref() }.unwrap();
         let current = SimulationTime::from_c_simtime(current).unwrap();
         let current = EmulatedTime::from_abs_simtime(current);
 
-        status_bar.mutate_state(|state| {
+        status_logger.mutate_state(|state| {
             state.update(current);
         });
     }
