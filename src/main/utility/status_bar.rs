@@ -6,6 +6,7 @@ use std::io::Write;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::time::Duration;
 
 const SAVE_CURSOR: &str = "\u{1B}[s";
 const RESTORE_CURSOR: &str = "\u{1B}[u";
@@ -26,7 +27,7 @@ pub struct StatusBar<T: StatusBarState> {
 
 impl<T: 'static + StatusBarState> StatusBar<T> {
     /// Create and start drawing the status bar.
-    pub fn new(state: T, redraw_interval: std::time::Duration) -> Self {
+    pub fn new(state: T, redraw_interval: Duration) -> Self {
         let state = Arc::new(RwLock::new(state));
         let stop_flag = Arc::new(AtomicBool::new(false));
 
@@ -39,11 +40,7 @@ impl<T: 'static + StatusBarState> StatusBar<T> {
         }
     }
 
-    fn redraw_loop(
-        state: Arc<RwLock<T>>,
-        stop_flag: Arc<AtomicBool>,
-        redraw_interval: std::time::Duration,
-    ) {
+    fn redraw_loop(state: Arc<RwLock<T>>, stop_flag: Arc<AtomicBool>, redraw_interval: Duration) {
         // we re-draw the status bar every interval, even if the state hasn't changed, since the
         // terminal might have been resized and the scroll region might have been reset
         while !stop_flag.load(std::sync::atomic::Ordering::Acquire) {
@@ -178,7 +175,7 @@ mod export {
         let end = EmulatedTime::from_abs_simtime(end);
         let state = ShadowStatusBarState::new(end);
 
-        let redraw_interval = std::time::Duration::from_millis(1000);
+        let redraw_interval = Duration::from_millis(1000);
         Box::into_raw(Box::new(StatusBar::new(state, redraw_interval)))
     }
 
