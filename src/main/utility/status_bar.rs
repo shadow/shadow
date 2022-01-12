@@ -4,8 +4,7 @@ use crate::utility::time::TimeParts;
 
 use std::io::Write;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 const SAVE_CURSOR: &str = "\u{1B}[s";
@@ -110,6 +109,74 @@ impl<T: 'static + StatusBarState> StatusBar<T> {
     }
 
     /// Update the state of the status bar.
+    pub fn mutate_state(&self, f: impl FnOnce(&mut T)) {
+        f(&mut *self.state.write().unwrap())
+    }
+}
+
+pub struct StatusPrinter<T: StatusBarState> {
+    state: Arc<RwLock<T>>,
+    stop_sender: Option<std::sync::mpsc::Sender<()>>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl<T: 'static + StatusBarState> StatusPrinter<T> {
+    /// Create and start printing the status.
+    pub fn new(state: T) -> Self {
+        let state = Arc::new(RwLock::new(state));
+        let (stop_sender, stop_receiver) = std::sync::mpsc::channel();
+
+        Self {
+            state: Arc::clone(&state),
+            stop_sender: Some(stop_sender),
+            thread: Some(std::thread::spawn(move || {
+                Self::print_loop(state, stop_receiver);
+            })),
+        }
+    }
+
+    fn print_loop(state: Arc<RwLock<T>>, stop_receiver: std::sync::mpsc::Receiver<()>) {
+        let mut print_interval = Duration::from_secs(30);
+
+        loop {
+            match stop_receiver.recv_timeout(print_interval) {
+                // the sender disconnects to signal that we should stop
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Ok(()) => unreachable!(),
+            }
+
+            // interval has an upper bound of 30 minutes
+            const MAX_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
+            // exponential backoff so that long simulations don't flood stderr
+            print_interval = std::cmp::min(print_interval.saturating_mul(2), MAX_INTERVAL);
+
+            // We want to write everything in as few write() syscalls as possible. Note that
+            // if we were to use eprint! with a format string like "{}{}", eprint! would
+            // always make at least two write() syscalls, which we wouldn't want.
+            let to_write = format!(
+                "Progress: {} (next update in {} minutes)\n",
+                *state.read().unwrap(),
+                print_interval.as_secs() / 60,
+            );
+            std::io::stderr().write_all(to_write.as_bytes()).unwrap();
+            let _ = std::io::stderr().flush();
+        }
+    }
+
+    /// Stop printing the status.
+    pub fn stop(&mut self) {
+        // drop the sender to disconnect it
+        self.stop_sender.take();
+        if let Some(handle) = self.thread.take() {
+            if let Err(e) = handle.join() {
+                log::warn!("Progress thread did not exit cleanly: {:?}", e);
+            }
+        }
+    }
+
+    /// Update the state of the status.
     pub fn mutate_state(&self, f: impl FnOnce(&mut T)) {
         f(&mut *self.state.write().unwrap())
     }
