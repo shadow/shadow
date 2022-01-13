@@ -160,7 +160,7 @@ thread-level siginfos and masks. If so, look up disposition in sigaction table:
   disposition of that signal to Term, and then use `tgkill` to send the current
   thread that signal. The OS will kill the process with that signal, which
   Shadow already detects and handles.
-* Ign: do nothing.
+* Ign: clear the pending siginfo and return the syscall result as normal.
 * Core: as with `Term`, use the native signal disposition and `tgkill` to force real
   death by the signal.
 * Stop: MS2: abort with error that this is unhandled. MS3: From the Shadow
@@ -314,6 +314,10 @@ handler, which would be responsible for recognizing that there's a pending
 signal and cleaning up any pending state. ~Every blocking syscall handler would
 need to be updated.
 
+TODO: Figure out whether a signal whose disposition is `Ign` still interrupts
+syscalls.  If not then the syscall handler needs to check this and ignore the
+signal in that case.
+
 # New tests
 
 Incomplete, but noting new tests we need as I think of them:
@@ -341,6 +345,9 @@ Incomplete, but noting new tests we need as I think of them:
   still handled). I'm not sure to what extent the latter is legal - e.g. when
   the target thread runs again is it legal to run the handler for the pending
   signal and then return successfully from the syscall?
+* Arrange for a thread to be blocked on a signal, and then send it a signal
+  whose disposition is `Ign`. Not sure whether the correct behavior is to
+  remain blocked on the syscall or have the syscall return `-EINTR`.
 
 # Questions/TODO
 
