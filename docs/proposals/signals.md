@@ -1,119 +1,172 @@
+# Overview
+
+Today basic signal sending and delivery is implemented mostly by passing
+everything through to native syscalls and signals in the kernel. This largely
+works in ptrace mode, but not in preload mode. There are a few problems:
+
+* There's an IPC state machine between Shadow and the shim. Naively sending the
+  signal to the managed thread disrupts that state machine. This is one of the
+  main problems we've observed in practice, and e.g.  why our current signal
+  tests are disabled in preload mode
+  (https://github.com/shadow/shadow/issues/1455). This may also cause breakage
+  in golang's signal-based preemption mechanism
+  (https://github.com/shadow/shadow/issues/1549#issuecomment-932606396).
+
+* The shim itself installs signal handlers for SIGSEGV (to handle traps of the
+  RDTSC instruction and emulate) and SIGSYS (to handle traps of the seccomp
+  filter due to syscalls to be intercepted). These currently run on the
+  thread's regular stack, which results in stack corruption in golang
+  (https://github.com/shadow/shadow/issues/1549#issuecomment-1010220221).
+
+  We also currently silently ignore attempts for the managed process to install
+  their own handlers for these signals, though this hasn't yet caused problems
+  in practice.
+
+* Since the syscall being executed by the shim when the signal is received is
+  part of the shim's syscall machinery, and not the original syscall that we're
+  emulating (as it is in ptrace), the `SA_RESTART` flag won't cause the kernel
+  to retry the original syscall for us. (We haven't seen this problem in
+  practice, but that may only be because things already go wrong earlier).
+
+My plan is to finish the current syscall/signal from Shadow's perspective,
+while pushing a frame on the stack on the shim side. This is analagous to how
+the Linux kernel handles signals.
+
+Shadow will set the siginfo for the signal in shared memory, and send the normal
+`SHD_SHIM_EVENT_SHMEM_COMPLETE` message. The shim will check for signals that
+are pending and not blocked before returning the syscall return value.  When
+there is one, it will store everything it needs to finish resolving the syscall
+(either restarting it or returning an error code) as locals on the current
+stack frame, call the handler, and then finish resolving the current syscall
+(by returning the originally specified value, or retrying the syscall).
+
+We *might* be able to save a little bit of emulation and shadowed data
+structures by still sending a signal to the thread. In that case we would still
+need some way of telling the the thread to prepare to receive a signal, but
+instead of calling (or even knowing about) the handler itself, it could just
+call something like `sigsuspend` to unmask and wait for the signal. I don't
+think this would actually save that much complexity though. e.g. we would still
+need to respect the simulated signal masks, either by fully tracking them
+ourselves, or saving and restoring the real signal mask in the syscall handling
+code (which would require a native syscall for each). We would also still need
+to handle retrying the original syscall when appropriate, saving and restoring
+interposition state etc. In the end I'm pretty sure this would be a wash at
+best.
+
+Most of this proposal focuses on getting signals working well in preload mode.
+Since ptrace mode is likely to be dropped unless we find a compelling reason
+not to, we won't invest effort in further improving the accuracy of its signal
+handling. We will preserve the current functionality by continuing to delegate
+to the native syscalls for signal handling in ptrace mode.
+
 # Milestones
 
-* MS1: Enough to support golang's signal-based preemptive scheduling. In
-  particular, support the sample program in #1549.
-  * `rt_sigaction` syscall: Used to set a signal handler, particularly for `SIGURG`. Example: `rt_sigaction(SIGURG, {sa_handler=0x46e360, sa_mask=~[RTMIN RT_1], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_SIGINFO, sa_restorer=0x7fafd720a3c0}, NULL, 8)`
-  * `sigaltstack` syscall: Used to configure an alternate stack on which to run
-    signal handlers. Experimentally, a simple golang program configures its
-    handlers to use an alt stack. It calls this call to set up the flag, and
-    uses the `SA_ONSTACK` flag in the individual calls to `rt_sigaction`. It
-    *might* work without actually switching stacks, but I suspect it has
-    something to do with not breaking its user space threads, and should be
-    easy to implement.
-  * `tgkill` syscall needs to deliver a signal to the configured signal
-    handler.
-  * Configure signal mask via `rt_sigprocmask`.
-* Beyond minimum, but worth doing in the near term (because easy to implement,
-  likely to be used, or both).
-  * Allow configuration and use of alternate signal handler stack
-    (`sigaltstack`).
-* 
-  * Realtime signals.
-  * fd-based signal APIs.
+These don't necessarily map to milestones in shadow's project; it's just a
+rough sequence of how to prioritize functionality.
 
-# Signals
+* MS1: Run our handlers on an alternate signal stack and handle `sigaltstack`.
+  It appears this may be enough for at least some small golang simulations,
+  such as the one in #1549.
+  * Use `sigaltstack` to run the shim's signal handlers on a dedicated stack.
+    This prevents stack corruption in golang, which can migrate goroutine
+    stacks between native threads. (I still don't 100% understand exactly how
+    this results in stack corruption, but golang itself uses `sigaltstack` for
+    presumably a similar reason, and I've confirmed that doing so for our own
+    handlers fixes the current issue).
+  * Prevent managed code calls to `sigaltstack` from actually making the native
+    call. In particular on debian11-slim, glibc seems to do this sometimes.
+    Running our own handlers on the specified stack *might* work, but they also
+    drop the the `SS_AUTODISARM` flag when doing this, which definitely breaks
+    our code. For this milestone it should be sufficient to mostly fake this
+    syscall without actually doing much.
+* MS2: Support running configured signal handlers in response to "standard" signals (1-31).
+  * Support configuring handlers, signal masks, etc. in preload mode.  The
+    calls and corresponding state will need to be emulated instead of being
+    passed through to the kernel as they are now to prevent interfering with
+    preload mode's own usage of signals and its communication state machine
+    between shadow and the shim.
+  * For syscalls that we don't implement for this milestone (e.g. `signalfd`),
+    we should return an error rather than passing through as a native syscall.
+    The former should make it relatively easy to identify the failure and see
+    that we can implement the syscall. Continuing to do the latter may break
+    things in more subtle ways.
+* MS3: Deferred. These things aren't necessarily a lot more difficult, but it
+  doesn't make sense to prioritize them without a concrete use case.
+  * Realtime signals (numbers 32+). Not too difficult, but we don't know of any
+    concrete use cases yet.
+  * File-descriptor-based signal APIs. Not too difficult, but we don't know of
+    any concrete use cases yet.
+  * Syscalls assigned to this milestone below should return an error in MS2.
 
-## Relevant syscalls and how to handle them
+# Overview of code changes
 
-* `kill(2)`. Send a signal to a *process* or *process group*. For each targeted
-  process set the bit in the "process-signal pending bitfield", then iterate
-  through threads until we find one that  hasn't masked that signal (if any)
-  and schedule that thread to run. This will need to be a new event type that
-  includes the signal number (and maybe a signals-handled counter...?), in case
-  an already scheduled event runs the thread and handles the signal.
+## New event type
 
-* `pause(2)`: suspends execution until any signal is caught. Basically want to
-  return "blocked" from the signal handler and maybe set a flag on the thread.
+* Deliver signal(thread pointer, signal number, target=thread|process).
+  Scheduled by syscalls such as `kill` and `tgkill`. Making
+  this an event lets us "unwind the stack" of running those syscalls before
+  beginning to handle the signal. When the event runs:
+  * If the signal is no longer pending for the targeted thread, just return.
+    (Not sure whether this can actually happen).
+  * If the signal is now blocked by the current thread:
+    * If the signal was process-targeted, and there is currently another thread
+      without this signal blocked, reschedule this event for *that* thread.
+    * Otherwise there is currently no eligible receiver; just return.
+  * Call `thread_continue` for the given thread.
 
-* `pidfd_send_signal(2)`: can skip for MVP.
+# New data structures
 
-* `restart_syscall(2)`: Used by signal trampoline call to restart a syscall,
-  updating time-related parameters if needed (for syscalls that specify a
-  relative timeout). We shouldn't need to implement a handler for this syscall
-  per se, but the man page is a good reference for what our equivalent
-  shim-side code will need to take into account when restarting an interrupted
-  system call.
+We'll tentatively keep per-thread signal state in the per-thread shared memory
+block. I'm not sure yet whether this is necessary, but shouldn't hurt, and may
+less us avoid some context switches between Shadow and the shim.
 
-* `sigaltstack(2)`: 
-* `signal(2)`
-* `signalfd(2)`
-* `sigpending(2)`: Returns the set of signals pending for the thread (union of
-  process-directed and thread-directed pending signals). Can probably be
-  handled completely shim-side.
-* `sigprocmask(2)`
-* `sigreturn(2)`
-* `sigsuspend(2)`: change signal mask, `pause(2)`, then restore signal mask.
-  We'll need to save the old signal mask somewhere (Thread?).
-* `sigtimedwait(2)`:
-* `sigwaitinfo(2)`:
-* `wait(2)`
+* signal mask bitfield: MS2. Per thread bitfield of masked signals.
+  (`sigprocmask(2)`:  Each of the threads in a process has its own signal
+  mask.)
+* thread-signal pending siginfos: MS2. Array of `siginfo_t` (see
+  `sigaction(2)`) of pending thread-directed signals.  (Alternatively, to save
+  memory this could probably be a bit-field in memory, and then a dynamically
+  allocated map from signal number to siginfo in Shadow's memory, which could
+  then be sent over the IPC pipe in a "handle signal" message).
+* run-state: MS3. 
 
-## Other man pages
-* `killpg(3)`
-* `raise(3)`
-* `siginterrupt(3)`
-* `sigqueue(3)`
-* `sigsetops(3)`
-* `sigvec(3)`
-* `signal(7)`
-* `sigwait(3)`
-* `tkill`: See `tgkill`.
-* `tgkill`.
+Likewise the following state is per-process, and is probably best kept in a
+per-process shared memory block:
 
-## New data structures
-
-In per-thread shared memory:
-* signal mask bitfield: per thread bitfield of masked signals. (`sigprocmask(2)`:  Each of the threads in
-  a process has its own signal mask.)
-* thread-signal pending siginfos: array of `siginfo_t` (see `sigaction(2)`) of
-  pending thread-directed signals.  (Alternatively, to save memory this could
-  probably be a bit-field in memory, and then a dynamically allocated map from
-  signal number to siginfo in Shadow's memory, which could then be sent over
-  the IPC pipe in the "handle signal" message).
-
-In per-process shared memory (do we have such a thing now?):
-* process-signal pending siginfos: array of `siginfo_t` (see `sigaction(2)`) of
-  pending process-directed signals. (Or bitfield
-+ map as for thread-signal pending siginfos).
-* signal disposition table: per *process* table of signal number to `struct
+* process-signal pending siginfos: MS2. array of `siginfo_t` (see
+  `sigaction(2)`) of pending process-directed signals. (Or bitfield + map as
+  for thread-signal pending siginfos).
+* signal disposition table: MS2. per *process* table of signal number to `struct
   sigaction`, which includes disposition (`Term|Ign|Core|Stop|Cont`), pointer
   to handler, and flags. See `signal(7)`. As a flat array this will be
   large-ish (64 signals * ~36 bytes -> 2300 bytes).  Might be worth having
-  shim-side only so that this can start small and grow dynamically as needed,
-  but some things will be easier and more efficient if this is available
-  shadow-side as well. Hopefully the shared region won't spill to more than a
-  page per process anyway.
+  shim-side only instead of in shared memory, so that this can start small and
+  grow dynamically as needed, but some things will be easier and more efficient
+  if this is available shadow-side as well. Hopefully the shared region won't
+  spill to more than a page per process anyway.
 
 In shim:
-* altstack: `stack_t` struct that pecifies an alternate stack on which to run
+
+* altstack: MS2. `stack_t` struct that pecifies an alternate stack on which to run
   signal handlers. See `sigaltstack(2)`.
 
-## New code
+## In shim syscall handling loop
 
-### In shim
+In the syscall handling loop, when a syscall result returns, check whether
+there's also a deliverable signal pending by checking the process and
+thread-level siginfos and masks. If so, look up disposition in sigaction table:
 
-Handle a new syscall response over pipe "Handle signal". Shadow side will have already
-checked the mask, so shim delivers it unconditionally. Look up disposition in sigaction table:
-
-* Term: with interposition still disabled, use `kill` to send a real `SIGKILL`
-  to self. `SIGKILL` is unblockable.
-* Ign: do nothing
-* Core: disable interposition and use `kill` to send a real `SIGABRT`
-  to self. Relies on shadow to have not allowed default disposition of
-  `SIGABRT` to have been changed. (Or set the disposition ourselves before
-  calling `kill` to be sure).
-* Stop: Send a Stop message to shadow, then wait for a Continue message from
-  Shadow.
+* Term: with interposition still disabled, use `sigaction` to change the native
+  disposition of that signal to Term, and then use `tgkill` to send the current
+  thread that signal. The OS will kill the process with that signal, which
+  Shadow already detects and handles.
+* Ign: do nothing.
+* Core: as with `Term`, use the native signal disposition and `tgkill` to force real
+  death by the signal.
+* Stop: MS2: abort with error that this is unhandled. MS3: From the Shadow
+  side, mark that the *process* is now in a 'stopped' state. There's more to
+  work out here about the details of what that means and how a process gets out
+  of that state.
 * handler:
   * Ensure anything needed to restart the syscall later is saved locally on the
     stack (it should already be).
@@ -127,67 +180,176 @@ checked the mask, so shim delivers it unconditionally. Look up disposition in si
     been set via `sigaltstack`
     * If the altstack was set with `SS_AUTODISARM`, save a copy of it locally and clear it.
     * Switch to the specified stack (we already have an example of how to do this in the shim).
+  * Save the current value of `_shim_disable_interposition` and set it to 0.
+    i.e. re-enable syscall interposition without unwinding the stack.
+  * Copy the relevant `siginfo` to a local, and clear the one being serviced from
+    the thread or process-level siginfo's.
   * Call the handler. (Check `SA_SIGINFO` to determine which field of the
     sigaction has the handler and what its function signature is.) 
+  * Restore `_shim_disable_interposition`, disabling interposition.
   * Switch back to old stack if needed (probably just return from a wrapper
     function, which will return to the old stack if applicable). Also restore
     `altstack` if it was cleared via `SS_AUTODISARM`.
   * If `SA_RESETHAND` was set in the saved `sa_flags`, then reset sigaction for
     this signal to default.
   * If `SA_RESTART` was set in the saved `sa_flags` (or current flags?
-    `sigaction(2)` doesn't specify which), and we got here via a signal
-    delivered while handling a syscall (vs. e.g. a SIGSEGV delivered
-    synchronously and handled via our shim handler instead of via a shadow
-    message)
+    `sigaction(2)` doesn't specify which)
     * then re-attempt the syscall that was in progress. If the original syscall had
       relative timeouts, may need to adjust for time passed. See `restart_syscall(2)`.
-    * else return `-EINTR`
+    * else return the value specified by Shadow (typically `-EINTR`, but e.g. 0
+      in the case of `kill` sending a signal to the current thread).
 
-### New messages from shim to shadow
+## In shim initialization
 
-* Stop: Used by shim to handle a signal whose disposition is Stop. On the
-  shadow side, just return from executing the thread without scheduling another
-  event to run the thread. Do we need to set a flag to explicitly mark that
-  the thread is in a stopped state? Might be useful for debugging if nothing
-  else.
+* MS1: Configure `sigaltstack` to run the shim's handlers on a stack owned by
+  the shim.
+* MS3: Install our own handlers for "synchronous" signals that may be raised
+  natively while executing code.  These include `SIGBUS`, `SIGFPE`, and
+  `SIGSEGV`. These handlers should call into the same core signal emulation
+  code as used while accepting signals during a syscall, including switching
+  the stack if necessary, etc. MS3 since the common case is that these signals
+  are fatal anyway - either immediately or after a handler writes out some
+  debugging information.
 
-### New messages from shadow to shim
+## In Thread
 
-* Handle signal: Used by shadow to deliver a signal. Most of the logic for
-  handling the signal will live shim-side.
-* Continue: 
+I don't think there's much code change in `Thread` or `ThreadPreload`, other than
+initializing the per-thread data structures.
 
-### Delivering a signal.
+When a thread is in a blocking syscall and interrupted by a signal, ultimately
+its `thread_continue` gets called, and it does the same as before - call the
+sycall handler for the blocked syscall. It's up to
+`syscallhandler_make_syscall` and/or the specific handlers to recognize that
+there's a deliverable signal pending, clean up as needed, and return an
+appropriate value for the current syscall (`-EINTR`).
 
-### Receiving a signal
+## Signal-related syscall handlers
 
-## Questions/TODO
+* `tgkill(2)`: MS2: Send a signal to a specific thread. If the specified thread
+  already has a pending signal with the same signal number, do nothing.
+  Otherwise write the pending signal info. If the target thread is not the one
+  currently executing, and that thread doesn't currently have this signal
+  blocked, schedule a "deliver signal" event for the target thread, for "now".
 
-* Whether and how to handle the `Stop` and `Cont` dispositions (see `signal(7)`). Dispositions 
-* How to handle `disable_interposition` counter when recursing into signal
-  handler? I think we need to add a way to fetch and restore it.
+* `kill(2)`: MS2. Similar to `tgkill`, but sends a signal to a *process* or
+  *process group*.  For each targeted process (which will currently only be 1
+  since we don't track process groups):
+  * If there's already a siginfo for this signal for this process, skip.
+  * set the siginfo for this signal in this process.
+  * If the process is the one currently running, and the signal isn't blocked
+    in the current thread, continue to next process.
+  * Iterate through threads in the process. If there's one without the signal
+    blocked, schedule a "deliver signal" event for that thread.
+  "process-signal pending siginfos", then iterate through threads until we find
+  one that  hasn't masked that signal (if any) and schedule a "deliver signal"
+  event for that thread.
 
-* What's supposed to happen to a stopped process if it receives a signal with a
-  disposition other than Cont? More broadly, what all can get a process out of
-  the stopped state?
+* `pause(2)`: MS3. Suspends execution until any signal is caught. Basically want to
+  return "blocked" from the signal handler and maybe set a flag on the thread.
 
-* Do we need to do anything with the `SA_RESTORER` flag or `sa_restorer` field in `struct sigaction`? I *think* we don't,
-unless there's some particular use of it to use for us. According to
-`sigreturn(2)`: "on contemporary Linux systems, depending on the architecture,
-the signal trampoline  code  lives  either  in  the vdso(7)  or  in the C
-library." I *think* we don't want to run the real trampoline code. The
-equivalent code will be in the shim "signal delivery" handling code.
+* `pidfd_send_signal(2)`: MS3.
 
-* Should we handle realtime signals?
+* `restart_syscall(2)`: MS3. Used by signal trampoline call to restart a syscall,
+  updating time-related parameters if needed (for syscalls that specify a
+  relative timeout). We shouldn't need to implement a handler for this syscall
+  per se, but the man page is a good reference for what our equivalent
+  shim-side code will need to take into account when restarting an interrupted
+  system call.
 
-* Signals generated outside of shadow: e.g. `SIGBUS` or `SIGSEGV`. MVP could
-  just let them be handled natively, e.g. allowing the process to exit on
-  `SIGBUS` or `SIGSEGV`. If we want to handle the case where the managed
-  process wants to install a handler for such signals, we'll need to install a
-  shim handler for each such signal. I suppose this could be done easily enough
-  if we move the implementation of `sigaction` shim-side.
+* `rt_sigqueueinfo(2)`: MS3.
 
-## Other notes
+* `setitimer(2)`: MS3.
+
+* `sigaction(2)`: Configure how a signal will be handled. This will manipulate
+  the signal disposition table.
+
+* `sgetmask(2)`: MS3. Deprecated version of `sigprocmask`.
+
+* `sigaltstack(2)`: MS1 and MS2.
+  Configures a stack for signal handlers to
+  execute on (instead of just pushing a frame onto the current thread's regular
+  stack), and returns information about the current configuration.
+  * MS1: We need to stop passing through to the kernel, since this would
+    interfere with the shim's `sigaltstack` configuration. We can probably get
+    away with just faking the returned information about the current
+    configuration for now.
+  * MS2: Save the requested stack configuration and return it in subsequent
+    calls. Actually switch to this stack when running the managed thread's
+    signal handlers. We might be able to get away without this, but failures
+    due to this functionality missing may be difficult to debug.
+* `signal(2)`: MS3. Deprecated alternative to `sigaction`.
+* `signalfd(2)`: MS3. Creates a file descriptor that can be used to listen for
+  signals.
+* `sigpending(2)`: MS3. Returns the set of signals pending for the thread
+  (union of process-directed and thread-directed pending signals).
+* `sigprocmask(2)`: MS2. Fetch and/or change calling thread's signal mask.
+* `sigreturn(2)`: MS3. This is meant to be called by the kernel's/libc's signal
+  handling code, which won't be invoked for emulated syscalls.
+* `sigsuspend(2)`: MS3. Change signal mask, `pause(2)`, then restore signal mask.
+* `sigtimedwait(2)`: MS3. Wait for a signal.
+* `sigwaitinfo(2)`: MS3. Wait for a signal.
+
+## Blocking-syscall handlers
+
+When we enter `syscallhandler_make_syscall` with an unblocked signal already
+pending, and a blocked syscall was in progress, we may need to do something to
+cancel it to avoid losing data, and then we should ultimately return `-EINTR`.
+
+If we don't do anything to cancel, will anything go wrong? e.g. if we don't
+cancel a blocked read, and the thread is later continued when the file
+descriptor becomes readable, hopefully we don't lose data?  I'd think this
+would be the case assuming e.g. no data is copied nor the position in the
+stream advanced until the "second half" of the syscall handler runs, which it
+never would in this case. If so, then life is simple -
+`syscallhandler_make_syscall` just returns `-EINTR` if there's an unblocked
+signal pending on entry.
+
+If not, then the next best option is if the base `SysCallHandler` has enough
+information that we can generically cancel the current syscall from
+`syscallhandler_make_syscall`. (This could also be desirable to avoid a
+spurious wakeup later).
+
+I could imagine a case where we need to still invoke the syscall-specific
+handler, which would be responsible for recognizing that there's a pending
+signal and cleaning up any pending state. ~Every blocking syscall handler would
+need to be updated.
+
+# New tests
+
+Incomplete, but noting new tests we need as I think of them:
+
+* Install a signal handler that mutates a global. `raise(3)` that signal. Check
+  immediately afterwards that the global was mutated by the handler.
+  (`raise(3)` guarantees that the handler has already run when `raise`
+  returns).
+* Install a signal handler that mutates a global. Block the signal with
+  `sigprocmask`.  `raise(3)` that signal. Check that global wasn't mutated.
+  Unblock the signal with `sigprocmask` - I *think* what we want to happen is
+  that the signal handler runs, and then `sigprocmask` returns without error.
+  Will need to verify that's what happens (or at least can happen) on Linux.
+  * Same, but send the signal using `kill` or `tgkill` from another thread.
+* Install a signal handler that increments a global counter and records the
+  current thread id.  Start several threads that sleep in a loop. Use `kill` to
+  send the signal to the process. Verify that the handler ran exactly once (it
+  doesn't matter which thread ran it).
+  * Same, but use `tgkill` and verify that the targeted thread ran it.
+* Arrange for a `read` on a socket and/or pipe to be blocked. From another
+  thread, unblock the operation (by writing to the other end), and then send a
+  signal to *interrupt* the operation. No data should be lost. Either the
+  operation is interrupted but subsequent reads correctly pick up where the
+  last successful read left off, or the operation completes (and the signal is
+  still handled). I'm not sure to what extent the latter is legal - e.g. when
+  the target thread runs again is it legal to run the handler for the pending
+  signal and then return successfully from the syscall?
+
+# Questions/TODO
+
+* What happens when to a thread-directed signal if that same signal is pending
+  for the process? I'm guessing both could be delivered, potentially to the
+  same thread, one via the process level siginfo and one via the thread level
+  siginfo?
+
+# Other notes
 
 process-directed vs thread-directed signals in `signal(7)`:
 
