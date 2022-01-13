@@ -1,7 +1,6 @@
 #ifndef SHD_SHIM_SHIM_H_
 #define SHD_SHIM_SHIM_H_
 
-#include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>

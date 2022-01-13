@@ -108,9 +108,7 @@ void shim_rdtsc_init() {
                       // handler.
                       // SA_SIGINFO: Required because we're specifying
                       // sa_sigaction.
-                      // SA_ONSTACK: Use the alternate signal handling stack, to avoid interfering
-                      // with userspace thread stacks.
-                      .sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK,
+                      .sa_flags = SA_SIGINFO | SA_NODEFER,
                   },
                   NULL) < 0) {
         panic("sigaction: %s", strerror(errno));

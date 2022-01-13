@@ -6,16 +6,12 @@
 #include <assert.h>
 #include <stdalign.h>
 
-// This needs to be big enough to store all thread-local variables for a single
-// thread. We fail at runtime if this limit is exceeded.
-//
-// Right now the biggest contributors are special thread-local stacks in
-// _shim_emulated_syscallv and in _shim_init_signal_stack. Each of those is
-// 4096*10 bytes.
-//
-// Fixing https://github.com/shadow/shadow/issues/1846 will likely remove one
-// of those, in which case we can reduce this allocation.
-#define BYTES_PER_THREAD (2*4096*10 + 1024)
+// Size of the thread-local stack in _shim_emulated_syscallv (4096*10) + an extra
+// kilobyte for the handful of other thread locals we use.  If the former
+// becomes a permanent fixture, we should make it a shared constant, but it
+// should eventually go away. In the meantime we catch at runtime if we try to
+// use more TLS than we've pre-reserved.
+#define BYTES_PER_THREAD (4096*10 + 1024)
 #define MAX_THREADS 100
 
 // Stores the TLS for a single thread.

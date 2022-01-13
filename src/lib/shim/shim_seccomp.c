@@ -66,10 +66,6 @@ static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcon
     ctx->uc_mcontext.gregs[REG_RAX] = rv;
 }
 
-#ifndef SS_AUTODISARM
-#define SS_AUTODISARM (1U << 31)
-#endif
-
 void shim_seccomp_init() {
     // Install signal sigsys signal handler, which will receive syscalls that
     // get stopped by the seccomp filter. Shadow's emulation of signal-related
@@ -84,9 +80,7 @@ void shim_seccomp_init() {
                       // to properly handle the case that we end up logging from the syscall
                       // handler, and the IO syscalls themselves are trapped.
                       // SA_SIGINFO: Required because we're specifying sa_sigaction.
-                      // SA_ONSTACK: Use the alternate signal handling stack, to avoid interfering
-                      // with userspace thread stacks.
-                      .sa_flags = SA_NODEFER | SA_SIGINFO | SA_ONSTACK,
+                      .sa_flags = SA_NODEFER | SA_SIGINFO,
                   },
                   &old_action) < 0) {
         panic("sigaction: %s", strerror(errno));
