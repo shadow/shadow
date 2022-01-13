@@ -33,7 +33,7 @@ while pushing a frame on the stack on the shim side. This is analagous to how
 the Linux kernel handles signals.
 
 Shadow will set the siginfo for the signal in shared memory, and send the normal
-`SHD_SHIM_EVENT_SHMEM_COMPLETE` message. The shim will check for signals that
+`SHD_SHIM_EVENT_SYSCALL_COMPLETE` message. The shim will check for signals that
 are pending and not blocked before returning the syscall return value.  When
 there is one, it will store everything it needs to finish resolving the syscall
 (either restarting it or returning an error code) as locals on the current
