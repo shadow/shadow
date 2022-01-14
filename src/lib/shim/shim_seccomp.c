@@ -80,7 +80,9 @@ void shim_seccomp_init() {
                       // to properly handle the case that we end up logging from the syscall
                       // handler, and the IO syscalls themselves are trapped.
                       // SA_SIGINFO: Required because we're specifying sa_sigaction.
-                      .sa_flags = SA_NODEFER | SA_SIGINFO,
+                      // SA_ONSTACK: Use the alternate signal handling stack, to avoid interfering
+                      // with userspace thread stacks.
+                      .sa_flags = SA_NODEFER | SA_SIGINFO | SA_ONSTACK,
                   },
                   &old_action) < 0) {
         panic("sigaction: %s", strerror(errno));
