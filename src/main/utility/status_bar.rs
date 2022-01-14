@@ -4,8 +4,8 @@ use crate::utility::time::TimeParts;
 
 use std::io::Write;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 const SAVE_CURSOR: &str = "\u{1B}[s";
 const RESTORE_CURSOR: &str = "\u{1B}[u";
@@ -26,7 +26,7 @@ pub struct StatusBar<T: StatusBarState> {
 
 impl<T: 'static + StatusBarState> StatusBar<T> {
     /// Create and start drawing the status bar.
-    pub fn new(state: T, redraw_interval: std::time::Duration) -> Self {
+    pub fn new(state: T, redraw_interval: Duration) -> Self {
         let state = Arc::new(RwLock::new(state));
         let stop_flag = Arc::new(AtomicBool::new(false));
 
@@ -39,11 +39,7 @@ impl<T: 'static + StatusBarState> StatusBar<T> {
         }
     }
 
-    fn redraw_loop(
-        state: Arc<RwLock<T>>,
-        stop_flag: Arc<AtomicBool>,
-        redraw_interval: std::time::Duration,
-    ) {
+    fn redraw_loop(state: Arc<RwLock<T>>, stop_flag: Arc<AtomicBool>, redraw_interval: Duration) {
         // we re-draw the status bar every interval, even if the state hasn't changed, since the
         // terminal might have been resized and the scroll region might have been reset
         while !stop_flag.load(std::sync::atomic::Ordering::Acquire) {
@@ -118,6 +114,74 @@ impl<T: 'static + StatusBarState> StatusBar<T> {
     }
 }
 
+pub struct StatusPrinter<T: StatusBarState> {
+    state: Arc<RwLock<T>>,
+    stop_sender: Option<std::sync::mpsc::Sender<()>>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl<T: 'static + StatusBarState> StatusPrinter<T> {
+    /// Create and start printing the status.
+    pub fn new(state: T) -> Self {
+        let state = Arc::new(RwLock::new(state));
+        let (stop_sender, stop_receiver) = std::sync::mpsc::channel();
+
+        Self {
+            state: Arc::clone(&state),
+            stop_sender: Some(stop_sender),
+            thread: Some(std::thread::spawn(move || {
+                Self::print_loop(state, stop_receiver);
+            })),
+        }
+    }
+
+    fn print_loop(state: Arc<RwLock<T>>, stop_receiver: std::sync::mpsc::Receiver<()>) {
+        let mut print_interval = Duration::from_secs(30);
+
+        loop {
+            match stop_receiver.recv_timeout(print_interval) {
+                // the sender disconnects to signal that we should stop
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Ok(()) => unreachable!(),
+            }
+
+            // interval has an upper bound of 30 minutes
+            const MAX_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
+            // exponential backoff so that long simulations don't flood stderr
+            print_interval = std::cmp::min(print_interval.saturating_mul(2), MAX_INTERVAL);
+
+            // We want to write everything in as few write() syscalls as possible. Note that
+            // if we were to use eprint! with a format string like "{}{}", eprint! would
+            // always make at least two write() syscalls, which we wouldn't want.
+            let to_write = format!(
+                "Progress: {} (next update in {} minutes)\n",
+                *state.read().unwrap(),
+                print_interval.as_secs() / 60,
+            );
+            std::io::stderr().write_all(to_write.as_bytes()).unwrap();
+            let _ = std::io::stderr().flush();
+        }
+    }
+
+    /// Stop printing the status.
+    pub fn stop(&mut self) {
+        // drop the sender to disconnect it
+        self.stop_sender.take();
+        if let Some(handle) = self.thread.take() {
+            if let Err(e) = handle.join() {
+                log::warn!("Progress thread did not exit cleanly: {:?}", e);
+            }
+        }
+    }
+
+    /// Update the state of the status.
+    pub fn mutate_state(&self, f: impl FnOnce(&mut T)) {
+        f(&mut *self.state.write().unwrap())
+    }
+}
+
 pub struct ShadowStatusBarState {
     start: std::time::Instant,
     current: EmulatedTime,
@@ -172,33 +236,70 @@ fn tiocgwinsz() -> nix::Result<libc::winsize> {
 mod export {
     use super::*;
 
+    pub enum StatusLogger<T: StatusBarState> {
+        Printer(StatusPrinter<T>),
+        Bar(StatusBar<T>),
+    }
+
+    impl<T: 'static + StatusBarState> StatusLogger<T> {
+        pub fn mutate_state(&self, f: impl FnOnce(&mut T)) {
+            match self {
+                Self::Printer(x) => x.mutate_state(f),
+                Self::Bar(x) => x.mutate_state(f),
+            }
+        }
+
+        pub fn stop(&mut self) {
+            match self {
+                Self::Printer(x) => x.stop(),
+                Self::Bar(x) => x.stop(),
+            }
+        }
+    }
+
     #[no_mangle]
-    pub unsafe extern "C" fn statusBar_new(end: u64) -> *mut StatusBar<ShadowStatusBarState> {
+    pub unsafe extern "C" fn statusBar_new(end: u64) -> *mut StatusLogger<ShadowStatusBarState> {
         let end = SimulationTime::from_c_simtime(end).unwrap();
         let end = EmulatedTime::from_abs_simtime(end);
         let state = ShadowStatusBarState::new(end);
 
-        let redraw_interval = std::time::Duration::from_millis(1000);
-        Box::into_raw(Box::new(StatusBar::new(state, redraw_interval)))
+        let redraw_interval = Duration::from_millis(1000);
+        Box::into_raw(Box::new(StatusLogger::Bar(StatusBar::new(
+            state,
+            redraw_interval,
+        ))))
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn statusBar_free(status_bar: *mut StatusBar<ShadowStatusBarState>) {
-        assert!(!status_bar.is_null());
-        let mut status_bar = unsafe { Box::from_raw(status_bar) };
-        status_bar.stop();
+    pub unsafe extern "C" fn statusPrinter_new(
+        end: u64,
+    ) -> *mut StatusLogger<ShadowStatusBarState> {
+        let end = SimulationTime::from_c_simtime(end).unwrap();
+        let end = EmulatedTime::from_abs_simtime(end);
+        let state = ShadowStatusBarState::new(end);
+
+        Box::into_raw(Box::new(StatusLogger::Printer(StatusPrinter::new(state))))
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn statusBar_update(
-        status_bar: *const StatusBar<ShadowStatusBarState>,
+    pub unsafe extern "C" fn statusLogger_free(
+        status_logger: *mut StatusLogger<ShadowStatusBarState>,
+    ) {
+        assert!(!status_logger.is_null());
+        let mut status_logger = unsafe { Box::from_raw(status_logger) };
+        status_logger.stop();
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn statusLogger_update(
+        status_logger: *const StatusLogger<ShadowStatusBarState>,
         current: u64,
     ) {
-        let status_bar = unsafe { status_bar.as_ref() }.unwrap();
+        let status_logger = unsafe { status_logger.as_ref() }.unwrap();
         let current = SimulationTime::from_c_simtime(current).unwrap();
         let current = EmulatedTime::from_abs_simtime(current);
 
-        status_bar.mutate_state(|state| {
+        status_logger.mutate_state(|state| {
             state.update(current);
         });
     }

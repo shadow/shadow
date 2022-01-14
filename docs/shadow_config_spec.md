@@ -333,7 +333,7 @@ Max number of iterations to busy-wait on IPC semaphore before blocking.
 Default: false  
 Type: Bool
 
-Show the simulation progress at the bottom of the terminal.
+Show the simulation progress.
 
 #### `experimental.runahead`
 
