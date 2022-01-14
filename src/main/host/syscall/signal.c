@@ -264,6 +264,43 @@ SysCallReturn syscallhandler_rt_sigaction(SysCallHandler* sys, const SysCallArgs
                          /*oldActPtr=*/args->args[2].as_ptr, /*masksize=*/args->args[3].as_u64);
 }
 
+SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs* args) {
+    if (!shimipc_getUseSeccomp()) {
+        // Outside of seccomp mode, just handle natively.
+        return (SysCallReturn){.state = SYSCALL_NATIVE};
+    }
+    // Otherwise we need to emulate to ensure that the shim's own sigaltstack
+    // configuration isn't clobbered.
+
+    utility_assert(sys && args);
+    PluginPtr ss_ptr = args->args[0].as_ptr;
+    PluginPtr old_ss_ptr = args->args[1].as_ptr;
+    trace("sigaltstack(%p, %p)", (void*)ss_ptr.val, (void*)old_ss_ptr.val);
+
+    if (ss_ptr.val) {
+        // TODO: if the alt stack is already active, return -EPERM.
+        stack_t ss;
+        int rv = process_readPtr(sys->process, &ss, ss_ptr, sizeof(ss));
+        if (rv != 0) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+        }
+        trace("sigaltstack ss_sp:%p ss_flags:%x ss_size:%zu", ss.ss_sp, ss.ss_flags, ss.ss_size);
+        // TODO: arrange for this info to be returned in subsequent calls via old_ss_ptr
+        // and to actually use this stack in managed thread signal handlers.
+        warning(
+            "sigaltstack used, but is currently only partially emulated. Instability may result.");
+    }
+
+    if (old_ss_ptr.val) {
+        // TODO: If an old stack was configured, return that instead of the native configuration.
+        long result = thread_nativeSyscall(sys->thread, SYS_sigaltstack, NULL, old_ss_ptr.val);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    }
+
+    // Ignore
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval = 0};
+}
+
 static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr setPtr,
                                      PluginPtr oldSetPtr, size_t sigsetsize) {
     utility_assert(sys);

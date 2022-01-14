@@ -367,6 +367,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         UNSUPPORTED(sigaction);
 #endif
         HANDLE(rt_sigaction);
+        HANDLE(sigaltstack);
 #ifdef SYS_signal
         // Superseded by sigaction in glibc 2.0
         UNSUPPORTED(signal);
@@ -479,7 +480,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         NATIVE(stat64);
 #endif
         NATIVE(statfs);
-        NATIVE(sigaltstack);
         NATIVE(symlink);
         NATIVE(truncate);
         NATIVE(unlink);
