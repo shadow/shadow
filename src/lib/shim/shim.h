@@ -15,13 +15,10 @@
 // Should be called by all syscall wrappers to ensure the shim is initialized.
 void shim_ensure_init();
 
-// Disables syscall interposition for the current thread if it's enabled.
-// Every call to this function should be matched with a call to shim_enableInterposition().
-void shim_disableInterposition();
-
-// Re-enabled syscall interposition for the current thread if it's disabled.
-// Every call to this function should be matched with a call to shim_disableInterposition().
-void shim_enableInterposition();
+// Sets the flag determining whether syscalls are passed through natively, and
+// returns the old value. Typical usage is to set this to the desired value at
+// the beginning of an operation, and restore the old value afterwards.
+bool shim_swapAllowNativeSyscalls(bool new);
 
 // Whether syscall interposition is currently enabled.
 bool shim_interpositionEnabled();

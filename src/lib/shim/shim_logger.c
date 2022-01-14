@@ -49,7 +49,7 @@ void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const ch
         return;
     }
     *in_logger = true;
-    shim_disableInterposition();
+    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     ShimLogger* logger = (ShimLogger*)base;
 
@@ -84,7 +84,7 @@ void shimlogger_log(Logger* base, LogLevel level, const char* fileName, const ch
         abort();
     }
 
-    shim_enableInterposition();
+    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
     *in_logger = false;
 }
 
@@ -94,9 +94,9 @@ void shimlogger_destroy(Logger* logger) {
 
 void shimlogger_flush(Logger* base) {
     ShimLogger* logger = (ShimLogger*)base;
-    shim_disableInterposition();
+    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
     fflush_unlocked(logger->file);
-    shim_enableInterposition();
+    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
 bool shimlogger_isEnabled(Logger* base, LogLevel level) {
