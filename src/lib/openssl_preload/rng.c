@@ -10,7 +10,7 @@
  * software using libcrypto non-deterministic.
  *
  * To use this library, set LD_PRELOAD in the target program's `environment`.
- * (In Shadow, this is done for you with `--use-openssl-rng-preload true`.)
+ * (In Shadow, this is done for you with `--use-preload-openssl-rng true`.)
  */
 
 #include <stddef.h>

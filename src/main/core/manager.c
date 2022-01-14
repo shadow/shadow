@@ -33,16 +33,16 @@
 #define PRELOAD_OPENSSL_CRYPTO_LIB_STR "libshadow_openssl_crypto.so"
 
 // Allow turning off libc preloading at run-time.
-static bool _use_libc_preload = true;
-ADD_CONFIG_HANDLER(config_getUseLibcPreload, _use_libc_preload)
+static bool _use_preload_libc = true;
+ADD_CONFIG_HANDLER(config_getUseLibcPreload, _use_preload_libc)
 
 // Allow turning off openssl rng lib preloading at run-time.
-static bool _use_openssl_rng_preload = true;
-ADD_CONFIG_HANDLER(config_getUseOpensslRNGPreload, _use_openssl_rng_preload)
+static bool _use_preload_openssl_rng = true;
+ADD_CONFIG_HANDLER(config_getUseOpensslRNGPreload, _use_preload_openssl_rng)
 
 // Allow turning on openssl crypto lib preloading at run-time.
-static bool _use_openssl_crypto_preload = true;
-ADD_CONFIG_HANDLER(config_getUseOpensslCryptoPreload, _use_openssl_crypto_preload)
+static bool _use_preload_openssl_crypto = true;
+ADD_CONFIG_HANDLER(config_getUseOpensslCryptoPreload, _use_preload_openssl_crypto)
 
 struct _Manager {
     Controller* controller;
@@ -237,14 +237,14 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
     manager->preloadInjectorPath = _manager_getRequiredPreloadPath(PRELOAD_INJECTOR_LIB_STR);
 
     // Only required if option is enabled.
-    if (_use_libc_preload) {
+    if (_use_preload_libc) {
         manager->preloadLibcPath = _manager_getRequiredPreloadPath(PRELOAD_LIBC_LIB_STR);
     } else {
         info("Preloading the libc library is disabled.");
     }
 
     // Only required if option is enabled.
-    if (_use_openssl_rng_preload) {
+    if (_use_preload_openssl_rng) {
         manager->preloadOpensslRngPath =
             _manager_getRequiredPreloadPath(PRELOAD_OPENSSL_RNG_LIB_STR);
     } else {
@@ -252,7 +252,7 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
     }
 
     // Only required if option is enabled.
-    if (_use_openssl_crypto_preload) {
+    if (_use_preload_openssl_crypto) {
         manager->preloadOpensslCryptoPath =
             _manager_getRequiredPreloadPath(PRELOAD_OPENSSL_CRYPTO_LIB_STR);
     } else {
@@ -497,17 +497,17 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
     debug("Adding Shadow injector lib path %s", manager->preloadInjectorPath);
     g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadInjectorPath));
 
-    if (_use_libc_preload) {
+    if (_use_preload_libc) {
         debug("Adding Shadow libc lib path %s", manager->preloadLibcPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadLibcPath));
     }
 
-    if (_use_openssl_rng_preload) {
+    if (_use_preload_openssl_rng) {
         debug("Adding Shadow openssl rng lib path %s", manager->preloadOpensslRngPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadOpensslRngPath));
     }
 
-    if (_use_openssl_crypto_preload) {
+    if (_use_preload_openssl_crypto) {
         debug("Adding Shadow openssl crypto lib path %s", manager->preloadOpensslCryptoPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadOpensslCryptoPath));
     }
