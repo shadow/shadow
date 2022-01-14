@@ -47,9 +47,6 @@
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
 
-static bool _useMM = true;
-ADD_CONFIG_HANDLER(config_getUseMemoryManager, _useMM)
-
 static bool _countSyscalls = false;
 ADD_CONFIG_HANDLER(config_getUseSyscallCounters, _countSyscalls)
 
@@ -234,14 +231,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args) {
     MAGIC_ASSERT(sys);
 
-    // Initialize the process's MemoryManager if it doesn't exist. In practice
-    // this happens the first time a process makes a syscall, and on the first
-    // syscall after an `exec` (which destroys the MemoryManager). It's done
-    // here because the MemoryManager needs a plugin thread that's ready to
-    // make syscalls in order to perform its initialization.
-    if (_useMM) {
-        memorymanager_initMapperIfNeeded(process_getMemoryManager(sys->process), sys->thread);
-    }
     SysCallReturn scr;
 
     /* Make sure that we either don't have a blocked syscall,
@@ -360,6 +349,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(shadow_get_ipc_blk);
         HANDLE(shadow_get_shm_blk);
         HANDLE(shadow_hostname_to_addr_ipv4);
+        HANDLE(shadow_init_memory_manager);
         HANDLE_RUST(sendto);
         HANDLE(setsockopt);
 #ifdef SYS_sigaction

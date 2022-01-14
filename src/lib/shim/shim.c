@@ -9,10 +9,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <time.h>
+#include <ucontext.h>
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
@@ -131,7 +133,7 @@ void shim_newThreadFinish() {
 bool shim_swapAllowNativeSyscalls(bool new) {
     bool old = *_shim_allowNativeSyscallsFlag();
     *_shim_allowNativeSyscallsFlag() = new;
-    if (_using_interpose_ptrace && new != old) {
+    if (_using_interpose_ptrace && (new != old)) {
         _shim_set_allow_native_syscalls(new);
     }
     return old;
@@ -324,6 +326,52 @@ static void _shim_parent_init_ipc() {
     assert(shim_thisThreadEventIPC());
 }
 
+static void _shim_parent_init_memory_manager_internal() {
+    syscall(SYS_shadow_init_memory_manager);
+}
+
+// Tell Shadow to initialize the MemoryManager, which includes remapping the
+// stack.
+static void _shim_parent_init_memory_manager() {
+    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
+
+    // Temporarily allocate some memory for a separate stack. The MemoryManager
+    // is going to remap the original stack, and we can't actively use it while
+    // it does so.
+    const size_t stack_sz = 4096*10;
+    void *stack = mmap(NULL, stack_sz, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    if (stack == MAP_FAILED) {
+        panic("mmap: %s", strerror(errno));
+    }
+
+    ucontext_t remap_ctx, orig_ctx;
+    if (getcontext(&remap_ctx) != 0) {
+        panic("getcontext: %s", strerror(errno));
+    }
+
+    // Run on our temporary stack.
+    remap_ctx.uc_stack.ss_sp = stack;
+    remap_ctx.uc_stack.ss_size = stack_sz;
+
+    // Return to the original ctx (which is initialized by swapcontext, below).
+    remap_ctx.uc_link = &orig_ctx;
+
+    makecontext(&remap_ctx, _shim_parent_init_memory_manager_internal, 0);
+
+    // Call _shim_parent_init_memory_manager_internal on the configured stack.
+    // Returning from _shim_parent_init_memory_manager_internal will return to
+    // here.
+    if (swapcontext(&orig_ctx, &remap_ctx) != 0) {
+        panic("swapcontext: %s", strerror(errno));
+    }
+
+    if (munmap(stack, stack_sz) != 0) {
+        panic("munmap: %s", strerror(errno));
+    }
+
+    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
+}
+
 static void _shim_preload_only_child_init_ipc() {
     assert(_using_interpose_preload);
     assert(!_using_interpose_ptrace);
@@ -368,6 +416,7 @@ static void _shim_parent_init_ptrace() {
 
     _shim_parent_init_logging();
     _shim_parent_init_shm();
+    _shim_parent_init_memory_manager();
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
@@ -390,6 +439,7 @@ static void _shim_parent_init_preload() {
     _shim_init_signal_stack();
     _shim_parent_init_death_signal();
     _shim_ipc_wait_for_start_event();
+    _shim_parent_init_memory_manager();
     _shim_parent_init_rdtsc_emu();
     if (getenv("SHADOW_USE_SECCOMP") != NULL) {
         _shim_parent_init_seccomp();

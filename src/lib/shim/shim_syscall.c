@@ -13,6 +13,7 @@
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_tls.h"
 #include "main/host/syscall/kernel_types.h"
+#include "main/host/syscall_numbers.h"
 #include "main/shmem/shmem_allocator.h"
 
 // Never inline, so that the seccomp filter can reliably whitelist a syscall from
@@ -189,45 +190,7 @@ long shim_emulated_syscallv(long n, va_list args) {
         regs[i].as_u64 = va_arg(args, uint64_t);
     }
 
-    /* On the first syscall, Shadow will remap the stack region of memory. In
-     * preload-mode, this process is actively involved in that operation, with
-     * several messages back and forth. To do that processing, we must use a
-     * stack region *other* than the one being remapped. We handle this by
-     * switching to a small dedicated stack, making the call, and then switching
-     * back.
-     */
-
-    // TODO: Do this once instead of on every syscall.
-    // https://github.com/shadow/shadow/issues/1846
-
-    // Needs to be big enough to run signal handlers in case Shadow delivers a
-    // non-fatal signal. No need to be stingy with the size here, since pages
-    // that are never used should never get allocated by the OS.
-    static ShimTlsVar new_stack_var = {0};
-    const size_t stack_sz = 4096 * 10;
-    char* new_stack = shimtlsvar_ptr(&new_stack_var, stack_sz);
-    // C ABI requires 16-byte alignment for stack frames
-    assert(((uintptr_t)new_stack % 16) == 0);
-    void* old_stack;
-    SysCallReg retval;
-    asm volatile("movq %[EVENT], %%rdi\n"     /* set up syscall arg */
-                 "movq %%rsp, %%rbx\n"        /* save stack pointer to a callee-save register*/
-                 "movq %[NEW_STACK], %%rsp\n" /* switch stack */
-                 "callq _shim_emulated_syscall_event\n"
-                 "movq %%rbx, %%rsp\n"     /* restore stack pointer */
-                 "movq %%rax, %[RETVAL]\n" /* save return value */
-                 :                         /* outputs */
-                 [RETVAL] "=rm"(retval)
-                 : /* inputs */
-                 /* Must be a register, since a memory operand would be relative to the stack.
-                    Note that we need to point to the *top* of the stack. */
-                 [NEW_STACK] "r"(&new_stack[stack_sz]), [EVENT] "rm"(&e)
-                 : /* clobbers */
-                 "memory",
-                 /* used to save rsp */
-                 "rbx",
-                 /* All caller-saved registers not already used above */
-                 "rax", "rdi", "rdx", "rcx", "rsi", "r8", "r9", "r10", "r11");
+    SysCallReg retval = _shim_emulated_syscall_event(&e);
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 
@@ -252,7 +215,7 @@ long shim_syscallv(long n, va_list args) {
         // No inter-process syscall needed, we handled it on the shim side! :)
         trace("Handled syscall %ld from the shim; we avoided inter-process overhead.", n);
         // rv was already set
-    } else if (shim_interpositionEnabled() && shim_thisThreadEventIPC()) {
+    } else if ((shim_interpositionEnabled() || syscall_num_is_shadow(n)) && shim_thisThreadEventIPC()) {
         // The syscall is made using the shmem IPC channel.
         trace("Making syscall %ld indirectly; we ask shadow to handle it using the shmem IPC "
               "channel.",
