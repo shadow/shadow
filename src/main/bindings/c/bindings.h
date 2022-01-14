@@ -308,6 +308,8 @@ bool config_getUseLibcPreload(const struct ConfigOptions *config);
 
 bool config_getUseOpensslRNGPreload(const struct ConfigOptions *config);
 
+bool config_getUseOpensslCryptoPreload(const struct ConfigOptions *config);
+
 bool config_getUseMemoryManager(const struct ConfigOptions *config);
 
 bool config_getUseShimSyscallHandler(const struct ConfigOptions *config);

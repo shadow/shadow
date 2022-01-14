@@ -30,6 +30,7 @@
 #define PRELOAD_INJECTOR_LIB_STR "libshadow_injector.so"
 #define PRELOAD_LIBC_LIB_STR "libshadow_libc.so"
 #define PRELOAD_OPENSSL_RNG_LIB_STR "libshadow_openssl_rng.so"
+#define PRELOAD_OPENSSL_CRYPTO_LIB_STR "libshadow_openssl_crypto.so"
 
 // Allow turning off libc preloading at run-time.
 static bool _use_libc_preload = true;
@@ -38,6 +39,10 @@ ADD_CONFIG_HANDLER(config_getUseLibcPreload, _use_libc_preload)
 // Allow turning off openssl rng lib preloading at run-time.
 static bool _use_openssl_rng_preload = true;
 ADD_CONFIG_HANDLER(config_getUseOpensslRNGPreload, _use_openssl_rng_preload)
+
+// Allow turning on openssl crypto lib preloading at run-time.
+static bool _use_openssl_crypto_preload = true;
+ADD_CONFIG_HANDLER(config_getUseOpensslCryptoPreload, _use_openssl_crypto_preload)
 
 struct _Manager {
     Controller* controller;
@@ -87,6 +92,8 @@ struct _Manager {
     gchar* preloadLibcPath;
     // Path to the openssl rng lib that we preload for managed processes.
     gchar* preloadOpensslRngPath;
+    // Path to the openssl crypto lib that we preload for managed processes.
+    gchar* preloadOpensslCryptoPath;
 
     StatusLogger_ShadowStatusBarState* statusLogger;
 
@@ -242,6 +249,14 @@ Manager* manager_new(Controller* controller, const ConfigOptions* config, Simula
             _manager_getRequiredPreloadPath(PRELOAD_OPENSSL_RNG_LIB_STR);
     } else {
         info("Preloading the openssl rng library is disabled.");
+    }
+
+    // Only required if option is enabled.
+    if (_use_openssl_crypto_preload) {
+        manager->preloadOpensslCryptoPath =
+            _manager_getRequiredPreloadPath(PRELOAD_OPENSSL_CRYPTO_LIB_STR);
+    } else {
+        info("Preloading the openssl crypto library is disabled.");
     }
 
     /* the main scheduler may utilize multiple threads */
@@ -475,6 +490,7 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
      *   - preload path of the injector
      *   - preload path of the libc lib
      *   - preload path of the openssl rng lib
+     *   - preload path of the openssl crypto lib
      *   - preload values from LD_PRELOAD entries in the environment process option */
     GPtrArray* ldPreloadArray = g_ptr_array_new();
 
@@ -489,6 +505,11 @@ static gchar** _manager_generateEnvv(Manager* manager, InterposeMethod interpose
     if (_use_openssl_rng_preload) {
         debug("Adding Shadow openssl rng lib path %s", manager->preloadOpensslRngPath);
         g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadOpensslRngPath));
+    }
+
+    if (_use_openssl_crypto_preload) {
+        debug("Adding Shadow openssl crypto lib path %s", manager->preloadOpensslCryptoPath);
+        g_ptr_array_add(ldPreloadArray, g_strdup(manager->preloadOpensslCryptoPath));
     }
 
     /* now we also have to scan the other env variables that were given in the shadow conf file */
