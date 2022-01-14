@@ -9,15 +9,8 @@
  * and emulate (such as the RDRAND instruction), making Shadow simulations of
  * software using libcrypto non-deterministic.
  *
- * To use this library, set LD_PRELOAD in the target program's `environment`
- * attribute in the Shadow simulation config file. e.g.:
- *
- * hosts:
- *   torclient:
- *     processes:
- *       - path: ~/.local/bin/tor
- *         # Must provide absolute path. See #1523.
- *         environment: 'LD_PRELOAD=/home/<username>/.local/lib/libshadow_openssl_rng.so'
+ * To use this library, set LD_PRELOAD in the target program's `environment`.
+ * (In Shadow, this is done for you with `--use-openssl-rng-preload true`.)
  */
 
 #include <stddef.h>
