@@ -178,7 +178,8 @@ _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
 }
 
 long shim_emulated_syscallv(long n, va_list args) {
-    shim_disableInterposition();
+    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
+
     ShimEvent e = {
         .event_id = SHD_SHIM_EVENT_SYSCALL,
         .event_data.syscall.syscall_args.number = n,
@@ -228,7 +229,7 @@ long shim_emulated_syscallv(long n, va_list args) {
                  /* All caller-saved registers not already used above */
                  "rax", "rdi", "rdx", "rcx", "rsi", "r8", "r9", "r10", "r11");
 
-    shim_enableInterposition();
+    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 
     return retval.as_i64;
 }

@@ -19,7 +19,7 @@
 #include "lib/tsc/tsc.h"
 
 _Noreturn static void _shim_rdtsc_die_with_sigsegv() {
-    shim_disableInterposition();
+    shim_swapAllowNativeSyscalls(true);
     if (sigaction(SIGSEGV, &(struct sigaction){.sa_handler = SIG_DFL}, NULL) != 0) {
         panic("sigaction: %s", strerror(errno));
     }
@@ -28,7 +28,7 @@ _Noreturn static void _shim_rdtsc_die_with_sigsegv() {
 }
 
 static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
-    shim_disableInterposition();
+    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     // Detect recursion. Unfortunately there's still potential for infinite
     // recursion here if there's a SEGV in this handling itself. We could avoid
@@ -90,7 +90,7 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
         _shim_rdtsc_die_with_sigsegv();
     }
     *in_handler = false;
-    shim_enableInterposition();
+    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
 void shim_rdtsc_init() {

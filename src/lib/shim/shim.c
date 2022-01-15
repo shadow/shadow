@@ -66,9 +66,9 @@ static ShimSharedMem* _shim_shared_mem() {
 }
 
 // We disable syscall interposition when this is > 0.
-static int* _shim_disable_interposition() {
+static int* _shim_allowNativeSyscallsFlag() {
     static ShimTlsVar v = {0};
-    return shimtlsvar_ptr(&v, sizeof(int));
+    return shimtlsvar_ptr(&v, sizeof(bool));
 }
 
 static void _shim_set_allow_native_syscalls(bool is_allowed) {
@@ -128,27 +128,17 @@ void shim_newThreadFinish() {
     }
 }
 
-void shim_disableInterposition() {
-    if (++*_shim_disable_interposition() == 1) {
-        if (_using_interpose_ptrace) {
-            // We can't prevent there being a ptrace-stop on a syscall, but we
-            // can signal Shadow to allow syscalls to execute natively.
-            _shim_set_allow_native_syscalls(true);
-        }
+bool shim_swapAllowNativeSyscalls(bool new) {
+    bool old = *_shim_allowNativeSyscallsFlag();
+    *_shim_allowNativeSyscallsFlag() = new;
+    if (_using_interpose_ptrace && new != old) {
+        _shim_set_allow_native_syscalls(new);
     }
-}
-
-void shim_enableInterposition() {
-    assert(_shim_disable_interposition > 0);
-    if (--*_shim_disable_interposition() == 0) {
-        if (_using_interpose_ptrace) {
-            _shim_set_allow_native_syscalls(false);
-        }
-    }
+    return old;
 }
 
 bool shim_interpositionEnabled() {
-    return !*_shim_disable_interposition();
+    return !*_shim_allowNativeSyscallsFlag();
 }
 
 bool shim_use_syscall_handler() { return _using_shim_syscall_handler; }
@@ -374,12 +364,12 @@ static void _shim_ipc_wait_for_start_event() {
 }
 
 static void _shim_parent_init_ptrace() {
-    shim_disableInterposition();
+    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     _shim_parent_init_logging();
     _shim_parent_init_shm();
 
-    shim_enableInterposition();
+    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
 static void _shim_parent_init_seccomp() {
@@ -391,7 +381,7 @@ static void _shim_parent_init_rdtsc_emu() {
 }
 
 static void _shim_parent_init_preload() {
-    shim_disableInterposition();
+    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     // The shim logger internally disables interposition while logging, so we open the log
     // file with interposition disabled too to get a native file descriptor.
@@ -405,25 +395,25 @@ static void _shim_parent_init_preload() {
         _shim_parent_init_seccomp();
     }
 
-    shim_enableInterposition();
+    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
 static void _shim_child_init_ptrace() {
-    shim_disableInterposition();
+    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     _shim_child_init_shm();
 
-    shim_enableInterposition();
+    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
 static void _shim_child_init_preload() {
-    shim_disableInterposition();
+    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     _shim_preload_only_child_init_ipc();
     _shim_init_signal_stack();
     _shim_preload_only_child_ipc_wait_for_start_event();
 
-    shim_enableInterposition();
+    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
 // This function should be called before any wrapped syscall. We also use the
