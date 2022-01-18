@@ -13,5 +13,6 @@ SYSCALL_HANDLER(shadow_set_ptrace_allow_native_syscalls);
 SYSCALL_HANDLER(shadow_get_ipc_blk);
 SYSCALL_HANDLER(shadow_get_shm_blk);
 SYSCALL_HANDLER(shadow_hostname_to_addr_ipv4);
+SYSCALL_HANDLER(shadow_init_memory_manager);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_CUSTOM_H_ */

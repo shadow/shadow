@@ -18,6 +18,10 @@
 #include "main/host/thread_ptrace.h"
 #include "main/routing/address.h"
 #include "main/shmem/shmem_allocator.h"
+#include "main/core/support/config_handlers.h"
+
+static bool _useMM = true;
+ADD_CONFIG_HANDLER(config_getUseMemoryManager, _useMM)
 
 SysCallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
                                                           const SysCallArgs* args) {
@@ -123,4 +127,15 @@ SysCallReturn syscallhandler_shadow_get_shm_blk(SysCallHandler* sys, const SysCa
     utility_assert(sys && args);
     trace("handling shadow_get_shm_blk syscall");
     return _syscallhandler_get_shmem_block(sys, args, thread_getShMBlock(sys->thread));
+}
+
+SysCallReturn syscallhandler_shadow_init_memory_manager(SysCallHandler* sys, const SysCallArgs* args) {
+    utility_assert(sys && args);
+    if (_useMM) {
+        trace("Initializing memory manager");
+        memorymanager_initMapperIfNeeded(process_getMemoryManager(sys->process), sys->thread);
+    } else {
+        trace("Not initializing memory manager");
+    }
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }

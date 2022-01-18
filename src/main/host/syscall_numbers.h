@@ -14,7 +14,8 @@ typedef enum {
     SYS_shadow_get_ipc_blk = 1001,
     SYS_shadow_get_shm_blk = 1002,
     SYS_shadow_hostname_to_addr_ipv4 = 1003,
-    SYS_shadow_max = 1003,
+    SYS_shadow_init_memory_manager = 1004,
+    SYS_shadow_max = 1004,
 } ShadowSyscallNum;
 
 static inline bool syscall_num_is_shadow(long n) {
