@@ -8,13 +8,7 @@
 
 // This needs to be big enough to store all thread-local variables for a single
 // thread. We fail at runtime if this limit is exceeded.
-//
-// Right now the biggest contributors is the special thread-local stacks in
-// in _shim_init_signal_stack, which is 4096*10 bytes.
-//
-// Fixing https://github.com/shadow/shadow/issues/1846 will likely remove one
-// of those, in which case we can reduce this allocation.
-#define BYTES_PER_THREAD (4096 * 10 + 1024)
+#define BYTES_PER_THREAD (SHIM_SIGNAL_STACK_SIZE + 1024)
 #define MAX_THREADS 100
 
 // Stores the TLS for a single thread.
