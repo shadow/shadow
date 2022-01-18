@@ -45,4 +45,15 @@ void shim_newThreadFinish();
 // the parent thread that it is now initialized.
 void shim_newThreadChildInitd();
 
+// Signal stack size parameters defined here because this is a significant
+// portion of the memory that needs to be statically allocated in shim_tls.c.
+//
+// We use a page for a stack guard, and up to another page to page-align the
+// stack guard. We assume 4k pages here but detect at runtime if this is too small.
+#define SHIM_SIGNAL_STACK_GUARD_OVERHEAD ((size_t)4096 * 2)
+// Found experimentally. 4k seems to be enough for most platforms, but fails on Ubuntu 18.04.
+#define SHIM_SIGNAL_STACK_MIN_USABLE_SIZE ((size_t)1024 * 12)
+#define SHIM_SIGNAL_STACK_SIZE                                                                     \
+    (SHIM_SIGNAL_STACK_GUARD_OVERHEAD + SHIM_SIGNAL_STACK_MIN_USABLE_SIZE)
+
 #endif // SHD_SHIM_SHIM_H_

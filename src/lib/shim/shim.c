@@ -186,11 +186,35 @@ static void _set_use_shim_syscall_handler() {
 // goroutines.
 // See https://github.com/shadow/shadow/issues/1549.
 static void _shim_init_signal_stack() {
-    // When changing this, adjust BYTES_PER_THREAD in shim_tls.c as well.
-    const size_t stack_sz = 4096 * 10;
+    assert(!shim_interpositionEnabled());
+
+    // Use signed here so that we can easily detect underflow below.
+    ssize_t stack_sz = SHIM_SIGNAL_STACK_SIZE;
 
     static ShimTlsVar new_stack_var = {0};
     void* new_stack = shimtlsvar_ptr(&new_stack_var, stack_sz);
+
+    // Align to page boundary.
+    const long page_size = sysconf(_SC_PAGESIZE);
+    if ((uintptr_t)new_stack % page_size) {
+        size_t padding = 0;
+        padding = page_size - ((uintptr_t)new_stack % page_size);
+        new_stack += padding;
+        stack_sz -= padding;
+    }
+
+    // Verify that we'll still have enough space left after adjusting for padding,
+    // and since we won't be able to use the guard page itself.
+    if ((stack_sz - page_size) < SHIM_SIGNAL_STACK_MIN_USABLE_SIZE) {
+        panic("Aligning stack to %zu page size leaves only %zd bytes (vs minimimum %zu)", page_size,
+              stack_sz, SHIM_SIGNAL_STACK_MIN_USABLE_SIZE);
+    }
+
+    // Set up a guard page.
+    if (mprotect(new_stack, page_size, PROT_NONE) != 0) {
+        int err = errno;
+        panic("mprotect: %s", strerror(err));
+    }
 
     stack_t stack_descriptor = {
         .ss_sp = new_stack,
