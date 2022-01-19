@@ -85,7 +85,7 @@ static int* _shim_allowNativeSyscallsFlag() {
     return shimtlsvar_ptr(&v, sizeof(bool));
 }
 
-static void _shim_set_allow_native_syscalls(bool is_allowed) {
+static void _shim_ptrace_set_allow_native_syscalls(bool is_allowed) {
     if (_shim_thread_shared_mem()) {
         _shim_thread_shared_mem()->ptrace_allow_native_syscalls = is_allowed;
         trace("%s native-syscalls via shmem %p", is_allowed ? "allowing" : "disallowing",
@@ -146,7 +146,7 @@ bool shim_swapAllowNativeSyscalls(bool new) {
     bool old = *_shim_allowNativeSyscallsFlag();
     *_shim_allowNativeSyscallsFlag() = new;
     if (_using_interpose_ptrace && (new != old)) {
-        _shim_set_allow_native_syscalls(new);
+        _shim_ptrace_set_allow_native_syscalls(new);
     }
     return old;
 }
