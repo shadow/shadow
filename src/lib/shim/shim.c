@@ -444,7 +444,6 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
 
     shimevent_recvEventFromShadow(ipc, &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
-    shim_sys_set_simtime_nanos(event.event_data.start.simulation_nanos);
 }
 
 static void _shim_ipc_wait_for_start_event() {
@@ -455,7 +454,6 @@ static void _shim_ipc_wait_for_start_event() {
     trace("waiting for start event on %p", shim_thisThreadEventIPC);
     shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
-    shim_sys_set_simtime_nanos(event.event_data.start.simulation_nanos);
 }
 
 static void _shim_parent_init_ptrace() {

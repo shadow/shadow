@@ -16,36 +16,14 @@
 #include "lib/shim/shim_sys.h"
 #include "main/core/support/definitions.h" // for SIMTIME definitions
 
-// We store the simulation time using timespec to reduce the number of
-// conversions that we need to do while servicing syscalls.
-static struct timespec _cached_simulation_time = {0};
-
-void shim_sys_set_simtime_nanos(uint64_t simulation_nanos) {
-    _cached_simulation_time.tv_sec = simulation_nanos / SIMTIME_ONE_SECOND;
-    _cached_simulation_time.tv_nsec = simulation_nanos % SIMTIME_ONE_SECOND;
-}
-
 static struct timespec* _shim_sys_get_time() {
     // First try to get time from shared mem.
     struct timespec* simtime_ts = shim_get_shared_time_location();
 
-    // If that's unavailable, check if the time has been cached before.
+    // If that's unavailable, fail. This can happen during early init.
     if (simtime_ts == NULL) {
-        simtime_ts = &_cached_simulation_time;
-    }
-
-    // If the time is not set, then we fail.
-    if (simtime_ts->tv_sec == 0 && simtime_ts->tv_nsec == 0) {
         return NULL;
     }
-
-#ifdef DEBUG
-    if (simtime_ts == &_cached_simulation_time) {
-        trace("simtime is available in the shim using cached time");
-    } else {
-        trace("simtime is available in the shim using shared memory");
-    }
-#endif
 
     return simtime_ts;
 }

@@ -49,17 +49,6 @@ typedef struct _ShimEvent {
 
     union {
         struct {
-            // Update shim-side simulation clock
-            uint64_t simulation_nanos;
-        } start;
-
-        struct {
-            struct timespec ts;
-        } data_nano_sleep;
-
-        int rv; // TODO (rwails) hack, remove me
-
-        struct {
             // We wrap this in the surrounding struct in case there's anything
             // else we end up needing in the message besides the literal struct
             // we're going to pass to the syscall handler.
@@ -68,8 +57,6 @@ typedef struct _ShimEvent {
 
         struct {
             SysCallReg retval;
-            // Update shim-side simulation clock
-            uint64_t simulation_nanos;
         } syscall_complete;
 
         struct {

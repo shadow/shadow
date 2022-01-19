@@ -124,7 +124,6 @@ _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
             case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
                 // Use provided result.
                 SysCallReg rv = res.event_data.syscall_complete.retval;
-                shim_sys_set_simtime_nanos(res.event_data.syscall_complete.simulation_nanos);
                 return rv;
             }
             case SHD_SHIM_EVENT_SYSCALL_DO_NATIVE: {

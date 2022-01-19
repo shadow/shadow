@@ -718,11 +718,7 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv, const char* wor
 
     if (thread->enableIpc) {
         // Send 'start' event.
-        ShimEvent startEvent = {
-            .event_id = SHD_SHIM_EVENT_START,
-            .event_data.start = {
-                .simulation_nanos = worker_getEmulatedTime(),
-            }};
+        ShimEvent startEvent = {.event_id = SHD_SHIM_EVENT_START};
         shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &startEvent);
     }
 
@@ -856,13 +852,10 @@ static SysCallCondition* _threadptrace_resumeIpcSyscall(ThreadPtrace* thread, bo
             return ret.cond;
         case SYSCALL_DONE: {
             trace("ipc_syscall done");
-            ShimEvent shim_result = {
-                .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
-                .event_data = {
-                    .syscall_complete = {.retval = ret.retval,
-                                         .simulation_nanos = worker_getEmulatedTime()},
-
-                }};
+            ShimEvent shim_result = {.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                                     .event_data = {
+                                         .syscall_complete = {.retval = ret.retval},
+                                     }};
             shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &shim_result);
             break;
         }
@@ -872,13 +865,10 @@ static SysCallCondition* _threadptrace_resumeIpcSyscall(ThreadPtrace* thread, bo
             long rv = thread_nativeSyscall(_threadPtraceToThread(thread), args->number,
                                            args->args[0], args->args[1], args->args[2],
                                            args->args[3], args->args[4], args->args[5]);
-            ShimEvent shim_result = {
-                .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
-                .event_data = {
-                    .syscall_complete = {.retval = rv,
-                                         .simulation_nanos = worker_getEmulatedTime()},
-
-                }};
+            ShimEvent shim_result = {.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                                     .event_data = {
+                                         .syscall_complete = {.retval = rv},
+                                     }};
             shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &shim_result);
         }
     }
@@ -1279,9 +1269,7 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
         // Send 'start' event.
         ShimEvent startEvent = {
             .event_id = SHD_SHIM_EVENT_START,
-            .event_data.start = {
-                .simulation_nanos = worker_getEmulatedTime(),
-            }};
+        };
         shimevent_sendEventToPlugin(_threadptrace_ipcData(child), &startEvent);
     }
 
