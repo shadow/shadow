@@ -86,18 +86,11 @@ void thread_unref(Thread* thread) {
     }
 }
 
-static void _thread_setSharedTime(Thread* thread) {
-    EmulatedTime now = worker_getEmulatedTime();
-    thread_sharedMem(thread)->sim_time.tv_sec = now / SIMTIME_ONE_SECOND;
-    thread_sharedMem(thread)->sim_time.tv_nsec = now % SIMTIME_ONE_SECOND;
-}
-
 void thread_run(Thread* thread, gchar** argv, gchar** envv, const char* workingDir) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.run);
 
     _thread_syncAffinityWithWorker(thread);
-    _thread_setSharedTime(thread);
 
     thread->nativePid = thread->methods.run(thread, argv, envv, workingDir);
     // In Linux, the PID is equal to the TID of its first thread.
@@ -108,7 +101,6 @@ void thread_resume(Thread* thread) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->methods.resume);
     _thread_syncAffinityWithWorker(thread);
-    _thread_setSharedTime(thread);
 
     // Ensure the condition isn't triggered again, but don't clear it yet.
     // Syscall handler can still access.

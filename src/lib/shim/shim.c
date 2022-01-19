@@ -566,9 +566,9 @@ __attribute__((constructor)) void _shim_load() {
 void shim_ensure_init() { _shim_load(); }
 
 struct timespec* shim_get_shared_time_location() {
-    if (_shim_thread_shared_mem() == NULL) {
+    if (_shim_process_shared_mem() == NULL) {
         return NULL;
     } else {
-        return &_shim_thread_shared_mem()->sim_time;
+        return &_shim_process_shared_mem()->sim_time;
     }
 }

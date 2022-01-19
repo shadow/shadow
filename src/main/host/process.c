@@ -154,6 +154,18 @@ static Thread* _process_threadLeader(Process* proc) {
     return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(proc->processID));
 }
 
+ShimProcessSharedMem* process_sharedMem(Process* proc) {
+    MAGIC_ASSERT(proc);
+    utility_assert(proc->shimSharedMemBlock.p);
+    return proc->shimSharedMemBlock.p;
+}
+
+static void _process_setSharedTime(Process* proc) {
+    EmulatedTime now = worker_getEmulatedTime();
+    process_sharedMem(proc)->sim_time.tv_sec = now / SIMTIME_ONE_SECOND;
+    process_sharedMem(proc)->sim_time.tv_nsec = now % SIMTIME_ONE_SECOND;
+}
+
 const gchar* process_getName(Process* proc) {
     MAGIC_ASSERT(proc);
     utility_assert(proc->processName->str);
@@ -522,6 +534,7 @@ static void _process_start(Process* proc) {
     }
 
     proc->plugin.isExecuting = TRUE;
+    _process_setSharedTime(proc);
     /* exec the process */
     thread_run(mainThread, proc->argv, proc->envv, proc->workingDir);
     proc->nativePid = thread_getNativePid(mainThread);
@@ -596,6 +609,8 @@ void process_continue(Process* proc, Thread* thread) {
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
 #endif
+
+    _process_setSharedTime(proc);
 
     proc->plugin.isExecuting = TRUE;
     thread_resume(thread);
