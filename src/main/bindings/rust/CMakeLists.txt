@@ -29,6 +29,13 @@ add_custom_command(OUTPUT wrapper.rs
         # Needs Socket
         --blacklist-type "_?CompatSocket.*"
 
+        # Uses atomics, which bindgen doesn't translate correctly.
+        # https://github.com/rust-lang/rust-bindgen/issues/2151
+        --blacklist-type "atomic_bool"
+        --blacklist-type "_?ShimThreadSharedMem"
+        --blacklist-type "_?ShimProcessSharedMem"
+        --blacklist-function "thread_sharedMem"
+
         --whitelist-function "affinity_.*"
         --whitelist-function "thread_.*"
         --whitelist-function "descriptor_close"
