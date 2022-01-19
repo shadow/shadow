@@ -232,13 +232,6 @@ static ShMemBlock* _threadpreload_getIPCBlock(Thread* base) {
     return &thread->ipc_blk;
 }
 
-static ShMemBlock* _threadpreload_getShMBlock(Thread* base) {
-    // We currently communicate the simulation time to the shim by including it in every event
-    // we send over the IPC channel, and the shim caches it.
-    // TODO we could instead use a shmem segment like threadptrace does.
-    return NULL;
-}
-
 SysCallCondition* threadpreload_resume(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
@@ -472,7 +465,6 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                                   .nativeSyscall = threadpreload_nativeSyscall,
                                   .clone = _threadpreload_clone,
                                   .getIPCBlock = _threadpreload_getIPCBlock,
-                                  .getShMBlock = _threadpreload_getShMBlock,
                               }),
     };
     thread->base.sys = syscallhandler_new(host, process, _threadPreloadToThread(thread));

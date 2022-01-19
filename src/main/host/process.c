@@ -506,6 +506,18 @@ static void _process_start(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 #endif
 
+    /* Add shared mem block of first thread to env */
+    {
+        ShMemBlockSerialized sharedMemBlockSerial =
+            shmemallocator_globalBlockSerialize(thread_getShMBlock(mainThread));
+
+        char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
+        shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
+
+        /* append to the env */
+        proc->envv = g_environ_setenv(proc->envv, "SHADOW_SHM_BLK", sharedMemBlockBuf, TRUE);
+    }
+
     proc->plugin.isExecuting = TRUE;
     /* exec the process */
     thread_run(mainThread, proc->argv, proc->envv, proc->workingDir);

@@ -27,7 +27,6 @@ typedef struct _ThreadMethods {
     int (*clone)(Thread* thread, unsigned long flags, PluginPtr child_stack, PluginPtr ptid,
                  PluginPtr ctid, unsigned long newtls, Thread** child);
     ShMemBlock* (*getIPCBlock)(Thread* thread);
-    ShMemBlock* (*getShMBlock)(Thread* thread);
 } ThreadMethods;
 
 struct _Thread {
@@ -47,6 +46,8 @@ struct _Thread {
     int referenceCount;
 
     SysCallHandler* sys;
+
+    ShMemBlock shimSharedMemBlock;
 
     // Non-null if blocked by a syscall.
     SysCallCondition* cond;

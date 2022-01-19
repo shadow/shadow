@@ -92,7 +92,7 @@ SysCallReturn syscallhandler_shadow_set_ptrace_allow_native_syscalls(SysCallHand
         bool is_allowed = args->args[0].as_i64;
         trace("shadow_set_ptrace_allow_native_syscalls is_allowed=%d", is_allowed);
 
-        threadptrace_setAllowNativeSyscalls(sys->thread, is_allowed);
+        thread_sharedMem(sys->thread)->ptrace_allow_native_syscalls = is_allowed;
 
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
     } else {

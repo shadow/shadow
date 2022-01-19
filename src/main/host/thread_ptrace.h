@@ -10,7 +10,4 @@ Thread* threadptraceonly_new(Host* host, Process* process, gint threadID);
 
 void threadptrace_detach(Thread* base);
 
-// Set whether or not ptrace will allow the shim to perform native syscalls.
-void threadptrace_setAllowNativeSyscalls(Thread* base, bool is_allowed);
-
 #endif
