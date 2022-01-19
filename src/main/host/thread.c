@@ -32,9 +32,9 @@ Thread thread_create(Host* host, Process* process, int threadID, int type_id,
                      .process = process,
                      .tid = threadID,
                      .affinity = AFFINITY_UNINIT,
-                     .shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimSharedMem)),
+                     .shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimThreadSharedMem)),
                      MAGIC_INITIALIZER};
-    *thread_sharedMem(&thread) = (ShimSharedMem){
+    *thread_sharedMem(&thread) = (ShimThreadSharedMem){
         .ptrace_allow_native_syscalls = false,
     };
     host_ref(host);
@@ -159,7 +159,7 @@ ShMemBlock* thread_getShMBlock(Thread* thread) {
     return &thread->shimSharedMemBlock;
 }
 
-ShimSharedMem* thread_sharedMem(Thread* thread) {
+ShimThreadSharedMem* thread_sharedMem(Thread* thread) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->shimSharedMemBlock.p);
     return thread->shimSharedMemBlock.p;

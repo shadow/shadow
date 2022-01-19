@@ -60,7 +60,7 @@ static ShMemBlock* _shim_shared_mem_blk() {
     static ShimTlsVar v = {0};
     return shimtlsvar_ptr(&v, sizeof(ShMemBlock));
 }
-static ShimSharedMem* _shim_shared_mem() {
+static ShimThreadSharedMem* _shim_shared_mem() {
     if (_shim_shared_mem_blk() == NULL) {
         return NULL;
     }

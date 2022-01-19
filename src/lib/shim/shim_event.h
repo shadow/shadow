@@ -14,12 +14,12 @@
 // Shared state between Shadow and a plugin-thread. The shim-side code can modify
 // directly; synchronization is achieved via the Shadow/Plugin IPC mechanisms
 // (ptrace-stops and the shim IPC locking).
-typedef struct _ShimSharedMem {
+typedef struct _ShimThreadSharedMem {
     // While true, Shadow allows syscalls to be executed natively.
     bool ptrace_allow_native_syscalls;
     // Store the latest simulation time to avoid inter-process time syscalls.
     struct timespec sim_time;
-} ShimSharedMem;
+} ShimThreadSharedMem;
 
 typedef enum {
     // Next val: 13
