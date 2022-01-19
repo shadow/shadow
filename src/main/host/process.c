@@ -515,7 +515,7 @@ static void _process_start(Process* proc) {
         shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
 
         /* append to the env */
-        proc->envv = g_environ_setenv(proc->envv, "SHADOW_SHM_BLK", sharedMemBlockBuf, TRUE);
+        proc->envv = g_environ_setenv(proc->envv, "SHADOW_SHM_THREAD_BLK", sharedMemBlockBuf, TRUE);
     }
 
     proc->plugin.isExecuting = TRUE;
