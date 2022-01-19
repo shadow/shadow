@@ -67,6 +67,18 @@ static ShimThreadSharedMem* _shim_thread_shared_mem() {
     return _shim_thread_shared_mem_blk()->p;
 }
 
+// Per-thread state shared with Shadow.
+static ShMemBlock* _shim_process_shared_mem_blk() {
+    static ShMemBlock blk;
+    return &blk;
+}
+static ShimProcessSharedMem* _shim_process_shared_mem() {
+    if (_shim_process_shared_mem_blk() == NULL) {
+        return NULL;
+    }
+    return _shim_process_shared_mem_blk()->p;
+}
+
 // We disable syscall interposition when this is > 0.
 static int* _shim_allowNativeSyscallsFlag() {
     static ShimTlsVar v = {0};
@@ -307,6 +319,17 @@ static void _shim_parent_init_death_signal() {
     _verify_parent_pid_or_exit();
 }
 
+static void _shim_parent_init_process_shm() {
+    const char* shm_blk_buf = getenv("SHADOW_SHM_PROCESS_BLK");
+    assert(shm_blk_buf);
+
+    bool err = false;
+    ShMemBlockSerialized shm_blk_serialized = shmemblockserialized_fromString(shm_blk_buf, &err);
+
+    *_shim_process_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
+    assert(_shim_process_shared_mem());
+}
+
 static void _shim_parent_init_thread_shm() {
     assert(_using_interpose_ptrace);
 
@@ -438,6 +461,7 @@ static void _shim_ipc_wait_for_start_event() {
 static void _shim_parent_init_ptrace() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
+    _shim_parent_init_process_shm();
     _shim_parent_init_logging();
     _shim_parent_init_thread_shm();
     _shim_parent_init_memory_manager();
@@ -458,6 +482,7 @@ static void _shim_parent_init_preload() {
 
     // The shim logger internally disables interposition while logging, so we open the log
     // file with interposition disabled too to get a native file descriptor.
+    _shim_parent_init_process_shm();
     _shim_parent_init_logging();
     _shim_parent_init_ipc();
     _shim_init_signal_stack();

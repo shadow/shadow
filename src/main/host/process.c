@@ -89,6 +89,9 @@ struct _Process {
     /* All of the descriptors opened by this process. */
     DescriptorTable* descTable;
 
+    /* Shared memory allocation for shared state with shim. */
+    ShMemBlock shimSharedMemBlock;
+
     /* the shadow plugin executable */
     struct {
         /* the name and path to the executable that we will exec */
@@ -750,6 +753,18 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
         utility_panic(
             "Could not allocate memory for the process' working directory, or directory did not "
             "exist");
+    }
+
+    proc->shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimProcessSharedMem));
+    {
+        ShMemBlockSerialized sharedMemBlockSerial =
+            shmemallocator_globalBlockSerialize(&proc->shimSharedMemBlock);
+
+        char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
+        shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
+
+        /* append to the env */
+        envv = g_environ_setenv(envv, "SHADOW_SHM_PROCESS_BLK", sharedMemBlockBuf, TRUE);
     }
 
     /* add log file to env */

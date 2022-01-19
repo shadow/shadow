@@ -21,6 +21,14 @@ typedef struct _ShimThreadSharedMem {
     struct timespec sim_time;
 } ShimThreadSharedMem;
 
+// Shared state between Shadow and a plugin-process. The shim-side code can modify
+// directly; synchronization is achieved via the Shadow/Plugin IPC mechanisms
+// (ptrace-stops and the shim IPC locking).
+typedef struct _ShimProcessSharedMem {
+    // Temporary; Shared mem allocator fails on size 0 struct.
+    int _dummy;
+} ShimProcessSharedMem;
+
 typedef enum {
     // Next val: 13
     SHD_SHIM_EVENT_NULL = 0,
