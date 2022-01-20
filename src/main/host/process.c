@@ -869,6 +869,8 @@ static void _process_free(Process* proc) {
         host_unref(proc->host);
     }
 
+    shmemallocator_globalFree(&proc->shimSharedMemBlock);
+
     worker_count_deallocation(Process);
 
     MAGIC_CLEAR(proc);

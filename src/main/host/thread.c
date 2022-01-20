@@ -81,6 +81,7 @@ void thread_unref(Thread* thread) {
         if (thread->host) {
             host_unref(thread->host);
         }
+        shmemallocator_globalFree(&thread->shimSharedMemBlock);
         MAGIC_CLEAR(thread);
         g_free(thread);
     }
