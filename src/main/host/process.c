@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <sys/file.h>
@@ -161,9 +162,7 @@ ShimProcessSharedMem* process_sharedMem(Process* proc) {
 }
 
 static void _process_setSharedTime(Process* proc) {
-    EmulatedTime now = worker_getEmulatedTime();
-    process_sharedMem(proc)->sim_time.tv_sec = now / SIMTIME_ONE_SECOND;
-    process_sharedMem(proc)->sim_time.tv_nsec = now % SIMTIME_ONE_SECOND;
+    process_sharedMem(proc)->sim_time = worker_getEmulatedTime();
 }
 
 const gchar* process_getName(Process* proc) {

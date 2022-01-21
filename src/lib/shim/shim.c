@@ -25,6 +25,7 @@
 #include "lib/shim/shim_logger.h"
 #include "lib/shim/shim_rdtsc.h"
 #include "lib/shim/shim_seccomp.h"
+#include "lib/shim/shim_shmem.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
@@ -563,7 +564,7 @@ __attribute__((constructor)) void _shim_load() {
 
 void shim_ensure_init() { _shim_load(); }
 
-struct timespec* shim_get_shared_time_location() {
+_Atomic EmulatedTime* shim_get_shared_time_location() {
     if (_shim_process_shared_mem() == NULL) {
         return NULL;
     } else {

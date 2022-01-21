@@ -2,6 +2,7 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+#include <arpa/inet.h>
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -9,6 +10,7 @@
 #include <glib.h>
 #include <netdb.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>

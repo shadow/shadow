@@ -4,28 +4,8 @@
 // Communication between Shadow and the shim. This is a header-only library
 // used in both places.
 
-#include <arpa/inet.h>
-#include <stdint.h>
-#include <time.h>
-
 #include "main/host/syscall_types.h"
 #include "main/shmem/shmem_allocator.h"
-
-// Shared state between Shadow and a plugin-thread. The shim-side code can modify
-// directly; synchronization is achieved via the Shadow/Plugin IPC mechanisms
-// (ptrace-stops and the shim IPC locking).
-typedef struct _ShimThreadSharedMem {
-    // While true, Shadow allows syscalls to be executed natively.
-    bool ptrace_allow_native_syscalls;
-} ShimThreadSharedMem;
-
-// Shared state between Shadow and a plugin-process. The shim-side code can modify
-// directly; synchronization is achieved via the Shadow/Plugin IPC mechanisms
-// (ptrace-stops and the shim IPC locking).
-typedef struct _ShimProcessSharedMem {
-    // Current simulation time.
-    struct timespec sim_time;
-} ShimProcessSharedMem;
 
 typedef enum {
     // Next val: 13
