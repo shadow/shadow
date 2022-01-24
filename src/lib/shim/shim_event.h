@@ -4,22 +4,8 @@
 // Communication between Shadow and the shim. This is a header-only library
 // used in both places.
 
-#include <arpa/inet.h>
-#include <stdint.h>
-#include <time.h>
-
 #include "main/host/syscall_types.h"
 #include "main/shmem/shmem_allocator.h"
-
-// Shared state between Shadow and a plugin-thread. The shim-side code can modify
-// directly; synchronization is achieved via the Shadow/Plugin IPC mechanisms
-// (ptrace-stops and the shim IPC locking).
-typedef struct _ShimSharedMem {
-    // While true, Shadow allows syscalls to be executed natively.
-    bool ptrace_allow_native_syscalls;
-    // Store the latest simulation time to avoid inter-process time syscalls.
-    struct timespec sim_time;
-} ShimSharedMem;
 
 typedef enum {
     // Next val: 13
@@ -43,17 +29,6 @@ typedef struct _ShimEvent {
 
     union {
         struct {
-            // Update shim-side simulation clock
-            uint64_t simulation_nanos;
-        } start;
-
-        struct {
-            struct timespec ts;
-        } data_nano_sleep;
-
-        int rv; // TODO (rwails) hack, remove me
-
-        struct {
             // We wrap this in the surrounding struct in case there's anything
             // else we end up needing in the message besides the literal struct
             // we're going to pass to the syscall handler.
@@ -62,8 +37,6 @@ typedef struct _ShimEvent {
 
         struct {
             SysCallReg retval;
-            // Update shim-side simulation clock
-            uint64_t simulation_nanos;
         } syscall_complete;
 
         struct {

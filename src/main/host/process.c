@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <sys/file.h>
@@ -89,6 +90,9 @@ struct _Process {
     /* All of the descriptors opened by this process. */
     DescriptorTable* descTable;
 
+    /* Shared memory allocation for shared state with shim. */
+    ShMemBlock shimSharedMemBlock;
+
     /* the shadow plugin executable */
     struct {
         /* the name and path to the executable that we will exec */
@@ -149,6 +153,16 @@ struct _Process {
 static Thread* _process_threadLeader(Process* proc) {
     // "main" thread is the one where pid==tid.
     return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(proc->processID));
+}
+
+ShimProcessSharedMem* process_sharedMem(Process* proc) {
+    MAGIC_ASSERT(proc);
+    utility_assert(proc->shimSharedMemBlock.p);
+    return proc->shimSharedMemBlock.p;
+}
+
+static void _process_setSharedTime(Process* proc) {
+    process_sharedMem(proc)->sim_time = worker_getEmulatedTime();
 }
 
 const gchar* process_getName(Process* proc) {
@@ -506,7 +520,20 @@ static void _process_start(Process* proc) {
     g_timer_start(proc->cpuDelayTimer);
 #endif
 
+    /* Add shared mem block of first thread to env */
+    {
+        ShMemBlockSerialized sharedMemBlockSerial =
+            shmemallocator_globalBlockSerialize(thread_getShMBlock(mainThread));
+
+        char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
+        shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
+
+        /* append to the env */
+        proc->envv = g_environ_setenv(proc->envv, "SHADOW_SHM_THREAD_BLK", sharedMemBlockBuf, TRUE);
+    }
+
     proc->plugin.isExecuting = TRUE;
+    _process_setSharedTime(proc);
     /* exec the process */
     thread_run(mainThread, proc->argv, proc->envv, proc->workingDir);
     proc->nativePid = thread_getNativePid(mainThread);
@@ -581,6 +608,8 @@ void process_continue(Process* proc, Thread* thread) {
     /* time how long we execute the program */
     g_timer_start(proc->cpuDelayTimer);
 #endif
+
+    _process_setSharedTime(proc);
 
     proc->plugin.isExecuting = TRUE;
     thread_resume(thread);
@@ -740,6 +769,18 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
             "exist");
     }
 
+    proc->shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimProcessSharedMem));
+    {
+        ShMemBlockSerialized sharedMemBlockSerial =
+            shmemallocator_globalBlockSerialize(&proc->shimSharedMemBlock);
+
+        char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
+        shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
+
+        /* append to the env */
+        envv = g_environ_setenv(envv, "SHADOW_SHM_PROCESS_BLK", sharedMemBlockBuf, TRUE);
+    }
+
     /* add log file to env */
     {
         gchar* logFileName = _process_outputFileName(proc, "shimlog");
@@ -826,6 +867,8 @@ static void _process_free(Process* proc) {
     if (proc->host) {
         host_unref(proc->host);
     }
+
+    shmemallocator_globalFree(&proc->shimSharedMemBlock);
 
     worker_count_deallocation(Process);
 

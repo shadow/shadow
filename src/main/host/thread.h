@@ -13,8 +13,9 @@
 
 typedef struct _Thread Thread;
 
-#include "main/host/syscall_handler.h"
+#include "lib/shim/shim_shmem.h"
 #include "main/host/process.h"
+#include "main/host/syscall_handler.h"
 #include "main/host/syscall_types.h"
 #include "main/shmem/shmem_allocator.h"
 
@@ -72,6 +73,10 @@ ShMemBlock* thread_getIPCBlock(Thread* thread);
 
 // Returns the block used for shared state, or NULL if no such block is is used.
 ShMemBlock* thread_getShMBlock(Thread* thread);
+
+// Returns a typed pointer to memory shared with the shim (which is backed by
+// the block returned by thread_getShMBlock).
+ShimThreadSharedMem* thread_sharedMem(Thread* thread);
 
 Process* thread_getProcess(Thread* thread);
 Host* thread_getHost(Thread* thread);

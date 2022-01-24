@@ -232,13 +232,6 @@ static ShMemBlock* _threadpreload_getIPCBlock(Thread* base) {
     return &thread->ipc_blk;
 }
 
-static ShMemBlock* _threadpreload_getShMBlock(Thread* base) {
-    // We currently communicate the simulation time to the shim by including it in every event
-    // we send over the IPC channel, and the shim caches it.
-    // TODO we could instead use a shmem segment like threadptrace does.
-    return NULL;
-}
-
 SysCallCondition* threadpreload_resume(Thread* base) {
     ThreadPreload* thread = _threadToThreadPreload(base);
 
@@ -256,7 +249,6 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 trace("sending start event code to %d on %p", thread->base.nativePid,
                       thread->ipc_data);
 
-                thread->currentEvent.event_data.start.simulation_nanos = worker_getEmulatedTime();
                 shimevent_sendEventToPlugin(thread->ipc_data, &thread->currentEvent);
                 break;
             }
@@ -313,14 +305,11 @@ SysCallCondition* threadpreload_resume(Thread* base) {
                 ShimEvent shim_result;
                 if (result.state == SYSCALL_DONE) {
                     // Now send the result of the syscall
-                    shim_result = (ShimEvent){
-                        .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
-                        .event_data = {
-                            .syscall_complete = {.retval = result.retval,
-                                                 .simulation_nanos = worker_getEmulatedTime(),
-                                                 },
+                    shim_result = (ShimEvent){.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                                              .event_data = {
+                                                  .syscall_complete = {.retval = result.retval},
 
-                        }};
+                                              }};
                 } else if (result.state == SYSCALL_NATIVE) {
                     // Tell the shim to make the syscall itself
                     shim_result = (ShimEvent){
@@ -472,7 +461,6 @@ Thread* threadpreload_new(Host* host, Process* process, gint threadID) {
                                   .nativeSyscall = threadpreload_nativeSyscall,
                                   .clone = _threadpreload_clone,
                                   .getIPCBlock = _threadpreload_getIPCBlock,
-                                  .getShMBlock = _threadpreload_getShMBlock,
                               }),
     };
     thread->base.sys = syscallhandler_new(host, process, _threadPreloadToThread(thread));

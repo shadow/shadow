@@ -3,15 +3,11 @@
 
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 /// This module allows us to short-circuit syscalls that can be handled directly
 /// in the shim without needing to perform a more expensive inter-pocess syscall
 /// operation with shadow.
-
-// Caches the current simulation time to avoid invoking syscalls to get it.
-// Not thread safe, but doesn't matter since Shadow only permits
-// one thread at a time to run anyway.
-void shim_sys_set_simtime_nanos(uint64_t simulation_nanos);
 
 // Returns the current cached simulation time, or 0 if it has not yet been set.
 uint64_t shim_sys_get_simtime_nanos();

@@ -25,6 +25,7 @@
 #include "lib/shim/shim_logger.h"
 #include "lib/shim/shim_rdtsc.h"
 #include "lib/shim/shim_seccomp.h"
+#include "lib/shim/shim_shmem.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
@@ -56,15 +57,27 @@ struct IPCData* shim_thisThreadEventIPC() {
 }
 
 // Per-thread state shared with Shadow.
-static ShMemBlock* _shim_shared_mem_blk() {
+static ShMemBlock* _shim_thread_shared_mem_blk() {
     static ShimTlsVar v = {0};
     return shimtlsvar_ptr(&v, sizeof(ShMemBlock));
 }
-static ShimSharedMem* _shim_shared_mem() {
-    if (_shim_shared_mem_blk() == NULL) {
+static ShimThreadSharedMem* _shim_thread_shared_mem() {
+    if (_shim_thread_shared_mem_blk() == NULL) {
         return NULL;
     }
-    return _shim_shared_mem_blk()->p;
+    return _shim_thread_shared_mem_blk()->p;
+}
+
+// Per-thread state shared with Shadow.
+static ShMemBlock* _shim_process_shared_mem_blk() {
+    static ShMemBlock blk;
+    return &blk;
+}
+static ShimProcessSharedMem* _shim_process_shared_mem() {
+    if (_shim_process_shared_mem_blk() == NULL) {
+        return NULL;
+    }
+    return _shim_process_shared_mem_blk()->p;
 }
 
 // We disable syscall interposition when this is > 0.
@@ -73,11 +86,11 @@ static int* _shim_allowNativeSyscallsFlag() {
     return shimtlsvar_ptr(&v, sizeof(bool));
 }
 
-static void _shim_set_allow_native_syscalls(bool is_allowed) {
-    if (_shim_shared_mem()) {
-        _shim_shared_mem()->ptrace_allow_native_syscalls = is_allowed;
+static void _shim_ptrace_set_allow_native_syscalls(bool is_allowed) {
+    if (_shim_thread_shared_mem()) {
+        _shim_thread_shared_mem()->ptrace_allow_native_syscalls = is_allowed;
         trace("%s native-syscalls via shmem %p", is_allowed ? "allowing" : "disallowing",
-              _shim_shared_mem);
+              _shim_thread_shared_mem);
     } else {
         // Ptrace will intercept the native syscall and handle this from within Shadow.
         shim_native_syscall(SYS_shadow_set_ptrace_allow_native_syscalls, is_allowed);
@@ -134,7 +147,7 @@ bool shim_swapAllowNativeSyscalls(bool new) {
     bool old = *_shim_allowNativeSyscallsFlag();
     *_shim_allowNativeSyscallsFlag() = new;
     if (_using_interpose_ptrace && (new != old)) {
-        _shim_set_allow_native_syscalls(new);
+        _shim_ptrace_set_allow_native_syscalls(new);
     }
     return old;
 }
@@ -307,23 +320,34 @@ static void _shim_parent_init_death_signal() {
     _verify_parent_pid_or_exit();
 }
 
-static void _shim_parent_init_shm() {
-    assert(_using_interpose_ptrace);
-
-    const char* shm_blk_buf = getenv("SHADOW_SHM_BLK");
+static void _shim_parent_init_process_shm() {
+    const char* shm_blk_buf = getenv("SHADOW_SHM_PROCESS_BLK");
     assert(shm_blk_buf);
 
     bool err = false;
     ShMemBlockSerialized shm_blk_serialized = shmemblockserialized_fromString(shm_blk_buf, &err);
 
-    *_shim_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
-    assert(_shim_shared_mem());
+    *_shim_process_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
+    assert(_shim_process_shared_mem());
 }
 
-static void _shim_child_init_shm() {
+static void _shim_parent_init_thread_shm() {
     assert(_using_interpose_ptrace);
 
-    assert(!_shim_shared_mem());
+    const char* shm_blk_buf = getenv("SHADOW_SHM_THREAD_BLK");
+    assert(shm_blk_buf);
+
+    bool err = false;
+    ShMemBlockSerialized shm_blk_serialized = shmemblockserialized_fromString(shm_blk_buf, &err);
+
+    *_shim_thread_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
+    assert(_shim_thread_shared_mem());
+}
+
+static void _shim_child_init_thread_shm() {
+    assert(_using_interpose_ptrace);
+
+    assert(!_shim_thread_shared_mem());
     ShMemBlockSerialized shm_blk_serialized;
 
     // We execute this natively and ptrace will intercept and handle from within Shadow.
@@ -333,8 +357,8 @@ static void _shim_child_init_shm() {
         abort();
     }
 
-    *_shim_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
-    assert(_shim_shared_mem());
+    *_shim_thread_shared_mem_blk() = shmemserializer_globalBlockDeserialize(&shm_blk_serialized);
+    assert(_shim_thread_shared_mem());
 }
 
 static void _shim_parent_init_ipc() {
@@ -421,7 +445,6 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
 
     shimevent_recvEventFromShadow(ipc, &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
-    shim_sys_set_simtime_nanos(event.event_data.start.simulation_nanos);
 }
 
 static void _shim_ipc_wait_for_start_event() {
@@ -432,14 +455,14 @@ static void _shim_ipc_wait_for_start_event() {
     trace("waiting for start event on %p", shim_thisThreadEventIPC);
     shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &event, /* spin= */ true);
     assert(event.event_id == SHD_SHIM_EVENT_START);
-    shim_sys_set_simtime_nanos(event.event_data.start.simulation_nanos);
 }
 
 static void _shim_parent_init_ptrace() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
+    _shim_parent_init_process_shm();
     _shim_parent_init_logging();
-    _shim_parent_init_shm();
+    _shim_parent_init_thread_shm();
     _shim_parent_init_memory_manager();
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
@@ -458,6 +481,7 @@ static void _shim_parent_init_preload() {
 
     // The shim logger internally disables interposition while logging, so we open the log
     // file with interposition disabled too to get a native file descriptor.
+    _shim_parent_init_process_shm();
     _shim_parent_init_logging();
     _shim_parent_init_ipc();
     _shim_init_signal_stack();
@@ -475,7 +499,7 @@ static void _shim_parent_init_preload() {
 static void _shim_child_init_ptrace() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
-    _shim_child_init_shm();
+    _shim_child_init_thread_shm();
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
@@ -540,10 +564,10 @@ __attribute__((constructor)) void _shim_load() {
 
 void shim_ensure_init() { _shim_load(); }
 
-struct timespec* shim_get_shared_time_location() {
-    if (_shim_shared_mem() == NULL) {
+_Atomic EmulatedTime* shim_get_shared_time_location() {
+    if (_shim_process_shared_mem() == NULL) {
         return NULL;
     } else {
-        return &_shim_shared_mem()->sim_time;
+        return &_shim_process_shared_mem()->sim_time;
     }
 }

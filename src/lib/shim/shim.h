@@ -1,16 +1,10 @@
 #ifndef SHD_SHIM_SHIM_H_
 #define SHD_SHIM_SHIM_H_
 
-#include <signal.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <time.h>
-
-#include <arpa/inet.h>
-#include <sys/socket.h>
+#include <stdatomic.h>
 #include <sys/types.h>
 
+#include "main/core/support/definitions.h"
 #include "main/shmem/shmem_allocator.h"
 
 // Should be called by all syscall wrappers to ensure the shim is initialized.
@@ -31,7 +25,7 @@ bool shim_use_syscall_handler();
 struct IPCData* shim_thisThreadEventIPC();
 
 // Return the location of the time object in shared memory, or NULL if unavailable.
-struct timespec* shim_get_shared_time_location();
+_Atomic EmulatedTime* shim_get_shared_time_location();
 
 // To be called in parent thread before making the `clone` syscall.
 // It sets up data for the new thread.

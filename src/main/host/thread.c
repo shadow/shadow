@@ -32,7 +32,11 @@ Thread thread_create(Host* host, Process* process, int threadID, int type_id,
                      .process = process,
                      .tid = threadID,
                      .affinity = AFFINITY_UNINIT,
+                     .shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimThreadSharedMem)),
                      MAGIC_INITIALIZER};
+    *thread_sharedMem(&thread) = (ShimThreadSharedMem){
+        .ptrace_allow_native_syscalls = false,
+    };
     host_ref(host);
     process_ref(process);
 
@@ -77,6 +81,7 @@ void thread_unref(Thread* thread) {
         if (thread->host) {
             host_unref(thread->host);
         }
+        shmemallocator_globalFree(&thread->shimSharedMemBlock);
         MAGIC_CLEAR(thread);
         g_free(thread);
     }
@@ -144,8 +149,13 @@ ShMemBlock* thread_getIPCBlock(Thread* thread) {
 
 ShMemBlock* thread_getShMBlock(Thread* thread) {
     MAGIC_ASSERT(thread);
-    utility_assert(thread->methods.getShMBlock);
-    return thread->methods.getShMBlock(thread);
+    return &thread->shimSharedMemBlock;
+}
+
+ShimThreadSharedMem* thread_sharedMem(Thread* thread) {
+    MAGIC_ASSERT(thread);
+    utility_assert(thread->shimSharedMemBlock.p);
+    return thread->shimSharedMemBlock.p;
 }
 
 SysCallHandler* thread_getSysCallHandler(Thread* thread) {

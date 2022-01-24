@@ -225,9 +225,6 @@ typedef struct _ThreadPtrace {
     // Handle for IPC shared memory. Access via `_threadptrace_ipcData`.
     ShMemBlock ipcBlk;
 
-    // Handle for additional shared memory. Access via `_threadptrace_sharedMem`.
-    ShMemBlock shimSharedMemBlock;
-
     // Enable syscall handling via IPC.
     bool enableIpc;
 } ThreadPtrace;
@@ -236,12 +233,6 @@ static struct IPCData* _threadptrace_ipcData(ThreadPtrace* thread) {
     utility_assert(thread);
     utility_assert(thread->ipcBlk.p);
     return thread->ipcBlk.p;
-}
-
-static ShimSharedMem* _threadptrace_sharedMem(ThreadPtrace* thread) {
-    utility_assert(thread);
-    utility_assert(thread->shimSharedMemBlock.p);
-    return thread->shimSharedMemBlock.p;
 }
 
 // Forward declaration.
@@ -696,17 +687,6 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv, const char* wor
         myenvv = g_environ_setenv(myenvv, "SHADOW_IPC_BLK", ipcBlkBuf, TRUE);
     }
 
-    {
-        ShMemBlockSerialized sharedMemBlockSerial =
-            shmemallocator_globalBlockSerialize(&thread->shimSharedMemBlock);
-
-        char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
-        shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
-
-        /* append to the env */
-        myenvv = g_environ_setenv(myenvv, "SHADOW_SHM_BLK", sharedMemBlockBuf, TRUE);
-    }
-
     gchar* envStr = utility_strvToNewStr(myenvv);
     gchar* argStr = utility_strvToNewStr(argv);
     info("forking new thread with environment '%s', arguments '%s', and working directory '%s'",
@@ -738,11 +718,7 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv, const char* wor
 
     if (thread->enableIpc) {
         // Send 'start' event.
-        ShimEvent startEvent = {
-            .event_id = SHD_SHIM_EVENT_START,
-            .event_data.start = {
-                .simulation_nanos = worker_getEmulatedTime(),
-            }};
+        ShimEvent startEvent = {.event_id = SHD_SHIM_EVENT_START};
         shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &startEvent);
     }
 
@@ -761,11 +737,6 @@ _threadptrace_getSerializedBlock(ThreadPtrace* thread, PluginPtr shm_blk_pptr, S
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
 
-void threadptrace_setAllowNativeSyscalls(Thread* base, bool is_allowed) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-    _threadptrace_sharedMem(thread)->ptrace_allow_native_syscalls = is_allowed;
-}
-
 static ShMemBlock* _threadptrace_getIPCBlock(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
     if (thread->enableIpc) {
@@ -775,17 +746,12 @@ static ShMemBlock* _threadptrace_getIPCBlock(Thread* base) {
     }
 }
 
-static ShMemBlock* _threadptrace_getShMBlock(Thread* base) {
-    ThreadPtrace* thread = _threadToThreadPtrace(base);
-    return &thread->shimSharedMemBlock;
-}
-
 static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallArgs* args) {
     utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL ||
                    thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
 
     if (!syscall_num_is_shadow(args->number) &&
-        _threadptrace_sharedMem(thread)->ptrace_allow_native_syscalls) {
+        thread_sharedMem(&thread->base)->ptrace_allow_native_syscalls) {
         if (args->number == SYS_brk) {
             // brk should *always* be interposed so that the MemoryManager can track it.
             trace("Interposing brk even though native syscalls are enabled");
@@ -886,13 +852,10 @@ static SysCallCondition* _threadptrace_resumeIpcSyscall(ThreadPtrace* thread, bo
             return ret.cond;
         case SYSCALL_DONE: {
             trace("ipc_syscall done");
-            ShimEvent shim_result = {
-                .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
-                .event_data = {
-                    .syscall_complete = {.retval = ret.retval,
-                                         .simulation_nanos = worker_getEmulatedTime()},
-
-                }};
+            ShimEvent shim_result = {.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                                     .event_data = {
+                                         .syscall_complete = {.retval = ret.retval},
+                                     }};
             shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &shim_result);
             break;
         }
@@ -902,13 +865,10 @@ static SysCallCondition* _threadptrace_resumeIpcSyscall(ThreadPtrace* thread, bo
             long rv = thread_nativeSyscall(_threadPtraceToThread(thread), args->number,
                                            args->args[0], args->args[1], args->args[2],
                                            args->args[3], args->args[4], args->args[5]);
-            ShimEvent shim_result = {
-                .event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
-                .event_data = {
-                    .syscall_complete = {.retval = rv,
-                                         .simulation_nanos = worker_getEmulatedTime()},
-
-                }};
+            ShimEvent shim_result = {.event_id = SHD_SHIM_EVENT_SYSCALL_COMPLETE,
+                                     .event_data = {
+                                         .syscall_complete = {.retval = rv},
+                                     }};
             shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &shim_result);
         }
     }
@@ -975,21 +935,12 @@ static SysCallCondition* _threadptrace_resumeSyscall(ThreadPtrace* thread, bool*
     return NULL;
 }
 
-static void _threadptrace_setSharedTime(ThreadPtrace* thread) {
-    EmulatedTime now = worker_getEmulatedTime();
-    _threadptrace_sharedMem(thread)->sim_time.tv_sec = now / SIMTIME_ONE_SECOND;
-    _threadptrace_sharedMem(thread)->sim_time.tv_nsec = now % SIMTIME_ONE_SECOND;
-}
-
 SysCallCondition* threadptrace_resume(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
 
     if (thread->needAttachment) {
         _threadptrace_doAttach(thread);
     }
-
-    // Make sure the shim has the latest time before we resume
-    _threadptrace_setSharedTime(thread);
 
     // Try to flush any buffers left from the previous thread. In particular if
     // the previous thread exited, we might not have been able to flush its
@@ -1318,9 +1269,7 @@ int threadptrace_clone(Thread* base, unsigned long flags, PluginPtr child_stack,
         // Send 'start' event.
         ShimEvent startEvent = {
             .event_id = SHD_SHIM_EVENT_START,
-            .event_data.start = {
-                .simulation_nanos = worker_getEmulatedTime(),
-            }};
+        };
         shimevent_sendEventToPlugin(_threadptrace_ipcData(child), &startEvent);
     }
 
@@ -1353,16 +1302,10 @@ Thread* threadptraceonly_new(Host* host, Process* process, int threadID) {
                                   .nativeSyscall = threadptrace_nativeSyscall,
                                   .clone = threadptrace_clone,
                                   .getIPCBlock = _threadptrace_getIPCBlock,
-                                  .getShMBlock = _threadptrace_getShMBlock,
                               }),
         .childState = THREAD_PTRACE_CHILD_STATE_NONE,
     };
     thread->base.sys = syscallhandler_new(host, process, _threadPtraceToThread(thread));
-
-    // Set up a shared mem channel that we use even if not using IPC events
-    thread->shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimSharedMem));
-    *_threadptrace_sharedMem(thread) = (ShimSharedMem){.ptrace_allow_native_syscalls = false};
-    _threadptrace_setSharedTime(thread);
 
     worker_count_allocation(ThreadPtrace);
 
