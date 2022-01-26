@@ -1,6 +1,7 @@
 #include <glib.h>
 
 #include <arpa/inet.h>
+#include <errno.h>
 #include <netdb.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -154,17 +155,18 @@ bool addrinfo_equals(const struct addrinfo* lhs, const struct addrinfo* rhs) {
         g_test_fail();                                                         \
     }
 
-#define assert_getaddrinfo_rv_equals(got, expected)                            \
-    {                                                                          \
-        char buf1_##__LINE__[20];                                              \
-        char buf2_##__LINE__[20];                                              \
-        int rv##__LINE__ = got;                                                \
-        if (rv##__LINE__ != expected) {                                        \
-            printf("Expected: %s ; Got: %s\n",                                 \
-                   getaddrinfo_rv_string(buf1_##__LINE__, expected),           \
-                   getaddrinfo_rv_string(buf2_##__LINE__, rv##__LINE__));      \
-            g_test_fail();                                                     \
-        }                                                                      \
+#define assert_getaddrinfo_rv_equals(got, expected)                                                \
+    {                                                                                              \
+        char buf1_##__LINE__[20];                                                                  \
+        char buf2_##__LINE__[20];                                                                  \
+        int rv##__LINE__ = got;                                                                    \
+        if (rv##__LINE__ != expected) {                                                            \
+            printf("Expected: %s ; Got: %s ; errno: %s\n",                                         \
+                   getaddrinfo_rv_string(buf1_##__LINE__, expected),                               \
+                   getaddrinfo_rv_string(buf2_##__LINE__, rv##__LINE__),                           \
+                   (rv##__LINE__ == EAI_SERVICE) ? strerror(errno) : "N/A");                       \
+            g_test_fail();                                                                         \
+        }                                                                                          \
     }
 
 void test_service() {
