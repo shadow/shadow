@@ -318,7 +318,7 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
 #endif
 
 static void _process_getAndLogReturnCode(Process* proc) {
-    if(!proc->didLogReturnCode) {
+    if(!proc->didLogReturnCode && process_hasStarted(proc)) {
         // Return an error if we can't get real exit code.
         proc->returnCode = EXIT_FAILURE;
 
@@ -403,7 +403,7 @@ pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
 static void _process_check(Process* proc) {
     MAGIC_ASSERT(proc);
 
-    if (process_isRunning(proc)) {
+    if (process_isRunning(proc) || !process_hasStarted(proc)) {
         return;
     }
 
@@ -713,6 +713,11 @@ void process_detachPlugin(gpointer procptr, gpointer nothing) {
             worker_setActiveProcess(NULL);
         }
     }
+}
+
+gboolean process_hasStarted(Process* proc) {
+    MAGIC_ASSERT(proc);
+    return proc->nativePid > 0;
 }
 
 gboolean process_isRunning(Process* proc) {

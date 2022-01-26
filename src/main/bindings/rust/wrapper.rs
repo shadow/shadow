@@ -886,6 +886,9 @@ extern "C" {
     pub fn process_markAsExiting(proc_: *mut Process);
 }
 extern "C" {
+    pub fn process_hasStarted(proc_: *mut Process) -> gboolean;
+}
+extern "C" {
     pub fn process_isRunning(proc_: *mut Process) -> gboolean;
 }
 extern "C" {

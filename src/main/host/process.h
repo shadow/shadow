@@ -61,6 +61,7 @@ void process_addThread(Process* proc, Thread* thread);
 // be difficult to recover from cleanly.
 void process_markAsExiting(Process* proc);
 
+gboolean process_hasStarted(Process* proc);
 gboolean process_isRunning(Process* proc);
 
 /* Returns the name of the process from an internal buffer.
