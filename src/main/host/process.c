@@ -318,59 +318,67 @@ static void _process_handleTimerResult(Process* proc, gdouble elapsedTimeSec) {
 #endif
 
 static void _process_getAndLogReturnCode(Process* proc) {
-    if(!proc->didLogReturnCode && process_hasStarted(proc)) {
-        // Return an error if we can't get real exit code.
-        proc->returnCode = EXIT_FAILURE;
-
-        int wstatus = 0;
-        int rv = waitpid(proc->nativePid, &wstatus, __WALL);
-        if (rv < 0) {
-            // Getting here is a bug, but since the process is exiting anyway
-            // not serious enough to merit `error`ing out.
-            warning("waitpid: %s", g_strerror(errno));
-        } else if (rv != proc->nativePid) {
-            warning("waitpid returned %d instead of the requested %d", rv, proc->nativePid);
-        } else {
-            if (WIFEXITED(wstatus)) {
-                proc->returnCode = WEXITSTATUS(wstatus);
-            } else if (WIFSIGNALED(wstatus)) {
-                proc->returnCode = return_code_for_signal(WTERMSIG(wstatus));
-            } else {
-                warning("Couldn't get exit status");
-            }
-        }
-
-        // don't change the formatting of this string since some integration tests depend on it
-        GString* mainResultString = g_string_new(NULL);
-        g_string_printf(mainResultString, "main %s code '%i' for process '%s'",
-                        ((proc->returnCode == 0) ? "success" : "error"), proc->returnCode,
-                        process_getName(proc));
-
-        gchar* fileName = _process_outputFileName(proc, "exitcode");
-        FILE *exitcodeFile = fopen(fileName, "we");
-        g_free(fileName);
-
-        if (exitcodeFile != NULL) {
-            fprintf(exitcodeFile, "%d", proc->returnCode);
-            fclose(exitcodeFile);
-        } else {
-            warning("Could not open '%s' for writing: %s", mainResultString->str, strerror(errno));
-        }
-
-        // if there was no error or was intentionally killed
-        // TODO: once we've implemented clean shutdown via SIGTERM,
-        //       treat death by SIGKILL as a plugin error
-        if (proc->returnCode == 0 || proc->returnCode == return_code_for_signal(SIGKILL)) {
-            info("%s", mainResultString->str);
-        } else {
-            warning("%s", mainResultString->str);
-            worker_incrementPluginError();
-        }
-
-        g_string_free(mainResultString, TRUE);
-
-        proc->didLogReturnCode = TRUE;
+    if (proc->didLogReturnCode) {
+        return;
     }
+
+    if (!process_hasStarted(proc)) {
+        error("Process '%s' with a start time of %" G_GUINT64_FORMAT " did not start",
+              process_getName(proc), proc->startTime);
+        return;
+    }
+
+    // Return an error if we can't get real exit code.
+    proc->returnCode = EXIT_FAILURE;
+
+    int wstatus = 0;
+    int rv = waitpid(proc->nativePid, &wstatus, __WALL);
+    if (rv < 0) {
+        // Getting here is a bug, but since the process is exiting anyway
+        // not serious enough to merit `error`ing out.
+        warning("waitpid: %s", g_strerror(errno));
+    } else if (rv != proc->nativePid) {
+        warning("waitpid returned %d instead of the requested %d", rv, proc->nativePid);
+    } else {
+        if (WIFEXITED(wstatus)) {
+            proc->returnCode = WEXITSTATUS(wstatus);
+        } else if (WIFSIGNALED(wstatus)) {
+            proc->returnCode = return_code_for_signal(WTERMSIG(wstatus));
+        } else {
+            warning("Couldn't get exit status");
+        }
+    }
+
+    // don't change the formatting of this string since some integration tests depend on it
+    GString* mainResultString = g_string_new(NULL);
+    g_string_printf(mainResultString, "main %s code '%i' for process '%s'",
+                    ((proc->returnCode == 0) ? "success" : "error"), proc->returnCode,
+                    process_getName(proc));
+
+    gchar* fileName = _process_outputFileName(proc, "exitcode");
+    FILE* exitcodeFile = fopen(fileName, "we");
+    g_free(fileName);
+
+    if (exitcodeFile != NULL) {
+        fprintf(exitcodeFile, "%d", proc->returnCode);
+        fclose(exitcodeFile);
+    } else {
+        warning("Could not open '%s' for writing: %s", mainResultString->str, strerror(errno));
+    }
+
+    // if there was no error or was intentionally killed
+    // TODO: once we've implemented clean shutdown via SIGTERM,
+    //       treat death by SIGKILL as a plugin error
+    if (proc->returnCode == 0 || proc->returnCode == return_code_for_signal(SIGKILL)) {
+        info("%s", mainResultString->str);
+    } else {
+        warning("%s", mainResultString->str);
+        worker_incrementPluginError();
+    }
+
+    g_string_free(mainResultString, TRUE);
+
+    proc->didLogReturnCode = TRUE;
 }
 
 pid_t process_findNativeTID(Process* proc, pid_t virtualPID, pid_t virtualTID) {
