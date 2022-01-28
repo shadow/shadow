@@ -21,21 +21,21 @@
 #include "main/utility/utility.h"
 
 struct _SysCallCondition {
-    // Specifies how the condition will signal when a status is reached
+    // A trigger to unblock the syscall.
     Trigger trigger;
-    // Non-null if the condition will signal upon a timeout firing.
+    // Non-null if the condition will trigger upon a timeout firing.
     Timer* timeout;
     // Non-null if we are listening for status updates on a trigger object
     StatusListener* triggerListener;
     // Non-null if we are listening for status updates on the timeout
     StatusListener* timeoutListener;
-    // The process waiting for the signal
+    // The process waiting for the condition
     Process* proc;
-    // The thread waiting for the signal
+    // The thread waiting for the condition
     Thread* thread;
-    // Whether there is currently a signal triggered for the condition.
-    // Used to ensure there is only ever one signal scheduled at once.
-    bool signalPending;
+    // Whether a wakeup event has already been scheduled.
+    // Used to avoid scheduling multiple events when multiple triggers fire.
+    bool wakeupScheduled;
     // Memory tracking
     gint referenceCount;
     MAGIC_DECLARE;
@@ -304,18 +304,34 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
     return false;
 }
 
-static void _syscallcondition_signal(Host* host, void* obj, void* arg) {
+static bool _syscallcondition_satisfied(SysCallCondition* cond) {
+    Timer* timeout = syscallcondition_getTimeout(cond);
+    if (timeout && timer_getExpirationCount(timeout) > 0) {
+        // Unclear what the semantics would be here if a repeating timer were
+        // used.
+        utility_assert(timer_getExpirationCount(timeout) == 1);
+
+        // Timed out.
+        return true;
+    }
+    if (_syscallcondition_statusIsValid(cond)) {
+        // Primary condition is satisfied.
+        return true;
+    }
+    return false;
+}
+
+static void _syscallcondition_trigger(Host* host, void* obj, void* arg) {
     SysCallCondition* cond = obj;
-    bool wasTimeout = (bool)arg;
     MAGIC_ASSERT(cond);
 
-    // The signal callback is executing here and now. Setting to false allows
+    // The wakeup is executing here and now. Setting to false allows
     // the callback to be scheduled again if the condition isn't canceled
     // (which it will be, if we decide to actually run the process below).
-    cond->signalPending = false;
+    cond->wakeupScheduled = false;
 
 #ifdef DEBUG
-    _syscallcondition_logListeningState(cond, "signaling while");
+    _syscallcondition_logListeningState(cond, "wakeup while");
 #endif
 
     if (!cond->proc || !cond->thread) {
@@ -329,49 +345,47 @@ static void _syscallcondition_signal(Host* host, void* obj, void* arg) {
         return;
     }
 
-    // Always deliver the signal if the timeout expired.
-    // Otherwise, only deliver the signal if the desc status is still valid.
-    if (wasTimeout || _syscallcondition_statusIsValid(cond)) {
+    // Always deliver the wakeup if the timeout expired.
+    // Otherwise, only deliver the wakeup if the desc status is still valid.
+    if (_syscallcondition_satisfied(cond)) {
 #ifdef DEBUG
         _syscallcondition_logListeningState(cond, "stopped");
 #endif
 
-        /* Deliver the signal to notify the process to continue. */
+        /* Wake up the thread. */
         process_continue(cond->proc, cond->thread);
     } else {
         // Spurious wakeup. Just return without running the process. The
         // condition's listeners should still be installed, and now that we've
-        // flipped `signalPending`, they can schedule this signal again.
+        // flipped `wakeupScheduled`, they can schedule this wakeup again.
 #ifdef DEBUG
         _syscallcondition_logListeningState(cond, "re-blocking");
 #endif
     }
 }
 
-static void _syscallcondition_scheduleSignalTask(SysCallCondition* cond,
-                                                 bool wasTimeout) {
+static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond) {
     MAGIC_ASSERT(cond);
 
-    if (cond->signalPending) {
-        // Deliver one signal even if condition is triggered multiple times or
+    if (cond->wakeupScheduled) {
+        // Deliver one wakeup even if condition is triggered multiple times or
         // ways.
         return;
     }
 
-    /* We deliver the signal via a task, to make sure whatever
+    /* We deliver the wakeup via a task, to make sure whatever
      * code triggered our listener finishes its logic first before
      * we tell the process to run the plugin and potentially change
      * the state of the trigger object again. */
-    Task* signalTask =
-        task_new(_syscallcondition_signal, cond, (void*)wasTimeout,
-                 _syscallcondition_unrefcb, NULL);
+    Task* wakeupTask =
+        task_new(_syscallcondition_trigger, cond, NULL, _syscallcondition_unrefcb, NULL);
     worker_scheduleTask(
-        signalTask, thread_getHost(cond->thread), 0); // Call without moving time forward
+        wakeupTask, thread_getHost(cond->thread), 0); // Call without moving time forward
 
     syscallcondition_ref(cond);
-    task_unref(signalTask);
+    task_unref(wakeupTask);
 
-    cond->signalPending = true;
+    cond->wakeupScheduled = true;
 }
 
 static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
@@ -382,7 +396,7 @@ static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
     _syscallcondition_logListeningState(cond, "status changed while");
 #endif
 
-    _syscallcondition_scheduleSignalTask(cond, false);
+    _syscallcondition_scheduleWakeupTask(cond);
 }
 
 static void _syscallcondition_notifyTimeoutExpired(void* obj, void* arg) {
@@ -393,7 +407,7 @@ static void _syscallcondition_notifyTimeoutExpired(void* obj, void* arg) {
     _syscallcondition_logListeningState(cond, "timeout expired while");
 #endif
 
-    _syscallcondition_scheduleSignalTask(cond, true);
+    _syscallcondition_scheduleWakeupTask(cond);
 }
 
 void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
