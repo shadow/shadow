@@ -277,8 +277,9 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_preload_openssl_rng").unwrap().as_str())]
     use_preload_openssl_rng: Option<bool>,
 
-    /// Preload our OpenSSL crypto library for all managed processes to skip some encrypt and
-    /// decrypt operations (may speed up simulation, especially if your CPU lacks AES-NI support).
+    /// Preload our OpenSSL crypto library for all managed processes to skip some crypto operations
+    /// (may speed up simulation if your CPU lacks AES-NI support, but can cause bugs so do not use
+    /// unless you know what you're doing).
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_preload_openssl_crypto").unwrap().as_str())]
     use_preload_openssl_crypto: Option<bool>,
