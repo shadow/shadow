@@ -304,9 +304,25 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
     return false;
 }
 
+static bool _syscallcondition_satisfied(SysCallCondition* cond) {
+    Timer* timeout = syscallcondition_getTimeout(cond);
+    if (timeout && timer_getExpirationCount(timeout) > 0) {
+        // Unclear what the semantics would be here if a repeating timer were
+        // used.
+        utility_assert(timer_getExpirationCount(timeout) == 1);
+
+        // Timed out.
+        return true;
+    }
+    if (_syscallcondition_statusIsValid(cond)) {
+        // Primary condition is satisfied.
+        return true;
+    }
+    return false;
+}
+
 static void _syscallcondition_trigger(Host* host, void* obj, void* arg) {
     SysCallCondition* cond = obj;
-    bool wasTimeout = (bool)arg;
     MAGIC_ASSERT(cond);
 
     // The wakeup is executing here and now. Setting to false allows
@@ -331,7 +347,7 @@ static void _syscallcondition_trigger(Host* host, void* obj, void* arg) {
 
     // Always deliver the wakeup if the timeout expired.
     // Otherwise, only deliver the wakeup if the desc status is still valid.
-    if (wasTimeout || _syscallcondition_statusIsValid(cond)) {
+    if (_syscallcondition_satisfied(cond)) {
 #ifdef DEBUG
         _syscallcondition_logListeningState(cond, "stopped");
 #endif
@@ -348,7 +364,7 @@ static void _syscallcondition_trigger(Host* host, void* obj, void* arg) {
     }
 }
 
-static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond, bool wasTimeout) {
+static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond) {
     MAGIC_ASSERT(cond);
 
     if (cond->wakeupScheduled) {
@@ -361,8 +377,8 @@ static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond, bool wa
      * code triggered our listener finishes its logic first before
      * we tell the process to run the plugin and potentially change
      * the state of the trigger object again. */
-    Task* wakeupTask = task_new(
-        _syscallcondition_trigger, cond, (void*)wasTimeout, _syscallcondition_unrefcb, NULL);
+    Task* wakeupTask =
+        task_new(_syscallcondition_trigger, cond, NULL, _syscallcondition_unrefcb, NULL);
     worker_scheduleTask(
         wakeupTask, thread_getHost(cond->thread), 0); // Call without moving time forward
 
@@ -380,7 +396,7 @@ static void _syscallcondition_notifyStatusChanged(void* obj, void* arg) {
     _syscallcondition_logListeningState(cond, "status changed while");
 #endif
 
-    _syscallcondition_scheduleWakeupTask(cond, false);
+    _syscallcondition_scheduleWakeupTask(cond);
 }
 
 static void _syscallcondition_notifyTimeoutExpired(void* obj, void* arg) {
@@ -391,7 +407,7 @@ static void _syscallcondition_notifyTimeoutExpired(void* obj, void* arg) {
     _syscallcondition_logListeningState(cond, "timeout expired while");
 #endif
 
-    _syscallcondition_scheduleWakeupTask(cond, true);
+    _syscallcondition_scheduleWakeupTask(cond);
 }
 
 void syscallcondition_waitNonblock(SysCallCondition* cond, Process* proc,
