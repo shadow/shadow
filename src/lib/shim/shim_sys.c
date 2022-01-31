@@ -16,26 +16,18 @@
 #include "lib/shim/shim_sys.h"
 #include "main/core/support/definitions.h" // for SIMTIME definitions
 
-static _Atomic EmulatedTime* _shim_sys_get_time() {
-    // First try to get time from shared mem.
-    _Atomic EmulatedTime* simtime_ts = shim_get_shared_time_location();
+static EmulatedTime _shim_sys_get_time() {
+    ShimShmemProcess* mem = shim_processSharedMem();
 
     // If that's unavailable, fail. This can happen during early init.
-    if (simtime_ts == NULL) {
-        return NULL;
-    }
-
-    return simtime_ts;
-}
-
-uint64_t shim_sys_get_simtime_nanos() {
-    _Atomic EmulatedTime* ts = _shim_sys_get_time();
-    if (!ts) {
+    if (mem == NULL) {
         return 0;
     }
 
-    return *ts;
+    return shimshmem_getEmulatedTime(mem);
 }
+
+uint64_t shim_sys_get_simtime_nanos() { return _shim_sys_get_time() / SIMTIME_ONE_NANOSECOND; }
 
 bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
     // This function is called on every syscall operation so be careful not to doing
@@ -43,14 +35,10 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
 
     switch (syscall_num) {
         case SYS_clock_gettime: {
-            EmulatedTime emulated_time;
-            {
-                _Atomic EmulatedTime* emulated_time_p = NULL;
-                // We can handle it if the time is available.
-                if (!(emulated_time_p = _shim_sys_get_time())) {
-                    return false;
-                }
-                emulated_time = *emulated_time_p;
+            EmulatedTime emulated_time = _shim_sys_get_time();
+            if (emulated_time == 0) {
+                // Not initialized yet.
+                return false;
             }
 
             trace("servicing syscall %ld:clock_gettime from the shim", syscall_num);
@@ -74,14 +62,10 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         }
 
         case SYS_time: {
-            EmulatedTime emulated_time;
-            {
-                _Atomic EmulatedTime* emulated_time_p = NULL;
-                // We can handle it if the time is available.
-                if (!(emulated_time_p = _shim_sys_get_time())) {
-                    return false;
-                }
-                emulated_time = *emulated_time_p;
+            EmulatedTime emulated_time = _shim_sys_get_time();
+            if (emulated_time == 0) {
+                // Not initialized yet.
+                return false;
             }
             time_t now = emulated_time / SIMTIME_ONE_SECOND;
 
@@ -99,14 +83,10 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         }
 
         case SYS_gettimeofday: {
-            EmulatedTime emulated_time;
-            {
-                _Atomic EmulatedTime* emulated_time_p = NULL;
-                // We can handle it if the time is available.
-                if (!(emulated_time_p = _shim_sys_get_time())) {
-                    return false;
-                }
-                emulated_time = *emulated_time_p;
+            EmulatedTime emulated_time = _shim_sys_get_time();
+            if (emulated_time == 0) {
+                // Not initialized yet.
+                return false;
             }
             uint64_t micros = emulated_time / SIMTIME_ONE_MICROSECOND;
 

@@ -41,6 +41,7 @@
 #include "main/host/syscall/timerfd.h"
 #include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
+#include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/syscall_numbers.h"
 #include "main/host/syscall_types.h"
@@ -230,6 +231,9 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
 SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
                                           const SysCallArgs* args) {
     MAGIC_ASSERT(sys);
+
+    utility_assert(!sys->shimShmemHostLock);
+    sys->shimShmemHostLock = shimshmemhost_lock(host_getSharedMem(sys->host));
 
     SysCallReturn scr;
 
@@ -488,6 +492,32 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             break;
     }
 
+    // If the syscall would be blocked, but there's a signal pending, fail with
+    // EINTR instead. The shim-side code will run the signal handlers before
+    // returning EINTR to the original syscall.
+    //
+    // We do this check *after* (not before) trying the syscall so that a syscall
+    // that both becomes unblocked and gets signalled before the thread runs again
+    // is allowed to complete.
+    //
+    // * Thread is blocked on reading a file descriptor.
+    // * The read becomes ready and the thread is scheduled to run.
+    // * The thread receives an unblocked signal.
+    // * The thread runs again.
+    //
+    // In this scenario, the `read` call should be allowed to complete successfully.
+    // from signal(7):  "If an I/O call on a slow device has already transferred
+    // some data by the time it is interrupted by a signal handler, then the
+    // call will return a success  status  (normally,  the  number of bytes
+    // transferred)."
+    if (scr.state == SYSCALL_BLOCK &&
+        thread_unblockedSignalPending(sys->thread, sys->shimShmemHostLock)) {
+        SysCallCondition* condition = scr.cond;
+        utility_assert(condition);
+        syscallcondition_unref(condition);
+        scr = (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINTR};
+    }
+
     if (scr.state == SYSCALL_BLOCK) {
         /* We are blocking: store the syscall number so we know
          * to expect the same syscall again when it unblocks. */
@@ -501,6 +531,8 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
         process_freePtrsWithoutFlushing(sys->process);
     }
+
+    shimshmemhost_unlock(host_getSharedMem(sys->host), &sys->shimShmemHostLock);
 
     return scr;
 }

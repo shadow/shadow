@@ -79,6 +79,9 @@ struct _Host {
     /* track the order in which the application sent us application data */
     gdouble packetPriorityCounter;
 
+    /* Shared memory allocation for shared state with shim. */
+    ShMemBlock shimSharedMemBlock;
+
     /* random stream */
     Random* random;
 
@@ -125,6 +128,9 @@ Host* host_new(HostParameters* params) {
 
     info("Created host id '%u' name '%s'", (guint)host->params.id,
          g_quark_to_string(host->params.id));
+
+    host->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemhost_size());
+    shimshmemhost_init(host_getSharedMem(host), host);
 
     host->processIDCounter = 1000;
     host->referenceCount = 1;
@@ -388,6 +394,16 @@ void host_addApplication(Host* host, SimulationTime startTime, SimulationTime st
                          InterposeMethod interposeMethod, const gchar* pluginName,
                          const gchar* pluginPath, gchar** envv, gchar** argv) {
     MAGIC_ASSERT(host);
+    {
+        ShMemBlockSerialized sharedMemBlockSerial =
+            shmemallocator_globalBlockSerialize(&host->shimSharedMemBlock);
+
+        char sharedMemBlockBuf[SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN] = {0};
+        shmemblockserialized_toString(&sharedMemBlockSerial, sharedMemBlockBuf);
+
+        /* append to the env */
+        envv = g_environ_setenv(envv, "SHADOW_SHM_HOST_BLK", sharedMemBlockBuf, TRUE);
+    }
     guint processID = host_getNewProcessID(host);
     Process* proc = process_new(host,
                                 processID,
@@ -677,6 +693,41 @@ Arc_AtomicRefCell_AbstractUnixNamespace* host_getAbstractUnixNamespace(Host* hos
 
 FutexTable* host_getFutexTable(Host* host) { return host->futexTable; }
 
+Process* host_getProcess(Host* host, pid_t virtualPID) {
+    MAGIC_ASSERT(host);
+
+    // TODO: once we have a process table, we can do a constant time lookup instead
+    GList* current = g_queue_peek_head_link(host->processes);
+
+    while (current != NULL) {
+        Process* proc = current->data;
+        if (process_getProcessID(proc) == virtualPID) {
+            return proc;
+        }
+        current = current->next;
+    }
+
+    return NULL;
+}
+
+Thread* host_getThread(Host* host, pid_t virtualTID) {
+    MAGIC_ASSERT(host);
+
+    // TODO: once we have a process table, we can do a constant time lookup instead
+    GList* current = g_queue_peek_head_link(host->processes);
+
+    while (current != NULL) {
+        Process* proc = current->data;
+        Thread* thread = process_getThread(proc, virtualTID);
+        if (thread) {
+            return thread;
+        }
+        current = current->next;
+    }
+
+    return NULL;
+}
+
 pid_t host_getNativeTID(Host* host, pid_t virtualPID, pid_t virtualTID) {
     MAGIC_ASSERT(host);
 
@@ -696,4 +747,10 @@ pid_t host_getNativeTID(Host* host, pid_t virtualPID, pid_t virtualTID) {
     }
 
     return nativeTID; // 0 if no process/thread has the given virtual PID/TID
+}
+
+ShimShmemHost* host_getSharedMem(Host* host) {
+    MAGIC_ASSERT(host);
+    utility_assert(host->shimSharedMemBlock.p);
+    return host->shimSharedMemBlock.p;
 }

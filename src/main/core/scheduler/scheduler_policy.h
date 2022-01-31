@@ -9,6 +9,7 @@
 #include "main/core/scheduler/scheduler_policy_type.h"
 #include "main/core/work/event.h"
 #include "main/host/host.h"
+#include "main/utility/utility.h"
 
 typedef struct _SchedulerPolicy SchedulerPolicy;
 

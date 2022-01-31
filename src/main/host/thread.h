@@ -76,12 +76,18 @@ ShMemBlock* thread_getShMBlock(Thread* thread);
 
 // Returns a typed pointer to memory shared with the shim (which is backed by
 // the block returned by thread_getShMBlock).
-ShimThreadSharedMem* thread_sharedMem(Thread* thread);
+ShimShmemThread* thread_sharedMem(Thread* thread);
 
 Process* thread_getProcess(Thread* thread);
 Host* thread_getHost(Thread* thread);
 // Get the syscallhandler for this thread.
 SysCallHandler* thread_getSysCallHandler(Thread* thread);
 SysCallCondition* thread_getSysCallCondition(Thread* thread);
+
+sigset_t* thread_getSignalSet(Thread* thread);
+
+// Returns true iff there is an unblocked, unignored signal pending for this
+// thread (or its process).
+bool thread_unblockedSignalPending(Thread* thread, const ShimShmemHostLock* host_lock);
 
 #endif /* SRC_MAIN_HOST_SHD_THREAD_H_ */

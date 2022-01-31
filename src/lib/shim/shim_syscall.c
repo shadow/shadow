@@ -89,9 +89,88 @@ long shim_native_syscall(long n, ...) {
     return rv;
 }
 
-// Only called from asm, so need to tell compiler not to discard.
-__attribute__((used)) static SysCallReg
-_shim_emulated_syscall_event(const ShimEvent* syscall_event) {
+static void _shim_process_signals(ShimShmemHostLock* host_lock) {
+    int signo;
+    siginfo_t siginfo;
+    while ((signo = shimshmem_takePendingUnblockedSignal(
+                host_lock, shim_processSharedMem(), shim_threadSharedMem(), &siginfo)) != 0) {
+        shd_kernel_sigset_t blocked_signals =
+            shimshmem_getBlockedSignals(host_lock, shim_threadSharedMem());
+
+        struct shd_kernel_sigaction action =
+            shimshmem_getSignalAction(host_lock, shim_processSharedMem(), signo);
+
+        if (action.ksa_handler == SIG_IGN) {
+            continue;
+        }
+
+        if (action.ksa_handler == SIG_DFL) {
+            switch (shd_defaultAction(signo)) {
+                case SHD_DEFAULT_ACTION_IGN:
+                    // Ignore
+                    continue;
+                case SHD_DEFAULT_ACTION_CORE:
+                case SHD_DEFAULT_ACTION_TERM: {
+                    // Deliver natively to terminate/drop core.
+                    if (sigaction(signo, &(struct sigaction){.sa_handler = SIG_DFL}, NULL) != 0) {
+                        panic("sigaction: %s", strerror(errno));
+                    }
+                    shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
+                    raise(signo);
+                    panic("Unreachable");
+                }
+                case SHD_DEFAULT_ACTION_STOP: panic("Stop via signal unimplemented.");
+                case SHD_DEFAULT_ACTION_CONT: panic("Continue via signal unimplemented.");
+            };
+            panic("Unreachable");
+        }
+
+        trace("Handling signo %d", signo);
+
+        shd_kernel_sigset_t handler_mask = shd_sigorset(&blocked_signals, &action.ksa_mask);
+        if (!(action.ksa_flags & SA_NODEFER)) {
+            // Block another instance of the same signal.
+            shd_sigaddset(&handler_mask, signo);
+        }
+        if (action.ksa_flags & SA_RESETHAND) {
+            shimshmem_setSignalAction(host_lock, shim_processSharedMem(), signo,
+                                      &(struct shd_kernel_sigaction){.ksa_handler = SIG_DFL});
+        }
+        if (action.ksa_flags & SA_ONSTACK) {
+            error("SA_ONSTACK unimplemented; ignoring.");
+        }
+        if (action.ksa_flags & SA_RESTART) {
+            error("SA_RESTART unimplemented; ignoring.");
+        }
+
+        // Call signal handler with host lock released, and native syscalls disabled.
+        shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
+        bool oldAllowNativeSyscalls = shim_swapAllowNativeSyscalls(false);
+        if (action.ksa_flags & SA_SIGINFO) {
+            // ucontext is unimplemented for now. Most signal handlers don't use
+            // it, and passing NULL and getting a loud crash if they try to use
+            // it is probably preferable over passing in a subtly-wrong fake.
+            //
+            // In cases where we intercepted the original syscall via seccomp,
+            // it might be reasonable to pass the ucontext_t that *our* signal
+            // handler received. Otherwise it's much murkier how such a context
+            // ought to be constructed.
+            ucontext_t* ucontext = NULL;
+            action.ksa_sigaction(signo, &siginfo, ucontext);
+        } else {
+            action.ksa_handler(signo);
+        }
+
+        // Reacquire host lock and re-disable native syscalls.
+        shim_swapAllowNativeSyscalls(oldAllowNativeSyscalls);
+        host_lock = shimshmemhost_lock(shim_hostSharedMem());
+
+        // Restore mask
+        shimshmem_setBlockedSignals(host_lock, shim_threadSharedMem(), blocked_signals);
+    }
+}
+
+static SysCallReg _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
 
     struct IPCData* ipc = shim_thisThreadEventIPC();
 
@@ -122,8 +201,21 @@ _shim_emulated_syscall_event(const ShimEvent* syscall_event) {
                 break;
             }
             case SHD_SHIM_EVENT_SYSCALL_COMPLETE: {
-                // Use provided result.
+                // We'll ultimately return the provided result.
                 SysCallReg rv = res.event_data.syscall_complete.retval;
+
+                if (!shim_hostSharedMem() || !shim_processSharedMem() || !shim_threadSharedMem()) {
+                    // We get here while initializing shim_threadSharedMem
+                    return rv;
+                }
+
+                // Process any signals, which may have resulted from the syscall itself
+                // (e.g. `kill(getpid(), signo)`), or may have been sent by another thread
+                // while this one was blocked in a syscall.
+                ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
+                _shim_process_signals(host_lock);
+                shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
+
                 return rv;
             }
             case SHD_SHIM_EVENT_SYSCALL_DO_NATIVE: {

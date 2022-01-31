@@ -155,14 +155,14 @@ static Thread* _process_threadLeader(Process* proc) {
     return g_hash_table_lookup(proc->threads, GUINT_TO_POINTER(proc->processID));
 }
 
-ShimProcessSharedMem* process_sharedMem(Process* proc) {
+ShimShmemProcess* process_getSharedMem(Process* proc) {
     MAGIC_ASSERT(proc);
     utility_assert(proc->shimSharedMemBlock.p);
     return proc->shimSharedMemBlock.p;
 }
 
 static void _process_setSharedTime(Process* proc) {
-    process_sharedMem(proc)->sim_time = worker_getEmulatedTime();
+    shimshmem_setEmulatedTime(process_getSharedMem(proc), worker_getEmulatedTime());
 }
 
 const gchar* process_getName(Process* proc) {
@@ -591,6 +591,10 @@ void process_addThread(Process* proc, Thread* thread) {
     task_unref(task);
 }
 
+Thread* process_getThread(Process* proc, pid_t virtualTID) {
+    return g_hash_table_lookup(proc->threads, GINT_TO_POINTER(virtualTID));
+}
+
 void process_markAsExiting(Process* proc) {
     MAGIC_ASSERT(proc);
     trace("Process %d marked as exiting", proc->processID);
@@ -782,7 +786,9 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
             "exist");
     }
 
-    proc->shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimProcessSharedMem));
+    proc->shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemprocess_size());
+    shimshmemprocess_init(proc->shimSharedMemBlock.p, proc);
+
     {
         ShMemBlockSerialized sharedMemBlockSerial =
             shmemallocator_globalBlockSerialize(&proc->shimSharedMemBlock);
@@ -1167,5 +1173,26 @@ void process_parseArgStrFree(char** argv, char* error) {
     }
     if (error != NULL) {
         g_free(error);
+    }
+}
+
+void process_interruptWithSignal(Process* process, ShimShmemHostLock* hostLock, int signo) {
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, process->threads);
+    while (g_hash_table_iter_next(&iter, &key, &value)) {
+        Thread* thread = value;
+
+        // Find a thread without the signal blocked, if any, and wake it up.
+        shd_kernel_sigset_t blocked_signals =
+            shimshmem_getBlockedSignals(hostLock, thread_sharedMem(thread));
+        if (!shd_sigismember(&blocked_signals, signo)) {
+            SysCallCondition* cond = thread_getSysCallCondition(thread);
+            if (!cond) {
+                continue;
+            }
+            syscallcondition_wakeupForSignal(cond, hostLock, signo);
+            break;
+        }
     }
 }

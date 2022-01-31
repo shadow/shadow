@@ -29,6 +29,7 @@
 #include <unistd.h>
 #include <wchar.h>
 
+#include "lib/shim/shim_shmem.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
 #include "main/host/descriptor/descriptor_types.h"
@@ -53,6 +54,8 @@ const char* process_getWorkingDir(Process* proc);
 // Adds a new thread to the process and schedules it to run.
 // Intended for use by `clone`.
 void process_addThread(Process* proc, Thread* thread);
+
+Thread* process_getThread(Process* proc, pid_t virtualTID);
 
 // In some cases a running thread processes an action that will bring down the
 // entire process. Calling this tells the Process to clean up other threads
@@ -181,5 +184,13 @@ InterposeMethod process_getInterposeMethod(Process* proc);
 bool process_parseArgStr(const char* commandLine, int* argc, char*** argv, char** error);
 // Free all data allocated by `process_parseArgStr()`.
 void process_parseArgStrFree(char** argv, char* error);
+
+// Process state kept in memory shared with the managed process's shim.
+ShimShmemProcess* process_getSharedMem(Process* proc);
+
+// Wake up one thread that has `signo` unblocked. This is intended for syscall
+// handlers that generate process-directed signals (e.g. `kill`). The caller
+// should have already set the signal as pending via ShimShmemProcess.
+void process_interruptWithSignal(Process* process, ShimShmemHostLock* hostLock, int signo);
 
 #endif /* SHD_PROCESS_H_ */

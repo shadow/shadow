@@ -304,7 +304,7 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
     return false;
 }
 
-static bool _syscallcondition_satisfied(SysCallCondition* cond) {
+static bool _syscallcondition_satisfied(SysCallCondition* cond, Host* host) {
     Timer* timeout = syscallcondition_getTimeout(cond);
     if (timeout && timer_getExpirationCount(timeout) > 0) {
         // Unclear what the semantics would be here if a repeating timer were
@@ -316,6 +316,12 @@ static bool _syscallcondition_satisfied(SysCallCondition* cond) {
     }
     if (_syscallcondition_statusIsValid(cond)) {
         // Primary condition is satisfied.
+        return true;
+    }
+    ShimShmemHostLock* hostLock = shimshmemhost_lock(host_getSharedMem(host));
+    bool signalPending = thread_unblockedSignalPending(cond->thread, hostLock);
+    shimshmemhost_unlock(host_getSharedMem(host), &hostLock);
+    if (signalPending) {
         return true;
     }
     return false;
@@ -347,7 +353,7 @@ static void _syscallcondition_trigger(Host* host, void* obj, void* arg) {
 
     // Always deliver the wakeup if the timeout expired.
     // Otherwise, only deliver the wakeup if the desc status is still valid.
-    if (_syscallcondition_satisfied(cond)) {
+    if (_syscallcondition_satisfied(cond, host)) {
 #ifdef DEBUG
         _syscallcondition_logListeningState(cond, "stopped");
 #endif
@@ -496,6 +502,25 @@ void syscallcondition_cancel(SysCallCondition* cond) {
     MAGIC_ASSERT(cond);
     _syscallcondition_cleanupListeners(cond);
     _syscallcondition_cleanupProc(cond);
+}
+
+bool syscallcondition_wakeupForSignal(SysCallCondition* cond, ShimShmemHostLock* hostLock,
+                                      int signo) {
+    MAGIC_ASSERT(cond);
+
+    shd_kernel_sigset_t blockedSignals =
+        shimshmem_getBlockedSignals(hostLock, thread_sharedMem(cond->thread));
+    if (shd_sigismember(&blockedSignals, signo)) {
+        // Signal is blocked. Don't schedule.
+        return false;
+    }
+
+#ifdef DEBUG
+    _syscallcondition_logListeningState(cond, "signaled while");
+#endif
+
+    _syscallcondition_scheduleWakeupTask(cond);
+    return true;
 }
 
 Timer* syscallcondition_getTimeout(SysCallCondition* cond) { return cond->timeout; }

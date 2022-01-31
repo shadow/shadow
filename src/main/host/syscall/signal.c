@@ -12,7 +12,9 @@
 #include "lib/logger/logger.h"
 #include "main/host/host.h"
 #include "main/host/shimipc.h"
+#include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall/protected.h"
+#include "main/host/syscall_condition.h"
 #include "main/host/thread.h"
 #include "main/utility/syscall.h"
 
@@ -27,95 +29,156 @@ static int _shim_handled_signals[] = {SIGSYS, SIGSEGV};
 #define ARRAY_LENGTH(x) (sizeof(x) / sizeof((x)[0]))
 #endif
 
-static bool _sigset_includes_shim_handled_signal(const sigset_t* set) {
-    for (int i = 0; i < ARRAY_LENGTH(_shim_handled_signals); ++i) {
-        int signal = _shim_handled_signals[i];
-        int rv = sigismember(set, signal);
-        if (rv < 0) {
-            panic("sigismember: %s", g_strerror(errno));
-        }
-        if (rv) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static void _sigset_remove_shim_handled_signals(sigset_t* set) {
-    for (int i = 0; i < ARRAY_LENGTH(_shim_handled_signals); ++i) {
-        int signal = _shim_handled_signals[i];
-        if (sigdelset(set, signal) < 0) {
-            panic("sigdelset: %s", g_strerror(errno));
-        }
-    }
-}
-
-// This should be compatible with the kernel's sigaction struct, which is what
-// the syscalls take in cases where the userspace wrappers take `struct
-// sigaction`. While a similar struct definition appears in the glibc source,
-// it's not exposed to users, so we duplicate it here. While in principle this
-// definition could change out from under us, it's more likely that the kernel
-// would introduce a new syscall number rather than breaking userspace programs
-// that still had the old definition.
-//
-// When reading/writing a userspace pointer, use kernel_sigaction_size to
-// calculate the true size. This is needed because the last field, `sa_mask`,
-// is actually variable size, and is specified with another parameter in the syscall.
-struct kernel_sigaction {
-    void* handler;
-    unsigned long sa_flags;
-    void (*sa_restorer)(void);
-    sigset_t sa_mask;
-};
-
-// Calculates the size of a corresponding `struct kernel_sigaction`. Returns 0
-// if the masksize is invalid.
-static size_t kernel_sigaction_size(size_t masksize) {
-    if (masksize < 4) {
-        warning("Got bad masksize: %zu < 4", masksize);
-    }
-    size_t sz = sizeof(struct kernel_sigaction) - sizeof(sigset_t) + masksize;
-    if (sz > sizeof(struct kernel_sigaction)) {
-        warning("Got bad sigaction size: %zu > %zu", sz, sizeof(struct kernel_sigaction));
-        return 0;
-    }
-    return sz;
-}
-
 ///////////////////////////////////////////////////////////
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SysCallReturn _syscallhandler_killHelper(SysCallHandler* sys, pid_t pid, pid_t tid, int sig,
-                                                long syscallnum) {
-    pid_t my_tid = thread_getNativeTid(sys->thread);
+static SysCallReturn _syscallhandler_signalProcess(SysCallHandler* sys, Process* process, int sig) {
+    if (sig < 0 || sig > SHD_SIGRT_MAX) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    }
 
-    // Return error if trying to stop/continue a process so we don't disrupt our ptracer.
-    // NOTE: If we run into signal problems, we could consider only allowing a process to
-    // send signals to itself, i.e., disallow inter-process signaling. See Github PR#1075.
-    if (sig == SIGSTOP || sig == SIGCONT) {
+    if (sig > SHD_STANDARD_SIGNAL_MAX_NO) {
+        warning("Unimplemented signal %d", sig);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
     }
 
-    trace(
-        "making syscall %li in native thread %i (pid=%i and tid=%i)", syscallnum, my_tid, pid, tid);
-
-    long result = 0;
-
-    switch (syscallnum) {
-        case SYS_kill: result = thread_nativeSyscall(sys->thread, SYS_kill, pid, sig); break;
-        case SYS_tkill: result = thread_nativeSyscall(sys->thread, SYS_tkill, tid, sig); break;
-        case SYS_tgkill:
-            result = thread_nativeSyscall(sys->thread, SYS_tgkill, pid, tid, sig);
-            break;
-        default: utility_panic("Invalid syscall number %li given", syscallnum); break;
+    if (sig == 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
     }
 
-    int error = syscall_rawReturnValueToErrno(result);
+    if (!shimipc_getUseSeccomp()) {
+        // ~legacy ptrace path. Send a real signal to the process.
+        pid_t nativePid = process_getNativePid(process);
+        long res = thread_nativeSyscall(sys->thread, SYS_kill, nativePid, sig);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = res};
+    }
 
-    trace("native syscall returned error code %i", error);
+    struct shd_kernel_sigaction action =
+        shimshmem_getSignalAction(sys->shimShmemHostLock, process_getSharedMem(process), sig);
+    if (action.ksa_handler == SIG_IGN ||
+        (action.ksa_handler == SIG_DFL && shd_defaultAction(sig) == SHD_DEFAULT_ACTION_IGN)) {
+        // Don't deliver ignored an signal.
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    }
 
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -error};
+    shd_kernel_sigset_t pending_signals =
+        shimshmem_getProcessPendingSignals(sys->shimShmemHostLock, process_getSharedMem(process));
+
+    if (shd_sigismember(&pending_signals, sig)) {
+        // Signal is already pending. From signal(7):In the case where a standard signal is already
+        // pending, the siginfo_t structure (see sigaction(2)) associated with  that  signal is not
+        // overwritten on arrival of subsequent instances of the same signal.
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    }
+
+    shd_sigaddset(&pending_signals, sig);
+    shimshmem_setProcessPendingSignals(
+        sys->shimShmemHostLock, process_getSharedMem(process), pending_signals);
+    shimshmem_setProcessSiginfo(sys->shimShmemHostLock, process_getSharedMem(process), sig,
+                                &(siginfo_t){
+                                    .si_signo = sig,
+                                    .si_errno = 0,
+                                    .si_code = SI_USER,
+                                    .si_pid = process_getProcessID(sys->process),
+                                    .si_uid = 0,
+                                });
+
+    if (process == sys->process) {
+        shd_kernel_sigset_t blocked_signals =
+            shimshmem_getBlockedSignals(sys->shimShmemHostLock, thread_sharedMem(sys->thread));
+        if (!shd_sigismember(&blocked_signals, sig)) {
+            // Target process is this process, and this thread hasn't blocked
+            // the signal.  It will be delivered to this thread.
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+        }
+    }
+
+    process_interruptWithSignal(process, sys->shimShmemHostLock, sig);
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+}
+
+static SysCallReturn _syscallhandler_signalThread(SysCallHandler* sys, Thread* thread, int sig) {
+    if (sig < 0 || sig > SHD_SIGRT_MAX) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EINVAL};
+    }
+
+    if (sig > SHD_STANDARD_SIGNAL_MAX_NO) {
+        warning("Unimplemented signal %d", sig);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+    }
+
+    if (sig == 0) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    }
+
+    if (!shimipc_getUseSeccomp()) {
+        // ~legacy ptrace path. Send a real signal to the thread.
+        pid_t nativeTid = thread_getNativePid(thread);
+        Process* process = thread_getProcess(thread);
+        pid_t nativePid = process_getNativePid(process);
+        long res = thread_nativeSyscall(sys->thread, SYS_tgkill, nativePid, nativeTid, sig);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = res};
+    }
+
+    Process* process = thread_getProcess(thread);
+    struct shd_kernel_sigaction action =
+        shimshmem_getSignalAction(sys->shimShmemHostLock, process_getSharedMem(process), sig);
+    if (action.ksa_handler == SIG_IGN ||
+        (action.ksa_handler == SIG_DFL && shd_defaultAction(sig) == SHD_DEFAULT_ACTION_IGN)) {
+        // Don't deliver ignored an signal.
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    }
+
+    shd_kernel_sigset_t pending_signals =
+        shimshmem_getThreadPendingSignals(sys->shimShmemHostLock, thread_sharedMem(thread));
+
+    if (shd_sigismember(&pending_signals, sig)) {
+        // Signal is already pending. From signal(7):In the case where a standard signal is already
+        // pending, the siginfo_t structure (see sigaction(2)) associated with  that  signal is not
+        // overwritten on arrival of subsequent instances of the same signal.
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    }
+
+    shd_sigaddset(&pending_signals, sig);
+    shimshmem_setThreadPendingSignals(
+        sys->shimShmemHostLock, thread_sharedMem(thread), pending_signals);
+    shimshmem_setThreadSiginfo(sys->shimShmemHostLock, thread_sharedMem(thread), sig,
+                               &(siginfo_t){
+                                   .si_signo = sig,
+                                   .si_errno = 0,
+                                   .si_code = SI_TKILL,
+                                   .si_pid = process_getProcessID(sys->process),
+                                   .si_uid = 0,
+                               });
+
+    if (thread == sys->thread) {
+        // Target is the current thread. It'll be handled synchronously when the
+        // current syscall returns (if it's unblocked).
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    }
+
+    shd_kernel_sigset_t blocked_signals =
+        shimshmem_getBlockedSignals(sys->shimShmemHostLock, thread_sharedMem(thread));
+    if (shd_sigismember(&blocked_signals, sig)) {
+        // Target thread has the signal blocked. We'll leave it pending, but no
+        // need to schedule an event to process the signal. It'll get processed
+        // synchronously when the thread executes a syscall that would unblock
+        // the signal.
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    }
+
+    SysCallCondition* cond = thread_getSysCallCondition(thread);
+    if (cond == NULL) {
+        // We may be able to get here if a thread is signalled before it runs
+        // for the first time. Just return; the signal will be delivered when
+        // the thread runs.
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
+    }
+    syscallcondition_wakeupForSignal(cond, sys->shimShmemHostLock, sig);
+
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = 0};
 }
 
 ///////////////////////////////////////////////////////////
@@ -129,25 +192,37 @@ SysCallReturn syscallhandler_kill(SysCallHandler* sys, const SysCallArgs* args) 
 
     trace("kill called on pid %i with signal %i", pid, sig);
 
-    pid_t native_pid = 0;
-
-    if (pid == -1 || pid == 0) {
-        // Special pids do not need translation
-        native_pid = pid;
-    } else {
-        // Translate from virtual to native pid
-        // Support -pid for kill
-        native_pid = (pid > 0) ? host_getNativeTID(sys->host, pid, 0)
-                               : -host_getNativeTID(sys->host, -pid, 0);
-
-        // If there is no such thread, it's an error
-        if (native_pid == 0) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESRCH};
-        }
+    if (pid == -1) {
+        // kill(2): If  pid  equals -1, then sig is sent to every process for
+        // which the calling process has permission to send signals, except for
+        // process 1.
+        //
+        // Currently unimplemented, and unlikely to be needed in the context of
+        // a shadow simulation.
+        warning("kill with pid=-1 unimplemented");
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ENOSYS};
+    } else if (pid == 0) {
+        // kill(2): If pid equals 0, then sig is sent to every process in the
+        // process group of the calling process.
+        //
+        // Currently every emulated process is in its own process group.
+        pid = process_getProcessID(sys->process);
+    } else if (pid < -1) {
+        // kill(2): If pid is less than -1, then sig is sent to every process in
+        // the process group whose ID is -pid.
+        //
+        // Currently every emulated process is in its own process group, where
+        // pgid=pid.
+        pid = -pid;
     }
 
-    trace("translated virtual pid %i to native pid %i", pid, native_pid);
-    return _syscallhandler_killHelper(sys, native_pid, 0, sig, SYS_kill);
+    Process* process = host_getProcess(sys->host, pid);
+    if (process == NULL) {
+        debug("Process %d not found", pid);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESRCH};
+    }
+
+    return _syscallhandler_signalProcess(sys, process, sig);
 }
 
 SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args) {
@@ -159,18 +234,18 @@ SysCallReturn syscallhandler_tgkill(SysCallHandler* sys, const SysCallArgs* args
 
     trace("tgkill called on tgid %i and tid %i with signal %i", tgid, tid, sig);
 
-    // Translate from virtual to native tgid and tid
-    pid_t native_tgid = host_getNativeTID(sys->host, tgid, 0);
-    pid_t native_tid = host_getNativeTID(sys->host, tgid, tid);
-
-    // If there is no such threads it's an error
-    if (native_tgid == 0 || native_tid == 0) {
+    Thread* thread = host_getThread(sys->host, tid);
+    if (thread == NULL) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESRCH};
     }
 
-    trace("translated virtual tgid %i to native tgid %i and virtual tid %i to native tid %i", tgid,
-          native_tgid, tid, native_tid);
-    return _syscallhandler_killHelper(sys, native_tgid, native_tid, sig, SYS_tgkill);
+    Process* process = thread_getProcess(thread);
+
+    if (process_getProcessID(process) != tgid) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESRCH};
+    }
+
+    return _syscallhandler_signalThread(sys, thread, sig);
 }
 
 SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args) {
@@ -180,16 +255,13 @@ SysCallReturn syscallhandler_tkill(SysCallHandler* sys, const SysCallArgs* args)
 
     trace("tkill called on tid %i with signal %i", tid, sig);
 
-    // Translate from virtual to native tid
-    pid_t native_tid = host_getNativeTID(sys->host, 0, tid);
-
-    // If there is no such thread it's an error
-    if (native_tid == 0) {
+    Thread* thread = host_getThread(sys->host, tid);
+    if (thread == NULL) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -ESRCH};
     }
 
-    trace("translated virtual tid %i to native tid %i", tid, native_tid);
-    return _syscallhandler_killHelper(sys, 0, native_tid, sig, SYS_tkill);
+    SysCallReturn ret = _syscallhandler_signalThread(sys, thread, sig);
+    return ret;
 }
 
 static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr actPtr,
@@ -201,67 +273,52 @@ static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr ac
         return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
 
-    // Prevent interference with shim's signal handlers.
-
-    if (!actPtr.val) {
-        // Caller is just reading the action; allow to proceed natively.
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
-
-    for (int i = 0; i < ARRAY_LENGTH(_shim_handled_signals); ++i) {
-        int shim_signal = _shim_handled_signals[i];
-        if (signum == shim_signal) {
-            warning("Ignoring `sigaction` for signal %d", shim_signal);
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval = 0};
-        }
-    }
-
-    size_t sz = kernel_sigaction_size(masksize);
-    if (!sz) {
-        warning("Bad masksize %zu", masksize);
+    if (signum < 1 || signum > 64) {
         return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
     }
 
-    struct kernel_sigaction action = {0};
-    int rv = process_readPtr(sys->process, &action, actPtr, sz);
-    if (rv < 0) {
-        warning("Couldn't read action ptr %p", (void*)actPtr.val);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+    if (masksize != 64 / 8) {
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
     }
 
-    if (!_sigset_includes_shim_handled_signal(&action.sa_mask)) {
-        // SIGSYS not present; proceed natively.
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
+    if (signum > 32) {
+        warning("Got signum %d, but realtime signals are unimplemented", signum);
+        return (SysCallReturn){.state = SYSCALL_DONE, .retval = -ENOSYS};
     }
 
-    // We can't safely modify actPtr, particularly since it could be read-only memory.
-    // We need to set up our own struct and make the syscall using that.
+    if (oldActPtr.val) {
+        struct shd_kernel_sigaction old_action = shimshmem_getSignalAction(
+            sys->shimShmemHostLock, process_getSharedMem(sys->process), signum);
+        int rv = process_writePtr(sys->process, oldActPtr, &old_action, sizeof(old_action));
+        if (rv != 0) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+        }
+    }
 
-    AllocdMem_u8* modified_action_mem = allocdmem_new(sys->thread, sizeof(struct kernel_sigaction));
-    utility_assert(modified_action_mem);
-    PluginPtr modified_action_ptr = allocdmem_pluginPtr(modified_action_mem);
-    struct kernel_sigaction* modified_action =
-        process_getWriteablePtr(sys->process, modified_action_ptr, sizeof(struct kernel_sigaction));
-    utility_assert(modified_action);
+    if (actPtr.val) {
+        if (signum == SIGKILL || signum == SIGSTOP) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
+        }
 
-    *modified_action = action;
-    _sigset_remove_shim_handled_signals(&modified_action->sa_mask);
-    process_flushPtrs(sys->process);
+        struct shd_kernel_sigaction new_action;
+        int rv = process_readPtr(sys->process, &new_action, actPtr, sizeof(new_action));
+        if (rv != 0) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+        }
+        shimshmem_setSignalAction(
+            sys->shimShmemHostLock, process_getSharedMem(sys->process), signum, &new_action);
+    }
 
-    long result = thread_nativeSyscall(
-        sys->thread, SYS_rt_sigaction, signum, modified_action_ptr, oldActPtr, masksize);
-    trace(
-        "rt_sigaction returned %ld, error:%s", result, result >= 0 ? "none" : g_strerror(-result));
-
-    allocdmem_free(sys->thread, modified_action_mem);
-
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval = 0};
 }
 
 SysCallReturn syscallhandler_rt_sigaction(SysCallHandler* sys, const SysCallArgs* args) {
     utility_assert(sys && args);
-    return _rt_sigaction(sys, /*signum=*/(int)args->args[0].as_i64, /*actPtr=*/args->args[1].as_ptr,
-                         /*oldActPtr=*/args->args[2].as_ptr, /*masksize=*/args->args[3].as_u64);
+    SysCallReturn ret =
+        _rt_sigaction(sys, /*signum=*/(int)args->args[0].as_i64,
+                      /*actPtr=*/args->args[1].as_ptr,
+                      /*oldActPtr=*/args->args[2].as_ptr, /*masksize=*/args->args[3].as_u64);
+    return ret;
 }
 
 SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs* args) {
@@ -309,57 +366,62 @@ static SysCallReturn _rt_sigprocmask(SysCallHandler* sys, int how, PluginPtr set
         return (SysCallReturn){.state = SYSCALL_NATIVE};
     }
 
-    // Prevent interference with shim's SIGSYS handler.
-
-    if (!setPtr.val) {
-        // Not writing; allow natively.
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
-    if (how != SIG_BLOCK) {
-        // Not blocking; allow natively.
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
-    }
-
-    if (sigsetsize < 4 || sigsetsize > sizeof(sigset_t)) {
+    // From sigprocmask(2): This argument is currently required to have a fixed architecture
+    // specific value (equal to sizeof(kernel_sigset_t)).
+    if (sigsetsize != (64 / 8)) {
         warning("Bad sigsetsize %zu", sigsetsize);
         return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
     }
 
-    sigset_t set = {0};
-    int rv = process_readPtr(sys->process, &set, setPtr, sigsetsize);
-    if (rv < 0) {
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+    shd_kernel_sigset_t current_set =
+        shimshmem_getBlockedSignals(sys->shimShmemHostLock, thread_sharedMem(sys->thread));
+
+    if (oldSetPtr.val) {
+        int rv = process_writePtr(sys->process, oldSetPtr, &current_set, sizeof(current_set));
+        if (rv < 0) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+        }
     }
 
-    if (!_sigset_includes_shim_handled_signal(&set)) {
-        return (SysCallReturn){.state = SYSCALL_NATIVE};
+    if (setPtr.val) {
+        shd_kernel_sigset_t set;
+        int rv = process_readPtr(sys->process, &set, setPtr, sizeof(set));
+        if (rv < 0) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+        }
+
+        switch (how) {
+            case SIG_BLOCK: {
+                current_set = shd_sigorset(&current_set, &set);
+                break;
+            }
+            case SIG_UNBLOCK: {
+                shd_kernel_sigset_t notset = shd_signotset(&set);
+                current_set = shd_sigandset(&current_set, &notset);
+                break;
+            }
+            case SIG_SETMASK: {
+                current_set = set;
+                break;
+            }
+            default: {
+                return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
+            }
+        }
+
+        shimshmem_setBlockedSignals(
+            sys->shimShmemHostLock, thread_sharedMem(sys->thread), current_set);
     }
 
-    // Remove handled signals from set and execute syscall with modified set.
-
-    AllocdMem_u8* modified_set_mem = allocdmem_new(sys->thread, sizeof(sigset_t));
-    utility_assert(modified_set_mem);
-    PluginPtr modified_set_ptr = allocdmem_pluginPtr(modified_set_mem);
-    sigset_t* modified_set =
-        process_getWriteablePtr(sys->process, modified_set_ptr, sizeof(*modified_set));
-    utility_assert(modified_set);
-
-    *modified_set = set;
-    _sigset_remove_shim_handled_signals(modified_set);
-    process_flushPtrs(sys->process);
-
-    long result = thread_nativeSyscall(
-        sys->thread, SYS_rt_sigprocmask, how, modified_set_ptr, oldSetPtr, sigsetsize);
-    trace("rt_sigprocmask returned %ld, error:%s", result,
-          result >= 0 ? "none" : g_strerror(-result));
-
-    allocdmem_free(sys->thread, modified_set_mem);
-
-    return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+    return (SysCallReturn){.state = SYSCALL_DONE, .retval = 0};
 }
 
 SysCallReturn syscallhandler_rt_sigprocmask(SysCallHandler* sys, const SysCallArgs* args) {
     utility_assert(sys && args);
-    return _rt_sigprocmask(sys, /*how=*/(int)args->args[0].as_i64, /*setPtr=*/args->args[1].as_ptr,
-                           /*oldSetPtr=*/args->args[2].as_ptr, /*sigsetsize=*/args->args[3].as_u64);
+
+    SysCallReturn ret =
+        _rt_sigprocmask(sys, /*how=*/(int)args->args[0].as_i64, /*setPtr=*/args->args[1].as_ptr,
+                        /*oldSetPtr=*/args->args[2].as_ptr, /*sigsetsize=*/args->args[3].as_u64);
+
+    return ret;
 }

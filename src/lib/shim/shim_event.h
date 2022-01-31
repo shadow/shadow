@@ -4,6 +4,7 @@
 // Communication between Shadow and the shim. This is a header-only library
 // used in both places.
 
+#include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall_types.h"
 #include "main/shmem/shmem_allocator.h"
 
