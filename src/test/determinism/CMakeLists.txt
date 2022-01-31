@@ -4,7 +4,6 @@
 add_executable(test-determinism test_determinism.c)
 target_link_libraries(test-determinism ${CMAKE_THREAD_LIBS_INIT})
 
-# preload doesn't support threads.
 foreach(METHOD ptrace preload)
     ## We need to run twice to make sure the 'random' output is the same both times
     add_shadow_tests(
