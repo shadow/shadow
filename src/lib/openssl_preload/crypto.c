@@ -32,8 +32,8 @@ static void* evp_eu_funcptr = NULL;
 static unsigned long aes_e_cnt = 0;
 static unsigned long aes_d_cnt = 0;
 static unsigned long aes_ce_cnt = 0;
-static unsigned long cry_ce_cnt = 0;
-static unsigned long cry_cec_cnt = 0;
+static unsigned long crypto_ce_cnt = 0;
+static unsigned long crypto_cec_cnt = 0;
 static unsigned long evp_c_cnt = 0;
 static unsigned long evp_eu_cnt = 0;
 
@@ -42,7 +42,7 @@ static void _print_counters() {
             "Counters: {'AES_encrypt':%lu, 'AES_decrypt':%lu, 'AES_ctr128_encrypt':%lu, "
             "'CRYPTO_ctr128_encrypt':%lu, 'CRYPTO_ctr128_encrypt_ctr32':%lu, "
             "'EVP_Cipher':%lu, 'EVP_EncryptUpdate':%lu}\n",
-            aes_e_cnt, aes_d_cnt, aes_ce_cnt, cry_ce_cnt, cry_cec_cnt, evp_c_cnt, evp_eu_cnt);
+            aes_e_cnt, aes_d_cnt, aes_ce_cnt, crypto_ce_cnt, crypto_cec_cnt, evp_c_cnt, evp_eu_cnt);
 }
 #endif
 
@@ -96,14 +96,14 @@ void AES_ctr128_encrypt(const unsigned char* in, unsigned char* out, const void*
 
 void CRYPTO_ctr128_encrypt(const unsigned char* in, unsigned char* out, size_t len, ...) {
 #ifdef DEBUG
-    _maybe_print_counters(++cry_ce_cnt);
+    _maybe_print_counters(++crypto_ce_cnt);
 #endif
     memmove(out, in, len);
 }
 
 void CRYPTO_ctr128_encrypt_ctr32(const unsigned char* in, unsigned char* out, size_t len, ...) {
 #ifdef DEBUG
-    _maybe_print_counters(++cry_cec_cnt);
+    _maybe_print_counters(++crypto_cec_cnt);
 #endif
     memmove(out, in, len);
 }
