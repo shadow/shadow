@@ -350,6 +350,8 @@ LogInfoFlags config_getHostHeartbeatLogInfo(const struct ConfigOptions *config);
 
 SimulationTime config_getHostHeartbeatInterval(const struct ConfigOptions *config);
 
+bool config_getUseStraceLogging(const struct ConfigOptions *config);
+
 bool config_getUseShortestPath(const struct ConfigOptions *config);
 
 __attribute__((warn_unused_result))

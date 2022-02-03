@@ -73,6 +73,9 @@ ADD_CONFIG_HANDLER(config_getUseShimSyscallHandler, _use_shim_syscall_handler)
 static bool _use_legacy_working_dir = false;
 ADD_CONFIG_HANDLER(config_getUseLegacyWorkingDir, _use_legacy_working_dir)
 
+static bool _use_strace_logging = false;
+ADD_CONFIG_HANDLER(config_getUseStraceLogging, _use_strace_logging)
+
 static gchar* _process_outputFileName(Process* proc, const char* type);
 static void _process_check(Process* proc);
 
@@ -136,6 +139,9 @@ struct _Process {
     File* stdoutFile;
     File* stderrFile;
 
+    bool straceLoggingEnabled;
+    int straceFd;
+
     /* When true, threads are no longer runnable and should just be cleaned up. */
     bool isExiting;
 
@@ -169,6 +175,16 @@ const gchar* process_getName(Process* proc) {
     MAGIC_ASSERT(proc);
     utility_assert(proc->processName->str);
     return proc->processName->str;
+}
+
+bool process_straceLoggingEnabled(Process* proc) {
+    MAGIC_ASSERT(proc);
+    return proc->straceLoggingEnabled;
+}
+
+int process_getStraceFd(Process* proc) {
+    MAGIC_ASSERT(proc);
+    return proc->straceFd;
 }
 
 const gchar* process_getPluginName(Process* proc) {
@@ -500,6 +516,13 @@ static void _process_start(Process* proc) {
     descriptor_ref((LegacyDescriptor*)proc->stderrFile);
     g_free(stderrFileName);
 
+    if (proc->straceLoggingEnabled) {
+        gchar* straceFileName = _process_outputFileName(proc, "strace");
+        proc->straceFd = open(straceFileName, O_CREAT | O_TRUNC | O_WRONLY | O_CLOEXEC,
+                              S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        g_free(straceFileName);
+    }
+
     // tid of first thread of a process is equal to the pid.
     int tid = proc->processID;
     Thread* mainThread = NULL;
@@ -823,6 +846,9 @@ Process* process_new(Host* host, guint processID, SimulationTime startTime, Simu
     proc->referenceCount = 1;
     proc->isExiting = false;
 
+    proc->straceLoggingEnabled = _use_strace_logging;
+    proc->straceFd = -1;
+
     proc->memoryMutRef = NULL;
     proc->memoryRefs = g_array_new(FALSE, FALSE, sizeof(ProcessMemoryRef_u8*));
 
@@ -875,6 +901,9 @@ static void _process_free(Process* proc) {
     }
     if (proc->stdoutFile) {
         descriptor_unref((LegacyDescriptor*)proc->stdoutFile);
+    }
+    if (proc->straceFd >= 0) {
+        close(proc->straceFd);
     }
 
     /* Now free all remaining descriptors stored in our table. */

@@ -73,6 +73,9 @@ gboolean process_isRunning(Process* proc);
  * outside of the process module. */
 const gchar* process_getName(Process* proc);
 
+bool process_straceLoggingEnabled(Process* proc);
+int process_getStraceFd(Process* proc);
+
 /* Returns the name of the plugin from an internal buffer.
  * The returned pointer will become invalid when the process
  * is freed and therefore should not be persistently stored

@@ -381,6 +381,11 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("host_heartbeat_interval").unwrap().as_str())]
     pub host_heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
+
+    /// Log syscalls for each process
+    #[clap(long, value_name = "bool")]
+    #[clap(help = EXP_HELP.get("use_strace_logging").unwrap().as_str())]
+    pub use_strace_logging: Option<bool>,
 }
 
 impl ExperimentalOptions {
@@ -422,6 +427,7 @@ impl Default for ExperimentalOptions {
             host_heartbeat_log_level: Some(LogLevel::Info),
             host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),
             host_heartbeat_interval: None,
+            use_strace_logging: Some(false),
         }
     }
 }
@@ -1346,6 +1352,14 @@ mod export {
             Some(x) => x.convert(units::TimePrefixUpper::Sec).unwrap().value() * SIMTIME_ONE_SECOND,
             None => SIMTIME_INVALID,
         }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getUseStraceLogging(config: *const ConfigOptions) -> bool {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+
+        config.experimental.use_strace_logging.unwrap()
     }
 
     #[no_mangle]
