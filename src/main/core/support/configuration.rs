@@ -382,7 +382,7 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("host_heartbeat_interval").unwrap().as_str())]
     pub host_heartbeat_interval: Option<units::Time<units::TimePrefixUpper>>,
 
-    /// Log syscalls for each process
+    /// Log the syscalls for each process to individual "strace" files
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_strace_logging").unwrap().as_str())]
     pub use_strace_logging: Option<bool>,

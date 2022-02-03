@@ -89,6 +89,7 @@ hosts:
 - [`experimental.use_sched_fifo`](#experimentaluse_sched_fifo)
 - [`experimental.use_shim_syscall_handler`](#experimentaluse_shim_syscall_handler)
 - [`experimental.use_seccomp`](#experimentaluse_seccomp)
+- [`experimental.use_strace_logging`](#experimentaluse_strace_logging)
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
 - [`experimental.worker_threads`](#experimentalworker_threads)
 - [`host_defaults`](#host_defaults)
@@ -471,6 +472,16 @@ Default: true iff `experimental.interpose_method == preload`.
 Type: Bool
 
 Use seccomp to trap syscalls.
+
+#### `experimental.use_strace_logging`
+
+Default: false  
+Type: Bool
+
+Log the syscalls for each process to individual "strace" files.
+
+For example, the logs will be stored at
+`shadow.data/hosts/<hostname>/<hostname>.<procname>.<pid>.strace`.
 
 #### `experimental.use_syscall_counters`
 
