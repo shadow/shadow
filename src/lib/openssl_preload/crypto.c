@@ -4,9 +4,9 @@
  * See LICENSE for licensing information
  */
 
-#define _GNU_SOURCE
 #include <dlfcn.h>
 #include <execinfo.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +23,10 @@ typedef struct {
     void* addr;
     bool is_libssl;
 } bt_cache_entry_t;
+
+// Lock for safely accessing this lib's global state from multiple threads.
+// TODO: We currently do no error checking when operating on this lock.
+static pthread_mutex_t global_state_lock = PTHREAD_MUTEX_INITIALIZER;
 
 // We use a small cache size: in ad-hoc experiments with tor-0.4.6.9, we observed
 // at most three callers of EVP_EncryptUpdate.
@@ -50,8 +54,24 @@ static void _print_counters() {
              evp_eu_cnt);
 }
 
+static void _lock_global_state() {
+    int result = pthread_mutex_lock(&global_state_lock);
+    if (result != 0) {
+        abort();
+    }
+}
+
+static void _unlock_global_state() {
+    int result = pthread_mutex_unlock(&global_state_lock);
+    if (result != 0) {
+        abort();
+    }
+}
+
 __attribute__((constructor)) void _crypto_load() {
     debuglog("Loading the preloaded crypto interception lib\n");
+
+    _lock_global_state();
 
     // Initialize backtrace address cache pointers to NULL.
     memset(evp_backtrace_cache, 0, sizeof(bt_cache_entry_t) * EVP_BACKTRACE_CACHE_LEN);
@@ -60,17 +80,28 @@ __attribute__((constructor)) void _crypto_load() {
     evp_eu_funcptr = dlsym(RTLD_NEXT, "EVP_EncryptUpdate");
 
     debuglog("dlsym for EVP_EncryptUpdate returned %p\n", evp_eu_funcptr);
+
+    _unlock_global_state();
 }
 
 __attribute__((destructor)) void _crypto_unload() {
     debuglog("Unloading the preloaded crypto interception lib\n");
+
+    _lock_global_state();
     _print_counters();
+    _unlock_global_state();
 }
 
-static void _increment(unsigned long* cnt_ptr) {
+static void _increment_unlocked(unsigned long* cnt_ptr) {
     if ((++(*cnt_ptr) % 1000) == 0) {
         _print_counters();
     }
+}
+
+static void _increment(unsigned long* cnt_ptr) {
+    _lock_global_state();
+    _increment_unlocked(cnt_ptr);
+    _unlock_global_state();
 }
 
 void AES_encrypt(const unsigned char* in, unsigned char* out, const void* key) {
@@ -168,6 +199,8 @@ int EVP_EncryptUpdate(void* cipher, unsigned char* out, int* outl, const unsigne
     }
 
     if (caller_addr != NULL) {
+        _lock_global_state();
+
         // We use a cache first because checking the name of the library is expensive.
         const bt_cache_entry_t* entry = _get_cache_entry(caller_addr);
 
@@ -185,11 +218,18 @@ int EVP_EncryptUpdate(void* cipher, unsigned char* out, int* outl, const unsigne
                 _append_to_cache(caller_addr, caller_is_libssl);
             }
         }
+
+        if (!caller_is_libssl) {
+            // We will skip the crypto, increment the counter while we still hold the lock.
+            _increment_unlocked(&evp_eu_cnt);
+        }
+
+        _unlock_global_state();
     }
 
     if (caller_addr != NULL && !caller_is_libssl) {
         // Skip the crypto in calls made from the application, e.g. tor.
-        _increment(&evp_eu_cnt);
+        // We already incremented the counter above.
         return 1; // success
     } else if (evp_eu_funcptr != NULL) {
         // Let openssl handle it.
