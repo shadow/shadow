@@ -62,6 +62,13 @@ impl From<PluginPtr> for u64 {
     }
 }
 
+impl std::fmt::Pointer for PluginPtr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ptr = self.ptr.val as *const libc::c_void;
+        std::fmt::Pointer::fmt(&ptr, f)
+    }
+}
+
 pub type SysCallArgs = c::SysCallArgs;
 pub type SysCallReg = c::SysCallReg;
 
