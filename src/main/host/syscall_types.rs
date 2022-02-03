@@ -118,6 +118,18 @@ impl From<SysCallReg> for usize {
     }
 }
 
+impl From<isize> for SysCallReg {
+    fn from(v: isize) -> Self {
+        Self { as_i64: v as i64 }
+    }
+}
+
+impl From<SysCallReg> for isize {
+    fn from(v: SysCallReg) -> isize {
+        unsafe { v.as_i64 as isize }
+    }
+}
+
 impl From<i64> for SysCallReg {
     fn from(v: i64) -> Self {
         Self { as_i64: v }
