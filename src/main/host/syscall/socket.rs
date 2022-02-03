@@ -19,6 +19,10 @@ use log::*;
 use nix::errno::Errno;
 use nix::sys::socket::MsgFlags;
 
+use syscall_logger::log_syscall;
+
+#[log_syscall(/* rv */ libc::c_int, /* domain */ nix::sys::socket::AddressFamily,
+              /* type */ libc::c_int, /* protocol */ libc::c_int)]
 pub fn socket(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let domain = libc::c_int::from(args.get(0));
     let socket_type = libc::c_int::from(args.get(1));
@@ -86,6 +90,8 @@ pub fn socket(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     Ok(fd.into())
 }
 
+#[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
+              /* addrlen */ libc::socklen_t)]
 pub fn bind(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd: libc::c_int = args.get(0).into();
     let addr_ptr: PluginPtr = args.get(1).into();
@@ -118,6 +124,9 @@ pub fn bind(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     SocketFile::bind(socket, addr.as_ref(), ctx.host.random())
 }
 
+#[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_char,
+              /* len */ libc::size_t, /* flags */ nix::sys::socket::MsgFlags,
+              /* dest_addr */ *const libc::sockaddr, /* addrlen */ libc::socklen_t)]
 pub fn sendto(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd: libc::c_int = args.get(0).into();
     let buf_ptr: PluginPtr = args.get(1).into();
@@ -208,6 +217,9 @@ pub fn sendto_helper(
     result
 }
 
+#[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_void,
+              /* len */ libc::size_t, /* flags */ nix::sys::socket::MsgFlags,
+              /* src_addr */ *const libc::sockaddr, /* addrlen */ *const libc::socklen_t)]
 pub fn recvfrom(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd: libc::c_int = args.get(0).into();
     let buf_ptr: PluginPtr = args.get(1).into();
@@ -306,6 +318,8 @@ pub fn recvfrom_helper(
     Ok(result)
 }
 
+#[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
+              /* addrlen */ *const libc::socklen_t)]
 pub fn getsockname(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd: libc::c_int = args.get(0).into();
     let addr_ptr: PluginPtr = args.get(1).into();
@@ -344,6 +358,8 @@ pub fn getsockname(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult
     Ok(0.into())
 }
 
+#[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
+              /* addrlen */ *const libc::socklen_t)]
 pub fn getpeername(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd: libc::c_int = args.get(0).into();
     let addr_ptr: PluginPtr = args.get(1).into();
@@ -382,6 +398,8 @@ pub fn getpeername(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult
     Ok(0.into())
 }
 
+#[log_syscall(/* rv */ libc::c_int, /* domain */ nix::sys::socket::AddressFamily,
+              /* type */ libc::c_int, /* protocol */ libc::c_int, /* sv */ [libc::c_int; 2])]
 pub fn socketpair(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let domain: libc::c_int = args.get(0).into();
     let socket_type: libc::c_int = args.get(1).into();

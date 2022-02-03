@@ -4,6 +4,9 @@ use crate::host::descriptor::{CompatDescriptor, DescriptorFlags, FileStatus};
 use crate::host::syscall;
 use crate::host::syscall_types::{PluginPtr, SysCallArgs, SyscallResult, TypedPluginPtr};
 
+use syscall_logger::log_syscall;
+
+#[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* request */ libc::c_ulong)]
 pub fn ioctl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd: libc::c_int = args.get(0).into();
     let request: libc::c_ulong = args.get(1).into();
