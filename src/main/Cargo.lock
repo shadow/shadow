@@ -806,6 +806,7 @@ dependencies = [
  "serde",
  "serde_with",
  "serde_yaml",
+ "syscall-logger",
  "vsprintf",
 ]
 
@@ -824,6 +825,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
+]
+
+[[package]]
+name = "syscall-logger"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]
