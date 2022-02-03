@@ -12,6 +12,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef DEBUG
+#define debuglog(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define debuglog(...)
+#endif
+
 // Caches whether or not a memory address is from libssl.so
 typedef struct {
     void* addr;
@@ -27,7 +33,6 @@ static bt_cache_entry_t evp_backtrace_cache[EVP_BACKTRACE_CACHE_LEN];
 typedef int EVP_EncryptUpdate_func(void*, unsigned char*, int*, const unsigned char*, int);
 static void* evp_eu_funcptr = NULL;
 
-#ifdef DEBUG
 // Counters for verifying that interception is happening correctly.
 static unsigned long aes_e_cnt = 0;
 static unsigned long aes_d_cnt = 0;
@@ -38,18 +43,15 @@ static unsigned long evp_c_cnt = 0;
 static unsigned long evp_eu_cnt = 0;
 
 static void _print_counters() {
-    fprintf(stderr,
-            "Counters: {'AES_encrypt':%lu, 'AES_decrypt':%lu, 'AES_ctr128_encrypt':%lu, "
-            "'CRYPTO_ctr128_encrypt':%lu, 'CRYPTO_ctr128_encrypt_ctr32':%lu, "
-            "'EVP_Cipher':%lu, 'EVP_EncryptUpdate':%lu}\n",
-            aes_e_cnt, aes_d_cnt, aes_ce_cnt, crypto_ce_cnt, crypto_cec_cnt, evp_c_cnt, evp_eu_cnt);
+    debuglog("Counters: {'AES_encrypt':%lu, 'AES_decrypt':%lu, 'AES_ctr128_encrypt':%lu, "
+             "'CRYPTO_ctr128_encrypt':%lu, 'CRYPTO_ctr128_encrypt_ctr32':%lu, "
+             "'EVP_Cipher':%lu, 'EVP_EncryptUpdate':%lu}\n",
+             aes_e_cnt, aes_d_cnt, aes_ce_cnt, crypto_ce_cnt, crypto_cec_cnt, evp_c_cnt,
+             evp_eu_cnt);
 }
-#endif
 
 __attribute__((constructor)) void _crypto_load() {
-#ifdef DEBUG
-    fprintf(stderr, "Loading the preloaded crypto interception lib\n");
-#endif
+    debuglog("Loading the preloaded crypto interception lib\n");
 
     // Initialize backtrace address cache pointers to NULL.
     memset(evp_backtrace_cache, 0, sizeof(bt_cache_entry_t) * EVP_BACKTRACE_CACHE_LEN);
@@ -57,14 +59,11 @@ __attribute__((constructor)) void _crypto_load() {
     // Get a ref to the EVP_EncryptUpdate that would be called if we didn't preload.
     evp_eu_funcptr = dlsym(RTLD_NEXT, "EVP_EncryptUpdate");
 
-#ifdef DEBUG
-    fprintf(stderr, "dlsym for EVP_EncryptUpdate returned %p\n", evp_eu_funcptr);
-#endif
+    debuglog("dlsym for EVP_EncryptUpdate returned %p\n", evp_eu_funcptr);
 }
 
-#ifdef DEBUG
 __attribute__((destructor)) void _crypto_unload() {
-    fprintf(stderr, "Unloading the preloaded crypto interception lib\n");
+    debuglog("Unloading the preloaded crypto interception lib\n");
     _print_counters();
 }
 
@@ -73,10 +72,6 @@ static void _increment(unsigned long* cnt_ptr) {
         _print_counters();
     }
 }
-#else
-#define _increment(cnt)                                                                            \
-    {}
-#endif
 
 void AES_encrypt(const unsigned char* in, unsigned char* out, const void* key) {
     _increment(&aes_e_cnt);
@@ -127,10 +122,9 @@ static void _append_to_cache(void* addr, bool is_libssl) {
         if (evp_backtrace_cache[i].addr == NULL) {
             evp_backtrace_cache[i].addr = addr;
             evp_backtrace_cache[i].is_libssl = is_libssl;
-#ifdef DEBUG
-            fprintf(stderr, "Cached EVP_EncryptUpdate caller=%p, is_libssl=%s\n", addr,
-                    is_libssl ? "true" : "false");
-#endif
+
+            debuglog("Cached EVP_EncryptUpdate caller=%p, is_libssl=%s\n", addr,
+                     is_libssl ? "true" : "false");
             break;
         }
     }
