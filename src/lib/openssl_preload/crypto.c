@@ -68,50 +68,40 @@ __attribute__((destructor)) void _crypto_unload() {
     _print_counters();
 }
 
-#define _maybe_print_counters(cnt)                                                                 \
-    {                                                                                              \
-        if ((cnt % 1000) == 0) {                                                                   \
-            _print_counters();                                                                     \
-        }                                                                                          \
+static void _increment(unsigned long* cnt_ptr) {
+    if ((++(*cnt_ptr) % 1000) == 0) {
+        _print_counters();
     }
+}
+#else
+#define _increment(cnt)                                                                            \
+    {}
 #endif
 
 void AES_encrypt(const unsigned char* in, unsigned char* out, const void* key) {
-#ifdef DEBUG
-    _maybe_print_counters(++aes_e_cnt);
-#endif
+    _increment(&aes_e_cnt);
 }
 
 void AES_decrypt(const unsigned char* in, unsigned char* out, const void* key) {
-#ifdef DEBUG
-    _maybe_print_counters(++aes_d_cnt);
-#endif
+    _increment(&aes_d_cnt);
 }
 
 void AES_ctr128_encrypt(const unsigned char* in, unsigned char* out, const void* key) {
-#ifdef DEBUG
-    _maybe_print_counters(++aes_ce_cnt);
-#endif
+    _increment(&aes_ce_cnt);
 }
 
 void CRYPTO_ctr128_encrypt(const unsigned char* in, unsigned char* out, size_t len, ...) {
-#ifdef DEBUG
-    _maybe_print_counters(++crypto_ce_cnt);
-#endif
+    _increment(&crypto_ce_cnt);
     memmove(out, in, len);
 }
 
 void CRYPTO_ctr128_encrypt_ctr32(const unsigned char* in, unsigned char* out, size_t len, ...) {
-#ifdef DEBUG
-    _maybe_print_counters(++crypto_cec_cnt);
-#endif
+    _increment(&crypto_cec_cnt);
     memmove(out, in, len);
 }
 
 int EVP_Cipher(void* ctx, unsigned char* out, const unsigned char* in, unsigned int inl) {
-#ifdef DEBUG
-    _maybe_print_counters(++evp_c_cnt);
-#endif
+    _increment(&evp_c_cnt);
     memmove(out, in, (size_t)inl);
     return 1;
 }
@@ -205,9 +195,7 @@ int EVP_EncryptUpdate(void* cipher, unsigned char* out, int* outl, const unsigne
 
     if (caller_addr != NULL && !caller_is_libssl) {
         // Skip the crypto in calls made from the application, e.g. tor.
-#ifdef DEBUG
-        _maybe_print_counters(++evp_eu_cnt);
-#endif
+        _increment(&evp_eu_cnt);
         return 1; // success
     } else if (evp_eu_funcptr != NULL) {
         // Let openssl handle it.
