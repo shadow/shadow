@@ -49,11 +49,11 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
 // Accessors
 // ************************
 
-/* Returns the flags that were used to open the file. */
-int file_getFlags(File* file);
+/* Returns the flags that were used when opening the file. */
+int file_getFlagsAtOpen(File* file);
 
-/* Returns the mode that was used to open the file. */
-mode_t file_getMode(File* file);
+/* Returns the mode that was used when opening the file. */
+mode_t file_getModeAtOpen(File* file);
 
 /* Returns the linux-backed fd that shadow uses to perform the file operations.  */
 int file_getOSBackedFD(File* file);

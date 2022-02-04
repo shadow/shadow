@@ -49,21 +49,24 @@ struct _File {
     /* Info related to our OS-backed file. */
     struct {
         int fd;
-        int flags;
-        mode_t mode;
-        char* abspath;
+        /* The flags used when opening the file; Not the file's current flags. */
+        int flagsAtOpen;
+        /* The permission mode the file was opened with. */
+        mode_t modeAtOpen;
+        /* The path of the file when it was opened. */
+        char* absPathAtOpen;
     } osfile;
     MAGIC_DECLARE;
 };
 
-int file_getFlags(File* file) {
+int file_getFlagsAtOpen(File* file) {
     MAGIC_ASSERT(file);
-    return file->osfile.flags;
+    return file->osfile.flagsAtOpen;
 }
 
-mode_t file_getMode(File* file) {
+mode_t file_getModeAtOpen(File* file) {
     MAGIC_ASSERT(file);
-    return file->osfile.mode;
+    return file->osfile.modeAtOpen;
 }
 
 static inline File* _file_descriptorToFile(LegacyDescriptor* desc) {
@@ -115,8 +118,8 @@ static void _file_free(LegacyDescriptor* desc) {
 
     _file_closeHelper(file);
 
-    if (file->osfile.abspath) {
-        free(file->osfile.abspath);
+    if (file->osfile.absPathAtOpen) {
+        free(file->osfile.absPathAtOpen);
     }
 
     descriptor_clear((LegacyDescriptor*)file);
@@ -167,12 +170,9 @@ File* file_dup(File* file, int* dupError) {
     newFile->type = file->type;
 
     newFile->osfile.fd = newFd;
-    newFile->osfile.flags = file->osfile.flags;
-    newFile->osfile.mode = file->osfile.mode;
-    newFile->osfile.abspath = strdup(file->osfile.abspath);
-
-    // CLOEXEC is a descriptor flag and it is not copied during a dup()
-    newFile->osfile.flags &= ~O_CLOEXEC;
+    newFile->osfile.flagsAtOpen = file->osfile.flagsAtOpen;
+    newFile->osfile.modeAtOpen = file->osfile.modeAtOpen;
+    newFile->osfile.absPathAtOpen = strdup(file->osfile.absPathAtOpen);
 
     return newFile;
 }
@@ -198,8 +198,8 @@ static char* _file_getAbsolutePath(File* dir, const char* pathname, const char* 
     }
 
     /* The path is relative, try dir prefix first. */
-    if (dir && dir->osfile.abspath) {
-        return _file_getConcatStr(dir->osfile.abspath, '/', pathname);
+    if (dir && dir->osfile.absPathAtOpen) {
+        return _file_getConcatStr(dir->osfile.absPathAtOpen, '/', pathname);
     }
 
     /* Use current working directory as prefix. */
@@ -313,12 +313,12 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
 
     /* Store the create information, which is used if we mmap the file later. */
     file->osfile.fd = osfd;
-    file->osfile.abspath = abspath;
-    file->osfile.flags = flags;
-    file->osfile.mode = mode;
+    file->osfile.absPathAtOpen = abspath;
+    file->osfile.flagsAtOpen = flags;
+    file->osfile.modeAtOpen = mode;
 
     trace("File %i opened os-backed file %i at absolute path %s",
-          _file_getFD(file), _file_getOSBackedFD(file), file->osfile.abspath);
+          _file_getFD(file), _file_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* The os-backed file is now ready. */
     descriptor_adjustStatus(&file->super, STATUS_DESCRIPTOR_ACTIVE, TRUE);
@@ -366,7 +366,7 @@ ssize_t file_read(File* file, Host* host, void* buf, size_t bufSize) {
 
     trace("File %i will read %zu bytes from os-backed file %i at path '%s'",
           _file_getFD(file), bufSize, _file_getOSBackedFD(file),
-          file->osfile.abspath);
+          file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -387,7 +387,7 @@ ssize_t file_pread(File* file, Host* host, void* buf, size_t bufSize, off_t offs
     }
 
     trace("File %i will pread %zu bytes from os-backed file %i offset %ld at path '%s'",
-          _file_getFD(file), bufSize, _file_getOSBackedFD(file), offset, file->osfile.abspath);
+          _file_getFD(file), bufSize, _file_getOSBackedFD(file), offset, file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -408,7 +408,7 @@ ssize_t file_preadv(File* file, Host* host, const struct iovec* iov, int iovcnt,
 
     trace("File %i will preadv %d vector items from os-backed file %i at path "
           "'%s'",
-          _file_getFD(file), iovcnt, _file_getOSBackedFD(file), file->osfile.abspath);
+          _file_getFD(file), iovcnt, _file_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -432,7 +432,7 @@ ssize_t file_preadv2(File* file, Host* host, const struct iovec* iov, int iovcnt
     trace("File %i will preadv2 %d vector items from os-backed file %i at path "
           "'%s'",
           _file_getFD(file), iovcnt, _file_getOSBackedFD(file),
-          file->osfile.abspath);
+          file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -451,7 +451,7 @@ ssize_t file_write(File* file, const void* buf, size_t bufSize) {
 
     trace("File %i will write %zu bytes to os-backed file %i at path '%s'",
           _file_getFD(file), bufSize, _file_getOSBackedFD(file),
-          file->osfile.abspath);
+          file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -467,7 +467,7 @@ ssize_t file_pwrite(File* file, const void* buf, size_t bufSize, off_t offset) {
     }
 
     trace("File %i will pwrite %zu bytes to os-backed file %i offset %ld at path '%s'",
-          _file_getFD(file), bufSize, _file_getOSBackedFD(file), offset, file->osfile.abspath);
+          _file_getFD(file), bufSize, _file_getOSBackedFD(file), offset, file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -484,7 +484,7 @@ ssize_t file_pwritev(File* file, const struct iovec* iov, int iovcnt, off_t offs
 
     trace("File %i will pwritev %d vector items from os-backed file %i at "
           "path '%s'",
-          _file_getFD(file), iovcnt, _file_getOSBackedFD(file), file->osfile.abspath);
+          _file_getFD(file), iovcnt, _file_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
@@ -504,7 +504,7 @@ ssize_t file_pwritev2(File* file, const struct iovec* iov, int iovcnt,
     trace("File %i will pwritev2 %d vector items from os-backed file %i at "
           "path '%s'",
           _file_getFD(file), iovcnt, _file_getOSBackedFD(file),
-          file->osfile.abspath);
+          file->osfile.absPathAtOpen);
 
     /* TODO: this may block the shadow thread until we properly handle
      * os-backed files in non-blocking mode. */
