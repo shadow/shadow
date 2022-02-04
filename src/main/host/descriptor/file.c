@@ -33,6 +33,8 @@
 
 #define OSFILE_INVALID -1
 
+const int SHADOW_FLAG_MASK = O_CLOEXEC;
+
 typedef enum _FileType FileType;
 enum _FileType {
     FILE_TYPE_NOTSET,
@@ -46,6 +48,9 @@ struct _File {
     /* File is a sub-type of a descriptor. */
     LegacyDescriptor super;
     FileType type;
+    /* O file flags that we don't pass to the native fd, but instead track within
+     * Shadow and handle manually. A subset of SHADOW_FLAG_MASK. */
+    int shadowFlags;
     /* Info related to our OS-backed file. */
     struct {
         int fd;
@@ -67,6 +72,11 @@ int file_getFlagsAtOpen(File* file) {
 mode_t file_getModeAtOpen(File* file) {
     MAGIC_ASSERT(file);
     return file->osfile.modeAtOpen;
+}
+
+int file_getShadowFlags(File* file) {
+    MAGIC_ASSERT(file);
+    return file->shadowFlags;
 }
 
 static inline File* _file_descriptorToFile(LegacyDescriptor* desc) {
@@ -168,6 +178,9 @@ File* file_dup(File* file, int* dupError) {
     File* newFile = file_new();
 
     newFile->type = file->type;
+
+    // CLOEXEC is a descriptor flag and it is not copied during a dup()
+    newFile->shadowFlags = file->shadowFlags & ~O_CLOEXEC;
 
     newFile->osfile.fd = newFd;
     newFile->osfile.flagsAtOpen = file->osfile.flagsAtOpen;
@@ -285,6 +298,15 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
     } else {
         file->type = FILE_TYPE_REGULAR;
     }
+
+    int originalFlags = flags;
+
+    // move any flags that shadow handles from 'flags' to 'shadowFlags'
+    file->shadowFlags = flags & SHADOW_FLAG_MASK;
+    flags &= ~SHADOW_FLAG_MASK;
+
+    // we should always use O_CLOEXEC for files opened in shadow
+    flags |= O_CLOEXEC;
 
     int osfd = 0, errcode = 0;
     if (file->type == FILE_TYPE_LOCALTIME) {
@@ -797,7 +819,30 @@ int file_fcntl(File* file, unsigned long command, void* arg) {
     trace("File %i fcntl os-backed file %i", _file_getFD(file),
           _file_getOSBackedFD(file));
 
+    if (command == F_SETFD) {
+        intptr_t arg_int = (intptr_t)arg;
+        // if the arg contains FD_CLOEXEC
+        if (arg_int & FD_CLOEXEC) {
+            file->shadowFlags |= O_CLOEXEC;
+        } else {
+            file->shadowFlags &= ~O_CLOEXEC;
+        }
+        // shadow always sets FD_CLOEXEC on the os-backed fd
+        arg_int |= FD_CLOEXEC;
+        arg = (void*)arg_int;
+    }
+
     int result = fcntl(_file_getOSBackedFD(file), command, arg);
+
+    if (result >= 0 && command == F_GETFD) {
+        // if the file should have FD_CLOEXEC
+        if (file->shadowFlags & O_CLOEXEC) {
+            result |= FD_CLOEXEC;
+        } else {
+            result &= ~FD_CLOEXEC;
+        }
+    }
+
     return (result < 0) ? -errno : result;
 }
 

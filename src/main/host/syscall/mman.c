@@ -149,9 +149,8 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     /* Flush the buffer to the plugin. */
     process_flushPtrs(sys->process);
 
-    /* There are three categories of file flags: access mode, creation, and
-     * status flags. All of these flags apply to the underlying file object,
-     * except O_CLOEXEC which applies to the descriptor. */
+    /* Attempt to open the file in the plugin with the same flags as what the
+     * shadow File object has. */
 
     /* From man 2 open */
     const int creationFlags =
@@ -161,17 +160,12 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     int flags = file_getFlagsAtOpen(file);
     /* Use only the file creation flags, except O_CLOEXEC. */
     flags &= (creationFlags & ~O_CLOEXEC);
-    /* Add any file access mode and file status flags. */
-    flags |= fcntl(file_getOSBackedFD(file), F_GETFL);
+    /* Add any file access mode and file status flags that shadow doesn't implement. */
+    flags |= (fcntl(file_getOSBackedFD(file), F_GETFL) & ~SHADOW_FLAG_MASK);
+    /* Add any flags that shadow implements. */
+    flags |= file_getShadowFlags(file);
     /* Be careful not to try re-creating or truncating it. */
     flags &= ~(O_CREAT | O_EXCL | O_TMPFILE | O_TRUNC);
-
-    /* Add the O_CLOEXEC creation flag if it's set for the descriptor. */
-    if (fcntl(file_getOSBackedFD(file), F_GETFD) & FD_CLOEXEC) {
-        flags |= O_CLOEXEC;
-    } else {
-        flags &= ~O_CLOEXEC;
-    }
 
     /* Instruct the plugin to open the file at the path we sent. */
     int result = thread_nativeSyscall(sys->thread, SYS_open, pluginBufPtr.val,
