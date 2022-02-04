@@ -92,8 +92,7 @@ int shmemfile_alloc(size_t nbytes, ShMemFile* shmf) {
 
     bool bad = false;
 
-    int fd =
-        shm_open(shmf->name, O_RDWR | O_CREAT | O_EXCL, SHMEM_PERMISSION_BITS);
+    int fd = shm_open(shmf->name, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, SHMEM_PERMISSION_BITS);
 
     if (fd >= 0) {
         int rc = ftruncate(fd, nbytes);
@@ -149,7 +148,7 @@ int shmemfile_map(const char* name, size_t nbytes, ShMemFile* shmf) {
 
     bool bad = false;
 
-    int fd = shm_open(shmf->name, O_RDWR, SHMEM_PERMISSION_BITS);
+    int fd = shm_open(shmf->name, O_RDWR | O_CLOEXEC, SHMEM_PERMISSION_BITS);
 
     if (fd >= 0) {
 

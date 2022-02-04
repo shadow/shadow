@@ -162,7 +162,7 @@ PCapWriter* pcapwriter_new(Host* host, gchar* pcapDirectory, gchar* pcapFilename
         g_string_append(filename, ".pcap");
     }
 
-    pcap->pcapFile = fopen(filename->str, "w");
+    pcap->pcapFile = fopen(filename->str, "we");
     if(!pcap->pcapFile) {
         warning("error trying to open PCAP file '%s' for writing", filename->str);
     } else {
