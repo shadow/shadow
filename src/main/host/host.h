@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 
 #include "lib/logger/log_level.h"
+#include "lib/shim/shim_shmem.h"
 #include "lib/tsc/tsc.h"
 #include "main/core/support/definitions.h"
 #include "main/host/cpu.h"
@@ -24,6 +25,7 @@
 #include "main/host/futex_table.h"
 #include "main/host/host_parameters.h"
 #include "main/host/network_interface.h"
+#include "main/host/thread.h"
 #include "main/host/tracker_types.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
@@ -99,5 +101,16 @@ FutexTable* host_getFutexTable(Host* host);
 
 // converts a virtual (shadow) tid into the native tid
 pid_t host_getNativeTID(Host* host, pid_t virtualPID, pid_t virtualTID);
+
+// Returns the specified process, or NULL if it doesn't exist.
+Process* host_getProcess(Host* host, pid_t virtualPID);
+
+// Returns the specified thread, or NULL if it doesn't exist.
+// If you already have the thread's Process*, `process_getThread` may be more
+// efficient.
+Thread* host_getThread(Host* host, pid_t virtualTID);
+
+// Returns host-specific state that's kept in memory shared with the shim(s).
+ShimShmemHost* host_getSharedMem(Host* host);
 
 #endif /* SHD_HOST_H_ */

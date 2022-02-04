@@ -19,7 +19,7 @@
 #include "main/host/syscall_condition.h"
 #include "main/host/thread.h"
 
-static const Timer* _syscallhandler_getTimeout(const SysCallHandler* sys) {
+const Timer* _syscallhandler_getTimeout(const SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
     SysCallCondition* cond = thread_getSysCallCondition(sys->thread);

@@ -18,6 +18,7 @@
 #include "lib/shim/shim_event.h"
 #include "main/core/worker.h"
 #include "main/host/affinity.h"
+#include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 #include "main/host/thread_protected.h"
@@ -32,13 +33,12 @@ Thread thread_create(Host* host, Process* process, int threadID, int type_id,
                      .process = process,
                      .tid = threadID,
                      .affinity = AFFINITY_UNINIT,
-                     .shimSharedMemBlock = shmemallocator_globalAlloc(sizeof(ShimThreadSharedMem)),
+                     .shimSharedMemBlock = shmemallocator_globalAlloc(shimshmemthread_size()),
                      MAGIC_INITIALIZER};
-    *thread_sharedMem(&thread) = (ShimThreadSharedMem){
-        .ptrace_allow_native_syscalls = false,
-    };
     host_ref(host);
     process_ref(process);
+
+    shimshmemthread_init(thread_sharedMem(&thread), &thread);
 
     // .sys is created (and destroyed) in implementation, since it needs the
     // address of the Thread (which we don't have yet).
@@ -152,7 +152,7 @@ ShMemBlock* thread_getShMBlock(Thread* thread) {
     return &thread->shimSharedMemBlock;
 }
 
-ShimThreadSharedMem* thread_sharedMem(Thread* thread) {
+ShimShmemThread* thread_sharedMem(Thread* thread) {
     MAGIC_ASSERT(thread);
     utility_assert(thread->shimSharedMemBlock.p);
     return thread->shimSharedMemBlock.p;
@@ -226,4 +226,32 @@ void thread_setTidAddress(Thread* thread, PluginPtr addr) {
 bool thread_isLeader(Thread* thread) {
     MAGIC_ASSERT(thread);
     return thread->tid == process_getProcessID(thread->process);
+}
+
+bool thread_unblockedSignalPending(Thread* thread, const ShimShmemHostLock* host_lock) {
+    shd_kernel_sigset_t blocked_signals =
+        shimshmem_getBlockedSignals(host_lock, thread_sharedMem(thread));
+    shd_kernel_sigset_t unblocked_signals = shd_signotset(&blocked_signals);
+
+    {
+        shd_kernel_sigset_t thread_pending =
+            shimshmem_getThreadPendingSignals(host_lock, thread_sharedMem(thread));
+        shd_kernel_sigset_t thread_unblocked_pending =
+            shd_sigandset(&thread_pending, &unblocked_signals);
+        if (!shd_sigisemptyset(&thread_unblocked_pending)) {
+            return true;
+        }
+    }
+
+    {
+        shd_kernel_sigset_t process_pending =
+            shimshmem_getProcessPendingSignals(host_lock, process_getSharedMem(thread->process));
+        shd_kernel_sigset_t process_unblocked_pending =
+            shd_sigandset(&process_pending, &unblocked_signals);
+        if (!shd_sigisemptyset(&process_unblocked_pending)) {
+            return true;
+        }
+    }
+
+    return false;
 }

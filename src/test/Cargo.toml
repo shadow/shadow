@@ -129,7 +129,13 @@ path = "regression/test_exit_after_signal_sched.rs"
 name = "test_dup"
 path = "dup/test_dup.rs"
 
+[[bin]]
+name = "test_signals"
+path = "signal/test_signals.rs"
+
 [dependencies]
 libc = "0.2"
 nix = "0.23.1"
 rand = { version="0.8.0", features=["small_rng"] }
+signal-hook = "0.3.2"
+once_cell = "1.9.0"

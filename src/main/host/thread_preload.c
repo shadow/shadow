@@ -1,6 +1,5 @@
 #include "main/host/thread_preload.h"
 
-#include <signal.h>
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>

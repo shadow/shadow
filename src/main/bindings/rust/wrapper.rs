@@ -77,6 +77,35 @@ pub type GQuark = guint32;
 pub type ssize_t = __ssize_t;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct __sigset_t {
+    pub __val: [::std::os::raw::c_ulong; 16usize],
+}
+#[test]
+fn bindgen_test_layout___sigset_t() {
+    assert_eq!(
+        ::std::mem::size_of::<__sigset_t>(),
+        128usize,
+        concat!("Size of: ", stringify!(__sigset_t))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<__sigset_t>(),
+        8usize,
+        concat!("Alignment of ", stringify!(__sigset_t))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<__sigset_t>())).__val as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(__sigset_t),
+            "::",
+            stringify!(__val)
+        )
+    );
+}
+pub type sigset_t = __sigset_t;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct _GTimer {
     _unused: [u8; 0],
 }
@@ -449,58 +478,28 @@ pub struct _Event {
 pub type Event = _Event;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _Tsc {
-    pub cyclesPerSecond: u64,
-}
-#[test]
-fn bindgen_test_layout__Tsc() {
-    assert_eq!(
-        ::std::mem::size_of::<_Tsc>(),
-        8usize,
-        concat!("Size of: ", stringify!(_Tsc))
-    );
-    assert_eq!(
-        ::std::mem::align_of::<_Tsc>(),
-        8usize,
-        concat!("Alignment of ", stringify!(_Tsc))
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_Tsc>())).cyclesPerSecond as *const _ as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(_Tsc),
-            "::",
-            stringify!(cyclesPerSecond)
-        )
-    );
-}
-pub type Tsc = _Tsc;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _CPU {
+pub struct _ShimShmemHost {
     _unused: [u8; 0],
 }
-pub type CPU = _CPU;
-pub use self::_Status as Status;
-pub const _Status_STATUS_NONE: _Status = 0;
-pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
-pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
-pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
-pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
-pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
-pub type _Status = i32;
-extern "C" {
-    pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+pub type ShimShmemHost = _ShimShmemHost;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _ShimShmemProcess {
+    _unused: [u8; 0],
 }
-pub type LegacyDescriptor = [u64; 7usize];
-pub type DescriptorCloseFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host)>;
-pub type DescriptorCleanupFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
-pub type DescriptorFreeFunc =
-    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
-pub type SysCallHandler = _SysCallHandler;
+pub type ShimShmemProcess = _ShimShmemProcess;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _ShimShmemThread {
+    _unused: [u8; 0],
+}
+pub type ShimShmemThread = _ShimShmemThread;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _ShimHostProtectedSharedMem {
+    _unused: [u8; 0],
+}
+pub type ShimShmemHostLock = _ShimHostProtectedSharedMem;
 pub type PluginVirtualPtr = _PluginVirtualPtr;
 pub type PluginPtr = _PluginVirtualPtr;
 pub type PluginPhysicalPtr = _PluginPhysicalPtr;
@@ -714,12 +713,6 @@ fn bindgen_test_layout__SysCallReturn() {
 pub type SysCallReturn = _SysCallReturn;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _Thread {
-    _unused: [u8; 0],
-}
-pub type Thread = _Thread;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct _ShMemBlock {
     pub p: *mut ::std::os::raw::c_void,
     pub nbytes: size_t,
@@ -758,6 +751,31 @@ fn bindgen_test_layout__ShMemBlock() {
     );
 }
 pub type ShMemBlock = _ShMemBlock;
+pub use self::_Status as Status;
+pub const _Status_STATUS_NONE: _Status = 0;
+pub const _Status_STATUS_DESCRIPTOR_ACTIVE: _Status = 1;
+pub const _Status_STATUS_DESCRIPTOR_READABLE: _Status = 2;
+pub const _Status_STATUS_DESCRIPTOR_WRITABLE: _Status = 4;
+pub const _Status_STATUS_DESCRIPTOR_CLOSED: _Status = 8;
+pub const _Status_STATUS_FUTEX_WAKEUP: _Status = 16;
+pub type _Status = i32;
+extern "C" {
+    pub fn return_code_for_signal(signal: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+}
+pub type LegacyDescriptor = [u64; 7usize];
+pub type DescriptorCloseFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor, host: *mut Host)>;
+pub type DescriptorCleanupFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
+pub type DescriptorFreeFunc =
+    ::std::option::Option<unsafe extern "C" fn(descriptor: *mut LegacyDescriptor)>;
+pub type SysCallHandler = _SysCallHandler;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Thread {
+    _unused: [u8; 0],
+}
+pub type Thread = _Thread;
 extern "C" {
     pub fn thread_ref(thread: *mut Thread);
 }
@@ -845,6 +863,15 @@ extern "C" {
     pub fn thread_getSysCallCondition(thread: *mut Thread) -> *mut SysCallCondition;
 }
 extern "C" {
+    pub fn thread_getSignalSet(thread: *mut Thread) -> *mut sigset_t;
+}
+extern "C" {
+    pub fn thread_unblockedSignalPending(
+        thread: *mut Thread,
+        host_lock: *const ShimShmemHostLock,
+    ) -> bool;
+}
+extern "C" {
     pub fn process_new(
         host: *mut Host,
         processID: guint,
@@ -881,6 +908,9 @@ extern "C" {
 }
 extern "C" {
     pub fn process_addThread(proc_: *mut Process, thread: *mut Thread);
+}
+extern "C" {
+    pub fn process_getThread(proc_: *mut Process, virtualTID: pid_t) -> *mut Thread;
 }
 extern "C" {
     pub fn process_markAsExiting(proc_: *mut Process);
@@ -1012,6 +1042,51 @@ extern "C" {
         error: *mut ::std::os::raw::c_char,
     );
 }
+extern "C" {
+    pub fn process_getSharedMem(proc_: *mut Process) -> *mut ShimShmemProcess;
+}
+extern "C" {
+    pub fn process_interruptWithSignal(
+        process: *mut Process,
+        hostLock: *mut ShimShmemHostLock,
+        signo: ::std::os::raw::c_int,
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _Tsc {
+    pub cyclesPerSecond: u64,
+}
+#[test]
+fn bindgen_test_layout__Tsc() {
+    assert_eq!(
+        ::std::mem::size_of::<_Tsc>(),
+        8usize,
+        concat!("Size of: ", stringify!(_Tsc))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<_Tsc>(),
+        8usize,
+        concat!("Alignment of ", stringify!(_Tsc))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_Tsc>())).cyclesPerSecond as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_Tsc),
+            "::",
+            stringify!(cyclesPerSecond)
+        )
+    );
+}
+pub type Tsc = _Tsc;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _CPU {
+    _unused: [u8; 0],
+}
+pub type CPU = _CPU;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _StatusListener {
@@ -1390,6 +1465,15 @@ extern "C" {
     pub fn host_getNativeTID(host: *mut Host, virtualPID: pid_t, virtualTID: pid_t) -> pid_t;
 }
 extern "C" {
+    pub fn host_getProcess(host: *mut Host, virtualPID: pid_t) -> *mut Process;
+}
+extern "C" {
+    pub fn host_getThread(host: *mut Host, virtualTID: pid_t) -> *mut Thread;
+}
+extern "C" {
+    pub fn host_getSharedMem(host: *mut Host) -> *mut ShimShmemHost;
+}
+extern "C" {
     pub fn worker_runEvent(event: *mut Event);
 }
 extern "C" {
@@ -1600,6 +1684,7 @@ pub struct _SysCallHandler {
     pub host: *mut Host,
     pub process: *mut Process,
     pub thread: *mut Thread,
+    pub shimShmemHostLock: *mut ShimShmemHostLock,
     pub epoll: *mut Epoll,
     pub blockedSyscallNR: ::std::os::raw::c_long,
     pub perfTimer: *mut GTimer,
@@ -1614,7 +1699,7 @@ pub struct _SysCallHandler {
 fn bindgen_test_layout__SysCallHandler() {
     assert_eq!(
         ::std::mem::size_of::<_SysCallHandler>(),
-        88usize,
+        96usize,
         concat!("Size of: ", stringify!(_SysCallHandler))
     );
     assert_eq!(
@@ -1653,8 +1738,20 @@ fn bindgen_test_layout__SysCallHandler() {
         )
     );
     assert_eq!(
-        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).epoll as *const _ as usize },
+        unsafe {
+            &(*(::std::ptr::null::<_SysCallHandler>())).shimShmemHostLock as *const _ as usize
+        },
         24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_SysCallHandler),
+            "::",
+            stringify!(shimShmemHostLock)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).epoll as *const _ as usize },
+        32usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1666,7 +1763,7 @@ fn bindgen_test_layout__SysCallHandler() {
         unsafe {
             &(*(::std::ptr::null::<_SysCallHandler>())).blockedSyscallNR as *const _ as usize
         },
-        32usize,
+        40usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1676,7 +1773,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).perfTimer as *const _ as usize },
-        40usize,
+        48usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1688,7 +1785,7 @@ fn bindgen_test_layout__SysCallHandler() {
         unsafe {
             &(*(::std::ptr::null::<_SysCallHandler>())).perfSecondsCurrent as *const _ as usize
         },
-        48usize,
+        56usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1700,7 +1797,7 @@ fn bindgen_test_layout__SysCallHandler() {
         unsafe {
             &(*(::std::ptr::null::<_SysCallHandler>())).perfSecondsTotal as *const _ as usize
         },
-        56usize,
+        64usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1710,7 +1807,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).numSyscalls as *const _ as usize },
-        64usize,
+        72usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1720,7 +1817,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).syscall_counter as *const _ as usize },
-        72usize,
+        80usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1730,7 +1827,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).referenceCount as *const _ as usize },
-        80usize,
+        88usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),
@@ -1740,7 +1837,7 @@ fn bindgen_test_layout__SysCallHandler() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<_SysCallHandler>())).magic as *const _ as usize },
-        84usize,
+        92usize,
         concat!(
             "Offset of field: ",
             stringify!(_SysCallHandler),

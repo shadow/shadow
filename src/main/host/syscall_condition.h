@@ -73,4 +73,11 @@ void syscallcondition_cancel(SysCallCondition* cond);
 /* Get the timer for the condition, or NULL if there isn't one. */
 Timer* syscallcondition_getTimeout(SysCallCondition* cond);
 
+/* If the condition's thread doesn't have `signo` blocked, schedule a wakeup.
+ *
+ * Returns whether a wakeup was scheduled.
+ */
+bool syscallcondition_wakeupForSignal(SysCallCondition* cond, ShimShmemHostLock* hostLock,
+                                      int signo);
+
 #endif /* SRC_MAIN_HOST_SYSCALL_CONDITION_H_ */

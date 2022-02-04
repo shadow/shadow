@@ -4,6 +4,7 @@
 #include <stdatomic.h>
 #include <sys/types.h>
 
+#include "lib/shim/shim_shmem.h"
 #include "main/core/support/definitions.h"
 #include "main/shmem/shmem_allocator.h"
 
@@ -24,9 +25,6 @@ bool shim_use_syscall_handler();
 // Returns the shmem block used for IPC, which may be uninitialized.
 struct IPCData* shim_thisThreadEventIPC();
 
-// Return the location of the time object in shared memory, or NULL if unavailable.
-_Atomic EmulatedTime* shim_get_shared_time_location();
-
 // To be called in parent thread before making the `clone` syscall.
 // It sets up data for the new thread.
 void shim_newThreadStart(ShMemBlockSerialized* block);
@@ -45,9 +43,20 @@ void shim_newThreadChildInitd();
 // We use a page for a stack guard, and up to another page to page-align the
 // stack guard. We assume 4k pages here but detect at runtime if this is too small.
 #define SHIM_SIGNAL_STACK_GUARD_OVERHEAD ((size_t)4096 * 2)
-// Found experimentally. 4k seems to be enough for most platforms, but fails on Ubuntu 18.04.
-#define SHIM_SIGNAL_STACK_MIN_USABLE_SIZE ((size_t)1024 * 12)
+// Shouldn't need to make this very large, but needs to be big enough to run the
+// managed process's signal handlers as well - possibly recursively.
+//
+// Stack space that's *never* used shouldn't ever become resident, but an
+// occasional deep stack could force the pages to be resident ever after.  To
+// mitigate that, we could consider `madvise(MADV_DONTNEED)` after running
+// signal handlers, to let the OS reclaim the (now-popped) signal handler stack
+// frames.
+#define SHIM_SIGNAL_STACK_MIN_USABLE_SIZE ((size_t)1024 * 100)
 #define SHIM_SIGNAL_STACK_SIZE                                                                     \
     (SHIM_SIGNAL_STACK_GUARD_OVERHEAD + SHIM_SIGNAL_STACK_MIN_USABLE_SIZE)
+
+ShimShmemThread* shim_threadSharedMem();
+ShimShmemProcess* shim_processSharedMem();
+ShimShmemHost* shim_hostSharedMem();
 
 #endif // SHD_SHIM_SHIM_H_

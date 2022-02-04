@@ -751,7 +751,7 @@ static SysCallReturn _threadptrace_handleSyscall(ThreadPtrace* thread, SysCallAr
                    thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
 
     if (!syscall_num_is_shadow(args->number) &&
-        thread_sharedMem(&thread->base)->ptrace_allow_native_syscalls) {
+        shimshmem_getPtraceAllowNativeSyscalls(thread_sharedMem(&thread->base))) {
         if (args->number == SYS_brk) {
             // brk should *always* be interposed so that the MemoryManager can track it.
             trace("Interposing brk even though native syscalls are enabled");
