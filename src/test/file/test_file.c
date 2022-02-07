@@ -483,11 +483,20 @@ __attribute__((unused)) static void _test_iov() {
     int expected_errno = 0;
     int expected_rv = 0;
 
+// Prevent warning (which would get elevated to error) for passing out-of-range
+// sizes  in 3rd parameter to readv.
+#pragma GCC diagnostic push
+#if defined(__GNUC__) && __GNUC__ >= 11
+// Range checks that fail below for the 3rd parameter to `readv`.
+#pragma GCC diagnostic ignored "-Wstringop-overflow="
+#pragma GCC diagnostic ignored "-Wstringop-overread"
+#endif
     g_assert_cmpint(readv(filed, iov, -1), ==, -1);
     assert_errno_is(EINVAL);
 
     g_assert_cmpint(readv(filed, iov, UIO_MAXIOV+1), ==, -1);
     assert_errno_is(EINVAL);
+#pragma GCC diagnostic pop
 
     // Invalid fd
     g_assert_cmpint(readv(1923, iov, UIO_MAXIOV+1), ==, -1);
