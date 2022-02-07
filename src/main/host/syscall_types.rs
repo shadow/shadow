@@ -62,6 +62,13 @@ impl From<PluginPtr> for u64 {
     }
 }
 
+impl std::fmt::Pointer for PluginPtr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ptr = self.ptr.val as *const libc::c_void;
+        std::fmt::Pointer::fmt(&ptr, f)
+    }
+}
+
 pub type SysCallArgs = c::SysCallArgs;
 pub type SysCallReg = c::SysCallReg;
 
@@ -115,6 +122,18 @@ impl From<usize> for SysCallReg {
 impl From<SysCallReg> for usize {
     fn from(v: SysCallReg) -> usize {
         unsafe { v.as_u64 as usize }
+    }
+}
+
+impl From<isize> for SysCallReg {
+    fn from(v: isize) -> Self {
+        Self { as_i64: v as i64 }
+    }
+}
+
+impl From<SysCallReg> for isize {
+    fn from(v: SysCallReg) -> isize {
+        unsafe { v.as_i64 as isize }
     }
 }
 

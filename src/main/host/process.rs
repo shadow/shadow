@@ -1,3 +1,5 @@
+use std::os::unix::io::{FromRawFd, IntoRawFd};
+
 use nix::unistd::Pid;
 
 use crate::cshadow;
@@ -110,6 +112,24 @@ impl Process {
         }
 
         removed_desc
+    }
+
+    pub fn strace_logging_enabled(&self) -> bool {
+        unsafe { cshadow::process_straceLoggingEnabled(self.cprocess) }
+    }
+
+    /// If strace logging is disabled, this function will do nothing and return `None`.
+    pub fn with_strace_file<T>(&self, f: impl FnOnce(&mut std::fs::File) -> T) -> Option<T> {
+        let fd = unsafe { cshadow::process_getStraceFd(self.cprocess) };
+
+        if fd < 0 {
+            return None;
+        }
+
+        let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
+        let rv = f(&mut file);
+        file.into_raw_fd();
+        Some(rv)
     }
 
     /// Get a reference to the descriptor with the given fd handle.

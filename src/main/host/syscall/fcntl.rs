@@ -10,7 +10,10 @@ use nix::fcntl::OFlag;
 use std::convert::{TryFrom, TryInto};
 use std::os::unix::prelude::RawFd;
 
-fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+use syscall_logger::log_syscall;
+
+#[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* cmd */ libc::c_int)]
+pub fn fcntl(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd: RawFd = args.args[0].into();
     let cmd: i32 = args.args[1].into();
 

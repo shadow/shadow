@@ -6,6 +6,7 @@ use std::convert::TryInto;
 
 pub mod eventfd;
 pub mod fcntl;
+pub mod format;
 pub mod ioctl;
 pub mod socket;
 pub mod unistd;

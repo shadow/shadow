@@ -350,6 +350,8 @@ LogInfoFlags config_getHostHeartbeatLogInfo(const struct ConfigOptions *config);
 
 SimulationTime config_getHostHeartbeatInterval(const struct ConfigOptions *config);
 
+bool config_getUseStraceLogging(const struct ConfigOptions *config);
+
 bool config_getUseShortestPath(const struct ConfigOptions *config);
 
 __attribute__((warn_unused_result))
@@ -659,6 +661,8 @@ SysCallReturn rustsyscallhandler_eventfd2(SysCallHandler *sys, const SysCallArgs
 SysCallReturn rustsyscallhandler_fcntl(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_fcntl64(SysCallHandler *sys, const SysCallArgs *args);
+
+SysCallReturn log_syscall(Process *proc, const char *name, const char *args, SysCallReturn result);
 
 SysCallReturn rustsyscallhandler_ioctl(SysCallHandler *sys, const SysCallArgs *args);
 

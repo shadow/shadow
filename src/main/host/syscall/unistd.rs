@@ -18,6 +18,9 @@ use atomic_refcell::AtomicRefCell;
 use log::*;
 use nix::errno::Errno;
 
+use syscall_logger::log_syscall;
+
+#[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int)]
 pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
 
@@ -39,6 +42,7 @@ pub fn close(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         .unwrap_or(Ok(0.into()))
 }
 
+#[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int)]
 pub fn dup(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
 
@@ -63,6 +67,7 @@ pub fn dup(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     Ok(libc::c_int::try_from(new_fd).unwrap().into())
 }
 
+#[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int, /* newfd */ libc::c_int)]
 pub fn dup2(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let old_fd = libc::c_int::from(args.get(0));
     let new_fd = libc::c_int::from(args.get(1));
@@ -103,6 +108,8 @@ pub fn dup2(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     Ok(libc::c_int::try_from(new_fd).unwrap().into())
 }
 
+#[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int, /* newfd */ libc::c_int,
+              /* flags */ nix::fcntl::OFlag)]
 pub fn dup3(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let old_fd = libc::c_int::from(args.get(0));
     let new_fd = libc::c_int::from(args.get(1));
@@ -150,6 +157,8 @@ pub fn dup3(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     Ok(libc::c_int::try_from(new_fd).unwrap().into())
 }
 
+#[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
+              /* count */ libc::size_t)]
 pub fn read(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
     let buf_ptr = PluginPtr::from(args.get(1));
@@ -169,6 +178,8 @@ pub fn read(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     }
 }
 
+#[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
+              /* count */ libc::size_t, /* offset */ libc::off_t)]
 pub fn pread64(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
     let buf_ptr = PluginPtr::from(args.get(1));
@@ -236,6 +247,8 @@ fn read_helper(
     result
 }
 
+#[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_char,
+              /* count */ libc::size_t)]
 pub fn write(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
     let buf_ptr = PluginPtr::from(args.get(1));
@@ -256,6 +269,8 @@ pub fn write(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     }
 }
 
+#[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_char,
+              /* count */ libc::size_t, /* offset */ libc::off_t)]
 pub fn pwrite64(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd = libc::c_int::from(args.get(0));
     let buf_ptr = PluginPtr::from(args.get(1));
@@ -323,12 +338,14 @@ fn write_helper(
     result
 }
 
+#[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2])]
 pub fn pipe(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd_ptr: PluginPtr = args.args[0].into();
 
     pipe_helper(ctx, fd_ptr, 0)
 }
 
+#[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2], /* flags */ nix::fcntl::OFlag)]
 pub fn pipe2(ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
     let fd_ptr: PluginPtr = args.args[0].into();
     let flags = unsafe { args.args[1].as_u64 } as libc::c_int;

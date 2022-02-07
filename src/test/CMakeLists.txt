@@ -89,6 +89,11 @@ macro(add_shadow_tests)
       list(APPEND SHADOW_TEST_ARGS "--use-cpu-pinning" "false")
    endif()
 
+   # If strace logging is not explicitly set, we enable it
+   if(NOT "${SHADOW_TEST_ARGS}" MATCHES ".*--use-strace-logging.*")
+      list(APPEND SHADOW_TEST_ARGS "--use-strace-logging" "true")
+   endif()
+
    string(REPLACE ";" " " SHADOW_TEST_ARGS "${SHADOW_TEST_ARGS}")
 
    foreach(SHADOW_TEST_METHOD ${SHADOW_TEST_METHODS})

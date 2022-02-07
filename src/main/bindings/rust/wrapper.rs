@@ -925,6 +925,12 @@ extern "C" {
     pub fn process_getName(proc_: *mut Process) -> *const gchar;
 }
 extern "C" {
+    pub fn process_straceLoggingEnabled(proc_: *mut Process) -> bool;
+}
+extern "C" {
+    pub fn process_getStraceFd(proc_: *mut Process) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn process_getPluginName(proc_: *mut Process) -> *const gchar;
 }
 extern "C" {
