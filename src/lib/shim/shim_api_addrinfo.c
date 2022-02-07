@@ -43,7 +43,7 @@ static int _getaddrinfo_service(in_port_t* port, const char* service,
 
     // `buf` will be used for strings pointed to in `result`.
     // 1024 is the recommended size in getservbyname_r(3).
-    char* buf = malloc(1024);
+    char buf[1024];
     struct servent servent;
     struct servent* result;
     int rv = getservbyname_r(service, NULL, &servent, buf, 1024, &result);
@@ -71,7 +71,6 @@ static int _getaddrinfo_service(in_port_t* port, const char* service,
     // it will return UDP and RAW in addition to TCP, despite /etc/services
     // only containing a TCP entry for that protocol.
     *port = result->s_port;
-    free(buf);
     return rv;
 }
 
