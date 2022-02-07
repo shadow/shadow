@@ -499,7 +499,7 @@ __attribute__((unused)) static void _test_iov() {
 #pragma GCC diagnostic pop
 
     // Invalid fd
-    g_assert_cmpint(readv(1923, iov, UIO_MAXIOV+1), ==, -1);
+    g_assert_cmpint(readv(1923, iov, UIO_MAXIOV), ==, -1);
     assert_errno_is(EBADF);
 
     // '0' iovcnt
