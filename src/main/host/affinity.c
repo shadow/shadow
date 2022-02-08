@@ -238,7 +238,7 @@ static int _affinity_readLSCPU(char** contents) {
         return -1;
     }
 
-    FILE* p_pipe = popen(LSCPU_COMMAND, "r");
+    FILE* p_pipe = popen(LSCPU_COMMAND, "re");
     bool read_success = false;
 
     if (p_pipe) {
