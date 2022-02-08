@@ -43,7 +43,7 @@ static int _getaddrinfo_service(in_port_t* port, const char* service,
 
     // `buf` will be used for strings pointed to in `result`.
     // 1024 is the recommended size in getservbyname_r(3).
-    char* buf = malloc(1024);
+    char buf[1024];
     struct servent servent;
     struct servent* result;
     int rv = getservbyname_r(service, NULL, &servent, buf, 1024, &result);
@@ -56,6 +56,15 @@ static int _getaddrinfo_service(in_port_t* port, const char* service,
         //
         // getaddrinfo(3): "EAI_SYSTEM: Other system error, check errno for
         // details."
+        if (rv == EBADF) {
+            // In cases where libc wasn't able to connect to a local resolver
+            // (which is expected under Shadow), and the service wasn't found in
+            // /etc/services, some versions of libc return non-zero rv and
+            // errno=EBADF.
+            // https://github.com/shadow/shadow/issues/1869
+            warning("Converting EBADF to EAI_SERVICE to work around #1869");
+            return EAI_SERVICE;
+        }
         errno = rv;
         return EAI_SYSTEM;
     }
@@ -71,7 +80,6 @@ static int _getaddrinfo_service(in_port_t* port, const char* service,
     // it will return UDP and RAW in addition to TCP, despite /etc/services
     // only containing a TCP entry for that protocol.
     *port = result->s_port;
-    free(buf);
     return rv;
 }
 
