@@ -598,6 +598,15 @@ fn test_nonblocking_stream(init_method: SocketInitMethod) -> Result<(), String> 
 
             if rv == -1 {
                 test_utils::result_assert_eq(errno, libc::EAGAIN, "Unexpected errno")?;
+                if bytes_read < bytes_sent {
+                    // This can happen when running natively.
+                    println!(
+                        "Read blocked with {} bytes remaining; sleeping and retrying",
+                        bytes_sent - bytes_read
+                    );
+                    assert_eq!(unsafe { libc::usleep(1000) }, 0);
+                    continue;
+                }
                 break;
             }
 
