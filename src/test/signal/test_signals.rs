@@ -85,13 +85,17 @@ enum SignalCode {
 }
 
 // Tests basic signal delivery to self.
-fn test_raise(raise_fn: &dyn Fn(Signal), expected_code: SignalCode) -> Result<(), Box<dyn Error>> {
+fn test_raise(
+    raise_fn: &dyn Fn(Signal),
+    expected_code: Option<SignalCode>,
+) -> Result<(), Box<dyn Error>> {
     for handler in &[
         signal::SigHandler::SigIgn,
         signal::SigHandler::SigAction(signal_action),
         signal::SigHandler::Handler(signal_handler),
     ] {
         for signal in catchable_signals() {
+            println!("Signal {}", signal);
             unsafe {
                 signal::sigaction(
                     signal,
@@ -127,7 +131,9 @@ fn test_raise(raise_fn: &dyn Fn(Signal), expected_code: SignalCode) -> Result<()
                 signal::SigHandler::SigAction(_) => {
                     let info = record.info.unwrap();
                     assert_eq!(Signal::try_from(info.si_signo).unwrap(), signal);
-                    assert_eq!(info.si_code, expected_code as i32);
+                    if let Some(expected_code) = expected_code {
+                        assert_eq!(info.si_code, expected_code as i32);
+                    }
                     assert_eq!(
                         unistd::Pid::from_raw(unsafe { info.si_pid() }),
                         unistd::getpid()
@@ -495,7 +501,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut tests: Vec<test_utils::ShadowTest<(), Box<dyn Error>>> = vec![
         ShadowTest::new(
             "raise",
-            &|| test_raise(&|s| signal::raise(s).unwrap(), SignalCode::SI_TKILL),
+            // The documentation for `raise` is ambiguous whether the signal is
+            // thread-directed or process-directed in a single-threaded program,
+            // and different versions of libc have different behavior. Therefore
+            // we don't check the SignalCode.
+            &|| test_raise(&|s| signal::raise(s).unwrap(), None),
             all_envs.clone(),
         ),
         ShadowTest::new(
@@ -503,7 +513,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             &|| {
                 test_raise(
                     &|s| signal::kill(unistd::getpid(), s).unwrap(),
-                    SignalCode::SI_USER,
+                    Some(SignalCode::SI_USER),
                 )
             },
             all_envs.clone(),
@@ -513,7 +523,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             &|| {
                 test_raise(
                     &|s| tkill(unistd::gettid(), s).unwrap(),
-                    SignalCode::SI_TKILL,
+                    Some(SignalCode::SI_TKILL),
                 )
             },
             all_envs.clone(),
@@ -523,7 +533,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             &|| {
                 test_raise(
                     &|s| tgkill(unistd::getpid(), unistd::gettid(), s).unwrap(),
-                    SignalCode::SI_TKILL,
+                    Some(SignalCode::SI_TKILL),
                 )
             },
             all_envs.clone(),
