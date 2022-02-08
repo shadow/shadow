@@ -19,6 +19,10 @@
 #include "main/core/support/definitions.h"
 #include "main/host/syscall/kernel_types.h"
 
+/* Mask of all O file flags that we don't pass to the native fd, but instead
+ * track within Shadow and handle manually. */
+extern const int SHADOW_FLAG_MASK;
+
 /* Opaque type representing a file-backed file descriptor. */
 typedef struct _File File;
 
@@ -49,11 +53,15 @@ int file_openat(File* file, File* dir, const char* pathname, int flags, mode_t m
 // Accessors
 // ************************
 
-/* Returns the flags that were used to open the file. */
-int file_getFlags(File* file);
+/* Returns the flags that were used when opening the file. */
+int file_getFlagsAtOpen(File* file);
 
-/* Returns the mode that was used to open the file. */
-mode_t file_getMode(File* file);
+/* Returns the mode that was used when opening the file. */
+mode_t file_getModeAtOpen(File* file);
+
+/* Get the file flags that shadow handles manually, but not the flags on the
+ * linux-backed file. Will be a subset of SHADOW_FLAG_MASK. */
+int file_getShadowFlags(File* file);
 
 /* Returns the linux-backed fd that shadow uses to perform the file operations.  */
 int file_getOSBackedFD(File* file);

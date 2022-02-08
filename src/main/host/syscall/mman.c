@@ -149,13 +149,27 @@ static int _syscallhandler_openPluginFile(SysCallHandler* sys, File* file) {
     /* Flush the buffer to the plugin. */
     process_flushPtrs(sys->process);
 
-    /* Get original flags that were used to open the file,
-       but be careful not to try re-creating or truncating it. */
-    int flags = file_getFlags(file) & ~(O_CREAT|O_EXCL|O_TMPFILE|O_TRUNC);
+    /* Attempt to open the file in the plugin with the same flags as what the
+     * shadow File object has. */
+
+    /* From man 2 open */
+    const int creationFlags =
+        O_CLOEXEC | O_CREAT | O_DIRECTORY | O_EXCL | O_NOCTTY | O_NOFOLLOW | O_TMPFILE | O_TRUNC;
+
+    /* Get original flags that were used to open the file. */
+    int flags = file_getFlagsAtOpen(file);
+    /* Use only the file creation flags, except O_CLOEXEC. */
+    flags &= (creationFlags & ~O_CLOEXEC);
+    /* Add any file access mode and file status flags that shadow doesn't implement. */
+    flags |= (fcntl(file_getOSBackedFD(file), F_GETFL) & ~SHADOW_FLAG_MASK);
+    /* Add any flags that shadow implements. */
+    flags |= file_getShadowFlags(file);
+    /* Be careful not to try re-creating or truncating it. */
+    flags &= ~(O_CREAT | O_EXCL | O_TMPFILE | O_TRUNC);
 
     /* Instruct the plugin to open the file at the path we sent. */
     int result = thread_nativeSyscall(sys->thread, SYS_open, pluginBufPtr.val,
-                                      flags, file_getMode(file));
+                                      flags, file_getModeAtOpen(file));
     int err = syscall_rawReturnValueToErrno(result);
     if (err) {
         trace("Failed to open path '%s' in plugin, error %i: %s.", mmap_path, err, strerror(err));
