@@ -159,7 +159,6 @@ impl Process {
 mod export {
     use super::*;
     use crate::host::descriptor::OwnedLegacyDescriptor;
-    use std::convert::TryInto;
 
     /// Register a `CompatDescriptor`. This takes ownership of the descriptor and you must not
     /// access it after.

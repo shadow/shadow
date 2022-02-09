@@ -6,9 +6,7 @@
 use bytes::{Bytes, BytesMut};
 
 use std::collections::LinkedList;
-use std::convert::{TryFrom, TryInto};
 use std::io::{ErrorKind, Read, Write};
-use std::iter::FromIterator;
 
 /// A queue of bytes that supports reading and writing stream and/or packet data.
 ///

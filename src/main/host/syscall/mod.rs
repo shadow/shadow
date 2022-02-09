@@ -2,8 +2,6 @@ use crate::cshadow as c;
 use crate::host::descriptor::{CompatDescriptor, FileState, PosixFile};
 use crate::host::process::Process;
 
-use std::convert::TryInto;
-
 pub mod eventfd;
 pub mod fcntl;
 pub mod format;

@@ -1,5 +1,3 @@
-use std::convert::{TryFrom, TryInto};
-
 use nix::errno::Errno;
 
 use crate::host::descriptor::{FileState, StateEventSource, StateListenerFilter};

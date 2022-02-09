@@ -3,7 +3,6 @@
  * See LICENSE for licensing information
  */
 
-use std::convert::TryFrom;
 use std::error::Error;
 use std::sync::atomic::{AtomicI32, Ordering};
 

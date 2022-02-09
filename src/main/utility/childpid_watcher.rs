@@ -5,7 +5,6 @@ use nix::sys::epoll::{
 };
 use nix::unistd::Pid;
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
 use std::fs::File;
 use std::os::unix::io::RawFd;
 use std::os::unix::prelude::{AsRawFd, FromRawFd};

@@ -7,8 +7,6 @@ mod export {
     use super::*;
     use crate::utility::notnull::notnull_mut_debug;
 
-    use std::convert::TryFrom;
-
     use rand::{Rng, RngCore, SeedableRng};
 
     #[no_mangle]

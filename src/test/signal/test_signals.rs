@@ -4,7 +4,6 @@ use nix::sys::signal::Signal;
 use nix::unistd;
 use once_cell::sync::OnceCell;
 use signal_hook::low_level::channel::Channel as SignalSafeChannel;
-use std::convert::TryFrom;
 use std::error::Error;
 use std::iter::Iterator;
 use std::os::unix::io::RawFd;

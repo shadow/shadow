@@ -726,7 +726,6 @@ mod export {
     use crate::host::context::ThreadContextObjs;
 
     use super::*;
-    use std::convert::TryInto;
 
     /// # Safety
     /// * `thread` must point to a valid object.

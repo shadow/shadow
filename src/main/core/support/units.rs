@@ -12,7 +12,6 @@ assert_eq!(
 ```
 */
 
-use std::convert::TryInto;
 use std::fmt::{self, Debug, Display};
 use std::str::FromStr;
 

@@ -10,7 +10,6 @@ This module contains some identically-named constants defined as C macros in
 */
 
 use crate::cshadow as c;
-use std::convert::TryFrom;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
 pub struct SimulationTime(std::time::Duration);

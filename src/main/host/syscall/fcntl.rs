@@ -7,7 +7,6 @@ use crate::host::syscall_types::{SysCallArgs, SysCallReg};
 use log::*;
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
-use std::convert::{TryFrom, TryInto};
 use std::os::unix::prelude::RawFd;
 
 use syscall_logger::log_syscall;

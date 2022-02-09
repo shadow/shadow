@@ -1,5 +1,4 @@
 use nix::errno::Errno;
-use std::convert::TryFrom;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{

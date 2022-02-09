@@ -1,5 +1,3 @@
-use std::iter::FromIterator;
-
 use proc_macro::*;
 use quote::ToTokens;
 

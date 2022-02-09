@@ -15,7 +15,6 @@ generic types.
 
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result};
-use std::iter::FromIterator;
 use std::ops::{Add, Sub};
 
 /// The main counter object that maps individual keys to count values.

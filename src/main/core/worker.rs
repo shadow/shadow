@@ -258,7 +258,6 @@ impl Worker {
 
 mod export {
     use super::*;
-    use std::convert::TryInto;
 
     /// Initialize a Worker for this thread.
     #[no_mangle]
