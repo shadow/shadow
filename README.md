@@ -3,6 +3,9 @@
 [![Shadow Tests](https://github.com/shadow/shadow/actions/workflows/run_tests.yml/badge.svg?branch=main&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tests.yml?query=branch:main+event:push)
 [![Tor Tests](https://github.com/shadow/shadow/actions/workflows/run_tor.yml/badge.svg?branch=main&event=push)](https://github.com/shadow/shadow/actions/workflows/run_tor.yml?query=branch:main+event:push)
 
+[Documentation](https://shadow.github.io/docs/guide)  
+[Examples](https://shadow.github.io/docs/guide/getting_started_basic.html)
+
 <!--- ANCHOR: body (for mdbook) -->
 
 ## What is Shadow?
