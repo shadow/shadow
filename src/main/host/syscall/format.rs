@@ -9,6 +9,7 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{
     PluginPtr, SysCallArgs, SysCallReg, SyscallError, SyscallResult, TypedPluginPtr,
 };
+use crate::host::thread::ThreadId;
 use crate::utility::time::TimeParts;
 
 /// Convert from a `SysCallReg`.
@@ -470,6 +471,7 @@ where
 pub fn write_syscall(
     mut writer: impl std::io::Write,
     sim_time: &EmulatedTime,
+    tid: ThreadId,
     name: impl Display,
     args: impl Display,
     rv: impl Display,
@@ -478,7 +480,11 @@ pub fn write_syscall(
     let sim_time = TimeParts::from_nanos(sim_time.as_nanos());
     let sim_time = sim_time.fmt_hr_min_sec_milli();
 
-    writeln!(writer, "{} {}({}) = {}", sim_time, name, args, rv)
+    writeln!(
+        writer,
+        "{} [tid {}] {}({}) = {}",
+        sim_time, tid, name, args, rv
+    )
 }
 
 mod export {
@@ -491,6 +497,7 @@ mod export {
     #[no_mangle]
     pub extern "C" fn log_syscall(
         proc: *mut c::Process,
+        tid: libc::pid_t,
         name: *const libc::c_char,
         args: *const libc::c_char,
         result: c::SysCallReturn,
@@ -510,7 +517,18 @@ mod export {
 
         if let Some(ref rv) = rv {
             proc.with_strace_file(|file| {
-                write_syscall(file, &Worker::current_time().unwrap(), name, args, rv).unwrap();
+                let time = Worker::current_time();
+
+                if let (Some(time), Ok(tid)) = (time, tid.try_into()) {
+                    write_syscall(file, &time, tid, name, args, rv).unwrap();
+                } else {
+                    log::warn!(
+                        "Could not log syscall {} with time {:?} and tid {:?}",
+                        name,
+                        time,
+                        tid
+                    );
+                }
             });
         }
 

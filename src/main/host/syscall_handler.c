@@ -204,29 +204,29 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number,
 // Single public API function for calling Shadow syscalls
 ///////////////////////////////////////////////////////////
 
-#define HANDLE(s)                                                              \
-    case SYS_##s:                                                              \
-        _syscallhandler_pre_syscall(sys, args->number, #s);                    \
-        scr = syscallhandler_##s(sys, args);                                   \
-        if (process_straceLoggingEnabled(sys->process)) {                      \
-            scr = log_syscall(sys->process, #s, "...", scr);                   \
-        }                                                                      \
-        _syscallhandler_post_syscall(sys, args->number, #s, &scr);             \
+#define HANDLE(s)                                                                                  \
+    case SYS_##s:                                                                                  \
+        _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
+        scr = syscallhandler_##s(sys, args);                                                       \
+        if (process_straceLoggingEnabled(sys->process)) {                                          \
+            scr = log_syscall(sys->process, thread_getID(sys->thread), #s, "...", scr);            \
+        }                                                                                          \
+        _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
         break
-#define NATIVE(s)                                                              \
-    case SYS_##s:                                                              \
-        trace("native syscall %ld " #s, args->number);                         \
-        scr = (SysCallReturn){.state = SYSCALL_NATIVE};                        \
-        if (process_straceLoggingEnabled(sys->process)) {                      \
-            scr = log_syscall(sys->process, #s, "...", scr);                   \
-        }                                                                      \
+#define NATIVE(s)                                                                                  \
+    case SYS_##s:                                                                                  \
+        trace("native syscall %ld " #s, args->number);                                             \
+        scr = (SysCallReturn){.state = SYSCALL_NATIVE};                                            \
+        if (process_straceLoggingEnabled(sys->process)) {                                          \
+            scr = log_syscall(sys->process, thread_getID(sys->thread), #s, "...", scr);            \
+        }                                                                                          \
         break
 #define UNSUPPORTED(s)                                                                             \
     case SYS_##s:                                                                                  \
         error("Returning error ENOSYS for explicitly unsupported syscall %ld " #s, args->number);  \
         scr = (SysCallReturn){.state = -ENOSYS};                                                   \
         if (process_straceLoggingEnabled(sys->process)) {                                          \
-            scr = log_syscall(sys->process, #s, "...", scr);                                       \
+            scr = log_syscall(sys->process, thread_getID(sys->thread), #s, "...", scr);            \
         }                                                                                          \
         break
 
@@ -502,7 +502,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
             if (process_straceLoggingEnabled(sys->process)) {
                 char arg_str[20] = {0};
                 snprintf(arg_str, sizeof(arg_str), "%ld, ...", args->number);
-                scr = log_syscall(sys->process, "syscall", arg_str, scr);
+                scr = log_syscall(sys->process, thread_getID(sys->thread), "syscall", arg_str, scr);
             }
 
             break;
