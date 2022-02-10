@@ -52,10 +52,7 @@ impl Process {
     }
 
     fn memory_manager_ptr(&self) -> *mut MemoryManager {
-        let mm_ptr: *mut cshadow::MemoryManager =
-            unsafe { cshadow::process_getMemoryManager(self.cprocess) };
-        // MemoryManager and cshadow::MemoryManager are the same type.
-        unsafe { std::mem::transmute(mm_ptr) }
+        unsafe { cshadow::process_getMemoryManager(self.cprocess) }
     }
 
     pub fn memory_mut(&mut self) -> &mut MemoryManager {

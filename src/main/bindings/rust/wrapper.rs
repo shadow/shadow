@@ -2,6 +2,7 @@
 use crate::host::descriptor::CompatDescriptor;
 use crate::host::descriptor::PosixFile;
 use crate::host::descriptor::descriptor_table::DescriptorTable;
+use crate::host::memory_manager::MemoryManager;
 use crate::core::support::configuration::ConfigOptions;
 use crate::utility::random::Random;
 use log_bindings::Logger;
@@ -130,11 +131,6 @@ pub struct ChildPidWatcher {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Counter {
-    _unused: [u8; 0],
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct MemoryManager {
     _unused: [u8; 0],
 }
 pub const SchedulerPolicyType_SP_PARALLEL_HOST_SINGLE: SchedulerPolicyType = 0;
