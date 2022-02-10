@@ -6,6 +6,7 @@ pub mod eventfd;
 pub mod fcntl;
 pub mod format;
 pub mod ioctl;
+pub mod random;
 pub mod socket;
 pub mod unistd;
 
