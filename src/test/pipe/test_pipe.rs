@@ -35,6 +35,7 @@ fn main() -> Result<(), String> {
 
 fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     let tests: Vec<test_utils::ShadowTest<_, _>> = vec![
+        test_utils::ShadowTest::new("test_null", test_null, set![TestEnv::Libc, TestEnv::Shadow]),
         test_utils::ShadowTest::new("test_pipe", test_pipe, set![TestEnv::Libc, TestEnv::Shadow]),
         test_utils::ShadowTest::new(
             "test_read_write",
@@ -119,6 +120,14 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     ];
 
     tests
+}
+
+fn test_null() -> Result<(), String> {
+    test_utils::check_system_call!(
+        || { unsafe { libc::pipe(std::ptr::null_mut()) } },
+        &[libc::EFAULT]
+    )?;
+    Ok(())
 }
 
 fn test_pipe() -> Result<(), String> {
