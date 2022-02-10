@@ -1,6 +1,5 @@
 use std::any::TypeId;
 use std::fmt::Display;
-use std::io::Read;
 use std::marker::PhantomData;
 use std::num::NonZeroU8;
 
@@ -187,28 +186,29 @@ impl SyscallPtrDisplay for SyscallPtr<*const i8> {
         const DISPLAY_LEN: usize = 40;
 
         // read up to one extra character to check if it's a null byte
-        let reader = mem.reader(TypedPluginPtr::new::<u8>(self.ptr, DISPLAY_LEN + 1));
-
-        // we read a byte at a time since we don't know the length of the string, and if we read too
-        // much at once (for example bytes past the null byte), we may try to read from an invalid
-        // address
+        let mem_ref = mem.memory_ref_prefix(TypedPluginPtr::new::<u8>(self.ptr, DISPLAY_LEN + 1));
 
         // to avoid printing too many escaped bytes, limit the number of non-graphic and non-ascii
         // characters
         let mut non_graphic_remaining = DISPLAY_LEN / 3;
 
-        let mut s: Vec<NonZeroU8> = reader
-            .bytes()
-            // get bytes until either null byte or a read error
-            .map_while(|x| x.ok().and_then(|y| NonZeroU8::new(y)))
-            // stop after a certain number of non-graphic characters
-            .map_while(|x| {
-                if !x.get().is_ascii_graphic() {
-                    non_graphic_remaining = non_graphic_remaining.saturating_sub(1);
-                }
-                (non_graphic_remaining > 0).then(|| x)
-            })
-            .collect();
+        let mut s: Vec<NonZeroU8> = match mem_ref {
+            // mem_ref will reference up to DISPLAY_LEN+1 bytes
+            Ok(mem_ref) => mem_ref
+                .iter()
+                // get bytes until a null byte
+                .map_while(|x| NonZeroU8::new(*x))
+                // stop after a certain number of non-graphic characters
+                .map_while(|x| {
+                    if !x.get().is_ascii_graphic() {
+                        non_graphic_remaining = non_graphic_remaining.saturating_sub(1);
+                    }
+                    (non_graphic_remaining > 0).then(|| x)
+                })
+                .collect(),
+            // the pointer didn't reference any valid memory
+            Err(_) => vec![],
+        };
 
         let len = s.len();
         s.truncate(DISPLAY_LEN);
