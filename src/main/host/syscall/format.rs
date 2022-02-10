@@ -193,16 +193,28 @@ impl SyscallPtrDisplay for SyscallPtr<*const i8> {
         // much at once (for example bytes past the null byte), we may try to read from an invalid
         // address
 
-        // get bytes until either null byte or a read error
+        // to avoid printing too many escaped bytes, limit the number of non-graphic and non-ascii
+        // characters
+        let mut non_graphic_remaining = DISPLAY_LEN / 3;
+
         let mut s: Vec<NonZeroU8> = reader
             .bytes()
+            // get bytes until either null byte or a read error
             .map_while(|x| x.ok().and_then(|y| NonZeroU8::new(y)))
+            // stop after a certain number of non-graphic characters
+            .map_while(|x| {
+                if !x.get().is_ascii_graphic() {
+                    non_graphic_remaining = non_graphic_remaining.saturating_sub(1);
+                }
+                (non_graphic_remaining > 0).then(|| x)
+            })
             .collect();
+
         let len = s.len();
         s.truncate(DISPLAY_LEN);
         let s: std::ffi::CString = s.into();
 
-        if len > DISPLAY_LEN {
+        if len > DISPLAY_LEN || non_graphic_remaining <= 0 {
             write!(f, "{:?}...", s)
         } else {
             write!(f, "{:?}", s)
