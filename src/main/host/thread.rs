@@ -5,9 +5,6 @@ use crate::cshadow as c;
 use crate::utility::syscall;
 use nix::unistd::Pid;
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
-pub struct ThreadId(u32);
-
 pub trait Thread {
     /// Have the plugin thread natively execute the given syscall.
     fn native_syscall(&mut self, n: i64, args: &[SysCallReg]) -> nix::Result<SysCallReg>;
@@ -221,5 +218,22 @@ impl Drop for CThread {
         unsafe {
             c::thread_unref(self.cthread);
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
+pub struct ThreadId(u32);
+
+impl TryFrom<libc::pid_t> for ThreadId {
+    type Error = <u32 as TryFrom<libc::pid_t>>::Error;
+
+    fn try_from(value: libc::pid_t) -> Result<Self, Self::Error> {
+        Ok(Self(u32::try_from(value)?))
+    }
+}
+
+impl std::fmt::Display for ThreadId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }

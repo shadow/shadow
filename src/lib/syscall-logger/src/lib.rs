@@ -95,6 +95,7 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
                     write_syscall(
                         file,
                         &Worker::current_time().unwrap(),
+                        ctx.thread.id(),
                         "{syscall_name}",
                         &syscall_args,
                         syscall_rv,
