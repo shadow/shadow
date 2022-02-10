@@ -713,11 +713,53 @@ impl std::ops::Deref for Quantity {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 #[serde(untagged)]
 pub enum ProcessArgs {
     List(Vec<String>),
     Str(String),
+}
+
+/// Serde doesn't provide good deserialization error messages for untagged enums, so we implement
+/// our own. For example, if serde finds a yaml value such as 4 for the process arguments, it won't
+/// deserialize it to the string "4" and the yaml parsing will fail. The serde-generated error
+/// message will say something like "data did not match any variant of untagged enum ProcessArgs at
+/// line X column Y" which isn't very helpful to the user, so here we try to give a better error
+/// message.
+impl<'de> serde::Deserialize<'de> for ProcessArgs {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct ProcessArgsVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for ProcessArgsVisitor {
+            type Value = ProcessArgs;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a string or a sequence of strings")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(Self::Value::Str(v.to_owned()))
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut v = vec![];
+
+                while let Some(val) = seq.next_element()? {
+                    v.push(val);
+                }
+
+                Ok(Self::Value::List(v))
+            }
+        }
+
+        deserializer.deserialize_any(ProcessArgsVisitor)
+    }
 }
 
 /// Helper function for serde default `ProcessArgs::Str("")` values.
