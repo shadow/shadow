@@ -670,6 +670,8 @@ SysCallReturn log_syscall(Process *proc,
 
 SysCallReturn rustsyscallhandler_ioctl(SysCallHandler *sys, const SysCallArgs *args);
 
+SysCallReturn rustsyscallhandler_getrandom(SysCallHandler *sys, const SysCallArgs *args);
+
 SysCallReturn rustsyscallhandler_socket(SysCallHandler *sys, const SysCallArgs *args);
 
 SysCallReturn rustsyscallhandler_bind(SysCallHandler *sys, const SysCallArgs *args);

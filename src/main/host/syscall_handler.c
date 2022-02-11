@@ -32,7 +32,6 @@
 #include "main/host/syscall/poll.h"
 #include "main/host/syscall/process.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall/random.h"
 #include "main/host/syscall/shadow.h"
 #include "main/host/syscall/signal.h"
 #include "main/host/syscall/socket.h"
@@ -307,7 +306,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(getpid);
         HANDLE(getppid);
         HANDLE(gettid);
-        HANDLE(getrandom);
+        HANDLE_RUST(getrandom);
         HANDLE(get_robust_list);
         HANDLE_RUST(getsockname);
         HANDLE(getsockopt);
