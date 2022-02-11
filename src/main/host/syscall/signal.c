@@ -281,11 +281,6 @@ static SysCallReturn _rt_sigaction(SysCallHandler* sys, int signum, PluginPtr ac
         return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
     }
 
-    if (signum > 32) {
-        warning("Got signum %d, but realtime signals are unimplemented", signum);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = -ENOSYS};
-    }
-
     if (oldActPtr.val) {
         struct shd_kernel_sigaction old_action = shimshmem_getSignalAction(
             sys->shimShmemHostLock, process_getSharedMem(sys->process), signum);
