@@ -85,7 +85,8 @@ hosts:
 - [`experimental.use_memory_manager`](#experimentaluse_memory_manager)
 - [`experimental.use_o_n_waitpid_workarounds`](#experimentaluse_o_n_waitpid_workarounds)
 - [`experimental.use_object_counters`](#experimentaluse_object_counters)
-- [`experimental.use_openssl_rng_preload`](#experimentaluse_openssl_rng_preload)
+- [`experimental.use_preload_openssl_crypto`](#experimentaluse_preload_openssl_crypto)
+- [`experimental.use_preload_openssl_rng`](#experimentaluse_preload_openssl_rng)
 - [`experimental.use_sched_fifo`](#experimentaluse_sched_fifo)
 - [`experimental.use_shim_syscall_handler`](#experimentaluse_shim_syscall_handler)
 - [`experimental.use_seccomp`](#experimentaluse_seccomp)
@@ -442,7 +443,18 @@ Type: Bool
 Count object allocations and deallocations. If disabled, we will not be able to
 detect object memory leaks.
 
-#### `experimental.use_openssl_rng_preload`
+#### `experimental.use_preload_openssl_crypto`
+
+Default: false  
+Type: Bool
+
+Preload our OpenSSL crypto library for all managed processes to skip some AES
+crypto operations, which may speed up simulation if your CPU lacks AES-NI
+support. However, it changes the behavior of your application and can cause bugs
+in OpenSSL that are hard to notice. You should probably not use this option
+unless you really know what you're doing.
+
+#### `experimental.use_preload_openssl_rng`
 
 Default: true  
 Type: Bool

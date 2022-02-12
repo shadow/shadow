@@ -269,13 +269,20 @@ pub struct ExperimentalOptions {
 
     /// Preload our libc library for all managed processes for fast syscall interposition when possible.
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_libc_preload").unwrap().as_str())]
-    use_libc_preload: Option<bool>,
+    #[clap(help = EXP_HELP.get("use_preload_libc").unwrap().as_str())]
+    use_preload_libc: Option<bool>,
 
     /// Preload our OpenSSL RNG library for all managed processes to mitigate non-deterministic use of OpenSSL.
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("use_openssl_rng_preload").unwrap().as_str())]
-    use_openssl_rng_preload: Option<bool>,
+    #[clap(help = EXP_HELP.get("use_preload_openssl_rng").unwrap().as_str())]
+    use_preload_openssl_rng: Option<bool>,
+
+    /// Preload our OpenSSL crypto library for all managed processes to skip some crypto operations
+    /// (may speed up simulation if your CPU lacks AES-NI support, but can cause bugs so do not use
+    /// unless you know what you're doing).
+    #[clap(long, value_name = "bool")]
+    #[clap(help = EXP_HELP.get("use_preload_openssl_crypto").unwrap().as_str())]
+    use_preload_openssl_crypto: Option<bool>,
 
     /// Max number of iterations to busy-wait on IPC semaphore before blocking
     #[clap(long, value_name = "iterations")]
@@ -405,8 +412,9 @@ impl Default for ExperimentalOptions {
             use_seccomp: None,
             use_syscall_counters: Some(false),
             use_object_counters: Some(true),
-            use_libc_preload: Some(true),
-            use_openssl_rng_preload: Some(true),
+            use_preload_libc: Some(true),
+            use_preload_openssl_rng: Some(true),
+            use_preload_openssl_crypto: Some(false),
             preload_spin_max: Some(0),
             use_memory_manager: Some(true),
             use_shim_syscall_handler: Some(true),
@@ -1147,14 +1155,21 @@ mod export {
     pub extern "C" fn config_getUseLibcPreload(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        config.experimental.use_libc_preload.unwrap()
+        config.experimental.use_preload_libc.unwrap()
     }
 
     #[no_mangle]
     pub extern "C" fn config_getUseOpensslRNGPreload(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
-        config.experimental.use_openssl_rng_preload.unwrap()
+        config.experimental.use_preload_openssl_rng.unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn config_getUseOpensslCryptoPreload(config: *const ConfigOptions) -> bool {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        config.experimental.use_preload_openssl_crypto.unwrap()
     }
 
     #[no_mangle]
