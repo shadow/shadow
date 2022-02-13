@@ -120,17 +120,8 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
     }
 }
 
-static SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, PluginPtr fds_ptr, nfds_t nfds,
-                                                const struct timespec* timeout) {
-    // Get the pollfd struct in our memory so we can read from and write to it.
-    struct pollfd* fds = NULL;
-    if (nfds > 0) {
-        fds = process_getMutablePtr(sys->process, fds_ptr, nfds * sizeof(*fds));
-        if (!fds) {
-            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
-        }
-    }
-
+SysCallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds, nfds_t nfds,
+                                         const struct timespec* timeout) {
     // Check if any of the fds have events now
     int num_ready = _syscallhandler_getPollEvents(sys, fds, nfds);
 
@@ -174,6 +165,21 @@ done:
     return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = num_ready};
 }
 
+static SysCallReturn _syscallhandler_pollHelperPluginPtr(SysCallHandler* sys, PluginPtr fds_ptr,
+                                                         nfds_t nfds,
+                                                         const struct timespec* timeout) {
+    // Get the pollfd struct in our memory so we can read from and write to it.
+    struct pollfd* fds = NULL;
+    if (nfds > 0) {
+        fds = process_getMutablePtr(sys->process, fds_ptr, nfds * sizeof(*fds));
+        if (!fds) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval.as_i64 = -EFAULT};
+        }
+    }
+
+    return _syscallhandler_pollHelper(sys, fds, nfds, timeout);
+}
+
 static int _syscallhandler_checkPollArgs(PluginPtr fds_ptr, nfds_t nfds) {
     if (nfds > INT_MAX) {
         trace("nfds was out of range [0, INT_MAX], returning EINVAL");
@@ -201,7 +207,7 @@ SysCallReturn syscallhandler_poll(SysCallHandler* sys, const SysCallArgs* args) 
         struct timespec timeout =
             (struct timespec){.tv_sec = timeout_millis / MILLIS_PER_SEC,
                               .tv_nsec = (timeout_millis % MILLIS_PER_SEC) * NANOS_PER_MILLISEC};
-        return _syscallhandler_pollHelper(sys, fds_ptr, nfds, &timeout);
+        return _syscallhandler_pollHelperPluginPtr(sys, fds_ptr, nfds, &timeout);
     }
 }
 
@@ -236,6 +242,6 @@ SysCallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args)
         }
     }
 
-    return _syscallhandler_pollHelper(
+    return _syscallhandler_pollHelperPluginPtr(
         sys, fds_ptr, nfds, ts_timeout_ptr.val ? &ts_timeout_val : NULL);
 }
