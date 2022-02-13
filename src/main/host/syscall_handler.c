@@ -32,6 +32,7 @@
 #include "main/host/syscall/poll.h"
 #include "main/host/syscall/process.h"
 #include "main/host/syscall/protected.h"
+#include "main/host/syscall/select.h"
 #include "main/host/syscall/shadow.h"
 #include "main/host/syscall/signal.h"
 #include "main/host/syscall/socket.h"
@@ -345,6 +346,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
 #ifdef SYS_prlimit64
         HANDLE(prlimit64);
 #endif
+        HANDLE(pselect6);
         HANDLE_RUST(pwrite64);
         HANDLE(pwritev);
 #ifdef SYS_pwritev2
@@ -362,6 +364,7 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         HANDLE(shadow_get_shm_blk);
         HANDLE(shadow_hostname_to_addr_ipv4);
         HANDLE(shadow_init_memory_manager);
+        HANDLE(select);
         HANDLE_RUST(sendto);
         HANDLE(setsockopt);
 #ifdef SYS_sigaction
@@ -415,10 +418,6 @@ SysCallReturn syscallhandler_make_syscall(SysCallHandler* sys,
         //// operations on pids (shadow overrides pids)
         // NATIVE(sched_getaffinity);
         // NATIVE(sched_setaffinity);
-
-        //// operations on file descriptors
-        // NATIVE(select);
-        // NATIVE(pselect6);
 
         //// copying data between various types of fds
         // NATIVE(copy_file_range);

@@ -118,6 +118,7 @@ set(shadow_srcs
     host/syscall/mman.c
     host/syscall/poll.c
     host/syscall/process.c
+    host/syscall/select.c
     host/syscall/shadow.c
     host/syscall/signal.c
     host/syscall/socket.c
