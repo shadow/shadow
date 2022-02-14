@@ -17,6 +17,13 @@
 #define SHD_SIGRT_MIN 32
 #define SHD_SIGRT_MAX 64
 
+// Definition is sometimes missing in the userspace headers. We could include
+// the kernel signal header, but it has definitions that conflict with the
+// userspace headers.
+#ifndef SS_AUTODISARM
+#define SS_AUTODISARM (1U << 31)
+#endif
+
 // Compatible with the kernel's definition of sigset_t on x86_64. Exposing the
 // definition in the header so that it can be used as a value-type, but should
 // be manipulated with the helpers below.

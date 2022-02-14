@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/syscall.h>
+#include <ucontext.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shim/ipc.h"
@@ -89,6 +90,17 @@ long shim_native_syscall(long n, ...) {
     return rv;
 }
 
+static void _call_signal_handler(const struct shd_kernel_sigaction* action, int signo,
+                                 siginfo_t* siginfo, ucontext_t* ucontext) {
+    shim_swapAllowNativeSyscalls(false);
+    if (action->ksa_flags & SA_SIGINFO) {
+        action->ksa_sigaction(signo, siginfo, ucontext);
+    } else {
+        action->ksa_handler(signo);
+    }
+    shim_swapAllowNativeSyscalls(true);
+}
+
 static void _shim_process_signals(ShimShmemHostLock* host_lock) {
     int signo;
     siginfo_t siginfo;
@@ -136,34 +148,54 @@ static void _shim_process_signals(ShimShmemHostLock* host_lock) {
             shimshmem_setSignalAction(host_lock, shim_processSharedMem(), signo,
                                       &(struct shd_kernel_sigaction){.ksa_handler = SIG_DFL});
         }
-        if (action.ksa_flags & SA_ONSTACK) {
-            error("SA_ONSTACK unimplemented; ignoring.");
-        }
         if (action.ksa_flags & SA_RESTART) {
             error("SA_RESTART unimplemented; ignoring.");
         }
 
-        // Call signal handler with host lock released, and native syscalls disabled.
-        shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
-        bool oldAllowNativeSyscalls = shim_swapAllowNativeSyscalls(false);
-        if (action.ksa_flags & SA_SIGINFO) {
-            // ucontext is unimplemented for now. Most signal handlers don't use
-            // it, and passing NULL and getting a loud crash if they try to use
-            // it is probably preferable over passing in a subtly-wrong fake.
-            //
-            // In cases where we intercepted the original syscall via seccomp,
-            // it might be reasonable to pass the ucontext_t that *our* signal
-            // handler received. Otherwise it's much murkier how such a context
-            // ought to be constructed.
-            ucontext_t* ucontext = NULL;
-            action.ksa_sigaction(signo, &siginfo, ucontext);
-        } else {
-            action.ksa_handler(signo);
-        }
+        const stack_t ss_original = shimshmem_getSigAltStack(host_lock, shim_threadSharedMem());
+        if (action.ksa_flags & SA_ONSTACK && !(ss_original.ss_flags & SS_DISABLE)) {
+            // Call handler on the configured signal stack.
 
-        // Reacquire host lock and re-disable native syscalls.
-        shim_swapAllowNativeSyscalls(oldAllowNativeSyscalls);
-        host_lock = shimshmemhost_lock(shim_hostSharedMem());
+            if (ss_original.ss_flags & SS_ONSTACK) {
+                // Documentation is unclear what should happen, but switching to
+                // the already-in-use stack would almost certainly go badly.
+                panic("Alternate stack already in use.")
+            }
+
+            // Update the signal-stack configuration while the handler is being run.
+            stack_t ss_during_handler;
+            if (ss_original.ss_flags & SS_AUTODISARM) {
+                ss_during_handler = (stack_t){.ss_flags = SS_DISABLE};
+            } else {
+                ss_during_handler = ss_original;
+                ss_during_handler.ss_flags |= SS_ONSTACK;
+            }
+            shimshmem_setSigAltStack(host_lock, shim_threadSharedMem(), ss_during_handler);
+
+            // Set up a context that uses the configured signal stack.
+            ucontext_t orig_ctx = {0}, handler_ctx = {0};
+            getcontext(&handler_ctx);
+            handler_ctx.uc_link = &orig_ctx;
+            handler_ctx.uc_stack.ss_sp = ss_original.ss_sp;
+            handler_ctx.uc_stack.ss_size = ss_original.ss_size;
+            makecontext(&handler_ctx, (void (*)(void))_call_signal_handler, 4, &action, signo,
+                        &siginfo, NULL);
+
+            // Call the handler on the configured signal stack.
+            shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
+            if (swapcontext(&orig_ctx, &handler_ctx) != 0) {
+                panic("swapcontext: %s", strerror(errno));
+            }
+            host_lock = shimshmemhost_lock(shim_hostSharedMem());
+
+            // Restore the signal-stack configuration.
+            shimshmem_setSigAltStack(host_lock, shim_threadSharedMem(), ss_original);
+        } else {
+            // Call signal handler with host lock released, and native syscalls disabled.
+            shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
+            _call_signal_handler(&action, signo, &siginfo, NULL);
+            host_lock = shimshmemhost_lock(shim_hostSharedMem());
+        }
 
         // Restore mask
         shimshmem_setBlockedSignals(host_lock, shim_threadSharedMem(), blocked_signals);
