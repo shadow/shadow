@@ -10,6 +10,7 @@ use crate::core::logger::log_wrapper::c_to_rust_log_level;
 use crate::core::logger::shadow_logger;
 use crate::core::support::configuration::{CliOptions, ConfigFileOptions, ConfigOptions};
 use crate::cshadow as c;
+use crate::shmem::cleanup;
 
 /// Main entry point for the simulator.
 pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
@@ -46,7 +47,7 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
 
     if options.shm_cleanup {
         // clean up any orphaned shared memory
-        unsafe { c::shmemcleanup_tryCleanup() };
+        cleanup::try_shm_cleanup();
         std::process::exit(0);
     }
 
@@ -96,7 +97,7 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     }
 
     // before we run the simulation, clean up any orphaned shared memory
-    unsafe { c::shmemcleanup_tryCleanup() };
+    cleanup::try_shm_cleanup();
 
     // save the platform data required for CPU pinning
     if config.experimental.use_cpu_pinning.unwrap() {
