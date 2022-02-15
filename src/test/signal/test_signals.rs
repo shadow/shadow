@@ -14,6 +14,21 @@ use test_utils::set;
 use test_utils::ShadowTest;
 use test_utils::TestEnvironment as TestEnv;
 
+const SS_AUTODISARM: libc::c_int = 1 << 31;
+
+fn sigaltstack(new: Option<&libc::stack_t>, old: Option<&mut libc::stack_t>) -> Result<(), Errno> {
+    let new = match new {
+        Some(r) => r as *const libc::stack_t,
+        None => std::ptr::null(),
+    };
+    let old = match old {
+        Some(r) => r as *mut libc::stack_t,
+        None => std::ptr::null_mut(),
+    };
+    Errno::result(unsafe { libc::sigaltstack(new, old) })?;
+    Ok(())
+}
+
 // Record of having received a signal.
 #[derive(Debug, Eq, PartialEq)]
 struct Record {
@@ -40,14 +55,11 @@ extern "C" fn signal_action(signal: i32, info: *mut libc::siginfo_t, _ctx: *mut 
     // bother to document/guarantee signal safety. Definitely avoid anything
     // known to be non-reentrant, though, including heap allocation.
 
-    let pid = unistd::getpid();
-    let tid = unistd::gettid();
-    let info = unsafe { info.as_ref().cloned() };
     let record = Record {
         signal,
-        pid,
-        tid,
-        info,
+        pid: unistd::getpid(),
+        tid: unistd::gettid(),
+        info: unsafe { info.as_ref().cloned() },
     };
     signal_channel().send(record);
 }
@@ -489,6 +501,214 @@ fn test_handled_kill_interrupts_syscall() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Record of having received a signal.
+#[derive(Debug)]
+struct SigaltstackRecord {
+    rsp: usize,
+    altstack: libc::stack_t,
+}
+
+// Normally the void* inside libc::stack_t prevents SigaltstackRecord from being
+// `Send`. We never dereference the pointer, though.
+unsafe impl Send for SigaltstackRecord {}
+
+// Global channel to be written from the signal handler.  We use
+// signal_hook::low_level::channel::Channel here, which is explicitly designed
+// to be async-signal-safe.
+fn sigaltstack_channel() -> &'static SignalSafeChannel<SigaltstackRecord> {
+    static INSTANCE: OnceCell<SignalSafeChannel<SigaltstackRecord>> = OnceCell::new();
+    INSTANCE.get_or_init(|| SignalSafeChannel::new())
+}
+
+extern "C" fn sigaltstack_action(
+    _signal: i32,
+    _info: *mut libc::siginfo_t,
+    _ctx: *mut std::ffi::c_void,
+) {
+    // Try to use only async-signal-safe functions. See signal-safety(7).
+    //
+    // Following this strictly is *very* restrictive, since most apis don't
+    // bother to document/guarantee signal safety. Definitely avoid anything
+    // known to be non-reentrant, though, including heap allocation.
+
+    // Get address of a stack-allocated value, which we use to detect which
+    // stack the handler is running on. Using assembly to get `rsp` directly
+    // might be a little nicer, but is currently unstable in Rust.
+    let stack_var = 0u64;
+    let rsp = &stack_var as *const u64 as usize;
+
+    let mut altstack = libc::stack_t {
+        ss_sp: std::ptr::null_mut(),
+        ss_flags: 0,
+        ss_size: 0,
+    };
+    sigaltstack(None, Some(&mut altstack)).unwrap();
+
+    let record = SigaltstackRecord { rsp, altstack };
+    sigaltstack_channel().send(record);
+}
+
+fn test_sigaltstack_unconfigured() -> Result<(), Box<dyn Error>> {
+    let signal = Signal::SIGUSR1;
+    unsafe {
+        signal::sigaction(
+            signal,
+            &signal::SigAction::new(
+                signal::SigHandler::SigAction(sigaltstack_action),
+                signal::SaFlags::empty(),
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    let altstack = libc::stack_t {
+        ss_sp: std::ptr::null_mut(),
+        ss_flags: libc::SS_DISABLE,
+        ss_size: 0,
+    };
+    sigaltstack(Some(&altstack), None)?;
+
+    // No altstack configured.
+    signal::raise(signal).unwrap();
+    let record = sigaltstack_channel().recv().unwrap();
+    assert_eq!(record.altstack, altstack);
+
+    Ok(())
+}
+
+fn test_sigaltstack_configured_but_unused() -> Result<(), Box<dyn Error>> {
+    let signal = Signal::SIGUSR1;
+    unsafe {
+        signal::sigaction(
+            signal,
+            &signal::SigAction::new(
+                signal::SigHandler::SigAction(sigaltstack_action),
+                signal::SaFlags::empty(),
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    // Configure an altstack.
+    const STACK_SZ: usize = 1 << 20;
+    let mut stack_space = Box::new([0u8; STACK_SZ]);
+    let stack_range =
+        (&stack_space[0] as *const u8 as usize)..(&stack_space[0] as *const u8 as usize + STACK_SZ);
+    let altstack = libc::stack_t {
+        ss_sp: &mut stack_space[0] as *mut u8 as *mut libc::c_void,
+        ss_flags: 0,
+        ss_size: STACK_SZ,
+    };
+    sigaltstack(Some(&altstack), None)?;
+
+    // Should see the configured altstack in the handler.
+    signal::raise(signal).unwrap();
+    let record = sigaltstack_channel().recv().unwrap();
+    assert_eq!(record.altstack, altstack);
+
+    // Handler *shouldn't* be running on the altstack, since it was registered
+    // without SA_ONSTACK.
+    assert!(!stack_range.contains(&record.rsp));
+
+    Ok(())
+}
+
+fn test_sigaltstack_used() -> Result<(), Box<dyn Error>> {
+    let signal = Signal::SIGUSR1;
+    unsafe {
+        signal::sigaction(
+            signal,
+            &signal::SigAction::new(
+                signal::SigHandler::SigAction(sigaltstack_action),
+                signal::SaFlags::SA_ONSTACK,
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    // Configure an altstack.
+    const STACK_SZ: usize = 1 << 20;
+    let mut stack_space = Box::new([0u8; STACK_SZ]);
+    let stack_range =
+        (&stack_space[0] as *const u8 as usize)..(&stack_space[0] as *const u8 as usize + STACK_SZ);
+    let altstack = libc::stack_t {
+        ss_sp: &mut stack_space[0] as *mut u8 as *mut libc::c_void,
+        ss_flags: 0,
+        ss_size: STACK_SZ,
+    };
+    sigaltstack(Some(&altstack), None)?;
+
+    // Should see the configured altstack in the handler.
+    signal::raise(signal).unwrap();
+    let record = sigaltstack_channel().recv().unwrap();
+
+    // Handler *should* be running on the altstack
+    let mut expected_stack = altstack;
+    expected_stack.ss_flags |= libc::SS_ONSTACK;
+    assert_eq!(record.altstack, expected_stack);
+    assert!(stack_range.contains(&record.rsp));
+
+    Ok(())
+}
+
+fn test_sigaltstack_autodisarm() -> Result<(), Box<dyn Error>> {
+    let signal = Signal::SIGUSR1;
+    unsafe {
+        signal::sigaction(
+            signal,
+            &signal::SigAction::new(
+                signal::SigHandler::SigAction(sigaltstack_action),
+                signal::SaFlags::SA_ONSTACK,
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    // Configure an altstack.
+    const STACK_SZ: usize = 1 << 20;
+    let mut stack_space = Box::new([0u8; STACK_SZ]);
+    let stack_range =
+        (&stack_space[0] as *const u8 as usize)..(&stack_space[0] as *const u8 as usize + STACK_SZ);
+    let altstack = libc::stack_t {
+        ss_sp: &mut stack_space[0] as *mut u8 as *mut libc::c_void,
+        ss_flags: SS_AUTODISARM,
+        ss_size: STACK_SZ,
+    };
+    sigaltstack(Some(&altstack), None)?;
+
+    // Should see the configured altstack in the handler.
+    signal::raise(signal).unwrap();
+    let record = sigaltstack_channel().recv().unwrap();
+
+    // Handler should be running on the altstack.
+    assert!(stack_range.contains(&record.rsp));
+
+    // The altstack config should be disarmed while the handler was running.
+    assert_eq!(
+        record.altstack,
+        libc::stack_t {
+            ss_sp: std::ptr::null_mut(),
+            ss_flags: libc::SS_DISABLE,
+            ss_size: 0
+        }
+    );
+
+    // The altstack config should be restored now that the handler has returned.
+    let mut final_altstack = libc::stack_t {
+        ss_sp: std::ptr::null_mut(),
+        ss_flags: 0,
+        ss_size: 0,
+    };
+    sigaltstack(None, Some(&mut final_altstack)).unwrap();
+    assert_eq!(final_altstack, altstack);
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -500,11 +720,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut tests: Vec<test_utils::ShadowTest<(), Box<dyn Error>>> = vec![
         ShadowTest::new(
             "raise",
-            // The documentation for `raise` is ambiguous whether the signal is
-            // thread-directed or process-directed in a single-threaded program,
-            // and different versions of libc have different behavior. Therefore
-            // we don't check the SignalCode.
-            &|| test_raise(&|s| signal::raise(s).unwrap(), None),
+            &|| {
+                test_raise(
+                    &|s| signal::raise(s).unwrap(),
+                    // The documentation for `raise` is ambiguous whether the signal is
+                    // thread-directed or process-directed in a single-threaded program,
+                    // and different versions of libc have different behavior. Therefore
+                    // we don't check the SignalCode.
+                    None,
+                )
+            },
             all_envs.clone(),
         ),
         ShadowTest::new(
@@ -566,6 +791,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         ShadowTest::new(
             "handled kill interrupts syscall",
             test_handled_kill_interrupts_syscall,
+            all_envs.clone(),
+        ),
+        ShadowTest::new(
+            "sigaltstack unconfigured",
+            test_sigaltstack_unconfigured,
+            all_envs.clone(),
+        ),
+        ShadowTest::new(
+            "sigaltstack unused",
+            test_sigaltstack_configured_but_unused,
+            all_envs.clone(),
+        ),
+        ShadowTest::new("sigaltstack used", test_sigaltstack_used, all_envs.clone()),
+        ShadowTest::new(
+            "sigaltstack autodisarm",
+            test_sigaltstack_autodisarm,
             all_envs.clone(),
         ),
     ];

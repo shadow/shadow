@@ -6,6 +6,7 @@
 #include "main/host/syscall/process.h"
 
 #include <errno.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <sys/syscall.h>
 
@@ -329,27 +330,41 @@ SysCallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
     PluginPtr old_ss_ptr = args->args[1].as_ptr;
     trace("sigaltstack(%p, %p)", (void*)ss_ptr.val, (void*)old_ss_ptr.val);
 
+    stack_t old_ss =
+        shimshmem_getSigAltStack(sys->shimShmemHostLock, thread_sharedMem(sys->thread));
+
     if (ss_ptr.val) {
-        // TODO: if the alt stack is already active, return -EPERM.
-        stack_t ss;
-        int rv = process_readPtr(sys->process, &ss, ss_ptr, sizeof(ss));
+        if (old_ss.ss_flags & SS_ONSTACK) {
+            // sigaltstack(2):  EPERM  An attempt was made to change the
+            // alternate signal stack while it was active.
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EPERM};
+        }
+
+        stack_t new_ss;
+        int rv = process_readPtr(sys->process, &new_ss, ss_ptr, sizeof(new_ss));
         if (rv != 0) {
             return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
         }
-        trace("sigaltstack ss_sp:%p ss_flags:%x ss_size:%zu", ss.ss_sp, ss.ss_flags, ss.ss_size);
-        // TODO: arrange for this info to be returned in subsequent calls via old_ss_ptr
-        // and to actually use this stack in managed thread signal handlers.
-        warning(
-            "sigaltstack used, but is currently only partially emulated. Instability may result.");
+        if (new_ss.ss_flags & SS_DISABLE) {
+            // sigaltstack(2): To disable an existing stack, specify ss.ss_flags
+            // as SS_DISABLE.  In this case, the kernel ignores any other flags
+            // in ss.ss_flags and the remaining fields in ss.
+            new_ss = (stack_t){.ss_flags = SS_DISABLE};
+        }
+        if (new_ss.ss_flags & ~(SS_DISABLE | SS_AUTODISARM)) {
+            // Unrecognized flag.
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval = -EINVAL};
+        }
+        shimshmem_setSigAltStack(sys->shimShmemHostLock, thread_sharedMem(sys->thread), new_ss);
     }
 
     if (old_ss_ptr.val) {
-        // TODO: If an old stack was configured, return that instead of the native configuration.
-        long result = thread_nativeSyscall(sys->thread, SYS_sigaltstack, NULL, old_ss_ptr.val);
-        return (SysCallReturn){.state = SYSCALL_DONE, .retval = result};
+        int rv = process_writePtr(sys->process, old_ss_ptr, &old_ss, sizeof(old_ss));
+        if (rv != 0) {
+            return (SysCallReturn){.state = SYSCALL_DONE, .retval = rv};
+        }
     }
 
-    // Ignore
     return (SysCallReturn){.state = SYSCALL_DONE, .retval = 0};
 }
 

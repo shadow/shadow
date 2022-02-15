@@ -67,6 +67,9 @@ struct _ShimThreadProtectedSharedMem {
     // We don't use sigset_t since glibc uses a much larger bitfield than
     // actually supported by the kernel.
     shd_kernel_sigset_t blocked_signals;
+
+    // Configured alternate signal stack for this thread.
+    stack_t sigaltstack;
 };
 
 struct _ShimShmemThread {
@@ -204,6 +207,21 @@ void shimshmem_setThreadSiginfo(const ShimShmemHostLock* host, ShimShmemThread* 
     thread->protected.pending_standard_siginfos[sig - 1] = *info;
 }
 
+stack_t shimshmem_getSigAltStack(const ShimShmemHostLock* host, const ShimShmemThread* thread) {
+    assert(host);
+    assert(thread);
+    assert(host->host_id == thread->host_id);
+    return thread->protected.sigaltstack;
+}
+
+void shimshmem_setSigAltStack(const ShimShmemHostLock* host, ShimShmemThread* thread,
+                              stack_t stack) {
+    assert(host);
+    assert(thread);
+    assert(host->host_id == thread->host_id);
+    thread->protected.sigaltstack = stack;
+}
+
 shd_kernel_sigset_t shimshmem_getBlockedSignals(const ShimShmemHostLock* host,
                                                 const ShimShmemThread* thread) {
     assert(host);
@@ -228,6 +246,7 @@ void shimshmemthread_init(ShimShmemThread* threadMem, Thread* thread) {
         .protected =
             {
                 .host_id = thread_getHostId(thread),
+                .sigaltstack.ss_flags = SS_DISABLE,
             },
     };
 }

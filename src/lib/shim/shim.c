@@ -20,6 +20,7 @@
 #include "lib/logger/logger.h"
 #include "lib/shim/ipc.h"
 #include "lib/shim/shadow_sem.h"
+#include "lib/shim/shadow_signals.h"
 #include "lib/shim/shadow_spinlock.h"
 #include "lib/shim/shim_event.h"
 #include "lib/shim/shim_logger.h"
@@ -30,13 +31,6 @@
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
 #include "main/host/syscall_numbers.h" // for SYS_shadow_* defs
-
-// Definition is sometimes missing in the userspace headers. We could include
-// the kernel signal header, but it has definitions that conflict with the
-// userspace headers.
-#ifndef SS_AUTODISARM
-#define SS_AUTODISARM (1U << 31)
-#endif
 
 // Whether Shadow is using preload-based interposition.
 static bool _using_interpose_preload = false;

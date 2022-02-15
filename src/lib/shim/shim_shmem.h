@@ -95,6 +95,11 @@ shd_kernel_sigset_t shimshmem_getBlockedSignals(const ShimShmemHostLock* host,
 void shimshmem_setBlockedSignals(const ShimShmemHostLock* host, ShimShmemThread* thread,
                                  shd_kernel_sigset_t sigset);
 
+// Get and set signal stack as set by `sigaltstack(2)`.
+stack_t shimshmem_getSigAltStack(const ShimShmemHostLock* host, const ShimShmemThread* thread);
+void shimshmem_setSigAltStack(const ShimShmemHostLock* host, ShimShmemThread* thread,
+                              stack_t stack);
+
 // Takes a pending unblocked signal (at the thread or process level) and marks it
 // no longer pending. Sets `info` if non-NULL.
 //
