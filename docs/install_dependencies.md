@@ -7,7 +7,6 @@
   + cmake (version >= 3.2)
   + make
   + xz-utils
-  + procps
   + lscpu
   + cargo, rustc (version \~ latest)
 
@@ -30,7 +29,6 @@ sudo apt-get install -y \
     libc-dbg \
     libglib2.0-0 \
     libglib2.0-dev \
-    libprocps-dev \
     make \
     python3 \
     python3-pip \
@@ -76,7 +74,6 @@ sudo dnf install -y \
     glib2 \
     glib2-devel \
     make \
-    procps-devel \
     python3 \
     python3-pip \
     xz \
@@ -109,16 +106,8 @@ sudo dnf install -y \
 
 ### CentOS Stream 8
 
-As procps-ng-devel is not available on CentOS Stream 8, you must install it manually.
-
-```bash
-dnf remove -y procps-ng procps-ng-devel
-dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-3.3.10-26.el7.x86_64.rpm
-dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-devel-3.3.10-26.el7.x86_64.rpm
-```
-
 Due to [a bug](https://bugs.centos.org/view.php?id=18212) in the CentOS 8 CMake
-package, you must also install libarchive manually.
+package, you must install libarchive manually.
 
 ```bash
 dnf install -y libarchive
