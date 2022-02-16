@@ -131,7 +131,7 @@ static GENERAL_HELP: Lazy<std::collections::HashMap<String, String>> =
 // these must all be Option types since they aren't required by the CLI, even if they're
 // required in the configuration file
 #[derive(Debug, Clone, Parser, Serialize, Deserialize, Merge, JsonSchema)]
-#[clap(help_heading = "GENERAL (Override configuration file options)")]
+#[clap(next_help_heading = "GENERAL (Override configuration file options)")]
 #[serde(deny_unknown_fields)]
 pub struct GeneralOptions {
     /// The simulated time at which simulated processes are sent a SIGKILL signal
@@ -201,7 +201,7 @@ static NETWORK_HELP: Lazy<std::collections::HashMap<String, String>> =
 // these must all be Option types since they aren't required by the CLI, even if they're
 // required in the configuration file
 #[derive(Debug, Clone, Parser, Serialize, Deserialize, Merge, JsonSchema)]
-#[clap(help_heading = "NETWORK (Override network options)")]
+#[clap(next_help_heading = "NETWORK (Override network options)")]
 #[serde(deny_unknown_fields)]
 pub struct NetworkOptions {
     /// The network topology graph
@@ -231,7 +231,7 @@ static EXP_HELP: Lazy<std::collections::HashMap<String, String>> =
 
 #[derive(Debug, Clone, Parser, Serialize, Deserialize, Merge, JsonSchema)]
 #[clap(
-    help_heading = "EXPERIMENTAL (Unstable and may change or be removed at any time, regardless of Shadow version)"
+    next_help_heading = "EXPERIMENTAL (Unstable and may change or be removed at any time, regardless of Shadow version)"
 )]
 #[serde(default, deny_unknown_fields)]
 pub struct ExperimentalOptions {
@@ -446,7 +446,7 @@ static HOST_HELP: Lazy<std::collections::HashMap<String, String>> =
     Lazy::new(|| generate_help_strs(schema_for!(HostDefaultOptions)));
 
 #[derive(Debug, Clone, Parser, Serialize, Deserialize, Merge, JsonSchema)]
-#[clap(help_heading = "HOST DEFAULTS (Default options for hosts)")]
+#[clap(next_help_heading = "HOST DEFAULTS (Default options for hosts)")]
 #[serde(default, deny_unknown_fields)]
 pub struct HostDefaultOptions {
     /// Log level at which to print node messages
