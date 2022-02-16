@@ -33,6 +33,7 @@ static void _shmemfile_getName(size_t nbytes, char* str) {
 
     pid_t pid = getpid();
 
+    // If the shmem file name format ever changes, we'll need to update cleanup.rs too.
     snprintf(str, MIN(SHD_SHMEM_FILE_NAME_NBYTES, nbytes),
              "/%s_%llu.%llu%c%" PRId64, SHADOW_PREFIX,
              (unsigned long long)ts.tv_sec, (unsigned long long)ts.tv_nsec,

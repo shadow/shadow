@@ -10,7 +10,6 @@ APT_PACKAGES="
   libc-dbg
   libglib2.0-0
   libglib2.0-dev
-  libprocps-dev
   make
   python3
   python3-pip
@@ -30,7 +29,6 @@ RPM_PACKAGES="
   glib2
   glib2-devel
   make
-  procps-devel
   python3
   python3-pip
   xz
@@ -73,12 +71,6 @@ case "$CONTAINER" in
         dnf install --best -y $RPM_PACKAGES $RPM_CI_PACKAGES
         ;;
     *centos:stream8)
-        # These packages aren't available on centos stream 8; we need to use centos 7's.
-        dnf remove -y procps-ng procps-ng-devel
-        dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-3.3.10-26.el7.x86_64.rpm
-        dnf install -y http://vault.centos.org/centos/7.7.1908/os/x86_64/Packages/procps-ng-devel-3.3.10-26.el7.x86_64.rpm
-        RPM_PACKAGES=${RPM_PACKAGES/procps-devel}
-
         dnf install -y ${RPM_PACKAGES} ${RPM_CI_PACKAGES}
         ;;
     *)

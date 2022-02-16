@@ -2122,6 +2122,3 @@ extern "C" {
 extern "C" {
     pub fn syscallcondition_unref(cond: *mut SysCallCondition);
 }
-extern "C" {
-    pub fn shmemcleanup_tryCleanup();
-}

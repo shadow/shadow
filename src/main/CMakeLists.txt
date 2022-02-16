@@ -60,15 +60,14 @@ set(SHD_SHMEM_SRC
     shmem/buddy.c
     shmem/shmem_allocator.c
     shmem/shmem_file.c
-    shmem/shmem_util.c
-    shmem/shmem_cleanup.c)
+    shmem/shmem_util.c)
 
 add_library(shadow-shmem STATIC ${SHD_SHMEM_SRC})
 target_link_libraries(shadow-shmem INTERFACE logger)
 
 add_executable(shd-shmem-test shmem/shmem_test.c)
 target_link_libraries(shd-shmem-test shadow-shmem
-    ${GLIB_LIBRARIES} ${RT_LIBRARIES} ${M_LIBRARIES} ${PROCPS_LIBRARIES})
+    ${GLIB_LIBRARIES} ${RT_LIBRARIES} ${M_LIBRARIES})
 add_test(NAME shmem COMMAND shd-shmem-test)
 
 ## sources for our main shadow program
@@ -156,7 +155,7 @@ set(shadow_srcs
 add_library(shadow-c STATIC ${shadow_srcs})
 target_link_libraries(shadow-c INTERFACE
    ${CMAKE_THREAD_LIBS_INIT} ${M_LIBRARIES} ${DL_LIBRARIES} ${RT_LIBRARIES}
-   ${GLIB_LIBRARIES} ${PROCPS_LIBRARIES}
+   ${GLIB_LIBRARIES}
    shadow-shim-helper logger shadow-remora shadow-shmem shadow-tsc)
 
 # TODO: extract -L and -l flags from the output of
