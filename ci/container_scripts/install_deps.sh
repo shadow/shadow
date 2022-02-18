@@ -35,7 +35,6 @@ RPM_PACKAGES="
   xz-devel
   yum-utils
   diffutils
-  libarchive
   util-linux
   "
 
