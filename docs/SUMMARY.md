@@ -32,6 +32,7 @@
     - [Application and Library-Specific Notes]()
         - [libopenblas](libopenblas.md)
 - [Developer Guides]()
+    - [Coding](coding.md)
     - [Debugging and profiling](developer_guide.md)
     - [Continous integration tests](ci.md)
 - [Contributing](contributing.md)
