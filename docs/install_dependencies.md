@@ -59,9 +59,6 @@ sudo apt-get install -y \
 
 ## YUM (Fedora/CentOS):
 
-Before running these commands, please check any platform-specific
-requirements below.
-
 **Warning:** `dnf` often installs 32-bit (`i686`) versions of
 libraries. You may want to use the `--best` option to make sure you're
 installing the 64-bit (`x86_64`) versions, which are required by Shadow.
@@ -102,13 +99,4 @@ sudo dnf install -y \
     git \
     htop \
     tmux
-```
-
-### CentOS Stream 8
-
-Due to [a bug](https://bugs.centos.org/view.php?id=18212) in the CentOS 8 CMake
-package, you must install libarchive manually.
-
-```bash
-dnf install -y libarchive
 ```
