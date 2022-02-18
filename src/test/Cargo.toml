@@ -133,6 +133,10 @@ path = "dup/test_dup.rs"
 name = "test_signals"
 path = "signal/test_signals.rs"
 
+[[bin]]
+name = "test_select"
+path = "select/test_select.rs"
+
 [dependencies]
 libc = "0.2"
 nix = "0.23.1"
