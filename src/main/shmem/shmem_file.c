@@ -20,6 +20,7 @@
 #include "lib/logger/logger.h"
 #include "main/shmem/shmem_util.h"
 
+// Keep these consistent with cleanup.rs
 static const char* SHADOW_PREFIX = "shadow_shmemfile";
 static const char PID_DELIM = '-';
 
@@ -38,30 +39,6 @@ static void _shmemfile_getName(size_t nbytes, char* str) {
              "/%s_%llu.%llu%c%" PRId64, SHADOW_PREFIX,
              (unsigned long long)ts.tv_sec, (unsigned long long)ts.tv_nsec,
              PID_DELIM, (int64_t)pid);
-}
-
-bool shmemfile_nameHasShadowPrefix(const char* name) {
-    const char* pfx = strstr(name, SHADOW_PREFIX);
-    return (pfx != NULL);
-}
-
-pid_t shmemfile_pidFromName(const char* name) {
-    pid_t ret = -1;
-
-    long long int x = 0;
-
-    const char* delim = strchr(name, '-');
-    if (delim) {
-        // try to parse the end of the string
-        x = strtol(delim + 1, NULL, 10);
-        if (x == 0 || x > INT_MAX || x <= INT_MIN) { // we had trouble parsing
-            ret = -1;
-        } else {
-            ret = (pid_t)x;
-        }
-    }
-
-    return ret;
 }
 
 static size_t _shmemfile_roundUpToMultiple(size_t x, size_t multiple) {
