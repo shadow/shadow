@@ -32,11 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Rustfmt check
-        run: |
-          (cd src/main && cargo fmt -- --check)
-          (cd src/test && cargo fmt -- --check)
-          (cd src/lib/logger/rust_bindings && cargo fmt -- --check)
-          (cd src/lib/gml-parser && cargo fmt -- --check)
+        run: (cd src && cargo fmt -- --check)
 
   lint-cargo-lock:
     runs-on: ubuntu-latest
@@ -47,9 +43,7 @@ jobs:
           # This will return an error if any versions of local crates in the Cargo.lock
           # are out of date compared to the crate versions in Cargo.toml. This can fail
           # if the Shadow version is bumped without using Cargo to update the lock file.
-          (cd src/main && cargo update --locked --workspace)
-          (cd src/test && cargo update --locked --workspace)
-          # the shadow logger bindings crate does not have a lockfile
+          (cd src && cargo update --locked --workspace)
 
   lint-bindings:
     runs-on: ubuntu-latest
