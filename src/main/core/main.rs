@@ -47,7 +47,7 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
 
     if options.shm_cleanup {
         // clean up any orphaned shared memory
-        cleanup::try_shm_cleanup().context("Cleaning shared memory files")?;
+        cleanup::shm_cleanup(cleanup::SHM_DIR_PATH).context("Cleaning shared memory files")?;
         std::process::exit(0);
     }
 
@@ -97,7 +97,7 @@ pub fn run_shadow<'a>(args: Vec<&'a OsStr>) -> anyhow::Result<()> {
     }
 
     // before we run the simulation, clean up any orphaned shared memory
-    if let Err(e) = cleanup::try_shm_cleanup() {
+    if let Err(e) = cleanup::shm_cleanup(cleanup::SHM_DIR_PATH) {
         log::warn!("Unable to clean up shared memory files: {:?}", e);
     }
 
