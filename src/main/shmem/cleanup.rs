@@ -6,8 +6,8 @@ use std::str::FromStr;
 
 use anyhow::{self, Context};
 
+pub const SHM_DIR_PATH: &str = "/dev/shm/";
 const PROC_DIR_PATH: &str = "/proc/";
-const SHM_DIR_PATH: &str = "/dev/shm/";
 const SHADOW_SHM_FILE_PREFIX: &str = "shadow_shmemfile";
 
 // Get the paths from the given directory path.
@@ -69,13 +69,13 @@ fn pid_from_shadow_shm_file_name(file_name: &str) -> anyhow::Result<i32> {
 // Cleans up orphaned shared memory files that are no longer mapped by a shadow
 // process. This function should never fail or crash, but is not guaranteed to
 // reclaim all possible orphans. Returns the number of orphans removed.
-pub fn try_shm_cleanup() -> anyhow::Result<u32> {
+pub fn shm_cleanup(shm_dir: impl AsRef<Path>) -> anyhow::Result<u32> {
     // Get the shm file paths before the PIDs to avoid a race condition (#1343).
-    let shm_paths = get_shadow_shm_file_paths(&Path::new(SHM_DIR_PATH))?;
+    let shm_paths = get_shadow_shm_file_paths(shm_dir.as_ref())?;
     log::debug!(
         "Found {} shadow shared memory files in {}",
         shm_paths.len(),
-        SHM_DIR_PATH
+        shm_dir.as_ref().display()
     );
 
     let running_pids = get_running_pid_set(&Path::new(PROC_DIR_PATH))?;
@@ -139,7 +139,7 @@ mod tests {
         let expired = Path::new(s);
 
         touch(&expired).unwrap();
-        assert_eq!(try_shm_cleanup().unwrap(), 1);
+        assert_eq!(shm_cleanup(SHM_DIR_PATH).unwrap(), 1);
         assert!(!expired.exists());
     }
 
@@ -150,7 +150,7 @@ mod tests {
         let valid = Path::new(&s);
 
         touch(&valid).unwrap();
-        assert_eq!(try_shm_cleanup().unwrap(), 0);
+        assert_eq!(shm_cleanup(SHM_DIR_PATH).unwrap(), 0);
         assert!(valid.exists());
 
         fs::remove_file(valid).unwrap();
@@ -162,7 +162,7 @@ mod tests {
         let nonshadow = Path::new(s);
 
         touch(&nonshadow).unwrap();
-        assert_eq!(try_shm_cleanup().unwrap(), 0);
+        assert_eq!(shm_cleanup(SHM_DIR_PATH).unwrap(), 0);
         assert!(nonshadow.exists());
 
         fs::remove_file(nonshadow).unwrap();
