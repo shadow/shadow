@@ -36,12 +36,13 @@ can fix it.
        * [Parallel Simulations](parallel_sims.md)
      * Application and Library-Specific Notes
        * [libopenblas](libopenblas.md)
-   * Developer Guides
+   * Developer Guide
+     * [Coding](coding.md)
      * [Debugging and profiling](developer_guide.md)
      * [Continous integration tests](ci.md)
+     * [Maintainer playbook](maintainer_playbook.md)
  * The Shadow project
    * [Contributing](contributing.md)
      * [Coding style](coding_style.md)
      * [Pull requests](pull_requests.md)
-   * [Maintainer playbook](maintainer_playbook.md)
    * [NSF Sponsorship](nsf_sponsorship.md)
