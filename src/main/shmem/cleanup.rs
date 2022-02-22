@@ -123,48 +123,48 @@ pub fn shm_cleanup(shm_dir: impl AsRef<Path>) -> anyhow::Result<u32> {
 mod tests {
     use super::*;
     use std::fs::OpenOptions;
+    use std::io;
     use std::process;
-    use std::{fs, io};
 
-    fn touch(path: &Path) -> io::Result<()> {
-        match OpenOptions::new().create(true).write(true).open(path) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e),
-        }
+    fn touch(path: impl AsRef<Path>) -> io::Result<()> {
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(path.as_ref())?;
+        Ok(())
     }
 
     #[test]
     fn test_expired_shm_file_is_removed() {
-        let s = "/dev/shm/shadow_shmemfile_6379761.950298775-999999999";
-        let expired = Path::new(s);
+        let dir = tempfile::tempdir().unwrap();
+        let s = "shadow_shmemfile_6379761.950298775-999999999";
+        let expired: PathBuf = [dir.as_ref(), s.as_ref()].iter().collect();
 
         touch(&expired).unwrap();
-        assert_eq!(shm_cleanup(SHM_DIR_PATH).unwrap(), 1);
-        assert!(!expired.exists());
+        assert_eq!(shm_cleanup(&dir).unwrap(), 1);
+        assert!(!expired.exists(), "Exists: {}", expired.display());
     }
 
     #[test]
     fn test_valid_shm_file_is_not_removed() {
         let my_pid = process::id();
-        let s = format!("/dev/shm/shadow_shmemfile_6379761.950298775-{my_pid}");
-        let valid = Path::new(&s);
+        let dir = tempfile::tempdir().unwrap();
+        let s = format!("shadow_shmemfile_6379761.950298775-{my_pid}");
+        let valid: PathBuf = [dir.as_ref(), s.as_ref()].iter().collect();
 
         touch(&valid).unwrap();
-        assert_eq!(shm_cleanup(SHM_DIR_PATH).unwrap(), 0);
-        assert!(valid.exists());
-
-        fs::remove_file(valid).unwrap();
+        assert_eq!(shm_cleanup(&dir).unwrap(), 0);
+        assert!(valid.exists(), "Doesn't exist: {}", valid.display());
     }
 
     #[test]
     fn test_nonshadow_shm_file_is_not_removed() {
-        let s = "/dev/shm/shadow_unimportant_test_file";
-        let nonshadow = Path::new(s);
+        let dir = tempfile::tempdir().unwrap();
+        let s = "shadow_unimportant_test_file";
+        let nonshadow: PathBuf = [dir.as_ref(), s.as_ref()].iter().collect();
 
         touch(&nonshadow).unwrap();
-        assert_eq!(shm_cleanup(SHM_DIR_PATH).unwrap(), 0);
-        assert!(nonshadow.exists());
-
-        fs::remove_file(nonshadow).unwrap();
+        assert_eq!(shm_cleanup(&dir).unwrap(), 0);
+        assert!(nonshadow.exists(), "Doesn't exist: {}", nonshadow.display());
     }
 }
