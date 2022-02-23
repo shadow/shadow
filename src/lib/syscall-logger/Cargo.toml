@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate_type = ["proc-macro"]
+proc-macro = true
 
 [dependencies]
 syn = { version = "1", features = ["full"] }
