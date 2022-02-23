@@ -1,0 +1,9 @@
+[workspace]
+
+members = [
+    "main",
+    "test",
+    "lib/gml-parser",
+    "lib/logger/rust_bindings",
+    "lib/syscall-logger",
+]
