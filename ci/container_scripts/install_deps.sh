@@ -7,6 +7,7 @@ set -euo pipefail
 APT_PACKAGES="
   cmake
   findutils
+  golang-go
   libc-dbg
   libglib2.0-0
   libglib2.0-dev
@@ -28,6 +29,7 @@ RPM_PACKAGES="
   findutils
   glib2
   glib2-devel
+  golang
   make
   python3
   python3-pip
