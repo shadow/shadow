@@ -39,15 +39,36 @@ add_executable(shadow-test-launcher-fail test_launcher_fail.c test_launcher_comm
 ## example: add_linux_tests(BASENAME bind COMMAND test_bind)
 ## will create one test named bind-linux
 macro(add_linux_tests)
-   cmake_parse_arguments(LINUX_TEST "" "BASENAME" "COMMAND" ${ARGN})
-   add_test(NAME ${LINUX_TEST_BASENAME}-linux COMMAND ${LINUX_TEST_COMMAND})
-   set_property(TEST ${LINUX_TEST_BASENAME}-linux PROPERTY ENVIRONMENT "RUST_BACKTRACE=1")
+   cmake_parse_arguments(LINUX_TEST "" "BASENAME" "COMMAND;CONFIGURATIONS;PROPERTIES" ${ARGN})
+   if(DEFINED LINUX_TEST_UNPARSED_ARGUMENTS)
+      message(FATAL_ERROR "Unrecognized arguments: ${LINUX_TEST_UNPARSED_ARGUMENTS}")
+   endif()
+
+   set(LINUX_TEST_NAME ${LINUX_TEST_BASENAME}-linux)
+   if(DEFINED LINUX_TEST_CONFIGURATIONS)
+      add_test(
+         NAME ${LINUX_TEST_NAME}
+         COMMAND ${LINUX_TEST_COMMAND}
+         CONFIGURATIONS ${LINUX_TEST_CONFIGURATIONS}
+         )
+   else()
+      add_test(
+         NAME ${LINUX_TEST_NAME}
+         COMMAND ${LINUX_TEST_COMMAND})
+   endif()
+   set_property(TEST ${LINUX_TEST_NAME} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1;G_DEBUG=fatal-criticals")
+   if(DEFINED LINUX_TEST_PROPERTIES)
+      set_tests_properties(${LINUX_TEST_NAME} PROPERTIES ${LINUX_TEST_PROPERTIES})
+   endif()
 endmacro()
 
 ## example: add_shadow_tests(BASENAME bind METHODS ptrace preload LOGLEVEL debug ARGS --pin-cpus)
 ## will create two tests named bind-shadow-ptrace and bind-shadow-preload
 macro(add_shadow_tests)
    cmake_parse_arguments(SHADOW_TEST "" "BASENAME;LOGLEVEL;SHADOW_CONFIG;CHECK_RETVAL;POST_CMD;EXPECT_ERROR" "METHODS;SKIP_METHODS;ARGS;CONFIGURATIONS;PROPERTIES" ${ARGN})
+   if(DEFINED SHADOW_TEST_UNPARSED_ARGUMENTS)
+      message(FATAL_ERROR "Unrecognized arguments: ${SHADOW_TEST_UNPARSED_ARGUMENTS}")
+   endif()
 
    if(NOT DEFINED SHADOW_TEST_LOGLEVEL)
       if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
