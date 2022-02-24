@@ -104,12 +104,6 @@ macro(add_shadow_tests)
       list(REMOVE_ITEM SHADOW_TEST_METHODS ${SHADOW_TEST_SKIP_METHODS})
    endif()
    
-   # If cpu pinning is not explicitly set, we disable it so we avoid pinning
-   # multiple tests that should be running in parallel to the same exact CPUs.
-   if(NOT "${SHADOW_TEST_ARGS}" MATCHES ".*--use-cpu-pinning.*")
-      list(APPEND SHADOW_TEST_ARGS "--use-cpu-pinning" "false")
-   endif()
-
    # If strace logging is not explicitly set, we enable it
    if(NOT "${SHADOW_TEST_ARGS}" MATCHES ".*--use-strace-logging.*")
       list(APPEND SHADOW_TEST_ARGS "--use-strace-logging" "true")
@@ -161,6 +155,10 @@ macro(add_shadow_tests)
       set_property(TEST ${SHADOW_TEST_NAME} PROPERTY ENVIRONMENT "RUST_BACKTRACE=1;G_DEBUG=fatal-criticals")
 
       set_property(TEST ${SHADOW_TEST_NAME} PROPERTY FAIL_REGULAR_EXPRESSION ${FAIL_REGEX})
+
+      # Tell cmake to assign processor affinity. This ensures that parallel tests
+      # with cpu pinning enabled use distinct sets of processors.
+      set_property(TEST ${SHADOW_TEST_NAME} PROPERTY PROCESSOR_AFFINITY 1)
 
       if(DEFINED SHADOW_TEST_PROPERTIES)
          set_tests_properties(${SHADOW_TEST_NAME} PROPERTIES ${SHADOW_TEST_PROPERTIES})
