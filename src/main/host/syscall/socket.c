@@ -301,6 +301,17 @@ static int _syscallhandler_getTCPOptHelper(SysCallHandler* sys, TCP* tcp, int op
 
             return 0;
         }
+        case TCP_NODELAY: {
+            /* Shadow doesn't support nagle's algorithm, so shadow always behaves
+             * as if TCP_NODELAY is enabled.
+             */
+            int val = 1;
+            int num_bytes = MIN(*optlen, sizeof(int));
+            memcpy(optval, &val, num_bytes);
+            *optlen = num_bytes;
+
+            return 0;
+        }
         default: {
             warning(
                 "getsockopt at level SOL_TCP called with unsupported option %i",
@@ -1144,6 +1155,39 @@ SysCallReturn syscallhandler_setsockopt(SysCallHandler* sys,
             errcode = _syscallhandler_setSocketOptHelper(
                 sys, socket_desc, optname, optvalPtr, optlen);
             break;
+        }
+        case SOL_TCP: {
+            if (descriptor_getType((LegacyDescriptor*)socket_desc) != DT_TCPSOCKET) {
+                errcode = -ENOPROTOOPT;
+                break;
+            }
+
+            /* Shadow doesn't support nagle's algorithm, so shadow always behaves as if TCP_NODELAY
+             * is enabled. Some programs will fail if setsockopt(fd, SOL_TCP, TCP_NODELAY, &1,
+             * sizeof(int)) returns an error, so we treat this as a no-op for compatibility.
+             */
+            if (optname == TCP_NODELAY) {
+                if (optlen < sizeof(int)) {
+                    errcode = -EINVAL;
+                    break;
+                }
+
+                int enable = 0;
+                errcode = process_readPtr(sys->process, &enable, optvalPtr, sizeof(int));
+                if (errcode == 0) {
+                    if (enable) {
+                        // wants to enable TCP_NODELAY
+                        debug("Ignoring TCP_NODELAY");
+                    } else {
+                        // wants to disable TCP_NODELAY
+                        warning("Cannot disable TCP_NODELAY since shadow does not implement "
+                                "Nagle's algorithm.");
+                        errcode = -ENOPROTOOPT;
+                    }
+                }
+                break;
+            }
+            // fall through
         }
         default:
             warning("setsockopt called with unsupported level %i with opt %i", level, optname);
