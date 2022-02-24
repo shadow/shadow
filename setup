@@ -93,6 +93,11 @@ def main():
         action="store_true", dest="do_test",
         default=False)
 
+    parser_build.add_argument('--extra',
+        help="build extra tests (Requires additional dependencies)",
+        action="store_true", dest="do_extra_test",
+        default=False)
+
     parser_build.add_argument('--werror',
         help="turn compiler warnings into errors",
         action="store_true", dest="do_werror",
@@ -131,6 +136,11 @@ def main():
     parser_test.add_argument('-v', '--verbose',
         help="print verbose test output",
         action="store_true", dest="do_verbose",
+        default=False)
+
+    parser_test.add_argument('--extra',
+        help="run extra tests (Requires building with --extra)",
+        action="store_true", dest="do_extra_test",
         default=False)
 
     # configure install subcommand
@@ -193,9 +203,6 @@ def build(args, remaining):
     # we will run from build directory
     calledDirectory = os.getcwd()
 
-    # run build tasks
-    os.chdir(builddir)
-
     # add extra library and include directories as absolution paths
     make_paths_absolute(args.extra_includes)
     make_paths_absolute(args.extra_libraries)
@@ -219,23 +226,32 @@ def build(args, remaining):
     #cmake_cmd += " -D_CMAKE_TOOLCHAIN_PREFIX=llvm-"
 
     # call cmake to configure the make process, wait for completion
-    logging.info("running \'{0}\' from \'{1}\'".format(cmake_cmd, os.getcwd()))
-    retcode = subprocess.call(cmake_cmd.strip().split())
+    logging.info("running \'{0}\' from \'{1}\'".format(cmake_cmd, builddir))
+    retcode = subprocess.call(cmake_cmd.strip().split(), cwd=builddir)
     logging.debug("cmake returned " + str(retcode))
+    if retcode != 0:
+        logging.error(f"Non-zero return code {retcode} from cmake.")
+        return retcode
 
-    if retcode == 0:
-        # call make, wait for it to finish
-        make = "make -j{0}".format(args.njobs)
+    # call make, wait for it to finish
+    make = f"make -j{args.njobs}"
+    logging.info("calling " + make)
+    retcode = subprocess.call(shlex.split(make), cwd=builddir)
+    logging.debug("make returned " + str(retcode))
+    if retcode != 0:
+        logging.error(f"Non-zero return code {retcode} from make.")
+        return retcode
+
+    if args.do_extra_test:
+        make = f"make -j{args.njobs} golang_tests"
         logging.info("calling " + make)
-        retcode = subprocess.call(shlex.split(make))
+        retcode = subprocess.call(shlex.split(make), cwd=builddir)
         logging.debug("make returned " + str(retcode))
-        if retcode == 0: logging.info("build successful!")
-        else: logging.error("Non-zero return code from make.")
-    else: logging.error(" Non-zero return code from cmake.")
+        if retcode != 0:
+            logging.error(f"Non-zero return code {retcode} from make.")
+            return retcode
 
-    # go back to where we came from
-    os.chdir(calledDirectory)
-    return retcode
+    return 0
 
 def test(args, remaining):
     testdir=getfullpath(BUILD_PREFIX)
@@ -258,6 +274,9 @@ def test(args, remaining):
 
     if args.testname_regex is not None:
         testcmd += " -R {}".format(args.testname_regex)
+
+    if args.do_extra_test:
+        testcmd += " -C extra"
 
     # pass the remaining arguments (the arguments after a '--') directly to ctest
     testcmd = testcmd.strip().split() + remaining
